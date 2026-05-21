@@ -12,11 +12,11 @@
 // kernels, runs once, writes the output, exits. Used by tests and benchmarks.
 //
 // Daemon mode: opens the device + JIT-compiles kernels once, then reads
-// "FRAME H W packs.npy offsets.npy px.npy py.npy out.npy" lines from stdin
-// in a loop, processes each frame (per-frame DRAM realloc + new runtime
-// args), prints "OK <ms>" with kernel-only elapsed time, and exits on
-// EOF or "QUIT". Used by the interactive viewer to keep the ~3s device
-// init + JIT cost off the per-frame path.
+// binary FRM1 frame requests from stdin in a loop (24-byte header + 4 fp32
+// payloads), writes OK11/ERR1 binary responses on stdout, and exits on
+// EOF or "QUIT". Reuses cached DRAM MeshBuffers across frames. Used by the
+// interactive viewer to keep the ~3s device init + JIT cost off the per-frame
+// path.
 
 #include <algorithm>
 #include <chrono>
@@ -52,6 +52,11 @@ using namespace gsplat;
 #ifndef OVERRIDE_KERNEL_PREFIX
 #define OVERRIDE_KERNEL_PREFIX ""
 #endif
+
+// Binary IPC magic (little-endian on the wire).
+constexpr uint32_t IPC_MAGIC_FRM1 = 0x46524D31;  // 'FRM1'
+constexpr uint32_t IPC_MAGIC_OK11 = 0x4F4B3131;  // 'OK11'
+constexpr uint32_t IPC_MAGIC_ERR1 = 0x45525231;  // 'ERR1'
 
 // ---------------------------------------------------------------------------
 // .npy I/O helpers
@@ -150,6 +155,26 @@ static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
 // Device + program reusable context
 // ---------------------------------------------------------------------------
 
+// Cached DRAM buffers reused across daemon frames. Grows geometrically (×1.5)
+// when total_entries / offsets / tile_ids exceed current caps; px/py/output
+// are reallocated only when (image_h, image_w) changes.
+struct BufferCache {
+    uint32_t image_h = 0;
+    uint32_t image_w = 0;
+    uint32_t num_tiles = 0;
+    uint32_t max_entries = 0;
+    uint32_t max_offsets = 0;
+    size_t max_tile_id_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> packs;
+    std::shared_ptr<distributed::MeshBuffer> offsets;
+    std::shared_ptr<distributed::MeshBuffer> px;
+    std::shared_ptr<distributed::MeshBuffer> py;
+    std::shared_ptr<distributed::MeshBuffer> output;
+    std::shared_ptr<distributed::MeshBuffer> tile_ids;
+    // Tracks which tiles had Gaussians last frame for selective output zero-fill.
+    std::vector<uint8_t> last_frame_tile_nonempty;
+};
+
 struct DeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
     distributed::MeshCommandQueue* cq = nullptr;
@@ -163,6 +188,7 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+    BufferCache cache;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -468,6 +494,148 @@ static FrameDramBuffers allocate_frame_buffers(
     return b;
 }
 
+static uint32_t grow_cap_u32(uint32_t current, uint32_t needed) {
+    if (needed <= current) {
+        return current;
+    }
+    if (current == 0) {
+        return needed;
+    }
+    return std::max(needed, current + current / 2);
+}
+
+static size_t grow_cap_size(size_t current, size_t needed) {
+    if (needed <= current) {
+        return current;
+    }
+    if (current == 0) {
+        return needed;
+    }
+    return std::max(needed, current + current / 2);
+}
+
+// Grow or create cached DRAM buffers. Sets *output_reallocated when px/py/output
+// were (re)allocated due to a resolution change.
+static void ensure_buffer_cache(
+    DeviceContext& ctx,
+    BufferCache& cache,
+    uint32_t image_h,
+    uint32_t image_w,
+    uint32_t total_entries,
+    uint32_t offsets_count,
+    size_t tile_ids_bytes,
+    uint32_t num_tiles,
+    bool& output_reallocated) {
+    output_reallocated = false;
+    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{
+            .page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    };
+
+    if (total_entries > cache.max_entries) {
+        cache.max_entries = grow_cap_u32(cache.max_entries, total_entries);
+        cache.packs = make_dram(
+            static_cast<size_t>(cache.max_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
+    }
+    if (offsets_count > cache.max_offsets) {
+        cache.max_offsets = grow_cap_u32(cache.max_offsets, offsets_count);
+        cache.offsets = make_dram(
+            static_cast<size_t>(cache.max_offsets) * sizeof(uint32_t), sizeof(uint32_t));
+    }
+    if (tile_ids_bytes > cache.max_tile_id_bytes) {
+        cache.max_tile_id_bytes = grow_cap_size(cache.max_tile_id_bytes, tile_ids_bytes);
+        cache.tile_ids = make_dram(cache.max_tile_id_bytes, TILE_IDS_PAGE_BYTES);
+    }
+    if (image_h != cache.image_h || image_w != cache.image_w) {
+        cache.image_h = image_h;
+        cache.image_w = image_w;
+        cache.num_tiles = num_tiles;
+        cache.px = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        cache.py = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        cache.output = make_dram(
+            static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        cache.last_frame_tile_nonempty.assign(num_tiles, 0);
+        output_reallocated = true;
+    }
+
+    if (!cache.packs) {
+        cache.max_entries = total_entries;
+        cache.packs = make_dram(
+            static_cast<size_t>(cache.max_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
+    }
+    if (!cache.offsets) {
+        cache.max_offsets = offsets_count;
+        cache.offsets = make_dram(
+            static_cast<size_t>(cache.max_offsets) * sizeof(uint32_t), sizeof(uint32_t));
+    }
+    if (!cache.px) {
+        cache.image_h = image_h;
+        cache.image_w = image_w;
+        cache.num_tiles = num_tiles;
+        cache.px = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        cache.py = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        cache.output = make_dram(
+            static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        cache.last_frame_tile_nonempty.assign(num_tiles, 0);
+        output_reallocated = true;
+    }
+    if (!cache.tile_ids) {
+        cache.max_tile_id_bytes = tile_ids_bytes;
+        cache.tile_ids = make_dram(cache.max_tile_id_bytes, TILE_IDS_PAGE_BYTES);
+    }
+}
+
+static std::vector<uint8_t> compute_tile_nonempty(
+    const std::vector<float>& offsets_f32, uint32_t num_tiles) {
+    std::vector<uint8_t> mask(num_tiles, 0);
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        if (offsets_f32[t + 1] - offsets_f32[t] > 0.0f) {
+            mask[t] = 1;
+        }
+    }
+    return mask;
+}
+
+// Zero output slots for tiles that were nonempty last frame but empty this frame.
+// On resolution change the caller zero-fills the entire output buffer instead.
+static void zero_flipped_empty_tiles(
+    DeviceContext& ctx,
+    const BufferCache& cache,
+    const std::vector<uint8_t>& last_nonempty,
+    const std::vector<uint8_t>& this_nonempty) {
+    const distributed::MeshCoordinate coord(0, 0);
+    std::vector<uint16_t> zeros(3 * TILE_H * TILE_W, 0);
+    std::vector<distributed::ShardDataTransfer> transfers;
+    for (uint32_t t = 0; t < this_nonempty.size(); t++) {
+        if (last_nonempty[t] && !this_nonempty[t]) {
+            const DeviceAddr offset = static_cast<DeviceAddr>(t) * 3 * TILE_BYTES_BF16;
+            transfers.push_back(
+                distributed::ShardDataTransfer(coord)
+                    .host_data(zeros.data())
+                    .region(BufferRegion{offset, 3 * TILE_BYTES_BF16}));
+        }
+    }
+    if (!transfers.empty()) {
+        ctx.cq->enqueue_write_shards(cache.output, transfers, /*blocking=*/false);
+    }
+}
+
+// EnqueueWriteMeshBuffer requires host data >= buffer size; pad with zeros when
+// the cached buffer is larger than this frame's payload.
+template <typename T>
+static void enqueue_write_cached_buffer(
+    DeviceContext& ctx,
+    std::shared_ptr<distributed::MeshBuffer>& mesh_buffer,
+    std::vector<T>& payload) {
+    const size_t need_elems = mesh_buffer->size() / sizeof(T);
+    if (payload.size() < need_elems) {
+        payload.resize(need_elems, 0);
+    }
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, mesh_buffer, payload);
+}
+
 // Set per-core runtime args for reader/compute/writer. Each core's slice of
 // the concatenated tile_id_buffer is identified by (per_core_offset[c],
 // per_core_count[c]); reader/writer kernels look up their tile IDs at runtime
@@ -583,6 +751,110 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     return kernel_ms;
 }
 
+// Daemon path: reuse cached DRAM buffers and return the fp32 image in memory.
+static std::vector<float> process_frame_cached(
+    DeviceContext& ctx,
+    uint32_t image_h,
+    uint32_t image_w,
+    const std::vector<float>& packs_f32,
+    const std::vector<float>& offsets_f32,
+    const std::vector<float>& px_f32,
+    const std::vector<float>& py_f32,
+    double& kernel_ms_out) {
+    const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
+    const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
+    const uint32_t num_tiles = tiles_x * tiles_y;
+    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
+    const uint32_t total_entries = static_cast<uint32_t>(packs_f32.size() / 9);
+
+    const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
+
+    bool output_reallocated = false;
+    ensure_buffer_cache(
+        ctx,
+        ctx.cache,
+        image_h,
+        image_w,
+        total_entries,
+        static_cast<uint32_t>(offsets_f32.size()),
+        assign.tile_id_buffer_bytes_padded,
+        num_tiles,
+        output_reallocated);
+    BufferCache& cache = ctx.cache;
+
+    auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
+    auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
+    auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
+    std::vector<uint32_t> offsets_u32(offsets_f32.size());
+    for (size_t i = 0; i < offsets_f32.size(); i++) {
+        offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
+    }
+
+    const std::vector<uint8_t> this_nonempty = compute_tile_nonempty(offsets_f32, num_tiles);
+
+    FrameDramBuffers bufs{
+        cache.packs, cache.offsets, cache.px, cache.py, cache.output, cache.tile_ids};
+    Program& program = get_program_for_workload(ctx);
+    set_per_core_runtime_args(program, ctx, bufs, assign);
+
+    const auto t_start = std::chrono::steady_clock::now();
+    if (output_reallocated) {
+        std::vector<uint16_t> output_zero(cache.output->size() / sizeof(uint16_t), 0);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, cache.output, output_zero);
+    } else {
+        zero_flipped_empty_tiles(ctx, cache, cache.last_frame_tile_nonempty, this_nonempty);
+    }
+    enqueue_write_cached_buffer(ctx, cache.packs, packs_payload);
+    enqueue_write_cached_buffer(ctx, cache.offsets, offsets_u32);
+    enqueue_write_cached_buffer(ctx, cache.px, px_bf16);
+    enqueue_write_cached_buffer(ctx, cache.py, py_bf16);
+    std::vector<uint32_t> tile_ids_payload = assign.tile_id_buffer_padded;
+    enqueue_write_cached_buffer(ctx, cache.tile_ids, tile_ids_payload);
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, cache.output, /*blocking=*/true);
+    const auto t_end = std::chrono::steady_clock::now();
+    kernel_ms_out = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+
+    cache.last_frame_tile_nonempty = this_nonempty;
+    return tiles_to_image(result_bf16, num_tiles, tiles_x, image_h, image_w);
+}
+
+// ---------------------------------------------------------------------------
+// Binary IPC helpers (daemon mode)
+// ---------------------------------------------------------------------------
+
+static bool read_exact_stdin(void* dst, size_t nbytes) {
+    char* out = static_cast<char*>(dst);
+    size_t got = 0;
+    while (got < nbytes) {
+        std::cin.read(out + got, static_cast<std::streamsize>(nbytes - got));
+        const auto n = static_cast<size_t>(std::cin.gcount());
+        if (n == 0) {
+            return false;
+        }
+        got += n;
+    }
+    return true;
+}
+
+static void write_ok_response(
+    const std::vector<float>& img, uint32_t image_h, uint32_t image_w, double kernel_ms) {
+    const uint32_t image_bytes = image_h * image_w * 3 * sizeof(float);
+    const uint32_t kernel_us = static_cast<uint32_t>(kernel_ms * 1000.0 + 0.5);
+    const uint32_t hdr[4] = {IPC_MAGIC_OK11, image_bytes, kernel_us, 0};
+    std::cout.write(reinterpret_cast<const char*>(hdr), sizeof(hdr));
+    std::cout.write(reinterpret_cast<const char*>(img.data()), image_bytes);
+    std::cout.flush();
+}
+
+static void write_err_response(const std::string& msg) {
+    const uint32_t hdr[4] = {IPC_MAGIC_ERR1, 0, 0, static_cast<uint32_t>(msg.size())};
+    std::cout.write(reinterpret_cast<const char*>(hdr), sizeof(hdr));
+    std::cout.write(msg.data(), static_cast<std::streamsize>(msg.size()));
+    std::cout.flush();
+}
+
 // ---------------------------------------------------------------------------
 // Daemon mode
 // ---------------------------------------------------------------------------
@@ -599,36 +871,59 @@ static int run_daemon() {
     std::cout << "READY" << std::endl;
     std::cout.flush();
 
-    std::string line;
-    while (std::getline(std::cin, line)) {
-        if (line == "QUIT" || line == "quit") {
+    while (true) {
+        char prefix[4];
+        if (!read_exact_stdin(prefix, 4)) {
             break;
         }
-        if (line.empty()) {
+
+        if ((prefix[0] == 'Q' || prefix[0] == 'q') && (prefix[1] == 'U' || prefix[1] == 'u') &&
+            (prefix[2] == 'I' || prefix[2] == 'i') && (prefix[3] == 'T' || prefix[3] == 't')) {
+            char nl = '\0';
+            read_exact_stdin(&nl, 1);
+            break;
+        }
+
+        uint32_t magic = 0;
+        std::memcpy(&magic, prefix, 4);
+        if (magic != IPC_MAGIC_FRM1) {
+            write_err_response("expected FRM1 magic or QUIT");
             continue;
         }
-        // FRAME H W packs offsets px py out
-        std::istringstream iss(line);
-        std::string cmd;
-        iss >> cmd;
-        if (cmd != "FRAME") {
-            std::cout << "ERR unknown command: " << cmd << std::endl;
-            std::cout.flush();
-            continue;
+
+        uint32_t hdr_rest[5] = {};
+        if (!read_exact_stdin(hdr_rest, sizeof(hdr_rest))) {
+            break;
         }
-        FrameInputs f;
-        if (!(iss >> f.image_h >> f.image_w >> f.packs_path >> f.offsets_path >> f.px_path >> f.py_path >> f.out_path)) {
-            std::cout << "ERR malformed FRAME line" << std::endl;
-            std::cout.flush();
-            continue;
+        const uint32_t image_h = hdr_rest[0];
+        const uint32_t image_w = hdr_rest[1];
+        const uint32_t total_entries = hdr_rest[2];
+        const uint32_t offsets_count = hdr_rest[3];
+
+        const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
+        const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
+        const uint32_t num_tiles = tiles_x * tiles_y;
+        const size_t packs_floats = static_cast<size_t>(total_entries) * 9;
+        const size_t px_floats = static_cast<size_t>(num_tiles) * TILE_H * TILE_W;
+
+        std::vector<float> packs_f32(packs_floats);
+        std::vector<float> offsets_f32(offsets_count);
+        std::vector<float> px_f32(px_floats);
+        std::vector<float> py_f32(px_floats);
+        if (!read_exact_stdin(packs_f32.data(), packs_floats * sizeof(float)) ||
+            !read_exact_stdin(offsets_f32.data(), offsets_count * sizeof(float)) ||
+            !read_exact_stdin(px_f32.data(), px_floats * sizeof(float)) ||
+            !read_exact_stdin(py_f32.data(), px_floats * sizeof(float))) {
+            break;
         }
+
         try {
-            double ms = process_frame(ctx, f);
-            std::cout << "OK " << std::fixed << std::setprecision(2) << ms << std::endl;
-            std::cout.flush();
+            double kernel_ms = 0.0;
+            auto img = process_frame_cached(
+                ctx, image_h, image_w, packs_f32, offsets_f32, px_f32, py_f32, kernel_ms);
+            write_ok_response(img, image_h, image_w, kernel_ms);
         } catch (const std::exception& e) {
-            std::cout << "ERR " << e.what() << std::endl;
-            std::cout.flush();
+            write_err_response(e.what());
         }
     }
 
