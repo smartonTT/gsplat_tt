@@ -394,8 +394,8 @@ void kernel_main() {
 
             // ----- Stage D2: per-channel color accumulator update.
             //   color_c_state ← color_c_state + color_c · contrib
-            // One batched producer (contrib·color_r/g/b → CB_T_R/G/B) plus three
-            // FPU adder blocks (state += scratch), each with in-place spill.
+            // One batched producer (contrib·color_r/g/b → CB_T_R/G/B) plus one
+            // batched FPU adder block (state += scratch), in-place spill to 3 CBs.
 
             // Batched producer: dst[0..2] = contrib · color_r/g/b
             tile_regs_acquire();
@@ -422,46 +422,34 @@ void kernel_main() {
             cb_wait_front(CB_T_G, 1);
             cb_wait_front(CB_T_B, 1);
 
-            // R channel adder
+            // Batched adder: dst[0..2] = R/G/B_state + T_R/G/B
             tile_regs_acquire();
             add_tiles_init(CB_COLOR_R_STATE, CB_T_R);
             add_tiles(CB_COLOR_R_STATE, CB_T_R, 0, 0, 0);
+            add_tiles_init(CB_COLOR_G_STATE, CB_T_G);
+            add_tiles(CB_COLOR_G_STATE, CB_T_G, 0, 0, 1);
+            add_tiles_init(CB_COLOR_B_STATE, CB_T_B);
+            add_tiles(CB_COLOR_B_STATE, CB_T_B, 0, 0, 2);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_R_STATE, 1);
             cb_reserve_back(CB_COLOR_R_STATE, 1);
             pack_tile(0, CB_COLOR_R_STATE);
             cb_push_back(CB_COLOR_R_STATE, 1);
-            tile_regs_release();
-            cb_wait_front(CB_COLOR_R_STATE, 1);
-            cb_pop_front(CB_T_R, 1);
-
-            // G channel adder
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_G_STATE, CB_T_G);
-            add_tiles(CB_COLOR_G_STATE, CB_T_G, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
             cb_pop_front(CB_COLOR_G_STATE, 1);
             cb_reserve_back(CB_COLOR_G_STATE, 1);
-            pack_tile(0, CB_COLOR_G_STATE);
+            pack_tile(1, CB_COLOR_G_STATE);
             cb_push_back(CB_COLOR_G_STATE, 1);
-            tile_regs_release();
-            cb_wait_front(CB_COLOR_G_STATE, 1);
-            cb_pop_front(CB_T_G, 1);
-
-            // B channel adder
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_B_STATE, CB_T_B);
-            add_tiles(CB_COLOR_B_STATE, CB_T_B, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
             cb_pop_front(CB_COLOR_B_STATE, 1);
             cb_reserve_back(CB_COLOR_B_STATE, 1);
-            pack_tile(0, CB_COLOR_B_STATE);
+            pack_tile(2, CB_COLOR_B_STATE);
             cb_push_back(CB_COLOR_B_STATE, 1);
             tile_regs_release();
+            cb_wait_front(CB_COLOR_R_STATE, 1);
+            cb_wait_front(CB_COLOR_G_STATE, 1);
             cb_wait_front(CB_COLOR_B_STATE, 1);
+            cb_pop_front(CB_T_R, 1);
+            cb_pop_front(CB_T_G, 1);
             cb_pop_front(CB_T_B, 1);
 
             // ----- Stage E: front-to-back transmittance update.
