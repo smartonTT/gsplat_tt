@@ -476,28 +476,11 @@ void kernel_main() {
             cb_wait_front(CB_COLOR_B_STATE, 1);
             cb_pop_front(CB_T_TMP, 1);
 
-            cb_pop_front(CB_CONTRIB, 1);
-
             // ----- Stage E: front-to-back transmittance update.
-            //   T_state ← T_state · (1 - alpha)
-            //
-            // Step 1: one_minus_alpha ← rsub(alpha, 1.0) = 1.0 - alpha
+            //   T_state -= CB_CONTRIB   (equivalent to T_state · (1 - alpha))
             tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_ALPHA);
-            copy_tile(CB_ALPHA, 0, 0);
-            rsub_unary_tile(0, ONE_F_BITS);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_ONE_MINUS_ALPHA, 1);
-            pack_tile(0, CB_ONE_MINUS_ALPHA);
-            cb_push_back(CB_ONE_MINUS_ALPHA, 1);
-            tile_regs_release();
-            cb_wait_front(CB_ONE_MINUS_ALPHA, 1);
-
-            // Step 2: T_state ← T_state · (1 - alpha)  (spill)
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_STATE, CB_ONE_MINUS_ALPHA);
-            mul_tiles(CB_T_STATE, CB_ONE_MINUS_ALPHA, 0, 0, 0);
+            sub_tiles_init(CB_T_STATE, CB_CONTRIB);
+            sub_tiles(CB_T_STATE, CB_CONTRIB, 0, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_T_STATE, 1);
@@ -505,8 +488,8 @@ void kernel_main() {
             pack_tile(0, CB_T_STATE);
             cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
-            cb_pop_front(CB_ONE_MINUS_ALPHA, 1);
             cb_wait_front(CB_T_STATE, 1);
+            cb_pop_front(CB_CONTRIB, 1);
 
             cb_pop_front(CB_ALPHA, 1);
             cb_pop_front(CB_SCALARS, 1);
