@@ -21,9 +21,11 @@
 | 010  | Fold B3b1 into B2+B3a via `add_binary_tile` | **KEPT** | 57.31 | −1.1% | −16.8% |
 | 011  | Fuse D2 adder + Stage E (4-slot dst) | **KEPT** | 56.54 | −1.3% | −18.0% |
 | 012  | D1+D2 producer FPU recompute fuse | **reverted** (no-win) | 56.90 | +0.6% | −18.0% |
+| 013  | Stage F fusion via `mul_binary_tile` | **reverted** (no-win) | 56.78 | +0.4% | −18.0% |
 
 **Net kernel improvement:** `68.92 ms → 56.54 ms` = **−18.0% on stitch hero**
 **Acquires per Gaussian:** ~10 → **6** (+2/16 for Stage F refresh)
+**Kept:** 7 / 13 iters. Most recent 3 attempts (011, 012, 013) all reverted or yielded < 1% — clear convergence signal.
 
 ## Multi-scene validation (iter-011 kernel)
 
