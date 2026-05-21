@@ -31,7 +31,8 @@
 //               -> "freeze" pixels whose contribution would round to <1/255
 //     Stage A : read 9 fp32 scalars (mean, cov_inv, color, opacity)
 //     Stage B1: dx = px - mean_x,  dy = py - mean_y         (per-pixel offset)
-//     Stage B2: dx² , dy² , dx·dy                           (squared offsets)
+//     Stage B2+B3a: weighted quadratic terms → CB_Q
+//               [a·dx², c·dy², 2b·dx·dy] (no intermediate CBs)
 //     Stage B3: Q = a·dx² + 2b·dx·dy + c·dy²                (Mahalanobis dist)
 //               power = -0.5·Q                              (Gaussian exponent)
 //     Stage C : weight  = exp(min(power, 0))                (Gaussian falloff)
@@ -282,67 +283,23 @@ void kernel_main() {
             cb_wait_front(CB_DX, 1);
             cb_wait_front(CB_DY, 1);
 
-            // ----- Stage B2: pairwise products dx², dy², dx·dy.
-            // tt-metal has no fused quadratic-form op, so we do three
-            // separate mul_tiles, each in its own acquire block (Dst is
-            // limited; can't keep many tiles live at once with fp32 acc).
-            // The three products feed Stage B3 below.
-
-            // Stage B2a: dx² = dx · dx
-            tile_regs_acquire();
-            mul_tiles_init(CB_DX, CB_DX);
-            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_DX2, 1);
-            pack_tile(0, CB_DX2);
-            cb_push_back(CB_DX2, 1);
-            tile_regs_release();
-
-            // Stage B2b: dy² = dy · dy
-            tile_regs_acquire();
-            mul_tiles_init(CB_DY, CB_DY);
-            mul_tiles(CB_DY, CB_DY, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_DY2, 1);
-            pack_tile(0, CB_DY2);
-            cb_push_back(CB_DY2, 1);
-            tile_regs_release();
-
-            // Stage B2c: dx·dy
-            tile_regs_acquire();
-            mul_tiles_init(CB_DX, CB_DY);
-            mul_tiles(CB_DX, CB_DY, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_DXDY, 1);
-            pack_tile(0, CB_DXDY);
-            cb_push_back(CB_DXDY, 1);
-            tile_regs_release();
-
-            cb_wait_front(CB_DX2, 1);
-            cb_wait_front(CB_DY2, 1);
-            cb_wait_front(CB_DXDY, 1);
-
-            // ----- Stage B3a: weight each squared offset by its covariance entry.
-            // Q = a·dx² + 2b·dx·dy + c·dy²  (Mahalanobis dist via inverse cov).
-            // Here we stage each weighted term as a separate tile in CB_Q
-            // (which has depth 3). We sum them in B3b1 and B3b2 below in two
-            // add_tiles passes — tt-metal binary ops always need CB operands,
-            // not three Dst slots, hence the staging.
+            // ----- Stage B2+B3a: dx²·a, dy²·c, dx·dy·2b → CB_Q (fused).
+            // One acquire block: mul products in Dst[0..2], scale by covariance
+            // scalars, pack directly to CB_Q — no CB_DX2/DY2/DXDY round-trips.
             //   CB_Q[0] = a · dx²
             //   CB_Q[1] = c · dy²
             //   CB_Q[2] = 2b · dx·dy
             tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_DX2);
-            copy_tile(CB_DX2, 0, 0);
+            mul_tiles_init(CB_DX, CB_DX);
+            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
             mul_unary_tile(0, cov_a_bits);
-            copy_tile_to_dst_init_short(CB_DY2);
-            copy_tile(CB_DY2, 0, 1);
+
+            mul_tiles_init(CB_DY, CB_DY);
+            mul_tiles(CB_DY, CB_DY, 0, 0, 1);
             mul_unary_tile(1, cov_c_bits);
-            copy_tile_to_dst_init_short(CB_DXDY);
-            copy_tile(CB_DXDY, 0, 2);
+
+            mul_tiles_init(CB_DX, CB_DY);
+            mul_tiles(CB_DX, CB_DY, 0, 0, 2);
             mul_unary_tile(2, two_cov_b_bits);
             tile_regs_commit();
             tile_regs_wait();
@@ -420,9 +377,6 @@ void kernel_main() {
             cb_pop_front(CB_Q, 3);
             cb_pop_front(CB_DX, 1);
             cb_pop_front(CB_DY, 1);
-            cb_pop_front(CB_DX2, 1);
-            cb_pop_front(CB_DY2, 1);
-            cb_pop_front(CB_DXDY, 1);
 
             cb_wait_front(CB_ALPHA, 1);
 
