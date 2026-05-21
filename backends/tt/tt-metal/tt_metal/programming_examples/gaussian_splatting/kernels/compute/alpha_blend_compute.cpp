@@ -9,6 +9,7 @@
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_binary.h"
+#include "api/compute/eltwise_binary_sfpu.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/binop_with_scalar.h"
 #include "api/compute/eltwise_unary/exp.h"
@@ -285,10 +286,9 @@ void kernel_main() {
 
             // ----- Stage B2+B3a: dx²·a, dy²·c, dx·dy·2b → CB_Q (fused).
             // One acquire block: mul products in Dst[0..2], scale by covariance
-            // scalars, pack directly to CB_Q — no CB_DX2/DY2/DXDY round-trips.
-            //   CB_Q[0] = a · dx²
-            //   CB_Q[1] = c · dy²
-            //   CB_Q[2] = 2b · dx·dy
+            // scalars, fold partial Q sum in-register, pack 2 tiles to CB_Q.
+            //   CB_Q[0] = a·dx² + c·dy²  (partial sum via SFPU add_binary_tile)
+            //   CB_Q[1] = 2b · dx·dy
             tile_regs_acquire();
             mul_tiles_init(CB_DX, CB_DX);
             mul_tiles(CB_DX, CB_DX, 0, 0, 0);
@@ -301,29 +301,19 @@ void kernel_main() {
             mul_tiles_init(CB_DX, CB_DY);
             mul_tiles(CB_DX, CB_DY, 0, 0, 2);
             mul_unary_tile(2, two_cov_b_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 3);
-            pack_tile(0, CB_Q);
-            pack_tile(1, CB_Q);
-            pack_tile(2, CB_Q);
-            cb_push_back(CB_Q, 3);
-            tile_regs_release();
-            cb_wait_front(CB_Q, 3);
 
-            // ----- Stage B3b1: partial sum a·dx² + c·dy² → CB_POWER.
-            // Just adding CB_Q[0] + CB_Q[1]. The third term (2b·dx·dy)
-            // is folded in within the next acquire block (B3b2+C) below.
-            tile_regs_acquire();
-            add_tiles_init(CB_Q, CB_Q);
-            add_tiles(CB_Q, CB_Q, 0, 1, 0);
+            // Fold partial Q sum into dst[0]; avoid standalone B3b1 acquire.
+            add_binary_tile_init();
+            add_binary_tile(0, 1, 0);
+
             tile_regs_commit();
             tile_regs_wait();
-            cb_reserve_back(CB_POWER, 1);
-            pack_tile(0, CB_POWER);
-            cb_push_back(CB_POWER, 1);
+            cb_reserve_back(CB_Q, 2);
+            pack_tile(0, CB_Q);
+            pack_tile(2, CB_Q);
+            cb_push_back(CB_Q, 2);
             tile_regs_release();
-            cb_wait_front(CB_POWER, 1);
+            cb_wait_front(CB_Q, 2);
 
             // ----- Stage B3b2 + C: finish Q, compute power, exp, and alpha.
             // This is the longest single Dst block in the kernel — it folds
@@ -334,8 +324,8 @@ void kernel_main() {
             //   alpha = min( opacity · exp(min(-0.5·Q, 0)),  0.99 )
             //
             tile_regs_acquire();
-            add_tiles_init(CB_POWER, CB_Q);
-            add_tiles(CB_POWER, CB_Q, 0, 2, 0);  // dst[0] = (a·dx² + c·dy²) + 2b·dx·dy = Q
+            add_tiles_init(CB_Q, CB_Q);
+            add_tiles(CB_Q, CB_Q, 0, 1, 0);  // dst[0] = partial sum + 2b·dx·dy = Q
 
             // power = -0.5 · Q
             mul_unary_tile(0, NEG_HALF_BITS);
@@ -373,8 +363,7 @@ void kernel_main() {
             tile_regs_release();
 
             // Cleanup intermediates from B/C stages.
-            cb_pop_front(CB_POWER, 1);
-            cb_pop_front(CB_Q, 3);
+            cb_pop_front(CB_Q, 2);
             cb_pop_front(CB_DX, 1);
             cb_pop_front(CB_DY, 1);
 
