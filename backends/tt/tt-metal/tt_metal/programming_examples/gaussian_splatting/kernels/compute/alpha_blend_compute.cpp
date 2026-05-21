@@ -16,6 +16,7 @@
 #include "api/compute/eltwise_unary/comp.h"
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/binary_max_min.h"
+#include "api/compute/reduce.h"
 
 // Alpha-blend compute kernel: 3D Gaussian Splatting forward rasterizer
 // (front-to-back compositing) for a per-core slice of screen tiles.
@@ -74,7 +75,7 @@ void kernel_main() {
     constexpr uint32_t CB_DXDY          = 8;   // dx·dy
     constexpr uint32_t CB_Q             = 9;   // [a·dx², c·dy², 2b·dx·dy] (3 tiles)
     constexpr uint32_t CB_POWER         = 10;  // partial sum a·dx² + c·dy²
-    // CB 11 reserved (was -88 clamp tile; now unused after exp_tile<approx=true>)
+    constexpr uint32_t CB_CONST_ONE     = 11;  // constant 1.0 tile (reduce scaler)
     constexpr uint32_t CB_ALPHA         = 12;  // per-pixel alpha
     constexpr uint32_t CB_CONTRIB       = 13;  // contrib = alpha · T · sat_mask
     constexpr uint32_t CB_ONE_MINUS_ALPHA = 14;
@@ -125,8 +126,19 @@ void kernel_main() {
     tile_regs_release();
     cb_push_back(CB_CONST_099, 1);
 
+    // CB_CONST_ONE ← tile of 1.0 (reduce scaler for block-dead detection)
+    cb_reserve_back(CB_CONST_ONE, 1);
+    tile_regs_acquire();
+    fill_tile(0, 1.0f);
+    tile_regs_commit();
+    tile_regs_wait();
+    pack_tile(0, CB_CONST_ONE);
+    tile_regs_release();
+    cb_push_back(CB_CONST_ONE, 1);
+
     cb_wait_front(CB_CONST_ZERO, 1);
     cb_wait_front(CB_CONST_099, 1);
+    cb_wait_front(CB_CONST_ONE, 1);
 
     for (uint32_t t = 0; t < num_tiles; t++) {
         // =====================================================================
@@ -212,16 +224,16 @@ void kernel_main() {
         // into CB_SCALARS; we consume one pack per iteration in this strict
         // front-to-back order (already sorted on the host).
         // =====================================================================
+        bool block_dead = false;
         for (uint32_t g = 0; g < g_count; g++) {
             // ----- Stage F: sat_mask refresh (every 16 Gaussians, skip g=0) -----
             // Recompute which pixels are still "active" (T >= 1e-4). For pixels
             // whose transmittance has saturated below 1e-4, sat_mask becomes 0
-            // and zeroes their contribution in stages D1/E going forward —
-            // effectively a per-pixel early termination without breaking the
-            // SFPU's vector lock-step (we can't actually skip lanes, but multiplying
-            // by 0 does the same job at the same op cost). g=0 is skipped because
-            // T is freshly initialized to 1 above.
-            if (g > 0 && (g & 0xFu) == 0u) {
+            // and zeroes their contribution in stages D1/E going forward.
+            // When all 1024 pixels are saturated (max sat_mask == 0), set block_dead
+            // and skip SFPU work for the remaining Gaussians (still pop CB_SCALARS
+            // so the reader does not deadlock). g=0 is skipped because T starts at 1.
+            if (!block_dead && g > 0 && (g & 0xFu) == 0u) {
                 tile_regs_acquire();
                 copy_tile_to_dst_init_short(CB_T_STATE);
                 copy_tile(CB_T_STATE, 0, 0);
@@ -236,9 +248,40 @@ void kernel_main() {
                 cb_push_back(CB_SAT_MASK, 1);
                 tile_regs_release();
                 cb_wait_front(CB_SAT_MASK, 1);
+
+                // Block-wide early termination: if every pixel is saturated, stop SFPU.
+                // SUM over {0,1} mask is 0 iff all pixels are dead. (MAX reduce +
+                // read_tile_value is unreliable on bf16 tiles; float compare on raw
+                // uint32 falsely treats bf16 1.0 as ~1e-4 and skipped every tile.)
+                reduce_init<PoolType::SUM, ReduceDim::REDUCE_SCALAR, true>(
+                    CB_SAT_MASK, CB_CONST_ONE, CB_T_TMP);
+                tile_regs_acquire();
+                reduce_tile<PoolType::SUM, ReduceDim::REDUCE_SCALAR, true>(
+                    CB_SAT_MASK, CB_CONST_ONE, 0, 0, 0);
+                tile_regs_commit();
+                tile_regs_wait();
+                cb_reserve_back(CB_T_TMP, 1);
+                pack_tile(0, CB_T_TMP);
+                cb_push_back(CB_T_TMP, 1);
+                tile_regs_release();
+                reduce_uninit<true>();
+                // Restore SFPU/packer state for subsequent eltwise ops (reduce_init
+                // reprograms the packer edge masks; must match kernel startup).
+                binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
+                cb_wait_front(CB_T_TMP, 1);
+                uint32_t sat_sum_bits = ckernel::read_tile_value(CB_T_TMP, 0, 0);
+                cb_pop_front(CB_T_TMP, 1);
+                if (sat_sum_bits == 0u) {
+                    block_dead = true;
+                }
             }
 
             cb_wait_front(CB_SCALARS, 1);
+
+            if (block_dead) {
+                cb_pop_front(CB_SCALARS, 1);
+                continue;
+            }
 
             // ----- Stage A: read this Gaussian's 9 fp32 attributes from CB_SCALARS.
             // Layout (set on the host in prepare_kernel_inputs):

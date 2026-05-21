@@ -24,8 +24,8 @@ constexpr uint32_t CB_DY2        = 7;   // dy²
 constexpr uint32_t CB_DXDY       = 8;   // dx·dy
 constexpr uint32_t CB_Q          = 9;   // [a·dx², c·dy², 2b·dx·dy] (3 tiles)
 constexpr uint32_t CB_POWER      = 10;  // partial sum a·dx² + c·dy² before adding 2b·dx·dy
-// CB 11 reserved (was CB_CONST_NEG88 for approx=false exp clamp; unused since
-// switch to exp_tile<approx=true>). Slot kept to avoid renumbering downstream CBs.
+// CB 11: constant 1.0 tile used as reduce scaler (PoolType::MAX/SUM).
+constexpr uint32_t CB_CONST_ONE  = 11;
 constexpr uint32_t CB_ALPHA      = 12;  // alpha = min(0.99, opacity · exp(power))
 constexpr uint32_t CB_CONTRIB    = 13;  // contrib = alpha · T_state · sat_mask
 constexpr uint32_t CB_ONE_MINUS_ALPHA = 14;  // (1 - alpha) for transmittance update
