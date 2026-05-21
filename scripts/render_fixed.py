@@ -80,6 +80,9 @@ def main():
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--profile", action="store_true",
                         help="Also set TT_METAL_DEVICE_PROFILER=1; runs 1 frame")
+    parser.add_argument("--resolution", default=None,
+                        help="Override (W, H) from cameras.json. Format: WxH "
+                             "(e.g. 1024x1024). Snapped to multiples of 32.")
     args = parser.parse_args()
 
     if args.profile:
@@ -104,7 +107,19 @@ def main():
         print(f"ERROR: ply not found: {ply_path}", file=sys.stderr)
         sys.exit(2)
 
-    W, H = entry["image_size"]
+    if args.resolution is not None:
+        try:
+            w_str, h_str = args.resolution.lower().split("x")
+            W_raw, H_raw = int(w_str), int(h_str)
+        except ValueError:
+            print(f"ERROR: --resolution must be WxH (got {args.resolution!r})",
+                  file=sys.stderr)
+            sys.exit(2)
+        # Snap down to tile multiples to match what the kernel expects.
+        W = max(TILE_SIZE, (W_raw // TILE_SIZE) * TILE_SIZE)
+        H = max(TILE_SIZE, (H_raw // TILE_SIZE) * TILE_SIZE)
+    else:
+        W, H = entry["image_size"]
     fov_deg = entry["fov_deg"]
     # c2w_to_w2c expects numpy; build c2w as numpy and pass through.
     c2w = np.asarray(entry["views"][args.view]["c2w"], dtype=np.float32)

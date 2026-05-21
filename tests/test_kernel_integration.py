@@ -71,6 +71,7 @@ def test_full_scene_psnr():
 
     with tempfile.TemporaryDirectory() as td:
         np.save(f"{td}/packs.npy", packs)
+        np.save(f"{td}/packs_gids.npy", sorted_gids.numpy().astype(np.float32))
         np.save(f"{td}/offsets.npy", offsets.astype(np.float32))
         np.save(f"{td}/px.npy", px)
         np.save(f"{td}/py.npy", py)
@@ -160,6 +161,7 @@ def test_640_perf_baseline():
     # --- Time kernel binary subprocess (incl. device init + JIT) ---
     with tempfile.TemporaryDirectory() as td:
         np.save(f"{td}/packs.npy", packs)
+        np.save(f"{td}/packs_gids.npy", sorted_gids.numpy().astype(np.float32))
         np.save(f"{td}/offsets.npy", offsets.astype(np.float32))
         np.save(f"{td}/px.npy", px)
         np.save(f"{td}/py.npy", py)

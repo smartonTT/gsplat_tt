@@ -6,8 +6,11 @@ namespace gsplat {
 constexpr uint32_t TILE_H = 32;
 constexpr uint32_t TILE_W = 32;
 constexpr uint32_t TILE_BYTES_BF16 = TILE_H * TILE_W * 2;     // 2 KB
-constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars
-constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // padded for NoC alignment
+constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars (compute CB)
+constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // CB_SCALARS page (9 fp32 + pad)
+constexpr uint32_t DYN_PACK_PAGE_BYTES = 32;                   // 5 fp32 mean+cov_inv per entry
+constexpr uint32_t STATIC_COLOR_OPACITY_PAGE_BYTES = 32;       // 4 fp32 (R,G,B,opacity) per gid
+constexpr uint32_t SORTED_GIDS_PAGE_BYTES = 64;                // 16 uint32 gids per page
 constexpr uint32_t META_PAGE_BYTES = 64;                       // padded uint32 page
 
 // CB indices

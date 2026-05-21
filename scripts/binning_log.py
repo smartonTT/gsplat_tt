@@ -131,11 +131,18 @@ def main():
     ap.add_argument("--ply", type=Path, default=None)
     ap.add_argument("--md", type=Path, default=None,
                     help="Also write a markdown summary at this path")
+    ap.add_argument("--resolution", default=None,
+                    help="Override (W, H) from cameras.json. Format: WxH "
+                         "(e.g. 1024x1024).")
     args = ap.parse_args()
 
     cams = json.loads(args.camera_file.read_text())
     entry = cams[args.scene]
-    W, H = entry["image_size"]
+    if args.resolution is not None:
+        w_str, h_str = args.resolution.lower().split("x")
+        W, H = int(w_str), int(h_str)
+    else:
+        W, H = entry["image_size"]
     fov_deg = entry["fov_deg"]
     c2w = np.asarray(entry["views"][args.view]["c2w"], dtype=np.float32)
     ply_path = args.ply if args.ply is not None else Path(entry["ply"])
@@ -177,7 +184,7 @@ def main():
             f"{s['avg_overdraw_per_pixel']:.1f} |"
         )
 
-    print("\n[theoretical peak] (72 cores @ 1.2 GHz; per-tile pair cycles)")
+    print(f"\n[theoretical peak] ({NUM_CORES} cores @ {SFPU_GHZ} GHz; per-tile pair cycles)")
     for ts in tile_sizes:
         pairs = bins[ts]["gaussian_tile_pairs"]
         agg = theoretical_peak_ms(pairs, CYCLES_PER_PAIR_AGGRESSIVE)
@@ -202,7 +209,7 @@ def main():
             f.write("\n".join(md_rows))
             f.write("\n\n")
             f.write("## Theoretical peak\n\n")
-            f.write("Assumes 72 cores at 1.2 GHz, perfectly parallel.\n\n")
+            f.write(f"Assumes {NUM_CORES} cores at {SFPU_GHZ} GHz, perfectly parallel.\n\n")
             for ts in tile_sizes:
                 pairs = bins[ts]["gaussian_tile_pairs"]
                 f.write(f"### tile {ts}×{ts}\n\n")

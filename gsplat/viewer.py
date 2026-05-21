@@ -1,5 +1,8 @@
 """Browser-based interactive viewer for 3D Gaussian Splatting scenes."""
+from __future__ import annotations
+
 import os
+import socket
 import statistics
 import time
 from datetime import datetime
@@ -12,7 +15,10 @@ import viser
 import nerfview
 
 from backends import get_backend
+from gsplat.camera_controls import ClientCameraController
 from gsplat.data_structures import Gaussians
+from gsplat.letterbox import letterbox_image
+from gsplat.nerfview_viewer import GsplatViewer
 from gsplat.pipeline import Pipeline, RenderResult, format_timings
 from gsplat.utils import c2w_to_w2c
 
@@ -45,6 +51,10 @@ def _median_by_key(
     return out
 
 
+def _snap_render_dim(value: int) -> int:
+    return max(TILE_SIZE, (value // TILE_SIZE) * TILE_SIZE)
+
+
 class GaussianViewer:
     """Interactive viewer for 3D Gaussian Splatting scenes.
 
@@ -61,75 +71,126 @@ class GaussianViewer:
         host: str = "0.0.0.0",
         port: int = 8080,
         backend: str = "cpu",
-        max_resolution: int = 640,
+        render_width: int = 1024,
+        render_height: int = 1024,
+        force_square: int | None = None,
         verbose: bool = False,
         scene_path: str | None = None,
+        # Back-compat alias: if passed, overrides render_width/height.
+        max_resolution: int | None = None,
     ):
         self.gaussians = gaussians
         self.backend_name = backend
-        # Path to the .ply this viewer was launched with — used as the scene
-        # name in the benchmark markdown filename (None for synthetic data).
         self.scene_path = scene_path
-        # Shorter render dim, in pixels (e.g. 720 ≈ 720p). The longer dim
-        # follows from the browser's aspect ratio; rendering at native browser
-        # size makes prepare_kernel_inputs take seconds and the viewer feels
-        # frozen. Stretching the displayed image is fine for interactive use.
-        self.max_resolution = max_resolution
+        if max_resolution is not None:
+            render_width = max_resolution
+            render_height = max_resolution
+        self.render_width = render_width
+        self.render_height = render_height
+        if force_square is not None:
+            if force_square <= 0 or force_square % TILE_SIZE != 0:
+                raise ValueError(
+                    f"force_square={force_square} must be a positive multiple "
+                    f"of TILE_SIZE={TILE_SIZE}"
+                )
+        self.force_square = force_square
         self.verbose = verbose
 
-        # Spin up the backend lazily through the registry, then wrap it in a
-        # Pipeline so per-stage timing happens automatically.
         self.pipeline = Pipeline(get_backend(backend, verbose=verbose),
                                  tile_size=TILE_SIZE)
 
-        # Per-frame timing log; aggregated into a markdown report on shutdown.
-        # Empty frames (no visible Gaussians) are skipped so they don't pull
-        # the median toward zero.
         self._frame_samples: list[_FrameSample] = []
         self._session_start = datetime.now()
+        self._camera_controllers: dict[int, ClientCameraController] = {}
 
-        # Compute scene bounds for initial camera placement.
-        # Naive mean / min-max over ALL Gaussians is fragile: trained 3DGS
-        # scenes routinely contain a small number of low-opacity outliers
-        # at extreme positions, which inflate the bounding box and push the
-        # camera so far back that the visible content collapses to a few
-        # center tiles. We instead use percentile bounds restricted to
-        # well-opaque Gaussians, which closely tracks the visible content.
         means = gaussians.means.numpy()
         opacities = gaussians.opacities.numpy()
         visible = means[opacities > 0.1]
         if visible.shape[0] < 100:
-            visible = means  # fallback for synthetic / very sparse scenes
+            visible = means
         lo = np.percentile(visible, 5, axis=0)
         hi = np.percentile(visible, 95, axis=0)
         self._scene_center = (lo + hi) * 0.5
         self._camera_distance = float(np.linalg.norm(hi - lo)) * 1.2
 
-        # Create viser server
         self.server = viser.ViserServer(host=host, port=port, verbose=False)
         self.server.scene.world_axes.visible = True
 
-        # GUI: stats display
         self._stats_display = self.server.gui.add_markdown("**FPS:** --")
+        self.server.gui.add_markdown(
+            f"**{socket.gethostname()}**",
+            order=-1000,
+        )
+        self._fps_controls = self.server.gui.add_checkbox(
+            "FPS controls",
+            initial_value=False,
+            hint=(
+                "Off: left-drag turntable orbit around the scene center. "
+                "On: first-person look + WASD/QE movement."
+            ),
+        )
 
-        # Create nerfview viewer (registers its own on_client_connect internally)
-        self.viewer = nerfview.Viewer(
+        self.viewer = GsplatViewer(
             server=self.server,
             render_fn=self._render_fn,
             mode="rendering",
+            default_render_width=render_width,
+            default_render_height=render_height,
         )
 
-        # Set initial camera for new clients (registered after nerfview's handler)
+        @self._fps_controls.on_update
+        def _on_control_mode(_event: viser.GuiEvent) -> None:
+            mode = (
+                ClientCameraController.FPS
+                if self._fps_controls.value
+                else ClientCameraController.ORBIT
+            )
+            for client in self.server.get_clients().values():
+                controller = self._camera_controllers.get(client.client_id)
+                if controller is None:
+                    continue
+                controller.set_mode(mode)
+                if mode == ClientCameraController.FPS:
+                    controller.snap_to_fps(client.camera)
+                else:
+                    controller.snap_to_orbit(client.camera)
+
         center = self._scene_center
         distance = self._camera_distance
 
         @self.server.on_client_connect
-        def _set_initial_camera(client: viser.ClientHandle) -> None:
+        def _on_client_connect(client: viser.ClientHandle) -> None:
+            controller = ClientCameraController(center, distance)
+            mode = (
+                ClientCameraController.FPS
+                if self._fps_controls.value
+                else ClientCameraController.ORBIT
+            )
+            controller.set_mode(mode)
+            self._camera_controllers[client.client_id] = controller
+
             client.camera.position = center + np.array([0.0, 0.0, distance])
             client.camera.look_at = center
+            controller.apply(client.camera)
+
+            @client.camera.on_update
+            def _on_camera_update(camera: viser.CameraHandle) -> None:
+                controller.set_mode(
+                    ClientCameraController.FPS
+                    if self._fps_controls.value
+                    else ClientCameraController.ORBIT
+                )
+                controller.apply(camera)
 
         self._running = False
-        flags = [f"backend={backend}", f"max_resolution={max_resolution}"]
+        if self.force_square is not None:
+            flags = [f"backend={backend}",
+                     f"force_square={self.force_square}x{self.force_square}"]
+        else:
+            flags = [
+                f"backend={backend}",
+                f"render={render_width}x{render_height}",
+            ]
         if verbose:
             flags.append("verbose")
         print(
@@ -140,36 +201,16 @@ class GaussianViewer:
     def _resolve_render_size(
         self, render_tab_state: nerfview.RenderTabState
     ) -> tuple[int, int, int, int]:
-        """Pick (W, H) for this frame.
+        """Pick render (W, H) and viewport (req_W, req_H) for this frame."""
+        req_W = render_tab_state.viewer_width
+        req_H = render_tab_state.viewer_height
 
-        max_resolution sets the shorter dim (480p/720p/1080p convention);
-        the longer dim follows from the browser's aspect ratio. Both dims
-        are snapped down to multiples of TILE_SIZE so the kernel gets whole
-        tiles.
+        if self.force_square is not None:
+            W = H = self.force_square
+            return req_W, req_H, W, H
 
-        Returns (req_W, req_H, W, H) — the original request alongside the
-        resolved size, useful for logging.
-        """
-        if render_tab_state.preview_render:
-            req_W = render_tab_state.render_width
-            req_H = render_tab_state.render_height
-        else:
-            req_W = render_tab_state.viewer_width
-            req_H = render_tab_state.viewer_height
-
-        if req_W <= 0 or req_H <= 0:
-            return req_W, req_H, max(req_W, 1), max(req_H, 1)
-
-        aspect = req_W / req_H
-        if aspect >= 1.0:  # landscape: H is the shorter dim
-            H = self.max_resolution
-            W = int(self.max_resolution * aspect)
-        else:  # portrait: W is the shorter dim
-            W = self.max_resolution
-            H = int(self.max_resolution / aspect)
-
-        W = max(TILE_SIZE, (W // TILE_SIZE) * TILE_SIZE)
-        H = max(TILE_SIZE, (H // TILE_SIZE) * TILE_SIZE)
+        W = _snap_render_dim(render_tab_state.render_width)
+        H = _snap_render_dim(render_tab_state.render_height)
         return req_W, req_H, W, H
 
     def _render_fn(
@@ -181,9 +222,10 @@ class GaussianViewer:
         wall_start = time.perf_counter()
         if self.verbose:
             print(
-                f"[render-enter] preview={render_tab_state.preview_render} "
-                f"viewer={render_tab_state.viewer_width}x{render_tab_state.viewer_height} "
-                f"render_tab={render_tab_state.render_width}x{render_tab_state.render_height}",
+                f"[render-enter] viewer={render_tab_state.viewer_width}x"
+                f"{render_tab_state.viewer_height} "
+                f"render={render_tab_state.render_width}x"
+                f"{render_tab_state.render_height}",
                 flush=True,
             )
 
@@ -194,18 +236,12 @@ class GaussianViewer:
         extrinsics = c2w_to_w2c(camera_state.c2w)
         intrinsics = torch.tensor(camera_state.get_K((W, H)), dtype=torch.float32)
 
-        # One pipeline call covers project → tile_assign → sort → blend.
-        # `result.timings` already has per-stage wall-clock; the backend may
-        # also have populated `result.sub_timings` (e.g. blend.kernel_run).
         result = self.pipeline.render(self.gaussians, extrinsics, intrinsics, H, W)
 
-        # Convert pipeline output → uint8 image for nerfview/viser.
         if result.image is None:
             image_np = np.zeros((H, W, 3), dtype=np.uint8)
         else:
             image_np = (np.clip(result.image, 0.0, 1.0) * 255).astype(np.uint8)
-            # Empty frames (no visible Gaussians) short-circuit the pipeline
-            # and would skew the median toward zero, so they're not recorded.
             self._frame_samples.append(_FrameSample(
                 timings=dict(result.timings),
                 sub_timings=dict(result.sub_timings),
@@ -213,11 +249,13 @@ class GaussianViewer:
                 height=H,
             ))
 
+        display = letterbox_image(image_np, req_W, req_H)
+
         wall_elapsed = time.perf_counter() - wall_start
         if self.verbose:
             self._log_verbose(req_W, req_H, W, H, result, wall_elapsed)
         self._update_stats(wall_elapsed, W, H, result.num_visible)
-        return image_np
+        return display
 
     def _log_verbose(
         self,
@@ -229,14 +267,12 @@ class GaussianViewer:
         wall_elapsed: float,
     ) -> None:
         print(
-            f"[render] req={req_W}x{req_H} -> {W}x{H}  "
+            f"[render] viewport={req_W}x{req_H} render={W}x{H}  "
             f"visible={result.num_visible}  sorted={result.num_entries}  "
             f"backend={self.backend_name}",
             flush=True,
         )
         print(format_timings(result), flush=True)
-        # Wall-clock is total inside _render_fn (incl. resize-resolve etc.);
-        # log alongside the pipeline-internal total for sanity checking.
         print(f"[wall]  {wall_elapsed * 1000:6.1f} ms", flush=True)
 
     def _update_stats(
@@ -245,7 +281,7 @@ class GaussianViewer:
         fps = 1.0 / elapsed if elapsed > 0 else 0.0
         self._stats_display.content = (
             f"**FPS:** {fps:.1f} | "
-            f"**Res:** {width}x{height} | "
+            f"**Render:** {width}x{height} | "
             f"**Visible:** {num_visible:,}"
         )
 
@@ -256,7 +292,6 @@ class GaussianViewer:
     def _aggregate_session_medians(
         self,
     ) -> tuple[dict[str, float], dict[str, float], list[str], float, tuple[int, int]]:
-        """Aggregate per-stage / sub-timing / total medians and modal (W, H)."""
         stage_rows = [s.timings for s in self._frame_samples]
         sub_rows = [s.sub_timings for s in self._frame_samples]
         sub_keys = list(dict.fromkeys(k for s in sub_rows for k in s))
@@ -271,7 +306,11 @@ class GaussianViewer:
 
     def _benchmark_filename(self) -> str:
         ts = self._session_start.strftime("%Y-%m-%d_%H-%M-%S")
-        return f"{self._scene_name}_{self.backend_name}_{self.max_resolution}_{ts}.md"
+        if self.force_square is not None:
+            tag = f"{self.force_square}x{self.force_square}"
+        else:
+            tag = f"{self.render_width}x{self.render_height}"
+        return f"{self._scene_name}_{self.backend_name}_{tag}_{ts}.md"
 
     def _render_benchmark_md(
         self,
@@ -284,7 +323,13 @@ class GaussianViewer:
         fps = 1000.0 / median_total if median_total > 0 else 0.0
         ts = self._session_start
         res_w, res_h = modal_resolution
-        resolution = f"{res_w}x{res_h} (max-resolution={self.max_resolution})"
+        if self.force_square is not None:
+            resolution = f"{res_w}x{res_h} (force_square={self.force_square})"
+        else:
+            resolution = (
+                f"{res_w}x{res_h} "
+                f"(default={self.render_width}x{self.render_height})"
+            )
 
         rows = ["| Stage | ms |", "|---|---|"]
         for stage in _STAGE_KEYS:
@@ -293,10 +338,6 @@ class GaussianViewer:
             for sub in sub_keys:
                 if not sub.startswith(f"{stage}.") or sub not in sub_medians:
                     continue
-                # Dotted depth = nesting level under the stage; e.g.
-                # "blend.daemon_rt.device_kernel" is depth 2 → indent twice.
-                # Markdown table renderers collapse leading whitespace inside
-                # cells, so we use &nbsp; to make the indent survive.
                 depth = sub.count(".")
                 leaf = sub.rsplit(".", 1)[-1]
                 indent = "&nbsp;" * 4 * depth
@@ -341,10 +382,6 @@ class GaussianViewer:
         finally:
             self._write_benchmark()
             self.pipeline.close()
-            # viser's websocket thread + thread executor have a teardown race
-            # during interpreter shutdown that produces a noisy traceback
-            # ("cannot schedule new futures after shutdown"). Hard-exit after
-            # our own cleanup so the user sees a clean shell prompt.
             os._exit(0)
 
     def stop(self) -> None:

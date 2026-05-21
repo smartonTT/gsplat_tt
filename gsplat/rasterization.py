@@ -410,14 +410,21 @@ def prepare_kernel_inputs(
     tile_ranges: torch.Tensor,
     image_height: int,
     image_width: int,
-) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    *,
+    static_handled_externally: bool = False,
+) -> (
+    tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+    | tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+):
     """Pack per-tile Gaussian attributes for the tt-metal kernel.
 
-    Produces:
+    When *static_handled_externally* is False (CPU / legacy path), produces:
       attribute_packs: (N_entries, 9) fp32, per row:
           [mean_x, mean_y, cov_inv_a, 2*cov_inv_b, cov_inv_c, R, G, B, opacity]
-      tile_offsets: (num_tiles + 1,) uint32, cumulative prefix sum.
-      px_tiles, py_tiles: (num_tiles, 32, 32) fp32, global screen coords.
+      tile_offsets, px_tiles, py_tiles
+
+    When True (TT daemon with SCN1 static DRAM), color/opacity are omitted;
+    returns a 5-col dyn_pack, the same offsets/px/py, and sorted_gids (uint32).
     """
     tiles_x = (image_width + 31) // 32
     tiles_y = (image_height + 31) // 32
@@ -445,7 +452,8 @@ def prepare_kernel_inputs(
     # (sort_and_bin sorts by tile_id then depth), so a per-column gather is
     # equivalent and ~100x faster.
     total_entries = gids_np.shape[0]
-    attribute_packs = np.empty((total_entries, 9), dtype=np.float32)
+    n_cols = 5 if static_handled_externally else 9
+    attribute_packs = np.empty((total_entries, n_cols), dtype=np.float32)
 
     # tile_offsets: cumulative count up to each tile, plus a final total.
     # Equivalent to walking tile_ranges in order, since sort_and_bin produces
@@ -469,16 +477,25 @@ def prepare_kernel_inputs(
     attribute_packs[:, 2] = cov_inv_a[gids_np]
     attribute_packs[:, 3] = 2.0 * cov_inv_b[gids_np]
     attribute_packs[:, 4] = cov_inv_c[gids_np]
-    attribute_packs[:, 5] = colors_np[gids_np, 0]
-    attribute_packs[:, 6] = colors_np[gids_np, 1]
-    attribute_packs[:, 7] = colors_np[gids_np, 2]
-    attribute_packs[:, 8] = opacities_np[gids_np]
+    if not static_handled_externally:
+        attribute_packs[:, 5] = colors_np[gids_np, 0]
+        attribute_packs[:, 6] = colors_np[gids_np, 1]
+        attribute_packs[:, 7] = colors_np[gids_np, 2]
+        attribute_packs[:, 8] = opacities_np[gids_np]
 
     # px/py grids depend only on (H, W) — cache them per resolution. During
     # interactive viewing the same resolution is reused thousands of times;
     # in benchmark runs each scene/resolution combo computes once.
     px_tiles, py_tiles = _get_px_py_grids(image_height, image_width)
 
+    if static_handled_externally:
+        return (
+            attribute_packs,
+            tile_offsets,
+            px_tiles,
+            py_tiles,
+            gids_np.astype(np.uint32, copy=False),
+        )
     return attribute_packs, tile_offsets, px_tiles, py_tiles
 
 
