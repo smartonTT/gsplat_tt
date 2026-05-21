@@ -411,7 +411,8 @@ void kernel_main() {
             cb_wait_front(CB_T_G, 1);
             cb_wait_front(CB_T_B, 1);
 
-            // Batched adder: dst[0..2] = R/G/B_state + T_R/G/B
+            // Batched adder + Stage E: dst[0..2] = R/G/B_state + T_R/G/B,
+            // dst[3] = T_state - CB_CONTRIB (front-to-back transmittance update)
             tile_regs_acquire();
             add_tiles_init(CB_COLOR_R_STATE, CB_T_R);
             add_tiles(CB_COLOR_R_STATE, CB_T_R, 0, 0, 0);
@@ -419,6 +420,8 @@ void kernel_main() {
             add_tiles(CB_COLOR_G_STATE, CB_T_G, 0, 0, 1);
             add_tiles_init(CB_COLOR_B_STATE, CB_T_B);
             add_tiles(CB_COLOR_B_STATE, CB_T_B, 0, 0, 2);
+            sub_tiles_init(CB_T_STATE, CB_CONTRIB);
+            sub_tiles(CB_T_STATE, CB_CONTRIB, 0, 0, 3);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_R_STATE, 1);
@@ -433,27 +436,18 @@ void kernel_main() {
             cb_reserve_back(CB_COLOR_B_STATE, 1);
             pack_tile(2, CB_COLOR_B_STATE);
             cb_push_back(CB_COLOR_B_STATE, 1);
+            cb_pop_front(CB_T_STATE, 1);
+            cb_reserve_back(CB_T_STATE, 1);
+            pack_tile(3, CB_T_STATE);
+            cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_R_STATE, 1);
             cb_wait_front(CB_COLOR_G_STATE, 1);
             cb_wait_front(CB_COLOR_B_STATE, 1);
+            cb_wait_front(CB_T_STATE, 1);
             cb_pop_front(CB_T_R, 1);
             cb_pop_front(CB_T_G, 1);
             cb_pop_front(CB_T_B, 1);
-
-            // ----- Stage E: front-to-back transmittance update.
-            //   T_state -= CB_CONTRIB   (equivalent to T_state · (1 - alpha))
-            tile_regs_acquire();
-            sub_tiles_init(CB_T_STATE, CB_CONTRIB);
-            sub_tiles(CB_T_STATE, CB_CONTRIB, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_pop_front(CB_T_STATE, 1);
-            cb_reserve_back(CB_T_STATE, 1);
-            pack_tile(0, CB_T_STATE);
-            cb_push_back(CB_T_STATE, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_STATE, 1);
             cb_pop_front(CB_CONTRIB, 1);
 
             cb_pop_front(CB_ALPHA, 1);
