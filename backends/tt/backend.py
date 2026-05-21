@@ -49,8 +49,10 @@ class KernelBackend(Backend):
             bufsize=1,
         )
         # The daemon may emit tt-metal init log lines on stdout before the
-        # READY sentinel; skip past them with a wall-clock deadline.
-        deadline = time.perf_counter() + 60.0
+        # READY sentinel; skip past them with a wall-clock deadline. First-run
+        # JIT compile on a cold cache (esp. on Blackhole) can exceed a minute,
+        # so the deadline is generous.
+        deadline = time.perf_counter() + 240.0
         ready = None
         line = ""
         while time.perf_counter() < deadline:

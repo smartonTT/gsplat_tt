@@ -244,7 +244,14 @@ docs/thesis_plan.md
 /gsplat_tt.egg-info/
 
 # Per-run benchmark markdowns written by the viewer on shutdown.
-/benchmarks/
+# Use /benchmarks/* (not /benchmarks/) so individual !-rules can re-include
+# specific files (git can't un-ignore inside an excluded *directory*).
+# The optimization-loop pipeline keeps cameras.json + reference PNGs tracked.
+/benchmarks/*
+!/benchmarks/cameras.json
+!/benchmarks/reference/
+/benchmarks/reference/*
+!/benchmarks/reference/*.png
 
 # IDE / editor settings — uncomment to also ignore .idea/ if you don't use JetBrains
 .vscode/

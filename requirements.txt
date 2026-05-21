@@ -15,3 +15,5 @@ viser==1.0.24
 matplotlib==3.10.9
 splines==0.3.3
 jaxtyping==0.3.9
+scikit-image==0.25.2
+Pillow==12.2.0
