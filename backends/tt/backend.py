@@ -201,9 +201,9 @@ class KernelBackend(Backend):
         #   cap=256  → kernel 13.9 ms  PSNR 20.5 dB  (needs-review)
         # Override via env: GSPLAT_TT_MAX_G_PER_TILE=N (0 = no cap).
         try:
-            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "512"))
+            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "448"))
         except ValueError:
-            self._max_g_per_tile = 512
+            self._max_g_per_tile = 448
         # Iter 033 (NO, default-disabled): host-side prefix-T saturation cull.
         # The math is sound (sum of log(1-opacity_i) crosses log(eps) as a
         # bound on max(per-pixel T) within the tile) BUT the bound is using
