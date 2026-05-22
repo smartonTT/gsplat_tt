@@ -225,11 +225,12 @@ void kernel_main() {
         // into CB_SCALARS; we consume one pack per iteration in this strict
         // front-to-back order (already sorted on the host).
         // =====================================================================
-        bool block_saturated = false;
         for (uint32_t g = 0; g < g_count; g++) {
-            // ----- Stage F + F2: per-pixel T freeze + block-wide saturation
-            // check (every 16 g's, skip g=0). Skipped once block_saturated.
-            if (!block_saturated && g > 0 && (g & 0xFu) == 0u) {
+            // ----- Stage F: per-pixel T freeze (every 16 g's, skip g=0).
+            // Iter 036 also added a block-wide saturation reduce here that
+            // never fires on stitch_doll (background pixels keep T=1.0), so
+            // iter 037b removed it to eliminate the dead-code SUM-reduce.
+            if (g > 0 && (g & 0xFu) == 0u) {
                 tile_regs_acquire();
                 copy_tile_to_dst_init_short(CB_T_STATE);
                 copy_tile(CB_T_STATE, 0, 0);
@@ -255,39 +256,11 @@ void kernel_main() {
                 tile_regs_release();
                 cb_wait_front(CB_T_STATE, 1);
 
-                // ----- Stage F2: block-wide early termination flag -----
-                // SUM the sat mask (1 where T >= 1e-4). sum==0 means every pixel
-                // is saturated. Background pixels at T=1.0 keep sum>0 on most tiles.
-                cb_wait_front(CB_CONST_ONE, 1);
-                reduce_init<PoolType::SUM, ReduceDim::REDUCE_SCALAR, /*enforce_fp32_accumulation=*/true>(
-                    CB_T_TMP, CB_CONST_ONE, CB_T_MAX);
-                tile_regs_acquire();
-                reduce_tile<PoolType::SUM, ReduceDim::REDUCE_SCALAR, /*enforce_fp32_accumulation=*/true>(
-                    CB_T_TMP, CB_CONST_ONE, /*itile=*/0, /*itile_scaler=*/0, /*idst=*/0);
-                tile_regs_commit();
-                tile_regs_wait();
-                cb_reserve_back(CB_T_MAX, 1);
-                pack_tile(0, CB_T_MAX);
-                cb_push_back(CB_T_MAX, 1);
-                tile_regs_release();
-                cb_wait_front(CB_T_MAX, 1);
-                uint32_t sat_sum_bits = ckernel::read_tile_value(CB_T_MAX, /*tile_index=*/0, /*element_offset=*/0);
-                cb_pop_front(CB_T_MAX, 1);
-                reduce_uninit<true>(CB_T_TMP);
-                binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
-                if (sat_sum_bits == 0u) {
-                    block_saturated = true;
-                }
-
                 cb_pop_front(CB_T_TMP, 1);
+                binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
             }
 
             cb_wait_front(CB_SCALARS, 1);
-
-            if (block_saturated) {
-                cb_pop_front(CB_SCALARS, 1);
-                continue;
-            }
 
             // ----- Stage A: read this Gaussian's 9 fp32 attributes from CB_SCALARS.
             // Layout (set on the host in prepare_kernel_inputs):
