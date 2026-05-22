@@ -9,9 +9,9 @@
 // Alpha-blend READER kernel (NCRISC, NoC1; see DataMovementProcessor::RISCV_1
 // in alpha_blend.cpp). Streams DRAM inputs into CBs for the compute kernel.
 //
-// Step 2: per-entry dyn pack (mean + cov_inv) and sorted gids; color/opacity
-// are gathered from static_colors_opacity[gid] and composed into CB_SCALARS
-// (64-byte, 9 fp32) for the unchanged compute kernel.
+// Step 2: per-entry dyn pack (basis-form quadratic coeffs) and sorted gids;
+// color/opacity are gathered from static_colors_opacity[gid] and composed into
+// CB_SCALARS (64-byte, 10 fp32) for the compute kernel.
 //
 // RUNTIME ARGS
 //   0: dyn_packs_addr
@@ -51,7 +51,7 @@ void kernel_main() {
     constexpr uint32_t scalar_pack_page_bytes = 64;
     constexpr uint32_t gids_page_bytes = 64;
     constexpr uint32_t tile_ids_page_bytes = 64;
-    constexpr uint32_t scalar_payload_bytes = 9 * 4;
+    constexpr uint32_t scalar_payload_bytes = 10 * 4;
 
     constexpr auto dyn_packs_args = TensorAccessorArgs<0>();
     constexpr auto offsets_args =
@@ -189,30 +189,27 @@ void kernel_main() {
             uint32_t cb_addr = get_write_ptr(CB_SCALARS);
 
             // dyn pack writes directly into CB_SCALARS at offset 0 (32B,
-            // aligned because CB pages are 64B-aligned). The first 5 fp32
-            // are valid (mean_x, mean_y, cov_a, 2·cov_b, cov_c); the next
-            // 3 are zero pad from the DRAM dyn page and are overwritten
-            // by the static gather below (out[5..8]).
+            // aligned because CB pages are 64B-aligned). The first 6 fp32
+            // are valid (A,B,C,D,E,F); the next 2 are zero pad from the
+            // DRAM dyn page and are overwritten by the static gather below.
             uint64_t dyn_noc = get_noc_addr(entry_id, dyn_packs_acc);
             noc_async_read(dyn_noc, cb_addr, dyn_pack_page_bytes);
 
             // static color/opacity goes to the L1 scratch region; we can't
-            // NoC-write directly to cb_addr + 20 because offset 20 is not
+            // NoC-write directly to cb_addr + 24 because offset 24 is not
             // 16-byte aligned (NoC destination alignment requirement).
             uint64_t static_noc = get_noc_addr(gid, static_colors_acc);
             noc_async_read(static_noc, reader_scratch_addr + L1_OFF_STATIC, static_page_bytes);
             noc_async_read_barrier();
 
             // Compose CB_SCALARS layout the compute kernel expects:
-            //   [mean_x, mean_y, cov_a, 2·cov_b, cov_c, R, G, B, opacity]
-            // dyn already covers elements [0..4]; static gathers [5..8].
-            // The dyn page also wrote 3 zero-pad fp32 into [5..7]; that's
-            // fine, the loop below overwrites them with R, G, B.
+            //   [A, B, C, D, E, F, R, G, B, opacity]
+            // dyn already covers elements [0..5]; static gathers [6..9].
             volatile uint32_t* out = reinterpret_cast<volatile uint32_t*>(cb_addr);
             for (uint32_t i = 0; i < 4; i++) {
-                out[5 + i] = static_l1[i];
+                out[6 + i] = static_l1[i];
             }
-            // Elements [9..15] of the 64-byte CB_SCALARS page are CB pad
+            // Elements [10..15] of the 64-byte CB_SCALARS page are CB pad
             // and compute never reads them; we leave them undefined.
 
             cb_push_back(CB_SCALARS, 1);

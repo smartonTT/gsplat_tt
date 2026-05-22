@@ -6,12 +6,12 @@ namespace gsplat {
 constexpr uint32_t TILE_H = 32;
 constexpr uint32_t TILE_W = 32;
 constexpr uint32_t TILE_BYTES_BF16 = TILE_H * TILE_W * 2;     // 2 KB
-constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars (compute CB)
-constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // CB_SCALARS page (9 fp32 + pad)
-constexpr uint32_t DYN_PACK_PAGE_BYTES = 32;                   // 5 fp32 mean+cov_inv per entry
-constexpr uint32_t STATIC_COLOR_OPACITY_PAGE_BYTES = 32;       // 4 fp32 (R,G,B,opacity) per gid
-constexpr uint32_t SORTED_GIDS_PAGE_BYTES = 64;                // 16 uint32 gids per page
-constexpr uint32_t META_PAGE_BYTES = 64;                       // padded uint32 page
+constexpr uint32_t SCALAR_PACK_BYTES = 10 * 4;                // 10 fp32 scalars (compute CB)
+constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;               // CB_SCALARS page (10 fp32 + pad)
+constexpr uint32_t DYN_PACK_PAGE_BYTES = 32;                  // 6 fp32 basis coeffs per entry
+constexpr uint32_t STATIC_COLOR_OPACITY_PAGE_BYTES = 32;      // 4 fp32 (R,G,B,opacity) per gid
+constexpr uint32_t SORTED_GIDS_PAGE_BYTES = 64;                 // 16 uint32 gids per page
+constexpr uint32_t META_PAGE_BYTES = 64;                        // padded uint32 page
 
 // CB indices
 constexpr uint32_t CB_PX         = 0;
@@ -19,14 +19,15 @@ constexpr uint32_t CB_PY         = 1;
 constexpr uint32_t CB_SCALARS    = 2;
 constexpr uint32_t CB_TILE_META  = 3;
 
-// Scratch CBs (per-Gaussian intermediate tiles; depth tuned for double-buffering)
-constexpr uint32_t CB_DX         = 4;   // dx = px - mean_x
-constexpr uint32_t CB_DY         = 5;   // dy = py - mean_y
-constexpr uint32_t CB_DX2        = 6;   // dx²
-constexpr uint32_t CB_DY2        = 7;   // dy²
-constexpr uint32_t CB_DXDY       = 8;   // dx·dy
-constexpr uint32_t CB_Q          = 9;   // [a·dx², c·dy², 2b·dx·dy] (3 tiles)
-constexpr uint32_t CB_POWER      = 10;  // partial sum a·dx² + c·dy² before adding 2b·dx·dy
+// Per-tile basis tiles (computed once per screen tile from px/py)
+constexpr uint32_t CB_PX2        = 4;   // px²
+constexpr uint32_t CB_PY2        = 5;   // py²
+constexpr uint32_t CB_PXPY       = 6;   // px·py
+constexpr uint32_t CB_COEFF      = 7;   // 6 scalar-broadcast tiles per Gaussian
+// Scratch CBs reused by Stage D2 (no overlap with per-tile basis CBs)
+constexpr uint32_t CB_DXDY       = 8;   // D2 scratch R channel
+constexpr uint32_t CB_Q          = 9;   // D2 scratch G channel
+constexpr uint32_t CB_POWER      = 10;  // D2 scratch B channel
 // CB 11 reserved (was CB_CONST_NEG88 for approx=false exp clamp; unused since
 // switch to exp_tile<approx=true>). Slot kept to avoid renumbering downstream CBs.
 constexpr uint32_t CB_ALPHA      = 12;  // alpha = min(0.99, opacity · exp(power))

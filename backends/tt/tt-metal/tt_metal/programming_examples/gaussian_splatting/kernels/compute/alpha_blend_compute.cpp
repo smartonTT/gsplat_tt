@@ -4,6 +4,7 @@
 
 #include <cstdint>
 
+#include "api/compute/bcast.h"
 #include "api/compute/common.h"
 #include "api/compute/cb_api.h"
 #include "api/compute/tile_move_copy.h"
@@ -27,92 +28,59 @@
 // state (R/G/B color, transmittance T):
 //
 //   Init      : R = G = B = 0,  T = 1   (per pixel)
+//   Per tile  : precompute px², py², px·py basis tiles once
 //   For each Gaussian g in this tile, sorted front-to-back:
 //     Stage F : every 16 g's (skip g=0): hard-zero T where T < 1e-4
-//               -> "freeze" saturated pixels in T_state directly
-//     Stage A : read 9 fp32 scalars (mean, cov_inv, color, opacity)
-//     Stage B1: dx = px - mean_x,  dy = py - mean_y         (per-pixel offset)
-//     Stage B2+B3a: weighted quadratic terms → CB_Q
-//               [a·dx², c·dy², 2b·dx·dy] (no intermediate CBs)
-//     Stage B3: Q = a·dx² + 2b·dx·dy + c·dy²                (Mahalanobis dist)
-//               power = -0.5·Q                              (Gaussian exponent)
-//     Stage C : weight  = exp(min(power, 0))                (Gaussian falloff)
-//               alpha   = min(opacity · weight, 0.99)       (per-pixel opacity)
-//     Stage D1: contrib = alpha · T_state                   (T pre-masked in Stage F)
-//     Stage D2: for c in {R,G,B}: c_state += color_c · contrib
-//     Stage E : T ← T · (1 - alpha)                         (transmittance update)
+//     Stage A : read 10 fp32 scalars (basis coeffs, color, opacity)
+//     Stage B : q = A·px² + B·px·py + C·py² + D·px + E·py + F  (FPU bcast)
+//     Stage C : weight  = exp(min(-0.5·q, 0)); alpha = min(opacity·weight, 0.99)
+//     Stage D1: contrib = alpha · T_state
+//     Stage D2: color_c_state += color_c · contrib
+//     Stage E : T ← T · (1 - alpha)
 //   Output    : pack R_state, G_state, B_state to CB_COLOR_OUT (3 tiles).
-//   Cleanup   : pop state CBs so the next tile's iteration starts fresh.
-//
-// EXECUTION MODEL
-// ----------------
-// - tt-metal compute kernel running on one Tensix core; reader (BRISC) and
-//   writer (NCRISC) on the same core handle NoC traffic via circular buffers.
-// - SFPU operates on tiles of 32x32 elements as 4 vector passes of 32 lanes
-//   each. All math here is per-pixel, broadcast across the tile's pixels.
-// - Dst (destination register file) holds fp32 working values during a single
-//   acquire/commit/release block; we spill back to L1 CBs between Gaussians
-//   because Dst is too small to hold all running state across the loop.
 //
 // RUNTIME ARGS
 //   0: num_tiles  -- number of screen tiles this core processes
-//
-// CB INDICES — see alpha_blend_host.h for the canonical declaration. The
-// constexprs below mirror those values (compute kernels can't include the
-// host-side namespace, so we duplicate; keep them in sync).
 void kernel_main() {
     uint32_t num_tiles = get_arg_val<uint32_t>(0);
 
-    // CB indices — must match alpha_blend_host.h verbatim. Compute kernels
-    // can't `#include` host-side headers, so we duplicate the constants here.
-    constexpr uint32_t CB_PX            = 0;   // px tile (per-pixel x coord)
-    constexpr uint32_t CB_PY            = 1;   // py tile (per-pixel y coord)
-    constexpr uint32_t CB_SCALARS       = 2;   // 9 fp32 scalars per Gaussian (64-byte page)
-    constexpr uint32_t CB_TILE_META     = 3;   // 1 uint32 (g_count) per screen tile
-    constexpr uint32_t CB_DX            = 4;   // dx = px - mean_x
-    constexpr uint32_t CB_DY            = 5;   // dy = py - mean_y
-    constexpr uint32_t CB_DX2           = 6;   // dx²
-    constexpr uint32_t CB_DY2           = 7;   // dy²
-    constexpr uint32_t CB_DXDY          = 8;   // dx·dy
-    constexpr uint32_t CB_Q             = 9;   // [a·dx², c·dy², 2b·dx·dy] (3 tiles)
-    constexpr uint32_t CB_POWER         = 10;  // partial sum a·dx² + c·dy²
-    // CB 11 reserved (was -88 clamp tile; now unused after exp_tile<approx=true>)
-    constexpr uint32_t CB_ALPHA         = 12;  // per-pixel alpha
-    constexpr uint32_t CB_CONTRIB       = 13;  // contrib = alpha · T_state
+    constexpr uint32_t CB_PX            = 0;
+    constexpr uint32_t CB_PY            = 1;
+    constexpr uint32_t CB_SCALARS       = 2;
+    constexpr uint32_t CB_TILE_META     = 3;
+    constexpr uint32_t CB_PX2           = 4;
+    constexpr uint32_t CB_PY2           = 5;
+    constexpr uint32_t CB_PXPY          = 6;
+    constexpr uint32_t CB_COEFF         = 7;
+    constexpr uint32_t CB_DXDY          = 8;
+    constexpr uint32_t CB_Q             = 9;
+    constexpr uint32_t CB_POWER         = 10;
+    constexpr uint32_t CB_ALPHA         = 12;
+    constexpr uint32_t CB_CONTRIB       = 13;
     constexpr uint32_t CB_ONE_MINUS_ALPHA = 14;
-    constexpr uint32_t CB_T_TMP         = 15;  // generic intermediate
-    constexpr uint32_t CB_COLOR_OUT     = 16;  // R, G, B output tiles per screen tile
-    constexpr uint32_t CB_COLOR_R_STATE = 17;  // running R accumulator
+    constexpr uint32_t CB_T_TMP         = 15;
+    constexpr uint32_t CB_COLOR_OUT     = 16;
+    constexpr uint32_t CB_COLOR_R_STATE = 17;
     constexpr uint32_t CB_COLOR_G_STATE = 18;
     constexpr uint32_t CB_COLOR_B_STATE = 19;
-    constexpr uint32_t CB_T_STATE       = 20;  // running transmittance per pixel
-    constexpr uint32_t CB_SAT_MASK      = 21;  // unused (host still allocates)
-    constexpr uint32_t CB_CONST_ZERO    = 22;  // constant 0.0 tile
-    constexpr uint32_t CB_CONST_099     = 23;  // constant 0.99 tile
+    constexpr uint32_t CB_T_STATE       = 20;
+    constexpr uint32_t CB_SAT_MASK      = 21;
+    constexpr uint32_t CB_CONST_ZERO    = 22;
+    constexpr uint32_t CB_CONST_099     = 23;
 
-    // Scratch CBs for Stage D2 producer batching (alias unused-since-iter-003 CBs).
-    constexpr uint32_t CB_T_R = CB_DX2;
-    constexpr uint32_t CB_T_G = CB_DY2;
-    constexpr uint32_t CB_T_B = CB_DXDY;
+    // Stage D2 scratch (disjoint from per-tile basis CBs held at front).
+    constexpr uint32_t CB_T_R = CB_DXDY;
+    constexpr uint32_t CB_T_G = CB_Q;
+    constexpr uint32_t CB_T_B = CB_POWER;
 
-    // Bit-pattern fp32 constants for SFPU scalar-unary ops (mul_unary_tile,
-    // sub_unary_tile, rsub_unary_tile, etc.) which take their immediate as a
-    // uint32 bit-cast of the float they want.
-    constexpr uint32_t NEG_HALF_BITS  = 0xBF000000u;  // fp32(-0.5)
-    constexpr uint32_t ONE_F_BITS     = 0x3F800000u;  // fp32( 1.0)
-    constexpr uint32_t T_THRESH_BITS  = 0x38D1B717u;  // fp32(1e-4) — T saturation threshold
+    constexpr uint32_t NEG_HALF_BITS  = 0xBF000000u;
+    constexpr uint32_t ONE_F_BITS     = 0x3F800000u;
+    constexpr uint32_t T_THRESH_BITS  = 0x38D1B717u;
 
-    // Foundational SFPU/FPU init: configures unpack and pack hardware for
-    // binary tile ops on this core. Must come before any tile op.
     binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
 
-    // ----- Pre-fill the two constant tiles used by the inner loop. -----
-    // These are pushed once per kernel invocation, never popped; the kernel
-    // copies them into Dst whenever it needs a 0.0 or 0.99 operand for
-    // binary_min_tile.
     fill_tile_init();
 
-    // CB_CONST_ZERO ← tile of 0.0
     cb_reserve_back(CB_CONST_ZERO, 1);
     tile_regs_acquire();
     fill_tile(0, 0.0f);
@@ -122,7 +90,6 @@ void kernel_main() {
     tile_regs_release();
     cb_push_back(CB_CONST_ZERO, 1);
 
-    // CB_CONST_099 ← tile of 0.99 (the alpha clamp ceiling)
     cb_reserve_back(CB_CONST_099, 1);
     tile_regs_acquire();
     fill_tile(0, 0.99f);
@@ -136,17 +103,6 @@ void kernel_main() {
     cb_wait_front(CB_CONST_099, 1);
 
     for (uint32_t t = 0; t < num_tiles; t++) {
-        // =====================================================================
-        // Per-tile state CB init: zero the color accumulators, set transmittance
-        // to 1.0. Each state CB lives
-        // at depth 1; we push its initial value here and pop it at the end of
-        // this iteration. Mid-loop the kernel "spills" updated values back to
-        // these CBs by pop_front + reserve_back + pack + push_back (since the
-        // Dst register file is too small to hold per-pixel state across
-        // many Gaussian iterations).
-        // =====================================================================
-
-        // R_state, G_state, B_state = 0.0
         cb_reserve_back(CB_COLOR_R_STATE, 1);
         tile_regs_acquire();
         fill_tile(0, 0.0f);
@@ -174,7 +130,6 @@ void kernel_main() {
         tile_regs_release();
         cb_push_back(CB_COLOR_B_STATE, 1);
 
-        // T_state = 1.0
         cb_reserve_back(CB_T_STATE, 1);
         tile_regs_acquire();
         fill_tile(0, 1.0f);
@@ -189,29 +144,38 @@ void kernel_main() {
         cb_wait_front(CB_COLOR_B_STATE, 1);
         cb_wait_front(CB_T_STATE, 1);
 
-        // Read the per-tile Gaussian count the reader wrote into CB_TILE_META.
-        // This tells us how many entries from CB_SCALARS we'll consume in the
-        // inner loop below. Pop it immediately so the slot is free for the
-        // reader to fill ahead with the *next* tile's count while we work.
         cb_wait_front(CB_TILE_META, 1);
-        uint32_t g_count = ckernel::read_tile_value(CB_TILE_META, /*tile_index=*/0, /*element_offset=*/0);
+        uint32_t g_count = ckernel::read_tile_value(CB_TILE_META, 0, 0);
         cb_pop_front(CB_TILE_META, 1);
 
-        // PX/PY tiles: the reader pushes one of each per screen tile (they
-        // hold per-pixel global screen coords). We hold them at front for
-        // the duration of this tile's Gaussian loop and pop at the end.
         cb_wait_front(CB_PX, 1);
         cb_wait_front(CB_PY, 1);
 
-        // =====================================================================
-        // Per-Gaussian inner loop. The reader has pushed g_count fp32 packs
-        // into CB_SCALARS; we consume one pack per iteration in this strict
-        // front-to-back order (already sorted on the host).
-        // =====================================================================
+        // Precompute px², py², px·py once per tile (held for all Gaussians).
+        tile_regs_acquire();
+        mul_tiles_init(CB_PX, CB_PX);
+        mul_tiles(CB_PX, CB_PX, 0, 0, 0);
+        mul_tiles_init(CB_PY, CB_PY);
+        mul_tiles(CB_PY, CB_PY, 0, 0, 1);
+        mul_tiles_init(CB_PX, CB_PY);
+        mul_tiles(CB_PX, CB_PY, 0, 0, 2);
+        tile_regs_commit();
+        tile_regs_wait();
+        cb_reserve_back(CB_PX2, 1);
+        pack_tile(0, CB_PX2);
+        cb_push_back(CB_PX2, 1);
+        cb_reserve_back(CB_PY2, 1);
+        pack_tile(1, CB_PY2);
+        cb_push_back(CB_PY2, 1);
+        cb_reserve_back(CB_PXPY, 1);
+        pack_tile(2, CB_PXPY);
+        cb_push_back(CB_PXPY, 1);
+        tile_regs_release();
+        cb_wait_front(CB_PX2, 1);
+        cb_wait_front(CB_PY2, 1);
+        cb_wait_front(CB_PXPY, 1);
+
         for (uint32_t g = 0; g < g_count; g++) {
-            // ----- Stage F: hard-zero T_state where T < 1e-4 (every 16 g's, skip g=0) -----
-            // Saturated pixels get T=0 in CB_T_STATE; downstream D1/E muls by T
-            // then naturally produce zero contribution. g=0 skipped (T freshly 1).
             if (g > 0 && (g & 0xFu) == 0u) {
                 tile_regs_acquire();
                 copy_tile_to_dst_init_short(CB_T_STATE);
@@ -242,115 +206,76 @@ void kernel_main() {
 
             cb_wait_front(CB_SCALARS, 1);
 
-            // ----- Stage A: read this Gaussian's 9 fp32 attributes from CB_SCALARS.
-            // Layout (set on the host in prepare_kernel_inputs):
-            //   [mean_x, mean_y, cov_a, 2·cov_b, cov_c, R, G, B, opacity]
-            // We keep them as bit-pattern uint32 because that's the form
-            // the SFPU scalar-unary ops (mul_unary_tile, sub_unary_tile, etc.)
-            // expect their immediate in. The bytes themselves are valid fp32.
-            uint32_t mean_x_bits    = ckernel::read_tile_value(CB_SCALARS, 0, 0);
-            uint32_t mean_y_bits    = ckernel::read_tile_value(CB_SCALARS, 0, 1);
-            uint32_t cov_a_bits     = ckernel::read_tile_value(CB_SCALARS, 0, 2);
-            uint32_t two_cov_b_bits = ckernel::read_tile_value(CB_SCALARS, 0, 3);
-            uint32_t cov_c_bits     = ckernel::read_tile_value(CB_SCALARS, 0, 4);
-            uint32_t color_r_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 5);
-            uint32_t color_g_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 6);
-            uint32_t color_b_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 7);
-            uint32_t opacity_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 8);
+            uint32_t A_bits       = ckernel::read_tile_value(CB_SCALARS, 0, 0);
+            uint32_t B_bits       = ckernel::read_tile_value(CB_SCALARS, 0, 1);
+            uint32_t C_bits       = ckernel::read_tile_value(CB_SCALARS, 0, 2);
+            uint32_t D_bits       = ckernel::read_tile_value(CB_SCALARS, 0, 3);
+            uint32_t E_bits       = ckernel::read_tile_value(CB_SCALARS, 0, 4);
+            uint32_t F_bits       = ckernel::read_tile_value(CB_SCALARS, 0, 5);
+            uint32_t color_r_bits = ckernel::read_tile_value(CB_SCALARS, 0, 6);
+            uint32_t color_g_bits = ckernel::read_tile_value(CB_SCALARS, 0, 7);
+            uint32_t color_b_bits = ckernel::read_tile_value(CB_SCALARS, 0, 8);
+            uint32_t opacity_bits = ckernel::read_tile_value(CB_SCALARS, 0, 9);
 
-            // ----- Stage B1: per-pixel offsets from the Gaussian center.
-            // Loads the px/py tiles into Dst slots 0/1 and subtracts the
-            // Gaussian center scalar (mean_x, mean_y) lane-wise. After this:
-            //   Dst[0][i] = px[i] - mean_x
-            //   Dst[1][i] = py[i] - mean_y
-            // Pack each back to its own CB so subsequent stages can read them
-            // as binary operands (mul_tiles, etc., need CB inputs).
+            // Pack six scalar-broadcast tiles for FPU mul_tiles_bcast_scalar.
             tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_PX);
-            copy_tile(CB_PX, 0, 0);
-            sub_unary_tile(0, mean_x_bits);
-            copy_tile_to_dst_init_short(CB_PY);
-            copy_tile(CB_PY, 0, 1);
-            sub_unary_tile(1, mean_y_bits);
+            fill_tile(0, *reinterpret_cast<const float*>(&A_bits));
+            fill_tile(1, *reinterpret_cast<const float*>(&B_bits));
+            fill_tile(2, *reinterpret_cast<const float*>(&C_bits));
+            fill_tile(3, *reinterpret_cast<const float*>(&D_bits));
+            fill_tile(4, *reinterpret_cast<const float*>(&E_bits));
+            fill_tile(5, *reinterpret_cast<const float*>(&F_bits));
             tile_regs_commit();
             tile_regs_wait();
-            cb_reserve_back(CB_DX, 1);
-            pack_tile(0, CB_DX);
-            cb_push_back(CB_DX, 1);
-            cb_reserve_back(CB_DY, 1);
-            pack_tile(1, CB_DY);
-            cb_push_back(CB_DY, 1);
+            cb_reserve_back(CB_COEFF, 6);
+            pack_tile(0, CB_COEFF);
+            pack_tile(1, CB_COEFF);
+            pack_tile(2, CB_COEFF);
+            pack_tile(3, CB_COEFF);
+            pack_tile(4, CB_COEFF);
+            pack_tile(5, CB_COEFF);
+            cb_push_back(CB_COEFF, 6);
             tile_regs_release();
-            cb_wait_front(CB_DX, 1);
-            cb_wait_front(CB_DY, 1);
+            cb_wait_front(CB_COEFF, 6);
 
-            // ----- Stage B2+B3a: dx²·a, dy²·c, dx·dy·2b → CB_Q (fused).
-            // One acquire block: mul products in Dst[0..2], scale by covariance
-            // scalars, fold partial Q sum in-register, pack 2 tiles to CB_Q.
-            //   CB_Q[0] = a·dx² + c·dy²  (partial sum via SFPU add_binary_tile)
-            //   CB_Q[1] = 2b · dx·dy
+            // Stage B + C: FPU basis-form quadratic, then SFPU exp/alpha chain.
             tile_regs_acquire();
-            mul_tiles_init(CB_DX, CB_DX);
-            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
-            mul_unary_tile(0, cov_a_bits);
+            mul_tiles_bcast_scalar_init_short(CB_PX2, CB_COEFF);
+            mul_tiles_bcast_scalar(CB_PX2, CB_COEFF, 0, 0, 0);
 
-            mul_tiles_init(CB_DY, CB_DY);
-            mul_tiles(CB_DY, CB_DY, 0, 0, 1);
-            mul_unary_tile(1, cov_c_bits);
-
-            mul_tiles_init(CB_DX, CB_DY);
-            mul_tiles(CB_DX, CB_DY, 0, 0, 2);
-            mul_unary_tile(2, two_cov_b_bits);
-
-            // Fold partial Q sum into dst[0]; avoid standalone B3b1 acquire.
+            mul_tiles_bcast_scalar_init_short(CB_PXPY, CB_COEFF);
+            mul_tiles_bcast_scalar(CB_PXPY, CB_COEFF, 0, 1, 1);
             add_binary_tile_init();
             add_binary_tile(0, 1, 0);
 
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 2);
-            pack_tile(0, CB_Q);
-            pack_tile(2, CB_Q);
-            cb_push_back(CB_Q, 2);
-            tile_regs_release();
-            cb_wait_front(CB_Q, 2);
+            mul_tiles_bcast_scalar_init_short(CB_PY2, CB_COEFF);
+            mul_tiles_bcast_scalar(CB_PY2, CB_COEFF, 0, 2, 1);
+            add_binary_tile(0, 1, 0);
 
-            // ----- Stage B3b2 + C: finish Q, compute power, exp, and alpha.
-            // This is the longest single Dst block in the kernel — it folds
-            // the last add into Q, then runs the entire exp / clamp / opacity
-            // chain to produce the per-pixel alpha. Doing it as one block
-            // avoids extra spill/reload to L1 between sub-stages.
-            //
-            //   alpha = min( opacity · exp(min(-0.5·Q, 0)),  0.99 )
-            //
-            tile_regs_acquire();
-            add_tiles_init(CB_Q, CB_Q);
-            add_tiles(CB_Q, CB_Q, 0, 1, 0);  // dst[0] = partial sum + 2b·dx·dy = Q
+            mul_tiles_bcast_scalar_init_short(CB_PX, CB_COEFF);
+            mul_tiles_bcast_scalar(CB_PX, CB_COEFF, 0, 3, 1);
+            add_binary_tile(0, 1, 0);
 
-            // power = -0.5 · Q
+            mul_tiles_bcast_scalar_init_short(CB_PY, CB_COEFF);
+            mul_tiles_bcast_scalar(CB_PY, CB_COEFF, 0, 4, 1);
+            add_binary_tile(0, 1, 0);
+
+            copy_tile_to_dst_init_short(CB_COEFF);
+            copy_tile(CB_COEFF, 5, 1);
+            add_binary_tile(0, 1, 0);
+
             mul_unary_tile(0, NEG_HALF_BITS);
 
-            // Clamp power to ≤ 0. For valid PSD covariance Q ≥ 0 always, so
-            // this is mostly defensive (handles fp rounding edge cases).
             copy_tile_to_dst_init_short(CB_CONST_ZERO);
             copy_tile(CB_CONST_ZERO, 0, 1);
             binary_min_tile_init();
             binary_min_tile(0, 1, 0);
 
-            // weight = exp(power). Approximate-mode polynomial (~100 cycles
-            // vs ~800 for the accurate path) with built-in ClampToNegative
-            // (input clamped to ≥ -88.5 before evaluating). Accuracy ~3-4
-            // decimal digits — fine for alpha ∈ [0, 0.99]; PSNR drops ~11 dB
-            // vs accurate but still has 16 dB headroom over the 35 dB floor.
             exp_tile_init<true>();
             exp_tile<true>(0);
 
-            // dst[0] *= opacity
             mul_unary_tile(0, opacity_bits);
 
-            // alpha = min(opacity · weight, 0.99). Cap at 0.99 (instead of
-            // 1.0) so transmittance T can never reach exactly 0 — keeps
-            // (1-alpha) > 0 in Stage E and avoids degenerate compositing.
             copy_tile_to_dst_init_short(CB_CONST_099);
             copy_tile(CB_CONST_099, 0, 1);
             binary_min_tile(0, 1, 0);
@@ -362,14 +287,9 @@ void kernel_main() {
             cb_push_back(CB_ALPHA, 1);
             tile_regs_release();
 
-            // Cleanup intermediates from B/C stages.
-            cb_pop_front(CB_Q, 2);
-            cb_pop_front(CB_DX, 1);
-            cb_pop_front(CB_DY, 1);
-
+            cb_pop_front(CB_COEFF, 6);
             cb_wait_front(CB_ALPHA, 1);
 
-            // ----- Stage D1: contrib = alpha · T_state (T pre-masked in Stage F).
             tile_regs_acquire();
             mul_tiles_init(CB_ALPHA, CB_T_STATE);
             mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
@@ -381,12 +301,6 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_CONTRIB, 1);
 
-            // ----- Stage D2: per-channel color accumulator update.
-            //   color_c_state ← color_c_state + color_c · contrib
-            // One batched producer (contrib·color_r/g/b → CB_T_R/G/B) plus one
-            // batched FPU adder block (state += scratch), in-place spill to 3 CBs.
-
-            // Batched producer: dst[0..2] = contrib · color_r/g/b
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
@@ -411,8 +325,6 @@ void kernel_main() {
             cb_wait_front(CB_T_G, 1);
             cb_wait_front(CB_T_B, 1);
 
-            // Batched adder + Stage E: dst[0..2] = R/G/B_state + T_R/G/B,
-            // dst[3] = T_state - CB_CONTRIB (front-to-back transmittance update)
             tile_regs_acquire();
             add_tiles_init(CB_COLOR_R_STATE, CB_T_R);
             add_tiles(CB_COLOR_R_STATE, CB_T_R, 0, 0, 0);
@@ -454,11 +366,6 @@ void kernel_main() {
             cb_pop_front(CB_SCALARS, 1);
         }
 
-        // ----- Per-tile finalize: pack the running R/G/B accumulators to
-        // CB_COLOR_OUT in a single 3-tile push. The writer kernel waits on
-        // 3-at-a-time pushes here and DMAs them out to DRAM at the correct
-        // global tile offset. After this, drain all the per-tile state
-        // CBs so the next iteration starts with empty slots ready for re-init.
         tile_regs_acquire();
         copy_tile_to_dst_init_short(CB_COLOR_R_STATE);
         copy_tile(CB_COLOR_R_STATE, 0, 0);
@@ -475,11 +382,13 @@ void kernel_main() {
         cb_push_back(CB_COLOR_OUT, 3);
         tile_regs_release();
 
-        // ===== Drain state CBs and per-tile inputs =====
         cb_pop_front(CB_COLOR_R_STATE, 1);
         cb_pop_front(CB_COLOR_G_STATE, 1);
         cb_pop_front(CB_COLOR_B_STATE, 1);
         cb_pop_front(CB_T_STATE, 1);
+        cb_pop_front(CB_PX2, 1);
+        cb_pop_front(CB_PY2, 1);
+        cb_pop_front(CB_PXPY, 1);
         cb_pop_front(CB_PX, 1);
         cb_pop_front(CB_PY, 1);
     }

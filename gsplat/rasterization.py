@@ -438,7 +438,7 @@ def prepare_kernel_inputs(
       tile_offsets, px_tiles, py_tiles
 
     When True (TT daemon with SCN1 static DRAM), color/opacity are omitted;
-    returns a 5-col dyn_pack, the same offsets/px/py, and sorted_gids (uint32).
+    returns a 6-col dyn_pack [A,B,C,D,E,F], the same offsets/px/py, and sorted_gids (uint32).
     """
     tiles_x = (image_width + 31) // 32
     tiles_y = (image_height + 31) // 32
@@ -466,7 +466,7 @@ def prepare_kernel_inputs(
     # (sort_and_bin sorts by tile_id then depth), so a per-column gather is
     # equivalent and ~100x faster.
     total_entries = gids_np.shape[0]
-    n_cols = 5 if static_handled_externally else 9
+    n_cols = 6 if static_handled_externally else 9
     attribute_packs = np.empty((total_entries, n_cols), dtype=np.float32)
 
     # tile_offsets: cumulative count up to each tile, plus a final total.
@@ -486,11 +486,17 @@ def prepare_kernel_inputs(
     tile_origin_x = (tile_id_per_entry % tiles_x).astype(np.float32) * 32.0
     tile_origin_y = (tile_id_per_entry // tiles_x).astype(np.float32) * 32.0
 
-    attribute_packs[:, 0] = means_np[gids_np, 0] - tile_origin_x
-    attribute_packs[:, 1] = means_np[gids_np, 1] - tile_origin_y
-    attribute_packs[:, 2] = cov_inv_a[gids_np]
-    attribute_packs[:, 3] = 2.0 * cov_inv_b[gids_np]
-    attribute_packs[:, 4] = cov_inv_c[gids_np]
+    mx = means_np[gids_np, 0] - tile_origin_x
+    my = means_np[gids_np, 1] - tile_origin_y
+    A = cov_inv_a[gids_np]
+    B = 2.0 * cov_inv_b[gids_np]
+    C = cov_inv_c[gids_np]
+    attribute_packs[:, 0] = A
+    attribute_packs[:, 1] = B
+    attribute_packs[:, 2] = C
+    attribute_packs[:, 3] = -2.0 * A * mx - B * my
+    attribute_packs[:, 4] = -2.0 * C * my - B * mx
+    attribute_packs[:, 5] = A * mx * mx + B * mx * my + C * my * my
     if not static_handled_externally:
         attribute_packs[:, 5] = colors_np[gids_np, 0]
         attribute_packs[:, 6] = colors_np[gids_np, 1]

@@ -40,7 +40,7 @@ _MAGIC_SHM1 = 0x53484D31  # 'SHM1'
 #   shm_in  (Python writes, daemon reads):  frame data for FRM2
 #     [0..63]:  header  — total_entries, offsets_count, image_h, image_w
 #                         (4 × uint32 at bytes 0..15, rest reserved)
-#     [64..]:   attr data   — (total_entries, 5) float32
+#     [64..]:   attr data   — (total_entries, 6) float32
 #               gids data   — (total_entries,)   uint32
 #               offsets data— (offsets_count,)    float32 (converted to u32 in daemon)
 #               px data     — (num_tiles*1024,)   float32  (tile-major bf16 input)
@@ -166,7 +166,7 @@ class KernelBackend(Backend):
         self._tile_cap: int = 0        # capacity in number of tiles
 
         # Entry-indexed buffers (P = total (Gaussian, tile) pairs)
-        self._attr_buf: np.ndarray | None = None        # (entry_cap, 5) float32
+        self._attr_buf: np.ndarray | None = None        # (entry_cap, 6) float32
         self._tile_ox_buf: np.ndarray | None = None     # (entry_cap,)   float32
         self._tile_oy_buf: np.ndarray | None = None     # (entry_cap,)   float32
         self._gids_u32_buf: np.ndarray | None = None    # (entry_cap,)   uint32
@@ -201,7 +201,7 @@ class KernelBackend(Backend):
         )
         # numpy views into shm_in data regions (set during SHM1 handshake)
         self._shm_hdr_view: np.ndarray | None = None    # (16,) uint32 header
-        self._shm_attr_view: np.ndarray | None = None   # (max_entries, 5) float32
+        self._shm_attr_view: np.ndarray | None = None   # (max_entries, 6) float32
         self._shm_gids_view: np.ndarray | None = None   # (max_entries,) uint32
         self._shm_offs_view: np.ndarray | None = None   # (max_offsets,) float32
         self._shm_px_view: np.ndarray | None = None     # (max_px_floats,) float32
@@ -241,7 +241,7 @@ class KernelBackend(Backend):
         Input SHM layout (shm_in):
           [0..63]   : header  — 4×uint32: total_entries, offsets_count,
                                 image_h, image_w  (bytes 16..63 reserved)
-          [64..]    : attr    — (max_entries, 5) float32
+          [64..]    : attr    — (max_entries, 6) float32
                       gids    — (max_entries,)   uint32
                       offsets — (max_offsets,)   float32
                       px      — (max_px_floats,) float32
@@ -257,7 +257,7 @@ class KernelBackend(Backend):
 
         # Byte offsets for each region within shm_in (after 64-byte header)
         attr_offset   = _SHM_HDR_BYTES
-        gids_offset   = attr_offset   + me * 5 * 4
+        gids_offset   = attr_offset   + me * 6 * 4
         offs_offset   = gids_offset   + me * 4
         px_offset     = offs_offset   + max_offsets * 4
         py_offset     = px_offset     + max_px_floats * 4
@@ -286,7 +286,7 @@ class KernelBackend(Backend):
         self._shm_hdr_view  = np.frombuffer(buf_in[:_SHM_HDR_BYTES], dtype=np.uint32)
         self._shm_attr_view = np.frombuffer(
             buf_in[attr_offset : gids_offset], dtype=np.float32
-        ).reshape(me, 5)
+        ).reshape(me, 6)
         self._shm_gids_view = np.frombuffer(
             buf_in[gids_offset : offs_offset], dtype=np.uint32
         )
@@ -367,7 +367,7 @@ class KernelBackend(Backend):
         """
         if total_entries > self._entry_cap:
             cap = total_entries + max(total_entries // 4, 65536)
-            self._attr_buf = np.empty((cap, 5), dtype=np.float32)
+            self._attr_buf = np.empty((cap, 6), dtype=np.float32)
             self._tile_ox_buf = np.empty(cap, dtype=np.float32)
             self._tile_oy_buf = np.empty(cap, dtype=np.float32)
             self._gids_u32_buf = np.empty(cap, dtype=np.uint32)
@@ -529,7 +529,7 @@ class KernelBackend(Backend):
         self._ensure_bufs(total_entries, M, num_tiles, H, W)
 
         # Active slices — views into preallocated buffers, no malloc.
-        attr = self._attr_buf[:total_entries]           # (P, 5) float32
+        attr = self._attr_buf[:total_entries]           # (P, 6) float32
         tile_ox = self._tile_ox_buf[:total_entries]     # (P,) float32
         tile_oy = self._tile_oy_buf[:total_entries]     # (P,) float32
         gids_u32 = self._gids_u32_buf[:total_entries]  # (P,) uint32
@@ -580,22 +580,20 @@ class KernelBackend(Backend):
                 tile_ox[s:e] = tile_ox_all[t]
                 tile_oy[s:e] = tile_oy_all[t]
 
-        # Gather Gaussian attributes into the packed table.
-        # The attr buffer is preallocated so the column writes do not malloc.
-        # Per-gather temporaries (6.4 MB each) are still created by arr[idx]
-        # fancy-indexing — this is faster than np.take with non-contiguous
-        # out= on every platform we've measured, because numpy's advanced-
-        # indexing path is better optimised for contiguous output allocation.
-        # On the Linux box the 5 × 6.4 MB gather temporaries use glibc's
-        # mmap allocator (~0.5 ms each), which is unavoidable without a
-        # numba/Cython gather primitive.  The large attr_buf malloc (32 MB)
-        # and the cov_inv / tile-origin temporaries are fully eliminated.
+        # Gather basis-form quadratic coefficients [A,B,C,D,E,F] per entry.
+        # Tile-local means feed D/E/F; A/B/C are the inverse-covariance terms.
         means_np = means_2d.numpy()  # (M, 2) float32 view
-        attr[:, 0] = means_np[gids_np, 0] - tile_ox
-        attr[:, 1] = means_np[gids_np, 1] - tile_oy
-        attr[:, 2] = cov_inv_a[gids_np]
-        attr[:, 3] = cov_inv_b[gids_np]   # iter 026: 2× already folded in
-        attr[:, 4] = cov_inv_c[gids_np]
+        mx = means_np[gids_np, 0] - tile_ox
+        my = means_np[gids_np, 1] - tile_oy
+        A = cov_inv_a[gids_np]
+        B = cov_inv_b[gids_np]   # iter 026: 2× already folded in
+        C = cov_inv_c[gids_np]
+        attr[:, 0] = A
+        attr[:, 1] = B
+        attr[:, 2] = C
+        attr[:, 3] = -2.0 * A * mx - B * my
+        attr[:, 4] = -2.0 * C * my - B * mx
+        attr[:, 5] = A * mx * mx + B * mx * my + C * my * my
 
         # px/py tile-local pixel grids — cached per resolution.
         px_tiles, py_tiles = _get_px_py_grids(H, W)
@@ -633,7 +631,7 @@ class KernelBackend(Backend):
             self._shm_hdr_view[3] = W
 
             # Copy frame data into shm_in regions (numpy → SHM, ~memcpy speed)
-            # attr is (total_entries, 5) float32
+            # attr is (total_entries, 6) float32
             np.copyto(self._shm_attr_view[:total_entries], attr[:total_entries])
             # gids is (total_entries,) uint32
             np.copyto(self._shm_gids_view[:total_entries], gids_u32[:total_entries])
@@ -673,7 +671,7 @@ class KernelBackend(Backend):
                 offsets_count,
                 0,
             ))
-            self._proc.stdin.write(memoryview(attr))          # (P, 5) float32
+            self._proc.stdin.write(memoryview(attr))          # (P, 6) float32
             self._proc.stdin.write(memoryview(gids_u32))      # (P,)   uint32
             self._proc.stdin.write(memoryview(offsets_f32))   # (T+1,) float32
             self._proc.stdin.write(memoryview(px_tiles))      # (T, 32, 32) float32

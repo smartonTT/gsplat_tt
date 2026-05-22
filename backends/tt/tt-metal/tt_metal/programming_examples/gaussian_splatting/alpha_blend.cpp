@@ -298,17 +298,13 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // batches in flight (parity with the previous double-buffering depth).
     cb_tile(CB_COLOR_OUT, 6);
 
-    cb_tile(CB_DX, 2);
-    cb_tile(CB_DY, 2);
-    cb_tile(CB_DX2, 2);
-    cb_tile(CB_DY2, 2);
-    cb_tile(CB_DXDY, 2);
-    {
-        CircularBufferConfig c(3 * TILE_BYTES_BF16, {{CB_Q, DataFormat::Float16_b}});
-        c.set_page_size(CB_Q, TILE_BYTES_BF16);
-        CreateCircularBuffer(program, cores, c);
-    }
-    cb_tile(CB_POWER, 2);
+    cb_tile(CB_PX2, 1);
+    cb_tile(CB_PY2, 1);
+    cb_tile(CB_PXPY, 1);
+    cb_tile(CB_COEFF, 6);
+    cb_tile(CB_DXDY, 1);
+    cb_tile(CB_Q, 1);
+    cb_tile(CB_POWER, 1);
     cb_tile(CB_ALPHA, 2);
 
     cb_tile(CB_CONTRIB, 1);
@@ -475,17 +471,17 @@ static TileAssignment build_tile_assignment(
     return a;
 }
 
-// Pack N x 5 fp32 dyn rows into 32-byte pages (mean + cov_inv).
+// Pack N x 6 fp32 dyn rows into 32-byte pages (basis-form quadratic coeffs).
 static std::vector<uint32_t> encode_dyn_packs(
     const std::vector<float>& dyn_f32, uint32_t total_entries) {
     std::vector<uint32_t> payload(
         (static_cast<size_t>(total_entries) * DYN_PACK_PAGE_BYTES) / 4, 0);
-    constexpr size_t row_bytes = 5 * sizeof(float);
+    constexpr size_t row_bytes = 6 * sizeof(float);
     for (uint32_t e = 0; e < total_entries; e++) {
         std::memcpy(
             reinterpret_cast<uint8_t*>(payload.data())
                 + static_cast<size_t>(e) * DYN_PACK_PAGE_BYTES,
-            &dyn_f32[e * 5],
+            &dyn_f32[e * 6],
             row_bytes);
     }
     return payload;
@@ -832,10 +828,10 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     }
     process_scn1(ctx, colors_opacity, num_gaussians);
 
-    std::vector<float> dyn_packs_f32(static_cast<size_t>(total_entries) * 5);
+    std::vector<float> dyn_packs_f32(static_cast<size_t>(total_entries) * 6);
     for (uint32_t e = 0; e < total_entries; e++) {
-        for (uint32_t c = 0; c < 5; c++) {
-            dyn_packs_f32[e * 5 + c] = packs_f32[e * 9 + c];
+        for (uint32_t c = 0; c < 6; c++) {
+            dyn_packs_f32[e * 6 + c] = packs_f32[e * 9 + c];
         }
     }
 
@@ -888,7 +884,7 @@ static std::vector<float> process_frame_cached(
     const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
     const uint32_t num_tiles = tiles_x * tiles_y;
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
-    const uint32_t total_entries = static_cast<uint32_t>(dyn_packs_f32.size() / 5);
+    const uint32_t total_entries = static_cast<uint32_t>(dyn_packs_f32.size() / 6);
     if (sorted_gids_u32.size() < total_entries) {
         throw std::runtime_error("sorted_gids shorter than total_entries");
     }
@@ -1094,7 +1090,7 @@ static int run_daemon() {
                 // Compute fixed byte offsets (must match backend.py _setup_shm)
                 ctx.shm.attr_offset  = SHM_HDR_BYTES;
                 ctx.shm.gids_offset  = ctx.shm.attr_offset
-                                       + static_cast<size_t>(msg.max_entries) * 5 * sizeof(float);
+                                       + static_cast<size_t>(msg.max_entries) * 6 * sizeof(float);
                 ctx.shm.offs_offset  = ctx.shm.gids_offset
                                        + static_cast<size_t>(msg.max_entries) * sizeof(uint32_t);
                 ctx.shm.px_offset    = ctx.shm.offs_offset
@@ -1148,7 +1144,7 @@ static int run_daemon() {
             const uint32_t tiles_x  = (image_w + TILE_W - 1) / TILE_W;
             const uint32_t tiles_y  = (image_h + TILE_H - 1) / TILE_H;
             const uint32_t num_tiles = tiles_x * tiles_y;
-            const size_t   dyn_floats = static_cast<size_t>(total_entries) * 5;
+            const size_t   dyn_floats = static_cast<size_t>(total_entries) * 6;
             const size_t   px_floats  = static_cast<size_t>(num_tiles) * TILE_H * TILE_W;
 
             const bool use_shm = (shm_flag == 1) && ctx.shm.active;
