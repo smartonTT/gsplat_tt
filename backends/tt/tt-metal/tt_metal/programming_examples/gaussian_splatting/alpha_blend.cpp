@@ -54,7 +54,10 @@ using namespace gsplat;
 #endif
 
 // Binary IPC magic (little-endian on the wire).
-constexpr uint32_t IPC_MAGIC_FRM1 = 0x46524D31;  // 'FRM1'
+constexpr uint32_t IPC_MAGIC_SCN1 = 0x53434E31;  // 'SCN1'
+constexpr uint32_t IPC_MAGIC_OK31 = 0x4F4B3331;  // 'OK31'
+constexpr uint32_t IPC_MAGIC_FRM1 = 0x46524D31;  // 'FRM1' (legacy)
+constexpr uint32_t IPC_MAGIC_FRM2 = 0x46524D32;  // 'FRM2'
 constexpr uint32_t IPC_MAGIC_OK11 = 0x4F4B3131;  // 'OK11'
 constexpr uint32_t IPC_MAGIC_ERR1 = 0x45525231;  // 'ERR1'
 
@@ -105,6 +108,15 @@ static std::vector<float> load_npy_f32(const std::string& path, std::vector<size
     std::vector<float> data(n);
     f.read(reinterpret_cast<char*>(data.data()), n * sizeof(float));
     return data;
+}
+
+static std::vector<uint32_t> load_npy_u32(const std::string& path, std::vector<size_t>& shape) {
+    auto f32 = load_npy_f32(path, shape);
+    std::vector<uint32_t> u32(f32.size());
+    for (size_t i = 0; i < f32.size(); i++) {
+        u32[i] = static_cast<uint32_t>(f32[i]);
+    }
+    return u32;
 }
 
 static void save_npy_f32(const std::string& path, const std::vector<float>& data, const std::vector<size_t>& shape) {
@@ -165,7 +177,9 @@ struct BufferCache {
     uint32_t max_entries = 0;
     uint32_t max_offsets = 0;
     size_t max_tile_id_bytes = 0;
-    std::shared_ptr<distributed::MeshBuffer> packs;
+    size_t max_sorted_gids_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> dyn_packs;
+    std::shared_ptr<distributed::MeshBuffer> sorted_gids;
     std::shared_ptr<distributed::MeshBuffer> offsets;
     std::shared_ptr<distributed::MeshBuffer> px;
     std::shared_ptr<distributed::MeshBuffer> py;
@@ -189,6 +203,9 @@ struct DeviceContext {
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
     BufferCache cache;
+    std::shared_ptr<distributed::MeshBuffer> static_colors_opacity;
+    uint32_t num_gaussians_static = 0;
+    bool scene_loaded = false;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -221,6 +238,8 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_tile(CB_PY, 2);
     cb_small(CB_SCALARS, SCALAR_PACK_PAGE_BYTES, 4, DataFormat::Float32);
     cb_small(CB_TILE_META, META_PAGE_BYTES, 2, DataFormat::UInt32);
+    // Reader-only L1 scratch (NoC-addressable). depth=1, never push/pop.
+    cb_small(CB_READER_SCRATCH, READER_SCRATCH_PAGE_BYTES, 1, DataFormat::UInt32);
     // Depth must be a multiple of 3 (the per-tile batch size) so no
     // single push-of-3 ever straddles the CB wrap. Picking 6 keeps two
     // batches in flight (parity with the previous double-buffering depth).
@@ -255,12 +274,11 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.
 
-    // Reader: 5 DRAM-interleaved TensorAccessorArgs for
-    // packs/offsets/px/py/tile_ids. For non-sharded interleaved buffers, the
-    // compile-time args reduce to (IsDram flag, aligned_page_size). Page sizes
-    // are compile-time constants, so this is independent of any specific
-    // buffer instance.
+    // Reader: 7 DRAM-interleaved TensorAccessorArgs for dyn_packs/offsets/px/py/
+    // tile_ids/sorted_gids/static_colors_opacity.
     std::vector<uint32_t> reader_ct;
+    TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -404,21 +422,43 @@ static TileAssignment build_tile_assignment(
     return a;
 }
 
-// Pack N x 9 fp32 attribute rows into 64-byte pages
-// (9 fp32 = 36 bytes payload, 28 bytes zero-padded per row).
-static std::vector<uint32_t> encode_attribute_packs(
-    const std::vector<float>& packs_f32, uint32_t total_entries) {
-    std::vector<uint32_t> packs_payload(
-        (static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES) / 4, 0);
-    constexpr size_t row_payload_bytes = 9 * sizeof(float);
+// Pack N x 5 fp32 dyn rows into 32-byte pages (mean + cov_inv).
+static std::vector<uint32_t> encode_dyn_packs(
+    const std::vector<float>& dyn_f32, uint32_t total_entries) {
+    std::vector<uint32_t> payload(
+        (static_cast<size_t>(total_entries) * DYN_PACK_PAGE_BYTES) / 4, 0);
+    constexpr size_t row_bytes = 5 * sizeof(float);
     for (uint32_t e = 0; e < total_entries; e++) {
         std::memcpy(
-            reinterpret_cast<uint8_t*>(packs_payload.data())
-                + static_cast<size_t>(e) * SCALAR_PACK_PAGE_BYTES,
-            &packs_f32[e * 9],
-            row_payload_bytes);
+            reinterpret_cast<uint8_t*>(payload.data())
+                + static_cast<size_t>(e) * DYN_PACK_PAGE_BYTES,
+            &dyn_f32[e * 5],
+            row_bytes);
     }
-    return packs_payload;
+    return payload;
+}
+
+// Pack num_gaussians x (R,G,B,opacity) into 32-byte pages.
+static std::vector<uint32_t> encode_static_colors_opacity(
+    const std::vector<float>& colors_opacity, uint32_t num_gaussians) {
+    std::vector<uint32_t> payload(
+        (static_cast<size_t>(num_gaussians) * STATIC_COLOR_OPACITY_PAGE_BYTES) / 4, 0);
+    constexpr size_t row_bytes = 4 * sizeof(float);
+    for (uint32_t g = 0; g < num_gaussians; g++) {
+        std::memcpy(
+            reinterpret_cast<uint8_t*>(payload.data())
+                + static_cast<size_t>(g) * STATIC_COLOR_OPACITY_PAGE_BYTES,
+            &colors_opacity[g * 4],
+            row_bytes);
+    }
+    return payload;
+}
+
+static size_t padded_sorted_gids_bytes(uint32_t total_entries) {
+    const size_t bytes_payload = static_cast<size_t>(total_entries) * sizeof(uint32_t);
+    const size_t bytes_min = std::max<size_t>(bytes_payload, SORTED_GIDS_PAGE_BYTES);
+    return ((bytes_min + SORTED_GIDS_PAGE_BYTES - 1) / SORTED_GIDS_PAGE_BYTES)
+           * SORTED_GIDS_PAGE_BYTES;
 }
 
 // Encode (num_tiles, 32, 32) fp32 input as bf16 tile-major bytes.
@@ -461,38 +501,14 @@ static std::vector<float> tiles_to_image(
 }
 
 struct FrameDramBuffers {
-    std::shared_ptr<distributed::MeshBuffer> packs;
+    std::shared_ptr<distributed::MeshBuffer> dyn_packs;
+    std::shared_ptr<distributed::MeshBuffer> sorted_gids;
     std::shared_ptr<distributed::MeshBuffer> offsets;
     std::shared_ptr<distributed::MeshBuffer> px;
     std::shared_ptr<distributed::MeshBuffer> py;
     std::shared_ptr<distributed::MeshBuffer> output;
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
 };
-
-// Allocate the 6 DRAM buffers a frame needs. Sizes are derived from the
-// scene's total_entries + tile count + the LPT-balanced tile-id list.
-// All buffers are RAII via shared_ptr; they free on scope exit.
-static FrameDramBuffers allocate_frame_buffers(
-    DeviceContext& ctx,
-    uint32_t total_entries,
-    uint32_t num_tiles,
-    size_t offsets_count,
-    size_t tile_ids_bytes) {
-    auto make_dram = [&](size_t bytes, size_t page_bytes) {
-        distributed::ReplicatedBufferConfig rc{.size = bytes};
-        distributed::DeviceLocalBufferConfig lc{
-            .page_size = page_bytes, .buffer_type = BufferType::DRAM};
-        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
-    };
-    FrameDramBuffers b;
-    b.packs    = make_dram(static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
-    b.offsets  = make_dram(offsets_count * sizeof(uint32_t), sizeof(uint32_t));
-    b.px       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.py       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
-    return b;
-}
 
 static uint32_t grow_cap_u32(uint32_t current, uint32_t needed) {
     if (needed <= current) {
@@ -514,11 +530,11 @@ static size_t grow_cap_size(size_t current, size_t needed) {
     return std::max(needed, current + current / 2);
 }
 
-// Same geometric growth, but rounded up to the buffer's page size so the
-// result is a valid MeshBuffer size (`size % page_size == 0`). Geometric
-// growth on raw byte counts can land on `current + current/2` that is
-// page-aligned for `current` but not for the buffer's `page_size`
-// (e.g. current=320, needed=448, page=64 -> grow=480, 480%64=32 -> crash).
+// Geometric growth with the result rounded up to `page_size`. Required for
+// any cache whose `needed` arg is bytes (rather than a unit-element count):
+// raw geometric growth can land on `current + current/2` that is aligned for
+// `current` but not for the buffer's page (e.g. 320 -> 480 with page=64 ->
+// `MeshBuffer::create` fails with `size % page_size == 0`).
 static size_t grow_cap_bytes_page_aligned(size_t current, size_t needed, size_t page_size) {
     size_t grown = grow_cap_size(current, needed);
     if (page_size <= 1) {
@@ -547,10 +563,16 @@ static void ensure_buffer_cache(
         return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
     };
 
+    const size_t gids_bytes = padded_sorted_gids_bytes(total_entries);
     if (total_entries > cache.max_entries) {
         cache.max_entries = grow_cap_u32(cache.max_entries, total_entries);
-        cache.packs = make_dram(
-            static_cast<size_t>(cache.max_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
+        cache.dyn_packs = make_dram(
+            static_cast<size_t>(cache.max_entries) * DYN_PACK_PAGE_BYTES, DYN_PACK_PAGE_BYTES);
+    }
+    if (gids_bytes > cache.max_sorted_gids_bytes) {
+        cache.max_sorted_gids_bytes = grow_cap_bytes_page_aligned(
+            cache.max_sorted_gids_bytes, gids_bytes, SORTED_GIDS_PAGE_BYTES);
+        cache.sorted_gids = make_dram(cache.max_sorted_gids_bytes, SORTED_GIDS_PAGE_BYTES);
     }
     if (offsets_count > cache.max_offsets) {
         cache.max_offsets = grow_cap_u32(cache.max_offsets, offsets_count);
@@ -574,10 +596,14 @@ static void ensure_buffer_cache(
         output_reallocated = true;
     }
 
-    if (!cache.packs) {
+    if (!cache.dyn_packs) {
         cache.max_entries = total_entries;
-        cache.packs = make_dram(
-            static_cast<size_t>(cache.max_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
+        cache.dyn_packs = make_dram(
+            static_cast<size_t>(cache.max_entries) * DYN_PACK_PAGE_BYTES, DYN_PACK_PAGE_BYTES);
+    }
+    if (!cache.sorted_gids) {
+        cache.max_sorted_gids_bytes = gids_bytes;
+        cache.sorted_gids = make_dram(cache.max_sorted_gids_bytes, SORTED_GIDS_PAGE_BYTES);
     }
     if (!cache.offsets) {
         cache.max_offsets = offsets_count;
@@ -659,12 +685,14 @@ static void set_per_core_runtime_args(
     const DeviceContext& ctx,
     const FrameDramBuffers& bufs,
     const TileAssignment& assign) {
-    const uint32_t packs_addr    = static_cast<uint32_t>(bufs.packs->address());
-    const uint32_t offsets_addr  = static_cast<uint32_t>(bufs.offsets->address());
-    const uint32_t px_addr       = static_cast<uint32_t>(bufs.px->address());
-    const uint32_t py_addr       = static_cast<uint32_t>(bufs.py->address());
-    const uint32_t out_addr      = static_cast<uint32_t>(bufs.output->address());
+    const uint32_t dyn_packs_addr = static_cast<uint32_t>(bufs.dyn_packs->address());
+    const uint32_t offsets_addr = static_cast<uint32_t>(bufs.offsets->address());
+    const uint32_t px_addr = static_cast<uint32_t>(bufs.px->address());
+    const uint32_t py_addr = static_cast<uint32_t>(bufs.py->address());
     const uint32_t tile_ids_addr = static_cast<uint32_t>(bufs.tile_ids->address());
+    const uint32_t sorted_gids_addr = static_cast<uint32_t>(bufs.sorted_gids->address());
+    const uint32_t static_addr = static_cast<uint32_t>(ctx.static_colors_opacity->address());
+    const uint32_t out_addr = static_cast<uint32_t>(bufs.output->address());
 
     uint32_t core_index = 0;
     for (const auto& range : ctx.all_cores.ranges()) {
@@ -674,8 +702,9 @@ static void set_per_core_runtime_args(
                 const uint32_t start = assign.per_core_offset[core_index];
                 const uint32_t count = assign.per_core_count[core_index];
                 SetRuntimeArgs(program, ctx.reader, core, {
-                    packs_addr, offsets_addr, px_addr, py_addr,
+                    dyn_packs_addr, offsets_addr, px_addr, py_addr,
                     tile_ids_addr, start, count,
+                    sorted_gids_addr, static_addr,
                 });
                 SetRuntimeArgs(program, ctx.compute, core, {count});
                 SetRuntimeArgs(program, ctx.writer, core, {
@@ -698,16 +727,23 @@ static Program& get_program_for_workload(DeviceContext& ctx) {
     return it->second;
 }
 
+static void process_scn1(DeviceContext& ctx, const std::vector<float>& colors_opacity, uint32_t num_gaussians);
+static std::vector<float> process_frame_cached(
+    DeviceContext& ctx,
+    uint32_t image_h,
+    uint32_t image_w,
+    const std::vector<float>& dyn_packs_f32,
+    const std::vector<uint32_t>& sorted_gids_u32,
+    const std::vector<float>& offsets_f32,
+    const std::vector<float>& px_f32,
+    const std::vector<float>& py_f32,
+    double& kernel_ms_out);
+
 // Returns the kernel-only elapsed time (EnqueueWriteBuffer start ->
 // EnqueueReadBuffer end) in milliseconds.
 static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     const uint32_t image_h = f.image_h;
     const uint32_t image_w = f.image_w;
-    const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
-    const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
-    const uint32_t num_tiles = tiles_x * tiles_y;
-    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
-
     // 1. Load .npy fixtures.
     std::vector<size_t> packs_shape, offsets_shape, px_shape, py_shape;
     auto packs_f32   = load_npy_f32(f.packs_path,   packs_shape);
@@ -716,53 +752,69 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     auto py_f32      = load_npy_f32(f.py_path,      py_shape);
     const uint32_t total_entries = static_cast<uint32_t>(packs_shape[0]);
 
-    // 2. LPT-balanced tile-to-core assignment.
-    const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
-
-    // 3. Allocate per-frame DRAM buffers and prepare upload payloads.
-    // (Non-const because EnqueueWrite/ReadMeshBuffer takes non-const lvalue
-    // refs to shared_ptr<MeshBuffer>.)
-    FrameDramBuffers bufs = allocate_frame_buffers(
-        ctx, total_entries, num_tiles, offsets_f32.size(),
-        assign.tile_id_buffer_bytes_padded);
-    auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
-    auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
-    auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
-    std::vector<uint32_t> offsets_u32(offsets_f32.size());
-    for (size_t i = 0; i < offsets_f32.size(); i++) {
-        offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
+    std::string gids_path = f.packs_path;
+    const auto dot = gids_path.rfind(".npy");
+    if (dot != std::string::npos) {
+        gids_path.replace(dot, 4, "_gids.npy");
+    }
+    std::vector<size_t> gids_shape;
+    auto sorted_gids_u32 = load_npy_u32(gids_path, gids_shape);
+    if (sorted_gids_u32.size() < total_entries) {
+        throw std::runtime_error("sorted_gids.npy missing or too short; save as packs_gids.npy");
     }
 
-    // 4. Refresh runtime args for this frame.
-    Program& program = get_program_for_workload(ctx);
-    set_per_core_runtime_args(program, ctx, bufs, assign);
+    uint32_t max_gid = 0;
+    for (uint32_t e = 0; e < total_entries; e++) {
+        max_gid = std::max(max_gid, sorted_gids_u32[e]);
+    }
+    const uint32_t num_gaussians = max_gid + 1;
+    std::vector<float> colors_opacity(static_cast<size_t>(num_gaussians) * 4, 0.0f);
+    for (uint32_t e = 0; e < total_entries; e++) {
+        const uint32_t gid = sorted_gids_u32[e];
+        const size_t base = static_cast<size_t>(gid) * 4;
+        colors_opacity[base + 0] = packs_f32[e * 9 + 5];
+        colors_opacity[base + 1] = packs_f32[e * 9 + 6];
+        colors_opacity[base + 2] = packs_f32[e * 9 + 7];
+        colors_opacity[base + 3] = packs_f32[e * 9 + 8];
+    }
+    process_scn1(ctx, colors_opacity, num_gaussians);
 
-    // 5. Kernel timing window: DRAM upload start -> output readback end.
-    const auto t_start = std::chrono::steady_clock::now();
-    // Zero-fill the output buffer. compute_lpt_assignment() filters out
-    // empty tiles, so their slots are never written by the writer kernel.
-    // The DRAM allocator may reuse addresses across frames in daemon mode,
-    // so without this fill, empty regions would show stale pixels.
-    std::vector<uint16_t> output_zero(
-        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       px_bf16);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py,       py_bf16);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
-    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
-    std::vector<uint16_t> result_bf16(
-        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
-    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, bufs.output, /*blocking=*/true);
-    const auto t_end = std::chrono::steady_clock::now();
-    const double kernel_ms =
-        std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    std::vector<float> dyn_packs_f32(static_cast<size_t>(total_entries) * 5);
+    for (uint32_t e = 0; e < total_entries; e++) {
+        for (uint32_t c = 0; c < 5; c++) {
+            dyn_packs_f32[e * 5 + c] = packs_f32[e * 9 + c];
+        }
+    }
 
-    // 6. Tile-major bf16 output -> row-major fp32 image; save .npy.
-    const auto img = tiles_to_image(result_bf16, num_tiles, tiles_x, image_h, image_w);
+    double kernel_ms = 0.0;
+    const auto img = process_frame_cached(
+        ctx,
+        image_h,
+        image_w,
+        dyn_packs_f32,
+        sorted_gids_u32,
+        offsets_f32,
+        px_f32,
+        py_f32,
+        kernel_ms);
     save_npy_f32(f.out_path, img, {image_h, image_w, 3});
     return kernel_ms;
+}
+
+static void process_scn1(DeviceContext& ctx, const std::vector<float>& colors_opacity, uint32_t num_gaussians) {
+    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{
+            .page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    };
+    ctx.static_colors_opacity = make_dram(
+        static_cast<size_t>(num_gaussians) * STATIC_COLOR_OPACITY_PAGE_BYTES,
+        STATIC_COLOR_OPACITY_PAGE_BYTES);
+    auto payload = encode_static_colors_opacity(colors_opacity, num_gaussians);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.static_colors_opacity, payload);
+    ctx.num_gaussians_static = num_gaussians;
+    ctx.scene_loaded = true;
 }
 
 // Daemon path: reuse cached DRAM buffers and return the fp32 image in memory.
@@ -770,16 +822,23 @@ static std::vector<float> process_frame_cached(
     DeviceContext& ctx,
     uint32_t image_h,
     uint32_t image_w,
-    const std::vector<float>& packs_f32,
+    const std::vector<float>& dyn_packs_f32,
+    const std::vector<uint32_t>& sorted_gids_u32,
     const std::vector<float>& offsets_f32,
     const std::vector<float>& px_f32,
     const std::vector<float>& py_f32,
     double& kernel_ms_out) {
+    if (!ctx.scene_loaded || !ctx.static_colors_opacity) {
+        throw std::runtime_error("SCN1 required before FRM2");
+    }
     const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
     const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
     const uint32_t num_tiles = tiles_x * tiles_y;
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
-    const uint32_t total_entries = static_cast<uint32_t>(packs_f32.size() / 9);
+    const uint32_t total_entries = static_cast<uint32_t>(dyn_packs_f32.size() / 5);
+    if (sorted_gids_u32.size() < total_entries) {
+        throw std::runtime_error("sorted_gids shorter than total_entries");
+    }
 
     const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
 
@@ -796,7 +855,13 @@ static std::vector<float> process_frame_cached(
         output_reallocated);
     BufferCache& cache = ctx.cache;
 
-    auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
+    auto dyn_payload = encode_dyn_packs(dyn_packs_f32, total_entries);
+    std::vector<uint32_t> gids_payload(
+        padded_sorted_gids_bytes(total_entries) / sizeof(uint32_t), 0);
+    std::copy(
+        sorted_gids_u32.begin(),
+        sorted_gids_u32.begin() + total_entries,
+        gids_payload.begin());
     auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
     auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
     std::vector<uint32_t> offsets_u32(offsets_f32.size());
@@ -807,7 +872,13 @@ static std::vector<float> process_frame_cached(
     const std::vector<uint8_t> this_nonempty = compute_tile_nonempty(offsets_f32, num_tiles);
 
     FrameDramBuffers bufs{
-        cache.packs, cache.offsets, cache.px, cache.py, cache.output, cache.tile_ids};
+        cache.dyn_packs,
+        cache.sorted_gids,
+        cache.offsets,
+        cache.px,
+        cache.py,
+        cache.output,
+        cache.tile_ids};
     Program& program = get_program_for_workload(ctx);
     set_per_core_runtime_args(program, ctx, bufs, assign);
 
@@ -818,7 +889,8 @@ static std::vector<float> process_frame_cached(
     } else {
         zero_flipped_empty_tiles(ctx, cache, cache.last_frame_tile_nonempty, this_nonempty);
     }
-    enqueue_write_cached_buffer(ctx, cache.packs, packs_payload);
+    enqueue_write_cached_buffer(ctx, cache.dyn_packs, dyn_payload);
+    enqueue_write_cached_buffer(ctx, cache.sorted_gids, gids_payload);
     enqueue_write_cached_buffer(ctx, cache.offsets, offsets_u32);
     enqueue_write_cached_buffer(ctx, cache.px, px_bf16);
     enqueue_write_cached_buffer(ctx, cache.py, py_bf16);
@@ -869,6 +941,12 @@ static void write_err_response(const std::string& msg) {
     std::cout.flush();
 }
 
+static void write_ok31_response() {
+    const uint32_t hdr[2] = {IPC_MAGIC_OK31, 0};
+    std::cout.write(reinterpret_cast<const char*>(hdr), sizeof(hdr));
+    std::cout.flush();
+}
+
 // ---------------------------------------------------------------------------
 // Daemon mode
 // ---------------------------------------------------------------------------
@@ -900,45 +978,84 @@ static int run_daemon() {
 
         uint32_t magic = 0;
         std::memcpy(&magic, prefix, 4);
-        if (magic != IPC_MAGIC_FRM1) {
-            write_err_response("expected FRM1 magic or QUIT");
+
+        if (magic == IPC_MAGIC_SCN1) {
+            uint32_t hdr_rest[3] = {};
+            if (!read_exact_stdin(hdr_rest, sizeof(hdr_rest))) {
+                break;
+            }
+            const uint32_t num_gaussians = hdr_rest[0];
+            std::vector<float> colors_opacity(static_cast<size_t>(num_gaussians) * 4);
+            if (!read_exact_stdin(colors_opacity.data(), colors_opacity.size() * sizeof(float))) {
+                break;
+            }
+            try {
+                process_scn1(ctx, colors_opacity, num_gaussians);
+                write_ok31_response();
+            } catch (const std::exception& e) {
+                write_err_response(e.what());
+            }
             continue;
         }
 
-        uint32_t hdr_rest[5] = {};
-        if (!read_exact_stdin(hdr_rest, sizeof(hdr_rest))) {
-            break;
-        }
-        const uint32_t image_h = hdr_rest[0];
-        const uint32_t image_w = hdr_rest[1];
-        const uint32_t total_entries = hdr_rest[2];
-        const uint32_t offsets_count = hdr_rest[3];
+        if (magic == IPC_MAGIC_FRM2) {
+            if (!ctx.scene_loaded) {
+                write_err_response("SCN1 required before FRM2");
+                continue;
+            }
+            uint32_t hdr_rest[5] = {};
+            if (!read_exact_stdin(hdr_rest, sizeof(hdr_rest))) {
+                break;
+            }
+            const uint32_t image_h = hdr_rest[0];
+            const uint32_t image_w = hdr_rest[1];
+            const uint32_t total_entries = hdr_rest[2];
+            const uint32_t offsets_count = hdr_rest[3];
 
-        const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
-        const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
-        const uint32_t num_tiles = tiles_x * tiles_y;
-        const size_t packs_floats = static_cast<size_t>(total_entries) * 9;
-        const size_t px_floats = static_cast<size_t>(num_tiles) * TILE_H * TILE_W;
+            const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
+            const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
+            const uint32_t num_tiles = tiles_x * tiles_y;
+            const size_t dyn_floats = static_cast<size_t>(total_entries) * 5;
+            const size_t px_floats = static_cast<size_t>(num_tiles) * TILE_H * TILE_W;
 
-        std::vector<float> packs_f32(packs_floats);
-        std::vector<float> offsets_f32(offsets_count);
-        std::vector<float> px_f32(px_floats);
-        std::vector<float> py_f32(px_floats);
-        if (!read_exact_stdin(packs_f32.data(), packs_floats * sizeof(float)) ||
-            !read_exact_stdin(offsets_f32.data(), offsets_count * sizeof(float)) ||
-            !read_exact_stdin(px_f32.data(), px_floats * sizeof(float)) ||
-            !read_exact_stdin(py_f32.data(), px_floats * sizeof(float))) {
-            break;
+            std::vector<float> dyn_packs_f32(dyn_floats);
+            std::vector<uint32_t> sorted_gids_u32(total_entries);
+            std::vector<float> offsets_f32(offsets_count);
+            std::vector<float> px_f32(px_floats);
+            std::vector<float> py_f32(px_floats);
+            if (!read_exact_stdin(dyn_packs_f32.data(), dyn_floats * sizeof(float)) ||
+                !read_exact_stdin(sorted_gids_u32.data(), total_entries * sizeof(uint32_t)) ||
+                !read_exact_stdin(offsets_f32.data(), offsets_count * sizeof(float)) ||
+                !read_exact_stdin(px_f32.data(), px_floats * sizeof(float)) ||
+                !read_exact_stdin(py_f32.data(), px_floats * sizeof(float))) {
+                break;
+            }
+
+            try {
+                double kernel_ms = 0.0;
+                auto img = process_frame_cached(
+                    ctx,
+                    image_h,
+                    image_w,
+                    dyn_packs_f32,
+                    sorted_gids_u32,
+                    offsets_f32,
+                    px_f32,
+                    py_f32,
+                    kernel_ms);
+                write_ok_response(img, image_h, image_w, kernel_ms);
+            } catch (const std::exception& e) {
+                write_err_response(e.what());
+            }
+            continue;
         }
 
-        try {
-            double kernel_ms = 0.0;
-            auto img = process_frame_cached(
-                ctx, image_h, image_w, packs_f32, offsets_f32, px_f32, py_f32, kernel_ms);
-            write_ok_response(img, image_h, image_w, kernel_ms);
-        } catch (const std::exception& e) {
-            write_err_response(e.what());
+        if (magic == IPC_MAGIC_FRM1) {
+            write_err_response("FRM1 deprecated; use SCN1 then FRM2");
+            continue;
         }
+
+        write_err_response("expected SCN1, FRM2, or QUIT");
     }
 
     bool ok = true;

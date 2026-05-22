@@ -7,155 +7,137 @@
 #include "api/dataflow/dataflow_api.h"
 
 // Alpha-blend READER kernel (NCRISC, NoC1; see DataMovementProcessor::RISCV_1
-// in alpha_blend.cpp). The host launches reader on RISCV_1 / NoC1 and writer
-// on RISCV_0 / NoC0 so reads and writes use opposite NoCs.
+// in alpha_blend.cpp). Streams DRAM inputs into CBs for the compute kernel.
 //
-// ROLE
-// ----
-// Streams the four input data sources from DRAM into the four input CBs that
-// feed the compute kernel:
-//
-//   CB_PX        (0): one bf16 32x32 tile per screen tile (per-pixel x coord)
-//   CB_PY        (1): one bf16 32x32 tile per screen tile (per-pixel y coord)
-//   CB_SCALARS   (2): one 64-byte fp32 pack per Gaussian (mean/cov/color/opacity)
-//   CB_TILE_META (3): one uint32 (g_count) per screen tile
-//
-// The reader runs on every active core in lock-step with the compute kernel:
-// for each screen tile assigned to this core, it pushes the four inputs in
-// the order shown, and compute consumes them one tile at a time.
-//
-// LPT TILE ASSIGNMENT
-// -------------------
-// This core does NOT process a contiguous tile range. The host runs LPT
-// (Longest Processing Time first) load balancing on the per-tile Gaussian
-// counts and writes a per-core slice of (possibly non-contiguous) tile IDs
-// into a shared DRAM buffer. We read this core's slice into L1 once at
-// startup (capped at MAX_TILE_IDS_PER_CORE entries) and index by element
-// in the per-tile loop. With non-contiguous IDs we can't carry the previous
-// tile's `g_end` forward to the next iteration, so each tile pays an extra
-// 2-element offsets[] read — small relative to the per-Gaussian stream.
-//
-// PER-TILE WORK
-// -------------
-//   1. fetch tile_offsets[id] and tile_offsets[id+1] → (g_start, g_end)
-//   2. push g_count = g_end - g_start as one uint32 to CB_TILE_META
-//   3. push px and py tiles for this screen tile to CB_PX, CB_PY
-//   4. push g_count scalar packs (one 64-byte page each) to CB_SCALARS
+// Step 2: per-entry dyn pack (mean + cov_inv) and sorted gids; color/opacity
+// are gathered from static_colors_opacity[gid] and composed into CB_SCALARS
+// (64-byte, 9 fp32) for the unchanged compute kernel.
 //
 // RUNTIME ARGS
-//   0: packs_addr         DRAM base of scalar packs buffer (64B page each)
-//   1: tile_offsets_addr  DRAM base of tile_offsets[] (4B per uint32)
-//   2: px_addr            DRAM base of px tiles       (2KB per bf16 32x32)
-//   3: py_addr            DRAM base of py tiles
-//   4: tile_ids_addr      DRAM base of concatenated tile-id list (uint32 each)
-//   5: tile_ids_start     this core's element offset into that list
-//   6: tile_ids_count     number of tile IDs this core handles
+//   0: dyn_packs_addr
+//   1: tile_offsets_addr
+//   2: px_addr
+//   3: py_addr
+//   4: tile_ids_addr
+//   5: tile_ids_start
+//   6: tile_ids_count
+//   7: sorted_gids_addr
+//   8: static_colors_opacity_addr
 //
-// COMPILE-TIME ARGS: 5 TensorAccessorArgs in order: packs, tile_offsets,
-// px, py, tile_ids. All DRAM-interleaved.
+// COMPILE-TIME ARGS: 7 TensorAccessorArgs (dyn_packs, offsets, px, py,
+// tile_ids, sorted_gids, static_colors_opacity).
 
-// Max per-core tile IDs we cache in L1. Sized to handle a 4K render
-// (120x68 = 8160 tiles, ~128/core after round-robin balancing). At 1080p
-// (60x34 = 2040 tiles) average is ~32/core, leaving plenty of headroom.
-// Cost: 1024 bytes per core (still trivial against the 1.5 MB total L1).
 constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 
 void kernel_main() {
-    uint32_t packs_addr        = get_arg_val<uint32_t>(0);
-    uint32_t tile_offsets_addr = get_arg_val<uint32_t>(1);
-    uint32_t px_addr           = get_arg_val<uint32_t>(2);
-    uint32_t py_addr           = get_arg_val<uint32_t>(3);
-    uint32_t tile_ids_addr     = get_arg_val<uint32_t>(4);
-    uint32_t tile_ids_start    = get_arg_val<uint32_t>(5);
-    uint32_t tile_ids_count    = get_arg_val<uint32_t>(6);
+    uint32_t dyn_packs_addr            = get_arg_val<uint32_t>(0);
+    uint32_t tile_offsets_addr         = get_arg_val<uint32_t>(1);
+    uint32_t px_addr                   = get_arg_val<uint32_t>(2);
+    uint32_t py_addr                   = get_arg_val<uint32_t>(3);
+    uint32_t tile_ids_addr             = get_arg_val<uint32_t>(4);
+    uint32_t tile_ids_start            = get_arg_val<uint32_t>(5);
+    uint32_t tile_ids_count            = get_arg_val<uint32_t>(6);
+    uint32_t sorted_gids_addr          = get_arg_val<uint32_t>(7);
+    uint32_t static_colors_opacity_addr = get_arg_val<uint32_t>(8);
 
     constexpr uint32_t CB_PX        = 0;
     constexpr uint32_t CB_PY        = 1;
     constexpr uint32_t CB_SCALARS   = 2;
     constexpr uint32_t CB_TILE_META = 3;
 
-    const uint32_t tile_bytes        = get_tile_size(CB_PX);       // 2048 (32x32 bf16)
-    // NOTE: do NOT use get_tile_size(CB_SCALARS) here. CB_SCALARS is configured
-    // as DataFormat::Float32 (so the SFPU sees fp32), but with a sub-tile page
-    // size of 64 bytes (9 fp32 scalar pack). get_tile_size returns the format
-    // tile size (4096 for fp32 32x32), not the configured page size, so using
-    // it as the NoC transaction size would overflow the CB by 3840 bytes per
-    // Gaussian and trample adjacent L1 (manifests as a multi-tile hang once
-    // the corrupted L1 overlaps a CB descriptor).
-    constexpr uint32_t pack_bytes_padded = 64;  // matches host SCALAR_PACK_PAGE_BYTES
-    constexpr uint32_t tile_ids_page_bytes = 64;  // matches host TILE_IDS_PAGE_BYTES
+    const uint32_t tile_bytes = get_tile_size(CB_PX);
+    constexpr uint32_t dyn_pack_page_bytes = 32;
+    constexpr uint32_t static_page_bytes = 32;
+    constexpr uint32_t scalar_pack_page_bytes = 64;
+    constexpr uint32_t gids_page_bytes = 64;
+    constexpr uint32_t tile_ids_page_bytes = 64;
+    constexpr uint32_t scalar_payload_bytes = 9 * 4;
 
-    constexpr auto packs_args     = TensorAccessorArgs<0>();
-    constexpr auto offsets_args   = TensorAccessorArgs<packs_args.next_compile_time_args_offset()>();
-    constexpr auto px_args        = TensorAccessorArgs<offsets_args.next_compile_time_args_offset()>();
-    constexpr auto py_args        = TensorAccessorArgs<px_args.next_compile_time_args_offset()>();
-    constexpr auto tile_ids_args  = TensorAccessorArgs<py_args.next_compile_time_args_offset()>();
+    constexpr auto dyn_packs_args = TensorAccessorArgs<0>();
+    constexpr auto offsets_args =
+        TensorAccessorArgs<dyn_packs_args.next_compile_time_args_offset()>();
+    constexpr auto px_args =
+        TensorAccessorArgs<offsets_args.next_compile_time_args_offset()>();
+    constexpr auto py_args = TensorAccessorArgs<px_args.next_compile_time_args_offset()>();
+    constexpr auto tile_ids_args =
+        TensorAccessorArgs<py_args.next_compile_time_args_offset()>();
+    constexpr auto sorted_gids_args =
+        TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
+    constexpr auto static_colors_args =
+        TensorAccessorArgs<sorted_gids_args.next_compile_time_args_offset()>();
 
-    const auto packs_acc    = TensorAccessor(packs_args,    packs_addr,        pack_bytes_padded);
-    const auto offsets_acc  = TensorAccessor(offsets_args,  tile_offsets_addr, /*page_size=*/4);
-    const auto px_acc       = TensorAccessor(px_args,       px_addr,           tile_bytes);
-    const auto py_acc       = TensorAccessor(py_args,       py_addr,           tile_bytes);
-    const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr,     tile_ids_page_bytes);
+    const auto dyn_packs_acc =
+        TensorAccessor(dyn_packs_args, dyn_packs_addr, dyn_pack_page_bytes);
+    const auto offsets_acc =
+        TensorAccessor(offsets_args, tile_offsets_addr, /*page_size=*/4);
+    const auto px_acc = TensorAccessor(px_args, px_addr, tile_bytes);
+    const auto py_acc = TensorAccessor(py_args, py_addr, tile_bytes);
+    const auto tile_ids_acc =
+        TensorAccessor(tile_ids_args, tile_ids_addr, tile_ids_page_bytes);
+    const auto sorted_gids_acc =
+        TensorAccessor(sorted_gids_args, sorted_gids_addr, gids_page_bytes);
+    const auto static_colors_acc = TensorAccessor(
+        static_colors_args, static_colors_opacity_addr, static_page_bytes);
 
-    // No-work cores (LPT may leave some cores empty when num_tiles < num_cores).
     if (tile_ids_count == 0) {
         return;
     }
 
-    // Per-tile offset scratch + per-core tile-ID cache. Both live in a small
-    // L1 region grabbed from the cb_tile_meta CB write pointer. Layout:
-    //   bytes [0, 4)               -> offset scratch slot (overwritten per push)
-    //   bytes [4, 4 + 4*count)     -> cached per-core tile-ID list
-    //
-    // We grab the L1 region from cb_tile_meta because we won't push to it
-    // until after all the prefetches are complete. The first per-tile iter
-    // refreshes scratch_addr (cb_tile_meta wraps on push_back), so we keep
-    // the cache valid by reading it into a local stack array before the loop.
     uint32_t scratch_addr = get_write_ptr(CB_TILE_META);
     auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
 
-    // Read this core's tile-ID slice into L1 with one NoC transaction per
-    // page. The slice may straddle multiple 64-byte pages; we loop over
-    // pages and copy into a local buffer.
     uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
     {
-        // First page that contains tile_ids_start; offset within that page.
-        const uint32_t ids_per_page = tile_ids_page_bytes / 4;  // 16
+        const uint32_t ids_per_page = tile_ids_page_bytes / 4;
         uint32_t page_idx = tile_ids_start / ids_per_page;
-        uint32_t in_page  = tile_ids_start % ids_per_page;
+        uint32_t in_page = tile_ids_start % ids_per_page;
         uint32_t remaining = tile_ids_count;
         uint32_t out_idx = 0;
-        // L1 scratch slot for one page (64B), reuse slot at scratch_addr.
         while (remaining > 0) {
             uint64_t page_noc = get_noc_addr(page_idx, tile_ids_acc);
             noc_async_read(page_noc, scratch_addr, tile_ids_page_bytes);
             noc_async_read_barrier();
             uint32_t take = ids_per_page - in_page;
-            if (take > remaining) take = remaining;
+            if (take > remaining) {
+                take = remaining;
+            }
             for (uint32_t i = 0; i < take; i++) {
                 tile_ids[out_idx + i] = scratch_ptr[in_page + i];
             }
-            out_idx   += take;
+            out_idx += take;
             remaining -= take;
-            page_idx  += 1;
-            in_page    = 0;
+            page_idx += 1;
+            in_page = 0;
         }
     }
 
-    // -------------------------------------------------------------------
-    // Main per-tile loop. For each screen tile assigned to this core:
-    //   1) read its [g_start, g_end) range from offsets[]
-    //   2) push g_count to CB_TILE_META
-    //   3) push the px and py tiles
-    //   4) push g_count Gaussian scalar packs to CB_SCALARS
-    // -------------------------------------------------------------------
+    // NoC destinations MUST live in worker L1 (NoC-addressable), NOT in
+    // NCRISC's private IRAM (the kernel's stack). The watcher will fault
+    // with "Local L1 address overflow" if we noc_async_read into a
+    // stack-allocated buffer.
+    //
+    // CB_READER_SCRATCH is a dedicated reader-only L1 CB (depth=1,
+    // page_size=READER_SCRATCH_PAGE_BYTES=128). We never push or pop it;
+    // the L1 region lives at a stable address for the kernel's lifetime
+    // and is reused as scratch by the inner gaussian loop.
+    //
+    // L1 layout:
+    //   [0,  64)   -> sorted_gids page cache (16 uint32 gids per page)
+    //   [64, 96)   -> static color/opacity scratch (8 fp32 per gid)
+    //   [96,128)   -> reserved
+    constexpr uint32_t CB_READER_SCRATCH = 24;
+    constexpr uint32_t gids_per_page = gids_page_bytes / 4;
+    constexpr uint32_t L1_OFF_GIDS = 0;
+    constexpr uint32_t L1_OFF_STATIC = 64;
+    const uint32_t reader_scratch_addr = get_write_ptr(CB_READER_SCRATCH);
+    volatile uint32_t* gids_l1 =
+        reinterpret_cast<volatile uint32_t*>(reader_scratch_addr + L1_OFF_GIDS);
+    volatile uint32_t* static_l1 =
+        reinterpret_cast<volatile uint32_t*>(reader_scratch_addr + L1_OFF_STATIC);
+
     for (uint32_t t = 0; t < tile_ids_count; t++) {
         uint32_t tile_id = tile_ids[t];
 
-        // (1) Read tile_offsets[tile_id] and tile_offsets[tile_id+1] from
-        // DRAM via two single-uint32 noc_async_reads. Two reads per tile
-        // (vs one carry-forward) is the cost of LPT's non-contiguous
-        // tile-id assignment; trivial relative to the per-Gaussian stream.
         {
             uint64_t off_noc = get_noc_addr(tile_id, offsets_acc);
             noc_async_read(off_noc, scratch_addr, 4);
@@ -168,20 +150,14 @@ void kernel_main() {
             noc_async_read(off_noc, scratch_addr, 4);
             noc_async_read_barrier();
         }
-        uint32_t g_end   = scratch_ptr[0];
+        uint32_t g_end = scratch_ptr[0];
         uint32_t g_count = g_end - g_start;
 
-        // (2) Push g_count into CB_TILE_META as a single uint32. Writes
-        // directly into the meta CB's write pointer (the scratch slot we
-        // just used is safe to overwrite — we no longer need it).
         cb_reserve_back(CB_TILE_META, 1);
         auto meta_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_META));
         meta_ptr[0] = g_count;
         cb_push_back(CB_TILE_META, 1);
 
-        // (3) Push px and py tiles. noc_async_read_tile uses the
-        // TensorAccessor's tile stride to fetch the right 32x32 region
-        // for this tile_id.
         cb_reserve_back(CB_PX, 1);
         noc_async_read_tile(tile_id, px_acc, get_write_ptr(CB_PX));
         cb_reserve_back(CB_PY, 1);
@@ -190,20 +166,60 @@ void kernel_main() {
         cb_push_back(CB_PX, 1);
         cb_push_back(CB_PY, 1);
 
-        // (4) Stream Gaussian scalar packs for this tile. One 64-byte
-        // page per Gaussian; compute pops one per inner-loop iteration.
-        // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
+        // Page cache for sorted_gids reads. The cache is invalidated at
+        // the start of every tile (last_gid_page = UINT32_MAX). Across
+        // a single tile's per-Gaussian loop, consecutive entries in
+        // the sorted list are very likely in the same 64-byte gid page,
+        // so the cache eliminates the redundant gid-page reads within a
+        // tile (typical hit rate >50%).
+        uint32_t last_gid_page = UINT32_MAX;
+
         for (uint32_t g = 0; g < g_count; g++) {
             uint32_t entry_id = g_start + g;
+            uint32_t gid_page = entry_id / gids_per_page;
+            if (gid_page != last_gid_page) {
+                uint64_t gids_noc = get_noc_addr(gid_page, sorted_gids_acc);
+                noc_async_read(gids_noc, reader_scratch_addr + L1_OFF_GIDS, gids_page_bytes);
+                noc_async_read_barrier();
+                last_gid_page = gid_page;
+            }
+            uint32_t gid = gids_l1[entry_id % gids_per_page];
+
             cb_reserve_back(CB_SCALARS, 1);
-            noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));
+            uint32_t cb_addr = get_write_ptr(CB_SCALARS);
+
+            // dyn pack writes directly into CB_SCALARS at offset 0 (32B,
+            // aligned because CB pages are 64B-aligned). The first 5 fp32
+            // are valid (mean_x, mean_y, cov_a, 2·cov_b, cov_c); the next
+            // 3 are zero pad from the DRAM dyn page and are overwritten
+            // by the static gather below (out[5..8]).
+            uint64_t dyn_noc = get_noc_addr(entry_id, dyn_packs_acc);
+            noc_async_read(dyn_noc, cb_addr, dyn_pack_page_bytes);
+
+            // static color/opacity goes to the L1 scratch region; we can't
+            // NoC-write directly to cb_addr + 20 because offset 20 is not
+            // 16-byte aligned (NoC destination alignment requirement).
+            uint64_t static_noc = get_noc_addr(gid, static_colors_acc);
+            noc_async_read(static_noc, reader_scratch_addr + L1_OFF_STATIC, static_page_bytes);
             noc_async_read_barrier();
+
+            // Compose CB_SCALARS layout the compute kernel expects:
+            //   [mean_x, mean_y, cov_a, 2·cov_b, cov_c, R, G, B, opacity]
+            // dyn already covers elements [0..4]; static gathers [5..8].
+            // The dyn page also wrote 3 zero-pad fp32 into [5..7]; that's
+            // fine, the loop below overwrites them with R, G, B.
+            volatile uint32_t* out = reinterpret_cast<volatile uint32_t*>(cb_addr);
+            for (uint32_t i = 0; i < 4; i++) {
+                out[5 + i] = static_l1[i];
+            }
+            // Elements [9..15] of the 64-byte CB_SCALARS page are CB pad
+            // and compute never reads them; we leave them undefined.
+
             cb_push_back(CB_SCALARS, 1);
         }
 
-        // CB_TILE_META's write pointer wraps after each push_back, so
-        // refresh our scratch pointer for the next tile's offset reads.
+        // Refresh scratch_addr for the next tile's offset reads.
         scratch_addr = get_write_ptr(CB_TILE_META);
-        scratch_ptr  = reinterpret_cast<volatile uint32_t*>(scratch_addr);
+        scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
     }
 }

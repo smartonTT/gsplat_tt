@@ -6,8 +6,11 @@ namespace gsplat {
 constexpr uint32_t TILE_H = 32;
 constexpr uint32_t TILE_W = 32;
 constexpr uint32_t TILE_BYTES_BF16 = TILE_H * TILE_W * 2;     // 2 KB
-constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars
-constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // padded for NoC alignment
+constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars (compute CB)
+constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // CB_SCALARS page (9 fp32 + pad)
+constexpr uint32_t DYN_PACK_PAGE_BYTES = 32;                   // 5 fp32 mean+cov_inv per entry
+constexpr uint32_t STATIC_COLOR_OPACITY_PAGE_BYTES = 32;       // 4 fp32 (R,G,B,opacity) per gid
+constexpr uint32_t SORTED_GIDS_PAGE_BYTES = 64;                // 16 uint32 gids per page
 constexpr uint32_t META_PAGE_BYTES = 64;                       // padded uint32 page
 
 // CB indices
@@ -49,6 +52,18 @@ constexpr uint32_t CB_SAT_MASK      = 21;
 // against Dst slots when SFPU ops require a CB operand.
 constexpr uint32_t CB_CONST_ZERO = 22;  // 0.0  (used to clamp power = min(power, 0))
 constexpr uint32_t CB_CONST_099  = 23;  // 0.99 (used to clamp alpha = min(., 0.99))
+
+// Reader-only scratch CB: a dedicated L1 region used by the reader kernel
+// for NoC-async-read destinations that need a stable, NoC-addressable
+// location (the kernel stack lives in NCRISC IRAM and is NOT
+// NoC-addressable; see watcher "Local L1 address overflow" if violated).
+// depth=1, never push/pop — reader just reads `get_write_ptr` once and
+// uses the L1 region for the per-frame inner-loop scratches:
+//   [0,   64)  -> sorted_gids page cache (16 uint32 per page)
+//   [64,  96)  -> static color/opacity scratch (8 fp32 per static gather)
+//   [96, 128)  -> reserved
+constexpr uint32_t CB_READER_SCRATCH = 24;
+constexpr uint32_t READER_SCRATCH_PAGE_BYTES = 128;
 
 // Sentinel-mask threshold: a pixel whose transmittance falls below this is
 // "saturated" (further Gaussians contribute < 1/255 to it). Used by the Stage F

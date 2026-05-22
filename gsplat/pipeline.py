@@ -124,6 +124,9 @@ class Pipeline:
         colors = gaussians.colors[valid_mask]
         opacities = gaussians.opacities[valid_mask]
 
+        if hasattr(self.backend, "set_scene"):
+            self.backend.set_scene(colors, opacities)
+
         # Stage 2: tile assignment
         with self._timer(timings, "tile_assign"):
             gaussian_ids, tile_ids, _ = self.backend.tile_assign(
