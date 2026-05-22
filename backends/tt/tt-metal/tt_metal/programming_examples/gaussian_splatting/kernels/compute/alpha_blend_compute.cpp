@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <cstdint>
+#include <cstring>
 
 #include "api/compute/bcast.h"
 #include "api/compute/common.h"
@@ -219,12 +220,19 @@ void kernel_main() {
 
             // Pack six scalar-broadcast tiles for FPU mul_tiles_bcast_scalar.
             tile_regs_acquire();
-            fill_tile(0, *reinterpret_cast<const float*>(&A_bits));
-            fill_tile(1, *reinterpret_cast<const float*>(&B_bits));
-            fill_tile(2, *reinterpret_cast<const float*>(&C_bits));
-            fill_tile(3, *reinterpret_cast<const float*>(&D_bits));
-            fill_tile(4, *reinterpret_cast<const float*>(&E_bits));
-            fill_tile(5, *reinterpret_cast<const float*>(&F_bits));
+            float coeff[6];
+            std::memcpy(&coeff[0], &A_bits, sizeof(float));
+            std::memcpy(&coeff[1], &B_bits, sizeof(float));
+            std::memcpy(&coeff[2], &C_bits, sizeof(float));
+            std::memcpy(&coeff[3], &D_bits, sizeof(float));
+            std::memcpy(&coeff[4], &E_bits, sizeof(float));
+            std::memcpy(&coeff[5], &F_bits, sizeof(float));
+            fill_tile(0, coeff[0]);
+            fill_tile(1, coeff[1]);
+            fill_tile(2, coeff[2]);
+            fill_tile(3, coeff[3]);
+            fill_tile(4, coeff[4]);
+            fill_tile(5, coeff[5]);
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_COEFF, 6);
