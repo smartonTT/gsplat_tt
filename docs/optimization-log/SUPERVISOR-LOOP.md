@@ -232,6 +232,25 @@ comes in.
   recovery. Future kernel-touching iters MUST run with `TT_METAL_WATCHER=5`
   on the FIRST validation bench so we catch the L1 fault directly instead of
   a silent hang.
+- **NEVER re-dispatch a subagent without a forensic check first.** A "PING
+  timed out" / "WritableIterable closed" / RPC drop is a *delivery-channel*
+  failure, NOT a work-result failure. Subagents commit on the worktree
+  branch *before* the parent receives the response. **Mandatory checklist
+  before any re-dispatch:**
+  1. `git -C <worktree> log --oneline -5` — is there a new commit on the
+     iteration branch since the worktree was created?
+  2. If yes → that's the answer; cherry-pick / bench / decide. **Do not
+     re-dispatch.**
+  3. If no → grep the subagent transcript at
+     `~/.cursor/projects/.../agent-transcripts/<parent>/subagents/<id>.jsonl`
+     for `commit -m`, `Write` calls, microbench numbers — if substantive
+     work was performed, salvage from the worktree, not a redo.
+  4. Only re-dispatch when the worktree is genuinely empty AND the
+     transcript shows the agent never reached commit. Cost of a wrong
+     redo: 5-10 min wasted compute + 1-2 ms of supervisor credibility.
+- **One-line forensic command** to run for every "errored" subagent before
+  even thinking about a redo:
+  `git -C <worktree> log --oneline <base>..HEAD && wc -l <transcript>.jsonl`
 
 ## Ideas backlog (un-prioritized)
 
