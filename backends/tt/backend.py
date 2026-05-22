@@ -191,13 +191,19 @@ class KernelBackend(Backend):
 
         # ---- Shared-memory IPC state (iter 024) ----
         self._use_shm: bool = os.environ.get("GSPLAT_TT_USE_SHM", "0") == "1"
-        # Iter 032: per-tile g_count cap. 0 = no cap (default). Empirically
-        # 256-512 saves 60-80% of kernel iterations at <1 dB PSNR cost on
-        # stitch_doll. See SUPERVISOR-LOOP.md iter 032.
+        # Iter 032: per-tile g_count cap (default 1024). After T_center has
+        # saturated below 1e-4 (kernel Stage F threshold), trailing Gaussians
+        # contribute ≈0 to compositing but still consume kernel cycles.
+        # Empirical sweep at 1024×1024 stitch_doll:
+        #   cap=2048 → kernel 65.2 ms  PSNR 50.6 dB  (clean-keep)
+        #   cap=1024 → kernel 47.4 ms  PSNR 38.9 dB  (clean-keep)  ← default
+        #   cap=512  → kernel 26.5 ms  PSNR 27.9 dB  (needs-review)
+        #   cap=256  → kernel 13.9 ms  PSNR 20.5 dB  (needs-review)
+        # Override via env: GSPLAT_TT_MAX_G_PER_TILE=N (0 = no cap).
         try:
-            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "0"))
+            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "1024"))
         except ValueError:
-            self._max_g_per_tile = 0
+            self._max_g_per_tile = 1024
         self._shm_in: SharedMemory | None = None        # frame data → daemon
         self._shm_out: SharedMemory | None = None       # rendered image ← daemon
         self._shm_max_entries: int = int(
