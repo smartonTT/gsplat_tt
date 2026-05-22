@@ -246,31 +246,67 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_COEFF, 6);
 
-            // Stage B + C: FPU basis-form quadratic, then SFPU exp/alpha chain.
+            // Stage B: FPU basis-form quadratic q → CB_Q (no SFPU on FPU dst).
             tile_regs_acquire();
             mul_tiles_bcast_scalar_init_short(CB_PX2, CB_COEFF);
             mul_tiles_bcast_scalar(CB_PX2, CB_COEFF, 0, 0, 0);
+            tile_regs_commit();
+            tile_regs_wait();
+            cb_reserve_back(CB_Q, 1);
+            pack_tile(0, CB_Q);
+            cb_push_back(CB_Q, 1);
+            tile_regs_release();
+            cb_wait_front(CB_Q, 1);
 
-            mul_tiles_bcast_scalar_init_short(CB_PXPY, CB_COEFF);
-            mul_tiles_bcast_scalar(CB_PXPY, CB_COEFF, 0, 1, 1);
-            add_binary_tile_init();
-            add_binary_tile(0, 1, 0);
+            // Accumulate remaining terms via FPU add_tiles (avoid SFPU add on FPU dst).
+            {
+                const struct { uint32_t basis; uint32_t coeff; } terms[] = {
+                    {CB_PXPY, 1}, {CB_PY2, 2}, {CB_PX, 3}, {CB_PY, 4},
+                };
+                for (uint32_t ti = 0; ti < 4; ti++) {
+                    tile_regs_acquire();
+                    mul_tiles_bcast_scalar_init_short(terms[ti].basis, CB_COEFF);
+                    mul_tiles_bcast_scalar(terms[ti].basis, CB_COEFF, 0, terms[ti].coeff, 1);
+                    tile_regs_commit();
+                    tile_regs_wait();
+                    cb_reserve_back(CB_T_TMP, 1);
+                    pack_tile(1, CB_T_TMP);
+                    cb_push_back(CB_T_TMP, 1);
+                    tile_regs_release();
+                    cb_wait_front(CB_T_TMP, 1);
 
-            mul_tiles_bcast_scalar_init_short(CB_PY2, CB_COEFF);
-            mul_tiles_bcast_scalar(CB_PY2, CB_COEFF, 0, 2, 1);
-            add_binary_tile(0, 1, 0);
+                    tile_regs_acquire();
+                    add_tiles_init(CB_Q, CB_T_TMP);
+                    add_tiles(CB_Q, CB_T_TMP, 0, 0, 0);
+                    tile_regs_commit();
+                    tile_regs_wait();
+                    cb_pop_front(CB_Q, 1);
+                    cb_pop_front(CB_T_TMP, 1);
+                    cb_reserve_back(CB_Q, 1);
+                    pack_tile(0, CB_Q);
+                    cb_push_back(CB_Q, 1);
+                    tile_regs_release();
+                    cb_wait_front(CB_Q, 1);
+                }
+            }
 
-            mul_tiles_bcast_scalar_init_short(CB_PX, CB_COEFF);
-            mul_tiles_bcast_scalar(CB_PX, CB_COEFF, 0, 3, 1);
-            add_binary_tile(0, 1, 0);
+            // Stage B finish + Stage C: add F (FPU), spill q to CB, then SFPU exp/alpha.
+            tile_regs_acquire();
+            add_tiles_init(CB_Q, CB_COEFF);
+            add_tiles(CB_Q, CB_COEFF, 0, 5, 0);
+            tile_regs_commit();
+            tile_regs_wait();
+            cb_pop_front(CB_Q, 1);
+            cb_reserve_back(CB_Q, 1);
+            pack_tile(0, CB_Q);
+            cb_push_back(CB_Q, 1);
+            tile_regs_release();
+            cb_pop_front(CB_COEFF, 6);
+            cb_wait_front(CB_Q, 1);
 
-            mul_tiles_bcast_scalar_init_short(CB_PY, CB_COEFF);
-            mul_tiles_bcast_scalar(CB_PY, CB_COEFF, 0, 4, 1);
-            add_binary_tile(0, 1, 0);
-
-            copy_tile_to_dst_init_short(CB_COEFF);
-            copy_tile(CB_COEFF, 5, 1);
-            add_binary_tile(0, 1, 0);
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_Q);
+            copy_tile(CB_Q, 0, 0);
 
             mul_unary_tile(0, NEG_HALF_BITS);
 
@@ -295,7 +331,7 @@ void kernel_main() {
             cb_push_back(CB_ALPHA, 1);
             tile_regs_release();
 
-            cb_pop_front(CB_COEFF, 6);
+            cb_pop_front(CB_Q, 1);
             cb_wait_front(CB_ALPHA, 1);
 
             tile_regs_acquire();
