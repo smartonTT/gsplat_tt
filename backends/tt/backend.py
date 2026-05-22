@@ -507,7 +507,12 @@ class KernelBackend(Backend):
         #   cov_inv_a = c/det,  cov_inv_b = -b/det,  cov_inv_c = a/det
         np.divide(covs_np[:, 1, 1], det_buf, out=cov_inv_a)
         np.divide(covs_np[:, 0, 1], det_buf, out=cov_inv_b)
-        cov_inv_b *= -1.0
+        # iter 026: fold the *2 from the Gaussian power expression
+        #   power = a*dx² + 2b*dx*dy + c*dy²
+        # into the M-sized precompute (~280k vs ~1.6M). Keeps the per-pair
+        # gather to a pure copy (`attr[:, 3] = cov_inv_b[gids]`) without
+        # the trailing scalar multiply.
+        cov_inv_b *= -2.0
         np.divide(covs_np[:, 0, 0], det_buf, out=cov_inv_c)
 
         # Fill per-entry tile origins from the cached per-resolution arrays.
@@ -535,7 +540,7 @@ class KernelBackend(Backend):
         attr[:, 0] = means_np[gids_np, 0] - tile_ox
         attr[:, 1] = means_np[gids_np, 1] - tile_oy
         attr[:, 2] = cov_inv_a[gids_np]
-        attr[:, 3] = 2.0 * cov_inv_b[gids_np]
+        attr[:, 3] = cov_inv_b[gids_np]   # iter 026: 2× already folded in
         attr[:, 4] = cov_inv_c[gids_np]
 
         # px/py tile-local pixel grids — cached per resolution.

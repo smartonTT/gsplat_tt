@@ -205,6 +205,7 @@ comes in.
 
 | # | Branch / SHA | What | kernel ms (1024) | total ms (1024) | prep ms (1024) | sort ms (1024) | KEEP | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 026 | (in-tree, KEEP) | fold the `2×` from the Gaussian power expression `power = a·dx² + 2b·dx·dy + c·dy²` into the M-sized `cov_inv_b` precompute (one `*= -2.0` on ~280k floats) instead of doing `attr[:, 3] = 2.0 * cov_inv_b[gids]` on ~1.6M floats per frame | 106.8 | **248.4** | 18.0 | 55.7 | YES | total **−5.3 ms (−2.1%)**, save_npy 5.4→2.5 ms (−2.9, surprisingly large; removing the 6.4 MB temp from `attr[:, 3] = 2.0 * gather` allocation also frees pipeline timing downstream). Bit-exact: `×(−1.0)` then `×2.0` and `×(−2.0)` are both exact in fp32 (powers of 2 only change the exponent). PSNR identical. **Lesson:** look for per-pair scalars that can be folded into per-Gaussian precompute — the 5.7× expansion factor at stitch_doll scale makes that fold worth a measurable chunk. |
 | 025 | (in-tree, reverted) | numpy reimpl of `get_tile_assignments` (replace `torch.repeat_interleave` chain with `np.repeat`, modulo→subtract, single `inv_ts` multiply) | 106.5 | 258.5 | 17.8 | 56.0 | NO | tile_assign **17.4 → 23.8 ms (+6.4 ms / +37%)**. Bit-exact (PASS on 5 cases up to M=280k). The torch `repeat_interleave` path on int32 is faster than `np.repeat` after `.astype(np.int64)` — the conversion copies dominate any savings from removing modulo. **Lesson:** torch CPU ops with int32 + MKL backend are already well-tuned; don't assume numpy is faster for tight vectorized loops. Future tile_assign wins must be algorithmic (e.g. AABB from cov diagonal instead of lambda_max circle to reduce P), not implementation. |
 | 024 | `7a6ca88` + `9f3b3b2` | POSIX SHM IPC (`shm_in` + `shm_out`) replacing stdin/stdout pipe for FRM2 + image readback (gated by `GSPLAT_TT_USE_SHM=1`, falls back to pipe) | 106.6 | **253.7** | 18.3 | 56.6 | YES | save_npy **17.6 → 5.4 ms (−12.2)**, load_npy **4.7 → 0.78 ms (−3.9)**, blend **165 → 156 ms (−9.3)**, total **−5.3 ms (−2.0%)**. Daemon-side memcpy absorbs some of the saved Python pipe-write time, so headline `total` win is smaller than the IPC-stage win. Subagent transport errored on result delivery but committed work; cherry-pick recovered. **Followups:** (a) fix `BufferError`/`resource_tracker` SHM-leak warning at process exit (numpy views outlive `close()`); (b) consider double-buffering `shm_in` so daemon read can overlap next-frame Python copyto. |
 | 019 | `144ca57` | preallocated per-pipeline scratch + lazy bf16→fp32 in `save_npy` | 107.1 | 259.2 | **18.5** | 56.5 | YES | prep -0.8 ms (-4.2%). PSNR 168 dB (bit-identical). Total within noise but no regression. Locks in shm-IPC scaffolding for future iter. |
@@ -217,9 +218,13 @@ comes in.
 
 (append iterations here)
 
-### Active baseline for new iterations: `9f3b3b2` (`smarton/opt-stable`, with `GSPLAT_TT_USE_SHM=1` set in bench env)
-  Kernel **106.6 ms**, total **253.7 ms**, prep **18.3 ms**, sort **56.6 ms**, save_npy **5.4 ms**, load_npy **0.78 ms** at 1024×1024 stitch_doll (post iter 024).
-  At 480×640: kernel 58.6 ms, total 134.2 ms, prep 9.6 ms, sort 28.9 ms.
+### Active baseline for new iterations: post-iter-026 (`smarton/opt-stable`, with `GSPLAT_TT_USE_SHM=1` set in bench env)
+  Kernel **106.8 ms**, total **248.4 ms**, prep **18.0 ms**, sort **55.7 ms**, save_npy **2.5 ms**, load_npy **0.80 ms** at 1024×1024 stitch_doll (post iter 026).
+  At 480×640: kernel 58.4 ms, total 133.2 ms, prep 9.4 ms, sort 28.4 ms.
+
+### Stability + variance notes
+* `save_npy` exhibits run-to-run variance of ~3 ms at 1024×1024 (5.4 / 7.4 / 2.5 across iter 024 / 025 / 026 benches that touched only Python CPU code unrelated to save_npy). Likely cause: pipeline timing depends on whether the daemon read of `shm_in` overlaps the prep of the next frame. **Until daemon-read overlap is implemented (followup to iter 024), require any save_npy or daemon_rt claim to be cross-validated with at least 2 bench runs.**
+* `device_kernel` is rock-stable (106.5–107.0 ms across all iters) — kernel-only claims do not need re-runs.
 
 ## Hard-won lessons (post-018/020 hang)
 
