@@ -153,8 +153,26 @@ ALWAYS bench against the canonical baseline.
      `docs/optimization-log/NNN-name.md`, increment.
    - Improvement < 2% or visual regression → discard branch, mark in the
      history as `KEEP=NO`, move on.
-9. **If 3 in a row are no-wins**, fall back to the "ideas backlog" and
-   pick the most speculative item to try.
+9. **REPORT update (mandatory after every bench, kept or reverted):**
+   ```bash
+   # On Mac, after the bench finishes:
+   scp yyzo-bh-14:/tmp/bench_stitch_1024x1024.png \
+       /Users/smarton/dev/gsplat_tt/docs/optimization-log/screenshots/iter-NNN-1024x1024.png
+   # Edit /Users/smarton/dev/gsplat_tt/docs/optimization-log/build_report.py and append
+   #   a new row to the EXPERIMENTS list (iter id, KEEP/NO/NEEDS_REVIEW,
+   #   short label, kernel/total/prep/sort/PSNR, screenshot filename, brief).
+   /usr/bin/python3 /Users/smarton/dev/gsplat_tt/docs/optimization-log/build_report.py
+   git add docs/optimization-log/screenshots/iter-NNN*.png \
+           docs/optimization-log/build_report.py \
+           docs/optimization-log/REPORT.md \
+           docs/optimization-log/SUPERVISOR-LOOP.md
+   ```
+   Commit the screenshot + EXPERIMENTS update + regenerated REPORT.md
+   together with the iteration code commit (or as a follow-up commit if
+   the iter is reverted). **Never skip this step — graphs are how the
+   user reviews progress.**
+10. **If 3 in a row are no-wins**, fall back to the "ideas backlog" and
+    pick the most speculative item to try.
 
 ### Best-of-N
 
