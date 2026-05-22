@@ -136,6 +136,15 @@ class Pipeline:
         tiles_x = (image_width + self.tile_size - 1) // self.tile_size
         tiles_y = (image_height + self.tile_size - 1) // self.tile_size
 
+        # Stage 2b (iter 034): per-pair Mahalanobis cull. Drops (G, tile)
+        # pairs whose nearest-pixel alpha would be below the kernel's
+        # contribution threshold. PSNR-safe; reduces sort/blend work.
+        with self._timer(timings, "cull_pairs"):
+            gaussian_ids, tile_ids = self.backend.cull_pairs(
+                gaussian_ids, tile_ids, means_2d, covs_2d, opacities,
+                tiles_x, tile_size=self.tile_size,
+            )
+
         # Stage 3: sort + bin
         with self._timer(timings, "sort"):
             sorted_gaussian_ids, tile_ranges = self.backend.sort(

@@ -102,6 +102,27 @@ class Backend(ABC):
             gaussian_ids, tile_ids, depths, tiles_x, tiles_y,
         )
 
+    def cull_pairs(
+        self,
+        gaussian_ids: torch.Tensor,
+        tile_ids: torch.Tensor,
+        means_2d: torch.Tensor,
+        covs_2d: torch.Tensor,
+        opacities: torch.Tensor,
+        tiles_x: int,
+        tile_size: int = 32,
+        eps: float = 1e-4,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Iter 034: drop (G, tile) pairs whose max-pixel alpha < eps.
+
+        Default implementation in `gsplat.rasterization`. Backends may
+        override with a tighter / faster impl.
+        """
+        return rasterization.cull_low_alpha_pairs(
+            gaussian_ids, tile_ids, means_2d, covs_2d, opacities,
+            tiles_x, tile_size=tile_size, eps=eps,
+        )
+
     # ------------------------------------------------------------------
     # The required stage. Every backend MUST implement this.
     # ------------------------------------------------------------------

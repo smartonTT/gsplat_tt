@@ -209,6 +209,12 @@ def main():
                 )
             tiles_x = (W + TILE_SIZE - 1) // TILE_SIZE
             tiles_y = (H + TILE_SIZE - 1) // TILE_SIZE
+            # Iter 034: per-pair Mahalanobis cull (PSNR-safe).
+            with _t(timings, "cull_pairs"):
+                gaussian_ids, tile_ids = backend.cull_pairs(
+                    gaussian_ids, tile_ids, means_2d, covs_2d, bench_opacities,
+                    tiles_x, tile_size=TILE_SIZE,
+                )
             with _t(timings, "sort"):
                 sorted_gaussian_ids, tile_ranges = backend.sort(
                     gaussian_ids, tile_ids, depths, tiles_x, tiles_y,

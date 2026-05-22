@@ -204,15 +204,19 @@ class KernelBackend(Backend):
             self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "1024"))
         except ValueError:
             self._max_g_per_tile = 1024
-        # Iter 033: per-tile prefix-T saturation cull. eps=0 disables.
-        # Values empirically tested at 1024×1024 stitch_doll:
-        #   eps=1e-2 → kernel ~X ms,  PSNR ~Y dB
-        #   eps=1e-3 → kernel ~X ms,  PSNR ~Y dB
-        # (filled in after sweep). Override via GSPLAT_TT_T_EPS=N.
+        # Iter 033 (NO, default-disabled): host-side prefix-T saturation cull.
+        # The math is sound (sum of log(1-opacity_i) crosses log(eps) as a
+        # bound on max(per-pixel T) within the tile) BUT the bound is using
+        # PEAK alpha (= opacity at Gaussian center). Peripheral pixels see
+        # alpha << opacity, so this bound saturates many-x faster than the
+        # actual per-pixel T. Empirical: even at eps=1e-4 (tight), PSNR
+        # collapses to 15 dB because we cull ~95% of entries that periphery
+        # pixels still need. Kept the implementation behind the env knob in
+        # case future scenes want it. Default 0 = disabled.
         try:
-            self._t_eps: float = float(os.environ.get("GSPLAT_TT_T_EPS", "1e-4"))
+            self._t_eps: float = float(os.environ.get("GSPLAT_TT_T_EPS", "0"))
         except ValueError:
-            self._t_eps = 1e-4
+            self._t_eps = 0.0
         self._opacities_np: np.ndarray | None = None
         self._opacities_id: int = -1
         self._shm_in: SharedMemory | None = None        # frame data → daemon

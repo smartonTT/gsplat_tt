@@ -220,6 +220,84 @@ def get_tile_assignments(
     return gaussian_ids, tile_ids, tiles_per_gaussian
 
 
+def cull_low_alpha_pairs(
+    gaussian_ids: torch.Tensor,
+    tile_ids: torch.Tensor,
+    means_2d: torch.Tensor,
+    covs_2d: torch.Tensor,
+    opacities: torch.Tensor,
+    tiles_x: int,
+    tile_size: int = 32,
+    eps: float = 1e-4,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Iter 034: drop (Gaussian, tile) pairs whose maximum alpha < eps.
+
+    For each pair we compute q_min = (Σ⁻¹ d̂)·d̂ where d̂ = clamp(mean, tile_lo,
+    tile_hi) - mean is the Mahalanobis distance² from the Gaussian center to
+    the closest pixel in the tile. The maximum alpha any pixel in the tile
+    sees is opacity·exp(-q_min/2); if that's below `eps`, the pair contributes
+    nothing to the kernel.
+
+    Conservative (no PSNR loss): we only drop pairs where even the BEST pixel
+    in the tile would be below threshold. This is a strictly tighter culling
+    than the AABB-overlap test in `get_tile_assignments` (which keeps ALL
+    pairs with any bbox overlap, even when the Gaussian center is far from
+    the tile and the closest-pixel q_min is huge).
+
+    Args:
+        gaussian_ids, tile_ids: (P,) the unsorted (G, tile) pairs from
+            `get_tile_assignments`.
+        means_2d: (M, 2) screen-space Gaussian centers.
+        covs_2d: (M, 2, 2) screen-space 2D covariances.
+        opacities: (M,) per-Gaussian opacity (post-projection cull).
+        tiles_x: tile grid width (used to derive tile origin from tile_id).
+        tile_size: tile dimension (default 32).
+        eps: the per-pixel alpha cull threshold. Match this to the kernel's
+            internal Stage F threshold (1e-4) for full safety.
+
+    Returns:
+        kept_gaussian_ids, kept_tile_ids: (P', ) — same dtypes, P' ≤ P.
+    """
+    if gaussian_ids.numel() == 0:
+        return gaussian_ids, tile_ids
+
+    gids_np = gaussian_ids.numpy()
+    tids_np = tile_ids.numpy()
+    means_np = means_2d.numpy()
+    covs_np = covs_2d.numpy()
+    ops_np = opacities.numpy()
+
+    tx0 = (tids_np % tiles_x).astype(np.float32) * tile_size
+    ty0 = (tids_np // tiles_x).astype(np.float32) * tile_size
+    mx = means_np[gids_np, 0]
+    my = means_np[gids_np, 1]
+    cx = np.clip(mx, tx0, tx0 + (tile_size - 1))
+    cy = np.clip(my, ty0, ty0 + (tile_size - 1))
+    dx = mx - cx
+    dy = my - cy
+
+    a = covs_np[gids_np, 0, 0]
+    b = covs_np[gids_np, 0, 1]
+    c = covs_np[gids_np, 1, 1]
+    det = np.maximum(a * c - b * b, 1e-6)
+    inv_a = c / det
+    inv_b = -b / det
+    inv_c = a / det
+
+    q_min = inv_a * dx * dx + 2.0 * inv_b * dx * dy + inv_c * dy * dy
+
+    # Keep iff opacity * exp(-q_min/2) >= eps.  Equivalently, in log-space:
+    #   log(opacity) - q_min/2 >= log(eps).
+    log_eps = float(np.log(eps))
+    log_op = np.log(np.maximum(ops_np[gids_np], 1e-30))
+    keep_mask = (log_op - 0.5 * q_min) >= log_eps
+
+    return (
+        torch.from_numpy(gids_np[keep_mask].copy()),
+        torch.from_numpy(tids_np[keep_mask].copy()),
+    )
+
+
 def sort_and_bin(
     gaussian_ids: torch.Tensor,
     tile_ids: torch.Tensor,
