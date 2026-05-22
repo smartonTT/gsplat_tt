@@ -354,9 +354,14 @@ static void build_program_and_workload(DeviceContext& ctx) {
         OVERRIDE_KERNEL_PREFIX "gaussian_splatting/kernels/compute/alpha_blend_compute.cpp",
         cores,
         ComputeConfig{
-            .math_fidelity = MathFidelity::HiFi3,
+            // Iter 042: HiFi3 → HiFi2 trade-off. LoFi was -2.5 dB PSNR
+            // (33.4) and only -0.3 ms; HiFi2 is the middle ground.
+            // Iter 043: enable math_approx_mode globally (was false) — most
+            // SFPU ops are explicitly templated <approx=true> already, but
+            // some library helpers consult APPROX from the global config.
+            .math_fidelity = MathFidelity::HiFi2,
             .fp32_dest_acc_en = true,
-            .math_approx_mode = false,
+            .math_approx_mode = true,
         });
 
     // Writer: 2 TensorAccessorArgs for out + tile_ids.
