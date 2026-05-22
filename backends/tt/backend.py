@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 from gsplat.backend import Backend
-from gsplat.rasterization import _get_px_py_grids
+from gsplat.rasterization import prepare_kernel_inputs
 
 # Binary IPC magic values (little-endian on the wire).
 _MAGIC_SCN1 = 0x53434E31  # 'SCN1'
@@ -66,52 +66,12 @@ def _wait_for_ready(stream, deadline: float) -> None:
     raise RuntimeError(f"daemon failed to start: last bytes {tail!r}")
 
 
-# ---------------------------------------------------------------------------
-# Per-resolution tile-origin cache
-# ---------------------------------------------------------------------------
-
-# Keyed by (image_height, image_width).
-# tile_ox_all[t] = (t % tiles_x) * 32.0  (left edge of tile t)
-# tile_oy_all[t] = (t // tiles_x) * 32.0  (top edge of tile t)
-# These are constant for a given resolution and reused every frame.
-_tile_origin_cache: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
-
-
-def _get_tile_origins(
-    image_height: int, image_width: int
-) -> tuple[np.ndarray, np.ndarray]:
-    """Return cached (tile_ox_all, tile_oy_all) of shape (num_tiles,) float32.
-
-    Each element is the pixel-space origin of that tile along x or y.
-    Cached per resolution so the division and float conversion only happen once.
-    """
-    key = (image_height, image_width)
-    cached = _tile_origin_cache.get(key)
-    if cached is not None:
-        return cached
-    tiles_x = (image_width + 31) // 32
-    tiles_y = (image_height + 31) // 32
-    num_tiles = tiles_x * tiles_y
-    t_ids = np.arange(num_tiles, dtype=np.float32)
-    tile_ox_all = (t_ids % tiles_x) * 32.0
-    tile_oy_all = (t_ids // tiles_x) * 32.0
-    _tile_origin_cache[key] = (tile_ox_all, tile_oy_all)
-    return tile_ox_all, tile_oy_all
-
-
 class KernelBackend(Backend):
     """Persistent IPC wrapper around the alpha-blend daemon subprocess.
 
     Spawn once at viewer/script start, call `blend(...)` per frame,
     `close()` on shutdown. After READY the protocol is binary on
     stdin/stdout (SCN1 scene init, FRM2 frame request → OK11/ERR1).
-
-    Per-frame scratch buffers (self._attr_buf etc.) are preallocated on the
-    first frame and grown lazily (with ~25% headroom) whenever the number of
-    visible (Gaussian, tile) pairs exceeds the current capacity.  On
-    steady-state interactive viewing at a fixed resolution the same buffers
-    are reused every frame, eliminating the ~50 MB of per-frame malloc/free
-    that previously dominated the blend.prep stage.
     """
 
     BINARY_PATH = "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
@@ -121,38 +81,6 @@ class KernelBackend(Backend):
         self._scene_initialized = False
         self._scene_n_gaussians = 0
         self._scene_colors_id: int | None = None
-
-        # ---- Preallocated per-frame scratch buffers ----
-        # Grown lazily; capacity tracked separately from shape so we can
-        # slice the active portion without a new allocation each frame.
-        self._entry_cap: int = 0       # capacity in (Gaussian, tile) entries
-        self._gauss_cap: int = 0       # capacity in visible Gaussian count
-        self._tile_cap: int = 0        # capacity in number of tiles
-
-        # Entry-indexed buffers (P = total (Gaussian, tile) pairs)
-        self._attr_buf: np.ndarray | None = None        # (entry_cap, 5) float32
-        self._tile_ox_buf: np.ndarray | None = None     # (entry_cap,)   float32
-        self._tile_oy_buf: np.ndarray | None = None     # (entry_cap,)   float32
-        self._gids_u32_buf: np.ndarray | None = None    # (entry_cap,)   uint32
-
-        # Gaussian-indexed scratch (M = visible Gaussian count)
-        self._cov_inv_a: np.ndarray | None = None       # (gauss_cap,)   float32
-        self._cov_inv_b: np.ndarray | None = None       # (gauss_cap,)   float32
-        self._cov_inv_c: np.ndarray | None = None       # (gauss_cap,)   float32
-        self._det_buf: np.ndarray | None = None         # (gauss_cap,)   float32
-        self._tmp_m_buf: np.ndarray | None = None       # (gauss_cap,)   float32
-
-        # Tile-indexed (num_tiles + 1 slots for cumulative offsets)
-        self._tile_offsets_buf: np.ndarray | None = None   # (tile_cap+1,) uint32
-        self._offsets_f32_buf: np.ndarray | None = None    # (tile_cap+1,) float32
-
-        # Image readback buffer — reused when resolution is unchanged.
-        # Callers must NOT store a long-lived reference across frames;
-        # the pipeline consumes (clips + converts to uint8) before the next
-        # blend() call, so this is safe in the interactive/benchmark paths.
-        self._image_buf: np.ndarray | None = None
-        self._image_buf_shape: tuple[int, int] = (0, 0)
-
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
@@ -169,46 +97,6 @@ class KernelBackend(Backend):
         # JIT compile on a cold cache (esp. on Blackhole) can exceed a minute,
         # so the deadline is generous.
         _wait_for_ready(self._proc.stdout, time.perf_counter() + 240.0)
-
-    # ------------------------------------------------------------------
-    # Scratch-buffer lifecycle
-    # ------------------------------------------------------------------
-
-    def _ensure_bufs(
-        self, total_entries: int, num_visible: int, num_tiles: int, H: int, W: int
-    ) -> None:
-        """Grow preallocated scratch buffers only when current capacity is exceeded.
-
-        Each buffer is grown with ~25 % headroom to avoid repeated reallocation
-        on gradually-increasing scenes.  On a stable interactive session (same
-        scene, same resolution) this is called zero times after the first frame.
-        """
-        if total_entries > self._entry_cap:
-            cap = total_entries + max(total_entries // 4, 65536)
-            self._attr_buf = np.empty((cap, 5), dtype=np.float32)
-            self._tile_ox_buf = np.empty(cap, dtype=np.float32)
-            self._tile_oy_buf = np.empty(cap, dtype=np.float32)
-            self._gids_u32_buf = np.empty(cap, dtype=np.uint32)
-            self._entry_cap = cap
-
-        if num_visible > self._gauss_cap:
-            cap = num_visible + max(num_visible // 4, 16384)
-            self._cov_inv_a = np.empty(cap, dtype=np.float32)
-            self._cov_inv_b = np.empty(cap, dtype=np.float32)
-            self._cov_inv_c = np.empty(cap, dtype=np.float32)
-            self._det_buf = np.empty(cap, dtype=np.float32)
-            self._tmp_m_buf = np.empty(cap, dtype=np.float32)
-            self._gauss_cap = cap
-
-        if num_tiles > self._tile_cap:
-            cap = num_tiles + 64
-            self._tile_offsets_buf = np.empty(cap + 1, dtype=np.uint32)
-            self._offsets_f32_buf = np.empty(cap + 1, dtype=np.float32)
-            self._tile_cap = cap
-
-        if (H, W) != self._image_buf_shape:
-            self._image_buf = np.empty((H, W, 3), dtype=np.float32)
-            self._image_buf_shape = (H, W)
 
     # ------------------------------------------------------------------
     # Scene static attributes (SCN1)
@@ -277,112 +165,19 @@ class KernelBackend(Backend):
         elif id(colors) != self._scene_colors_id:
             self.set_scene(colors, opacities)
 
-        # ----------------------------------------------------------------
-        # Sub-stage A: pack the 5-column dynamic-Gaussian attribute table.
-        #
-        # Uses preallocated scratch buffers (grown lazily) to avoid the
-        # ~50 MB of per-frame malloc/free that previously dominated this
-        # stage.  Key techniques:
-        #   • np.take(..., out=col) — gathers into a preallocated column
-        #     without creating a temporary array.
-        #   • np.divide / np.multiply with out= — in-place covariance
-        #     inversion, no intermediate PyTorch tensor allocations.
-        #   • Python loop over num_tiles (≤1024) to fill tile origins —
-        #     avoids np.repeat's 6 MB temporary allocation.
-        # ----------------------------------------------------------------
+        # Sub-stage A: SoA repack (5-col dyn pack + sorted gids; no color gather).
         t_prep = time.perf_counter()
-
-        M = int(means_2d.shape[0])   # visible Gaussian count
-        gids_np = sorted_gaussian_ids.numpy()   # int64 view, no copy
-        total_entries = int(gids_np.shape[0])   # total (Gaussian, tile) pairs
-        tiles_x = (W + 31) // 32
-        tiles_y = (H + 31) // 32
-        num_tiles = tiles_x * tiles_y
-
-        self._ensure_bufs(total_entries, M, num_tiles, H, W)
-
-        # Active slices — views into preallocated buffers, no malloc.
-        attr = self._attr_buf[:total_entries]           # (P, 5) float32
-        tile_ox = self._tile_ox_buf[:total_entries]     # (P,) float32
-        tile_oy = self._tile_oy_buf[:total_entries]     # (P,) float32
-        gids_u32 = self._gids_u32_buf[:total_entries]  # (P,) uint32
-        cov_inv_a = self._cov_inv_a[:M]                # (M,) float32
-        cov_inv_b = self._cov_inv_b[:M]                # (M,) float32
-        cov_inv_c = self._cov_inv_c[:M]                # (M,) float32
-        det_buf = self._det_buf[:M]                    # (M,) float32
-        tmp_m = self._tmp_m_buf[:M]                    # (M,) float32
-        tile_offsets = self._tile_offsets_buf[:num_tiles + 1]   # (T+1,) uint32
-        offsets_f32 = self._offsets_f32_buf[:num_tiles + 1]     # (T+1,) float32
-
-        # Convert sorted gids to uint32 in-place (int64 values are ≤ M ≤ 2^24).
-        np.copyto(gids_u32, gids_np, casting="unsafe")
-
-        # Build cumulative tile offsets from tile_ranges (no new array).
-        ranges_np = tile_ranges.numpy()
-        counts_u32 = (ranges_np[:, 1] - ranges_np[:, 0]).astype(np.uint32)
-        tile_offsets[0] = 0
-        np.cumsum(counts_u32, out=tile_offsets[1:])
-
-        # Covariance inversion — pure numpy into preallocated buffers,
-        # avoiding PyTorch tensor creation for each intermediate.
-        covs_np = covs_2d.numpy()  # (M, 2, 2), strides (16, 8, 4) bytes
-        #   det = clamp(a*c - b*b, min=1e-6)
-        np.multiply(covs_np[:, 0, 0], covs_np[:, 1, 1], out=det_buf)   # a*c
-        np.multiply(covs_np[:, 0, 1], covs_np[:, 0, 1], out=tmp_m)     # b*b
-        np.subtract(det_buf, tmp_m, out=det_buf)                        # a*c - b*b
-        np.clip(det_buf, 1e-6, None, out=det_buf)
-        #   cov_inv_a = c/det,  cov_inv_b = -b/det,  cov_inv_c = a/det
-        np.divide(covs_np[:, 1, 1], det_buf, out=cov_inv_a)
-        np.divide(covs_np[:, 0, 1], det_buf, out=cov_inv_b)
-        cov_inv_b *= -1.0
-        np.divide(covs_np[:, 0, 0], det_buf, out=cov_inv_c)
-
-        # Fill per-entry tile origins from the cached per-resolution arrays.
-        # Python loop over ≤1024 tiles; each body is a vectorized slice fill,
-        # costing ~0.3 ms total — cheaper than np.repeat's 6 MB alloc.
-        tile_ox_all, tile_oy_all = _get_tile_origins(H, W)
-        for t in range(num_tiles):
-            s = int(tile_offsets[t])
-            e = int(tile_offsets[t + 1])
-            if e > s:
-                tile_ox[s:e] = tile_ox_all[t]
-                tile_oy[s:e] = tile_oy_all[t]
-
-        # Gather Gaussian attributes into the packed table.
-        # The attr buffer is preallocated so the column writes do not malloc.
-        # Per-gather temporaries (6.4 MB each) are still created by arr[idx]
-        # fancy-indexing — this is faster than np.take with non-contiguous
-        # out= on every platform we've measured, because numpy's advanced-
-        # indexing path is better optimised for contiguous output allocation.
-        # On the Linux box the 5 × 6.4 MB gather temporaries use glibc's
-        # mmap allocator (~0.5 ms each), which is unavoidable without a
-        # numba/Cython gather primitive.  The large attr_buf malloc (32 MB)
-        # and the cov_inv / tile-origin temporaries are fully eliminated.
-        means_np = means_2d.numpy()  # (M, 2) float32 view
-        attr[:, 0] = means_np[gids_np, 0] - tile_ox
-        attr[:, 1] = means_np[gids_np, 1] - tile_oy
-        attr[:, 2] = cov_inv_a[gids_np]
-        attr[:, 3] = 2.0 * cov_inv_b[gids_np]
-        attr[:, 4] = cov_inv_c[gids_np]
-
-        # px/py tile-local pixel grids — cached per resolution.
-        px_tiles, py_tiles = _get_px_py_grids(H, W)
-
-        # Offsets as float32 for the FRM2 wire format (daemon reads as float).
-        offsets_f32[:] = tile_offsets   # uint32 → float32, into preallocated buffer
-
+        dyn_pack, offsets, px, py, sorted_gids = prepare_kernel_inputs(
+            means_2d, covs_2d, colors, opacities,
+            sorted_gaussian_ids, tile_ranges, H, W,
+            static_handled_externally=True,
+        )
         prep_ms = (time.perf_counter() - t_prep) * 1000.0
 
-        # ----------------------------------------------------------------
         # Sub-stage B: write binary FRM2 frame to daemon stdin.
-        #
-        # All buffers are already in the correct dtype and C-contiguous, so
-        # memoryview wraps are zero-copy.  The bottleneck here is pipe I/O
-        # bandwidth (~46 MB/frame at 1024×1024) which cannot be reduced
-        # without changing the wire protocol (deferred to iter 021 / shm).
-        # ----------------------------------------------------------------
         t_save = time.perf_counter()
-        offsets_count = int(offsets_f32.shape[0])
+        total_entries = int(dyn_pack.shape[0])
+        offsets_count = int(offsets.shape[0])
         self._proc.stdin.write(struct.pack(
             "<6I",
             _MAGIC_FRM2,
@@ -392,11 +187,13 @@ class KernelBackend(Backend):
             offsets_count,
             0,
         ))
-        self._proc.stdin.write(memoryview(attr))          # (P, 5) float32
-        self._proc.stdin.write(memoryview(gids_u32))      # (P,)   uint32
-        self._proc.stdin.write(memoryview(offsets_f32))   # (T+1,) float32
-        self._proc.stdin.write(memoryview(px_tiles))      # (T, 32, 32) float32
-        self._proc.stdin.write(memoryview(py_tiles))      # (T, 32, 32) float32
+        self._proc.stdin.write(
+            memoryview(np.ascontiguousarray(dyn_pack, dtype=np.float32)))
+        self._proc.stdin.write(
+            memoryview(np.ascontiguousarray(sorted_gids, dtype=np.uint32)))
+        for arr in (offsets, px, py):
+            self._proc.stdin.write(
+                memoryview(np.ascontiguousarray(arr, dtype=np.float32)))
         self._proc.stdin.flush()
         save_ms = (time.perf_counter() - t_save) * 1000.0
 
@@ -413,13 +210,10 @@ class KernelBackend(Backend):
 
         kernel_ms = kernel_us / 1000.0 if kernel_us else None
 
-        # Sub-stage D: read rendered image bytes from stdout into the
-        # preallocated readback buffer, saving the 12 MB malloc on every frame.
-        # The caller (pipeline → viewer) converts immediately to uint8 and
-        # does not retain a reference across frame boundaries, so returning
-        # the live buffer is safe for the interactive and benchmark paths.
+        # Sub-stage D: read rendered image bytes from stdout.
         t_load = time.perf_counter()
-        _read_exact_into(self._proc.stdout, memoryview(self._image_buf).cast("B"))
+        image = np.empty((H, W, 3), dtype=np.float32)
+        _read_exact_into(self._proc.stdout, memoryview(image).cast("B"))
         load_ms = (time.perf_counter() - t_load) * 1000.0
 
         sub_timings: dict[str, float] = {
@@ -431,7 +225,7 @@ class KernelBackend(Backend):
             sub_timings["daemon_rt.device_kernel"] = kernel_ms
         sub_timings["load_npy"] = load_ms
 
-        return self._image_buf, sub_timings
+        return image, sub_timings
 
     def close(self) -> None:
         # Process cleanup: try graceful QUIT first; if the daemon doesn't
