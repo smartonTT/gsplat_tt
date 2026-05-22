@@ -205,6 +205,8 @@ comes in.
 
 | # | Branch / SHA | What | kernel ms (1024) | total ms (1024) | prep ms (1024) | sort ms (1024) | KEEP | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 025 | (in-tree, reverted) | numpy reimpl of `get_tile_assignments` (replace `torch.repeat_interleave` chain with `np.repeat`, modulo→subtract, single `inv_ts` multiply) | 106.5 | 258.5 | 17.8 | 56.0 | NO | tile_assign **17.4 → 23.8 ms (+6.4 ms / +37%)**. Bit-exact (PASS on 5 cases up to M=280k). The torch `repeat_interleave` path on int32 is faster than `np.repeat` after `.astype(np.int64)` — the conversion copies dominate any savings from removing modulo. **Lesson:** torch CPU ops with int32 + MKL backend are already well-tuned; don't assume numpy is faster for tight vectorized loops. Future tile_assign wins must be algorithmic (e.g. AABB from cov diagonal instead of lambda_max circle to reduce P), not implementation. |
+| 024 | `7a6ca88` + `9f3b3b2` | POSIX SHM IPC (`shm_in` + `shm_out`) replacing stdin/stdout pipe for FRM2 + image readback (gated by `GSPLAT_TT_USE_SHM=1`, falls back to pipe) | 106.6 | **253.7** | 18.3 | 56.6 | YES | save_npy **17.6 → 5.4 ms (−12.2)**, load_npy **4.7 → 0.78 ms (−3.9)**, blend **165 → 156 ms (−9.3)**, total **−5.3 ms (−2.0%)**. Daemon-side memcpy absorbs some of the saved Python pipe-write time, so headline `total` win is smaller than the IPC-stage win. Subagent transport errored on result delivery but committed work; cherry-pick recovered. **Followups:** (a) fix `BufferError`/`resource_tracker` SHM-leak warning at process exit (numpy views outlive `close()`); (b) consider double-buffering `shm_in` so daemon read can overlap next-frame Python copyto. |
 | 019 | `144ca57` | preallocated per-pipeline scratch + lazy bf16→fp32 in `save_npy` | 107.1 | 259.2 | **18.5** | 56.5 | YES | prep -0.8 ms (-4.2%). PSNR 168 dB (bit-identical). Total within noise but no regression. Locks in shm-IPC scaffolding for future iter. |
 | 017-C | `6a44a8b` (subagent), reverted | counting + per-tile depth quicksort (claimed 2.1×) | 106.6 | 284.8 | 19.6 | **84.8** | NO | **Sort got SLOWER** (+28 ms). Subagent's microbench was on synthetic input; real distribution at stitch_doll has many small buckets where the per-bucket overhead dominates. PSNR 168 dB (correct, just slow). |
 | 022 | (in-tree, reverted) | project two-pass: depth/opacity cull before Jacobian + cov_2d | 106.6 | 259.9 | 19.3 | 56.8 | NO | `project` 16.9 → 18.3 ms. Slice overhead at 82% survival rate exceeded the saved Jacobian work. Visually bit-exact (PSNR 168 dB). |
@@ -215,8 +217,9 @@ comes in.
 
 (append iterations here)
 
-### Active baseline for new iterations: `144ca57` (`smarton/opt-stable`)
-  Kernel **107 ms**, total **259 ms**, prep **18.5 ms**, sort **56.5 ms** at 1024×1024 stitch_doll (post iter 019).
+### Active baseline for new iterations: `9f3b3b2` (`smarton/opt-stable`, with `GSPLAT_TT_USE_SHM=1` set in bench env)
+  Kernel **106.6 ms**, total **253.7 ms**, prep **18.3 ms**, sort **56.6 ms**, save_npy **5.4 ms**, load_npy **0.78 ms** at 1024×1024 stitch_doll (post iter 024).
+  At 480×640: kernel 58.6 ms, total 134.2 ms, prep 9.6 ms, sort 28.9 ms.
 
 ## Hard-won lessons (post-018/020 hang)
 
