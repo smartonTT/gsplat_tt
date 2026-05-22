@@ -1,7 +1,11 @@
 """Browser-based interactive viewer for 3D Gaussian Splatting scenes."""
+from __future__ import annotations
+
 import os
+import socket
 import statistics
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -12,7 +16,13 @@ import viser
 import nerfview
 
 from backends import get_backend
+# `viser_patches` MUST be imported before any viser/nerfview machinery is
+# touched so the monkey-patches are in place when the server is created.
+import gsplat.viser_patches  # noqa: F401
+from gsplat.camera_controls import ClientCameraController
 from gsplat.data_structures import Gaussians
+from gsplat.letterbox import letterbox_for_aspect
+from gsplat.nerfview_viewer import GsplatViewer
 from gsplat.pipeline import Pipeline, RenderResult, format_timings
 from gsplat.utils import c2w_to_w2c
 
@@ -45,6 +55,80 @@ def _median_by_key(
     return out
 
 
+def _snap_render_dim(value: int) -> int:
+    return max(TILE_SIZE, (value // TILE_SIZE) * TILE_SIZE)
+
+
+def _failure_pattern(width: int, height: int) -> np.ndarray:
+    """Visible debug image for when the pipeline raises.
+
+    Black-on-magenta diagonal stripes — easy to spot in the browser, so a
+    silent kernel/Python failure can't masquerade as "the camera moved out
+    of frame". The exception is already printed via ``traceback.print_exc``.
+    """
+    canvas = np.zeros((height, width, 3), dtype=np.uint8)
+    yy, xx = np.indices((height, width))
+    stripe = ((xx + yy) // 24) % 2 == 0
+    canvas[stripe] = (255, 0, 255)
+    return canvas
+
+
+# Initial reference frame for the orbit math:
+#   world up        = -Y (scenes are authored with +Y down — see
+#                     gsplat.camera_controls)
+#   initial offset  = +Z * distance (camera sits in front of the scene
+#                     center, looking back along -Z)
+#   initial right   = +X (consistent with up × forward in the orbit frame)
+_WORLD_UP_INITIAL = np.array([0.0, -1.0, 0.0], dtype=np.float64)
+_OFFSET_DIR_INITIAL = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+_RIGHT_INITIAL = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+
+
+def _rotation_matrix(axis: np.ndarray, angle: float) -> np.ndarray:
+    """Rodrigues' rotation matrix for ``angle`` radians around ``axis``."""
+    norm = float(np.linalg.norm(axis))
+    if norm < 1e-12:
+        return np.eye(3, dtype=np.float64)
+    axis = axis / norm
+    c, s = float(np.cos(angle)), float(np.sin(angle))
+    K = np.array([
+        [0.0, -axis[2], axis[1]],
+        [axis[2], 0.0, -axis[0]],
+        [-axis[1], axis[0], 0.0],
+    ], dtype=np.float64)
+    return np.eye(3, dtype=np.float64) + s * K + (1.0 - c) * (K @ K)
+
+
+def _orbit_pose(
+    center: np.ndarray,
+    distance: float,
+    azim_deg: float,
+    elev_deg: float,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Spherical → camera (position, look_at, up_direction).
+
+    Pitch is applied around the camera's *current* right axis (i.e. the
+    initial right axis rotated by yaw), so elevation always tilts up/down
+    relative to the camera, not the world. The world up vector is rotated
+    along with the camera so values past ±90° (i.e. through the pole) stay
+    coherent — at elev = ±180° the camera ends up upside-down behind the
+    target, which is what you want for "keep dragging past the pole".
+    """
+    azim_rad = float(np.radians(azim_deg))
+    elev_rad = float(np.radians(elev_deg))
+
+    yaw_R = _rotation_matrix(_WORLD_UP_INITIAL, azim_rad)
+    right_after_yaw = yaw_R @ _RIGHT_INITIAL
+    pitch_R = _rotation_matrix(right_after_yaw, elev_rad)
+    rot = pitch_R @ yaw_R
+
+    offset = rot @ (_OFFSET_DIR_INITIAL * float(distance))
+    position = np.asarray(center, dtype=np.float64) + offset
+    look_at = np.asarray(center, dtype=np.float64)
+    up_direction = rot @ _WORLD_UP_INITIAL
+    return position, look_at, up_direction
+
+
 class GaussianViewer:
     """Interactive viewer for 3D Gaussian Splatting scenes.
 
@@ -61,75 +145,203 @@ class GaussianViewer:
         host: str = "0.0.0.0",
         port: int = 8080,
         backend: str = "cpu",
-        max_resolution: int = 640,
+        render_width: int = 1024,
+        render_height: int = 1024,
+        force_square: int | None = None,
         verbose: bool = False,
         scene_path: str | None = None,
+        # Back-compat alias: if passed, overrides render_width/height.
+        max_resolution: int | None = None,
     ):
         self.gaussians = gaussians
         self.backend_name = backend
-        # Path to the .ply this viewer was launched with — used as the scene
-        # name in the benchmark markdown filename (None for synthetic data).
         self.scene_path = scene_path
-        # Shorter render dim, in pixels (e.g. 720 ≈ 720p). The longer dim
-        # follows from the browser's aspect ratio; rendering at native browser
-        # size makes prepare_kernel_inputs take seconds and the viewer feels
-        # frozen. Stretching the displayed image is fine for interactive use.
-        self.max_resolution = max_resolution
+        if max_resolution is not None:
+            render_width = max_resolution
+            render_height = max_resolution
+        self.render_width = render_width
+        self.render_height = render_height
+        if force_square is not None:
+            if force_square <= 0 or force_square % TILE_SIZE != 0:
+                raise ValueError(
+                    f"force_square={force_square} must be a positive multiple "
+                    f"of TILE_SIZE={TILE_SIZE}"
+                )
+        self.force_square = force_square
         self.verbose = verbose
 
-        # Spin up the backend lazily through the registry, then wrap it in a
-        # Pipeline so per-stage timing happens automatically.
         self.pipeline = Pipeline(get_backend(backend, verbose=verbose),
                                  tile_size=TILE_SIZE)
 
-        # Per-frame timing log; aggregated into a markdown report on shutdown.
-        # Empty frames (no visible Gaussians) are skipped so they don't pull
-        # the median toward zero.
         self._frame_samples: list[_FrameSample] = []
         self._session_start = datetime.now()
+        self._camera_controllers: dict[int, ClientCameraController] = {}
 
-        # Compute scene bounds for initial camera placement.
-        # Naive mean / min-max over ALL Gaussians is fragile: trained 3DGS
-        # scenes routinely contain a small number of low-opacity outliers
-        # at extreme positions, which inflate the bounding box and push the
-        # camera so far back that the visible content collapses to a few
-        # center tiles. We instead use percentile bounds restricted to
-        # well-opaque Gaussians, which closely tracks the visible content.
         means = gaussians.means.numpy()
         opacities = gaussians.opacities.numpy()
         visible = means[opacities > 0.1]
         if visible.shape[0] < 100:
-            visible = means  # fallback for synthetic / very sparse scenes
+            visible = means
         lo = np.percentile(visible, 5, axis=0)
         hi = np.percentile(visible, 95, axis=0)
         self._scene_center = (lo + hi) * 0.5
         self._camera_distance = float(np.linalg.norm(hi - lo)) * 1.2
 
-        # Create viser server
         self.server = viser.ViserServer(host=host, port=port, verbose=False)
         self.server.scene.world_axes.visible = True
 
-        # GUI: stats display
+        self.server.gui.add_markdown(
+            f"**{socket.gethostname()}**",
+            order=-1000,
+        )
         self._stats_display = self.server.gui.add_markdown("**FPS:** --")
 
-        # Create nerfview viewer (registers its own on_client_connect internally)
-        self.viewer = nerfview.Viewer(
+        # Explicit camera controls (sliders + buttons). Mouse drag is still
+        # active for fine motion, but its react-three drei orbit clamps
+        # vertical at ±90° and gimbal-locks at the pole — so the sliders
+        # are the only way to rotate continuously. Elevation accepts the
+        # full ±180° on purpose; values outside [−90, +90] put the camera
+        # past the pole (looking up while world up is below) and the up
+        # vector is rotated with it so the scene doesn't suddenly invert.
+        self._control_folder = self.server.gui.add_folder(
+            "Camera",
+            order=-900,
+        )
+        with self._control_folder:
+            self._azim_slider = self.server.gui.add_slider(
+                "Azimuth (°)",
+                min=-180.0, max=180.0, step=1.0, initial_value=0.0,
+                hint="Rotate around the world up axis. Wraps freely.",
+            )
+            self._elev_slider = self.server.gui.add_slider(
+                "Elevation (°)",
+                min=-180.0, max=180.0, step=1.0, initial_value=0.0,
+                hint=(
+                    "Tilt up/down. Goes past ±90° (the mouse-drag "
+                    "clamp) — the camera flips through the pole."
+                ),
+            )
+            self._dist_slider = self.server.gui.add_slider(
+                "Distance",
+                min=max(self._camera_distance * 0.05, 1e-3),
+                max=self._camera_distance * 5.0,
+                step=self._camera_distance * 0.01,
+                initial_value=self._camera_distance,
+                hint="Zoom in/out along the current camera-to-target ray.",
+            )
+            self._reset_view_button = self.server.gui.add_button(
+                "Reset view",
+                hint="Snap azimuth/elevation/distance back to defaults.",
+            )
+
+        self.viewer = GsplatViewer(
             server=self.server,
             render_fn=self._render_fn,
             mode="rendering",
+            default_render_width=render_width,
+            default_render_height=render_height,
         )
 
-        # Set initial camera for new clients (registered after nerfview's handler)
         center = self._scene_center
-        distance = self._camera_distance
+        default_distance = self._camera_distance
+
+        # Suppress flag prevents the slider on_update -> camera write ->
+        # client camera message -> our on_camera_update -> slider sync ->
+        # on_update feedback loop.
+        self._slider_suppress = False
+        # Last (azim°, elev°, distance) the GaussianViewer applied to the
+        # camera. Read by the slider on_update to compute deltas, and by
+        # the camera-update callback to detect "user dragged away from
+        # what the sliders say".
+        self._last_orbit_state: tuple[float, float, float] = (0.0, 0.0, default_distance)
+
+        def _apply_orbit_to_all_clients(
+            azim_deg: float, elev_deg: float, dist: float
+        ) -> None:
+            for client in self.server.get_clients().values():
+                position, look_at, up_dir = _orbit_pose(
+                    center, dist, azim_deg, elev_deg,
+                )
+                self._slider_suppress = True
+                try:
+                    client.camera.position = position
+                    client.camera.look_at = look_at
+                    client.camera.up_direction = up_dir
+                finally:
+                    self._slider_suppress = False
+            self._last_orbit_state = (azim_deg, elev_deg, dist)
+
+        @self._azim_slider.on_update
+        def _on_azim(_event: viser.GuiEvent) -> None:
+            if self._slider_suppress:
+                return
+            _apply_orbit_to_all_clients(
+                float(self._azim_slider.value),
+                float(self._elev_slider.value),
+                float(self._dist_slider.value),
+            )
+
+        @self._elev_slider.on_update
+        def _on_elev(_event: viser.GuiEvent) -> None:
+            if self._slider_suppress:
+                return
+            _apply_orbit_to_all_clients(
+                float(self._azim_slider.value),
+                float(self._elev_slider.value),
+                float(self._dist_slider.value),
+            )
+
+        @self._dist_slider.on_update
+        def _on_dist(_event: viser.GuiEvent) -> None:
+            if self._slider_suppress:
+                return
+            _apply_orbit_to_all_clients(
+                float(self._azim_slider.value),
+                float(self._elev_slider.value),
+                float(self._dist_slider.value),
+            )
+
+        @self._reset_view_button.on_click
+        def _on_reset(_event: viser.GuiEvent) -> None:
+            self._slider_suppress = True
+            try:
+                self._azim_slider.value = 0.0
+                self._elev_slider.value = 0.0
+                self._dist_slider.value = default_distance
+            finally:
+                self._slider_suppress = False
+            _apply_orbit_to_all_clients(0.0, 0.0, default_distance)
 
         @self.server.on_client_connect
-        def _set_initial_camera(client: viser.ClientHandle) -> None:
-            client.camera.position = center + np.array([0.0, 0.0, distance])
-            client.camera.look_at = center
+        def _on_client_connect(client: viser.ClientHandle) -> None:
+            controller = ClientCameraController(center, default_distance)
+            controller.set_mode(ClientCameraController.ORBIT)
+            self._camera_controllers[client.client_id] = controller
+
+            # Apply the slider state (or defaults) to this client.
+            position, look_at, up_dir = _orbit_pose(
+                center,
+                float(self._dist_slider.value),
+                float(self._azim_slider.value),
+                float(self._elev_slider.value),
+            )
+            self._slider_suppress = True
+            try:
+                client.camera.position = position
+                client.camera.look_at = look_at
+                client.camera.up_direction = up_dir
+            finally:
+                self._slider_suppress = False
 
         self._running = False
-        flags = [f"backend={backend}", f"max_resolution={max_resolution}"]
+        if self.force_square is not None:
+            flags = [f"backend={backend}",
+                     f"force_square={self.force_square}x{self.force_square}"]
+        else:
+            flags = [
+                f"backend={backend}",
+                f"render={render_width}x{render_height}",
+            ]
         if verbose:
             flags.append("verbose")
         print(
@@ -139,73 +351,64 @@ class GaussianViewer:
 
     def _resolve_render_size(
         self, render_tab_state: nerfview.RenderTabState
-    ) -> tuple[int, int, int, int]:
-        """Pick (W, H) for this frame.
+    ) -> tuple[int, int]:
+        """Pick the (W, H) the kernel should render at, in pixels.
 
-        max_resolution sets the shorter dim (480p/720p/1080p convention);
-        the longer dim follows from the browser's aspect ratio. Both dims
-        are snapped down to multiples of TILE_SIZE so the kernel gets whole
-        tiles.
-
-        Returns (req_W, req_H, W, H) — the original request alongside the
-        resolved size, useful for logging.
+        We ignore ``render_tab_state.viewer_width/height`` on purpose:
+        nerfview shrinks those during interactive drag (the "low_move"
+        state) which would force a low-resolution preview render. The user
+        always wants the explicit Render Res; the browser handles scaling
+        the result to the viewport. Aspect ratio in the browser is then
+        preserved by letterboxing in :py:meth:`_render_fn`.
         """
-        if render_tab_state.preview_render:
-            req_W = render_tab_state.render_width
-            req_H = render_tab_state.render_height
-        else:
-            req_W = render_tab_state.viewer_width
-            req_H = render_tab_state.viewer_height
-
-        if req_W <= 0 or req_H <= 0:
-            return req_W, req_H, max(req_W, 1), max(req_H, 1)
-
-        aspect = req_W / req_H
-        if aspect >= 1.0:  # landscape: H is the shorter dim
-            H = self.max_resolution
-            W = int(self.max_resolution * aspect)
-        else:  # portrait: W is the shorter dim
-            W = self.max_resolution
-            H = int(self.max_resolution / aspect)
-
-        W = max(TILE_SIZE, (W // TILE_SIZE) * TILE_SIZE)
-        H = max(TILE_SIZE, (H // TILE_SIZE) * TILE_SIZE)
-        return req_W, req_H, W, H
+        if self.force_square is not None:
+            return self.force_square, self.force_square
+        W = _snap_render_dim(render_tab_state.render_width)
+        H = _snap_render_dim(render_tab_state.render_height)
+        return W, H
 
     def _render_fn(
         self,
         camera_state: nerfview.CameraState,
         render_tab_state: nerfview.RenderTabState,
     ) -> np.ndarray:
-        """Render callback invoked by nerfview for each frame."""
+        """Render callback invoked by nerfview for each frame.
+
+        Always renders at the user's Render Res — never the shrunk
+        ``viewer_width/height`` that nerfview hands us during drag — and
+        letterboxes the result into the camera aspect so the browser can
+        scale to fill without distortion.
+        """
         wall_start = time.perf_counter()
+        W, H = self._resolve_render_size(render_tab_state)
         if self.verbose:
             print(
-                f"[render-enter] preview={render_tab_state.preview_render} "
-                f"viewer={render_tab_state.viewer_width}x{render_tab_state.viewer_height} "
-                f"render_tab={render_tab_state.render_width}x{render_tab_state.render_height}",
+                f"[render-enter] viewer={render_tab_state.viewer_width}x"
+                f"{render_tab_state.viewer_height} "
+                f"render={render_tab_state.render_width}x"
+                f"{render_tab_state.render_height}  "
+                f"-> kernel {W}x{H}  aspect={camera_state.aspect:.3f}",
                 flush=True,
             )
 
-        req_W, req_H, W, H = self._resolve_render_size(render_tab_state)
         if W <= 0 or H <= 0:
-            return np.zeros((max(req_H, 1), max(req_W, 1), 3), dtype=np.uint8)
+            return np.zeros((max(H, 1), max(W, 1), 3), dtype=np.uint8)
 
         extrinsics = c2w_to_w2c(camera_state.c2w)
         intrinsics = torch.tensor(camera_state.get_K((W, H)), dtype=torch.float32)
 
-        # One pipeline call covers project → tile_assign → sort → blend.
-        # `result.timings` already has per-stage wall-clock; the backend may
-        # also have populated `result.sub_timings` (e.g. blend.kernel_run).
-        result = self.pipeline.render(self.gaussians, extrinsics, intrinsics, H, W)
+        try:
+            result = self.pipeline.render(
+                self.gaussians, extrinsics, intrinsics, H, W,
+            )
+        except Exception:
+            traceback.print_exc()
+            return _failure_pattern(W, H)
 
-        # Convert pipeline output → uint8 image for nerfview/viser.
         if result.image is None:
             image_np = np.zeros((H, W, 3), dtype=np.uint8)
         else:
             image_np = (np.clip(result.image, 0.0, 1.0) * 255).astype(np.uint8)
-            # Empty frames (no visible Gaussians) short-circuit the pipeline
-            # and would skew the median toward zero, so they're not recorded.
             self._frame_samples.append(_FrameSample(
                 timings=dict(result.timings),
                 sub_timings=dict(result.sub_timings),
@@ -213,30 +416,28 @@ class GaussianViewer:
                 height=H,
             ))
 
+        display = letterbox_for_aspect(image_np, camera_state.aspect)
+
         wall_elapsed = time.perf_counter() - wall_start
         if self.verbose:
-            self._log_verbose(req_W, req_H, W, H, result, wall_elapsed)
+            self._log_verbose(W, H, result, wall_elapsed)
         self._update_stats(wall_elapsed, W, H, result.num_visible)
-        return image_np
+        return display
 
     def _log_verbose(
         self,
-        req_W: int,
-        req_H: int,
         W: int,
         H: int,
         result: RenderResult,
         wall_elapsed: float,
     ) -> None:
         print(
-            f"[render] req={req_W}x{req_H} -> {W}x{H}  "
+            f"[render] kernel={W}x{H}  "
             f"visible={result.num_visible}  sorted={result.num_entries}  "
             f"backend={self.backend_name}",
             flush=True,
         )
         print(format_timings(result), flush=True)
-        # Wall-clock is total inside _render_fn (incl. resize-resolve etc.);
-        # log alongside the pipeline-internal total for sanity checking.
         print(f"[wall]  {wall_elapsed * 1000:6.1f} ms", flush=True)
 
     def _update_stats(
@@ -245,7 +446,7 @@ class GaussianViewer:
         fps = 1.0 / elapsed if elapsed > 0 else 0.0
         self._stats_display.content = (
             f"**FPS:** {fps:.1f} | "
-            f"**Res:** {width}x{height} | "
+            f"**Render:** {width}x{height} | "
             f"**Visible:** {num_visible:,}"
         )
 
@@ -256,7 +457,6 @@ class GaussianViewer:
     def _aggregate_session_medians(
         self,
     ) -> tuple[dict[str, float], dict[str, float], list[str], float, tuple[int, int]]:
-        """Aggregate per-stage / sub-timing / total medians and modal (W, H)."""
         stage_rows = [s.timings for s in self._frame_samples]
         sub_rows = [s.sub_timings for s in self._frame_samples]
         sub_keys = list(dict.fromkeys(k for s in sub_rows for k in s))
@@ -271,7 +471,11 @@ class GaussianViewer:
 
     def _benchmark_filename(self) -> str:
         ts = self._session_start.strftime("%Y-%m-%d_%H-%M-%S")
-        return f"{self._scene_name}_{self.backend_name}_{self.max_resolution}_{ts}.md"
+        if self.force_square is not None:
+            tag = f"{self.force_square}x{self.force_square}"
+        else:
+            tag = f"{self.render_width}x{self.render_height}"
+        return f"{self._scene_name}_{self.backend_name}_{tag}_{ts}.md"
 
     def _render_benchmark_md(
         self,
@@ -284,7 +488,13 @@ class GaussianViewer:
         fps = 1000.0 / median_total if median_total > 0 else 0.0
         ts = self._session_start
         res_w, res_h = modal_resolution
-        resolution = f"{res_w}x{res_h} (max-resolution={self.max_resolution})"
+        if self.force_square is not None:
+            resolution = f"{res_w}x{res_h} (force_square={self.force_square})"
+        else:
+            resolution = (
+                f"{res_w}x{res_h} "
+                f"(default={self.render_width}x{self.render_height})"
+            )
 
         rows = ["| Stage | ms |", "|---|---|"]
         for stage in _STAGE_KEYS:
@@ -293,10 +503,6 @@ class GaussianViewer:
             for sub in sub_keys:
                 if not sub.startswith(f"{stage}.") or sub not in sub_medians:
                     continue
-                # Dotted depth = nesting level under the stage; e.g.
-                # "blend.daemon_rt.device_kernel" is depth 2 → indent twice.
-                # Markdown table renderers collapse leading whitespace inside
-                # cells, so we use &nbsp; to make the indent survive.
                 depth = sub.count(".")
                 leaf = sub.rsplit(".", 1)[-1]
                 indent = "&nbsp;" * 4 * depth
@@ -341,10 +547,6 @@ class GaussianViewer:
         finally:
             self._write_benchmark()
             self.pipeline.close()
-            # viser's websocket thread + thread executor have a teardown race
-            # during interpreter shutdown that produces a noisy traceback
-            # ("cannot schedule new futures after shutdown"). Hard-exit after
-            # our own cleanup so the user sees a clean shell prompt.
             os._exit(0)
 
     def stop(self) -> None:

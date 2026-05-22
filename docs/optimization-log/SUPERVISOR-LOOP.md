@@ -1,0 +1,238 @@
+# Supervisor Optimization Loop — TT Alpha-Blend Kernel
+
+> Living document. Every hour the supervisor re-reads this file, edits as
+> needed, captures new ideas, and continues optimizing until the stopping
+> criteria are met. **Do not rewrite from scratch — append, refine, mark
+> obsolete.**
+
+## Status snapshot
+
+- **Hardware:** `yyzo-bh-14`, P300 reservation, **1 of 2 chips healthy**
+  (`p300(1|2)`). Mesh descriptor pinned to `p100_mesh_graph_descriptor`.
+- **Working tree (Mac):** `gsplat_tt @ e0a3640` — Phase 1 (static/dyn DRAM
+  split + SCN1/FRM2 IPC + page-aligned grow). Mac drives via `devsync`.
+- **Viewer policy:** always up at `http://localhost:8080` (Mac tunnel).
+  Stop *only* for benchmarking; restart immediately after.
+- **Background P300 poller:** `~/dev/tmp/p300_poll.sh` looking for
+  `p300(2|2)`; will let us upgrade to a full-capacity chip mid-loop.
+
+## Baseline (commit e0a3640, 2026-05-22T04:55Z, stitch_doll, 341,426 G)
+
+Kernel-only median is `sub.blend.daemon_rt.device_kernel` — that's what
+"theoretical peak" applies to.
+
+| Resolution | visible | entries | kernel ms | daemon_rt ms | blend ms | total ms | kernel-FPS |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 480x640    | 256,558 |   832,049 |  58.5 |  61.5 |  82.2 | 153.3 | 17.10 |
+| 1024x1024  | 280,007 | 1,591,353 | 106.5 | 126.8 | 168.5 | 293.8 |  9.39 |
+
+Stage breakdown @ 1024x1024 (median ms):
+
+| Stage | ms | Owner | Note |
+| --- | --- | --- | --- |
+| project        | 16.5 | CPU (Python) | per-Gaussian projection |
+| tile_assign    | 13.4 | CPU         | LPT load balance + tile stamping |
+| sort           | 93.3 | CPU         | **largest non-kernel cost** |
+| blend.prep     | 19.2 | CPU         | 5-col dyn pack encode + bf16 tilize |
+| blend.load_npy |  4.6 | CPU         | should be ~0 with shm-ring IPC |
+| blend.save_npy | 17.9 | CPU         | image readback + reshape |
+| blend.daemon_rt − kernel | 20.3 | TT host | dispatch + DRAM xfer |
+| **kernel**     | **106.5** | **TT device** | **main optimization target** |
+| **total**      | **293.8** | end-to-end | |
+
+## Theoretical peak (1-chip Blackhole P300)
+
+The kernel processes **1,591,353 (Gaussian, tile) entries** at 1024x1024
+across **1024 tiles of 32x32** distributed over **80 Tensix cores**.
+
+**Compute lower bound** (no memory stalls, perfect issue):
+
+- Per (Gaussian, pixel) inner step: 5×fp16 covariance eval + 1 exp + 4 mul +
+  3 mac for RGBA = **~20 effective FMAs** (with early termination,
+  alpha-saturated pixels skip).
+- Effective inner steps after early-term: assume on average **40 entries
+  effectively touched per pixel** (down from ~1500 due to T<ε cutoff).
+- Total: 1024×1024 px × 40 entries × 20 FMAs = **0.84 GFMAs**.
+- 80 cores × ~5 FP16 FMAs/cycle × 1 GHz × 50% utilization = **0.2 TFLOPS
+  sustained**. → 0.84 GFMAs / 0.2e12 = **~4 ms**.
+
+**Memory lower bound** (DRAM-only):
+
+- Static colors+opacity: 341,426 × 16 B = 5.5 MB read once per scene.
+- Dynamic packs: 280,007 visible × 20 B = 5.6 MB per frame.
+- sorted_gids: 1,591,353 × 4 B = 6.4 MB per frame.
+- offsets: 1024 × 4 B = 4 KB.
+- PX/PY: 2 × 1024 × 2048 B = 4 MB.
+- Output: 1024×1024×3×2 = 6 MB write.
+- Total per frame: ~22 MB. Blackhole DRAM ~1.2 TB/s → **0.02 ms**.
+
+**Realistic engineering target** (accounting for: imperfect early-term,
+half-utilized FPU, kernel dispatch, NoC moves, host overhead): **~15 ms
+device_kernel @ 1024x1024**.
+
+**Stopping criteria** (any *one* of these):
+- Median 1024x1024 stitch_doll `device_kernel` ≤ **15 ms** (≈7× speedup).
+- 3 consecutive iterations no-win (≤2% improvement) — declare convergence.
+- Manual call from user.
+
+(The 4 ms compute-only bound is acknowledged as physically below what the
+host stack can hide; we won't chase below ~10 ms without a full host
+rewrite.)
+
+## Workflow — how iterations are run
+
+Goals: every change is *measured*, *visually verified*, and *cheaply
+revertible*. We use the `optimization-loop` skill philosophy: small
+diffs, best-of-N parallel attempts when an idea has multiple shapes,
+ALWAYS bench against the canonical baseline.
+
+### Per-iteration recipe
+
+1. **Pick the next phase** from the queue at the bottom of this doc.
+2. **Branch:** create `opt/NNN-short-name` off current `smarton/opt-stable`.
+3. **Implement** — keep the diff small. Write a one-line summary in the
+   commit message. Do not touch UI / camera / viewer code in perf iters.
+4. **Devsync to box** (Mac → `yyzo-bh-14`).
+5. **Stop viewer**, run benchmark, **restart viewer** (in script form so
+   we don't forget):
+   ```bash
+   ssh yyzo-bh-14 bash /tmp/run_baseline.sh   # both resolutions
+   ```
+6. **Visual gate:** the saved 1024x1024 PNG must look like the reference
+   (`benchmarks/reference/stitch_hero_1024.png`) within image_diff
+   tolerance. `scripts/image_diff.py` produces an amplified diff.
+7. **Record** kernel/total ms in the table at the bottom of this file
+   under "Iteration history".
+8. **Decision:**
+   - Improvement on `device_kernel` ≥ 2% AND visual gate passes →
+     fast-forward `smarton/opt-stable` to this commit, write
+     `docs/optimization-log/NNN-name.md`, increment.
+   - Improvement < 2% or visual regression → discard branch, mark in the
+     history as `KEEP=NO`, move on.
+9. **If 3 in a row are no-wins**, fall back to the "ideas backlog" and
+   pick the most speculative item to try.
+
+### Best-of-N
+
+For phases where multiple shapes are plausible (e.g. CB depths, tile
+sizes, scratch placement), launch multiple subagents in parallel via the
+`Task` tool with `subagent_type=best-of-n-runner`. Each gets its own
+worktree+branch. We bench all variants serially (one device), pick the
+fastest *that passes the visual gate*, discard the rest.
+
+### Recovery rules (don't get wedged)
+
+- Never `ird reboot --force`. Use `pkill -TERM` first, then SIGKILL only
+  after a 10s grace.
+- If the daemon segfaults → kill, restart viewer, re-bench. *Never*
+  attempt to rescue a half-dead daemon's stdin/stdout.
+- If ARC firmware wedges (TT_FATAL: not found) → `tt-smi --warm-reset`
+  on the box; if that fails, wait for the cluster scheduler to recycle.
+- Watcher: enable only when debugging an actual hang
+  (`TT_METAL_WATCHER=5 TT_METAL_LOGGER_LEVEL=info`); the watcher itself
+  costs ~5 ms per iteration.
+
+## Optimization queue (in priority order)
+
+Ordered roughly by predicted benefit / effort. Update freely as data
+comes in.
+
+### Tier-1 (kernel) — biggest expected gains
+
+1. **Block-wide early termination + bit-pattern compare** *(was Phase 4)*.
+   When all 1024 lanes of a tile have alpha ≥ 0.999, exit the per-Gaussian
+   loop. Currently each lane masks itself but still pulls every CB. Should
+   cut kernel ms 30-50% on dense tiles.
+2. **Dst-resident R/G/B/T accumulators** *(was Phase 5)*. Keep the running
+   color/transmittance in dst register file across the inner loop instead
+   of round-tripping to CB_*_STATE every iter. Best-of-N: try 4-channel,
+   3+1, and 7-register variants.
+3. **Reader async coalescing + true PX/PY double-buffer + drop CB_SAT_MASK**
+   *(was Phase 3)*. NoC reads are issued one entry at a time; batch them
+   so the compute pipeline isn't waiting on DRAM. Drop CB_SAT_MASK
+   (unused after the early-term refactor).
+4. **16x16 tiles, conditional on Phase 4 saturation signal**
+   *(was Phase 6)*. Smaller tiles give better load-balancing on dense
+   regions; doubling tile count (4096 instead of 1024) should keep all
+   80 cores fed. Speculative — could help or hurt depending on overhead.
+
+### Tier-2 (kernel host)
+
+5. **Persistent kernel + mailbox dispatch + async host prep overlap**
+   *(was Phase 2)*. Currently every frame re-issues the workload via
+   `EnqueueMeshWorkload`; a persistent kernel reading commands from an L1
+   mailbox skips the dispatch overhead (~5 ms of the 20 ms host gap).
+   Lets host prep overlap with device kernel.
+
+### Tier-1 (CPU) — sort is 93 ms, that's table stakes
+
+6. **Replace `numpy.argsort` for tile-IDs with bucket/radix sort.**
+   `argsort(tile_ids)` is the dominant cost in `pipeline.sort` at 1.6 M
+   entries. Tile IDs fit in 11 bits (<2048) → 1-pass counting sort, ~3
+   ms instead of 93 ms. **Highest single-line ROI on the board.**
+7. **Preallocated prep buffers** — every frame allocates a fresh np
+   buffer for `dyn_packs`, `sorted_gids`, `px`, `py`. Reuse caches.
+8. **Tighter `tile_assign`** — vectorize the per-Gaussian tile box
+   iteration; currently a Python double-loop where it could be one
+   `numpy.repeat`/`numpy.cumsum` block.
+9. **Two-pass project** — first pass to compute the cull mask, second
+   only on visible. Saves ~30% of `project` time.
+10. **shm-ring IPC for image readback** — `save_npy` is 17.9 ms because
+    we serialize a 6 MB image through a pipe. Move to shared-memory
+    ring buffer.
+
+### Tier-3 (algorithmic)
+
+11. **Spatial index on Gaussians** — k-d tree or BVH built once, traversed
+    per frame to skip Gaussians not in any tile.
+12. **Frame-coherency cache** — most tiles change very little between
+    frames; cache `dyn_packs` for tiles whose visible-Gaussian set hasn't
+    changed.
+13. **Adaptive precision** — far Gaussians at fp8/int8, near at bf16.
+14. **Tile-major static-data layout** — pack
+    static_colors_opacity per-tile so each tile streams a contiguous DRAM
+    region rather than gathering through `sorted_gids[i]`.
+
+### Tier-4 (stretch / risky)
+
+15. **`project_gaussians` on device** *(was Phase 9)*. Eliminates the
+    16.5 ms project + ~5 ms transfer-back. Big lift; only after the
+    kernel is in shape.
+16. **Re-bench all kept iters at 320x640 + 1024 + 2048**, write
+    SUMMARY.md.
+
+## Iteration history (newest at top)
+
+| # | Branch | What | kernel ms (1024) | total ms (1024) | KEEP | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| 0 | `e0a3640` | baseline (Phase 1, end of first pass) | **106.5** | **293.8** | YES | Reference for all subsequent iters |
+
+(append iterations here)
+
+## Ideas backlog (un-prioritized)
+
+- Try `math_fidelity = LoFi`/`HiFi2` for the inner FPU ops.
+- Replace `exp_tile<approx=true>` with a polynomial approximation in
+  the early-term-guarded path.
+- Use 16-bit tile IDs in DRAM to halve `sorted_gids` traffic.
+- Investigate `noc_async_read_tile` vs current `noc_async_read` for
+  packet alignment wins.
+- Profile with `TT_METAL_DEVICE_PROFILER=1` (one frame) to find the
+  longest-stall stage of the kernel.
+- Try `fp32_dest_acc_en=false` for the inner loop (if HiFi3 with bf16
+  DM is enough precision for stitch_doll).
+- Investigate per-core 2D work mapping (8×10 or 10×8) vs flat 80-core
+  list to better match Blackhole's NoC topology.
+
+## Hourly cadence checklist
+
+Set a calendar reminder; on each hour:
+
+1. Re-read the **status snapshot** above. Update commit / chips healthy
+   if changed.
+2. Re-read **iteration history** since the last review.
+3. If the last 3 iterations are all no-wins, switch to the **Ideas
+   backlog** for the next pick.
+4. Add at least one new idea to the backlog from what you've learned.
+5. If the optimization queue is empty, mark the loop as **converged**
+   and inform the user — even if we haven't hit 15 ms.

@@ -245,14 +245,22 @@ def sort_and_bin(
     """
     num_tiles = tiles_x * tiles_y
 
-    # Create a composite sort key: tile_id first, then depth within each tile.
-    # Sorting by (tile_id * large_number + depth) achieves lexicographic ordering.
-    # We use a scale factor large enough that depth differences never cross tile boundaries.
-    max_depth = depths.max().item() + 1.0
-    sort_keys = tile_ids.float() * max_depth + depths[gaussian_ids]
+    # Build an int64 composite key: upper 32 bits = tile_id, lower 32 bits = depth
+    # reinterpreted as uint32.  IEEE 754 positive floats preserve their ordering when
+    # viewed as uint32 bit patterns, so this single int64 key sorts lexicographically
+    # by (tile_id, depth) — identical semantics to the old float composite key but
+    # without floating-point precision loss and faster via numpy's C-level sort.
+    import numpy as np  # already a dep; local import avoids module-level side effects
+    depth_per_pair = depths[gaussian_ids]  # (P,) float32, non-negative camera-space Z
+    tile_ids_np = tile_ids.numpy().astype(np.int64)  # no copy on CPU contiguous tensor
+    # view float32 bits as uint32, then widen to int64 for the bit-pack
+    depth_bits = depth_per_pair.numpy().view(np.uint32).astype(np.int64)
+    composite_keys = (tile_ids_np << np.int64(32)) | depth_bits  # (P,) int64
 
-    # Sort all pairs by the composite key
-    sorted_indices = torch.argsort(sort_keys)
+    # np.argsort with kind='stable' (mergesort) preserves relative order of equal keys,
+    # matching torch.argsort's stable guarantee.
+    sorted_indices_np = np.argsort(composite_keys, kind="stable")
+    sorted_indices = torch.from_numpy(sorted_indices_np)
     sorted_gaussian_ids = gaussian_ids[sorted_indices]
     sorted_tile_ids = tile_ids[sorted_indices]
 

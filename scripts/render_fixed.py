@@ -80,6 +80,17 @@ def main():
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--profile", action="store_true",
                         help="Also set TT_METAL_DEVICE_PROFILER=1; runs 1 frame")
+    parser.add_argument(
+        "--image-size",
+        nargs=2,
+        type=int,
+        metavar=("W", "H"),
+        default=None,
+        help=(
+            "Override the (W, H) from cameras.json. Useful for benchmarking "
+            "the same view at a different resolution; the FOV is preserved."
+        ),
+    )
     args = parser.parse_args()
 
     if args.profile:
@@ -105,6 +116,8 @@ def main():
         sys.exit(2)
 
     W, H = entry["image_size"]
+    if args.image_size is not None:
+        W, H = int(args.image_size[0]), int(args.image_size[1])
     fov_deg = entry["fov_deg"]
     # c2w_to_w2c expects numpy; build c2w as numpy and pass through.
     c2w = np.asarray(entry["views"][args.view]["c2w"], dtype=np.float32)
