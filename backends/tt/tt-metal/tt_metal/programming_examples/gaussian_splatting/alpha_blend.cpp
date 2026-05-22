@@ -514,6 +514,19 @@ static size_t grow_cap_size(size_t current, size_t needed) {
     return std::max(needed, current + current / 2);
 }
 
+// Same geometric growth, but rounded up to the buffer's page size so the
+// result is a valid MeshBuffer size (`size % page_size == 0`). Geometric
+// growth on raw byte counts can land on `current + current/2` that is
+// page-aligned for `current` but not for the buffer's `page_size`
+// (e.g. current=320, needed=448, page=64 -> grow=480, 480%64=32 -> crash).
+static size_t grow_cap_bytes_page_aligned(size_t current, size_t needed, size_t page_size) {
+    size_t grown = grow_cap_size(current, needed);
+    if (page_size <= 1) {
+        return grown;
+    }
+    return ((grown + page_size - 1) / page_size) * page_size;
+}
+
 // Grow or create cached DRAM buffers. Sets *output_reallocated when px/py/output
 // were (re)allocated due to a resolution change.
 static void ensure_buffer_cache(
@@ -545,7 +558,8 @@ static void ensure_buffer_cache(
             static_cast<size_t>(cache.max_offsets) * sizeof(uint32_t), sizeof(uint32_t));
     }
     if (tile_ids_bytes > cache.max_tile_id_bytes) {
-        cache.max_tile_id_bytes = grow_cap_size(cache.max_tile_id_bytes, tile_ids_bytes);
+        cache.max_tile_id_bytes = grow_cap_bytes_page_aligned(
+            cache.max_tile_id_bytes, tile_ids_bytes, TILE_IDS_PAGE_BYTES);
         cache.tile_ids = make_dram(cache.max_tile_id_bytes, TILE_IDS_PAGE_BYTES);
     }
     if (image_h != cache.image_h || image_w != cache.image_w) {
