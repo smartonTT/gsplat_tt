@@ -16,6 +16,7 @@ import os
 import struct
 import subprocess
 import time
+from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
 import torch
@@ -29,6 +30,32 @@ _MAGIC_OK31 = 0x4F4B3331  # 'OK31'
 _MAGIC_FRM2 = 0x46524D32  # 'FRM2'
 _MAGIC_OK11 = 0x4F4B3131  # 'OK11'
 _MAGIC_ERR1 = 0x45525231  # 'ERR1'
+_MAGIC_SHM1 = 0x53484D31  # 'SHM1'
+
+# ---------------------------------------------------------------------------
+# Shared-memory IPC (iter 024) — enabled by GSPLAT_TT_USE_SHM=1
+#
+# Two POSIX SHM segments are negotiated with the daemon after READY via SHM1:
+#
+#   shm_in  (Python writes, daemon reads):  frame data for FRM2
+#     [0..63]:  header  — total_entries, offsets_count, image_h, image_w
+#                         (4 × uint32 at bytes 0..15, rest reserved)
+#     [64..]:   attr data   — (total_entries, 5) float32
+#               gids data   — (total_entries,)   uint32
+#               offsets data— (offsets_count,)    float32 (converted to u32 in daemon)
+#               px data     — (num_tiles*1024,)   float32  (tile-major bf16 input)
+#               py data     — same
+#
+#   shm_out (daemon writes, Python reads):  rendered fp32 image
+#     [0..]:    (image_h * image_w * 3) float32, row-major
+#
+# Environment variables:
+#   GSPLAT_TT_USE_SHM=1          — enable (default: 0)
+#   GSPLAT_TT_SHM_MAX_ENTRIES    — max (Gaussian,tile) pairs (default: 2097152)
+#   GSPLAT_TT_SHM_MAX_TILES      — max tile count (default: 1024)
+# ---------------------------------------------------------------------------
+
+_SHM_HDR_BYTES = 64   # reserved bytes at start of shm_in for the per-frame header
 
 
 def _read_exact(stream, nbytes: int) -> bytes:
@@ -153,6 +180,28 @@ class KernelBackend(Backend):
         self._image_buf: np.ndarray | None = None
         self._image_buf_shape: tuple[int, int] = (0, 0)
 
+        # ---- Shared-memory IPC state (iter 024) ----
+        self._use_shm: bool = os.environ.get("GSPLAT_TT_USE_SHM", "0") == "1"
+        self._shm_in: SharedMemory | None = None        # frame data → daemon
+        self._shm_out: SharedMemory | None = None       # rendered image ← daemon
+        self._shm_max_entries: int = int(
+            os.environ.get("GSPLAT_TT_SHM_MAX_ENTRIES", "2097152")
+        )
+        self._shm_max_tiles: int = int(
+            os.environ.get("GSPLAT_TT_SHM_MAX_TILES", "1024")
+        )
+        # numpy views into shm_in data regions (set during SHM1 handshake)
+        self._shm_hdr_view: np.ndarray | None = None    # (16,) uint32 header
+        self._shm_attr_view: np.ndarray | None = None   # (max_entries, 5) float32
+        self._shm_gids_view: np.ndarray | None = None   # (max_entries,) uint32
+        self._shm_offs_view: np.ndarray | None = None   # (max_offsets,) float32
+        self._shm_px_view: np.ndarray | None = None     # (max_px_floats,) float32
+        self._shm_py_view: np.ndarray | None = None     # (max_px_floats,) float32
+        self._shm_max_offsets: int = 0
+        self._shm_max_px_floats: int = 0
+        # numpy view into shm_out (max_pixels * 3 float32)
+        self._shm_out_view: np.ndarray | None = None
+
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
@@ -169,6 +218,130 @@ class KernelBackend(Backend):
         # JIT compile on a cold cache (esp. on Blackhole) can exceed a minute,
         # so the deadline is generous.
         _wait_for_ready(self._proc.stdout, time.perf_counter() + 240.0)
+
+        if self._use_shm:
+            self._setup_shm()
+
+    # ------------------------------------------------------------------
+    # Shared-memory setup (iter 024)
+    # ------------------------------------------------------------------
+
+    def _setup_shm(self) -> None:
+        """Create SHM segments and send SHM1 handshake to daemon.
+
+        Input SHM layout (shm_in):
+          [0..63]   : header  — 4×uint32: total_entries, offsets_count,
+                                image_h, image_w  (bytes 16..63 reserved)
+          [64..]    : attr    — (max_entries, 5) float32
+                      gids    — (max_entries,)   uint32
+                      offsets — (max_offsets,)   float32
+                      px      — (max_px_floats,) float32
+                      py      — (max_px_floats,) float32
+
+        Output SHM layout (shm_out):
+          [0..] : (max_pixels * 3) float32, row-major (set by daemon after kernel)
+        """
+        me = self._shm_max_entries
+        mt = self._shm_max_tiles
+        max_offsets = mt + 1
+        max_px_floats = mt * 32 * 32
+
+        # Byte offsets for each region within shm_in (after 64-byte header)
+        attr_offset   = _SHM_HDR_BYTES
+        gids_offset   = attr_offset   + me * 5 * 4
+        offs_offset   = gids_offset   + me * 4
+        px_offset     = offs_offset   + max_offsets * 4
+        py_offset     = px_offset     + max_px_floats * 4
+        shm_in_size   = py_offset     + max_px_floats * 4
+
+        # Max pixels: assume square = mt tiles of 32×32 pixels
+        max_pixels = mt * 32 * 32
+        shm_out_size = max_pixels * 3 * 4  # fp32
+
+        pid = os.getpid()
+        shm_in_name  = f"gtt_in_{pid}"
+        shm_out_name = f"gtt_out_{pid}"
+
+        try:
+            self._shm_in  = SharedMemory(name=shm_in_name,  create=True, size=shm_in_size)
+            self._shm_out = SharedMemory(name=shm_out_name, create=True, size=shm_out_size)
+        except Exception as exc:
+            self._cleanup_shm()
+            if self.verbose:
+                print(f"[TTBackend] SHM creation failed ({exc}); falling back to pipe mode")
+            self._use_shm = False
+            return
+
+        # Pre-build numpy views into the SHM regions (zero-copy per frame)
+        buf_in = memoryview(self._shm_in.buf)
+        self._shm_hdr_view  = np.frombuffer(buf_in[:_SHM_HDR_BYTES], dtype=np.uint32)
+        self._shm_attr_view = np.frombuffer(
+            buf_in[attr_offset : gids_offset], dtype=np.float32
+        ).reshape(me, 5)
+        self._shm_gids_view = np.frombuffer(
+            buf_in[gids_offset : offs_offset], dtype=np.uint32
+        )
+        self._shm_offs_view = np.frombuffer(
+            buf_in[offs_offset : px_offset], dtype=np.float32
+        )
+        self._shm_px_view   = np.frombuffer(
+            buf_in[px_offset : py_offset], dtype=np.float32
+        )
+        self._shm_py_view   = np.frombuffer(
+            buf_in[py_offset : shm_in_size], dtype=np.float32
+        )
+        self._shm_max_offsets   = max_offsets
+        self._shm_max_px_floats = max_px_floats
+
+        self._shm_out_view = np.frombuffer(
+            memoryview(self._shm_out.buf)[:shm_out_size], dtype=np.float32
+        )
+
+        # SHM1 wire message: 256 bytes
+        #   [0..3]   magic
+        #   [4..7]   max_entries
+        #   [8..11]  max_offsets
+        #   [12..15] max_px_floats
+        #   [16..79] shm_in_name (64 bytes, null-padded)
+        #   [80..87] shm_in_size (uint64)
+        #   [88..151] shm_out_name (64 bytes, null-padded)
+        #   [152..159] shm_out_size (uint64)
+        #   [160..255] reserved zeros
+        name_in_bytes  = shm_in_name.encode()[:63].ljust(64, b"\x00")
+        name_out_bytes = shm_out_name.encode()[:63].ljust(64, b"\x00")
+        msg = struct.pack("<4I", _MAGIC_SHM1, me, max_offsets, max_px_floats)
+        msg += name_in_bytes
+        msg += struct.pack("<Q", shm_in_size)
+        msg += name_out_bytes
+        msg += struct.pack("<Q", shm_out_size)
+        msg += b"\x00" * (256 - len(msg))
+
+        try:
+            self._proc.stdin.write(msg)
+            self._proc.stdin.flush()
+            resp = _read_exact(self._proc.stdout, 8)
+            magic, _ = struct.unpack("<2I", resp)
+            if magic != _MAGIC_OK31:
+                raise RuntimeError(f"SHM1 daemon rejected: {magic:#010x}")
+        except Exception as exc:
+            self._cleanup_shm()
+            if self.verbose:
+                print(f"[TTBackend] SHM1 handshake failed ({exc}); falling back to pipe mode")
+            self._use_shm = False
+
+    def _cleanup_shm(self) -> None:
+        for shm in (self._shm_in, self._shm_out):
+            if shm is not None:
+                try:
+                    shm.close()
+                    shm.unlink()
+                except Exception:
+                    pass
+        self._shm_in = self._shm_out = None
+        self._shm_hdr_view = self._shm_attr_view = None
+        self._shm_gids_view = self._shm_offs_view = None
+        self._shm_px_view = self._shm_py_view = None
+        self._shm_out_view = None
 
     # ------------------------------------------------------------------
     # Scratch-buffer lifecycle
@@ -376,28 +549,77 @@ class KernelBackend(Backend):
         # ----------------------------------------------------------------
         # Sub-stage B: write binary FRM2 frame to daemon stdin.
         #
-        # All buffers are already in the correct dtype and C-contiguous, so
-        # memoryview wraps are zero-copy.  The bottleneck here is pipe I/O
-        # bandwidth (~46 MB/frame at 1024×1024) which cannot be reduced
-        # without changing the wire protocol (deferred to iter 021 / shm).
+        # Two paths:
+        #   SHM path  (GSPLAT_TT_USE_SHM=1): write frame data to shm_in,
+        #             then send a 24-byte FRM2 header only (shm_flag=1).
+        #             Eliminates the ~46 MB stdin write (~17 ms → ~0.1 ms).
+        #   Pipe path (default): write full payload to stdin as before.
         # ----------------------------------------------------------------
         t_save = time.perf_counter()
         offsets_count = int(offsets_f32.shape[0])
-        self._proc.stdin.write(struct.pack(
-            "<6I",
-            _MAGIC_FRM2,
-            H,
-            W,
-            total_entries,
-            offsets_count,
-            0,
-        ))
-        self._proc.stdin.write(memoryview(attr))          # (P, 5) float32
-        self._proc.stdin.write(memoryview(gids_u32))      # (P,)   uint32
-        self._proc.stdin.write(memoryview(offsets_f32))   # (T+1,) float32
-        self._proc.stdin.write(memoryview(px_tiles))      # (T, 32, 32) float32
-        self._proc.stdin.write(memoryview(py_tiles))      # (T, 32, 32) float32
-        self._proc.stdin.flush()
+
+        shm_ok = (
+            self._use_shm
+            and self._shm_in is not None
+            and total_entries <= self._shm_max_entries
+            and offsets_count <= self._shm_max_offsets
+            and num_tiles <= self._shm_max_tiles
+        )
+
+        if shm_ok:
+            # Write header into shm_in (4 × uint32 at byte offset 0)
+            self._shm_hdr_view[0] = total_entries
+            self._shm_hdr_view[1] = offsets_count
+            self._shm_hdr_view[2] = H
+            self._shm_hdr_view[3] = W
+
+            # Copy frame data into shm_in regions (numpy → SHM, ~memcpy speed)
+            # attr is (total_entries, 5) float32
+            np.copyto(self._shm_attr_view[:total_entries], attr[:total_entries])
+            # gids is (total_entries,) uint32
+            np.copyto(self._shm_gids_view[:total_entries], gids_u32[:total_entries])
+            # offsets is (offsets_count,) float32
+            np.copyto(self._shm_offs_view[:offsets_count], offsets_f32[:offsets_count])
+            # px / py are (num_tiles, 32, 32) float32 — flatten to 1-D view
+            px_flat = px_tiles.reshape(-1)
+            py_flat = py_tiles.reshape(-1)
+            px_n = int(px_flat.shape[0])
+            np.copyto(self._shm_px_view[:px_n], px_flat)
+            np.copyto(self._shm_py_view[:px_n], py_flat)
+
+            # Send FRM2 header only (shm_flag=1, no payload)
+            self._proc.stdin.write(struct.pack(
+                "<6I",
+                _MAGIC_FRM2,
+                H,
+                W,
+                total_entries,
+                offsets_count,
+                1,   # shm_flag
+            ))
+            self._proc.stdin.flush()
+        else:
+            # Pipe fallback: full payload
+            if self._use_shm and self.verbose:
+                print(
+                    f"[TTBackend] SHM fallback: entries={total_entries} "
+                    f"max={self._shm_max_entries}"
+                )
+            self._proc.stdin.write(struct.pack(
+                "<6I",
+                _MAGIC_FRM2,
+                H,
+                W,
+                total_entries,
+                offsets_count,
+                0,
+            ))
+            self._proc.stdin.write(memoryview(attr))          # (P, 5) float32
+            self._proc.stdin.write(memoryview(gids_u32))      # (P,)   uint32
+            self._proc.stdin.write(memoryview(offsets_f32))   # (T+1,) float32
+            self._proc.stdin.write(memoryview(px_tiles))      # (T, 32, 32) float32
+            self._proc.stdin.write(memoryview(py_tiles))      # (T, 32, 32) float32
+            self._proc.stdin.flush()
         save_ms = (time.perf_counter() - t_save) * 1000.0
 
         # Sub-stage C: daemon round-trip (kernel + response header).
@@ -413,13 +635,20 @@ class KernelBackend(Backend):
 
         kernel_ms = kernel_us / 1000.0 if kernel_us else None
 
-        # Sub-stage D: read rendered image bytes from stdout into the
-        # preallocated readback buffer, saving the 12 MB malloc on every frame.
-        # The caller (pipeline → viewer) converts immediately to uint8 and
-        # does not retain a reference across frame boundaries, so returning
-        # the live buffer is safe for the interactive and benchmark paths.
+        # Sub-stage D: read rendered image.
+        # SHM path: image is already in shm_out (daemon wrote it before OK11).
+        #           Copy into preallocated _image_buf; ~memcpy speed (~0.1 ms).
+        # Pipe path: read from stdout as before (~4.7 ms for 12 MB at 1024×1024).
         t_load = time.perf_counter()
-        _read_exact_into(self._proc.stdout, memoryview(self._image_buf).cast("B"))
+        if shm_ok:
+            # shm_out holds (H*W*3) float32 written by the daemon
+            n = H * W * 3
+            np.copyto(
+                self._image_buf.reshape(-1),
+                self._shm_out_view[:n],
+            )
+        else:
+            _read_exact_into(self._proc.stdout, memoryview(self._image_buf).cast("B"))
         load_ms = (time.perf_counter() - t_load) * 1000.0
 
         sub_timings: dict[str, float] = {
@@ -452,3 +681,4 @@ class KernelBackend(Backend):
                     self._proc.wait(timeout=3)
                 except subprocess.TimeoutExpired:
                     pass
+        self._cleanup_shm()

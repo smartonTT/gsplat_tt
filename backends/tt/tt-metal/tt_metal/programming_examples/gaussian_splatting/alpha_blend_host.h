@@ -53,6 +53,14 @@ constexpr uint32_t CB_SAT_MASK      = 21;
 constexpr uint32_t CB_CONST_ZERO = 22;  // 0.0  (used to clamp power = min(power, 0))
 constexpr uint32_t CB_CONST_099  = 23;  // 0.99 (used to clamp alpha = min(., 0.99))
 
+// IPC opcode for shared-memory handshake (iter 024).
+// After READY + SCN1, Python can optionally send SHM1 to negotiate a
+// POSIX shared-memory transport for frame data and image readback.
+// The daemon responds with OK31 on success, ERR1 on failure.
+// Python then sets the shm_flag field in subsequent FRM2 headers to 1
+// to use the shared-memory path instead of the pipe.
+constexpr uint32_t IPC_MAGIC_SHM1 = 0x53484D31;  // 'SHM1'
+
 // Reader-only scratch CB: a dedicated L1 region used by the reader kernel
 // for NoC-async-read destinations that need a stable, NoC-addressable
 // location (the kernel stack lives in NCRISC IRAM and is NOT
