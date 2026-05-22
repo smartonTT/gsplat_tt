@@ -65,6 +65,18 @@ constexpr uint32_t CB_CONST_099  = 23;  // 0.99 (used to clamp alpha = min(., 0.
 constexpr uint32_t CB_READER_SCRATCH = 24;
 constexpr uint32_t READER_SCRATCH_PAGE_BYTES = 128;
 
+// Block-wide early termination CBs (iter 018).
+// CB_CONST_ONE: bf16 tile pre-filled with 1.0; used as the scaler in the
+//   MAX reduce (multiplying by 1 leaves the maximum unchanged).
+// CB_T_MAX: fp32 single-tile output of the MAX reduce over CB_T_STATE; the
+//   RISC reads element [0,0] as a raw fp32 bit-pattern and compares it
+//   against T_THRESH_BITS to detect full-tile saturation.
+constexpr uint32_t CB_CONST_ONE = 25;
+constexpr uint32_t CB_T_MAX     = 26;
+
+// fp32 full-tile byte count; used when allocating fp32-format CBs.
+constexpr uint32_t TILE_BYTES_FP32 = TILE_H * TILE_W * 4;
+
 // Sentinel-mask threshold: a pixel whose transmittance falls below this is
 // "saturated" (further Gaussians contribute < 1/255 to it). Used by the Stage F
 // sat_mask refresh to freeze saturated pixels in subsequent compositing steps.

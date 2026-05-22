@@ -274,6 +274,14 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.
 
+    // Block-wide early termination (iter 018):
+    //   CB_CONST_ONE: pre-filled bf16 1.0 tile used as the MAX-reduce scaler.
+    //   CB_T_MAX:     fp32 scratch for the scalar max output; depth 1, cycled
+    //                 (push/pop) every Stage-F check so it never stays "full"
+    //                 across the inter-tile boundary.
+    cb_tile(CB_CONST_ONE, 1);
+    cb_small(CB_T_MAX, TILE_BYTES_FP32, 1, DataFormat::Float32);
+
     // Reader: 7 DRAM-interleaved TensorAccessorArgs for dyn_packs/offsets/px/py/
     // tile_ids/sorted_gids/static_colors_opacity.
     std::vector<uint32_t> reader_ct;
