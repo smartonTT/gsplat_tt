@@ -73,6 +73,14 @@ constexpr uint32_t IPC_MAGIC_SHM1 = 0x53484D31;  // 'SHM1'
 constexpr uint32_t CB_READER_SCRATCH = 24;
 constexpr uint32_t READER_SCRATCH_PAGE_BYTES = 128;
 
+// Block-wide early termination CBs (iter 036).
+// CB_CONST_ONE: bf16 tile pre-filled with 1.0; MAX-reduce scaler (×1 unchanged).
+// CB_T_MAX: fp32 scratch for scalar max(T) over CB_T_STATE; cycled each check.
+constexpr uint32_t CB_CONST_ONE = 25;
+constexpr uint32_t CB_T_MAX     = 26;
+
+constexpr uint32_t TILE_BYTES_FP32 = TILE_H * TILE_W * 4;
+
 // Sentinel-mask threshold: a pixel whose transmittance falls below this is
 // "saturated" (further Gaussians contribute < 1/255 to it). Used by the Stage F
 // sat_mask refresh to freeze saturated pixels in subsequent compositing steps.
