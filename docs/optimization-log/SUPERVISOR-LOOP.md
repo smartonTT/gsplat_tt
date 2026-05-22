@@ -203,11 +203,35 @@ comes in.
 
 ## Iteration history (newest at top)
 
-| # | Branch | What | kernel ms (1024) | total ms (1024) | KEEP | Notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| 0 | `e0a3640` | baseline (Phase 1, end of first pass) | **106.5** | **293.8** | YES | Reference for all subsequent iters |
+| # | Branch / SHA | What | kernel ms (1024) | total ms (1024) | prep ms (1024) | sort ms (1024) | KEEP | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 019 | `144ca57` | preallocated per-pipeline scratch + lazy bf16→fp32 in `save_npy` | 107.1 | 259.2 | **18.5** | 56.5 | YES | prep -0.8 ms (-4.2%). PSNR 168 dB (bit-identical). Total within noise but no regression. Locks in shm-IPC scaffolding for future iter. |
+| 017-C | `6a44a8b` (subagent), reverted | counting + per-tile depth quicksort (claimed 2.1×) | 106.6 | 284.8 | 19.6 | **84.8** | NO | **Sort got SLOWER** (+28 ms). Subagent's microbench was on synthetic input; real distribution at stitch_doll has many small buckets where the per-bucket overhead dominates. PSNR 168 dB (correct, just slow). |
+| 022 | (in-tree, reverted) | project two-pass: depth/opacity cull before Jacobian + cov_2d | 106.6 | 259.9 | 19.3 | 56.8 | NO | `project` 16.9 → 18.3 ms. Slice overhead at 82% survival rate exceeded the saved Jacobian work. Visually bit-exact (PSNR 168 dB). |
+| 020 | `b0daced` (subagent), reverted | reader NoC pipeline: 8B offsets coalesce + PX/PY overlap + static prefetch | — | — | — | — | NO | **Kernel hangs.** No frame produced; chip needed full `tt-smi -r all` to recover. Subagent diff has an NCRISC ordering bug. Re-attempt with watcher (`TT_METAL_WATCHER=5`) before relanding. |
+| 018 | `3a8d815` (subagent), reverted | block-wide early term via `reduce<MAX,SCALAR>` over CB_T_STATE | — | — | — | — | NO | **Kernel hangs.** Probably the new CBs (CB_CONST_ONE, CB_T_MAX) interact badly with reduce_init/reduce_uninit + the existing Stage F binary_op_init. Re-attempt with watcher and a unit-test that does the reduce in isolation. |
+| 017 | `01b321c` (subagent commit `a29890a` rebased onto baseline) | int64 composite sort key | 106.6 | **258.3** | 19.3 | **56.2** | YES | sort -39%, total -12% (-35 ms). PSNR 44.0 dB. Confirmed via clean-baseline rebench post-commit. Kernel unchanged. |
+| 0   | `e0a3640` | baseline (Phase 1, end of first pass) | 106.5 | 293.8 | 19.3 | 93.3 | YES | Reference. (Pre-supervisor-loop sort path used `torch.argsort` on a float key.) |
 
 (append iterations here)
+
+### Active baseline for new iterations: `144ca57` (`smarton/opt-stable`)
+  Kernel **107 ms**, total **259 ms**, prep **18.5 ms**, sort **56.5 ms** at 1024×1024 stitch_doll (post iter 019).
+
+## Hard-won lessons (post-018/020 hang)
+
+- **Stale daemons hold the device lock silently.** `pkill -TERM` is not enough.
+  Use `sudo pkill -KILL -9 -f metal_example` and **verify** with `pgrep -af`.
+  If a kernel is mid-flight when its host gets killed, RISC firmware can wedge
+  and require `sudo /opt/venv/bin/tt-smi -r all` (deeper than `-r 0`).
+- **Sudo is needed for both rebuilds and resets** (`build/` is owned by root,
+  `tt-smi -r` needs PCI access). Saved in `tmp/run_baseline.sh`.
+- **Bench harness must check + cleanup before every run.** Implemented in the
+  hardened `tmp/run_baseline.sh`.
+- **A failing iteration can be REALLY costly**: hang → wedge → reset → ~3-5 min
+  recovery. Future kernel-touching iters MUST run with `TT_METAL_WATCHER=5`
+  on the FIRST validation bench so we catch the L1 fault directly instead of
+  a silent hang.
 
 ## Ideas backlog (un-prioritized)
 
