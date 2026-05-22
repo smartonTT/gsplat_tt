@@ -149,6 +149,15 @@ class KernelBackend(Backend):
         self._scene_n_gaussians = 0
         self._scene_colors_id: int | None = None
 
+        # Iter 029: pipelined submit/recv. _frame_in_flight is set to True
+        # by submit_frame and cleared by recv_frame; guards against
+        # accidentally submitting two frames before reading the first
+        # (which would deadlock the daemon).
+        self._frame_in_flight: bool = False
+        self._inflight_H: int = 0
+        self._inflight_W: int = 0
+        self._inflight_shm_ok: bool = False
+
         # ---- Preallocated per-frame scratch buffers ----
         # Grown lazily; capacity tracked separately from shape so we can
         # slice the active portion without a new allocation each frame.
@@ -443,6 +452,51 @@ class KernelBackend(Backend):
         image_height: int,
         image_width: int,
     ) -> tuple[np.ndarray, dict[str, float]]:
+        # Single-shot synchronous render: submit + recv. This is the
+        # backward-compatible API used by the interactive viewer and the
+        # default Pipeline.render() path. For benchmark / batch workloads
+        # use submit_frame() + recv_frame() directly to overlap CPU pre-
+        # blend of frame N+1 with daemon kernel of frame N (iter 029).
+        partial_timings = self.submit_frame(
+            means_2d, covs_2d, colors, opacities,
+            sorted_gaussian_ids, tile_ranges,
+            image_height, image_width,
+        )
+        return self.recv_frame(partial_timings)
+
+    def submit_frame(
+        self,
+        means_2d: torch.Tensor,
+        covs_2d: torch.Tensor,
+        colors: torch.Tensor,
+        opacities: torch.Tensor,
+        sorted_gaussian_ids: torch.Tensor,
+        tile_ranges: torch.Tensor,
+        image_height: int,
+        image_width: int,
+    ) -> dict[str, float]:
+        """Submit a frame to the daemon WITHOUT waiting for the kernel result.
+
+        Returns a partial-timings dict containing the host-side stages
+        already measured (prep, save_npy). Caller MUST follow with a
+        matching `recv_frame(partial_timings)` to retrieve the rendered
+        image and the daemon-side timings (daemon_rt, device_kernel,
+        load_npy). At most one frame may be in flight at a time — calling
+        `submit_frame` twice without an intervening `recv_frame` is an
+        error and will deadlock the daemon.
+
+        This is the host-pipelined API used to overlap pre-blend Python
+        work for frame N+1 with the daemon kernel of frame N (iter 029):
+        the prep + shm write + FRM2 phases all complete in a few ms; the
+        daemon then runs autonomously while the caller is free to do
+        whatever CPU work it wants.
+        """
+        if self._frame_in_flight:
+            raise RuntimeError(
+                "submit_frame called while a previous frame is still in "
+                "flight; call recv_frame first"
+            )
+
         H, W = image_height, image_width
 
         if not self._scene_initialized:
@@ -627,14 +681,43 @@ class KernelBackend(Backend):
             self._proc.stdin.flush()
         save_ms = (time.perf_counter() - t_save) * 1000.0
 
+        # Mark frame in flight; record host-side timings + per-frame
+        # parameters so recv_frame can finalize the sub-timings dict and
+        # know the expected image shape / shm layout.
+        self._frame_in_flight = True
+        self._inflight_H = H
+        self._inflight_W = W
+        self._inflight_shm_ok = shm_ok
+        return {"prep": prep_ms, "save_npy": save_ms}
+
+    def recv_frame(
+        self, partial_timings: dict[str, float],
+    ) -> tuple[np.ndarray, dict[str, float]]:
+        """Wait for the previously-submitted frame to finish; return image.
+
+        `partial_timings` is the dict returned by `submit_frame`; this
+        method augments it with daemon_rt, device_kernel, and load_npy
+        and returns it as the final sub-timings dict.
+
+        Calling recv_frame without a matching submit_frame raises.
+        """
+        if not self._frame_in_flight:
+            raise RuntimeError("recv_frame called with no frame in flight")
+
+        H = self._inflight_H
+        W = self._inflight_W
+        shm_ok = self._inflight_shm_ok
+
         # Sub-stage C: daemon round-trip (kernel + response header).
         t_rt = time.perf_counter()
         resp_hdr = _read_exact(self._proc.stdout, 16)
         magic, image_bytes, kernel_us, err_len = struct.unpack("<4I", resp_hdr)
         if magic == _MAGIC_ERR1:
             err_msg = _read_exact(self._proc.stdout, err_len).decode("utf-8")
+            self._frame_in_flight = False
             raise RuntimeError(f"daemon error: {err_msg}")
         if magic != _MAGIC_OK11:
+            self._frame_in_flight = False
             raise RuntimeError(f"unexpected daemon response magic {magic:#010x}")
         rt_ms = (time.perf_counter() - t_rt) * 1000.0
 
@@ -656,15 +739,13 @@ class KernelBackend(Backend):
             _read_exact_into(self._proc.stdout, memoryview(self._image_buf).cast("B"))
         load_ms = (time.perf_counter() - t_load) * 1000.0
 
-        sub_timings: dict[str, float] = {
-            "prep": prep_ms,
-            "save_npy": save_ms,
-            "daemon_rt": rt_ms,
-        }
+        sub_timings: dict[str, float] = dict(partial_timings)
+        sub_timings["daemon_rt"] = rt_ms
         if kernel_ms is not None:
             sub_timings["daemon_rt.device_kernel"] = kernel_ms
         sub_timings["load_npy"] = load_ms
 
+        self._frame_in_flight = False
         return self._image_buf, sub_timings
 
     def close(self) -> None:
