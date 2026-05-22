@@ -191,6 +191,13 @@ class KernelBackend(Backend):
 
         # ---- Shared-memory IPC state (iter 024) ----
         self._use_shm: bool = os.environ.get("GSPLAT_TT_USE_SHM", "0") == "1"
+        # Iter 032: per-tile g_count cap. 0 = no cap (default). Empirically
+        # 256-512 saves 60-80% of kernel iterations at <1 dB PSNR cost on
+        # stitch_doll. See SUPERVISOR-LOOP.md iter 032.
+        try:
+            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "0"))
+        except ValueError:
+            self._max_g_per_tile = 0
         self._shm_in: SharedMemory | None = None        # frame data → daemon
         self._shm_out: SharedMemory | None = None       # rendered image ← daemon
         self._shm_max_entries: int = int(
@@ -464,6 +471,44 @@ class KernelBackend(Backend):
         )
         return self.recv_frame(partial_timings)
 
+    @staticmethod
+    def _cap_per_tile(
+        sorted_gids_np: np.ndarray,
+        ranges_np: np.ndarray,
+        max_g: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Truncate per-tile sorted Gaussian lists at `max_g` (front-to-back kept).
+
+        Iter 032: the post-iter-030 entry distribution at 1024×1024 stitch_doll
+        has median 1015, p99 3059, max 4700 entries per tile. After ~50 front-to-
+        back Gaussians, T at the tile center has saturated below 1e-4 (kernel
+        Stage F's threshold), so the kernel is doing wasted work for the trailing
+        90%+ of each tile's list. We cull on the host: after position `max_g`,
+        drop the rest.
+
+        Returns: (new_sorted_gids, new_ranges) — both numpy, contiguous.
+        """
+        counts = ranges_np[:, 1] - ranges_np[:, 0]
+        if counts.max() <= max_g:
+            return sorted_gids_np, ranges_np
+        capped = np.minimum(counts, max_g)
+        new_offsets = np.empty(len(ranges_np) + 1, dtype=np.int64)
+        new_offsets[0] = 0
+        np.cumsum(capped, out=new_offsets[1:])
+        new_total = int(new_offsets[-1])
+
+        new_entries = np.arange(new_total, dtype=np.int64)
+        # tile_id of each new entry
+        tile_id = np.searchsorted(new_offsets[1:], new_entries, side="right")
+        within_tile = new_entries - new_offsets[tile_id]
+        old_idx = ranges_np[tile_id, 0].astype(np.int64) + within_tile
+        new_gids = sorted_gids_np[old_idx]
+
+        new_ranges = np.empty_like(ranges_np)
+        new_ranges[:, 0] = new_offsets[:-1]
+        new_ranges[:, 1] = new_offsets[1:]
+        return new_gids, new_ranges
+
     def submit_frame(
         self,
         means_2d: torch.Tensor,
@@ -521,6 +566,16 @@ class KernelBackend(Backend):
 
         M = int(means_2d.shape[0])   # visible Gaussian count
         gids_np = sorted_gaussian_ids.numpy()   # int64 view, no copy
+        ranges_np = tile_ranges.numpy()
+
+        # Iter 032: per-tile g_count cap. After Stage F's T<1e-4 saturation, all
+        # remaining work in a tile is multiplied by ~0 — but the kernel still
+        # iterates the full list. Truncate on the host so the kernel never sees
+        # the dead tail. Configurable via GSPLAT_TT_MAX_G_PER_TILE.
+        max_g_per_tile = self._max_g_per_tile
+        if max_g_per_tile > 0:
+            gids_np, ranges_np = self._cap_per_tile(gids_np, ranges_np, max_g_per_tile)
+
         total_entries = int(gids_np.shape[0])   # total (Gaussian, tile) pairs
         tiles_x = (W + 31) // 32
         tiles_y = (H + 31) // 32
@@ -544,8 +599,7 @@ class KernelBackend(Backend):
         # Convert sorted gids to uint32 in-place (int64 values are ≤ M ≤ 2^24).
         np.copyto(gids_u32, gids_np, casting="unsafe")
 
-        # Build cumulative tile offsets from tile_ranges (no new array).
-        ranges_np = tile_ranges.numpy()
+        # Build cumulative tile offsets from (possibly capped) ranges.
         counts_u32 = (ranges_np[:, 1] - ranges_np[:, 0]).astype(np.uint32)
         tile_offsets[0] = 0
         np.cumsum(counts_u32, out=tile_offsets[1:])
