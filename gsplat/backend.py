@@ -129,9 +129,9 @@ class Backend(ABC):
         """
         if eps is None:
             try:
-                eps = float(os.environ.get("GSPLAT_TT_CULL_EPS", "2e-1"))
+                eps = float(os.environ.get("GSPLAT_TT_CULL_EPS", "5e-2"))
             except ValueError:
-                eps = 2e-1
+                eps = 5e-2
         return rasterization.cull_low_alpha_pairs(
             gaussian_ids, tile_ids, means_2d, covs_2d, opacities,
             tiles_x, tile_size=tile_size, eps=eps,
