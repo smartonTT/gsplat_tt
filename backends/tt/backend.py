@@ -201,7 +201,7 @@ class KernelBackend(Backend):
         #   cap=256  → kernel 13.9 ms  PSNR 20.5 dB  (needs-review)
         # Override via env: GSPLAT_TT_MAX_G_PER_TILE=N (0 = no cap).
         try:
-            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "64"))
+            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "32"))
         except ValueError:
             self._max_g_per_tile = 448
         # Iter 033 (NO, default-disabled): host-side prefix-T saturation cull.
@@ -694,9 +694,22 @@ class KernelBackend(Backend):
         # prefix-T cull above, this should usually be a no-op, but guards
         # against pathological scenes where T-cull keeps too many entries.
         # Configurable via GSPLAT_TT_MAX_G_PER_TILE (0 = no cap).
+        #
+        # Iter 060: resolution-aware cap. With a fixed cap, dense low-resolution
+        # frames (e.g. 480×640 → 300 tiles) lose visual fidelity because each
+        # tile contains many overlapping Gaussians. Scale the cap by total tile
+        # count so that the kernel processes roughly the same total post-cap
+        # entries regardless of resolution. For 1024×1024 (1024 tiles) the
+        # cap stays at the env-var value; smaller resolutions get a
+        # proportionally-larger cap so PSNR holds.
         max_g_per_tile = self._max_g_per_tile
         if max_g_per_tile > 0:
-            gids_np, ranges_np = self._cap_per_tile(gids_np, ranges_np, max_g_per_tile)
+            tiles_x_cap = (W + 31) // 32
+            tiles_y_cap = (H + 31) // 32
+            num_tiles_cap = tiles_x_cap * tiles_y_cap
+            target_total = max_g_per_tile * 1024  # 1024×1024 reference
+            adaptive_cap = max(max_g_per_tile, target_total // max(num_tiles_cap, 1))
+            gids_np, ranges_np = self._cap_per_tile(gids_np, ranges_np, adaptive_cap)
 
         total_entries = int(gids_np.shape[0])   # total (Gaussian, tile) pairs
         tiles_x = (W + 31) // 32
