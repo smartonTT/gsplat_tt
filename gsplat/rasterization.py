@@ -243,58 +243,46 @@ def sort_and_bin(
         sorted_gaussian_ids: (P,) Gaussian indices sorted by (tile_id, depth).
         tile_ranges: (num_tiles, 2) start and end index in sorted array for each tile.
     """
-    import numpy as np  # already a dep; local import avoids module-level side effects
-
     num_tiles = tiles_x * tiles_y
-    N = gaussian_ids.shape[0]
 
-    gids_np   = gaussian_ids.numpy()          # int64 view, no copy
-    tids_np   = tile_ids.numpy()              # int32 view, no copy (from get_tile_assignments)
-    depths_np = depths.numpy()               # float32 view, no copy
-    dp_np     = depths_np[gids_np]            # (P,) float32 gather — one numpy fancy-index
+    # Build an int64 composite key: upper 32 bits = tile_id, lower 32 bits = depth
+    # reinterpreted as uint32.  IEEE 754 positive floats preserve their ordering when
+    # viewed as uint32 bit patterns, so this single int64 key sorts lexicographically
+    # by (tile_id, depth) — identical semantics to the old float composite key but
+    # without floating-point precision loss and faster via numpy's C-level sort.
+    import numpy as np  # already a dep; local import avoids module-level side effects
+    depth_per_pair = depths[gaussian_ids]  # (P,) float32, non-negative camera-space Z
+    tile_ids_np = tile_ids.numpy().astype(np.int64)  # no copy on CPU contiguous tensor
+    # view float32 bits as uint32, then widen to int64 for the bit-pack
+    depth_bits = depth_per_pair.numpy().view(np.uint32).astype(np.int64)
+    composite_keys = (tile_ids_np << np.int64(32)) | depth_bits  # (P,) int64
 
-    # Tile ranges via bincount+cumsum — O(N + num_tiles), avoids scanning sorted output.
-    # For empty tiles counts[t]==0 so offsets[t]==offsets[t+1], giving range (k, k) which
-    # the kernel interprets as "empty" (same as the torch change-point method below).
-    counts  = np.bincount(tids_np, minlength=num_tiles)  # int64
-    offsets = np.empty(num_tiles + 1, dtype=np.int64)
-    offsets[0] = 0
-    np.cumsum(counts, out=offsets[1:])
+    # np.argsort with kind='stable' (mergesort) preserves relative order of equal keys,
+    # matching torch.argsort's stable guarantee.
+    sorted_indices_np = np.argsort(composite_keys, kind="stable")
+    sorted_indices = torch.from_numpy(sorted_indices_np)
+    sorted_gaussian_ids = gaussian_ids[sorted_indices]
+    sorted_tile_ids = tile_ids[sorted_indices]
 
-    if N == 0:
-        tile_ranges_np = np.stack([offsets[:-1], offsets[1:]], axis=1)
-        return gaussian_ids, torch.from_numpy(tile_ranges_np.copy())
+    # Build tile ranges: for each tile, find where its Gaussians start and end
+    # in the sorted array. Tiles with no Gaussians get range (0, 0).
+    tile_ranges = torch.zeros(num_tiles, 2, dtype=torch.int64)
 
-    tids_i64 = tids_np.astype(np.int64)                    # int32 → int64 for bit-shift
-    db_i64   = dp_np.view(np.uint32).astype(np.int64)      # float32 bits → int64
+    if sorted_tile_ids.numel() > 0:
+        # Detect where tile_id changes in the sorted array
+        changes = sorted_tile_ids[1:] != sorted_tile_ids[:-1]
+        change_indices = torch.where(changes)[0] + 1
 
-    # Fast path — 63-bit composite key (iter 017-C counting-sort variant):
-    #
-    # Bit layout (all fields non-negative, bit 63 stays 0):
-    #   bits [62:53]  tile_id     (10 bits, tile_ids ≤ 1023 at 1024×1024/32×32)
-    #   bits [52:21]  depth_bits  (32 bits, IEEE-754 uint32 reinterpret of float32 depth)
-    #   bits [20:0]   input_pos   (21 bits, original pair index 0..N-1, ≤ 2,097,151)
-    #
-    # Because input_pos is globally unique, ALL keys are distinct, so an unstable sort
-    # (np.argsort kind='quicksort', ~2× faster than mergesort) produces the same
-    # output as a stable sort by (tile_id, depth) with input-order tie-breaking.
-    #
-    # Preconditions: num_tiles ≤ 1024 (10 bits) AND N < 2^21 = 2,097,152.
-    # Both hold at 1024×1024 with 32×32 tiles and ≤1.6 M (gaussian, tile) pairs.
-    # The fallback (iter-017 two-key stable path) handles larger configurations.
-    if num_tiles <= (1 << 10) and N < (1 << 21):
-        orig_i64 = np.arange(N, dtype=np.int64)
-        composite = (tids_i64 << np.int64(53)) | (db_i64 << np.int64(21)) | orig_i64
-        si = np.argsort(composite, kind="quicksort")   # unique keys → unstable is safe
-    else:
-        # Fallback: iter-017 two-key stable sort (handles arbitrary N and num_tiles).
-        composite = (tids_i64 << np.int64(32)) | db_i64
-        si = np.argsort(composite, kind="stable")
+        # Start indices: position 0 + every change point
+        starts = torch.cat([torch.zeros(1, dtype=torch.int64), change_indices])
+        # End indices: every change point + final position
+        ends = torch.cat([change_indices, torch.tensor([len(sorted_tile_ids)])])
 
-    sorted_gaussian_ids = torch.from_numpy(gids_np[si])
+        # The tile at each segment
+        segment_tiles = sorted_tile_ids[starts]
 
-    tile_ranges_np = np.stack([offsets[:-1], offsets[1:]], axis=1)
-    tile_ranges    = torch.from_numpy(tile_ranges_np.copy())
+        tile_ranges[segment_tiles, 0] = starts
+        tile_ranges[segment_tiles, 1] = ends
 
     return sorted_gaussian_ids, tile_ranges
 
