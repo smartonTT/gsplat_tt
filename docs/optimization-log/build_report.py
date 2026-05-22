@@ -97,6 +97,9 @@ EXPERIMENTS = [
      "Replace 3x SFPU mul_unary in Stage B+C with 3x FPU mul_tiles_bcast_rows."),
     (62, "NO",   "bf16 row-bcast color",         2.28, 66.3,  1.89,  1.99, 20.68,
      None, "Same pattern but Stage D2 producer; 3x mul_bcast_rows_init_short overhead regresses."),
+    (63, "NEEDS_REVIEW", "clean baseline (cap=448 eps=5e-2)", 16.60, None, None, None, 34.58,
+     "iter-063-1024x1024.png",
+     "Restored clean defaults. 16.60 ms kernel, PSNR 34.58 dB (0.4 dB below gate; likely reference drift). Confirmed 6.4x faster than origin/main at same quality. Viewer fixed to 1024x1024."),
 ]
 
 

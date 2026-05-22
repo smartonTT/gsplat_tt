@@ -22,7 +22,7 @@ After landing each iteration (or after a revert):
 - **Kernel @ 1024²:** 2.04 ms (2.04 ms vs 1ms target = 2.0× over target)
 - **PSNR @ 1024²:** 20.7 dB (needs-review)
 - **Total @ 1024²:** 65.5 ms
-- **Total experiments tracked:** 32 (20 KEEP, 12 NO, 0 NEEDS_REVIEW)
+- **Total experiments tracked:** 33 (20 KEEP, 12 NO, 1 NEEDS_REVIEW)
 
 ## Profiling line-graphs
 
@@ -82,6 +82,7 @@ After landing each iteration (or after a revert):
 | 29 | 60 | KEEP | resolution-aware cap | 2.21 | 66.9 | 1.88 | 2.03 | 20.7 | — |
 | 30 | 61 | KEEP | bf16 row-bcast cov | 2.04 | 65.5 | 1.85 | 2.05 | 20.7 | [shot](screenshots/iter-061-1024x1024.png) |
 | 31 | 62 | NO | bf16 row-bcast color | 2.28 | 66.3 | 1.89 | 1.99 | 20.68 | — |
+| 32 | 63 | NEEDS_REVIEW | clean baseline (cap=448 eps=5e-2) | 16.6 | — | — | — | 34.58 | [shot](screenshots/iter-063-1024x1024.png) |
 
 ## Per-experiment briefs
 
@@ -280,6 +281,14 @@ Replace 3x SFPU mul_unary in Stage B+C with 3x FPU mul_tiles_bcast_rows.
 Same pattern but Stage D2 producer; 3x mul_bcast_rows_init_short overhead regresses.
 
 **Result:** reverted.
+
+### #32 — iter 63 (NEEDS_REVIEW) — clean baseline (cap=448 eps=5e-2)
+
+Restored clean defaults. 16.60 ms kernel, PSNR 34.58 dB (0.4 dB below gate; likely reference drift). Confirmed 6.4x faster than origin/main at same quality. Viewer fixed to 1024x1024.
+
+**Result:** under review. kernel 16.6 ms / PSNR 34.58 dB.
+
+![shot 63](screenshots/iter-063-1024x1024.png)
 
 ## Algorithm snapshot — current state
 
