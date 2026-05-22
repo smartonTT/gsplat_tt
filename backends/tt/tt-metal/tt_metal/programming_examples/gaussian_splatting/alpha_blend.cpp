@@ -325,6 +325,9 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_tile(CB_CONST_099, 1);
     cb_tile(CB_CONST_ONE, 1);
     cb_small(CB_T_MAX, TILE_BYTES_FP32, 1, DataFormat::Float32);
+    cb_tile(CB_BCAST_A, 2);
+    cb_tile(CB_BCAST_B, 2);
+    cb_tile(CB_BCAST_C, 2);
     // CB_CONST_NEG88 (index 11) is reserved but unused now that the kernel
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.

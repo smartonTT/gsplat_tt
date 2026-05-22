@@ -79,6 +79,11 @@ constexpr uint32_t READER_SCRATCH_PAGE_BYTES = 128;
 constexpr uint32_t CB_CONST_ONE = 25;
 constexpr uint32_t CB_T_MAX     = 26;
 
+// bf16 row-broadcast tiles for cov scalars (iter 061 / re-applied iter 049d).
+constexpr uint32_t CB_BCAST_A = 27;  // cov_a'  (-c/2det)
+constexpr uint32_t CB_BCAST_B = 28;  // 2·cov_b' (b/det)
+constexpr uint32_t CB_BCAST_C = 29;  // cov_c'  (-a/2det)
+
 constexpr uint32_t TILE_BYTES_FP32 = TILE_H * TILE_W * 4;
 
 // Sentinel-mask threshold: a pixel whose transmittance falls below this is

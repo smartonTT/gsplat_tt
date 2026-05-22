@@ -44,6 +44,9 @@ void kernel_main() {
     constexpr uint32_t CB_PY        = 1;
     constexpr uint32_t CB_SCALARS   = 2;
     constexpr uint32_t CB_TILE_META = 3;
+    constexpr uint32_t CB_BCAST_A   = 27;
+    constexpr uint32_t CB_BCAST_B   = 28;
+    constexpr uint32_t CB_BCAST_C   = 29;
 
     const uint32_t tile_bytes = get_tile_size(CB_PX);
     constexpr uint32_t dyn_pack_page_bytes = 32;
@@ -135,6 +138,21 @@ void kernel_main() {
     volatile uint32_t* static_l1 =
         reinterpret_cast<volatile uint32_t*>(reader_scratch_addr + L1_OFF_STATIC);
 
+    auto push_bcast_tile = [&](uint32_t cb_id, uint32_t fp32_bits) {
+        uint16_t bf16 = static_cast<uint16_t>(fp32_bits >> 16);
+        uint32_t doubled = (static_cast<uint32_t>(bf16) << 16) | bf16;
+        cb_reserve_back(cb_id, 1);
+        volatile uint32_t* p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(cb_id));
+        // Face 0 row 0: words [0..7]; Face 1 row 0: words [128..135]
+        for (uint32_t k = 0; k < 2; k++) {
+            uint32_t base = k << 7;
+            for (uint32_t j = 0; j < 8; j++) {
+                p[base + j] = doubled;
+            }
+        }
+        cb_push_back(cb_id, 1);
+    };
+
     for (uint32_t t = 0; t < tile_ids_count; t++) {
         uint32_t tile_id = tile_ids[t];
 
@@ -215,7 +233,13 @@ void kernel_main() {
             // Elements [9..15] of the 64-byte CB_SCALARS page are CB pad
             // and compute never reads them; we leave them undefined.
 
+            uint32_t cov_a_bits = out[2];
+            uint32_t two_b_bits = out[3];
+            uint32_t cov_c_bits = out[4];
             cb_push_back(CB_SCALARS, 1);
+            push_bcast_tile(CB_BCAST_A, cov_a_bits);
+            push_bcast_tile(CB_BCAST_B, two_b_bits);
+            push_bcast_tile(CB_BCAST_C, cov_c_bits);
         }
 
         // Refresh scratch_addr for the next tile's offset reads.

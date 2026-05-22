@@ -18,6 +18,7 @@
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/binary_max_min.h"
 #include "api/compute/reduce.h"
+#include "api/compute/bcast.h"
 
 // Alpha-blend compute kernel: 3D Gaussian Splatting forward rasterizer
 // (front-to-back compositing) for a per-core slice of screen tiles.
@@ -95,6 +96,9 @@ void kernel_main() {
     // CB 24 = CB_READER_SCRATCH (reader-only, not visible to compute)
     constexpr uint32_t CB_CONST_ONE     = 25;  // constant 1.0 tile (bf16, reduce scaler)
     constexpr uint32_t CB_T_MAX         = 26;  // MAX-reduce output scratch (fp32, depth 1)
+    constexpr uint32_t CB_BCAST_A       = 27;  // cov_a' row-bcast tile (bf16)
+    constexpr uint32_t CB_BCAST_B       = 28;  // 2·cov_b' row-bcast tile (bf16)
+    constexpr uint32_t CB_BCAST_C       = 29;  // cov_c' row-bcast tile (bf16)
 
     // Scratch CBs for Stage D2 producer batching (alias unused-since-iter-003 CBs).
     constexpr uint32_t CB_T_R = CB_DX2;
@@ -277,27 +281,46 @@ void kernel_main() {
             cb_wait_front(CB_DX, 1);
             cb_wait_front(CB_DY, 1);
 
-            // ----- Stage B2+B3+C (Iter 040): host pre-folds -0.5 into the
-            // covariance scalars (cov_a' = -c/2det, cov_b' = b/det,
-            // cov_c' = -a/2det) so the kernel's three per-axis mul_unary
-            // calls produce -Q/2 directly. Saves the standalone
-            // `mul_unary_tile(0, NEG_HALF_BITS)` SFPU op (~256 cycles).
-            //
-            //   power = (-c/2det)·dx² + (b/det)·dx·dy + (-a/2det)·dy²
-            //         = -Q/2
-            //   alpha = min( opacity · exp(power), 0.99 )
+            // ----- Stage B2: dx², dy², dx·dy into scratch CBs for FPU bcast.
             tile_regs_acquire();
             mul_tiles_init(CB_DX, CB_DX);
             mul_tiles(CB_DX, CB_DX, 0, 0, 0);
-            mul_unary_tile(0, cov_a_bits);     // (-c/2det)·dx²
-
             mul_tiles_init(CB_DY, CB_DY);
             mul_tiles(CB_DY, CB_DY, 0, 0, 1);
-            mul_unary_tile(1, cov_c_bits);     // (-a/2det)·dy²
-
             mul_tiles_init(CB_DX, CB_DY);
             mul_tiles(CB_DX, CB_DY, 0, 0, 2);
-            mul_unary_tile(2, two_cov_b_bits); // (b/det)·dx·dy
+            tile_regs_commit();
+            tile_regs_wait();
+            cb_reserve_back(CB_DX2, 1);
+            pack_tile(0, CB_DX2);
+            cb_push_back(CB_DX2, 1);
+            cb_reserve_back(CB_DY2, 1);
+            pack_tile(1, CB_DY2);
+            cb_push_back(CB_DY2, 1);
+            cb_reserve_back(CB_DXDY, 1);
+            pack_tile(2, CB_DXDY);
+            cb_push_back(CB_DXDY, 1);
+            tile_regs_release();
+            cb_wait_front(CB_DX2, 1);
+            cb_wait_front(CB_DY2, 1);
+            cb_wait_front(CB_DXDY, 1);
+            cb_wait_front(CB_BCAST_A, 1);
+            cb_wait_front(CB_BCAST_B, 1);
+            cb_wait_front(CB_BCAST_C, 1);
+
+            // ----- Stage B2+B3+C (Iter 061 / re-applied iter 049d): host
+            // pre-folds -0.5 into cov scalars; reader pushes bf16 row-bcast
+            // tiles so FPU mul_tiles_bcast_rows replaces 3× SFPU mul_unary.
+            //
+            //   power = (-c/2det)·dx² + (b/det)·dx·dy + (-a/2det)·dy² = -Q/2
+            //   alpha = opacity · exp(power)
+            tile_regs_acquire();
+            mul_bcast_rows_init_short(CB_DX2, CB_BCAST_A);
+            mul_tiles_bcast_rows(CB_DX2, CB_BCAST_A, 0, 0, 0);
+            mul_bcast_rows_init_short(CB_DY2, CB_BCAST_C);
+            mul_tiles_bcast_rows(CB_DY2, CB_BCAST_C, 0, 0, 1);
+            mul_bcast_rows_init_short(CB_DXDY, CB_BCAST_B);
+            mul_tiles_bcast_rows(CB_DXDY, CB_BCAST_B, 0, 0, 2);
 
             // dst[0] = power = sum of the three pre-halved signed products.
             add_binary_tile_init();
@@ -321,6 +344,12 @@ void kernel_main() {
 
             cb_pop_front(CB_DX, 1);
             cb_pop_front(CB_DY, 1);
+            cb_pop_front(CB_DX2, 1);
+            cb_pop_front(CB_DY2, 1);
+            cb_pop_front(CB_DXDY, 1);
+            cb_pop_front(CB_BCAST_A, 1);
+            cb_pop_front(CB_BCAST_B, 1);
+            cb_pop_front(CB_BCAST_C, 1);
 
             cb_wait_front(CB_ALPHA, 1);
 
