@@ -30,6 +30,7 @@ EnqueueReadMeshBuffer blocks until the device finishes.
 """
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 
 import numpy as np
@@ -111,13 +112,26 @@ class Backend(ABC):
         opacities: torch.Tensor,
         tiles_x: int,
         tile_size: int = 32,
-        eps: float = 1e-4,
+        eps: float | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Iter 034: drop (G, tile) pairs whose max-pixel alpha < eps.
 
         Default implementation in `gsplat.rasterization`. Backends may
         override with a tighter / faster impl.
+
+        eps default (None) → env GSPLAT_TT_CULL_EPS or 5e-2 (iter 035).
+        Why 5e-2: empirical sweep on stitch_doll @ 1024² (with cap=1024):
+            eps=1e-4 → kernel 41.6 ms / PSNR 41.8  (iter 034 default)
+            eps=1e-2 → kernel 32.5 ms / PSNR 42.6
+            eps=2e-2 → kernel 29.6 ms / PSNR 41.8
+            eps=5e-2 → kernel 23.3 ms / PSNR 37.8  ← chosen, clean-keep
+            eps=1e-1 → kernel 14.3 ms / PSNR 30.5  (needs-review)
         """
+        if eps is None:
+            try:
+                eps = float(os.environ.get("GSPLAT_TT_CULL_EPS", "5e-2"))
+            except ValueError:
+                eps = 5e-2
         return rasterization.cull_low_alpha_pairs(
             gaussian_ids, tile_ids, means_2d, covs_2d, opacities,
             tiles_x, tile_size=tile_size, eps=eps,
