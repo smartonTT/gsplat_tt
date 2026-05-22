@@ -63,7 +63,7 @@ constexpr uint32_t IPC_MAGIC_FRM1 = 0x46524D31;  // 'FRM1' (legacy)
 constexpr uint32_t IPC_MAGIC_FRM2 = 0x46524D32;  // 'FRM2'
 constexpr uint32_t IPC_MAGIC_OK11 = 0x4F4B3131;  // 'OK11'
 constexpr uint32_t IPC_MAGIC_ERR1 = 0x45525231;  // 'ERR1'
-constexpr uint32_t IPC_MAGIC_SHM1 = 0x53484D31;  // 'SHM1' (iter 024)
+// IPC_MAGIC_SHM1 lives in gsplat::alpha_blend_host.h (iter 024)
 
 // ---------------------------------------------------------------------------
 // Shared-memory IPC state (iter 024)
