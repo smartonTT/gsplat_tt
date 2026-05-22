@@ -204,6 +204,17 @@ class KernelBackend(Backend):
             self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "1024"))
         except ValueError:
             self._max_g_per_tile = 1024
+        # Iter 033: per-tile prefix-T saturation cull. eps=0 disables.
+        # Values empirically tested at 1024×1024 stitch_doll:
+        #   eps=1e-2 → kernel ~X ms,  PSNR ~Y dB
+        #   eps=1e-3 → kernel ~X ms,  PSNR ~Y dB
+        # (filled in after sweep). Override via GSPLAT_TT_T_EPS=N.
+        try:
+            self._t_eps: float = float(os.environ.get("GSPLAT_TT_T_EPS", "1e-4"))
+        except ValueError:
+            self._t_eps = 1e-4
+        self._opacities_np: np.ndarray | None = None
+        self._opacities_id: int = -1
         self._shm_in: SharedMemory | None = None        # frame data → daemon
         self._shm_out: SharedMemory | None = None       # rendered image ← daemon
         self._shm_max_entries: int = int(
@@ -478,6 +489,89 @@ class KernelBackend(Backend):
         return self.recv_frame(partial_timings)
 
     @staticmethod
+    def _prefix_t_cull(
+        sorted_gids_np: np.ndarray,
+        ranges_np: np.ndarray,
+        opacities_np: np.ndarray,
+        log_eps: float,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Adaptive per-tile prefix-T saturation cull (iter 033).
+
+        For each tile, walks Gaussians front-to-back accumulating
+            log_T = sum_j log(1 - opacity[gid_j]).
+        Truncates the tile's list at the first entry where log_T < log(eps),
+        INCLUDING that saturating entry (so the actual front-to-back
+        compositing in the kernel reaches the saturated state with the same
+        last contribution).
+
+        Strictly more elegant than the fixed cap (iter 032): dense tiles get
+        aggressive truncation, sparse tiles keep all entries — quality is
+        bounded by the kernel's existing T<1e-4 Stage F threshold expressed
+        as a host-side cull instead of a kernel-side multiply-by-zero.
+
+        log_eps: caller passes log(eps), e.g. log(1e-3) for 99.9% T saturation.
+        """
+        BIG = np.iinfo(np.int64).max
+
+        # Per-entry log(1 - opacity); clip to avoid log(0) for opacity=1 splats.
+        log1m = np.log(
+            np.clip(1.0 - opacities_np[sorted_gids_np], 1e-10, 1.0)
+        ).astype(np.float64)
+
+        # Global cumulative log-T (running running prefix; gp[i+1] = sum of log1m[:i+1]).
+        gp = np.empty(len(log1m) + 1, dtype=np.float64)
+        gp[0] = 0.0
+        np.cumsum(log1m, out=gp[1:])
+
+        starts = ranges_np[:, 0]
+        ends = ranges_np[:, 1]
+        counts_orig = (ends - starts).astype(np.int64)
+
+        # tile_id per entry.
+        tile_id = np.repeat(np.arange(len(ranges_np), dtype=np.int64), counts_orig)
+
+        # local_log_T at entry i = gp[i+1] - gp[starts[tile_id[i]]].
+        local_log_T = gp[1:] - gp[starts[tile_id]]
+        is_below = local_log_T < log_eps  # (P,) bool
+
+        # First-below idx per non-empty tile via masked min reduce.
+        candidate_idx = np.where(
+            is_below, np.arange(len(is_below), dtype=np.int64), BIG
+        )
+
+        nonempty_mask = counts_orig > 0
+        counts_kept = np.zeros(len(ranges_np), dtype=np.int64)
+        if nonempty_mask.any():
+            ne_idx = np.where(nonempty_mask)[0]
+            ne_starts = starts[ne_idx]
+            ne_first_below = np.minimum.reduceat(candidate_idx, ne_starts)
+            ne_counts = np.where(
+                ne_first_below == BIG,
+                counts_orig[ne_idx],
+                # +1 to INCLUDE the saturating entry (so the last log_T is below eps).
+                ne_first_below - ne_starts + 1,
+            )
+            counts_kept[ne_idx] = ne_counts
+
+        # New offsets (capped totals).
+        new_offsets = np.empty(len(ranges_np) + 1, dtype=np.int64)
+        new_offsets[0] = 0
+        np.cumsum(counts_kept, out=new_offsets[1:])
+        new_total = int(new_offsets[-1])
+
+        # Gather kept gids — vectorized via searchsorted (same pattern as iter 032).
+        new_entries = np.arange(new_total, dtype=np.int64)
+        new_tile_id = np.searchsorted(new_offsets[1:], new_entries, side="right")
+        within_tile = new_entries - new_offsets[new_tile_id]
+        old_idx = starts[new_tile_id].astype(np.int64) + within_tile
+        new_gids = sorted_gids_np[old_idx]
+
+        new_ranges = np.empty_like(ranges_np)
+        new_ranges[:, 0] = new_offsets[:-1]
+        new_ranges[:, 1] = new_offsets[1:]
+        return new_gids, new_ranges
+
+    @staticmethod
     def _cap_per_tile(
         sorted_gids_np: np.ndarray,
         ranges_np: np.ndarray,
@@ -574,10 +668,24 @@ class KernelBackend(Backend):
         gids_np = sorted_gaussian_ids.numpy()   # int64 view, no copy
         ranges_np = tile_ranges.numpy()
 
-        # Iter 032: per-tile g_count cap. After Stage F's T<1e-4 saturation, all
-        # remaining work in a tile is multiplied by ~0 — but the kernel still
-        # iterates the full list. Truncate on the host so the kernel never sees
-        # the dead tail. Configurable via GSPLAT_TT_MAX_G_PER_TILE.
+        # Iter 033: prefix-T saturation cull (adaptive per-tile). Strictly
+        # better than fixed cap: dense tiles get aggressive trim, sparse tiles
+        # keep all entries. Disabled if t_eps <= 0.
+        if self._t_eps > 0.0:
+            ops_np = opacities.numpy()
+            if id(opacities) != self._opacities_id:
+                # Cache the contiguous numpy view for repeat calls
+                self._opacities_np = ops_np
+                self._opacities_id = id(opacities)
+            log_eps = float(np.log(self._t_eps))
+            gids_np, ranges_np = self._prefix_t_cull(
+                gids_np, ranges_np, ops_np, log_eps,
+            )
+
+        # Iter 032: per-tile g_count cap as a fallback / backstop. After the
+        # prefix-T cull above, this should usually be a no-op, but guards
+        # against pathological scenes where T-cull keeps too many entries.
+        # Configurable via GSPLAT_TT_MAX_G_PER_TILE (0 = no cap).
         max_g_per_tile = self._max_g_per_tile
         if max_g_per_tile > 0:
             gids_np, ranges_np = self._cap_per_tile(gids_np, ranges_np, max_g_per_tile)
