@@ -24,12 +24,15 @@
 #include <cstdlib>
 #include <cstring>
 #include <exception>
+#include <fcntl.h>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <memory>
 #include <sstream>
 #include <string>
+#include <sys/mman.h>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -60,6 +63,54 @@ constexpr uint32_t IPC_MAGIC_FRM1 = 0x46524D31;  // 'FRM1' (legacy)
 constexpr uint32_t IPC_MAGIC_FRM2 = 0x46524D32;  // 'FRM2'
 constexpr uint32_t IPC_MAGIC_OK11 = 0x4F4B3131;  // 'OK11'
 constexpr uint32_t IPC_MAGIC_ERR1 = 0x45525231;  // 'ERR1'
+constexpr uint32_t IPC_MAGIC_SHM1 = 0x53484D31;  // 'SHM1' (iter 024)
+
+// ---------------------------------------------------------------------------
+// Shared-memory IPC state (iter 024)
+// ---------------------------------------------------------------------------
+
+// SHM1 wire message layout (256 bytes total):
+//   [0..3]    magic (IPC_MAGIC_SHM1)
+//   [4..7]    max_entries (uint32)
+//   [8..11]   max_offsets (uint32)
+//   [12..15]  max_px_floats (uint32)
+//   [16..79]  shm_in_name[64]  (null-padded)
+//   [80..87]  shm_in_size (uint64)
+//   [88..151] shm_out_name[64] (null-padded)
+//   [152..159] shm_out_size (uint64)
+//   [160..255] reserved zeros
+struct Shm1Msg {
+    uint32_t magic;
+    uint32_t max_entries;
+    uint32_t max_offsets;
+    uint32_t max_px_floats;
+    char     shm_in_name[64];
+    uint64_t shm_in_size;
+    char     shm_out_name[64];
+    uint64_t shm_out_size;
+    uint8_t  reserved[96];
+};
+static_assert(sizeof(Shm1Msg) == 256, "Shm1Msg must be 256 bytes");
+
+// Shared-memory layout constants (must match backend.py)
+static constexpr size_t SHM_HDR_BYTES = 64;  // per-frame header at start of shm_in
+
+struct ShmState {
+    void*    in_ptr       = MAP_FAILED;  // mmap of shm_in
+    void*    out_ptr      = MAP_FAILED;  // mmap of shm_out
+    size_t   in_size      = 0;
+    size_t   out_size     = 0;
+    uint32_t max_entries  = 0;
+    uint32_t max_offsets  = 0;
+    uint32_t max_px_floats = 0;
+    // Byte offsets within shm_in for each data region
+    size_t   attr_offset  = 0;
+    size_t   gids_offset  = 0;
+    size_t   offs_offset  = 0;
+    size_t   px_offset    = 0;
+    size_t   py_offset    = 0;
+    bool     active       = false;
+};
 
 // ---------------------------------------------------------------------------
 // .npy I/O helpers
@@ -206,6 +257,8 @@ struct DeviceContext {
     std::shared_ptr<distributed::MeshBuffer> static_colors_opacity;
     uint32_t num_gaussians_static = 0;
     bool scene_loaded = false;
+    // Shared-memory IPC (iter 024); only active when SHM1 handshake succeeded.
+    ShmState shm;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -924,6 +977,7 @@ static bool read_exact_stdin(void* dst, size_t nbytes) {
     return true;
 }
 
+// Pipe mode: send OK11 + full fp32 image via stdout.
 static void write_ok_response(
     const std::vector<float>& img, uint32_t image_h, uint32_t image_w, double kernel_ms) {
     const uint32_t image_bytes = image_h * image_w * 3 * sizeof(float);
@@ -931,6 +985,18 @@ static void write_ok_response(
     const uint32_t hdr[4] = {IPC_MAGIC_OK11, image_bytes, kernel_us, 0};
     std::cout.write(reinterpret_cast<const char*>(hdr), sizeof(hdr));
     std::cout.write(reinterpret_cast<const char*>(img.data()), image_bytes);
+    std::cout.flush();
+}
+
+// SHM mode: write image to shm_out, then send OK11 with image_bytes=0
+// (Python reads from shm_out directly, no pipe payload).
+static void write_ok_response_shm(
+    const std::vector<float>& img, ShmState& shm, double kernel_ms) {
+    std::memcpy(shm.out_ptr, img.data(), img.size() * sizeof(float));
+    const uint32_t kernel_us = static_cast<uint32_t>(kernel_ms * 1000.0 + 0.5);
+    // image_bytes=0 signals Python to read from shm_out.
+    const uint32_t hdr[4] = {IPC_MAGIC_OK11, 0, kernel_us, 0};
+    std::cout.write(reinterpret_cast<const char*>(hdr), sizeof(hdr));
     std::cout.flush();
 }
 
@@ -979,6 +1045,72 @@ static int run_daemon() {
         uint32_t magic = 0;
         std::memcpy(&magic, prefix, 4);
 
+        if (magic == IPC_MAGIC_SHM1) {
+            // Read remaining 252 bytes of the 256-byte SHM1 message.
+            Shm1Msg msg{};
+            msg.magic = magic;
+            if (!read_exact_stdin(
+                    reinterpret_cast<uint8_t*>(&msg) + 4, sizeof(Shm1Msg) - 4)) {
+                break;
+            }
+            try {
+                // Build shm_in name with leading '/' (POSIX SHM convention).
+                std::string in_name  = "/" + std::string(msg.shm_in_name);
+                std::string out_name = "/" + std::string(msg.shm_out_name);
+
+                int fd_in  = ::shm_open(in_name.c_str(),  O_RDWR, 0);
+                int fd_out = ::shm_open(out_name.c_str(), O_RDWR, 0);
+                if (fd_in < 0 || fd_out < 0) {
+                    if (fd_in  >= 0) ::close(fd_in);
+                    if (fd_out >= 0) ::close(fd_out);
+                    throw std::runtime_error("shm_open failed for SHM1 segments");
+                }
+
+                void* in_ptr = ::mmap(
+                    nullptr, msg.shm_in_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_in, 0);
+                void* out_ptr = ::mmap(
+                    nullptr, msg.shm_out_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_out, 0);
+                ::close(fd_in);
+                ::close(fd_out);
+
+                if (in_ptr  == MAP_FAILED || out_ptr == MAP_FAILED) {
+                    if (in_ptr  != MAP_FAILED) ::munmap(in_ptr,  msg.shm_in_size);
+                    if (out_ptr != MAP_FAILED) ::munmap(out_ptr, msg.shm_out_size);
+                    throw std::runtime_error("mmap failed for SHM1 segments");
+                }
+
+                // Unmap previous SHM if renegotiating.
+                if (ctx.shm.in_ptr  != MAP_FAILED) ::munmap(ctx.shm.in_ptr,  ctx.shm.in_size);
+                if (ctx.shm.out_ptr != MAP_FAILED) ::munmap(ctx.shm.out_ptr, ctx.shm.out_size);
+
+                ctx.shm.in_ptr        = in_ptr;
+                ctx.shm.out_ptr       = out_ptr;
+                ctx.shm.in_size       = msg.shm_in_size;
+                ctx.shm.out_size      = msg.shm_out_size;
+                ctx.shm.max_entries   = msg.max_entries;
+                ctx.shm.max_offsets   = msg.max_offsets;
+                ctx.shm.max_px_floats = msg.max_px_floats;
+
+                // Compute fixed byte offsets (must match backend.py _setup_shm)
+                ctx.shm.attr_offset  = SHM_HDR_BYTES;
+                ctx.shm.gids_offset  = ctx.shm.attr_offset
+                                       + static_cast<size_t>(msg.max_entries) * 5 * sizeof(float);
+                ctx.shm.offs_offset  = ctx.shm.gids_offset
+                                       + static_cast<size_t>(msg.max_entries) * sizeof(uint32_t);
+                ctx.shm.px_offset    = ctx.shm.offs_offset
+                                       + static_cast<size_t>(msg.max_offsets) * sizeof(float);
+                ctx.shm.py_offset    = ctx.shm.px_offset
+                                       + static_cast<size_t>(msg.max_px_floats) * sizeof(float);
+                ctx.shm.active       = true;
+
+                write_ok31_response();
+            } catch (const std::exception& e) {
+                ctx.shm.active = false;
+                write_err_response(std::string("SHM1 failed: ") + e.what());
+            }
+            continue;
+        }
+
         if (magic == IPC_MAGIC_SCN1) {
             uint32_t hdr_rest[3] = {};
             if (!read_exact_stdin(hdr_rest, sizeof(hdr_rest))) {
@@ -1007,28 +1139,51 @@ static int run_daemon() {
             if (!read_exact_stdin(hdr_rest, sizeof(hdr_rest))) {
                 break;
             }
-            const uint32_t image_h = hdr_rest[0];
-            const uint32_t image_w = hdr_rest[1];
+            const uint32_t image_h       = hdr_rest[0];
+            const uint32_t image_w       = hdr_rest[1];
             const uint32_t total_entries = hdr_rest[2];
             const uint32_t offsets_count = hdr_rest[3];
+            const uint32_t shm_flag      = hdr_rest[4];  // 1 = SHM path; was reserved=0
 
-            const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
-            const uint32_t tiles_y = (image_h + TILE_H - 1) / TILE_H;
+            const uint32_t tiles_x  = (image_w + TILE_W - 1) / TILE_W;
+            const uint32_t tiles_y  = (image_h + TILE_H - 1) / TILE_H;
             const uint32_t num_tiles = tiles_x * tiles_y;
-            const size_t dyn_floats = static_cast<size_t>(total_entries) * 5;
-            const size_t px_floats = static_cast<size_t>(num_tiles) * TILE_H * TILE_W;
+            const size_t   dyn_floats = static_cast<size_t>(total_entries) * 5;
+            const size_t   px_floats  = static_cast<size_t>(num_tiles) * TILE_H * TILE_W;
 
-            std::vector<float> dyn_packs_f32(dyn_floats);
+            const bool use_shm = (shm_flag == 1) && ctx.shm.active;
+
+            std::vector<float>    dyn_packs_f32(dyn_floats);
             std::vector<uint32_t> sorted_gids_u32(total_entries);
-            std::vector<float> offsets_f32(offsets_count);
-            std::vector<float> px_f32(px_floats);
-            std::vector<float> py_f32(px_floats);
-            if (!read_exact_stdin(dyn_packs_f32.data(), dyn_floats * sizeof(float)) ||
-                !read_exact_stdin(sorted_gids_u32.data(), total_entries * sizeof(uint32_t)) ||
-                !read_exact_stdin(offsets_f32.data(), offsets_count * sizeof(float)) ||
-                !read_exact_stdin(px_f32.data(), px_floats * sizeof(float)) ||
-                !read_exact_stdin(py_f32.data(), px_floats * sizeof(float))) {
-                break;
+            std::vector<float>    offsets_f32(offsets_count);
+            std::vector<float>    px_f32(px_floats);
+            std::vector<float>    py_f32(px_floats);
+
+            if (use_shm) {
+                // Read frame data from shared memory (zero pipe I/O for the payload).
+                // The Python side wrote the data and sent the FRM2 header;
+                // the pipe write provides the ordering barrier — by the time we
+                // read here the SHM writes are visible.
+                const uint8_t* base = static_cast<const uint8_t*>(ctx.shm.in_ptr);
+                std::memcpy(dyn_packs_f32.data(),    base + ctx.shm.attr_offset,
+                            dyn_floats * sizeof(float));
+                std::memcpy(sorted_gids_u32.data(),  base + ctx.shm.gids_offset,
+                            total_entries * sizeof(uint32_t));
+                std::memcpy(offsets_f32.data(),      base + ctx.shm.offs_offset,
+                            offsets_count * sizeof(float));
+                std::memcpy(px_f32.data(),            base + ctx.shm.px_offset,
+                            px_floats * sizeof(float));
+                std::memcpy(py_f32.data(),            base + ctx.shm.py_offset,
+                            px_floats * sizeof(float));
+            } else {
+                // Pipe fallback: read full payload from stdin.
+                if (!read_exact_stdin(dyn_packs_f32.data(),   dyn_floats * sizeof(float)) ||
+                    !read_exact_stdin(sorted_gids_u32.data(), total_entries * sizeof(uint32_t)) ||
+                    !read_exact_stdin(offsets_f32.data(),     offsets_count * sizeof(float)) ||
+                    !read_exact_stdin(px_f32.data(),          px_floats * sizeof(float)) ||
+                    !read_exact_stdin(py_f32.data(),          px_floats * sizeof(float))) {
+                    break;
+                }
             }
 
             try {
@@ -1043,7 +1198,11 @@ static int run_daemon() {
                     px_f32,
                     py_f32,
                     kernel_ms);
-                write_ok_response(img, image_h, image_w, kernel_ms);
+                if (use_shm) {
+                    write_ok_response_shm(img, ctx.shm, kernel_ms);
+                } else {
+                    write_ok_response(img, image_h, image_w, kernel_ms);
+                }
             } catch (const std::exception& e) {
                 write_err_response(e.what());
             }
@@ -1056,6 +1215,17 @@ static int run_daemon() {
         }
 
         write_err_response("expected SCN1, FRM2, or QUIT");
+    }
+
+    // Unmap shared-memory regions if active (Python owns the SHM objects and
+    // will unlink them; the daemon only needs to release the mmap).
+    if (ctx.shm.in_ptr  != MAP_FAILED) {
+        ::munmap(ctx.shm.in_ptr,  ctx.shm.in_size);
+        ctx.shm.in_ptr = MAP_FAILED;
+    }
+    if (ctx.shm.out_ptr != MAP_FAILED) {
+        ::munmap(ctx.shm.out_ptr, ctx.shm.out_size);
+        ctx.shm.out_ptr = MAP_FAILED;
     }
 
     bool ok = true;
