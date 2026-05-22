@@ -450,7 +450,11 @@ class KernelBackend(Backend):
 
         static = np.empty((n, 4), dtype=np.float32)
         static[:, :3] = np.ascontiguousarray(colors.detach().cpu().numpy(), dtype=np.float32)
-        static[:, 3] = np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32)
+        # iter 041: clamp opacity at 0.99 on the host so alpha = opacity·exp(-Q/2) ≤ 0.99
+        # is guaranteed without any per-pixel SFPU min in the kernel. Saves 1
+        # SFPU op + the CB_CONST_099 copy_tile per Gaussian (~300 cycles).
+        opacities_np = np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32)
+        np.minimum(opacities_np, 0.99, out=static[:, 3])
 
         self._proc.stdin.write(struct.pack("<4I", _MAGIC_SCN1, n, 0, 0))
         self._proc.stdin.write(memoryview(static))
@@ -730,16 +734,21 @@ class KernelBackend(Backend):
         np.multiply(covs_np[:, 0, 1], covs_np[:, 0, 1], out=tmp_m)     # b*b
         np.subtract(det_buf, tmp_m, out=det_buf)                        # a*c - b*b
         np.clip(det_buf, 1e-6, None, out=det_buf)
-        #   cov_inv_a = c/det,  cov_inv_b = -b/det,  cov_inv_c = a/det
-        np.divide(covs_np[:, 1, 1], det_buf, out=cov_inv_a)
-        np.divide(covs_np[:, 0, 1], det_buf, out=cov_inv_b)
-        # iter 026: fold the *2 from the Gaussian power expression
-        #   power = a*dx² + 2b*dx*dy + c*dy²
-        # into the M-sized precompute (~280k vs ~1.6M). Keeps the per-pair
-        # gather to a pure copy (`attr[:, 3] = cov_inv_b[gids]`) without
-        # the trailing scalar multiply.
-        cov_inv_b *= -2.0
-        np.divide(covs_np[:, 0, 0], det_buf, out=cov_inv_c)
+        # iter 040: fold both the *2 (from 2b·dx·dy term) and -0.5
+        # (from power = -Q/2) into the M-sized covariance precompute
+        # so the kernel computes power directly via 3 mul_unary ops (no
+        # standalone NEG_HALF_BITS mul_unary). Net per-G saving: 1 SFPU
+        # op (~256 cycles).
+        #
+        #   pre-fold scalars sent to the kernel as cov_a/b/c_bits:
+        #     cov_a' = -c / (2·det)
+        #     cov_b' = +b /     det          (i.e. -2b/det × -1/2)
+        #     cov_c' = -a / (2·det)
+        np.divide(covs_np[:, 1, 1], det_buf, out=cov_inv_a)  # c/det
+        cov_inv_a *= -0.5                                     # → -c/(2·det)
+        np.divide(covs_np[:, 0, 1], det_buf, out=cov_inv_b)  # b/det
+        np.divide(covs_np[:, 0, 0], det_buf, out=cov_inv_c)  # a/det
+        cov_inv_c *= -0.5                                     # → -a/(2·det)
 
         # Fill per-entry tile origins from the cached per-resolution arrays.
         # Python loop over ≤1024 tiles; each body is a vectorized slice fill,

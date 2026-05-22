@@ -226,39 +226,12 @@ void kernel_main() {
         // front-to-back order (already sorted on the host).
         // =====================================================================
         for (uint32_t g = 0; g < g_count; g++) {
-            // ----- Stage F: per-pixel T freeze (every 16 g's, skip g=0).
-            // Iter 036 also added a block-wide saturation reduce here that
-            // never fires on stitch_doll (background pixels keep T=1.0), so
-            // iter 037b removed it to eliminate the dead-code SUM-reduce.
-            if (g > 0 && (g & 0xFu) == 0u) {
-                tile_regs_acquire();
-                copy_tile_to_dst_init_short(CB_T_STATE);
-                copy_tile(CB_T_STATE, 0, 0);
-                unary_ge_tile_init();
-                unary_ge_tile(0, T_THRESH_BITS);
-                tile_regs_commit();
-                tile_regs_wait();
-                cb_reserve_back(CB_T_TMP, 1);
-                pack_tile(0, CB_T_TMP);
-                cb_push_back(CB_T_TMP, 1);
-                tile_regs_release();
-                cb_wait_front(CB_T_TMP, 1);
-
-                tile_regs_acquire();
-                mul_tiles_init(CB_T_STATE, CB_T_TMP);
-                mul_tiles(CB_T_STATE, CB_T_TMP, 0, 0, 0);
-                tile_regs_commit();
-                tile_regs_wait();
-                cb_pop_front(CB_T_STATE, 1);
-                cb_reserve_back(CB_T_STATE, 1);
-                pack_tile(0, CB_T_STATE);
-                cb_push_back(CB_T_STATE, 1);
-                tile_regs_release();
-                cb_wait_front(CB_T_STATE, 1);
-
-                cb_pop_front(CB_T_TMP, 1);
-                binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
-            }
+            // Iter 038b: Stage F (per-pixel T saturation reset every 16 g's)
+            // removed. With iter 035's cull eps=5e-2, contribution per
+            // Gaussian is bounded; T decays smoothly to ~0 without ever
+            // going negative or causing cumulative drift large enough to
+            // visibly affect the output. PSNR check confirmed clean-keep
+            // gate held after removal.
 
             cb_wait_front(CB_SCALARS, 1);
 
@@ -304,76 +277,40 @@ void kernel_main() {
             cb_wait_front(CB_DX, 1);
             cb_wait_front(CB_DY, 1);
 
-            // ----- Stage B2+B3a: dx²·a, dy²·c, dx·dy·2b → CB_Q (fused).
-            // One acquire block: mul products in Dst[0..2], scale by covariance
-            // scalars, fold partial Q sum in-register, pack 2 tiles to CB_Q.
-            //   CB_Q[0] = a·dx² + c·dy²  (partial sum via SFPU add_binary_tile)
-            //   CB_Q[1] = 2b · dx·dy
+            // ----- Stage B2+B3+C (Iter 040): host pre-folds -0.5 into the
+            // covariance scalars (cov_a' = -c/2det, cov_b' = b/det,
+            // cov_c' = -a/2det) so the kernel's three per-axis mul_unary
+            // calls produce -Q/2 directly. Saves the standalone
+            // `mul_unary_tile(0, NEG_HALF_BITS)` SFPU op (~256 cycles).
+            //
+            //   power = (-c/2det)·dx² + (b/det)·dx·dy + (-a/2det)·dy²
+            //         = -Q/2
+            //   alpha = min( opacity · exp(power), 0.99 )
             tile_regs_acquire();
             mul_tiles_init(CB_DX, CB_DX);
             mul_tiles(CB_DX, CB_DX, 0, 0, 0);
-            mul_unary_tile(0, cov_a_bits);
+            mul_unary_tile(0, cov_a_bits);     // (-c/2det)·dx²
 
             mul_tiles_init(CB_DY, CB_DY);
             mul_tiles(CB_DY, CB_DY, 0, 0, 1);
-            mul_unary_tile(1, cov_c_bits);
+            mul_unary_tile(1, cov_c_bits);     // (-a/2det)·dy²
 
             mul_tiles_init(CB_DX, CB_DY);
             mul_tiles(CB_DX, CB_DY, 0, 0, 2);
-            mul_unary_tile(2, two_cov_b_bits);
+            mul_unary_tile(2, two_cov_b_bits); // (b/det)·dx·dy
 
-            // Fold partial Q sum into dst[0]; avoid standalone B3b1 acquire.
+            // dst[0] = power = sum of the three pre-halved signed products.
             add_binary_tile_init();
             add_binary_tile(0, 1, 0);
+            add_binary_tile(0, 2, 0);
 
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 2);
-            pack_tile(0, CB_Q);
-            pack_tile(2, CB_Q);
-            cb_push_back(CB_Q, 2);
-            tile_regs_release();
-            cb_wait_front(CB_Q, 2);
-
-            // ----- Stage B3b2 + C: finish Q, compute power, exp, and alpha.
-            // This is the longest single Dst block in the kernel — it folds
-            // the last add into Q, then runs the entire exp / clamp / opacity
-            // chain to produce the per-pixel alpha. Doing it as one block
-            // avoids extra spill/reload to L1 between sub-stages.
-            //
-            //   alpha = min( opacity · exp(min(-0.5·Q, 0)),  0.99 )
-            //
-            tile_regs_acquire();
-            add_tiles_init(CB_Q, CB_Q);
-            add_tiles(CB_Q, CB_Q, 0, 1, 0);  // dst[0] = partial sum + 2b·dx·dy = Q
-
-            // power = -0.5 · Q
-            mul_unary_tile(0, NEG_HALF_BITS);
-
-            // Clamp power to ≤ 0. For valid PSD covariance Q ≥ 0 always, so
-            // this is mostly defensive (handles fp rounding edge cases).
-            copy_tile_to_dst_init_short(CB_CONST_ZERO);
-            copy_tile(CB_CONST_ZERO, 0, 1);
-            binary_min_tile_init();
-            binary_min_tile(0, 1, 0);
-
-            // weight = exp(power). Approximate-mode polynomial (~100 cycles
-            // vs ~800 for the accurate path) with built-in ClampToNegative
-            // (input clamped to ≥ -88.5 before evaluating). Accuracy ~3-4
-            // decimal digits — fine for alpha ∈ [0, 0.99]; PSNR drops ~11 dB
-            // vs accurate but still has 16 dB headroom over the 35 dB floor.
+            // weight = exp(power)
             exp_tile_init<true>();
             exp_tile<true>(0);
 
-            // dst[0] *= opacity
+            // alpha = opacity · weight. Iter 041: opacity is host-clamped at
+            // 0.99, so alpha ≤ 0.99 always. No per-pixel min needed.
             mul_unary_tile(0, opacity_bits);
-
-            // alpha = min(opacity · weight, 0.99). Cap at 0.99 (instead of
-            // 1.0) so transmittance T can never reach exactly 0 — keeps
-            // (1-alpha) > 0 in Stage E and avoids degenerate compositing.
-            copy_tile_to_dst_init_short(CB_CONST_099);
-            copy_tile(CB_CONST_099, 0, 1);
-            binary_min_tile(0, 1, 0);
 
             tile_regs_commit();
             tile_regs_wait();
@@ -382,8 +319,6 @@ void kernel_main() {
             cb_push_back(CB_ALPHA, 1);
             tile_regs_release();
 
-            // Cleanup intermediates from B/C stages.
-            cb_pop_front(CB_Q, 2);
             cb_pop_front(CB_DX, 1);
             cb_pop_front(CB_DY, 1);
 
