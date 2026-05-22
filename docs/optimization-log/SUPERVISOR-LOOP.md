@@ -42,42 +42,86 @@ Stage breakdown @ 1024x1024 (median ms):
 
 ## Theoretical peak (1-chip Blackhole P300)
 
+**REVISED 2026-05-22: user target is 1 ms device_kernel @ 1024×1024.** Previous
+estimate of 15 ms was based on the SFPU-dominant inner loop (~30 SFPU tile
+ops/Gaussian × 50 cycles each). With the FPU-math refactor (basis-form
+expansion of `q` so the inner loop is dominated by `mul_tiles + acc_to_dest`
+on the FPU instead of `mul_unary_tile` on the SFPU), the per-Gaussian
+budget drops 4-5×.
+
 The kernel processes **1,591,353 (Gaussian, tile) entries** at 1024x1024
 across **1024 tiles of 32x32** distributed over **80 Tensix cores**.
 
-**Compute lower bound** (no memory stalls, perfect issue):
+**Compute lower bound** (FPU-resident, no memory stalls):
 
-- Per (Gaussian, pixel) inner step: 5×fp16 covariance eval + 1 exp + 4 mul +
-  3 mac for RGBA = **~20 effective FMAs** (with early termination,
-  alpha-saturated pixels skip).
-- Effective inner steps after early-term: assume on average **40 entries
-  effectively touched per pixel** (down from ~1500 due to T<ε cutoff).
-- Total: 1024×1024 px × 40 entries × 20 FMAs = **0.84 GFMAs**.
-- 80 cores × ~5 FP16 FMAs/cycle × 1 GHz × 50% utilization = **0.2 TFLOPS
-  sustained**. → 0.84 GFMAs / 0.2e12 = **~4 ms**.
+- Per Gaussian per tile: 6× FPU `mul_tiles` (basis × per-Gaussian
+  coefficient) + 1 SFPU `exp_tile` + ~4 DST-resident SFPU ops for alpha
+  compositing. FPU `mul_tiles` ≈ 16 cycles (32×32 fp16 tile, faces
+  pipelined). SFPU `exp_tile<approx>` ≈ ~80 cycles. So ~96 + 80 + 200
+  ≈ **~380 cycles per Gaussian-tile pair** in the FPU-refactored path.
+- Per core: 1.59M / 80 = ~20k entries × 380 cycles = **7.6M cycles** = 
+  **7.6 ms @ 1 GHz**. With 4-face pruning the entry count drops ~30% →
+  **~5 ms**.
+- After block-wide early term skipping saturated pixels (~50% of inner
+  iterations on dense tiles), → **~3 ms**.
+- **1 ms requires reducing P further** via tighter AABB, 4-face split,
+  per-tile prefix-saturation cull, and persistent kernel dispatch overlap.
 
 **Memory lower bound** (DRAM-only):
 
 - Static colors+opacity: 341,426 × 16 B = 5.5 MB read once per scene.
-- Dynamic packs: 280,007 visible × 20 B = 5.6 MB per frame.
+- Dynamic packs: 280,007 visible × 20 B = 5.6 MB per frame (post-FPU-refactor:
+  280k × 24 B = 6.7 MB for A,B,C,D,E,F + opacity + R,G,B coefficients).
 - sorted_gids: 1,591,353 × 4 B = 6.4 MB per frame.
 - offsets: 1024 × 4 B = 4 KB.
 - PX/PY: 2 × 1024 × 2048 B = 4 MB.
 - Output: 1024×1024×3×2 = 6 MB write.
 - Total per frame: ~22 MB. Blackhole DRAM ~1.2 TB/s → **0.02 ms**.
-
-**Realistic engineering target** (accounting for: imperfect early-term,
-half-utilized FPU, kernel dispatch, NoC moves, host overhead): **~15 ms
-device_kernel @ 1024x1024**.
+- (Memory is ~100× under-utilized; we are compute-bound.)
 
 **Stopping criteria** (any *one* of these):
-- Median 1024x1024 stitch_doll `device_kernel` ≤ **15 ms** (≈7× speedup).
-- 3 consecutive iterations no-win (≤2% improvement) — declare convergence.
+- Median 1024x1024 stitch_doll `device_kernel` ≤ **1 ms** (user target).
+- Three consecutive iterations of <2% kernel improvement after a major
+  refactor lands — declare a tier converged, force a new tier.
 - Manual call from user.
 
-(The 4 ms compute-only bound is acknowledged as physically below what the
-host stack can hide; we won't chase below ~10 ms without a full host
-rewrite.)
+## Optimization strategy (revised 2026-05-22)
+
+**Direct kernel time reductions only.** Per user (2026-05-22):
+> "Don't waste time with stuff outside the kernels if they're not gonna
+> make the kernels execute faster. Optimize the algorithm and the data so
+> the kernels reach theoretical max speed. Only change CPU code when it
+> will speed up the kernel execution. Both data movement and compute."
+
+Two orthogonal levers, multiplicative:
+
+**Lever A — Reduce P (entries fed to the kernel)**
+1. **Tighter AABB** (iter 030): per-axis bbox `(3√a, 3√c)` instead of
+   bounding circle `3√λ_max`. ~25-35% P reduction for anisotropic Gaussians.
+2. **4-face split** (iter 032): each 32×32 tile owner has 4 separate
+   16×16 face Gaussian lists. ~30% reduction (Gaussians touching only one
+   face don't get billed for the other three).
+3. **Per-tile prefix-saturation cull** (iter 035): host-side scan, drop
+   tail Gaussians once front-to-back opacity prefix saturates the tile.
+   Direct kernel iter reduction.
+
+**Lever B — Reduce per-Gaussian cycles inside the kernel**
+1. **FPU math refactor** (iter 031): expand `q = (x-μ)ᵀ Σ⁻¹ (x-μ)` into
+   affine-quadratic basis form `q = A·x² + B·xy + C·y² + D·x + E·y + F`,
+   precompute basis tiles `PX², PXPY, PY², PX, PY` once per tile in the
+   kernel, then per-Gaussian assemble q via 6× FPU `mul_tiles_bcast`
+   (acc_to_dest). Eliminates the SFPU `dx/dy/dx²/dy²/dx·dy/mul_unary`
+   chain. Expected 3-4× kernel speedup. **Highest single-iter ROI.**
+2. **Block-wide early termination** (iter 033): cross-lane reduce on
+   CB_T_STATE; `break` per-Gaussian inner loop when all pixels saturate.
+   30-50% reduction on dense tiles.
+3. **Dst-resident R/G/B/T** (iter 034): skip CB_*_STATE round-trips.
+   10-20% reduction.
+
+**Reference doc:** `~/Downloads/32x32 Bin 3DGS Renderer with FPU
+Optimization and TT Implementation Notes.md` (Glean conversation, see
+specifically the May 13 "convert your 4-face example to leverage as much
+fpu as possible" exchange — basis-form math + FPU mul_tiles strategy).
 
 ## Workflow — how iterations are run
 
