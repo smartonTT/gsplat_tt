@@ -408,7 +408,7 @@ class GaussianViewer:
         if result.image is None:
             image_np = np.zeros((H, W, 3), dtype=np.uint8)
         else:
-            image_np = np.flipud((np.clip(result.image, 0.0, 1.0) * 255).astype(np.uint8))
+            image_np = (np.clip(result.image, 0.0, 1.0) * 255).astype(np.uint8)
             self._frame_samples.append(_FrameSample(
                 timings=dict(result.timings),
                 sub_timings=dict(result.sub_timings),
