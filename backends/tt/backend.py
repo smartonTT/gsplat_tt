@@ -112,16 +112,27 @@ def _drain_post_ready_text(stream, timeout_s: float = 0.3) -> None:
 
 
 def _wait_for_ready(stream, deadline: float) -> None:
-    """Skip tt-metal init log lines until the READY sentinel."""
+    """Skip tt-metal init log lines until the READY sentinel.
+
+    Uses raw os.read() throughout so Python's BufferedReader never buffers
+    any text bytes — leaving the BufferedReader clean for binary protocol
+    immediately after this function returns.
+    """
+    import select as _sel
     buf = b""
+    fd = stream.fileno()
     while time.perf_counter() < deadline:
-        chunk = stream.read(4096)
+        r, _, _ = _sel.select([fd], [], [], 1.0)
+        if not r:
+            continue
+        chunk = os.read(fd, 65536)
         if not chunk:
             break
         buf += chunk
         if b"READY\n" in buf:
             # Drain any text flushed after READY (JIT telemetry etc.)
-            # before entering binary protocol.
+            # The daemon sends all text before entering the command loop,
+            # so everything in the pipe right now is still text.
             _drain_post_ready_text(stream)
             return
     tail = buf[-200:].decode("utf-8", errors="replace")
