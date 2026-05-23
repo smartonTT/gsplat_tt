@@ -72,24 +72,9 @@ void kernel_main() {
     for (uint32_t t = 0; t < num_tiles; t++) {
 
         // =====================================================================
-        // Per-tile state init: Dst[0..3] = R=0, G=0, B=0, T=1.
-        // In SyncFull mode, Pack touches only explicitly packed slots.
-        // We pack nothing here → state persists in Dst[0..3] for all Gaussians.
-        // =====================================================================
-        tile_regs_acquire();
-        fill_tile_init();
-        fill_tile(0, 0.0f);   // Dst[0] = R_state = 0
-        fill_tile(1, 0.0f);   // Dst[1] = G_state = 0
-        fill_tile(2, 0.0f);   // Dst[2] = B_state = 0
-        fill_tile(3, 1.0f);   // Dst[3] = T_state = 1
-        tile_regs_commit();
-        tile_regs_wait();
-        // No pack_tile calls → Pack reads nothing → Dst[0..3] unchanged after release
-        tile_regs_release();
-
-        // =====================================================================
         // Per-tile precompute: lx², ly², lx·ly → CBs (reused every Gaussian).
-        // Uses Dst[4..7] as scratch (state in Dst[0..3] is preserved).
+        // MUST run BEFORE state init: pack_tile in SyncFull triggers TTI_ZEROACC
+        // which clears all Dst tiles — safe here because state not yet written.
         // =====================================================================
         cb_wait_front(CB_PX, 1);
         cb_wait_front(CB_PY, 1);
@@ -108,11 +93,27 @@ void kernel_main() {
         cb_reserve_back(CB_LX2, 1);  pack_tile(7, CB_LX2);  cb_push_back(CB_LX2, 1);
         cb_reserve_back(CB_LY2, 1);  pack_tile(4, CB_LY2);  cb_push_back(CB_LY2, 1);
         cb_reserve_back(CB_LXLY, 1); pack_tile(6, CB_LXLY); cb_push_back(CB_LXLY, 1);
-        tile_regs_release();
+        tile_regs_release();   // ← TTI_ZEROACC fires here (SyncFull+pack), Dst=0 now
 
         cb_wait_front(CB_LX2, 1);
         cb_wait_front(CB_LY2, 1);
         cb_wait_front(CB_LXLY, 1);
+
+        // =====================================================================
+        // Per-tile state init: Dst[0..3] = R=0, G=0, B=0, T=1.
+        // Runs AFTER precompute so the pack-triggered ZEROACC doesn't wipe state.
+        // Inner loop has no pack_tile → no ZEROACC → state persists.
+        // =====================================================================
+        tile_regs_acquire();
+        fill_tile_init();
+        fill_tile(0, 0.0f);   // Dst[0] = R_state = 0
+        fill_tile(1, 0.0f);   // Dst[1] = G_state = 0
+        fill_tile(2, 0.0f);   // Dst[2] = B_state = 0
+        fill_tile(3, 1.0f);   // Dst[3] = T_state = 1
+        tile_regs_commit();
+        tile_regs_wait();
+        // No pack_tile → no TTI_ZEROACC → Dst[0..3] persists into the inner loop
+        tile_regs_release();
 
         // Read per-tile Gaussian count.
         cb_wait_front(CB_TILE_META, 1);
