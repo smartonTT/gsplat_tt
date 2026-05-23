@@ -17,6 +17,7 @@ import struct
 import subprocess
 import time
 from multiprocessing.shared_memory import SharedMemory
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -142,6 +143,7 @@ class KernelBackend(Backend):
     """
 
     BINARY_PATH = "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
+    _LOCK_PATH = Path("/tmp/gsplat_tt_daemon.lock")
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
@@ -241,6 +243,26 @@ class KernelBackend(Backend):
         # numpy view into shm_out (max_pixels * 3 float32)
         self._shm_out_view: np.ndarray | None = None
 
+        # Guard against dual-daemon hardware conflicts. Two daemons on the same
+        # P300 corrupt tile output (verified 2026-05-22). Lock file holds the
+        # running daemon's PID; stale locks (dead process) are cleaned up.
+        lock = self._LOCK_PATH
+        if lock.exists():
+            try:
+                existing_pid = int(lock.read_text().strip())
+            except (ValueError, OSError):
+                existing_pid = None
+            if existing_pid is not None:
+                try:
+                    os.kill(existing_pid, 0)
+                    raise RuntimeError(
+                        f"TT daemon already running (PID {existing_pid}). "
+                        f"Stop the viewer/benchmark first. "
+                        f"To force-clear: rm {lock}"
+                    )
+                except ProcessLookupError:
+                    lock.unlink(missing_ok=True)
+
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
@@ -252,6 +274,7 @@ class KernelBackend(Backend):
             text=False,
             bufsize=0,
         )
+        lock.write_text(str(self._proc.pid))
         # The daemon may emit tt-metal init log lines on stdout before the
         # READY sentinel; skip past them with a wall-clock deadline. First-run
         # JIT compile on a cold cache (esp. on Blackhole) can exceed a minute,
@@ -964,3 +987,4 @@ class KernelBackend(Backend):
                 except subprocess.TimeoutExpired:
                     pass
         self._cleanup_shm()
+        self._LOCK_PATH.unlink(missing_ok=True)
