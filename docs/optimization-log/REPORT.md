@@ -18,10 +18,10 @@ After landing each iteration (or after a revert):
 
 ## Status snapshot
 
-- **Active baseline:** iter 66 (basis-form kernel: precompute lx2/ly2/lxly once per tile)
-- **Kernel @ 1024²:** 16.47 ms (16.47 ms vs 1ms target = 16.5× over target)
-- **PSNR @ 1024²:** 42.46 dB (clean-keep)
-- **Total experiments tracked:** 35 (22 KEEP, 12 NO, 1 NEEDS_REVIEW)
+- **Active baseline:** iter 69 (skip px/py DRAM writes after first frame)
+- **Kernel @ 1024²:** 17.24 ms (17.24 ms vs 1ms target = 17.2× over target)
+- **PSNR @ 1024²:** 42.48 dB (clean-keep)
+- **Total experiments tracked:** 37 (24 KEEP, 12 NO, 1 NEEDS_REVIEW)
 
 ## Profiling line-graphs
 
@@ -84,6 +84,8 @@ After landing each iteration (or after a revert):
 | 32 | 63 | NEEDS_REVIEW | clean baseline (cap=448 eps=5e-2) | 16.6 | — | — | — | 34.58 | [shot](screenshots/iter-063-1024x1024.png) |
 | 33 | 64 | KEEP | merge B1+B2 into 1 acquire (SFPU binary) | 17.09 | — | — | — | 42.09 | — |
 | 34 | 66 | KEEP | basis-form kernel: precompute lx2/ly2/lxly once per tile | 16.47 | — | — | — | 42.46 | [shot](screenshots/iter-066-hero-1024.png) |
+| 35 | 68 | KEEP | D1 merged into B+C: remove CB_ALPHA | 17.38 | — | — | — | 42.48 | [shot](screenshots/iter-068-hero-1024.png) |
+| 36 | 69 | KEEP | skip px/py DRAM writes after first frame | 17.24 | — | — | — | 42.48 | [shot](screenshots/iter-069-hero-1024.png) |
 
 ## Per-experiment briefs
 
@@ -304,6 +306,22 @@ Complete basis-form rewrite: eliminate 3x mul_tiles_bcast_rows (FPU bcast) per G
 **Result:** kept. kernel **16.47 ms**, PSNR **42.46 dB**.
 
 ![shot 66](screenshots/iter-066-hero-1024.png)
+
+### #35 — iter 68 (KEEP) — D1 merged into B+C: remove CB_ALPHA
+
+Merge D1 (contrib=alpha*T_state) into the B+C acquire block, eliminating CB_ALPHA and 1 of 3 acquire/release pairs per Gaussian. Measured at 1024x1024: 17.38 ms, within noise of baseline (17.24 ms). SFPU cost of 1 extra copy_tile + mul_binary_tile cancels savings from 1 fewer acquire/release. Confirms acquire/release overhead is small; bottleneck is SFPU compute (especially exp_tile). KEEP for cleanliness.
+
+**Result:** kept. kernel **17.38 ms**, PSNR **42.48 dB**.
+
+![shot 68](screenshots/iter-068-hero-1024.png)
+
+### #36 — iter 69 (KEEP) — skip px/py DRAM writes after first frame
+
+px/py are tile-local coordinate grids — constant for a given resolution. Skip EnqueueWriteMeshBuffer for px/py on all frames after the first, saving ~4 MB of DRAM writes per frame at 1024x1024. Measured: 17.24 ms vs 17.38 ms baseline. Saving ~0.14 ms; px/py writes at high DRAM bandwidth are nearly free. KEEP for correctness and CPU-side savings (skip encode_tiles_to_bf16 each frame).
+
+**Result:** kept. kernel **17.24 ms**, PSNR **42.48 dB**.
+
+![shot 69](screenshots/iter-069-hero-1024.png)
 
 ## Algorithm snapshot — current state
 

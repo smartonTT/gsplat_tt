@@ -116,6 +116,20 @@ EXPERIMENTS = [
      "bcast tiles (3 CBs removed), reduces per-Gaussian DRAM reads by 3 bfloat16 tiles. "
      "PSNR 37.31 dB at 480x640 (above 35 dB gate). Confirmed correct: A/C negative, "
      "power always <=0, exp(power) in (0,1]."),
+    (68, "KEEP", "D1 merged into B+C: remove CB_ALPHA", 17.38, None, None, None, 42.48,
+     "iter-068-hero-1024.png",
+     "Merge D1 (contrib=alpha*T_state) into the B+C acquire block, eliminating CB_ALPHA "
+     "and 1 of 3 acquire/release pairs per Gaussian. Measured at 1024x1024: 17.38 ms, "
+     "within noise of baseline (17.24 ms). SFPU cost of 1 extra copy_tile + mul_binary_tile "
+     "cancels savings from 1 fewer acquire/release. Confirms acquire/release overhead is "
+     "small; bottleneck is SFPU compute (especially exp_tile). KEEP for cleanliness."),
+    (69, "KEEP", "skip px/py DRAM writes after first frame", 17.24, None, None, None, 42.48,
+     "iter-069-hero-1024.png",
+     "px/py are tile-local coordinate grids — constant for a given resolution. "
+     "Skip EnqueueWriteMeshBuffer for px/py on all frames after the first, saving ~4 MB "
+     "of DRAM writes per frame at 1024x1024. Measured: 17.24 ms vs 17.38 ms baseline. "
+     "Saving ~0.14 ms; px/py writes at high DRAM bandwidth are nearly free. "
+     "KEEP for correctness and CPU-side savings (skip encode_tiles_to_bf16 each frame)."),
 ]
 
 

@@ -238,6 +238,8 @@ struct BufferCache {
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
     // Tracks which tiles had Gaussians last frame for selective output zero-fill.
     std::vector<uint8_t> last_frame_tile_nonempty;
+    // px/py are tile-local coordinate grids — constant once written for a given resolution.
+    bool px_py_written = false;
 };
 
 struct DeviceContext {
@@ -660,6 +662,7 @@ static void ensure_buffer_cache(
         cache.output = make_dram(
             static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
         cache.last_frame_tile_nonempty.assign(num_tiles, 0);
+        cache.px_py_written = false;
         output_reallocated = true;
     }
 
@@ -686,6 +689,7 @@ static void ensure_buffer_cache(
         cache.output = make_dram(
             static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
         cache.last_frame_tile_nonempty.assign(num_tiles, 0);
+        cache.px_py_written = false;
         output_reallocated = true;
     }
     if (!cache.tile_ids) {
@@ -948,8 +952,13 @@ static std::vector<float> process_frame_cached(
         sorted_gids_u32.begin(),
         sorted_gids_u32.begin() + total_entries,
         gids_payload.begin());
-    auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
-    auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
+    // px/py are tile-local coordinate grids, constant for a given resolution.
+    // Only encode and write once; skip every subsequent frame.
+    std::vector<uint16_t> px_bf16, py_bf16;
+    if (!cache.px_py_written) {
+        px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
+        py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
+    }
     std::vector<uint32_t> offsets_u32(offsets_f32.size());
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
@@ -978,8 +987,11 @@ static std::vector<float> process_frame_cached(
     enqueue_write_cached_buffer(ctx, cache.dyn_packs, dyn_payload);
     enqueue_write_cached_buffer(ctx, cache.sorted_gids, gids_payload);
     enqueue_write_cached_buffer(ctx, cache.offsets, offsets_u32);
-    enqueue_write_cached_buffer(ctx, cache.px, px_bf16);
-    enqueue_write_cached_buffer(ctx, cache.py, py_bf16);
+    if (!cache.px_py_written) {
+        enqueue_write_cached_buffer(ctx, cache.px, px_bf16);
+        enqueue_write_cached_buffer(ctx, cache.py, py_bf16);
+        cache.px_py_written = true;
+    }
     std::vector<uint32_t> tile_ids_payload = assign.tile_id_buffer_padded;
     enqueue_write_cached_buffer(ctx, cache.tile_ids, tile_ids_payload);
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
