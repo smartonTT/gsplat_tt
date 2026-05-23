@@ -325,9 +325,10 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_tile(CB_CONST_099, 1);
     cb_tile(CB_CONST_ONE, 1);
     cb_small(CB_T_MAX, TILE_BYTES_FP32, 1, DataFormat::Float32);
-    cb_tile(CB_BCAST_A, 2);
-    cb_tile(CB_BCAST_B, 2);
-    cb_tile(CB_BCAST_C, 2);
+    // Iter 066: CB_BCAST_A/B/C (27/28/29) removed — basis-form kernel passes
+    // A, B, C as scalars in CB_SCALARS and uses mul_unary_tile instead of
+    // mul_tiles_bcast_rows; CB_DX/DY (4/5) and CB_Q (9) reused for per-tile
+    // precomputed lx², ly², lx·ly tiles.
     // CB_CONST_NEG88 (index 11) is reserved but unused now that the kernel
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.
@@ -485,17 +486,20 @@ static TileAssignment build_tile_assignment(
     return a;
 }
 
-// Pack N x 5 fp32 dyn rows into 32-byte pages (mean + cov_inv).
+// Pack N x 6 fp32 basis-form rows [A,B,C,D',E',F'] into 32-byte pages.
+// Iter 066: 6 coefficients (was 5: mean_x, mean_y, A, B, C); static colors
+// R/G/B/opacity are still gathered separately by the reader from the static
+// buffer and written to CB_SCALARS positions 6-9.
 static std::vector<uint32_t> encode_dyn_packs(
     const std::vector<float>& dyn_f32, uint32_t total_entries) {
     std::vector<uint32_t> payload(
         (static_cast<size_t>(total_entries) * DYN_PACK_PAGE_BYTES) / 4, 0);
-    constexpr size_t row_bytes = 5 * sizeof(float);
+    constexpr size_t row_bytes = 6 * sizeof(float);
     for (uint32_t e = 0; e < total_entries; e++) {
         std::memcpy(
             reinterpret_cast<uint8_t*>(payload.data())
                 + static_cast<size_t>(e) * DYN_PACK_PAGE_BYTES,
-            &dyn_f32[e * 5],
+            &dyn_f32[e * 6],
             row_bytes);
     }
     return payload;
@@ -903,6 +907,25 @@ static std::vector<float> process_frame_cached(
         throw std::runtime_error("sorted_gids shorter than total_entries");
     }
 
+    // Iter 066: convert [mx, my, A, B, C] → [A, B, C, D', E', F'] (basis form).
+    // lx = px_local (tile-local, range ~[0.5, 31.5]), mx = mean_x_local = mean_x - tile_ox.
+    // power = A·lx² + B·lx·ly + C·ly² + D'·lx + E'·ly + F'
+    // D' = -2A·mx - B·my,  E' = -B·mx - 2C·my,  F' = A·mx² + B·mx·my + C·my²
+    std::vector<float> basis_f32(static_cast<size_t>(total_entries) * 6);
+    for (uint32_t e = 0; e < total_entries; e++) {
+        const float mx = dyn_packs_f32[e * 5 + 0];  // mean_x - tile_ox (tile-local)
+        const float my = dyn_packs_f32[e * 5 + 1];  // mean_y - tile_oy
+        const float A  = dyn_packs_f32[e * 5 + 2];  // cov_a' = -c/(2det)
+        const float B  = dyn_packs_f32[e * 5 + 3];  // two_cov_b' = b/det
+        const float C  = dyn_packs_f32[e * 5 + 4];  // cov_c' = -a/(2det)
+        basis_f32[e * 6 + 0] = A;
+        basis_f32[e * 6 + 1] = B;
+        basis_f32[e * 6 + 2] = C;
+        basis_f32[e * 6 + 3] = -2.0f * A * mx - B * my;          // D'
+        basis_f32[e * 6 + 4] = -B * mx - 2.0f * C * my;           // E'
+        basis_f32[e * 6 + 5] = A * mx * mx + B * mx * my + C * my * my;  // F'
+    }
+
     const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
 
     bool output_reallocated = false;
@@ -918,7 +941,7 @@ static std::vector<float> process_frame_cached(
         output_reallocated);
     BufferCache& cache = ctx.cache;
 
-    auto dyn_payload = encode_dyn_packs(dyn_packs_f32, total_entries);
+    auto dyn_payload = encode_dyn_packs(basis_f32, total_entries);
     std::vector<uint32_t> gids_payload(
         padded_sorted_gids_bytes(total_entries) / sizeof(uint32_t), 0);
     std::copy(

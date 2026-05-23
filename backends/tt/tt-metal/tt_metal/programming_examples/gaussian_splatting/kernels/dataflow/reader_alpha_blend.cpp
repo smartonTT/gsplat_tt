@@ -44,9 +44,8 @@ void kernel_main() {
     constexpr uint32_t CB_PY        = 1;
     constexpr uint32_t CB_SCALARS   = 2;
     constexpr uint32_t CB_TILE_META = 3;
-    constexpr uint32_t CB_BCAST_A   = 27;
-    constexpr uint32_t CB_BCAST_B   = 28;
-    constexpr uint32_t CB_BCAST_C   = 29;
+    // Iter 066: CB_BCAST_A/B/C removed — basis-form kernel reads A,B,C,D',E',F'
+    // as scalars from CB_SCALARS; reader no longer pushes bcast tiles.
 
     const uint32_t tile_bytes = get_tile_size(CB_PX);
     constexpr uint32_t dyn_pack_page_bytes = 32;
@@ -54,7 +53,7 @@ void kernel_main() {
     constexpr uint32_t scalar_pack_page_bytes = 64;
     constexpr uint32_t gids_page_bytes = 64;
     constexpr uint32_t tile_ids_page_bytes = 64;
-    constexpr uint32_t scalar_payload_bytes = 9 * 4;
+    constexpr uint32_t scalar_payload_bytes = 10 * 4;  // iter 066: 10 scalars (was 9)
 
     constexpr auto dyn_packs_args = TensorAccessorArgs<0>();
     constexpr auto offsets_args =
@@ -138,20 +137,7 @@ void kernel_main() {
     volatile uint32_t* static_l1 =
         reinterpret_cast<volatile uint32_t*>(reader_scratch_addr + L1_OFF_STATIC);
 
-    auto push_bcast_tile = [&](uint32_t cb_id, uint32_t fp32_bits) {
-        uint16_t bf16 = static_cast<uint16_t>(fp32_bits >> 16);
-        uint32_t doubled = (static_cast<uint32_t>(bf16) << 16) | bf16;
-        cb_reserve_back(cb_id, 1);
-        volatile uint32_t* p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(cb_id));
-        // Face 0 row 0: words [0..7]; Face 1 row 0: words [128..135]
-        for (uint32_t k = 0; k < 2; k++) {
-            uint32_t base = k << 7;
-            for (uint32_t j = 0; j < 8; j++) {
-                p[base + j] = doubled;
-            }
-        }
-        cb_push_back(cb_id, 1);
-    };
+    // Iter 066: push_bcast_tile removed — basis-form kernel uses scalar ops.
 
     for (uint32_t t = 0; t < tile_ids_count; t++) {
         uint32_t tile_id = tile_ids[t];
@@ -221,25 +207,20 @@ void kernel_main() {
             noc_async_read(static_noc, reader_scratch_addr + L1_OFF_STATIC, static_page_bytes);
             noc_async_read_barrier();
 
-            // Compose CB_SCALARS layout the compute kernel expects:
-            //   [mean_x, mean_y, cov_a, 2·cov_b, cov_c, R, G, B, opacity]
-            // dyn already covers elements [0..4]; static gathers [5..8].
-            // The dyn page also wrote 3 zero-pad fp32 into [5..7]; that's
-            // fine, the loop below overwrites them with R, G, B.
+            // Compose CB_SCALARS layout for iter 066 basis-form kernel:
+            //   [A, B, C, D', E', F', R, G, B, opacity]
+            // dyn_pack covers [0..5] = [A, B, C, D', E', F'] (6 fp32 = 24 bytes,
+            // written by encode_dyn_packs in the host C++); positions [6..7] are
+            // zero-pad from the 32-byte dyn_pack page. The static gather loop
+            // overwrites [6..9] with [R, G, B, opacity].
             volatile uint32_t* out = reinterpret_cast<volatile uint32_t*>(cb_addr);
             for (uint32_t i = 0; i < 4; i++) {
-                out[5 + i] = static_l1[i];
+                out[6 + i] = static_l1[i];  // R=6, G=7, B=8, opacity=9
             }
-            // Elements [9..15] of the 64-byte CB_SCALARS page are CB pad
-            // and compute never reads them; we leave them undefined.
-
-            uint32_t cov_a_bits = out[2];
-            uint32_t two_b_bits = out[3];
-            uint32_t cov_c_bits = out[4];
+            // Elements [10..15] of the 64-byte CB_SCALARS page are unused pad.
             cb_push_back(CB_SCALARS, 1);
-            push_bcast_tile(CB_BCAST_A, cov_a_bits);
-            push_bcast_tile(CB_BCAST_B, two_b_bits);
-            push_bcast_tile(CB_BCAST_C, cov_c_bits);
+            // No bcast tiles (iter 066): basis-form kernel reads A,B,C,D',E',F'
+            // as scalars from CB_SCALARS using mul_unary_tile.
         }
 
         // Refresh scratch_addr for the next tile's offset reads.
