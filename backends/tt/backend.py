@@ -80,6 +80,37 @@ def _read_exact_into(stream, buf: memoryview) -> None:
         filled += n
 
 
+def _drain_post_ready_text(stream, timeout_s: float = 0.3) -> None:
+    """Drain any text the daemon flushes to stdout right after READY.
+
+    The daemon (tt-metal ≥v1) writes JIT compilation telemetry to its stdout
+    right after READY, before entering the binary command loop.  If not drained,
+    these text lines corrupt the binary protocol.  All data buffered at this
+    point is text (the daemon hasn't received a command yet and therefore hasn't
+    produced any binary output).
+    """
+    import fcntl
+    import select as _select
+    fd = stream.fileno()
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    try:
+        deadline = time.perf_counter() + timeout_s
+        while True:
+            remaining = deadline - time.perf_counter()
+            if remaining <= 0:
+                break
+            r, _, _ = _select.select([fd], [], [], min(0.05, remaining))
+            if not r:
+                break  # pipe quiet → drain complete
+            try:
+                os.read(fd, 65536)
+            except BlockingIOError:
+                break
+    finally:
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags)
+
+
 def _wait_for_ready(stream, deadline: float) -> None:
     """Skip tt-metal init log lines until the READY sentinel."""
     buf = b""
@@ -89,6 +120,9 @@ def _wait_for_ready(stream, deadline: float) -> None:
             break
         buf += chunk
         if b"READY\n" in buf:
+            # Drain any text flushed after READY (JIT telemetry etc.)
+            # before entering binary protocol.
+            _drain_post_ready_text(stream)
             return
     tail = buf[-200:].decode("utf-8", errors="replace")
     raise RuntimeError(f"daemon failed to start: last bytes {tail!r}")

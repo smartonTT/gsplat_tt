@@ -365,8 +365,13 @@ static void build_program_and_workload(DeviceContext& ctx) {
             // Iter 043: enable math_approx_mode globally (was false) — most
             // SFPU ops are explicitly templated <approx=true> already, but
             // some library helpers consult APPROX from the global config.
+            // Iter 070: dst_full_sync_en=true → 8 Dst tiles (vs 4 in Half mode)
+            // with fp32_dest_acc_en=true. Required for Dst-resident R/G/B/T state:
+            // SyncFull mode preserves non-packed Dst slots across acquire/release
+            // cycles (Half mode ping-pongs halves, destroying persistent state).
             .math_fidelity = MathFidelity::HiFi2,
             .fp32_dest_acc_en = true,
+            .dst_full_sync_en = true,
             .math_approx_mode = true,
         });
 
