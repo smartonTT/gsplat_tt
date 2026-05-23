@@ -309,7 +309,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     }
     cb_tile(CB_POWER, 2);
-    cb_tile(CB_ALPHA, 2);
+    // CB_ALPHA (12) removed in iter 068: D1 merged into B+C block, contrib computed directly.
 
     cb_tile(CB_CONTRIB, 1);
     cb_tile(CB_ONE_MINUS_ALPHA, 1);

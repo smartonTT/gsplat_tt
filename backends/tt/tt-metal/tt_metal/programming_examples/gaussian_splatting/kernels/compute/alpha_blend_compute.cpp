@@ -83,7 +83,7 @@ void kernel_main() {
     constexpr uint32_t CB_LXLY          = 9;   // lx·ly = px_local·py_local  (was CB_Q)
     constexpr uint32_t CB_POWER         = 10;  // (legacy/unused; slot reserved)
     // CB 11 reserved (was -88 clamp tile; now unused after exp_tile<approx=true>)
-    constexpr uint32_t CB_ALPHA         = 12;  // per-pixel alpha
+    // CB_ALPHA (12) removed in iter 068: D1 merged into B+C block, CB_ALPHA slot freed.
     constexpr uint32_t CB_CONTRIB       = 13;  // contrib = alpha · T_state
     constexpr uint32_t CB_ONE_MINUS_ALPHA = 14;
     constexpr uint32_t CB_T_TMP         = 15;  // generic intermediate
@@ -289,18 +289,19 @@ void kernel_main() {
             uint32_t color_b_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 8);  // B
             uint32_t opacity_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 9);  // opacity
 
-            // ----- Stage B+C (iter 066 basis form): single acquire block.
+            // ----- Stage B+C+D1 (iter 068): single acquire block.
             //
             // power = A·lx² + B·lx·ly + C·ly² + D'·lx + E'·ly + F'
+            // alpha = opacity · exp(power)
+            // contrib = alpha · T_state   ← D1 merged in; eliminates 1 acquire/release pair
             //
             // lx² / ly² / lx·ly are per-tile precomputed CBs (CB_LX2, CB_LY2, CB_LXLY).
-            // lx = CB_PX (tile-local x), ly = CB_PY (tile-local y).
-            // A, B, C, D', E', F' are per-Gaussian scalars from CB_SCALARS.
+            // lx = CB_PX, ly = CB_PY (tile-local). A–F' are per-Gaussian scalars from CB_SCALARS.
             //
             // Dst slot layout (3 of 4 fp32 slots used):
-            //   [0] = quadratic accumulator → power → exp → alpha
-            //   [1] = scratch: B·lx·ly, then D'·lx
-            //   [2] = scratch: C·ly², then E'·ly
+            //   [0] = accumulator → power → exp → alpha → contrib (final)
+            //   [1] = scratch: B·lx·ly / D'·lx / T_state (reused)
+            //   [2] = scratch: C·ly² / E'·ly (reused)
             tile_regs_acquire();
             // Quadratic terms
             copy_tile_to_dst_init_short(CB_LX2);
@@ -327,23 +328,15 @@ void kernel_main() {
             add_binary_tile_init();
             add_binary_tile(0, 2, 0);             // Dst[0] += E'·ly
             add_unary_tile(0, f_prime_bits);       // Dst[0] += F'
-            // power = Dst[0]; compute alpha = opacity · exp(power)
+            // alpha = opacity · exp(power)
             exp_tile_init<true>();
             exp_tile<true>(0);                     // Dst[0] = exp(power)
             mul_unary_tile(0, opacity_bits);       // Dst[0] = alpha
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_ALPHA, 1);
-            pack_tile(0, CB_ALPHA);
-            cb_push_back(CB_ALPHA, 1);
-            tile_regs_release();
-
-            cb_wait_front(CB_ALPHA, 1);
-
-            // ----- Stage D1: contrib = alpha · T_state (T pre-masked in Stage F).
-            tile_regs_acquire();
-            mul_tiles_init(CB_ALPHA, CB_T_STATE);
-            mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
+            // D1 merged: contrib = alpha · T_state (no separate acquire needed)
+            copy_tile_to_dst_init_short(CB_T_STATE);
+            copy_tile(CB_T_STATE, 0, 1);           // Dst[1] = T_state
+            mul_binary_tile_init();
+            mul_binary_tile(0, 1, 0);              // Dst[0] = alpha · T_state = contrib
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_CONTRIB, 1);
@@ -421,7 +414,6 @@ void kernel_main() {
             cb_pop_front(CB_T_B, 1);
             cb_pop_front(CB_CONTRIB, 1);
 
-            cb_pop_front(CB_ALPHA, 1);
             cb_pop_front(CB_SCALARS, 1);
         }
 
