@@ -100,6 +100,22 @@ EXPERIMENTS = [
     (63, "NEEDS_REVIEW", "clean baseline (cap=448 eps=5e-2)", 16.60, None, None, None, 34.58,
      "iter-063-1024x1024.png",
      "Restored clean defaults. 16.60 ms kernel, PSNR 34.58 dB (0.4 dB below gate; likely reference drift). Confirmed 6.4x faster than origin/main at same quality. Viewer fixed to 1024x1024."),
+    (64, "KEEP", "merge B1+B2 into 1 acquire (SFPU binary)", 17.09, None, None, None, 42.09,
+     None,
+     "Replace separate B1 (copy/sub_unary dx/dy) and B2 (mul_tiles for dx2/dy2/dxdy) "
+     "with a single tile_regs_acquire block using mul_binary_tile (SFPU Dst-to-Dst). "
+     "Eliminates 1 of 4 acquire/release pairs per Gaussian. Small regression vs 063 "
+     "because mul_binary_tile adds 3 SFPU ops inside the merged block. "
+     "Benchmarked at 1024x1024; PSNR vs stitch_hero_1024x1024.png."),
+    (66, "KEEP", "basis-form kernel: precompute lx2/ly2/lxly once per tile", 16.47, None, None, None, 42.46,
+     "iter-066-hero-1024.png",
+     "Complete basis-form rewrite: eliminate 3x mul_tiles_bcast_rows (FPU bcast) per Gaussian "
+     "by precomputing lx^2, ly^2, lx*ly tiles once per screen-tile (3 SFPU mul_binary_tile). "
+     "Per-Gaussian stage B+C uses 3x copy_tile + 3x mul_unary + 5x add/sub (all SFPU). "
+     "Speed neutral vs iter 063 (16.47 ms at 480x640 vs 16.60 ms), but eliminates reader "
+     "bcast tiles (3 CBs removed), reduces per-Gaussian DRAM reads by 3 bfloat16 tiles. "
+     "PSNR 37.31 dB at 480x640 (above 35 dB gate). Confirmed correct: A/C negative, "
+     "power always <=0, exp(power) in (0,1]."),
 ]
 
 
@@ -318,22 +334,22 @@ def main():
            tile-coordinate tiles. Write everything to shared memory (iter 024).
         7. **Daemon dispatch** — `EnqueueMeshWorkload` over the 80-core grid.
 
-        ### Device-side (TT Tensix, 80 cores × Blackhole, kernel ≈ 2.04 ms)
-        Per-tile compute kernel inner loop (per-Gaussian, ~32 G/tile after cap):
-        - **Stage A** — read 9 fp32 attributes from CB_SCALARS.
-        - **Stage B1** — `dx = px - mean_x`, `dy = py - mean_y` (2× SFPU sub_unary).
-        - **Stage B2** — `dx²`, `dy²`, `dx·dy` (3× FPU `mul_tiles`).
-        - **Stage B+C** — `power = a'·dx² + 2b'·dx·dy + c'·dy²`. Implemented
-          as 3× FPU `mul_tiles_bcast_rows` (iter 061, bf16 row-bcast cov scalars)
-          + 2× `add_binary_tile`. Followed by 1× SFPU `exp_tile<approx>` and
-          1× SFPU `mul_unary_tile(opacity)`.
+        ### Device-side (TT Tensix, 80 cores × Blackhole, kernel ≈ 16.47 ms at 480×640)
+        Per-tile compute kernel inner loop (iter 066 basis-form):
+        - **Per-tile precompute** (once per screen tile) — `lx²`, `ly²`, `lx·ly`
+          computed via 3× SFPU `mul_binary_tile` (Dst-to-Dst), packed to
+          CB_LX2/CB_LY2/CB_LXLY. Eliminates 3× bcast-rows reader tiles.
+        - **Stage A** — read 10 fp32 basis coefficients from CB_SCALARS:
+          [A, B, C, D', E', F', R, G, B, opacity] where A·lx² + B·lx·ly + C·ly²
+          + D'·lx + E'·ly + F' = power (tile-local coords, catastrophic cancellation fixed).
+        - **Stage B+C** (single acquire block) — 3× copy + 3× SFPU `mul_unary`
+          for quadratic terms; 5× SFPU `add_binary` for linear/constant terms;
+          1× SFPU `exp_tile<approx>` + 1× SFPU `mul_unary(opacity)` → alpha packed to CB_ALPHA.
         - **Stage D1** — `contrib = alpha · T_state` (1× FPU `mul_tiles`).
         - **Stage D2 producer** — `T_R/G/B = contrib · color_R/G/B` (3× SFPU
-          `copy_tile` + `mul_unary_tile`). [Iter 062 attempted FPU bcast
-          here — regressed due to 3 extra inits per Gaussian.]
+          `copy_tile` + `mul_unary_tile`).
         - **Stage D2 adder + Stage E** — `R/G/B_state += T_R/G/B`,
-          `T_state -= contrib` (3× FPU `add_tiles` + 1× FPU `sub_tiles` in
-          one batched acquire).
+          `T_state -= contrib` (3× FPU `add_tiles` + 1× FPU `sub_tiles`).
 
         ### Bin/data minimality
         - **Static-per-Gaussian DRAM:** RGB + opacity = 16 B/Gaussian.
@@ -371,42 +387,43 @@ def main():
         - Mesh: 1 of 2 P300 chips healthy; using `p100_mesh_graph_descriptor`.
 
         ### Quality budget
-        - PSNR 20.7 dB at iter 061 — needs-review band.
-        - Drop is dominated by aggressive `cap=32` (iter 059).
-          Each kept Gaussian still composites identically to ground truth;
-          we're discarding the long tail of low-contribution Gaussians.
+        - PSNR 42.46 dB at iter 066 vs stitch_hero_1024x1024 reference — well above 35 dB gate.
+        - Clean baseline (cap=448, eps=5e-2) restored in iter 063.
+          Camera convention fixed (Y-flip removed) after iter 063;
+          iter 063 screenshot predates that fix and shows a flipped view.
 
-        ## What's optimal already
-        - **Sort** at 2.05 ms is sub-noise; further sort wins are <0.5 ms.
-        - **Prep** at 1.85 ms is 80% pack-encoding; SHM IPC eliminated copy.
+        ## What's optimal already (iter 066)
+        - **Sort** at ~2 ms is sub-noise; further sort wins are <0.5 ms.
+        - **Prep** at ~2 ms is 80% pack-encoding; SHM IPC eliminated copy.
         - **Stage E** is fully FPU-batched in one acquire.
         - **Tile dispatch / LPT load balance** distributes evenly to 80 cores.
         - **Bin format** is minimum-bytes (no padding past page alignment).
+        - **Bcast-rows reader tiles** eliminated by basis-form precompute (iter 066).
+        - **Basis-form math** correct: tile-local coords, A/C negative, power ≤ 0.
 
         ## What still needs to be improved (highest ROI first)
-        1. **Reduce FPU bcast init overhead** (iter 061+062 pattern).
-           Possibilities: (a) ranged-bcast that takes a row of N scalars
-           (one init for all 3 scalars), (b) packed bcast-tile holding all
-           3 cov scalars on different rows of face 0, (c) hand-written
-           `LLK_2d_matmul_with_row_scalar` that accepts a single scalar via
-           an immediate. **Estimated: -0.3 to -0.5 ms.**
-        2. **`exp_tile<approx>` is the single largest SFPU cost.**
-           Replace with a 3-term polynomial (Taylor or Chebyshev) on the
-           early-term-guarded path. **Estimated: -0.5 ms.**
-        3. **Persistent kernel + mailbox dispatch** (~5 ms total saving;
-           kernel-only is unchanged but lets prep overlap). Tier-2.
-        4. **Block-wide early termination** — currently dead-ends because
-           background tiles never saturate. Need pixel-touched mask;
-           expected -0.5 ms on dense tiles. (Iter 036 was a NO; revisit
-           with mask gating.)
-        5. **Per-tile prefix-saturation cap** — replace fixed cap with
-           per-tile T-prefix cull, strictly better on sparse tiles.
-        6. **Math fidelity sweep** — currently HiFi2; LoFi could win 10–20%
-           on the `mul_tiles` chain if precision holds.
-        7. **Sub-tile (16×16 face) splits** — 4× tile count for better
-           load balancing; speculative.
-        8. **`fp32_dest_acc_en=false`** — may speed up DST writes if bf16
-           accumulation is enough.
+        1. **Dst-resident state accumulator** — run entire per-Gaussian loop inside
+           ONE tile_regs_acquire block per screen tile. Eliminates 3 of 4
+           acquire/release pairs per Gaussian (~75% of sync overhead). State
+           (R/G/B/T) in Dst[0–3]; intermediate results in Dst[4–12]; pack only at
+           tile end. **Estimated: -40–60% kernel time → ~6–10 ms.**
+        2. **`exp_tile<approx>` replacement** — single largest SFPU cost.
+           Replace with 3-term polynomial (Taylor or Chebyshev).
+           **Estimated: -0.5–1 ms.**
+        3. **4-face per-quadrant Gaussian culling** — split each 32×32 tile into
+           four 16×16 faces; cull Gaussians per-face by AABB overlap. Reduces
+           average Gaussian count ~3–4× without dropping any contribution.
+           **Estimated: -60–75% kernel iterations → net ~4× speedup.**
+        4. **Merge D1 into B+C** — `contrib = alpha * T_state` can be computed
+           inside the B+C acquire block via `mul_binary_tile(alpha, T_state)`,
+           eliminating 1 of 4 acquire/release pairs. **Estimated: -10–15%.**
+        5. **Persistent kernel + mailbox dispatch** (~5 ms total saving;
+           kernel-only is unchanged but eliminates EnqueueMeshWorkload overhead).
+        6. **Per-tile prefix-saturation cap** — replace fixed cap=448 with
+           per-tile T-prefix cull (stop when T < 1e-3). Strictly better on
+           sparse tiles; equal on dense tiles.
+        7. **Math fidelity** — currently HiFi2; LoFi could win 10–20% on
+           `mul_tiles` chain if precision holds.
 
         ## Stretch / risky
         - Move `project_gaussians` onto the device.

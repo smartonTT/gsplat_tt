@@ -498,6 +498,49 @@ class KernelBackend(Backend):
     # Backend API
     # ------------------------------------------------------------------
 
+    def _restart_daemon(self) -> None:
+        """Kill dead/crashed daemon, clean lock, start a fresh one and wait for READY.
+
+        Called automatically by blend() when an IPC error is detected so the
+        viewer recovers without requiring a manual restart.
+        """
+        print("[backend] daemon crash detected — restarting...", flush=True)
+        # Reap whatever state the process is in.
+        try:
+            if self._proc.poll() is None:
+                self._proc.terminate()
+                try:
+                    self._proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._proc.kill()
+                    try:
+                        self._proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        pass
+            else:
+                self._proc.wait()
+        except Exception:
+            pass
+        self._LOCK_PATH.unlink(missing_ok=True)
+        # Reset per-session state so set_scene() re-uploads on next blend().
+        self._scene_initialized = False
+        self._frame_in_flight = False
+        # Start a new daemon process.
+        env = os.environ.copy()
+        env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
+        env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
+        self._proc = subprocess.Popen(
+            [self.BINARY_PATH, "--daemon"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            env=env,
+            text=False,
+            bufsize=0,
+        )
+        self._LOCK_PATH.write_text(str(self._proc.pid))
+        _wait_for_ready(self._proc.stdout, time.perf_counter() + 240.0)
+        print("[backend] daemon restarted successfully", flush=True)
+
     def blend(
         self,
         means_2d: torch.Tensor,
@@ -514,12 +557,29 @@ class KernelBackend(Backend):
         # default Pipeline.render() path. For benchmark / batch workloads
         # use submit_frame() + recv_frame() directly to overlap CPU pre-
         # blend of frame N+1 with daemon kernel of frame N (iter 029).
-        partial_timings = self.submit_frame(
-            means_2d, covs_2d, colors, opacities,
-            sorted_gaussian_ids, tile_ranges,
-            image_height, image_width,
-        )
-        return self.recv_frame(partial_timings)
+        #
+        # Auto-restart: if the daemon has died (poll() != None) or if an IPC
+        # error occurs mid-frame, restart and retry once so the viewer recovers
+        # transparently without a manual restart.
+        if self._proc.poll() is not None:
+            self._restart_daemon()
+        try:
+            partial_timings = self.submit_frame(
+                means_2d, covs_2d, colors, opacities,
+                sorted_gaussian_ids, tile_ranges,
+                image_height, image_width,
+            )
+            return self.recv_frame(partial_timings)
+        except (BrokenPipeError, OSError, RuntimeError) as exc:
+            print(f"[backend] IPC error ({exc}) — restarting daemon and retrying",
+                  flush=True)
+            self._restart_daemon()
+            partial_timings = self.submit_frame(
+                means_2d, covs_2d, colors, opacities,
+                sorted_gaussian_ids, tile_ranges,
+                image_height, image_width,
+            )
+            return self.recv_frame(partial_timings)
 
     @staticmethod
     def _prefix_t_cull(
