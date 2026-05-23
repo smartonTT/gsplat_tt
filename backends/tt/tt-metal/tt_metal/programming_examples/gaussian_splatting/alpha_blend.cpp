@@ -376,6 +376,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
             // some library helpers consult APPROX from the global config.
             .math_fidelity = MathFidelity::HiFi2,
             .fp32_dest_acc_en = true,
+            .dst_full_sync_en = true,   // iter 070c: 8 Dst tiles for single-acquire state
             .math_approx_mode = true,
         });
 

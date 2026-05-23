@@ -1049,22 +1049,6 @@ class KernelBackend(Backend):
             raise RuntimeError(f"daemon error: {err_msg}")
         if magic != _MAGIC_OK11:
             self._frame_in_flight = False
-            # Try to read more bytes to expose TT_FATAL messages
-            import sys, select as _sel2
-            extra = resp_hdr
-            try:
-                r2, _, _ = _sel2.select([self._proc.stdout.fileno()], [], [], 1.0)
-                if r2:
-                    extra += os.read(self._proc.stdout.fileno(), 65536)
-                # Read until pipe quiet
-                for _ in range(10):
-                    r2, _, _ = _sel2.select([self._proc.stdout.fileno()], [], [], 0.1)
-                    if not r2:
-                        break
-                    extra += os.read(self._proc.stdout.fileno(), 65536)
-            except Exception:
-                pass
-            print(f"[DAEMON ERR] magic={magic:#010x}:\n{extra.decode('utf-8', errors='replace')[:3000]}", file=sys.stderr)
             raise RuntimeError(f"unexpected daemon response magic {magic:#010x}")
         rt_ms = (time.perf_counter() - t_rt) * 1000.0
 
