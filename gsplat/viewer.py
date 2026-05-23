@@ -210,7 +210,7 @@ class GaussianViewer:
         with self._control_folder:
             self._azim_slider = self.server.gui.add_slider(
                 "Azimuth (°)",
-                min=-180.0, max=180.0, step=1.0, initial_value=0.0,
+                min=-180.0, max=180.0, step=1.0, initial_value=180.0,
                 hint="Rotate around the world up axis. Wraps freely.",
             )
             self._elev_slider = self.server.gui.add_slider(
@@ -253,7 +253,7 @@ class GaussianViewer:
         # camera. Read by the slider on_update to compute deltas, and by
         # the camera-update callback to detect "user dragged away from
         # what the sliders say".
-        self._last_orbit_state: tuple[float, float, float] = (0.0, 0.0, default_distance)
+        self._last_orbit_state: tuple[float, float, float] = (180.0, 0.0, default_distance)
 
         def _apply_orbit_to_all_clients(
             azim_deg: float, elev_deg: float, dist: float
@@ -305,12 +305,12 @@ class GaussianViewer:
         def _on_reset(_event: viser.GuiEvent) -> None:
             self._slider_suppress = True
             try:
-                self._azim_slider.value = 0.0
+                self._azim_slider.value = 180.0
                 self._elev_slider.value = 0.0
                 self._dist_slider.value = default_distance
             finally:
                 self._slider_suppress = False
-            _apply_orbit_to_all_clients(0.0, 0.0, default_distance)
+            _apply_orbit_to_all_clients(180.0, 0.0, default_distance)
 
         @self.server.on_client_connect
         def _on_client_connect(client: viser.ClientHandle) -> None:
@@ -408,7 +408,7 @@ class GaussianViewer:
         if result.image is None:
             image_np = np.zeros((H, W, 3), dtype=np.uint8)
         else:
-            image_np = (np.clip(result.image, 0.0, 1.0) * 255).astype(np.uint8)
+            image_np = np.flipud((np.clip(result.image, 0.0, 1.0) * 255).astype(np.uint8))
             self._frame_samples.append(_FrameSample(
                 timings=dict(result.timings),
                 sub_timings=dict(result.sub_timings),

@@ -340,7 +340,7 @@ def main():
         print("ERROR: empty frame (no visible Gaussians); aborting", file=sys.stderr)
         sys.exit(2)
 
-    img_uint8 = (np.clip(last_image, 0.0, 1.0) * 255).astype(np.uint8)
+    img_uint8 = np.flipud((np.clip(last_image, 0.0, 1.0) * 255).astype(np.uint8))
     Image.fromarray(img_uint8).save(out_path)
     print(f"[saved] {out_path}  ({img_uint8.shape[1]}x{img_uint8.shape[0]})", flush=True)
 
