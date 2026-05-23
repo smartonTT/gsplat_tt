@@ -36,10 +36,10 @@
 //
 // DST SLOT LAYOUT (iter 070, dst_full_sync_en=true → 8 tiles with fp32_dest_acc_en=true)
 // ---------------------------------------------------------------------------------------
-//   Dst[0] = R_state   \
+//   Dst[0] = R_state   |
 //   Dst[1] = G_state    | persistent across all Gaussians for a tile;
 //   Dst[2] = B_state    | not packed in inner loop → preserved by SyncFull mode
-//   Dst[3] = T_state   /
+//   Dst[3] = T_state   |
 //   Dst[4] = power accumulator → alpha (scratch, per-Gaussian)
 //   Dst[5] = scratch A: B·lx·ly, D'·lx, E'·ly, contrib, color·contrib
 //   Dst[6] = scratch B: C·ly², contrib copy for G/B channels
