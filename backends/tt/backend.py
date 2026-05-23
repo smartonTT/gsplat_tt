@@ -311,6 +311,9 @@ class KernelBackend(Backend):
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
+        # Force FATAL level: the daemon uses spdlog on stdout (same fd as the
+        # binary protocol), so any lower-level log would corrupt binary reads.
+        env["TT_METAL_LOGGER_LEVEL"] = "FATAL"
         self._proc = subprocess.Popen(
             [self.BINARY_PATH, "--daemon"],
             stdin=subprocess.PIPE,
@@ -574,6 +577,7 @@ class KernelBackend(Backend):
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
+        env["TT_METAL_LOGGER_LEVEL"] = "FATAL"
         self._proc = subprocess.Popen(
             [self.BINARY_PATH, "--daemon"],
             stdin=subprocess.PIPE,
