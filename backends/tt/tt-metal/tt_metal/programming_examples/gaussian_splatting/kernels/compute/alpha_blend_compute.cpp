@@ -255,40 +255,30 @@ void kernel_main() {
             uint32_t color_b_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 7);
             uint32_t opacity_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 8);
 
-            // ----- Stage B1: per-pixel offsets from the Gaussian center.
-            // Loads the px/py tiles into Dst slots 0/1 and subtracts the
-            // Gaussian center scalar (mean_x, mean_y) lane-wise. After this:
-            //   Dst[0][i] = px[i] - mean_x
-            //   Dst[1][i] = py[i] - mean_y
-            // Pack each back to its own CB so subsequent stages can read them
-            // as binary operands (mul_tiles, etc., need CB inputs).
+            // ----- Stage B1+B2 (iter 064): merged single acquire block.
+            // Compute dx/dy via SFPU sub_unary, then fold dx·dy, dx², dy² all
+            // in-Dst using SFPU mul_binary_tile (Dst→Dst, no CB round-trip for
+            // dx/dy).  Saves one acquire/release pair vs the prior two-block
+            // approach.
+            //
+            // Order: compute dx·dy BEFORE squaring so all three Dst values
+            // fit in 3 slots (fp32 half-Dst = 4 slots; using 3 is safe):
+            //   Dst[0] = dx, Dst[1] = dy
+            //   → Dst[2] = dx·dy  (mul_binary_tile(0,1,2))
+            //   → Dst[0] = dx²   (in-place: mul_binary_tile(0,0,0))
+            //   → Dst[1] = dy²   (in-place: mul_binary_tile(1,1,1))
+            // CB_DX2 ← pack(0), CB_DY2 ← pack(1), CB_DXDY ← pack(2).
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_PX);
             copy_tile(CB_PX, 0, 0);
-            sub_unary_tile(0, mean_x_bits);
+            sub_unary_tile(0, mean_x_bits);   // Dst[0] = dx
             copy_tile_to_dst_init_short(CB_PY);
             copy_tile(CB_PY, 0, 1);
-            sub_unary_tile(1, mean_y_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_DX, 1);
-            pack_tile(0, CB_DX);
-            cb_push_back(CB_DX, 1);
-            cb_reserve_back(CB_DY, 1);
-            pack_tile(1, CB_DY);
-            cb_push_back(CB_DY, 1);
-            tile_regs_release();
-            cb_wait_front(CB_DX, 1);
-            cb_wait_front(CB_DY, 1);
-
-            // ----- Stage B2: dx², dy², dx·dy into scratch CBs for FPU bcast.
-            tile_regs_acquire();
-            mul_tiles_init(CB_DX, CB_DX);
-            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
-            mul_tiles_init(CB_DY, CB_DY);
-            mul_tiles(CB_DY, CB_DY, 0, 0, 1);
-            mul_tiles_init(CB_DX, CB_DY);
-            mul_tiles(CB_DX, CB_DY, 0, 0, 2);
+            sub_unary_tile(1, mean_y_bits);   // Dst[1] = dy
+            mul_binary_tile_init();
+            mul_binary_tile(0, 1, 2);         // Dst[2] = dx·dy
+            mul_binary_tile(0, 0, 0);         // Dst[0] = dx²  (in-place)
+            mul_binary_tile(1, 1, 1);         // Dst[1] = dy²  (in-place)
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_DX2, 1);
@@ -342,8 +332,6 @@ void kernel_main() {
             cb_push_back(CB_ALPHA, 1);
             tile_regs_release();
 
-            cb_pop_front(CB_DX, 1);
-            cb_pop_front(CB_DY, 1);
             cb_pop_front(CB_DX2, 1);
             cb_pop_front(CB_DY2, 1);
             cb_pop_front(CB_DXDY, 1);
