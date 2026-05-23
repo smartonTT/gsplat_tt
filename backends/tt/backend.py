@@ -1050,12 +1050,18 @@ class KernelBackend(Backend):
             import sys, select as _sel2
             extra = resp_hdr
             try:
-                r2, _, _ = _sel2.select([self._proc.stdout.fileno()], [], [], 0.5)
+                r2, _, _ = _sel2.select([self._proc.stdout.fileno()], [], [], 1.0)
                 if r2:
-                    extra += os.read(self._proc.stdout.fileno(), 4096)
+                    extra += os.read(self._proc.stdout.fileno(), 65536)
+                # Read until pipe quiet
+                for _ in range(10):
+                    r2, _, _ = _sel2.select([self._proc.stdout.fileno()], [], [], 0.1)
+                    if not r2:
+                        break
+                    extra += os.read(self._proc.stdout.fileno(), 65536)
             except Exception:
                 pass
-            print(f"[DAEMON ERR] magic={magic:#010x} raw={extra[:400]!r}", file=sys.stderr)
+            print(f"[DAEMON ERR] magic={magic:#010x}:\n{extra.decode('utf-8', errors='replace')[:3000]}", file=sys.stderr)
             raise RuntimeError(f"unexpected daemon response magic {magic:#010x}")
         rt_ms = (time.perf_counter() - t_rt) * 1000.0
 
