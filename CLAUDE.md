@@ -168,3 +168,134 @@ Plus `tests/test_numeric_sanity.py` — pure-Python alpha-blend reference checks
 - `gsplat` (nerfstudio) — production CUDA + PyTorch fallback.
 - `antimatter15/splat` — ~300-line WebGL.
 - `graphdeco-inria/diff-gaussian-rasterization` — original CUDA rasterizer.
+
+## IRD box workflow
+
+Edit on Mac, `devsync` mirrors to the box. See `~/dev/README.md` for the generic devsync/IRD workflow.
+
+**Launch on the box (P300 Blackhole, e.g. `yyzo-bh-14`):**
+
+```bash
+cd /proj_sw/user_dev/smarton/gsplat_tt
+source venv/bin/activate
+export TT_METAL_HOME=$PWD/backends/tt/tt-metal
+export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME
+export TT_MESH_GRAPH_DESC_PATH=$TT_METAL_HOME/tt_metal/fabric/mesh_graph_descriptors/p100_mesh_graph_descriptor.textproto
+export TT_METAL_LOGGER_LEVEL=warning
+export TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache
+mkdir -p /localdev/smarton/.cache/tt-metal-cache
+gsplat scenes/stitch_doll.ply --backend tt --force-square 1024
+```
+
+`TT_MESH_GRAPH_DESC_PATH` is required on P300; omitting it causes `TT_FATAL: Custom fabric mesh graph descriptor path must be specified for CUSTOM cluster type`.
+
+**Rebuild after editing kernel or host `.cpp`:**
+
+```bash
+sudo ninja -C backends/tt/tt-metal/build metal_example_gaussian_splatting
+```
+
+Then wipe the JIT cache: `rm -rf /localdev/smarton/.cache/tt-metal-cache/`
+
+**The viewer script** at `/tmp/start_viewer.sh` on the box sets all env vars, kills any prior daemon, and launches `gsplat scenes/stitch_doll.ply --backend tt --port 8080 --force-square 1024`. Recreate it if lost:
+
+```bash
+cat > /tmp/start_viewer.sh << 'EOF'
+#!/usr/bin/env bash
+set -uo pipefail
+cd /proj_sw/user_dev/smarton/gsplat_tt
+source venv/bin/activate
+export TT_METAL_HOME=$PWD/backends/tt/tt-metal
+export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME
+export TT_MESH_GRAPH_DESC_PATH=$TT_METAL_HOME/tt_metal/fabric/mesh_graph_descriptors/p100_mesh_graph_descriptor.textproto
+export TT_METAL_LOGGER_LEVEL=warning
+export TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache
+unset GSPLAT_TT_MAX_G_PER_TILE GSPLAT_TT_CULL_EPS
+pkill -TERM -f "scenes/stitch_doll" 2>/dev/null || true
+pkill -TERM -f "metal_example_gaussian" 2>/dev/null || true
+sleep 8
+nohup gsplat scenes/stitch_doll.ply --backend tt --port 8080 --force-square 1024 --verbose \
+  > /localdev/smarton/viewer_logs/viewer_$(date +%Y%m%d-%H%M%S).log 2>&1 &
+echo "viewer PID: $!"
+EOF
+chmod +x /tmp/start_viewer.sh
+```
+
+**Mac-side tunnel:**
+
+```bash
+ssh -f -N -L 8080:127.0.0.1:8080 bh-30   # stable viewer on bh-30 (always live)
+# ssh -f -N -L 8080:127.0.0.1:8080 yyzo-bh-14  # dev box (only during testing)
+curl -sI http://127.0.0.1:8080/   # should return HTTP 200
+```
+
+## Two-box workflow (optimization)
+
+- **bh-14 (yyzo-bh-14, Toronto P300)** — development and benchmarking. All rebuilds happen here.
+- **bh-30 (Austin P150)** — stable viewer. Always running last KEEP binary; never rebuilt during development.
+
+Both boxes share the same Weka filesystem at `/proj_sw/user_dev/smarton/`. The stable viewer binary lives outside the git working tree so devsync updates never clobber it:
+
+```
+/proj_sw/user_dev/smarton/stable_viewer/
+  metal_example_gaussian_splatting_iter068   ← stable binary (updated on each KEEP)
+  k/gaussian_splatting/kernels/              ← stable JIT kernel sources (frozen at last KEEP)
+```
+
+**Starting the stable viewer on bh-30:**
+```bash
+bash /tmp/start_stable_viewer.sh
+# Or, if the script was lost, recreate from scripts/start_stable_viewer.sh in the repo.
+```
+
+**Env vars for stable viewer** (all handled by the script):
+- `GSPLAT_TT_BINARY` — points to stable binary
+- `GSPLAT_TT_KERNEL_PREFIX` — points to stable frozen kernel sources
+- `TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache-stable` — separate JIT cache
+
+**Promoting a new KEEP to stable viewer** (run on bh-14 after confirming PSNR ≥ 35 dB):
+```bash
+# 1. Save updated stable binary
+cp backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting \
+   /proj_sw/user_dev/smarton/stable_viewer/metal_example_gaussian_splatting_iter068
+# 2. Update frozen kernel sources
+cp -r backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/kernels/. \
+   /proj_sw/user_dev/smarton/stable_viewer/k/gaussian_splatting/kernels/
+# 3. Clear stable JIT cache (forces recompile with new kernels on bh-30)
+ssh bh-30 "rm -rf /localdev/smarton/.cache/tt-metal-cache-stable/"
+# 4. Restart stable viewer on bh-30
+ssh bh-30 "bash /tmp/start_stable_viewer.sh"
+```
+
+A phase is only "done" when both the headless harness (`scripts/render_fixed.py`) AND a live viewer frame (`[wall] N ms` in the log after a browser connects) confirm the new binary is working.
+
+## Benchmarking
+
+```bash
+cd /proj_sw/user_dev/smarton/gsplat_tt
+source venv/bin/activate
+# ... set env vars (see above) ...
+python scripts/render_fixed.py stitch hero --backend tt --warmup 5 --frames 30 \
+    --out /tmp/iter_NNN.png --json
+```
+
+The `--json` flag emits one line with all timings. Key fields: `daemon_rt.device_kernel` (kernel ms), `timings.blend` (total blend including IPC overhead).
+
+Compare to reference: `benchmarks/reference/stitch_hero_480x640.png` (480×640) or `stitch_hero_1024x1024.png` (1024×1024).
+
+Compute PSNR:
+
+```python
+from PIL import Image
+import numpy as np, math
+ref = np.array(Image.open('benchmarks/reference/stitch_hero_480x640.png').convert('RGB'), dtype=float)
+cur = np.array(Image.open('/tmp/iter_NNN.png').convert('RGB'), dtype=float)
+mse = np.mean((ref - cur)**2)
+print(f'PSNR: {20 * math.log10(255.0 / math.sqrt(mse)):.2f} dB')
+```
+
+**Quality gate:** PSNR ≥ 35 dB = KEEP. 30–35 dB = NEEDS_REVIEW. < 30 dB = NO/revert.
+
+## Optimization branch
+
+Current optimization work is on `smarton/opt-stable`. Per-iteration results are in `docs/optimization-log/REPORT.md`. The target is ≤1 ms for the alpha-blend metal kernel (`daemon_rt.device_kernel`) at 1024×1024 with PSNR ≥ 35 dB.

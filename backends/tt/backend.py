@@ -187,7 +187,10 @@ class KernelBackend(Backend):
     that previously dominated the blend.prep stage.
     """
 
-    BINARY_PATH = "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
+    BINARY_PATH = os.environ.get(
+        "GSPLAT_TT_BINARY",
+        "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting",
+    )
     _LOCK_PATH = Path("/tmp/gsplat_tt_daemon.lock")
 
     def __init__(self, verbose: bool = False):

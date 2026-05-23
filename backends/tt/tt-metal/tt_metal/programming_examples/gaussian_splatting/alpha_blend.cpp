@@ -56,6 +56,17 @@ using namespace gsplat;
 #define OVERRIDE_KERNEL_PREFIX ""
 #endif
 
+// Runtime-overridable kernel directory prefix.
+// GSPLAT_TT_KERNEL_PREFIX env var (e.g. "/proj_sw/.../stable_viewer/k/")
+// takes priority, otherwise falls back to OVERRIDE_KERNEL_PREFIX compile flag.
+static const std::string& kp() {
+    static const std::string val = []() -> std::string {
+        const char* env = std::getenv("GSPLAT_TT_KERNEL_PREFIX");
+        return env ? std::string(env) : std::string(OVERRIDE_KERNEL_PREFIX);
+    }();
+    return val;
+}
+
 // Binary IPC magic (little-endian on the wire).
 constexpr uint32_t IPC_MAGIC_SCN1 = 0x53434E31;  // 'SCN1'
 constexpr uint32_t IPC_MAGIC_OK31 = 0x4F4B3331;  // 'OK31'
@@ -238,8 +249,6 @@ struct BufferCache {
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
     // Tracks which tiles had Gaussians last frame for selective output zero-fill.
     std::vector<uint8_t> last_frame_tile_nonempty;
-    // px/py are tile-local coordinate grids — constant once written for a given resolution.
-    bool px_py_written = false;
 };
 
 struct DeviceContext {
@@ -347,7 +356,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     ctx.reader = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "gaussian_splatting/kernels/dataflow/reader_alpha_blend.cpp",
+        kp() + "gaussian_splatting/kernels/dataflow/reader_alpha_blend.cpp",
         cores,
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_1,
@@ -357,7 +366,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     ctx.compute = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "gaussian_splatting/kernels/compute/alpha_blend_compute.cpp",
+        kp() + "gaussian_splatting/kernels/compute/alpha_blend_compute.cpp",
         cores,
         ComputeConfig{
             // Iter 042: HiFi3 → HiFi2 trade-off. LoFi was -2.5 dB PSNR
@@ -365,13 +374,8 @@ static void build_program_and_workload(DeviceContext& ctx) {
             // Iter 043: enable math_approx_mode globally (was false) — most
             // SFPU ops are explicitly templated <approx=true> already, but
             // some library helpers consult APPROX from the global config.
-            // Iter 070: dst_full_sync_en=true → 8 Dst tiles (vs 4 in Half mode)
-            // with fp32_dest_acc_en=true. Required for Dst-resident R/G/B/T state:
-            // SyncFull mode preserves non-packed Dst slots across acquire/release
-            // cycles (Half mode ping-pongs halves, destroying persistent state).
             .math_fidelity = MathFidelity::HiFi2,
             .fp32_dest_acc_en = true,
-            .dst_full_sync_en = true,
             .math_approx_mode = true,
         });
 
@@ -381,7 +385,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     ctx.writer = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "gaussian_splatting/kernels/dataflow/writer_alpha_blend.cpp",
+        kp() + "gaussian_splatting/kernels/dataflow/writer_alpha_blend.cpp",
         cores,
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_0,
@@ -667,7 +671,6 @@ static void ensure_buffer_cache(
         cache.output = make_dram(
             static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
         cache.last_frame_tile_nonempty.assign(num_tiles, 0);
-        cache.px_py_written = false;
         output_reallocated = true;
     }
 
@@ -694,7 +697,6 @@ static void ensure_buffer_cache(
         cache.output = make_dram(
             static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
         cache.last_frame_tile_nonempty.assign(num_tiles, 0);
-        cache.px_py_written = false;
         output_reallocated = true;
     }
     if (!cache.tile_ids) {
@@ -957,13 +959,8 @@ static std::vector<float> process_frame_cached(
         sorted_gids_u32.begin(),
         sorted_gids_u32.begin() + total_entries,
         gids_payload.begin());
-    // px/py are tile-local coordinate grids, constant for a given resolution.
-    // Only encode and write once; skip every subsequent frame.
-    std::vector<uint16_t> px_bf16, py_bf16;
-    if (!cache.px_py_written) {
-        px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
-        py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
-    }
+    auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
+    auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
     std::vector<uint32_t> offsets_u32(offsets_f32.size());
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
@@ -992,11 +989,8 @@ static std::vector<float> process_frame_cached(
     enqueue_write_cached_buffer(ctx, cache.dyn_packs, dyn_payload);
     enqueue_write_cached_buffer(ctx, cache.sorted_gids, gids_payload);
     enqueue_write_cached_buffer(ctx, cache.offsets, offsets_u32);
-    if (!cache.px_py_written) {
-        enqueue_write_cached_buffer(ctx, cache.px, px_bf16);
-        enqueue_write_cached_buffer(ctx, cache.py, py_bf16);
-        cache.px_py_written = true;
-    }
+    enqueue_write_cached_buffer(ctx, cache.px, px_bf16);
+    enqueue_write_cached_buffer(ctx, cache.py, py_bf16);
     std::vector<uint32_t> tile_ids_payload = assign.tile_id_buffer_padded;
     enqueue_write_cached_buffer(ctx, cache.tile_ids, tile_ids_payload);
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
