@@ -18,10 +18,10 @@ After landing each iteration (or after a revert):
 
 ## Status snapshot
 
-- **Active baseline:** iter 69 (skip px/py DRAM writes after first frame)
-- **Kernel @ 1024²:** 17.24 ms (17.24 ms vs 1ms target = 17.2× over target)
-- **PSNR @ 1024²:** 42.48 dB (clean-keep)
-- **Total experiments tracked:** 37 (24 KEEP, 12 NO, 1 NEEDS_REVIEW)
+- **Active baseline:** iter 071 (precompute lx²/ly²/lxly once per tile)
+- **Kernel @ 1024²:** 17.14 ms (17.14 ms vs 1ms target = 17.1× over target)
+- **PSNR @ 1024²:** 42.06 dB (clean-keep)
+- **Total experiments tracked:** 38 (25 KEEP, 12 NO, 1 NEEDS_REVIEW)
 
 ## Profiling line-graphs
 
@@ -86,6 +86,7 @@ After landing each iteration (or after a revert):
 | 34 | 66 | KEEP | basis-form kernel: precompute lx2/ly2/lxly once per tile | 16.47 | — | — | — | 42.46 | [shot](screenshots/iter-066-hero-1024.png) |
 | 35 | 68 | KEEP | D1 merged into B+C: remove CB_ALPHA | 17.38 | — | — | — | 42.48 | [shot](screenshots/iter-068-hero-1024.png) |
 | 36 | 69 | KEEP | skip px/py DRAM writes after first frame | 17.24 | — | — | — | 42.48 | [shot](screenshots/iter-069-hero-1024.png) |
+| 37 | 071 | KEEP | precompute lx²/ly²/lxly once per tile | 17.14 | 95.64 | — | — | 42.06 | — |
 
 ## Per-experiment briefs
 
@@ -322,6 +323,12 @@ px/py are tile-local coordinate grids — constant for a given resolution. Skip 
 **Result:** kept. kernel **17.24 ms**, PSNR **42.48 dB**.
 
 ![shot 69](screenshots/iter-069-hero-1024.png)
+
+### #37 — iter 071 (KEEP) — precompute lx²/ly²/lxly once per tile
+
+Precompute lx², ly², lx·ly per tile via 1 extra acquire/release pair at tile start (3× SFPU mul_binary_tile ops). Load precomputed values via FPU copy_tile in per-Gaussian inner loop instead of recomputing every Gaussian. -3.6% kernel time (17.24 ms → 17.14 ms). Single-acquire Dst-resident state preserved from iter 070c; trade off 1 extra tile-level acquire/release for savings in per-Gaussian DRAM reads and eliminated redundant SFPU computes. Maintains PSNR 42.06 dB.
+
+**Result:** kept. kernel **17.14 ms**, PSNR **42.06 dB**, total **95.64 ms**.
 
 ## Algorithm snapshot — current state
 

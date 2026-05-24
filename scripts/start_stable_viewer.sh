@@ -6,7 +6,7 @@ set -uo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STABLE_BIN_DIR="/proj_sw/user_dev/smarton/stable_viewer"
-STABLE_BINARY="${STABLE_BIN_DIR}/metal_example_gaussian_splatting_iter068"
+STABLE_BINARY="${STABLE_BIN_DIR}/metal_example_gaussian_splatting_iter071"
 STABLE_KERNELS_DIR="${STABLE_BIN_DIR}/kernels"
 PORT="${GSPLAT_STABLE_PORT:-8080}"
 SCENE="${1:-scenes/stitch_doll.ply}"
