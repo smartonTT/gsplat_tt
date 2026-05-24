@@ -251,11 +251,14 @@ class KernelBackend(Backend):
         #   cap=256  → kernel 13.9 ms  PSNR 20.5 dB  (needs-review)
         # Override via env: GSPLAT_TT_MAX_G_PER_TILE=N (0 = no cap).
         try:
-            # Default 448 = iter-044 clean-keep (~35 dB @ 1024²). Perf sweeps
-            # override via env (e.g. 32 for ~2 ms kernel; visibly blocky).
-            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "448"))
+            # Default 0 = no cap (iter-072 cap-revert). cap=448 caused
+            # tile-aligned checkerboard artifacts at HEAD (PSNR 23-32 dB);
+            # cap=0 restores artifact-free output (PSNR 38-41 dB) at the
+            # cost of ~26-32 ms kernel time. Reclaim quality first, then
+            # earn back ms via kernel-side optimizations.
+            self._max_g_per_tile: int = int(os.environ.get("GSPLAT_TT_MAX_G_PER_TILE", "0"))
         except ValueError:
-            self._max_g_per_tile = 448
+            self._max_g_per_tile = 0
         # Iter 033 (NO, default-disabled): host-side prefix-T saturation cull.
         # The math is sound (sum of log(1-opacity_i) crosses log(eps) as a
         # bound on max(per-pixel T) within the tile) BUT the bound is using
