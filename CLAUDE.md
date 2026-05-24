@@ -221,18 +221,19 @@ EOF
 chmod +x /tmp/start_viewer.sh
 ```
 
-**Mac-side tunnel:**
+**Mac-side tunnels (two-port layout):**
 
 ```bash
-ssh -f -N -L 8080:127.0.0.1:8080 bh-30   # stable viewer on bh-30 (always live)
-# ssh -f -N -L 8080:127.0.0.1:8080 yyzo-bh-14  # dev box (only during testing)
-curl -sI http://127.0.0.1:8080/   # should return HTTP 200
+ssh -f -N -L 8080:127.0.0.1:8080 bh-14   # dev viewer on bh-14 (current build, iterating)
+ssh -f -N -L 8081:127.0.0.1:8081 bh-30   # stable viewer on bh-30 (last KEEP, always live)
+curl -sI http://127.0.0.1:8080/   # dev: HTTP 200
+curl -sI http://127.0.0.1:8081/   # stable: HTTP 200
 ```
 
 ## Two-box workflow (optimization)
 
-- **bh-14 (yyzo-bh-14, Toronto P300)** — development and benchmarking. All rebuilds happen here.
-- **bh-30 (Austin P150)** — stable viewer. Always running last KEEP binary; never rebuilt during development.
+- **bh-14 (yyzo-bh-14, Toronto P300)** — development and benchmarking. All rebuilds happen here. Dev viewer serves on **port 8080**. Keep the viewer up unless you need the device for something else. Restart the viewer as soon as possible after any work. 
+- **bh-30 (Austin P150)** — stable viewer. Always running last KEEP binary; never rebuilt during development. Stable viewer serves on **port 8081**.
 
 Both boxes share the same Weka filesystem at `/proj_sw/user_dev/smarton/`. The stable viewer binary lives outside the git working tree so devsync updates never clobber it:
 

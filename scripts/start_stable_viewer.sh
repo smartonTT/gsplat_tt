@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STABLE_BIN_DIR="/proj_sw/user_dev/smarton/stable_viewer"
 STABLE_BINARY="${STABLE_BIN_DIR}/metal_example_gaussian_splatting_iter071"
 STABLE_KERNELS_DIR="${STABLE_BIN_DIR}/kernels"
-PORT="${GSPLAT_STABLE_PORT:-8080}"
+PORT="${GSPLAT_STABLE_PORT:-8081}"
 SCENE="${1:-scenes/stitch_doll.ply}"
 
 if [[ ! -x "$STABLE_BINARY" ]]; then
@@ -32,9 +32,10 @@ export GSPLAT_TT_KERNEL_PREFIX="${STABLE_BIN_DIR}/k/"
 mkdir -p /localdev/smarton/.cache/tt-metal-cache-stable
 mkdir -p /localdev/smarton/viewer_logs
 
-# Kill any old stable viewer instance
-pkill -TERM -f "stable_viewer" 2>/dev/null || true
-pkill -TERM -f "gsplat.*stitch_doll.*port.*${PORT}" 2>/dev/null || true
+# Kill any old stable viewer instance (avoid self-match: don't pkill on
+# "stable_viewer" since this script's own path contains that string).
+pkill -TERM -f "gsplat.*--port ${PORT}" 2>/dev/null || true
+pkill -TERM -f "metal_example_gaussian" 2>/dev/null || true
 sleep 5
 
 LOG_FILE="/localdev/smarton/viewer_logs/stable_viewer_$(date +%Y%m%d-%H%M%S).log"

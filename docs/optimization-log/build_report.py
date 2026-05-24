@@ -130,6 +130,12 @@ EXPERIMENTS = [
      "of DRAM writes per frame at 1024x1024. Measured: 17.24 ms vs 17.38 ms baseline. "
      "Saving ~0.14 ms; px/py writes at high DRAM bandwidth are nearly free. "
      "KEEP for correctness and CPU-side savings (skip encode_tiles_to_bf16 each frame)."),
+    (71, "KEEP", "precompute lx²/ly²/lxly once per tile", 17.14, 95.64, None, None, 42.06,
+     "iter-071-face-1024.png",
+     "Precompute lx², ly², lx·ly once per screen tile (1 extra acquire/release block), "
+     "then load via FPU copy_tile in the per-Gaussian loop. -3.6% kernel time vs iter 069 "
+     "(17.14 ms vs 17.24 ms). Single-acquire Dst-resident state preserved from 070c. "
+     "PSNR 42.06 dB (clean-keep). Face-on hero shot via stitch/side view."),
 ]
 
 
