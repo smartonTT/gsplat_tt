@@ -282,14 +282,14 @@ python scripts/render_fixed.py stitch hero --backend tt --warmup 5 --frames 30 \
 
 The `--json` flag emits one line with all timings. Key fields: `daemon_rt.device_kernel` (kernel ms), `timings.blend` (total blend including IPC overhead).
 
-Compare to reference: `benchmarks/reference/stitch_hero_480x640.png` (480×640) or `stitch_hero_1024x1024.png` (1024×1024).
+Compare to reference: `benchmarks/reference/stitch_hero.png` (all references are 1024×1024 — no other sizes).
 
 Compute PSNR:
 
 ```python
 from PIL import Image
 import numpy as np, math
-ref = np.array(Image.open('benchmarks/reference/stitch_hero_480x640.png').convert('RGB'), dtype=float)
+ref = np.array(Image.open('benchmarks/reference/stitch_hero.png').convert('RGB'), dtype=float)
 cur = np.array(Image.open('/tmp/iter_NNN.png').convert('RGB'), dtype=float)
 mse = np.mean((ref - cur)**2)
 print(f'PSNR: {20 * math.log10(255.0 / math.sqrt(mse)):.2f} dB')
