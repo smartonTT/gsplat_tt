@@ -1,0 +1,18 @@
+{
+  "iter_dir": "iter-001-dst-resident-state",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 99.95,
+  "psnr_per_view": {
+    "hero": 3.5477543390462998,
+    "side": 3.8699811350293216,
+    "top": 4.472898152617398
+  },
+  "kernel_ms_median": 90.91,
+  "kernel_ms_p99": 94.9284,
+  "per_view_median": {
+    "hero": 90.91,
+    "side": 82.4,
+    "top": 94.88499999999999
+  },
+  "frame_count": 30
+}

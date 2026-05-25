@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 1 · current best: 99.95 ms · target: 1.0 ms
+      iters: 2 · current best: 99.95 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,37 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-001-dst-resident-state
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-25T16:09:46.363404+00:00</span>
+    </h3>
+  </header>
+  <div class="metrics">
+    <div class="ms">kernel: <b>90.91 ms</b> median · 94.93 ms p99</div>
+    <div class="per-view">per-view: hero 90.91 / side 82.40 / top 94.88</div>
+    <div class="psnr">PSNR: hero 3.5 / side 3.9 / top 4.5 (min <b>3.5</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-001-dst-resident-state/hero.png" target="_blank"><img src="screenshots/iter-001-dst-resident-state/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-001-dst-resident-state/side.png" target="_blank"><img src="screenshots/iter-001-dst-resident-state/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-001-dst-resident-state/top.png" target="_blank"><img src="screenshots/iter-001-dst-resident-state/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-001-dst-resident-state/hero_diff10.png" target="_blank"><img src="screenshots/iter-001-dst-resident-state/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-001-dst-resident-state/side_diff10.png" target="_blank"><img src="screenshots/iter-001-dst-resident-state/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-001-dst-resident-state/top_diff10.png" target="_blank"><img src="screenshots/iter-001-dst-resident-state/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✗ tile_grid_seams: 32x32 tile-grid pattern visible across all three views — block boundaries colored magenta/blue/white</li><li>✗ tile_uniform_fill: many tiles saturated solid magenta or solid white where the stitch geometry should appear</li><li>✗ missing_splat_holes: large blob regions where Gaussian coverage is replaced by accumulator-garbage</li><li>✗ color_clipping_bands: magenta + cyan band patterns inconsistent with stitch&#x27;s actual palette</li><li>✗ ringing_halos: all three views show ringing at tile boundaries</li><li>✗ nan_inf_signatures: fully-saturated white regions suggest unbounded accumulation or overflow</li><li>✗ geometry_shift: subject geometry largely replaced by tile-grid noise</li><li>✗ diff10_structure: diff10 PNGs nearly white-saturated — error far exceeds 10x amplification envelope</li></ul>
+    <p class="reasoning">Layer A Dst-resident refactor produced a 9% kernel-ms win (99.95 to 90.91 ms) but PSNR collapsed from infinity to 3.5-4.5 dB across all views. Renders show classic accumulator-corruption tile-grid artifacts: 32x32 colored blocks (magenta, blue, saturated white) tiling each image. Hypothesis stated this should be bit-identical to iter-0; instead the storage relocation altered the math. Likely cause: Dst[0..3] is reused across Gaussians without the proper unpacker-side init that the prior CB round-trip provided, so subsequent Gaussians compute against stale or uninitialized accumulator state. Kernel-algebra class requires &gt;100 dB; observed 3.5 dB. REJECT — revert the kernel edit, BACKBURNER the approach with note that Dst-resident state requires a different init pattern than the assumed bit-equivalence.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-000-baseline
@@ -58,6 +89,15 @@
 Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to promote.
 
 _None yet._
+
+## iter-001-dst-resident-state — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 90.91 / p99 94.93
+- PSNR per view: hero 3.5 / side 3.9 / top 4.5
+- Validator reasoning: Layer A Dst-resident refactor produced a 9% kernel-ms win (99.95 → 90.91 ms) but PSNR collapsed from infinity to 3.5-4.5 dB across all views. The renders show classic accumulator-corruption tile-grid artifacts: 32x32 colored blocks (magenta, blue, saturated white) tiling the image. The hypothesis stated this should be bit-identical to iter-0; instead the storage relocation altered the math. Likely cause: Dst[0..3] is being reused across Gaussians without the proper unpacker-side init that the prior CB round-trip provided, so subsequent Gaussians compute against stale or uninitialized accumulator state. Kernel-algebra class requires &gt;100 dB; observed 3.5 dB. REJECT — revert kernel edit, BACKBURNER with note that Dst-resident state requires a different init pattern than the assumed equivalence.
+- Thumbnails: ![hero](screenshots/iter-001-dst-resident-state/hero.png) ![diff10](screenshots/iter-001-dst-resident-state/hero_diff10.png)
+
 </pre>
   </section>
 </body>

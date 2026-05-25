@@ -1,0 +1,30 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams",     "result": "fail", "evidence": "32x32 tile-grid pattern visible across all three views — block boundaries colored magenta/blue/white"},
+    {"name": "tile_uniform_fill",   "result": "fail", "evidence": "many tiles saturated solid magenta or solid white where the stitch geometry should appear"},
+    {"name": "missing_splat_holes", "result": "fail", "evidence": "large blob regions where Gaussian coverage is replaced by accumulator-garbage"},
+    {"name": "color_clipping_bands","result": "fail", "evidence": "magenta + cyan band patterns inconsistent with stitch's actual palette"},
+    {"name": "ringing_halos",       "result": "fail", "evidence": "all three views show ringing at tile boundaries"},
+    {"name": "nan_inf_signatures",  "result": "fail", "evidence": "fully-saturated white regions suggest unbounded accumulation or overflow"},
+    {"name": "geometry_shift",      "result": "fail", "evidence": "subject geometry largely replaced by tile-grid noise"},
+    {"name": "diff10_structure",    "result": "fail", "evidence": "diff10 PNGs nearly white-saturated — error far exceeds 10x amplification envelope"}
+  ],
+  "psnr_check": {
+    "floor": 100.0,
+    "actual": {"hero": 3.5477543390462998, "side": 3.8699811350293216, "top": 4.472898152617398},
+    "pass": false
+  },
+  "per_view_consistency": {
+    "max_psnr_delta_db": 0.93,
+    "max_ms_ratio": 1.151,
+    "pass": false
+  },
+  "timing": {
+    "median_ms": 90.91,
+    "p99_ms": 94.9284,
+    "vs_prev_best_pct": -9.05,
+    "pass": true
+  },
+  "reasoning": "Layer A Dst-resident refactor produced a 9% kernel-ms win (99.95 to 90.91 ms) but PSNR collapsed from infinity to 3.5-4.5 dB across all views. Renders show classic accumulator-corruption tile-grid artifacts: 32x32 colored blocks (magenta, blue, saturated white) tiling each image. Hypothesis stated this should be bit-identical to iter-0; instead the storage relocation altered the math. Likely cause: Dst[0..3] is reused across Gaussians without the proper unpacker-side init that the prior CB round-trip provided, so subsequent Gaussians compute against stale or uninitialized accumulator state. Kernel-algebra class requires >100 dB; observed 3.5 dB. REJECT — revert the kernel edit, BACKBURNER the approach with note that Dst-resident state requires a different init pattern than the assumed bit-equivalence."
+}
