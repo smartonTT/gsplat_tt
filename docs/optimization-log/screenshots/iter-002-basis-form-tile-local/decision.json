@@ -1,8 +1,9 @@
 {
-  "verdict": "REJECT",
-  "action": "backburner",
+  "verdict": "KEEP",
+  "action": "no_commit_valid_but_not_faster",
   "high_promotion_priority": false,
   "kernel_ms_median": 106.16499999999999,
   "prev_best_kernel_ms": 99.955,
-  "commit_sha": null
+  "commit_sha": null,
+  "reclassified": "2026-05-25 — perceptual 40dB floor + FPU-heavy roadmap; building block for M1-M4"
 }

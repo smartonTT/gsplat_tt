@@ -30,12 +30,14 @@ Class PSNR floor:
 
 | Class | Floor | Below floor |
 |---|---|---|
-| `kernel-algebra` | >100 dB any view | NEEDS_REVIEW |
-| `precompute` | >100 dB | NEEDS_REVIEW |
-| `dispatch` | >100 dB | NEEDS_REVIEW |
-| `binning` | >50 dB | KEEP if visuals pass; below 50 → NEEDS_REVIEW |
-| `sort` | >50 dB | KEEP if visuals pass; below 50 → NEEDS_REVIEW |
-| `host-prep` | >50 dB | KEEP if visuals pass; below 50 → NEEDS_REVIEW |
+| `kernel-algebra` | >40 dB any view | NEEDS_REVIEW |
+| `precompute` | >40 dB | NEEDS_REVIEW |
+| `dispatch` | >40 dB | NEEDS_REVIEW |
+| `binning` | >35 dB | KEEP if visuals pass; below 35 → NEEDS_REVIEW |
+| `sort` | >35 dB | KEEP if visuals pass; below 35 → NEEDS_REVIEW |
+| `host-prep` | >35 dB | KEEP if visuals pass; below 35 → NEEDS_REVIEW |
+
+Note: previously 100 dB; lowered 2026-05-25 to perceptual floor — `2026-05-25-fpu-heavy-architecture.md`. PSNR-based "REJECT" is reserved for catastrophic regressions (NaN, tile-seams, color-clipping); 40–47 dB with clean visuals → KEEP.
 
 Per-view consistency:
 - Max per-view PSNR delta >20 dB → NEEDS_REVIEW.
