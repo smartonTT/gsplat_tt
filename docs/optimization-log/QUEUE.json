@@ -11,41 +11,48 @@
     "slug": "basis-form-tile-local",
     "class": "kernel-algebra",
     "track": "kernel-layer-b",
-    "hypothesis": "Expand Q = A\u00b7x\u00b2 + B\u00b7xy + C\u00b7y\u00b2 + D\u00b7x + E\u00b7y + F with tile-local centered coords in [-15.5, 15.5]. 6 mul_tiles + acc_to_dest + exp_tile."
+    "hypothesis": "Expand Q = A·x² + B·xy + C·y² + D·x + E·y + F with tile-local centered coords. RECLASSIFIED 2026-05-25 as building block under 40 dB perceptual PSNR floor (see 2026-05-25-fpu-heavy-architecture.md)."
   },
   {
     "iter": 3,
-    "slug": "layer-a-plus-b",
+    "slug": "m1-basis-form-fpu-q",
     "class": "kernel-algebra",
-    "track": "kernel-combined",
-    "hypothesis": "Compose Dst-resident state (Layer A) with basis-form (Layer B)."
+    "track": "fpu-heavy-m1",
+    "hypothesis": "M1 of FPU-heavy roadmap. Rewrite per-Gaussian Q in basis form with HOST-side coefficients (A,B,C,D,E,F). Kernel builds Q in one DST slot via 6 mul_tiles FMA against precomputed basis tiles (x², xy, y², x, y, 1). Replaces the SFPU dx/dy/sq/mul chain with pure FPU FMA accumulation. PSNR floor 40 dB (perceptual). Timing may regress slightly vs iter-0 baseline; OK — M3 reclaims it. See docs/superpowers/specs/2026-05-25-fpu-heavy-architecture.md §M1."
   },
   {
     "iter": 4,
-    "slug": "tighter-tile-bbox",
-    "class": "binning",
-    "track": "binning",
-    "hypothesis": "Use per-Gaussian (\u03bc, \u03a3) for 3\u03c3 ellipse bbox vs conservative axis-aligned."
+    "slug": "m2-precomputed-basis-dram",
+    "class": "precompute",
+    "track": "fpu-heavy-m2",
+    "hypothesis": "M2 of FPU-heavy roadmap. The 6 basis tiles are owner-tile-local and identical across owner tiles. Compute them in a one-shot compute kernel that runs at the start of each frame and writes them to a fixed DRAM region. Reader streams them to all cores. See spec §M2."
   },
   {
     "iter": 5,
+    "slug": "m3-dst-resident-state",
+    "class": "kernel-algebra",
+    "track": "fpu-heavy-m3",
+    "hypothesis": "M3 of FPU-heavy roadmap. Eliminate CB_COLOR_R/G/B_STATE, CB_T_STATE, CB_SAT_MASK as L1 spill targets. One tile_regs_acquire() per output tile. Init dst[0..3] = (0,0,0,1). Per Gaussian: build Q (M1), exp, alpha-clamp, contrib, SFPU DST×DST color/T updates. Use binary_dest_reuse_tiles<ELWMUL,DEST_TO_SRCA> for α *= opacity. See spec §M3."
+  },
+  {
+    "iter": 6,
+    "slug": "m4-16x16-face-decomposition",
+    "class": "kernel-algebra",
+    "track": "fpu-heavy-m4",
+    "hypothesis": "M4 of FPU-heavy roadmap. Decompose 32×32 owner tile into 4×16×16 faces with independent Gaussian streams (4 CBs cb_f0..cb_f3). process_face<cb_fN>(countN) within the single acquire. log_mask_face added before exp_tile to zero contributions from other faces. Expected ~3-4× fewer Gaussians visited per face. See spec §M4."
+  },
+  {
+    "iter": 7,
+    "slug": "tighter-tile-bbox",
+    "class": "binning",
+    "track": "binning",
+    "hypothesis": "Use per-Gaussian (μ, Σ) for 3σ ellipse bbox vs conservative axis-aligned."
+  },
+  {
+    "iter": 8,
     "slug": "skip-empty-tiles",
     "class": "dispatch",
     "track": "dispatch",
     "hypothesis": "Skip kernel launch for tiles with zero assigned Gaussians."
-  },
-  {
-    "iter": 6,
-    "slug": "parallel-sort-tiles",
-    "class": "sort",
-    "track": "sort",
-    "hypothesis": "Parallel sort across tiles using available CPU cores."
-  },
-  {
-    "iter": 7,
-    "slug": "host-device-overlap",
-    "class": "dispatch",
-    "track": "overlap",
-    "hypothesis": "Pipeline depth 2 at host/device boundary; prep frame N+1 while device runs frame N."
   }
 ]
