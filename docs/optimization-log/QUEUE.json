@@ -1,0 +1,51 @@
+[
+  {
+    "iter": 1,
+    "slug": "dst-resident-state",
+    "class": "kernel-algebra",
+    "track": "kernel-layer-a",
+    "hypothesis": "Acquire Dst once per output tile; keep R/G/B/T in Dst[0..3] across the Gaussian loop. Storage relocation only, should be bit-identical."
+  },
+  {
+    "iter": 2,
+    "slug": "basis-form-tile-local",
+    "class": "kernel-algebra",
+    "track": "kernel-layer-b",
+    "hypothesis": "Expand Q = A\u00b7x\u00b2 + B\u00b7xy + C\u00b7y\u00b2 + D\u00b7x + E\u00b7y + F with tile-local centered coords in [-15.5, 15.5]. 6 mul_tiles + acc_to_dest + exp_tile."
+  },
+  {
+    "iter": 3,
+    "slug": "layer-a-plus-b",
+    "class": "kernel-algebra",
+    "track": "kernel-combined",
+    "hypothesis": "Compose Dst-resident state (Layer A) with basis-form (Layer B)."
+  },
+  {
+    "iter": 4,
+    "slug": "tighter-tile-bbox",
+    "class": "binning",
+    "track": "binning",
+    "hypothesis": "Use per-Gaussian (\u03bc, \u03a3) for 3\u03c3 ellipse bbox vs conservative axis-aligned."
+  },
+  {
+    "iter": 5,
+    "slug": "skip-empty-tiles",
+    "class": "dispatch",
+    "track": "dispatch",
+    "hypothesis": "Skip kernel launch for tiles with zero assigned Gaussians."
+  },
+  {
+    "iter": 6,
+    "slug": "parallel-sort-tiles",
+    "class": "sort",
+    "track": "sort",
+    "hypothesis": "Parallel sort across tiles using available CPU cores."
+  },
+  {
+    "iter": 7,
+    "slug": "host-device-overlap",
+    "class": "dispatch",
+    "track": "overlap",
+    "hypothesis": "Pipeline depth 2 at host/device boundary; prep frame N+1 while device runs frame N."
+  }
+]
