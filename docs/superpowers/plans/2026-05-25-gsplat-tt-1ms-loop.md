@@ -572,6 +572,18 @@ def main():
 
     timing = aggregate_timing(args.iter_dir / "timing.jsonl")
 
+    # Optional: per-zone Tracy data if --profile was used.
+    tracy_zones = None
+    zones_csv = args.iter_dir / "zones.csv"
+    if zones_csv.exists():
+        import csv
+        with zones_csv.open() as f:
+            tracy_zones = [
+                {"name": r["name"], "avg_ns": float(r["avg_ns"]), "count": int(r["count"])}
+                for r in csv.DictReader(f)
+                if r.get("name") and r.get("avg_ns")
+            ]
+
     metrics = {
         "iter_dir": str(args.iter_dir.name),
         "class": args.class_tag,
@@ -579,6 +591,8 @@ def main():
         "psnr_per_view": psnr,
         **timing,
     }
+    if tracy_zones is not None:
+        metrics["tracy_zones"] = tracy_zones
     (args.iter_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
     print(json.dumps(metrics, indent=2))
 
@@ -1549,19 +1563,22 @@ git commit -m "opt-v2: rewrite build_report.py — REPORT.html driven by iters.j
 #!/usr/bin/env bash
 # Single-command worker entry point for one iter.
 #
-# Usage: scripts/run_iter.sh <iter_num> <slug> <class>
+# Usage: scripts/run_iter.sh <iter_num> <slug> <class> [--profile]
 #   <iter_num>  e.g. 1, 2, 47
 #   <slug>      kebab-case label, e.g. "dst-resident-state"
 #   <class>     one of: kernel-algebra | precompute | dispatch | binning | sort | host-prep
+#   --profile   (optional) build with Tracy enabled and capture per-zone timings.
+#               Adds ~5-10% kernel overhead, so OFF by default. Use when an iter
+#               is surprising or we plateau and need per-zone attribution.
 #
 # Steps:
 #   1. clean tree check
 #   2. devsync gate
 #   3. JIT cache wipe if needed
-#   4. remote build
-#   5. remote render (training-pattern cycles)
-#   6. scp results back
-#   7. compute_metrics locally
+#   4. remote build (Tracy-enabled if --profile)
+#   5. remote render (training-pattern cycles; Tracy capture if --profile)
+#   6. scp results back (+ .tracy + zones.csv if --profile)
+#   7. compute_metrics locally (merges zones.csv if present)
 #   8. (supervisor invokes dispatch_validator separately)
 #   9. (supervisor invokes decide_and_log separately)
 #  10. build_report
@@ -1570,9 +1587,11 @@ git commit -m "opt-v2: rewrite build_report.py — REPORT.html driven by iters.j
 # failed before producing artifacts; supervisor handles per §4 decision matrix.
 set -euo pipefail
 
-ITER_NUM="${1:?usage: $0 <iter_num> <slug> <class>}"
+ITER_NUM="${1:?usage: $0 <iter_num> <slug> <class> [--profile]}"
 SLUG="${2:?slug required}"
 CLASS="${3:?class required}"
+PROFILE=0
+if [[ "${4:-}" == "--profile" ]]; then PROFILE=1; fi
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 ITER_NAME="$(printf "iter-%03d-%s" "$ITER_NUM" "$SLUG")"
 ITER_DIR="$REPO/docs/optimization-log/screenshots/$ITER_NAME"
@@ -1616,8 +1635,16 @@ if [[ "$NEEDS_WIPE" == "1" ]]; then
 fi
 
 # Step 4: remote build
-echo "[run_iter] building on $BOX_HOST"
-timeout 180 ssh "$BOX_USER@$BOX_HOST" "cd $REMOTE_REPO && sudo ninja -C backends/tt/tt-metal/build metal_example_gaussian_splatting" \
+echo "[run_iter] building on $BOX_HOST (profile=$PROFILE)"
+if [[ "$PROFILE" == "1" ]]; then
+  # Tracy-enabled build into a separate build dir to avoid thrashing the fast binary.
+  # If tt-metal's Tracy flag name differs, adjust here (commonly ENABLE_TRACY or
+  # TT_METAL_ENABLE_TRACING). Build dir kept separate so non-profile iters stay fast.
+  BUILD_CMD="cd $REMOTE_REPO && sudo cmake -S backends/tt/tt-metal -B backends/tt/tt-metal/build-tracy -DENABLE_TRACY=ON -DCMAKE_BUILD_TYPE=Release >/dev/null && sudo ninja -C backends/tt/tt-metal/build-tracy metal_example_gaussian_splatting"
+else
+  BUILD_CMD="cd $REMOTE_REPO && sudo ninja -C backends/tt/tt-metal/build metal_example_gaussian_splatting"
+fi
+timeout 240 ssh "$BOX_USER@$BOX_HOST" "$BUILD_CMD" \
   >>"$ITER_DIR/build.log" 2>&1 || { touch "$ITER_DIR/BUILD_FAIL"; exit 2; }
 echo "$CURR" > "$SENTINEL"
 
@@ -1625,13 +1652,37 @@ echo "$CURR" > "$SENTINEL"
 echo "[run_iter] rendering on $BOX_HOST"
 REMOTE_OUT="/tmp/$ITER_NAME"
 ssh "$BOX_USER@$BOX_HOST" "mkdir -p $REMOTE_OUT"
-ssh "$BOX_USER@$BOX_HOST" \
-  "cd $REMOTE_REPO && MESH_DEVICE=P100 python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT" \
-  >>"$ITER_DIR/run.log" 2>&1 || { touch "$ITER_DIR/DEVICE_FAIL"; exit 3; }
+if [[ "$PROFILE" == "1" ]]; then
+  # Start tracy-capture in the background, then render, then stop capture.
+  # tracy-capture listens on TCP 8086 by default; -o writes the .tracy file.
+  # Use a remote helper script to keep the inline ssh string sane.
+  ssh "$BOX_USER@$BOX_HOST" "
+    set -e
+    cd $REMOTE_REPO
+    export TT_METAL_DEVICE_PROFILER=1
+    tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
+    CAP=\$!
+    sleep 1
+    MESH_DEVICE=P100 python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT --binary backends/tt/tt-metal/build-tracy/programming_examples/metal_example_gaussian_splatting
+    # Give tracy-capture a moment to flush, then stop it.
+    sleep 2
+    kill -TERM \$CAP 2>/dev/null || true
+    wait \$CAP 2>/dev/null || true
+    tracy-csvexport $REMOTE_OUT/iter.tracy > $REMOTE_OUT/zones.csv
+  " >>"$ITER_DIR/run.log" 2>&1 || { touch "$ITER_DIR/DEVICE_FAIL"; exit 3; }
+else
+  ssh "$BOX_USER@$BOX_HOST" \
+    "cd $REMOTE_REPO && MESH_DEVICE=P100 python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT" \
+    >>"$ITER_DIR/run.log" 2>&1 || { touch "$ITER_DIR/DEVICE_FAIL"; exit 3; }
+fi
 
 # Step 6: scp results back
 scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/{hero,side,top}.png" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1
 scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/timing.jsonl" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1
+if [[ "$PROFILE" == "1" ]]; then
+  scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/iter.tracy" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
+  scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/zones.csv" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
+fi
 
 # Step 7: compute metrics locally
 PREV_BEST="$(jq -r '[.[]?] | map(select(.action=="commit")) | min_by(.kernel_ms_median).kernel_ms_median // "Infinity"' \
@@ -1690,6 +1741,20 @@ if ! ssh -o ConnectTimeout=5 "$BOX_USER@$BOX_HOST" 'tt-smi -s' >/dev/null 2>&1; 
   echo "tt-smi failed on $BOX_HOST" >&2
   echo "DEVICE_HUNG"
   exit 0
+fi
+
+# Check 1.5: tt-triage (if available) — catches hangs/wedges that tt-smi misses.
+# Gracefully skipped if the tool isn't installed. Look for any non-empty `errors`
+# array in the JSON output as a wedge signal.
+TRIAGE_JSON=$(ssh "$BOX_USER@$BOX_HOST" 'command -v tt-triage >/dev/null && tt-triage --json 2>/dev/null || echo ""' 2>/dev/null || echo "")
+if [[ -n "$TRIAGE_JSON" ]]; then
+  ERR_COUNT=$(echo "$TRIAGE_JSON" | jq -r '(.errors // []) | length' 2>/dev/null || echo "0")
+  if [[ "$ERR_COUNT" != "0" ]]; then
+    echo "tt-triage flagged $ERR_COUNT issue(s):" >&2
+    echo "$TRIAGE_JSON" | jq -r '.errors[]?' >&2 || true
+    echo "DEVICE_HUNG"
+    exit 0
+  fi
 fi
 
 # Check 2: viewer on 8080 responsive (tunnel must be up from Mac)
