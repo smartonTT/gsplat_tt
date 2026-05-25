@@ -27,8 +27,12 @@ if [[ "$SSH_EXIT" != "0" ]]; then
   exit 0
 fi
 
-# Check 1: tt-smi
-if ! ssh -o ConnectTimeout=5 "$BOX_USER@$BOX_HOST" 'tt-smi -s' >/dev/null 2>&1; then
+# Check 1: tt-smi. Non-interactive ssh skips /etc/profile.d, so tt-smi may
+# not be on PATH; fall back to /opt/venv/bin/tt-smi (the ttkmd default).
+if ! ssh -o ConnectTimeout=5 "$BOX_USER@$BOX_HOST" \
+       'command -v tt-smi >/dev/null && tt-smi -s >/dev/null 2>&1 \
+        || /opt/venv/bin/tt-smi -s >/dev/null 2>&1' \
+       >/dev/null 2>&1; then
   echo "tt-smi failed on $BOX_HOST" >&2
   echo "DEVICE_HUNG"
   exit 0
