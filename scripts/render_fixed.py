@@ -21,6 +21,14 @@ Options:
   --ply PATH            (default: from cameras.json scene entry)
   --json                (also emit one line of JSON with all timings)
   --profile             (run with TT_METAL_DEVICE_PROFILER=1; one frame only)
+  --cycles              (training-pattern mode: loop hero/side/top for
+                         --warmup-cycles + --measure-cycles iterations;
+                         requires --out-dir)
+  --scene NAME          (scene for --cycles mode; default stitch)
+  --measure-cycles N    (default 10)
+  --warmup-cycles W     (default 1)
+  --out-dir PATH        (required when --cycles is set)
+  --size N              (square override for --cycles; sets W=H=N)
 """
 from __future__ import annotations
 
@@ -47,6 +55,9 @@ from gsplat.utils import c2w_to_w2c  # noqa: E402
 
 TILE_SIZE = 32
 
+# Default camera-file location (relative to repo root).
+_DEFAULT_CAMERA_FILE = Path("benchmarks/cameras.json")
+
 
 def fov_to_focal(fov_deg: float, length_px: int) -> float:
     """Pinhole focal length given a horizontal/vertical fov and that dim's pixel size."""
@@ -66,16 +77,157 @@ def build_intrinsics(W: int, H: int, fov_deg: float) -> torch.Tensor:
     return torch.from_numpy(K)
 
 
+def load_cameras_json(camera_file: Path) -> dict:
+    """Read and return the cameras.json dict. Exits with an error if missing."""
+    if not camera_file.exists():
+        print(f"ERROR: camera file not found: {camera_file}", file=sys.stderr)
+        sys.exit(2)
+    return json.loads(camera_file.read_text())
+
+
+def load_camera(cameras: dict, scene: str, view: str) -> tuple:
+    """Return (c2w_np, W, H, fov_deg, ply_path) for the given scene/view.
+
+    Raises SystemExit with a helpful message if the scene or view is missing.
+    """
+    if scene not in cameras:
+        print(f"ERROR: scene {scene!r} not in cameras.json. "
+              f"Known: {list(cameras)}", file=sys.stderr)
+        sys.exit(2)
+    entry = cameras[scene]
+    if view not in entry["views"]:
+        print(f"ERROR: view {view!r} not in scene {scene}. "
+              f"Known: {list(entry['views'])}", file=sys.stderr)
+        sys.exit(2)
+    c2w = np.asarray(entry["views"][view]["c2w"], dtype=np.float32)
+    W, H = entry["image_size"]
+    fov_deg = entry["fov_deg"]
+    ply_path = Path(entry["ply"])
+    return c2w, W, H, fov_deg, ply_path
+
+
+def render_one_view_sync(pipeline, gauss, extrinsics, intrinsics, H: int, W: int) -> tuple:
+    """Run one synchronous render (CPU / CUDA / TT-sync).
+
+    Returns (image_np_float32_or_None, wall_ms, result).
+    """
+    t0 = time.perf_counter()
+    result = pipeline.render(gauss, extrinsics, intrinsics, H, W)
+    wall_ms = (time.perf_counter() - t0) * 1000.0
+    return result.image, wall_ms, result
+
+
+def image_to_uint8(image_float) -> np.ndarray:
+    """Convert a float32 image array (top-row = +Y) to uint8 with vertical flip."""
+    return np.flipud((np.clip(image_float, 0.0, 1.0) * 255).astype(np.uint8))
+
+
+def main_cycles(args) -> None:
+    """--cycles training-pattern mode.
+
+    Loops over hero/side/top for `warmup_cycles + measure_cycles` full passes.
+    Measured cycles emit one JSON row per frame into <out-dir>/timing.jsonl.
+    The final measured render for each view is saved as <out-dir>/{view}.png.
+    """
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    camera_file = Path(args.camera_file) if args.camera_file else _DEFAULT_CAMERA_FILE
+    cameras = load_cameras_json(camera_file)
+
+    scene = args.scene
+    views = ("hero", "side", "top")
+
+    # Load ply path from the scene entry (--ply overrides).
+    _, _, _, _, ply_from_json = load_camera(cameras, scene, views[0])
+    ply_path = Path(args.ply) if args.ply else ply_from_json
+    if not ply_path.exists():
+        print(f"ERROR: ply not found: {ply_path}", file=sys.stderr)
+        sys.exit(2)
+
+    gauss = load_ply(str(ply_path))
+    print(f"[cycles] scene={scene} ply={ply_path} backend={args.backend} "
+          f"gaussians={gauss.num_gaussians:,}", flush=True)
+
+    # Build a shared backend / pipeline (one device open for the whole run).
+    backend = get_backend(args.backend, verbose=False)
+    pipeline = Pipeline(backend, tile_size=TILE_SIZE)
+
+    # Pre-load cameras; optionally override image size with --size.
+    cam_info: dict[str, tuple] = {}
+    for v in views:
+        c2w, W, H, fov_deg, _ = load_camera(cameras, scene, v)
+        if args.size is not None:
+            W = H = int(args.size)
+        cam_info[v] = (c2w, W, H, fov_deg)
+
+    timing_rows: list[dict] = []
+    final_imgs: dict[str, np.ndarray] = {}
+    total_cycles = args.warmup_cycles + args.measure_cycles
+
+    for cycle in range(total_cycles):
+        measured = cycle >= args.warmup_cycles
+        tag = "measured" if measured else "warmup "
+        for v in views:
+            c2w, W, H, fov_deg = cam_info[v]
+            extrinsics = c2w_to_w2c(c2w)
+            intrinsics = build_intrinsics(W, H, fov_deg)
+
+            image_float, wall_ms, result = render_one_view_sync(
+                pipeline, gauss, extrinsics, intrinsics, H, W
+            )
+
+            # kernel_ms: prefer TT sub-timing; fall back to wall time.
+            kernel_ms = (
+                result.sub_timings.get("blend.daemon_rt.device_kernel")
+                or result.sub_timings.get("device_kernel")
+                or wall_ms
+            )
+            print(
+                f"[cycle {cycle:2d}/{total_cycles-1} {tag} {v:4s}] "
+                f"wall={wall_ms:7.1f}ms kernel_ms={kernel_ms:.2f}",
+                flush=True,
+            )
+            if measured:
+                timing_rows.append({
+                    "cycle": cycle - args.warmup_cycles,
+                    "view": v,
+                    "kernel_ms": float(kernel_ms),
+                })
+                if image_float is not None:
+                    final_imgs[v] = image_to_uint8(image_float)
+
+    pipeline.close()
+
+    # Write output images.
+    from PIL import Image as _PILImage
+    for v, img in final_imgs.items():
+        _PILImage.fromarray(img).save(out_dir / f"{v}.png")
+
+    # Write timing.jsonl (one JSON object per line).
+    (out_dir / "timing.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in timing_rows) + "\n"
+        if timing_rows else ""
+    )
+
+    print(json.dumps({"frames_measured": len(timing_rows), "out_dir": str(out_dir)}))
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("scene", help="Scene short name (key into cameras.json)")
-    parser.add_argument("view", help="View name: hero | side | top")
+    # Positional args are optional so --cycles mode can omit them.
+    parser.add_argument("scene", nargs="?", default=None,
+                        help="Scene short name (key into cameras.json); "
+                             "required unless --cycles is set")
+    parser.add_argument("view", nargs="?", default=None,
+                        help="View name: hero | side | top; "
+                             "required unless --cycles is set")
     parser.add_argument("--backend", default="tt", choices=("cpu", "tt", "cuda"))
     parser.add_argument("--warmup", type=int, default=3)
     parser.add_argument("--frames", type=int, default=10)
     parser.add_argument("--out", type=Path, default=None)
-    parser.add_argument("--camera-file", type=Path, default=Path("benchmarks/cameras.json"))
+    parser.add_argument("--camera-file", type=Path, default=_DEFAULT_CAMERA_FILE)
     parser.add_argument("--ply", type=Path, default=None)
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--profile", action="store_true",
@@ -91,7 +243,33 @@ def main():
             "the same view at a different resolution; the FOV is preserved."
         ),
     )
+    # --cycles training-pattern mode flags.
+    parser.add_argument("--cycles", action="store_true",
+                        help="Training-pattern mode: loop hero/side/top for "
+                             "warmup + measure cycles")
+    parser.add_argument("--scene", default="stitch", dest="cycles_scene",
+                        help="Scene for --cycles mode (default: stitch)")
+    parser.add_argument("--measure-cycles", type=int, default=10,
+                        help="Number of measured cycles in --cycles mode (default: 10)")
+    parser.add_argument("--warmup-cycles", type=int, default=1,
+                        help="Warmup cycles before measuring in --cycles mode (default: 1)")
+    parser.add_argument("--out-dir", default=None,
+                        help="Output directory for --cycles mode (required)")
+    parser.add_argument("--size", type=int, default=None,
+                        help="Square image size override for --cycles mode (sets W=H=N)")
     args = parser.parse_args()
+
+    # Dispatch to --cycles mode early.
+    if args.cycles:
+        if not args.out_dir:
+            raise SystemExit("--cycles requires --out-dir")
+        # Bridge: expose scene/ply/camera_file on args for main_cycles.
+        args.scene = args.cycles_scene
+        return main_cycles(args)
+
+    # Single-view mode: scene and view are required.
+    if args.scene is None or args.view is None:
+        parser.error("scene and view are required unless --cycles is set")
 
     if args.profile:
         # Profiler runs are one-shot.
@@ -99,7 +277,7 @@ def main():
         args.frames = 1
         os.environ["TT_METAL_DEVICE_PROFILER"] = "1"
 
-    cameras = json.loads(args.camera_file.read_text())
+    cameras = load_cameras_json(args.camera_file)
     if args.scene not in cameras:
         print(f"ERROR: scene {args.scene!r} not in {args.camera_file}. "
               f"Known: {list(cameras)}", file=sys.stderr)
