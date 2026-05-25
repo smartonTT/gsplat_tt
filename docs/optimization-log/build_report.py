@@ -43,61 +43,68 @@ def load_iters() -> list[dict]:
     return [json.loads(l) for l in p.read_text().splitlines() if l.strip()]
 
 
-def graph_kernel_ms(iters: list[dict]) -> None:
-    fig, ax = plt.subplots(figsize=(10, 5))
-    xs = list(range(len(iters)))
-    medians = [r.get("kernel_ms_median", float("nan")) for r in iters]
-    p99s = [r.get("kernel_ms_p99", float("nan")) for r in iters]
-    colors = [ACTION_COLOR.get(r.get("action"), "#999999") for r in iters]
-    ax.plot(xs, medians, "-", color="#666666", linewidth=1, label="median")
-    ax.plot(xs, p99s, "--", color="#bbbbbb", linewidth=1, label="p99")
-    ax.scatter(xs, medians, c=colors, s=40, zorder=3)
-    if iters:
-        baseline = max((r["kernel_ms_median"] for r in iters if r["iter_dir"].startswith("iter-000")), default=None)
-        if baseline:
-            ax.axhline(baseline, color="#cccccc", linestyle=":", label=f"iter-0 baseline ({baseline:.1f} ms)")
-    ax.axhline(1.0, color="#000000", linestyle=":", linewidth=1, label="target 1.0 ms")
-    ax.set_xlabel("iter index")
-    ax.set_ylabel("kernel ms")
-    ax.set_yscale("log")
-    ax.set_title("Kernel ms (median + p99), colored by action")
-    ax.legend()
+def _psnr_min(r: dict) -> float | None:
+    psnr = r.get("psnr_per_view") or {}
+    vals = [v for v in psnr.values() if v is not None and v != float("inf")]
+    return min(vals) if vals else None
+
+
+def graph_combined(iters: list[dict]) -> None:
+    """Single combined graph: kernel ms (log, left axis) + PSNR (linear, right axis).
+
+    Plots only at-or-better iters: each entry must have kernel_ms_median <=
+    the running best so far (iter-0 anchors). This is the "committed trajectory"
+    — regressed iters and historical opt-stable data are excluded.
+    """
+    nan = float("nan")
+    best = float("inf")
+    kept: list[dict] = []
+    for r in iters:
+        ms = r.get("kernel_ms_median")
+        if ms is None:
+            continue
+        if ms <= best:
+            kept.append(r)
+            best = ms
+
+    labels = [r["iter_dir"] for r in kept]
+    medians = [r.get("kernel_ms_median", nan) for r in kept]
+    hero = [r.get("per_view_median", {}).get("hero", nan) for r in kept]
+    side = [r.get("per_view_median", {}).get("side", nan) for r in kept]
+    top  = [r.get("per_view_median", {}).get("top",  nan) for r in kept]
+    psnr_min = [(_psnr_min(r) if _psnr_min(r) is not None else nan) for r in kept]
+    actions = [r.get("action", "unknown") for r in kept]
+
+    xs = list(range(len(labels)))
+    fig, ax_ms = plt.subplots(figsize=(14, 6))
+    ax_ms.plot(xs, medians, "-", color="#1f77b4", linewidth=1.6, label="kernel median", zorder=3)
+    colors = [ACTION_COLOR.get(a, "#999999") for a in actions]
+    ax_ms.scatter(xs, medians, c=colors, s=44, zorder=4, edgecolors="white", linewidths=0.7)
+    ax_ms.plot(xs, hero, "-", color="#1f77b4", alpha=0.35, linewidth=0.9, label="hero")
+    ax_ms.plot(xs, side, "-", color="#2ca02c", alpha=0.35, linewidth=0.9, label="side")
+    ax_ms.plot(xs, top,  "-", color="#d62728", alpha=0.35, linewidth=0.9, label="top")
+    ax_ms.axhline(1.0, color="#000000", linestyle=":", linewidth=1, label="target 1.0 ms")
+    ax_ms.set_xlabel("iter")
+    ax_ms.set_ylabel("kernel ms (log)")
+    ax_ms.set_yscale("log")
+    ax_ms.grid(True, alpha=0.3)
+    ax_ms.set_xticks(xs)
+    ax_ms.set_xticklabels(labels, rotation=60, ha="right", fontsize=7)
+
+    ax_db = ax_ms.twinx()
+    ax_db.plot(xs, psnr_min, "--", color="#9467bd", linewidth=1.2, marker="s",
+               markersize=4, label="PSNR min (dB)")
+    ax_db.axhline(35.0, color="#9467bd", linestyle=":", linewidth=1, alpha=0.6,
+                  label="PSNR gate 35 dB")
+    ax_db.set_ylabel("PSNR (dB)")
+    ax_db.set_ylim(0, 55)
+
+    h1, l1 = ax_ms.get_legend_handles_labels()
+    h2, l2 = ax_db.get_legend_handles_labels()
+    ax_ms.legend(h1 + h2, l1 + l2, loc="upper right", fontsize=8, ncol=2)
+    ax_ms.set_title("Kernel ms + PSNR — committed trajectory (at-or-better iters)")
     fig.tight_layout()
-    fig.savefig(GRAPHS / "graph-kernel-ms.png", dpi=110)
-    plt.close(fig)
-
-
-def graph_kernel_ms_per_view(iters: list[dict]) -> None:
-    fig, ax = plt.subplots(figsize=(10, 5))
-    xs = list(range(len(iters)))
-    for view, color in [("hero", "#1f77b4"), ("side", "#2ca02c"), ("top", "#d62728")]:
-        ys = [r.get("per_view_median", {}).get(view, float("nan")) for r in iters]
-        ax.plot(xs, ys, "-o", color=color, markersize=4, label=view)
-    ax.axhline(1.0, color="#000000", linestyle=":", linewidth=1, label="target")
-    ax.set_xlabel("iter index")
-    ax.set_ylabel("kernel ms (per-view median)")
-    ax.set_yscale("log")
-    ax.set_title("Per-view kernel ms median")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(GRAPHS / "graph-kernel-ms-per-view.png", dpi=110)
-    plt.close(fig)
-
-
-def graph_psnr(iters: list[dict]) -> None:
-    fig, ax = plt.subplots(figsize=(10, 5))
-    xs = list(range(len(iters)))
-    mins = [min(r.get("psnr_per_view", {"x": 0}).values()) for r in iters]
-    colors = [ACTION_COLOR.get(r.get("action"), "#999999") for r in iters]
-    ax.scatter(xs, mins, c=colors, s=40)
-    ax.axhline(100.0, color="#000000", linestyle="--", linewidth=1, label="kernel-algebra floor (100 dB)")
-    ax.axhline(50.0, color="#888888", linestyle="--", linewidth=1, label="binning/sort floor (50 dB)")
-    ax.set_xlabel("iter index")
-    ax.set_ylabel("min PSNR across 3 views (dB)")
-    ax.set_title("PSNR min per iter with class floors")
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(GRAPHS / "graph-psnr.png", dpi=110)
+    fig.savefig(GRAPHS / "graph-progress.png", dpi=120)
     plt.close(fig)
 
 
@@ -162,12 +169,12 @@ def render_card(r: dict) -> str:
     <div class="psnr">PSNR: hero {psnr.get('hero', float('nan')):.1f} / side {psnr.get('side', float('nan')):.1f} / top {psnr.get('top', float('nan')):.1f} (min <b>{psnr_min:.1f}</b>)</div>
   </div>
   <div class="thumbs">
-    <figure><img src="{shot_dir}/hero.png" alt="hero"><figcaption>hero</figcaption></figure>
-    <figure><img src="{shot_dir}/side.png" alt="side"><figcaption>side</figcaption></figure>
-    <figure><img src="{shot_dir}/top.png" alt="top"><figcaption>top</figcaption></figure>
-    <figure><img src="{shot_dir}/hero_diff10.png" alt="hero diff10"><figcaption>hero × 10</figcaption></figure>
-    <figure><img src="{shot_dir}/side_diff10.png" alt="side diff10"><figcaption>side × 10</figcaption></figure>
-    <figure><img src="{shot_dir}/top_diff10.png" alt="top diff10"><figcaption>top × 10</figcaption></figure>
+    <figure><a href="{shot_dir}/hero.png" target="_blank"><img src="{shot_dir}/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="{shot_dir}/side.png" target="_blank"><img src="{shot_dir}/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="{shot_dir}/top.png" target="_blank"><img src="{shot_dir}/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="{shot_dir}/hero_diff10.png" target="_blank"><img src="{shot_dir}/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="{shot_dir}/side_diff10.png" target="_blank"><img src="{shot_dir}/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="{shot_dir}/top_diff10.png" target="_blank"><img src="{shot_dir}/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
   </div>
   <details>
     <summary>Validator checks ({verdict_badge})</summary>
@@ -206,10 +213,8 @@ def render_html(iters: list[dict]) -> str:
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
   <section class="graphs">
-    <img src="graphs/graph-kernel-ms.png" alt="kernel ms">
-    <img src="graphs/graph-kernel-ms-per-view.png" alt="per-view kernel ms">
-    <img src="graphs/graph-psnr.png" alt="psnr">
-    <img src="graphs/graph-class-progress.png" alt="class progress">
+    <a href="graphs/graph-progress.png" target="_blank"><img src="graphs/graph-progress.png" alt="progress: kernel ms + PSNR"></a>
+    <a href="graphs/graph-class-progress.png" target="_blank"><img src="graphs/graph-class-progress.png" alt="class progress"></a>
   </section>
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
@@ -226,11 +231,14 @@ def render_html(iters: list[dict]) -> str:
 
 def main() -> None:
     iters = load_iters()
+    graph_combined(iters)
     if iters:
-        graph_kernel_ms(iters)
-        graph_kernel_ms_per_view(iters)
-        graph_psnr(iters)
         graph_class_progress(iters)
+    # Drop stale per-metric graphs from the pre-combined layout, if present.
+    for stale in ("graph-kernel-ms.png", "graph-kernel-ms-per-view.png", "graph-psnr.png"):
+        p = GRAPHS / stale
+        if p.exists():
+            p.unlink()
     (OUT / "REPORT.html").write_text(render_html(iters))
     print(f"built REPORT.html for {len(iters)} iters")
 
