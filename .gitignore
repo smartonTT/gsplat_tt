@@ -259,4 +259,5 @@ docs/thesis_plan.md
 /scenes/*.png
 
 # opt-v2 autonomous loop: last-build bookmark (local state, not for git)
-.opt-v2-last-build-commitdocs/optimization-log/graphs/
+.opt-v2-last-build-commit
+docs/optimization-log/graphs/
