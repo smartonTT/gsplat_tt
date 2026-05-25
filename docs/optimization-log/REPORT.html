@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 0 · current best: n/a · target: 1.0 ms
+      iters: 1 · current best: 99.95 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -22,6 +22,36 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-000-baseline
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">baseline</span>
+      
+      <span class="ts">2026-05-25T12:18:40.735888+00:00</span>
+    </h3>
+  </header>
+  <div class="metrics">
+    <div class="ms">kernel: <b>99.95 ms</b> median · 105.40 ms p99</div>
+    <div class="per-view">per-view: hero 99.95 / side 90.57 / top 105.28</div>
+    <div class="psnr">PSNR: hero inf / side inf / top inf (min <b>inf</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><img src="screenshots/iter-000-baseline/hero.png" alt="hero"><figcaption>hero</figcaption></figure>
+    <figure><img src="screenshots/iter-000-baseline/side.png" alt="side"><figcaption>side</figcaption></figure>
+    <figure><img src="screenshots/iter-000-baseline/top.png" alt="top"><figcaption>top</figcaption></figure>
+    <figure><img src="screenshots/iter-000-baseline/hero_diff10.png" alt="hero diff10"><figcaption>hero × 10</figcaption></figure>
+    <figure><img src="screenshots/iter-000-baseline/side_diff10.png" alt="side diff10"><figcaption>side × 10</figcaption></figure>
+    <figure><img src="screenshots/iter-000-baseline/top_diff10.png" alt="top diff10"><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>(no validator.json)</li></ul>
+    <p class="reasoning"></p>
+  </details>
+</section>
+
   </section>
   <section class="backburner">
     <h2>BACKBURNER</h2>
