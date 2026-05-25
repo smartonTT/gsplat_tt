@@ -40,6 +40,17 @@ class KernelBackend(Backend):
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
+        # On hosts with multiple P100 chips (e.g. yyzo-bh-14 which has 2 chips),
+        # tt-metal detects a CUSTOM cluster type and requires an explicit mesh graph
+        # descriptor.  Point at the single-chip p100 descriptor so we use device 0
+        # only — create_unit_mesh(0) already limits us to one chip.
+        _tt_home = env["TT_METAL_HOME"]
+        _p100_desc = os.path.join(
+            _tt_home,
+            "tt_metal/fabric/mesh_graph_descriptors/p100_mesh_graph_descriptor.textproto",
+        )
+        if os.path.exists(_p100_desc):
+            env.setdefault("TT_MESH_GRAPH_DESC_PATH", _p100_desc)
         self._proc = subprocess.Popen(
             [self.BINARY_PATH, "--daemon"],
             stdin=subprocess.PIPE,
