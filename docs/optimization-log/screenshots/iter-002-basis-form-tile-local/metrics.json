@@ -1,0 +1,18 @@
+{
+  "iter_dir": "iter-002-basis-form-tile-local",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 99.955,
+  "psnr_per_view": {
+    "hero": 47.433146311186,
+    "side": 51.01907033422017,
+    "top": 44.67580278107127
+  },
+  "kernel_ms_median": 106.16499999999999,
+  "kernel_ms_p99": 112.64710000000001,
+  "per_view_median": {
+    "hero": 106.16499999999999,
+    "side": 96.28999999999999,
+    "top": 112.595
+  },
+  "frame_count": 30
+}

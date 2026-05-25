@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 2 · current best: 99.95 ms · target: 1.0 ms
+      iters: 4 · current best: 99.95 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -22,6 +22,70 @@
     
 <section class="iter-card">
   <header>
+    <h3>iter-002-basis-form-tile-local
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-25T18:09:38.467243+00:00</span>
+    </h3>
+  </header>
+  <p class="brief">Today the inner kernel computes `Q = a·dx² + 2b·dx·dy + c·dy²` per-Gaussian with global `dx = x - μ_x`, `dy = y - μ_y`. Layer B rewrites this as:</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>106.16 ms</b> median · 112.65 ms p99</div>
+    <div class="per-view">per-view: hero 106.16 / side 96.29 / top 112.59</div>
+    <div class="psnr">PSNR: hero 47.4 / side 51.0 / top 44.7 (min <b>44.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/hero.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/side.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/top.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/hero_diff10.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/side_diff10.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/top_diff10.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✓ tile_grid_seams: no 32x32 seams visible in any view</li><li>✓ tile_uniform_fill: natural Gaussian falloff intact</li><li>✓ missing_splat_holes: geometry coverage looks correct</li><li>✓ color_clipping_bands: no clipping bands</li><li>✓ ringing_halos: edges look natural</li><li>✓ nan_inf_signatures: no saturated regions</li><li>✓ geometry_shift: subject geometry matches references visually</li><li>✗ diff10_structure: diff10 shows broadly distributed low-level error consistent with bf16 round-trip in mul_tiles chain</li></ul>
+    <p class="reasoning">Layer B basis-form refactor rendered visually correct (no tile seams, no NaN, no geometry shift), but PSNR landed at 44-51 dB across views — far below the kernel-algebra 100 dB floor. Worker&#x27;s own root-cause analysis: basis tiles stored/fetched as bf16; the 6-step mul_tiles FPU chain introduces ~4-7 bits of accumulated rounding error in the polynomial evaluation that did not exist in the original SFPU sub_unary path. Also slower than baseline (106.17 vs 99.96 ms, +6.2%) — CB overhead of the 6 mul_tiles + Q accumulation outweighed the SFPU→FPU substitution gain. Per spec §2: if basis-form drifts below 100 dB after the tile-local fix, BACKBURNER, never the kernel. REJECT — revert. Tile-local recentering itself looked numerically fine (no 14 dB cliff like iter-057), so the basis-form approach is recoverable if the basis tiles can be stored fp32 end-to-end or if the accumulation can be reorganized to keep the dominant terms in fp32 SFPU.</p>
+  </details>
+</section>
+
+
+<section class="iter-card">
+  <header>
+    <h3>iter-002-basis-form-tile-local
+      <span class="badge" style="background:#999999">pending</span>
+      <span class="badge verdict">PENDING</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-25T18:07:07.328511Z</span>
+    </h3>
+  </header>
+  <p class="brief">Today the inner kernel computes `Q = a·dx² + 2b·dx·dy + c·dy²` per-Gaussian with global `dx = x - μ_x`, `dy = y - μ_y`. Layer B rewrites this as:</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>106.17 ms</b> median · 112.65 ms p99</div>
+    <div class="per-view">per-view: hero 106.17 / side 96.29 / top 112.59</div>
+    <div class="psnr">PSNR: hero 47.4 / side 51.0 / top 44.7 (min <b>44.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/hero.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/side.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/top.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/hero_diff10.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/side_diff10.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-002-basis-form-tile-local/top_diff10.png" target="_blank"><img src="screenshots/iter-002-basis-form-tile-local/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (PENDING)</summary>
+    <ul><li>✓ tile_grid_seams: no 32x32 seams visible in any view</li><li>✓ tile_uniform_fill: natural Gaussian falloff intact</li><li>✓ missing_splat_holes: geometry coverage looks correct</li><li>✓ color_clipping_bands: no clipping bands</li><li>✓ ringing_halos: edges look natural</li><li>✓ nan_inf_signatures: no saturated regions</li><li>✓ geometry_shift: subject geometry matches references visually</li><li>✗ diff10_structure: diff10 shows broadly distributed low-level error consistent with bf16 round-trip in mul_tiles chain</li></ul>
+    <p class="reasoning">Layer B basis-form refactor rendered visually correct (no tile seams, no NaN, no geometry shift), but PSNR landed at 44-51 dB across views — far below the kernel-algebra 100 dB floor. Worker&#x27;s own root-cause analysis: basis tiles stored/fetched as bf16; the 6-step mul_tiles FPU chain introduces ~4-7 bits of accumulated rounding error in the polynomial evaluation that did not exist in the original SFPU sub_unary path. Also slower than baseline (106.17 vs 99.96 ms, +6.2%) — CB overhead of the 6 mul_tiles + Q accumulation outweighed the SFPU→FPU substitution gain. Per spec §2: if basis-form drifts below 100 dB after the tile-local fix, BACKBURNER, never the kernel. REJECT — revert. Tile-local recentering itself looked numerically fine (no 14 dB cliff like iter-057), so the basis-form approach is recoverable if the basis tiles can be stored fp32 end-to-end or if the accumulation can be reorganized to keep the dominant terms in fp32 SFPU.</p>
+  </details>
+</section>
+
+
+<section class="iter-card">
+  <header>
     <h3>iter-001-dst-resident-state
       <span class="badge" style="background:#d62728">backburner</span>
       <span class="badge verdict">REJECT</span>
@@ -30,6 +94,7 @@
       <span class="ts">2026-05-25T16:09:46.363404+00:00</span>
     </h3>
   </header>
+  <p class="brief">The current `alpha_blend_compute.cpp` `tile_regs_acquire/release` around each per-Gaussian R/G/B/T accumulator update, spilling state back through CBs every iteration. Refactor to:</p>
   <div class="metrics">
     <div class="ms">kernel: <b>90.91 ms</b> median · 94.93 ms p99</div>
     <div class="per-view">per-view: hero 90.91 / side 82.40 / top 94.88</div>
@@ -61,6 +126,7 @@
       <span class="ts">2026-05-25T12:18:40.735888+00:00</span>
     </h3>
   </header>
+  <p class="brief">baseline</p>
   <div class="metrics">
     <div class="ms">kernel: <b>99.95 ms</b> median · 105.40 ms p99</div>
     <div class="per-view">per-view: hero 99.95 / side 90.57 / top 105.28</div>
@@ -97,6 +163,15 @@ _None yet._
 - PSNR per view: hero 3.5 / side 3.9 / top 4.5
 - Validator reasoning: Layer A Dst-resident refactor produced a 9% kernel-ms win (99.95 → 90.91 ms) but PSNR collapsed from infinity to 3.5-4.5 dB across all views. The renders show classic accumulator-corruption tile-grid artifacts: 32x32 colored blocks (magenta, blue, saturated white) tiling the image. The hypothesis stated this should be bit-identical to iter-0; instead the storage relocation altered the math. Likely cause: Dst[0..3] is being reused across Gaussians without the proper unpacker-side init that the prior CB round-trip provided, so subsequent Gaussians compute against stale or uninitialized accumulator state. Kernel-algebra class requires &gt;100 dB; observed 3.5 dB. REJECT — revert kernel edit, BACKBURNER with note that Dst-resident state requires a different init pattern than the assumed equivalence.
 - Thumbnails: ![hero](screenshots/iter-001-dst-resident-state/hero.png) ![diff10](screenshots/iter-001-dst-resident-state/hero_diff10.png)
+
+
+## iter-002-basis-form-tile-local — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 106.16 / p99 112.65
+- PSNR per view: hero 47.4 / side 51.0 / top 44.7
+- Validator reasoning: Layer B basis-form refactor rendered visually correct (no tile seams, no NaN, no geometry shift), but PSNR landed at 44-51 dB across views — far below the kernel-algebra 100 dB floor. Worker&#x27;s own root-cause analysis: basis tiles stored/fetched as bf16; the 6-step mul_tiles FPU chain introduces ~4-7 bits of accumulated rounding error in the polynomial evaluation that did not exist in the original SFPU sub_unary path. Also slower than baseline (106.17 vs 99.96 ms, +6.2%) — CB overhead of the 6 mul_tiles + Q accumulation outweighed the SFPU→FPU substitution gain. Per spec §2: if basis-form drifts below 100 dB after the tile-local fix, BACKBURNER, never the kernel. REJECT — revert. Tile-local recentering itself looked numerically fine (no 14 dB cliff like iter-057), so the basis-form approach is recoverable if the basis tiles can be stored fp32 end-to-end or if the accumulation can be reorganized to keep the dominant terms in fp32 SFPU.
+- Thumbnails: ![hero](screenshots/iter-002-basis-form-tile-local/hero.png) ![diff10](screenshots/iter-002-basis-form-tile-local/hero_diff10.png)
 
 </pre>
   </section>

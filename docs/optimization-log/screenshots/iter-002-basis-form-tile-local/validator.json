@@ -1,0 +1,30 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams",     "result": "pass", "evidence": "no 32x32 seams visible in any view"},
+    {"name": "tile_uniform_fill",   "result": "pass", "evidence": "natural Gaussian falloff intact"},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "geometry coverage looks correct"},
+    {"name": "color_clipping_bands","result": "pass", "evidence": "no clipping bands"},
+    {"name": "ringing_halos",       "result": "pass", "evidence": "edges look natural"},
+    {"name": "nan_inf_signatures",  "result": "pass", "evidence": "no saturated regions"},
+    {"name": "geometry_shift",      "result": "pass", "evidence": "subject geometry matches references visually"},
+    {"name": "diff10_structure",    "result": "fail", "evidence": "diff10 shows broadly distributed low-level error consistent with bf16 round-trip in mul_tiles chain"}
+  ],
+  "psnr_check": {
+    "floor": 100.0,
+    "actual": {"hero": 47.433146311186, "side": 51.01907033422017, "top": 44.67580278107127},
+    "pass": false
+  },
+  "per_view_consistency": {
+    "max_psnr_delta_db": 6.34,
+    "max_ms_ratio": 1.169,
+    "pass": false
+  },
+  "timing": {
+    "median_ms": 106.165,
+    "p99_ms": 112.6471,
+    "vs_prev_best_pct": 6.21,
+    "pass": false
+  },
+  "reasoning": "Layer B basis-form refactor rendered visually correct (no tile seams, no NaN, no geometry shift), but PSNR landed at 44-51 dB across views — far below the kernel-algebra 100 dB floor. Worker's own root-cause analysis: basis tiles stored/fetched as bf16; the 6-step mul_tiles FPU chain introduces ~4-7 bits of accumulated rounding error in the polynomial evaluation that did not exist in the original SFPU sub_unary path. Also slower than baseline (106.17 vs 99.96 ms, +6.2%) — CB overhead of the 6 mul_tiles + Q accumulation outweighed the SFPU→FPU substitution gain. Per spec §2: if basis-form drifts below 100 dB after the tile-local fix, BACKBURNER, never the kernel. REJECT — revert. Tile-local recentering itself looked numerically fine (no 14 dB cliff like iter-057), so the basis-form approach is recoverable if the basis tiles can be stored fp32 end-to-end or if the accumulation can be reorganized to keep the dominant terms in fp32 SFPU."
+}

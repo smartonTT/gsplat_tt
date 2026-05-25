@@ -34,6 +34,8 @@ h3 { margin-top: 24px; font-size: 18px; }
 .iter-card header { display: flex; flex-wrap: wrap; gap: 10px;
                     align-items: baseline; margin-bottom: 8px; }
 .iter-card .iter-id { font-weight: 600; font-size: 15px; color: #333; }
+.iter-card .brief { color: #444; font-size: 13px; line-height: 1.45;
+                     margin: 6px 0 2px 0; }
 .iter-card .label { color: #333; font-size: 14px; flex: 1; min-width: 200px; }
 .iter-card .hash { color: var(--muted); font-family: "SF Mono", Menlo, monospace;
                    font-size: 12px; }

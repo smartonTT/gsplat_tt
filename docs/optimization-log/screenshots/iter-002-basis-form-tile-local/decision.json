@@ -1,0 +1,8 @@
+{
+  "verdict": "REJECT",
+  "action": "backburner",
+  "high_promotion_priority": false,
+  "kernel_ms_median": 106.16499999999999,
+  "prev_best_kernel_ms": 99.955,
+  "commit_sha": null
+}

@@ -129,6 +129,35 @@ def graph_class_progress(iters: list[dict]) -> None:
     plt.close(fig)
 
 
+def _brief_for_iter(iter_name: str) -> str:
+    """One-line description: first paragraph after '## Hypothesis' in the iter's
+    md file (capped). Falls back to the iter's slug if no md exists."""
+    md = OUT / f"{iter_name}.md"
+    if md.exists():
+        text = md.read_text()
+        if "## Hypothesis" in text:
+            after = text.split("## Hypothesis", 1)[1].strip()
+            # First non-empty, non-heading paragraph.
+            para_lines: list[str] = []
+            for line in after.splitlines():
+                s = line.strip()
+                if not s:
+                    if para_lines:
+                        break
+                    continue
+                if s.startswith("#"):
+                    if para_lines:
+                        break
+                    continue
+                para_lines.append(s)
+            brief = " ".join(para_lines)
+            if brief:
+                return brief[:280] + ("…" if len(brief) > 280 else "")
+    # Fallback: pretty-print the slug.
+    slug = iter_name.split("-", 2)[-1] if iter_name.startswith("iter-") else iter_name
+    return slug.replace("-", " ")
+
+
 def render_card(r: dict) -> str:
     iter_name = r["iter_dir"]
     shot_dir = f"screenshots/{iter_name}"
@@ -138,6 +167,7 @@ def render_card(r: dict) -> str:
     badge_color = ACTION_COLOR.get(r.get("action"), "#999999")
     badge = r.get("action", "unknown")
     verdict_badge = r.get("verdict", "?")
+    brief = _brief_for_iter(iter_name)
 
     # Try to load validator JSON for the checklist render
     val_path = OUT / "screenshots" / iter_name / "validator.json"
@@ -163,6 +193,7 @@ def render_card(r: dict) -> str:
       <span class="ts">{escape(r.get('timestamp', ''))}</span>
     </h3>
   </header>
+  <p class="brief">{escape(brief)}</p>
   <div class="metrics">
     <div class="ms">kernel: <b>{r.get('kernel_ms_median', float('nan')):.2f} ms</b> median · {r.get('kernel_ms_p99', float('nan')):.2f} ms p99</div>
     <div class="per-view">per-view: hero {per_view.get('hero', float('nan')):.2f} / side {per_view.get('side', float('nan')):.2f} / top {per_view.get('top', float('nan')):.2f}</div>
