@@ -16,6 +16,7 @@
 #include "api/compute/eltwise_unary/comp.h"
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/binary_max_min.h"
+#include "api/compute/eltwise_binary_sfpu.h"
 
 // Alpha-blend compute kernel: 3D Gaussian Splatting forward rasterizer
 // (front-to-back compositing) for a per-core slice of screen tiles.
@@ -361,86 +362,50 @@ void kernel_main() {
             uint32_t color_b_bits = ckernel::read_tile_value(CB_SCALARS, 0, 8);
             uint32_t opacity_bits = ckernel::read_tile_value(CB_SCALARS, 0, 9);
 
-            // ----- Stage B: Build Q in basis form (4 acquire blocks) -----
+            // ----- Stage B+C: Build Q in basis form + exp + alpha clamp -----
             //
-            // Block B1: Scale 6 basis tiles by their per-Gaussian coefficients.
-            //   dst[0] = A * x^2,  dst[1] = B * x*y,  dst[2] = C * y^2
-            //   dst[3] = D * x,    dst[4] = E * y,     dst[5] = F * 1
-            //   Pack all 6 to CB_Q (depth 6).
+            // SINGLE acquire block. Q stays in fp32 DST throughout; no
+            // intermediate packs to bf16. This is critical because the 6
+            // basis terms (A·x², B·xy, C·y², D·x, E·y, F) have magnitudes
+            // ~O(qxx · 1000) ≈ O(10) that cancel to a small Q (~0.01 near
+            // the Gaussian center). Packing each term to bf16 would lose
+            // ~0.04 per term; 6 such errors compound to swamp the true Q
+            // signal. Keep everything in the fp32 DST register until exp().
             tile_regs_acquire();
+
+            // dst[0] = A·x²
             copy_tile_to_dst_init_short(CB_BASIS_X2);
             copy_tile(CB_BASIS_X2, 0, 0);
             mul_unary_tile(0, coeff_A_bits);
+
+            // dst[1] = B·xy; dst[0] += dst[1]
             copy_tile_to_dst_init_short(CB_BASIS_XY);
             copy_tile(CB_BASIS_XY, 0, 1);
             mul_unary_tile(1, coeff_B_bits);
+            add_binary_tile_init();
+            add_binary_tile(0, 1, 0);
+
+            // dst[1] = C·y²; dst[0] += dst[1]
             copy_tile_to_dst_init_short(CB_BASIS_Y2);
-            copy_tile(CB_BASIS_Y2, 0, 2);
-            mul_unary_tile(2, coeff_C_bits);
+            copy_tile(CB_BASIS_Y2, 0, 1);
+            mul_unary_tile(1, coeff_C_bits);
+            add_binary_tile(0, 1, 0);
+
+            // dst[1] = D·x; dst[0] += dst[1]
             copy_tile_to_dst_init_short(CB_BASIS_X);
-            copy_tile(CB_BASIS_X,  0, 3);
-            mul_unary_tile(3, coeff_D_bits);
+            copy_tile(CB_BASIS_X, 0, 1);
+            mul_unary_tile(1, coeff_D_bits);
+            add_binary_tile(0, 1, 0);
+
+            // dst[1] = E·y; dst[0] += dst[1]
             copy_tile_to_dst_init_short(CB_BASIS_Y);
-            copy_tile(CB_BASIS_Y,  0, 4);
-            mul_unary_tile(4, coeff_E_bits);
-            copy_tile_to_dst_init_short(CB_BASIS_ONE);
-            copy_tile(CB_BASIS_ONE, 0, 5);
-            mul_unary_tile(5, coeff_F_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 6);
-            pack_tile(0, CB_Q);
-            pack_tile(1, CB_Q);
-            pack_tile(2, CB_Q);
-            pack_tile(3, CB_Q);
-            pack_tile(4, CB_Q);
-            pack_tile(5, CB_Q);
-            cb_push_back(CB_Q, 6);
-            tile_regs_release();
-            cb_wait_front(CB_Q, 6);
+            copy_tile(CB_BASIS_Y, 0, 1);
+            mul_unary_tile(1, coeff_E_bits);
+            add_binary_tile(0, 1, 0);
 
-            // Block B2: Sum the 6 scaled terms in 3 pairs.
-            //   dst[0] = Q[0]+Q[1] = A*x^2 + B*xy
-            //   dst[1] = Q[2]+Q[3] = C*y^2 + D*x
-            //   dst[2] = Q[4]+Q[5] = E*y + F
-            //   Pack to CB_POWER (depth 3).
-            tile_regs_acquire();
-            add_tiles_init(CB_Q, CB_Q);
-            add_tiles(CB_Q, CB_Q, 0, 1, 0);
-            add_tiles(CB_Q, CB_Q, 2, 3, 1);
-            add_tiles(CB_Q, CB_Q, 4, 5, 2);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_POWER, 3);
-            pack_tile(0, CB_POWER);
-            pack_tile(1, CB_POWER);
-            pack_tile(2, CB_POWER);
-            cb_push_back(CB_POWER, 3);
-            tile_regs_release();
-            cb_pop_front(CB_Q, 6);
-            cb_wait_front(CB_POWER, 3);
-
-            // Block B3: Sum first 2 pairs.
-            //   dst[0] = CB_POWER[0] + CB_POWER[1] = A*x^2+B*xy + C*y^2+D*x
-            //   Pack to CB_T_TMP.
-            tile_regs_acquire();
-            add_tiles_init(CB_POWER, CB_POWER);
-            add_tiles(CB_POWER, CB_POWER, 0, 1, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_pop_front(CB_POWER, 2);  // pop the first 2 pairs
-            cb_wait_front(CB_T_TMP, 1);
-
-            // Block B4 + C: Final Q sum + power + exp + alpha.
-            //   CB_T_TMP has (A*x^2+B*xy+C*y^2+D*x), CB_POWER[0] has (E*y+F).
-            //   Q = add them; then power = -0.5*Q; then alpha chain.
-            tile_regs_acquire();
-            add_tiles_init(CB_T_TMP, CB_POWER);
-            add_tiles(CB_T_TMP, CB_POWER, 0, 0, 0);  // dst[0] = Q
+            // dst[0] += F  (scalar add, no tile load)
+            add_unary_tile(0, coeff_F_bits);
+            // dst[0] is now Q.
 
             // power = -0.5 * Q
             mul_unary_tile(0, NEG_HALF_BITS);
@@ -468,8 +433,6 @@ void kernel_main() {
             cb_push_back(CB_ALPHA, 1);
             tile_regs_release();
 
-            cb_pop_front(CB_T_TMP, 1);
-            cb_pop_front(CB_POWER, 1);  // pop the remaining (E*y+F) pair
             cb_wait_front(CB_ALPHA, 1);
 
             // ----- Stage D1: contrib = alpha * T_state * sat_mask -----
