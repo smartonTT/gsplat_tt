@@ -42,6 +42,8 @@ def write_diff10(ref: np.ndarray, cand: np.ndarray, out: Path) -> None:
 def aggregate_timing(timing_path: Path) -> dict:
     rows = [json.loads(line) for line in timing_path.read_text().splitlines() if line.strip()]
     all_ms = [r["kernel_ms"] for r in rows]
+    if not all_ms:
+        raise ValueError(f"{timing_path} has no kernel_ms rows (did the kernel crash mid-run?)")
     per_view = {v: [r["kernel_ms"] for r in rows if r.get("view") == v] for v in VIEWS}
     return {
         "kernel_ms_median": float(statistics.median(all_ms)),
