@@ -435,51 +435,34 @@ void kernel_main() {
 
             cb_wait_front(CB_ALPHA, 1);
 
-            // ----- Stage D1: contrib = alpha * T_state * sat_mask -----
-            // Step 1: T_TMP <- alpha * T_state
+            // ----- Stage D1: contrib = alpha * T_state * sat_mask (FUSED, was 2 acquires) -----
+            // FPU mul_tiles(alpha, T_state) -> dst[0]
+            // SFPU copy(sat_mask) -> dst[1]; mul_binary_tile dst[0]*=dst[1]
             tile_regs_acquire();
             mul_tiles_init(CB_ALPHA, CB_T_STATE);
             mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            // Step 2: contrib <- T_TMP * sat_mask
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_TMP, CB_SAT_MASK);
-            mul_tiles(CB_T_TMP, CB_SAT_MASK, 0, 0, 0);
+            copy_tile_to_dst_init_short(CB_SAT_MASK);
+            copy_tile(CB_SAT_MASK, 0, 1);
+            mul_binary_tile_init();
+            mul_binary_tile(0, 1, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_CONTRIB, 1);
             pack_tile(0, CB_CONTRIB);
             cb_push_back(CB_CONTRIB, 1);
             tile_regs_release();
-
-            cb_pop_front(CB_T_TMP, 1);
             cb_wait_front(CB_CONTRIB, 1);
 
-            // ----- Stage D2: color accumulator update -----
-
-            // R channel
+            // ----- Stage D2: color accumulator update (FUSED, each channel was 2 acquires) -----
+            // R channel: dst[0] = R_state, dst[1] = contrib*color_r, dst[0] += dst[1]
             tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_COLOR_R_STATE);
+            copy_tile(CB_COLOR_R_STATE, 0, 0);
             copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 0);
-            mul_unary_tile(0, color_r_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_R_STATE, CB_T_TMP);
-            add_tiles(CB_COLOR_R_STATE, CB_T_TMP, 0, 0, 0);
+            copy_tile(CB_CONTRIB, 0, 1);
+            mul_unary_tile(1, color_r_bits);
+            add_binary_tile_init();
+            add_binary_tile(0, 1, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_R_STATE, 1);
@@ -488,24 +471,16 @@ void kernel_main() {
             cb_push_back(CB_COLOR_R_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_R_STATE, 1);
-            cb_pop_front(CB_T_TMP, 1);
 
             // G channel
             tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_COLOR_G_STATE);
+            copy_tile(CB_COLOR_G_STATE, 0, 0);
             copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 0);
-            mul_unary_tile(0, color_g_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_G_STATE, CB_T_TMP);
-            add_tiles(CB_COLOR_G_STATE, CB_T_TMP, 0, 0, 0);
+            copy_tile(CB_CONTRIB, 0, 1);
+            mul_unary_tile(1, color_g_bits);
+            add_binary_tile_init();
+            add_binary_tile(0, 1, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_G_STATE, 1);
@@ -514,24 +489,16 @@ void kernel_main() {
             cb_push_back(CB_COLOR_G_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_G_STATE, 1);
-            cb_pop_front(CB_T_TMP, 1);
 
             // B channel
             tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_COLOR_B_STATE);
+            copy_tile(CB_COLOR_B_STATE, 0, 0);
             copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 0);
-            mul_unary_tile(0, color_b_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_B_STATE, CB_T_TMP);
-            add_tiles(CB_COLOR_B_STATE, CB_T_TMP, 0, 0, 0);
+            copy_tile(CB_CONTRIB, 0, 1);
+            mul_unary_tile(1, color_b_bits);
+            add_binary_tile_init();
+            add_binary_tile(0, 1, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_B_STATE, 1);
@@ -540,41 +507,22 @@ void kernel_main() {
             cb_push_back(CB_COLOR_B_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_B_STATE, 1);
-            cb_pop_front(CB_T_TMP, 1);
 
             cb_pop_front(CB_CONTRIB, 1);
 
-            // ----- Stage E: transmittance update -----
-            // Step 1: one_minus_alpha = 1.0 - alpha
+            // ----- Stage E: T_state = T_state * (1 - alpha) * sat_mask (FUSED, was 3 acquires) -----
+            // dst[0] = T_state, dst[1] = 1-alpha, mul; dst[1] = sat_mask, mul
             tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_T_STATE);
+            copy_tile(CB_T_STATE, 0, 0);
             copy_tile_to_dst_init_short(CB_ALPHA);
-            copy_tile(CB_ALPHA, 0, 0);
-            rsub_unary_tile(0, ONE_F_BITS);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_ONE_MINUS_ALPHA, 1);
-            pack_tile(0, CB_ONE_MINUS_ALPHA);
-            cb_push_back(CB_ONE_MINUS_ALPHA, 1);
-            tile_regs_release();
-            cb_wait_front(CB_ONE_MINUS_ALPHA, 1);
-
-            // Step 2: T_TMP = T_state * (1 - alpha)
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_STATE, CB_ONE_MINUS_ALPHA);
-            mul_tiles(CB_T_STATE, CB_ONE_MINUS_ALPHA, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_pop_front(CB_ONE_MINUS_ALPHA, 1);
-            cb_wait_front(CB_T_TMP, 1);
-
-            // Step 3: T_state = T_TMP * sat_mask
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_TMP, CB_SAT_MASK);
-            mul_tiles(CB_T_TMP, CB_SAT_MASK, 0, 0, 0);
+            copy_tile(CB_ALPHA, 0, 1);
+            rsub_unary_tile(1, ONE_F_BITS);
+            mul_binary_tile_init();
+            mul_binary_tile(0, 1, 0);
+            copy_tile_to_dst_init_short(CB_SAT_MASK);
+            copy_tile(CB_SAT_MASK, 0, 1);
+            mul_binary_tile(0, 1, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_T_STATE, 1);
@@ -584,7 +532,6 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_T_STATE, 1);
 
-            cb_pop_front(CB_T_TMP, 1);
             cb_pop_front(CB_ALPHA, 1);
             cb_pop_front(CB_SCALARS, 1);
         }
