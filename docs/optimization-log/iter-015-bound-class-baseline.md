@@ -87,9 +87,63 @@ and any future --profile run.
 
 ## Outcome
 
-(to be filled in after run)
+Status: **KEEP** (measurement iter — render valid, no perf regression).
 
-- per-RISC durations:
-- overhead_ratio:
-- bound-class tag:
-- next-iter lever family:
+Host kernel_ms: 96.80 ms median (iter-010 baseline 97.77; within noise — Tracy
+overhead negligible).
+
+Per-RISC kernel duration (median across cores × frames, n=3630 each):
+
+| RISC    | KERNEL median (ms) |
+|---------|--------------------|
+| BRISC   | 46.339             |
+| NCRISC  | 46.324             |
+| TRISC_0 | 46.339             |
+| TRISC_1 | 46.339             |
+| TRISC_2 | 46.339             |
+
+FW max: 46.34 ms. Spread across all five RISCs is **< 0.04%** — every RISC
+finishes within ~15 µs of the others.
+
+**overhead_ratio = (96.80 - 46.34) / 96.80 = 0.521** → 52% of per-frame time
+is OUTSIDE the device firmware framework (dispatch, EnqueueWrite, EnqueueRead,
+finalize).
+
+**Bound class: host-dominated (dispatch/transfer)**, with a secondary
+"fully-synchronized" signal on-device (no RISC is the bottleneck individually
+— they're all locked-step, suggesting CB / barrier sync).
+
+### Implications
+
+The iter-007..014 family of fusion attempts (FPU acquire merges, init
+coalescing, sat-mask removal, etc.) all targeted the 46 ms compute slice.
+Even a 50% reduction of compute would yield only ~23 ms; the *floor* set by
+dispatch is 50 ms — over half the frame.
+
+The actual >40% lever family from here:
+
+1. **iter-016: persist per-scene buffers across frames.** `packs` (~32 MB
+   of attribute SoA), `tile_ids` and probably `offsets` are scene-invariant
+   given a fixed camera batch. Currently re-uploaded every frame. If they
+   live on device across frames, kernel_ms drops to ≈ FW + small uploads.
+2. **iter-017: skip output zero-fill.** The 6 MB output zero-fill upload
+   is non-trivial; alternative is to mark empty tiles in the writer
+   kernel so the host-side zero-fill is unnecessary.
+3. **iter-018: trace API.** tt-metal Trace pre-records the command stream
+   so subsequent invocations skip dispatch overhead. Likely the largest
+   lever if available for MeshDevice fast-dispatch.
+
+### Files modified
+
+- `backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/alpha_blend.cpp`:
+  added `tt::tt_metal::detail::ReadDeviceProfilerResults(...)` after the
+  EnqueueRead — flushes per-RISC durations to disk. No-op in non-Tracy builds.
+- `scripts/run_iter.sh`: fixed device-profile output path (writes to
+  `.logs/`, not `reports/`); made tracy-csvexport tolerant of missing tool.
+- `scripts/analyze_device_profile.py`: new — parses `profile_log_device.csv`,
+  computes per-RISC medians + bound-class classification.
+
+### Artifacts
+
+- `device_profile/profile_log_device.csv` — 72,602 raw zone events (11 MB)
+- `device_profile/classification.json` — per-RISC summary + bound-class tag

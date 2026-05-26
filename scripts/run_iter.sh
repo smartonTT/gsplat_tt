@@ -124,7 +124,7 @@ if [[ "$PROFILE" == "1" ]]; then
     cd $REMOTE_REPO
     export TT_METAL_DEVICE_PROFILER=1
     export TT_METAL_HOME=$REMOTE_REPO/backends/tt/tt-metal
-    rm -rf \$TT_METAL_HOME/generated/profiler/reports 2>/dev/null || true
+    rm -rf \$TT_METAL_HOME/generated/profiler/.logs 2>/dev/null || true
     tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
     CAP=\$!
     sleep 1
@@ -140,11 +140,14 @@ if [[ "$PROFILE" == "1" ]]; then
       echo \"tracy-csvexport not found on PATH; skipping zones.csv\" >&2
       : > $REMOTE_OUT/zones.csv
     fi
-    # Copy the latest device-profiler report dir to REMOTE_OUT/device_profile/
-    LATEST_REPORT=\$(ls -dt \$TT_METAL_HOME/generated/profiler/reports/*/ 2>/dev/null | head -1)
-    if [[ -n \"\$LATEST_REPORT\" ]]; then
+    # Copy device-profiler CSVs. tt-metal writes them to .logs/, not reports/.
+    # The reports/ dir is only populated by tools/tracy/process_device_log.py
+    # which we don't run on the box.
+    PROF_LOGS=\$TT_METAL_HOME/generated/profiler/.logs
+    if [[ -d \$PROF_LOGS ]]; then
       mkdir -p $REMOTE_OUT/device_profile
-      cp \$LATEST_REPORT/*.csv $REMOTE_OUT/device_profile/ 2>/dev/null || true
+      cp \$PROF_LOGS/*.csv $REMOTE_OUT/device_profile/ 2>/dev/null || true
+      cp \$PROF_LOGS/*.log $REMOTE_OUT/device_profile/ 2>/dev/null || true
       ls $REMOTE_OUT/device_profile/ || true
     fi
   " >>"$ITER_DIR/run.log" 2>&1 || { touch "$ITER_DIR/DEVICE_FAIL"; exit 3; }

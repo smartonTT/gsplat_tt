@@ -268,3 +268,9 @@ docs/thesis_plan.md
 # opt-v2 autonomous loop: last-build bookmark (local state, not for git)
 .opt-v2-last-build-commit
 docs/optimization-log/graphs/
+
+# Raw device-profile CSVs (12+ MB each; classification.json carries the summary)
+docs/optimization-log/screenshots/iter-*/device_profile/profile_log_device.csv
+docs/optimization-log/screenshots/iter-*/device_profile/*.log
+docs/optimization-log/screenshots/iter-*/zones.csv
+docs/optimization-log/screenshots/iter-*/iter.tracy

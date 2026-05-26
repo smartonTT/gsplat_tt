@@ -1,0 +1,26 @@
+{
+  "iter_dir": "iter-015-bound-class-baseline",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 97.77,
+  "psnr_per_view": {
+    "hero": 40.40181099360784,
+    "side": 43.69705259506113,
+    "top": 40.149730293255274
+  },
+  "kernel_ms_median": 96.80000000000001,
+  "kernel_ms_p99": 101.9455,
+  "per_view_median": {
+    "hero": 96.80000000000001,
+    "side": 87.58500000000001,
+    "top": 101.785
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 325.44310299272183,
+    "project_ms": 16.963517002295703,
+    "tile_assign_ms": 10.511298998608254,
+    "sort_ms": 66.5591239958303,
+    "blend_ms": 230.75955799868098
+  },
+  "tracy_zones": []
+}
