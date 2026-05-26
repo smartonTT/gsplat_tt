@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 12 · current best: 99.34 ms · target: 1.0 ms
+      iters: 13 · current best: 97.77 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-010-e-fuse-fpu
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      <a href="iter-010-e-fuse-fpu.md">md</a>
+      <span class="ts">2026-05-26T05:44:08.813644+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> Stage E computes the front-to-back transmittance update as three acquire blocks:<br><br>Steps E2 and E3 are exactly the iter-007 D1 pattern in disguise: a FPU<br>`mul_tiles` followed by another FPU multiply that consumes its output as one<br>operand. Fuse them with `binary_dest_reuse_tiles&lt;ELWMUL, DEST_TO_SRCA&gt;`,<br>keeping the intermediate in dst[0] rather than spilling to L1 via CB_T_TMP:<br><br>Saves 1 acquire/commit/wait/release + the CB_T_TMP reserve/pack/push/wait/pop<br>roundtrip per Gaussian. Pure FPU — same op type repeated, no SFPU mixed in.<br>This matches the iter-007 safe pattern; iter-009&#x27;s regression was about<br>INDEPENDENT FPU ops (no producer-consumer chain), here we have a<br>producer-consumer chain so the second op overlaps naturally with the first&#x27;s<br>result staying live in dst.<br><br>This is NOT a iter-009-style &quot;collapse independent ops&quot; fusion. It&#x27;s an<br>iter-007-style &quot;keep the intermediate in dst instead of spilling&quot; fusion.<br>iter-006 already proved the saving in D1 with a SFPU equivalent (regressed<br>0.75 ms), iter-007 used the FPU variant of the same trick and won 0.6 ms.</p>
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass. The diff10 images show only diffuse fine-grained speckle across the object surface with no tile-boundary seams, geometry shift outlines, color clipping, NaN signatures, ringing, or structured patterns — consistent with the expected bf16 quantization noise from the fused FPU transmittance path. Numerically: all three views exceed the 40 dB kernel-algebra floor (hero 40.40, side 43.70, top 40.15); max per-view PSNR delta is 3.55 dB (well under 20 dB threshold); max per-view ms ratio is 1.16 (well under 2x); kernel_ms_median of 97.77 is 1.58% below prev_best of 99.34 (a real improvement); p99/median ratio is 1.054 (well under 3x). No check failures. Verdict: KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>97.77 ms</b> median · 103.10 ms p99</div>
+    <div class="per-view">per-view: hero 97.77 / side 88.71 / top 102.91</div>
+    <div class="psnr">PSNR: hero 40.4 / side 43.7 / top 40.1 (min <b>40.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-010-e-fuse-fpu/hero.png" target="_blank"><img src="screenshots/iter-010-e-fuse-fpu/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-010-e-fuse-fpu/side.png" target="_blank"><img src="screenshots/iter-010-e-fuse-fpu/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-010-e-fuse-fpu/top.png" target="_blank"><img src="screenshots/iter-010-e-fuse-fpu/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-010-e-fuse-fpu/hero_diff10.png" target="_blank"><img src="screenshots/iter-010-e-fuse-fpu/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-010-e-fuse-fpu/side_diff10.png" target="_blank"><img src="screenshots/iter-010-e-fuse-fpu/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-010-e-fuse-fpu/top_diff10.png" target="_blank"><img src="screenshots/iter-010-e-fuse-fpu/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32- or 16-pixel spacing visible in hero_diff10, side_diff10, or top_diff10. Diff is s</li><li>✓ tile_uniform_fill: No constant-color 32x32 or 16x16 square blocks observed in any rendered PNG. Surface detail matches reference throughout</li><li>✓ missing_splat_holes: No dark voids larger than ~16px in any view where reference has coverage. Background black is correctly flat in both ren</li><li>✓ color_clipping_bands: No saturated R/G/B stripes or flat-colored bands in any rendered view. Color range matches reference.</li><li>✓ ringing_halos: No structured ringing or halo artifacts at object silhouettes in any view. Edge transitions are smooth and match referen</li><li>✓ nan_inf_signatures: No pure black, white, or magenta patches in spatially-correlated patterns. All pixels in rendered images are continuous-</li><li>✓ geometry_shift: Diff10 images show diffuse per-pixel speckle distributed across the object interior — not a clean silhouette outline tha</li><li>✓ diff10_structure: All three diff10 images (hero, side, top) are dominated by fine-grained uniform speckle across the object surface. No gr</li></ul>
+    <p class="reasoning">All 8 visual checks pass. The diff10 images show only diffuse fine-grained speckle across the object surface with no tile-boundary seams, geometry shift outlines, color clipping, NaN signatures, ringing, or structured patterns — consistent with the expected bf16 quantization noise from the fused FPU transmittance path. Numerically: all three views exceed the 40 dB kernel-algebra floor (hero 40.40, side 43.70, top 40.15); max per-view PSNR delta is 3.55 dB (well under 20 dB threshold); max per-view ms ratio is 1.16 (well under 2x); kernel_ms_median of 97.77 is 1.58% below prev_best of 99.34 (a real improvement); p99/median ratio is 1.054 (well under 3x). No check failures. Verdict: KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-009-b2-fuse-fpu

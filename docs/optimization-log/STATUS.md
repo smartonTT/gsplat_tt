@@ -6,8 +6,8 @@ _None._
 
 ## Current State
 
-- Last updated: 2026-05-26 05:30 UTC
-- Last iter: iter-009-b2-fuse-fpu → REJECT / backburner
-- Current best kernel ms (committed): 99.34 ms
-- Last iter kernel ms median: 100.69
+- Last updated: 2026-05-26 05:44 UTC
+- Last iter: iter-010-e-fuse-fpu → KEEP / commit
+- Current best kernel ms (committed): 97.77 ms
+- Last iter kernel ms median: 97.77
 - Target: 1.0 ms
