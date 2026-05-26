@@ -162,7 +162,10 @@ static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
 // gaussian-tile pairs), 24 MB output buffer. Total persistent DRAM
 // footprint ~52 MB, well within Blackhole P100/P300's >32 GB DRAM.
 constexpr uint32_t MAX_NUM_TILES_PERSIST = 4096;
-constexpr uint32_t MAX_TOTAL_ENTRIES_PERSIST = 200000;
+// 1024² stitch_doll observed ~1.26M total_entries per view; size to 4M for
+// 3× headroom across views/scenes. At SCALAR_PACK_PAGE_BYTES=64 the packs
+// buffer is 256 MB — well within Blackhole DRAM budget.
+constexpr uint32_t MAX_TOTAL_ENTRIES_PERSIST = 4000000;
 constexpr size_t TILE_IDS_PAGE_BYTES_FWD = 64;  // mirrors TILE_IDS_PAGE_BYTES below
 
 struct PersistentBuffers {
