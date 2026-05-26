@@ -49,6 +49,7 @@ constexpr uint32_t CB_SAT_MASK      = 21;
 // against Dst slots when SFPU ops require a CB operand.
 constexpr uint32_t CB_CONST_ZERO = 22;  // 0.0  (used to clamp power = min(power, 0))
 constexpr uint32_t CB_CONST_099  = 23;  // 0.99 (used to clamp alpha = min(., 0.99))
+constexpr uint32_t CB_CONST_ONE  = 24;  // 1.0  (per-tile state init: T_state, sat_mask)
 
 // Sentinel-mask threshold: a pixel whose transmittance falls below this is
 // "saturated" (further Gaussians contribute < 1/255 to it). Used by the Stage F

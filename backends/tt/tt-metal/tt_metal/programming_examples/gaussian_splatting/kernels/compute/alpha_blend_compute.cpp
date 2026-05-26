@@ -87,6 +87,7 @@ void kernel_main() {
     constexpr uint32_t CB_SAT_MASK      = 21;  // 1.0 if T>=1e-4 else 0.0
     constexpr uint32_t CB_CONST_ZERO    = 22;  // constant 0.0 tile
     constexpr uint32_t CB_CONST_099     = 23;  // constant 0.99 tile
+    constexpr uint32_t CB_CONST_ONE     = 24;  // constant 1.0 tile (per-tile T/sat_mask init)
 
     // Bit-pattern fp32 constants for SFPU scalar-unary ops (mul_unary_tile,
     // sub_unary_tile, rsub_unary_tile, etc.) which take their immediate as a
@@ -125,8 +126,22 @@ void kernel_main() {
     tile_regs_release();
     cb_push_back(CB_CONST_099, 1);
 
+    // CB_CONST_ONE ← tile of 1.0 (used by per-tile init for T_state and sat_mask
+    // via copy_tile, replacing 5 fill_tile acquires with 2 copy_tile acquires —
+    // iter-014). Multi-slot copy_tile is proven elsewhere in this kernel; multi-slot
+    // fill_tile was not (see iter-012 lesson).
+    cb_reserve_back(CB_CONST_ONE, 1);
+    tile_regs_acquire();
+    fill_tile(0, 1.0f);
+    tile_regs_commit();
+    tile_regs_wait();
+    pack_tile(0, CB_CONST_ONE);
+    tile_regs_release();
+    cb_push_back(CB_CONST_ONE, 1);
+
     cb_wait_front(CB_CONST_ZERO, 1);
     cb_wait_front(CB_CONST_099, 1);
+    cb_wait_front(CB_CONST_ONE, 1);
 
     for (uint32_t t = 0; t < num_tiles; t++) {
         // =====================================================================
@@ -139,53 +154,47 @@ void kernel_main() {
         // many Gaussian iterations).
         // =====================================================================
 
-        // R_state, G_state, B_state = 0.0
+        // iter-014: replace 5 fill_tile acquires (R/G/B = 0, T = 1, sat_mask = 1)
+        // with 2 multi-slot copy_tile acquires from CB_CONST_ZERO / CB_CONST_ONE.
+        // Multi-slot copy_tile is proven elsewhere in this kernel (lines 595-602,
+        // 267-280). The previous fill_tile-multi-slot approach (iter-012) hung.
+        //
+        // Acquire 1: load CB_CONST_ZERO into slots 0/1/2 (R/G/B), CB_CONST_ONE into
+        // slot 3 (T). Pack each slot to its corresponding state CB.
+        tile_regs_acquire();
+        copy_tile_to_dst_init_short(CB_CONST_ZERO);
+        copy_tile(CB_CONST_ZERO, 0, 0);
+        copy_tile(CB_CONST_ZERO, 0, 1);
+        copy_tile(CB_CONST_ZERO, 0, 2);
+        copy_tile_to_dst_init_short(CB_CONST_ONE);
+        copy_tile(CB_CONST_ONE, 0, 3);
+        tile_regs_commit();
+        tile_regs_wait();
         cb_reserve_back(CB_COLOR_R_STATE, 1);
-        tile_regs_acquire();
-        fill_tile(0, 0.0f);
-        tile_regs_commit();
-        tile_regs_wait();
         pack_tile(0, CB_COLOR_R_STATE);
-        tile_regs_release();
         cb_push_back(CB_COLOR_R_STATE, 1);
-
         cb_reserve_back(CB_COLOR_G_STATE, 1);
-        tile_regs_acquire();
-        fill_tile(0, 0.0f);
-        tile_regs_commit();
-        tile_regs_wait();
-        pack_tile(0, CB_COLOR_G_STATE);
-        tile_regs_release();
+        pack_tile(1, CB_COLOR_G_STATE);
         cb_push_back(CB_COLOR_G_STATE, 1);
-
         cb_reserve_back(CB_COLOR_B_STATE, 1);
-        tile_regs_acquire();
-        fill_tile(0, 0.0f);
-        tile_regs_commit();
-        tile_regs_wait();
-        pack_tile(0, CB_COLOR_B_STATE);
-        tile_regs_release();
+        pack_tile(2, CB_COLOR_B_STATE);
         cb_push_back(CB_COLOR_B_STATE, 1);
-
-        // T_state = 1.0
         cb_reserve_back(CB_T_STATE, 1);
-        tile_regs_acquire();
-        fill_tile(0, 1.0f);
-        tile_regs_commit();
-        tile_regs_wait();
-        pack_tile(0, CB_T_STATE);
-        tile_regs_release();
+        pack_tile(3, CB_T_STATE);
         cb_push_back(CB_T_STATE, 1);
+        tile_regs_release();
 
-        // sat_mask = 1.0 (all pixels active)
-        cb_reserve_back(CB_SAT_MASK, 1);
+        // Acquire 2: sat_mask = 1.0 (DST has only 4 fp32 slots — need a separate
+        // acquire for the 5th tile).
         tile_regs_acquire();
-        fill_tile(0, 1.0f);
+        copy_tile_to_dst_init_short(CB_CONST_ONE);
+        copy_tile(CB_CONST_ONE, 0, 0);
         tile_regs_commit();
         tile_regs_wait();
+        cb_reserve_back(CB_SAT_MASK, 1);
         pack_tile(0, CB_SAT_MASK);
-        tile_regs_release();
         cb_push_back(CB_SAT_MASK, 1);
+        tile_regs_release();
 
         cb_wait_front(CB_COLOR_R_STATE, 1);
         cb_wait_front(CB_COLOR_G_STATE, 1);
