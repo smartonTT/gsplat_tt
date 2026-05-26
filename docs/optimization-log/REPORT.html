@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 22 · current best: 96.52 ms · target: 1.0 ms
+      iters: 23 · current best: 69.41 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-022-aabb-tile-bbox
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-26T22:49:44.819834+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass: no tile seams, no uniform fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, no geometry shift, and all three diff10 images show only uniform speckle noise. PSNR class is &#x27;binning&#x27; with floor 35 dB; all three views exceed that floor (hero 40.14 dB, side 43.51 dB, top 39.69 dB). Max per-view PSNR delta is 3.82 dB (well under 20 dB limit). Max per-view kernel-ms ratio is 1.25x (under 2x limit). Timing shows kernel_ms_median 69.41 ms vs prev_best 96.52 ms — a 28.1% improvement, comfortably under the 1.02x break-even threshold. p99/median ratio is 1.15x, well under the 3x suspicious-tail threshold. No check failures; verdict is KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>69.41 ms</b> median · 80.03 ms p99</div>
+    <div class="per-view">per-view: hero 69.41 / side 64.09 / top 79.91</div>
+    <div class="psnr">PSNR: hero 40.1 / side 43.5 / top 39.7 (min <b>39.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-022-aabb-tile-bbox/hero.png" target="_blank"><img src="screenshots/iter-022-aabb-tile-bbox/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-022-aabb-tile-bbox/side.png" target="_blank"><img src="screenshots/iter-022-aabb-tile-bbox/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-022-aabb-tile-bbox/top.png" target="_blank"><img src="screenshots/iter-022-aabb-tile-bbox/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-022-aabb-tile-bbox/hero_diff10.png" target="_blank"><img src="screenshots/iter-022-aabb-tile-bbox/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-022-aabb-tile-bbox/side_diff10.png" target="_blank"><img src="screenshots/iter-022-aabb-tile-bbox/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-022-aabb-tile-bbox/top_diff10.png" target="_blank"><img src="screenshots/iter-022-aabb-tile-bbox/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32- or 16-pixel spacing visible in hero_diff10, side_diff10, or top_diff10.</li><li>✓ tile_uniform_fill: No constant-color 32x32 or 16x16 blocks replacing detail in any rendered view versus reference.</li><li>✓ missing_splat_holes: No local dark holes or missing coverage in any rendered view relative to reference. Diff10 images show only distributed </li><li>✓ color_clipping_bands: No saturated R/G/B flat-stripe regions in hero, side, or top renders. Colors match reference faithfully (blue body, oran</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes visible in any rendered view or diff10.</li><li>✓ nan_inf_signatures: No spatially-correlated patches of pure black/white/magenta in any rendered view.</li><li>✓ geometry_shift: Diff10 images do not show silhouette outlines of the object, indicating no coordinate/geometry shift.</li><li>✓ diff10_structure: All three diff10 images (hero, side, top) are dominated by uniform speckle noise with no structured patterns (grids, edg</li></ul>
+    <p class="reasoning">All 8 visual checks pass: no tile seams, no uniform fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, no geometry shift, and all three diff10 images show only uniform speckle noise. PSNR class is &#x27;binning&#x27; with floor 35 dB; all three views exceed that floor (hero 40.14 dB, side 43.51 dB, top 39.69 dB). Max per-view PSNR delta is 3.82 dB (well under 20 dB limit). Max per-view kernel-ms ratio is 1.25x (under 2x limit). Timing shows kernel_ms_median 69.41 ms vs prev_best 96.52 ms — a 28.1% improvement, comfortably under the 1.02x break-even threshold. p99/median ratio is 1.15x, well under the 3x suspicious-tail threshold. No check failures; verdict is KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-020-int64-sort-key
