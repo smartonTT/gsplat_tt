@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32- or 16-pixel spacing visible in hero_diff10, side_diff10, or top_diff10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32x32 or 16x16 blocks replacing detail in any rendered view versus reference."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No local dark holes or missing coverage in any rendered view relative to reference. Diff10 images show only distributed speckle, no bright localized holes."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat-stripe regions in hero, side, or top renders. Colors match reference faithfully (blue body, orange ear, pink tongue on hero)."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes visible in any rendered view or diff10."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No spatially-correlated patches of pure black/white/magenta in any rendered view."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show silhouette outlines of the object, indicating no coordinate/geometry shift."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images (hero, side, top) are dominated by uniform speckle noise with no structured patterns (grids, edges, gradients, or bands)."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 40.14482574192463, "side": 43.51355429086536, "top": 39.689119952686966}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 3.824434548178394, "max_ms_ratio": 1.246, "pass": true},
+  "timing": {"median_ms": 69.4115, "p99_ms": 80.02881, "vs_prev_best_pct": -28.1, "pass": true},
+  "reasoning": "All 8 visual checks pass: no tile seams, no uniform fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, no geometry shift, and all three diff10 images show only uniform speckle noise. PSNR class is 'binning' with floor 35 dB; all three views exceed that floor (hero 40.14 dB, side 43.51 dB, top 39.69 dB). Max per-view PSNR delta is 3.82 dB (well under 20 dB limit). Max per-view kernel-ms ratio is 1.25x (under 2x limit). Timing shows kernel_ms_median 69.41 ms vs prev_best 96.52 ms — a 28.1% improvement, comfortably under the 1.02x break-even threshold. p99/median ratio is 1.15x, well under the 3x suspicious-tail threshold. No check failures; verdict is KEEP."
+}
