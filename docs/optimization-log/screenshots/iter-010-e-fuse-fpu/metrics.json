@@ -1,0 +1,25 @@
+{
+  "iter_dir": "iter-010-e-fuse-fpu",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 99.34,
+  "psnr_per_view": {
+    "hero": 40.40181099360784,
+    "side": 43.69705259506113,
+    "top": 40.149730293255274
+  },
+  "kernel_ms_median": 97.77,
+  "kernel_ms_p99": 103.0971,
+  "per_view_median": {
+    "hero": 97.77,
+    "side": 88.71000000000001,
+    "top": 102.905
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 315.88849849504186,
+    "project_ms": 16.48248900892213,
+    "tile_assign_ms": 10.3000035014702,
+    "sort_ms": 65.61999700352317,
+    "blend_ms": 222.96079149964498
+  }
+}

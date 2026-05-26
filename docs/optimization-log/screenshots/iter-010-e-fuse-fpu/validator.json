@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32- or 16-pixel spacing visible in hero_diff10, side_diff10, or top_diff10. Diff is spatially diffuse with no grid periodicity."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32x32 or 16x16 square blocks observed in any rendered PNG. Surface detail matches reference throughout."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark voids larger than ~16px in any view where reference has coverage. Background black is correctly flat in both rendered and reference images."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat-colored bands in any rendered view. Color range matches reference."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halo artifacts at object silhouettes in any view. Edge transitions are smooth and match reference."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta patches in spatially-correlated patterns. All pixels in rendered images are continuous-valued."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images show diffuse per-pixel speckle distributed across the object interior — not a clean silhouette outline that would indicate coordinate shift. The object shape visible in diff10 is interior noise coverage, not an edge-of-silhouette displacement signature."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images (hero, side, top) are dominated by fine-grained uniform speckle across the object surface. No grids, structured edges, gradients, or banding. This is consistent with bf16 quantization noise in the fused transmittance FPU path, not a structural artifact."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 40.40181099360784, "side": 43.69705259506113, "top": 40.149730293255274}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 3.548, "max_ms_ratio": 1.161, "pass": true},
+  "timing": {"median_ms": 97.77, "p99_ms": 103.0971, "vs_prev_best_pct": -1.58, "pass": true},
+  "reasoning": "All 8 visual checks pass. The diff10 images show only diffuse fine-grained speckle across the object surface with no tile-boundary seams, geometry shift outlines, color clipping, NaN signatures, ringing, or structured patterns — consistent with the expected bf16 quantization noise from the fused FPU transmittance path. Numerically: all three views exceed the 40 dB kernel-algebra floor (hero 40.40, side 43.70, top 40.15); max per-view PSNR delta is 3.55 dB (well under 20 dB threshold); max per-view ms ratio is 1.16 (well under 2x); kernel_ms_median of 97.77 is 1.58% below prev_best of 99.34 (a real improvement); p99/median ratio is 1.054 (well under 3x). No check failures. Verdict: KEEP."
+}
