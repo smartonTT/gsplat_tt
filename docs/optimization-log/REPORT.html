@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 10 · current best: 99.34 ms · target: 1.0 ms
+      iters: 11 · current best: 99.34 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-008-d2-fuse-fpu
+      <span class="badge" style="background:#999999">revert</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      <a href="iter-008-d2-fuse-fpu.md">md</a>
+      <span class="ts">2026-05-26T04:30:00+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> Apply the same single-acquire pattern that worked for iter-007 to Stage D2.<br>For each channel C ∈ {R, G, B} the baseline is:<br><br>Collapse to one acquire using `binary_dest_reuse_tiles&lt;ELWADD, DEST_TO_SRCA&gt;`:<br><br>Saves per channel: 1 acquire/commit/wait/release cycle + 1 CB_T_TMP<br>reserve/pack/push/wait/pop. With 3 channels, that&#x27;s 3× the per-iter savings<br>we got in iter-007.<br><br>iter-007 measured ~0.6 ms saved by fusing one similar pair. Three pairs may<br>yield ~1.5–1.8 ms naively, though the SFPU copy + mul_unary still happens<br>so the FPU win is only on the add half.</p>
+  <p class="brief outcome"><b>Outcome.</b> Per-channel D2 fuse with copy_tile + mul_unary_tile + binary_dest_reuse_tiles&lt;ELWADD, DEST_TO_SRCA&gt; deadlocks the kernel. Render daemon hung within cycle 1; no per-cycle timing line ever emitted. Same class of failure as M2 precompute basis tiles (commit 86c5ae2). Chaining copy_tile/mul_unary with binary_dest_reuse_tiles in a single acquire breaks CB_COLOR_C_STATE pop/push ordering. The iter-007 win used FPU mul_tiles + binary_dest_reuse_tiles (FPU-FPU) with no SFPU op in between — that pattern is the safe one. Avoid SFPU/FPU mixed chains across binary_dest_reuse_tiles.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>— ms</b> median · — ms p99</div>
+    <div class="per-view">per-view: hero — / side — / top —</div>
+    <div class="psnr">PSNR: hero — / side — / top — (min <b>—</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-008-d2-fuse-fpu/hero.png" target="_blank"><img src="screenshots/iter-008-d2-fuse-fpu/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-008-d2-fuse-fpu/side.png" target="_blank"><img src="screenshots/iter-008-d2-fuse-fpu/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-008-d2-fuse-fpu/top.png" target="_blank"><img src="screenshots/iter-008-d2-fuse-fpu/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-008-d2-fuse-fpu/hero_diff10.png" target="_blank"><img src="screenshots/iter-008-d2-fuse-fpu/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-008-d2-fuse-fpu/side_diff10.png" target="_blank"><img src="screenshots/iter-008-d2-fuse-fpu/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-008-d2-fuse-fpu/top_diff10.png" target="_blank"><img src="screenshots/iter-008-d2-fuse-fpu/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>(no validator.json)</li></ul>
+    <p class="reasoning"></p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-007-d1-fuse-fpu
@@ -132,8 +165,8 @@
   
   <p class="brief outcome"><b>Outcome.</b> Never reached verdict — built on iter-003 M1 (inherits tile-seam artifact). Rolled back as part of M1 revert. Timing 99.67 ms regressed from prev_best 97.55 ms; the SFPU DST-DST fusions were slower than the prior FPU mul_tiles.</p>
   <div class="metrics">
-    <div class="ms">kernel: <b>99.67 ms</b> median · nan ms p99</div>
-    <div class="per-view">per-view: hero nan / side nan / top nan</div>
+    <div class="ms">kernel: <b>99.67 ms</b> median · — ms p99</div>
+    <div class="per-view">per-view: hero — / side — / top —</div>
     <div class="psnr">PSNR: hero 43.9 / side 46.9 / top 41.8 (min <b>41.8</b>)</div>
   </div>
   <div class="thumbs">

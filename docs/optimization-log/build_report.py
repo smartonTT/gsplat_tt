@@ -254,6 +254,22 @@ def render_card(r: dict) -> str:
         checks_html = "<li>(no validator.json)</li>"
         reasoning = ""
 
+    # iter-008 and other DEVICE_FAIL/deadlock iters write null for kernel_ms_median
+    # — guard the format calls so a single broken row doesn't blow up the whole report.
+    def _ms(key):
+        v = r.get(key)
+        return f"{v:.2f}" if isinstance(v, (int, float)) and v == v else "—"
+
+    def _pv(key):
+        v = (r.get("per_view_median") or {}).get(key)
+        return f"{v:.2f}" if isinstance(v, (int, float)) and v == v else "—"
+
+    def _psnr(key):
+        v = (r.get("psnr_per_view") or {}).get(key)
+        return f"{v:.1f}" if isinstance(v, (int, float)) and v == v else "—"
+
+    psnr_min_str = f"{psnr_min:.1f}" if isinstance(psnr_min, (int, float)) and psnr_min == psnr_min else "—"
+
     return f"""
 <section class="iter-card">
   <header>
@@ -268,9 +284,9 @@ def render_card(r: dict) -> str:
   {hypothesis_html}
   {outcome_html}
   <div class="metrics">
-    <div class="ms">kernel: <b>{r.get('kernel_ms_median', float('nan')):.2f} ms</b> median · {r.get('kernel_ms_p99', float('nan')):.2f} ms p99</div>
-    <div class="per-view">per-view: hero {per_view.get('hero', float('nan')):.2f} / side {per_view.get('side', float('nan')):.2f} / top {per_view.get('top', float('nan')):.2f}</div>
-    <div class="psnr">PSNR: hero {psnr.get('hero', float('nan')):.1f} / side {psnr.get('side', float('nan')):.1f} / top {psnr.get('top', float('nan')):.1f} (min <b>{psnr_min:.1f}</b>)</div>
+    <div class="ms">kernel: <b>{_ms('kernel_ms_median')} ms</b> median · {_ms('kernel_ms_p99')} ms p99</div>
+    <div class="per-view">per-view: hero {_pv('hero')} / side {_pv('side')} / top {_pv('top')}</div>
+    <div class="psnr">PSNR: hero {_psnr('hero')} / side {_psnr('side')} / top {_psnr('top')} (min <b>{psnr_min_str}</b>)</div>
   </div>
   <div class="thumbs">
     <figure><a href="{shot_dir}/hero.png" target="_blank"><img src="{shot_dir}/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
