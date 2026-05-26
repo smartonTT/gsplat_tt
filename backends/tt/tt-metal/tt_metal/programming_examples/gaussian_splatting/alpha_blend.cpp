@@ -543,31 +543,6 @@ struct FrameDramBuffers {
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
 };
 
-// Allocate the 6 DRAM buffers a frame needs. Sizes are derived from the
-// scene's total_entries + tile count + the LPT-balanced tile-id list.
-// All buffers are RAII via shared_ptr; they free on scope exit.
-static FrameDramBuffers allocate_frame_buffers(
-    DeviceContext& ctx,
-    uint32_t total_entries,
-    uint32_t num_tiles,
-    size_t offsets_count,
-    size_t tile_ids_bytes) {
-    auto make_dram = [&](size_t bytes, size_t page_bytes) {
-        distributed::ReplicatedBufferConfig rc{.size = bytes};
-        distributed::DeviceLocalBufferConfig lc{
-            .page_size = page_bytes, .buffer_type = BufferType::DRAM};
-        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
-    };
-    FrameDramBuffers b;
-    b.packs    = make_dram(static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
-    b.offsets  = make_dram(offsets_count * sizeof(uint32_t), sizeof(uint32_t));
-    b.px       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.py       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
-    return b;
-}
-
 // Set per-core runtime args for reader/compute/writer. Each core's slice of
 // the concatenated tile_id_buffer is identified by (per_core_offset[c],
 // per_core_count[c]); reader/writer kernels look up their tile IDs at runtime
