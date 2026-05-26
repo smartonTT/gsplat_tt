@@ -128,7 +128,7 @@ if [[ "$PROFILE" == "1" ]]; then
     tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
     CAP=\$!
     sleep 1
-    MESH_DEVICE=P100 ./venv/bin/python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT --binary backends/tt/tt-metal/build-tracy/programming_examples/metal_example_gaussian_splatting
+    MESH_DEVICE=P100 TT_BINARY_PATH=backends/tt/tt-metal/build-tracy/programming_examples/metal_example_gaussian_splatting ./venv/bin/python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT
     sleep 2
     kill -TERM \$CAP 2>/dev/null || true
     wait \$CAP 2>/dev/null || true

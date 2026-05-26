@@ -37,6 +37,9 @@ class KernelBackend(Backend):
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
+        # TT_BINARY_PATH override lets the --profile harness point at the
+        # Tracy-enabled binary in build-tracy/ without symlinking.
+        binary = os.environ.get("TT_BINARY_PATH", self.BINARY_PATH)
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
@@ -52,7 +55,7 @@ class KernelBackend(Backend):
         if os.path.exists(_p100_desc):
             env.setdefault("TT_MESH_GRAPH_DESC_PATH", _p100_desc)
         self._proc = subprocess.Popen(
-            [self.BINARY_PATH, "--daemon"],
+            [binary, "--daemon"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             env=env,
