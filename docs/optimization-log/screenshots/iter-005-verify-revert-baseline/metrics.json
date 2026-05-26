@@ -1,0 +1,18 @@
+{
+  "iter_dir": "iter-005-verify-revert-baseline",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 97.545,
+  "psnr_per_view": {
+    "hero": Infinity,
+    "side": Infinity,
+    "top": Infinity
+  },
+  "kernel_ms_median": 100.33500000000001,
+  "kernel_ms_p99": 105.7213,
+  "per_view_median": {
+    "hero": 100.33500000000001,
+    "side": 90.86,
+    "top": 105.6
+  },
+  "frame_count": 30
+}
