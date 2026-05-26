@@ -517,9 +517,28 @@ static Program& get_program_for_workload(DeviceContext& ctx) {
     return it->second;
 }
 
-// Returns the kernel-only elapsed time (EnqueueWriteBuffer start ->
-// EnqueueReadBuffer end) in milliseconds.
-static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
+// Per-frame phase timings, in milliseconds. Populated by process_frame().
+// Phase breakdown (upload/dispatch/readback) requires Finish() barriers
+// between phases, which serialize and inflate kernel_ms by ~1-3%. Phase
+// breakdown is gated on the daemon-level `profile_phases` flag (env
+// GSPLAT_PROFILE_PHASES=1) so the production daemon stays overhead-free.
+struct FramePhaseTimings {
+    double io_load_ms   = 0.0;   // np.load × 4 fixtures
+    double encode_ms    = 0.0;   // LPT + bf16 packs + bf16 px/py + offsets + output_zero alloc + set_runtime_args
+    double kernel_ms    = 0.0;   // wall: 6× EnqueueWrite + dispatch + readback (today's "OK <ms>")
+    double upload_ms    = 0.0;   // only set when profile_phases — 6× EnqueueWrite + Finish
+    double dispatch_ms  = 0.0;   // only set when profile_phases — EnqueueMeshWorkload + Finish
+    double readback_ms  = 0.0;   // only set when profile_phases — EnqueueRead (blocking)
+    double io_save_ms   = 0.0;   // tiles_to_image + np.save
+};
+
+static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f, bool profile_phases) {
+    using clk = std::chrono::steady_clock;
+    auto ms_between = [](clk::time_point a, clk::time_point b) {
+        return std::chrono::duration<double, std::milli>(b - a).count();
+    };
+    FramePhaseTimings T;
+
     const uint32_t image_h = f.image_h;
     const uint32_t image_w = f.image_w;
     const uint32_t tiles_x = (image_w + TILE_W - 1) / TILE_W;
@@ -528,19 +547,19 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
 
     // 1. Load .npy fixtures.
+    const auto t_load_start = clk::now();
     std::vector<size_t> packs_shape, offsets_shape, px_shape, py_shape;
     auto packs_f32   = load_npy_f32(f.packs_path,   packs_shape);
     auto offsets_f32 = load_npy_f32(f.offsets_path, offsets_shape);
     auto px_f32      = load_npy_f32(f.px_path,      px_shape);
     auto py_f32      = load_npy_f32(f.py_path,      py_shape);
     const uint32_t total_entries = static_cast<uint32_t>(packs_shape[0]);
+    T.io_load_ms = ms_between(t_load_start, clk::now());
 
-    // 2. LPT-balanced tile-to-core assignment.
+    // 2-4. CPU encode: LPT, attribute packs to bf16, offsets cast, output zero buffer,
+    // refresh per-core runtime args. All host-side, no device traffic.
+    const auto t_encode_start = clk::now();
     const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
-
-    // 3. Allocate per-frame DRAM buffers and prepare upload payloads.
-    // (Non-const because EnqueueWrite/ReadMeshBuffer takes non-const lvalue
-    // refs to shared_ptr<MeshBuffer>.)
     FrameDramBuffers bufs = allocate_frame_buffers(
         ctx, total_entries, num_tiles, offsets_f32.size(),
         assign.tile_id_buffer_bytes_padded);
@@ -551,32 +570,45 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
     }
-
-    // 4. Refresh runtime args for this frame.
     Program& program = get_program_for_workload(ctx);
     set_per_core_runtime_args(program, ctx, bufs, assign);
-
-    // 5. Kernel timing window: DRAM upload start -> output readback end.
-    const auto t_start = std::chrono::steady_clock::now();
-    // Zero-fill the output buffer. compute_lpt_assignment() filters out
-    // empty tiles, so their slots are never written by the writer kernel.
-    // The DRAM allocator may reuse addresses across frames in daemon mode,
-    // so without this fill, empty regions would show stale pixels.
     std::vector<uint16_t> output_zero(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
+    std::vector<uint16_t> result_bf16(
+        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
+    T.encode_ms = ms_between(t_encode_start, clk::now());
+
+    // 5. Kernel timing window: DRAM upload start -> output readback end.
+    // When profile_phases is set we insert Finish() barriers between phases
+    // so we can attribute time to upload vs dispatch vs readback. This adds
+    // serialization overhead, so it's off by default and toggled via env
+    // GSPLAT_PROFILE_PHASES=1.
+    const auto t_start = clk::now();
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       px_bf16);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py,       py_bf16);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
+    clk::time_point t_after_upload;
+    if (profile_phases) {
+        distributed::Finish(*ctx.cq);
+        t_after_upload = clk::now();
+        T.upload_ms = ms_between(t_start, t_after_upload);
+    }
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
-    std::vector<uint16_t> result_bf16(
-        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
+    clk::time_point t_after_dispatch;
+    if (profile_phases) {
+        distributed::Finish(*ctx.cq);
+        t_after_dispatch = clk::now();
+        T.dispatch_ms = ms_between(t_after_upload, t_after_dispatch);
+    }
     distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, bufs.output, /*blocking=*/true);
-    const auto t_end = std::chrono::steady_clock::now();
-    const double kernel_ms =
-        std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    const auto t_end = clk::now();
+    T.kernel_ms = ms_between(t_start, t_end);
+    if (profile_phases) {
+        T.readback_ms = ms_between(t_after_dispatch, t_end);
+    }
 
     // Flush per-RISC device profiler data to disk. No-op unless built with
     // TRACY_ENABLE *and* TT_METAL_DEVICE_PROFILER=1 in env. Excluded from
@@ -585,9 +617,12 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     tt::tt_metal::detail::ReadDeviceProfilerResults(ctx.mesh_device->get_device(0));
 
     // 6. Tile-major bf16 output -> row-major fp32 image; save .npy.
+    const auto t_save_start = clk::now();
     const auto img = tiles_to_image(result_bf16, num_tiles, tiles_x, image_h, image_w);
     save_npy_f32(f.out_path, img, {image_h, image_w, 3});
-    return kernel_ms;
+    T.io_save_ms = ms_between(t_save_start, clk::now());
+
+    return T;
 }
 
 // ---------------------------------------------------------------------------
@@ -602,6 +637,12 @@ static int run_daemon() {
         std::cerr << "daemon init failed: " << e.what() << std::endl;
         return 1;
     }
+
+    // Phase-breakdown profiling: opt-in via env so the production daemon
+    // pays no Finish()-barrier overhead. Set GSPLAT_PROFILE_PHASES=1 to
+    // get upload_ms/dispatch_ms/readback_ms in the OK line.
+    const char* prof_env = std::getenv("GSPLAT_PROFILE_PHASES");
+    const bool profile_phases = prof_env && std::string(prof_env) != "0";
 
     std::cout << "READY" << std::endl;
     std::cout.flush();
@@ -630,8 +671,22 @@ static int run_daemon() {
             continue;
         }
         try {
-            double ms = process_frame(ctx, f);
-            std::cout << "OK " << std::fixed << std::setprecision(2) << ms << std::endl;
+            FramePhaseTimings T = process_frame(ctx, f, profile_phases);
+            // OK line: key=value pairs after a single leading kernel_ms value
+            // for backward compatibility (older backend.py parsed `OK <ms>`
+            // positionally). The new backend.py parses key=value pairs
+            // first and falls back to positional kernel_ms.
+            std::cout << "OK " << std::fixed << std::setprecision(3) << T.kernel_ms
+                      << " kernel_ms=" << T.kernel_ms
+                      << " io_load_ms=" << T.io_load_ms
+                      << " encode_ms=" << T.encode_ms
+                      << " io_save_ms=" << T.io_save_ms;
+            if (profile_phases) {
+                std::cout << " upload_ms=" << T.upload_ms
+                          << " dispatch_ms=" << T.dispatch_ms
+                          << " readback_ms=" << T.readback_ms;
+            }
+            std::cout << std::endl;
             std::cout.flush();
         } catch (const std::exception& e) {
             std::cout << "ERR " << e.what() << std::endl;
@@ -669,7 +724,9 @@ static int run_single_shot(int argc, char** argv) {
     DeviceContext ctx;
     try {
         ctx = init_device_context();
-        process_frame(ctx, f);
+        const char* prof_env = std::getenv("GSPLAT_PROFILE_PHASES");
+        const bool profile_phases = prof_env && std::string(prof_env) != "0";
+        process_frame(ctx, f, profile_phases);
         std::cout << "Wrote " << f.out_path << std::endl;
         if (ctx.mesh_device) {
             pass &= ctx.mesh_device->close();

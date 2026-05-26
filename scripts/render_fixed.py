@@ -202,6 +202,12 @@ def main_cycles(args) -> None:
                     "sort_ms": float(t.get("sort", 0.0)),
                     "blend_ms": float(t.get("blend", 0.0)),
                 }
+                # Flatten every sub-timing as "sub.<key>" so compute_metrics
+                # can take a median over them across cycles. These include
+                # project.<phase>, tile_assign.<phase>, sort.<phase>,
+                # blend.<phase>, blend.daemon_rt.<phase>, prep.<phase>.
+                for k, val in (result.sub_timings or {}).items():
+                    row[f"sub.{k}"] = float(val)
                 timing_rows.append(row)
                 if image_float is not None:
                     final_imgs[v] = image_to_uint8(image_float)

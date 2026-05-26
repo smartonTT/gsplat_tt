@@ -97,10 +97,15 @@ class KernelBackend(Backend):
         H, W = image_height, image_width
 
         # Sub-stage A: SoA repack (kernel-friendly layout).
+        # `prep_sub` captures the per-step breakdown of prepare_kernel_inputs
+        # (cov_inv, offsets, gather, ...) so the pipeline profiler sees
+        # WHERE inside prep the time went, not just the outer wall.
         t_prep = time.perf_counter()
+        prep_sub: dict[str, float] = {}
         packs, offsets, px, py = prepare_kernel_inputs(
             means_2d, covs_2d, colors, opacities,
             sorted_gaussian_ids, tile_ranges, H, W,
+            sub_timings=prep_sub,
         )
         prep_ms = (time.perf_counter() - t_prep) * 1000.0
 
@@ -140,14 +145,37 @@ class KernelBackend(Backend):
             raise RuntimeError(f"daemon error: {resp!r}")
         rt_ms = (time.perf_counter() - t_rt) * 1000.0
 
-        # Parse the daemon's reported device-side kernel time from "OK <ms>".
-        # Surface as a sub-timing so callers can separate dispatch+IO from
-        # actual on-device kernel runtime.
+        # Parse the daemon's reported device-side timings.
+        #
+        # The daemon now emits an extended OK line:
+        #   OK <kernel_ms_float> kernel_ms=<X> io_load_ms=<Y> encode_ms=<Z> io_save_ms=<W>
+        #   [upload_ms=<U> dispatch_ms=<D> readback_ms=<R>]
+        # where the leading positional value is kept for backward
+        # compatibility (older builds emitted only `OK <ms>`).
+        # `daemon_phases` collects every key=value pair so callers can
+        # bound-class each phase of the C++ daemon flow without forcing
+        # the daemon to emit JSON.
         kernel_ms = None
-        try:
-            kernel_ms = float(resp.split(maxsplit=1)[1])
-        except (IndexError, ValueError):
-            pass
+        daemon_phases: dict[str, float] = {}
+        tokens = resp.split()
+        if len(tokens) >= 2:
+            try:
+                kernel_ms = float(tokens[1])
+            except ValueError:
+                pass
+            for tok in tokens[2:]:
+                if "=" not in tok:
+                    continue
+                k, _, v = tok.partition("=")
+                try:
+                    daemon_phases[k] = float(v)
+                except ValueError:
+                    continue
+        # Newer daemons always echo kernel_ms as a key=value too; prefer
+        # that over the positional fallback (same float either way, but
+        # this future-proofs against dropping the positional).
+        if "kernel_ms" in daemon_phases:
+            kernel_ms = daemon_phases["kernel_ms"]
 
         # Sub-stage D: load the rendered image from the daemon's .npy.
         t_load = time.perf_counter()
@@ -162,8 +190,20 @@ class KernelBackend(Backend):
             "save_npy": save_ms,
             "daemon_rt": rt_ms,
         }
+        # Surface the prep breakdown so the pipeline profiler can attribute
+        # prep time to cov_inv / gather / offsets / etc.
+        sub_timings.update(prep_sub)
         if kernel_ms is not None:
             sub_timings["daemon_rt.device_kernel"] = kernel_ms
+        # All other daemon-reported phases are sub-measurements of daemon_rt
+        # too: io_load (np.load on the daemon side), encode (LPT + bf16
+        # repacks + runtime-arg refresh), io_save (np.save), and the
+        # optional upload/dispatch/readback splits when
+        # GSPLAT_PROFILE_PHASES=1.
+        for k, v in daemon_phases.items():
+            if k == "kernel_ms":
+                continue  # already exposed as daemon_rt.device_kernel
+            sub_timings[f"daemon_rt.{k}"] = v
         sub_timings["load_npy"] = load_ms
 
         return image, sub_timings

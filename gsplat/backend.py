@@ -60,14 +60,19 @@ class Backend(ABC):
         image_height: int,
         image_width: int,
         opacities: torch.Tensor | None = None,
+        sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """3D → 2D projection + frustum/opacity/radius culling.
+
+        `sub_timings` is an optional dict that, if provided, is populated
+        with per-stage millisecond timings keyed `project.<phase>`.
 
         Returns: (means_2d, covs_2d, depths, radii, valid_mask).
         """
         return rasterization.project_gaussians(
             means, scales, rotations, extrinsics, intrinsics,
             image_height, image_width, opacities=opacities,
+            sub_timings=sub_timings,
         )
 
     def tile_assign(
@@ -77,13 +82,15 @@ class Backend(ABC):
         image_height: int,
         image_width: int,
         tile_size: int = 32,
+        sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Tile-overlap assignment.
 
         Returns: (gaussian_ids, tile_ids, tiles_per_gaussian).
         """
         return rasterization.get_tile_assignments(
-            means_2d, radii, image_height, image_width, tile_size=tile_size,
+            means_2d, radii, image_height, image_width,
+            tile_size=tile_size, sub_timings=sub_timings,
         )
 
     def sort(
@@ -93,6 +100,7 @@ class Backend(ABC):
         depths: torch.Tensor,
         tiles_x: int,
         tiles_y: int,
+        sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Sort (gaussian, tile) pairs by (tile_id, depth) and bin into tiles.
 
@@ -100,6 +108,7 @@ class Backend(ABC):
         """
         return rasterization.sort_and_bin(
             gaussian_ids, tile_ids, depths, tiles_x, tiles_y,
+            sub_timings=sub_timings,
         )
 
     # ------------------------------------------------------------------

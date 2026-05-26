@@ -124,11 +124,15 @@ if [[ "$PROFILE" == "1" ]]; then
     cd $REMOTE_REPO
     export TT_METAL_DEVICE_PROFILER=1
     export TT_METAL_HOME=$REMOTE_REPO/backends/tt/tt-metal
+    # Daemon phase-split inside kernel_ms. Adds Finish() barriers between
+    # upload / dispatch / readback so the report can attribute the host-side
+    # bound. Gated on this env var so the prod daemon stays overhead-free.
+    export GSPLAT_PROFILE_PHASES=1
     rm -rf \$TT_METAL_HOME/generated/profiler/.logs 2>/dev/null || true
     tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
     CAP=\$!
     sleep 1
-    MESH_DEVICE=P100 TT_BINARY_PATH=backends/tt/tt-metal/build-tracy/programming_examples/metal_example_gaussian_splatting ./venv/bin/python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT
+    MESH_DEVICE=P100 TT_BINARY_PATH=backends/tt/tt-metal/build-tracy/programming_examples/metal_example_gaussian_splatting GSPLAT_PROFILE_PHASES=1 ./venv/bin/python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT
     sleep 2
     kill -TERM \$CAP 2>/dev/null || true
     wait \$CAP 2>/dev/null || true
@@ -178,6 +182,28 @@ PREV_BEST="$(jq -r '[.[]?] | map(select(.action=="commit")) | min_by(.kernel_ms_
   --reference-dir "$REPO/benchmarks/reference" \
   --class "$CLASS" \
   --prev-best-ms "$PREV_BEST" >>"$ITER_DIR/run.log" 2>&1
+
+# Step 7b: device-side bound-class classifier (only when --profile is on
+# and the per-RISC CSV is present). Writes device_profile/classification.json
+# which the report generator consumes for the overhead_ratio + per-RISC table.
+if [[ "$PROFILE" == "1" && -f "$ITER_DIR/device_profile/profile_log_device.csv" ]]; then
+  HOST_KERNEL_MS="$(jq -r '.kernel_ms_median // empty' "$ITER_DIR/metrics.json" 2>/dev/null || echo "")"
+  HK_FLAG=()
+  if [[ -n "$HOST_KERNEL_MS" ]]; then HK_FLAG=(--host-kernel-ms "$HOST_KERNEL_MS"); fi
+  "$LOCAL_PY" "$REPO/scripts/analyze_device_profile.py" \
+    --csv "$ITER_DIR/device_profile/profile_log_device.csv" \
+    "${HK_FLAG[@]}" \
+    --out-json "$ITER_DIR/device_profile/classification.json" \
+    >>"$ITER_DIR/run.log" 2>&1 || true
+fi
+
+# Step 7c: unified pipeline profile report. Persistent — runs every iter
+# regardless of --profile so we always have a sub-stage breakdown to compare
+# against. Device-side bound-class numbers are richer when --profile is on
+# (device_profile/classification.json present); without it the report still
+# emits the full host-side breakdown.
+"$LOCAL_PY" "$REPO/scripts/pipeline_profile_report.py" \
+  --iter-dir "$ITER_DIR" >>"$ITER_DIR/run.log" 2>&1 || true
 
 # Step 10: rebuild report (validator + decide steps happen via separate supervisor calls)
 "$LOCAL_PY" "$REPO/docs/optimization-log/build_report.py" >>"$ITER_DIR/run.log" 2>&1

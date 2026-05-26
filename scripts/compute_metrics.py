@@ -62,6 +62,18 @@ def aggregate_timing(timing_path: Path) -> dict:
             stage_medians[k] = float(statistics.median(vals))
     if stage_medians:
         out["stage_medians"] = stage_medians
+
+    # iter-PROF: every sub-timing under "sub.*" gets a median too. Keeps
+    # the persistent profiling story alive across future iters — every
+    # metrics.json from this point forward records the full breakdown.
+    sub_keys = sorted({k for r in rows for k in r if k.startswith("sub.")})
+    sub_medians: dict[str, float] = {}
+    for k in sub_keys:
+        vals = [r[k] for r in rows if k in r]
+        if vals:
+            sub_medians[k[len("sub."):]] = float(statistics.median(vals))
+    if sub_medians:
+        out["sub_medians"] = sub_medians
     return out
 
 

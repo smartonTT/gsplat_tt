@@ -1,7 +1,28 @@
+import time
+from contextlib import contextmanager
+
 import numpy as np
 import torch
 
 from gsplat.utils import build_covariance_3d
+
+
+# Sub-stage timer used by sort_and_bin / prepare_kernel_inputs. Both
+# accept an optional dict; when one is passed in, each sub-step records
+# its wall-clock millis into the dict. This is a permanent profiling
+# hook — Pipeline.render() always passes a dict so every frame's
+# breakdown is captured. Overhead is one perf_counter call per zone
+# (~50 ns), negligible against the millisecond-scale stages.
+@contextmanager
+def _sub_timer(d: dict[str, float] | None, name: str):
+    if d is None:
+        yield
+        return
+    t0 = time.perf_counter()
+    try:
+        yield
+    finally:
+        d[name] = d.get(name, 0.0) + (time.perf_counter() - t0) * 1000.0
 
 
 def project_gaussians(
@@ -14,6 +35,7 @@ def project_gaussians(
     image_width: int,
     opacities: torch.Tensor | None = None,
     min_opacity: float = 1.0 / 255.0,
+    sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Project 3D Gaussians to 2D screen-space ellipses.
 
@@ -51,67 +73,57 @@ def project_gaussians(
     cx, cy = intrinsics[0, 2], intrinsics[1, 2]
 
     # --- Step 1: Build 3D covariance matrices ---
-    cov3d = build_covariance_3d(scales, rotations)  # (N, 3, 3)
+    with _sub_timer(sub_timings, "project.cov3d"):
+        cov3d = build_covariance_3d(scales, rotations)  # (N, 3, 3)
 
     # --- Step 2: Transform Gaussian centers to camera space ---
-    # p_cam = R @ p_world + t, using extrinsics directly
-    R = extrinsics[:3, :3]  # (3, 3)
-    t = extrinsics[:3, 3]   # (3,)
-    means_cam = means @ R.T + t  # (N, 3) @ (3, 3) + (3,) -> (N, 3)
+    with _sub_timer(sub_timings, "project.cam_xform"):
+        R = extrinsics[:3, :3]  # (3, 3)
+        t = extrinsics[:3, 3]   # (3,)
+        means_cam = means @ R.T + t  # (N, 3) @ (3, 3) + (3,) -> (N, 3)
 
-    # --- Step 3: Frustum culling ---
-    # Keep only Gaussians in front of the near plane
-    near = 0.2
-    valid_mask = means_cam[:, 2] > near  # z > near plane
+        # --- Step 3: Frustum culling ---
+        near = 0.2
+        valid_mask = means_cam[:, 2] > near  # z > near plane
 
     # --- Step 4: Compute screen-space positions (exact pinhole projection) ---
-    tx, ty, tz = means_cam[:, 0], means_cam[:, 1], means_cam[:, 2]
-    means_2d = torch.stack([fx * tx / tz + cx, fy * ty / tz + cy], dim=-1)  # (N, 2)
+    with _sub_timer(sub_timings, "project.screen_xy"):
+        tx, ty, tz = means_cam[:, 0], means_cam[:, 1], means_cam[:, 2]
+        means_2d = torch.stack([fx * tx / tz + cx, fy * ty / tz + cy], dim=-1)  # (N, 2)
 
-    # --- Step 5: Compute the Jacobian of the perspective projection ---
-    # The perspective projection maps (x, y, z) -> (fx*x/z + cx, fy*y/z + cy).
-    # Its Jacobian at point (x, y, z) is:
-    #   J = [[fx/z,  0,   -fx*x/z²],
-    #        [0,     fy/z, -fy*y/z²]]
-    # This linearizes the nonlinear projection around each Gaussian's center, 
-    # which is a good approximation if the size of the Gaussian is small 
-    # compared to the distance to the camera.
-    tz2 = tz * tz
+    # --- Step 5+6: Compute the Jacobian + project 3D covariance to 2D ---
+    with _sub_timer(sub_timings, "project.cov2d"):
+        tz2 = tz * tz
 
-    J = torch.zeros(N, 2, 3, dtype=means.dtype)
-    J[:, 0, 0] = fx / tz
-    J[:, 0, 2] = -fx * tx / tz2
-    J[:, 1, 1] = fy / tz
-    J[:, 1, 2] = -fy * ty / tz2
+        J = torch.zeros(N, 2, 3, dtype=means.dtype)
+        J[:, 0, 0] = fx / tz
+        J[:, 0, 2] = -fx * tx / tz2
+        J[:, 1, 1] = fy / tz
+        J[:, 1, 2] = -fy * ty / tz2
 
-    # --- Step 6: Project 3D covariance to 2D ---
-    # Σ_2D = J @ R @ Σ_3D @ R^T @ J^T
-    # First transform to camera space: Σ_cam = R @ Σ_3D @ R^T
-    cov_cam = R @ cov3d @ R.T  # (3, 3) @ (N, 3, 3) @ (3, 3) -> (N, 3, 3)
+        # Σ_2D = J @ R @ Σ_3D @ R^T @ J^T
+        cov_cam = R @ cov3d @ R.T
+        covs_2d = J @ cov_cam @ J.transpose(1, 2)
 
-    # Then apply Jacobian: Σ_2D = J @ Σ_cam @ J^T
-    covs_2d = J @ cov_cam @ J.transpose(1, 2)  # (N, 2, 2)
-
-    # Add low-pass filter for anti-aliasing (0.3px variance, per original implementation)
-    covs_2d[:, 0, 0] += 0.3
-    covs_2d[:, 1, 1] += 0.3
+        # Add low-pass filter for anti-aliasing.
+        covs_2d[:, 0, 0] += 0.3
+        covs_2d[:, 1, 1] += 0.3
 
     # --- Step 7: Compute bounding radii from 2D covariance eigenvalues ---
-    # For a 2x2 symmetric matrix [[a, b], [b, c]], the max eigenvalue is:
-    #   λ_max = ((a+c) + sqrt((a-c)² + 4b²)) / 2
-    a = covs_2d[:, 0, 0]
-    b = covs_2d[:, 0, 1]
-    c = covs_2d[:, 1, 1]
-    det = (a - c) ** 2 + 4 * b ** 2
-    lambda_max = 0.5 * (a + c + torch.sqrt(torch.clamp(det, min=0.0)))
-    radii = torch.ceil(3.0 * torch.sqrt(lambda_max))
+    with _sub_timer(sub_timings, "project.radii"):
+        a = covs_2d[:, 0, 0]
+        b = covs_2d[:, 0, 1]
+        c = covs_2d[:, 1, 1]
+        det = (a - c) ** 2 + 4 * b ** 2
+        lambda_max = 0.5 * (a + c + torch.sqrt(torch.clamp(det, min=0.0)))
+        radii = torch.ceil(3.0 * torch.sqrt(lambda_max))
 
-    # Also cull Gaussians that project entirely outside the screen
-    valid_mask = valid_mask & (means_2d[:, 0] + radii > 0)
-    valid_mask = valid_mask & (means_2d[:, 0] - radii < image_width)
-    valid_mask = valid_mask & (means_2d[:, 1] + radii > 0)
-    valid_mask = valid_mask & (means_2d[:, 1] - radii < image_height)
-    valid_mask = valid_mask & (radii > 0)
+        # Also cull Gaussians that project entirely outside the screen
+        valid_mask = valid_mask & (means_2d[:, 0] + radii > 0)
+        valid_mask = valid_mask & (means_2d[:, 0] - radii < image_width)
+        valid_mask = valid_mask & (means_2d[:, 1] + radii > 0)
+        valid_mask = valid_mask & (means_2d[:, 1] - radii < image_height)
+        valid_mask = valid_mask & (radii > 0)
 
     # Cap the bounding radius. The Jacobian linearization of the perspective
     # transform (Step 5 above) breaks down when a Gaussian's 3D extent is
@@ -145,6 +157,7 @@ def get_tile_assignments(
     image_height: int,
     image_width: int,
     tile_size: int = 32,
+    sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.
 
@@ -177,39 +190,36 @@ def get_tile_assignments(
     which is what the original CUDA implementation (diff-gaussian-rasterization) uses.
     """
     # Compute the tile range each Gaussian's bounding box covers.
-    # Clamp to valid tile indices [0, tiles_x) and [0, tiles_y)
-    tile_min_x = torch.clamp((means_2d[:, 0] - radii) / tile_size, min=0, max=tiles_x - 1).int()
-    tile_max_x = torch.clamp((means_2d[:, 0] + radii) / tile_size, min=0, max=tiles_x - 1).int()
-    tile_min_y = torch.clamp((means_2d[:, 1] - radii) / tile_size, min=0, max=tiles_y - 1).int()
-    tile_max_y = torch.clamp((means_2d[:, 1] + radii) / tile_size, min=0, max=tiles_y - 1).int()
+    with _sub_timer(sub_timings, "tile_assign.bbox"):
+        tile_min_x = torch.clamp((means_2d[:, 0] - radii) / tile_size, min=0, max=tiles_x - 1).int()
+        tile_max_x = torch.clamp((means_2d[:, 0] + radii) / tile_size, min=0, max=tiles_x - 1).int()
+        tile_min_y = torch.clamp((means_2d[:, 1] - radii) / tile_size, min=0, max=tiles_y - 1).int()
+        tile_max_y = torch.clamp((means_2d[:, 1] + radii) / tile_size, min=0, max=tiles_y - 1).int()
 
-    # Width and height of each Gaussian's tile bounding box
-    widths = tile_max_x - tile_min_x + 1
-    heights = tile_max_y - tile_min_y + 1
-    tiles_per_gaussian = widths * heights
+        widths = tile_max_x - tile_min_x + 1
+        heights = tile_max_y - tile_min_y + 1
+        tiles_per_gaussian = widths * heights
 
-    # Total number of (gaussian, tile) pairs
     P = tiles_per_gaussian.sum().item()
 
-    # Repeat each Gaussian's index and tile-box params by its tile count
-    gaussian_ids = torch.repeat_interleave(torch.arange(means_2d.shape[0]), tiles_per_gaussian)
-    min_x_rep = torch.repeat_interleave(tile_min_x, tiles_per_gaussian)
-    min_y_rep = torch.repeat_interleave(tile_min_y, tiles_per_gaussian)
-    widths_rep = torch.repeat_interleave(widths, tiles_per_gaussian)
+    # Repeat-interleave: expand each Gaussian's index by its tile count.
+    with _sub_timer(sub_timings, "tile_assign.repeat"):
+        gaussian_ids = torch.repeat_interleave(torch.arange(means_2d.shape[0]), tiles_per_gaussian)
+        min_x_rep = torch.repeat_interleave(tile_min_x, tiles_per_gaussian)
+        min_y_rep = torch.repeat_interleave(tile_min_y, tiles_per_gaussian)
+        widths_rep = torch.repeat_interleave(widths, tiles_per_gaussian)
 
-    # For each pair, compute the local offset within that Gaussian's tile grid
-    # local_idx goes 0, 1, 2, ... tiles_per_gaussian[i]-1 for each Gaussian
-    offsets = torch.arange(P) - torch.repeat_interleave(
-        torch.cat([torch.zeros(1, dtype=torch.int32), tiles_per_gaussian.cumsum(0)[:-1]]),
-        tiles_per_gaussian,
-    )
+    # Compute flat tile index per (Gaussian, tile-slot) pair.
+    with _sub_timer(sub_timings, "tile_assign.flat_ids"):
+        offsets = torch.arange(P) - torch.repeat_interleave(
+            torch.cat([torch.zeros(1, dtype=torch.int32), tiles_per_gaussian.cumsum(0)[:-1]]),
+            tiles_per_gaussian,
+        )
 
-    # Convert local offset to (dx, dy) within the Gaussian's tile bounding box
-    dy = offsets // widths_rep
-    dx = offsets % widths_rep
+        dy = offsets // widths_rep
+        dx = offsets % widths_rep
 
-    # Compute flat tile index: (min_y + dy) * tiles_x + (min_x + dx)
-    tile_ids = (min_y_rep + dy) * tiles_x + (min_x_rep + dx)
+        tile_ids = (min_y_rep + dy) * tiles_x + (min_x_rep + dx)
 
     return gaussian_ids, tile_ids, tiles_per_gaussian
 
@@ -220,6 +230,7 @@ def sort_and_bin(
     depths: torch.Tensor,
     tiles_x: int,
     tiles_y: int,
+    sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Sort Gaussians by (tile_id, depth) and compute per-tile start/end ranges.
 
@@ -248,33 +259,37 @@ def sort_and_bin(
     # Create a composite sort key: tile_id first, then depth within each tile.
     # Sorting by (tile_id * large_number + depth) achieves lexicographic ordering.
     # We use a scale factor large enough that depth differences never cross tile boundaries.
-    max_depth = depths.max().item() + 1.0
-    sort_keys = tile_ids.float() * max_depth + depths[gaussian_ids]
+    with _sub_timer(sub_timings, "sort.keys"):
+        max_depth = depths.max().item() + 1.0
+        sort_keys = tile_ids.float() * max_depth + depths[gaussian_ids]
 
     # Sort all pairs by the composite key
-    sorted_indices = torch.argsort(sort_keys)
-    sorted_gaussian_ids = gaussian_ids[sorted_indices]
-    sorted_tile_ids = tile_ids[sorted_indices]
+    with _sub_timer(sub_timings, "sort.argsort"):
+        sorted_indices = torch.argsort(sort_keys)
+    with _sub_timer(sub_timings, "sort.gather"):
+        sorted_gaussian_ids = gaussian_ids[sorted_indices]
+        sorted_tile_ids = tile_ids[sorted_indices]
 
     # Build tile ranges: for each tile, find where its Gaussians start and end
     # in the sorted array. Tiles with no Gaussians get range (0, 0).
-    tile_ranges = torch.zeros(num_tiles, 2, dtype=torch.int64)
+    with _sub_timer(sub_timings, "sort.ranges"):
+        tile_ranges = torch.zeros(num_tiles, 2, dtype=torch.int64)
 
-    if sorted_tile_ids.numel() > 0:
-        # Detect where tile_id changes in the sorted array
-        changes = sorted_tile_ids[1:] != sorted_tile_ids[:-1]
-        change_indices = torch.where(changes)[0] + 1
+        if sorted_tile_ids.numel() > 0:
+            # Detect where tile_id changes in the sorted array
+            changes = sorted_tile_ids[1:] != sorted_tile_ids[:-1]
+            change_indices = torch.where(changes)[0] + 1
 
-        # Start indices: position 0 + every change point
-        starts = torch.cat([torch.zeros(1, dtype=torch.int64), change_indices])
-        # End indices: every change point + final position
-        ends = torch.cat([change_indices, torch.tensor([len(sorted_tile_ids)])])
+            # Start indices: position 0 + every change point
+            starts = torch.cat([torch.zeros(1, dtype=torch.int64), change_indices])
+            # End indices: every change point + final position
+            ends = torch.cat([change_indices, torch.tensor([len(sorted_tile_ids)])])
 
-        # The tile at each segment
-        segment_tiles = sorted_tile_ids[starts]
+            # The tile at each segment
+            segment_tiles = sorted_tile_ids[starts]
 
-        tile_ranges[segment_tiles, 0] = starts
-        tile_ranges[segment_tiles, 1] = ends
+            tile_ranges[segment_tiles, 0] = starts
+            tile_ranges[segment_tiles, 1] = ends
 
     return sorted_gaussian_ids, tile_ranges
 
@@ -410,6 +425,7 @@ def prepare_kernel_inputs(
     tile_ranges: torch.Tensor,
     image_height: int,
     image_width: int,
+    sub_timings: dict[str, float] | None = None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Pack per-tile Gaussian attributes for the tt-metal kernel.
 
@@ -424,19 +440,20 @@ def prepare_kernel_inputs(
     num_tiles = tiles_x * tiles_y
 
     # Invert covariances (same math as alpha_blend)
-    a = covs_2d[:, 0, 0]
-    b = covs_2d[:, 0, 1]
-    c = covs_2d[:, 1, 1]
-    det = torch.clamp(a * c - b * b, min=1e-6)
-    cov_inv_a = (c / det).numpy()
-    cov_inv_b = (-b / det).numpy()
-    cov_inv_c = (a / det).numpy()
+    with _sub_timer(sub_timings, "prep.cov_inv"):
+        a = covs_2d[:, 0, 0]
+        b = covs_2d[:, 0, 1]
+        c = covs_2d[:, 1, 1]
+        det = torch.clamp(a * c - b * b, min=1e-6)
+        cov_inv_a = (c / det).numpy()
+        cov_inv_b = (-b / det).numpy()
+        cov_inv_c = (a / det).numpy()
 
-    means_np = means_2d.numpy()
-    colors_np = colors.numpy()
-    opacities_np = opacities.numpy()
-    gids_np = sorted_gaussian_ids.numpy()
-    ranges_np = tile_ranges.numpy()
+        means_np = means_2d.numpy()
+        colors_np = colors.numpy()
+        opacities_np = opacities.numpy()
+        gids_np = sorted_gaussian_ids.numpy()
+        ranges_np = tile_ranges.numpy()
 
     # Build attribute_packs by a single gather over sorted_gaussian_ids.
     # The previous implementation iterated tile-by-tile in Python and built one
@@ -445,39 +462,37 @@ def prepare_kernel_inputs(
     # (sort_and_bin sorts by tile_id then depth), so a per-column gather is
     # equivalent and ~100x faster.
     total_entries = gids_np.shape[0]
-    attribute_packs = np.empty((total_entries, 9), dtype=np.float32)
 
     # tile_offsets: cumulative count up to each tile, plus a final total.
-    # Equivalent to walking tile_ranges in order, since sort_and_bin produces
-    # contiguous ranges for non-empty tiles and (0, 0) for empties.
-    counts = (ranges_np[:, 1] - ranges_np[:, 0]).astype(np.uint32)
-    tile_offsets = np.zeros(num_tiles + 1, dtype=np.uint32)
-    tile_offsets[1:] = np.cumsum(counts)
+    with _sub_timer(sub_timings, "prep.offsets"):
+        counts = (ranges_np[:, 1] - ranges_np[:, 0]).astype(np.uint32)
+        tile_offsets = np.zeros(num_tiles + 1, dtype=np.uint32)
+        tile_offsets[1:] = np.cumsum(counts)
 
     # Per-entry tile origin: subtract from each Gaussian's mean so the pack
-    # stores tile-LOCAL means matching the tile-local px/py grid. This keeps
-    # all coordinates in a small range where bf16 has sub-0.25 precision —
-    # without this, right-side tiles at high resolution stored mean_x/px in
-    # bf16's coarse range (step = 8 in [1024, 2048)) and produced visible
-    # ~8-pixel blocky stripes.
-    tile_id_per_entry = np.repeat(np.arange(num_tiles, dtype=np.int32), counts)
-    tile_origin_x = (tile_id_per_entry % tiles_x).astype(np.float32) * 32.0
-    tile_origin_y = (tile_id_per_entry // tiles_x).astype(np.float32) * 32.0
+    # stores tile-LOCAL means matching the tile-local px/py grid.
+    with _sub_timer(sub_timings, "prep.tile_origin"):
+        tile_id_per_entry = np.repeat(np.arange(num_tiles, dtype=np.int32), counts)
+        tile_origin_x = (tile_id_per_entry % tiles_x).astype(np.float32) * 32.0
+        tile_origin_y = (tile_id_per_entry // tiles_x).astype(np.float32) * 32.0
 
-    attribute_packs[:, 0] = means_np[gids_np, 0] - tile_origin_x
-    attribute_packs[:, 1] = means_np[gids_np, 1] - tile_origin_y
-    attribute_packs[:, 2] = cov_inv_a[gids_np]
-    attribute_packs[:, 3] = 2.0 * cov_inv_b[gids_np]
-    attribute_packs[:, 4] = cov_inv_c[gids_np]
-    attribute_packs[:, 5] = colors_np[gids_np, 0]
-    attribute_packs[:, 6] = colors_np[gids_np, 1]
-    attribute_packs[:, 7] = colors_np[gids_np, 2]
-    attribute_packs[:, 8] = opacities_np[gids_np]
+    with _sub_timer(sub_timings, "prep.gather"):
+        attribute_packs = np.empty((total_entries, 9), dtype=np.float32)
+        attribute_packs[:, 0] = means_np[gids_np, 0] - tile_origin_x
+        attribute_packs[:, 1] = means_np[gids_np, 1] - tile_origin_y
+        attribute_packs[:, 2] = cov_inv_a[gids_np]
+        attribute_packs[:, 3] = 2.0 * cov_inv_b[gids_np]
+        attribute_packs[:, 4] = cov_inv_c[gids_np]
+        attribute_packs[:, 5] = colors_np[gids_np, 0]
+        attribute_packs[:, 6] = colors_np[gids_np, 1]
+        attribute_packs[:, 7] = colors_np[gids_np, 2]
+        attribute_packs[:, 8] = opacities_np[gids_np]
 
     # px/py grids depend only on (H, W) — cache them per resolution. During
     # interactive viewing the same resolution is reused thousands of times;
     # in benchmark runs each scene/resolution combo computes once.
-    px_tiles, py_tiles = _get_px_py_grids(image_height, image_width)
+    with _sub_timer(sub_timings, "prep.px_py_grid"):
+        px_tiles, py_tiles = _get_px_py_grids(image_height, image_width)
 
     return attribute_packs, tile_offsets, px_tiles, py_tiles
 
