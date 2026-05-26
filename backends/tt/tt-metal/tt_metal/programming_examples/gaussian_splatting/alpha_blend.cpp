@@ -200,23 +200,17 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // batches in flight (parity with the previous double-buffering depth).
     cb_tile(CB_COLOR_OUT, 6);
 
-    // M1: CB_DX/DY/DX2/DY2/DXDY are unused (dx/dy chain eliminated by basis
-    // form). Allocate depth=1 each to satisfy any CB-index gap requirements.
-    cb_tile(CB_DX, 1);
-    cb_tile(CB_DY, 1);
-    cb_tile(CB_DX2, 1);
-    cb_tile(CB_DY2, 1);
-    cb_tile(CB_DXDY, 1);
-    // CB_Q: depth 6 to hold all 6 scaled basis-term tiles per Gaussian during
-    // the Q accumulation phase.
+    cb_tile(CB_DX, 2);
+    cb_tile(CB_DY, 2);
+    cb_tile(CB_DX2, 2);
+    cb_tile(CB_DY2, 2);
+    cb_tile(CB_DXDY, 2);
     {
-        CircularBufferConfig c(6 * TILE_BYTES_BF16, {{CB_Q, DataFormat::Float16_b}});
+        CircularBufferConfig c(3 * TILE_BYTES_BF16, {{CB_Q, DataFormat::Float16_b}});
         c.set_page_size(CB_Q, TILE_BYTES_BF16);
         CreateCircularBuffer(program, cores, c);
     }
-    // CB_POWER: depth 3 — holds the 3 pair-sums during Q build, then reused
-    // as a 1-deep CB for the (E*y+F) term in the final Q add step.
-    cb_tile(CB_POWER, 3);
+    cb_tile(CB_POWER, 2);
     cb_tile(CB_ALPHA, 2);
 
     cb_tile(CB_CONTRIB, 1);
@@ -234,16 +228,6 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // CB_CONST_NEG88 (index 11) is reserved but unused now that the kernel
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.
-
-    // M1 basis tiles: one depth=1 bf16 tile each, pre-filled by the compute
-    // kernel at startup (same pattern as CB_CONST_ZERO/CB_CONST_099 above).
-    // x = j + 0.5, y = i + 0.5  for tile-local pixel coords in [0, 32).
-    cb_tile(CB_BASIS_X2,  1);  // x² = (j+0.5)²
-    cb_tile(CB_BASIS_XY,  1);  // x*y = (j+0.5)*(i+0.5)
-    cb_tile(CB_BASIS_Y2,  1);  // y² = (i+0.5)²
-    cb_tile(CB_BASIS_X,   1);  // x  = j+0.5
-    cb_tile(CB_BASIS_Y,   1);  // y  = i+0.5
-    cb_tile(CB_BASIS_ONE, 1);  // 1.0
 
     // Reader: 5 DRAM-interleaved TensorAccessorArgs for
     // packs/offsets/px/py/tile_ids. For non-sharded interleaved buffers, the
@@ -394,20 +378,18 @@ static TileAssignment build_tile_assignment(
     return a;
 }
 
-// Pack N x 10 fp32 attribute rows into 64-byte pages
-// (10 fp32 = 40 bytes payload, 24 bytes zero-padded per row).
-// M1 layout: [A, B, C, D, E, F, R, G, B, opacity]
-// where Q(x,y) = A*x^2 + B*xy + C*y^2 + D*x + E*y + F  (tile-local x,y)
+// Pack N x 9 fp32 attribute rows into 64-byte pages
+// (9 fp32 = 36 bytes payload, 28 bytes zero-padded per row).
 static std::vector<uint32_t> encode_attribute_packs(
     const std::vector<float>& packs_f32, uint32_t total_entries) {
     std::vector<uint32_t> packs_payload(
         (static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES) / 4, 0);
-    constexpr size_t row_payload_bytes = 10 * sizeof(float);
+    constexpr size_t row_payload_bytes = 9 * sizeof(float);
     for (uint32_t e = 0; e < total_entries; e++) {
         std::memcpy(
             reinterpret_cast<uint8_t*>(packs_payload.data())
                 + static_cast<size_t>(e) * SCALAR_PACK_PAGE_BYTES,
-            &packs_f32[e * 10],
+            &packs_f32[e * 9],
             row_payload_bytes);
     }
     return packs_payload;

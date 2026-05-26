@@ -414,19 +414,10 @@ def prepare_kernel_inputs(
     """Pack per-tile Gaussian attributes for the tt-metal kernel.
 
     Produces:
-      attribute_packs: (N_entries, 10) fp32, per row (M1 basis-form):
-          [A, B, C, D, E, F, R, G, B, opacity]
-          where Q(x,y) = A*x^2 + B*x*y + C*y^2 + D*x + E*y + F
-          and x, y are tile-local pixel coords in [0, 32).
-          Coefficients derived from tile-local means (mx, my in [0, 32)):
-            A = qxx
-            B = 2*qxy
-            C = qyy
-            D = -2*(qxx*mx + qxy*my)
-            E = -2*(qyy*my + qxy*mx)
-            F = qxx*mx^2 + 2*qxy*mx*my + qyy*my^2
+      attribute_packs: (N_entries, 9) fp32, per row:
+          [mean_x, mean_y, cov_inv_a, 2*cov_inv_b, cov_inv_c, R, G, B, opacity]
       tile_offsets: (num_tiles + 1,) uint32, cumulative prefix sum.
-      px_tiles, py_tiles: (num_tiles, 32, 32) fp32, tile-local screen coords.
+      px_tiles, py_tiles: (num_tiles, 32, 32) fp32, global screen coords.
     """
     tiles_x = (image_width + 31) // 32
     tiles_y = (image_height + 31) // 32
@@ -437,9 +428,9 @@ def prepare_kernel_inputs(
     b = covs_2d[:, 0, 1]
     c = covs_2d[:, 1, 1]
     det = torch.clamp(a * c - b * b, min=1e-6)
-    cov_inv_a = (c / det).numpy()      # qxx
-    cov_inv_b = (-b / det).numpy()     # qxy
-    cov_inv_c = (a / det).numpy()      # qyy
+    cov_inv_a = (c / det).numpy()
+    cov_inv_b = (-b / det).numpy()
+    cov_inv_c = (a / det).numpy()
 
     means_np = means_2d.numpy()
     colors_np = colors.numpy()
@@ -448,47 +439,40 @@ def prepare_kernel_inputs(
     ranges_np = tile_ranges.numpy()
 
     # Build attribute_packs by a single gather over sorted_gaussian_ids.
-    # The flat array is already in the correct order (sort_and_bin sorts by
-    # tile_id then depth), so a per-column gather is ~100x faster than
-    # iterating tile-by-tile in Python.
+    # The previous implementation iterated tile-by-tile in Python and built one
+    # 9-element list per entry — at 45K entries that's ~250 ms of pure
+    # interpreter overhead. The flat array is already in the correct order
+    # (sort_and_bin sorts by tile_id then depth), so a per-column gather is
+    # equivalent and ~100x faster.
     total_entries = gids_np.shape[0]
-    # 10 fp32 per entry = 40 bytes, fits in 64-byte SCALAR_PACK_PAGE_BYTES
-    attribute_packs = np.empty((total_entries, 10), dtype=np.float32)
+    attribute_packs = np.empty((total_entries, 9), dtype=np.float32)
 
     # tile_offsets: cumulative count up to each tile, plus a final total.
+    # Equivalent to walking tile_ranges in order, since sort_and_bin produces
+    # contiguous ranges for non-empty tiles and (0, 0) for empties.
     counts = (ranges_np[:, 1] - ranges_np[:, 0]).astype(np.uint32)
     tile_offsets = np.zeros(num_tiles + 1, dtype=np.uint32)
     tile_offsets[1:] = np.cumsum(counts)
 
-    # Per-entry tile origin: compute tile-LOCAL means (mx, my in [0, 32)).
-    # Tile-local coords keep all values small so fp32 precision is clean in
-    # the A..F coefficient products. Global coords at high resolution can
-    # produce catastrophic cancellation in F = qxx*mx^2 + ... when mx ~1024.
+    # Per-entry tile origin: subtract from each Gaussian's mean so the pack
+    # stores tile-LOCAL means matching the tile-local px/py grid. This keeps
+    # all coordinates in a small range where bf16 has sub-0.25 precision —
+    # without this, right-side tiles at high resolution stored mean_x/px in
+    # bf16's coarse range (step = 8 in [1024, 2048)) and produced visible
+    # ~8-pixel blocky stripes.
     tile_id_per_entry = np.repeat(np.arange(num_tiles, dtype=np.int32), counts)
     tile_origin_x = (tile_id_per_entry % tiles_x).astype(np.float32) * 32.0
     tile_origin_y = (tile_id_per_entry // tiles_x).astype(np.float32) * 32.0
 
-    # Tile-local means for each entry (in [0, 32) range)
-    mx = means_np[gids_np, 0] - tile_origin_x
-    my = means_np[gids_np, 1] - tile_origin_y
-
-    # Covariance inverse components per entry
-    qxx = cov_inv_a[gids_np]
-    qxy = cov_inv_b[gids_np]
-    qyy = cov_inv_c[gids_np]
-
-    # M1 basis-form coefficients: Q(x,y) = A*x^2 + B*xy + C*y^2 + D*x + E*y + F
-    # where x,y are tile-local coords [0,32) matching px_tiles/py_tiles.
-    attribute_packs[:, 0] = qxx                                          # A
-    attribute_packs[:, 1] = 2.0 * qxy                                    # B
-    attribute_packs[:, 2] = qyy                                          # C
-    attribute_packs[:, 3] = -2.0 * (qxx * mx + qxy * my)                # D
-    attribute_packs[:, 4] = -2.0 * (qyy * my + qxy * mx)                # E
-    attribute_packs[:, 5] = qxx * mx * mx + 2.0 * qxy * mx * my + qyy * my * my  # F
-    attribute_packs[:, 6] = colors_np[gids_np, 0]                        # R
-    attribute_packs[:, 7] = colors_np[gids_np, 1]                        # G
-    attribute_packs[:, 8] = colors_np[gids_np, 2]                        # B
-    attribute_packs[:, 9] = opacities_np[gids_np]                        # opacity
+    attribute_packs[:, 0] = means_np[gids_np, 0] - tile_origin_x
+    attribute_packs[:, 1] = means_np[gids_np, 1] - tile_origin_y
+    attribute_packs[:, 2] = cov_inv_a[gids_np]
+    attribute_packs[:, 3] = 2.0 * cov_inv_b[gids_np]
+    attribute_packs[:, 4] = cov_inv_c[gids_np]
+    attribute_packs[:, 5] = colors_np[gids_np, 0]
+    attribute_packs[:, 6] = colors_np[gids_np, 1]
+    attribute_packs[:, 7] = colors_np[gids_np, 2]
+    attribute_packs[:, 8] = opacities_np[gids_np]
 
     # px/py grids depend only on (H, W) — cache them per resolution. During
     # interactive viewing the same resolution is reused thousands of times;
