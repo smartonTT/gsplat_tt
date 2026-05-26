@@ -322,8 +322,8 @@ void kernel_main() {
         uint32_t g_count = ckernel::read_tile_value(CB_TILE_META, /*tile_index=*/0, /*element_offset=*/0);
         cb_pop_front(CB_TILE_META, 1);
 
-        cb_wait_front(CB_PX, 1);
-        cb_wait_front(CB_PY, 1);
+        // M2: CB_PX/CB_PY are pushed once (before the per-tile loop) and the
+        // basis precompute above consumed them — no per-tile wait/pop here.
 
         // =====================================================================
         // Per-Gaussian inner loop.
@@ -612,7 +612,6 @@ void kernel_main() {
         cb_pop_front(CB_COLOR_B_STATE, 1);
         cb_pop_front(CB_T_STATE, 1);
         cb_pop_front(CB_SAT_MASK, 1);
-        cb_pop_front(CB_PX, 1);
-        cb_pop_front(CB_PY, 1);
+        // M2: CB_PX/CB_PY are one-shot at startup; nothing to pop here.
     }
 }
