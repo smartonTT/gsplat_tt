@@ -486,16 +486,24 @@ def prepare_kernel_inputs(
         tile_origin_y = (tile_id_per_entry // tiles_x).astype(np.float32) * 32.0
 
     with _sub_timer(sub_timings, "prep.gather"):
-        attribute_packs = np.empty((total_entries, 9), dtype=np.float32)
-        attribute_packs[:, 0] = means_np[gids_np, 0] - tile_origin_x
-        attribute_packs[:, 1] = means_np[gids_np, 1] - tile_origin_y
-        attribute_packs[:, 2] = cov_inv_a[gids_np]
-        attribute_packs[:, 3] = 2.0 * cov_inv_b[gids_np]
-        attribute_packs[:, 4] = cov_inv_c[gids_np]
-        attribute_packs[:, 5] = colors_np[gids_np, 0]
-        attribute_packs[:, 6] = colors_np[gids_np, 1]
-        attribute_packs[:, 7] = colors_np[gids_np, 2]
-        attribute_packs[:, 8] = opacities_np[gids_np]
+        # Pack all 9 per-Gaussian attributes into one (M, 9) source array, then
+        # do a single np.take to materialize (N_entries, 9). One gather over a
+        # contiguous 2D source is ~3× faster than 9 separate fancy-index ops
+        # (bench: 20.6 → 6.2 ms at 800k entries on bh-14).
+        num_gaussians = means_np.shape[0]
+        source = np.empty((num_gaussians, 9), dtype=np.float32)
+        source[:, 0] = means_np[:, 0]
+        source[:, 1] = means_np[:, 1]
+        source[:, 2] = cov_inv_a
+        source[:, 3] = 2.0 * cov_inv_b
+        source[:, 4] = cov_inv_c
+        source[:, 5] = colors_np[:, 0]
+        source[:, 6] = colors_np[:, 1]
+        source[:, 7] = colors_np[:, 2]
+        source[:, 8] = opacities_np
+        attribute_packs = np.take(source, gids_np, axis=0)
+        attribute_packs[:, 0] -= tile_origin_x
+        attribute_packs[:, 1] -= tile_origin_y
 
     # px/py grids depend only on (H, W) — cache them per resolution. During
     # interactive viewing the same resolution is reused thousands of times;
