@@ -132,7 +132,14 @@ if [[ "$PROFILE" == "1" ]]; then
     sleep 2
     kill -TERM \$CAP 2>/dev/null || true
     wait \$CAP 2>/dev/null || true
-    tracy-csvexport $REMOTE_OUT/iter.tracy > $REMOTE_OUT/zones.csv
+    # tracy-csvexport may not be on PATH on every box — don't let a missing
+    # tool abort the rest of the script (especially the profiler CSV copy).
+    if command -v tracy-csvexport >/dev/null 2>&1; then
+      tracy-csvexport $REMOTE_OUT/iter.tracy > $REMOTE_OUT/zones.csv || true
+    else
+      echo \"tracy-csvexport not found on PATH; skipping zones.csv\" >&2
+      : > $REMOTE_OUT/zones.csv
+    fi
     # Copy the latest device-profiler report dir to REMOTE_OUT/device_profile/
     LATEST_REPORT=\$(ls -dt \$TT_METAL_HOME/generated/profiler/reports/*/ 2>/dev/null | head -1)
     if [[ -n \"\$LATEST_REPORT\" ]]; then

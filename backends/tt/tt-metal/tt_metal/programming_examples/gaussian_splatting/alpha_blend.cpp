@@ -39,6 +39,7 @@
 #include <tt-metalium/distributed.hpp>
 #include <tt-metalium/host_api.hpp>
 #include <tt-metalium/tensor_accessor_args.hpp>
+#include <tt-metalium/tt_metal_profiler.hpp>
 #include <tt-metalium/work_split.hpp>
 #include "tt-metalium/base_types.hpp"
 #include "tt-metalium/kernel_types.hpp"
@@ -576,6 +577,12 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     const auto t_end = std::chrono::steady_clock::now();
     const double kernel_ms =
         std::chrono::duration<double, std::milli>(t_end - t_start).count();
+
+    // Flush per-RISC device profiler data to disk. No-op unless built with
+    // TRACY_ENABLE *and* TT_METAL_DEVICE_PROFILER=1 in env. Excluded from
+    // kernel_ms by placing after t_end. Writes to
+    // ${TT_METAL_HOME}/generated/profiler/reports/<timestamp>/.
+    tt::tt_metal::detail::ReadDeviceProfilerResults(ctx.mesh_device->get_device(0));
 
     // 6. Tile-major bf16 output -> row-major fp32 image; save .npy.
     const auto img = tiles_to_image(result_bf16, num_tiles, tiles_x, image_h, image_w);
