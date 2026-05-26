@@ -86,10 +86,16 @@ fi
 # Step 4: remote build
 echo "[run_iter] building on $BOX_HOST (profile=$PROFILE)"
 if [[ "$PROFILE" == "1" ]]; then
-  # Tracy-enabled build into a separate build dir to avoid thrashing the fast binary.
-  # If tt-metal's Tracy flag name differs, adjust here (commonly ENABLE_TRACY or
-  # TT_METAL_ENABLE_TRACING). Build dir kept separate so non-profile iters stay fast.
-  BUILD_CMD="cd $REMOTE_REPO && sudo cmake -S backends/tt/tt-metal -B backends/tt/tt-metal/build-tracy -DENABLE_TRACY=ON -DCMAKE_BUILD_TYPE=Release >/dev/null && sudo ninja -C backends/tt/tt-metal/build-tracy metal_example_gaussian_splatting"
+  # Tracy-enabled build in build-tracy/. Configure only if build.ninja missing
+  # (re-configuring an existing cache can clobber generator state). Pin clang-20
+  # explicitly — gcc default fails the "GCC-12+ required" check on this box.
+  BUILD_CMD="cd $REMOTE_REPO && \
+    if [[ ! -f backends/tt/tt-metal/build-tracy/build.ninja ]]; then \
+      sudo cmake -S backends/tt/tt-metal -B backends/tt/tt-metal/build-tracy \
+        -DENABLE_TRACY=ON -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20; \
+    fi && \
+    sudo ninja -C backends/tt/tt-metal/build-tracy metal_example_gaussian_splatting"
 else
   BUILD_CMD="cd $REMOTE_REPO && sudo ninja -C backends/tt/tt-metal/build metal_example_gaussian_splatting"
 fi

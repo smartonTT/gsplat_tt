@@ -165,6 +165,8 @@ def main():
         "commit_sha": commit_sha,
         "high_promotion_priority": decision["high_promotion_priority"],
     }
+    if "stage_medians" in metrics:
+        row["stage_medians"] = metrics["stage_medians"]
     atomic_append_jsonl(jsonl, row)
 
     if decision["action"] == "backburner":
