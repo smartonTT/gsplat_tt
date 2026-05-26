@@ -1,0 +1,17 @@
+{
+  "verdict": "NEEDS_REVIEW",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff×10 images (hero, side, top) show no horizontal or vertical lines at 32px or 16px spacing. The diff pattern is spatially irregular with no periodic structure."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32×32 or 16×16 constant-color blocks appear in any rendered view where the reference has detail. All object regions show continuous textural variation matching the reference."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No localized dark regions in the render where reference shows coverage. Hero view is generally darker than reference but uniformly so — not localized black holes. No bright concentrated spots in diff×10 indicating missing coverage >16px."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes in any rendered view. Hero view is underexposed relative to reference but shows no clipping artifacts or banded saturation."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos visible at object silhouettes in any view. Edges in hero, side, and top renders are clean and consistent with the reference silhouette shape."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No correlated patches of pure black, white, or magenta in any rendered image. All pixel values appear to be valid floating-point results."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 images do not show bright object-silhouette outlines that would indicate coordinate errors. The diff pattern is distributed as speckle over the object interior, not as a displaced-silhouette halo."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images are dominated by fine, spatially-uniform speckle noise on the object surface. No grids, banded gradients, edge outlines, or other structured patterns are present. This is consistent with bfloat16 quantization noise from the changed Q-summation path."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 39.69374661393664, "side": 43.066736097074596, "top": 38.86972289570602}, "pass": false},
+  "per_view_consistency": {"max_psnr_delta_db": 4.197013203368556, "max_ms_ratio": 1.1592, "pass": true},
+  "timing": {"median_ms": 97.9, "p99_ms": 102.9371, "vs_prev_best_pct": 0.133, "pass": true},
+  "reasoning": "Visual gate passes on all 8 checks: no tile seams, no uniform-fill blocks, no missing-splat holes, no clipping bands, no ringing, no NaN/Inf, no geometry shift, and diff×10 structure is uniform speckle consistent with bfloat16 quantization noise from the fused Q-summation change. However, two of three views fall below the 40 dB kernel-algebra PSNR floor: hero at 39.69 dB and top at 38.87 dB. Per spec, any view below the 40 dB floor for class kernel-algebra triggers NEEDS_REVIEW (not auto-REJECT since visuals are clean). Timing is essentially break-even: median 97.9 ms vs prev_best 97.77 ms (+0.13%), within the 1.02× tolerance. Per-view PSNR delta is only 4.20 dB (well under 20 dB threshold) and per-view ms ratio is 1.16× (well under 2×). The NEEDS_REVIEW verdict is driven solely by two views sub-floor — the iteration produces structurally clean output but the fused Q-summation path is introducing enough bfloat16 accumulation error to push hero and top below 40 dB, which warrants human review before promotion."
+}
