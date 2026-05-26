@@ -55,3 +55,16 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Visual gate passes on all 8 checks: no tile seams, no uniform-fill blocks, no missing-splat holes, no clipping bands, no ringing, no NaN/Inf, no geometry shift, and diff×10 structure is uniform speckle consistent with bfloat16 quantization noise from the fused Q-summation change. However, two of three views fall below the 40 dB kernel-algebra PSNR floor: hero at 39.69 dB and top at 38.87 dB. Per spec, any view below the 40 dB floor for class kernel-algebra triggers NEEDS_REVIEW (not auto-REJECT since visuals are clean). Timing is essentially break-even: median 97.9 ms vs prev_best 97.77 ms (+0.13%), within the 1.02× tolerance. Per-view PSNR delta is only 4.20 dB (well under 20 dB threshold) and per-view ms ratio is 1.16× (well under 2×). The NEEDS_REVIEW verdict is driven solely by two views sub-floor — the iteration produces structurally clean output but the fused Q-summation path is introducing enough bfloat16 accumulation error to push hero and top below 40 dB, which warrants human review before promotion.
 - Thumbnails: ![hero](screenshots/iter-011-b3b-fuse-fpu/hero.png) ![diff10](screenshots/iter-011-b3b-fuse-fpu/hero_diff10.png)
 
+## iter-012-init-fuse — REJECT (kernel deadlock)
+
+- Class: `kernel-algebra`
+- kernel ms: N/A — daemon hung at cycle 1
+- PSNR per view: N/A
+- Hypothesis: collapse 5 per-tile fill_tile acquires (R/G/B = 0, T = 1, sat_mask = 1) into 1 or 2 acquires using multi-slot fill_tile.
+- Both attempts deadlocked the kernel:
+  - Variant A (1 acquire): `pack_tile(3, CB_T_STATE)` then `pack_tile(3, CB_SAT_MASK)` reusing dst[3]. Hung.
+  - Variant B (2 acquires): `fill_tile(0..3)` for R/G/B/T in slots 0..3, then separate acquire with `fill_tile(0, 1.0)` for sat_mask. Also hung.
+- Daemon state: blocked in `futex_wait_queue_me` holding `/dev/tenstorrent/0`. Host process blocked in `pipe_read` waiting for daemon.
+- Lesson: multi-slot `fill_tile` calls in one acquire deadlock the SFPU fill pipeline in this kernel. No working precedent exists in tt-metal `programming_examples/` or `tests/` — `fill_tile` is otherwise unused there. The header docs `idst` as unconstrained but practically single-slot use is required. Future per-tile state init optimizations should use `copy_tile` from pre-populated constant CBs (CB_CONST_ZERO already exists; a CB_CONST_ONE could be added once at startup).
+- No thumbnails (no render produced).
+

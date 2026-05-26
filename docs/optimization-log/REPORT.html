@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 14 · current best: 97.77 ms · target: 1.0 ms
+      iters: 15 · current best: 97.77 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-012-init-fuse
+      <span class="badge" style="background:#999999">revert</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      <a href="iter-012-init-fuse.md">md</a>
+      <span class="ts">2026-05-26T06:45:00+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> At the top of every `for (t = 0; t &lt; num_tiles; t++)` iteration, the kernel<br>performs **5 independent `fill_tile` acquires** to initialize the per-tile<br>state CBs:<br><br>DST has 4 fp32 slots (fp32_dest_acc_en). Fill 0.0 into slots 0/1/2 and 1.0<br>into slot 3 in a single acquire, then pack each slot to its corresponding<br>CB. CB_SAT_MASK reuses dst[3] (same 1.0 value as CB_T_STATE) — pack the<br>same slot twice.<br><br>Saves **3 acquire/commit/wait/release roundtrips per screen tile** (5 → 2).<br>With ~16 tiles/core and 64 cores, that&#x27;s ~3072 saved acquire cycles per<br>frame. Per-core saving ~2-3 μs at an estimated 30-50ns each.<br><br>**First attempt history (0592a23, reverted):** tried 1-acquire form<br>packing dst[3] to BOTH CB_T_STATE and CB_SAT_MASK. The kernel hung at<br>cycle 1 (daemon blocked in futex_wait_queue_me holding /dev/tenstorrent/0).<br>Packing the same dst slot to two different CBs in one acquire isn&#x27;t<br>supported — pack_tile must consume the slot or pack hardware needs<br>reconfig between CBs.</p>
+  <p class="brief outcome"><b>Outcome.</b> Multi-slot fill_tile in one acquire deadlocks the kernel. Two variants tried: (A) pack_tile(3, CB_T_STATE) + pack_tile(3, CB_SAT_MASK) reusing same dst slot — hang. (B) 2-acquire form: fill_tile(0..3) for R/G/B/T then fill_tile(0) for SAT_MASK — also hang. Both blocked daemon in futex_wait_queue_me holding /dev/tenstorrent/0. No working multi-slot fill_tile precedent in tt-metal programming_examples or tests. fill_tile.h says idst is unconstrained, but in practice the SFPU fill pipeline appears to require single-slot use. For per-tile state init, stick with the original 5-acquire pattern OR use copy_tile from a pre-populated CB_CONST tile. Don&#x27;t try multi-slot fill_tile again without a tt-metal reference example.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>— ms</b> median · — ms p99</div>
+    <div class="per-view">per-view: hero — / side — / top —</div>
+    <div class="psnr">PSNR: hero — / side — / top — (min <b>—</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-012-init-fuse/hero.png" target="_blank"><img src="screenshots/iter-012-init-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-012-init-fuse/side.png" target="_blank"><img src="screenshots/iter-012-init-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-012-init-fuse/top.png" target="_blank"><img src="screenshots/iter-012-init-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-012-init-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-012-init-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-012-init-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-012-init-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-012-init-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-012-init-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>(no validator.json)</li></ul>
+    <p class="reasoning"></p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-011-b3b-fuse-fpu
@@ -540,6 +573,19 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.7 / side 43.1 / top 38.9
 - Validator reasoning: Visual gate passes on all 8 checks: no tile seams, no uniform-fill blocks, no missing-splat holes, no clipping bands, no ringing, no NaN/Inf, no geometry shift, and diff×10 structure is uniform speckle consistent with bfloat16 quantization noise from the fused Q-summation change. However, two of three views fall below the 40 dB kernel-algebra PSNR floor: hero at 39.69 dB and top at 38.87 dB. Per spec, any view below the 40 dB floor for class kernel-algebra triggers NEEDS_REVIEW (not auto-REJECT since visuals are clean). Timing is essentially break-even: median 97.9 ms vs prev_best 97.77 ms (+0.13%), within the 1.02× tolerance. Per-view PSNR delta is only 4.20 dB (well under 20 dB threshold) and per-view ms ratio is 1.16× (well under 2×). The NEEDS_REVIEW verdict is driven solely by two views sub-floor — the iteration produces structurally clean output but the fused Q-summation path is introducing enough bfloat16 accumulation error to push hero and top below 40 dB, which warrants human review before promotion.
 - Thumbnails: ![hero](screenshots/iter-011-b3b-fuse-fpu/hero.png) ![diff10](screenshots/iter-011-b3b-fuse-fpu/hero_diff10.png)
+
+## iter-012-init-fuse — REJECT (kernel deadlock)
+
+- Class: `kernel-algebra`
+- kernel ms: N/A — daemon hung at cycle 1
+- PSNR per view: N/A
+- Hypothesis: collapse 5 per-tile fill_tile acquires (R/G/B = 0, T = 1, sat_mask = 1) into 1 or 2 acquires using multi-slot fill_tile.
+- Both attempts deadlocked the kernel:
+  - Variant A (1 acquire): `pack_tile(3, CB_T_STATE)` then `pack_tile(3, CB_SAT_MASK)` reusing dst[3]. Hung.
+  - Variant B (2 acquires): `fill_tile(0..3)` for R/G/B/T in slots 0..3, then separate acquire with `fill_tile(0, 1.0)` for sat_mask. Also hung.
+- Daemon state: blocked in `futex_wait_queue_me` holding `/dev/tenstorrent/0`. Host process blocked in `pipe_read` waiting for daemon.
+- Lesson: multi-slot `fill_tile` calls in one acquire deadlock the SFPU fill pipeline in this kernel. No working precedent exists in tt-metal `programming_examples/` or `tests/` — `fill_tile` is otherwise unused there. The header docs `idst` as unconstrained but practically single-slot use is required. Future per-tile state init optimizations should use `copy_tile` from pre-populated constant CBs (CB_CONST_ZERO already exists; a CB_CONST_ONE could be added once at startup).
+- No thumbnails (no render produced).
 
 </pre>
   </section>
