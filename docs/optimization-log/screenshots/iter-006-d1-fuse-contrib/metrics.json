@@ -1,0 +1,18 @@
+{
+  "iter_dir": "iter-006-d1-fuse-contrib",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 97.545,
+  "psnr_per_view": {
+    "hero": Infinity,
+    "side": Infinity,
+    "top": Infinity
+  },
+  "kernel_ms_median": 100.695,
+  "kernel_ms_p99": 106.2368,
+  "per_view_median": {
+    "hero": 100.695,
+    "side": 91.225,
+    "top": 106.08500000000001
+  },
+  "frame_count": 30
+}

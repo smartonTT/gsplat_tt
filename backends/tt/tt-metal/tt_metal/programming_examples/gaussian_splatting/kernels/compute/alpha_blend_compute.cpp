@@ -9,7 +9,6 @@
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_binary.h"
-#include "api/compute/eltwise_binary_sfpu.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/binop_with_scalar.h"
 #include "api/compute/eltwise_unary/exp.h"
@@ -436,17 +435,17 @@ void kernel_main() {
             // actually consumed mathematically (the Stage F refresh just
             // produces it).
             //
-            // FUSED (iter-006): contrib = alpha · T_state · sat_mask in one acquire.
-            // FPU mul_tiles(alpha, T_state) → dst[0]; SFPU copy(sat_mask) → dst[1];
-            // SFPU mul_binary_tile dst[0] *= dst[1]; pack dst[0] → CB_CONTRIB.
-            // Saves one acquire + the CB_T_TMP roundtrip for this stage.
+            // FUSED (iter-007): contrib = alpha · T_state · sat_mask in one acquire,
+            // FPU-only. mul_tiles(alpha, T_state) → dst[0]; then
+            // binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA>(sat_mask) reuses dst[0]
+            // as SRCA and multiplies by sat_mask in-place. Saves one acquire + the
+            // CB_T_TMP roundtrip. iter-006 used SFPU mul_binary_tile here and
+            // regressed perf by ~0.75 ms — the FPU variant is the cheap fusion.
             tile_regs_acquire();
             mul_tiles_init(CB_ALPHA, CB_T_STATE);
             mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
-            copy_tile_to_dst_init_short(CB_SAT_MASK);
-            copy_tile(CB_SAT_MASK, 0, 1);
-            mul_binary_tile_init();
-            mul_binary_tile(0, 1, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_CONTRIB, 1);
