@@ -86,7 +86,12 @@ if [[ "$PROFILE" == "1" ]]; then
 else
   BUILD_CMD="cd $REMOTE_REPO && sudo ninja -C backends/tt/tt-metal/build metal_example_gaussian_splatting"
 fi
-timeout 240 ssh "$BOX_USER@$BOX_HOST" "$BUILD_CMD" \
+TIMEOUT_BIN="$(command -v gtimeout || command -v timeout || true)"
+if [[ -z "$TIMEOUT_BIN" ]]; then
+  echo "[run_iter] ERROR: need 'timeout' (Linux) or 'gtimeout' (macOS: brew install coreutils)" >&2
+  exit 2
+fi
+"$TIMEOUT_BIN" 240 ssh "$BOX_USER@$BOX_HOST" "$BUILD_CMD" \
   >>"$ITER_DIR/build.log" 2>&1 || { touch "$ITER_DIR/BUILD_FAIL"; exit 2; }
 echo "$CURR" > "$SENTINEL"
 
