@@ -563,23 +563,17 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_ONE_MINUS_ALPHA, 1);
 
-            // Step 2: T_TMP ← T_state · (1 - alpha)
+            // Steps 2+3 FUSED (iter-010): T_state ← T_state · (1-alpha) · sat_mask
+            // in one acquire, pure FPU. mul_tiles(T_state, ONE_MINUS_ALPHA) → dst[0];
+            // then binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA>(SAT_MASK) reuses
+            // dst[0] as SRCA and multiplies by sat_mask in-place. Saves 1 acquire
+            // + the CB_T_TMP reserve/pack/push/wait/pop roundtrip. Same pattern as
+            // iter-007's Stage D1 win.
             tile_regs_acquire();
             mul_tiles_init(CB_T_STATE, CB_ONE_MINUS_ALPHA);
             mul_tiles(CB_T_STATE, CB_ONE_MINUS_ALPHA, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_pop_front(CB_ONE_MINUS_ALPHA, 1);
-            cb_wait_front(CB_T_TMP, 1);
-
-            // Step 3: T_state ← T_TMP · sat_mask  (spill back to CB_T_STATE)
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_TMP, CB_SAT_MASK);
-            mul_tiles(CB_T_TMP, CB_SAT_MASK, 0, 0, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_T_STATE, 1);
@@ -587,9 +581,9 @@ void kernel_main() {
             pack_tile(0, CB_T_STATE);
             cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
+            cb_pop_front(CB_ONE_MINUS_ALPHA, 1);
             cb_wait_front(CB_T_STATE, 1);
 
-            cb_pop_front(CB_T_TMP, 1);
             cb_pop_front(CB_ALPHA, 1);
             cb_pop_front(CB_SCALARS, 1);
         }
