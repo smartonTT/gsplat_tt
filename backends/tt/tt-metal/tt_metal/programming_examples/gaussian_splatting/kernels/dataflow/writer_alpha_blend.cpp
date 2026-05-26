@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "tools/profiler/kernel_profiler.hpp"
 
 // Alpha-blend WRITER kernel (BRISC, NoC0; see DataMovementProcessor::RISCV_0
 // in alpha_blend.cpp).
@@ -96,6 +97,9 @@ void kernel_main() {
     // Main per-tile loop: drain 3 R/G/B tiles compute pushed for this screen
     // tile and async-write them to their global slots in the output buffer.
     for (uint32_t t = 0; t < tile_ids_count; t++) {
+        // Per-tile profiling zone. No-op in non-profile builds.
+        DeviceZoneScopedN("Z_W_tile");
+
         uint32_t screen_tile = tile_ids[t];
 
         // Wait for compute's batch of 3 tiles (R, then G, then B) in order.

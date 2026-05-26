@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "tools/profiler/kernel_profiler.hpp"
 
 // Alpha-blend READER kernel (NCRISC, NoC1; see DataMovementProcessor::RISCV_1
 // in alpha_blend.cpp). The host launches reader on RISCV_1 / NoC1 and writer
@@ -150,6 +151,9 @@ void kernel_main() {
     //   4) push g_count Gaussian scalar packs to CB_SCALARS
     // -------------------------------------------------------------------
     for (uint32_t t = 0; t < tile_ids_count; t++) {
+        // Per-tile profiling zone. No-op in non-profile builds.
+        DeviceZoneScopedN("Z_R_tile");
+
         uint32_t tile_id = tile_ids[t];
 
         // (1) Read tile_offsets[tile_id] and tile_offsets[tile_id+1] from
@@ -194,6 +198,11 @@ void kernel_main() {
         // page per Gaussian; compute pops one per inner-loop iteration.
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
         for (uint32_t g = 0; g < g_count; g++) {
+            // Accumulator zone for per-Gaussian scalar fetch (SumN1 slot 0).
+            // Reports total cycles spent in the per-Gaussian DRAM→L1 stream
+            // for this RISC, which is the dominant work on the reader.
+            DeviceZoneScopedSumN1("Z_R_g");
+
             uint32_t entry_id = g_start + g;
             cb_reserve_back(CB_SCALARS, 1);
             noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));

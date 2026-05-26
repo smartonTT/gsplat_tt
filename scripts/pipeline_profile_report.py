@@ -234,10 +234,12 @@ def main() -> int:
         lines.append(
             "- blend kernel is `host-dominated`: the `device_fw_max` is "
             f"{_fmt_ms(fw_max_ms)} vs host wall {_fmt_ms(kernel_ms)}. "
-            "Lever family: batched upload, persistent inputs, Trace API "
-            "(post per-frame upload elimination), 2-CQ pipeline. "
-            "**Do NOT pursue compute-bound levers (init-fuse, FPU-heavy) "
-            "until that gap closes.**"
+            "Host-side lever family: batched upload, persistent inputs, "
+            "Trace API, 2-CQ pipeline, smaller per-frame DRAM payloads. "
+            "Device-side levers still independently valid — `device_fw_max` "
+            "is itself a real floor that compounds with any host wins. "
+            "Per-RISC table above identifies the dominant RISC; pursue both "
+            "in parallel if zone data justifies it."
         )
     elif 0.15 <= blend_overhead <= 0.40:
         lines.append(

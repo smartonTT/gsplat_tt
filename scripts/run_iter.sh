@@ -122,6 +122,12 @@ if [[ "$PROFILE" == "1" ]]; then
   ssh "$BOX_USER@$BOX_HOST" "
     set -e
     cd $REMOTE_REPO
+    # Kill any stale daemons that might still be holding the Wormhole device.
+    # iter-PROF first attempt hung 33+ minutes because a daemon from a prior
+    # session was still alive. Belt-and-suspenders since render_fixed.py spawns
+    # its own daemon: anything holding the device WILL hang the new spawn.
+    pkill -f 'metal_example_gaussian_splatting' 2>/dev/null || true
+    sleep 1
     export TT_METAL_DEVICE_PROFILER=1
     export TT_METAL_HOME=$REMOTE_REPO/backends/tt/tt-metal
     # Daemon phase-split inside kernel_ms. Adds Finish() barriers between
@@ -129,19 +135,30 @@ if [[ "$PROFILE" == "1" ]]; then
     # bound. Gated on this env var so the prod daemon stays overhead-free.
     export GSPLAT_PROFILE_PHASES=1
     rm -rf \$TT_METAL_HOME/generated/profiler/.logs 2>/dev/null || true
-    tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
-    CAP=\$!
-    sleep 1
+    # tracy-capture is the network-mode capture tool. We DON'T require it —
+    # the per-RISC device_profile CSV (written by TT_METAL_DEVICE_PROFILER=1)
+    # is what the bound-class classifier and the new kernel-side DeviceZone
+    # zones depend on. Tracy is a nice-to-have for the full timeline view.
+    CAP=
+    if command -v tracy-capture >/dev/null 2>&1; then
+      tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
+      CAP=\$!
+      sleep 1
+    else
+      echo \"tracy-capture not found on PATH; skipping Tracy timeline capture (device_profile CSV is still collected)\" >&2
+    fi
     MESH_DEVICE=P100 TT_BINARY_PATH=backends/tt/tt-metal/build-tracy/programming_examples/metal_example_gaussian_splatting GSPLAT_PROFILE_PHASES=1 ./venv/bin/python scripts/render_fixed.py --cycles --backend tt --scene stitch --size 1024 --warmup-cycles 1 --measure-cycles 10 --out-dir $REMOTE_OUT
-    sleep 2
-    kill -TERM \$CAP 2>/dev/null || true
-    wait \$CAP 2>/dev/null || true
+    if [[ -n \"\$CAP\" ]]; then
+      sleep 2
+      kill -TERM \$CAP 2>/dev/null || true
+      wait \$CAP 2>/dev/null || true
+    fi
     # tracy-csvexport may not be on PATH on every box — don't let a missing
     # tool abort the rest of the script (especially the profiler CSV copy).
-    if command -v tracy-csvexport >/dev/null 2>&1; then
+    if command -v tracy-csvexport >/dev/null 2>&1 && [[ -f $REMOTE_OUT/iter.tracy ]]; then
       tracy-csvexport $REMOTE_OUT/iter.tracy > $REMOTE_OUT/zones.csv || true
     else
-      echo \"tracy-csvexport not found on PATH; skipping zones.csv\" >&2
+      echo \"tracy-csvexport not found on PATH or no .tracy capture; skipping zones.csv\" >&2
       : > $REMOTE_OUT/zones.csv
     fi
     # Copy device-profiler CSVs. tt-metal writes them to .logs/, not reports/.

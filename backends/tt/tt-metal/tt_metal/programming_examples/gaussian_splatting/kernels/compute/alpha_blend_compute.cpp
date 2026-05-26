@@ -17,6 +17,8 @@
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/binary_max_min.h"
 
+#include "tools/profiler/kernel_profiler.hpp"
+
 // Alpha-blend compute kernel: 3D Gaussian Splatting forward rasterizer
 // (front-to-back compositing) for a per-core slice of screen tiles.
 //
@@ -129,6 +131,11 @@ void kernel_main() {
     cb_wait_front(CB_CONST_099, 1);
 
     for (uint32_t t = 0; t < num_tiles; t++) {
+        // Per-tile profiling zone. In non-profile builds DeviceZoneScopedN is
+        // a no-op macro (see tt-metal kernel_profiler.hpp), so this costs
+        // nothing unless --profile is on.
+        DeviceZoneScopedN("Z_C_tile");
+
         // =====================================================================
         // Per-tile state CB init: zero the color accumulators, set transmittance
         // to 1.0, and start with all pixels unsaturated. Each state CB lives
@@ -213,6 +220,12 @@ void kernel_main() {
         // front-to-back order (already sorted on the host).
         // =====================================================================
         for (uint32_t g = 0; g < g_count; g++) {
+            // Per-Gaussian accumulator zone (SumN1 → slot 0 in sums[]).
+            // Aggregates cycles across all g iterations on this RISC so the
+            // device-profile CSV reports a single SUM row per kernel — the
+            // headline "compute spent N cycles in per-Gaussian work."
+            DeviceZoneScopedSumN1("Z_C_g");
+
             // ----- Stage F: sat_mask refresh (every 16 Gaussians, skip g=0) -----
             // Recompute which pixels are still "active" (T >= 1e-4). For pixels
             // whose transmittance has saturated below 1e-4, sat_mask becomes 0
