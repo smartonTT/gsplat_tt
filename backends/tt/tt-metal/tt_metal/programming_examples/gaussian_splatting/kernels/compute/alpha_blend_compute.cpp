@@ -9,6 +9,7 @@
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_binary.h"
+#include "api/compute/eltwise_binary_sfpu.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/binop_with_scalar.h"
 #include "api/compute/eltwise_unary/exp.h"
@@ -435,30 +436,23 @@ void kernel_main() {
             // actually consumed mathematically (the Stage F refresh just
             // produces it).
             //
-            // Step 1: T_TMP ← alpha · T_state
+            // FUSED (iter-006): contrib = alpha · T_state · sat_mask in one acquire.
+            // FPU mul_tiles(alpha, T_state) → dst[0]; SFPU copy(sat_mask) → dst[1];
+            // SFPU mul_binary_tile dst[0] *= dst[1]; pack dst[0] → CB_CONTRIB.
+            // Saves one acquire + the CB_T_TMP roundtrip for this stage.
             tile_regs_acquire();
             mul_tiles_init(CB_ALPHA, CB_T_STATE);
             mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            // Step 2: contrib ← T_TMP · sat_mask
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_TMP, CB_SAT_MASK);
-            mul_tiles(CB_T_TMP, CB_SAT_MASK, 0, 0, 0);
+            copy_tile_to_dst_init_short(CB_SAT_MASK);
+            copy_tile(CB_SAT_MASK, 0, 1);
+            mul_binary_tile_init();
+            mul_binary_tile(0, 1, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_CONTRIB, 1);
             pack_tile(0, CB_CONTRIB);
             cb_push_back(CB_CONTRIB, 1);
             tile_regs_release();
-
-            cb_pop_front(CB_T_TMP, 1);
             cb_wait_front(CB_CONTRIB, 1);
 
             // ----- Stage D2: per-channel color accumulator update.
