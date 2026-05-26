@@ -91,7 +91,8 @@ if [[ "$PROFILE" == "1" ]]; then
   # explicitly — gcc default fails the "GCC-12+ required" check on this box.
   BUILD_CMD="cd $REMOTE_REPO && \
     if [[ ! -f backends/tt/tt-metal/build-tracy/build.ninja ]]; then \
-      sudo cmake -S backends/tt/tt-metal -B backends/tt/tt-metal/build-tracy \
+      sudo rm -rf backends/tt/tt-metal/build-tracy && \
+      sudo cmake -G Ninja -S backends/tt/tt-metal -B backends/tt/tt-metal/build-tracy \
         -DENABLE_TRACY=ON -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20; \
     fi && \
