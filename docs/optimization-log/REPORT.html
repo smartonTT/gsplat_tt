@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 21 · current best: 96.70 ms · target: 1.0 ms
+      iters: 22 · current best: 96.52 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-020-int64-sort-key
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">sort</span>
+      
+      <span class="ts">2026-05-26T21:56:44.068026+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass: diff×10 images across hero, side, and top views show only uniform fine speckle distributed across the figure surface with no tile-grid seams, no uniform-fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, and no geometry shift. PSNR floor for class &#x27;sort&#x27; is 35 dB; actual values of 40.40/43.69/40.14 dB all clear this floor by &gt;5 dB. Per-view PSNR delta is 3.55 dB (threshold 20 dB) and per-view kernel-ms ratio is 1.163 (threshold 2×), both pass. kernel_ms_median 96.52 ms is 0.19% below prev_best 96.70 ms, well within the 1.02× break-even threshold. p99/median ratio is 1.053, far below the 3× tail-spike threshold. Sort stage dropped from 65.4 ms to 10.6 ms (-84%), reducing total pipeline time from 323.6 ms to 265.5 ms (-18%). No check failures.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>96.52 ms</b> median · 101.58 ms p99</div>
+    <div class="per-view">per-view: hero 96.52 / side 87.27 / top 101.51</div>
+    <div class="psnr">PSNR: hero 40.4 / side 43.7 / top 40.1 (min <b>40.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-020-int64-sort-key/hero.png" target="_blank"><img src="screenshots/iter-020-int64-sort-key/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-020-int64-sort-key/side.png" target="_blank"><img src="screenshots/iter-020-int64-sort-key/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-020-int64-sort-key/top.png" target="_blank"><img src="screenshots/iter-020-int64-sort-key/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-020-int64-sort-key/hero_diff10.png" target="_blank"><img src="screenshots/iter-020-int64-sort-key/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-020-int64-sort-key/side_diff10.png" target="_blank"><img src="screenshots/iter-020-int64-sort-key/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-020-int64-sort-key/top_diff10.png" target="_blank"><img src="screenshots/iter-020-int64-sort-key/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32px or 16px spacing visible in any diff×10 image (hero, side, top). Diff patterns ar</li><li>✓ tile_uniform_fill: No square constant-color blocks in any render. All three views show continuous Gaussian coverage matching reference deta</li><li>✓ missing_splat_holes: No dark holes or missing-coverage patches in any render vs reference. Diff×10 shows no localized bright spots indicating</li><li>✓ color_clipping_bands: No saturated flat-color stripes in hero, side, or top renders. Color range matches reference exactly.</li><li>✓ ringing_halos: No structured ringing at silhouette edges visible in any of the three renders or their diff×10 images.</li><li>✓ nan_inf_signatures: No spatially-correlated pure black, white, or magenta patches in any render. All three views look clean.</li><li>✓ geometry_shift: Diff×10 images do not show silhouette outlines of the object. Speckle is distributed across the figure surface, not conc</li><li>✓ diff10_structure: All three diff×10 images (hero, side, top) are dominated by uniform fine speckle across the figure. No grids, edge gradi</li></ul>
+    <p class="reasoning">All 8 visual checks pass: diff×10 images across hero, side, and top views show only uniform fine speckle distributed across the figure surface with no tile-grid seams, no uniform-fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, and no geometry shift. PSNR floor for class &#x27;sort&#x27; is 35 dB; actual values of 40.40/43.69/40.14 dB all clear this floor by &gt;5 dB. Per-view PSNR delta is 3.55 dB (threshold 20 dB) and per-view kernel-ms ratio is 1.163 (threshold 2×), both pass. kernel_ms_median 96.52 ms is 0.19% below prev_best 96.70 ms, well within the 1.02× break-even threshold. p99/median ratio is 1.053, far below the 3× tail-spike threshold. Sort stage dropped from 65.4 ms to 10.6 ms (-84%), reducing total pipeline time from 323.6 ms to 265.5 ms (-18%). No check failures.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-019-kernel-zones
