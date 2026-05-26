@@ -64,9 +64,16 @@ NEEDS_WIPE=0
 if [[ -z "$LAST_BUILD" ]]; then
   NEEDS_WIPE=1  # first build on opt-v2
 else
+  # NB: real source root is .../tt-metal/tt_metal/programming_examples/...
+  # (the doubled `tt-metal/tt_metal/` is intentional — outer is the vendored
+  # repo dir, inner is its source subdir). The old filter was missing the
+  # inner segment and silently never wiped the JIT cache for kernel edits,
+  # so iter-N ran with iter-(N-1) cached kernels (e.g. M2 ran cached M1 → hang).
   CHANGED="$(git -C "$REPO" diff --name-only "$LAST_BUILD" "$CURR" -- \
-    'backends/tt/tt-metal/programming_examples/gaussian_splatting/*.cpp' \
-    'backends/tt/tt-metal/programming_examples/gaussian_splatting/*.hpp' || true)"
+    'backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/**/*.cpp' \
+    'backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/**/*.hpp' \
+    'backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/*.cpp' \
+    'backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/*.hpp' || true)"
   if [[ -n "$CHANGED" ]]; then
     NEEDS_WIPE=1
   fi

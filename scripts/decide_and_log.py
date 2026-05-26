@@ -172,6 +172,16 @@ def main():
 
     update_status(args.state_dir / "STATUS.md", decision, metrics, jsonl)
 
+    # Always refresh REPORT.html after a decision so the human-facing report
+    # never lags iters.jsonl. Best-effort: a build_report failure must not
+    # fail the whole decision (we still want the row in the log + STATUS).
+    build_report = args.state_dir / "build_report.py"
+    if build_report.exists():
+        try:
+            subprocess.run(["python3", str(build_report)], check=True)
+        except subprocess.CalledProcessError as e:
+            print(f"warning: build_report.py failed: {e}", flush=True)
+
     print(json.dumps(decision, indent=2))
 
 

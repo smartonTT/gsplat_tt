@@ -8,7 +8,7 @@ set -euo pipefail
 SHA="${1:?usage: $0 <commit-sha>}"
 BOX_USER="${BOX_USER:-smarton}"
 BH14="yyzo-bh-14"
-BH30="aus-misc-bh-30"  # adjust hostname if different — bh-30 is in Austin per memory
+BH30="bh-30"  # devsync-managed ssh alias (see ~/.devsync/ssh-hosts)
 REMOTE_BIN_BH14="/proj_sw/user_dev/smarton/gsplat_tt/backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
 STABLE_DIR_BH30="/proj_sw/user_dev/smarton/gsplat_tt_stable"
 
