@@ -99,6 +99,12 @@ def graph_combined(iters: list[dict]) -> None:
     ax_top.set_ylabel("ms (log)")
     ax_top.set_yscale("log")
     ax_top.grid(True, alpha=0.3, which="both")
+    # Force the y-range to include host-wall values (total_ms can exceed 300 ms).
+    # Autoscale alone undershot when only 3 iters had stage_medians; the resulting
+    # ~150 ms ceiling clipped the total/blend lines off the chart entirely.
+    finite_top = [v for v in (medians + total_ms + blend_ms) if v == v]
+    if finite_top:
+        ax_top.set_ylim(0.5, max(finite_top) * 1.5)
 
     ax_db = ax_top.twinx()
     ax_db.plot(xs, psnr_min, "--", color="#9467bd", linewidth=1.2, marker="s",
