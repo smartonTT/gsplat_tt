@@ -50,59 +50,81 @@ def _psnr_min(r: dict) -> float | None:
 
 
 def graph_combined(iters: list[dict]) -> None:
-    """Single combined graph: kernel ms (log, left axis) + PSNR (linear, right axis).
+    """Trajectory graph: every iter (not just at-or-better), with per-stage timings.
 
-    Plots only at-or-better iters: each entry must have kernel_ms_median <=
-    the running best so far (iter-0 anchors). This is the "committed trajectory"
-    — regressed iters and historical opt-stable data are excluded.
+    Top subplot — log y: kernel_ms, total_ms (end-to-end host wall), blend_ms
+    (host-side blend including daemon IPC), with PSNR_min on the right axis.
+    Bottom subplot — linear y: prep_ms (project + tile_assign) and sort_ms,
+    the host-side stages that flank the device kernel.
+
+    Stage timings (total/blend/prep/sort) come from
+    metrics.json["stage_medians"]; iters that don't have them just plot
+    NaN for those series. Dot color encodes the action verdict.
     """
     nan = float("nan")
-    best = float("inf")
-    kept: list[dict] = []
-    for r in iters:
-        ms = r.get("kernel_ms_median")
-        if ms is None:
-            continue
-        if ms <= best:
-            kept.append(r)
-            best = ms
+    kept = [r for r in iters if r.get("kernel_ms_median") is not None]
+    if not kept:
+        return
 
     labels = [r["iter_dir"] for r in kept]
-    medians = [r.get("kernel_ms_median", nan) for r in kept]
-    hero = [r.get("per_view_median", {}).get("hero", nan) for r in kept]
-    side = [r.get("per_view_median", {}).get("side", nan) for r in kept]
-    top  = [r.get("per_view_median", {}).get("top",  nan) for r in kept]
-    psnr_min = [(_psnr_min(r) if _psnr_min(r) is not None else nan) for r in kept]
     actions = [r.get("action", "unknown") for r in kept]
+    medians = [r.get("kernel_ms_median", nan) for r in kept]
+    psnr_min = [(_psnr_min(r) if _psnr_min(r) is not None else nan) for r in kept]
+
+    def stage(key):
+        return [r.get("stage_medians", {}).get(key, nan) for r in kept]
+
+    total_ms = stage("total_ms")
+    blend_ms = stage("blend_ms")
+    project_ms = stage("project_ms")
+    tile_assign_ms = stage("tile_assign_ms")
+    sort_ms = stage("sort_ms")
+    prep_ms = [
+        (p + t) if (p == p and t == t) else nan  # NaN-safe sum
+        for p, t in zip(project_ms, tile_assign_ms)
+    ]
 
     xs = list(range(len(labels)))
-    fig, ax_ms = plt.subplots(figsize=(14, 6))
-    ax_ms.plot(xs, medians, "-", color="#1f77b4", linewidth=1.6, label="kernel median", zorder=3)
-    colors = [ACTION_COLOR.get(a, "#999999") for a in actions]
-    ax_ms.scatter(xs, medians, c=colors, s=44, zorder=4, edgecolors="white", linewidths=0.7)
-    ax_ms.plot(xs, hero, "-", color="#1f77b4", alpha=0.35, linewidth=0.9, label="hero")
-    ax_ms.plot(xs, side, "-", color="#2ca02c", alpha=0.35, linewidth=0.9, label="side")
-    ax_ms.plot(xs, top,  "-", color="#d62728", alpha=0.35, linewidth=0.9, label="top")
-    ax_ms.axhline(1.0, color="#000000", linestyle=":", linewidth=1, label="target 1.0 ms")
-    ax_ms.set_xlabel("iter")
-    ax_ms.set_ylabel("kernel ms (log)")
-    ax_ms.set_yscale("log")
-    ax_ms.grid(True, alpha=0.3)
-    ax_ms.set_xticks(xs)
-    ax_ms.set_xticklabels(labels, rotation=60, ha="right", fontsize=7)
+    fig, (ax_top, ax_bot) = plt.subplots(
+        2, 1, figsize=(14, 9), sharex=True, gridspec_kw={"height_ratios": [2, 1]}
+    )
 
-    ax_db = ax_ms.twinx()
+    # Top: kernel + total + blend (log) with PSNR on twin axis.
+    ax_top.plot(xs, total_ms, "-", color="#7f7f7f", linewidth=1.2, label="total (host wall)")
+    ax_top.plot(xs, blend_ms, "-", color="#ff7f0e", linewidth=1.2, label="blend (host)")
+    ax_top.plot(xs, medians, "-", color="#1f77b4", linewidth=1.8, label="kernel median", zorder=3)
+    dot_colors = [ACTION_COLOR.get(a, "#999999") for a in actions]
+    ax_top.scatter(xs, medians, c=dot_colors, s=44, zorder=4, edgecolors="white", linewidths=0.7)
+    ax_top.axhline(1.0, color="#000000", linestyle=":", linewidth=1, label="target 1.0 ms")
+    ax_top.set_ylabel("ms (log)")
+    ax_top.set_yscale("log")
+    ax_top.grid(True, alpha=0.3, which="both")
+
+    ax_db = ax_top.twinx()
     ax_db.plot(xs, psnr_min, "--", color="#9467bd", linewidth=1.2, marker="s",
                markersize=4, label="PSNR min (dB)")
     ax_db.axhline(35.0, color="#9467bd", linestyle=":", linewidth=1, alpha=0.6,
                   label="PSNR gate 35 dB")
     ax_db.set_ylabel("PSNR (dB)")
-    ax_db.set_ylim(0, 55)
+    ax_db.set_ylim(0, 75)
 
-    h1, l1 = ax_ms.get_legend_handles_labels()
+    h1, l1 = ax_top.get_legend_handles_labels()
     h2, l2 = ax_db.get_legend_handles_labels()
-    ax_ms.legend(h1 + h2, l1 + l2, loc="upper right", fontsize=8, ncol=2)
-    ax_ms.set_title("Kernel ms + PSNR — committed trajectory (at-or-better iters)")
+    ax_top.legend(h1 + h2, l1 + l2, loc="upper right", fontsize=8, ncol=2)
+    ax_top.set_title("Per-iter trajectory — kernel + host stages + PSNR (all iters)")
+
+    # Bottom: prep + sort (linear). These are CPU pre-blend stages.
+    ax_bot.plot(xs, prep_ms, "-", color="#2ca02c", linewidth=1.2, marker="o",
+                markersize=3, label="prep (project + tile_assign)")
+    ax_bot.plot(xs, sort_ms, "-", color="#d62728", linewidth=1.2, marker="o",
+                markersize=3, label="sort")
+    ax_bot.set_xlabel("iter")
+    ax_bot.set_ylabel("ms")
+    ax_bot.grid(True, alpha=0.3)
+    ax_bot.set_xticks(xs)
+    ax_bot.set_xticklabels(labels, rotation=60, ha="right", fontsize=7)
+    ax_bot.legend(loc="upper right", fontsize=8)
+
     fig.tight_layout()
     fig.savefig(GRAPHS / "graph-progress.png", dpi=120)
     plt.close(fig)
@@ -129,33 +151,73 @@ def graph_class_progress(iters: list[dict]) -> None:
     plt.close(fig)
 
 
-def _brief_for_iter(iter_name: str) -> str:
-    """One-line description: first paragraph after '## Hypothesis' in the iter's
-    md file (capped). Falls back to the iter's slug if no md exists."""
+def _brief_for_iter(iter_name: str) -> dict:
+    """Returns {hypothesis, outcome} for an iter.
+
+    hypothesis: the full ## Hypothesis section text (excluding fenced code
+                blocks, capped ~1200 chars).
+    outcome:    validator reasoning if validator.json exists, else lesson/
+                correction note from iters.jsonl if present, else "".
+    Both fields fall back to "" rather than slug-derived stand-ins, so the
+    UI can decide whether to render an empty paragraph.
+    """
+    hypothesis = ""
     md = OUT / f"{iter_name}.md"
     if md.exists():
         text = md.read_text()
         if "## Hypothesis" in text:
-            after = text.split("## Hypothesis", 1)[1].strip()
-            # First non-empty, non-heading paragraph.
-            para_lines: list[str] = []
-            for line in after.splitlines():
-                s = line.strip()
-                if not s:
-                    if para_lines:
-                        break
+            after = text.split("## Hypothesis", 1)[1]
+            # Stop at next "## " heading.
+            chunks = after.split("\n## ", 1)
+            section = chunks[0]
+            # Strip fenced code blocks for the brief.
+            cleaned: list[str] = []
+            in_code = False
+            for line in section.splitlines():
+                if line.strip().startswith("```"):
+                    in_code = not in_code
                     continue
-                if s.startswith("#"):
-                    if para_lines:
-                        break
+                if in_code:
                     continue
-                para_lines.append(s)
-            brief = " ".join(para_lines)
-            if brief:
-                return brief[:280] + ("…" if len(brief) > 280 else "")
-    # Fallback: pretty-print the slug.
-    slug = iter_name.split("-", 2)[-1] if iter_name.startswith("iter-") else iter_name
-    return slug.replace("-", " ")
+                cleaned.append(line.rstrip())
+            # Collapse runs of blank lines.
+            collapsed: list[str] = []
+            prev_blank = False
+            for s in cleaned:
+                if not s.strip():
+                    if not prev_blank:
+                        collapsed.append("")
+                    prev_blank = True
+                else:
+                    collapsed.append(s)
+                    prev_blank = False
+            hypothesis = "\n".join(collapsed).strip()
+            if len(hypothesis) > 1200:
+                hypothesis = hypothesis[:1200].rstrip() + "…"
+
+    outcome = ""
+    val_path = OUT / "screenshots" / iter_name / "validator.json"
+    if val_path.exists():
+        try:
+            outcome = (json.loads(val_path.read_text()).get("reasoning") or "").strip()
+        except Exception:
+            outcome = ""
+    if not outcome:
+        # Look in iters.jsonl for a lesson / correction_note attached to this iter.
+        try:
+            for line in (OUT / "iters.jsonl").read_text().splitlines():
+                if not line.strip():
+                    continue
+                row = json.loads(line)
+                if row.get("iter_dir") == iter_name:
+                    note = row.get("lesson") or row.get("correction") or row.get("correction_note")
+                    if note:
+                        outcome = note.strip()
+                        break
+        except Exception:
+            pass
+
+    return {"hypothesis": hypothesis, "outcome": outcome}
 
 
 def render_card(r: dict) -> str:
@@ -168,6 +230,16 @@ def render_card(r: dict) -> str:
     badge = r.get("action", "unknown")
     verdict_badge = r.get("verdict", "?")
     brief = _brief_for_iter(iter_name)
+    hypothesis_html = (
+        "<p class=\"brief hypothesis\"><b>Hypothesis.</b> "
+        + escape(brief["hypothesis"]).replace("\n", "<br>")
+        + "</p>"
+    ) if brief["hypothesis"] else ""
+    outcome_html = (
+        "<p class=\"brief outcome\"><b>Outcome.</b> "
+        + escape(brief["outcome"]).replace("\n", "<br>")
+        + "</p>"
+    ) if brief["outcome"] else ""
 
     # Try to load validator JSON for the checklist render
     val_path = OUT / "screenshots" / iter_name / "validator.json"
@@ -189,11 +261,12 @@ def render_card(r: dict) -> str:
       <span class="badge" style="background:{badge_color}">{escape(badge)}</span>
       <span class="badge verdict">{escape(verdict_badge)}</span>
       <span class="class-tag">{escape(r.get('class', '?'))}</span>
-      {f'<a href="../../{escape(r["iter_dir"])}.md">md</a>' if r.get('commit_sha') else ''}
+      {f'<a href="{escape(r["iter_dir"])}.md">md</a>' if (OUT / f"{r['iter_dir']}.md").exists() else ''}
       <span class="ts">{escape(r.get('timestamp', ''))}</span>
     </h3>
   </header>
-  <p class="brief">{escape(brief)}</p>
+  {hypothesis_html}
+  {outcome_html}
   <div class="metrics">
     <div class="ms">kernel: <b>{r.get('kernel_ms_median', float('nan')):.2f} ms</b> median · {r.get('kernel_ms_p99', float('nan')):.2f} ms p99</div>
     <div class="per-view">per-view: hero {per_view.get('hero', float('nan')):.2f} / side {per_view.get('side', float('nan')):.2f} / top {per_view.get('top', float('nan')):.2f}</div>

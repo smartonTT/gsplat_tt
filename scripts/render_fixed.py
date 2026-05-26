@@ -189,11 +189,20 @@ def main_cycles(args) -> None:
                 flush=True,
             )
             if measured:
-                timing_rows.append({
+                # Capture richer per-stage timings so build_report.py's trajectory
+                # chart can show total/prep/sort/blend alongside kernel_ms.
+                t = result.timings if hasattr(result, "timings") else {}
+                row = {
                     "cycle": cycle - args.warmup_cycles,
                     "view": v,
                     "kernel_ms": float(kernel_ms),
-                })
+                    "total_ms": float(t.get("total", wall_ms)),
+                    "project_ms": float(t.get("project", 0.0)),
+                    "tile_assign_ms": float(t.get("tile_assign", 0.0)),
+                    "sort_ms": float(t.get("sort", 0.0)),
+                    "blend_ms": float(t.get("blend", 0.0)),
+                }
+                timing_rows.append(row)
                 if image_float is not None:
                     final_imgs[v] = image_to_uint8(image_float)
 

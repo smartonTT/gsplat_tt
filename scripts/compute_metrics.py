@@ -45,12 +45,24 @@ def aggregate_timing(timing_path: Path) -> dict:
     if not all_ms:
         raise ValueError(f"{timing_path} has no kernel_ms rows (did the kernel crash mid-run?)")
     per_view = {v: [r["kernel_ms"] for r in rows if r.get("view") == v] for v in VIEWS}
-    return {
+    out = {
         "kernel_ms_median": float(statistics.median(all_ms)),
         "kernel_ms_p99": float(np.percentile(all_ms, 99)),
         "per_view_median": {v: (float(statistics.median(per_view[v])) if per_view[v] else float("nan")) for v in VIEWS},
         "frame_count": len(all_ms),
     }
+    # Optional per-stage medians (added in iter-008 trajectory work). Only emit
+    # keys that exist on every row — missing on historical iters where
+    # render_fixed.py wasn't capturing them yet.
+    stage_keys = ("total_ms", "project_ms", "tile_assign_ms", "sort_ms", "blend_ms")
+    stage_medians = {}
+    for k in stage_keys:
+        vals = [r[k] for r in rows if k in r]
+        if len(vals) == len(rows):
+            stage_medians[k] = float(statistics.median(vals))
+    if stage_medians:
+        out["stage_medians"] = stage_medians
+    return out
 
 
 def main():
