@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 16 · current best: 97.77 ms · target: 1.0 ms
+      iters: 17 · current best: 96.80 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-015-bound-class-baseline
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      <a href="iter-015-bound-class-baseline.md">md</a>
+      <span class="ts">2026-05-26T10:08:23.447060+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> (about ourselves, not the kernel)<br><br>The kernel is **not** compute-bound. Likely classifications:<br>- **reader-bound** (BRISC ≳ TRISC1): the per-Gaussian inner loop reads<br>  9 fp32 attributes from CB_SCALARS, plus the per-tile px/py. With 10K<br>  Gaussians × 64 cores the reader has substantial sustained traffic.<br>- **overhead-bound** (`(FW - KERNEL) / FW &gt; 40%`): the kernel has many<br>  small acquire/commit cycles per Gaussian (currently ~10 acquires per<br>  Gaussian after the iter-007/iter-010 fusions). Dispatch + CB-flush<br>  could dominate.<br><br>If either is true, the entire iter-007..014 lever family was misaimed.<br>We need a different lever family (CB depth, batched reads, kernel<br>restructure) to make further progress.</p>
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass: renders are visually identical to reference across all three views, diff10 images show only fine uniform speckle with no structured artifacts (no tile seams, no fill blocks, no holes, no clipping, no ringing, no NaN patterns, no geometry shift). Numeric checks all pass: PSNR is 40.40/43.70/40.15 dB — all above the 40 dB kernel-algebra floor with a max inter-view delta of 3.55 dB (limit 20 dB). Per-view kernel timing ratio is 1.162 (limit 2x). p99/median ratio is 1.053 (limit 3x). kernel_ms_median of 96.80 ms is 1.0% below prev_best of 97.77 ms, within the 1.02x break-even band — no regression. This is a pure measurement iter with no code changes, and results confirm the baseline is stable and clean for bound-class profiling.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>96.80 ms</b> median · 101.95 ms p99</div>
+    <div class="per-view">per-view: hero 96.80 / side 87.59 / top 101.78</div>
+    <div class="psnr">PSNR: hero 40.4 / side 43.7 / top 40.1 (min <b>40.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-015-bound-class-baseline/hero.png" target="_blank"><img src="screenshots/iter-015-bound-class-baseline/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-015-bound-class-baseline/side.png" target="_blank"><img src="screenshots/iter-015-bound-class-baseline/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-015-bound-class-baseline/top.png" target="_blank"><img src="screenshots/iter-015-bound-class-baseline/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-015-bound-class-baseline/hero_diff10.png" target="_blank"><img src="screenshots/iter-015-bound-class-baseline/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-015-bound-class-baseline/side_diff10.png" target="_blank"><img src="screenshots/iter-015-bound-class-baseline/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-015-bound-class-baseline/top_diff10.png" target="_blank"><img src="screenshots/iter-015-bound-class-baseline/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32px or 16px spacing visible in any diff10 image. Diff patterns follow object surface</li><li>✓ tile_uniform_fill: No square constant-color regions in any of the three renders. Detail matches reference throughout.</li><li>✓ missing_splat_holes: No locally dark regions relative to reference. Diff10 brightness is distributed uniformly across the object surface with</li><li>✓ color_clipping_bands: No saturated R/G/B stripes or flat-colored bands in hero, side, or top renders. Colors match reference hue and saturatio</li><li>✓ ringing_halos: Silhouette edges in all three views show normal soft Gaussian falloff. No structured ringing or halo rings at high-contr</li><li>✓ nan_inf_signatures: No pure black, white, or magenta patches in spatially-correlated patterns. Background is clean black, object pixels are </li><li>✓ geometry_shift: Diff10 images do not show object silhouette outlines that would indicate coordinate errors. Diff energy is distributed w</li><li>✓ diff10_structure: All three diff10 images show uniform fine speckle following the surface of the plush toy with no grids, gradient bands, </li></ul>
+    <p class="reasoning">All 8 visual checks pass: renders are visually identical to reference across all three views, diff10 images show only fine uniform speckle with no structured artifacts (no tile seams, no fill blocks, no holes, no clipping, no ringing, no NaN patterns, no geometry shift). Numeric checks all pass: PSNR is 40.40/43.70/40.15 dB — all above the 40 dB kernel-algebra floor with a max inter-view delta of 3.55 dB (limit 20 dB). Per-view kernel timing ratio is 1.162 (limit 2x). p99/median ratio is 1.053 (limit 3x). kernel_ms_median of 96.80 ms is 1.0% below prev_best of 97.77 ms, within the 1.02x break-even band — no regression. This is a pure measurement iter with no code changes, and results confirm the baseline is stable and clean for bound-class profiling.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-013-drop-stage-e-sat-mask
