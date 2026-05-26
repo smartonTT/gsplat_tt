@@ -563,16 +563,17 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_ONE_MINUS_ALPHA, 1);
 
-            // Step 2 (iter-013): T_state ← T_state · (1 - alpha). The
-            // multiplication by sat_mask that used to happen here (via
-            // binary_dest_reuse<ELWMUL, DEST_TO_SRCA>(CB_SAT_MASK) per iter-010)
-            // is algorithmically redundant — Stage D1 already gates contrib by
-            // sat_mask, so an unmasked T_state never adds visible energy to the
-            // output. Dropping the binary_dest_reuse saves ~1 dB PSNR (bf16
-            // truncation on DEST_TO_SRCA reload) and a small SFPU/FPU op cost.
+            // Steps 2+3 FUSED (iter-010): T_state ← T_state · (1-alpha) · sat_mask
+            // in one acquire, pure FPU. mul_tiles(T_state, ONE_MINUS_ALPHA) → dst[0];
+            // then binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA>(SAT_MASK) reuses
+            // dst[0] as SRCA and multiplies by sat_mask in-place. Saves 1 acquire
+            // + the CB_T_TMP reserve/pack/push/wait/pop roundtrip. Same pattern as
+            // iter-007's Stage D1 win.
             tile_regs_acquire();
             mul_tiles_init(CB_T_STATE, CB_ONE_MINUS_ALPHA);
             mul_tiles(CB_T_STATE, CB_ONE_MINUS_ALPHA, 0, 0, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_T_STATE, 1);
