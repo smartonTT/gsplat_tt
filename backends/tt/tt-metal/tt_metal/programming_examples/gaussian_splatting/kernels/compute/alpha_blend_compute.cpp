@@ -160,16 +160,11 @@ void kernel_main() {
         // 267-280). The previous fill_tile-multi-slot approach (iter-012) hung.
         //
         // Acquire 1: load CB_CONST_ZERO into slots 0/1/2 (R/G/B), CB_CONST_ONE into
-        // slot 3 (T). Pack each slot to its corresponding state CB. Each copy_tile
-        // is preceded by a copy_tile_to_dst_init_short — same pattern used at the
-        // per-tile finalize (lines 595-602). Multi-slot copy_tile from the same
-        // CB without re-init hung in a prior attempt.
+        // slot 3 (T). Pack each slot to its corresponding state CB.
         tile_regs_acquire();
         copy_tile_to_dst_init_short(CB_CONST_ZERO);
         copy_tile(CB_CONST_ZERO, 0, 0);
-        copy_tile_to_dst_init_short(CB_CONST_ZERO);
         copy_tile(CB_CONST_ZERO, 0, 1);
-        copy_tile_to_dst_init_short(CB_CONST_ZERO);
         copy_tile(CB_CONST_ZERO, 0, 2);
         copy_tile_to_dst_init_short(CB_CONST_ONE);
         copy_tile(CB_CONST_ONE, 0, 3);
