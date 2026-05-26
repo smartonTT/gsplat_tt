@@ -411,6 +411,26 @@ static void write_persistent_region(
         *buffer, src.data(), range, blocking, std::optional<BufferRegion>{region});
 }
 
+// iter-017: Counterpart to write_persistent_region. EnqueueReadMeshBuffer
+// reads buffer->size() bytes — if we read the max-allocated output buffer
+// directly we transfer ~24 MB even when only ~6 MB of tiles are live, which
+// is a measurable per-frame regression. enqueue_read_shards with an explicit
+// BufferRegion limits the readback to the actual frame bytes.
+template <typename T>
+static void read_persistent_region(
+    distributed::MeshCommandQueue& cq,
+    const std::shared_ptr<distributed::MeshBuffer>& buffer,
+    std::vector<T>& dst,
+    bool blocking = true) {
+    const size_t bytes = dst.size() * sizeof(T);
+    auto coord = *distributed::MeshCoordinateRange(buffer->device()->shape()).begin();
+    std::vector<distributed::ShardDataTransfer> xfer = {
+        distributed::ShardDataTransfer{coord}
+            .host_data(dst.data())
+            .region(std::optional<BufferRegion>{BufferRegion{0, bytes}})};
+    cq.enqueue_read_shards(xfer, buffer, blocking);
+}
+
 // ---------------------------------------------------------------------------
 // Per-frame work
 // ---------------------------------------------------------------------------
@@ -708,7 +728,7 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
         write_persistent_region(*ctx.workload_cq, p.tile_ids, assign.tile_id_buffer_padded);
         // Pre-warm: actual dispatch produces output for this frame.
         distributed::EnqueueMeshWorkload(*ctx.workload_cq, ctx.workload, /*blocking=*/true);
-        distributed::EnqueueReadMeshBuffer(*ctx.workload_cq, result_bf16, p.output, /*blocking=*/true);
+        read_persistent_region(*ctx.workload_cq, p.output, result_bf16, /*blocking=*/true);
 
         // Capture a trace of the (now-warmed) workload dispatch for replay.
         auto trace_id = distributed::BeginTraceCapture(ctx.mesh_device.get(), /*cq_id=*/1);
@@ -726,7 +746,7 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
         auto write_done = ctx.data_cq->enqueue_record_event();
         ctx.workload_cq->enqueue_wait_for_event(write_done);
         ctx.mesh_device->replay_mesh_trace(/*cq_id=*/1, cache_it->second, /*blocking=*/false);
-        distributed::EnqueueReadMeshBuffer(*ctx.workload_cq, result_bf16, p.output, /*blocking=*/true);
+        read_persistent_region(*ctx.workload_cq, p.output, result_bf16, /*blocking=*/true);
     }
 
     const auto t_end = std::chrono::steady_clock::now();
