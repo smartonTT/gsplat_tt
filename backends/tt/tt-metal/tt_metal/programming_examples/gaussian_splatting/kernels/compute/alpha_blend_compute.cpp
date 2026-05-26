@@ -282,28 +282,42 @@ void kernel_main() {
             cb_wait_front(CB_DX, 1);
             cb_wait_front(CB_DY, 1);
 
-            // ----- Stage B2: pairwise products dx², dy², dx·dy (fused, iter-009).
-            // With fp32_dest_acc_en we have 4 DST slots; the three products
-            // fit in dst[0/1/2] within a single acquire. Pure FPU chain —
-            // same op type repeated — matches the iter-007 safe pattern.
-            // Saves 2 acquire/commit/wait/release cycles per Gaussian.
+            // ----- Stage B2: pairwise products dx², dy², dx·dy.
+            // tt-metal has no fused quadratic-form op, so we do three
+            // separate mul_tiles, each in its own acquire block (Dst is
+            // limited; can't keep many tiles live at once with fp32 acc).
+            // The three products feed Stage B3 below.
+
+            // Stage B2a: dx² = dx · dx
             tile_regs_acquire();
             mul_tiles_init(CB_DX, CB_DX);
-            mul_tiles(CB_DX, CB_DX, 0, 0, 0);  // dst[0] = dx²
-            mul_tiles_init(CB_DY, CB_DY);
-            mul_tiles(CB_DY, CB_DY, 0, 0, 1);  // dst[1] = dy²
-            mul_tiles_init(CB_DX, CB_DY);
-            mul_tiles(CB_DX, CB_DY, 0, 0, 2);  // dst[2] = dx·dy
+            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_DX2, 1);
             pack_tile(0, CB_DX2);
             cb_push_back(CB_DX2, 1);
+            tile_regs_release();
+
+            // Stage B2b: dy² = dy · dy
+            tile_regs_acquire();
+            mul_tiles_init(CB_DY, CB_DY);
+            mul_tiles(CB_DY, CB_DY, 0, 0, 0);
+            tile_regs_commit();
+            tile_regs_wait();
             cb_reserve_back(CB_DY2, 1);
-            pack_tile(1, CB_DY2);
+            pack_tile(0, CB_DY2);
             cb_push_back(CB_DY2, 1);
+            tile_regs_release();
+
+            // Stage B2c: dx·dy
+            tile_regs_acquire();
+            mul_tiles_init(CB_DX, CB_DY);
+            mul_tiles(CB_DX, CB_DY, 0, 0, 0);
+            tile_regs_commit();
+            tile_regs_wait();
             cb_reserve_back(CB_DXDY, 1);
-            pack_tile(2, CB_DXDY);
+            pack_tile(0, CB_DXDY);
             cb_push_back(CB_DXDY, 1);
             tile_regs_release();
 
