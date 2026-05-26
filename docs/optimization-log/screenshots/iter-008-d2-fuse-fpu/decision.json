@@ -1,0 +1,10 @@
+{
+  "verdict": "REJECT",
+  "action": "revert",
+  "high_promotion_priority": false,
+  "kernel_ms_median": null,
+  "prev_best_kernel_ms": 99.34,
+  "commit_sha": "02c8089",
+  "failure_mode": "kernel deadlock",
+  "lesson": "Per-channel D2 fuse (copy_tile + mul_unary_tile + binary_dest_reuse_tiles<ELWADD, DEST_TO_SRCA> for CB_COLOR_C_STATE) deadlocked the kernel. The render daemon hung within the first cycle (no [cycle N/M ...] line ever printed after [cycles] scene=...). Killed after 30+ min. Likely root cause: chaining copy_tile → mul_unary → binary_dest_reuse_tiles in one acquire saturates the SFPU/FPU pipeline state machine in a way that breaks the CB_COLOR_C_STATE pop/push ordering. Same failure class as M2 (commit 86c5ae2 'revert M2 precompute basis tiles: kernel deadlock at cycle 1+'). Both involved more aggressive intra-acquire fusion than iter-007 (which only chained mul_tiles + binary_dest_reuse_tiles, no copy_tile/mul_unary)."
+}
