@@ -37,3 +37,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 43.9 / side 46.9 / top 41.8 (inherited from iter-003 M1)
 - Built on iter-003 M1 (basis-form), so it inherited the tile-seam artifact and was reverted in the same rollback. The SFPU DST-DST fusion in D1+D2+E was also slower than the prior FPU mul_tiles approach, so even on its own merits it would not have landed.
 - Thumbnails: ![hero](screenshots/iter-004-fuse-inner-acquires/hero.png) ![diff10](screenshots/iter-004-fuse-inner-acquires/hero_diff10.png)
+
+## iter-009-b2-fuse-fpu — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 100.69 / p99 106.17
+- PSNR per view: hero 59.5 / side 62.3 / top 60.0
+- Validator reasoning: Algebra-preserving fusion: PSNR per-view is bit-identical to iter-007 (59.518/62.260/59.995). Visual checks all pass with the same diff10 noise floor. However the kernel ms regressed 99.34 → 100.695 (+1.37%), which falls within the 2% break-even band but offers no improvement, while making the kernel less explicit (three live products in one acquire). Same class of negative result as iter-006: collapsing acquire cycles for FPU ops appears to remove overlap between pack and the next stage's setup, so theoretical 'saves 2 acquire cycles' becomes net-zero or slightly negative. REJECT with action=revert; lesson is that the 3-mul_tiles single-acquire pattern is not a perf win on this kernel and the explicit 3-acquire form is preferable.
+- Thumbnails: ![hero](screenshots/iter-009-b2-fuse-fpu/hero.png) ![diff10](screenshots/iter-009-b2-fuse-fpu/hero_diff10.png)
+
