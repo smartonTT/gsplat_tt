@@ -1,0 +1,18 @@
+{
+  "iter_dir": "iter-003-m1-basis-form-fpu-q",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 99.955,
+  "psnr_per_view": {
+    "hero": 43.90745857563266,
+    "side": 46.8968312224647,
+    "top": 41.81050878351938
+  },
+  "kernel_ms_median": 97.545,
+  "kernel_ms_p99": 102.6439,
+  "per_view_median": {
+    "hero": 97.545,
+    "side": 88.525,
+    "top": 102.38
+  },
+  "frame_count": 30
+}

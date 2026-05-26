@@ -6,8 +6,8 @@ _None._
 
 ## Current State
 
-- Last updated: 2026-05-25 18:09 UTC
-- Last iter: iter-002-basis-form-tile-local → REJECT / backburner
-- Current best kernel ms (committed): 99.95 ms
-- Last iter kernel ms median: 106.16
+- Last updated: 2026-05-26 02:18 UTC
+- Last iter: iter-003-m1-basis-form-fpu-q → KEEP / commit
+- Current best kernel ms (committed): 97.55 ms
+- Last iter kernel ms median: 97.55
 - Target: 1.0 ms
