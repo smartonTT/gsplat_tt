@@ -26,25 +26,37 @@ CB. CB_SAT_MASK reuses dst[3] (same 1.0 value as CB_T_STATE) — pack the
 same slot twice.
 
 ```
-acquire {
-  fill_tile_init();             // already called once at kernel startup
+acquire {                       // 4 dst slots, R/G/B/T
   fill_tile(0, 0.0f);           // R
   fill_tile(1, 0.0f);           // G
   fill_tile(2, 0.0f);           // B
-  fill_tile(3, 1.0f);           // T (and sat_mask via pack reuse)
+  fill_tile(3, 1.0f);           // T
 }
 commit, wait;
 pack 0 → CB_COLOR_R_STATE
 pack 1 → CB_COLOR_G_STATE
 pack 2 → CB_COLOR_B_STATE
 pack 3 → CB_T_STATE
-pack 3 → CB_SAT_MASK          // same slot, different CB
+release;
+
+acquire {                       // separate dst for sat_mask
+  fill_tile(0, 1.0f);
+}
+commit, wait;
+pack 0 → CB_SAT_MASK
 release;
 ```
 
-Saves **4 acquire/commit/wait/release roundtrips per screen tile**. With
-~16 tiles/core and 64 cores, that's ~4096 saved acquire cycles per frame.
-At an estimated 30-50ns each, the per-core saving is ~3-5 μs.
+Saves **3 acquire/commit/wait/release roundtrips per screen tile** (5 → 2).
+With ~16 tiles/core and 64 cores, that's ~3072 saved acquire cycles per
+frame. Per-core saving ~2-3 μs at an estimated 30-50ns each.
+
+**First attempt history (0592a23, reverted):** tried 1-acquire form
+packing dst[3] to BOTH CB_T_STATE and CB_SAT_MASK. The kernel hung at
+cycle 1 (daemon blocked in futex_wait_queue_me holding /dev/tenstorrent/0).
+Packing the same dst slot to two different CBs in one acquire isn't
+supported — pack_tile must consume the slot or pack hardware needs
+reconfig between CBs.
 
 ## Why this is low-PSNR-risk
 
