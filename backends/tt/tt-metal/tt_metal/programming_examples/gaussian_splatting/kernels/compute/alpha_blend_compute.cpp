@@ -139,32 +139,45 @@ void kernel_main() {
         // many Gaussian iterations).
         // =====================================================================
 
-        // R/G/B = 0, T = 1, sat_mask = 1 — fused init (iter-012):
-        // 5 acquires → 2. Acquire 1 fills 4 dst slots and packs R/G/B/T to
-        // their state CBs. Acquire 2 fills sat_mask separately because
-        // packing the same dst slot to two different CBs (e.g. pack_tile(3,
-        // CB_T_STATE) then pack_tile(3, CB_SAT_MASK)) hangs the device.
+        // R_state, G_state, B_state = 0.0
         cb_reserve_back(CB_COLOR_R_STATE, 1);
-        cb_reserve_back(CB_COLOR_G_STATE, 1);
-        cb_reserve_back(CB_COLOR_B_STATE, 1);
-        cb_reserve_back(CB_T_STATE, 1);
         tile_regs_acquire();
         fill_tile(0, 0.0f);
-        fill_tile(1, 0.0f);
-        fill_tile(2, 0.0f);
-        fill_tile(3, 1.0f);
         tile_regs_commit();
         tile_regs_wait();
         pack_tile(0, CB_COLOR_R_STATE);
-        pack_tile(1, CB_COLOR_G_STATE);
-        pack_tile(2, CB_COLOR_B_STATE);
-        pack_tile(3, CB_T_STATE);
         tile_regs_release();
         cb_push_back(CB_COLOR_R_STATE, 1);
+
+        cb_reserve_back(CB_COLOR_G_STATE, 1);
+        tile_regs_acquire();
+        fill_tile(0, 0.0f);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_tile(0, CB_COLOR_G_STATE);
+        tile_regs_release();
         cb_push_back(CB_COLOR_G_STATE, 1);
+
+        cb_reserve_back(CB_COLOR_B_STATE, 1);
+        tile_regs_acquire();
+        fill_tile(0, 0.0f);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_tile(0, CB_COLOR_B_STATE);
+        tile_regs_release();
         cb_push_back(CB_COLOR_B_STATE, 1);
+
+        // T_state = 1.0
+        cb_reserve_back(CB_T_STATE, 1);
+        tile_regs_acquire();
+        fill_tile(0, 1.0f);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_tile(0, CB_T_STATE);
+        tile_regs_release();
         cb_push_back(CB_T_STATE, 1);
 
+        // sat_mask = 1.0 (all pixels active)
         cb_reserve_back(CB_SAT_MASK, 1);
         tile_regs_acquire();
         fill_tile(0, 1.0f);
