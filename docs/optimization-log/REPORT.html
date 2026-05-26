@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 19 · current best: 96.80 ms · target: 1.0 ms
+      iters: 20 · current best: 96.70 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-019-kernel-zones
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-26T21:28:39.634115+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass: renders are bit-identical to the iter-015 reference (instrumentation-only change, no math altered), diff×10 images show only fine uniform speckle consistent with normal bf16 noise, no structural artifacts detected. PSNR for all views exceeds the 40 dB kernel-algebra floor (hero=40.40, side=43.70, top=40.15). Per-view PSNR delta is 3.55 dB (well under 20 dB threshold) and per-view ms ratio is 1.162× (well under 2×). Timing is flat vs prev_best at -0.10% (within break-even 1.02× band); p99/median ratio is 1.055× (well under 3×). The --profile build noise (+5-10%) accounts for the negligible 0.10 ms difference from baseline. No grounds for REJECT or NEEDS_REVIEW.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>96.70 ms</b> median · 102.02 ms p99</div>
+    <div class="per-view">per-view: hero 96.70 / side 87.46 / top 101.65</div>
+    <div class="psnr">PSNR: hero 40.4 / side 43.7 / top 40.1 (min <b>40.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-019-kernel-zones/hero.png" target="_blank"><img src="screenshots/iter-019-kernel-zones/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-019-kernel-zones/side.png" target="_blank"><img src="screenshots/iter-019-kernel-zones/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-019-kernel-zones/top.png" target="_blank"><img src="screenshots/iter-019-kernel-zones/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-019-kernel-zones/hero_diff10.png" target="_blank"><img src="screenshots/iter-019-kernel-zones/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-019-kernel-zones/side_diff10.png" target="_blank"><img src="screenshots/iter-019-kernel-zones/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-019-kernel-zones/top_diff10.png" target="_blank"><img src="screenshots/iter-019-kernel-zones/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32- or 16-pixel spacing visible in any diff×10 image across hero, side, or top views.</li><li>✓ tile_uniform_fill: No constant-color square regions detected in renders; all surfaces show continuous Gaussian splat coverage matching refe</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions in any view; diff×10 shows only fine speckle over the object, not localized br</li><li>✓ color_clipping_bands: No saturated flat-colored stripes or clipped R/G/B bands observed in hero, side, or top renders. Colors match reference </li><li>✓ ringing_halos: Object silhouettes in all three views are clean; no structured ringing or halo artifacts at high-contrast edges between </li><li>✓ nan_inf_signatures: No pure-black, pure-white, or magenta spatially-correlated patches in any render. Background is clean black, object pixe</li><li>✓ geometry_shift: Diff×10 images show no silhouette-shaped high-contrast region indicating a coordinate shift; the object outline does not</li><li>✓ diff10_structure: All three diff×10 images are dominated by uniform fine speckle over the object surface with no grids, structured edges, </li></ul>
+    <p class="reasoning">All 8 visual checks pass: renders are bit-identical to the iter-015 reference (instrumentation-only change, no math altered), diff×10 images show only fine uniform speckle consistent with normal bf16 noise, no structural artifacts detected. PSNR for all views exceeds the 40 dB kernel-algebra floor (hero=40.40, side=43.70, top=40.15). Per-view PSNR delta is 3.55 dB (well under 20 dB threshold) and per-view ms ratio is 1.162× (well under 2×). Timing is flat vs prev_best at -0.10% (within break-even 1.02× band); p99/median ratio is 1.055× (well under 3×). The --profile build noise (+5-10%) accounts for the negligible 0.10 ms difference from baseline. No grounds for REJECT or NEEDS_REVIEW.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-017-trace-api

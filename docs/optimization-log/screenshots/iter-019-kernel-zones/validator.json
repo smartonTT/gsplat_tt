@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32- or 16-pixel spacing visible in any diff×10 image across hero, side, or top views."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color square regions detected in renders; all surfaces show continuous Gaussian splat coverage matching reference detail."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage regions in any view; diff×10 shows only fine speckle over the object, not localized bright patches indicating missing splats."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes or clipped R/G/B bands observed in hero, side, or top renders. Colors match reference hues."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Object silhouettes in all three views are clean; no structured ringing or halo artifacts at high-contrast edges between the figure and black background."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure-black, pure-white, or magenta spatially-correlated patches in any render. Background is clean black, object pixels are continuous."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 images show no silhouette-shaped high-contrast region indicating a coordinate shift; the object outline does not appear in the diff pattern."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images are dominated by uniform fine speckle over the object surface with no grids, structured edges, gradients, or bands. This is consistent with normal bf16 quantization noise."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 40.40181099360784, "side": 43.69705259506113, "top": 40.149730293255274}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 3.55, "max_ms_ratio": 1.162, "pass": true},
+  "timing": {"median_ms": 96.702, "p99_ms": 102.025, "vs_prev_best_pct": -0.101, "pass": true},
+  "reasoning": "All 8 visual checks pass: renders are bit-identical to the iter-015 reference (instrumentation-only change, no math altered), diff×10 images show only fine uniform speckle consistent with normal bf16 noise, no structural artifacts detected. PSNR for all views exceeds the 40 dB kernel-algebra floor (hero=40.40, side=43.70, top=40.15). Per-view PSNR delta is 3.55 dB (well under 20 dB threshold) and per-view ms ratio is 1.162× (well under 2×). Timing is flat vs prev_best at -0.10% (within break-even 1.02× band); p99/median ratio is 1.055× (well under 3×). The --profile build noise (+5-10%) accounts for the negligible 0.10 ms difference from baseline. No grounds for REJECT or NEEDS_REVIEW."
+}
