@@ -392,6 +392,25 @@ static void ensure_persistent_buffers(DeviceContext& ctx) {
     ctx.persistent.allocated = true;
 }
 
+// iter-017: Write only `src.size() * sizeof(T)` bytes at offset 0 of a
+// max-allocated persistent buffer. The default `EnqueueWriteMeshBuffer`
+// helper asserts src.size()*sizeof(T) >= buffer->size(), which fails when
+// the buffer is much larger than the per-frame payload. The kernels only
+// read the portion described by their runtime args (e.g. total_entries *
+// SCALAR_PACK_PAGE_BYTES), so writing a partial region is safe.
+template <typename T>
+static void write_persistent_region(
+    distributed::MeshCommandQueue& cq,
+    const std::shared_ptr<distributed::MeshBuffer>& buffer,
+    const std::vector<T>& src,
+    bool blocking = false) {
+    const size_t bytes = src.size() * sizeof(T);
+    distributed::MeshCoordinateRange range(buffer->device()->shape());
+    BufferRegion region{0, bytes};
+    cq.enqueue_write_shard_to_sub_grid(
+        *buffer, src.data(), range, blocking, std::optional<BufferRegion>{region});
+}
+
 // ---------------------------------------------------------------------------
 // Per-frame work
 // ---------------------------------------------------------------------------
@@ -681,12 +700,12 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
         Program& program = get_program_for_workload(ctx);
         set_per_core_runtime_args(program, ctx, bufs, assign);
 
-        distributed::EnqueueWriteMeshBuffer(*ctx.workload_cq, p.output,   output_zero);
-        distributed::EnqueueWriteMeshBuffer(*ctx.workload_cq, p.packs,    packs_payload);
-        distributed::EnqueueWriteMeshBuffer(*ctx.workload_cq, p.offsets,  offsets_u32);
-        distributed::EnqueueWriteMeshBuffer(*ctx.workload_cq, p.px,       px_bf16);
-        distributed::EnqueueWriteMeshBuffer(*ctx.workload_cq, p.py,       py_bf16);
-        distributed::EnqueueWriteMeshBuffer(*ctx.workload_cq, p.tile_ids, assign.tile_id_buffer_padded);
+        write_persistent_region(*ctx.workload_cq, p.output,   output_zero);
+        write_persistent_region(*ctx.workload_cq, p.packs,    packs_payload);
+        write_persistent_region(*ctx.workload_cq, p.offsets,  offsets_u32);
+        write_persistent_region(*ctx.workload_cq, p.px,       px_bf16);
+        write_persistent_region(*ctx.workload_cq, p.py,       py_bf16);
+        write_persistent_region(*ctx.workload_cq, p.tile_ids, assign.tile_id_buffer_padded);
         // Pre-warm: actual dispatch produces output for this frame.
         distributed::EnqueueMeshWorkload(*ctx.workload_cq, ctx.workload, /*blocking=*/true);
         distributed::EnqueueReadMeshBuffer(*ctx.workload_cq, result_bf16, p.output, /*blocking=*/true);
@@ -698,12 +717,12 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
         ctx.trace_cache.emplace(key, trace_id);
     } else {
         // Cache hit: upload inputs on data_cq, sync, replay trace, read.
-        distributed::EnqueueWriteMeshBuffer(*ctx.data_cq, p.output,   output_zero);
-        distributed::EnqueueWriteMeshBuffer(*ctx.data_cq, p.packs,    packs_payload);
-        distributed::EnqueueWriteMeshBuffer(*ctx.data_cq, p.offsets,  offsets_u32);
-        distributed::EnqueueWriteMeshBuffer(*ctx.data_cq, p.px,       px_bf16);
-        distributed::EnqueueWriteMeshBuffer(*ctx.data_cq, p.py,       py_bf16);
-        distributed::EnqueueWriteMeshBuffer(*ctx.data_cq, p.tile_ids, assign.tile_id_buffer_padded);
+        write_persistent_region(*ctx.data_cq, p.output,   output_zero);
+        write_persistent_region(*ctx.data_cq, p.packs,    packs_payload);
+        write_persistent_region(*ctx.data_cq, p.offsets,  offsets_u32);
+        write_persistent_region(*ctx.data_cq, p.px,       px_bf16);
+        write_persistent_region(*ctx.data_cq, p.py,       py_bf16);
+        write_persistent_region(*ctx.data_cq, p.tile_ids, assign.tile_id_buffer_padded);
         auto write_done = ctx.data_cq->enqueue_record_event();
         ctx.workload_cq->enqueue_wait_for_event(write_done);
         ctx.mesh_device->replay_mesh_trace(/*cq_id=*/1, cache_it->second, /*blocking=*/false);
