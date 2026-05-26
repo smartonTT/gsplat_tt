@@ -1,0 +1,25 @@
+{
+  "iter_dir": "iter-016-persist-px-py",
+  "class": "dispatch",
+  "prev_best_kernel_ms": 96.80000000000001,
+  "psnr_per_view": {
+    "hero": 40.40181099360784,
+    "side": 43.69705259506113,
+    "top": 40.149730293255274
+  },
+  "kernel_ms_median": 98.435,
+  "kernel_ms_p99": 103.601,
+  "per_view_median": {
+    "hero": 98.435,
+    "side": 88.825,
+    "top": 103.39
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 325.07705099123996,
+    "project_ms": 17.196262000652496,
+    "tile_assign_ms": 11.05709850526182,
+    "sort_ms": 65.54738200065913,
+    "blend_ms": 229.51199750241358
+  }
+}

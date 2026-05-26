@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 17 · current best: 96.80 ms · target: 1.0 ms
+      iters: 18 · current best: 96.80 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-016-persist-px-py
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">dispatch</span>
+      <a href="iter-016-persist-px-py.md">md</a>
+      <span class="ts">2026-05-26T17:07:28.123880+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> px and py are bf16-encoded tile-local pixel coordinates of shape<br>`(num_tiles, 32, 32)`. At 1024² they&#x27;re 2 MB each → 4 MB total uploaded<br>per frame. The contents are deterministically derived from<br>`(image_height, image_width)` — once computed and uploaded they never<br>need to change as long as the resolution stays the same.<br><br>Caching the device buffer in DeviceContext keyed by `(image_h, image_w)`<br>skips:<br>- 2× MeshBuffer allocation (~hundreds of µs of dispatch overhead each)<br>- 2× EnqueueWriteMeshBuffer of 2 MB each (~0.5 ms each at 8 GB/s effective)<br>- 2× host-side bf16 encoding (~0.2 ms at 1M elements)<br><br>Expected savings: **2-4 ms** per frame (~2-4% of 96.8 ms). Small but<br>non-zero, and it proves the lever family. If it works we move on to<br>the bigger output zero-fill upload (6 MB, ~iter-017) and ultimately<br>the tt-metal Trace API (~iter-018).<br><br>If this iter shows ≤ 0.5 ms improvement, it would suggest dispatch<br>overhead per call is the bottleneck more than transfer bytes — useful<br>signal for choosing between &quot;batch uploads into one big buffer&quot; vs<br>&quot;avoid uploads entirely&quot; levers in future iters.</p>
+  <p class="brief outcome"><b>Outcome.</b> PSNR identical to iter-015 baseline to 16 decimals (40.40/43.70/40.15 dB); hero/side/top PNGs are byte-identical to iter-015 (verified via md5). Kernel math is unchanged, so visuals are perfect. REJECT is for perf regression: kernel_ms_median 98.44 vs iter-015 96.80 = +1.64 ms / +1.7% — consistent across all 30 frames (hero 98.30-98.50 every cycle vs iter-015 96.72-96.89). Hypothesis expected -2 to -4 ms from skipping 2x EnqueueWriteMeshBuffer + encode of 4 MB total. Actual signature is the opposite direction, indicating the saved upload time (~0.5 ms estimated) is dominated by added cost of conditional cache lookup + persistent buffer allocator pressure. Code change adds complexity (res_cache state in DeviceContext + per-frame branch on cache hit) with no measurable benefit. Useful negative signal: small (4 MB) buffers don&#x27;t justify persistence overhead; bigger buffers (packs ~32 MB, output ~6 MB) or Trace API are the right next levers.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>98.44 ms</b> median · 103.60 ms p99</div>
+    <div class="per-view">per-view: hero 98.44 / side 88.83 / top 103.39</div>
+    <div class="psnr">PSNR: hero 40.4 / side 43.7 / top 40.1 (min <b>40.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-016-persist-px-py/hero.png" target="_blank"><img src="screenshots/iter-016-persist-px-py/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-016-persist-px-py/side.png" target="_blank"><img src="screenshots/iter-016-persist-px-py/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-016-persist-px-py/top.png" target="_blank"><img src="screenshots/iter-016-persist-px-py/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-016-persist-px-py/hero_diff10.png" target="_blank"><img src="screenshots/iter-016-persist-px-py/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-016-persist-px-py/side_diff10.png" target="_blank"><img src="screenshots/iter-016-persist-px-py/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-016-persist-px-py/top_diff10.png" target="_blank"><img src="screenshots/iter-016-persist-px-py/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul></ul>
+    <p class="reasoning">PSNR identical to iter-015 baseline to 16 decimals (40.40/43.70/40.15 dB); hero/side/top PNGs are byte-identical to iter-015 (verified via md5). Kernel math is unchanged, so visuals are perfect. REJECT is for perf regression: kernel_ms_median 98.44 vs iter-015 96.80 = +1.64 ms / +1.7% — consistent across all 30 frames (hero 98.30-98.50 every cycle vs iter-015 96.72-96.89). Hypothesis expected -2 to -4 ms from skipping 2x EnqueueWriteMeshBuffer + encode of 4 MB total. Actual signature is the opposite direction, indicating the saved upload time (~0.5 ms estimated) is dominated by added cost of conditional cache lookup + persistent buffer allocator pressure. Code change adds complexity (res_cache state in DeviceContext + per-frame branch on cache hit) with no measurable benefit. Useful negative signal: small (4 MB) buffers don&#x27;t justify persistence overhead; bigger buffers (packs ~32 MB, output ~6 MB) or Trace API are the right next levers.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-015-bound-class-baseline
@@ -662,6 +695,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Daemon state: blocked in `futex_wait_queue_me` holding `/dev/tenstorrent/0`. Host process blocked in `pipe_read` waiting for daemon.
 - Lesson: multi-slot `fill_tile` calls in one acquire deadlock the SFPU fill pipeline in this kernel. No working precedent exists in tt-metal `programming_examples/` or `tests/` — `fill_tile` is otherwise unused there. The header docs `idst` as unconstrained but practically single-slot use is required. Future per-tile state init optimizations should use `copy_tile` from pre-populated constant CBs (CB_CONST_ZERO already exists; a CB_CONST_ONE could be added once at startup).
 - No thumbnails (no render produced).
+
+
+## iter-016-persist-px-py — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 98.44 / p99 103.60
+- PSNR per view: hero 40.4 / side 43.7 / top 40.1
+- Validator reasoning: PSNR identical to iter-015 baseline to 16 decimals (40.40/43.70/40.15 dB); hero/side/top PNGs are byte-identical to iter-015 (verified via md5). Kernel math is unchanged, so visuals are perfect. REJECT is for perf regression: kernel_ms_median 98.44 vs iter-015 96.80 = +1.64 ms / +1.7% — consistent across all 30 frames (hero 98.30-98.50 every cycle vs iter-015 96.72-96.89). Hypothesis expected -2 to -4 ms from skipping 2x EnqueueWriteMeshBuffer + encode of 4 MB total. Actual signature is the opposite direction, indicating the saved upload time (~0.5 ms estimated) is dominated by added cost of conditional cache lookup + persistent buffer allocator pressure. Code change adds complexity (res_cache state in DeviceContext + per-frame branch on cache hit) with no measurable benefit. Useful negative signal: small (4 MB) buffers don&#x27;t justify persistence overhead; bigger buffers (packs ~32 MB, output ~6 MB) or Trace API are the right next levers.
+- Thumbnails: ![hero](screenshots/iter-016-persist-px-py/hero.png) ![diff10](screenshots/iter-016-persist-px-py/hero_diff10.png)
 
 </pre>
   </section>
