@@ -94,6 +94,7 @@ if [[ "$PROFILE" == "1" ]]; then
       sudo rm -rf backends/tt/tt-metal/build-tracy && \
       sudo cmake -G Ninja -S backends/tt/tt-metal -B backends/tt/tt-metal/build-tracy \
         -DENABLE_TRACY=ON -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_PROGRAMMING_EXAMPLES=ON \
         -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20; \
     fi && \
     sudo ninja -C backends/tt/tt-metal/build-tracy metal_example_gaussian_splatting"
