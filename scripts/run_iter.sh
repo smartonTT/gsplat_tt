@@ -122,8 +122,10 @@ else
 fi
 
 # Step 6: scp results back
-scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/{hero,side,top}.png" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1
-scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/timing.jsonl" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1
+# macOS scp (sftp-based) doesn't expand brace patterns server-side, so do per-file copies.
+for f in hero.png side.png top.png timing.jsonl; do
+  scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/$f" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1
+done
 if [[ "$PROFILE" == "1" ]]; then
   scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/iter.tracy" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
   scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/zones.csv" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
