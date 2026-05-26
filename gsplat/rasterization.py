@@ -111,18 +111,31 @@ def project_gaussians(
         covs_2d[:, 0, 0] += 0.3
         covs_2d[:, 1, 1] += 0.3
 
-    # --- Step 7: Compute per-axis 3σ AABB radii from the 2D covariance ---
+    # --- Step 7: Compute per-axis AABB radii from the 2D covariance ---
     # For Σ_2D = [[a, b], [b, c]], the diagonals a and c are the variances
-    # along screen-x and screen-y. The axis-aligned 3σ bbox is therefore
-    # rx = 3*sqrt(a), ry = 3*sqrt(c) regardless of the rotation encoded in b.
-    # This is strictly tighter than the lambda_max-based circle (which equals
-    # this for circular Gaussians and overestimates for elongated/tilted
-    # ones) — measured iter-022 splat-pair cut: ~28% on stitch_doll.
+    # along screen-x and screen-y. The axis-aligned σ-bbox is therefore
+    # rx = k*sqrt(a), ry = k*sqrt(c) regardless of the rotation encoded in b.
+    #
+    # k is chosen *per Gaussian* from its opacity ω. The peak contribution at
+    # Mahalanobis distance d² (in σ units) is ω * exp(-d²/2). Setting this
+    # equal to the 8-bit perceptual floor 1/255 yields:
+    #     d² = 2 * ln(ω * 255)   →   k(ω) = sqrt(2 * ln(ω * 255))
+    # For ω≥1/255 this is well-defined; the min_opacity cull already drops
+    # ω<1/255. We additionally clamp k ≤ 3 so high-opacity Gaussians never
+    # grow beyond the iter-022 3σ baseline (k(1.0)=3.33 without the cap).
+    # On stitch_doll (most Gaussians have ω∈[0.01, 0.5]) this cuts another
+    # ~11% (gaussian, tile) pairs on top of iter-022 — measurement:
+    # scripts/measure_splat_count.py.
     with _sub_timer(sub_timings, "project.radii"):
         a = covs_2d[:, 0, 0]
         c = covs_2d[:, 1, 1]
-        rx = torch.ceil(3.0 * torch.sqrt(torch.clamp(a, min=0.0)))
-        ry = torch.ceil(3.0 * torch.sqrt(torch.clamp(c, min=0.0)))
+        if opacities is not None:
+            arg = torch.clamp(opacities * 255.0, min=1.0)
+            k = torch.clamp(torch.sqrt(2.0 * torch.log(arg)), max=3.0)
+        else:
+            k = torch.full_like(a, 3.0)
+        rx = torch.ceil(k * torch.sqrt(torch.clamp(a, min=0.0)))
+        ry = torch.ceil(k * torch.sqrt(torch.clamp(c, min=0.0)))
         radii = torch.stack([rx, ry], dim=-1)  # (N, 2)
 
         # Also cull Gaussians that project entirely outside the screen.
