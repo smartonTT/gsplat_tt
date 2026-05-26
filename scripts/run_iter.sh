@@ -109,10 +109,14 @@ ssh "$BOX_USER@$BOX_HOST" "mkdir -p $REMOTE_OUT"
 if [[ "$PROFILE" == "1" ]]; then
   # Start tracy-capture in the background, then render, then stop capture.
   # tracy-capture listens on TCP 8086 by default; -o writes the .tracy file.
+  # Also wipe & collect the device-profiler output dir (per-RISC durations CSV
+  # — that's the headline bound-class signal per tt-buddy interpretation.md).
   ssh "$BOX_USER@$BOX_HOST" "
     set -e
     cd $REMOTE_REPO
     export TT_METAL_DEVICE_PROFILER=1
+    export TT_METAL_HOME=$REMOTE_REPO/backends/tt/tt-metal
+    rm -rf \$TT_METAL_HOME/generated/profiler/reports 2>/dev/null || true
     tracy-capture -o $REMOTE_OUT/iter.tracy -a 127.0.0.1 >/tmp/tracy-cap.log 2>&1 &
     CAP=\$!
     sleep 1
@@ -121,6 +125,13 @@ if [[ "$PROFILE" == "1" ]]; then
     kill -TERM \$CAP 2>/dev/null || true
     wait \$CAP 2>/dev/null || true
     tracy-csvexport $REMOTE_OUT/iter.tracy > $REMOTE_OUT/zones.csv
+    # Copy the latest device-profiler report dir to REMOTE_OUT/device_profile/
+    LATEST_REPORT=\$(ls -dt \$TT_METAL_HOME/generated/profiler/reports/*/ 2>/dev/null | head -1)
+    if [[ -n \"\$LATEST_REPORT\" ]]; then
+      mkdir -p $REMOTE_OUT/device_profile
+      cp \$LATEST_REPORT/*.csv $REMOTE_OUT/device_profile/ 2>/dev/null || true
+      ls $REMOTE_OUT/device_profile/ || true
+    fi
   " >>"$ITER_DIR/run.log" 2>&1 || { touch "$ITER_DIR/DEVICE_FAIL"; exit 3; }
 else
   ssh "$BOX_USER@$BOX_HOST" \
@@ -136,6 +147,9 @@ done
 if [[ "$PROFILE" == "1" ]]; then
   scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/iter.tracy" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
   scp "$BOX_USER@$BOX_HOST:$REMOTE_OUT/zones.csv" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
+  # Per-RISC device profile CSVs (ops_perf_results_*.csv, profile_log_device.csv)
+  mkdir -p "$ITER_DIR/device_profile"
+  scp -r "$BOX_USER@$BOX_HOST:$REMOTE_OUT/device_profile/" "$ITER_DIR/" >>"$ITER_DIR/run.log" 2>&1 || true
 fi
 
 # Step 7: compute metrics locally
