@@ -151,18 +151,6 @@ static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
 // Device + program reusable context
 // ---------------------------------------------------------------------------
 
-// Resolution-only DRAM buffers. px/py are tile-local pixel coordinates of
-// shape (num_tiles, 32, 32); their contents depend solely on (image_h,
-// image_w), not on camera or scene. Cached across frames in DeviceContext to
-// skip the 4 MB/frame upload + bf16 encoding when resolution is stable.
-// Evicted + reallocated on resolution change.
-struct ResolutionBuffers {
-    uint32_t image_h = 0;
-    uint32_t image_w = 0;
-    std::shared_ptr<distributed::MeshBuffer> px;
-    std::shared_ptr<distributed::MeshBuffer> py;
-};
-
 struct DeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
     distributed::MeshCommandQueue* cq = nullptr;
@@ -176,7 +164,6 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
-    ResolutionBuffers res_cache;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -457,10 +444,9 @@ struct FrameDramBuffers {
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
 };
 
-// Allocate the per-frame (camera-dependent) DRAM buffers. px/py are NOT
-// allocated here — they're resolution-only and cached in DeviceContext;
-// process_frame() populates bufs.px / bufs.py from ctx.res_cache before
-// SetRuntimeArgs. All buffers are RAII via shared_ptr; they free on scope exit.
+// Allocate the 6 DRAM buffers a frame needs. Sizes are derived from the
+// scene's total_entries + tile count + the LPT-balanced tile-id list.
+// All buffers are RAII via shared_ptr; they free on scope exit.
 static FrameDramBuffers allocate_frame_buffers(
     DeviceContext& ctx,
     uint32_t total_entries,
@@ -476,6 +462,8 @@ static FrameDramBuffers allocate_frame_buffers(
     FrameDramBuffers b;
     b.packs    = make_dram(static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
     b.offsets  = make_dram(offsets_count * sizeof(uint32_t), sizeof(uint32_t));
+    b.px       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    b.py       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
     b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
     b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
     return b;
@@ -540,9 +528,11 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
 
     // 1. Load .npy fixtures.
-    std::vector<size_t> packs_shape, offsets_shape;
+    std::vector<size_t> packs_shape, offsets_shape, px_shape, py_shape;
     auto packs_f32   = load_npy_f32(f.packs_path,   packs_shape);
     auto offsets_f32 = load_npy_f32(f.offsets_path, offsets_shape);
+    auto px_f32      = load_npy_f32(f.px_path,      px_shape);
+    auto py_f32      = load_npy_f32(f.py_path,      py_shape);
     const uint32_t total_entries = static_cast<uint32_t>(packs_shape[0]);
 
     // 2. LPT-balanced tile-to-core assignment.
@@ -555,40 +545,12 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
         ctx, total_entries, num_tiles, offsets_f32.size(),
         assign.tile_id_buffer_bytes_padded);
     auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
+    auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
+    auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
     std::vector<uint32_t> offsets_u32(offsets_f32.size());
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
     }
-
-    // 3b. Resolution-only px/py: cache lookup. On hit, reuse the cached
-    // MeshBuffers (skip allocate + encode + load + upload). On miss, allocate
-    // fresh, then encode + upload inside the timing window below.
-    const bool res_cache_hit =
-        ctx.res_cache.px && ctx.res_cache.py &&
-        ctx.res_cache.image_h == image_h && ctx.res_cache.image_w == image_w;
-    std::vector<uint16_t> px_bf16, py_bf16;
-    if (!res_cache_hit) {
-        auto make_dram = [&](size_t bytes, size_t page_bytes) {
-            distributed::ReplicatedBufferConfig rc{.size = bytes};
-            distributed::DeviceLocalBufferConfig lc{
-                .page_size = page_bytes, .buffer_type = BufferType::DRAM};
-            return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
-        };
-        ctx.res_cache.px = make_dram(
-            static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-        ctx.res_cache.py = make_dram(
-            static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-        ctx.res_cache.image_h = image_h;
-        ctx.res_cache.image_w = image_w;
-
-        std::vector<size_t> px_shape, py_shape;
-        auto px_f32 = load_npy_f32(f.px_path, px_shape);
-        auto py_f32 = load_npy_f32(f.py_path, py_shape);
-        px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
-        py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
-    }
-    bufs.px = ctx.res_cache.px;
-    bufs.py = ctx.res_cache.py;
 
     // 4. Refresh runtime args for this frame.
     Program& program = get_program_for_workload(ctx);
@@ -605,10 +567,8 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
-    if (!res_cache_hit) {
-        distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px, px_bf16);
-        distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py, py_bf16);
-    }
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       px_bf16);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py,       py_bf16);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     std::vector<uint16_t> result_bf16(
