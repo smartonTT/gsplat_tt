@@ -65,7 +65,9 @@ def project_gaussians(
         means_2d: (M, 2) screen-space positions of visible Gaussians.
         covs_2d: (M, 2, 2) 2D covariance matrices.
         depths: (M,) camera-space depth values.
-        radii: (M,) bounding circle radius in pixels (at 3σ).
+        radii: (M, 2) axis-aligned 3σ bounding-box half-extents (rx, ry) in
+            pixels. Strictly tighter than a circular radius for elongated
+            Gaussians (off-diagonal cov), identical for circular ones.
         valid_mask: (N,) boolean mask indicating which input Gaussians are visible.
     """
     N = means.shape[0]
@@ -109,33 +111,39 @@ def project_gaussians(
         covs_2d[:, 0, 0] += 0.3
         covs_2d[:, 1, 1] += 0.3
 
-    # --- Step 7: Compute bounding radii from 2D covariance eigenvalues ---
+    # --- Step 7: Compute per-axis 3σ AABB radii from the 2D covariance ---
+    # For Σ_2D = [[a, b], [b, c]], the diagonals a and c are the variances
+    # along screen-x and screen-y. The axis-aligned 3σ bbox is therefore
+    # rx = 3*sqrt(a), ry = 3*sqrt(c) regardless of the rotation encoded in b.
+    # This is strictly tighter than the lambda_max-based circle (which equals
+    # this for circular Gaussians and overestimates for elongated/tilted
+    # ones) — measured iter-022 splat-pair cut: ~28% on stitch_doll.
     with _sub_timer(sub_timings, "project.radii"):
         a = covs_2d[:, 0, 0]
-        b = covs_2d[:, 0, 1]
         c = covs_2d[:, 1, 1]
-        det = (a - c) ** 2 + 4 * b ** 2
-        lambda_max = 0.5 * (a + c + torch.sqrt(torch.clamp(det, min=0.0)))
-        radii = torch.ceil(3.0 * torch.sqrt(lambda_max))
+        rx = torch.ceil(3.0 * torch.sqrt(torch.clamp(a, min=0.0)))
+        ry = torch.ceil(3.0 * torch.sqrt(torch.clamp(c, min=0.0)))
+        radii = torch.stack([rx, ry], dim=-1)  # (N, 2)
 
-        # Also cull Gaussians that project entirely outside the screen
-        valid_mask = valid_mask & (means_2d[:, 0] + radii > 0)
-        valid_mask = valid_mask & (means_2d[:, 0] - radii < image_width)
-        valid_mask = valid_mask & (means_2d[:, 1] + radii > 0)
-        valid_mask = valid_mask & (means_2d[:, 1] - radii < image_height)
-        valid_mask = valid_mask & (radii > 0)
+        # Also cull Gaussians that project entirely outside the screen.
+        # Use per-axis radii so an elongated Gaussian whose minor axis crosses
+        # the edge is still kept based on the relevant axis.
+        valid_mask = valid_mask & (means_2d[:, 0] + rx > 0)
+        valid_mask = valid_mask & (means_2d[:, 0] - rx < image_width)
+        valid_mask = valid_mask & (means_2d[:, 1] + ry > 0)
+        valid_mask = valid_mask & (means_2d[:, 1] - ry < image_height)
+        valid_mask = valid_mask & (rx > 0) & (ry > 0)
 
     # Cap the bounding radius. The Jacobian linearization of the perspective
     # transform (Step 5 above) breaks down when a Gaussian's 3D extent is
     # comparable to its distance from the camera — producing wildly wrong 2D
-    # covariances and massive bounding circles. Visually these show up as
+    # covariances and massive bounding boxes. Visually these show up as
     # giant fuzzy blobs right in front of the camera when zooming in.
-    # Capping `radii` to half the smaller image dim drops these projection-
-    # breakdown cases without affecting legitimate close-up content (a
-    # Gaussian that genuinely covers more than half the viewport is almost
-    # always an artifact, not real geometry).
+    # Drop any Gaussian where either AABB half-extent exceeds half the smaller
+    # image dim, since a single splat covering more than half the viewport is
+    # almost always an artifact, not real geometry.
     max_radius = min(image_height, image_width) // 2
-    valid_mask = valid_mask & (radii <= max_radius)
+    valid_mask = valid_mask & (rx <= max_radius) & (ry <= max_radius)
 
     # Optional opacity cull: a Gaussian's peak per-pixel contribution is
     # `opacity * exp(0) = opacity` (at its center). If that's below the 8-bit
@@ -168,7 +176,7 @@ def get_tile_assignments(
 
     Args:
         means_2d: (M, 2) screen-space positions of visible Gaussians.
-        radii: (M,) bounding circle radius in pixels (at 3σ).
+        radii: (M, 2) per-axis 3σ AABB half-extents (rx, ry) in pixels.
         image_height: output image height in pixels.
         image_width: output image width in pixels.
         tile_size: tile dimension in pixels (default 32x32, matches the kernel).
@@ -181,20 +189,19 @@ def get_tile_assignments(
     tiles_x = (image_width + tile_size - 1) // tile_size
     tiles_y = (image_height + tile_size - 1) // tile_size
 
-    """ NOTE: radii is derived from lambda_max (largest eigenvalue), so the bounding region
-    is a circle, not an ellipse. For elongated Gaussians this overestimates — some tiles
-    will be assigned even though the Gaussian barely reaches them. This is conservative
-    (no visual errors), just slightly more work in alpha blending where those pixels will
-    evaluate to near-zero alpha and get skipped. A tighter approach would use an AABB from
-    the covariance diagonal: extent_x = 3*sqrt(cov[0,0]), extent_y = 3*sqrt(cov[1,1]),
-    which is what the original CUDA implementation (diff-gaussian-rasterization) uses.
-    """
-    # Compute the tile range each Gaussian's bounding box covers.
+    # `radii` is (M, 2): per-axis 3σ AABB half-extents from the 2D covariance
+    # diagonal (see project_gaussians step 7). This is strictly tighter than a
+    # lambda_max-based circle for elongated/tilted Gaussians — equivalent to
+    # the original CUDA implementation (diff-gaussian-rasterization).
+    rx = radii[:, 0]
+    ry = radii[:, 1]
+
+    # Compute the tile range each Gaussian's AABB covers.
     with _sub_timer(sub_timings, "tile_assign.bbox"):
-        tile_min_x = torch.clamp((means_2d[:, 0] - radii) / tile_size, min=0, max=tiles_x - 1).int()
-        tile_max_x = torch.clamp((means_2d[:, 0] + radii) / tile_size, min=0, max=tiles_x - 1).int()
-        tile_min_y = torch.clamp((means_2d[:, 1] - radii) / tile_size, min=0, max=tiles_y - 1).int()
-        tile_max_y = torch.clamp((means_2d[:, 1] + radii) / tile_size, min=0, max=tiles_y - 1).int()
+        tile_min_x = torch.clamp((means_2d[:, 0] - rx) / tile_size, min=0, max=tiles_x - 1).int()
+        tile_max_x = torch.clamp((means_2d[:, 0] + rx) / tile_size, min=0, max=tiles_x - 1).int()
+        tile_min_y = torch.clamp((means_2d[:, 1] - ry) / tile_size, min=0, max=tiles_y - 1).int()
+        tile_max_y = torch.clamp((means_2d[:, 1] + ry) / tile_size, min=0, max=tiles_y - 1).int()
 
         widths = tile_max_x - tile_min_x + 1
         heights = tile_max_y - tile_min_y + 1
