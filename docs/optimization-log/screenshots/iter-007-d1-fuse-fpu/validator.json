@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images (hero, side, top) show no horizontal or vertical lines at 32-pixel or 16-pixel spacing. The diff signal is entirely unstructured."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color fill blocks visible in any render. Rendered detail matches reference at all scales."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark voids or missing-coverage regions visible in any render. Splat coverage matches reference across all three views."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat-color banding visible in hero, side, or top renders. Color matches reference throughout."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halo artifacts at silhouette edges in any view. Object boundaries are clean."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches in spatially-correlated patterns. All pixels appear numerically valid."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images show no distinct object silhouette outline that would indicate a coordinate offset. The faint low-amplitude dark regions in hero_diff10 and top_diff10 follow interior object regions, not displaced edges — consistent with bf16 rounding noise, not geometry shift."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are nearly entirely black — extremely low amplitude throughout. The faint interior-region noise is unstructured, spatially diffuse, and consistent with uniform sub-pixel quantization noise at bf16 precision. No grids, edges, gradients, or bands are present."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 59.51822203462508, "side": 62.26025128398001, "top": 59.9949490355364}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.742, "max_ms_ratio": 1.161, "pass": true},
+  "timing": {"median_ms": 99.34, "p99_ms": 104.7039, "vs_prev_best_pct": 1.84, "pass": true},
+  "reasoning": "All eight visual checks pass. The three diff10 images are essentially featureless black — no tile grid seams, no structured banding, no geometry shift silhouette, no NaN/Inf signatures. The faint dark regions visible in hero_diff10 and top_diff10 are sub-pixel-amplitude, follow interior object surfaces (not displaced edges), and are consistent with expected bf16 quantization noise. PSNR is 59.5–62.3 dB across all views, well above the 40 dB kernel-algebra floor. Per-view PSNR delta is 2.74 dB (threshold 20 dB). Per-view kernel-ms ratio is 1.16x (threshold 2x). Timing is median 99.34 ms vs prev_best 97.545 ms (+1.84%), within the 2% break-even band. p99/median ratio is 1.054x, well under the 3x suspicious-tail threshold. All numeric gates pass."
+}

@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 8 · current best: 97.55 ms · target: 1.0 ms
+      iters: 10 · current best: 99.34 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,70 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-007-d1-fuse-fpu
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-26T03:40:07.326363+00:00</span>
+    </h3>
+  </header>
+  <p class="brief">iter-006 collapsed the two D1 acquires (alpha·T_state then ·sat_mask) into one using SFPU `mul_binary_tile` for the second multiply. Bit-identical (PSNR ∞, diff10 black) but kernel ms regressed 99.95 → 100.69. The SFPU DST-DST mul is slower than the acquire+CB_T_TMP roundtrip it …</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>99.34 ms</b> median · 104.70 ms p99</div>
+    <div class="per-view">per-view: hero 99.34 / side 89.98 / top 104.52</div>
+    <div class="psnr">PSNR: hero 59.5 / side 62.3 / top 60.0 (min <b>59.5</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-007-d1-fuse-fpu/hero.png" target="_blank"><img src="screenshots/iter-007-d1-fuse-fpu/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-007-d1-fuse-fpu/side.png" target="_blank"><img src="screenshots/iter-007-d1-fuse-fpu/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-007-d1-fuse-fpu/top.png" target="_blank"><img src="screenshots/iter-007-d1-fuse-fpu/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-007-d1-fuse-fpu/hero_diff10.png" target="_blank"><img src="screenshots/iter-007-d1-fuse-fpu/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-007-d1-fuse-fpu/side_diff10.png" target="_blank"><img src="screenshots/iter-007-d1-fuse-fpu/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-007-d1-fuse-fpu/top_diff10.png" target="_blank"><img src="screenshots/iter-007-d1-fuse-fpu/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images (hero, side, top) show no horizontal or vertical lines at 32-pixel or 16-pixel spacing. The diff</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color fill blocks visible in any render. Rendered detail matches reference at all scales.</li><li>✓ missing_splat_holes: No dark voids or missing-coverage regions visible in any render. Splat coverage matches reference across all three views</li><li>✓ color_clipping_bands: No saturated R/G/B stripes or flat-color banding visible in hero, side, or top renders. Color matches reference througho</li><li>✓ ringing_halos: No structured ringing or halo artifacts at silhouette edges in any view. Object boundaries are clean.</li><li>✓ nan_inf_signatures: No pure black/white/magenta patches in spatially-correlated patterns. All pixels appear numerically valid.</li><li>✓ geometry_shift: Diff10 images show no distinct object silhouette outline that would indicate a coordinate offset. The faint low-amplitud</li><li>✓ diff10_structure: All three diff10 images are nearly entirely black — extremely low amplitude throughout. The faint interior-region noise </li></ul>
+    <p class="reasoning">All eight visual checks pass. The three diff10 images are essentially featureless black — no tile grid seams, no structured banding, no geometry shift silhouette, no NaN/Inf signatures. The faint dark regions visible in hero_diff10 and top_diff10 are sub-pixel-amplitude, follow interior object surfaces (not displaced edges), and are consistent with expected bf16 quantization noise. PSNR is 59.5–62.3 dB across all views, well above the 40 dB kernel-algebra floor. Per-view PSNR delta is 2.74 dB (threshold 20 dB). Per-view kernel-ms ratio is 1.16x (threshold 2x). Timing is median 99.34 ms vs prev_best 97.545 ms (+1.84%), within the 2% break-even band. p99/median ratio is 1.054x, well under the 3x suspicious-tail threshold. All numeric gates pass.</p>
+  </details>
+</section>
+
+
+<section class="iter-card">
+  <header>
+    <h3>iter-006-d1-fuse-contrib
+      <span class="badge" style="background:#999999">revert</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      <a href="../../iter-006-d1-fuse-contrib.md">md</a>
+      <span class="ts">2026-05-26T04:00:00+00:00</span>
+    </h3>
+  </header>
+  <p class="brief">The baseline Stage D1 computes `contrib = alpha · T_state · sat_mask` in 2 separate acquire blocks (via the scratch CB_T_TMP):</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>100.69 ms</b> median · 106.24 ms p99</div>
+    <div class="per-view">per-view: hero 100.69 / side 91.22 / top 106.08</div>
+    <div class="psnr">PSNR: hero inf / side inf / top inf (min <b>inf</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-006-d1-fuse-contrib/hero.png" target="_blank"><img src="screenshots/iter-006-d1-fuse-contrib/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-006-d1-fuse-contrib/side.png" target="_blank"><img src="screenshots/iter-006-d1-fuse-contrib/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-006-d1-fuse-contrib/top.png" target="_blank"><img src="screenshots/iter-006-d1-fuse-contrib/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-006-d1-fuse-contrib/hero_diff10.png" target="_blank"><img src="screenshots/iter-006-d1-fuse-contrib/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-006-d1-fuse-contrib/side_diff10.png" target="_blank"><img src="screenshots/iter-006-d1-fuse-contrib/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-006-d1-fuse-contrib/top_diff10.png" target="_blank"><img src="screenshots/iter-006-d1-fuse-contrib/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>(no validator.json)</li></ul>
+    <p class="reasoning"></p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-005-verify-revert-baseline
@@ -119,7 +183,7 @@
 <section class="iter-card">
   <header>
     <h3>iter-003-m1-basis-form-fpu-q
-      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge" style="background:#999999">reverted_post_hoc</span>
       <span class="badge verdict">KEEP</span>
       <span class="class-tag">kernel-algebra</span>
       <a href="../../iter-003-m1-basis-form-fpu-q.md">md</a>
@@ -151,7 +215,7 @@
 <section class="iter-card">
   <header>
     <h3>iter-003-m1-basis-form-fpu-q
-      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge" style="background:#999999">reverted_post_hoc</span>
       <span class="badge verdict">KEEP</span>
       <span class="class-tag">kernel-algebra</span>
       

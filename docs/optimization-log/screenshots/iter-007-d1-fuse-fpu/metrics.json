@@ -1,0 +1,18 @@
+{
+  "iter_dir": "iter-007-d1-fuse-fpu",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 99.955,
+  "psnr_per_view": {
+    "hero": 59.51822203462508,
+    "side": 62.26025128398001,
+    "top": 59.9949490355364
+  },
+  "kernel_ms_median": 99.34,
+  "kernel_ms_p99": 104.7039,
+  "per_view_median": {
+    "hero": 99.34,
+    "side": 89.985,
+    "top": 104.515
+  },
+  "frame_count": 30
+}
