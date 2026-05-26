@@ -143,24 +143,11 @@ void kernel_main() {
     }
 
     // -------------------------------------------------------------------
-    // M2: PX/PY are tile-local pixel coords (j+0.5, i+0.5), identical for
-    // every screen tile. Read tile 0 once before the loop; the compute
-    // kernel consumes them exactly once at startup to build the 6 basis
-    // tiles, then never references CB_PX/CB_PY again.
-    // -------------------------------------------------------------------
-    cb_reserve_back(CB_PX, 1);
-    noc_async_read_tile(0, px_acc, get_write_ptr(CB_PX));
-    cb_reserve_back(CB_PY, 1);
-    noc_async_read_tile(0, py_acc, get_write_ptr(CB_PY));
-    noc_async_read_barrier();
-    cb_push_back(CB_PX, 1);
-    cb_push_back(CB_PY, 1);
-
-    // -------------------------------------------------------------------
     // Main per-tile loop. For each screen tile assigned to this core:
     //   1) read its [g_start, g_end) range from offsets[]
     //   2) push g_count to CB_TILE_META
-    //   3) push g_count Gaussian scalar packs to CB_SCALARS
+    //   3) push the px and py tiles
+    //   4) push g_count Gaussian scalar packs to CB_SCALARS
     // -------------------------------------------------------------------
     for (uint32_t t = 0; t < tile_ids_count; t++) {
         uint32_t tile_id = tile_ids[t];
@@ -192,10 +179,20 @@ void kernel_main() {
         meta_ptr[0] = g_count;
         cb_push_back(CB_TILE_META, 1);
 
-        // (3) Stream Gaussian scalar packs for this tile. One 64-byte
+        // (3) Push px and py tiles. noc_async_read_tile uses the
+        // TensorAccessor's tile stride to fetch the right 32x32 region
+        // for this tile_id.
+        cb_reserve_back(CB_PX, 1);
+        noc_async_read_tile(tile_id, px_acc, get_write_ptr(CB_PX));
+        cb_reserve_back(CB_PY, 1);
+        noc_async_read_tile(tile_id, py_acc, get_write_ptr(CB_PY));
+        noc_async_read_barrier();
+        cb_push_back(CB_PX, 1);
+        cb_push_back(CB_PY, 1);
+
+        // (4) Stream Gaussian scalar packs for this tile. One 64-byte
         // page per Gaussian; compute pops one per inner-loop iteration.
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
-        // (PX/PY are pushed once before this loop — see M2 comment above.)
         for (uint32_t g = 0; g < g_count; g++) {
             uint32_t entry_id = g_start + g;
             cb_reserve_back(CB_SCALARS, 1);
