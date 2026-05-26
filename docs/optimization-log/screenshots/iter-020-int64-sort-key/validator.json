@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32px or 16px spacing visible in any diff×10 image (hero, side, top). Diff patterns are uniformly distributed speckle."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No square constant-color blocks in any render. All three views show continuous Gaussian coverage matching reference detail."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage patches in any render vs reference. Diff×10 shows no localized bright spots indicating absent splats."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-color stripes in hero, side, or top renders. Color range matches reference exactly."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouette edges visible in any of the three renders or their diff×10 images."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No spatially-correlated pure black, white, or magenta patches in any render. All three views look clean."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 images do not show silhouette outlines of the object. Speckle is distributed across the figure surface, not concentrated at edges indicating coordinate error."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images (hero, side, top) are dominated by uniform fine speckle across the figure. No grids, edge gradients, color bands, or other structured patterns present."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 40.39577640199263, "side": 43.69452713807593, "top": 40.14010082549006}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 3.55, "max_ms_ratio": 1.163, "pass": true},
+  "timing": {"median_ms": 96.5175, "p99_ms": 101.57936, "vs_prev_best_pct": -0.19, "pass": true},
+  "reasoning": "All 8 visual checks pass: diff×10 images across hero, side, and top views show only uniform fine speckle distributed across the figure surface with no tile-grid seams, no uniform-fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, and no geometry shift. PSNR floor for class 'sort' is 35 dB; actual values of 40.40/43.69/40.14 dB all clear this floor by >5 dB. Per-view PSNR delta is 3.55 dB (threshold 20 dB) and per-view kernel-ms ratio is 1.163 (threshold 2×), both pass. kernel_ms_median 96.52 ms is 0.19% below prev_best 96.70 ms, well within the 1.02× break-even threshold. p99/median ratio is 1.053, far below the 3× tail-spike threshold. Sort stage dropped from 65.4 ms to 10.6 ms (-84%), reducing total pipeline time from 323.6 ms to 265.5 ms (-18%). No check failures."
+}
