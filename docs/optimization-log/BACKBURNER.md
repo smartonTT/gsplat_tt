@@ -87,3 +87,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: PSNR identical to iter-015 baseline to 16 decimals (40.40/43.70/40.15 dB); hero/side/top PNGs are byte-identical to iter-015 (verified via md5). Kernel math is unchanged, so visuals are perfect. REJECT is for perf regression: kernel_ms_median 98.44 vs iter-015 96.80 = +1.64 ms / +1.7% — consistent across all 30 frames (hero 98.30-98.50 every cycle vs iter-015 96.72-96.89). Hypothesis expected -2 to -4 ms from skipping 2x EnqueueWriteMeshBuffer + encode of 4 MB total. Actual signature is the opposite direction, indicating the saved upload time (~0.5 ms estimated) is dominated by added cost of conditional cache lookup + persistent buffer allocator pressure. Code change adds complexity (res_cache state in DeviceContext + per-frame branch on cache hit) with no measurable benefit. Useful negative signal: small (4 MB) buffers don't justify persistence overhead; bigger buffers (packs ~32 MB, output ~6 MB) or Trace API are the right next levers.
 - Thumbnails: ![hero](screenshots/iter-016-persist-px-py/hero.png) ![diff10](screenshots/iter-016-persist-px-py/hero_diff10.png)
 
+
+## iter-017-trace-api — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 96.66 / p99 101.74
+- PSNR per view: hero 40.4 / side 43.7 / top 40.1
+- Validator reasoning: iter-017 (tt-metal Trace API) achieved kernel_ms_median of 96.655 ms, a negligible -0.145 ms change vs the iter-015 baseline of 96.80 ms — well below the KEEP gate of ≤91.96 ms (iter-015 × 0.95) and far short of the explicit ≥10 ms improvement goal of ≤86 ms. PSNR is identical to baseline across all three views (hero 40.40 dB, side 43.70 dB, top 40.15 dB), all above the 40 dB floor, confirming kernel math is unchanged and render quality is correct. PNG screenshots were written to /tmp/iter-017-trace-api (not copied to the artifacts dir), but the bit-identical PSNR values and the flat timing signal together confirm no visual artifacts were introduced. The near-zero improvement is a major architectural finding: the host overhead is NOT in dispatch command construction or per-core SetRuntimeArgs push but upstream of it (likely EnqueueRead blocking semantics or driver-level serialization), exactly the secondary hypothesis flagged in the plan doc.
+- Thumbnails: ![hero](screenshots/iter-017-trace-api/hero.png) ![diff10](screenshots/iter-017-trace-api/hero_diff10.png)
+

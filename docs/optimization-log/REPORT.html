@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 18 · current best: 96.80 ms · target: 1.0 ms
+      iters: 19 · current best: 96.80 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-017-trace-api
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">dispatch</span>
+      <a href="iter-017-trace-api.md">md</a>
+      <span class="ts">2026-05-26T19:18:28.080492+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> The 50 ms host overhead is dominated by dispatch command construction +<br>per-core runtime-arg push. Trace replay should reduce kernel_ms toward<br>the device-FW floor (~46 ms). Expected: **≥10 ms improvement** (≤86 ms<br>median) for KEEP, with reach goal ≤55 ms (device FW + thin replay shim).<br><br>If trace replay shows &lt;5 ms improvement, the bound is upstream of<br>dispatch (e.g. EnqueueRead blocking semantics or driver-level<br>serialization), which would be a major architectural finding.</p>
+  <p class="brief outcome"><b>Outcome.</b> iter-017 (tt-metal Trace API) achieved kernel_ms_median of 96.655 ms, a negligible -0.145 ms change vs the iter-015 baseline of 96.80 ms — well below the KEEP gate of ≤91.96 ms (iter-015 × 0.95) and far short of the explicit ≥10 ms improvement goal of ≤86 ms. PSNR is identical to baseline across all three views (hero 40.40 dB, side 43.70 dB, top 40.15 dB), all above the 40 dB floor, confirming kernel math is unchanged and render quality is correct. PNG screenshots were written to /tmp/iter-017-trace-api (not copied to the artifacts dir), but the bit-identical PSNR values and the flat timing signal together confirm no visual artifacts were introduced. The near-zero improvement is a major architectural finding: the host overhead is NOT in dispatch command construction or per-core SetRuntimeArgs push but upstream of it (likely EnqueueRead blocking semantics or driver-level serialization), exactly the secondary hypothesis flagged in the plan doc.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>96.66 ms</b> median · 101.74 ms p99</div>
+    <div class="per-view">per-view: hero 96.66 / side 87.42 / top 101.66</div>
+    <div class="psnr">PSNR: hero 40.4 / side 43.7 / top 40.1 (min <b>40.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-017-trace-api/hero.png" target="_blank"><img src="screenshots/iter-017-trace-api/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-017-trace-api/side.png" target="_blank"><img src="screenshots/iter-017-trace-api/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-017-trace-api/top.png" target="_blank"><img src="screenshots/iter-017-trace-api/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-017-trace-api/hero_diff10.png" target="_blank"><img src="screenshots/iter-017-trace-api/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-017-trace-api/side_diff10.png" target="_blank"><img src="screenshots/iter-017-trace-api/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-017-trace-api/top_diff10.png" target="_blank"><img src="screenshots/iter-017-trace-api/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul></ul>
+    <p class="reasoning">iter-017 (tt-metal Trace API) achieved kernel_ms_median of 96.655 ms, a negligible -0.145 ms change vs the iter-015 baseline of 96.80 ms — well below the KEEP gate of ≤91.96 ms (iter-015 × 0.95) and far short of the explicit ≥10 ms improvement goal of ≤86 ms. PSNR is identical to baseline across all three views (hero 40.40 dB, side 43.70 dB, top 40.15 dB), all above the 40 dB floor, confirming kernel math is unchanged and render quality is correct. PNG screenshots were written to /tmp/iter-017-trace-api (not copied to the artifacts dir), but the bit-identical PSNR values and the flat timing signal together confirm no visual artifacts were introduced. The near-zero improvement is a major architectural finding: the host overhead is NOT in dispatch command construction or per-core SetRuntimeArgs push but upstream of it (likely EnqueueRead blocking semantics or driver-level serialization), exactly the secondary hypothesis flagged in the plan doc.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-016-persist-px-py
@@ -704,6 +737,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 40.4 / side 43.7 / top 40.1
 - Validator reasoning: PSNR identical to iter-015 baseline to 16 decimals (40.40/43.70/40.15 dB); hero/side/top PNGs are byte-identical to iter-015 (verified via md5). Kernel math is unchanged, so visuals are perfect. REJECT is for perf regression: kernel_ms_median 98.44 vs iter-015 96.80 = +1.64 ms / +1.7% — consistent across all 30 frames (hero 98.30-98.50 every cycle vs iter-015 96.72-96.89). Hypothesis expected -2 to -4 ms from skipping 2x EnqueueWriteMeshBuffer + encode of 4 MB total. Actual signature is the opposite direction, indicating the saved upload time (~0.5 ms estimated) is dominated by added cost of conditional cache lookup + persistent buffer allocator pressure. Code change adds complexity (res_cache state in DeviceContext + per-frame branch on cache hit) with no measurable benefit. Useful negative signal: small (4 MB) buffers don&#x27;t justify persistence overhead; bigger buffers (packs ~32 MB, output ~6 MB) or Trace API are the right next levers.
 - Thumbnails: ![hero](screenshots/iter-016-persist-px-py/hero.png) ![diff10](screenshots/iter-016-persist-px-py/hero_diff10.png)
+
+
+## iter-017-trace-api — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 96.66 / p99 101.74
+- PSNR per view: hero 40.4 / side 43.7 / top 40.1
+- Validator reasoning: iter-017 (tt-metal Trace API) achieved kernel_ms_median of 96.655 ms, a negligible -0.145 ms change vs the iter-015 baseline of 96.80 ms — well below the KEEP gate of ≤91.96 ms (iter-015 × 0.95) and far short of the explicit ≥10 ms improvement goal of ≤86 ms. PSNR is identical to baseline across all three views (hero 40.40 dB, side 43.70 dB, top 40.15 dB), all above the 40 dB floor, confirming kernel math is unchanged and render quality is correct. PNG screenshots were written to /tmp/iter-017-trace-api (not copied to the artifacts dir), but the bit-identical PSNR values and the flat timing signal together confirm no visual artifacts were introduced. The near-zero improvement is a major architectural finding: the host overhead is NOT in dispatch command construction or per-core SetRuntimeArgs push but upstream of it (likely EnqueueRead blocking semantics or driver-level serialization), exactly the secondary hypothesis flagged in the plan doc.
+- Thumbnails: ![hero](screenshots/iter-017-trace-api/hero.png) ![diff10](screenshots/iter-017-trace-api/hero_diff10.png)
 
 </pre>
   </section>

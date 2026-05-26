@@ -3,7 +3,7 @@
 - Class: dispatch
 - Track: host-dominated lever family, high-leverage move
 - Date: 2026-05-26
-- Status: PLANNED
+- Status: REJECT (reverted, code rolled back)
 - Predecessor: iter-015 baseline (96.80 ms KEEP) + iter-016 negative signal (per-buffer persistence regresses by +1.6 ms)
 
 ## Why this iter exists
@@ -141,4 +141,69 @@ apples comparison with iter-015 / iter-016.
 
 ## Outcome
 
-(to be filled in after run)
+**REJECT — reverted.**
+
+Measured (30 frames, 10 cycles × 3 views):
+- kernel_ms_median: **96.655 ms** vs iter-015 baseline 96.80 ms → **-0.145 ms** (essentially flat, within noise)
+- PSNR identical to baseline: 40.40 / 43.70 / 40.15 dB
+- Validation gate ≤91.96 ms (5% improvement) NOT met; explicit goal ≥10 ms missed by ~10 ms.
+
+### Implementation reality vs plan
+
+The plan stub was implemented and works end-to-end:
+- 2-CQ mesh (data_cq + workload_cq) with MeshEvent sync
+- Trace capture on cache miss, replay on cache hit
+- Max-allocated persistent DRAM buffers (~256 MB packs + 24 MB output + ~16 MB px/py)
+- Partial-region writes (`enqueue_write_shard_to_sub_grid` + BufferRegion) so per-frame uploads only touch actual payload bytes
+- Partial-region readback (`enqueue_read_shards` + BufferRegion) so 6 MB of tiles transfers, not the full 24 MB persistent buffer
+
+Render quality stayed identical to baseline — kernel math and ordering are bit-correct.
+
+### Critical negative signal
+
+Trace API replaces per-frame dispatch construction + per-core SetRuntimeArgs
+push with a single `replay_mesh_trace()` call. Predicted savings: ≥10 ms.
+Actual: ~0 ms.
+
+**The host overhead measured by iter-015 (50.5 ms gap between kernel_ms_median
+96.8 ms and device-FW max 46.3 ms) is NOT dispatch-command-construction
+overhead.** Where it actually lives:
+
+1. **Per-frame DRAM transfer**. We still upload 6 buffers per frame (output
+   zero-fill + packs + offsets + px + py + tile_ids). The trace doesn't touch
+   uploads — they're outside the capture window by design (writes are not
+   trace-replayable; only kernel dispatch commands are).
+2. **MeshCommandQueue / driver serialization** between writes and
+   dispatch/read. The 2-CQ sync via record_event/wait_for_event adds latency
+   that approximately matches whatever dispatch-construction was saved.
+3. **Persistent-buffer-of-max-size overhead** (per iter-016 lesson): allocator
+   pressure + DRAM-page coordination cost when long-lived large buffers sit
+   alongside ephemeral per-frame state.
+
+### Implications
+
+The host-dominated lever family at "dispatch command construction"
+granularity is **exhausted**. iter-016 (persist 4 MB), iter-017 (full Trace
+API) both delivered ≤0.2 ms net change. The remaining levers in this family
+are either much higher-risk or fundamentally different:
+
+- **Skip per-frame uploads on cache-hit cycles** by keeping per-view
+  persistent input buffers (one set per (resolution, view) key — 3× memory
+  but avoids ~30-40 MB/frame of repeated DRAM transfer). High complexity,
+  uncertain gain.
+- **Batch the 6 small buffers into one large persistent buffer** so the
+  per-frame upload is 1× EnqueueWrite of ~40 MB instead of 6× ~7 MB. May
+  shave ~1-2 ms; lower-risk than the per-view approach.
+- **Switch back to the compute-bound lever family**. Even though iter-015
+  classified the op as 52% host-dominated, that classification assumed
+  dispatch overhead was reducible. The non-reducible portion (DRAM transfer
+  + driver serialization) appears to be a hard floor at ~50 ms for this
+  workload size. The 46 ms device-FW path still has compute headroom
+  (e.g. async LLK fusion, init-call reduction inside the dest-resident
+  loop) that could trim 5-15 ms.
+
+### Files changed (then reverted)
+
+Reverted in commit (this commit). alpha_blend.cpp restored to the
+pre-iter-017 state (1a8b773).
+

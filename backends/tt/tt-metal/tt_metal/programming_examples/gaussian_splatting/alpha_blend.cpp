@@ -30,7 +30,6 @@
 #include <memory>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -152,67 +151,8 @@ static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
 // Device + program reusable context
 // ---------------------------------------------------------------------------
 
-// iter-017: persistent buffer sizing. Allocate once at daemon init at the
-// max we'll ever need, then per-frame writes only touch the prefix we
-// actually use. This is a precondition for the Trace API path: the trace
-// captures DRAM addresses verbatim, so the same shared_ptr<MeshBuffer>
-// must live for the entire daemon lifetime once a trace references it.
-//
-// Sized for 2048x2048 image cap (= 4096 tiles), 12 MB packs (200K
-// gaussian-tile pairs), 24 MB output buffer. Total persistent DRAM
-// footprint ~52 MB, well within Blackhole P100/P300's >32 GB DRAM.
-constexpr uint32_t MAX_NUM_TILES_PERSIST = 4096;
-// 1024² stitch_doll observed ~1.26M total_entries per view; size to 4M for
-// 3× headroom across views/scenes. At SCALAR_PACK_PAGE_BYTES=64 the packs
-// buffer is 256 MB — well within Blackhole DRAM budget.
-constexpr uint32_t MAX_TOTAL_ENTRIES_PERSIST = 4000000;
-constexpr size_t TILE_IDS_PAGE_BYTES_FWD = 64;  // mirrors TILE_IDS_PAGE_BYTES below
-
-struct PersistentBuffers {
-    std::shared_ptr<distributed::MeshBuffer> packs;
-    std::shared_ptr<distributed::MeshBuffer> offsets;
-    std::shared_ptr<distributed::MeshBuffer> px;
-    std::shared_ptr<distributed::MeshBuffer> py;
-    std::shared_ptr<distributed::MeshBuffer> output;
-    std::shared_ptr<distributed::MeshBuffer> tile_ids;
-    bool allocated = false;
-};
-
-// Cache key per distinct dispatch shape. For the benchmark each (view ×
-// fixed scene) is one key. Cycles repeat the same key 9x → replay.
-struct TraceKey {
-    uint32_t image_h = 0;
-    uint32_t image_w = 0;
-    uint32_t total_entries = 0;
-    std::vector<uint32_t> per_core_count;
-    bool operator==(const TraceKey& o) const {
-        return image_h == o.image_h && image_w == o.image_w &&
-               total_entries == o.total_entries && per_core_count == o.per_core_count;
-    }
-};
-
-struct TraceKeyHash {
-    size_t operator()(const TraceKey& k) const {
-        size_t h = std::hash<uint32_t>{}(k.image_h);
-        auto mix = [&h](uint32_t v) {
-            h ^= std::hash<uint32_t>{}(v) + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-        };
-        mix(k.image_w);
-        mix(k.total_entries);
-        for (uint32_t c : k.per_core_count) mix(c);
-        return h;
-    }
-};
-
 struct DeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
-    // iter-017: two CQs. data_cq handles writes/reads; workload_cq handles
-    // dispatch + trace replay. They sync via MeshEvent. Required because
-    // tt-metal's Trace API only records EnqueueMeshWorkload calls, not
-    // EnqueueWriteMeshBuffer.
-    distributed::MeshCommandQueue* data_cq = nullptr;
-    distributed::MeshCommandQueue* workload_cq = nullptr;
-    // Legacy alias for code that doesn't yet care about CQ split (single-shot).
     distributed::MeshCommandQueue* cq = nullptr;
     distributed::MeshWorkload workload;
     KernelHandle reader{};
@@ -224,10 +164,6 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
-
-    // iter-017: persistent buffers + per-view trace cache.
-    PersistentBuffers persistent;
-    std::unordered_map<TraceKey, distributed::MeshTraceId, TraceKeyHash> trace_cache;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -346,89 +282,12 @@ static void build_program_and_workload(DeviceContext& ctx) {
 static DeviceContext init_device_context() {
     DeviceContext ctx;
     constexpr int device_id = 0;
-    // iter-017: 2 CQs + trace region for Trace API. trace_region_size is
-    // DRAM reserved for captured command-stream bytes; 16 MB comfortably
-    // covers our 3-view bench (each captured trace ~few hundred KB).
-    ctx.mesh_device = distributed::MeshDevice::create_unit_mesh(
-        device_id,
-        /*l1_small_size=*/DEFAULT_L1_SMALL_SIZE,
-        /*trace_region_size=*/16u << 20,
-        /*num_command_queues=*/2);
-    ctx.data_cq     = &ctx.mesh_device->mesh_command_queue(0);
-    ctx.workload_cq = &ctx.mesh_device->mesh_command_queue(1);
-    ctx.cq          = ctx.workload_cq;  // single-shot path uses workload CQ
+    ctx.mesh_device = distributed::MeshDevice::create_unit_mesh(device_id);
+    ctx.cq = &ctx.mesh_device->mesh_command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
     ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program_and_workload(ctx);
     return ctx;
-}
-
-// iter-017: max-allocate persistent DRAM buffers. Called lazily on first
-// frame (after the device is open + program built). The shared_ptrs are
-// retained for the daemon's lifetime so DRAM addresses are stable across
-// frames — a precondition for Trace API correctness.
-static void ensure_persistent_buffers(DeviceContext& ctx) {
-    if (ctx.persistent.allocated) return;
-    auto make_dram = [&](size_t bytes, size_t page_bytes) {
-        distributed::ReplicatedBufferConfig rc{.size = bytes};
-        distributed::DeviceLocalBufferConfig lc{
-            .page_size = page_bytes, .buffer_type = BufferType::DRAM};
-        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
-    };
-    const size_t max_tile_ids_bytes =
-        ((static_cast<size_t>(MAX_NUM_TILES_PERSIST) * sizeof(uint32_t)
-          + TILE_IDS_PAGE_BYTES_FWD - 1) / TILE_IDS_PAGE_BYTES_FWD) * TILE_IDS_PAGE_BYTES_FWD;
-    ctx.persistent.packs    = make_dram(
-        static_cast<size_t>(MAX_TOTAL_ENTRIES_PERSIST) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
-    ctx.persistent.offsets  = make_dram(
-        (static_cast<size_t>(MAX_NUM_TILES_PERSIST) + 1) * sizeof(uint32_t), sizeof(uint32_t));
-    ctx.persistent.px       = make_dram(
-        static_cast<size_t>(MAX_NUM_TILES_PERSIST) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    ctx.persistent.py       = make_dram(
-        static_cast<size_t>(MAX_NUM_TILES_PERSIST) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    ctx.persistent.output   = make_dram(
-        static_cast<size_t>(MAX_NUM_TILES_PERSIST) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    ctx.persistent.tile_ids = make_dram(max_tile_ids_bytes, TILE_IDS_PAGE_BYTES_FWD);
-    ctx.persistent.allocated = true;
-}
-
-// iter-017: Write only `src.size() * sizeof(T)` bytes at offset 0 of a
-// max-allocated persistent buffer. The default `EnqueueWriteMeshBuffer`
-// helper asserts src.size()*sizeof(T) >= buffer->size(), which fails when
-// the buffer is much larger than the per-frame payload. The kernels only
-// read the portion described by their runtime args (e.g. total_entries *
-// SCALAR_PACK_PAGE_BYTES), so writing a partial region is safe.
-template <typename T>
-static void write_persistent_region(
-    distributed::MeshCommandQueue& cq,
-    const std::shared_ptr<distributed::MeshBuffer>& buffer,
-    const std::vector<T>& src,
-    bool blocking = false) {
-    const size_t bytes = src.size() * sizeof(T);
-    distributed::MeshCoordinateRange range(buffer->device()->shape());
-    BufferRegion region{0, bytes};
-    cq.enqueue_write_shard_to_sub_grid(
-        *buffer, src.data(), range, blocking, std::optional<BufferRegion>{region});
-}
-
-// iter-017: Counterpart to write_persistent_region. EnqueueReadMeshBuffer
-// reads buffer->size() bytes — if we read the max-allocated output buffer
-// directly we transfer ~24 MB even when only ~6 MB of tiles are live, which
-// is a measurable per-frame regression. enqueue_read_shards with an explicit
-// BufferRegion limits the readback to the actual frame bytes.
-template <typename T>
-static void read_persistent_region(
-    distributed::MeshCommandQueue& cq,
-    const std::shared_ptr<distributed::MeshBuffer>& buffer,
-    std::vector<T>& dst,
-    bool blocking = true) {
-    const size_t bytes = dst.size() * sizeof(T);
-    auto coord = *distributed::MeshCoordinateRange(buffer->device()->shape()).begin();
-    std::vector<distributed::ShardDataTransfer> xfer = {
-        distributed::ShardDataTransfer{coord}
-            .host_data(dst.data())
-            .region(std::optional<BufferRegion>{BufferRegion{0, bytes}})};
-    cq.enqueue_read_shards(xfer, buffer, blocking);
 }
 
 // ---------------------------------------------------------------------------
@@ -585,6 +444,31 @@ struct FrameDramBuffers {
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
 };
 
+// Allocate the 6 DRAM buffers a frame needs. Sizes are derived from the
+// scene's total_entries + tile count + the LPT-balanced tile-id list.
+// All buffers are RAII via shared_ptr; they free on scope exit.
+static FrameDramBuffers allocate_frame_buffers(
+    DeviceContext& ctx,
+    uint32_t total_entries,
+    uint32_t num_tiles,
+    size_t offsets_count,
+    size_t tile_ids_bytes) {
+    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{
+            .page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    };
+    FrameDramBuffers b;
+    b.packs    = make_dram(static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
+    b.offsets  = make_dram(offsets_count * sizeof(uint32_t), sizeof(uint32_t));
+    b.px       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    b.py       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
+    return b;
+}
+
 // Set per-core runtime args for reader/compute/writer. Each core's slice of
 // the concatenated tile_id_buffer is identified by (per_core_offset[c],
 // per_core_count[c]); reader/writer kernels look up their tile IDs at runtime
@@ -633,19 +517,8 @@ static Program& get_program_for_workload(DeviceContext& ctx) {
     return it->second;
 }
 
-// iter-017: Returns the kernel-only elapsed time (kernel-host critical
-// section start -> EnqueueReadBuffer end) in milliseconds.
-//
-// Path A (cache miss for this (view, scene) shape): upload inputs to
-// persistent buffers, set runtime args, run normally (blocking=true) to
-// get correct output, then capture a trace for future replay.
-//
-// Path B (cache hit): upload inputs to persistent buffers on data_cq,
-// sync via MeshEvent, replay the cached trace on workload_cq, read.
-// This bypasses dispatch construction + per-core SetRuntimeArgs push.
-//
-// Bench has 3 fixed views × 10 cycles = first cycle gets 3 misses, 9
-// subsequent cycles are pure replays.
+// Returns the kernel-only elapsed time (EnqueueWriteBuffer start ->
+// EnqueueReadBuffer end) in milliseconds.
 static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     const uint32_t image_h = f.image_h;
     const uint32_t image_w = f.image_w;
@@ -654,12 +527,6 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     const uint32_t num_tiles = tiles_x * tiles_y;
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
 
-    if (num_tiles > MAX_NUM_TILES_PERSIST) {
-        throw std::runtime_error(
-            "frame num_tiles " + std::to_string(num_tiles)
-            + " exceeds persistent-buffer cap " + std::to_string(MAX_NUM_TILES_PERSIST));
-    }
-
     // 1. Load .npy fixtures.
     std::vector<size_t> packs_shape, offsets_shape, px_shape, py_shape;
     auto packs_f32   = load_npy_f32(f.packs_path,   packs_shape);
@@ -667,18 +534,16 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     auto px_f32      = load_npy_f32(f.px_path,      px_shape);
     auto py_f32      = load_npy_f32(f.py_path,      py_shape);
     const uint32_t total_entries = static_cast<uint32_t>(packs_shape[0]);
-    if (total_entries > MAX_TOTAL_ENTRIES_PERSIST) {
-        throw std::runtime_error(
-            "frame total_entries " + std::to_string(total_entries)
-            + " exceeds persistent-buffer cap " + std::to_string(MAX_TOTAL_ENTRIES_PERSIST));
-    }
 
     // 2. LPT-balanced tile-to-core assignment.
     const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
 
-    // 3. Lazy max-allocate persistent buffers + build per-frame payloads.
-    ensure_persistent_buffers(ctx);
-    PersistentBuffers& p = ctx.persistent;
+    // 3. Allocate per-frame DRAM buffers and prepare upload payloads.
+    // (Non-const because EnqueueWrite/ReadMeshBuffer takes non-const lvalue
+    // refs to shared_ptr<MeshBuffer>.)
+    FrameDramBuffers bufs = allocate_frame_buffers(
+        ctx, total_entries, num_tiles, offsets_f32.size(),
+        assign.tile_id_buffer_bytes_padded);
     auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
     auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
     auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
@@ -686,69 +551,29 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
     }
+
+    // 4. Refresh runtime args for this frame.
+    Program& program = get_program_for_workload(ctx);
+    set_per_core_runtime_args(program, ctx, bufs, assign);
+
+    // 5. Kernel timing window: DRAM upload start -> output readback end.
+    const auto t_start = std::chrono::steady_clock::now();
+    // Zero-fill the output buffer. compute_lpt_assignment() filters out
+    // empty tiles, so their slots are never written by the writer kernel.
+    // The DRAM allocator may reuse addresses across frames in daemon mode,
+    // so without this fill, empty regions would show stale pixels.
     std::vector<uint16_t> output_zero(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
-
-    // 4. Cache key for this dispatch shape (view × scene).
-    TraceKey key;
-    key.image_h = image_h;
-    key.image_w = image_w;
-    key.total_entries = total_entries;
-    key.per_core_count = assign.per_core_count;
-    auto cache_it = ctx.trace_cache.find(key);
-    const bool cache_hit = (cache_it != ctx.trace_cache.end());
-
-    // We always need a "frame bufs" view of the persistent buffers for the
-    // existing set_per_core_runtime_args helper (it takes a FrameDramBuffers).
-    FrameDramBuffers bufs;
-    bufs.packs    = p.packs;
-    bufs.offsets  = p.offsets;
-    bufs.px       = p.px;
-    bufs.py       = p.py;
-    bufs.output   = p.output;
-    bufs.tile_ids = p.tile_ids;
-
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       px_bf16);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py,       py_bf16);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     std::vector<uint16_t> result_bf16(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
-
-    // 5. Kernel timing window: upload start -> readback end.
-    const auto t_start = std::chrono::steady_clock::now();
-
-    if (!cache_hit) {
-        // First time seeing this dispatch shape — set args, run normally
-        // (so the output is correct for THIS frame), then capture a trace.
-        Program& program = get_program_for_workload(ctx);
-        set_per_core_runtime_args(program, ctx, bufs, assign);
-
-        write_persistent_region(*ctx.workload_cq, p.output,   output_zero);
-        write_persistent_region(*ctx.workload_cq, p.packs,    packs_payload);
-        write_persistent_region(*ctx.workload_cq, p.offsets,  offsets_u32);
-        write_persistent_region(*ctx.workload_cq, p.px,       px_bf16);
-        write_persistent_region(*ctx.workload_cq, p.py,       py_bf16);
-        write_persistent_region(*ctx.workload_cq, p.tile_ids, assign.tile_id_buffer_padded);
-        // Pre-warm: actual dispatch produces output for this frame.
-        distributed::EnqueueMeshWorkload(*ctx.workload_cq, ctx.workload, /*blocking=*/true);
-        read_persistent_region(*ctx.workload_cq, p.output, result_bf16, /*blocking=*/true);
-
-        // Capture a trace of the (now-warmed) workload dispatch for replay.
-        auto trace_id = distributed::BeginTraceCapture(ctx.mesh_device.get(), /*cq_id=*/1);
-        distributed::EnqueueMeshWorkload(*ctx.workload_cq, ctx.workload, /*blocking=*/false);
-        ctx.mesh_device->end_mesh_trace(/*cq_id=*/1, trace_id);
-        ctx.trace_cache.emplace(key, trace_id);
-    } else {
-        // Cache hit: upload inputs on data_cq, sync, replay trace, read.
-        write_persistent_region(*ctx.data_cq, p.output,   output_zero);
-        write_persistent_region(*ctx.data_cq, p.packs,    packs_payload);
-        write_persistent_region(*ctx.data_cq, p.offsets,  offsets_u32);
-        write_persistent_region(*ctx.data_cq, p.px,       px_bf16);
-        write_persistent_region(*ctx.data_cq, p.py,       py_bf16);
-        write_persistent_region(*ctx.data_cq, p.tile_ids, assign.tile_id_buffer_padded);
-        auto write_done = ctx.data_cq->enqueue_record_event();
-        ctx.workload_cq->enqueue_wait_for_event(write_done);
-        ctx.mesh_device->replay_mesh_trace(/*cq_id=*/1, cache_it->second, /*blocking=*/false);
-        read_persistent_region(*ctx.workload_cq, p.output, result_bf16, /*blocking=*/true);
-    }
-
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, bufs.output, /*blocking=*/true);
     const auto t_end = std::chrono::steady_clock::now();
     const double kernel_ms =
         std::chrono::duration<double, std::milli>(t_end - t_start).count();

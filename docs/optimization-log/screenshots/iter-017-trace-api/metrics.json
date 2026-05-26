@@ -1,0 +1,25 @@
+{
+  "iter_dir": "iter-017-trace-api",
+  "class": "dispatch",
+  "prev_best_kernel_ms": 96.80000000000001,
+  "psnr_per_view": {
+    "hero": 40.40181099360784,
+    "side": 43.69705259506113,
+    "top": 40.149730293255274
+  },
+  "kernel_ms_median": 96.655,
+  "kernel_ms_p99": 101.7368,
+  "per_view_median": {
+    "hero": 96.655,
+    "side": 87.415,
+    "top": 101.655
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 314.6445480015245,
+    "project_ms": 16.54070349468384,
+    "tile_assign_ms": 10.431528993649408,
+    "sort_ms": 65.34167099016486,
+    "blend_ms": 221.10126899497118
+  }
+}
