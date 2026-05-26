@@ -465,22 +465,19 @@ void kernel_main() {
             //      spilling the new sum back via pop+reserve+pack+push (the
             //      "in-place state replace" pattern for depth-1 state CBs).
 
+            // Per-channel D2 fused (iter-008): copy(contrib)+mul_unary(color_c)
+            // into dst[0], then FPU binary_dest_reuse_tiles<ELWADD, DEST_TO_SRCA>
+            // adds the persistent state into dst[0] in place. Single acquire per
+            // channel, eliminates the CB_T_TMP roundtrip. Same DEST_TO_SRCA
+            // pattern as iter-007's D1 fuse.
+
             // R channel
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
             mul_unary_tile(0, color_r_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_R_STATE, CB_T_TMP);
-            add_tiles(CB_COLOR_R_STATE, CB_T_TMP, 0, 0, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_R_STATE, 1);
@@ -489,24 +486,14 @@ void kernel_main() {
             cb_push_back(CB_COLOR_R_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_R_STATE, 1);
-            cb_pop_front(CB_T_TMP, 1);
 
             // G channel
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
             mul_unary_tile(0, color_g_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_G_STATE, CB_T_TMP);
-            add_tiles(CB_COLOR_G_STATE, CB_T_TMP, 0, 0, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_G_STATE, 1);
@@ -515,24 +502,14 @@ void kernel_main() {
             cb_push_back(CB_COLOR_G_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_G_STATE, 1);
-            cb_pop_front(CB_T_TMP, 1);
 
             // B channel
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
             mul_unary_tile(0, color_b_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_T_TMP, 1);
-            pack_tile(0, CB_T_TMP);
-            cb_push_back(CB_T_TMP, 1);
-            tile_regs_release();
-            cb_wait_front(CB_T_TMP, 1);
-
-            tile_regs_acquire();
-            add_tiles_init(CB_COLOR_B_STATE, CB_T_TMP);
-            add_tiles(CB_COLOR_B_STATE, CB_T_TMP, 0, 0, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_B_STATE, 1);
@@ -541,7 +518,6 @@ void kernel_main() {
             cb_push_back(CB_COLOR_B_STATE, 1);
             tile_regs_release();
             cb_wait_front(CB_COLOR_B_STATE, 1);
-            cb_pop_front(CB_T_TMP, 1);
 
             cb_pop_front(CB_CONTRIB, 1);
 
