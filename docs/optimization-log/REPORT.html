@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 15 · current best: 97.77 ms · target: 1.0 ms
+      iters: 16 · current best: 97.77 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-013-drop-stage-e-sat-mask
+      <span class="badge" style="background:#999999">revert</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      <a href="iter-013-drop-stage-e-sat-mask.md">md</a>
+      <span class="ts">2026-05-26T07:30:00+00:00</span>
+    </h3>
+  </header>
+  <p class="brief hypothesis"><b>Hypothesis.</b> Stage E currently does `T_state ← T_state · (1 - alpha) · sat_mask`, fused<br>via iter-010&#x27;s pattern:<br><br>The `· sat_mask` multiplication is **algorithmically redundant** because<br>Stage D1 already gates by sat_mask via:<br><br>For an &quot;inactive&quot; pixel (sat_mask=0):<br>- D1: contrib = α · T_state · 0 = 0 ✓ (no contribution)<br>- E original: T_state := T_state · (1-α) · 0 = 0 (zeroed)<br>- E proposed: T_state := T_state · (1-α) (stays small but nonzero)<br><br>But D1&#x27;s sat_mask zeroing is what makes the pixel actually inactive — E&#x27;s<br>sat_mask was just keeping T_state nominally clean.<br><br>### Why T_state staying nonzero is harmless<br><br>Before any Stage F refresh, sat_mask = 1 everywhere (initial state).<br>First refresh is at g=16: sat_mask becomes 0 for pixels where T_state &lt;<br>1e-4. For those pixels in subsequent Gaussians:<br><br>At the next Stage F refresh, `T_state &gt;= 1e-4` is still false → sat_mask<br>stays 0. The pixel remains permanently inactive. Same algorithmic outcome<br>as the original.<br><br>### PSNR impact<br><br>Each `binary_dest_reuse&lt;ELWMUL, DEST_TO_SRCA&gt;` application has cost ~1 dB<br>in iter-007 + iter-010 + iter-011 history (cumulative truncation of fp32 →<br>bf16 during DEST_TO_SRCA reload). Removing one application should **add<br>ba…</p>
+  <p class="brief outcome"><b>Outcome.</b> Removing binary_dest_reuse&lt;ELWMUL, DEST_TO_SRCA&gt;(CB_SAT_MASK) from iter-010&#x27;s fused acquire deadlocks the kernel. Two attempts (one on dirty device, one with fresh JIT cache + verified clean device) both hung at cycle 1 within 5 min. The mul_tiles → binary_dest_reuse → pack triad is not freely reversible: pack_tile appears to depend on internal pipeline state established by binary_dest_reuse_tiles_init, even though it nominally reads from dst[0] which holds the mul_tiles result. Lesson: to recover PSNR headroom from iter-007/iter-010 fusions, the *whole triad* must be reverted to a 2-acquire form, not just the binary_dest_reuse half. Plan doc preserved in iter-013-drop-stage-e-sat-mask.md.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>— ms</b> median · — ms p99</div>
+    <div class="per-view">per-view: hero — / side — / top —</div>
+    <div class="psnr">PSNR: hero — / side — / top — (min <b>—</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-013-drop-stage-e-sat-mask/hero.png" target="_blank"><img src="screenshots/iter-013-drop-stage-e-sat-mask/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-013-drop-stage-e-sat-mask/side.png" target="_blank"><img src="screenshots/iter-013-drop-stage-e-sat-mask/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-013-drop-stage-e-sat-mask/top.png" target="_blank"><img src="screenshots/iter-013-drop-stage-e-sat-mask/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-013-drop-stage-e-sat-mask/hero_diff10.png" target="_blank"><img src="screenshots/iter-013-drop-stage-e-sat-mask/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-013-drop-stage-e-sat-mask/side_diff10.png" target="_blank"><img src="screenshots/iter-013-drop-stage-e-sat-mask/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-013-drop-stage-e-sat-mask/top_diff10.png" target="_blank"><img src="screenshots/iter-013-drop-stage-e-sat-mask/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>(no validator.json)</li></ul>
+    <p class="reasoning"></p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-012-init-fuse
@@ -573,6 +606,16 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.7 / side 43.1 / top 38.9
 - Validator reasoning: Visual gate passes on all 8 checks: no tile seams, no uniform-fill blocks, no missing-splat holes, no clipping bands, no ringing, no NaN/Inf, no geometry shift, and diff×10 structure is uniform speckle consistent with bfloat16 quantization noise from the fused Q-summation change. However, two of three views fall below the 40 dB kernel-algebra PSNR floor: hero at 39.69 dB and top at 38.87 dB. Per spec, any view below the 40 dB floor for class kernel-algebra triggers NEEDS_REVIEW (not auto-REJECT since visuals are clean). Timing is essentially break-even: median 97.9 ms vs prev_best 97.77 ms (+0.13%), within the 1.02× tolerance. Per-view PSNR delta is only 4.20 dB (well under 20 dB threshold) and per-view ms ratio is 1.16× (well under 2×). The NEEDS_REVIEW verdict is driven solely by two views sub-floor — the iteration produces structurally clean output but the fused Q-summation path is introducing enough bfloat16 accumulation error to push hero and top below 40 dB, which warrants human review before promotion.
 - Thumbnails: ![hero](screenshots/iter-011-b3b-fuse-fpu/hero.png) ![diff10](screenshots/iter-011-b3b-fuse-fpu/hero_diff10.png)
+
+## iter-013-drop-stage-e-sat-mask — REJECT (kernel deadlock)
+
+- Class: `kernel-algebra`
+- kernel ms: N/A — daemon hung at cycle 1 (two attempts, including one with explicit JIT cache wipe + verified clean device state)
+- PSNR per view: N/A
+- Hypothesis: drop the `binary_dest_reuse&lt;ELWMUL, DEST_TO_SRCA&gt;(CB_SAT_MASK)` from Stage E&#x27;s iter-010 fused acquire. The multiplication by sat_mask is algorithmically redundant because Stage D1 already gates contrib by sat_mask, so an unmasked T_state doesn&#x27;t add visible energy to the output (monotonic decrement preserves the inactive set).
+- Failure: simple removal of binary_dest_reuse_tiles_init + binary_dest_reuse_tiles deadlocks. Daemon blocked in `futex_wait_queue_me` holding `/dev/tenstorrent/0`, host blocked in `pipe_read`. Reproduces deterministically.
+- Lesson: the `mul_tiles → binary_dest_reuse → pack_tile` triad is not freely reversible. pack_tile depends on internal pipeline state established by binary_dest_reuse_tiles_init even though it nominally reads from dst[0] which holds the mul_tiles result. To recover the ~1 dB PSNR headroom from each iter-007/iter-010 binary_dest_reuse, we&#x27;d need to revert the *whole triad* to a 2-acquire form, not just the binary_dest_reuse half.
+- No thumbnails (no render produced).
 
 ## iter-012-init-fuse — REJECT (kernel deadlock)
 

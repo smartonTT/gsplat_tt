@@ -55,6 +55,16 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Visual gate passes on all 8 checks: no tile seams, no uniform-fill blocks, no missing-splat holes, no clipping bands, no ringing, no NaN/Inf, no geometry shift, and diff×10 structure is uniform speckle consistent with bfloat16 quantization noise from the fused Q-summation change. However, two of three views fall below the 40 dB kernel-algebra PSNR floor: hero at 39.69 dB and top at 38.87 dB. Per spec, any view below the 40 dB floor for class kernel-algebra triggers NEEDS_REVIEW (not auto-REJECT since visuals are clean). Timing is essentially break-even: median 97.9 ms vs prev_best 97.77 ms (+0.13%), within the 1.02× tolerance. Per-view PSNR delta is only 4.20 dB (well under 20 dB threshold) and per-view ms ratio is 1.16× (well under 2×). The NEEDS_REVIEW verdict is driven solely by two views sub-floor — the iteration produces structurally clean output but the fused Q-summation path is introducing enough bfloat16 accumulation error to push hero and top below 40 dB, which warrants human review before promotion.
 - Thumbnails: ![hero](screenshots/iter-011-b3b-fuse-fpu/hero.png) ![diff10](screenshots/iter-011-b3b-fuse-fpu/hero_diff10.png)
 
+## iter-013-drop-stage-e-sat-mask — REJECT (kernel deadlock)
+
+- Class: `kernel-algebra`
+- kernel ms: N/A — daemon hung at cycle 1 (two attempts, including one with explicit JIT cache wipe + verified clean device state)
+- PSNR per view: N/A
+- Hypothesis: drop the `binary_dest_reuse<ELWMUL, DEST_TO_SRCA>(CB_SAT_MASK)` from Stage E's iter-010 fused acquire. The multiplication by sat_mask is algorithmically redundant because Stage D1 already gates contrib by sat_mask, so an unmasked T_state doesn't add visible energy to the output (monotonic decrement preserves the inactive set).
+- Failure: simple removal of binary_dest_reuse_tiles_init + binary_dest_reuse_tiles deadlocks. Daemon blocked in `futex_wait_queue_me` holding `/dev/tenstorrent/0`, host blocked in `pipe_read`. Reproduces deterministically.
+- Lesson: the `mul_tiles → binary_dest_reuse → pack_tile` triad is not freely reversible. pack_tile depends on internal pipeline state established by binary_dest_reuse_tiles_init even though it nominally reads from dst[0] which holds the mul_tiles result. To recover the ~1 dB PSNR headroom from each iter-007/iter-010 binary_dest_reuse, we'd need to revert the *whole triad* to a 2-acquire form, not just the binary_dest_reuse half.
+- No thumbnails (no render produced).
+
 ## iter-012-init-fuse — REJECT (kernel deadlock)
 
 - Class: `kernel-algebra`
