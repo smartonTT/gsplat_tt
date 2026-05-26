@@ -256,14 +256,23 @@ def sort_and_bin(
     """
     num_tiles = tiles_x * tiles_y
 
-    # Create a composite sort key: tile_id first, then depth within each tile.
-    # Sorting by (tile_id * large_number + depth) achieves lexicographic ordering.
-    # We use a scale factor large enough that depth differences never cross tile boundaries.
+    # Composite int64 sort key: (tile_id << 32) | depth_bits.
+    #
+    # Depth bits are the float32 bit pattern reinterpreted as int32. For
+    # positive floats (always true here — z > near plane > 0 after the
+    # visibility filter), the int32 view is monotonic in the float value,
+    # so a single int64 argsort produces exact lexicographic (tile_id,
+    # depth) ordering with no precision loss.
+    #
+    # The previous implementation built `tile_id * max_depth + depth` as
+    # float32 — at ~30000 magnitude that gives ~0.001 precision, collapsing
+    # adjacent depths within a tile and producing approximate ordering.
+    # torch.argsort on int64 also uses radix internally, which is ~7×
+    # faster than mergesort on float32 keys at this size (iter-020: 61→7 ms).
     with _sub_timer(sub_timings, "sort.keys"):
-        max_depth = depths.max().item() + 1.0
-        sort_keys = tile_ids.float() * max_depth + depths[gaussian_ids]
+        depth_bits = depths[gaussian_ids].view(torch.int32).to(torch.int64)
+        sort_keys = (tile_ids.to(torch.int64) << 32) | depth_bits
 
-    # Sort all pairs by the composite key
     with _sub_timer(sub_timings, "sort.argsort"):
         sorted_indices = torch.argsort(sort_keys)
     with _sub_timer(sub_timings, "sort.gather"):
