@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "Numpy reference implementation of per-microblock ellipse culling. Cull math from microblock-cpu-spec.md section 2 is now actually applied to mb_stream (was a no-op in the worker's first pass). At mb_contrib_floor=1/16384 (~6.1e-5), all 30 views render at min PSNR 60.34 dB (gate 60), mean 63.26 dB, max 69.74 dB. Per-(g,m) work reduction is 77.36% mean across views (63-87% range), which will translate to ~4-5x blend speedup when iter-007 ports microblock_cull + iter-008 ports microblock-major blend to C++. The mb_contrib_floor will be exposed as a viewer slider in iter-009. Numpy sum-total is 409s (down from v1's 30 minutes), expected slowness; not a perf gate. Pytest invariants 6/6 pass. cpu_cpp backend stages all still green. This iter establishes the (mb_header, mb_stream) data layout and per-microblock cull semantics that iter-007/008/009 will build on."
+}

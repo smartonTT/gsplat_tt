@@ -89,6 +89,8 @@ def main():
         Image.fromarray(img_u8).save(args.out_dir / f"{name}.png")
 
         sub_timings = dict(res.timings) if hasattr(res, "timings") and res.timings else {}
+        if hasattr(res, "sub_timings") and res.sub_timings:
+            sub_timings.update(res.sub_timings)
         row = {"view": name, "view_idx": i, "total_ms": wall_ms, **sub_timings}
         timing_rows.append(row)
         print(f"[render_30frame] {i+1:2d}/{len(order)} {name:14s} {wall_ms:7.1f} ms")

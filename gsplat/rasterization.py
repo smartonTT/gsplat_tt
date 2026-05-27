@@ -493,6 +493,216 @@ def alpha_blend(
     return torch.from_numpy(image)
 
 
+_NUM_MICROBLOCKS = 32
+_MB_ORIGIN_X = (np.arange(_NUM_MICROBLOCKS, dtype=np.int32) & 3) * 8
+_MB_ORIGIN_Y = (np.arange(_NUM_MICROBLOCKS, dtype=np.int32) >> 2) * 4
+
+
+def microblock_cull(
+    means_2d: torch.Tensor,
+    covs_2d: torch.Tensor,
+    opacities: torch.Tensor,
+    sorted_gaussian_ids: torch.Tensor,
+    tile_ranges: torch.Tensor,
+    tiles_x: int,
+    tiles_y: int,
+    tile_size: int = 32,
+    mb_contrib_floor: float = 1.0 / 16384.0,
+    contrib_floor: float = 15.0 / 255.0,
+    sub_timings: dict[str, float] | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, dict]:
+    """Per-microblock Mahalanobis cull; emit mb_header and mb_stream.
+
+    `mb_contrib_floor` is the tight per-microblock keep threshold (default
+    1/16384). Hero hits ~63 dB at 1/4096 but a few off-axis benchmark views
+    (chal_bottom, orbit_*) need a tighter floor to stay ≥ 60 dB on the full
+    30-frame sweep. `contrib_floor`
+    is retained for backwards compatibility with callers that want the looser
+    per-tile floor.
+
+    mb_stream stores GLOBAL gaussian ids (same M-space as sorted_gaussian_ids),
+    filtered per (tile, microblock) by the §2 closest-point-in-microblock test.
+    """
+    del contrib_floor  # explicit: per-microblock cull uses mb_contrib_floor.
+    del sub_timings    # reserved for iter-007 profiling hooks
+
+    means_np = means_2d.numpy()
+    covs_np = covs_2d.numpy()
+    opacities_np = opacities.numpy()
+    gids_np = sorted_gaussian_ids.numpy()
+    ranges_np = tile_ranges.numpy()
+
+    num_tiles = tiles_x * tiles_y
+    mb_header = np.zeros((num_tiles, _NUM_MICROBLOCKS, 2), dtype=np.int64)
+    stream_chunks: list[np.ndarray] = []
+
+    pairs_in = int(gids_np.shape[0])
+    tile_pairs_dropped = 0
+    stream_offset = 0
+    mb_ox_local = _MB_ORIGIN_X.astype(np.float64)
+    mb_oy_local = _MB_ORIGIN_Y.astype(np.float64)
+
+    for ty in range(tiles_y):
+        for tx in range(tiles_x):
+            tile_id = ty * tiles_x + tx
+            start, end = ranges_np[tile_id, 0], ranges_np[tile_id, 1]
+            if start == end:
+                continue
+
+            tile_g_ids = gids_np[start:end]
+            tx_tile = float(tx * tile_size)
+            ty_tile = float(ty * tile_size)
+
+            mean_x = means_np[tile_g_ids, 0]
+            mean_y = means_np[tile_g_ids, 1]
+            a = covs_np[tile_g_ids, 0, 0]
+            b = covs_np[tile_g_ids, 0, 1]
+            c = covs_np[tile_g_ids, 1, 1]
+            det = np.maximum(a * c - b * b, 1e-6)
+            ci_a = c / det
+            ci_b = -b / det
+            ci_c = a / det
+            g_op = opacities_np[tile_g_ids]
+
+            # Per-(g, m) keep mask (spec §2 closest-point clamp form).
+            mb_ox = tx_tile + mb_ox_local
+            mb_oy = ty_tile + mb_oy_local
+            cx = np.clip(mean_x[:, np.newaxis], mb_ox[np.newaxis, :], mb_ox[np.newaxis, :] + 8.0)
+            cy = np.clip(mean_y[:, np.newaxis], mb_oy[np.newaxis, :], mb_oy[np.newaxis, :] + 4.0)
+            dx_c = cx - mean_x[:, np.newaxis]
+            dy_c = cy - mean_y[:, np.newaxis]
+            power_c = -0.5 * (
+                ci_a[:, np.newaxis] * dx_c * dx_c
+                + 2.0 * ci_b[:, np.newaxis] * dx_c * dy_c
+                + ci_c[:, np.newaxis] * dy_c * dy_c
+            )
+            keep_mask = (
+                np.minimum(g_op[:, np.newaxis] * np.exp(np.minimum(power_c, 0.0)), 0.99)
+                >= mb_contrib_floor
+            )
+            tile_pairs_dropped += int(np.sum(~keep_mask.any(axis=1)))
+
+            for m in range(_NUM_MICROBLOCKS):
+                kept = tile_g_ids[keep_mask[:, m]]
+                count = int(kept.shape[0])
+                mb_header[tile_id, m, 0] = stream_offset
+                mb_header[tile_id, m, 1] = count
+                if count > 0:
+                    stream_chunks.append(kept)
+                    stream_offset += count
+
+    if stream_chunks:
+        mb_stream_np = np.concatenate(stream_chunks).astype(np.int64)
+    else:
+        mb_stream_np = np.empty(0, dtype=np.int64)
+
+    pairs_out = int(mb_stream_np.shape[0])
+    drop_pct = 0.0 if pairs_in == 0 else 100.0 * tile_pairs_dropped / pairs_in
+    full_replay = pairs_in * _NUM_MICROBLOCKS
+    work_reduction_pct = (
+        0.0 if full_replay == 0 else 100.0 * (1.0 - pairs_out / full_replay)
+    )
+
+    stats = {
+        "pairs_in": pairs_in,
+        "pairs_out": pairs_out,
+        "drop_pct": drop_pct,
+        "work_reduction_pct": work_reduction_pct,
+    }
+    return (
+        torch.from_numpy(mb_header),
+        torch.from_numpy(mb_stream_np),
+        stats,
+    )
+
+
+def alpha_blend_microblock(
+    means_2d: torch.Tensor,
+    covs_2d: torch.Tensor,
+    colors: torch.Tensor,
+    opacities: torch.Tensor,
+    mb_header: torch.Tensor,
+    mb_stream: torch.Tensor,
+    image_height: int,
+    image_width: int,
+    tile_size: int = 32,
+) -> torch.Tensor:
+    """Microblock-major alpha compositing (same per-pixel math as alpha_blend)."""
+    means_np = means_2d.numpy()
+    colors_np = colors.numpy()
+    opacities_np = opacities.numpy()
+    header_np = mb_header.numpy()
+    stream_np = mb_stream.numpy()
+
+    covs_np = covs_2d.numpy()
+    a, b, c = covs_np[:, 0, 0], covs_np[:, 0, 1], covs_np[:, 1, 1]
+    det = np.maximum(a * c - b * b, 1e-6)
+    cov_inv_np = np.zeros_like(covs_np)
+    cov_inv_np[:, 0, 0] = c / det
+    cov_inv_np[:, 0, 1] = -b / det
+    cov_inv_np[:, 1, 0] = -b / det
+    cov_inv_np[:, 1, 1] = a / det
+
+    tiles_x = (image_width + tile_size - 1) // tile_size
+    tiles_y = (image_height + tile_size - 1) // tile_size
+    image = np.zeros((image_height, image_width, 3), dtype=np.float32)
+
+    for ty in range(tiles_y):
+        for tx in range(tiles_x):
+            tile_id = ty * tiles_x + tx
+            py_tile = ty * tile_size
+            px_tile = tx * tile_size
+            py_end_tile = min(py_tile + tile_size, image_height)
+            px_end_tile = min(px_tile + tile_size, image_width)
+
+            for m in range(_NUM_MICROBLOCKS):
+                off, cnt = header_np[tile_id, m, 0], header_np[tile_id, m, 1]
+                if cnt == 0:
+                    continue
+
+                mb_ox = (m & 3) * 8
+                mb_oy = (m >> 2) * 4
+                py_start = py_tile + mb_oy
+                px_start = px_tile + mb_ox
+                py_end = min(py_start + 4, py_end_tile)
+                px_end = min(px_start + 8, px_end_tile)
+                if py_start >= py_end or px_start >= px_end:
+                    continue
+
+                mb_h = py_end - py_start
+                mb_w = px_end - px_start
+
+                py = np.arange(py_start, py_end, dtype=np.float32) + 0.5
+                px = np.arange(px_start, px_end, dtype=np.float32) + 0.5
+                grid_y, grid_x = np.meshgrid(py, px, indexing="ij")
+
+                accumulated_color = np.zeros((mb_h, mb_w, 3), dtype=np.float32)
+                transmittance = np.ones((mb_h, mb_w), dtype=np.float32)
+
+                for idx in range(int(off), int(off + cnt)):
+                    g = int(stream_np[idx])
+
+                    dx = grid_x - means_np[g, 0]
+                    dy = grid_y - means_np[g, 1]
+
+                    ci = cov_inv_np[g]
+                    power = -0.5 * (
+                        ci[0, 0] * dx * dx + 2.0 * ci[0, 1] * dx * dy + ci[1, 1] * dy * dy
+                    )
+                    gauss_weight = np.exp(np.minimum(power, 0.0))
+                    alpha = np.clip(opacities_np[g] * gauss_weight, None, 0.99)
+
+                    accumulated_color += (alpha * transmittance)[:, :, np.newaxis] * colors_np[g]
+                    transmittance *= 1.0 - alpha
+
+                    if transmittance.max() < 0.0001:
+                        break
+
+                image[py_start:py_end, px_start:px_end] = accumulated_color
+
+    return torch.from_numpy(image)
+
+
 def prepare_kernel_inputs(
     means_2d: torch.Tensor,
     covs_2d: torch.Tensor,
