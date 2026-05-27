@@ -359,6 +359,44 @@ ProjectResult project_finalize(
     return gather_visible(prep, covs_2d, radii_scratch, valid_mask);
 }
 
+namespace {
+
+inline void cov2d_for_i(const ProjectPrepared& prep, std::size_t i, float* covs_2d_out) {
+    Mat3f cov_cam;
+    std::memcpy(cov_cam.m.data(), prep.cov_cam.data() + i * 9, 9 * sizeof(float));
+    Cov2f cov2d = project_cov2d(cov_cam, prep.jacobian.data() + i * 6);
+    cov2d.a += 0.3f;
+    cov2d.c += 0.3f;
+    covs_2d_out[i * 4 + 0] = cov2d.a;
+    covs_2d_out[i * 4 + 1] = cov2d.b;
+    covs_2d_out[i * 4 + 2] = cov2d.b;
+    covs_2d_out[i * 4 + 3] = cov2d.c;
+}
+
+}  // namespace
+
+void compute_covs_2d(
+    const ProjectPrepared& prep,
+    float* covs_2d_out,
+    ThreadPool* pool) {
+    const std::size_t N = prep.N;
+    if (pool != nullptr && pool->size() > 1 && N >= 4096) {
+        const std::size_t W = pool->size();
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([w, W, N, &prep, covs_2d_out]() {
+                for (std::size_t i = w; i < N; i += W) {
+                    cov2d_for_i(prep, i, covs_2d_out);
+                }
+            });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t i = 0; i < N; ++i) {
+            cov2d_for_i(prep, i, covs_2d_out);
+        }
+    }
+}
+
 ProjectResult project(
     const float* means,
     const float* scales,
@@ -374,18 +412,7 @@ ProjectResult project(
         project_prepare(means, scales, rotations, extrinsics, intrinsics, N, image_height, image_width);
 
     std::vector<float> covs_2d(N * 4);
-    for (std::size_t i = 0; i < N; ++i) {
-        Mat3f cov_cam;
-        std::memcpy(cov_cam.m.data(), prep.cov_cam.data() + i * 9, 9 * sizeof(float));
-
-        Cov2f cov2d = project_cov2d(cov_cam, prep.jacobian.data() + i * 6);
-        cov2d.a += 0.3f;
-        cov2d.c += 0.3f;
-        covs_2d[i * 4 + 0] = cov2d.a;
-        covs_2d[i * 4 + 1] = cov2d.b;
-        covs_2d[i * 4 + 2] = cov2d.b;
-        covs_2d[i * 4 + 3] = cov2d.c;
-    }
+    compute_covs_2d(prep, covs_2d.data(), nullptr);
 
     return project_finalize(prep, covs_2d.data(), opacities, min_opacity);
 }

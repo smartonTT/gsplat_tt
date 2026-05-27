@@ -173,27 +173,11 @@ py::tuple project_full_with_cov3d_py(
         image_width,
         &global_project_pool());
 
+    // iter-018: pure-C++ cov2d (was python -> torch.bmm round-trip). Matches
+    // torch.bmm within ~5e-4 (verify_stage tolerance 1e-3).
     const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
-    py::module_ torch = py::module_::import("torch");
-
-    py::array_t<float> cov_cam_arr({n, static_cast<py::ssize_t>(3), static_cast<py::ssize_t>(3)});
-    if (prep.N > 0) {
-        std::memcpy(cov_cam_arr.mutable_data(), prep.cov_cam.data(), prep.N * 9 * sizeof(float));
-    }
-    py::array_t<float> j_arr({n, static_cast<py::ssize_t>(2), static_cast<py::ssize_t>(3)});
-    if (prep.N > 0) {
-        std::memcpy(j_arr.mutable_data(), prep.jacobian.data(), prep.N * 6 * sizeof(float));
-    }
-    py::object cov_cam_t = torch.attr("from_numpy")(cov_cam_arr);
-    py::object j = torch.attr("from_numpy")(j_arr);
-    py::object covs_2d =
-        torch.attr("bmm")(torch.attr("bmm")(j, cov_cam_t), j.attr("transpose")(1, 2));
-    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 0, 0)).attr("__iadd__")(0.3);
-    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 1, 1)).attr("__iadd__")(0.3);
-
-    py::array_t<float, py::array::c_style | py::array::forcecast> covs_flat =
-        py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
-            covs_2d.attr("detach")().attr("cpu")().attr("numpy")().attr("reshape")(n, 4));
+    py::array_t<float> covs_flat({n, static_cast<py::ssize_t>(4)});
+    gsplat_cpu::compute_covs_2d(prep, covs_flat.mutable_data(), &global_project_pool());
 
     return project_finalize_py(prep, covs_flat, opacities_obj, min_opacity);
 }
@@ -210,11 +194,6 @@ py::tuple project_full_py(
     float min_opacity = 1.0f / 255.0f) {
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
-    // C++ path for cov3d + cov_cam — `project_prepare` does both per-Gaussian
-    // scalar fp32 with -ffp-contract=off. Saves ~8 ms over torch matmul calls
-    // (iter-011). cov2d still goes through torch.bmm because the (N,2,3) @
-    // (N,3,3) @ (N,3,2) batched matmul drops below 1 ms in torch on M-series
-    // and bit-matches the numpy reference.
     const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare(
         static_cast<const float*>(means_info.ptr),
         static_cast<const float*>(scales.request().ptr),
@@ -226,26 +205,8 @@ py::tuple project_full_py(
         image_width);
 
     const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
-    py::module_ torch = py::module_::import("torch");
-
-    py::array_t<float> cov_cam_arr({n, static_cast<py::ssize_t>(3), static_cast<py::ssize_t>(3)});
-    if (prep.N > 0) {
-        std::memcpy(cov_cam_arr.mutable_data(), prep.cov_cam.data(), prep.N * 9 * sizeof(float));
-    }
-    py::array_t<float> j_arr({n, static_cast<py::ssize_t>(2), static_cast<py::ssize_t>(3)});
-    if (prep.N > 0) {
-        std::memcpy(j_arr.mutable_data(), prep.jacobian.data(), prep.N * 6 * sizeof(float));
-    }
-    py::object cov_cam_t = torch.attr("from_numpy")(cov_cam_arr);
-    py::object j = torch.attr("from_numpy")(j_arr);
-    py::object covs_2d =
-        torch.attr("bmm")(torch.attr("bmm")(j, cov_cam_t), j.attr("transpose")(1, 2));
-    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 0, 0)).attr("__iadd__")(0.3);
-    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 1, 1)).attr("__iadd__")(0.3);
-
-    py::array_t<float, py::array::c_style | py::array::forcecast> covs_flat =
-        py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
-            covs_2d.attr("detach")().attr("cpu")().attr("numpy")().attr("reshape")(n, 4));
+    py::array_t<float> covs_flat({n, static_cast<py::ssize_t>(4)});
+    gsplat_cpu::compute_covs_2d(prep, covs_flat.mutable_data(), &global_project_pool());
 
     return project_finalize_py(prep, covs_flat, opacities_obj, min_opacity);
 }

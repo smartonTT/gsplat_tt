@@ -78,6 +78,19 @@ ProjectResult project_finalize_parallel(
     float min_opacity,
     ThreadPool* pool = nullptr);
 
+// Compute covs_2d = J @ cov_cam @ J.T + 0.3*I per Gaussian in pure fp32 C++.
+// Pure C++ avoids the python -> torch.bmm round-trip used in the previous
+// pybind path (saves ~2-3ms / frame). Matches torch's batched bmm within
+// ~5e-4 (same magnitude as the previous covs_2d diff vs numpy reference),
+// driven by fp32 accumulation order.
+//   prep      output of project_prepare_geometry / project_prepare_from_cov3d
+//   covs_2d_out output buffer, size prep.N * 4, layout [a, b, b, c] row-major
+//   pool      optional thread pool for the parallel inner loop
+void compute_covs_2d(
+    const ProjectPrepared& prep,
+    float* covs_2d_out,
+    ThreadPool* pool = nullptr);
+
 ProjectResult project_finalize(
     const ProjectPrepared& prep,
     const float* covs_2d, // N * 4, layout [a, b, b, c]
