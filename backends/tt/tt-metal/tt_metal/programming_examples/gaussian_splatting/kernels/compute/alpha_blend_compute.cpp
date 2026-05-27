@@ -15,7 +15,6 @@
 #include "api/compute/eltwise_unary/fill.h"
 #include "api/compute/eltwise_unary/comp.h"
 #include "api/compute/eltwise_unary/rsub.h"
-#include "api/compute/eltwise_unary/clamp.h"
 #include "api/compute/binary_max_min.h"
 
 #include "tools/profiler/kernel_profiler.hpp"
@@ -97,18 +96,10 @@ void kernel_main() {
     constexpr uint32_t NEG_HALF_BITS  = 0xBF000000u;  // fp32(-0.5)
     constexpr uint32_t ONE_F_BITS     = 0x3F800000u;  // fp32( 1.0)
     constexpr uint32_t T_THRESH_BITS  = 0x38D1B717u;  // fp32(1e-4) — T threshold for sat_mask
-    constexpr uint32_t NEG_INF_BITS   = 0xFF800000u;  // fp32(-inf) — clamp lower bound for "min only"
-    constexpr uint32_t ZERO_F_BITS    = 0x00000000u;  // fp32( 0.0)
-    constexpr uint32_t ALPHA_099_BITS = 0x3F7AE148u;  // fp32(0.99) — alpha clamp ceiling
 
     // Foundational SFPU/FPU init: configures unpack and pack hardware for
     // binary tile ops on this core. Must come before any tile op.
     binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
-
-    // iter-046: register the SFPU clamp op once (replaces copy_tile + binary_min
-    // pattern in B3b/C — clamp_tile(idst, min_bits, max_bits) does both bounds
-    // in one SFPU op, saving ~5 SFPU ops per Gaussian).
-    clamp_tile_init();
 
     // ----- Pre-fill the two constant tiles used by the inner loop. -----
     // These are pushed once per kernel invocation, never popped; the kernel
@@ -373,13 +364,12 @@ void kernel_main() {
             // power = -0.5 · Q
             mul_unary_tile(0, NEG_HALF_BITS);
 
-            // Clamp power to ≤ 0 (iter-046): replaces the prior
-            // copy_tile(CB_CONST_ZERO) + binary_min_tile sequence with a
-            // single SFPU clamp_tile. clamp lower bound = -inf (no-op for
-            // power ≥ -88), upper = 0. For valid PSD covariance Q ≥ 0
-            // always; this is mostly defensive (handles fp rounding edge
-            // cases).
-            clamp_tile(0, NEG_INF_BITS, ZERO_F_BITS);
+            // Clamp power to ≤ 0. For valid PSD covariance Q ≥ 0 always, so
+            // this is mostly defensive (handles fp rounding edge cases).
+            copy_tile_to_dst_init_short(CB_CONST_ZERO);
+            copy_tile(CB_CONST_ZERO, 0, 1);
+            binary_min_tile_init();
+            binary_min_tile(0, 1, 0);
 
             // weight = exp(power). Approximate-mode polynomial (~100 cycles
             // vs ~800 for the accurate path) with built-in ClampToNegative
@@ -392,12 +382,12 @@ void kernel_main() {
             // dst[0] *= opacity
             mul_unary_tile(0, opacity_bits);
 
-            // alpha = clamp(opacity · weight, 0, 0.99) (iter-046).
-            // Cap at 0.99 (instead of 1.0) so transmittance T can never reach
-            // exactly 0 — keeps (1-alpha) > 0 in Stage E and avoids degenerate
-            // compositing. Lower bound 0 is defensive (exp output is already
-            // ≥ 0, but clamp_tile API requires both bounds).
-            clamp_tile(0, ZERO_F_BITS, ALPHA_099_BITS);
+            // alpha = min(opacity · weight, 0.99). Cap at 0.99 (instead of
+            // 1.0) so transmittance T can never reach exactly 0 — keeps
+            // (1-alpha) > 0 in Stage E and avoids degenerate compositing.
+            copy_tile_to_dst_init_short(CB_CONST_099);
+            copy_tile(CB_CONST_099, 0, 1);
+            binary_min_tile(0, 1, 0);
 
             tile_regs_commit();
             tile_regs_wait();
