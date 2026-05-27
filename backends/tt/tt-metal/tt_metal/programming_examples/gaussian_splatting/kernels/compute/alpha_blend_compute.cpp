@@ -129,23 +129,22 @@ void kernel_main() {
         // =====================================================================
 
         // R/G/B + T state init fused into ONE acquire (iter-077, extending
-        // iter-069). 2 fill_tile calls in one acquire — iter-047 said ≥5
-        // corrupts; iter-069 confirmed 1 fill_tile + copy_dest_values is safe.
-        // 2 is the unknown middle case being tested here.
+        // iter-069). iter-095: 4 fill_tile calls in one acquire — drops the
+        // copy_dest_values pair and tests the unexplored 3-4 fill boundary.
+        // iter-077 confirmed 2 fill_tile safe; iter-047 said ≥5 corrupts.
+        // 4 is the highest untested.
         //   slot 0 = 0.0 (R)
-        //   slot 1 = 0.0 (G, via copy_dest)
-        //   slot 2 = 0.0 (B, via copy_dest)
-        //   slot 3 = 1.0 (T, via second fill_tile)
-        // Saves 1 acquire per tile (~340 acquires per frame).
+        //   slot 1 = 0.0 (G)
+        //   slot 2 = 0.0 (B)
+        //   slot 3 = 1.0 (T)
         cb_reserve_back(CB_COLOR_R_STATE, 1);
         cb_reserve_back(CB_COLOR_G_STATE, 1);
         cb_reserve_back(CB_COLOR_B_STATE, 1);
         cb_reserve_back(CB_T_STATE, 1);
         tile_regs_acquire();
         fill_tile(0, 0.0f);
-        copy_dest_values_init();
-        copy_dest_values<DataFormat::Float32>(0, 1);
-        copy_dest_values<DataFormat::Float32>(0, 2);
+        fill_tile(1, 0.0f);
+        fill_tile(2, 0.0f);
         fill_tile(3, 1.0f);
         tile_regs_commit();
         tile_regs_wait();
