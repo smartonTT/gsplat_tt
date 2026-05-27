@@ -224,149 +224,10 @@ void cull_and_blend_tile(
 
     const int64_t L = end - start;
 
-    int64_t dropped = 0;
-    int64_t kept_total = 0;
-
-    // iter-054: fused cull+blend with 32 in-flight MbAccums. Replaces the
-    // 2-pass (cull builds per-mb kept_flat; blend walks each mb) with one
-    // outer pass over sorted_gaussian_ids that, for each Gaussian, applies
-    // it directly to every microblock that survived the corner-test cull.
-    // Wins:
-    //   1) gauss_rec[g] / colors[g*3] are read ONCE per Gaussian (vs ~5
-    //      times: once during cull + once per mb during blend). For a
-    //      Gaussian kept in 4 mbs, this cuts 4 cache-line fetches of
-    //      gauss_rec (40 B) + 4 of colors (12 B) = ~256 B / Gaussian.
-    //      Across 233 k Gaussians = ~60 MB of memory traffic eliminated.
-    //   2) The 32*L scratch.kept_flat buffer (up to ~1.4 MB / tile in the
-    //      worst case) is no longer needed — TileScratch becomes unused
-    //      on the fused fast path.
-    //   3) Per-mb saturation tracked via a uint32_t bitmap (mb_saturated);
-    //      once a mb's max_t falls below 1e-4 we set its bit and future
-    //      Gaussians targeting that mb skip apply entirely. Refreshed
-    //      every K_REFRESH=4 applies / mb (matching iter-035's batch
-    //      pattern), so the read-after-write barrier of max_t_neon
-    //      amortises across 4 applies.
-    //
-    // Fast path requires interior mbs (mb_h == 4 && mb_w == 8). For boundary
-    // tiles (image dims not divisible by tile_size) we fall through to a
-    // scalar fallback that uses a temporary kept_flat for the boundary mbs.
-    // At the benchmark's 512x512 / tile_size=32, all 256 tiles are interior.
-    const bool tile_is_interior =
-        (py_end_tile - py_tile == tile_size) &&
-        (px_end_tile - px_tile == tile_size) &&
-        (tile_size == 32);
-
-    if (tile_is_interior) {
-#if GSPLAT_HAS_NEON
-        MbAccum accums[kNumMicroblocks];
-        uint8_t mb_apply_count[kNumMicroblocks];
-        uint32_t mb_saturated = 0;  // bit m = mb m saturated, skip further applies
-        for (int m = 0; m < kNumMicroblocks; ++m) {
-            init_mb_accum(accums[m]);
-            mb_apply_count[m] = 0;
-        }
-        constexpr uint8_t K_REFRESH = 4;
-        constexpr float kSatThresh = 0.0001f;
-
-        for (int64_t l = 0; l < L; ++l) {
-            if (mb_saturated == 0xFFFFFFFFu) {
-                dropped += (L - l);
-                break;
-            }
-            const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
-            const GaussianCullRec& rec = gauss_rec[static_cast<std::size_t>(g)];
-
-            const float log_thresh = rec.log_thresh;
-            if (log_thresh >= 0.0f) {
-                ++dropped;
-                continue;
-            }
-
-            const float mean_x = rec.mx;
-            const float mean_y = rec.my;
-            const float ci_a = rec.ci_a;
-            const float ci_b = rec.ci_b;
-            const float ci_c = rec.ci_c;
-            const float x_half = rec.x_half;
-            const float y_half = rec.y_half;
-
-            const int mx_lo = std::max(0, static_cast<int>(std::floor((mean_x - x_half - tx_tile) / 8.0f)));
-            const int mx_hi = std::min(3, static_cast<int>(std::floor((mean_x + x_half - tx_tile) / 8.0f)));
-            const int my_lo = std::max(0, static_cast<int>(std::floor((mean_y - y_half - ty_tile) / 4.0f)));
-            const int my_hi = std::min(7, static_cast<int>(std::floor((mean_y + y_half - ty_tile) / 4.0f)));
-
-            if (mx_lo > mx_hi || my_lo > my_hi) {
-                ++dropped;
-                continue;
-            }
-
-            const float cr = colors[static_cast<std::size_t>(g) * 3 + 0];
-            const float cg = colors[static_cast<std::size_t>(g) * 3 + 1];
-            const float cb = colors[static_cast<std::size_t>(g) * 3 + 2];
-            const float opacity = rec.opacity;
-
-            bool kept_any = false;
-            for (int my = my_lo; my <= my_hi; ++my) {
-                const float mb_oy = ty_tile + static_cast<float>(my * 4);
-                const float cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0f);
-                const float dy_c = cy - mean_y;
-                for (int mx = mx_lo; mx <= mx_hi; ++mx) {
-                    const float mb_ox = tx_tile + static_cast<float>(mx * 8);
-                    const float cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0f);
-                    const float dx_c = cx - mean_x;
-                    const float power_c =
-                        -0.5f * (ci_a * dx_c * dx_c + 2.0f * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
-                    if (power_c < log_thresh) continue;
-
-                    const int m = (my << 2) | mx;
-                    if (mb_saturated & (1u << m)) continue;
-
-                    kept_any = true;
-                    ++kept_total;
-
-                    const int py_start_m = py_tile + my * 4;
-                    const int px_start_m = px_tile + mx * 8;
-                    apply_gaussian_neon(accums[m],
-                        ci_a, ci_b, ci_c, mean_x, mean_y, opacity,
-                        cr, cg, cb, px_start_m, py_start_m);
-
-                    if (++mb_apply_count[m] >= K_REFRESH) {
-                        mb_apply_count[m] = 0;
-                        if (max_t_neon(accums[m]) < kSatThresh) {
-                            mb_saturated |= (1u << m);
-                        }
-                    }
-                }
-            }
-
-            if (!kept_any) ++dropped;
-        }
-
-        for (int m = 0; m < kNumMicroblocks; ++m) {
-            const int mb_ox_i = (m & 3) * 8;
-            const int mb_oy_i = (m >> 2) * 4;
-            const int py_start = py_tile + mb_oy_i;
-            const int px_start = px_tile + mb_ox_i;
-            const MbAccum& acc = accums[m];
-            for (int i = 0; i < 4; ++i) {
-                const int gy = py_start + i;
-                for (int j = 0; j < 8; ++j) {
-                    const int gx = px_start + j;
-                    const int out_base = (gy * image_width + gx) * 3;
-                    const int ij = i * 8 + j;
-                    image_out[out_base + 0] = acc.r[ij];
-                    image_out[out_base + 1] = acc.g[ij];
-                    image_out[out_base + 2] = acc.b[ij];
-                }
-            }
-        }
-        *tile_dropped_count = dropped;
-        *tile_kept_count = kept_total;
-        return;
-#endif
-    }
-
-    // Boundary-tile (or non-NEON) fallback: legacy two-pass with kept_flat.
+    // Use the per-worker TileScratch buffer: one contiguous int64_t array of
+    // size 32*L, partitioned into 32 microblock slots of stride L. Counters
+    // track how many ids have been pushed into each slot. Avoids ~32 heap
+    // allocations per tile (= 8192 per frame on a 256-tile image).
     const int32_t stride = static_cast<int32_t>(L);
     const std::size_t needed =
         static_cast<std::size_t>(kNumMicroblocks) * static_cast<std::size_t>(L);
@@ -375,12 +236,18 @@ void cull_and_blend_tile(
     for (int m = 0; m < kNumMicroblocks; ++m) {
         scratch.offsets[static_cast<std::size_t>(m)] = m * stride;
     }
+    // offsets[m] starts at the slot base, incremented as ids are pushed.
+    // The slot for microblock m holds ids in [m*stride, offsets[m]).
+
+    int64_t dropped = 0;
+    int64_t kept_total = 0;
 
     for (int64_t l = 0; l < L; ++l) {
         const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
         const GaussianCullRec& rec = gauss_rec[static_cast<std::size_t>(g)];
 
         const float log_thresh = rec.log_thresh;
+        // log_thresh >= 0 sentinel = "Gaussian below mb_contrib_floor".
         if (log_thresh >= 0.0f) {
             ++dropped;
             continue;
@@ -394,10 +261,15 @@ void cull_and_blend_tile(
         const float x_half = rec.x_half;
         const float y_half = rec.y_half;
 
-        const int mx_lo = std::max(0, static_cast<int>(std::floor((mean_x - x_half - tx_tile) / 8.0f)));
-        const int mx_hi = std::min(3, static_cast<int>(std::floor((mean_x + x_half - tx_tile) / 8.0f)));
-        const int my_lo = std::max(0, static_cast<int>(std::floor((mean_y - y_half - ty_tile) / 4.0f)));
-        const int my_hi = std::min(7, static_cast<int>(std::floor((mean_y + y_half - ty_tile) / 4.0f)));
+        const float bb_x_min = mean_x - x_half;
+        const float bb_x_max = mean_x + x_half;
+        const float bb_y_min = mean_y - y_half;
+        const float bb_y_max = mean_y + y_half;
+
+        const int mx_lo = std::max(0, static_cast<int>(std::floor((bb_x_min - tx_tile) / 8.0f)));
+        const int mx_hi = std::min(3, static_cast<int>(std::floor((bb_x_max - tx_tile) / 8.0f)));
+        const int my_lo = std::max(0, static_cast<int>(std::floor((bb_y_min - ty_tile) / 4.0f)));
+        const int my_hi = std::min(7, static_cast<int>(std::floor((bb_y_max - ty_tile) / 4.0f)));
 
         if (mx_lo > mx_hi || my_lo > my_hi) {
             ++dropped;
@@ -426,9 +298,12 @@ void cull_and_blend_tile(
             }
         }
 
-        if (!kept_any) ++dropped;
+        if (!kept_any) {
+            ++dropped;
+        }
     }
 
+    // Blend each microblock from the in-tile kept list.
     for (int m = 0; m < kNumMicroblocks; ++m) {
         const int32_t slot_base = m * stride;
         const int32_t slot_end = scratch.offsets[static_cast<std::size_t>(m)];
@@ -451,6 +326,17 @@ void cull_and_blend_tile(
         if (mb_h == 4 && mb_w == 8) {
             MbAccum acc;
             init_mb_accum(acc);
+            // iter-035: check max_t every 4 Gaussians instead of every 1.
+            // The per-Gaussian max_t_neon (8 loads + 7 vmaxq + 1 vmaxvq) acts
+            // as a synchronisation barrier between successive apply_gaussian
+            // calls because it reads `acc` immediately after apply writes it.
+            // Removing it lets the compiler / CPU schedule the next apply's
+            // independent setup (pwr build, exp, alpha) in parallel with
+            // the previous apply's RGB writeback. We only over-blend up to
+            // 3 already-saturated Gaussians per microblock — each costs
+            // 4 fully-attenuated FMAs and produces zero visual change since
+            // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
+            // for the typical ~100+ Gaussians per saturating microblock.
             int32_t k = 0;
             for (; k + 4 <= kn; k += 4) {
                 for (int j = 0; j < 4; ++j) {
