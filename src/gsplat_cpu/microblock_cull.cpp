@@ -14,9 +14,6 @@ namespace {
 
 constexpr int kNumMicroblocks = 32;
 
-constexpr int mb_origin_x(int m) { return (m & 3) * 8; }
-constexpr int mb_origin_y(int m) { return (m >> 2) * 4; }
-
 struct TileCullLocal {
     int64_t tile_pairs_dropped{0};
     std::array<int64_t, kNumMicroblocks> counts{};
@@ -71,21 +68,68 @@ void cull_tile(
         const double ci_b = -b / det;
         const double ci_c = a / det;
 
-        for (int m = 0; m < kNumMicroblocks; ++m) {
-            const double mb_ox = tx_tile + static_cast<double>(mb_origin_x(m));
-            const double mb_oy = ty_tile + static_cast<double>(mb_origin_y(m));
-            const double cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0);
-            const double cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0);
-            const double dx_c = cx - mean_x;
-            const double dy_c = cy - mean_y;
-            const double power_c =
-                -0.5 * (ci_a * dx_c * dx_c + 2.0 * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
-            const double alpha_peak =
-                std::min(g_op * std::exp(std::min(power_c, 0.0)), 0.99);
-            const bool keep = alpha_peak >= mb_contrib_floor;
-            keep_mask[static_cast<std::size_t>(l)][static_cast<std::size_t>(m)] = keep;
-            if (keep) {
-                keep_any[static_cast<std::size_t>(l)] = true;
+        // Bounding-box prefilter (iter-015). The ellipse mahalanobis <= R^2
+        // contains every point whose alpha_peak >= mb_contrib_floor, where
+        //   R^2 = 2 * log(g_op / mb_contrib_floor)
+        // (assuming the 0.99 clamp doesn't kick in — handled below).
+        // The ellipse's tight axis-aligned bounding box has half-extents
+        //   x_half = R * sqrt(a),  y_half = R * sqrt(c)
+        // even for off-diagonal covariances (Σ_xx eigenvector projection).
+        // Microblocks disjoint from this BB are guaranteed to have alpha_peak
+        // below the floor at their closest-point clamp → must end up with
+        // keep=false. We skip them (keep_mask defaults to false) instead of
+        // running the per-microblock exp.
+        //
+        // When g_op <= mb_contrib_floor every microblock drops out because
+        // even the in-center peak alpha is too small — early exit completely.
+        if (g_op <= mb_contrib_floor) {
+            continue;
+        }
+
+        const double r_sq = 2.0 * std::log(g_op / mb_contrib_floor);
+        const double r = std::sqrt(r_sq);
+        const double x_half = r * std::sqrt(a);
+        const double y_half = r * std::sqrt(c);
+
+        const double bb_x_min = mean_x - x_half;
+        const double bb_x_max = mean_x + x_half;
+        const double bb_y_min = mean_y - y_half;
+        const double bb_y_max = mean_y + y_half;
+
+        // Convert BB into microblock indices within this tile (mx in [0,3], my in [0,7]).
+        const double tile_x_local_min = bb_x_min - tx_tile;
+        const double tile_x_local_max = bb_x_max - tx_tile;
+        const double tile_y_local_min = bb_y_min - ty_tile;
+        const double tile_y_local_max = bb_y_max - ty_tile;
+
+        const int mx_lo = std::max(0, static_cast<int>(std::floor(tile_x_local_min / 8.0)));
+        const int mx_hi = std::min(3, static_cast<int>(std::floor(tile_x_local_max / 8.0)));
+        const int my_lo = std::max(0, static_cast<int>(std::floor(tile_y_local_min / 4.0)));
+        const int my_hi = std::min(7, static_cast<int>(std::floor(tile_y_local_max / 4.0)));
+
+        if (mx_lo > mx_hi || my_lo > my_hi) {
+            // BB clipped entirely outside the tile — nothing to do.
+            continue;
+        }
+
+        for (int my = my_lo; my <= my_hi; ++my) {
+            for (int mx = mx_lo; mx <= mx_hi; ++mx) {
+                const int m = (my << 2) | mx;
+                const double mb_ox = tx_tile + static_cast<double>(mx * 8);
+                const double mb_oy = ty_tile + static_cast<double>(my * 4);
+                const double cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0);
+                const double cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0);
+                const double dx_c = cx - mean_x;
+                const double dy_c = cy - mean_y;
+                const double power_c =
+                    -0.5 * (ci_a * dx_c * dx_c + 2.0 * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
+                const double alpha_peak =
+                    std::min(g_op * std::exp(std::min(power_c, 0.0)), 0.99);
+                const bool keep = alpha_peak >= mb_contrib_floor;
+                keep_mask[static_cast<std::size_t>(l)][static_cast<std::size_t>(m)] = keep;
+                if (keep) {
+                    keep_any[static_cast<std::size_t>(l)] = true;
+                }
             }
         }
     }
