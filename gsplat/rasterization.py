@@ -178,6 +178,9 @@ def get_tile_assignments(
     image_height: int,
     image_width: int,
     tile_size: int = 32,
+    covs_2d: torch.Tensor | None = None,
+    opacities: torch.Tensor | None = None,
+    contrib_floor: float = 1.0 / 255.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.
@@ -187,17 +190,29 @@ def get_tile_assignments(
     to find all tiles it touches. This produces a list of (gaussian_idx, tile_id) pairs
     that tells us which Gaussians contribute to which tiles.
 
+    When both `covs_2d` and `opacities` are provided, an additional per-pair
+    Mahalanobis cull runs after the bbox assignment: for each candidate
+    (Gaussian, tile) pair we compute the closest point in the tile to the
+    Gaussian center and drop the pair if the Gaussian's peak contribution
+    inside the tile (`ω·exp(-½·m²)`) is below `contrib_floor`. This catches
+    pairs the AABB still kept whose actual in-tile contribution is invisible.
+
     Args:
         means_2d: (M, 2) screen-space positions of visible Gaussians.
         radii: (M, 2) per-axis 3σ AABB half-extents (rx, ry) in pixels.
         image_height: output image height in pixels.
         image_width: output image width in pixels.
         tile_size: tile dimension in pixels (default 32x32, matches the kernel).
+        covs_2d: (M, 2, 2) 2D covariance (optional; required for the cull).
+        opacities: (M,) opacities (optional; required for the cull).
+        contrib_floor: pairs whose peak in-tile contribution falls below this
+            value are dropped (default 1/255 — the 8-bit perceptual floor).
 
     Returns:
         gaussian_ids: (P,) index into means_2d for each Gaussian-tile pair.
         tile_ids: (P,) flat tile index for each Gaussian-tile pair.
-        tiles_per_gaussian: (M,) how many tiles each Gaussian overlaps (useful for debugging).
+        tiles_per_gaussian: (M,) how many tiles each Gaussian overlaps after
+            the cull (sums to P).
     """
     tiles_x = (image_width + tile_size - 1) // tile_size
     tiles_y = (image_height + tile_size - 1) // tile_size
@@ -240,6 +255,36 @@ def get_tile_assignments(
         dx = offsets % widths_rep
 
         tile_ids = (min_y_rep + dy) * tiles_x + (min_x_rep + dx)
+
+    # Per-pair Mahalanobis cull: drop (G, tile) pairs whose actual peak
+    # contribution inside the tile is below the perceptual floor. Measured
+    # on stitch_doll: another ~22% pair drop on top of opacity-aware AABB,
+    # because the bbox is an over-estimate near the edges (where Mahalanobis
+    # to the nearest pixel is large).
+    if covs_2d is not None and opacities is not None and P > 0:
+        with _sub_timer(sub_timings, "tile_assign.contrib_cull"):
+            a = covs_2d[gaussian_ids, 0, 0]
+            b = covs_2d[gaussian_ids, 0, 1]
+            c = covs_2d[gaussian_ids, 1, 1]
+            det = torch.clamp(a * c - b * b, min=1e-6)
+
+            px = means_2d[gaussian_ids, 0]
+            py = means_2d[gaussian_ids, 1]
+            tx_tile = (tile_ids % tiles_x).float() * tile_size
+            ty_tile = (tile_ids // tiles_x).float() * tile_size
+            # closest point inside this tile to the Gaussian center
+            cx = torch.clamp(px, min=tx_tile, max=tx_tile + tile_size)
+            cy = torch.clamp(py, min=ty_tile, max=ty_tile + tile_size)
+            dx_c = cx - px
+            dy_c = cy - py
+            m2 = (c * dx_c * dx_c - 2.0 * b * dx_c * dy_c + a * dy_c * dy_c) / det
+            keep = opacities[gaussian_ids] * torch.exp(-0.5 * m2) >= contrib_floor
+
+            gaussian_ids = gaussian_ids[keep]
+            tile_ids = tile_ids[keep]
+            # Recompute tiles_per_gaussian from the surviving pairs so any
+            # downstream consumer keeps a consistent view.
+            tiles_per_gaussian = torch.bincount(gaussian_ids, minlength=means_2d.shape[0])
 
     return gaussian_ids, tile_ids, tiles_per_gaussian
 

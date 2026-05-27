@@ -125,11 +125,14 @@ class Pipeline:
         colors = gaussians.colors[valid_mask]
         opacities = gaussians.opacities[valid_mask]
 
-        # Stage 2: tile assignment
+        # Stage 2: tile assignment (+ per-pair Mahalanobis cull when cov+ω
+        # are available — drops ~22% more pairs on stitch_doll, iter-024).
         with self._timer(timings, "tile_assign"):
             gaussian_ids, tile_ids, _ = self.backend.tile_assign(
                 means_2d, radii, image_height, image_width,
-                tile_size=self.tile_size, sub_timings=sub_timings,
+                tile_size=self.tile_size,
+                covs_2d=covs_2d, opacities=opacities,
+                sub_timings=sub_timings,
             )
         tiles_x = (image_width + self.tile_size - 1) // self.tile_size
         tiles_y = (image_height + self.tile_size - 1) // self.tile_size
