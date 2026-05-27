@@ -164,6 +164,9 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+    // iter-082: persisted output_zero buffer reused across frames. Sized once
+    // when num_tiles first stabilises; sentinel 0 forces (re)allocation.
+    std::vector<uint16_t> output_zero_cache;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -584,8 +587,15 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
     }
     Program& program = get_program_for_workload(ctx);
     set_per_core_runtime_args(program, ctx, bufs, assign, num_tiles);
-    std::vector<uint16_t> output_zero(
-        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
+    // iter-082: reuse cached output_zero across frames. The DRAM upload reads
+    // from this same vector each frame and the host never writes back into it,
+    // so its zero contents stay valid. Resize only on dimension change.
+    const size_t output_zero_needed =
+        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W;
+    if (ctx.output_zero_cache.size() != output_zero_needed) {
+        ctx.output_zero_cache.assign(output_zero_needed, 0);
+    }
+    std::vector<uint16_t>& output_zero = ctx.output_zero_cache;
     std::vector<uint16_t> result_bf16(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     T.encode_ms = ms_between(t_encode_start, clk::now());
