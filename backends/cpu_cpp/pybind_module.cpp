@@ -22,6 +22,7 @@ namespace {
 gsplat_cpu::ThreadPool& global_blend_pool();
 gsplat_cpu::ThreadPool& global_cull_pool();
 gsplat_cpu::ThreadPool& global_sort_pool();
+gsplat_cpu::ThreadPool& global_tile_assign_pool();
 
 py::tuple pack_project_result(const gsplat_cpu::ProjectResult& result, std::size_t N) {
     const std::size_t M = result.depths.size();
@@ -331,7 +332,8 @@ py::tuple tile_assign_py(
         tile_size,
         covs_ptr,
         opacities_ptr,
-        contrib_floor);
+        contrib_floor,
+        &global_tile_assign_pool());
 
     return pack_tile_assign_result(result, M);
 }
@@ -411,6 +413,11 @@ gsplat_cpu::ThreadPool& global_cull_pool() {
 }
 
 gsplat_cpu::ThreadPool& global_sort_pool() {
+    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
+    return pool;
+}
+
+gsplat_cpu::ThreadPool& global_tile_assign_pool() {
     static gsplat_cpu::ThreadPool pool(resolve_pool_size());
     return pool;
 }

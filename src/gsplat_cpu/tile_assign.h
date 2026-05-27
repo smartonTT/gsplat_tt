@@ -6,6 +6,8 @@
 
 namespace gsplat_cpu {
 
+class ThreadPool;
+
 struct TileAssignResult {
     std::vector<int64_t> gaussian_ids;        // (P,)
     std::vector<int64_t> tile_ids;            // (P,)
@@ -21,6 +23,7 @@ TileAssignResult tile_assign(
     int tile_size,
     const float* covs_2d,  // nullable; M * 4 (a, b, b, c) when provided
     const float* opacities,  // nullable; M
-    float contrib_floor);
+    float contrib_floor,
+    ThreadPool* pool = nullptr);
 
 }  // namespace gsplat_cpu
