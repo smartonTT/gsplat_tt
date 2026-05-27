@@ -398,24 +398,32 @@ void kernel_main() {
             // novel pattern. Saves 1 acquire per Gaussian.
             tile_regs_acquire();
 
-            // D2-R: dst[0] = contrib · color_r + R_state
+            // iter-058: restructure D2 to do all 3 copy_tile(CB_CONTRIB) calls
+            // up-front before any binary_dest_reuse_tiles_init. This collapses
+            // 3× copy_tile_to_dst_init_short(CB_CONTRIB) → 1 init (iter-048+049
+            // safe pattern: ONE init shared by multiple same-CB ops, with NO
+            // interleaving _init). Previous layout interleaved binary-reuse
+            // inits between the 3 copies, forcing each copy to re-init (the
+            // iter-055 footgun made that mandatory there). SFPU mul_unary_tile
+            // doesn't mutate unpacker state, so the 3 copies + 3 muls are safe
+            // back-to-back.
+            //
+            // Final D2 contents (slots 0/1/2 hold R/G/B contributions):
+            //   dst[0] = contrib · color_r + R_state
+            //   dst[1] = contrib · color_g + G_state
+            //   dst[2] = contrib · color_b + B_state
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
+            copy_tile(CB_CONTRIB, 0, 1);
+            copy_tile(CB_CONTRIB, 0, 2);
             mul_unary_tile(0, color_r_bits);
+            mul_unary_tile(1, color_g_bits);
+            mul_unary_tile(2, color_b_bits);
+
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
-
-            // D2-G: dst[1] = contrib · color_g + G_state
-            copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 1);
-            mul_unary_tile(1, color_g_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 1);
-
-            // D2-B: dst[2] = contrib · color_b + B_state
-            copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 2);
-            mul_unary_tile(2, color_b_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
 
