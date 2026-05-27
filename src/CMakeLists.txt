@@ -70,6 +70,7 @@ add_library(gsplat_cpu STATIC
   gsplat_cpu/blend.cpp
   gsplat_cpu/microblock_cull.cpp
   gsplat_cpu/blend_microblock.cpp
+  gsplat_cpu/cull_and_blend.cpp
 )
 target_include_directories(gsplat_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(gsplat_cpu PRIVATE -ffp-contract=off)
