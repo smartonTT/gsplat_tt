@@ -213,11 +213,7 @@ void kernel_main() {
         // the current write pointer. iter-087 (K=4, no wrap check) hung
         // on CB wrap-straddle; we cap `batch` to pages_until_wrap so the
         // burst always lands in contiguous L1.
-        // iter-101 (retry of iter-099/100 after ARC wedge + ird reboot):
-        // bump K=2→K=3. CB_SCALARS depth=4, K=3 leaves 1 slot for compute
-        // consumption between bursts; halves barrier overhead in steady
-        // state. Wrap-aware cap unchanged.
-        constexpr uint32_t K = 3;
+        constexpr uint32_t K = 2;
         const auto& cb_scal = get_local_cb_interface(CB_SCALARS);
         uint32_t g = 0;
         while (g < g_count) {

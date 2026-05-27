@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "diff10 shows uniform speckle across object surface with no horizontal/vertical lines at 32px or 16px spacing in any of the three views"},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "no constant-color 32×32 or 16×16 blocks visible; all rendered surfaces show continuous texture detail matching reference"},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "no localized dark holes larger than ~16px in any view; coverage matches reference throughout"},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "no saturated flat-color stripes or clipping artifacts in hero/side/top renders"},
+    {"name": "ringing_halos", "result": "pass", "evidence": "silhouette edges show only fine speckle noise, no structured ringing bands"},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "no pure black/white/magenta correlated patches; no firefly hot dots visible on solid regions or silhouettes in any view"},
+    {"name": "geometry_shift", "result": "pass", "evidence": "diff10 does not show silhouette outlines of displaced geometry; object contours align with reference"},
+    {"name": "diff10_structure", "result": "pass", "evidence": "all three diff10 images dominated by uniform fine speckle within the object boundary; no grids, gradients, or banded patterns"}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.36803767875739, "side": 40.949644684083964, "top": 38.57406490624109}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.132167903177493, "actual": {"hero": 17.10733360539974, "side": 17.29181297057425, "top": 18.132167903177493}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.376, "max_ms_ratio": 1.225, "pass": true},
+  "timing": {"median_ms": 25.388, "p99_ms": 30.05781, "vs_prev_best_pct": 3.91, "pass": false},
+  "reasoning": "REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089's finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted."
+}
