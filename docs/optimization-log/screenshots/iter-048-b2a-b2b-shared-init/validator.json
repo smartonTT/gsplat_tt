@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "PNG MD5-identical to iter-045 best (hero/side/top all match)."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "Bit-identical to iter-045."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Bit-identical to iter-045."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.405854042771026, "side": 40.985048050319115, "top": 38.592830113577335}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.39, "max_ms_ratio": 1.26, "pass": true},
+  "timing": {"median_ms": 26.372, "p99_ms": 32.02684, "vs_prev_best_pct": 0.07, "pass": true},
+  "reasoning": "PNG bit-identical to iter-045 (MD5 match). Kernel 26.3485 → 26.372 ms (+0.07% — within measurement noise, treated as flat). The change fused B2a+B2b into ONE acquire with a SINGLE mul_tiles_init(CB_DX, CB_DX) shared by mul_tiles(CB_DX,CB_DX) AND mul_tiles(CB_DY,CB_DY) — the new safe pattern: ONE mul_tiles_init + multiple mul_tiles with DIFFERENT same-format CBs. Distinct from iter-039's MULTIPLE mul_tiles_init hang. Pattern is now PROVEN SAFE (kernel ran, output bit-identical). Perf is flat because we saved 1 acquire but the FPU ops dominate; the next iter (049) extending to 3-way (B2a+B2b+B2c) should show real win. KEEP for the pattern unlock — neutral perf but enables iter-049."
+}
