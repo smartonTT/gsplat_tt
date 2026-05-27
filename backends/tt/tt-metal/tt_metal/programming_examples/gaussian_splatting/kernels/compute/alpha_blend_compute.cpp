@@ -128,42 +128,35 @@ void kernel_main() {
         // many Gaussian iterations).
         // =====================================================================
 
-        // R_state, G_state, B_state = 0.0 — iter-069: fused into ONE acquire.
-        // Single fill_tile(0, 0.0) + copy_dest_values<Float32>(0,1)/(0,2)
-        // duplicates zero into dst[1]/dst[2], then pack 3 different CBs from
-        // 3 dst slots. Saves 2 acquires per tile (~680 acquires per frame).
-        //
-        // Safe pattern: ONE fill_tile (iter-047 forbade ≥5 fill_tile chains
-        // due to silent corruption; one fill is fine), then SFPU copy_dest
-        // duplication (iter-067 used this exact API). Multi-pack from
-        // different dst slots to different CBs is established (iter-043,
-        // iter-045 D2+E megafuse).
+        // R/G/B + T state init fused into ONE acquire (iter-077, extending
+        // iter-069). 2 fill_tile calls in one acquire — iter-047 said ≥5
+        // corrupts; iter-069 confirmed 1 fill_tile + copy_dest_values is safe.
+        // 2 is the unknown middle case being tested here.
+        //   slot 0 = 0.0 (R)
+        //   slot 1 = 0.0 (G, via copy_dest)
+        //   slot 2 = 0.0 (B, via copy_dest)
+        //   slot 3 = 1.0 (T, via second fill_tile)
+        // Saves 1 acquire per tile (~340 acquires per frame).
         cb_reserve_back(CB_COLOR_R_STATE, 1);
         cb_reserve_back(CB_COLOR_G_STATE, 1);
         cb_reserve_back(CB_COLOR_B_STATE, 1);
+        cb_reserve_back(CB_T_STATE, 1);
         tile_regs_acquire();
         fill_tile(0, 0.0f);
         copy_dest_values_init();
         copy_dest_values<DataFormat::Float32>(0, 1);
         copy_dest_values<DataFormat::Float32>(0, 2);
+        fill_tile(3, 1.0f);
         tile_regs_commit();
         tile_regs_wait();
         pack_tile(0, CB_COLOR_R_STATE);
         pack_tile(1, CB_COLOR_G_STATE);
         pack_tile(2, CB_COLOR_B_STATE);
+        pack_tile(3, CB_T_STATE);
         tile_regs_release();
         cb_push_back(CB_COLOR_R_STATE, 1);
         cb_push_back(CB_COLOR_G_STATE, 1);
         cb_push_back(CB_COLOR_B_STATE, 1);
-
-        // T_state = 1.0
-        cb_reserve_back(CB_T_STATE, 1);
-        tile_regs_acquire();
-        fill_tile(0, 1.0f);
-        tile_regs_commit();
-        tile_regs_wait();
-        pack_tile(0, CB_T_STATE);
-        tile_regs_release();
         cb_push_back(CB_T_STATE, 1);
 
         // iter-060: dropped sat_mask init block. Per iter-059, sat_mask is
