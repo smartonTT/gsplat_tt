@@ -29,7 +29,7 @@
 //
 //   Init      : R = G = B = 0,  T = 1,  sat_mask = 1   (per pixel)
 //   For each Gaussian g in this tile, sorted front-to-back:
-//     Stage F : every 16 g's (skip g=0): sat_mask = (T >= 1e-4)
+//     Stage F : every 8 g's (skip g=0): sat_mask = (T >= 1e-4)
 //               -> "freeze" pixels whose contribution would round to <1/255
 //     Stage A : read 9 fp32 scalars (mean, cov_inv, color, opacity)
 //     Stage B1: dx = px - mean_x,  dy = py - mean_y         (per-pixel offset)
@@ -226,7 +226,7 @@ void kernel_main() {
             // headline "compute spent N cycles in per-Gaussian work."
             DeviceZoneScopedSumN1("Z_C_g");
 
-            // ----- Stage F: sat_mask refresh (every 16 Gaussians, skip g=0) -----
+            // ----- Stage F: sat_mask refresh (every 8 Gaussians, skip g=0) -----
             // Recompute which pixels are still "active" (T >= 1e-4). For pixels
             // whose transmittance has saturated below 1e-4, sat_mask becomes 0
             // and zeroes their contribution in stages D1/E going forward —
@@ -234,7 +234,7 @@ void kernel_main() {
             // SFPU's vector lock-step (we can't actually skip lanes, but multiplying
             // by 0 does the same job at the same op cost). g=0 is skipped because
             // T is freshly initialized to 1 above.
-            if (g > 0 && (g & 0xFu) == 0u) {
+            if (g > 0 && (g & 0x7u) == 0u) {
                 tile_regs_acquire();
                 copy_tile_to_dst_init_short(CB_T_STATE);
                 copy_tile(CB_T_STATE, 0, 0);
