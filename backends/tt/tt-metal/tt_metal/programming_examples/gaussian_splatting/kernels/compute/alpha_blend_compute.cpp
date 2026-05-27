@@ -445,10 +445,12 @@ void kernel_main() {
             cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
 
-            cb_wait_front(CB_COLOR_R_STATE, 1);
-            cb_wait_front(CB_COLOR_G_STATE, 1);
-            cb_wait_front(CB_COLOR_B_STATE, 1);
-            cb_wait_front(CB_T_STATE, 1);
+            // iter-085: dropped 4× cb_wait_front(CB_*_STATE, 1) here.
+            // Same RISC produces (push_back above) and consumes (D2 read
+            // next iter) on these depth-1 CBs; the post-push wait_front
+            // is checking a semaphore we just incremented ourselves.
+            // Next read at line ~376 follows a tile_regs_acquire which
+            // provides the math/pack fence.
 
             cb_pop_front(CB_CONTRIB, 1);
             // CB_ALPHA no longer used (iter-052 fused B3b/C+D1).
