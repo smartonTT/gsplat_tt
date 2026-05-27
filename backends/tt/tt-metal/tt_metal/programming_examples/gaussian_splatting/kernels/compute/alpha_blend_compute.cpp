@@ -355,12 +355,16 @@ void kernel_main() {
             // power = -0.5 · Q
             mul_unary_tile(0, NEG_HALF_BITS);
 
-            // Clamp power to ≤ 0. For valid PSD covariance Q ≥ 0 always, so
-            // this is mostly defensive (handles fp rounding edge cases).
-            copy_tile_to_dst_init_short(CB_CONST_ZERO);
-            copy_tile(CB_CONST_ZERO, 0, 1);
-            binary_min_tile_init();
-            binary_min_tile(0, 1, 0);
+            // DROPPED (iter-050): defensive ≤0 clamp on power. Q = a·dx² + c·dy²
+            // + 2b·dx·dy ≥ 0 algebraically for any valid PSD covariance, so
+            // -0.5·Q ≤ 0 by construction. bf16 round-off could in principle
+            // produce tiny positive power (~ε), but exp_tile<true> has built-in
+            // ClampToNegative (input clamped to ≥ -88.5) and the result is
+            // bounded by alpha-cap-at-0.99 below. Saves 4 SFPU ops/Gaussian.
+            // exp_tile_init<true>() resets SFPU state explicitly, so removing
+            // binary_min_tile_init() does NOT disrupt downstream exp init
+            // (distinct from iter-046's regression, which replaced the chain
+            // with clamp_tile + clamp_tile_init — a different op shape).
 
             // weight = exp(power). Approximate-mode polynomial (~100 cycles
             // vs ~800 for the accurate path) with built-in ClampToNegative
