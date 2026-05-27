@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 80 · current best: 23.98 ms · target: 1.0 ms
+      iters: 81 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-085-drop-state-wait-fronts
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T12:05:06.916260+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All checks pass. kernel_ms_median 24.479 vs prev_best 24.7055 is a -0.92% improvement (break-even to modest win). PSNR is within -0.05 dB of prev_best on all views (hero 39.368 vs 39.415, side 40.950 vs 40.996, top 38.574 vs 38.595) — well within the -0.1 dB bit-identical band, no regression. Tile structure ratios are bit-identical to prev_best (max delta +0.014, well inside the ±0.05 architectural-baseline carve-out and far below the +0.3 ratchet threshold); the established max ratio of ~18.13 on top is the architectural floor, not new drift. Visual inspection of all 3 renders shows clean output with no fireflies, tile seams, missing-splat holes, color clipping, ringing, or geometry shifts. Diff10 images show uniform speckle consistent with the architectural bf16 noise floor. p99/median ratio is 1.19x, well below the 3x suspicious-tail threshold. Per-view PSNR spread is 2.38 dB and per-view kernel-ms ratio is 1.23x, both within bounds.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.48 ms</b> median · 29.18 ms p99</div>
+    <div class="per-view">per-view: hero 24.48 / side 23.65 / top 29.15</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-085-drop-state-wait-fronts/hero.png" target="_blank"><img src="screenshots/iter-085-drop-state-wait-fronts/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-085-drop-state-wait-fronts/side.png" target="_blank"><img src="screenshots/iter-085-drop-state-wait-fronts/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-085-drop-state-wait-fronts/top.png" target="_blank"><img src="screenshots/iter-085-drop-state-wait-fronts/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-085-drop-state-wait-fronts/hero_diff10.png" target="_blank"><img src="screenshots/iter-085-drop-state-wait-fronts/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-085-drop-state-wait-fronts/side_diff10.png" target="_blank"><img src="screenshots/iter-085-drop-state-wait-fronts/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-085-drop-state-wait-fronts/top_diff10.png" target="_blank"><img src="screenshots/iter-085-drop-state-wait-fronts/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images for all 3 views show no horizontal or vertical lines at 32px or 16px spacing. Noise is distributed as unif</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color blocks visible in any rendered PNG. All three views show smooth, detail-preserving rend</li><li>✓ missing_splat_holes: No dark holes or under-covered regions in any view. Diff10 shows no bright isolated patches indicating missing coverage.</li><li>✓ color_clipping_bands: No saturated flat-color stripes in hero, side, or top renders. Color fidelity looks correct vs reference for all views.</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes. Edge noise in diff10 is consistent with the architectural noise fl</li><li>✓ nan_inf_signatures: No pure black/white/magenta patches or spatially correlated NaN/Inf patterns. No fireflies (isolated bright hot pixels) </li><li>✓ geometry_shift: Diff10 does not show the silhouette of an object as a structured bright outline indicating coordinate error. The silhoue</li><li>✓ diff10_structure: All 3 diff10 images are dominated by uniform speckle within the object body and at silhouette edges. No grids, bands, gr</li></ul>
+    <p class="reasoning">All checks pass. kernel_ms_median 24.479 vs prev_best 24.7055 is a -0.92% improvement (break-even to modest win). PSNR is within -0.05 dB of prev_best on all views (hero 39.368 vs 39.415, side 40.950 vs 40.996, top 38.574 vs 38.595) — well within the -0.1 dB bit-identical band, no regression. Tile structure ratios are bit-identical to prev_best (max delta +0.014, well inside the ±0.05 architectural-baseline carve-out and far below the +0.3 ratchet threshold); the established max ratio of ~18.13 on top is the architectural floor, not new drift. Visual inspection of all 3 renders shows clean output with no fireflies, tile seams, missing-splat holes, color clipping, ringing, or geometry shifts. Diff10 images show uniform speckle consistent with the architectural bf16 noise floor. p99/median ratio is 1.19x, well below the 3x suspicious-tail threshold. Per-view PSNR spread is 2.38 dB and per-view kernel-ms ratio is 1.23x, both within bounds.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-084-color-magnitude-cull
