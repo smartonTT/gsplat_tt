@@ -200,20 +200,19 @@ class CpuCppBackend(Backend):
             32,
             float(self._mb_contrib_floor),
         )
-        from gsplat.rasterization import alpha_blend_microblock
-
-        image = alpha_blend_microblock(
-            means_2d,
-            covs_2d,
-            colors,
-            opacities,
-            torch.from_numpy(
-                mb_header_np.reshape(tiles_x * tiles_y, 32, 2)
+        image = self._mod.blend_microblock(
+            np.ascontiguousarray(means_2d.detach().cpu().numpy(), dtype=np.float32),
+            np.ascontiguousarray(
+                covs_2d.detach().cpu().numpy().reshape(-1, 4), dtype=np.float32
             ),
-            torch.from_numpy(mb_stream_np),
-            image_height,
-            image_width,
-        ).numpy()
+            np.ascontiguousarray(colors.detach().cpu().numpy(), dtype=np.float32),
+            np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32),
+            np.ascontiguousarray(mb_header_np, dtype=np.int64),
+            np.ascontiguousarray(mb_stream_np, dtype=np.int64),
+            int(image_height),
+            int(image_width),
+            32,
+        )
         return image, {
             "microblock_drop_pct": stats["drop_pct"],
             "microblock_work_reduction_pct": stats["work_reduction_pct"],

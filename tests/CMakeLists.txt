@@ -24,6 +24,7 @@ add_executable(gsplat_cpu_tests
   unit/test_sort.cpp
   unit/test_blend.cpp
   unit/test_microblock_cull.cpp
+  unit/test_blend_microblock.cpp
 )
 target_link_libraries(gsplat_cpu_tests PRIVATE gsplat_cpu Catch2::Catch2WithMain cnpy)
 target_include_directories(gsplat_cpu_tests PRIVATE ${CMAKE_SOURCE_DIR})
