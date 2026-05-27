@@ -1,0 +1,4 @@
+{
+  "verdict": "ACCEPT",
+  "reasoning": "iter-056: pack cr/cg/cb into GaussianCullRec during the parallel prelude (40 -> 48 B, 12 floats). Blend inner loop now reads only gauss_rec[gs] — eliminates a second random 12-byte colors[g*3] load per apply (~millions of loads/frame). Working set 48*M = 11.2 MB still under M-Pro 16 MB L2 (vs 64 B/record iter-033 that spilled). PSNR identical. Single run_iter trial: 257 ms; 4 manual trials: 258/243/310(outlier)/249 ms — median ~254 ms, best 243 ms (blend sum 132 ms). Slight improvement vs iter-053/055 ~255 ms; primary value is one fewer pointer-chasing stream in the blend hot loop ahead of Metal port. Code landed in iter-055 commit message by mistake; opt log tracks as iter-056."
+}

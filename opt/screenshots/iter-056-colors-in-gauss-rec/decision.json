@@ -1,0 +1,8 @@
+{
+  "verdict": "ACCEPT",
+  "action": "backburner",
+  "high_promotion_priority": false,
+  "sum_total_ms": 257.72466594935395,
+  "prev_best_sum_ms": 311.00383203011006,
+  "commit_sha": null
+}
