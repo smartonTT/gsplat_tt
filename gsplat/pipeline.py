@@ -96,12 +96,13 @@ class Pipeline:
         sub_timings: dict[str, float] = {}
         t_total = time.perf_counter()
 
-        # Stage 1: project
+        # Stage 1: project (with per-step sub-timings).
         with self._timer(timings, "project"):
             means_2d, covs_2d, depths, radii, valid_mask = self.backend.project(
                 gaussians.means, gaussians.scales, gaussians.rotations,
                 extrinsics, intrinsics, image_height, image_width,
                 opacities=gaussians.opacities,
+                sub_timings=sub_timings,
             )
         num_visible = int(valid_mask.sum().item())
 
@@ -124,11 +125,14 @@ class Pipeline:
         colors = gaussians.colors[valid_mask]
         opacities = gaussians.opacities[valid_mask]
 
-        # Stage 2: tile assignment
+        # Stage 2: tile assignment (+ per-pair Mahalanobis cull when cov+ω
+        # are available — drops ~22% more pairs on stitch_doll, iter-024).
         with self._timer(timings, "tile_assign"):
             gaussian_ids, tile_ids, _ = self.backend.tile_assign(
                 means_2d, radii, image_height, image_width,
                 tile_size=self.tile_size,
+                covs_2d=covs_2d, opacities=opacities,
+                sub_timings=sub_timings,
             )
         tiles_x = (image_width + self.tile_size - 1) // self.tile_size
         tiles_y = (image_height + self.tile_size - 1) // self.tile_size
@@ -137,6 +141,7 @@ class Pipeline:
         with self._timer(timings, "sort"):
             sorted_gaussian_ids, tile_ranges = self.backend.sort(
                 gaussian_ids, tile_ids, depths, tiles_x, tiles_y,
+                sub_timings=sub_timings,
             )
         num_entries = int(sorted_gaussian_ids.numel())
 
