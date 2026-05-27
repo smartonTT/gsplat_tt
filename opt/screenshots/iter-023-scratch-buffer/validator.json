@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "iter-023: per-worker tile scratch buffer for cull_and_blend. The previous tile loop allocated 32 std::vector<int64_t> per tile via std::array<vector,32> with .reserve(L) each — ~8192 heap allocations per frame on the 256-tile image. Replaced with a per-worker TileScratch struct (one contiguous flat int64_t buffer of size 32*L partitioned into 32 microblock slots of stride L, plus a 32-element offsets array). Buffer is resized lazily once per tile and survives across tiles + frames in a worker thread. Layer 1: 42/42 ctest. Layer 3: macro 30-frame 430.7 -> 411.1 ms (1.048x); per-frame p50 13.4 ms (vs 15.4 prev), min 9.4 ms, max 14.8 ms — tighter per-frame envelope. PSNR distribution UNCHANGED: min 60.33, mean 63.26, max 69.74 — same depth-sorted Gaussian list per microblock means bit-identical blend math. Cumulative since iter-014 quiet baseline (1138 ms): 2.77x."
+}
