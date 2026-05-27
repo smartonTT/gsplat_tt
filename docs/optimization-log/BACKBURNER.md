@@ -249,3 +249,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on tile_structure_check hard gate. The tile_structure_ratio_per_view max is 20.22 (top view), which is > 14 and represents a delta of +2.087 vs. the prev-best baseline max of 18.132 (iter-094/095). This far exceeds the +0.3 ratchet threshold. These are identical tile_structure_ratio values to iter-096 (which was also REJECTed for this same reason: hero=18.893, side=17.365, top=20.219). The fp32-state-cb component of this iter was already disproved in iter-064 (REVERT, bit-identical ratio, +2.25% kernel). The L1 accumulator component appears to produce the same per-tile precision drift as iter-096's packer-l1-acc-d2. Kernel timing shows a real improvement (-1.39% vs prev_best), PSNR is acceptable (all views ≥ 38 dB floor), and visual checks all pass — but the tile_structure_ratio increase is a hard reject regardless of perf and PSNR wins.
 - Thumbnails: ![hero](screenshots/iter-097-fp32-state-cb-plus-l1-acc/hero.png) ![diff10](screenshots/iter-097-fp32-state-cb-plus-l1-acc/hero_diff10.png)
 
+
+## iter-101-k3-burst-retry2 — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 25.39 / p99 30.06
+- PSNR per view: hero 39.4 / side 40.9 / top 38.6
+- Validator reasoning: REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089's finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted.
+- Thumbnails: ![hero](screenshots/iter-101-k3-burst-retry2/hero.png) ![diff10](screenshots/iter-101-k3-burst-retry2/hero_diff10.png)
+

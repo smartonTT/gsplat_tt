@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 93 · current best: 23.98 ms · target: 1.0 ms
+      iters: 94 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-101-k3-burst-retry2
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T17:02:36.612311+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089&#x27;s finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.39 ms</b> median · 30.06 ms p99</div>
+    <div class="per-view">per-view: hero 25.39 / side 24.53 / top 30.04</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-101-k3-burst-retry2/hero.png" target="_blank"><img src="screenshots/iter-101-k3-burst-retry2/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-101-k3-burst-retry2/side.png" target="_blank"><img src="screenshots/iter-101-k3-burst-retry2/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-101-k3-burst-retry2/top.png" target="_blank"><img src="screenshots/iter-101-k3-burst-retry2/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-101-k3-burst-retry2/hero_diff10.png" target="_blank"><img src="screenshots/iter-101-k3-burst-retry2/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-101-k3-burst-retry2/side_diff10.png" target="_blank"><img src="screenshots/iter-101-k3-burst-retry2/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-101-k3-burst-retry2/top_diff10.png" target="_blank"><img src="screenshots/iter-101-k3-burst-retry2/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✓ tile_grid_seams: diff10 shows uniform speckle across object surface with no horizontal/vertical lines at 32px or 16px spacing in any of t</li><li>✓ tile_uniform_fill: no constant-color 32×32 or 16×16 blocks visible; all rendered surfaces show continuous texture detail matching reference</li><li>✓ missing_splat_holes: no localized dark holes larger than ~16px in any view; coverage matches reference throughout</li><li>✓ color_clipping_bands: no saturated flat-color stripes or clipping artifacts in hero/side/top renders</li><li>✓ ringing_halos: silhouette edges show only fine speckle noise, no structured ringing bands</li><li>✓ nan_inf_signatures: no pure black/white/magenta correlated patches; no firefly hot dots visible on solid regions or silhouettes in any view</li><li>✓ geometry_shift: diff10 does not show silhouette outlines of displaced geometry; object contours align with reference</li><li>✓ diff10_structure: all three diff10 images dominated by uniform fine speckle within the object boundary; no grids, gradients, or banded pat</li></ul>
+    <p class="reasoning">REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089&#x27;s finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-100-k3-burst-retry
@@ -3341,6 +3374,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 38.9 / side 41.1 / top 38.0
 - Validator reasoning: REJECT on tile_structure_check hard gate. The tile_structure_ratio_per_view max is 20.22 (top view), which is &gt; 14 and represents a delta of +2.087 vs. the prev-best baseline max of 18.132 (iter-094/095). This far exceeds the +0.3 ratchet threshold. These are identical tile_structure_ratio values to iter-096 (which was also REJECTed for this same reason: hero=18.893, side=17.365, top=20.219). The fp32-state-cb component of this iter was already disproved in iter-064 (REVERT, bit-identical ratio, +2.25% kernel). The L1 accumulator component appears to produce the same per-tile precision drift as iter-096&#x27;s packer-l1-acc-d2. Kernel timing shows a real improvement (-1.39% vs prev_best), PSNR is acceptable (all views ≥ 38 dB floor), and visual checks all pass — but the tile_structure_ratio increase is a hard reject regardless of perf and PSNR wins.
 - Thumbnails: ![hero](screenshots/iter-097-fp32-state-cb-plus-l1-acc/hero.png) ![diff10](screenshots/iter-097-fp32-state-cb-plus-l1-acc/hero_diff10.png)
+
+
+## iter-101-k3-burst-retry2 — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 25.39 / p99 30.06
+- PSNR per view: hero 39.4 / side 40.9 / top 38.6
+- Validator reasoning: REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089&#x27;s finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted.
+- Thumbnails: ![hero](screenshots/iter-101-k3-burst-retry2/hero.png) ![diff10](screenshots/iter-101-k3-burst-retry2/hero_diff10.png)
 
 </pre>
   </section>
