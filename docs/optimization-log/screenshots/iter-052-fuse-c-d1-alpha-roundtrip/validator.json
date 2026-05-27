@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show diffuse speckle noise distributed across the object silhouette with no horizontal or vertical lines at 32-pixel or 16-pixel spacing. hero_diff10 and side_diff10 show fine random grain; top_diff10 shows slightly more structured noise following object geometry but no grid seam lines."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color blocks visible in any of the three renders. All views show continuous detail across the object surface."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing coverage regions visible in hero, side, or top renders. Object surfaces appear fully covered with Gaussians. No bright spots in diff10 images indicating missing-splat voids larger than 16 pixels."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes or clipped R/G/B bands visible in any render. Colors appear natural and continuous across all views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Edge transitions in all three renders appear smooth. Diff10 shows edge brightening at the object silhouette consistent with precision differences at boundaries, but no structured ringing pattern (alternating light/dark rings) is visible."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta spatially-correlated patches visible in any render. All pixel values appear within normal range."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show the object silhouette as a bright outline (which would indicate coordinate error). The diff is distributed across the surface interior, not at the silhouette boundary."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "hero_diff10 and side_diff10 are dominated by uniform speckle noise concentrated on the object body. top_diff10 shows slightly more structured noise following the object contours (consistent with the known elevated tile_structure_ratio of 17.59), but no grid lines, gradients, or banding patterns are present. The structure is object-following, not tile-grid-following."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.09866898104336, "side": 40.92246672507844, "top": 38.29195117666665}, "pass": true},
+  "tile_structure_check": {"max_ratio": 17.587439611872732, "actual": {"hero": 16.60769335026065, "side": 17.27658395374453, "top": 17.587439611872732}, "pass": true, "delta_vs_prev": 0.067},
+  "per_view_consistency": {"max_psnr_delta_db": 2.63, "max_ms_ratio": 1.232, "pass": true},
+  "timing": {"median_ms": 25.0555, "p99_ms": 29.9541, "vs_prev_best_pct": -0.68, "pass": true},
+  "reasoning": "All visual checks pass: no tile grid seams, uniform-fill blocks, missing-splat holes, color clipping, ringing, NaN/Inf signatures, or geometry shifts in any of the three views or their diff10 images. The diff10 images show diffuse speckle noise consistent with minor bf16 precision differences, not structural artifacts. Tile_structure_ratio max is 17.59 (top view), which falls in the 13-18 range requiring no regression from prev_best; delta vs iter-051 is +0.067, well under the +0.5 REJECT threshold. PSNR floor is 35 dB per project-psnr-floor-perceptual policy; all three views pass (min 38.29 dB top, hero 39.10, side 40.92). Per-view PSNR delta is 2.63 dB (far under 20 dB limit) and per-view ms ratio is 1.23x (far under 2x limit). Kernel ms improved 25.226 -> 25.056 (-0.68%), p99/median ratio is 1.194 (well under 3x). No check failures found; verdict is KEEP."
+}
