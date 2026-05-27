@@ -192,33 +192,29 @@ class CpuCppBackend(Backend):
 
         tiles_x = (image_width + 31) // 32
         tiles_y = (image_height + 31) // 32
+        # Single numpy conversion shared between microblock_cull and
+        # blend_microblock — saves ~ms of redundant detach/cpu/cast on each
+        # 30-frame iter.
+        means_np = np.ascontiguousarray(means_2d.detach().cpu().numpy(), dtype=np.float32)
+        covs_np = np.ascontiguousarray(
+            covs_2d.detach().cpu().numpy().reshape(-1, 4), dtype=np.float32
+        )
+        opac_np = np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32)
+        colors_np = np.ascontiguousarray(colors.detach().cpu().numpy(), dtype=np.float32)
+        sgids_np = np.ascontiguousarray(
+            sorted_gaussian_ids.detach().cpu().numpy(), dtype=np.int64
+        )
+        tranges_np = np.ascontiguousarray(tile_ranges.detach().cpu().numpy(), dtype=np.int64)
+
         mb_header_np, mb_stream_np, stats = self._mod.microblock_cull(
-            np.ascontiguousarray(means_2d.detach().cpu().numpy(), dtype=np.float32),
-            np.ascontiguousarray(
-                covs_2d.detach().cpu().numpy().reshape(-1, 4), dtype=np.float32
-            ),
-            np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32),
-            np.ascontiguousarray(
-                sorted_gaussian_ids.detach().cpu().numpy(), dtype=np.int64
-            ),
-            np.ascontiguousarray(tile_ranges.detach().cpu().numpy(), dtype=np.int64),
-            int(tiles_x),
-            int(tiles_y),
-            32,
+            means_np, covs_np, opac_np, sgids_np, tranges_np,
+            int(tiles_x), int(tiles_y), 32,
             float(self._mb_contrib_floor),
         )
         image = self._mod.blend_microblock(
-            np.ascontiguousarray(means_2d.detach().cpu().numpy(), dtype=np.float32),
-            np.ascontiguousarray(
-                covs_2d.detach().cpu().numpy().reshape(-1, 4), dtype=np.float32
-            ),
-            np.ascontiguousarray(colors.detach().cpu().numpy(), dtype=np.float32),
-            np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32),
-            np.ascontiguousarray(mb_header_np, dtype=np.int64),
-            np.ascontiguousarray(mb_stream_np, dtype=np.int64),
-            int(image_height),
-            int(image_width),
-            32,
+            means_np, covs_np, colors_np, opac_np,
+            mb_header_np, mb_stream_np,
+            int(image_height), int(image_width), 32,
         )
         return image, {
             "microblock_drop_pct": stats["drop_pct"],

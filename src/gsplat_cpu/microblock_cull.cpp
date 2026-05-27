@@ -68,25 +68,19 @@ void cull_tile(
         const double ci_b = -b / det;
         const double ci_c = a / det;
 
-        // Bounding-box prefilter (iter-015). The ellipse mahalanobis <= R^2
-        // contains every point whose alpha_peak >= mb_contrib_floor, where
-        //   R^2 = 2 * log(g_op / mb_contrib_floor)
-        // (assuming the 0.99 clamp doesn't kick in — handled below).
-        // The ellipse's tight axis-aligned bounding box has half-extents
-        //   x_half = R * sqrt(a),  y_half = R * sqrt(c)
-        // even for off-diagonal covariances (Σ_xx eigenvector projection).
-        // Microblocks disjoint from this BB are guaranteed to have alpha_peak
-        // below the floor at their closest-point clamp → must end up with
-        // keep=false. We skip them (keep_mask defaults to false) instead of
-        // running the per-microblock exp.
-        //
-        // When g_op <= mb_contrib_floor every microblock drops out because
-        // even the in-center peak alpha is too small — early exit completely.
+        // iter-015 BB prefilter + iter-017 exp-elimination:
+        //   keep = (alpha_peak >= mb_contrib_floor)
+        //        = (g_op * exp(power_c) >= floor)        // 0.99-cap is harmless: 0.99 >> floor
+        //        = (power_c >= log(floor / g_op))
+        //        = (power_c >= log_thresh)               // precomputed once per Gaussian
+        // Note power_c <= 0 always (negative of a PSD quadratic form), and
+        // log_thresh < 0 iff g_op > floor (precondition below).
         if (g_op <= mb_contrib_floor) {
             continue;
         }
 
-        const double r_sq = 2.0 * std::log(g_op / mb_contrib_floor);
+        const double log_thresh = std::log(mb_contrib_floor / g_op);  // <= 0
+        const double r_sq = -2.0 * log_thresh;                         // > 0
         const double r = std::sqrt(r_sq);
         const double x_half = r * std::sqrt(a);
         const double y_half = r * std::sqrt(c);
@@ -96,7 +90,6 @@ void cull_tile(
         const double bb_y_min = mean_y - y_half;
         const double bb_y_max = mean_y + y_half;
 
-        // Convert BB into microblock indices within this tile (mx in [0,3], my in [0,7]).
         const double tile_x_local_min = bb_x_min - tx_tile;
         const double tile_x_local_max = bb_x_max - tx_tile;
         const double tile_y_local_min = bb_y_min - ty_tile;
@@ -108,7 +101,6 @@ void cull_tile(
         const int my_hi = std::min(7, static_cast<int>(std::floor(tile_y_local_max / 4.0)));
 
         if (mx_lo > mx_hi || my_lo > my_hi) {
-            // BB clipped entirely outside the tile — nothing to do.
             continue;
         }
 
@@ -123,9 +115,7 @@ void cull_tile(
                 const double dy_c = cy - mean_y;
                 const double power_c =
                     -0.5 * (ci_a * dx_c * dx_c + 2.0 * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
-                const double alpha_peak =
-                    std::min(g_op * std::exp(std::min(power_c, 0.0)), 0.99);
-                const bool keep = alpha_peak >= mb_contrib_floor;
+                const bool keep = power_c >= log_thresh;
                 keep_mask[static_cast<std::size_t>(l)][static_cast<std::size_t>(m)] = keep;
                 if (keep) {
                     keep_any[static_cast<std::size_t>(l)] = true;
