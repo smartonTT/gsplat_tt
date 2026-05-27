@@ -15,6 +15,7 @@
 #include "api/compute/eltwise_unary/fill.h"
 #include "api/compute/eltwise_unary/comp.h"
 #include "api/compute/eltwise_unary/rsub.h"
+#include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/binary_max_min.h"
 
 #include "tools/profiler/kernel_profiler.hpp"
@@ -93,7 +94,8 @@ void kernel_main() {
     // Bit-pattern fp32 constants for SFPU scalar-unary ops (mul_unary_tile,
     // sub_unary_tile, rsub_unary_tile, etc.) which take their immediate as a
     // uint32 bit-cast of the float they want.
-    constexpr uint32_t NEG_HALF_BITS  = 0xBF000000u;  // fp32(-0.5)
+    constexpr uint32_t HALF_BITS      = 0x3F000000u;  // fp32(+0.5)
+    constexpr uint32_t NEG_ONE_BITS   = 0xBF800000u;  // fp32(-1.0)
     constexpr uint32_t ONE_F_BITS     = 0x3F800000u;  // fp32( 1.0)
     constexpr uint32_t T_THRESH_BITS  = 0x38D1B717u;  // fp32(1e-4) — T threshold for sat_mask
 
@@ -101,9 +103,13 @@ void kernel_main() {
     // binary tile ops on this core. Must come before any tile op.
     binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
 
-    // iter-054: CB_CONST_ZERO/CB_CONST_099 prologue dropped. The min(power,0)
-    // clamp (iter-050) and min(alpha,0.99) cap (iter-051) were the only consumers;
-    // both removed. Slots 22/23 reserved but no longer allocated/filled.
+    // iter-066: relu_tile_init for power clamp (sign-trick: dst=0.5·Q; relu;
+    // negate → min(-0.5·Q, 0)). Restores safety dropped in iter-050: when
+    // bf16 round-off of Q makes Q < 0, power = -0.5·Q > 0, exp(power) > 1,
+    // α > 1, contrib > T, T_new = T - contrib < 0 → next-Gaussian color
+    // accumulator picks up large negative biases that surface as bright
+    // firefly pixels in the final render. No CB allocation needed.
+    relu_tile_init();
 
     for (uint32_t t = 0; t < num_tiles; t++) {
         // Per-tile profiling zone. In non-profile builds DeviceZoneScopedN is
@@ -321,8 +327,22 @@ void kernel_main() {
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q, 2, 0);  // dst[0] = Q
 
-            // power = -0.5 · Q (iter-050: dropped defensive min(power,0))
-            mul_unary_tile(0, NEG_HALF_BITS);
+            // power = min(-0.5 · Q, 0) — iter-066 restored clamp via SFPU
+            // sign-trick (no CB allocation). The defensive clamp was dropped in
+            // iter-050 on the theory Q ≥ 0 algebraically, but bf16 quantization
+            // of the dx²/dy²/dx·dy contributions in CB_Q can make Q slightly
+            // negative for marginal Gaussians; then power = -0.5·Q > 0,
+            // exp(power) > 1, α = opacity·weight > 1, contrib = α·T > T,
+            // T_new = T - contrib < 0. A negative T_state biases subsequent
+            // colour adds and surfaces as bright firefly pixels.
+            //
+            // Identity: min(power, 0) = -max(-power, 0) = -relu(-power).
+            //   step 1: dst = 0.5·Q   (mostly ≥ 0; tiny < 0 only when Q is bf16-quantized negative)
+            //   step 2: dst = relu(0.5·Q) = max(0.5·Q, 0)
+            //   step 3: dst = -relu(0.5·Q) = min(-0.5·Q, 0) = clamped power
+            mul_unary_tile(0, HALF_BITS);    // dst = +0.5·Q (sign flipped vs needed)
+            relu_tile(0);                     // dst = max(0.5·Q, 0)
+            mul_unary_tile(0, NEG_ONE_BITS);  // dst = -max(0.5·Q, 0) = clamped power ≤ 0
 
             // weight = exp(power). Approximate-mode polynomial.
             exp_tile_init<true>();
