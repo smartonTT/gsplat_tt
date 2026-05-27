@@ -64,8 +64,56 @@ inline void init_mb_accum(MbAccum& a) {
     }
 }
 
-inline void apply_gaussian_neon(
+// iter-045: per-microblock blend kernel that holds the 8 transmittance
+// vectors (acc.t[0..31] as 8 float32x4_t) live in NEON registers across
+// every Gaussian in the microblock instead of round-tripping through
+// memory on every apply. Each Gaussian eliminates 8 vld1q (t) and 8 vst1q
+// (t') — ~16 NEON ops × kn Gaussians per microblock = O(kn × 16) ops
+// saved. RGB stays in memory because together r/g/b/t (32 regs) would
+// exhaust the entire NEON register file and force spills.
+//
+// max_t check still happens every 4 Gaussians (iter-035). It now reads
+// directly from the live t registers via vmaxq reductions — no memory
+// fetch required.
+struct TVec8 {
+    float32x4_t t0_lo, t0_hi, t1_lo, t1_hi, t2_lo, t2_hi, t3_lo, t3_hi;
+};
+
+inline void load_t_regs(const MbAccum& acc, TVec8& tv) {
+    tv.t0_lo = vld1q_f32(&acc.t[0]);
+    tv.t0_hi = vld1q_f32(&acc.t[4]);
+    tv.t1_lo = vld1q_f32(&acc.t[8]);
+    tv.t1_hi = vld1q_f32(&acc.t[12]);
+    tv.t2_lo = vld1q_f32(&acc.t[16]);
+    tv.t2_hi = vld1q_f32(&acc.t[20]);
+    tv.t3_lo = vld1q_f32(&acc.t[24]);
+    tv.t3_hi = vld1q_f32(&acc.t[28]);
+}
+
+inline void store_t_regs(MbAccum& acc, const TVec8& tv) {
+    vst1q_f32(&acc.t[0],  tv.t0_lo);
+    vst1q_f32(&acc.t[4],  tv.t0_hi);
+    vst1q_f32(&acc.t[8],  tv.t1_lo);
+    vst1q_f32(&acc.t[12], tv.t1_hi);
+    vst1q_f32(&acc.t[16], tv.t2_lo);
+    vst1q_f32(&acc.t[20], tv.t2_hi);
+    vst1q_f32(&acc.t[24], tv.t3_lo);
+    vst1q_f32(&acc.t[28], tv.t3_hi);
+}
+
+inline float max_t_regs(const TVec8& tv) {
+    const float32x4_t m01_lo = vmaxq_f32(tv.t0_lo, tv.t1_lo);
+    const float32x4_t m01_hi = vmaxq_f32(tv.t0_hi, tv.t1_hi);
+    const float32x4_t m23_lo = vmaxq_f32(tv.t2_lo, tv.t3_lo);
+    const float32x4_t m23_hi = vmaxq_f32(tv.t2_hi, tv.t3_hi);
+    const float32x4_t m_lo = vmaxq_f32(m01_lo, m23_lo);
+    const float32x4_t m_hi = vmaxq_f32(m01_hi, m23_hi);
+    return vmaxvq_f32(vmaxq_f32(m_lo, m_hi));
+}
+
+inline void apply_gaussian_t_regs(
     MbAccum& acc,
+    TVec8& tv,
     float ci_a, float ci_b, float ci_c,
     float mx, float my,
     float opacity,
@@ -94,14 +142,7 @@ inline void apply_gaussian_neon(
     const float32x4_t dx_lo_sq = vmulq_f32(dx_lo, dx_lo);
     const float32x4_t dx_hi_sq = vmulq_f32(dx_hi, dx_hi);
 
-    // iter-039: process the 4 rows as 4 independent pipelines instead of a
-    // 4-iter loop. Each row's pwr build, range clamp, simd_exp and alpha
-    // cap+mul are entirely independent of other rows (rows act on
-    // different pixels and different acc.t/r/g/b slots). Listing them
-    // sequentially lets the OoO engine + 2-3 NEON FMA pipes interleave
-    // them. The compiler's loop unroller doesn't always achieve this
-    // depth of reordering across the cross-iter RAW chains.
-    auto row_body = [&](int i) __attribute__((always_inline)) {
+    auto row_body = [&](int i, float32x4_t& t_lo, float32x4_t& t_hi) __attribute__((always_inline)) {
         const float py = static_cast<float>(py_start + i) + 0.5f;
         const float dy = py - my;
         const float y_term = C * dy * dy;
@@ -124,8 +165,6 @@ inline void apply_gaussian_neon(
         const float32x4_t alpha_hi = vminq_f32(vmulq_f32(op_v, gw_hi), alpha_cap);
 
         const int row = i * 8;
-        const float32x4_t t_lo = vld1q_f32(&acc.t[row]);
-        const float32x4_t t_hi = vld1q_f32(&acc.t[row + 4]);
         const float32x4_t at_lo = vmulq_f32(alpha_lo, t_lo);
         const float32x4_t at_hi = vmulq_f32(alpha_hi, t_hi);
 
@@ -149,21 +188,13 @@ inline void apply_gaussian_neon(
         vst1q_f32(&acc.g[row + 4], gg_hi);
         vst1q_f32(&acc.b[row + 4], bb_hi);
 
-        vst1q_f32(&acc.t[row],     vsubq_f32(t_lo, at_lo));
-        vst1q_f32(&acc.t[row + 4], vsubq_f32(t_hi, at_hi));
+        t_lo = vsubq_f32(t_lo, at_lo);
+        t_hi = vsubq_f32(t_hi, at_hi);
     };
-    row_body(0);
-    row_body(1);
-    row_body(2);
-    row_body(3);
-}
-
-inline float max_t_neon(const MbAccum& acc) {
-    float32x4_t m = vld1q_f32(&acc.t[0]);
-    for (int k = 4; k < 32; k += 4) {
-        m = vmaxq_f32(m, vld1q_f32(&acc.t[k]));
-    }
-    return vmaxvq_f32(m);
+    row_body(0, tv.t0_lo, tv.t0_hi);
+    row_body(1, tv.t1_lo, tv.t1_hi);
+    row_body(2, tv.t2_lo, tv.t2_hi);
+    row_body(3, tv.t3_lo, tv.t3_hi);
 }
 #endif  // GSPLAT_HAS_NEON
 
@@ -326,41 +357,38 @@ void cull_and_blend_tile(
         if (mb_h == 4 && mb_w == 8) {
             MbAccum acc;
             init_mb_accum(acc);
-            // iter-035: check max_t every 4 Gaussians instead of every 1.
-            // The per-Gaussian max_t_neon (8 loads + 7 vmaxq + 1 vmaxvq) acts
-            // as a synchronisation barrier between successive apply_gaussian
-            // calls because it reads `acc` immediately after apply writes it.
-            // Removing it lets the compiler / CPU schedule the next apply's
-            // independent setup (pwr build, exp, alpha) in parallel with
-            // the previous apply's RGB writeback. We only over-blend up to
-            // 3 already-saturated Gaussians per microblock — each costs
-            // 4 fully-attenuated FMAs and produces zero visual change since
-            // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
-            // for the typical ~100+ Gaussians per saturating microblock.
+            // iter-045: load t into 8 NEON registers, keep them live across
+            // every Gaussian's apply, write back once at the end. Saves
+            // 8 vld1q + 8 vst1q (= 16 ops × ~1 issue slot each) per Gaussian
+            // — the highest-frequency redundant memory ops in the inner loop.
+            TVec8 tv;
+            load_t_regs(acc, tv);
+            // iter-035: max_t every 4 Gaussians (now read from tv regs).
             int32_t k = 0;
             for (; k + 4 <= kn; k += 4) {
                 for (int j = 0; j < 4; ++j) {
                     const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
                     const GaussianCullRec& rec = gauss_rec[gs];
-                    apply_gaussian_neon(acc,
+                    apply_gaussian_t_regs(acc, tv,
                         rec.ci_a, rec.ci_b, rec.ci_c,
                         rec.mx, rec.my,
                         rec.opacity,
                         colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                         px_start, py_start);
                 }
-                if (max_t_neon(acc) < 0.0001f) { k = kn; break; }
+                if (max_t_regs(tv) < 0.0001f) { k = kn; break; }
             }
             for (; k < kn; ++k) {
                 const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
                 const GaussianCullRec& rec = gauss_rec[gs];
-                apply_gaussian_neon(acc,
+                apply_gaussian_t_regs(acc, tv,
                     rec.ci_a, rec.ci_b, rec.ci_c,
                     rec.mx, rec.my,
                     rec.opacity,
                     colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                     px_start, py_start);
             }
+            store_t_regs(acc, tv);
             for (int i = 0; i < 4; ++i) {
                 const int gy = py_start + i;
                 for (int j = 0; j < 8; ++j) {
