@@ -165,6 +165,9 @@ void cull_and_blend_tile(
     const float* cov_inv_a,
     const float* cov_inv_b,
     const float* cov_inv_c,
+    const float* log_thresh_arr,
+    const float* x_half_arr,
+    const float* y_half_arr,
     float* image_out,
     int64_t* tile_dropped_count,
     int64_t* tile_kept_count,
@@ -210,24 +213,21 @@ void cull_and_blend_tile(
 
         const float mean_x = means_2d[gs * 2 + 0];
         const float mean_y = means_2d[gs * 2 + 1];
-        const float a = covs_2d[gs * 4 + 0];
-        const float c = covs_2d[gs * 4 + 3];
-        const float g_op = opacities[gs];
 
-        if (g_op <= mb_contrib_floor) {
+        const float log_thresh = log_thresh_arr[gs];
+        // log_thresh == 0 sentinel = "Gaussian below mb_contrib_floor".
+        // Precomputed in the parallel prelude; we still need the cheap drop here.
+        if (log_thresh >= 0.0f) {
             ++dropped;
             continue;
         }
 
-        // ci_a/b/c precomputed globally (passed in).
         const float ci_a = cov_inv_a[gs];
         const float ci_b = cov_inv_b[gs];
         const float ci_c = cov_inv_c[gs];
 
-        const float log_thresh = std::log(mb_contrib_floor / g_op);
-        const float r = std::sqrt(-2.0f * log_thresh);
-        const float x_half = r * std::sqrt(a);
-        const float y_half = r * std::sqrt(c);
+        const float x_half = x_half_arr[gs];
+        const float y_half = y_half_arr[gs];
 
         const float bb_x_min = mean_x - x_half;
         const float bb_x_max = mean_x + x_half;
@@ -401,8 +401,17 @@ CullAndBlendResult cull_and_blend(
                             static_cast<std::size_t>(image_width) * 3,
                         0.0f);
 
-    // Precompute per-Gaussian cov_inv once, parallel.
+    // Precompute per-Gaussian cull data once, parallel. Pulls log/sqrt out
+    // of the per-tile cull inner loop where they would otherwise be
+    // recomputed for every (Gaussian, tile) pair.
+    //   cia/cib/cic        cov inverse (used inside the per-microblock check)
+    //   log_thresh         log(mb_contrib_floor / opacity), <= 0 for visible;
+    //                      log_thresh >= 0 is a sentinel meaning "drop this
+    //                      Gaussian, opacity below floor".
+    //   x_half / y_half    BB half-extents = r * sqrt(a) / sqrt(c)
+    //                      with r = sqrt(-2 * log_thresh).
     std::vector<float> cia(M), cib(M), cic(M);
+    std::vector<float> log_thresh(M), x_half(M), y_half(M);
     if (M > 0) {
         const std::size_t W = pool.size();
         auto compute_one = [&](std::size_t i) {
@@ -413,6 +422,19 @@ CullAndBlendResult cull_and_blend(
             cia[i] = c / det;
             cib[i] = -b / det;
             cic[i] = a / det;
+
+            const float g_op = opacities[i];
+            if (g_op <= mb_contrib_floor) {
+                log_thresh[i] = 0.0f;  // sentinel: drop in per-tile cull
+                x_half[i] = 0.0f;
+                y_half[i] = 0.0f;
+            } else {
+                const float lt = std::log(mb_contrib_floor / g_op);
+                log_thresh[i] = lt;  // <= 0 for visible
+                const float r = std::sqrt(-2.0f * lt);
+                x_half[i] = r * std::sqrt(std::max(a, 0.0f));
+                y_half[i] = r * std::sqrt(std::max(c, 0.0f));
+            }
         };
         if (W > 1 && M >= 4096) {
             for (std::size_t w = 0; w < W; ++w) {
@@ -464,6 +486,7 @@ CullAndBlendResult cull_and_blend(
                     sorted_gaussian_ids, tile_ranges,
                     mb_contrib_floor,
                     cia.data(), cib.data(), cic.data(),
+                    log_thresh.data(), x_half.data(), y_half.data(),
                     result.image.data(),
                     &tile_dropped[static_cast<std::size_t>(tile_id)],
                     &tile_kept[static_cast<std::size_t>(tile_id)],
