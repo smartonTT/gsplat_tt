@@ -572,18 +572,59 @@ ProjectResult project_full_fused(
         const float j00 = fx / tz, j02 = -fx * tx / tz2;
         const float j11 = fy / tz, j12 = -fy * ty / tz2;
 
-        // cov_cam = R @ cov3d @ R^T  (registers only).
-        Mat3f c;
-        std::memcpy(c.m.data(), cov3d + i * 9, 9 * sizeof(float));
-        const Mat3f cov_cam = mat3_mul(mat3_mul(r_mat, c), r_t);
+        // iter-044: cov_cam = R @ cov3d @ R^T exploiting cov3d symmetry.
+        // cov3d is stored as 9 floats but only the upper triangle (6 entries)
+        // is independent. Two general 3x3 matmuls cost 54 mul + 36 add and
+        // produce a symmetric result; here we directly compute the 6 unique
+        // cov_cam entries we will read below, saving ~17% of the per-Gaussian
+        // covariance flops (45 mul + 30 add instead of 54 mul + 36 add).
+        //
+        // Let v_j = cov3d @ R(j,:)^T (a 3-vector). cov_cam(i,j) = R(i,:) . v_j.
+        // Only entries used by the cov2d compute are needed:
+        //   (0,0), (0,1) = (1,0), (0,2) = (2,0), (1,1), (1,2) = (2,1), (2,2)
+        const float c00 = cov3d[i * 9 + 0];
+        const float c01 = cov3d[i * 9 + 1];
+        const float c02 = cov3d[i * 9 + 2];
+        const float c11 = cov3d[i * 9 + 4];
+        const float c12 = cov3d[i * 9 + 5];
+        const float c22 = cov3d[i * 9 + 8];
+
+        const float r00 = r_mat(0, 0), r01 = r_mat(0, 1), r02 = r_mat(0, 2);
+        const float r10 = r_mat(1, 0), r11 = r_mat(1, 1), r12 = r_mat(1, 2);
+        const float r20 = r_mat(2, 0), r21 = r_mat(2, 1), r22 = r_mat(2, 2);
+
+        // v_j = cov3d @ R(j,:)^T  (cov3d symmetric — use upper triangle only).
+        // v_j[0] = c00*r_j0 + c01*r_j1 + c02*r_j2
+        // v_j[1] = c01*r_j0 + c11*r_j1 + c12*r_j2
+        // v_j[2] = c02*r_j0 + c12*r_j1 + c22*r_j2
+        const float v0_0 = c00 * r00 + c01 * r01 + c02 * r02;
+        const float v0_1 = c01 * r00 + c11 * r01 + c12 * r02;
+        const float v0_2 = c02 * r00 + c12 * r01 + c22 * r02;
+
+        const float v1_0 = c00 * r10 + c01 * r11 + c02 * r12;
+        const float v1_1 = c01 * r10 + c11 * r11 + c12 * r12;
+        const float v1_2 = c02 * r10 + c12 * r11 + c22 * r12;
+
+        const float v2_0 = c00 * r20 + c01 * r21 + c02 * r22;
+        const float v2_1 = c01 * r20 + c11 * r21 + c12 * r22;
+        const float v2_2 = c02 * r20 + c12 * r21 + c22 * r22;
+
+        // cov_cam(i,j) = R(i,:) . v_j  (6 unique entries; symmetric).
+        const float cc00 = r00 * v0_0 + r01 * v0_1 + r02 * v0_2;
+        const float cc01 = r00 * v1_0 + r01 * v1_1 + r02 * v1_2;
+        const float cc02 = r00 * v2_0 + r01 * v2_1 + r02 * v2_2;
+        const float cc11 = r10 * v1_0 + r11 * v1_1 + r12 * v1_2;
+        const float cc12 = r10 * v2_0 + r11 * v2_1 + r12 * v2_2;
+        const float cc22 = r20 * v2_0 + r21 * v2_1 + r22 * v2_2;
 
         // cov2d = J @ cov_cam @ J^T + 0.3 * I.
         // J is sparse (j01 = j10 = 0); expand by hand for fewer FLOPs.
-        const float m00 = j00 * cov_cam(0,0) + j02 * cov_cam(2,0);
-        const float m01 = j00 * cov_cam(0,1) + j02 * cov_cam(2,1);
-        const float m02 = j00 * cov_cam(0,2) + j02 * cov_cam(2,2);
-        const float m11 = j11 * cov_cam(1,1) + j12 * cov_cam(2,1);
-        const float m12 = j11 * cov_cam(1,2) + j12 * cov_cam(2,2);
+        // Symmetric cov_cam: (2,0) = cc02, (2,1) = cc12.
+        const float m00 = j00 * cc00 + j02 * cc02;
+        const float m01 = j00 * cc01 + j02 * cc12;
+        const float m02 = j00 * cc02 + j02 * cc22;
+        const float m11 = j11 * cc11 + j12 * cc12;
+        const float m12 = j11 * cc12 + j12 * cc22;
 
         const float a = m00 * j00 + m02 * j02 + 0.3f;
         const float b_canonical = m01 * j11 + m02 * j12;
