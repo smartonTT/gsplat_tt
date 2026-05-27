@@ -168,22 +168,21 @@ void kernel_main() {
         uint32_t tile_id = tile_ids[t];
 
         // (1) Read tile_offsets[tile_id] and tile_offsets[tile_id+1] from
-        // DRAM via two single-uint32 noc_async_reads. Two reads per tile
-        // (vs one carry-forward) is the cost of LPT's non-contiguous
-        // tile-id assignment; trivial relative to the per-Gaussian stream.
+        // DRAM. iter-098: issue both 4-byte noc_async_reads back-to-back into
+        // adjacent scratch slots, then ONE barrier. Halves the offset-read
+        // round-trip cost (2 barriers → 1) per tile per core. tile_id and
+        // tile_id+1 are typically on different DRAM banks under interleaved
+        // layout, so we can't merge into one larger NoC transaction — but
+        // we can pipeline the two requests behind a single barrier.
         {
-            uint64_t off_noc = get_noc_addr(tile_id, offsets_acc);
-            noc_async_read(off_noc, scratch_addr, 4);
+            uint64_t off_noc_a = get_noc_addr(tile_id,     offsets_acc);
+            uint64_t off_noc_b = get_noc_addr(tile_id + 1, offsets_acc);
+            noc_async_read(off_noc_a, scratch_addr,     4);
+            noc_async_read(off_noc_b, scratch_addr + 4, 4);
             noc_async_read_barrier();
         }
         uint32_t g_start = scratch_ptr[0];
-
-        {
-            uint64_t off_noc = get_noc_addr(tile_id + 1, offsets_acc);
-            noc_async_read(off_noc, scratch_addr, 4);
-            noc_async_read_barrier();
-        }
-        uint32_t g_end   = scratch_ptr[0];
+        uint32_t g_end   = scratch_ptr[1];
         uint32_t g_count = g_end - g_start;
 
         // (2) Push g_count into CB_TILE_META as a single uint32. Writes
