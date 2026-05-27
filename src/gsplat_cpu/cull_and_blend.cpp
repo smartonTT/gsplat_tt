@@ -337,22 +337,8 @@ void cull_and_blend_tile(
             // 4 fully-attenuated FMAs and produces zero visual change since
             // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
             // for the typical ~100+ Gaussians per saturating microblock.
-            // iter-040: prefetch the NEXT batch's gauss_rec + colors while we
-            // process the CURRENT batch. The blend's apply_gaussian compute
-            // is on the order of 250 NEON ops per Gaussian ~= 60-100 cycles,
-            // which gives enough latency window to hide an L2 fetch
-            // (~14 cycles) for the next Gaussian's 40-byte gauss_rec entry
-            // and 12-byte colors triplet.
             int32_t k = 0;
             for (; k + 4 <= kn; k += 4) {
-                if (k + 8 <= kn) {
-                    const std::size_t gs_pf0 = static_cast<std::size_t>(kg_data[k + 4]);
-                    const std::size_t gs_pf1 = static_cast<std::size_t>(kg_data[k + 5]);
-                    __builtin_prefetch(&gauss_rec[gs_pf0], 0, 1);
-                    __builtin_prefetch(&colors[gs_pf0 * 3], 0, 1);
-                    __builtin_prefetch(&gauss_rec[gs_pf1], 0, 1);
-                    __builtin_prefetch(&colors[gs_pf1 * 3], 0, 1);
-                }
                 for (int j = 0; j < 4; ++j) {
                     const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
                     const GaussianCullRec& rec = gauss_rec[gs];
