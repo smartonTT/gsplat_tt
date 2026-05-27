@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 images for all three views show uniform speckle noise across the object surface with no horizontal/vertical grid lines at 32- or 16-pixel spacing visible in any view."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color fill blocks visible in hero, side, or top renders. All detail is preserved."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing coverage regions in any rendered view. Coverage is continuous across the object."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B bands or flat colored stripes in any rendered view. Color transitions appear natural."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes in any view. Edge transitions look normal."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No isolated bright outlier pixels (fireflies), pure black/white/magenta patches, or NaN/Inf signatures visible in hero, side, or top renders. No fireflies detected on any silhouette."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show the silhouette of the object as a bright outline indicating coordinate shift. Differences are distributed across the body of the object, not concentrated at edges."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform speckle noise consistent with the established bf16 architectural baseline. No grids, structured bands, or gradient patterns are present."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.368, "side": 40.950, "top": 38.574}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.132, "actual": {"hero": 17.107, "side": 17.292, "top": 18.132}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.382, "max_ms_ratio": 1.234, "pass": true},
+  "timing": {"median_ms": 24.4565, "p99_ms": 29.18042, "vs_prev_best_pct": 0.09, "pass": true},
+  "reasoning": "All checks pass. PSNR is bit-identical to the previous committed iter across all three views (hero 39.368, side 40.950, top 38.574 - all above the 38 dB dispatch-class floor). Tile structure ratios are bit-identical to the prior baseline (max 18.132, delta ~0.000 on all views), well within the +-0.3 ratchet threshold - this is the established architectural bf16 floor, not new drift. Kernel_ms_median is 24.457 vs prev_best 24.434 (+0.09%), comfortably within the 2% break-even threshold. p99/median ratio is 1.19, far below the 3x NEEDS_REVIEW threshold. Visual inspection of all rendered PNGs and diff10 images confirms no tile seams, no fill blocks, no missing-splat holes, no color clipping, no ringing, no fireflies, no geometry shift, and no structured patterns in the diff - only uniform speckle consistent with the architectural baseline."
+}
