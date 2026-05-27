@@ -315,7 +315,32 @@ void cull_and_blend_tile(
         if (mb_h == 4 && mb_w == 8) {
             MbAccum acc;
             init_mb_accum(acc);
-            for (int32_t k = 0; k < kn; ++k) {
+            // iter-035: check max_t every 4 Gaussians instead of every 1.
+            // The per-Gaussian max_t_neon (8 loads + 7 vmaxq + 1 vmaxvq) acts
+            // as a synchronisation barrier between successive apply_gaussian
+            // calls because it reads `acc` immediately after apply writes it.
+            // Removing it lets the compiler / CPU schedule the next apply's
+            // independent setup (pwr build, exp, alpha) in parallel with
+            // the previous apply's RGB writeback. We only over-blend up to
+            // 3 already-saturated Gaussians per microblock — each costs
+            // 4 fully-attenuated FMAs and produces zero visual change since
+            // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
+            // for the typical ~100+ Gaussians per saturating microblock.
+            int32_t k = 0;
+            for (; k + 4 <= kn; k += 4) {
+                for (int j = 0; j < 4; ++j) {
+                    const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
+                    const GaussianCullRec& rec = gauss_rec[gs];
+                    apply_gaussian_neon(acc,
+                        rec.ci_a, rec.ci_b, rec.ci_c,
+                        rec.mx, rec.my,
+                        rec.opacity,
+                        colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
+                        px_start, py_start);
+                }
+                if (max_t_neon(acc) < 0.0001f) { k = kn; break; }
+            }
+            for (; k < kn; ++k) {
                 const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
                 const GaussianCullRec& rec = gauss_rec[gs];
                 apply_gaussian_neon(acc,
@@ -324,7 +349,6 @@ void cull_and_blend_tile(
                     rec.opacity,
                     colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                     px_start, py_start);
-                if (max_t_neon(acc) < 0.0001f) break;
             }
             for (int i = 0; i < 4; ++i) {
                 const int gy = py_start + i;
