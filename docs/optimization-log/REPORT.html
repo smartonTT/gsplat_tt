@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 33 · current best: 35.56 ms · target: 1.0 ms
+      iters: 34 · current best: 33.55 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-033-contrib-floor-13-of-255
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T00:57:09.788171+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass. PSNR floor met on all three views (min 36.65 dB vs 35.0 floor). Per-view PSNR delta is 41.27-36.65=4.62 dB, well under the 20 dB threshold. Per-view ms ratio is top/side = 41.95/32.41 = 1.29, under the 2× threshold. kernel_ms_median 33.55 vs prev_best 35.5585 = -5.65%, comfortably within the ≤prev_best×1.02 progress gate. p99/median = 42.00/33.55 = 1.25, well under the 3× flag. Diff images show perceptual-quality speckle at fur boundaries only — no structured artifacts. KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>33.55 ms</b> median · 42.00 ms p99</div>
+    <div class="per-view">per-view: hero 33.55 / side 32.41 / top 41.95</div>
+    <div class="psnr">PSNR: hero 37.4 / side 41.3 / top 36.7 (min <b>36.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-033-contrib-floor-13-of-255/hero.png" target="_blank"><img src="screenshots/iter-033-contrib-floor-13-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-033-contrib-floor-13-of-255/side.png" target="_blank"><img src="screenshots/iter-033-contrib-floor-13-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-033-contrib-floor-13-of-255/top.png" target="_blank"><img src="screenshots/iter-033-contrib-floor-13-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-033-contrib-floor-13-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-033-contrib-floor-13-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-033-contrib-floor-13-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-033-contrib-floor-13-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-033-contrib-floor-13-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-033-contrib-floor-13-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No 32px or 16px grid lines visible in any of the three renders; transitions are smooth across the image.</li><li>✓ tile_uniform_fill: No tile-shaped uniform-color blocks detected in hero, side, or top views.</li><li>✓ missing_splat_holes: Subject coverage is complete in all three views; no black holes &gt;16px within the geometry.</li><li>✓ color_clipping_bands: No hard clipping bands observed; highlights and darks transition naturally.</li><li>✓ ringing_halos: Silhouette edges in all three views are clean; no ringing or bright/dark halos visible.</li><li>✓ nan_inf_signatures: No black, white, or magenta patches present in any render.</li><li>✓ geometry_shift: Geometry aligns well with reference across all three views; no positional shift detected.</li><li>✓ diff10_structure: Diff×10 images show diffuse, high-frequency speckle concentrated at fur-detail edges and silhouettes — consistent with e</li></ul>
+    <p class="reasoning">All visual checks pass. PSNR floor met on all three views (min 36.65 dB vs 35.0 floor). Per-view PSNR delta is 41.27-36.65=4.62 dB, well under the 20 dB threshold. Per-view ms ratio is top/side = 41.95/32.41 = 1.29, under the 2× threshold. kernel_ms_median 33.55 vs prev_best 35.5585 = -5.65%, comfortably within the ≤prev_best×1.02 progress gate. p99/median = 42.00/33.55 = 1.25, well under the 3× flag. Diff images show perceptual-quality speckle at fur boundaries only — no structured artifacts. KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-032-contrib-floor-11-of-255
