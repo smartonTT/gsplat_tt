@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 83 · current best: 23.98 ms · target: 1.0 ms
+      iters: 84 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-089-burst-noc-k2-wrap-aware
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T13:12:28.925282+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All checks pass. Tile_structure_ratio max is 18.132 (top view), which is above the &gt;14 threshold but falls squarely within the architectural-baseline carve-out: delta vs iter-088 prev_best is 0.000 on all 3 views (bit-identical to 3 decimals, well within the +/-0.05 carve-out window), so no new structural drift is being introduced and the &#x27;strictly reduce&#x27; rule does not apply. The +0.3 ratchet rule is also not triggered (delta 0.000 &lt; 0.3). PSNR is bit-identical to iter-088 baseline on all views (hero 39.368, side 40.950, top 38.574 — all &gt;=38 dB dispatch-class floor). Kernel timing is effectively flat at -0.02% (24.474 vs 24.479 ms prev_best), within the 1.02x break-even window. p99/median ratio 1.19x is well within the 3x tail limit. Per-view PSNR delta 2.376 dB and per-view ms ratio 1.232x both pass their consistency gates. Visual inspection finds no tile seams, no fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, no fireflies, no geometry shift, and diff10s show clean uniform speckle consistent with the established architectural baseline. KEEP as flat/break-even result with clean quality.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.47 ms</b> median · 29.18 ms p99</div>
+    <div class="per-view">per-view: hero 24.47 / side 23.65 / top 29.15</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-089-burst-noc-k2-wrap-aware/hero.png" target="_blank"><img src="screenshots/iter-089-burst-noc-k2-wrap-aware/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-089-burst-noc-k2-wrap-aware/side.png" target="_blank"><img src="screenshots/iter-089-burst-noc-k2-wrap-aware/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-089-burst-noc-k2-wrap-aware/top.png" target="_blank"><img src="screenshots/iter-089-burst-noc-k2-wrap-aware/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-089-burst-noc-k2-wrap-aware/hero_diff10.png" target="_blank"><img src="screenshots/iter-089-burst-noc-k2-wrap-aware/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-089-burst-noc-k2-wrap-aware/side_diff10.png" target="_blank"><img src="screenshots/iter-089-burst-noc-k2-wrap-aware/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-089-burst-noc-k2-wrap-aware/top_diff10.png" target="_blank"><img src="screenshots/iter-089-burst-noc-k2-wrap-aware/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images for all 3 views show uniform speckle along object silhouettes with no horizontal/vertical lines at 32px or</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color regions in any rendered PNG where reference has detail. Object surfaces show natural Ga</li><li>✓ missing_splat_holes: No local darker-than-reference patches or coverage holes visible in hero/side/top renders. Diff10 shows no localized bri</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes in any view. Color distribution appears normal across hero (blue body, pink tongue), sid</li><li>✓ ringing_halos: No structured ringing at object silhouettes in any view. Edge regions in diff10 show expected edge-noise from subpixel G</li><li>✓ nan_inf_signatures: No pure black/white/magenta patches in spatially correlated regions. No fireflies (isolated 1-3px bright outliers) visib</li><li>✓ geometry_shift: Diff10 does not show silhouette outlines of displaced geometry. Bright regions in diff10 are distributed across the obje</li><li>✓ diff10_structure: All 3 diff10 images are dominated by uniform speckle noise concentrated on the object. No structured patterns (grids, ba</li></ul>
+    <p class="reasoning">All checks pass. Tile_structure_ratio max is 18.132 (top view), which is above the &gt;14 threshold but falls squarely within the architectural-baseline carve-out: delta vs iter-088 prev_best is 0.000 on all 3 views (bit-identical to 3 decimals, well within the +/-0.05 carve-out window), so no new structural drift is being introduced and the &#x27;strictly reduce&#x27; rule does not apply. The +0.3 ratchet rule is also not triggered (delta 0.000 &lt; 0.3). PSNR is bit-identical to iter-088 baseline on all views (hero 39.368, side 40.950, top 38.574 — all &gt;=38 dB dispatch-class floor). Kernel timing is effectively flat at -0.02% (24.474 vs 24.479 ms prev_best), within the 1.02x break-even window. p99/median ratio 1.19x is well within the 3x tail limit. Per-view PSNR delta 2.376 dB and per-view ms ratio 1.232x both pass their consistency gates. Visual inspection finds no tile seams, no fill blocks, no missing-splat holes, no color clipping, no ringing, no NaN/Inf signatures, no fireflies, no geometry shift, and diff10s show clean uniform speckle consistent with the established architectural baseline. KEEP as flat/break-even result with clean quality.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-088-cb-scalars-depth-4
