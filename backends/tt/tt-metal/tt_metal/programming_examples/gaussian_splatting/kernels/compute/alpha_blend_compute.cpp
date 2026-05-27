@@ -17,8 +17,6 @@
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/binary_max_min.h"
-#include "api/compute/eltwise_binary_sfpu.h"  // iter-068: mul_binary_tile
-#include "api/compute/compute_kernel_api.h"   // iter-068: square_tile
 
 #include "tools/profiler/kernel_profiler.hpp"
 
