@@ -231,3 +231,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on multiple hard gates. (1) PSNR catastrophic: all three views are in the 23-27 dB range, 10-15 dB below the 38 dB kernel-algebra floor — this is not architectural baseline drift but a wholesale rendering failure. (2) tile_structure_ratio max 23.08 (top view), delta +5.08 vs architectural baseline ~17-18 — far exceeds the +0.3 ratchet limit. (3) Visual inspection confirms the failure: side render shows severe 32×32 uniform-fill dark blocks with detail lost; top render shows pink/orange color contamination in large tile-shaped regions; all diff10 images show extreme tile-correlated structured noise rather than uniform speckle. Dropping same-RISC cb_wait_fronts has caused per-tile state corruption — data races between reader and compute on the same RISC are apparently load-bearing synchronization, not redundant waits. The timing win (-5.2%) is real but irrelevant given the quality collapse.
 - Thumbnails: ![hero](screenshots/iter-086-drop-all-same-risc-waits/hero.png) ![diff10](screenshots/iter-086-drop-all-same-risc-waits/hero_diff10.png)
 
+
+## iter-096-packer-l1-acc-d2 — REJECT 
+
+- Class: `compute`
+- kernel ms: median 24.07 / p99 28.58
+- PSNR per view: hero 38.9 / side 41.1 / top 38.0
+- Validator reasoning: REJECT on tile_structure_ratio: top-view 20.22 vs prev_best baseline ~18.13 = +2.09 delta, far above the +0.3 ratchet threshold. All views show structural drift (hero +1.78, side +0.08, top +2.09). bf16 L1-accumulate quantizes the running sum per-tile uniformly, producing tile-correlated error. PSNR within floor (top 38.03 above 38). Kernel +0.36 ms saved (-1.47%) but quality regression rejects the iter.
+- Thumbnails: ![hero](screenshots/iter-096-packer-l1-acc-d2/hero.png) ![diff10](screenshots/iter-096-packer-l1-acc-d2/hero_diff10.png)
+

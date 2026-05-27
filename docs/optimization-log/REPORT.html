@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 88 · current best: 23.98 ms · target: 1.0 ms
+      iters: 89 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-096-packer-l1-acc-d2
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">compute</span>
+      
+      <span class="ts">2026-05-27T14:46:21.163767+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> REJECT on tile_structure_ratio: top-view 20.22 vs prev_best baseline ~18.13 = +2.09 delta, far above the +0.3 ratchet threshold. All views show structural drift (hero +1.78, side +0.08, top +2.09). bf16 L1-accumulate quantizes the running sum per-tile uniformly, producing tile-correlated error. PSNR within floor (top 38.03 above 38). Kernel +0.36 ms saved (-1.47%) but quality regression rejects the iter.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.07 ms</b> median · 28.58 ms p99</div>
+    <div class="per-view">per-view: hero 24.07 / side 23.26 / top 28.56</div>
+    <div class="psnr">PSNR: hero 38.9 / side 41.1 / top 38.0 (min <b>38.0</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-096-packer-l1-acc-d2/hero.png" target="_blank"><img src="screenshots/iter-096-packer-l1-acc-d2/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-096-packer-l1-acc-d2/side.png" target="_blank"><img src="screenshots/iter-096-packer-l1-acc-d2/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-096-packer-l1-acc-d2/top.png" target="_blank"><img src="screenshots/iter-096-packer-l1-acc-d2/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-096-packer-l1-acc-d2/hero_diff10.png" target="_blank"><img src="screenshots/iter-096-packer-l1-acc-d2/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-096-packer-l1-acc-d2/side_diff10.png" target="_blank"><img src="screenshots/iter-096-packer-l1-acc-d2/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-096-packer-l1-acc-d2/top_diff10.png" target="_blank"><img src="screenshots/iter-096-packer-l1-acc-d2/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images show no horizontal/vertical lines at 32px or 16px spacing; brightness distribution is edge-concentrated ra</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color blocks visible in any rendered PNG.</li><li>✓ missing_splat_holes: No dark holes in rendered PNGs relative to reference.</li><li>✓ color_clipping_bands: No saturated R/G/B stripes or flat colored bands visible.</li><li>✓ ringing_halos: No structured ringing at silhouettes.</li><li>✓ nan_inf_signatures: No pure black/white/magenta patches; no fireflies.</li><li>✓ geometry_shift: Diff10 does not show a silhouette offset.</li><li>✓ diff10_structure: Diff10 dominated by fine speckle and edge-concentrated noise.</li></ul>
+    <p class="reasoning">REJECT on tile_structure_ratio: top-view 20.22 vs prev_best baseline ~18.13 = +2.09 delta, far above the +0.3 ratchet threshold. All views show structural drift (hero +1.78, side +0.08, top +2.09). bf16 L1-accumulate quantizes the running sum per-tile uniformly, producing tile-correlated error. PSNR within floor (top 38.03 above 38). Kernel +0.36 ms saved (-1.47%) but quality regression rejects the iter.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-095-four-fill-tile-init
@@ -3158,6 +3191,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 23.7 / side 27.5 / top 24.1
 - Validator reasoning: REJECT on multiple hard gates. (1) PSNR catastrophic: all three views are in the 23-27 dB range, 10-15 dB below the 38 dB kernel-algebra floor — this is not architectural baseline drift but a wholesale rendering failure. (2) tile_structure_ratio max 23.08 (top view), delta +5.08 vs architectural baseline ~17-18 — far exceeds the +0.3 ratchet limit. (3) Visual inspection confirms the failure: side render shows severe 32×32 uniform-fill dark blocks with detail lost; top render shows pink/orange color contamination in large tile-shaped regions; all diff10 images show extreme tile-correlated structured noise rather than uniform speckle. Dropping same-RISC cb_wait_fronts has caused per-tile state corruption — data races between reader and compute on the same RISC are apparently load-bearing synchronization, not redundant waits. The timing win (-5.2%) is real but irrelevant given the quality collapse.
 - Thumbnails: ![hero](screenshots/iter-086-drop-all-same-risc-waits/hero.png) ![diff10](screenshots/iter-086-drop-all-same-risc-waits/hero_diff10.png)
+
+
+## iter-096-packer-l1-acc-d2 — REJECT 
+
+- Class: `compute`
+- kernel ms: median 24.07 / p99 28.58
+- PSNR per view: hero 38.9 / side 41.1 / top 38.0
+- Validator reasoning: REJECT on tile_structure_ratio: top-view 20.22 vs prev_best baseline ~18.13 = +2.09 delta, far above the +0.3 ratchet threshold. All views show structural drift (hero +1.78, side +0.08, top +2.09). bf16 L1-accumulate quantizes the running sum per-tile uniformly, producing tile-correlated error. PSNR within floor (top 38.03 above 38). Kernel +0.36 ms saved (-1.47%) but quality regression rejects the iter.
+- Thumbnails: ![hero](screenshots/iter-096-packer-l1-acc-d2/hero.png) ![diff10](screenshots/iter-096-packer-l1-acc-d2/hero_diff10.png)
 
 </pre>
   </section>

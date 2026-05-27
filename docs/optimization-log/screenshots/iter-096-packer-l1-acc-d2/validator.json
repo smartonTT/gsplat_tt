@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 images show no horizontal/vertical lines at 32px or 16px spacing; brightness distribution is edge-concentrated rather than grid-quilted."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color blocks visible in any rendered PNG."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes in rendered PNGs relative to reference."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat colored bands visible."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouettes."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches; no fireflies."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show a silhouette offset."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Diff10 dominated by fine speckle and edge-concentrated noise."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 38.869, "side": 41.077, "top": 38.028}, "pass": true},
+  "tile_structure_check": {"max_ratio": 20.219, "actual": {"hero": 18.893, "side": 17.365, "top": 20.219}, "pass": false, "delta_vs_prev": 2.087},
+  "per_view_consistency": {"max_psnr_delta_db": 3.05, "max_ms_ratio": 1.228, "pass": true},
+  "timing": {"median_ms": 24.074, "p99_ms": 28.580, "vs_prev_best_pct": -1.47, "pass": true},
+  "reasoning": "REJECT on tile_structure_ratio: top-view 20.22 vs prev_best baseline ~18.13 = +2.09 delta, far above the +0.3 ratchet threshold. All views show structural drift (hero +1.78, side +0.08, top +2.09). bf16 L1-accumulate quantizes the running sum per-tile uniformly, producing tile-correlated error. PSNR within floor (top 38.03 above 38). Kernel +0.36 ms saved (-1.47%) but quality regression rejects the iter."
+}
