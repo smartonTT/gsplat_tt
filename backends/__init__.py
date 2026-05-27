@@ -32,6 +32,12 @@ try:
 except ImportError:
     pass
 
+try:
+    from backends.cpu_cpp.backend import CpuCppBackend
+    REGISTRY["cpu_cpp"] = CpuCppBackend
+except (ImportError, ModuleNotFoundError, AssertionError):
+    pass
+
 
 def get_backend(name: str, **kwargs) -> Backend:
     """Construct the backend registered under `name`.
