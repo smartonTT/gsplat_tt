@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 68 · current best: 23.98 ms · target: 1.0 ms
+      iters: 69 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-073-math-approx-true
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T09:55:56.441980+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All checks pass. Tile_structure_ratio is bit-identical to prev_best (iter-072) across all three views (delta &lt; 0.0001 on all views), well within the ±0.05 architectural-baseline carve-out; the &gt;14 ratio is the established bf16 pack_tile floor and does NOT trigger the strictly-reduce rule. PSNR is bit-identical to prev_best (delta &lt; 0.01 dB all views), all above the 38 dB kernel-algebra floor. Kernel timing improved -0.41% (25.1445→25.0415 ms), within prev_best×1.02 budget. p99/median ratio 1.20× well under the 3× alert threshold. Per-view PSNR spread 2.4 dB and ms ratio 1.23× both well under their thresholds. Visual inspection shows clean renders with no tile seams, no fireflies, no geometry shift, no color clipping, and diff10 shows uniform architectural noise speckle consistent with the established baseline.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.04 ms</b> median · 30.09 ms p99</div>
+    <div class="per-view">per-view: hero 25.04 / side 24.29 / top 29.94</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-073-math-approx-true/hero.png" target="_blank"><img src="screenshots/iter-073-math-approx-true/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-073-math-approx-true/side.png" target="_blank"><img src="screenshots/iter-073-math-approx-true/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-073-math-approx-true/top.png" target="_blank"><img src="screenshots/iter-073-math-approx-true/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-073-math-approx-true/hero_diff10.png" target="_blank"><img src="screenshots/iter-073-math-approx-true/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-073-math-approx-true/side_diff10.png" target="_blank"><img src="screenshots/iter-073-math-approx-true/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-073-math-approx-true/top_diff10.png" target="_blank"><img src="screenshots/iter-073-math-approx-true/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images (hero/side/top) show distributed noise at object silhouettes and body; no horizontal or vertical lines at </li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color blocks visible in any rendered PNG; all views show correct fine detail and texture.</li><li>✓ missing_splat_holes: No dark voids or missing-coverage regions in any rendered view; coverage matches reference stitch_hero.</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes or clipping artifacts visible in hero, side, or top renders.</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes; edge noise in diff10 is consistent with established architectural </li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any view. No isolated bright firefly pixels (&gt;5) visible </li><li>✓ geometry_shift: Diff10 does not show the silhouette of the object as a solid bright outline; geometry positions match reference.</li><li>✓ diff10_structure: All three diff10 images show uniform speckle distributed across the object body and edges — consistent with bf16 pack_ti</li></ul>
+    <p class="reasoning">All checks pass. Tile_structure_ratio is bit-identical to prev_best (iter-072) across all three views (delta &lt; 0.0001 on all views), well within the ±0.05 architectural-baseline carve-out; the &gt;14 ratio is the established bf16 pack_tile floor and does NOT trigger the strictly-reduce rule. PSNR is bit-identical to prev_best (delta &lt; 0.01 dB all views), all above the 38 dB kernel-algebra floor. Kernel timing improved -0.41% (25.1445→25.0415 ms), within prev_best×1.02 budget. p99/median ratio 1.20× well under the 3× alert threshold. Per-view PSNR spread 2.4 dB and ms ratio 1.23× both well under their thresholds. Visual inspection shows clean renders with no tile seams, no fireflies, no geometry shift, no color clipping, and diff10 shows uniform architectural noise speckle consistent with the established baseline.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-072-hifi2-math
