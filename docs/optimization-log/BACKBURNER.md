@@ -240,3 +240,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on tile_structure_ratio: top-view 20.22 vs prev_best baseline ~18.13 = +2.09 delta, far above the +0.3 ratchet threshold. All views show structural drift (hero +1.78, side +0.08, top +2.09). bf16 L1-accumulate quantizes the running sum per-tile uniformly, producing tile-correlated error. PSNR within floor (top 38.03 above 38). Kernel +0.36 ms saved (-1.47%) but quality regression rejects the iter.
 - Thumbnails: ![hero](screenshots/iter-096-packer-l1-acc-d2/hero.png) ![diff10](screenshots/iter-096-packer-l1-acc-d2/hero_diff10.png)
 
+
+## iter-097-fp32-state-cb-plus-l1-acc — REJECT 
+
+- Class: `compute`
+- kernel ms: median 24.09 / p99 28.63
+- PSNR per view: hero 38.9 / side 41.1 / top 38.0
+- Validator reasoning: REJECT on tile_structure_check hard gate. The tile_structure_ratio_per_view max is 20.22 (top view), which is > 14 and represents a delta of +2.087 vs. the prev-best baseline max of 18.132 (iter-094/095). This far exceeds the +0.3 ratchet threshold. These are identical tile_structure_ratio values to iter-096 (which was also REJECTed for this same reason: hero=18.893, side=17.365, top=20.219). The fp32-state-cb component of this iter was already disproved in iter-064 (REVERT, bit-identical ratio, +2.25% kernel). The L1 accumulator component appears to produce the same per-tile precision drift as iter-096's packer-l1-acc-d2. Kernel timing shows a real improvement (-1.39% vs prev_best), PSNR is acceptable (all views ≥ 38 dB floor), and visual checks all pass — but the tile_structure_ratio increase is a hard reject regardless of perf and PSNR wins.
+- Thumbnails: ![hero](screenshots/iter-097-fp32-state-cb-plus-l1-acc/hero.png) ![diff10](screenshots/iter-097-fp32-state-cb-plus-l1-acc/hero_diff10.png)
+

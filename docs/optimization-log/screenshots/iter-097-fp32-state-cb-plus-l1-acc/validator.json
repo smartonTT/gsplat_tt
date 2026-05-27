@@ -1,0 +1,23 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "diff10 images show edge-concentrated speckle along object silhouettes, no horizontal/vertical lines at 32px or 16px spacing visible"},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "no constant-color 32x32 or 16x16 regions observed in any of the three renders; detail preserved throughout"},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "no dark holes or missing-coverage regions visible; Stitch toy body fully rendered in all three views"},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "no saturated R/G/B flat stripes present; color gradients appear continuous"},
+    {"name": "ringing_halos", "result": "pass", "evidence": "no structured ringing at object silhouettes; edge transitions look normal"},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "no pure black/white/magenta patches; no firefly hot pixels detected in hero, side, or top renders"},
+    {"name": "geometry_shift", "result": "pass", "evidence": "diff10 does not reveal object silhouette structure indicating geometry shift; errors concentrated at fine-detail regions not object boundaries"},
+    {"name": "diff10_structure", "result": "pass", "evidence": "diff10 dominated by uniform speckle concentrated along object edges/silhouettes, consistent with per-Gaussian precision changes; no grid, band, or gradient patterns"}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 38.86870943835264, "side": 41.077300849625296, "top": 38.02817491775589}, "pass": true},
+  "tile_structure_check": {
+    "max_ratio": 20.218992423110848,
+    "actual": {"hero": 18.893318450636645, "side": 17.365192395074544, "top": 20.218992423110848},
+    "pass": false,
+    "delta_vs_prev": {"hero": 1.786, "side": 0.073, "top": 2.087, "max_delta": 2.087}
+  },
+  "per_view_consistency": {"max_psnr_delta_db": 3.049, "max_ms_ratio": 1.227, "pass": true},
+  "timing": {"median_ms": 24.095, "p99_ms": 28.634909999999998, "vs_prev_best_pct": -1.39, "pass": true},
+  "reasoning": "REJECT on tile_structure_check hard gate. The tile_structure_ratio_per_view max is 20.22 (top view), which is > 14 and represents a delta of +2.087 vs. the prev-best baseline max of 18.132 (iter-094/095). This far exceeds the +0.3 ratchet threshold. These are identical tile_structure_ratio values to iter-096 (which was also REJECTed for this same reason: hero=18.893, side=17.365, top=20.219). The fp32-state-cb component of this iter was already disproved in iter-064 (REVERT, bit-identical ratio, +2.25% kernel). The L1 accumulator component appears to produce the same per-tile precision drift as iter-096's packer-l1-acc-d2. Kernel timing shows a real improvement (-1.39% vs prev_best), PSNR is acceptable (all views ≥ 38 dB floor), and visual checks all pass — but the tile_structure_ratio increase is a hard reject regardless of perf and PSNR wins."
+}
