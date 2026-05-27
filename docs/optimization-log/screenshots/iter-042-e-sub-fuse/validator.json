@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No 32px/16px grid lines in any diff×10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color blocks; surface texture intact."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "Full object coverage; no localized dark regions."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "Blues, pinks, grays all preserved; no flat stripes."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Edges soft; no halos or sparkle."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No black/white/magenta patches."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "No silhouette-shaped bright edges indicating coordinate error."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Diff×10 is more vibrant than typical — consistent with PSNR going UP (+1 to +3 dB across views). New render is closer to ground truth than iter-041 baseline, so diff is larger but spatially incoherent."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.405854042771026, "side": 40.985048050319115, "top": 38.592830113577335}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.39, "max_ms_ratio": 1.27, "pass": true},
+  "timing": {"median_ms": 27.420, "p99_ms": 33.629, "vs_prev_best_pct": -3.7, "pass": true},
+  "reasoning": "All 8 visual checks pass. Diff×10 shows incoherent per-Gaussian noise without structural artifacts. PSNR INCREASED substantially (hero +2.99, side +1.06, top +2.92 dB) — this is consistent with eliminating the bf16 CB_ONE_MINUS_ALPHA round-trip: dst register stays in fp32 throughout the new fused acquire, while the old path packed/unpacked through bf16. Even though ELWSUB runs at LoFi fidelity (vs ELWMUL HiFi3), the precision win from skipping the bf16 round-trip dominates. Timing: kernel_ms_median 27.420 vs prev_best 28.485 (-3.7%); p99/median 1.23×. Clean kernel win + accuracy bonus."
+}
