@@ -442,52 +442,53 @@ void kernel_main() {
             // Saves 1 acquire + the CB_T_TMP roundtrip per channel — same pattern as
             // iter-007 Stage D1 and iter-010 Stage E.
 
-            // R channel
+            // D2 fused 3-channel (iter-043): all R/G/B in one acquire, using
+            // dst slots 0/1/2. Multi binary_dest_reuse_tiles_init in one
+            // acquire is OK because each call reconfigures only the unpack_A
+            // side for a different source CB — same binary type (ELWADD,
+            // DEST_TO_SRCA) throughout. Distinct from iter-039 which hung
+            // from multiple mul_tiles_init calls (full AB-init for binary
+            // mul). Saves 2 acquires per Gaussian.
             tile_regs_acquire();
+
+            // R: dst[0] = contrib · color_r + R_state
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
             mul_unary_tile(0, color_r_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
+
+            // G: dst[1] = contrib · color_g + G_state
+            copy_tile_to_dst_init_short(CB_CONTRIB);
+            copy_tile(CB_CONTRIB, 0, 1);
+            mul_unary_tile(1, color_g_bits);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 1);
+
+            // B: dst[2] = contrib · color_b + B_state
+            copy_tile_to_dst_init_short(CB_CONTRIB);
+            copy_tile(CB_CONTRIB, 0, 2);
+            mul_unary_tile(2, color_b_bits);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
+
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_COLOR_R_STATE, 1);
-            cb_reserve_back(CB_COLOR_R_STATE, 1);
-            pack_tile(0, CB_COLOR_R_STATE);
-            cb_push_back(CB_COLOR_R_STATE, 1);
-            tile_regs_release();
-            cb_wait_front(CB_COLOR_R_STATE, 1);
-
-            // G channel
-            tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 0);
-            mul_unary_tile(0, color_g_bits);
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
             cb_pop_front(CB_COLOR_G_STATE, 1);
-            cb_reserve_back(CB_COLOR_G_STATE, 1);
-            pack_tile(0, CB_COLOR_G_STATE);
-            cb_push_back(CB_COLOR_G_STATE, 1);
-            tile_regs_release();
-            cb_wait_front(CB_COLOR_G_STATE, 1);
-
-            // B channel
-            tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 0);
-            mul_unary_tile(0, color_b_bits);
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 0);
-            tile_regs_commit();
-            tile_regs_wait();
             cb_pop_front(CB_COLOR_B_STATE, 1);
+            cb_reserve_back(CB_COLOR_R_STATE, 1);
+            cb_reserve_back(CB_COLOR_G_STATE, 1);
             cb_reserve_back(CB_COLOR_B_STATE, 1);
-            pack_tile(0, CB_COLOR_B_STATE);
+            pack_tile(0, CB_COLOR_R_STATE);
+            pack_tile(1, CB_COLOR_G_STATE);
+            pack_tile(2, CB_COLOR_B_STATE);
+            cb_push_back(CB_COLOR_R_STATE, 1);
+            cb_push_back(CB_COLOR_G_STATE, 1);
             cb_push_back(CB_COLOR_B_STATE, 1);
             tile_regs_release();
+            cb_wait_front(CB_COLOR_R_STATE, 1);
+            cb_wait_front(CB_COLOR_G_STATE, 1);
             cb_wait_front(CB_COLOR_B_STATE, 1);
 
             // ----- Stage E (fused iter-042): T_new = T·sat - contrib.

@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 38 · current best: 28.48 ms · target: 1.0 ms
+      iters: 39 · current best: 27.42 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-042-e-sub-fuse
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T03:02:02.487021+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass. Diff×10 shows incoherent per-Gaussian noise without structural artifacts. PSNR INCREASED substantially (hero +2.99, side +1.06, top +2.92 dB) — this is consistent with eliminating the bf16 CB_ONE_MINUS_ALPHA round-trip: dst register stays in fp32 throughout the new fused acquire, while the old path packed/unpacked through bf16. Even though ELWSUB runs at LoFi fidelity (vs ELWMUL HiFi3), the precision win from skipping the bf16 round-trip dominates. Timing: kernel_ms_median 27.420 vs prev_best 28.485 (-3.7%); p99/median 1.23×. Clean kernel win + accuracy bonus.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>27.42 ms</b> median · 33.63 ms p99</div>
+    <div class="per-view">per-view: hero 27.42 / side 26.44 / top 33.54</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-042-e-sub-fuse/hero.png" target="_blank"><img src="screenshots/iter-042-e-sub-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-042-e-sub-fuse/side.png" target="_blank"><img src="screenshots/iter-042-e-sub-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-042-e-sub-fuse/top.png" target="_blank"><img src="screenshots/iter-042-e-sub-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-042-e-sub-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-042-e-sub-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-042-e-sub-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-042-e-sub-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-042-e-sub-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-042-e-sub-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No 32px/16px grid lines in any diff×10.</li><li>✓ tile_uniform_fill: No constant-color blocks; surface texture intact.</li><li>✓ missing_splat_holes: Full object coverage; no localized dark regions.</li><li>✓ color_clipping_bands: Blues, pinks, grays all preserved; no flat stripes.</li><li>✓ ringing_halos: Edges soft; no halos or sparkle.</li><li>✓ nan_inf_signatures: No black/white/magenta patches.</li><li>✓ geometry_shift: No silhouette-shaped bright edges indicating coordinate error.</li><li>✓ diff10_structure: Diff×10 is more vibrant than typical — consistent with PSNR going UP (+1 to +3 dB across views). New render is closer to</li></ul>
+    <p class="reasoning">All 8 visual checks pass. Diff×10 shows incoherent per-Gaussian noise without structural artifacts. PSNR INCREASED substantially (hero +2.99, side +1.06, top +2.92 dB) — this is consistent with eliminating the bf16 CB_ONE_MINUS_ALPHA round-trip: dst register stays in fp32 throughout the new fused acquire, while the old path packed/unpacked through bf16. Even though ELWSUB runs at LoFi fidelity (vs ELWMUL HiFi3), the precision win from skipping the bf16 round-trip dominates. Timing: kernel_ms_median 27.420 vs prev_best 28.485 (-3.7%); p99/median 1.23×. Clean kernel win + accuracy bonus.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-041-b2-b3a-fuse
