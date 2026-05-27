@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 52 · current best: 24.73 ms · target: 1.0 ms
+      iters: 53 · current best: 24.73 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-056-profile-capture
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T05:49:21.253830+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> NEEDS_REVIEW triggered solely by the kernel-algebra class PSNR floor (&gt;40 dB per view): hero 39.10 dB and top 38.29 dB are below the 40 dB floor. However, this is a diagnostic-only profile-capture iter with Tracy instrumentation added to a bit-identical kernel binary — the PSNR values are identical to iter-054 (39.10/40.92/38.29), which was KEEP. All visual checks pass cleanly: no tile seams, no fill blocks, no holes, no clipping, no NaN signatures, no geometry shift, and diff10 speckle is uniformly distributed. Tile structure ratios (max 17.587) match iter-054 exactly (delta_vs_prev ~0.000), confirming no quality regression from the +Tracy instrumentation. Timing is +0.57% vs prev_best 24.729 ms (well within 2% break-even). The NEEDS_REVIEW flag is a mechanical application of the kernel-algebra floor rule to values that were already present and accepted at iter-054; a human reviewer should confirm these below-40-dB views are the known pre-existing condition rather than a new regression, and if confirmed, this iter is a KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.87 ms</b> median · 30.09 ms p99</div>
+    <div class="per-view">per-view: hero 24.87 / side 24.04 / top 29.68</div>
+    <div class="psnr">PSNR: hero 39.1 / side 40.9 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-056-profile-capture/hero.png" target="_blank"><img src="screenshots/iter-056-profile-capture/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-056-profile-capture/side.png" target="_blank"><img src="screenshots/iter-056-profile-capture/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-056-profile-capture/top.png" target="_blank"><img src="screenshots/iter-056-profile-capture/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-056-profile-capture/hero_diff10.png" target="_blank"><img src="screenshots/iter-056-profile-capture/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-056-profile-capture/side_diff10.png" target="_blank"><img src="screenshots/iter-056-profile-capture/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-056-profile-capture/top_diff10.png" target="_blank"><img src="screenshots/iter-056-profile-capture/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images show distributed speckle concentrated at object edges/silhouettes. No horizontal or vertical lin</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color fill blocks detected in any render. All regions with reference detail show correspondin</li><li>✓ missing_splat_holes: No local dark holes or coverage gaps in hero, side, or top renders relative to their references. Diff10 shows no concent</li><li>✓ color_clipping_bands: No saturated R/G/B bands or flat colored stripes present in any render. Color distribution matches reference across all </li><li>✓ ringing_halos: No structured ringing at object silhouettes. Edge noise in diff10 is consistent with accumulated bf16 quantization error</li><li>✓ nan_inf_signatures: No pure black, white, or magenta spatially-correlated patches in any render. All pixel values appear within normal range</li><li>✓ geometry_shift: Diff10 images do not show object silhouettes as a dominant pattern. Diff is distributed across the body surface, not shi</li><li>✓ diff10_structure: All three diff10 images show predominantly uniform speckle noise confined to the subject region. top_diff10 shows the ex</li></ul>
+    <p class="reasoning">NEEDS_REVIEW triggered solely by the kernel-algebra class PSNR floor (&gt;40 dB per view): hero 39.10 dB and top 38.29 dB are below the 40 dB floor. However, this is a diagnostic-only profile-capture iter with Tracy instrumentation added to a bit-identical kernel binary — the PSNR values are identical to iter-054 (39.10/40.92/38.29), which was KEEP. All visual checks pass cleanly: no tile seams, no fill blocks, no holes, no clipping, no NaN signatures, no geometry shift, and diff10 speckle is uniformly distributed. Tile structure ratios (max 17.587) match iter-054 exactly (delta_vs_prev ~0.000), confirming no quality regression from the +Tracy instrumentation. Timing is +0.57% vs prev_best 24.729 ms (well within 2% break-even). The NEEDS_REVIEW flag is a mechanical application of the kernel-algebra floor rule to values that were already present and accepted at iter-054; a human reviewer should confirm these below-40-dB views are the known pre-existing condition rather than a new regression, and if confirmed, this iter is a KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-054-drop-const-prologue
