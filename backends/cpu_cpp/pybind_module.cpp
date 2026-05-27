@@ -891,9 +891,35 @@ py::tuple render_full_py(
         {static_cast<py::ssize_t>(image_height),
          static_cast<py::ssize_t>(image_width),
          static_cast<py::ssize_t>(3)});
-    std::memset(image.mutable_data(), 0,
-                static_cast<std::size_t>(image_height) *
-                    static_cast<std::size_t>(image_width) * 3 * sizeof(float));
+    // iter-050: parallel zero of the 3 MB image buffer. Single-threaded
+    // memset is memory-bandwidth-bound (~30 GB/s sustained on M-Pro =
+    // ~100 µs / 3 MB). Splitting across the warm pool's W workers gives a
+    // ~3-4x reduction (memory bandwidth scales superlinearly with the
+    // number of issuing cores on Apple silicon up to ~4 cores, then
+    // plateaus). Save ~70 µs / frame.
+    {
+        float* const img_ptr = image.mutable_data();
+        const std::size_t total =
+            static_cast<std::size_t>(image_height) *
+            static_cast<std::size_t>(image_width) * 3;
+        gsplat_cpu::ThreadPool& pool_ref = global_blend_pool();
+        const std::size_t W = std::max<std::size_t>(1, pool_ref.size());
+        const std::size_t per_worker = (total + W - 1) / W;
+        if (W > 1 && total > 65536) {
+            for (std::size_t w = 0; w < W; ++w) {
+                pool_ref.submit([img_ptr, w, per_worker, total]() {
+                    const std::size_t lo = w * per_worker;
+                    const std::size_t hi = std::min(lo + per_worker, total);
+                    if (hi > lo) {
+                        std::memset(img_ptr + lo, 0, (hi - lo) * sizeof(float));
+                    }
+                });
+            }
+            pool_ref.wait();
+        } else {
+            std::memset(img_ptr, 0, total * sizeof(float));
+        }
+    }
 
     // Stage 4: cull + blend.
     auto t_b0 = clock::now();
