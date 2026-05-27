@@ -111,15 +111,6 @@ void kernel_main() {
     // SFPU pass; cheaper than clamping power pre-exp (which needed 3 ops).
     relu_max_tile_init();
 
-    // iter-068: dst-resident B1+B2+B3a fuse — skip CB_DX/CB_DY entirely.
-    // mul_binary_tile(idst0, idst1, odst) is dst-to-dst SFPU multiply,
-    // square_tile(idst) is in-place SFPU square. Both need one-time inits;
-    // chaining them with SFPU-unary inits in the per-Gaussian acquire is
-    // the same pattern as iter-066's relu_max (one-time global, then called
-    // inside acquires without re-init).
-    mul_binary_tile_init();
-    square_tile_init();
-
     for (uint32_t t = 0; t < num_tiles; t++) {
         // Per-tile profiling zone. In non-profile builds DeviceZoneScopedN is
         // a no-op macro (see tt-metal kernel_profiler.hpp), so this costs
@@ -238,43 +229,63 @@ void kernel_main() {
             uint32_t color_b_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 7);
             uint32_t opacity_bits   = ckernel::read_tile_value(CB_SCALARS, 0, 8);
 
-            // ----- Stage B1 + B2 + B3a (FUSED iter-068):
-            // Skip CB_DX/CB_DY entirely — dx, dy never escape fp32 dst.
-            // Hypothesis under test: CB_DX/CB_DY were the dominant quilting
-            // source. Same tile sees identical px, py grids across every
-            // Gaussian, so the bf16 pack of dx, dy quantizes IDENTICALLY for
-            // every Gaussian that touches the tile. That deterministic
-            // per-pixel rounding bias accumulates as hundreds of Gaussians
-            // blend, producing the tile-grid signature in diff10. After
-            // iter-052 (CB_ALPHA), iter-064 (state CBs), iter-067 (CB_CONTRIB)
-            // all left the metric flat, CB_DX/CB_DY are the strongest remaining
-            // candidate (project-iter-067-cb-contrib-disproved).
-            //
-            // Dst-slot plan:
-            //   dst[0] := px - mean_x = dx
-            //   dst[1] := py - mean_y = dy
-            //   dst[2] := dx · dy           (mul_binary_tile dst-to-dst)
-            //   dst[0] := dx²              (square_tile in-place)
-            //   dst[1] := dy²              (square_tile in-place)
-            //   dst[0] *= cov_a            (a · dx²)
-            //   dst[1] *= cov_c            (c · dy²)
-            //   dst[2] *= 2·cov_b          (2b · dx·dy)
-            // Order matters: dx·dy MUST run before either square_tile,
-            // otherwise the squared values overwrite the operands.
-            //
-            // SFPU init pattern: square_tile_init() and mul_binary_tile_init()
-            // are global one-time inits placed at the top of kernel_main
-            // alongside relu_max_tile_init() (iter-066). Inside the acquire
-            // we only need the copy_tile unpacker init.
+            // ----- Stage B1: per-pixel offsets from the Gaussian center.
+            // Loads the px/py tiles into Dst slots 0/1 and subtracts the
+            // Gaussian center scalar (mean_x, mean_y) lane-wise. After this:
+            //   Dst[0][i] = px[i] - mean_x
+            //   Dst[1][i] = py[i] - mean_y
+            // Pack each back to its own CB so subsequent stages can read them
+            // as binary operands (mul_tiles, etc., need CB inputs).
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_PX);
             copy_tile(CB_PX, 0, 0);
             sub_unary_tile(0, mean_x_bits);
+            // iter-057: dropped redundant copy_tile_to_dst_init_short(CB_PY).
+            // CB_PX and CB_PY are both bf16, identical format. Only sub_unary_tile
+            // (SFPU, doesn't mutate unpacker) runs between the two copy_tiles, so
+            // the second init is the iter-048+049 safe-drop pattern (no other
+            // _init interleaved), NOT the iter-055 pattern (binary_dest_reuse_init
+            // between).
             copy_tile(CB_PY, 0, 1);
             sub_unary_tile(1, mean_y_bits);
-            mul_binary_tile(0, 1, 2);   // dst[2] = dx · dy
-            square_tile(0);             // dst[0] = dx²
-            square_tile(1);             // dst[1] = dy²
+            tile_regs_commit();
+            tile_regs_wait();
+            cb_reserve_back(CB_DX, 1);
+            pack_tile(0, CB_DX);
+            cb_push_back(CB_DX, 1);
+            cb_reserve_back(CB_DY, 1);
+            pack_tile(1, CB_DY);
+            cb_push_back(CB_DY, 1);
+            tile_regs_release();
+            cb_wait_front(CB_DX, 1);
+            cb_wait_front(CB_DY, 1);
+
+            // ----- Stage B2+B3a (fused): three acquire blocks, each computing
+            // one Q term directly:  mul_tiles → mul_unary_tile in same acquire.
+            // Eliminates CB_DX2/CB_DY2/CB_DXDY scratch round-trips. Single
+            // mul_tiles_init per block + SFPU mul_unary — safe (NOT the
+            // iter-039 multi-init footgun: that hung from chaining ≥2
+            // mul_tiles_init in one acquire; here it's one FPU init followed
+            // by SFPU scalar mul, which is the standard pipeline).
+            //   CB_Q[0] = a · dx²
+            //   CB_Q[1] = c · dy²
+            //   CB_Q[2] = 2b · dx·dy
+
+            // FUSED (iter-049): All 3 B2 ops in ONE acquire using dst slots
+            // 0/1/2. ONE mul_tiles_init shared by 3 mul_tiles calls with
+            // different (but same-format bf16) CB pairs. Extends iter-048's
+            // 2-way pattern. Third mul_tiles uses (CB_DX, CB_DY) — different
+            // pair from init's (CB_DX, CB_DX), testing whether unpack
+            // handles cross-CB pairing without re-init. Saves 2 acquires
+            // per Gaussian vs the unfused 3-acquire pattern.
+            //   dst[0] = a · dx²
+            //   dst[1] = c · dy²
+            //   dst[2] = 2b · dx·dy
+            tile_regs_acquire();
+            mul_tiles_init(CB_DX, CB_DX);
+            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
+            mul_tiles(CB_DY, CB_DY, 0, 0, 1);
+            mul_tiles(CB_DX, CB_DY, 0, 0, 2);
             mul_unary_tile(0, cov_a_bits);
             mul_unary_tile(1, cov_c_bits);
             mul_unary_tile(2, two_cov_b_bits);
@@ -347,9 +358,10 @@ void kernel_main() {
             cb_push_back(CB_CONTRIB, 1);
             tile_regs_release();
 
-            // Cleanup B/C inputs. iter-068: CB_DX/CB_DY no longer pushed
-            // (fused into B1+B2+B3a single-acquire), nothing to pop.
+            // Cleanup B/C inputs (CB_ALPHA is no longer used).
             cb_pop_front(CB_Q, 3);
+            cb_pop_front(CB_DX, 1);
+            cb_pop_front(CB_DY, 1);
 
             cb_wait_front(CB_CONTRIB, 1);
 

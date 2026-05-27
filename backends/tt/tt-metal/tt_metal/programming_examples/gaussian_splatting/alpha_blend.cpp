@@ -201,9 +201,8 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // batches in flight (parity with the previous double-buffering depth).
     cb_tile(CB_COLOR_OUT, 6);
 
-    // iter-068: CB_DX/CB_DY allocations dropped — B1+B2+B3a fused into one
-    // acquire keeps dx, dy in fp32 dst; no pack to bf16. Indices 4 and 5
-    // reserved per the no-renumbering policy.
+    cb_tile(CB_DX, 2);
+    cb_tile(CB_DY, 2);
     // iter-053: CB_DX2/CB_DY2/CB_DXDY/CB_POWER/CB_ALPHA/CB_ONE_MINUS_ALPHA/CB_T_TMP
     // allocations dropped — slots 6,7,8,10,12,14,15 reserved but unused after
     // the per-Gaussian fuse chain (iter-040 B3 power, iter-041 B2+B3a per-term,
