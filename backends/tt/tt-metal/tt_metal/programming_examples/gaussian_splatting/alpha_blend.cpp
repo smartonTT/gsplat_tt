@@ -220,7 +220,8 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_tile(CB_COLOR_G_STATE, 1);
     cb_tile(CB_COLOR_B_STATE, 1);
     cb_tile(CB_T_STATE, 1);
-    cb_tile(CB_SAT_MASK, 1);
+    // iter-060: dropped cb_tile(CB_SAT_MASK,1). CB is unused after iter-059.
+    // Slot 21 kept reserved (CB_SAT_MASK constexpr) to avoid renumbering.
 
     // iter-054: CB_CONST_ZERO/CB_CONST_099 dropped — no consumer remains after
     // iter-050 (power clamp) and iter-051 (alpha cap) removals.

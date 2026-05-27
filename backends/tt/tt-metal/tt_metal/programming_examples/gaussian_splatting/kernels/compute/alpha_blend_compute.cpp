@@ -159,21 +159,14 @@ void kernel_main() {
         tile_regs_release();
         cb_push_back(CB_T_STATE, 1);
 
-        // sat_mask = 1.0 (all pixels active)
-        cb_reserve_back(CB_SAT_MASK, 1);
-        tile_regs_acquire();
-        fill_tile(0, 1.0f);
-        tile_regs_commit();
-        tile_regs_wait();
-        pack_tile(0, CB_SAT_MASK);
-        tile_regs_release();
-        cb_push_back(CB_SAT_MASK, 1);
+        // iter-060: dropped sat_mask init block. Per iter-059, sat_mask is
+        // unused in the per-Gaussian path (constant=1 assumption on stitch_doll).
+        // Saves 1 acquire per tile (CB fill + pack).
 
         cb_wait_front(CB_COLOR_R_STATE, 1);
         cb_wait_front(CB_COLOR_G_STATE, 1);
         cb_wait_front(CB_COLOR_B_STATE, 1);
         cb_wait_front(CB_T_STATE, 1);
-        cb_wait_front(CB_SAT_MASK, 1);
 
         // Read the per-tile Gaussian count the reader wrote into CB_TILE_META.
         // This tells us how many entries from CB_SCALARS we'll consume in the
@@ -478,7 +471,7 @@ void kernel_main() {
         cb_pop_front(CB_COLOR_G_STATE, 1);
         cb_pop_front(CB_COLOR_B_STATE, 1);
         cb_pop_front(CB_T_STATE, 1);
-        cb_pop_front(CB_SAT_MASK, 1);
+        // iter-060: CB_SAT_MASK no longer pushed; nothing to pop.
         cb_pop_front(CB_PX, 1);
         cb_pop_front(CB_PY, 1);
     }
