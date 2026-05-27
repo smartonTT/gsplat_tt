@@ -216,20 +216,10 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     cb_tile(CB_CONTRIB, 1);
 
-    // iter-064: fp32 state CBs to reduce bf16 quantization accumulation
-    // across the per-Gaussian loop (suspect cause of tile_structure_ratio
-    // plateau ~16-17 per iter-052 analysis). Each state CB now 4 KB instead
-    // of 2 KB (+8 KB/core total — trivial vs 1.5 MB L1). pack/unpack handle
-    // the format conversion automatically since fp32_dest_acc_en=true.
-    auto cb_state_fp32 = [&](uint32_t id) {
-        CircularBufferConfig c(TILE_BYTES_FP32, {{id, DataFormat::Float32}});
-        c.set_page_size(id, TILE_BYTES_FP32);
-        CreateCircularBuffer(program, cores, c);
-    };
-    cb_state_fp32(CB_COLOR_R_STATE);
-    cb_state_fp32(CB_COLOR_G_STATE);
-    cb_state_fp32(CB_COLOR_B_STATE);
-    cb_state_fp32(CB_T_STATE);
+    cb_tile(CB_COLOR_R_STATE, 1);
+    cb_tile(CB_COLOR_G_STATE, 1);
+    cb_tile(CB_COLOR_B_STATE, 1);
+    cb_tile(CB_T_STATE, 1);
     // iter-060: dropped cb_tile(CB_SAT_MASK,1). CB is unused after iter-059.
     // Slot 21 kept reserved (CB_SAT_MASK constexpr) to avoid renumbering.
 
