@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 85 · current best: 23.98 ms · target: 1.0 ms
+      iters: 86 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-093-cq1-upload-split
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T13:57:35.905025+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All gates pass. PSNR is bit-identical to prev_best (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch-class floor, delta ~0). tile_structure_ratio is bit-identical to prev_best established architectural baseline (max 18.132 top, delta ~0.0); architectural-baseline carve-out applies, +0.3 ratchet rule is satisfied with delta=0. kernel_ms_median 24.4555 vs prev_best 24.474 = -0.075%, flat/break-even within the 1.02x threshold. p99/median ratio = 1.193, well under 3x tail threshold. Per-view PSNR delta 2.38 dB and per-view ms ratio 1.23x are both within their respective 20 dB and 2x limits. All eight visual checks pass: renders show faithful geometry matching references, no fireflies, no tile-grid seams, no geometry shift, no color clipping, no missing-splat holes above speckle level; diff10 images show the established architectural bf16 body-noise pattern without any structured grid or banding artifacts. This is a pure host-side dispatch refactor; numerical and visual identity with prev_best is expected and confirmed.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.46 ms</b> median · 29.17 ms p99</div>
+    <div class="per-view">per-view: hero 24.46 / side 23.64 / top 29.15</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-093-cq1-upload-split/hero.png" target="_blank"><img src="screenshots/iter-093-cq1-upload-split/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-093-cq1-upload-split/side.png" target="_blank"><img src="screenshots/iter-093-cq1-upload-split/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-093-cq1-upload-split/top.png" target="_blank"><img src="screenshots/iter-093-cq1-upload-split/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-093-cq1-upload-split/hero_diff10.png" target="_blank"><img src="screenshots/iter-093-cq1-upload-split/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-093-cq1-upload-split/side_diff10.png" target="_blank"><img src="screenshots/iter-093-cq1-upload-split/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-093-cq1-upload-split/top_diff10.png" target="_blank"><img src="screenshots/iter-093-cq1-upload-split/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 PNGs show fine-grained body noise consistent with established bf16 architectural baseline; no horizonta</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color blocks visible in any rendered PNG; fur detail, ear gradient, and tongue color all appe</li><li>✓ missing_splat_holes: No local dark regions in render where reference has coverage; object body coverage matches reference stitch PNGs across </li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes visible in hero, side, or top renders; color palette matches references (blue fur, peach</li><li>✓ ringing_halos: No structured ringing at silhouette edges in any render; object edges are soft and consistent with reference.</li><li>✓ nan_inf_signatures: No pure black, white, or magenta spatially-correlated patches in any render; no isolated 1-3px bright hot dots (fireflie</li><li>✓ geometry_shift: Diff10 shows noise distributed across object body, not a silhouette-edge shift pattern; geometry position matches refere</li><li>✓ diff10_structure: All three diff10 images are dominated by uniform fine-grained speckle on the object body — no grids, edges, gradients, o</li></ul>
+    <p class="reasoning">All gates pass. PSNR is bit-identical to prev_best (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch-class floor, delta ~0). tile_structure_ratio is bit-identical to prev_best established architectural baseline (max 18.132 top, delta ~0.0); architectural-baseline carve-out applies, +0.3 ratchet rule is satisfied with delta=0. kernel_ms_median 24.4555 vs prev_best 24.474 = -0.075%, flat/break-even within the 1.02x threshold. p99/median ratio = 1.193, well under 3x tail threshold. Per-view PSNR delta 2.38 dB and per-view ms ratio 1.23x are both within their respective 20 dB and 2x limits. All eight visual checks pass: renders show faithful geometry matching references, no fireflies, no tile-grid seams, no geometry shift, no color clipping, no missing-splat holes above speckle level; diff10 images show the established architectural bf16 body-noise pattern without any structured grid or banding artifacts. This is a pure host-side dispatch refactor; numerical and visual identity with prev_best is expected and confirmed.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-092-persist-dram-mesh-buffers
