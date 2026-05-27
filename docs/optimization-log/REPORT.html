@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 30 · current best: 42.31 ms · target: 1.0 ms
+      iters: 31 · current best: 40.02 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-030-contrib-floor-7-of-255
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T00:47:38.698618+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass. Diff×10 images show only fine uniform speckle across the object surface with no structural artifacts — consistent with a contrib_floor threshold bump dropping low-opacity splats uniformly. No tile seams, no geometry shift, no clipping. PSNR: all three views above 35 dB floor (hero 39.50, side 43.86, top 38.71); for binning class the floor is 35 dB, all pass. Per-view PSNR delta is 5.15 dB (hero 39.50 vs side 43.86), well under 20 dB gate. Per-view ms ratio is 50.33/38.58=1.305, well under 2× gate. Timing: median 40.022 ms vs prev_best 42.311 ms = -5.41% improvement, passing the ≤prev_best×1.02 progress bar. p99 50.42 ms is 1.26× median, well under the 3× NEEDS_REVIEW threshold. This is a clean KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>40.02 ms</b> median · 50.42 ms p99</div>
+    <div class="per-view">per-view: hero 40.02 / side 38.58 / top 50.33</div>
+    <div class="psnr">PSNR: hero 39.5 / side 43.9 / top 38.7 (min <b>38.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-030-contrib-floor-7-of-255/hero.png" target="_blank"><img src="screenshots/iter-030-contrib-floor-7-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-030-contrib-floor-7-of-255/side.png" target="_blank"><img src="screenshots/iter-030-contrib-floor-7-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-030-contrib-floor-7-of-255/top.png" target="_blank"><img src="screenshots/iter-030-contrib-floor-7-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-030-contrib-floor-7-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-030-contrib-floor-7-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-030-contrib-floor-7-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-030-contrib-floor-7-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-030-contrib-floor-7-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-030-contrib-floor-7-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32px or 16px spacing visible in any of the three diff×10 images. Diff patterns are co</li><li>✓ tile_uniform_fill: No square constant-color blocks in any render. All three views show continuous Gaussian splat coverage with expected tex</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions beyond expected background black. Object coverage is continuous across hero, s</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes in any render. Colors are well within expected range; no clipping artifacts visible.</li><li>✓ ringing_halos: No structured ringing at object silhouettes in any view. Edges show clean Gaussian falloff consistent with prior iters.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any render. All pixel values appear finite and reasonable.</li><li>✓ geometry_shift: Diff×10 images do not show silhouette outlines of the object displaced from reference. Diff energy is distributed across</li><li>✓ diff10_structure: All three diff×10 images show uniform fine speckle across the object surface — the expected pattern for a per-splat cont</li></ul>
+    <p class="reasoning">All visual checks pass. Diff×10 images show only fine uniform speckle across the object surface with no structural artifacts — consistent with a contrib_floor threshold bump dropping low-opacity splats uniformly. No tile seams, no geometry shift, no clipping. PSNR: all three views above 35 dB floor (hero 39.50, side 43.86, top 38.71); for binning class the floor is 35 dB, all pass. Per-view PSNR delta is 5.15 dB (hero 39.50 vs side 43.86), well under 20 dB gate. Per-view ms ratio is 50.33/38.58=1.305, well under 2× gate. Timing: median 40.022 ms vs prev_best 42.311 ms = -5.41% improvement, passing the ≤prev_best×1.02 progress bar. p99 50.42 ms is 1.26× median, well under the 3× NEEDS_REVIEW threshold. This is a clean KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-029-sat-mask-refresh-every-8
