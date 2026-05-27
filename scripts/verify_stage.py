@@ -39,6 +39,7 @@ TOLS = {
     "tile_assign": {"gaussian_ids": 0, "tile_ids": 0, "tiles_per_gaussian": 0},
     "sort": {"sorted_gaussian_ids": 0, "tile_ranges": 0},
     "blend": {"image": 1.0},   # max-abs check is informational; PSNR gates
+    "microblock_cull": {"mb_header": 0, "mb_stream": 0},
 }
 # Layer 2 gate for the blend stage. Matches the north-star invariant (60 dB)
 # from opt/plan.md — a port that's truly identical modulo fp accumulation
@@ -135,11 +136,39 @@ def run_blend(backend, fixtures_dir: Path):
     return {"image": (image, ref_out)}
 
 
+def run_microblock_cull(backend, fixtures_dir: Path):
+    inp = np.load(fixtures_dir / "microblock_cull_inputs.npz")
+    out = np.load(fixtures_dir / "microblock_cull_outputs.npz")
+    mod = backend._mod
+    mb_header_flat, mb_stream, _stats = mod.microblock_cull(
+        np.ascontiguousarray(inp["means_2d"], np.float32),
+        np.ascontiguousarray(inp["covs_2d"].reshape(-1, 4), np.float32),
+        np.ascontiguousarray(inp["opacities"], np.float32),
+        np.ascontiguousarray(inp["sorted_gaussian_ids"], np.int64),
+        np.ascontiguousarray(inp["tile_ranges"], np.int64),
+        int(inp["tiles_x"]),
+        int(inp["tiles_y"]),
+        32,
+        float(inp["mb_contrib_floor"]),
+    )
+    tiles_x = int(inp["tiles_x"])
+    tiles_y = int(inp["tiles_y"])
+    num_tiles = tiles_x * tiles_y
+    return {
+        "mb_header": (
+            mb_header_flat.reshape(num_tiles, 32, 2),
+            out["mb_header"],
+        ),
+        "mb_stream": (mb_stream, out["mb_stream"]),
+    }
+
+
 RUNNERS = {
     "project": run_project,
     "tile_assign": run_tile_assign,
     "sort": run_sort,
     "blend": run_blend,
+    "microblock_cull": run_microblock_cull,
 }
 
 

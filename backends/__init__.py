@@ -36,6 +36,12 @@ except ImportError:
 try:
     from backends.cpu_cpp.backend import CpuCppBackend
     REGISTRY["cpu_cpp"] = CpuCppBackend
+
+    class CpuCppMbBackend(CpuCppBackend):
+        def __init__(self):
+            super().__init__(microblock=True)
+
+    REGISTRY["cpu_cpp_mb"] = CpuCppMbBackend
 except (ImportError, ModuleNotFoundError, AssertionError):
     pass
 
