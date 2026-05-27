@@ -154,145 +154,6 @@ inline float max_t_neon(const MbAccum& acc) {
     }
     return vmaxvq_f32(m);
 }
-
-// iter-038: fused 2-Gaussian apply. The compiler's inliner / OoO engine
-// cannot pipeline successive apply_gaussian_neon calls beyond what the
-// RAW chain on acc.t/r/g/b allows. By manually interleaving two
-// Gaussians' independent setup (pwr build, range-clamp, simd_exp,
-// alpha cap+mul) and only sequentially applying them at the RGB+T
-// writeback step, we expose ~2x more in-flight FMAs to NEON's two
-// FMA pipes per cycle. Per row: 26 setup ops for g1 || 26 setup ops
-// for g2 (in parallel), then sequential at/RGB/T for g1, then for g2.
-inline void apply_two_gaussians_neon(
-    MbAccum& acc,
-    float ci_a_g1, float ci_b_g1, float ci_c_g1,
-    float mx_g1, float my_g1,
-    float opacity_g1,
-    float cr_g1, float cg_g1, float cb_g1,
-    float ci_a_g2, float ci_b_g2, float ci_c_g2,
-    float mx_g2, float my_g2,
-    float opacity_g2,
-    float cr_g2, float cg_g2, float cb_g2,
-    int px_start, int py_start) {
-    const float A_g1 = -0.5f * ci_a_g1;
-    const float B_g1 = -ci_b_g1;
-    const float C_g1 = -0.5f * ci_c_g1;
-    const float A_g2 = -0.5f * ci_a_g2;
-    const float B_g2 = -ci_b_g2;
-    const float C_g2 = -0.5f * ci_c_g2;
-
-    const float32x4_t A_v_g1 = vdupq_n_f32(A_g1);
-    const float32x4_t op_v_g1 = vdupq_n_f32(opacity_g1);
-    const float32x4_t A_v_g2 = vdupq_n_f32(A_g2);
-    const float32x4_t op_v_g2 = vdupq_n_f32(opacity_g2);
-    const float32x4_t alpha_cap = vdupq_n_f32(0.99f);
-    const float32x4_t zero = vdupq_n_f32(0.0f);
-    const float32x4_t pwr_lo_bound = vdupq_n_f32(-30.0f);
-    const float32x4_t cr_v_g1 = vdupq_n_f32(cr_g1);
-    const float32x4_t cg_v_g1 = vdupq_n_f32(cg_g1);
-    const float32x4_t cb_v_g1 = vdupq_n_f32(cb_g1);
-    const float32x4_t cr_v_g2 = vdupq_n_f32(cr_g2);
-    const float32x4_t cg_v_g2 = vdupq_n_f32(cg_g2);
-    const float32x4_t cb_v_g2 = vdupq_n_f32(cb_g2);
-
-    static const float dx_offs_lo[4] = {0.5f, 1.5f, 2.5f, 3.5f};
-    static const float dx_offs_hi[4] = {4.5f, 5.5f, 6.5f, 7.5f};
-    const float32x4_t dx_off_lo = vld1q_f32(dx_offs_lo);
-    const float32x4_t dx_off_hi = vld1q_f32(dx_offs_hi);
-
-    const float px_base_g1 = static_cast<float>(px_start) - mx_g1;
-    const float32x4_t dx_lo_g1 = vaddq_f32(vdupq_n_f32(px_base_g1), dx_off_lo);
-    const float32x4_t dx_hi_g1 = vaddq_f32(vdupq_n_f32(px_base_g1), dx_off_hi);
-    const float32x4_t dx_lo_sq_g1 = vmulq_f32(dx_lo_g1, dx_lo_g1);
-    const float32x4_t dx_hi_sq_g1 = vmulq_f32(dx_hi_g1, dx_hi_g1);
-
-    const float px_base_g2 = static_cast<float>(px_start) - mx_g2;
-    const float32x4_t dx_lo_g2 = vaddq_f32(vdupq_n_f32(px_base_g2), dx_off_lo);
-    const float32x4_t dx_hi_g2 = vaddq_f32(vdupq_n_f32(px_base_g2), dx_off_hi);
-    const float32x4_t dx_lo_sq_g2 = vmulq_f32(dx_lo_g2, dx_lo_g2);
-    const float32x4_t dx_hi_sq_g2 = vmulq_f32(dx_hi_g2, dx_hi_g2);
-
-    for (int i = 0; i < 4; ++i) {
-        const float py = static_cast<float>(py_start + i) + 0.5f;
-
-        // ---------- Independent setup for g1 ----------
-        const float dy_g1 = py - my_g1;
-        const float32x4_t y_term_v_g1 = vdupq_n_f32(C_g1 * dy_g1 * dy_g1);
-        const float32x4_t xy_coef_v_g1 = vdupq_n_f32(B_g1 * dy_g1);
-        float32x4_t pwr_lo_g1 = vfmaq_f32(y_term_v_g1, xy_coef_v_g1, dx_lo_g1);
-        pwr_lo_g1 = vfmaq_f32(pwr_lo_g1, A_v_g1, dx_lo_sq_g1);
-        float32x4_t pwr_hi_g1 = vfmaq_f32(y_term_v_g1, xy_coef_v_g1, dx_hi_g1);
-        pwr_hi_g1 = vfmaq_f32(pwr_hi_g1, A_v_g1, dx_hi_sq_g1);
-        pwr_lo_g1 = vmaxq_f32(vminq_f32(pwr_lo_g1, zero), pwr_lo_bound);
-        pwr_hi_g1 = vmaxq_f32(vminq_f32(pwr_hi_g1, zero), pwr_lo_bound);
-
-        // ---------- Independent setup for g2 ----------
-        const float dy_g2 = py - my_g2;
-        const float32x4_t y_term_v_g2 = vdupq_n_f32(C_g2 * dy_g2 * dy_g2);
-        const float32x4_t xy_coef_v_g2 = vdupq_n_f32(B_g2 * dy_g2);
-        float32x4_t pwr_lo_g2 = vfmaq_f32(y_term_v_g2, xy_coef_v_g2, dx_lo_g2);
-        pwr_lo_g2 = vfmaq_f32(pwr_lo_g2, A_v_g2, dx_lo_sq_g2);
-        float32x4_t pwr_hi_g2 = vfmaq_f32(y_term_v_g2, xy_coef_v_g2, dx_hi_g2);
-        pwr_hi_g2 = vfmaq_f32(pwr_hi_g2, A_v_g2, dx_hi_sq_g2);
-        pwr_lo_g2 = vmaxq_f32(vminq_f32(pwr_lo_g2, zero), pwr_lo_bound);
-        pwr_hi_g2 = vmaxq_f32(vminq_f32(pwr_hi_g2, zero), pwr_lo_bound);
-
-        // ---------- Both exp's in parallel ----------
-        const float32x4_t gw_lo_g1 = simd_exp_f32x4_fast(pwr_lo_g1);
-        const float32x4_t gw_hi_g1 = simd_exp_f32x4_fast(pwr_hi_g1);
-        const float32x4_t gw_lo_g2 = simd_exp_f32x4_fast(pwr_lo_g2);
-        const float32x4_t gw_hi_g2 = simd_exp_f32x4_fast(pwr_hi_g2);
-
-        const float32x4_t alpha_lo_g1 = vminq_f32(vmulq_f32(op_v_g1, gw_lo_g1), alpha_cap);
-        const float32x4_t alpha_hi_g1 = vminq_f32(vmulq_f32(op_v_g1, gw_hi_g1), alpha_cap);
-        const float32x4_t alpha_lo_g2 = vminq_f32(vmulq_f32(op_v_g2, gw_lo_g2), alpha_cap);
-        const float32x4_t alpha_hi_g2 = vminq_f32(vmulq_f32(op_v_g2, gw_hi_g2), alpha_cap);
-
-        // ---------- Sequential apply g1 then g2 ----------
-        const int row = i * 8;
-        float32x4_t t_lo = vld1q_f32(&acc.t[row]);
-        float32x4_t t_hi = vld1q_f32(&acc.t[row + 4]);
-        float32x4_t r_lo = vld1q_f32(&acc.r[row]);
-        float32x4_t gg_lo = vld1q_f32(&acc.g[row]);
-        float32x4_t bb_lo = vld1q_f32(&acc.b[row]);
-        float32x4_t r_hi = vld1q_f32(&acc.r[row + 4]);
-        float32x4_t gg_hi = vld1q_f32(&acc.g[row + 4]);
-        float32x4_t bb_hi = vld1q_f32(&acc.b[row + 4]);
-
-        // g1
-        const float32x4_t at_lo_g1 = vmulq_f32(alpha_lo_g1, t_lo);
-        const float32x4_t at_hi_g1 = vmulq_f32(alpha_hi_g1, t_hi);
-        r_lo = vfmaq_f32(r_lo, at_lo_g1, cr_v_g1);
-        gg_lo = vfmaq_f32(gg_lo, at_lo_g1, cg_v_g1);
-        bb_lo = vfmaq_f32(bb_lo, at_lo_g1, cb_v_g1);
-        r_hi = vfmaq_f32(r_hi, at_hi_g1, cr_v_g1);
-        gg_hi = vfmaq_f32(gg_hi, at_hi_g1, cg_v_g1);
-        bb_hi = vfmaq_f32(bb_hi, at_hi_g1, cb_v_g1);
-        t_lo = vsubq_f32(t_lo, at_lo_g1);
-        t_hi = vsubq_f32(t_hi, at_hi_g1);
-
-        // g2 (uses updated T)
-        const float32x4_t at_lo_g2 = vmulq_f32(alpha_lo_g2, t_lo);
-        const float32x4_t at_hi_g2 = vmulq_f32(alpha_hi_g2, t_hi);
-        r_lo = vfmaq_f32(r_lo, at_lo_g2, cr_v_g2);
-        gg_lo = vfmaq_f32(gg_lo, at_lo_g2, cg_v_g2);
-        bb_lo = vfmaq_f32(bb_lo, at_lo_g2, cb_v_g2);
-        r_hi = vfmaq_f32(r_hi, at_hi_g2, cr_v_g2);
-        gg_hi = vfmaq_f32(gg_hi, at_hi_g2, cg_v_g2);
-        bb_hi = vfmaq_f32(bb_hi, at_hi_g2, cb_v_g2);
-        t_lo = vsubq_f32(t_lo, at_lo_g2);
-        t_hi = vsubq_f32(t_hi, at_hi_g2);
-
-        vst1q_f32(&acc.r[row], r_lo);
-        vst1q_f32(&acc.g[row], gg_lo);
-        vst1q_f32(&acc.b[row], bb_lo);
-        vst1q_f32(&acc.r[row + 4], r_hi);
-        vst1q_f32(&acc.g[row + 4], gg_hi);
-        vst1q_f32(&acc.b[row + 4], bb_hi);
-        vst1q_f32(&acc.t[row], t_lo);
-        vst1q_f32(&acc.t[row + 4], t_hi);
-    }
-}
 #endif  // GSPLAT_HAS_NEON
 
 // Per-worker scratch buffer for the cull pass. One contiguous uint32_t array
@@ -465,31 +326,18 @@ void cull_and_blend_tile(
             // 4 fully-attenuated FMAs and produces zero visual change since
             // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
             // for the typical ~100+ Gaussians per saturating microblock.
-            // iter-038: process 2 Gaussians per fused apply (exposes setup
-            // ILP between Gaussians); check max_t every 2 such pairs
-            // (i.e. 4 Gaussians), matching iter-035's saturation tolerance.
             int32_t k = 0;
             for (; k + 4 <= kn; k += 4) {
-                const std::size_t gs0 = static_cast<std::size_t>(kg_data[k + 0]);
-                const std::size_t gs1 = static_cast<std::size_t>(kg_data[k + 1]);
-                const std::size_t gs2 = static_cast<std::size_t>(kg_data[k + 2]);
-                const std::size_t gs3 = static_cast<std::size_t>(kg_data[k + 3]);
-                const GaussianCullRec& r0 = gauss_rec[gs0];
-                const GaussianCullRec& r1 = gauss_rec[gs1];
-                const GaussianCullRec& r2 = gauss_rec[gs2];
-                const GaussianCullRec& r3 = gauss_rec[gs3];
-                apply_two_gaussians_neon(acc,
-                    r0.ci_a, r0.ci_b, r0.ci_c, r0.mx, r0.my, r0.opacity,
-                    colors[gs0 * 3 + 0], colors[gs0 * 3 + 1], colors[gs0 * 3 + 2],
-                    r1.ci_a, r1.ci_b, r1.ci_c, r1.mx, r1.my, r1.opacity,
-                    colors[gs1 * 3 + 0], colors[gs1 * 3 + 1], colors[gs1 * 3 + 2],
-                    px_start, py_start);
-                apply_two_gaussians_neon(acc,
-                    r2.ci_a, r2.ci_b, r2.ci_c, r2.mx, r2.my, r2.opacity,
-                    colors[gs2 * 3 + 0], colors[gs2 * 3 + 1], colors[gs2 * 3 + 2],
-                    r3.ci_a, r3.ci_b, r3.ci_c, r3.mx, r3.my, r3.opacity,
-                    colors[gs3 * 3 + 0], colors[gs3 * 3 + 1], colors[gs3 * 3 + 2],
-                    px_start, py_start);
+                for (int j = 0; j < 4; ++j) {
+                    const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
+                    const GaussianCullRec& rec = gauss_rec[gs];
+                    apply_gaussian_neon(acc,
+                        rec.ci_a, rec.ci_b, rec.ci_c,
+                        rec.mx, rec.my,
+                        rec.opacity,
+                        colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
+                        px_start, py_start);
+                }
                 if (max_t_neon(acc) < 0.0001f) { k = kn; break; }
             }
             for (; k < kn; ++k) {
