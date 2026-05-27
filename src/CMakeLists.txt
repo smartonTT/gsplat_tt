@@ -65,6 +65,8 @@ find_package(pybind11 CONFIG REQUIRED)
 add_library(gsplat_cpu STATIC
   gsplat_cpu/thread_pool.cpp
   gsplat_cpu/project.cpp
+  gsplat_cpu/tile_assign.cpp
+  gsplat_cpu/sort.cpp
 )
 target_include_directories(gsplat_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_options(gsplat_cpu PRIVATE -ffp-contract=off)
