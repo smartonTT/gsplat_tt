@@ -14,6 +14,10 @@ struct ProjectResult {
     std::vector<float> depths;
     std::vector<float> radii;
     std::vector<uint8_t> valid_mask;
+    // iter-057: compact visible-only colors/opacities gathered with geometry
+    // so render_full skips a second parallel scan over all N Gaussians.
+    std::vector<float> colors;     // M * 3
+    std::vector<float> opacities;  // M
 };
 
 struct ProjectPrepared {
@@ -125,6 +129,7 @@ ProjectResult project_full_fused(
     const float* cov3d,
     const float* extrinsics,
     const float* intrinsics,
+    const float* colors,
     const float* opacities,
     float min_opacity,
     std::size_t N,
