@@ -20,12 +20,18 @@ namespace py = pybind11;
 
 namespace {
 
-// Forward declarations of pool getters (definitions below).
-gsplat_cpu::ThreadPool& global_blend_pool();
-gsplat_cpu::ThreadPool& global_cull_pool();
-gsplat_cpu::ThreadPool& global_sort_pool();
-gsplat_cpu::ThreadPool& global_tile_assign_pool();
-gsplat_cpu::ThreadPool& global_project_pool();
+// Forward declarations of the shared pool getter (iter-030: collapsed
+// from 5 per-stage pools to one global pool; threads stay warm across
+// stages -> fewer cv wake/sleep context switches per frame).
+gsplat_cpu::ThreadPool& global_pool();
+
+// Stage-specific aliases retained for legacy bindings; all resolve to the
+// same shared pool.
+inline gsplat_cpu::ThreadPool& global_blend_pool()       { return global_pool(); }
+inline gsplat_cpu::ThreadPool& global_cull_pool()        { return global_pool(); }
+inline gsplat_cpu::ThreadPool& global_sort_pool()        { return global_pool(); }
+inline gsplat_cpu::ThreadPool& global_tile_assign_pool() { return global_pool(); }
+inline gsplat_cpu::ThreadPool& global_project_pool()     { return global_pool(); }
 
 py::tuple pack_project_result(const gsplat_cpu::ProjectResult& result, std::size_t N) {
     const std::size_t M = result.depths.size();
@@ -382,27 +388,7 @@ std::size_t resolve_pool_size() {
     return 0;
 }
 
-gsplat_cpu::ThreadPool& global_blend_pool() {
-    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
-    return pool;
-}
-
-gsplat_cpu::ThreadPool& global_cull_pool() {
-    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
-    return pool;
-}
-
-gsplat_cpu::ThreadPool& global_sort_pool() {
-    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
-    return pool;
-}
-
-gsplat_cpu::ThreadPool& global_tile_assign_pool() {
-    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
-    return pool;
-}
-
-gsplat_cpu::ThreadPool& global_project_pool() {
+gsplat_cpu::ThreadPool& global_pool() {
     static gsplat_cpu::ThreadPool pool(resolve_pool_size());
     return pool;
 }
