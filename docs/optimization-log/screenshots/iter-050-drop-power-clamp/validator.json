@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No seam artifacts in any view."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No tile-uniform colors."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "Stitch fully rendered, no missing patches."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "Colors smooth, no clipping."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No ringing visible."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "All finite values."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Geometry positioned correctly across all 3 views."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Diff PNG shows scattered low-magnitude per-pixel deltas (expected from bf16 round-off propagating through exp), but no structural diff patterns — no seams, no halos, no localized failure modes."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.13955407863337, "side": 40.96432698521112, "top": 38.32757973060286}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.64, "max_ms_ratio": 1.25, "pass": true},
+  "timing": {"median_ms": 25.442, "p99_ms": 30.64426, "vs_prev_best_pct": -3.34, "pass": true},
+  "reasoning": "Kernel 26.321 → 25.442 ms (-3.34%) — a real win. PSNR drops slightly (-0.27 dB hero, -0.03 side, -0.26 top) but all views comfortably above 35 dB floor. The change drops the defensive `min(power, 0)` clamp before exp_tile<true>. For valid PSD covariance, Q ≥ 0 mathematically so -0.5·Q ≤ 0 by construction. bf16 round-off can produce tiny positive `power` (~ε), but exp_tile<true>'s built-in ClampToNegative and the downstream 0.99 alpha cap bound any deviation. Distinct from iter-046's regression: iter-046 REPLACED the clamp with clamp_tile + clamp_tile_init (a different op shape that was internally slower); this iter simply REMOVES the chain. The explicit `exp_tile_init<true>()` after `mul_unary_tile` resets SFPU state directly, so removing binary_min_tile_init() before it doesn't disrupt exp init — unlike iter-046's hypothesized state dependency. Saved 4 SFPU ops/Gaussian. Visual: 3 views look clean and identical to reference, diff10 shows low-magnitude scattered pixel deltas with no structural patterns. KEEP."
+}
