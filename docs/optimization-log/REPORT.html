@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 37 · current best: 29.76 ms · target: 1.0 ms
+      iters: 38 · current best: 28.48 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-041-b2-b3a-fuse
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T02:56:33.573872+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass. Diff×10 shows uniform low-amplitude speckle on the doll silhouette — expected from eliminating the CB_DX2/CB_DY2/CB_DXDY bf16 round-trips. PSNR matches iter-040 within rounding (no algebraic change, only one fewer pack/unpack per term). Timing: kernel_ms_median 28.485 vs prev_best 29.756 (-4.3%); p99/median 1.23× under 3× threshold. Clean kernel win — saved 1 acquire and 3 CB round-trips per Gaussian using the proven mul_tiles+mul_unary single-init pattern. Safe because each acquire has only ONE mul_tiles_init (not the iter-039 multi-init footgun).</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>28.48 ms</b> median · 35.15 ms p99</div>
+    <div class="per-view">per-view: hero 28.48 / side 27.47 / top 35.09</div>
+    <div class="psnr">PSNR: hero 36.4 / side 39.9 / top 35.7 (min <b>35.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-041-b2-b3a-fuse/hero.png" target="_blank"><img src="screenshots/iter-041-b2-b3a-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-041-b2-b3a-fuse/side.png" target="_blank"><img src="screenshots/iter-041-b2-b3a-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-041-b2-b3a-fuse/top.png" target="_blank"><img src="screenshots/iter-041-b2-b3a-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-041-b2-b3a-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-041-b2-b3a-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-041-b2-b3a-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-041-b2-b3a-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-041-b2-b3a-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-041-b2-b3a-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal/vertical 32px or 16px lines in any diff×10 image.</li><li>✓ tile_uniform_fill: No constant-color 32×32/16×16 blocks. Surface texture intact.</li><li>✓ missing_splat_holes: No localized dark regions vs reference; full object coverage in all views.</li><li>✓ color_clipping_bands: Blue fur, peach inner ear, pink tongue, grey eye patches all correct — no flat stripes.</li><li>✓ ringing_halos: Fur edges soft and natural; no halos or sparkle.</li><li>✓ nan_inf_signatures: No black/white/magenta patches in spatially-correlated patterns.</li><li>✓ geometry_shift: Diff×10 does not show silhouette-shaped bright edges; geometry matches.</li><li>✓ diff10_structure: Diff confined to doll silhouette as dense per-Gaussian-level speckle. No bands, ghosts, missing features. Consistent wit</li></ul>
+    <p class="reasoning">All 8 visual checks pass. Diff×10 shows uniform low-amplitude speckle on the doll silhouette — expected from eliminating the CB_DX2/CB_DY2/CB_DXDY bf16 round-trips. PSNR matches iter-040 within rounding (no algebraic change, only one fewer pack/unpack per term). Timing: kernel_ms_median 28.485 vs prev_best 29.756 (-4.3%); p99/median 1.23× under 3× threshold. Clean kernel win — saved 1 acquire and 3 CB round-trips per Gaussian using the proven mul_tiles+mul_unary single-init pattern. Safe because each acquire has only ONE mul_tiles_init (not the iter-039 multi-init footgun).</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-040-b3-power-fuse

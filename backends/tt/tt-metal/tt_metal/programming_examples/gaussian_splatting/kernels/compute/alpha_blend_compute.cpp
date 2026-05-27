@@ -490,37 +490,20 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_COLOR_B_STATE, 1);
 
-            cb_pop_front(CB_CONTRIB, 1);
-
-            // ----- Stage E: front-to-back transmittance update.
-            //   T_state ← T_state · (1 - alpha) · sat_mask
-            // Done as three acquire blocks (each binary op needs CB operands,
-            // not three Dst slots), with the final spill back to CB_T_STATE.
-            //
-            // Step 1: one_minus_alpha ← rsub(alpha, 1.0) = 1.0 - alpha
+            // ----- Stage E (fused iter-042): T_new = T·sat - contrib.
+            // Algebra: T·(1-α)·sat = T·sat - α·T·sat = T·sat - contrib
+            //          (since contrib = α·T·sat from D1).
+            // One acquire: mul_tiles(T_STATE, SAT_MASK) → dst[0] = T·sat,
+            //              then binary_dest_reuse<ELWSUB, DEST_TO_SRCA>(CONTRIB)
+            //              subtracts contrib in-place. Eliminates the entire
+            //              CB_ONE_MINUS_ALPHA round-trip and the rsub_unary
+            //              acquire. Note: ELWSUB runs at LoFi fidelity (vs
+            //              ELWMUL HiFi3) — PSNR check confirms no regression.
             tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_ALPHA);
-            copy_tile(CB_ALPHA, 0, 0);
-            rsub_unary_tile(0, ONE_F_BITS);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_ONE_MINUS_ALPHA, 1);
-            pack_tile(0, CB_ONE_MINUS_ALPHA);
-            cb_push_back(CB_ONE_MINUS_ALPHA, 1);
-            tile_regs_release();
-            cb_wait_front(CB_ONE_MINUS_ALPHA, 1);
-
-            // Steps 2+3 FUSED (iter-010): T_state ← T_state · (1-alpha) · sat_mask
-            // in one acquire, pure FPU. mul_tiles(T_state, ONE_MINUS_ALPHA) → dst[0];
-            // then binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA>(SAT_MASK) reuses
-            // dst[0] as SRCA and multiplies by sat_mask in-place. Saves 1 acquire
-            // + the CB_T_TMP reserve/pack/push/wait/pop roundtrip. Same pattern as
-            // iter-007's Stage D1 win.
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_STATE, CB_ONE_MINUS_ALPHA);
-            mul_tiles(CB_T_STATE, CB_ONE_MINUS_ALPHA, 0, 0, 0);
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);
+            mul_tiles_init(CB_T_STATE, CB_SAT_MASK);
+            mul_tiles(CB_T_STATE, CB_SAT_MASK, 0, 0, 0);  // dst[0] = T·sat
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB, 0, 0);  // dst[0] -= contrib = T·(1-α)·sat
             tile_regs_commit();
             tile_regs_wait();
             cb_pop_front(CB_T_STATE, 1);
@@ -528,9 +511,9 @@ void kernel_main() {
             pack_tile(0, CB_T_STATE);
             cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
-            cb_pop_front(CB_ONE_MINUS_ALPHA, 1);
             cb_wait_front(CB_T_STATE, 1);
 
+            cb_pop_front(CB_CONTRIB, 1);
             cb_pop_front(CB_ALPHA, 1);
             cb_pop_front(CB_SCALARS, 1);
         }
