@@ -105,3 +105,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP.
 - Thumbnails: ![hero](screenshots/iter-029-sat-mask-refresh-every-8/hero.png) ![diff10](screenshots/iter-029-sat-mask-refresh-every-8/hero_diff10.png)
 
+
+## iter-035-contrib-floor-17-of-255 — NEEDS_REVIEW ⭐ HIGH-PROMOTION-PRIORITY
+
+- Class: `binning`
+- kernel ms: median 29.33 / p99 36.64
+- PSNR per view: hero 35.6 / side 38.9 / top 34.8
+- Validator reasoning: Timing is a clear win: kernel_ms_median 29.334 ms vs prev_best 31.335 ms, a 6.4% improvement, and p99/median ratio is 1.25× (well under the 3× threshold). Visuals pass all structural checks — no tile seams, no geometry shift, no NaN signatures, no clipping. However, the 'top' view PSNR of 34.83 dB falls below the 35 dB binning-class floor, triggering NEEDS_REVIEW per the numeric rules. Hero (35.59 dB) is only marginally above the floor. This is consistent with the iter-034 memo that 17/255 was a boundary test; the top view has crossed the floor. Per-view PSNR delta is 4.03 dB (well under 20 dB), and per-view kernel-ms ratio is 1.295× (under 2×). The sole failure is top-view PSNR 34.83 dB < 35 dB floor for class 'binning'.
+- Thumbnails: ![hero](screenshots/iter-035-contrib-floor-17-of-255/hero.png) ![diff10](screenshots/iter-035-contrib-floor-17-of-255/hero_diff10.png)
+

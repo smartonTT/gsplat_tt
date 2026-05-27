@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 35 · current best: 31.34 ms · target: 1.0 ms
+      iters: 36 · current best: 31.34 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-035-contrib-floor-17-of-255
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">NEEDS_REVIEW</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T01:09:21.822717+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> Timing is a clear win: kernel_ms_median 29.334 ms vs prev_best 31.335 ms, a 6.4% improvement, and p99/median ratio is 1.25× (well under the 3× threshold). Visuals pass all structural checks — no tile seams, no geometry shift, no NaN signatures, no clipping. However, the &#x27;top&#x27; view PSNR of 34.83 dB falls below the 35 dB binning-class floor, triggering NEEDS_REVIEW per the numeric rules. Hero (35.59 dB) is only marginally above the floor. This is consistent with the iter-034 memo that 17/255 was a boundary test; the top view has crossed the floor. Per-view PSNR delta is 4.03 dB (well under 20 dB), and per-view kernel-ms ratio is 1.295× (under 2×). The sole failure is top-view PSNR 34.83 dB &lt; 35 dB floor for class &#x27;binning&#x27;.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>29.33 ms</b> median · 36.64 ms p99</div>
+    <div class="per-view">per-view: hero 29.33 / side 28.27 / top 36.60</div>
+    <div class="psnr">PSNR: hero 35.6 / side 38.9 / top 34.8 (min <b>34.8</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-035-contrib-floor-17-of-255/hero.png" target="_blank"><img src="screenshots/iter-035-contrib-floor-17-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-035-contrib-floor-17-of-255/side.png" target="_blank"><img src="screenshots/iter-035-contrib-floor-17-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-035-contrib-floor-17-of-255/top.png" target="_blank"><img src="screenshots/iter-035-contrib-floor-17-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-035-contrib-floor-17-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-035-contrib-floor-17-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-035-contrib-floor-17-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-035-contrib-floor-17-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-035-contrib-floor-17-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-035-contrib-floor-17-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (NEEDS_REVIEW)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32- or 16-pixel spacing visible in any diff×10 image.</li><li>✓ tile_uniform_fill: No constant-color 32×32 or 16×16 square blocks replacing detail in any render.</li><li>✓ missing_splat_holes: No local black holes larger than ~16px in rendered views; coverage matches reference geometry.</li><li>✓ color_clipping_bands: No saturated flat-colored stripes or clipping bands in hero, side, or top renders.</li><li>✓ ringing_halos: No structured ringing at object silhouettes; edge noise is minor speckle only.</li><li>✓ nan_inf_signatures: No spatially-correlated pure black/white/magenta patches; background is clean black.</li><li>✓ geometry_shift: Diff×10 does not show silhouette outlines of displaced geometry; differences are distributed within the object surface.</li><li>✓ diff10_structure: All three diff×10 images show uniform surface speckle without grids, edge halos, gradients, or bands. Top view shows sli</li></ul>
+    <p class="reasoning">Timing is a clear win: kernel_ms_median 29.334 ms vs prev_best 31.335 ms, a 6.4% improvement, and p99/median ratio is 1.25× (well under the 3× threshold). Visuals pass all structural checks — no tile seams, no geometry shift, no NaN signatures, no clipping. However, the &#x27;top&#x27; view PSNR of 34.83 dB falls below the 35 dB binning-class floor, triggering NEEDS_REVIEW per the numeric rules. Hero (35.59 dB) is only marginally above the floor. This is consistent with the iter-034 memo that 17/255 was a boundary test; the top view has crossed the floor. Per-view PSNR delta is 4.03 dB (well under 20 dB), and per-view kernel-ms ratio is 1.295× (under 2×). The sole failure is top-view PSNR 34.83 dB &lt; 35 dB floor for class &#x27;binning&#x27;.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-034-contrib-floor-15-of-255
@@ -1283,6 +1316,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.8 / side 44.1 / top 39.0
 - Validator reasoning: Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP.
 - Thumbnails: ![hero](screenshots/iter-029-sat-mask-refresh-every-8/hero.png) ![diff10](screenshots/iter-029-sat-mask-refresh-every-8/hero_diff10.png)
+
+
+## iter-035-contrib-floor-17-of-255 — NEEDS_REVIEW ⭐ HIGH-PROMOTION-PRIORITY
+
+- Class: `binning`
+- kernel ms: median 29.33 / p99 36.64
+- PSNR per view: hero 35.6 / side 38.9 / top 34.8
+- Validator reasoning: Timing is a clear win: kernel_ms_median 29.334 ms vs prev_best 31.335 ms, a 6.4% improvement, and p99/median ratio is 1.25× (well under the 3× threshold). Visuals pass all structural checks — no tile seams, no geometry shift, no NaN signatures, no clipping. However, the &#x27;top&#x27; view PSNR of 34.83 dB falls below the 35 dB binning-class floor, triggering NEEDS_REVIEW per the numeric rules. Hero (35.59 dB) is only marginally above the floor. This is consistent with the iter-034 memo that 17/255 was a boundary test; the top view has crossed the floor. Per-view PSNR delta is 4.03 dB (well under 20 dB), and per-view kernel-ms ratio is 1.295× (under 2×). The sole failure is top-view PSNR 34.83 dB &lt; 35 dB floor for class &#x27;binning&#x27;.
+- Thumbnails: ![hero](screenshots/iter-035-contrib-floor-17-of-255/hero.png) ![diff10](screenshots/iter-035-contrib-floor-17-of-255/hero_diff10.png)
 
 </pre>
   </section>
