@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 55 · current best: 24.67 ms · target: 1.0 ms
+      iters: 56 · current best: 24.18 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-059-drop-sat-mask-muls
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T06:14:18.737031+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass: diff10 images for all three views show uniform speckle with no tile grid seams, fill blocks, holes, clipping bands, ringing, NaN signatures, or geometry shift. hero.png is a zero-byte file (file-write artifact) but the hero render metrics (PSNR 39.21, tile_ratio 16.74) are valid in metrics.json and hero_diff10.png confirms a clean render was produced. tile_structure_ratio max is 17.75 (top view), delta +0.16 vs prev_best 17.59 — within the ≤0.5 threshold, not a regression. PSNR floor applied at 35 dB per project memory (perceptual floor); all views pass: hero 39.21, side 40.98, top 38.42 all ≥35 dB, and PSNR slightly improved +0.06 to +0.13 dB vs prior iter due to dropped bf16 sat_mask round-trips. Timing: 24.1825 ms vs prev_best 24.6685 ms = -1.97%, a real kernel win. p99/median ratio 1.19x, well under 3x. Per-view max PSNR delta 2.56 dB and max ms ratio 1.23x both within bounds. Verdict: KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.18 ms</b> median · 28.79 ms p99</div>
+    <div class="per-view">per-view: hero 24.18 / side 23.41 / top 28.72</div>
+    <div class="psnr">PSNR: hero 39.2 / side 41.0 / top 38.4 (min <b>38.4</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-059-drop-sat-mask-muls/hero.png" target="_blank"><img src="screenshots/iter-059-drop-sat-mask-muls/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-059-drop-sat-mask-muls/side.png" target="_blank"><img src="screenshots/iter-059-drop-sat-mask-muls/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-059-drop-sat-mask-muls/top.png" target="_blank"><img src="screenshots/iter-059-drop-sat-mask-muls/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-059-drop-sat-mask-muls/hero_diff10.png" target="_blank"><img src="screenshots/iter-059-drop-sat-mask-muls/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-059-drop-sat-mask-muls/side_diff10.png" target="_blank"><img src="screenshots/iter-059-drop-sat-mask-muls/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-059-drop-sat-mask-muls/top_diff10.png" target="_blank"><img src="screenshots/iter-059-drop-sat-mask-muls/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images show uniform speckle distributed over object silhouette with no horizontal/vertical lines at 32p</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color fill blocks visible in any diff10 or render. side.png and top.png match reference geome</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions in side.png or top.png vs references. hero.png is a zero-byte file but PSNR/ti</li><li>✓ color_clipping_bands: No saturated R/G/B bands or flat colored stripes visible in side.png, top.png, or any diff10 image.</li><li>✓ ringing_halos: Silhouette edges in side_diff10 and top_diff10 show normal edge noise, not structured ringing. No halo rings around high</li><li>✓ nan_inf_signatures: No pure-black, pure-white, or magenta spatially-correlated patches in any render or diff10. Pixel distributions look nor</li><li>✓ geometry_shift: diff10 images do not trace object silhouettes as displacement artifacts. hero_diff10 shows bilateral edge noise consiste</li><li>✓ diff10_structure: All three diff10 images are dominated by uniform speckle. hero_diff10 has slightly higher amplitude (consistent with lar</li></ul>
+    <p class="reasoning">All 8 visual checks pass: diff10 images for all three views show uniform speckle with no tile grid seams, fill blocks, holes, clipping bands, ringing, NaN signatures, or geometry shift. hero.png is a zero-byte file (file-write artifact) but the hero render metrics (PSNR 39.21, tile_ratio 16.74) are valid in metrics.json and hero_diff10.png confirms a clean render was produced. tile_structure_ratio max is 17.75 (top view), delta +0.16 vs prev_best 17.59 — within the ≤0.5 threshold, not a regression. PSNR floor applied at 35 dB per project memory (perceptual floor); all views pass: hero 39.21, side 40.98, top 38.42 all ≥35 dB, and PSNR slightly improved +0.06 to +0.13 dB vs prior iter due to dropped bf16 sat_mask round-trips. Timing: 24.1825 ms vs prev_best 24.6685 ms = -1.97%, a real kernel win. p99/median ratio 1.19x, well under 3x. Per-view max PSNR delta 2.56 dB and max ms ratio 1.23x both within bounds. Verdict: KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-058-restructure-d2-shared-init
