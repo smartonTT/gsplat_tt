@@ -1,5 +1,7 @@
 #include "gsplat_cpu/project.h"
 
+#include "gsplat_cpu/thread_pool.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -142,9 +144,10 @@ ProjectPrepared project_prepare_from_cov3d(
     const float* intrinsics,
     const std::size_t N,
     const int image_height,
-    const int image_width) {
-    ProjectPrepared prep =
-        project_prepare_geometry(means, extrinsics, intrinsics, N, image_height, image_width);
+    const int image_width,
+    ThreadPool* pool) {
+    ProjectPrepared prep = project_prepare_geometry(means, extrinsics, intrinsics, N,
+                                                    image_height, image_width, pool);
     prep.cov_cam.resize(N * 9);
 
     Mat3f r_mat;
@@ -159,11 +162,24 @@ ProjectPrepared project_prepare_from_cov3d(
     r_mat(2, 2) = extrinsics[10];
 
     const Mat3f r_t = mat3_transpose(r_mat);
-    for (std::size_t i = 0; i < N; ++i) {
+    auto per_gaussian = [&](std::size_t i) {
         Mat3f c;
         std::memcpy(c.m.data(), cov3d + i * 9, 9 * sizeof(float));
         const Mat3f cov_cam = mat3_mul(mat3_mul(r_mat, c), r_t);
         std::memcpy(prep.cov_cam.data() + i * 9, cov_cam.m.data(), 9 * sizeof(float));
+    };
+    if (pool != nullptr && pool->size() > 1 && N >= 4096) {
+        const std::size_t W = pool->size();
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([w, W, N, &per_gaussian]() {
+                for (std::size_t i = w; i < N; i += W) {
+                    per_gaussian(i);
+                }
+            });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t i = 0; i < N; ++i) per_gaussian(i);
     }
 
     return prep;
@@ -175,7 +191,8 @@ ProjectPrepared project_prepare_geometry(
     const float* intrinsics,
     const std::size_t N,
     const int image_height,
-    const int image_width) {
+    const int image_width,
+    ThreadPool* pool) {
     const float fx = intrinsics[0];
     const float fy = intrinsics[4];
     const float cx = intrinsics[2];
@@ -193,9 +210,9 @@ ProjectPrepared project_prepare_geometry(
     prep.near_valid.resize(N);
 
     std::vector<float> means_cam;
-    transform_means_cam(means, extrinsics, N, means_cam);
+    transform_means_cam(means, extrinsics, N, means_cam);  // Accelerate sgemm — already fast.
 
-    for (std::size_t i = 0; i < N; ++i) {
+    auto per_gaussian = [&](std::size_t i) {
         const float tx = means_cam[i * 3 + 0];
         const float ty = means_cam[i * 3 + 1];
         const float tz = means_cam[i * 3 + 2];
@@ -208,9 +225,97 @@ ProjectPrepared project_prepare_geometry(
         prep.means_2d[i * 2 + 1] = fy * ty * inv_tz + cy;
 
         build_jacobian(fx, fy, tx, ty, tz, prep.jacobian.data() + i * 6);
+    };
+
+    if (pool != nullptr && pool->size() > 1 && N >= 4096) {
+        const std::size_t W = pool->size();
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([w, W, N, &per_gaussian]() {
+                for (std::size_t i = w; i < N; i += W) {
+                    per_gaussian(i);
+                }
+            });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t i = 0; i < N; ++i) per_gaussian(i);
     }
 
     return prep;
+}
+
+namespace {
+
+void compute_valid_and_radii(
+    const ProjectPrepared& prep,
+    const float* covs_2d,
+    const float* opacities,
+    const float min_opacity,
+    const int max_radius,
+    std::size_t i,
+    std::vector<uint8_t>& valid_mask,
+    std::vector<Vec2f>& radii_scratch) {
+    bool valid = prep.near_valid[i] != 0;
+
+    const float a = covs_2d[i * 4 + 0];
+    const float c = covs_2d[i * 4 + 3];
+    const float mean_x = prep.means_2d[i * 2 + 0];
+    const float mean_y = prep.means_2d[i * 2 + 1];
+
+    const float k = opacities != nullptr ? opacity_aware_k(opacities[i]) : 3.0f;
+    const float rx = std::ceil(k * std::sqrt(std::max(a, 0.0f)));
+    const float ry = std::ceil(k * std::sqrt(std::max(c, 0.0f)));
+    radii_scratch[i] = Vec2f{rx, ry};
+
+    valid = valid && (mean_x + rx > 0.0f);
+    valid = valid && (mean_x - rx < static_cast<float>(prep.image_width));
+    valid = valid && (mean_y + ry > 0.0f);
+    valid = valid && (mean_y - ry < static_cast<float>(prep.image_height));
+    valid = valid && (rx > 0.0f) && (ry > 0.0f);
+    valid = valid && (rx <= static_cast<float>(max_radius)) &&
+            (ry <= static_cast<float>(max_radius));
+
+    if (opacities != nullptr) {
+        valid = valid && (opacities[i] >= min_opacity);
+    }
+
+    valid_mask[i] = valid ? 1 : 0;
+}
+
+}  // namespace
+
+ProjectResult project_finalize_parallel(
+    const ProjectPrepared& prep,
+    const float* covs_2d,
+    const float* opacities,
+    const float min_opacity,
+    ThreadPool* pool) {
+    const int max_radius = std::min(prep.image_height, prep.image_width) / 2;
+
+    std::vector<uint8_t> valid_mask(prep.N);
+    std::vector<Vec2f> radii_scratch(prep.N);
+
+    if (pool != nullptr && pool->size() > 1 && prep.N >= 4096) {
+        const std::size_t W = pool->size();
+        const std::size_t N = prep.N;
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([w, W, N, &prep, covs_2d, opacities, min_opacity, max_radius,
+                          &valid_mask, &radii_scratch]() {
+                for (std::size_t i = w; i < N; i += W) {
+                    compute_valid_and_radii(prep, covs_2d, opacities, min_opacity, max_radius,
+                                            i, valid_mask, radii_scratch);
+                }
+            });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t i = 0; i < prep.N; ++i) {
+            compute_valid_and_radii(prep, covs_2d, opacities, min_opacity, max_radius, i,
+                                    valid_mask, radii_scratch);
+        }
+    }
+
+    return gather_visible(prep, covs_2d, radii_scratch, valid_mask);
 }
 
 ProjectResult project_finalize(
