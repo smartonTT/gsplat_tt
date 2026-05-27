@@ -255,7 +255,12 @@ static void build_program_and_workload(DeviceContext& ctx) {
         OVERRIDE_KERNEL_PREFIX "gaussian_splatting/kernels/compute/alpha_blend_compute.cpp",
         cores,
         ComputeConfig{
-            .math_fidelity = MathFidelity::HiFi3,
+            // iter-062: HiFi3 → LoFi. HiFi3 does 3 FPU passes per tile;
+            // LoFi does 1. Per-Gaussian FPU work in this kernel: 3 mul_tiles
+            // (B2) + 5 binary_dest_reuse FPU ops (D1/D2/E) = ~8 FPU ops × N
+            // Gaussians. Risk: precision loss in alpha-blend accumulators.
+            // Keep iff PSNR ≥35 floor AND kernel improves.
+            .math_fidelity = MathFidelity::LoFi,
             .fp32_dest_acc_en = true,
             .math_approx_mode = false,
         });
