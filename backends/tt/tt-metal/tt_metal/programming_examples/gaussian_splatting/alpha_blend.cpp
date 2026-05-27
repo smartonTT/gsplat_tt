@@ -214,11 +214,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     }
 
-    // iter-067: CB_CONTRIB allocation dropped — fused into the B3b+C+D1+D2+E
-    // mega-acquire. contrib never leaves fp32 dst now, eliminating the last
-    // per-Gaussian bf16 round-trip in the math chain (primary suspect for
-    // tile-structure quilting after iter-052+064 ruled out CB_ALPHA + state CBs).
-    // Index 13 reserved (CB_CONTRIB constexpr kept) to avoid renumbering.
+    cb_tile(CB_CONTRIB, 1);
 
     cb_tile(CB_COLOR_R_STATE, 1);
     cb_tile(CB_COLOR_G_STATE, 1);
