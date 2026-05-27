@@ -130,7 +130,10 @@ def project_gaussians(
         a = covs_2d[:, 0, 0]
         c = covs_2d[:, 1, 1]
         if opacities is not None:
-            arg = torch.clamp(opacities * 255.0, min=1.0)
+            # k(ω) = sqrt(2·ln(ω / contrib_floor)) is the σ-multiplier at which
+            # the Gaussian's contribution drops below contrib_floor. tile_assign
+            # uses contrib_floor = 5/255, so we match here: ω·255/5 = ω·51.
+            arg = torch.clamp(opacities * 51.0, min=1.0)
             k = torch.clamp(torch.sqrt(2.0 * torch.log(arg)), max=3.0)
         else:
             k = torch.full_like(a, 3.0)
