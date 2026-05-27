@@ -1,0 +1,23 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 images for all 3 views show no horizontal or vertical lines at 32px or 16px spacing. Noise is distributed as uniform speckle within the object silhouette, consistent with the architectural bf16 floor established since iter-066."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color blocks visible in any rendered PNG. All three views show smooth, detail-preserving rendering of the Stitch doll."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or under-covered regions in any view. Diff10 shows no bright isolated patches indicating missing coverage."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-color stripes in hero, side, or top renders. Color fidelity looks correct vs reference for all views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes. Edge noise in diff10 is consistent with the architectural noise floor, not structured ringing."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches or spatially correlated NaN/Inf patterns. No fireflies (isolated bright hot pixels) visible in any of the 3 rendered PNGs. relu_max_tile firefly fix from iter-066 remains effective."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show the silhouette of an object as a structured bright outline indicating coordinate error. The silhouette-edge noise visible is consistent with sub-pixel alpha-blend quantization, not a geometry shift."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All 3 diff10 images are dominated by uniform speckle within the object body and at silhouette edges. No grids, bands, gradients, or structured patterns beyond the established architectural tile ratio of ~17-18."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.36803565955834, "side": 40.949644684083964, "top": 38.57406490624109}, "pass": true},
+  "tile_structure_check": {
+    "max_ratio": 18.132165883707906,
+    "actual": {"hero": 17.107328028167462, "side": 17.29181297057425, "top": 18.132165883707906},
+    "pass": true,
+    "delta_vs_prev": {"hero": -0.030330245193679, "side": 0.013460075468587, "top": -0.010096357140794, "max_abs_delta": 0.030330245193679}
+  },
+  "per_view_consistency": {"max_psnr_delta_db": 2.381608824525624, "max_ms_ratio": 1.2328, "pass": true},
+  "timing": {"median_ms": 24.479, "p99_ms": 29.18204, "vs_prev_best_pct": -0.9172, "pass": true},
+  "reasoning": "All checks pass. kernel_ms_median 24.479 vs prev_best 24.7055 is a -0.92% improvement (break-even to modest win). PSNR is within -0.05 dB of prev_best on all views (hero 39.368 vs 39.415, side 40.950 vs 40.996, top 38.574 vs 38.595) — well within the -0.1 dB bit-identical band, no regression. Tile structure ratios are bit-identical to prev_best (max delta +0.014, well inside the ±0.05 architectural-baseline carve-out and far below the +0.3 ratchet threshold); the established max ratio of ~18.13 on top is the architectural floor, not new drift. Visual inspection of all 3 renders shows clean output with no fireflies, tile seams, missing-splat holes, color clipping, ringing, or geometry shifts. Diff10 images show uniform speckle consistent with the architectural bf16 noise floor. p99/median ratio is 1.19x, well below the 3x suspicious-tail threshold. Per-view PSNR spread is 2.38 dB and per-view kernel-ms ratio is 1.23x, both within bounds."
+}
