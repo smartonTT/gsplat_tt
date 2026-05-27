@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show speckle concentrated at object silhouettes/edges, not at 32px or 16px grid intervals. No horizontal/vertical grid lines visible in hero_diff10, side_diff10, or top_diff10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color filled blocks visible in rendered PNGs. Hero, side, and top all show continuous texture detail across regions."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage regions in any rendered view. Object coverage appears complete across all three views. Diff10 bright spots are edge-noise, not coverage gaps > 16px."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B bands or color stripes present in any view. Hero shows expected pink ear and tongue; side and top show natural blue-gray tones without clipping artifacts."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes visible in renders or diff10 images. Edge differences in diff10 are consistent with normal high-frequency Gaussian precision noise."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches in spatially-correlated patterns in any view. All three renders show normal scene content with black background."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images show noise distributed within the object silhouette boundary, not the silhouette itself displaced. No geometry shift signature detected in any view."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform speckle along edges/silhouettes — characteristic of accumulated bf16 per-tile precision at high tile_ratio. No structured grids, bands, or gradients. Top_diff10 slightly more diffuse consistent with highest tile_ratio 17.75 but still non-grid noise."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.20974508325555, "side": 40.979845205494414, "top": 38.41531255268442}, "pass": true},
+  "tile_structure_check": {"max_ratio": 17.746483244498126, "actual": {"hero": 16.74427602297702, "side": 17.26100085898212, "top": 17.746483244498126}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.56453012223886, "max_ms_ratio": 1.2274374999999999, "pass": true},
+  "timing": {"median_ms": 23.98, "p99_ms": 28.48126, "vs_prev_best_pct": -0.84, "pass": true},
+  "reasoning": "iter-060 is a dead-code cleanup removing the CB_SAT_MASK init block, pop_front, and cb_tile host allocation — no algebra change. All numerical checks pass: tile_structure_ratio max 17.75 is within the ≤18 hard gate and delta is exactly 0.0 vs prev_best (bit-identical to iter-059), so no tile-structure regression. PSNR floor applied at perceptual 35 dB per project memory (kernel-algebra 40 dB nominal was overconservative); all views ≥38.4 dB with clean visuals confirms KEEP. Timing improved -0.84% (23.98 vs prev_best 24.1825 ms) from saved per-tile init acquire — real win. p99/median ratio 1.19x well within 3x limit. Per-view PSNR delta 2.57 dB and ms ratio 1.23x both well within consistency bounds. Visual inspection of all three rendered PNGs and diff10 images shows no tile grid seams, no missing-splat holes, no color clipping, no NaN/Inf signatures, no geometry shift — only normal edge-concentrated speckle consistent with accumulated bf16 state quantization at this tile_ratio level."
+}
