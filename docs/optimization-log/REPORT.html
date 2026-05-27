@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 39 · current best: 27.42 ms · target: 1.0 ms
+      iters: 40 · current best: 26.64 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-043-d2-channel-fuse-one
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T03:11:24.172462+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All 3 view PNGs are MD5-identical to iter-042 baseline (51e5722864c3099f4da8bbb4007a3848, 935b799e9f8de257924f77e3ac525c41, a5fa80cd341a0d78139d5672ac11528b for hero/side/top). The D2 3-channel fusion is a pure scheduling reorganization: R/G/B color-state updates moved from 3 sequential acquires into one acquire using dst slots 0/1/2, with three binary_dest_reuse_tiles_init&lt;ELWADD, DEST_TO_SRCA&gt; calls reconfiguring unpack_A between slot updates. Output bytes preserved because each slot&#x27;s algebra (contrib·color_X + X_state) is unchanged. Timing: kernel_ms_median 26.6435 vs prev_best 27.420 (-2.8%); p99/median 1.22× under threshold. Safety insight extends iter-041&#x27;s safe-fusion catalog: multi binary_dest_reuse_tiles_init with same binary template (different source CBs) is SAFE — distinct from iter-039&#x27;s multi mul_tiles_init hang, since binary_dest_reuse only reconfigures unpack_A. Clean kernel win.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>26.64 ms</b> median · 32.39 ms p99</div>
+    <div class="per-view">per-view: hero 26.64 / side 25.71 / top 32.37</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-043-d2-channel-fuse-one/hero.png" target="_blank"><img src="screenshots/iter-043-d2-channel-fuse-one/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-043-d2-channel-fuse-one/side.png" target="_blank"><img src="screenshots/iter-043-d2-channel-fuse-one/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-043-d2-channel-fuse-one/top.png" target="_blank"><img src="screenshots/iter-043-d2-channel-fuse-one/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-043-d2-channel-fuse-one/hero_diff10.png" target="_blank"><img src="screenshots/iter-043-d2-channel-fuse-one/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-043-d2-channel-fuse-one/side_diff10.png" target="_blank"><img src="screenshots/iter-043-d2-channel-fuse-one/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-043-d2-channel-fuse-one/top_diff10.png" target="_blank"><img src="screenshots/iter-043-d2-channel-fuse-one/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: PNG output bit-identical to iter-042 baseline (MD5 match all 3 views).</li><li>✓ tile_uniform_fill: Bit-identical to iter-042; no possible change in fill patterns.</li><li>✓ missing_splat_holes: Bit-identical to iter-042; coverage unchanged.</li><li>✓ color_clipping_bands: Bit-identical to iter-042; no color regression possible.</li><li>✓ ringing_halos: Bit-identical to iter-042; no edge artifacts possible.</li><li>✓ nan_inf_signatures: Bit-identical to iter-042; no NaN/Inf possible.</li><li>✓ geometry_shift: Bit-identical to iter-042; no geometry change possible.</li><li>✓ diff10_structure: diff10 vs CPU reference is identical to iter-042 (same kernel output bytes). PSNR identical to iter-042.</li></ul>
+    <p class="reasoning">All 3 view PNGs are MD5-identical to iter-042 baseline (51e5722864c3099f4da8bbb4007a3848, 935b799e9f8de257924f77e3ac525c41, a5fa80cd341a0d78139d5672ac11528b for hero/side/top). The D2 3-channel fusion is a pure scheduling reorganization: R/G/B color-state updates moved from 3 sequential acquires into one acquire using dst slots 0/1/2, with three binary_dest_reuse_tiles_init&lt;ELWADD, DEST_TO_SRCA&gt; calls reconfiguring unpack_A between slot updates. Output bytes preserved because each slot&#x27;s algebra (contrib·color_X + X_state) is unchanged. Timing: kernel_ms_median 26.6435 vs prev_best 27.420 (-2.8%); p99/median 1.22× under threshold. Safety insight extends iter-041&#x27;s safe-fusion catalog: multi binary_dest_reuse_tiles_init with same binary template (different source CBs) is SAFE — distinct from iter-039&#x27;s multi mul_tiles_init hang, since binary_dest_reuse only reconfigures unpack_A. Clean kernel win.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-042-e-sub-fuse
