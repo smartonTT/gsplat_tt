@@ -35,7 +35,7 @@ ITER_NAME="$(printf "iter-%03d-%s" "$ITER_NUM" "$SLUG")"
 ITER_DIR="$REPO/docs/optimization-log/screenshots/$ITER_NAME"
 SENTINEL="$REPO/.opt-v2-last-build-commit"
 BOX_USER="smarton"
-BOX_HOST="yyzo-bh-14"
+BOX_HOST="${BOX_HOST:-yyzo-bh-14}"
 REMOTE_REPO="/proj_sw/user_dev/smarton/gsplat_tt"
 # Local python on Mac: project venv has broken symlinks (it points to /opt/venv which is bh-14-only),
 # so use /usr/bin/python3 which has numpy + PIL + matplotlib installed system-wide. Remote python on
