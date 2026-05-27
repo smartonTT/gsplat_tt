@@ -260,10 +260,22 @@ def get_tile_assignments(
         tile_ids = (min_y_rep + dy) * tiles_x + (min_x_rep + dx)
 
     # Per-pair Mahalanobis cull: drop (G, tile) pairs whose actual peak
-    # contribution inside the tile is below the perceptual floor. Measured
-    # on stitch_doll: another ~22% pair drop on top of opacity-aware AABB,
-    # because the bbox is an over-estimate near the edges (where Mahalanobis
-    # to the nearest pixel is large).
+    # contribution inside the tile is below the perceptual floor.
+    #
+    # CORRECTNESS NOTE: the previous implementation used an L∞-clamp closest
+    # point (per-axis clamp of the Gaussian center onto the tile rectangle)
+    # to evaluate m². That is WRONG for tilted (off-diagonal cov) Gaussians:
+    # the L∞-clamp point can have m² much larger than the true min m² over
+    # the tile, so the cull drops Gaussians whose elongated axis crosses the
+    # tile diagonally — producing visible 32×32 tile artifacts at silhouettes
+    # (chunks missing, sharp tile-boundary cuts in fur, semi-transparency).
+    #
+    # The proper-min formulation: for a positive-definite quadratic form
+    # f(u, v) = c·u² - 2b·u·v + a·v² (with Σ = [[a,b],[b,c]], det > 0), the
+    # 1D min on a vertical edge u = u_fixed is at v* = b·u_fixed/a, clamped
+    # to the edge range. The constrained min over an axis-aligned rectangle
+    # is either 0 (center inside), or the smaller of the two facing-edge
+    # 1D-mins. This is exact and only ~2× the cost of the L∞-clamp.
     if covs_2d is not None and opacities is not None and P > 0:
         with _sub_timer(sub_timings, "tile_assign.contrib_cull"):
             a = covs_2d[gaussian_ids, 0, 0]
@@ -275,12 +287,44 @@ def get_tile_assignments(
             py = means_2d[gaussian_ids, 1]
             tx_tile = (tile_ids % tiles_x).float() * tile_size
             ty_tile = (tile_ids // tiles_x).float() * tile_size
-            # closest point inside this tile to the Gaussian center
-            cx = torch.clamp(px, min=tx_tile, max=tx_tile + tile_size)
-            cy = torch.clamp(py, min=ty_tile, max=ty_tile + tile_size)
-            dx_c = cx - px
-            dy_c = cy - py
-            m2 = (c * dx_c * dx_c - 2.0 * b * dx_c * dy_c + a * dy_c * dy_c) / det
+
+            # Displacement bounds (Gaussian-centered): rect is
+            # u in [u_lo, u_hi], v in [v_lo, v_hi].
+            u_lo = tx_tile - px
+            u_hi = u_lo + tile_size
+            v_lo = ty_tile - py
+            v_hi = v_lo + tile_size
+
+            x_inside = (u_lo <= 0.0) & (0.0 <= u_hi)
+            y_inside = (v_lo <= 0.0) & (0.0 <= v_hi)
+            inside = x_inside & y_inside
+
+            INF = torch.full_like(u_lo, float("inf"))
+
+            # Vertical-edge candidate: choose facing edge.
+            u_fix = torch.where(u_lo > 0.0, u_lo, u_hi)
+            a_safe = torch.clamp(a, min=1e-12)
+            v_star = (b * u_fix) / a_safe
+            v_star = torch.clamp(v_star, min=v_lo, max=v_hi)
+            m2_v_edge = (
+                c * u_fix * u_fix - 2.0 * b * u_fix * v_star + a * v_star * v_star
+            )
+            m2_v_edge = torch.where(x_inside, INF, m2_v_edge)
+
+            # Horizontal-edge candidate: choose facing edge.
+            v_fix = torch.where(v_lo > 0.0, v_lo, v_hi)
+            c_safe = torch.clamp(c, min=1e-12)
+            u_star = (b * v_fix) / c_safe
+            u_star = torch.clamp(u_star, min=u_lo, max=u_hi)
+            m2_h_edge = (
+                c * u_star * u_star - 2.0 * b * u_star * v_fix + a * v_fix * v_fix
+            )
+            m2_h_edge = torch.where(y_inside, INF, m2_h_edge)
+
+            m2_min = torch.minimum(m2_v_edge, m2_h_edge)
+            m2_min = torch.where(inside, torch.zeros_like(m2_min), m2_min)
+            m2 = m2_min / det
+
             keep = opacities[gaussian_ids] * torch.exp(-0.5 * m2) >= contrib_floor
 
             gaussian_ids = gaussian_ids[keep]
@@ -539,8 +583,10 @@ def microblock_cull(
     pairs_in = int(gids_np.shape[0])
     tile_pairs_dropped = 0
     stream_offset = 0
-    mb_ox_local = _MB_ORIGIN_X.astype(np.float64)
-    mb_oy_local = _MB_ORIGIN_Y.astype(np.float64)
+    # Use float32 to match the C++ fixture-bit-identity contract; the proper-min
+    # cull is well-conditioned so f32 is sufficient for stability.
+    mb_ox_local = _MB_ORIGIN_X.astype(np.float32)
+    mb_oy_local = _MB_ORIGIN_Y.astype(np.float32)
 
     for ty in range(tiles_y):
         for tx in range(tiles_x):
@@ -564,22 +610,67 @@ def microblock_cull(
             ci_c = a / det
             g_op = opacities_np[tile_g_ids]
 
-            # Per-(g, m) keep mask (spec §2 closest-point clamp form).
-            mb_ox = tx_tile + mb_ox_local
-            mb_oy = ty_tile + mb_oy_local
-            cx = np.clip(mean_x[:, np.newaxis], mb_ox[np.newaxis, :], mb_ox[np.newaxis, :] + 8.0)
-            cy = np.clip(mean_y[:, np.newaxis], mb_oy[np.newaxis, :], mb_oy[np.newaxis, :] + 4.0)
-            dx_c = cx - mean_x[:, np.newaxis]
-            dy_c = cy - mean_y[:, np.newaxis]
-            power_c = -0.5 * (
-                ci_a[:, np.newaxis] * dx_c * dx_c
-                + 2.0 * ci_b[:, np.newaxis] * dx_c * dy_c
-                + ci_c[:, np.newaxis] * dy_c * dy_c
+            # Per-(g, m) keep mask using the TRUE min m² over each microblock
+            # rectangle. The previous version used L∞-clamp (per-axis clamp of
+            # the Gaussian center onto the microblock), which is wrong for
+            # tilted Gaussians — see get_tile_assignments for the full bug
+            # write-up. This vectorised constrained-min form is exact.
+            mb_ox = tx_tile + mb_ox_local        # (M,) microblock x origins
+            mb_oy = ty_tile + mb_oy_local        # (M,) microblock y origins
+            u_lo = mb_ox[np.newaxis, :] - mean_x[:, np.newaxis]   # (G, M)
+            u_hi = u_lo + 8.0
+            v_lo = mb_oy[np.newaxis, :] - mean_y[:, np.newaxis]
+            v_hi = v_lo + 4.0
+
+            x_inside = (u_lo <= 0.0) & (0.0 <= u_hi)
+            y_inside = (v_lo <= 0.0) & (0.0 <= v_hi)
+
+            ci_a_safe = np.maximum(ci_a, 1e-12)[:, np.newaxis]
+            ci_c_safe = np.maximum(ci_c, 1e-12)[:, np.newaxis]
+            ci_a_b = ci_a[:, np.newaxis]
+            ci_b_b = ci_b[:, np.newaxis]
+            ci_c_b = ci_c[:, np.newaxis]
+
+            INF = np.full_like(u_lo, np.inf)
+
+            # Vertical-edge candidate.
+            u_fix = np.where(u_lo > 0.0, u_lo, u_hi)
+            v_star = -ci_b_b * u_fix / ci_c_safe
+            v_star = np.clip(v_star, v_lo, v_hi)
+            m2_v = (
+                ci_a_b * u_fix * u_fix
+                + 2.0 * ci_b_b * u_fix * v_star
+                + ci_c_b * v_star * v_star
             )
-            keep_mask = (
-                np.minimum(g_op[:, np.newaxis] * np.exp(np.minimum(power_c, 0.0)), 0.99)
-                >= mb_contrib_floor
+            m2_v = np.where(x_inside, INF, m2_v)
+
+            # Horizontal-edge candidate.
+            v_fix = np.where(v_lo > 0.0, v_lo, v_hi)
+            u_star = -ci_b_b * v_fix / ci_a_safe
+            u_star = np.clip(u_star, u_lo, u_hi)
+            m2_h = (
+                ci_a_b * u_star * u_star
+                + 2.0 * ci_b_b * u_star * v_fix
+                + ci_c_b * v_fix * v_fix
             )
+            m2_h = np.where(y_inside, INF, m2_h)
+
+            m2_min = np.minimum(m2_v, m2_h)
+            m2_min = np.where(x_inside & y_inside, np.float32(0.0), m2_min)
+
+            # Equivalent exp-free form (matches C++ cull bit-for-bit). Test
+            # `g_op * exp(-0.5*m²) >= floor` ⇔ `m² <= -2*log(floor/g_op)`.
+            # For g_op <= floor the LHS can never reach floor (since exp ≤ 1),
+            # so set thresh = -inf to force drop.
+            g_op_f = g_op.astype(np.float32)
+            with np.errstate(divide="ignore"):
+                log_thresh_g = np.log(np.float32(mb_contrib_floor) / g_op_f)
+            thresh_m2_g = np.where(
+                g_op_f > np.float32(mb_contrib_floor),
+                (-2.0 * log_thresh_g).astype(np.float32),
+                np.float32(-np.inf),
+            )
+            keep_mask = m2_min <= thresh_m2_g[:, np.newaxis]
             tile_pairs_dropped += int(np.sum(~keep_mask.any(axis=1)))
 
             for m in range(_NUM_MICROBLOCKS):

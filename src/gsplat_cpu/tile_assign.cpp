@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 namespace gsplat_cpu {
@@ -195,14 +196,17 @@ TileAssignResult tile_assign(
             }
         }
 
-        // iter-053: cull dispatch changed from strided to block-chunked.
-        // The strided pattern wrote keep_mask[p] (1 byte each) at p, p+W,
-        // p+2W with W=10 — every 64 B cache line of keep_mask was touched
-        // by every worker, causing intense cross-core line invalidation
-        // on each store. Block-chunked dispatch makes each worker own a
-        // contiguous span of keep_mask -> zero cross-core line traffic,
-        // and hw-prefetcher-friendly sequential reads of gaussian_ids/
-        // tile_ids.
+        // Per-pair Mahalanobis cull: drop pairs whose true min m² over the
+        // tile rectangle exceeds the contribution threshold.
+        //
+        // CORRECTNESS NOTE: the previous implementation used L∞-clamp
+        // (per-axis clamp of Gaussian center onto the tile) and evaluated
+        // m² at that point. That is WRONG for tilted Gaussians — the
+        // L∞-clamp point can have m² much larger than the true min m²
+        // over the rectangle, so the cull drops Gaussians whose elongated
+        // axis crosses the tile diagonally, producing visible 32×32 tile
+        // artifacts at silhouettes. This version computes the actual
+        // constrained min m² over the rectangle.
         const std::size_t chunk_p = (P + W - 1) / W;
         auto cull_stripe = [&](std::size_t w) {
             const std::size_t lo = w * chunk_p;
@@ -230,14 +234,48 @@ TileAssignResult tile_assign(
                     static_cast<float>(tile_id / static_cast<int64_t>(tiles_x)) *
                     static_cast<float>(tile_size);
 
-                const float cx = clamp_float(px, tx_tile, tx_tile + static_cast<float>(tile_size));
-                const float cy = clamp_float(py, ty_tile, ty_tile + static_cast<float>(tile_size));
-                const float dx_c = cx - px;
-                const float dy_c = cy - py;
-                const float num =
-                    c * dx_c * dx_c - 2.0f * b * dx_c * dy_c + a * dy_c * dy_c;
+                // Rectangle in Gaussian-centered displacement space.
+                const float u_lo = tx_tile - px;
+                const float u_hi = u_lo + static_cast<float>(tile_size);
+                const float v_lo = ty_tile - py;
+                const float v_hi = v_lo + static_cast<float>(tile_size);
+
+                const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+                const bool y_inside = (v_lo <= 0.0f) && (0.0f <= v_hi);
+
                 const float scaled_thresh =
                     det * m2_thresh_g[static_cast<std::size_t>(g)];
+
+                if (x_inside && y_inside) {
+                    // Gaussian center inside tile: peak alpha is at center,
+                    // so contribution is opacity >= contrib_floor. Always keep.
+                    keep_mask[p] = 1;
+                    continue;
+                }
+
+                // Vertical facing edge (if any). 1D-min over v at fixed u:
+                //   v* = b*u/a  (clamped to [v_lo, v_hi])
+                float m2_v = std::numeric_limits<float>::infinity();
+                if (!x_inside) {
+                    const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
+                    const float a_safe = std::max(a, 1e-12f);
+                    float v_star = (b * u_fix) / a_safe;
+                    v_star = clamp_float(v_star, v_lo, v_hi);
+                    m2_v = c * u_fix * u_fix - 2.0f * b * u_fix * v_star
+                           + a * v_star * v_star;
+                }
+                // Horizontal facing edge. 1D-min over u at fixed v:
+                //   u* = b*v/c  (clamped to [u_lo, u_hi])
+                float m2_h = std::numeric_limits<float>::infinity();
+                if (!y_inside) {
+                    const float v_fix = (v_lo > 0.0f) ? v_lo : v_hi;
+                    const float c_safe = std::max(c, 1e-12f);
+                    float u_star = (b * v_fix) / c_safe;
+                    u_star = clamp_float(u_star, u_lo, u_hi);
+                    m2_h = c * u_star * u_star - 2.0f * b * u_star * v_fix
+                           + a * v_fix * v_fix;
+                }
+                const float num = std::min(m2_v, m2_h);
                 keep_mask[p] = (num <= scaled_thresh) ? 1 : 0;
             }
         };
