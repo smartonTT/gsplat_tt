@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 56 · current best: 24.18 ms · target: 1.0 ms
+      iters: 57 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-060-drop-unused-sat-mask-cb
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T06:19:10.320498+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> iter-060 is a dead-code cleanup removing the CB_SAT_MASK init block, pop_front, and cb_tile host allocation — no algebra change. All numerical checks pass: tile_structure_ratio max 17.75 is within the ≤18 hard gate and delta is exactly 0.0 vs prev_best (bit-identical to iter-059), so no tile-structure regression. PSNR floor applied at perceptual 35 dB per project memory (kernel-algebra 40 dB nominal was overconservative); all views ≥38.4 dB with clean visuals confirms KEEP. Timing improved -0.84% (23.98 vs prev_best 24.1825 ms) from saved per-tile init acquire — real win. p99/median ratio 1.19x well within 3x limit. Per-view PSNR delta 2.57 dB and ms ratio 1.23x both well within consistency bounds. Visual inspection of all three rendered PNGs and diff10 images shows no tile grid seams, no missing-splat holes, no color clipping, no NaN/Inf signatures, no geometry shift — only normal edge-concentrated speckle consistent with accumulated bf16 state quantization at this tile_ratio level.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>23.98 ms</b> median · 28.48 ms p99</div>
+    <div class="per-view">per-view: hero 23.98 / side 23.18 / top 28.45</div>
+    <div class="psnr">PSNR: hero 39.2 / side 41.0 / top 38.4 (min <b>38.4</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-060-drop-unused-sat-mask-cb/hero.png" target="_blank"><img src="screenshots/iter-060-drop-unused-sat-mask-cb/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-060-drop-unused-sat-mask-cb/side.png" target="_blank"><img src="screenshots/iter-060-drop-unused-sat-mask-cb/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-060-drop-unused-sat-mask-cb/top.png" target="_blank"><img src="screenshots/iter-060-drop-unused-sat-mask-cb/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-060-drop-unused-sat-mask-cb/hero_diff10.png" target="_blank"><img src="screenshots/iter-060-drop-unused-sat-mask-cb/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-060-drop-unused-sat-mask-cb/side_diff10.png" target="_blank"><img src="screenshots/iter-060-drop-unused-sat-mask-cb/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-060-drop-unused-sat-mask-cb/top_diff10.png" target="_blank"><img src="screenshots/iter-060-drop-unused-sat-mask-cb/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images show speckle concentrated at object silhouettes/edges, not at 32px or 16px grid intervals. No ho</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color filled blocks visible in rendered PNGs. Hero, side, and top all show continuous texture</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions in any rendered view. Object coverage appears complete across all three views.</li><li>✓ color_clipping_bands: No saturated R/G/B bands or color stripes present in any view. Hero shows expected pink ear and tongue; side and top sho</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes visible in renders or diff10 images. Edge differences in diff10 are</li><li>✓ nan_inf_signatures: No pure black/white/magenta patches in spatially-correlated patterns in any view. All three renders show normal scene co</li><li>✓ geometry_shift: Diff10 images show noise distributed within the object silhouette boundary, not the silhouette itself displaced. No geom</li><li>✓ diff10_structure: All three diff10 images are dominated by uniform speckle along edges/silhouettes — characteristic of accumulated bf16 pe</li></ul>
+    <p class="reasoning">iter-060 is a dead-code cleanup removing the CB_SAT_MASK init block, pop_front, and cb_tile host allocation — no algebra change. All numerical checks pass: tile_structure_ratio max 17.75 is within the ≤18 hard gate and delta is exactly 0.0 vs prev_best (bit-identical to iter-059), so no tile-structure regression. PSNR floor applied at perceptual 35 dB per project memory (kernel-algebra 40 dB nominal was overconservative); all views ≥38.4 dB with clean visuals confirms KEEP. Timing improved -0.84% (23.98 vs prev_best 24.1825 ms) from saved per-tile init acquire — real win. p99/median ratio 1.19x well within 3x limit. Per-view PSNR delta 2.57 dB and ms ratio 1.23x both well within consistency bounds. Visual inspection of all three rendered PNGs and diff10 images shows no tile grid seams, no missing-splat holes, no color clipping, no NaN/Inf signatures, no geometry shift — only normal edge-concentrated speckle consistent with accumulated bf16 state quantization at this tile_ratio level.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-059-drop-sat-mask-muls
