@@ -1,0 +1,58 @@
+{
+  "iter_dir": "iter-062-lofi-math-fidelity",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 23.98,
+  "psnr_per_view": {
+    "hero": 33.59067108370507,
+    "side": 40.01521450189314,
+    "top": 33.21575011980599
+  },
+  "tile_structure_ratio_per_view": {
+    "hero": 10.704458147516752,
+    "side": 15.235507954220873,
+    "top": 10.503266509740238
+  },
+  "kernel_ms_median": 23.810000000000002,
+  "kernel_ms_p99": 28.15162,
+  "per_view_median": {
+    "hero": 23.810000000000002,
+    "side": 23.069000000000003,
+    "top": 28.089
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 106.48489100276493,
+    "project_ms": 17.153783497633412,
+    "tile_assign_ms": 6.924967994564213,
+    "sort_ms": 1.8182049971073866,
+    "blend_ms": 79.66257199586835
+  },
+  "sub_medians": {
+    "blend.daemon_rt": 53.923824496450834,
+    "blend.daemon_rt.device_kernel": 23.810000000000002,
+    "blend.daemon_rt.encode_ms": 10.882000000000001,
+    "blend.daemon_rt.io_load_ms": 2.1639999999999997,
+    "blend.daemon_rt.io_save_ms": 14.461500000000001,
+    "blend.load_npy": 1.3301690050866455,
+    "blend.prep": 7.415169005980715,
+    "blend.prep.cov_inv": 0.40019200241658837,
+    "blend.prep.gather": 6.282903021201491,
+    "blend.prep.offsets": 0.048984496970660985,
+    "blend.prep.px_py_grid": 0.0025399785954505205,
+    "blend.prep.tile_origin": 0.691724504576996,
+    "blend.save_npy": 16.64029799576383,
+    "project.cam_xform": 1.7000160150928423,
+    "project.cov2d": 8.037388499360532,
+    "project.cov3d": 4.536446998827159,
+    "project.radii": 1.0598210064927116,
+    "project.screen_xy": 0.32082200050354004,
+    "sort.argsort": 1.0042615176644176,
+    "sort.gather": 0.2532880025682971,
+    "sort.keys": 0.37301648990251124,
+    "sort.ranges": 0.18084849580191076,
+    "tile_assign.bbox": 0.470950995804742,
+    "tile_assign.contrib_cull": 2.8008869994664565,
+    "tile_assign.flat_ids": 1.621421513846144,
+    "tile_assign.repeat": 1.7873949982458726
+  }
+}
