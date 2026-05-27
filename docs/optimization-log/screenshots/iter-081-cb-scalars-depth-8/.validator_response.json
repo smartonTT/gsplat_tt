@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32- or 16-pixel spacing visible in any diff10 image. Diff pattern is smooth speckle over object body."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32x32 or 16x16 blocks observed in any rendered view. Detail is preserved throughout."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No local dark regions or black holes relative to reference. Coverage matches reference across all three views."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat colored regions not present in reference. Color range matches reference."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at silhouettes. Edge differences in diff10 are consistent with normal per-Gaussian precision noise."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta patches in any rendered view. No spatially-correlated anomalous pixel clusters."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show the object silhouette as a distinct bright outline indicating coordinate shift. Differences are distributed across the object interior as expected."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images show uniform speckle distribution confined to the object body. No grid patterns, banding, or structured gradients. Bright edges in diff10 are consistent with established architectural baseline."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.41496520322124, "side": 40.99648830708902, "top": 38.59546500629706}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.1422622408487, "actual": {"hero": 17.137658028356157, "side": 17.278351895106663, "top": 18.1422622408487}, "pass": true, "delta_vs_prev": "~0.0 — top ratio 18.142 is within the established architectural baseline of ~17-18 (iter-068 recorded 18.15 top; architectural-baseline carve-out applies). Delta is effectively 0.0 vs prior iters at this prev_best level, well under the +0.3 ratchet threshold."},
+  "per_view_consistency": {"max_psnr_delta_db": 2.401, "max_ms_ratio": 1.237, "pass": true},
+  "timing": {"median_ms": 24.71, "p99_ms": 29.59171, "vs_prev_best_pct": 0.018, "pass": true},
+  "reasoning": "All checks pass. Kernel timing is essentially flat at +0.018% vs prev_best 24.7055 ms (well within the 2% break-even threshold). PSNR for all three views exceeds the dispatch-class floor of 38 dB (hero 39.41, side 41.00, top 38.60). Tile structure ratios (hero 17.14, side 17.28, top 18.14) are within the established architectural baseline of ~17-18 confirmed since iter-068; the architectural-baseline carve-out applies and the delta vs prev_best is effectively zero, well under the +0.3 ratchet threshold. P99/median ratio is 1.198, far below the 3x NEEDS_REVIEW threshold. Per-view PSNR spread is 2.4 dB (under 20 dB gate) and per-view ms ratio is 1.24 (under 2x gate). Renders are visually clean with no fireflies, no tile seams, no geometry shift, no color clipping, and no NaN/Inf signatures. Diff10 images show uniform speckle confined to the object body consistent with prior iters at this architectural baseline."
+}
