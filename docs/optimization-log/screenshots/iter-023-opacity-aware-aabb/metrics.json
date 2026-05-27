@@ -1,0 +1,52 @@
+{
+  "iter_dir": "iter-023-opacity-aware-aabb",
+  "class": "binning",
+  "prev_best_kernel_ms": 69.4115,
+  "psnr_per_view": {
+    "hero": 40.05250945649671,
+    "side": 43.43980715148941,
+    "top": 39.569722232170335
+  },
+  "kernel_ms_median": 61.869,
+  "kernel_ms_p99": 73.90878,
+  "per_view_median": {
+    "hero": 61.869,
+    "side": 58.513000000000005,
+    "top": 73.6705
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 194.25258999399375,
+    "project_ms": 17.801946989493445,
+    "tile_assign_ms": 7.663076001335867,
+    "sort_ms": 5.703053015167825,
+    "blend_ms": 161.6276944987476
+  },
+  "sub_medians": {
+    "blend.daemon_rt": 110.9989075048361,
+    "blend.daemon_rt.device_kernel": 61.869,
+    "blend.daemon_rt.encode_ms": 17.686,
+    "blend.daemon_rt.io_load_ms": 12.024000000000001,
+    "blend.daemon_rt.io_save_ms": 14.002,
+    "blend.load_npy": 1.327493999269791,
+    "blend.prep": 20.24361299118027,
+    "blend.prep.cov_inv": 0.5542255094042048,
+    "blend.prep.gather": 18.135080506908707,
+    "blend.prep.offsets": 0.04846400406677276,
+    "blend.prep.px_py_grid": 0.0032149982871487737,
+    "blend.prep.tile_origin": 1.4245784986997023,
+    "blend.save_npy": 24.53342750959564,
+    "project.cam_xform": 1.682105998042971,
+    "project.cov2d": 8.307221010909416,
+    "project.cov3d": 4.773909487994388,
+    "project.radii": 1.0278315021423623,
+    "project.screen_xy": 0.31939748441800475,
+    "sort.argsort": 2.7848219906445593,
+    "sort.gather": 1.5045769978314638,
+    "sort.keys": 1.0842109913937747,
+    "sort.ranges": 0.3016629925696179,
+    "tile_assign.bbox": 0.7325940096052364,
+    "tile_assign.flat_ids": 3.704614005982876,
+    "tile_assign.repeat": 2.949745990918018
+  }
+}

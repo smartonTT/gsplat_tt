@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32px or 16px spacing visible in any diff10 image across hero, side, or top views."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color square blocks observed in renders. Fur detail is preserved throughout the object in all three views."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes >16px in any render. Isolated bright speckles in diff10 are sub-pixel or tiny, consistent with normal AABB shrinkage noise at fur boundaries."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes in any render. All color channels appear continuous and within reference range."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouette edges in hero, side, or top. Silhouette boundaries in diff10 show only diffuse speckle, not systematic ringing patterns."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure-black, pure-white, or magenta patches in any render. Background is normal black; no spatially-correlated anomalous patches."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images show noise distributed within the object body following fur texture variation, not a silhouette offset indicating coordinate error. Object pose matches reference exactly."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform speckle noise distributed over the object surface. No grids, banded gradients, or structured edges. Side diff10 is nearly dark (very low error). Hero and top show fine texture-correlated speckle, which is expected for opacity-aware AABB shrinkage."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 40.05250945649671, "side": 43.43980715148941, "top": 39.569722232170335}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 3.87, "max_ms_ratio": 1.259, "pass": true},
+  "timing": {"median_ms": 61.869, "p99_ms": 73.90878, "vs_prev_best_pct": -10.9, "pass": true},
+  "reasoning": "All 8 visual checks pass: no tile seams, uniform-fill blocks, missing-splat holes, color clipping, ringing, NaN/Inf signatures, geometry shift, or structured diff10 patterns detected across all three views. Diff10 images show only diffuse speckle noise consistent with expected opacity-aware AABB shrinkage behavior. Class is 'binning' with a 35 dB PSNR floor; all views pass (hero=40.05, side=43.44, top=39.57). Kernel timing improved -10.9% vs prev_best (61.87 vs 69.41 ms), p99/median ratio is 1.19 (well under 3x), and per-view kernel-ms ratio is 1.26 (well under 2x). Per-view PSNR delta is 3.87 dB (well under 20 dB threshold). No check failures."
+}
