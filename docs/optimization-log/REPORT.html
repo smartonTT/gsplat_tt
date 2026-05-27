@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 31 · current best: 40.02 ms · target: 1.0 ms
+      iters: 32 · current best: 38.48 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-031-contrib-floor-9-of-255
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T00:51:09.010345+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass. No structural artifacts, tile seams, holes, clipping, halos, or NaN signatures. The diff10 images show only diffuse surface speckle consistent with culled low-contribution splats — no geometry shift or structured patterns. PSNR floor of 35 dB met on all views (hero 39.17, side 43.55, top 38.42). Per-view PSNR delta of 5.13 dB (hero vs side) and max ms ratio of 1.30 (top 48.19 vs side 37.07) both within acceptable bounds. kernel_ms_median 38.48 is -3.84% below prev_best 40.022, confirming forward progress. Binning-class floor of 35 dB is satisfied with margin.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>38.48 ms</b> median · 48.27 ms p99</div>
+    <div class="per-view">per-view: hero 38.48 / side 37.06 / top 48.19</div>
+    <div class="psnr">PSNR: hero 39.2 / side 43.5 / top 38.4 (min <b>38.4</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-031-contrib-floor-9-of-255/hero.png" target="_blank"><img src="screenshots/iter-031-contrib-floor-9-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-031-contrib-floor-9-of-255/side.png" target="_blank"><img src="screenshots/iter-031-contrib-floor-9-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-031-contrib-floor-9-of-255/top.png" target="_blank"><img src="screenshots/iter-031-contrib-floor-9-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-031-contrib-floor-9-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-031-contrib-floor-9-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-031-contrib-floor-9-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-031-contrib-floor-9-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-031-contrib-floor-9-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-031-contrib-floor-9-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No 32px or 16px grid lines visible in any render or diff10</li><li>✓ tile_uniform_fill: No tile-shaped uniform-fill blocks in any view</li><li>✓ missing_splat_holes: No black holes larger than 16px; geometry is complete across all three views</li><li>✓ color_clipping_bands: No color clipping bands visible; gradients appear smooth</li><li>✓ ringing_halos: No ringing or halos at silhouette edges in hero, side, or top</li><li>✓ nan_inf_signatures: No black/white/magenta patches indicating NaN or Inf values</li><li>✓ geometry_shift: Diff10 images show no structured silhouette shift; error is distributed across surface texture</li><li>✓ diff10_structure: All three diff10 images show diffuse speckle across Gaussian surface areas with no tile-aligned or structured patterns; </li></ul>
+    <p class="reasoning">All visual checks pass. No structural artifacts, tile seams, holes, clipping, halos, or NaN signatures. The diff10 images show only diffuse surface speckle consistent with culled low-contribution splats — no geometry shift or structured patterns. PSNR floor of 35 dB met on all views (hero 39.17, side 43.55, top 38.42). Per-view PSNR delta of 5.13 dB (hero vs side) and max ms ratio of 1.30 (top 48.19 vs side 37.07) both within acceptable bounds. kernel_ms_median 38.48 is -3.84% below prev_best 40.022, confirming forward progress. Binning-class floor of 35 dB is satisfied with margin.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-030-contrib-floor-7-of-255
