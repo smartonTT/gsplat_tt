@@ -208,12 +208,16 @@ void kernel_main() {
         // page per Gaussian; compute pops one per inner-loop iteration.
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
         //
-        // iter-089: wrap-aware K=2 burst. Coalesce 2 noc_async_read_tile
-        // calls per barrier when the CB has 2 contiguous slots free at
+        // iter-089: wrap-aware K=2 burst. Coalesce K noc_async_read_tile
+        // calls per barrier when the CB has K contiguous slots free at
         // the current write pointer. iter-087 (K=4, no wrap check) hung
         // on CB wrap-straddle; we cap `batch` to pages_until_wrap so the
         // burst always lands in contiguous L1.
-        constexpr uint32_t K = 2;
+        // iter-099: bump K=2 → K=3. CB_SCALARS depth=4, so K=3 leaves 1
+        // slot for compute consumption between bursts (vs K=2 leaving 2).
+        // Halves barrier overhead vs K=2 in the steady-state case where
+        // compute drains 1 page per acquire. Wrap-aware cap unchanged.
+        constexpr uint32_t K = 3;
         const auto& cb_scal = get_local_cb_interface(CB_SCALARS);
         uint32_t g = 0;
         while (g < g_count) {
