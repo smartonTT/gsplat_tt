@@ -155,10 +155,10 @@ def project_gaussians(
     # comparable to its distance from the camera — producing wildly wrong 2D
     # covariances and massive bounding boxes. Visually these show up as
     # giant fuzzy blobs right in front of the camera when zooming in.
-    # Drop any Gaussian where either AABB half-extent exceeds 1/4 of the smaller
-    # image dim. Legitimate Gaussians with k≤3σ and reasonable σ rarely exceed
-    # ~100 pixels; the >256 px regime is dominated by Jacobian artifacts.
-    max_radius = min(image_height, image_width) // 4
+    # Drop any Gaussian where either AABB half-extent exceeds half the smaller
+    # image dim, since a single splat covering more than half the viewport is
+    # almost always an artifact, not real geometry.
+    max_radius = min(image_height, image_width) // 2
     valid_mask = valid_mask & (rx <= max_radius) & (ry <= max_radius)
 
     # Optional opacity cull: a Gaussian's peak per-pixel contribution is
