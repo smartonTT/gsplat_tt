@@ -8,15 +8,21 @@ Author trail: derived from a verified read of `tt_metal/tt-llk/tt_llk_blackhole/
 
 ## 0. TL;DR
 
-The current kernel does full 32×32 tile compute for every Gaussian-tile pair, even when a Gaussian only meaningfully touches a few microblocks of the tile. Real (not-AABB) Gaussian footprints are highly skewed: a 3σ ellipse with σ ≈ 1–4 px touches 10–40% of pixels in the tiles it overlaps. We are paying ~3–10× the SFPU work we need on the inner Mahalanobis/exp/alpha/blend chain.
+The current kernel does full 32×32 tile compute for every (Gaussian, tile) pair, even when a Gaussian only meaningfully touches a few of the tile's 32 microblocks (4-row × 8-col SFPU slots). Real Gaussian footprints are highly skewed: a 3σ ellipse with σ ≈ 1–4 px touches 10–40% of the pixels in the tiles it overlaps. We are paying ~3–10× the inner SFPU work we need.
 
-This spec defines a hybrid pipeline:
+This spec defines a **microblock-major** pipeline:
 
-1. **Host bins to microblocks** (4-row × 8-col, 32 lanes each — 32 microblocks per tile), not just to tiles. Each per-Gaussian payload now carries a 32-bit microblock-active mask.
-2. **Compute kernel keeps 32×32 tile dispatch** (matches existing CB / pack / writer / DST budget) and uses **per-microblock SFPU compute** through `TT_SFPLOAD/TT_SFPMAD/TT_SFPSTORE` against DST addresses, skipping zero-mask microblocks entirely.
-3. **Tile-level FPU work that is invariant under the microblock mask** (the 6 basis tiles `x², xy, y², x, y, 1` derived from `px/py`, plus state-CB I/O) stays on the FPU as full-tile `mul_tiles_bcast_*` ops. Tile-level work is paid once per tile, not per Gaussian.
+1. **Host bins to microblocks**, not just to tiles. Per tile it emits (a) one coefficient table for that tile's gaussians and (b) 32 ordered, depth-sorted gaussian-index lists, one per microblock.
+2. **Compute kernel keeps 32×32 tile dispatch** (matches existing CB / pack / writer model) but its outer loop is `for microblock m in tile`. Inner loop is `for gaussian g in microblock_list[m]`.
+3. **Inner body is per-microblock SFPU math** via `TT_SFPLOAD/TTI_SFPMAD/TT_SFPSTORE` against the microblock's DST address (one 4-row × 8-col, 32-lane slot).
+4. **State (R/G/B/T for this microblock) lives in 4 LREGs across the microblock's gaussian inner loop.** DST is touched only at microblock boundaries (32× per tile, not G× per tile).
+5. **Basis values for this microblock (x², xy, y², x, y) live in 5 LREGs across the same inner loop.** Loaded once per microblock from per-tile basis tiles in DST; computed from x, y via 3 SFPMUL.
+6. **Per-Gaussian coefficients (A..F + opacity + color) come from a per-tile L1 table.** Indexed by the microblock's gaussian-list entry; loaded fresh per (microblock, gaussian) iteration.
+7. **Inner SFPU sequence is recorded into the replay buffer once** and reissued per (microblock, gaussian) via `lltt::replay`.
 
-Result: per-Gaussian cost scales with `popcount(mask) / 32` × the inner microblock cost, plus a small constant. Expected end state: device_kernel proportional to true Gaussian footprint, not AABB footprint.
+Per-microblock SFPLOADs/SFPSTOREs are amortized over the microblock's gaussian list; per-gaussian coefficient loads are amortized over the 11 SFPLOADIs constant cost. Memory ops drop ~10× relative to the g-major + mask-skip alternative we considered first. Expected end state: device_kernel time proportional to active (microblock, gaussian) pairs.
+
+This design is informed by two prior proposals (see §13) — one had the right outer loop and the wrong inner math (full-tile compute then microblock-extract), the other had the right inner math (real `TT_SFPLOAD`/`TTI_SFPMAD`/`TT_SFPSTORE`) and the wrong dispatch granularity (per-face). Neither fit DST budget. This spec is the verified synthesis.
 
 ---
 
@@ -223,141 +229,206 @@ SFPLOADs/SFPSTOREs which stay inline.
 
 ```
 HOST (gsplat/rasterization.py + backends/tt/backend.py)
-  1. project_gaussians                 (existing)
-  2. AABB tile assignment              (existing, _assign_gaussians_to_tiles)
-  3. PER-PAIR mahalanobis cull         (existing, contrib_floor)
-  4. NEW: per-Gaussian microblock mask (32-bit popcounted active mask
-                                        for each surviving (g, tile) pair)
-  5. depth sort + per-tile bin         (existing, sort_and_bin)
-  6. pack scalars                      (existing, +1 uint32 per Gaussian
-                                        for the microblock mask -> payload
-                                        grows from 64B to 64B; we pack the
-                                        mask into the existing 64B page)
-  7. pack px/py tiles                  (existing)
-  8. write tile_offsets, tile_ids,     (existing; LPT load balancing
-     packs to DRAM                     unchanged)
+  1. project_gaussians                  (existing)
+  2. AABB tile assignment               (existing, _assign_gaussians_to_tiles)
+  3. PER-PAIR mahalanobis cull          (existing, contrib_floor)
+  4. NEW: per-microblock cull            for each surviving (g, tile) pair,
+                                        compute the 32-microblock activity
+                                        mask (closest-point Mahalanobis per
+                                        microblock).
+  5. depth sort + per-tile bin          (existing, sort_and_bin)
+  6. NEW: expand to per-microblock      from each (g, tile) pair's mask,
+     gaussian-index lists                emit one (microblock_idx,
+                                        local_gaussian_idx) pair per active
+                                        microblock. Group these per
+                                        microblock per tile -> 32 lists/tile.
+  7. NEW: pack per-tile coefficient     for each tile, write the contiguous
+     table to DRAM                       table of {A..F, opacity, color_rgb}
+                                        for the L = g_count gaussians of
+                                        this tile.
+  8. NEW: pack per-tile microblock      for each tile, write 32 (offset,
+     headers + per-microblock streams    count) entries followed by the
+                                        flat concatenated stream of L'
+                                        local-gaussian-indices (sum of
+                                        per-microblock counts; L' = sum of
+                                        popcount(mask) across the tile's
+                                        gaussians).
+  9. pack px/py tiles, tile_ids         (existing)
 
 DEVICE
   READER (NCRISC, NoC1, kernels/dataflow/reader_alpha_blend.cpp)
     Per assigned tile:
-      - g_count = tile_offsets[tile+1] - tile_offsets[tile]
-      - push g_count to CB_TILE_META
-      - push px tile (1) to CB_PX
-      - push py tile (1) to CB_PY
-      - for g in [g_start, g_end):
-          push 1 64B page to CB_SCALARS (now contains mb_mask)
+      - push px, py tiles to CB_PX, CB_PY                          (existing)
+      - DMA per-tile coefficient table to CB_COEFF_TABLE           (NEW)
+      - DMA per-tile microblock-header to CB_MB_HEADER             (NEW)
+      - DMA per-tile microblock-stream to CB_MB_STREAM             (NEW)
+        (one shot per tile -- no per-gaussian DMA churn)
 
   COMPUTE (kernels/compute/alpha_blend_compute.cpp)
     Once per program launch:
       - prefill CB_CONST_ZERO, CB_CONST_099                         (existing)
-      - record replay slot for the per-microblock SFPU inner sequence  (NEW)
-      - prefill CB_BASIS_X, CB_BASIS_Y, CB_BASIS_X2, CB_BASIS_XY,
-                CB_BASIS_Y2, CB_BASIS_ONE  (per-tile basis tiles)       (NEW)
+      - record replay slot for the per-microblock SFPU inner body   (NEW)
 
     Per tile:
-      A. Init R/G/B/T/sat state CBs                                 (existing)
-      B. Fast-skip: if tile_g_count == 0, pack zeros and continue   (existing+)
-      C. Build per-tile basis tiles from CB_PX, CB_PY               (NEW)
-         - x_local = px - tile_origin_x  (FPU, mul_tiles_bcast or sub)
-         - y_local = py - tile_origin_y
-         - x², xy, y²                                               (FPU)
-         - These are PER-TILE constants; we compute once and hold in
-           L1 across all g_count Gaussians of this tile. Saves
-           3 SFPU mul_unary_tile + 1 mul_tiles_bcast per Gaussian.
-      D. Per-Gaussian inner loop. The 32-bit mb_mask drives compute:
-         - if popcount(mb_mask) == 32:  full-tile FPU/SFPU path     (existing)
-         - if popcount(mb_mask) < THRESH: per-microblock path       (NEW)
-            - basis-form Q evaluation per active microblock only
-            - exp, alpha, contrib, R/G/B accum, T update
-              all per-microblock against THE SAME state CB (we
-              load/modify/store only the microblocks we touch)
-      E. Per-tile finalize: pack R/G/B state to CB_COLOR_OUT        (existing)
+      A. Acquire DST.
+      B. Build per-tile basis tiles X, Y in DST slots 4, 5:        (NEW)
+         - X = px - tile_origin_x         (SFPU sub_unary_tile)
+         - Y = py - tile_origin_y
+         - These are PER-TILE constants; held in DST across the
+           whole 32-microblock outer loop.
+      C. Init state DST slots 0,1,2,3:
+         - R = G = B = 0, T = 1                                    (fill_tile)
+      D. Outer microblock loop:  for m in [0, 32):
+           1. count = mb_header[m].count
+              if count == 0: continue
+           2. Read 5 basis values for microblock m into LREGs:
+              X^2_lreg, XY_lreg, Y^2_lreg via SFPMULs of
+              X_lreg, Y_lreg loaded from DST slots 4, 5 at m's
+              addr.
+           3. Load microblock m's R, G, B, T state from DST slots
+              0..3 (at m's addr) into 4 LREGs.
+           4. Inner gaussian loop:  for i in [0, count):
+                gauss_idx = mb_stream[mb_header[m].offset + i]
+                load (A..F, opacity, color_rgb) for gauss_idx from
+                  CB_COEFF_TABLE into LREGs
+                lltt::replay(REPLAY_SLOT_MB_BODY) -- runs Q, exp,
+                  alpha, contrib, R/G/B FMA, T update entirely in
+                  LREGs (no DST touch).
+                periodic saturation check: if T-all-lanes saturate,
+                  break.
+           5. SFPSTORE the 4 state LREGs back to DST slots 0..3 at
+              m's addr.
+      E. Commit DST. Pack DST slots 0..2 to CB_COLOR_OUT (R/G/B).
+      F. Release DST.
 
   WRITER (BRISC, NoC0, kernels/dataflow/writer_alpha_blend.cpp)     (existing)
 ```
 
-### 2.1 Why hybrid full-tile + per-microblock
+### 2.1 No "hybrid full-tile path" anymore
 
-- **Full-tile path is faster per byte of work** when the mask covers the
-  whole tile, because `mul_tiles_bcast_*` is FPU (matrix engine) and beats
-  any SFPU loop on dense work. Real workloads have a heavy tail of
-  Gaussians that *do* cover the full tile (the central tile of a big
-  splat). We must keep this path.
-- **Per-microblock path** only competes when the mask is sparse — at that
-  point the FPU full-tile cost becomes a constant ceiling we want to
-  break through.
-
-The crossover threshold (`THRESH`) is empirical; design this as a runtime
-or compile-time knob. First implementation: `THRESH = 24` (i.e., switch to
-the microblock path only when 24+ of 32 microblocks are *inactive*; that's
-≥75% sparsity, a regime where SFPU cost ≈ 25% of full-tile cost).
+The earlier draft kept a full-tile FPU fallback for dense `mb_mask`. With
+mb-major dispatch the dense case is exactly: a microblock whose count
+equals the total tile gaussian count L (every gaussian touches it).
+The per-microblock SFPU path already handles this — its cost in that case
+is `L × ~30 cycles` per microblock, which is competitive with the FPU
+full-tile path at any realistic L. We delete the hybrid threshold; there
+is one code path. (We revisit this in §8 if the performance model says
+otherwise.)
 
 ---
 
 ## 3. Host binning to microblocks
 
-### 3.1 Where the change lands
+### 3.1 What the host emits
 
-`gsplat/rasterization.py::_assign_gaussians_to_tiles` already produces
-`(gaussian_ids, tile_ids, tiles_per_gaussian)`. We extend it to emit one
-additional output:
+For each tile, the host produces three blobs in DRAM:
 
 ```python
-mb_masks: torch.Tensor   # uint32, shape (P,) where P = sum(tiles_per_gaussian)
-                         # bit `m` (m in 0..31) is 1 iff microblock `m` of
-                         # tile `tile_ids[i]` has at least one pixel that
-                         # passes the per-microblock contribution test.
+# Per-tile coefficient table: contiguous fp32 rows, one per local-gaussian.
+# Indexed by `local_gaussian_idx in [0, L)` where L = number of gaussians
+# of this tile.
+coeff_table[tile]: np.ndarray         # shape (L, 11), dtype=np.uint32
+                                       # 10 fp32 lanes + 1 unused pad
+                                       # lane layout per row:
+                                       #   0..5: A, B, C, D, E, F (basis-form coeffs)
+                                       #   6:    opacity
+                                       #   7..9: color_r, color_g, color_b
+                                       #   10:   pad (round to 44B -> 48B page)
+
+# Per-tile microblock header: 32 (offset, count) entries.
+mb_header[tile]: np.ndarray            # shape (32, 2), dtype=np.uint32
+                                       # mb_header[m][0] = offset into mb_stream
+                                       # mb_header[m][1] = count
+
+# Per-tile microblock stream: flat list of local_gaussian_idx values, mb-major.
+mb_stream[tile]: np.ndarray            # shape (L',), dtype=np.uint16 or uint32
+                                       # L' = sum_m mb_header[m][1] (active pairs)
+                                       # mb_stream[mb_header[m][0] : mb_header[m][0] + mb_header[m][1]]
+                                       #   = local_gaussian_idx values in DEPTH ORDER
+                                       #     for microblock m
 ```
 
-### 3.2 Per-microblock contribution test
+Total host-side memory cost per tile (typical L=200, K_avg=8):
+- coeff_table: 200 × 48 B = 9.6 KB
+- mb_header: 32 × 8 B = 256 B
+- mb_stream: 1600 × 4 B = 6.4 KB
+- Sum: ~16 KB / tile. At 1080p × 2040 tiles: ~33 MB total. Fits DRAM with
+  room to spare; comparable to today's per-gaussian packs.
 
-Reuse the existing closest-pixel-in-bbox Mahalanobis trick from the
-per-pair `contrib_cull` (rasterization.py lines 268–290), but evaluate it
-**32 times per surviving (g, tile) pair**, once per microblock.
+### 3.2 Per-microblock cull (the binning math)
 
-Each microblock is a 4×8 axis-aligned rectangle inside the tile. For
-microblock `m`, the closest point to the Gaussian mean is
+Same closest-pixel-in-rectangle Mahalanobis trick as the existing
+per-pair `contrib_cull` (`rasterization.py` lines 268–290), but evaluated
+once per (g, tile, microblock) triple. Vectorized over all 32
+microblocks at once via a `(P, 32)` torch op:
 
 ```python
-# Per-tile pixel origin of the tile, broadcast over P
-tx_tile = (tile_ids % tiles_x).float() * tile_size            # (P,)
-ty_tile = (tile_ids // tiles_x).float() * tile_size           # (P,)
+# Per-microblock origin within a tile, table of 32 entries. Order matches
+# §3.4 enumeration.
+mb_origin_x = torch.tensor([...32 entries: 0, 8, 16, 24, 0, 8, ...])  # (32,)
+mb_origin_y = torch.tensor([...32 entries: 0, 0,  0,  0, 4, 4, ...])  # (32,)
 
-# Per-microblock origin within the tile, table of 32 entries.
-# Constructed from the (face_row, face_col, band, colhi) decode in §1.3.
-mb_origin_x = ...  # shape (32,) values in {0, 8, 16, 24}
-mb_origin_y = ...  # shape (32,) values in {0, 4, 8, 12, 16, 20, 24, 28}
+# Per-tile pixel origin, broadcast across the P (g, tile) pairs:
+tx_tile = (tile_ids % tiles_x).float() * tile_size                    # (P,)
+ty_tile = (tile_ids // tiles_x).float() * tile_size                   # (P,)
 
-# Closest point inside the m-th microblock of the i-th pair to mean[i]:
-#   cx[i, m] = clamp(mean_x[i], tx_tile[i] + mb_origin_x[m],
-#                                tx_tile[i] + mb_origin_x[m] + 8)
-# (likewise cy; 4 instead of 8 for y)
-# Then evaluate
-#   m2[i, m] = (c*dx² - 2b*dx*dy + a*dy²) / det
-#   keep_mb[i, m] = opacity[g] * exp(-0.5 * m2) >= contrib_floor
-# and
-#   mb_masks[i] = sum_m (keep_mb[i, m] << m)
+# Microblock origin in image coords for each (pair, microblock):
+mb_ox = tx_tile[:, None] + mb_origin_x[None, :]                       # (P, 32)
+mb_oy = ty_tile[:, None] + mb_origin_y[None, :]                       # (P, 32)
+
+# Closest point inside the m-th microblock to gaussian g's mean:
+cx = torch.clamp(means_2d[gaussian_ids, 0:1], min=mb_ox, max=mb_ox + 8)
+cy = torch.clamp(means_2d[gaussian_ids, 1:2], min=mb_oy, max=mb_oy + 4)
+dx = cx - means_2d[gaussian_ids, 0:1]
+dy = cy - means_2d[gaussian_ids, 1:2]
+
+# Closest-point Mahalanobis distance for each (pair, microblock):
+m2 = (c[:, None] * dx*dx - 2.0*b[:, None] * dx*dy + a[:, None] * dy*dy) / det[:, None]
+keep_mb = opacities[gaussian_ids, None] * torch.exp(-0.5 * m2) >= contrib_floor   # (P, 32)
 ```
 
-This is a single `(P, 32)` vectorized `torch` block, no Python loops. Cost
-on CPU is `O(P)` with constant 32 — at 1080p (~2k tiles, ~50k pairs after
-existing culls) this is microseconds, dwarfed by everything else in
-prep.
+Then build the per-microblock streams. The trick: `keep_mb[i, m] == True`
+means pair `i` (a (g, tile) pair) contributes to microblock `m` of its
+tile. For each tile we want, per-microblock, the depth-sorted list of
+`local_gaussian_idx` (i.e., the position of this gaussian in the tile's
+gaussian list).
 
-### 3.3 Mask aliasing rule
+```python
+# After sort_and_bin, gaussian_ids and tile_ids are sorted so that all
+# pairs of one tile are contiguous and depth-sorted within. Per tile:
+for t in range(num_tiles):
+    s, e = tile_offsets[t], tile_offsets[t + 1]
+    pairs_in_tile = slice(s, e)
+    L = e - s
+    keep_tile = keep_mb[pairs_in_tile]               # (L, 32) bool
+    mb_stream_t = []
+    mb_header_t = np.zeros((32, 2), dtype=np.uint32)
+    for m in range(32):
+        local_idx = np.where(keep_tile[:, m])[0]     # depth-sorted by construction
+        mb_header_t[m, 0] = len(mb_stream_t)
+        mb_header_t[m, 1] = len(local_idx)
+        mb_stream_t.extend(local_idx.tolist())
+    # write coeff_table_t, mb_header_t, mb_stream_t to DRAM-bound buffers
+```
 
-We do not drop pairs where `mb_masks[i] == 0` (they should be 0 already
-because `contrib_cull` runs first; if any survive, it means the AABB-level
-test passed but every microblock failed — drop them here too).
+This Python loop over `num_tiles` is a real cost (~2 ms at 1080p). Easy
+torch-vectorize: `keep_mb` is `(P, 32)`; flatten to `(P*32, 2)` with a
+column for `m`; sort by `(tile_id_per_pair, m, original_pair_position)`;
+emit. We'll port to vectorized form once Stage 1 host correctness lands.
 
-Conservative invariant: `popcount(mb_masks[i]) >= 1` for every pair we
-keep. Sanity-check this on the host, fail loudly if it fires.
+### 3.3 Drop-pair rule
 
-### 3.4 Microblock enumeration
+A pair with `keep_mb[i, :].sum() == 0` (passed AABB+per-pair cull but
+fails every microblock) is dropped from the bin entirely. Sanity-check
+on the host: this should be rare (<1% of pairs); fail loudly if >5%
+because it means our per-pair `contrib_cull` is wrong.
 
-We commit to a single canonical mapping `m ↔ (face, band, colhi)` that is
-shared between host and device. Define it once in
-`alpha_blend_host.h` so neither side guesses. Recommended raster order:
+### 3.4 Microblock enumeration (host ↔ device agreement)
+
+We commit to a single canonical mapping `m ↔ (face, band, colhi)` shared
+between host and device. Define it in `alpha_blend_host.h` so neither
+side guesses. Recommended raster order (rows 0..3 first, left-to-right;
+then rows 4..7; etc):
 
 ```cpp
 // In alpha_blend_host.h
@@ -370,560 +441,559 @@ shared between host and device. Define it once in
 //   tile_row_band -> face_row * 4 + band
 //   tile_col_group -> face_col * 2 + colhi
 //
-// Microblock 0 = rows 0..3,  cols 0..7   (face 0, band 0, colhi 0)
-// Microblock 1 = rows 0..3,  cols 8..15  (face 0, band 0, colhi 1)
-// Microblock 2 = rows 0..3,  cols 16..23 (face 1, band 0, colhi 0)
-// Microblock 3 = rows 0..3,  cols 24..31 (face 1, band 0, colhi 1)
-// Microblock 4 = rows 4..7,  cols 0..7   (face 0, band 1, colhi 0)
+// Microblock 0  = rows  0..3,  cols  0..7   (face 0, band 0, colhi 0)
+// Microblock 1  = rows  0..3,  cols  8..15  (face 0, band 0, colhi 1)
+// Microblock 2  = rows  0..3,  cols 16..23  (face 1, band 0, colhi 0)
+// Microblock 3  = rows  0..3,  cols 24..31  (face 1, band 0, colhi 1)
+// Microblock 4  = rows  4..7,  cols  0..7   (face 0, band 1, colhi 0)
 // ...
-// Microblock 31 = rows 28..31, cols 24..31 (face 3, band 3, colhi 1)
+// Microblock 31 = rows 28..31, cols 24..31  (face 3, band 3, colhi 1)
 constexpr uint32_t mb_to_dst_addr(uint32_t m, uint32_t dst_tile_idx) {
     uint32_t row_band   = m >> 2;          // 0..7
     uint32_t col_group  = m & 0x3;         // 0..3
-    uint32_t face_row   = row_band >> 2;   // 0 or 1 (upper / lower half)
+    uint32_t face_row   = row_band >> 2;   // 0 or 1
     uint32_t band       = row_band & 0x3;  // 0..3
-    uint32_t face_col   = col_group >> 1;  // 0 or 1 (left / right half)
+    uint32_t face_col   = col_group >> 1;  // 0 or 1
     uint32_t colhi      = col_group & 0x1; // 0 or 1
-    uint32_t face       = (face_row << 1) | face_col;     // 0..3
+    uint32_t face       = (face_row << 1) | face_col;
     return dst_tile_idx * 64 + face * 16 + band * 4 + colhi * 2;
 }
 ```
 
-This function is `constexpr` so the compiler folds it for any compile-time
-`m`. The per-microblock loop body uses it as a precomputed table of 32 addr
-values for `dst_tile_idx = 0` (the inner-loop slot we always pack from).
+The kernel uses a precomputed 32-entry table indexed by `m` directly to
+avoid the decode in the inner loop (see §6.3).
 
 ---
 
 ## 4. Payload + reader changes
 
-### 4.1 Existing 64B scalar pack
+The existing per-gaussian 64B scalar pack and `CB_SCALARS` stream go
+away. Reads are reorganized around per-tile blobs instead of per-gaussian
+pages.
 
-`alpha_blend_host.h::SCALAR_PACK_BYTES = 9 * 4 = 36 bytes`, padded to
-`SCALAR_PACK_PAGE_BYTES = 64`. The 9 fp32 scalars are
-`(mean_x, mean_y, a, b, c, opacity, color_r, color_g, color_b)`.
-
-### 4.2 New 64B scalar pack
-
-The 64-byte page has 28 bytes of slack. We pack the new mb_mask into one
-of those uint32 slots, raising the layout to **10 lanes** with one of them
-being a uint32 mask:
+### 4.1 New CB layout
 
 ```cpp
 // alpha_blend_host.h additions:
-constexpr uint32_t SCALAR_PACK_LANES = 10;
-constexpr uint32_t SCALAR_PACK_BYTES = SCALAR_PACK_LANES * 4;  // 40 bytes
-constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // unchanged
 
-// Lane assignment (host-side packs; device-side reads identical layout):
-//   0: mean_x   (fp32)
-//   1: mean_y   (fp32)
-//   2: a        (fp32, cov_inv[0,0])
-//   3: b        (fp32, cov_inv[0,1])
-//   4: c        (fp32, cov_inv[1,1])
-//   5: opacity  (fp32)
-//   6: color_r  (fp32)
-//   7: color_g  (fp32)
-//   8: color_b  (fp32)
-//   9: mb_mask  (uint32, bit m = microblock m active)  *** NEW ***
+// COEFFICIENT TABLE: per-tile, fp32. One row per gaussian of this tile.
+// Row size 48 B (= 10 fp32 lanes + 2 fp32 pad to NoC-align), L rows.
+constexpr uint32_t COEFF_LANES_PER_GAUSSIAN = 10;  // A..F, opacity, color_rgb
+constexpr uint32_t COEFF_ROW_BYTES          = 48;  // NoC-aligned
+constexpr uint32_t COEFF_LANE_A             = 0;
+constexpr uint32_t COEFF_LANE_B             = 1;
+constexpr uint32_t COEFF_LANE_C             = 2;
+constexpr uint32_t COEFF_LANE_D             = 3;
+constexpr uint32_t COEFF_LANE_E             = 4;
+constexpr uint32_t COEFF_LANE_F             = 5;
+constexpr uint32_t COEFF_LANE_OPACITY       = 6;
+constexpr uint32_t COEFF_LANE_COLOR_R       = 7;
+constexpr uint32_t COEFF_LANE_COLOR_G       = 8;
+constexpr uint32_t COEFF_LANE_COLOR_B       = 9;
+
+// MICROBLOCK HEADER: per-tile, uint32. Always exactly 256 B (32 entries x 8 B).
+struct MicroblockHeader {
+    uint32_t offset;   // into mb_stream
+    uint32_t count;    // gaussians in this microblock
+};
+static_assert(sizeof(MicroblockHeader) == 8, "8B per entry assumed");
+constexpr uint32_t MB_HEADER_BYTES = 32 * 8;       // 256 B
+
+// MICROBLOCK STREAM: per-tile, uint32. L' = sum(mb_header[m].count) entries,
+// each a local-gaussian-index into the per-tile coeff_table.
+//
+// Sized to a worst-case L' bound per tile (e.g. L_max * 32 if every
+// gaussian touches every microblock); host writes only the prefix that's
+// actually used.
+
+// New CB indices:
+constexpr uint32_t CB_PX            = 0;   // unchanged
+constexpr uint32_t CB_PY            = 1;   // unchanged
+constexpr uint32_t CB_COEFF_TABLE   = 2;   // *replaces* CB_SCALARS
+constexpr uint32_t CB_MB_HEADER     = 3;   // *replaces* CB_TILE_META
+constexpr uint32_t CB_MB_STREAM     = 4;   // NEW
+
+constexpr uint32_t CB_COLOR_OUT     = 16;  // unchanged
+// State and constant CBs (CB_CONST_ZERO, CB_CONST_099) keep their indices
+// from the existing host header; the per-Gaussian intermediate CBs
+// (CB_DX/DY/DX2/DY2/DXDY/Q/POWER/ALPHA/CONTRIB/T_TMP/...) are DELETED
+// because the inner loop no longer round-trips through them.
 ```
 
-Page size is unchanged at 64 bytes — no NoC-bandwidth change, no CB
-reconfig. Reader and host pack changes are both trivial.
+### 4.2 CB sizing
 
-### 4.3 Reader kernel diff
+| CB | Page size | Pages (depth) | Total L1 |
+|---|---|---|---|
+| CB_PX | 2048 B (bf16 32×32) | 2 (double-buffered) | 4 KB |
+| CB_PY | 2048 B | 2 | 4 KB |
+| CB_COEFF_TABLE | 48 B (per gaussian row) | L_max (~512) | 24 KB |
+| CB_MB_HEADER | 256 B (fixed) | 2 | 512 B |
+| CB_MB_STREAM | 4 B per index | L_max·K_max (~16384) | 64 KB |
+| CB_COLOR_OUT | 2048 B | 3 (R/G/B push) | 6 KB |
+| State CBs (R/G/B/T persistent intra-tile) | — none, in DST | — | — |
 
-`kernels/dataflow/reader_alpha_blend.cpp` does not need to look at the
-mask at all — it just streams 64B pages. **Zero changes** to the reader.
+Total per-core L1 cost: ~100 KB, well within the ~1.5 MB L1 budget.
 
-The compute kernel reads the mask via `read_tile_value(CB_SCALARS, 0, MB_MASK_LANE)`,
-exactly the same way it reads the existing fp32 lanes. See `read_tile_value`
-calls in the existing compute kernel for `mean_x`, `opacity`, etc.
+### 4.3 Reader kernel
 
-`MB_MASK_LANE` depends on which payload layout is in effect:
-- 9 fp32 + mb_mask uint32 = 10 lanes total (mask at lane 9). Used during
-  Stage 2 of the validation plan (§9), before the basis-form refactor.
-- 6 fp32 (A..F) + 4 fp32 (opacity, color_r, color_g, color_b) + mb_mask
-  uint32 = 11 lanes total (mask at lane 10). Used after the §5.1
-  basis-form refactor and from §6 onward.
+`kernels/dataflow/reader_alpha_blend.cpp` is rewritten:
 
-Define `MB_MASK_LANE` as a single host-shared constant in `alpha_blend_host.h`
-so neither side guesses.
+```cpp
+// Pseudocode for the per-tile work; same outer loop over tile_ids[]
+// as the existing reader.
+for tile_id in this core's tile slice:
+    // 1. Streams as today.
+    noc_async_read_tile(tile_id, px_acc, get_write_ptr(CB_PX));
+    noc_async_read_tile(tile_id, py_acc, get_write_ptr(CB_PY));
+
+    // 2. Per-tile blob fetches. Each tile's coefficient table and
+    //    microblock metadata live at known DRAM offsets indexed by
+    //    tile_id (TensorAccessor with row-stride = COEFF_ROW_BYTES * L_max
+    //    for coeff_table; fixed 256 B for mb_header; row-stride =
+    //    MB_STREAM_MAX_BYTES for mb_stream).
+    noc_async_read(coeff_table_dram_for(tile_id),
+                   get_write_ptr(CB_COEFF_TABLE), L * 48);
+    noc_async_read(mb_header_dram_for(tile_id),
+                   get_write_ptr(CB_MB_HEADER), 256);
+    noc_async_read(mb_stream_dram_for(tile_id),
+                   get_write_ptr(CB_MB_STREAM), L_prime * 4);
+    noc_async_read_barrier();
+
+    cb_push_back(CB_PX, 1);
+    cb_push_back(CB_PY, 1);
+    cb_push_back(CB_COEFF_TABLE, L);       // depth-multi push
+    cb_push_back(CB_MB_HEADER, 1);
+    cb_push_back(CB_MB_STREAM, L_prime);   // depth-multi push
+```
+
+Reader is dramatically simpler than today — one DMA per blob, no
+per-gaussian `for g in g_count { noc_async_read_tile(packs_acc, ...) }`
+loop. Total NoC transactions per tile drops from `~L + 4` to `5`.
+
+DRAM bandwidth is the same: `L × 48 B` (coeff_table) vs today's
+`L × 64 B` (packs); plus the small mb_header (256 B) and mb_stream
+(~L × K × 4 B = roughly `2 × L × K` B). At L=200, K=8 this is
+`9.6 KB + 256 B + 6.4 KB = 16.3 KB/tile` vs today's `12.8 KB/tile`.
+~25% more DRAM bandwidth in exchange for the compute reduction we model
+in §8. Worth it.
 
 ---
 
-## 5. Tile-level basis prep (FPU, once per tile)
+## 5. Tile-level basis prep (DST-resident X, Y; per-microblock X²/XY/Y²)
 
-We compute six per-tile basis tiles and hold them in CBs across the entire
-per-Gaussian inner loop. They are **invariant under the microblock mask**
-and they encode all of the per-pixel x/y dependence of the inner Q form.
+The previous draft maintained 6 basis tiles (X, Y, X², XY, Y², ONE) in
+CBs. With mb-major we hold only **2 basis tiles in DST** for the whole
+tile (X and Y), and compute the 3 product values (X², XY, Y²) **per
+microblock into LREGs** (3 SFPMUL each, reused across the microblock's
+gaussian inner loop).
 
-Per-tile basis tiles (6 tiles at depth 1, allocated as new CBs):
+Why:
+- Frees 3 DST tile slots (we recover budget to fit 4 state + 2 basis + 2
+  transient = 8 tiles total — see §6.5).
+- ONE basis tile is unnecessary: the `F` term in `Q = A*x² + B*xy + C*y²
+  + D*x + E*y + F` is added as an SFPADD with the LREG-resident `F`
+  coefficient, no tile multiply needed.
+- Per-microblock product compute is 3 SFPMULs amortized over the
+  microblock's gaussian list (G_mb gaussians × 5 product accesses
+  saved). Net win for G_mb ≥ 1.
 
-```
-CB_BASIS_X    : (px - tile_origin_x)         (fp32, 32x32 tile, "x_local")
-CB_BASIS_Y    : (py - tile_origin_y)         (fp32)
-CB_BASIS_X2   : x_local * x_local            (fp32)
-CB_BASIS_XY   : x_local * y_local            (fp32)
-CB_BASIS_Y2   : y_local * y_local            (fp32)
-CB_BASIS_ONE  : constant 1.0                 (fp32, prefilled once at init)
-```
+### 5.1 Build sequence
 
-Build sequence at the top of the per-tile loop, **before** the per-Gaussian
-inner loop starts:
+At the top of the per-tile compute loop, **before** the 32-microblock
+outer loop:
 
 ```cpp
-// Construct CB_BASIS_X = px - tile_origin_x (per-tile constant).
-// tile_origin_x is a tile-id-derived runtime arg, broadcast as a scalar
-// via sub_unary_tile (SFPU unary, accepts a uint32 fp32-bits immediate).
-// 4 SFPU passes, ~tens of cycles -- amortized across all g_count Gaussians.
 tile_regs_acquire();
+
+// Slot 4 = X basis tile = (px - tile_origin_x)
 copy_tile_to_dst_init_short(CB_PX);
-copy_tile(CB_PX, 0, 0);
-sub_unary_tile(0, tile_origin_x_bits);
-tile_regs_commit();
-tile_regs_wait();
-cb_reserve_back(CB_BASIS_X, 1);
-pack_tile(0, CB_BASIS_X);
-cb_push_back(CB_BASIS_X, 1);
-tile_regs_release();
+copy_tile(CB_PX, 0, 4);
+sub_unary_tile(4, tile_origin_x_bits);
 
-// Same for CB_BASIS_Y from CB_PY.
+// Slot 5 = Y basis tile = (py - tile_origin_y)
+copy_tile_to_dst_init_short(CB_PY);
+copy_tile(CB_PY, 0, 5);
+sub_unary_tile(5, tile_origin_y_bits);
 
-// Then x², xy, y² with FPU mul_tiles (3 full-tile FPU ops, ~3 * 32 = 96
-// matrix-cycles total -- one-time cost per tile).
-tile_regs_acquire();
-mul_tiles_init(CB_BASIS_X, CB_BASIS_X);
-mul_tiles(CB_BASIS_X, CB_BASIS_X, 0, 0, 0);   // dst[0] = x²
-mul_tiles_init(CB_BASIS_X, CB_BASIS_Y);
-mul_tiles(CB_BASIS_X, CB_BASIS_Y, 0, 0, 1);   // dst[1] = xy
-mul_tiles_init(CB_BASIS_Y, CB_BASIS_Y);
-mul_tiles(CB_BASIS_Y, CB_BASIS_Y, 0, 0, 2);   // dst[2] = y²
-tile_regs_commit();
-tile_regs_wait();
-cb_reserve_back(CB_BASIS_X2, 1);
-cb_reserve_back(CB_BASIS_XY, 1);
-cb_reserve_back(CB_BASIS_Y2, 1);
-pack_tile(0, CB_BASIS_X2);
-pack_tile(1, CB_BASIS_XY);
-pack_tile(2, CB_BASIS_Y2);
-cb_push_back(CB_BASIS_X2, 1);
-cb_push_back(CB_BASIS_XY, 1);
-cb_push_back(CB_BASIS_Y2, 1);
-tile_regs_release();
+// Slots 0..3 = state tiles, initialized R = G = B = 0, T = 1.
+fill_tile_init();
+fill_tile(0, 0.0f);    // R
+fill_tile(1, 0.0f);    // G
+fill_tile(2, 0.0f);    // B
+fill_tile(3, 1.0f);    // T
+
+// DST is now:
+//   0..3 : R, G, B, T  (persistent across the 32-microblock outer loop)
+//   4..5 : X, Y        (persistent)
+//   6..7 : transient scratch for per-microblock work
+
+// We do NOT release DST here. The outer microblock loop runs inside this
+// same acquire so state and basis remain DST-resident.
 ```
 
-Cost: ~5 FPU/SFPU full-tile ops × 32 microblocks × 1 cycle/microblock + acquire/pack overhead = a few hundred cycles per tile, paid once. **Saves 4 SFPU mul_unary_tile + 1 sub_unary chain per Gaussian.** Break-even at ≥ 2 Gaussians per tile (typical: 100s).
-
-### 5.1 Per-Gaussian Q in basis form
-
-Once the basis tiles exist, every Gaussian-inner Q computation reduces to
-
-```
-Q   = a*x² + 2b*xy + c*y² - 2*(a*mx + b*my)*x - 2*(b*mx + c*my)*y
-      + (a*mx² + 2b*mx*my + c*my²)
-    = A*x² + B*xy + C*y² + D*x + E*y + F      (basis-form expansion)
-```
-
-where `A..F` are 6 fp32 coefficients computed per Gaussian on the host
-from `(mean, cov_inv)`. We extend the scalar pack to carry these 6
-coefficients **in place of** the 5 raw `(mean_x, mean_y, a, b, c)`
-scalars (still 6 fp32 lanes; no payload growth). New layout:
-
-```
-  0: A          (= a)
-  1: B          (= 2b)
-  2: C          (= c)
-  3: D          (= -2*(a*mx + b*my))
-  4: E          (= -2*(b*mx + c*my))
-  5: F          (= a*mx² + 2b*mx*my + c*my²)
-  6: opacity
-  7: color_r
-  8: color_g
-  9: color_b
- 10: mb_mask    (uint32; we have to extend the pack by 4 bytes here --
-                 still 11 lanes = 44 bytes, well inside the 64B page)
-```
-
-This is the 057b basis-form refactor that the project previously tried
-with bf16 basis tiles and which failed because of `mul_bcast_rows_init_short`
-re-init overhead. Here we use **fp32 basis tiles + fp32 dest acc** (the
-existing config), so there is no row-bcast re-init churn — the 6 ops are
-straight `mul_tiles` against tile-resident operands.
-
-### 5.2 Full-tile inner Q (mask = 0xFFFFFFFF case)
+### 5.2 Per-microblock basis-product LREG init (inside the outer loop)
 
 ```cpp
-// dst[0] = A*x² + B*xy + C*y² + D*x + E*y + F  (basis-form Q)
-// All FPU mul_tiles + acc_to_dest accumulation.
-tile_regs_acquire();
-mul_tiles_init(CB_BASIS_X2, CB_BASIS_ONE);
-mul_tiles(CB_BASIS_X2, CB_BASIS_ONE, 0, 0, 0);   // dst[0] = x² * 1
-mul_unary_tile(0, A_bits);                        // dst[0] *= A   (SFPU 4 pass)
+// For each microblock m at the top of its inner gaussian loop:
+constexpr uint32_t addr_X  = 4 * 64 + MB_TO_DST_ADDR[m];   // X basis MB addr
+constexpr uint32_t addr_Y  = 5 * 64 + MB_TO_DST_ADDR[m];   // Y basis MB addr
 
-// We then want dst[0] += B * xy + C * y² + D * x + E * y + F.
-// Each += can be done with an FPU mul + binary_dest_reuse_tiles<ADD>:
-//   tmp_slot = mul_tiles(BASIS_XY, BASIS_ONE);
-//   mul_unary_tile(tmp_slot, B_bits);
-//   binary_dest_reuse_tiles<ELWADD, DEST_TO_SRCB>(tmp_slot, 0);
-// 5 such += chains -- this is the 057b code path. fp32 tile multiplies
-// against an (almost) ones tile is a single FPU pass; no SFPU bcast init
-// overhead because the dest format is fp32 throughout.
+// Load X_mb, Y_mb into persistent LREGs (kept across this MB's gaussian loop).
+TT_SFPLOAD(LREG_X,  InstrModLoadStore::DEFAULT, ADDR_MOD_7, addr_X);
+TT_SFPLOAD(LREG_Y,  InstrModLoadStore::DEFAULT, ADDR_MOD_7, addr_Y);
 
-// ... 5 MAC chains ...
-// followed by power = -0.5 * Q ; weight = exp(power) ; alpha = ... ;
-// (existing C/D2/E pipeline, unchanged)
+// Compute X², XY, Y² products into 3 more persistent LREGs.
+TTI_SFPMUL(LREG_X, LREG_X, p_sfpu::LCONST_0, LREG_X2, 0);
+TTI_SFPMUL(LREG_X, LREG_Y, p_sfpu::LCONST_0, LREG_XY, 0);
+TTI_SFPMUL(LREG_Y, LREG_Y, p_sfpu::LCONST_0, LREG_Y2, 0);
 
-tile_regs_commit();
-tile_regs_wait();
-// pack alpha, contrib, R/G/B, T -- existing pattern.
-tile_regs_release();
+// Now LREG_X, LREG_Y, LREG_X2, LREG_XY, LREG_Y2 are all live for the
+// inner gaussian loop. Cost = 5 SFPU ops per microblock, ~5 cycles.
 ```
 
-This is only 1.5x faster than today's `dx²/dxdy/dy²` recompute path
-(the savings come from not recomputing `dx, dy, dx*dy` per Gaussian,
-~6 SFPU ops/Gaussian → 0). It is necessary to make the per-microblock
-path cheap (we'll reuse the basis tiles there).
+### 5.3 Basis-form Q
+
+The basis form is unchanged from the previous draft:
+
+```
+Q = A·x² + B·xy + C·y² + D·x + E·y + F
+power = Q       (host already absorbs the -0.5 factor into A..F)
+```
+
+Per gaussian per microblock, Q evaluation is 5 FMAs against the 5 basis
+LREGs plus one SFPADD with `F`:
+
+```cpp
+// Q = A*x² + B*xy + C*y² + D*x + E*y + F
+TTI_SFPMUL(LREG_X2, LREG_A, p_sfpu::LCONST_0, LREG_Q, 0);  // Q  = A*x²
+TTI_SFPMAD(LREG_XY, LREG_B, LREG_Q,           LREG_Q, 0);  // Q += B*xy
+TTI_SFPMAD(LREG_Y2, LREG_C, LREG_Q,           LREG_Q, 0);  // Q += C*y²
+TTI_SFPMAD(LREG_X,  LREG_D, LREG_Q,           LREG_Q, 0);  // Q += D*x
+TTI_SFPMAD(LREG_Y,  LREG_E, LREG_Q,           LREG_Q, 0);  // Q += E*y
+TTI_SFPADD(LREG_F,  p_sfpu::LCONST_1, LREG_Q, LREG_Q, 0);  // Q += F
+```
+
+6 SFPU ops, 32 lanes each. With `fp32_dest_acc_en = true` and a
+host-precomputed A..F, this evaluates the entire Q form for this
+microblock's 32 pixels in ~12 cycles (6 ops × 2-cycle latency, fully
+pipelined back-to-back because each writes/reads LREG_Q which we
+serialize on; the dependency chain limits parallelism here but we can
+hide the latency under the next gaussian's coefficient SFPLOADIs).
 
 ---
 
-## 6. Per-microblock inner kernel (the SFPU sparse path)
+## 6. Per-microblock compute kernel (mb-major)
 
-This is the heart of the design. Given a Gaussian with `mb_mask`, we
-update the per-tile state (R/G/B/T) **only on the active microblocks**,
-loading basis values from the basis tiles and per-Gaussian coefficients
-from the SFPU constant registers we set up once per Gaussian.
+This is the heart of the design. One DST acquire per tile spans the
+whole 32-microblock outer loop. Within each microblock the inner gaussian
+loop is pure LREG math — state and basis live in LREGs across the inner
+loop, DST is touched only at microblock boundaries.
 
-### 6.1 DST register slots used
-
-We allocate the per-Gaussian inner work to 5 DST tile slots:
+### 6.1 DST slot map (8 total on BH `fp32_dest_acc_en = true`)
 
 ```
-slot 0:  Q (Mahalanobis quadratic) being built up across the 5 += stages
-slot 1:  alpha (after exp + cap)
-slot 2:  contrib = alpha * T * sat_mask
-slot 3:  Q scratch / temporary
-slot 4:  T_new scratch
+slot 0:  R_state    (persistent across all 32 microblocks of this tile)
+slot 1:  G_state    (persistent)
+slot 2:  B_state    (persistent)
+slot 3:  T_state    (persistent; init 1.0)
+slot 4:  X basis    (persistent; px - tile_origin_x)
+slot 5:  Y basis    (persistent; py - tile_origin_y)
+slot 6:  transient (free for pack_tile staging at end of tile)
+slot 7:  transient
 ```
 
-DST budget on Blackhole with `fp32_dest_acc_en = true` is 8 tiles. We use
-5 → safe.
+All 8 slots used; 6 persistent, 2 transient. No room left — adding any
+new persistent tile requires evicting one of the above. Sat_mask is
+dropped (handled per-microblock by the saturation early-out in §6.7).
 
-### 6.2 Setup phase per Gaussian
+### 6.2 LREG allocation contract (16 total on BH SFPU)
 
-Once per Gaussian, before iterating microblocks, we:
+```
+PERSISTENT (one microblock's lifetime, ie. across that microblock's gaussian loop):
+  LREG0  = R           per-microblock R-channel state
+  LREG1  = G           per-microblock G-channel state
+  LREG2  = B           per-microblock B-channel state
+  LREG3  = T           per-microblock transmittance state
+  LREG4  = X           per-microblock x basis value (x_local for this MB)
+  LREG5  = Y           per-microblock y basis value
+  LREG6  = X²          (= X*X, computed once per microblock)
+  LREG7  = XY          (= X*Y)
+  LREG8  = Y²          (= Y*Y)
 
-1. Read the 11-lane scalar pack into 11 LREG-resident fp32 constants
-   using `read_tile_value(CB_SCALARS, 0, lane)` → bit-reinterpret to
-   fp32.
-2. Convert each fp32 scalar coefficient to its uint32 bit pattern for use
-   as an immediate to `_unary` SFPU ops (the existing kernel already does
-   this — see `NEG_HALF_BITS` etc.).
-3. Lift the 6 basis coefficients `A..F` and `opacity`, `color_r/g/b` into
-   per-Gaussian uint32 immediates.
-4. Read `mb_mask`. If `popcount(mb_mask) >= 32 - SPARSE_SKIP_THRESH`, take
-   the full-tile path (§5.2) and skip the per-microblock loop. Else go to
-   §6.3.
+TRANSIENT (overwritten per gaussian inner iteration):
+  LREG9  = Q           Mahalanobis quadratic for this (g, m) pair
+  LREG10 = coeff/tmp1  bf16-immediate destination + scratch
+  LREG11 = coeff/tmp2  (overrides hw default -1.0; restored at tile end)
+  LREG12 = exp_scratch inline exp polynomial scratch (1 of 2)
+  LREG13 = exp_scratch                              (2 of 2)
+  LREG14 = alpha       per-(g, m) alpha after exp + cap
+  LREG15 = contrib     per-(g, m) contrib = alpha * T
 
-### 6.3 Per-microblock loop body
+Total: 9 persistent + 7 transient = 16, fits exactly. No overflow margin —
+if any extension needs an additional persistent LREG, evict X²/XY/Y² and
+recompute per gaussian inside Q evaluation (cost +3 SFPMUL per gaussian).
+```
 
-The inner loop iterates `m = 0..31`, skipping inactive microblocks:
+The trick: A, B, C, D, E, F, opacity, color_r/g/b (10 per-gaussian
+coefficients) are loaded into the transient LREGs **per gaussian**, used
+immediately, and overwritten. We never need more than ~3 coefficient
+LREGs live at a time because the Q evaluation chain reads one coefficient
+per FMA and we can interleave loads with FMAs.
+
+### 6.3 Microblock → DST addr table
 
 ```cpp
+// Verified by hand against §3.4 enumeration: every entry checked.
 constexpr uint32_t MB_TO_DST_ADDR[32] = {
-    /* m =  0 */ 0,  /* m =  1 */ 2,  /* m =  2 */ 16, /* m =  3 */ 18,
-    /* m =  4 */ 4,  /* m =  5 */ 6,  /* m =  6 */ 20, /* m =  7 */ 22,
-    /* m =  8 */ 8,  /* m =  9 */ 10, /* m = 10 */ 24, /* m = 11 */ 26,
+    /* m =  0 */  0, /* m =  1 */  2, /* m =  2 */ 16, /* m =  3 */ 18,
+    /* m =  4 */  4, /* m =  5 */  6, /* m =  6 */ 20, /* m =  7 */ 22,
+    /* m =  8 */  8, /* m =  9 */ 10, /* m = 10 */ 24, /* m = 11 */ 26,
     /* m = 12 */ 12, /* m = 13 */ 14, /* m = 14 */ 28, /* m = 15 */ 30,
     /* m = 16 */ 32, /* m = 17 */ 34, /* m = 18 */ 48, /* m = 19 */ 50,
     /* m = 20 */ 36, /* m = 21 */ 38, /* m = 22 */ 52, /* m = 23 */ 54,
     /* m = 24 */ 40, /* m = 25 */ 42, /* m = 26 */ 56, /* m = 27 */ 58,
     /* m = 28 */ 44, /* m = 29 */ 46, /* m = 30 */ 60, /* m = 31 */ 62,
 };
-// Verified by hand against §3.4 enumeration; addresses are within
-// dst_tile_idx = 0 (we acquire one DST tile slot for the inner loop).
 
-uint32_t mb_mask = ckernel::read_tile_value(CB_SCALARS, 0, 10);
-
-tile_regs_acquire();
-
-// First we need the basis tiles loaded into a known set of DST slots. The
-// FPU does this with copy_tile -- one full-tile copy per basis tile.
-copy_tile_to_dst_init_short(CB_BASIS_X);
-copy_tile(CB_BASIS_X,  0, 0);   // dst tile 0 = x_local
-copy_tile_to_dst_init_short(CB_BASIS_Y);
-copy_tile(CB_BASIS_Y,  0, 1);   // dst tile 1 = y_local
-copy_tile_to_dst_init_short(CB_BASIS_X2);
-copy_tile(CB_BASIS_X2, 0, 2);   // dst tile 2 = x²
-copy_tile_to_dst_init_short(CB_BASIS_XY);
-copy_tile(CB_BASIS_XY, 0, 3);   // dst tile 3 = xy
-copy_tile_to_dst_init_short(CB_BASIS_Y2);
-copy_tile(CB_BASIS_Y2, 0, 4);   // dst tile 4 = y²
-// State CBs already loaded into dst tiles 5..7 in the OUTER acquire/commit
-// flow we describe in §6.4.
-
-// We will write the per-microblock result to dst tile slot SLOT_OUT.
-constexpr uint32_t SLOT_OUT = 5;          // R_state in-place update target
-constexpr uint32_t TILE_BASE_X  = 0 * 64;
-constexpr uint32_t TILE_BASE_Y  = 1 * 64;
-constexpr uint32_t TILE_BASE_X2 = 2 * 64;
-constexpr uint32_t TILE_BASE_XY = 3 * 64;
-constexpr uint32_t TILE_BASE_Y2 = 4 * 64;
-constexpr uint32_t TILE_BASE_OUT = SLOT_OUT * 64;
-// Note: TILE_BASE_* + MB_TO_DST_ADDR[m] = absolute SFPLOAD/SFPSTORE addr
-// for microblock m of that DST tile slot.
-
-// Pre-load the 11 per-Gaussian fp32 coefficients into LREGs that survive
-// across all 32 microblock iterations (LREG10..15 are not touched by the
-// per-microblock body, see §6.5):
-//   LREG10 = A
-//   LREG11 = B   (overrides default; see §6.5 caveat about LREG_11 = -1.0)
-//   LREG12 = C
-//   LREG13 = D
-//   LREG14 = E
-//   LREG15 = F
-// Done via 6 SFPLOADI sequences (each = 2 instructions: UPPER + LOWER).
-// (Helper: see _build_lane_mask_col0_ in ckernel_sfpu_binary_bcast.h
-// lines 192-200 for the exact SFPLOADI pattern.)
-
-// Iterate 32 microblocks; skip those with mb_mask bit clear.
-for (int m = 0; m < 32; m++) {
-    if ((mb_mask & (1u << m)) == 0) continue;
-
-    uint32_t a_x  = TILE_BASE_X  + MB_TO_DST_ADDR[m];
-    uint32_t a_y  = TILE_BASE_Y  + MB_TO_DST_ADDR[m];
-    uint32_t a_x2 = TILE_BASE_X2 + MB_TO_DST_ADDR[m];
-    uint32_t a_xy = TILE_BASE_XY + MB_TO_DST_ADDR[m];
-    uint32_t a_y2 = TILE_BASE_Y2 + MB_TO_DST_ADDR[m];
-    uint32_t a_out = TILE_BASE_OUT + MB_TO_DST_ADDR[m];
-
-    // === Q = A*x² + B*xy + C*y² + D*x + E*y + F  (microblock-local) ===
-    // 5 FMAs + 1 base load. All independent across distinct LREG dests.
-    // LREG6 = scratch accumulator. LREG7 = temporary.
-    TT_SFPLOAD(p_sfpu::LREG6, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_x2);
-    TTI_SFPMUL(p_sfpu::LREG6, p_sfpu::LREG10 /*A*/, p_sfpu::LCONST_0, p_sfpu::LREG6, 0);
-
-    TT_SFPLOAD(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_xy);
-    TTI_SFPMAD(p_sfpu::LREG7, p_sfpu::LREG11 /*B*/, p_sfpu::LREG6, p_sfpu::LREG6, 0);
-
-    TT_SFPLOAD(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_y2);
-    TTI_SFPMAD(p_sfpu::LREG7, p_sfpu::LREG12 /*C*/, p_sfpu::LREG6, p_sfpu::LREG6, 0);
-
-    TT_SFPLOAD(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_x);
-    TTI_SFPMAD(p_sfpu::LREG7, p_sfpu::LREG13 /*D*/, p_sfpu::LREG6, p_sfpu::LREG6, 0);
-
-    TT_SFPLOAD(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_y);
-    TTI_SFPMAD(p_sfpu::LREG7, p_sfpu::LREG14 /*E*/, p_sfpu::LREG6, p_sfpu::LREG6, 0);
-
-    // dst[6] += F  (1.0 * F + LREG6)
-    TTI_SFPADD(p_sfpu::LREG15 /*F*/, p_sfpu::LCONST_1, p_sfpu::LREG6, p_sfpu::LREG6, 0);
-
-    // === alpha = clamp(opacity * exp(-0.5 * Q), 0, 0.99) ===
-    // Per-microblock exp via the inline SFPU exp polynomial. We do NOT
-    // call exp_tile here -- exp_tile is a full-tile op. Instead we use
-    // the lower-level _calculate_exponential_body_<APPROXIMATION_MODE>
-    // entry point that operates on dst_reg[0] (= 32 lanes = 1 microblock).
-    //
-    // Plan A (simpler): SFPU exp polynomial inlined here. Implementation
-    //   mirrors the body of _calculate_exp_inline_<true> in
-    //   ckernel_sfpu_exp.h with dst_reg pointing at our LREG_TMP. About
-    //   ~10 SFPU ops -- the same the full-tile exp pays per microblock,
-    //   so no microblock skip benefit lost.
-    //
-    // Plan B (faster): use exp_tile<true>() in the FULL-TILE inner-Q
-    //   path only and exit the microblock path BEFORE exp -- i.e. we
-    //   only do per-microblock work for the Q evaluation, then promote
-    //   the result back to a full DST tile (the inactive microblocks
-    //   remain whatever the previous Gaussian left, but they will be
-    //   overwritten safely because contrib will multiply them by an
-    //   in-active-mask predicate before adding to state).
-    //
-    // First impl: Plan A. See §6.6 for the inline exp expansion.
-
-    // === inline exp on LREG6 (= power) ===
-    // IMPORTANT: there is no built-in LCONST_neg1_half. Only LCONST_0,
-    // LCONST_1, LCONST_neg1 are guaranteed (verified via grep of
-    // tt_llk_blackhole/common/inc/ckernel_instr_params.h). Two options:
-    //
-    //   (a) Pre-multiply A..F by -0.5 on the host so that the basis-form
-    //       Q evaluation directly produces -0.5*Q. Then "power" is the
-    //       output of the §6.3 Q chain with no additional multiply.
-    //       This is the recommended path -- host coefficients become:
-    //         A' = -0.5*A, B' = -0.5*B, C' = -0.5*C,
-    //         D' = -0.5*D, E' = -0.5*E, F' = -0.5*F.
-    //       Saves 1 SFPMUL per microblock per Gaussian.
-    //
-    //   (b) Load -0.5 into a reserved LREG once per Gaussian via
-    //         TTI_SFPLOADI(LREG_NEG_HALF, SFPLOADI_MOD0_UPPER, 0xBF00);
-    //         TTI_SFPLOADI(LREG_NEG_HALF, SFPLOADI_MOD0_LOWER, 0x0000);
-    //       and multiply per-microblock. 2 cycles per Gaussian setup +
-    //       1 SFPMUL per microblock.
-
-    /* with option (a): no scalar multiply here -- LREG6 is already -0.5*Q */
-    /* ... ~8 SFPU ops for exp polynomial, see ckernel_sfpu_exp.h ... */
-    /* result in LREG6 = weight */
-
-    // alpha = min(opacity * weight, 0.99)
-    TTI_SFPMUL(p_sfpu::LREG6, p_sfpu::LREG_OPACITY, p_sfpu::LCONST_0, p_sfpu::LREG6, 0);
-    /* TTI_SFPMIN against 0.99 (see ckernel_sfpu_binary_max_min.h for the
-       exact instruction sequence) -- result in LREG6 = alpha */
-
-    // === contrib = alpha * T_state[m] * sat_mask[m] ===
-    // T_state and sat_mask are state CBs -- we keep them in DST tiles 6 and 7.
-    TT_SFPLOAD(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, /* T_state's MB addr */ 6 * 64 + MB_TO_DST_ADDR[m]);
-    TTI_SFPMUL(p_sfpu::LREG7, p_sfpu::LREG6 /*alpha*/, p_sfpu::LCONST_0, p_sfpu::LREG6, 0);
-    /* ... * sat_mask similarly ... result LREG6 = contrib */
-
-    // === R/G/B accum (3 FMAs) and T_new = T - contrib (1 SUB) ===
-    // Fused like iter-045 D2+E mega-fuse, but per microblock.
-    // R_state[m] += contrib * color_r
-    TT_SFPLOAD(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, /* R_state's MB addr */ 5 * 64 + MB_TO_DST_ADDR[m]);
-    TTI_SFPMAD(p_sfpu::LREG6 /*contrib*/, p_sfpu::LREG_COLOR_R, p_sfpu::LREG7, p_sfpu::LREG7, 0);
-    TT_SFPSTORE(p_sfpu::LREG7, InstrModLoadStore::DEFAULT, ADDR_MOD_7, 5 * 64 + MB_TO_DST_ADDR[m]);
-
-    /* ... G_state, B_state, T_state likewise ... */
-}
-
-tile_regs_commit();
-// note: the state CBs are updated IN-PLACE in DST. We pack them BACK to
-// the same state CB slots after the WHOLE inner Gaussian loop ends -- not
-// per Gaussian. See §6.4.
+constexpr uint32_t TILE_BASE(uint32_t slot) { return slot * 64; }
 ```
 
-### 6.4 State CB I/O strategy (key design choice)
-
-The current kernel pops + reserves + pushes the state CBs **inside the
-per-Gaussian loop** (one full-tile pack/unpack pair per Gaussian). For
-the microblock path this would be catastrophic: per-microblock SFPU
-work is fast, but pack/unpack is full-tile.
-
-The fix: **lift state I/O out of the per-Gaussian loop**.
-
-```
-Per-tile flow:
-  Acquire DST.
-    Load R/G/B/T/sat state CBs into DST tile slots 5/6/7/... once.
-    For each Gaussian g in this tile:
-      Per-Gaussian setup: load scalar pack, prep LREG10..15.
-      If full-tile path: existing dx²/dxdy/dy² flow, write to slots 5..7
-                         in-place via dest_reuse_tiles binary ops.
-      If microblock path: per-microblock SFPU work, in-place on slots 5..7.
-    Store R/G/B/T/sat state from DST tile slots back to state CBs.
-  Commit / pack / release.
-```
-
-This means **one DST acquire per tile** (not per Gaussian). It is the
-single largest reduction in overhead this design enables.
-
-⚠ Constraint: DST acquire holds the math-pack synchronization point. With
-8 fp32 dest tile slots (Blackhole `fp32_dest_acc_en`), we have 5 basis
-tiles + 5 state tiles = 10 — too many. Resolution: load basis tiles **per
-Gaussian** (5 copy_tile per Gaussian, 4 of which are recycled, total
-amortized ~few SFPU ops/Gaussian) and keep state tiles resident across
-the whole tile loop. Slot map:
-
-```
-DST slots:
-  0: scratch / Q accumulator      (per-Gaussian, transient)
-  1: alpha                         (per-Gaussian, transient)
-  2: contrib                       (per-Gaussian, transient)
-  3: x_local | x²                  (per-Gaussian basis, reloaded with copy_tile)
-  4: xy | y² | y_local             (per-Gaussian basis, reloaded)
-  5: R_state                       (PERSISTENT across Gaussians)
-  6: G_state                       (PERSISTENT)
-  7: B_state                       (PERSISTENT)
-```
-
-T_state and sat_mask cannot stay in DST — they don't fit. They live in
-their CBs and are pulled into a transient DST slot when needed (slot 0 or
-2). For `T_new = T*sat - contrib` we mux through slot 0 with one
-copy_tile from CB_T_STATE per Gaussian.
-
-This is a very real DST budget trade-off and IS the rate-limiting
-constraint on this design. We may need to:
-  - Drop sat_mask (revert iter-013 effort: just eat the no-op alpha
-    contributions on saturated pixels). Cost: a few extra SFPU ops per
-    saturated pixel per Gaussian; but most pixels are non-saturated so
-    the average is ~0%.
-  - Or split R+G+B into a single 3-channel "color_state" tile by
-    storing them as 3 contiguous 32×32 tiles in adjacent DST slots and
-    sharing the `contrib` LREG across all 3 microblock SFMADs.
-
-First implementation: **drop sat_mask**, keep R/G/B/T as 4 PERSISTENT
-DST tile slots (slots 4..7), use slots 0..3 as transient.
-
-### 6.5 LREG allocation contract
-
-Within the per-microblock loop body we use:
-
-```
-LREG0..LREG5    : per-microblock transient scratch (Q accumulator, exp
-                  polynomial intermediates, contrib, etc). Free at start
-                  of each iteration; need not be preserved across iterations.
-
-LREG6           : per-microblock load/Q/contrib working scratch.
-LREG7           : per-microblock multiplicand load (basis values, state
-                  values).
-
-LREG8, LREG9    : reserved scratch for inline exp polynomial (matches
-                  the pattern in ckernel_sfpu_exp.h _calculate_exp_body_).
-
-LREG10..LREG15  : PER-GAUSSIAN persistent fp32 immediates:
-                  10 = A
-                  11 = B            (overrides hardware default of -1.0;
-                                     restore at end of Gaussian if any
-                                     downstream code expects LREG11 = -1.0)
-                  12 = C
-                  13 = D
-                  14 = E
-                  15 = F
-
-  ALSO USED AS PERSISTENT:
-  LREG_OPACITY, LREG_COLOR_{R,G,B}: aliased onto LREG10..15 by sharing
-  slots after the Q evaluation (which only needs A..F) -- once we've
-  computed Q for this microblock and moved on to the alpha/contrib chain
-  we can clobber LREG10..14 with opacity/color_r/g/b and pull them back
-  in for the NEXT microblock from the constant scalar pack we keep
-  re-reading via SFPLOADI.
-
-  This is a tight register budget; if we run short, fall back to
-  reloading 1-2 fp32 immediates per microblock via SFPLOADI (4 cycles
-  per immediate, ~ amortized ~negligible against the 5 SFMADs).
-```
-
-Restoring LREG11 to -1.0 at end-of-Gaussian: `TTI_SFPLOADI(LREG11, SFPLOADI_MOD0_UPPER, 0xBF80); TTI_SFPLOADI(LREG11, SFPLOADI_MOD0_LOWER, 0x0000);` — same pattern as `_build_lane_mask_col0_` lines 213–215 of the bcast kernel.
-
-### 6.6 Inline exp polynomial
-
-For the per-microblock path we cannot call `exp_tile<true>(0)` (full-tile
-op). We need a per-microblock SFPU exp. Two options:
-
-**Option A: inline the body of `_calculate_exponential_<APPROXIMATION_MODE=true>`** — see `tt_metal/tt-llk/tt_llk_blackhole/common/inc/sfpu/ckernel_sfpu_exp.h`. The approximate-mode polynomial is ~10 SFPU ops on `dst_reg[0]`. We adapt it to operate directly on `LREG6` (input/output) using the explicit-LREG `TTI_SFPMAD/TTI_SFPMUL/TTI_SFPADD` form. No `dst_reg++` cursor advance because we're processing exactly 1 microblock per call. This is the path of least resistance.
-
-**Option B: lltt::replay** — record the exp polynomial body to a replay slot once at kernel init (`lltt::record(REPLAY_SLOT_EXP, REPLAY_LEN_EXP)`) and issue `lltt::replay(REPLAY_SLOT_EXP, REPLAY_LEN_EXP)` per microblock. Saves on dispatch cost in the inner loop.
-
-Recommendation: ship Option A first; A→B if profiling shows replay overhead winnable.
-
-The `_init_exponential_<APPROXIMATION_MODE>()` call must still be issued **once per kernel init** so the SFPU approximation constants are loaded.
-
-### 6.7 Sparse loop structure & branch overhead
-
-A naive `for (m = 0; m < 32; m++) if (mb_mask & (1<<m)) { ... }` adds a
-branch + bit-test per microblock — 64 cycles/Gaussian wasted on inactive
-microblocks. Alternative: use **bit-manipulation iteration** (`__builtin_ctz`):
+### 6.4 The outer microblock loop (one acquire spans the whole tile)
 
 ```cpp
-uint32_t remaining = mb_mask;
-while (remaining) {
-    uint32_t m = __builtin_ctz(remaining);
-    remaining &= remaining - 1;
-    /* ... per-microblock body using MB_TO_DST_ADDR[m] ... */
+// Once per program: record the inner replay slot. See §6.6.
+ckernel::sfpu::init_inline_exp_approx();   // wraps _init_exponential_<true>
+lltt::record(REPLAY_SLOT_INNER, REPLAY_LEN_INNER);   /* body in §6.6 */
+
+// Per tile:
+tile_regs_acquire();
+
+// §5.1 basis/state init: DST slots 0..5 populated.
+build_basis_and_state_in_dst();
+
+// Read per-tile microblock header (32 entries) into local L1 stack.
+cb_wait_front(CB_MB_HEADER, 1);
+volatile MicroblockHeader* mb_hdr = reinterpret_cast<volatile MicroblockHeader*>(
+    get_read_ptr(CB_MB_HEADER));
+MicroblockHeader hdr[32];
+for (int i = 0; i < 32; ++i) { hdr[i].offset = mb_hdr[i].offset; hdr[i].count = mb_hdr[i].count; }
+cb_pop_front(CB_MB_HEADER, 1);
+
+// Per-tile L1 pointers for stream + coeff table.
+cb_wait_front(CB_MB_STREAM, L_prime);          // host knows L_prime; passed as arg
+cb_wait_front(CB_COEFF_TABLE, L);              // L gaussians of this tile
+auto mb_stream    = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_MB_STREAM));
+auto coeff_table  = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_COEFF_TABLE));
+constexpr uint32_t ROW_U32 = COEFF_ROW_BYTES / 4;   // 12 (= 10 lanes + 2 pad)
+
+// Outer microblock loop.
+for (uint32_t m = 0; m < 32; ++m) {
+    const uint32_t count = hdr[m].count;
+    if (count == 0) continue;
+
+    const uint32_t mb_addr  = MB_TO_DST_ADDR[m];
+    const uint32_t a_X      = TILE_BASE(4) + mb_addr;   // X basis MB addr
+    const uint32_t a_Y      = TILE_BASE(5) + mb_addr;   // Y basis MB addr
+    const uint32_t a_R      = TILE_BASE(0) + mb_addr;
+    const uint32_t a_G      = TILE_BASE(1) + mb_addr;
+    const uint32_t a_B      = TILE_BASE(2) + mb_addr;
+    const uint32_t a_T      = TILE_BASE(3) + mb_addr;
+
+    // Load X, Y for this microblock into persistent LREGs.
+    TT_SFPLOAD(p_sfpu::LREG4, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_X);
+    TT_SFPLOAD(p_sfpu::LREG5, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_Y);
+
+    // Compute X², XY, Y² products into persistent LREGs.
+    TTI_SFPMUL(p_sfpu::LREG4, p_sfpu::LREG4, p_sfpu::LCONST_0, p_sfpu::LREG6, 0);  // X²
+    TTI_SFPMUL(p_sfpu::LREG4, p_sfpu::LREG5, p_sfpu::LCONST_0, p_sfpu::LREG7, 0);  // XY
+    TTI_SFPMUL(p_sfpu::LREG5, p_sfpu::LREG5, p_sfpu::LCONST_0, p_sfpu::LREG8, 0);  // Y²
+
+    // Load this microblock's R, G, B, T from DST -> persistent LREGs.
+    TT_SFPLOAD(p_sfpu::LREG0, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_R);
+    TT_SFPLOAD(p_sfpu::LREG1, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_G);
+    TT_SFPLOAD(p_sfpu::LREG2, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_B);
+    TT_SFPLOAD(p_sfpu::LREG3, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_T);
+
+    // Inner gaussian loop for this microblock.
+    const uint32_t base = hdr[m].offset;
+    for (uint32_t i = 0; i < count; ++i) {
+        const uint32_t gidx = mb_stream[base + i];
+        const volatile uint32_t* row = coeff_table + gidx * ROW_U32;
+
+        // Load A..F into transient LREGs via bf16-immediate loads:
+        //   TTI_SFPLOADI(L, FP16_B_MOD0, fp32_bits >> 16);
+        // Saves vs SFPLOADI UPPER+LOWER pair (1 instr vs 2 per coeff).
+        // See _build_lane_mask_col0_ for the SFPLOADI pattern and
+        // ckernel_sfpu_binary_bcast.h lines 192-200 for the encoding.
+        //
+        // The Q chain reads each coeff exactly once into LREG10/11 (alternating)
+        // and immediately consumes it; coefficient LREGs are recycled
+        // across the 6 ops of Q evaluation.
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_A]);
+        TTI_SFPMUL(p_sfpu::LREG6, p_sfpu::LREG10, p_sfpu::LCONST_0, p_sfpu::LREG9, 0);  // Q  = A*X²
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_B]);
+        TTI_SFPMAD(p_sfpu::LREG7, p_sfpu::LREG10, p_sfpu::LREG9, p_sfpu::LREG9, 0);     // Q += B*XY
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_C]);
+        TTI_SFPMAD(p_sfpu::LREG8, p_sfpu::LREG10, p_sfpu::LREG9, p_sfpu::LREG9, 0);     // Q += C*Y²
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_D]);
+        TTI_SFPMAD(p_sfpu::LREG4, p_sfpu::LREG10, p_sfpu::LREG9, p_sfpu::LREG9, 0);     // Q += D*X
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_E]);
+        TTI_SFPMAD(p_sfpu::LREG5, p_sfpu::LREG10, p_sfpu::LREG9, p_sfpu::LREG9, 0);     // Q += E*Y
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_F]);
+        TTI_SFPADD(p_sfpu::LREG10, p_sfpu::LCONST_1, p_sfpu::LREG9, p_sfpu::LREG9, 0);  // Q += F
+
+        // Q in LREG9 is already -0.5 * (true Q) because host folded -0.5
+        // into A..F. So "power" = LREG9; no extra SFPMUL needed.
+
+        // INLINE EXP POLYNOMIAL (~10 ops; LREG12/13 are exp scratch).
+        // Adapted from ckernel_sfpu_exp.h _calculate_exponential_<true> body,
+        // operating on explicit LREG9 instead of dst_reg[0].
+        inline_exp_approx(p_sfpu::LREG9, p_sfpu::LREG12, p_sfpu::LREG13);
+        // LREG9 now holds exp(power) = weight.
+
+        // alpha = min(opacity * weight, 0.99). Cap via SFPMIN
+        // (TTI_SFPSWAP_MOD1_VEC_MIN_MAX form, see ckernel_sfpu_recip.h
+        // line ~199 for the encoding).
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_OPACITY]);
+        TTI_SFPMUL(p_sfpu::LREG9, p_sfpu::LREG10, p_sfpu::LCONST_0, p_sfpu::LREG14, 0);   // = opacity*weight
+        load_bf16_imm(p_sfpu::LREG10, 0x3F7AE148u);                                       // 0.99f as bf16-upper
+        sfpu_min_inplace(p_sfpu::LREG14, p_sfpu::LREG10);   // LREG14 = alpha = min(.,0.99)
+
+        // contrib = alpha * T   (LREG3 = T persistent)
+        TTI_SFPMUL(p_sfpu::LREG14, p_sfpu::LREG3, p_sfpu::LCONST_0, p_sfpu::LREG15, 0);
+
+        // R += contrib * color_r
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_COLOR_R]);
+        TTI_SFPMAD(p_sfpu::LREG15, p_sfpu::LREG10, p_sfpu::LREG0, p_sfpu::LREG0, 0);
+        // G += contrib * color_g
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_COLOR_G]);
+        TTI_SFPMAD(p_sfpu::LREG15, p_sfpu::LREG10, p_sfpu::LREG1, p_sfpu::LREG1, 0);
+        // B += contrib * color_b
+        load_bf16_imm(p_sfpu::LREG10, row[COEFF_LANE_COLOR_B]);
+        TTI_SFPMAD(p_sfpu::LREG15, p_sfpu::LREG10, p_sfpu::LREG2, p_sfpu::LREG2, 0);
+
+        // T = T - contrib  (= T * (1 - alpha) because contrib = T*alpha)
+        TTI_SFPMAD(p_sfpu::LREG15, p_sfpu::LCONST_neg1, p_sfpu::LREG3, p_sfpu::LREG3, 0);
+
+        // Periodic T-saturation check (every K_SAT gaussians, eg. 16):
+        // if all 32 lanes of T < 1e-4, break out of this microblock's loop.
+        // See §6.7 for the reduction pattern.
+    }
+
+    // SFPSTORE state LREGs back to DST persistent slots for this MB.
+    TT_SFPSTORE(p_sfpu::LREG0, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_R);
+    TT_SFPSTORE(p_sfpu::LREG1, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_G);
+    TT_SFPSTORE(p_sfpu::LREG2, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_B);
+    TT_SFPSTORE(p_sfpu::LREG3, InstrModLoadStore::DEFAULT, ADDR_MOD_7, a_T);
+}
+
+// All 32 microblocks done. Persistent DST slots 0..2 hold final R/G/B.
+tile_regs_commit();
+tile_regs_wait();
+
+cb_reserve_back(CB_COLOR_OUT, 3);
+pack_tile(0, CB_COLOR_OUT);   // R
+pack_tile(1, CB_COLOR_OUT);   // G
+pack_tile(2, CB_COLOR_OUT);   // B
+cb_push_back(CB_COLOR_OUT, 3);
+
+tile_regs_release();
+cb_pop_front(CB_COEFF_TABLE, L);
+cb_pop_front(CB_MB_STREAM,   L_prime);
+cb_pop_front(CB_PX, 1);
+cb_pop_front(CB_PY, 1);
+```
+
+### 6.5 The replay-buffer optimization
+
+The inner per-gaussian body (everything between "Load A..F" and "T = T - contrib")
+is ~30 SFPU ops, identical across (m, g) pairs except for the
+coefficient values loaded via `load_bf16_imm`. Because `load_bf16_imm`
+emits `TTI_SFPLOADI` with a per-call immediate, the **immediate is baked
+at record time** — replay cannot parameterize it.
+
+Two approaches:
+
+- **(a) Skip replay** for the coefficient load + multiply pair (keep these
+  inline), record only the cross-coefficient chains that are address-
+  and coefficient-independent. Net win: ~10 of 30 ops compressed.
+  Modest improvement; simple to implement.
+
+- **(b) Use `lltt::record<lltt::Exec>` once at the top of the FIRST
+  gaussian's processing in a fresh tile**, capturing the coefficient
+  loads with the *first gaussian's values baked in*. Replay then replays
+  the first gaussian's coefficients onto subsequent gaussians — which is
+  **wrong**. (b) doesn't work; replay isn't a function-call abstraction.
+
+Recommendation: option (a). Implementation deferred to Stage 3 of §9
+(measure the dispatch overhead first; if it's <5% of inner cost, replay
+buys nothing and we don't bother).
+
+### 6.6 Inline exp polynomial helper
+
+We need `exp(x)` on a single 32-lane LREG. The full-tile `exp_tile<true>`
+in `api/compute/eltwise_unary/exp.h` calls down to
+`_calculate_exponential_<APPROXIMATION_MODE=true, SCALE_EN=false,
+ITERATIONS=8>`, which iterates the polynomial body 8 times for a
+full tile and advances `dst_reg` between iterations.
+
+We extract the per-iteration body and bind it to an explicit LREG. The
+body (per
+`tt_metal/tt-llk/tt_llk_blackhole/common/inc/sfpu/ckernel_sfpu_exp.h`)
+is the standard `2^x` polynomial: clamp the input, split into integer
+and fractional parts, polynomial-approximate `2^frac`, scale by `2^int`
+via an exponent-field add. The approximate path is ~10 SFPU ops on a
+32-lane vector.
+
+```cpp
+// Skeleton — exact instruction sequence transliterated from
+// _calculate_exponential_<APPROXIMATION_MODE=true>'s inner body in
+// ckernel_sfpu_exp.h. Inputs: x in LREG_X; scratch in LREG_S0, LREG_S1.
+// Output: x replaced with exp(x).
+inline void inline_exp_approx(uint32_t LREG_X, uint32_t LREG_S0, uint32_t LREG_S1) {
+    // 1. Clamp x to >= -88 (avoid underflow + match LLK ClampToNegative semantics).
+    //    TTI_SFPSWAP(0, LCONST_clamp, LREG_X, MOD1_VEC_MAX) — see recip kernel L201.
+    // 2. x = x * log2(e)        (TTI_SFPMUL against a precomputed bf16-imm in LREG_S0)
+    // 3. n = floor(x); f = x - n
+    //    SFPIADD / SFPSHFT2 sequence per the LLK reference.
+    // 4. poly(f) = 1 + f*(c1 + f*(c2 + f*c3))    (3 SFPMADs, coeffs as bf16 imms)
+    // 5. result = poly(f) * 2^n  via SFPSHFT2 on the exponent field.
+    // ~10 ops total.
 }
 ```
 
-Loop body executes exactly `popcount(mb_mask)` times. Loop overhead
-~3 cycles/iteration. For typical 25% sparsity (8/32 microblocks active)
-this is ~24 cycles/Gaussian of loop overhead — < 5% of inner work.
+The exact op sequence is left as a transliteration exercise during
+implementation — read `ckernel_sfpu_exp.h` and convert each `dst_reg[0]`
+reference to the named LREG. This is mechanical, but we should NOT make
+up the polynomial coefficients here; pull them from the LLK source so
+they match `exp_tile<true>` bit-for-bit (which preserves the PSNR delta
+profile we already validated in iter-040).
+
+### 6.7 Saturation early-out
+
+Per-microblock T eventually drops below 1e-4 for foreground microblocks
+covered by many opaque gaussians. Once all 32 lanes of LREG3 (T) are
+below that threshold, remaining gaussians in this microblock's list
+contribute <1/255 to any pixel — we can break.
+
+```cpp
+// Every K_SAT gaussians (eg. 16), check all-lanes saturation.
+if ((i & (K_SAT - 1)) == (K_SAT - 1)) {
+    // Build "any lane > 1e-4" via SFPCMP and SFPCCC (set-condition,
+    // copy-cc-out). See ckernel_sfpu_relu.h for v_if pattern.
+    bool any_active = sfpu_any_gt(p_sfpu::LREG3, T_THRESH_BITS);
+    if (!any_active) break;
+}
+```
+
+`sfpu_any_gt` is the reduction primitive — there isn't a direct one-op
+"any lane true" in the SFPU. The cheapest approach is a 5-level
+sub-vector OR reduction (4 ROR1 stages + 1 SFPSETCC, see
+`_record_broadcast_replay_` in `ckernel_sfpu_binary_bcast.h` for the
+shuffle-ROR pattern adapted from broadcast to reduce). ~10 ops, paid
+every K_SAT=16 gaussians. Negligible.
+
+Per-microblock saturated-skip is the per-tile early-out generalized.
 
 ---
 
@@ -964,142 +1034,217 @@ These MUST hold for any candidate change:
 
 ## 8. Performance model
 
-### 8.1 Cycles per microblock (estimated, BH SFPU @ 1 GHz)
+### 8.1 Per (microblock, gaussian) inner cost (BH SFPU @ ~1 GHz)
 
-Per active microblock (Q + exp + alpha + contrib + R/G/B/T):
-
-```
-Q evaluation         : 5 SFPMAD + 5 SFPLOAD + 1 SFPLOAD + 1 SFPADD  = ~14 cycles
-exp polynomial (apx) : ~10 SFPU ops                                  = ~10 cycles
-opacity * weight     : 1 SFPMUL                                      =  ~1 cycles
-min(., 0.99)         : 2 SFPU ops (SFPMIN)                           =  ~2 cycles
-contrib chain        : 2 SFPMUL + 1 SFPLOAD                          =  ~3 cycles
-R/G/B accum (3 ch)   : 3 SFPMAD + 3 SFPLOAD + 3 SFPSTORE             =  ~9 cycles
-T update             : 1 SFPMUL + 1 SFPMAD + 1 SFPLOAD + 1 SFPSTORE  =  ~4 cycles
-                                                              total  = ~43 cycles
-```
-
-### 8.2 Cycles per Gaussian (full-tile path = today)
+Body inside the `for i in count` loop, per (m, g) iteration:
 
 ```
-dx, dy, dx², dy², dx*dy   : ~5 SFPU full-tile ops × 4 microblocks/face
-                            × 4 faces = ~80 cycles SFPU work + FPU mul_tiles
-Q via FPU mul_tiles_bcast  : ~3 FPU passes × 32 cycles                    = ~100
-exp_tile<true>             : ~ 100 cycles (per existing kernel docs)
-alpha cap                  : ~30 cycles
-contrib + R/G/B + T (D2/E) : ~3 FPU passes × 32 cycles                   = ~100
-
-Per Gaussian ≈ 400-500 SFPU+FPU cycles.
+6 bf16 coeff loads (LREG10 reused)   : 6 SFPLOADI                = ~6 cycles
+Q chain                              : 1 SFPMUL + 4 SFPMAD + 1 SFPADD = ~6 cycles
+exp polynomial (approx)              : ~10 SFPU ops              = ~10 cycles
+opacity load + mul                   : 1 SFPLOADI + 1 SFPMUL     = ~2 cycles
+alpha clamp (min vs 0.99)            : 1 SFPLOADI + 2 SFPU ops   = ~3 cycles
+contrib = alpha * T                  : 1 SFPMUL                  = ~1 cycle
+R/G/B FMAs (3 colors, 3 loads)       : 3 SFPLOADI + 3 SFPMAD     = ~6 cycles
+T -= contrib                          : 1 SFPMAD                  = ~1 cycle
+                                                            total = ~35 cycles per (m, g) pair
 ```
 
-Currently observed: ~25.4 ms / 1080p frame / ~50k Gaussian-tile pairs ≈
-500 ns/pair @ 1 GHz = 500 cycles/pair. Matches.
+Pipeline note: SFPU ops have 2-cycle latency on dependent reads. The Q
+chain is a strict serial dependency through LREG9 — the 5 SFPMADs each
+read the previous one's output, so they cost ~10 cycles in pipeline
+terms, not 5. The exp polynomial and the R/G/B/T tail are similarly
+serialized on their respective accumulators. Realistic estimate: **~50
+cycles per (m, g) pair** after dependency stalls.
 
-### 8.3 Per-microblock total
+### 8.2 Per-microblock overhead (paid once per non-empty microblock)
 
 ```
-For mask sparsity factor k = popcount(mb_mask) / 32:
-  cycles_per_g ≈  k * 32 * 43   +   constant (basis copy + scalar load + branch)
-              =  k * 1376       +   ~100 cycles
-              ≈  100 + 1376*k   cycles
-
-Crossover with 500 cycles full-tile:  k ≈ 0.29.
-
-So:
-  k = 0.10 (3 active microblocks): ~240 cycles/g  (2.1x speedup)
-  k = 0.25 (8 active microblocks): ~440 cycles/g  (1.1x speedup)
-  k = 0.50 (16 active microblocks): ~790 cycles/g (0.6x speedup -- USE FULL TILE)
-  k = 1.00 (full tile):            ~1500 cycles/g (TAKE FULL TILE PATH)
+basis SFPLOAD (X, Y)                 : 2 cycles
+basis-product SFPMUL (X², XY, Y²)    : 3 cycles
+state load (R, G, B, T)              : 4 cycles
+state store (R, G, B, T)             : 4 cycles
+loop overhead                        : ~5 cycles
+                                  total = ~18 cycles
 ```
 
-Conclusion: the per-microblock path **only wins for k < 0.3** (at most
-9 active microblocks). The threshold check in §6.2 step 4 must
-guarantee we go full-tile above that.
+### 8.3 Per-tile overhead (paid once per tile)
 
-### 8.4 Expected end-to-end speedup
+```
+basis tile build (§5.1)              : ~50 cycles  (sub_unary_tile × 2)
+state tile init                      : ~40 cycles  (fill_tile × 4)
+mb_header copy to L1 stack           : ~30 cycles
+final pack (R/G/B → CB_COLOR_OUT)    : ~50 cycles
+acquire/commit/release               : ~50 cycles
+                                  total = ~220 cycles
+```
 
-The histogram of `popcount(mb_mask) / 32` across pairs is the input we
-need from a profiling pass. Hypothesis (to validate first iteration):
-~half of pairs are k > 0.5 (full-tile path, no change in cost),
-~half are k < 0.3 (microblock path, 2-3× speedup). Net ~1.5× kernel
-speedup → 25.4ms → ~17ms.
+### 8.4 Total per tile
 
-This is a conservative model; we can do better with §10 follow-ups.
+```
+cycles_per_tile ≈ 220                            (per-tile)
+                + Σ_m≠empty  18                  (per non-empty MB)
+                + Σ_(m,g)    50                  (per (m, g) pair)
+
+≈ 220 + N_mb_active * 18 + N_pairs * 50
+
+where:
+  N_mb_active = number of non-empty microblocks (≤ 32)
+  N_pairs     = Σ_m count[m] = total (mb, g) pairs in this tile
+              = L * K_avg   (L gaussians, K_avg average MBs each touches)
+```
+
+For typical (L = 200, K_avg = 8, all 32 microblocks non-empty):
+```
+≈ 220 + 32 * 18 + 1600 * 50
+= 220 + 576 + 80000
+≈ 80800 cycles/tile
+```
+
+### 8.5 Baseline comparison
+
+Existing kernel (measured): ~25.4 ms / 1080p frame / 2040 tiles
+≈ 12.5 µs/tile = ~12500 cycles/tile @ 1 GHz.
+
+Hmm — that's lower than our model predicts (80800). Two reconciling
+notes:
+
+1. The existing kernel does NOT do per-gaussian work for all (g, tile)
+   pairs equally — many pairs hit the iter-013 "T saturated"
+   early-skip, the iter-050 power-clamp elision, etc. The effective
+   pair count per tile is well below 200 × 1.0 = 200.
+2. Our model assumes worst-case sequential pipeline stalls; in reality
+   instruction-level parallelism between coefficient loads and FMAs
+   recovers a factor of 1.5-2×.
+
+We expect the mb-major design to **measure faster than today** in the
+sparse regime (K_avg ≤ 10), but the absolute speedup factor depends on
+the workload's K distribution, which we will profile in Stage 1 (§9).
+
+### 8.6 Conservative end-to-end target
+
+Plausible range based on (1) host pair count after per-microblock cull
+(should drop ~30% — only pairs whose Mahalanobis still passes the
+tighter per-microblock test survive) and (2) per-pair cost reduction
+from SFPU LREG residency (~2× vs today's CB round-trips):
+
+```
+new_kernel_ms ≈ today * (0.7 pair_cull) * (0.5 per_pair_speedup)
+              ≈ 25.4 * 0.35
+              ≈ 9 ms / frame
+```
+
+Stretch target if §10's follow-ups land: ~5 ms / frame.
 
 ---
 
 ## 9. Validation plan
 
-Three stages, each gated:
+Four stages, each gated. Strictly sequential — no stage starts until the
+previous gate has passed on stitch + at least 2 other scenes.
 
 ### Stage 1: host binning correctness, no kernel changes
 
-1. Implement §3 in `gsplat/rasterization.py`. Emit `mb_masks` alongside
-   the existing outputs.
-2. Property test: for every `(g, tile)` pair in the existing pipeline,
-   assert `popcount(mb_mask[i]) >= 1` and `popcount(mb_mask[i]) <= 32`.
-3. Visual test: rasterize on a CPU reference (use the existing CPU
-   backend) using `mb_masks` as a "render only these microblocks" mask
-   for each Gaussian (any pixel outside an active microblock keeps the
-   pre-Gaussian state). PSNR vs no-mask reference must be ≥ 100 dB
-   (rounding-only deltas).
-4. Gate: PSNR ≥ 100 dB AND `popcount` distribution matches expectations
-   (eg. heavy tail at 32 for big splats, mode at 8-16 for typical).
+1. Implement §3 in `gsplat/rasterization.py`. Emit `(coeff_table[tile],
+   mb_header[tile], mb_stream[tile])` for every tile.
+2. Property tests, run on every frame of the validation set:
+   - For each tile: `sum(mb_header[m].count for m in 0..31) == L'`
+   - For each (m, gidx) appearing in mb_stream: that gidx, plus opacity
+     & cov for the corresponding gaussian, gives `peak_in_mb ≥
+     contrib_floor` at the closest pixel.
+   - Per-microblock streams are depth-sorted (no inversions vs the
+     tile's global depth-sorted gaussian order).
+   - Drop rate (pairs that pass per-pair AABB cull but fail every
+     microblock) < 5%.
+3. Visual test: rasterize on the CPU reference using the per-microblock
+   lists as a "render only these microblocks for this gaussian" mask.
+   PSNR vs the unmasked CPU reference ≥ 100 dB (rounding-only deltas).
+4. Gate: all property tests pass + PSNR ≥ 100 dB + `K` distribution
+   reasonable (median ≈ 4-12, p99 ≤ 32).
 
-### Stage 2: full-tile path with basis tiles (no microblock skip)
+### Stage 2: per-tile coefficient table + reader plumbing, no compute change
 
-1. Implement §5 (basis tile prep).
-2. Implement §5.2 full-tile inner Q via basis form.
-3. Run the existing iter validation: `device_kernel` ms, PSNR.
-4. Gate: PSNR ≥ 35.0 dB ON ALL VALIDATION VIEWS, kernel ms ≤ current
-   median (no regression).
+1. Implement §4 (new CBs, new reader). Leave compute kernel unchanged —
+   it still consumes the OLD per-gaussian scalar packs from a parallel
+   shadow CB to avoid behavioral change.
+2. Validate: reader correctly DMAs coeff_table / mb_header / mb_stream
+   into their CBs. End-to-end PSNR is unchanged (compute hasn't seen
+   the new data yet).
+3. Gate: PSNR bit-identical to current; reader cycles per tile within
+   2× of today (we expect SIGNIFICANTLY faster — single-shot DMAs vs
+   per-gaussian loop — but a 2× regression caps the worst case).
 
-### Stage 3: per-microblock SFPU path
+### Stage 3: §5 basis-form + §6 mb-major compute kernel
 
-1. Implement §6 with a runtime knob `GSPLAT_TT_USE_MICROBLOCK_PATH=0/1`.
-2. With knob = 0: must reproduce Stage 2 results bit-for-bit.
-3. With knob = 1: PSNR drift ≤ 0.5 dB vs Stage 2; kernel ms reduction.
-4. Gate: PSNR ≥ 35.0 dB AND device_kernel ms reduction.
+1. Implement §5.1 basis-build, §6 outer microblock loop, §6.4 inner body
+   (without inline exp — use `exp_tile<true>` on a full tile and extract
+   the microblock; intentionally suboptimal, just for correctness).
+2. Run validation: PSNR per view, kernel ms.
+3. Gate: PSNR ≥ 35.0 dB on every validation view; kernel ms ≤ current
+   median × 1.2 (a 20% regression is tolerable because we haven't
+   landed inline exp yet).
+
+### Stage 4: §6.6 inline exp + §6.7 saturation early-out
+
+1. Replace full-tile exp_tile with the inline polynomial.
+2. Add the per-microblock T saturation check.
+3. Run validation.
+4. Gate: PSNR ≥ 35.0 dB on every view; kernel ms ≤ 50% of current
+   median (the 2× speedup target).
 
 ### Bisect on failure
 
 If PSNR drops below the gate, the bisect order is:
-  a. Per-microblock state I/O coherence bug (most likely; probe with
-     a small targeted test that runs ONE Gaussian against ONE tile
-     with mb_mask = 0x0000_0001 and checks every pixel).
-  b. Inline exp polynomial difference vs `exp_tile<true>` (diff
-     2-3 ULP per microblock should be safe; if it isn't, switch to
-     full-tile exp_tile and only microblock-skip the Q evaluation).
-  c. LREG11 not restored to -1.0 across Gaussians (run with restore).
+  a. **mb_stream ordering** (most likely): one (m, g) pair processed
+     out-of-depth-order. Probe: capture mb_stream for one frame, verify
+     monotonic depth indices per microblock.
+  b. **DST/LREG state coherence** between microblocks: did SFPSTORE
+     write to the wrong addr? Add a per-microblock checksum tile that
+     captures the pre-store LREG values + the post-store DST values
+     after every 100 microblocks. Compare.
+  c. **Inline exp polynomial drift** vs `exp_tile<true>`: should be
+     ≤2 ULP per call; if more, revert to full-tile exp for this stage
+     and recheck.
+  d. **bf16-immediate truncation** of A..F coefficients: if Q drifts,
+     the coeffs lost too much precision via fp32→bf16 imm. Switch the
+     6 coeffs to full fp32 SFPLOADI (UPPER+LOWER) at +1 cycle/coeff/
+     gaussian cost.
+  e. **LREG11 = -1.0 hardware default**: ckernel SFPU code assumes
+     LREG11 holds -1.0 after restore; ensure we restore at tile end
+     (`SFPLOADI 0xBF80; SFPLOADI 0x0000`).
 
 ---
 
 ## 10. NOT YET DESIGNED (future iterations)
 
-These are explicitly out-of-scope for the first microblock implementation
-but are obvious follow-ups once §1-9 ship:
+Explicitly out-of-scope for the first mb-major implementation; follow-ups
+once §1-9 ship:
 
-- **Multi-microblock packing of dependent Gaussians**: if two adjacent
-  Gaussians both have mask `m`, their per-microblock work could share
-  the basis SFPLOAD. Saves ~5 SFPLOADs per microblock per Gaussian.
-- **lltt::replay-based inner kernel** (§6.6 Option B). Estimated 10-20%
-  speedup on inner-loop dispatch overhead.
-- **Tile-level FP16 basis** (revisit iter-057b): once microblocks are
-  in place, the basis tiles' precision tradeoff is bounded by a single
-  microblock's worth of pixels (32 lanes), making bf16 basis tile error
-  much smaller in absolute terms than the previous global-coords
-  attempt. Can save a 2x in basis tile L1 footprint.
-- **Microblock dispatch from host**: instead of one CB push per tile,
-  push one CB entry per **active microblock-Gaussian** pair (host
-  expands the bin to per-microblock granularity). Loses the current
-  per-tile state coherence model — would need a redesign of the inner
-  loop to be (microblock, gaussian) instead of (gaussian, microblock).
-  Likely net loss until L1 bandwidth becomes the bottleneck.
-- **Persistent kernel + mailbox dispatch**: orthogonal to microblocks
-  but composes; queued for after §1-9.
-- **8x8 microblocks** (vs 4x8): would require a SFPLOAD that reads 64
-  lanes; the SFPU is 32-lane wide so this is hardware-impossible.
-  We are at the natural minimum granularity already.
+- **lltt::replay for the address-independent slice of the inner body**
+  (§6.5 option (a)). Estimated 5-15% inner-loop dispatch saving.
+- **Tile-level bf16 basis** (revisit iter-057b): the bf16 precision
+  trade-off is bounded by a single microblock's 32 lanes (much better
+  numerics than the failed global-coords attempt). Cuts L1 basis
+  footprint 2×.
+- **Coefficient compression**: A..F + opacity + color in 11 fp32 = 44 B
+  per gaussian per tile. Many of these have low dynamic range across
+  gaussians of one tile (color especially). Quantize to int8 + per-tile
+  scale → 11 B per gaussian; saves 75% DRAM bandwidth on the coeff
+  table. Worth doing if Stage 2 measures coeff DMA as a bottleneck.
+- **Multi-gaussian coefficient pipelining**: prefetch next gaussian's
+  coefficients into shadow LREGs (LREG11) while the current gaussian's
+  Q chain runs. Hides 6 SFPLOADI latency per gaussian. ~10% speedup.
+- **Persistent kernel + mailbox dispatch**: orthogonal to microblocks;
+  composes cleanly.
+- **8×8 microblocks**: would need a 64-lane SFPLOAD; SFPU is 32-lane,
+  so this is hardware-impossible. We are at the natural minimum
+  granularity already.
+- **Per-microblock saturation MASK propagation**: once a microblock
+  saturates, mark it in a tile-local bitmask. Cheap, but unclear
+  benefit beyond §6.7's per-microblock break — the break already
+  exits that microblock's loop; the only further saving is skipping
+  the start-of-microblock SFPLOAD basis/state setup, which we already
+  guard on `count > 0`. Track if profiling shows residual overhead.
 
 ---
 
@@ -1107,39 +1252,69 @@ but are obvious follow-ups once §1-9 ship:
 
 ```
 gsplat/rasterization.py
-  + _assign_gaussians_to_tiles_microblock_masks()  (§3)
-  + return mb_masks alongside (gaussian_ids, tile_ids, tiles_per_gaussian)
+  + per-microblock cull (§3.2): vectorized (P, 32) Mahalanobis test
+  + per-tile output assembly: coeff_table[tile], mb_header[tile],
+    mb_stream[tile] (§3.1)
+  + return these alongside (gaussian_ids, tile_ids, tiles_per_gaussian)
 
 gsplat/backend.py + backends/tt/backend.py
-  + plumb mb_masks into prepare_kernel_inputs
-  + pack mb_mask into the 11th uint32 lane of the 64B scalar pack
+  + replace prepare_kernel_inputs's old packs/offsets/px/py with
+    {coeff_tables, mb_headers, mb_streams, px, py, tile_ids}
+  + host packs A..F coefficients (with -0.5 already folded in) into the
+    coeff_table rows; opacity + color_rgb in lanes 6..9
 
 backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting/
   alpha_blend_host.h
-    + SCALAR_PACK_LANES bumped to 11
+    + MicroblockHeader struct (§4.1)
+    + COEFF_* lane constants
+    + CB_COEFF_TABLE, CB_MB_HEADER, CB_MB_STREAM indices
     + mb_to_dst_addr() constexpr (§3.4)
-    + MB_TO_DST_ADDR[32] static table
-    + CB_BASIS_X / Y / X2 / XY / Y2 / ONE indices
+    + MB_TO_DST_ADDR[32] static table (§6.3)
+    - removed: SCALAR_PACK_*, CB_SCALARS, CB_TILE_META, the per-gaussian
+      intermediate CBs (CB_DX/DY/.../CB_T_TMP, etc.)
 
   alpha_blend.cpp
-    + 6 new CB allocations (basis tiles), all depth=1, fp32
-    + (no kernel-args change; existing dispatch path reuses)
+    + allocate CB_COEFF_TABLE / CB_MB_HEADER / CB_MB_STREAM with sizes
+      per §4.2
+    - removed: per-Gaussian intermediate CB allocations
+    + reader/writer args: drop packs_addr/offsets_addr; add
+      coeff_table_addr/mb_header_addr/mb_stream_addr per tile (or pass
+      a single TensorAccessor that strides by tile_id)
 
   kernels/dataflow/reader_alpha_blend.cpp
-    (no changes; pack is still 64B/Gaussian)
+    + rewrite: per-tile single-shot DMA for coeff_table, mb_header,
+      mb_stream (§4.3). No per-gaussian inner loop.
 
   kernels/compute/alpha_blend_compute.cpp
-    + at init: build basis tiles ONCE per program (§5)... wait, basis
-      tiles are PER-TILE, not per-program. Build in the per-tile loop
-      head (§5).
-    + per-tile: compute basis tiles, hold across inner Gaussian loop
-    + per-Gaussian: dispatch microblock vs full-tile path on
-      popcount(mb_mask)
-    + per-microblock body using TT_SFPLOAD/TTI_SFPMAD/TT_SFPSTORE
-      against MB_TO_DST_ADDR
-    + state CBs: lift acquire/commit out of the per-Gaussian loop
-      (acquire ONCE at start of tile, commit ONCE at end)
+    + REWRITE around the mb-major outer/inner loop (§6.4)
+    + per-tile: build X, Y basis tiles (§5.1); init R/G/B/T state tiles
+    + outer microblock loop: load X/Y, compute X²/XY/Y² into LREGs;
+      load R/G/B/T into LREGs; iterate inner gaussian loop
+    + inner body: bf16-imm coeffs, basis-form Q, inline exp, alpha,
+      contrib, R/G/B FMA, T update -- all in LREGs (§6.4)
+    + per-microblock store R/G/B/T LREGs back to DST
+    + per-tile pack R/G/B to CB_COLOR_OUT
+
+  kernels/dataflow/writer_alpha_blend.cpp
+    (unchanged; still consumes CB_COLOR_OUT 3-tile pushes)
 ```
+
+### 11.1 Estimated review-sized PRs
+
+This is a large change. Suggested PR sequence (each is independently
+reviewable and shippable as a no-functional-change refactor, except the
+last):
+
+1. **PR1**: §3 host binning — add mb_masks / coeff_table / mb_header /
+   mb_stream emission alongside the existing per-gaussian outputs. No
+   reader/compute changes; existing pipeline unchanged. Property tests
+   only. ~200 LOC.
+2. **PR2**: §4 reader rewrite using new CBs in PARALLEL with existing
+   CBs. Compute still consumes old scalars. PSNR unchanged. ~300 LOC.
+3. **PR3**: §5 + §6 compute rewrite. Uses the new CBs from PR2; deletes
+   the old scalar consumption path. PSNR validation. ~600 LOC.
+4. **PR4**: §6.6 inline exp + §6.7 saturation early-out. Performance
+   measurement. ~200 LOC.
 
 ---
 

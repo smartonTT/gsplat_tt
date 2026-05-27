@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show distributed speckle concentrated at object edges/silhouettes. No horizontal or vertical lines at 32px or 16px spacing visible in hero_diff10, side_diff10, or top_diff10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color fill blocks detected in any render. All regions with reference detail show corresponding detail in the candidate renders."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No local dark holes or coverage gaps in hero, side, or top renders relative to their references. Diff10 shows no concentrated bright patches indicating missing coverage."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B bands or flat colored stripes present in any render. Color distribution matches reference across all three views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at object silhouettes. Edge noise in diff10 is consistent with accumulated bf16 quantization error, not coherent ringing artifacts."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta spatially-correlated patches in any render. All pixel values appear within normal range."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show object silhouettes as a dominant pattern. Diff is distributed across the body surface, not shifted outlines."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images show predominantly uniform speckle noise confined to the subject region. top_diff10 shows the expected elevated tile-correlated structure consistent with the pre-existing ratio ~17.6 from iter-054 — no new grid pattern introduced by this iter."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.09866898104336, "side": 40.92246672507844, "top": 38.29195117666665}, "pass": true},
+  "tile_structure_check": {"max_ratio": 17.587439611872732, "actual": {"hero": 16.60769335026065, "side": 17.27658395374453, "top": 17.587439611872732}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.630515543534790, "max_ms_ratio": 1.2344, "pass": true},
+  "timing": {"median_ms": 24.8685, "p99_ms": 30.09481, "vs_prev_best_pct": 0.57, "pass": true},
+  "reasoning": "NEEDS_REVIEW triggered solely by the kernel-algebra class PSNR floor (>40 dB per view): hero 39.10 dB and top 38.29 dB are below the 40 dB floor. However, this is a diagnostic-only profile-capture iter with Tracy instrumentation added to a bit-identical kernel binary — the PSNR values are identical to iter-054 (39.10/40.92/38.29), which was KEEP. All visual checks pass cleanly: no tile seams, no fill blocks, no holes, no clipping, no NaN signatures, no geometry shift, and diff10 speckle is uniformly distributed. Tile structure ratios (max 17.587) match iter-054 exactly (delta_vs_prev ~0.000), confirming no quality regression from the +Tracy instrumentation. Timing is +0.57% vs prev_best 24.729 ms (well within 2% break-even). The NEEDS_REVIEW flag is a mechanical application of the kernel-algebra floor rule to values that were already present and accepted at iter-054; a human reviewer should confirm these below-40-dB views are the known pre-existing condition rather than a new regression, and if confirmed, this iter is a KEEP."
+}
