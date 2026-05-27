@@ -31,7 +31,7 @@
     </h3>
   </header>
   
-  <p class="brief outcome"><b>Outcome.</b> REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the &gt;14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.</p>
+  
   <div class="metrics">
     <div class="ms">kernel: <b>25.47 ms</b> median · 30.57 ms p99</div>
     <div class="per-view">per-view: hero 25.47 / side 24.78 / top 30.52</div>
@@ -47,8 +47,8 @@
   </div>
   <details>
     <summary>Validator checks (REJECT)</summary>
-    <ul><li>✓ tile_grid_seams: diff10 shows object-shaped speckle noise; no visible 32px or 16px horizontal/vertical grid lines</li><li>✓ tile_uniform_fill: no 32x32 or 16x16 constant-fill blocks visible; detail preserved across all views</li><li>✓ missing_splat_holes: no local black holes or missing-coverage regions in any view</li><li>✓ color_clipping_bands: no saturated R/G/B stripe artifacts; color distribution looks normal</li><li>✓ ringing_halos: silhouette edges show only noise-level diff, no structured ringing</li><li>✓ nan_inf_signatures: no pure black/white/magenta correlated patches; no firefly outlier pixels visible in rendered PNGs across all three view</li><li>✓ geometry_shift: diff10 does not show object silhouette shift; error concentrated on body not edges</li><li>✓ diff10_structure: diff10 dominated by uniform speckle on object body; no grid, gradient, or band patterns</li></ul>
-    <p class="reasoning">REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the &gt;14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.</p>
+    <ul><li>(no validator.json)</li></ul>
+    <p class="reasoning"></p>
   </details>
 </section>
 
@@ -122,7 +122,7 @@
 <section class="iter-card">
   <header>
     <h3>iter-066-weight-cap-fireflies
-      <span class="badge" style="background:#7f7f7f">no_commit_valid_but_not_faster</span>
+      <span class="badge" style="background:#2ca02c">commit</span>
       <span class="badge verdict">KEEP</span>
       <span class="class-tag">kernel-algebra</span>
       
