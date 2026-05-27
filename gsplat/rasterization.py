@@ -183,7 +183,6 @@ def get_tile_assignments(
     tile_size: int = 32,
     covs_2d: torch.Tensor | None = None,
     opacities: torch.Tensor | None = None,
-    colors: torch.Tensor | None = None,
     contrib_floor: float = 15.0 / 255.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -198,10 +197,8 @@ def get_tile_assignments(
     Mahalanobis cull runs after the bbox assignment: for each candidate
     (Gaussian, tile) pair we compute the closest point in the tile to the
     Gaussian center and drop the pair if the Gaussian's peak contribution
-    inside the tile (`ω·exp(-½·m²)`) is below `contrib_floor`. When `colors`
-    is also provided (iter-084), the per-pair check scales the contribution
-    by the Gaussian's peak channel magnitude `max(|color|)`, dropping pairs
-    whose actual rgb contribution falls below the perceptual floor.
+    inside the tile (`ω·exp(-½·m²)`) is below `contrib_floor`. This catches
+    pairs the AABB still kept whose actual in-tile contribution is invisible.
 
     Args:
         means_2d: (M, 2) screen-space positions of visible Gaussians.
@@ -284,14 +281,7 @@ def get_tile_assignments(
             dx_c = cx - px
             dy_c = cy - py
             m2 = (c * dx_c * dx_c - 2.0 * b * dx_c * dy_c + a * dy_c * dy_c) / det
-            contrib = opacities[gaussian_ids] * torch.exp(-0.5 * m2)
-            if colors is not None:
-                # iter-084: scale by peak channel magnitude so we drop pairs
-                # whose actual rgb contribution falls below the floor (dim
-                # Gaussians whose alpha was already marginal).
-                color_max = colors.abs().amax(dim=-1)
-                contrib = contrib * color_max[gaussian_ids]
-            keep = contrib >= contrib_floor
+            keep = opacities[gaussian_ids] * torch.exp(-0.5 * m2) >= contrib_floor
 
             gaussian_ids = gaussian_ids[keep]
             tile_ids = tile_ids[keep]
