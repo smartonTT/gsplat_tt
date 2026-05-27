@@ -197,15 +197,29 @@ void kernel_main() {
         // (4) Stream Gaussian scalar packs for this tile. One 64-byte
         // page per Gaussian; compute pops one per inner-loop iteration.
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
-        for (uint32_t g = 0; g < g_count; g++) {
-            // Accumulator zone for per-Gaussian scalar fetch (SumN1 slot 0).
-            // Reports total cycles spent in the per-Gaussian DRAM→L1 stream
-            // for this RISC, which is the dominant work on the reader.
+        //
+        // iter-061: batch by 2. cb_reserve_back/barrier/push_back are
+        // per-call fixed costs; reserving 2 slots issues 2 reads under
+        // a single barrier, halving overhead in the dominant reader path.
+        // Depth-4 CB still allows 2-batch-deep pipelining (reader can
+        // prep next pair while compute drains current pair). Tail of 1
+        // (odd g_count) handled separately.
+        uint32_t g = 0;
+        for (; g + 2 <= g_count; g += 2) {
             DeviceZoneScopedSumN1("Z_R_g");
 
-            uint32_t entry_id = g_start + g;
+            cb_reserve_back(CB_SCALARS, 2);
+            uint32_t base_wp = get_write_ptr(CB_SCALARS);
+            noc_async_read_tile(g_start + g,     packs_acc, base_wp);
+            noc_async_read_tile(g_start + g + 1, packs_acc, base_wp + pack_bytes_padded);
+            noc_async_read_barrier();
+            cb_push_back(CB_SCALARS, 2);
+        }
+        if (g < g_count) {
+            DeviceZoneScopedSumN1("Z_R_g");
+
             cb_reserve_back(CB_SCALARS, 1);
-            noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));
+            noc_async_read_tile(g_start + g, packs_acc, get_write_ptr(CB_SCALARS));
             noc_async_read_barrier();
             cb_push_back(CB_SCALARS, 1);
         }
