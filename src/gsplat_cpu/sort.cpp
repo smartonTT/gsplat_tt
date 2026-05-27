@@ -105,43 +105,103 @@ SortResult sort_and_bin(
         return result;
     }
 
-    // Pass 1a: count per-tile occupancy.
-    std::vector<int64_t> counts(static_cast<std::size_t>(num_tiles), 0);
-    for (std::size_t i = 0; i < P; ++i) {
-        const int64_t t = tile_ids[i];
-        ++counts[static_cast<std::size_t>(t)];
+    const std::size_t W_count = (pool != nullptr) ? std::max<std::size_t>(1, pool->size()) : 1;
+
+    // iter-043: parallel per-chunk count -> per-(chunk, tile) starts ->
+    // parallel scatter into globally-shared packed_keys / packed_ids.
+    // Replaces the two prior serial 294k-iteration loops (Pass 1a count
+    // and Pass 2 scatter) that were single-thread on ~0.3 ms wall each
+    // and gated the radix-sort parallelism behind them.
+    //
+    // Stability is preserved: chunks tile [0, P) in contiguous ranges,
+    // so within each tile the per-(chunk, tile) sub-slots scatter in
+    // input order and the cross-chunk concatenation maintains the global
+    // input order (chunk 0's pairs end up before chunk 1's for any tile).
+    //
+    // Chunk size is chosen so each worker gets exactly one chunk: keeps
+    // the W * num_tiles per-(chunk, tile) table at ~20 KB (10 * 256 * 8 B)
+    // - small enough to live in L1 of the prefix-sum driver.
+    const std::size_t chunk_count_sz = std::max<std::size_t>(1024, (P + W_count - 1) / W_count);
+    const std::size_t num_chunks = (P + chunk_count_sz - 1) / chunk_count_sz;
+    std::vector<std::vector<int64_t>> chunk_counts(num_chunks,
+        std::vector<int64_t>(static_cast<std::size_t>(num_tiles), 0));
+
+    auto count_chunk = [&](std::size_t c) {
+        const std::size_t lo = c * chunk_count_sz;
+        const std::size_t hi = std::min(lo + chunk_count_sz, P);
+        int64_t* local = chunk_counts[c].data();
+        for (std::size_t i = lo; i < hi; ++i) {
+            ++local[static_cast<std::size_t>(tile_ids[i])];
+        }
+    };
+    if (pool != nullptr && W_count > 1 && num_chunks > 1) {
+        for (std::size_t c = 0; c < num_chunks; ++c) {
+            pool->submit([c, &count_chunk]() { count_chunk(c); });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t c = 0; c < num_chunks; ++c) count_chunk(c);
     }
 
-    // Pass 1b: prefix-sum into starts. For tile_ranges output we match the
-    // numpy reference convention: populated tiles get (prefix_start, prefix_end);
-    // empty tiles stay at (0, 0). The internal `starts` array is the true prefix
-    // sum used for scatter regardless of the published tile_ranges values.
+    // Pass 1b: global per-tile totals + prefix sum into starts.
+    std::vector<int64_t> counts(static_cast<std::size_t>(num_tiles), 0);
+    for (std::size_t c = 0; c < num_chunks; ++c) {
+        const int64_t* local = chunk_counts[c].data();
+        for (int t = 0; t < num_tiles; ++t) {
+            counts[static_cast<std::size_t>(t)] += local[static_cast<std::size_t>(t)];
+        }
+    }
     std::vector<int64_t> starts(static_cast<std::size_t>(num_tiles) + 1, 0);
     for (int t = 0; t < num_tiles; ++t) {
         const int64_t c = counts[static_cast<std::size_t>(t)];
-        starts[static_cast<std::size_t>(t) + 1] = starts[static_cast<std::size_t>(t)] + c;
+        starts[static_cast<std::size_t>(t) + 1] =
+            starts[static_cast<std::size_t>(t)] + c;
         if (c > 0) {
-            result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = starts[static_cast<std::size_t>(t)];
-            result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] = starts[static_cast<std::size_t>(t) + 1];
+            result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] =
+                starts[static_cast<std::size_t>(t)];
+            result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] =
+                starts[static_cast<std::size_t>(t) + 1];
         }
     }
 
-    // Pass 2: scatter (gaussian_id, depth_bits) into per-tile slots in input
-    // order. depth_bits is stored as a uint32 in `packed_keys`; the parallel
-    // `packed_ids` array holds the matching gaussian_id. Scatter preserves
-    // tile_assign's input order, which is what the numpy reference's stable
-    // radix sort uses as the tie-break order for equal depth_bits.
+    // Pass 1c: per-(chunk, tile) start offset = global tile_start[t] +
+    // sum of earlier chunks' contributions to that tile. Stable order
+    // means chunk 0 writes first, then chunk 1, etc.
+    std::vector<std::vector<int64_t>> chunk_starts(num_chunks,
+        std::vector<int64_t>(static_cast<std::size_t>(num_tiles), 0));
+    for (int t = 0; t < num_tiles; ++t) {
+        int64_t cur = starts[static_cast<std::size_t>(t)];
+        for (std::size_t c = 0; c < num_chunks; ++c) {
+            chunk_starts[c][static_cast<std::size_t>(t)] = cur;
+            cur += chunk_counts[c][static_cast<std::size_t>(t)];
+        }
+    }
+
+    // Pass 2: parallel scatter. Each chunk writes into its disjoint
+    // per-(chunk, tile) slots in input order.
     std::vector<uint32_t> packed_keys(P);
     std::vector<int64_t> packed_ids(P);
-    std::vector<int64_t> cursors = starts;
-    for (std::size_t i = 0; i < P; ++i) {
-        const std::size_t t = static_cast<std::size_t>(tile_ids[i]);
-        const int64_t g = gaussian_ids[i];
-        const uint32_t db = std::bit_cast<uint32_t>(depths[static_cast<std::size_t>(g)]);
-        const std::size_t pos = static_cast<std::size_t>(cursors[t]);
-        packed_keys[pos] = db;
-        packed_ids[pos] = g;
-        cursors[t] = static_cast<int64_t>(pos + 1);
+
+    auto scatter_chunk = [&](std::size_t c) {
+        const std::size_t lo = c * chunk_count_sz;
+        const std::size_t hi = std::min(lo + chunk_count_sz, P);
+        int64_t* local_starts = chunk_starts[c].data();
+        for (std::size_t i = lo; i < hi; ++i) {
+            const std::size_t t = static_cast<std::size_t>(tile_ids[i]);
+            const int64_t g = gaussian_ids[i];
+            const uint32_t db = std::bit_cast<uint32_t>(depths[static_cast<std::size_t>(g)]);
+            const std::size_t pos = static_cast<std::size_t>(local_starts[t]++);
+            packed_keys[pos] = db;
+            packed_ids[pos] = g;
+        }
+    };
+    if (pool != nullptr && W_count > 1 && num_chunks > 1) {
+        for (std::size_t c = 0; c < num_chunks; ++c) {
+            pool->submit([c, &scatter_chunk]() { scatter_chunk(c); });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t c = 0; c < num_chunks; ++c) scatter_chunk(c);
     }
 
     // Pass 3: per-tile STABLE LSD radix sort by depth_bits.
