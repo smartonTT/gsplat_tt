@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 51 · current best: 24.73 ms · target: 1.0 ms
+      iters: 52 · current best: 24.73 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-054-drop-const-prologue
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T04:35:08.556638+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> Pure dead-code removal: PNG MD5s bit-identical to iter-053; PSNR and tile_structure_ratio bit-identical (delta 0.0). Kernel +0.24% within break-even tolerance. All visual checks pass.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.79 ms</b> median · 29.65 ms p99</div>
+    <div class="per-view">per-view: hero 24.79 / side 23.96 / top 29.58</div>
+    <div class="psnr">PSNR: hero 39.1 / side 40.9 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-054-drop-const-prologue/hero.png" target="_blank"><img src="screenshots/iter-054-drop-const-prologue/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-054-drop-const-prologue/side.png" target="_blank"><img src="screenshots/iter-054-drop-const-prologue/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-054-drop-const-prologue/top.png" target="_blank"><img src="screenshots/iter-054-drop-const-prologue/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-054-drop-const-prologue/hero_diff10.png" target="_blank"><img src="screenshots/iter-054-drop-const-prologue/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-054-drop-const-prologue/side_diff10.png" target="_blank"><img src="screenshots/iter-054-drop-const-prologue/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-054-drop-const-prologue/top_diff10.png" target="_blank"><img src="screenshots/iter-054-drop-const-prologue/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: diff10 images show diffuse speckle concentrated on object silhouettes and surfaces; no horizontal/vertical grid lines at</li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color fill blocks visible in any render. All three views show smooth Gaussian splatting cover</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions larger than ~16 pixels observed. Renders show continuous coverage on the stitc</li><li>✓ color_clipping_bands: No saturated flat-color stripes or clipping bands visible in hero, side, or top renders. Color gradients look natural.</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes beyond expected soft Gaussian falloff edges.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any render. All pixels show expected color values.</li><li>✓ geometry_shift: diff10 images do not show object silhouette outlines that would indicate coordinate shift. Diff energy is interior/surfa</li><li>✓ diff10_structure: diff10 images show diffuse speckle within object bounds consistent with cumulative bf16 precision drift from iter-010 on</li></ul>
+    <p class="reasoning">Pure dead-code removal: PNG MD5s bit-identical to iter-053; PSNR and tile_structure_ratio bit-identical (delta 0.0). Kernel +0.24% within break-even tolerance. All visual checks pass.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-053-dead-cb-cleanup
