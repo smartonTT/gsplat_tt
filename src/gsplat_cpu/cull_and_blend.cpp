@@ -506,10 +506,22 @@ CullAndBlendResult cull_and_blend(
                 r.y_half = rd * std::sqrt(std::max(c, 0.0f));
             }
         };
+        // iter-051: blocked vs strided dispatch. Old `i = w; i += W` interleaved
+        // worker writes into gauss_rec — every worker touched every 10th
+        // 40-byte record, so adjacent records were owned by different cores
+        // and the cache lines bounced (false sharing on the 64-byte line that
+        // covers records [w] + [w+1] which differ by 40 bytes). Block-chunked
+        // (one contiguous slice per worker) gives each worker a private,
+        // sequential L1+prefetcher-friendly stream of writes — no cross-core
+        // line traffic, full hw prefetcher engagement on covs_2d/means_2d/
+        // opacities reads.
         if (W > 1 && M >= 4096) {
+            const std::size_t chunk = (M + W - 1) / W;
             for (std::size_t w = 0; w < W; ++w) {
-                pool.submit([&, w, W]() {
-                    for (std::size_t i = w; i < M; i += W) compute_one(i);
+                pool.submit([&, w, chunk]() {
+                    const std::size_t lo = w * chunk;
+                    const std::size_t hi = std::min(lo + chunk, M);
+                    for (std::size_t i = lo; i < hi; ++i) compute_one(i);
                 });
             }
             pool.wait();
