@@ -306,28 +306,27 @@ void kernel_main() {
             //   CB_Q[1] = c · dy²
             //   CB_Q[2] = 2b · dx·dy
 
-            // Stage B2a + B3a[0]: dst[0] = (dx · dx) · a → CB_Q[0]
+            // FUSED (iter-048): B2a+B2b in ONE acquire with single shared
+            // mul_tiles_init. The init configures unpack format (bf16) and
+            // broadcast/fidelity, not CB-to-srcA/B binding (which is per-call).
+            // Since CB_DX and CB_DY have identical bf16 format and we use the
+            // same broadcast pattern (none), one init should cover both
+            // mul_tiles. Distinct from iter-039 hang (MULTIPLE mul_tiles_init
+            // per acquire); this is ONE init + 2 mul_tiles with different CBs.
+            //   dst[0] = a · dx²
+            //   dst[1] = c · dy²
             tile_regs_acquire();
             mul_tiles_init(CB_DX, CB_DX);
             mul_tiles(CB_DX, CB_DX, 0, 0, 0);
+            mul_tiles(CB_DY, CB_DY, 0, 0, 1);
             mul_unary_tile(0, cov_a_bits);
+            mul_unary_tile(1, cov_c_bits);
             tile_regs_commit();
             tile_regs_wait();
-            cb_reserve_back(CB_Q, 1);
+            cb_reserve_back(CB_Q, 2);
             pack_tile(0, CB_Q);
-            cb_push_back(CB_Q, 1);
-            tile_regs_release();
-
-            // Stage B2b + B3a[1]: dst[0] = (dy · dy) · c → CB_Q[1]
-            tile_regs_acquire();
-            mul_tiles_init(CB_DY, CB_DY);
-            mul_tiles(CB_DY, CB_DY, 0, 0, 0);
-            mul_unary_tile(0, cov_c_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 1);
-            pack_tile(0, CB_Q);
-            cb_push_back(CB_Q, 1);
+            pack_tile(1, CB_Q);
+            cb_push_back(CB_Q, 2);
             tile_regs_release();
 
             // Stage B2c + B3a[2]: dst[0] = (dx · dy) · 2b → CB_Q[2]
