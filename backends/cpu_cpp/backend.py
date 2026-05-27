@@ -25,6 +25,7 @@ class CpuCppBackend(Backend):
         microblock: bool = True,
         mb_contrib_floor: float = 1.0 / 16384.0,
         fused: bool = True,
+        render_fused: bool = True,
     ):
         # Lazily import the compiled module so import doesn't fail when the
         # extension hasn't been built yet.
@@ -34,6 +35,7 @@ class CpuCppBackend(Backend):
         self._microblock = microblock
         self._mb_contrib_floor = mb_contrib_floor
         self._fused = fused
+        self._render_fused = render_fused
         # cov3d cache (iter-012): per-Gaussian cov3d depends only on (scales,
         # rotations), not on camera. Cache it across views so the 30-frame
         # training-pattern bench (same scene, 30 cameras) builds cov3d once.
@@ -249,3 +251,53 @@ class CpuCppBackend(Backend):
             "microblock_drop_pct": stats["drop_pct"],
             "microblock_work_reduction_pct": stats["work_reduction_pct"],
         }
+
+    # ------------------------------------------------------------------
+    # iter-029 fused render: ALL stages in a single pybind crossing.
+    # ------------------------------------------------------------------
+
+    def has_render_fused(self) -> bool:
+        """Whether `render_fused()` is enabled and supported by this backend."""
+        return self._render_fused and hasattr(self._mod, "render_full")
+
+    def render_fused(
+        self,
+        gaussians,            # gsplat.data_structures.Gaussians
+        extrinsics: torch.Tensor,
+        intrinsics: torch.Tensor,
+        image_height: int,
+        image_width: int,
+        contrib_floor: float = 15.0 / 255.0,
+    ) -> tuple[np.ndarray, dict]:
+        """Single-pybind fused render. Returns (image, stats_dict).
+
+        stats_dict keys:
+          project_ms, tile_assign_ms, sort_ms, blend_ms, total_ms,
+          num_visible, num_entries,
+          pairs_in, pairs_dropped, pairs_kept_per_mb.
+        """
+        means_np = gaussians.means.detach().cpu().numpy().astype(np.float32, copy=False)
+        scales_np = gaussians.scales.detach().cpu().numpy().astype(np.float32, copy=False)
+        rotations_np = gaussians.rotations.detach().cpu().numpy().astype(np.float32, copy=False)
+        opacities_np = gaussians.opacities.detach().cpu().numpy().astype(np.float32, copy=False)
+        colors_np = gaussians.colors.detach().cpu().numpy().astype(np.float32, copy=False)
+        extr_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        intr_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        cov3d = self._cached_cov3d(scales_np, rotations_np)
+
+        image, stats = self._mod.render_full(
+            means_np,
+            cov3d,
+            opacities_np,
+            colors_np,
+            extr_np,
+            intr_np,
+            int(image_height),
+            int(image_width),
+            32,
+            1.0 / 255.0,
+            float(contrib_floor),
+            float(self._mb_contrib_floor),
+        )
+        return np.asarray(image), dict(stats)

@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -720,6 +721,222 @@ py::tuple cull_and_blend_py(
     return py::make_tuple(image, stats);
 }
 
+// Filter colors / opacities by valid_mask. Parallel-filter pattern (chunked
+// count + prefix-sum + parallel scatter), bit-identical to numpy
+// colors[valid_mask] / opacities[valid_mask] but stays inside C++.
+struct VisibleFiltered {
+    std::vector<float> colors;     // M*3
+    std::vector<float> opacities;  // M
+};
+
+VisibleFiltered filter_visible(
+    const float* colors_n,   // N*3
+    const float* opacities_n,// N
+    const uint8_t* valid_mask,// N (0/1)
+    std::size_t N,
+    std::size_t M,
+    gsplat_cpu::ThreadPool& pool) {
+    VisibleFiltered out;
+    out.colors.assign(M * 3, 0.0f);
+    out.opacities.assign(M, 0.0f);
+    if (N == 0 || M == 0) return out;
+
+    const std::size_t W = std::max<std::size_t>(1, pool.size());
+    const std::size_t chunk_size = std::max<std::size_t>(1024, (N + W - 1) / W);
+    const std::size_t num_chunks = (N + chunk_size - 1) / chunk_size;
+    std::vector<std::size_t> chunk_counts(num_chunks, 0);
+
+    auto count_chunk = [&](std::size_t c) {
+        const std::size_t lo = c * chunk_size;
+        const std::size_t hi = std::min(lo + chunk_size, N);
+        std::size_t k = 0;
+        for (std::size_t i = lo; i < hi; ++i) k += valid_mask[i];
+        chunk_counts[c] = k;
+    };
+    if (W > 1 && num_chunks > 1) {
+        for (std::size_t c = 0; c < num_chunks; ++c) {
+            pool.submit([c, &count_chunk]() { count_chunk(c); });
+        }
+        pool.wait();
+    } else {
+        for (std::size_t c = 0; c < num_chunks; ++c) count_chunk(c);
+    }
+
+    std::vector<std::size_t> chunk_offs(num_chunks + 1, 0);
+    for (std::size_t c = 0; c < num_chunks; ++c) {
+        chunk_offs[c + 1] = chunk_offs[c] + chunk_counts[c];
+    }
+
+    auto scatter_chunk = [&](std::size_t c) {
+        const std::size_t lo = c * chunk_size;
+        const std::size_t hi = std::min(lo + chunk_size, N);
+        std::size_t pos = chunk_offs[c];
+        for (std::size_t i = lo; i < hi; ++i) {
+            if (valid_mask[i]) {
+                out.colors[pos * 3 + 0] = colors_n[i * 3 + 0];
+                out.colors[pos * 3 + 1] = colors_n[i * 3 + 1];
+                out.colors[pos * 3 + 2] = colors_n[i * 3 + 2];
+                out.opacities[pos] = opacities_n[i];
+                ++pos;
+            }
+        }
+    };
+    if (W > 1 && num_chunks > 1) {
+        for (std::size_t c = 0; c < num_chunks; ++c) {
+            pool.submit([c, &scatter_chunk]() { scatter_chunk(c); });
+        }
+        pool.wait();
+    } else {
+        for (std::size_t c = 0; c < num_chunks; ++c) scatter_chunk(c);
+    }
+
+    return out;
+}
+
+// All-stage fused render. Orchestrates project_full_fused -> filter colors/
+// opacities by valid_mask -> tile_assign -> sort_and_bin -> cull_and_blend
+// entirely in C++. Eliminates ~4 pybind boundary crossings + ~7 numpy<->C++
+// array conversions + the Python torch indexing for colors/opacities filter.
+// Returns (image, stats_dict) where stats_dict contains per-stage timings,
+// num_visible, num_entries, and microblock cull stats.
+py::tuple render_full_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> means,
+    py::array_t<float, py::array::c_style | py::array::forcecast> cov3d,
+    py::array_t<float, py::array::c_style | py::array::forcecast> opacities,
+    py::array_t<float, py::array::c_style | py::array::forcecast> colors,
+    py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics,
+    py::array_t<float, py::array::c_style | py::array::forcecast> intrinsics,
+    int image_height,
+    int image_width,
+    int tile_size,
+    float min_opacity,
+    float contrib_floor,
+    float mb_contrib_floor) {
+    using clock = std::chrono::steady_clock;
+    auto t0 = clock::now();
+
+    const auto means_info = means.request();
+    const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
+
+    const float* opacities_ptr = static_cast<const float*>(opacities.request().ptr);
+    const float* colors_ptr = static_cast<const float*>(colors.request().ptr);
+
+    // Stage 1: project.
+    auto t_p0 = clock::now();
+    const gsplat_cpu::ProjectResult proj = gsplat_cpu::project_full_fused(
+        static_cast<const float*>(means_info.ptr),
+        static_cast<const float*>(cov3d.request().ptr),
+        static_cast<const float*>(extrinsics.request().ptr),
+        static_cast<const float*>(intrinsics.request().ptr),
+        opacities_ptr,
+        min_opacity,
+        N,
+        image_height,
+        image_width,
+        &global_project_pool());
+    const std::size_t M = proj.depths.size();
+    auto t_p1 = clock::now();
+
+    // Early-out: zero visible Gaussians -> return all-black image with zero stats.
+    if (M == 0) {
+        py::array_t<float> image_zero(
+            {static_cast<py::ssize_t>(image_height),
+             static_cast<py::ssize_t>(image_width),
+             static_cast<py::ssize_t>(3)});
+        std::memset(image_zero.mutable_data(), 0,
+                    static_cast<std::size_t>(image_height) *
+                        static_cast<std::size_t>(image_width) * 3 * sizeof(float));
+        py::dict stats;
+        stats["num_visible"] = 0;
+        stats["num_entries"] = 0;
+        stats["pairs_in"] = 0;
+        stats["pairs_dropped"] = 0;
+        stats["pairs_kept_per_mb"] = 0;
+        stats["project_ms"] = std::chrono::duration<float, std::milli>(t_p1 - t_p0).count();
+        stats["tile_assign_ms"] = 0.0f;
+        stats["sort_ms"] = 0.0f;
+        stats["blend_ms"] = 0.0f;
+        stats["total_ms"] = std::chrono::duration<float, std::milli>(clock::now() - t0).count();
+        return py::make_tuple(image_zero, stats);
+    }
+
+    // Stage 1.5: filter colors/opacities by valid_mask.
+    const VisibleFiltered vis = filter_visible(
+        colors_ptr, opacities_ptr, proj.valid_mask.data(), N, M, global_project_pool());
+
+    // Stage 2: tile_assign with per-pair Mahalanobis cull.
+    const int tiles_x = (image_width + tile_size - 1) / tile_size;
+    const int tiles_y = (image_height + tile_size - 1) / tile_size;
+    auto t_ta0 = clock::now();
+    const gsplat_cpu::TileAssignResult ta = gsplat_cpu::tile_assign(
+        proj.means_2d.data(),
+        proj.radii.data(),
+        M,
+        image_height,
+        image_width,
+        tile_size,
+        proj.covs_2d.data(),
+        vis.opacities.data(),
+        contrib_floor,
+        &global_tile_assign_pool());
+    auto t_ta1 = clock::now();
+
+    // Stage 3: sort + bin.
+    auto t_s0 = clock::now();
+    const gsplat_cpu::SortResult sr = gsplat_cpu::sort_and_bin(
+        ta.gaussian_ids.data(),
+        ta.tile_ids.data(),
+        proj.depths.data(),
+        ta.gaussian_ids.size(),
+        M,
+        tiles_x,
+        tiles_y,
+        &global_sort_pool());
+    auto t_s1 = clock::now();
+
+    // Stage 4: cull + blend.
+    auto t_b0 = clock::now();
+    const gsplat_cpu::CullAndBlendResult cb = gsplat_cpu::cull_and_blend(
+        proj.means_2d.data(),
+        proj.covs_2d.data(),
+        vis.colors.data(),
+        vis.opacities.data(),
+        sr.sorted_gaussian_ids.data(),
+        sr.tile_ranges.data(),
+        M,
+        sr.sorted_gaussian_ids.size(),
+        tiles_x,
+        tiles_y,
+        tile_size,
+        image_height,
+        image_width,
+        mb_contrib_floor,
+        global_blend_pool());
+    auto t_b1 = clock::now();
+
+    // Pack outputs.
+    py::array_t<float> image(
+        {static_cast<py::ssize_t>(image_height),
+         static_cast<py::ssize_t>(image_width),
+         static_cast<py::ssize_t>(3)});
+    if (!cb.image.empty()) {
+        std::memcpy(image.mutable_data(), cb.image.data(), cb.image.size() * sizeof(float));
+    }
+
+    py::dict stats;
+    stats["num_visible"] = static_cast<int64_t>(M);
+    stats["num_entries"] = static_cast<int64_t>(sr.sorted_gaussian_ids.size());
+    stats["pairs_in"] = cb.pairs_in;
+    stats["pairs_dropped"] = cb.pairs_dropped_all_mb;
+    stats["pairs_kept_per_mb"] = cb.pairs_kept_per_mb;
+    stats["project_ms"] = std::chrono::duration<float, std::milli>(t_p1 - t_p0).count();
+    stats["tile_assign_ms"] = std::chrono::duration<float, std::milli>(t_ta1 - t_ta0).count();
+    stats["sort_ms"] = std::chrono::duration<float, std::milli>(t_s1 - t_s0).count();
+    stats["blend_ms"] = std::chrono::duration<float, std::milli>(t_b1 - t_b0).count();
+    stats["total_ms"] = std::chrono::duration<float, std::milli>(clock::now() - t0).count();
+    return py::make_tuple(image, stats);
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_gsplat_cpu, m) {
@@ -871,6 +1088,22 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("tile_size") = 32,
         py::arg("image_height") = 0,
         py::arg("image_width") = 0,
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
+
+    m.def(
+        "render_full",
+        &render_full_py,
+        py::arg("means"),
+        py::arg("cov3d"),
+        py::arg("opacities"),
+        py::arg("colors"),
+        py::arg("extrinsics"),
+        py::arg("intrinsics"),
+        py::arg("image_height"),
+        py::arg("image_width"),
+        py::arg("tile_size") = 32,
+        py::arg("min_opacity") = 1.0f / 255.0f,
+        py::arg("contrib_floor") = 15.0f / 255.0f,
         py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
 
     m.def(
