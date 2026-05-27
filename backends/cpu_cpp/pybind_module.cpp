@@ -162,25 +162,39 @@ py::tuple project_full_with_cov3d_py(
     int image_width,
     py::object opacities_obj = py::none(),
     float min_opacity = 1.0f / 255.0f) {
+    // iter-022: fused per-Gaussian project_full. Replaces the prior 5-pool.wait()
+    // sub-stage chain (geometry -> cov_cam -> cov2d -> valid/radii ->
+    // gather count/scatter) with one big parallel pass over N plus the
+    // gather count+scatter (3 waits total). cov_cam is held in registers
+    // only — never materialised to memory (saves ~21.6 MB of memory
+    // traffic per frame at N=601k).
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
-    const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare_from_cov3d(
+
+    const float* opacities_ptr = nullptr;
+    py::array_t<float, py::array::c_style | py::array::forcecast> opacities;
+    if (!opacities_obj.is_none()) {
+        opacities = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
+            opacities_obj);
+        if (static_cast<std::size_t>(opacities.request().shape[0]) != N) {
+            throw std::invalid_argument("opacities must have shape (N,)");
+        }
+        opacities_ptr = static_cast<const float*>(opacities.request().ptr);
+    }
+
+    const gsplat_cpu::ProjectResult result = gsplat_cpu::project_full_fused(
         static_cast<const float*>(means_info.ptr),
         static_cast<const float*>(cov3d.request().ptr),
         static_cast<const float*>(extrinsics.request().ptr),
         static_cast<const float*>(intrinsics.request().ptr),
+        opacities_ptr,
+        min_opacity,
         N,
         image_height,
         image_width,
         &global_project_pool());
 
-    // iter-018: pure-C++ cov2d (was python -> torch.bmm round-trip). Matches
-    // torch.bmm within ~5e-4 (verify_stage tolerance 1e-3).
-    const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
-    py::array_t<float> covs_flat({n, static_cast<py::ssize_t>(4)});
-    gsplat_cpu::compute_covs_2d(prep, covs_flat.mutable_data(), &global_project_pool());
-
-    return project_finalize_py(prep, covs_flat, opacities_obj, min_opacity);
+    return pack_project_result(result, N);
 }
 
 py::tuple project_full_py(

@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -403,17 +404,41 @@ CullAndBlendResult cull_and_blend(
     std::vector<int64_t> tile_dropped(static_cast<std::size_t>(num_tiles), 0);
     std::vector<int64_t> tile_kept(static_cast<std::size_t>(num_tiles), 0);
 
-    for (int tile_id = 0; tile_id < num_tiles; ++tile_id) {
-        pool.submit([&, tile_id]() {
-            cull_and_blend_tile(
-                tile_id, tiles_x, tile_size, image_height, image_width,
-                means_2d, covs_2d, colors, opacities,
-                sorted_gaussian_ids, tile_ranges,
-                mb_contrib_floor,
-                cia.data(), cib.data(), cic.data(),
-                result.image.data(),
-                &tile_dropped[static_cast<std::size_t>(tile_id)],
-                &tile_kept[static_cast<std::size_t>(tile_id)]);
+    // LPT scheduling + reduced submits: sort tile indices by descending
+    // Gaussian count, then dispatch only W tasks (one per worker). Each
+    // worker greedily pulls the next-heaviest tile from a shared atomic
+    // counter. Two wins over 256 individual submits:
+    //   - 256 mutex acquisitions on the pool's task queue collapse to W (~10).
+    //   - True LPT: workers race to grab heavy tiles first; light tail
+    //     dispatched last.
+    std::vector<int> tile_order(static_cast<std::size_t>(num_tiles));
+    for (int i = 0; i < num_tiles; ++i) tile_order[static_cast<std::size_t>(i)] = i;
+    std::sort(tile_order.begin(), tile_order.end(), [&](int a, int b) {
+        const int64_t la = tile_ranges[static_cast<std::size_t>(a) * 2 + 1] -
+                           tile_ranges[static_cast<std::size_t>(a) * 2 + 0];
+        const int64_t lb = tile_ranges[static_cast<std::size_t>(b) * 2 + 1] -
+                           tile_ranges[static_cast<std::size_t>(b) * 2 + 0];
+        return la > lb;
+    });
+
+    std::atomic<int> next_idx{0};
+    const std::size_t W = std::max<std::size_t>(1, pool.size());
+    for (std::size_t w = 0; w < W; ++w) {
+        pool.submit([&]() {
+            for (;;) {
+                const int idx = next_idx.fetch_add(1, std::memory_order_relaxed);
+                if (idx >= num_tiles) return;
+                const int tile_id = tile_order[static_cast<std::size_t>(idx)];
+                cull_and_blend_tile(
+                    tile_id, tiles_x, tile_size, image_height, image_width,
+                    means_2d, covs_2d, colors, opacities,
+                    sorted_gaussian_ids, tile_ranges,
+                    mb_contrib_floor,
+                    cia.data(), cib.data(), cic.data(),
+                    result.image.data(),
+                    &tile_dropped[static_cast<std::size_t>(tile_id)],
+                    &tile_kept[static_cast<std::size_t>(tile_id)]);
+            }
         });
     }
     pool.wait();

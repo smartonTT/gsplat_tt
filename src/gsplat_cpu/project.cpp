@@ -480,4 +480,197 @@ ProjectResult project(
     return project_finalize(prep, covs_2d.data(), opacities, min_opacity);
 }
 
+ProjectResult project_full_fused(
+    const float* means,
+    const float* cov3d,
+    const float* extrinsics,
+    const float* intrinsics,
+    const float* opacities,
+    const float min_opacity,
+    const std::size_t N,
+    const int image_height,
+    const int image_width,
+    ThreadPool* pool) {
+    // Extrinsics (column-3 translation).
+    Mat3f r_mat;
+    r_mat(0, 0) = extrinsics[0]; r_mat(0, 1) = extrinsics[1]; r_mat(0, 2) = extrinsics[2];
+    r_mat(1, 0) = extrinsics[4]; r_mat(1, 1) = extrinsics[5]; r_mat(1, 2) = extrinsics[6];
+    r_mat(2, 0) = extrinsics[8]; r_mat(2, 1) = extrinsics[9]; r_mat(2, 2) = extrinsics[10];
+    const Mat3f r_t = mat3_transpose(r_mat);
+
+    const float t0 = extrinsics[3], t1 = extrinsics[7], t2 = extrinsics[11];
+    const float fx = intrinsics[0], fy = intrinsics[4];
+    const float cx = intrinsics[2], cy = intrinsics[5];
+    constexpr float k_near = 0.2f;
+    const int max_radius = std::min(image_height, image_width) / 2;
+
+    // Single-shot means_cam via Accelerate (already <1ms even at 600k Gaussians).
+    std::vector<float> means_cam(N * 3);
+#if defined(__APPLE__)
+    {
+        const float r9[9] = {r_mat(0,0), r_mat(0,1), r_mat(0,2),
+                             r_mat(1,0), r_mat(1,1), r_mat(1,2),
+                             r_mat(2,0), r_mat(2,1), r_mat(2,2)};
+        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                    static_cast<int>(N), 3, 3, 1.0f, means, 3, r9, 3, 0.0f,
+                    means_cam.data(), 3);
+    }
+#else
+    for (std::size_t i = 0; i < N; ++i) {
+        const float mx = means[i*3+0], my = means[i*3+1], mz = means[i*3+2];
+        means_cam[i*3+0] = mx*r_mat(0,0) + my*r_mat(0,1) + mz*r_mat(0,2);
+        means_cam[i*3+1] = mx*r_mat(1,0) + my*r_mat(1,1) + mz*r_mat(1,2);
+        means_cam[i*3+2] = mx*r_mat(2,0) + my*r_mat(2,1) + mz*r_mat(2,2);
+    }
+#endif
+
+    // Per-Gaussian scratch: means_2d (2), depths (1), cov2d (4), valid (1),
+    // radii (2). Final compact arrays are built by the parallel-filter
+    // gather below. cov_cam is computed in registers only — never stored.
+    std::vector<float> means_2d(N * 2);
+    std::vector<float> depths(N);
+    std::vector<float> covs_2d(N * 4);
+    std::vector<uint8_t> valid_mask(N);
+    std::vector<Vec2f> radii_scratch(N);
+
+    auto per_gaussian = [&](std::size_t i) {
+        const float tx = means_cam[i*3+0] + t0;
+        const float ty = means_cam[i*3+1] + t1;
+        const float tz = means_cam[i*3+2] + t2;
+        depths[i] = tz;
+
+        bool valid = tz > k_near;
+
+        const float inv_tz = 1.0f / tz;
+        const float mean_x = fx * tx * inv_tz + cx;
+        const float mean_y = fy * ty * inv_tz + cy;
+        means_2d[i*2+0] = mean_x;
+        means_2d[i*2+1] = mean_y;
+
+        // Jacobian (kept in registers — never stored to memory).
+        const float tz2 = tz * tz;
+        const float j00 = fx / tz, j02 = -fx * tx / tz2;
+        const float j11 = fy / tz, j12 = -fy * ty / tz2;
+
+        // cov_cam = R @ cov3d @ R^T  (registers only).
+        Mat3f c;
+        std::memcpy(c.m.data(), cov3d + i * 9, 9 * sizeof(float));
+        const Mat3f cov_cam = mat3_mul(mat3_mul(r_mat, c), r_t);
+
+        // cov2d = J @ cov_cam @ J^T + 0.3 * I.
+        // J is sparse (j01 = j10 = 0); expand by hand for fewer FLOPs.
+        const float m00 = j00 * cov_cam(0,0) + j02 * cov_cam(2,0);
+        const float m01 = j00 * cov_cam(0,1) + j02 * cov_cam(2,1);
+        const float m02 = j00 * cov_cam(0,2) + j02 * cov_cam(2,2);
+        const float m10 = j11 * cov_cam(1,0) + j12 * cov_cam(2,0);
+        const float m11 = j11 * cov_cam(1,1) + j12 * cov_cam(2,1);
+        const float m12 = j11 * cov_cam(1,2) + j12 * cov_cam(2,2);
+
+        const float a = m00 * j00 + m02 * j02 + 0.3f;
+        const float b = m00 * 0.0f + m01 * j11 + m02 * j12;  // (M @ J^T)[0,1]
+        // Equivalent algebraic form (avoids the 0 multiply):
+        const float b_canonical = m01 * j11 + m02 * j12;
+        const float c_diag = m11 * j11 + m12 * j12 + 0.3f;
+        (void)b;
+        covs_2d[i*4+0] = a;
+        covs_2d[i*4+1] = b_canonical;
+        covs_2d[i*4+2] = b_canonical;
+        covs_2d[i*4+3] = c_diag;
+
+        const float k = opacities != nullptr ? opacity_aware_k(opacities[i]) : 3.0f;
+        const float rx = std::ceil(k * std::sqrt(std::max(a, 0.0f)));
+        const float ry = std::ceil(k * std::sqrt(std::max(c_diag, 0.0f)));
+        radii_scratch[i] = Vec2f{rx, ry};
+
+        valid = valid && (mean_x + rx > 0.0f)
+                      && (mean_x - rx < static_cast<float>(image_width))
+                      && (mean_y + ry > 0.0f)
+                      && (mean_y - ry < static_cast<float>(image_height))
+                      && (rx > 0.0f) && (ry > 0.0f)
+                      && (rx <= static_cast<float>(max_radius))
+                      && (ry <= static_cast<float>(max_radius));
+        if (opacities != nullptr) valid = valid && (opacities[i] >= min_opacity);
+        valid_mask[i] = valid ? 1 : 0;
+    };
+
+    if (pool != nullptr && pool->size() > 1 && N >= 4096) {
+        const std::size_t W = pool->size();
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([w, W, N, &per_gaussian]() {
+                for (std::size_t i = w; i < N; i += W) per_gaussian(i);
+            });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t i = 0; i < N; ++i) per_gaussian(i);
+    }
+
+    // Parallel-filter gather: count -> prefix -> scatter (iter-020 pattern).
+    ProjectResult result;
+    result.valid_mask = valid_mask;
+    if (pool == nullptr || pool->size() <= 1 || N < 8192) {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (!valid_mask[i]) continue;
+            result.means_2d.push_back(means_2d[i*2+0]);
+            result.means_2d.push_back(means_2d[i*2+1]);
+            result.covs_2d.push_back(covs_2d[i*4+0]);
+            result.covs_2d.push_back(covs_2d[i*4+1]);
+            result.covs_2d.push_back(covs_2d[i*4+2]);
+            result.covs_2d.push_back(covs_2d[i*4+3]);
+            result.depths.push_back(depths[i]);
+            result.radii.push_back(radii_scratch[i].x);
+            result.radii.push_back(radii_scratch[i].y);
+        }
+        return result;
+    }
+
+    const std::size_t W = pool->size();
+    const std::size_t chunk = (N + W - 1) / W;
+    std::vector<std::size_t> chunk_counts(W, 0);
+    std::vector<std::size_t> chunk_starts(W + 1, 0);
+
+    for (std::size_t w = 0; w < W; ++w) {
+        pool->submit([w, W, chunk, N, &valid_mask, &chunk_counts]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            std::size_t cnt = 0;
+            for (std::size_t i = lo; i < hi; ++i) cnt += (valid_mask[i] != 0);
+            chunk_counts[w] = cnt;
+        });
+    }
+    pool->wait();
+
+    for (std::size_t w = 0; w < W; ++w) chunk_starts[w + 1] = chunk_starts[w] + chunk_counts[w];
+    const std::size_t V = chunk_starts[W];
+    result.means_2d.resize(V * 2);
+    result.covs_2d.resize(V * 4);
+    result.depths.resize(V);
+    result.radii.resize(V * 2);
+
+    for (std::size_t w = 0; w < W; ++w) {
+        pool->submit([w, W, chunk, N, &means_2d, &covs_2d, &depths, &radii_scratch,
+                      &valid_mask, &chunk_starts, &result]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            std::size_t out = chunk_starts[w];
+            for (std::size_t i = lo; i < hi; ++i) {
+                if (!valid_mask[i]) continue;
+                result.means_2d[out*2+0] = means_2d[i*2+0];
+                result.means_2d[out*2+1] = means_2d[i*2+1];
+                result.covs_2d[out*4+0] = covs_2d[i*4+0];
+                result.covs_2d[out*4+1] = covs_2d[i*4+1];
+                result.covs_2d[out*4+2] = covs_2d[i*4+2];
+                result.covs_2d[out*4+3] = covs_2d[i*4+3];
+                result.depths[out] = depths[i];
+                result.radii[out*2+0] = radii_scratch[i].x;
+                result.radii[out*2+1] = radii_scratch[i].y;
+                ++out;
+            }
+        });
+    }
+    pool->wait();
+
+    return result;
+}
+
 }  // namespace gsplat_cpu
