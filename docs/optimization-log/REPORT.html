@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 44 · current best: 26.35 ms · target: 1.0 ms
+      iters: 45 · current best: 26.35 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-048-b2a-b2b-shared-init
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T03:38:29.220617+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> PNG bit-identical to iter-045 (MD5 match). Kernel 26.3485 → 26.372 ms (+0.07% — within measurement noise, treated as flat). The change fused B2a+B2b into ONE acquire with a SINGLE mul_tiles_init(CB_DX, CB_DX) shared by mul_tiles(CB_DX,CB_DX) AND mul_tiles(CB_DY,CB_DY) — the new safe pattern: ONE mul_tiles_init + multiple mul_tiles with DIFFERENT same-format CBs. Distinct from iter-039&#x27;s MULTIPLE mul_tiles_init hang. Pattern is now PROVEN SAFE (kernel ran, output bit-identical). Perf is flat because we saved 1 acquire but the FPU ops dominate; the next iter (049) extending to 3-way (B2a+B2b+B2c) should show real win. KEEP for the pattern unlock — neutral perf but enables iter-049.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>26.37 ms</b> median · 32.03 ms p99</div>
+    <div class="per-view">per-view: hero 26.37 / side 25.43 / top 31.96</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-048-b2a-b2b-shared-init/hero.png" target="_blank"><img src="screenshots/iter-048-b2a-b2b-shared-init/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-048-b2a-b2b-shared-init/side.png" target="_blank"><img src="screenshots/iter-048-b2a-b2b-shared-init/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-048-b2a-b2b-shared-init/top.png" target="_blank"><img src="screenshots/iter-048-b2a-b2b-shared-init/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-048-b2a-b2b-shared-init/hero_diff10.png" target="_blank"><img src="screenshots/iter-048-b2a-b2b-shared-init/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-048-b2a-b2b-shared-init/side_diff10.png" target="_blank"><img src="screenshots/iter-048-b2a-b2b-shared-init/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-048-b2a-b2b-shared-init/top_diff10.png" target="_blank"><img src="screenshots/iter-048-b2a-b2b-shared-init/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: PNG MD5-identical to iter-045 best (hero/side/top all match).</li><li>✓ tile_uniform_fill: Bit-identical to iter-045.</li><li>✓ missing_splat_holes: Bit-identical.</li><li>✓ color_clipping_bands: Bit-identical.</li><li>✓ ringing_halos: Bit-identical.</li><li>✓ nan_inf_signatures: Bit-identical.</li><li>✓ geometry_shift: Bit-identical.</li><li>✓ diff10_structure: Bit-identical to iter-045.</li></ul>
+    <p class="reasoning">PNG bit-identical to iter-045 (MD5 match). Kernel 26.3485 → 26.372 ms (+0.07% — within measurement noise, treated as flat). The change fused B2a+B2b into ONE acquire with a SINGLE mul_tiles_init(CB_DX, CB_DX) shared by mul_tiles(CB_DX,CB_DX) AND mul_tiles(CB_DY,CB_DY) — the new safe pattern: ONE mul_tiles_init + multiple mul_tiles with DIFFERENT same-format CBs. Distinct from iter-039&#x27;s MULTIPLE mul_tiles_init hang. Pattern is now PROVEN SAFE (kernel ran, output bit-identical). Perf is flat because we saved 1 acquire but the FPU ops dominate; the next iter (049) extending to 3-way (B2a+B2b+B2c) should show real win. KEEP for the pattern unlock — neutral perf but enables iter-049.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-039-fill-tile-mega-fuse
