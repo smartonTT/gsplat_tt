@@ -449,14 +449,26 @@ CullAndBlendResult cull_and_blend(
     const int image_height,
     const int image_width,
     const float mb_contrib_floor,
-    ThreadPool& pool) {
+    ThreadPool& pool,
+    float* image_out_external) {
     const int num_tiles = tiles_x * tiles_y;
 
     CullAndBlendResult result;
     result.pairs_in = static_cast<int64_t>(P);
-    result.image.assign(static_cast<std::size_t>(image_height) *
-                            static_cast<std::size_t>(image_width) * 3,
-                        0.0f);
+    // iter-049: when the caller supplies a pre-zeroed external buffer, skip
+    // the internal std::vector alloc + 3 MB memset entirely; pixels are
+    // written directly into the caller's buffer (typically the pybind numpy
+    // image array). The internal vector path remains for legacy callers
+    // (cull_and_blend_py / tests) where the result owns its image.
+    float* image_out = nullptr;
+    if (image_out_external != nullptr) {
+        image_out = image_out_external;
+    } else {
+        result.image.assign(static_cast<std::size_t>(image_height) *
+                                static_cast<std::size_t>(image_width) * 3,
+                            0.0f);
+        image_out = result.image.data();
+    }
 
     // Precompute per-Gaussian cull data into one AoS array, parallel.
     // Pulls log/sqrt out of the per-tile cull inner loop AND packs every
@@ -544,7 +556,7 @@ CullAndBlendResult cull_and_blend(
                     sorted_gaussian_ids, tile_ranges,
                     mb_contrib_floor,
                     gauss_rec.data(),
-                    result.image.data(),
+                    image_out,
                     &tile_dropped[static_cast<std::size_t>(tile_id)],
                     &tile_kept[static_cast<std::size_t>(tile_id)],
                     sc);

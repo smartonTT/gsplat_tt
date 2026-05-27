@@ -881,6 +881,20 @@ py::tuple render_full_py(
         &global_sort_pool());
     auto t_s1 = clock::now();
 
+    // iter-049: pre-allocate + zero the pybind output buffer and thread its
+    // data pointer through cull_and_blend. Eliminates a ~3 MB std::vector
+    // alloc+zero inside the C++ stage AND the same-sized memcpy on the way
+    // out. The kernel writes pixels (and only the kept-microblock pixels)
+    // directly into the numpy buffer; remaining pixels keep the up-front
+    // zero we just wrote.
+    py::array_t<float> image(
+        {static_cast<py::ssize_t>(image_height),
+         static_cast<py::ssize_t>(image_width),
+         static_cast<py::ssize_t>(3)});
+    std::memset(image.mutable_data(), 0,
+                static_cast<std::size_t>(image_height) *
+                    static_cast<std::size_t>(image_width) * 3 * sizeof(float));
+
     // Stage 4: cull + blend.
     auto t_b0 = clock::now();
     const gsplat_cpu::CullAndBlendResult cb = gsplat_cpu::cull_and_blend(
@@ -898,17 +912,9 @@ py::tuple render_full_py(
         image_height,
         image_width,
         mb_contrib_floor,
-        global_blend_pool());
+        global_blend_pool(),
+        /*image_out_external=*/image.mutable_data());
     auto t_b1 = clock::now();
-
-    // Pack outputs.
-    py::array_t<float> image(
-        {static_cast<py::ssize_t>(image_height),
-         static_cast<py::ssize_t>(image_width),
-         static_cast<py::ssize_t>(3)});
-    if (!cb.image.empty()) {
-        std::memcpy(image.mutable_data(), cb.image.data(), cb.image.size() * sizeof(float));
-    }
 
     py::dict stats;
     stats["num_visible"] = static_cast<int64_t>(M);
