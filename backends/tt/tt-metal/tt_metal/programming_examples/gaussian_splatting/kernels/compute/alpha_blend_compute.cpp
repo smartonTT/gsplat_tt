@@ -255,7 +255,12 @@ void kernel_main() {
             copy_tile_to_dst_init_short(CB_PX);
             copy_tile(CB_PX, 0, 0);
             sub_unary_tile(0, mean_x_bits);
-            copy_tile_to_dst_init_short(CB_PY);
+            // iter-057: dropped redundant copy_tile_to_dst_init_short(CB_PY).
+            // CB_PX and CB_PY are both bf16, identical format. Only sub_unary_tile
+            // (SFPU, doesn't mutate unpacker) runs between the two copy_tiles, so
+            // the second init is the iter-048+049 safe-drop pattern (no other
+            // _init interleaved), NOT the iter-055 pattern (binary_dest_reuse_init
+            // between).
             copy_tile(CB_PY, 0, 1);
             sub_unary_tile(1, mean_y_bits);
             tile_regs_commit();
@@ -459,9 +464,11 @@ void kernel_main() {
         tile_regs_acquire();
         copy_tile_to_dst_init_short(CB_COLOR_R_STATE);
         copy_tile(CB_COLOR_R_STATE, 0, 0);
-        copy_tile_to_dst_init_short(CB_COLOR_G_STATE);
+        // iter-057: dropped redundant copy_tile_to_dst_init_short(CB_COLOR_G/B_STATE).
+        // All three state CBs are bf16, identical format. Only copy_tile (same-type
+        // op) between them — no interleaving _init that would reconfigure
+        // unpacker_A (the iter-055 footgun). Safe per iter-048+049 rule.
         copy_tile(CB_COLOR_G_STATE, 0, 1);
-        copy_tile_to_dst_init_short(CB_COLOR_B_STATE);
         copy_tile(CB_COLOR_B_STATE, 0, 2);
         tile_regs_commit();
         tile_regs_wait();
