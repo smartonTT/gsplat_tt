@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 32 · current best: 38.48 ms · target: 1.0 ms
+      iters: 33 · current best: 35.56 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-032-contrib-floor-11-of-255
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T00:54:01.899682+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All structural visual checks pass. Renders are clean with no tile artifacts, seams, holes, or NaN signatures. Diff×10 shows distributed texture-following speckle noise — expected artifact of bumping contrib_floor from 5/255 to 11/255 (higher cull aggressiveness). PSNR: all three views clear the 35 dB floor (hero 38.27, side 42.36, top 37.46). The max per-view delta is 42.36-38.27=4.09 dB, well within 20 dB. Per-view timing ratio max is top/side = 44.63/34.83 = 1.28, well within 2×. kernel_ms_median 35.56 vs prev_best 38.4845 is -7.6%, comfortably beating the 1.02× threshold. p99 44.74 / median 35.56 = 1.26, well within 3×. KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>35.56 ms</b> median · 44.74 ms p99</div>
+    <div class="per-view">per-view: hero 35.56 / side 34.83 / top 44.63</div>
+    <div class="psnr">PSNR: hero 38.3 / side 42.4 / top 37.5 (min <b>37.5</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-032-contrib-floor-11-of-255/hero.png" target="_blank"><img src="screenshots/iter-032-contrib-floor-11-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-032-contrib-floor-11-of-255/side.png" target="_blank"><img src="screenshots/iter-032-contrib-floor-11-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-032-contrib-floor-11-of-255/top.png" target="_blank"><img src="screenshots/iter-032-contrib-floor-11-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-032-contrib-floor-11-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-032-contrib-floor-11-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-032-contrib-floor-11-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-032-contrib-floor-11-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-032-contrib-floor-11-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-032-contrib-floor-11-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No 32px or 16px grid lines visible in any of the three renders.</li><li>✓ tile_uniform_fill: No tile-shaped uniform-fill blocks detected; Gaussian splat blending appears continuous across all views.</li><li>✓ missing_splat_holes: No black holes &gt;16px visible in hero, side, or top renders. Background black is expected scene background.</li><li>✓ color_clipping_bands: No color clipping bands or saturation artifacts detected in any view.</li><li>✓ ringing_halos: Silhouette edges appear clean with soft natural falloff; no ringing or halo artifacts.</li><li>✓ nan_inf_signatures: No black/white/magenta NaN or Inf patches observed in any render.</li><li>✓ geometry_shift: Diff×10 shows per-splat texture residuals following the geometry contours without any bulk silhouette offset or shift.</li><li>✓ diff10_structure: Diff×10 shows distributed fine-grained speckle noise tracing fur/texture detail — expected at higher cull threshold. No </li></ul>
+    <p class="reasoning">All structural visual checks pass. Renders are clean with no tile artifacts, seams, holes, or NaN signatures. Diff×10 shows distributed texture-following speckle noise — expected artifact of bumping contrib_floor from 5/255 to 11/255 (higher cull aggressiveness). PSNR: all three views clear the 35 dB floor (hero 38.27, side 42.36, top 37.46). The max per-view delta is 42.36-38.27=4.09 dB, well within 20 dB. Per-view timing ratio max is top/side = 44.63/34.83 = 1.28, well within 2×. kernel_ms_median 35.56 vs prev_best 38.4845 is -7.6%, comfortably beating the 1.02× threshold. p99 44.74 / median 35.56 = 1.26, well within 3×. KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-031-contrib-floor-9-of-255
