@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "fail", "evidence": "top_diff10 shows structured internal patterning across the object body consistent with tile-correlated precision drift; tile_structure_ratio_per_view top=19.27 exceeds the >18 hard-REJECT threshold, confirming tile-grid seam structure is present. hero and side diff10 also show non-uniform structured brightness correlated with object boundaries rather than pure i.i.d. speckle."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color fill blocks visible in hero, side, or top renders; detail is preserved throughout the object."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No local black-hole regions or missing-coverage patches >16px detected in any view. The object is fully covered."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripe regions or flat colored bands visible in any of the three rendered views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes detected in hero, side, or top renders."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches indicative of NaN or Inf values detected in any render."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show object silhouette outlines that would indicate coordinate shift; the object geometry is correctly placed in all views."},
+    {"name": "diff10_structure", "result": "fail", "evidence": "top_diff10 shows dense structured internal patterning across the entire object body rather than uniform speckle — consistent with tile-correlated precision drift. hero_diff10 and side_diff10 also show concentration of errors along silhouette boundaries with structured internal patterns, not purely random noise. This is mechanically confirmed by tile_structure_ratio max=19.27 (>18 REJECT threshold)."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 37.893676108826014, "side": 39.58368389006951, "top": 37.121268749423436}, "pass": true},
+  "tile_structure_check": {"max_ratio": 19.265508906523895, "actual": {"hero": 17.79993400437914, "side": 17.61645979839746, "top": 19.265508906523895}, "pass": false, "delta_vs_prev": 1.519025661651769},
+  "per_view_consistency": {"max_psnr_delta_db": 2.4624151406440817, "max_ms_ratio": 1.2228044825804596, "pass": true},
+  "timing": {"median_ms": 22.951999999999998, "p99_ms": 26.503259999999997, "vs_prev_best_pct": -4.284403669724771, "pass": true},
+  "reasoning": "REJECT on tile_structure hard gate: the top view tile_structure_ratio is 19.27, which exceeds the >18 threshold for 'tile_grid_seams structurally bad'. Additionally, the delta_vs_prev is +1.52 (19.27 - 17.75 from prior KEEP iter-060), which exceeds the +0.5 max-delta rule and mandates REJECT regardless of PSNR or kernel-ms gains. The top_diff10 visually confirms structured internal patterning across the object body consistent with tile-correlated precision drift rather than uniform speckle. The kernel-ms gain is real (-4.28%, 23.98→22.95 ms) and PSNR remains above the 35 dB binning floor (hero 37.89, top 37.12), but the tile structure regression is unacceptable. This contrib_floor=17/255 bump structurally worsens tile quantization beyond the permitted threshold; the iter-035 REJECT precedent at 17/255 is now confirmed a second time with a different quality metric. Do not retry this threshold."
+}

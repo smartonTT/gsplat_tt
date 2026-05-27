@@ -141,3 +141,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Kernel runs but output is catastrophically wrong — PSNR collapsed from 39 dB to 14-16 dB (20+ dB drop). Visual: scattered red pixels across all 3 views. The change fused 5 per-tile fill_tile inits (R/G/B=0.0, T/SAT=1.0) into ONE acquire using dst slots 0/1/2/3/4 with 5 packs from those slots. Symptoms suggest some dst slots did not get the requested fill value — likely a tt-metal SFPU pipeline constraint where multiple sequential fill_tile calls in one acquire silently corrupt some lanes/slots. This is the same family of issue as the reverted iter-014 (which fused fills differently and also failed). RULE: do NOT fuse multiple fill_tile calls in one acquire — fill_tile is not safe-multi-slot. Each state CB init needs its own acquire. REJECT and revert.
 - Thumbnails: ![hero](screenshots/iter-039-fill-tile-mega-fuse/hero.png) ![diff10](screenshots/iter-039-fill-tile-mega-fuse/hero_diff10.png)
 
+
+## iter-063-contrib-floor-17-of-255 — REJECT 
+
+- Class: `binning`
+- kernel ms: median 22.95 / p99 26.50
+- PSNR per view: hero 37.9 / side 39.6 / top 37.1
+- Validator reasoning: REJECT on tile_structure hard gate: the top view tile_structure_ratio is 19.27, which exceeds the >18 threshold for 'tile_grid_seams structurally bad'. Additionally, the delta_vs_prev is +1.52 (19.27 - 17.75 from prior KEEP iter-060), which exceeds the +0.5 max-delta rule and mandates REJECT regardless of PSNR or kernel-ms gains. The top_diff10 visually confirms structured internal patterning across the object body consistent with tile-correlated precision drift rather than uniform speckle. The kernel-ms gain is real (-4.28%, 23.98→22.95 ms) and PSNR remains above the 35 dB binning floor (hero 37.89, top 37.12), but the tile structure regression is unacceptable. This contrib_floor=17/255 bump structurally worsens tile quantization beyond the permitted threshold; the iter-035 REJECT precedent at 17/255 is now confirmed a second time with a different quality metric. Do not retry this threshold.
+- Thumbnails: ![hero](screenshots/iter-063-contrib-floor-17-of-255/hero.png) ![diff10](screenshots/iter-063-contrib-floor-17-of-255/hero_diff10.png)
+
