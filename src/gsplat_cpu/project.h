@@ -6,6 +6,8 @@
 
 namespace gsplat_cpu {
 
+class ThreadPool;
+
 struct ProjectResult {
     std::vector<float> means_2d;
     std::vector<float> covs_2d;
@@ -42,7 +44,8 @@ ProjectPrepared project_prepare_geometry(
     const float* intrinsics,
     std::size_t N,
     int image_height,
-    int image_width);
+    int image_width,
+    ThreadPool* pool = nullptr);
 
 // Compute cov3d (= R(q) @ S^2 @ R(q).T) for N Gaussians once per scene. Caller
 // caches the (N*9, row-major 3x3) buffer across views; cov3d is view-independent.
@@ -63,7 +66,17 @@ ProjectPrepared project_prepare_from_cov3d(
     const float* intrinsics,
     std::size_t N,
     int image_height,
-    int image_width);
+    int image_width,
+    ThreadPool* pool = nullptr);
+
+// Same as project_finalize but accepts a thread pool for the per-Gaussian
+// radius/cull pass.
+ProjectResult project_finalize_parallel(
+    const ProjectPrepared& prep,
+    const float* covs_2d,
+    const float* opacities,
+    float min_opacity,
+    ThreadPool* pool = nullptr);
 
 ProjectResult project_finalize(
     const ProjectPrepared& prep,

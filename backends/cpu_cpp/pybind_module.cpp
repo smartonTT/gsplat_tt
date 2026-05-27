@@ -23,6 +23,7 @@ gsplat_cpu::ThreadPool& global_blend_pool();
 gsplat_cpu::ThreadPool& global_cull_pool();
 gsplat_cpu::ThreadPool& global_sort_pool();
 gsplat_cpu::ThreadPool& global_tile_assign_pool();
+gsplat_cpu::ThreadPool& global_project_pool();
 
 py::tuple pack_project_result(const gsplat_cpu::ProjectResult& result, std::size_t N) {
     const std::size_t M = result.depths.size();
@@ -72,8 +73,9 @@ py::tuple project_finalize_py(
         opacities_ptr = static_cast<const float*>(op_info.ptr);
     }
 
-    const gsplat_cpu::ProjectResult result = gsplat_cpu::project_finalize(
-        prep, static_cast<const float*>(cov_info.ptr), opacities_ptr, min_opacity);
+    const gsplat_cpu::ProjectResult result = gsplat_cpu::project_finalize_parallel(
+        prep, static_cast<const float*>(cov_info.ptr), opacities_ptr, min_opacity,
+        &global_project_pool());
     return pack_project_result(result, prep.N);
 }
 
@@ -168,7 +170,8 @@ py::tuple project_full_with_cov3d_py(
         static_cast<const float*>(intrinsics.request().ptr),
         N,
         image_height,
-        image_width);
+        image_width,
+        &global_project_pool());
 
     const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
     py::module_ torch = py::module_::import("torch");
@@ -418,6 +421,11 @@ gsplat_cpu::ThreadPool& global_sort_pool() {
 }
 
 gsplat_cpu::ThreadPool& global_tile_assign_pool() {
+    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
+    return pool;
+}
+
+gsplat_cpu::ThreadPool& global_project_pool() {
     static gsplat_cpu::ThreadPool pool(resolve_pool_size());
     return pool;
 }
