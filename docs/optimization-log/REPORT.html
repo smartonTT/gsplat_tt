@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 62 · current best: 23.98 ms · target: 1.0 ms
+      iters: 63 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-067-contrib-megafuse
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T08:42:27.215040+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> REJECT on three independent grounds. First, tile_structure_check fails: max tile_structure_ratio is 17.94 (top view), which is in the &gt;14 REJECT band — the rule is REJECT for any iter that does not strictly reduce the ratio vs. prev best. The prev best (iter-064) had max 17.75; iter-067 is 17.94 (+0.19), a slight increase, not a reduction. Second, visual_checks tile_grid_seams and diff10_structure both fail: top_diff10 shows a conspicuous regular grid mesh pattern across the figure body at ~32px spacing, confirming the tile_structure_ratio reading is a real visible artifact. Third, timing fails: kernel_ms_median=26.195 vs prev_best=23.98 is a +9.2% regression (well above the 1.02× break-even threshold). Additionally, class is kernel-algebra whose PSNR floor is &gt;40 dB; hero (39.43) and top (38.63) fall below that floor, constituting a NEEDS_REVIEW-level numeric signal that reinforces the REJECT. The CB_CONTRIB megafuse intent was to attack tile quilting, but the ratio increased rather than decreased, the kernel regressed +9.2%, and the tile grid seams are visually confirmed — all three primary gates fail.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>26.20 ms</b> median · 31.73 ms p99</div>
+    <div class="per-view">per-view: hero 26.20 / side 25.29 / top 31.72</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-067-contrib-megafuse/hero.png" target="_blank"><img src="screenshots/iter-067-contrib-megafuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-067-contrib-megafuse/side.png" target="_blank"><img src="screenshots/iter-067-contrib-megafuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-067-contrib-megafuse/top.png" target="_blank"><img src="screenshots/iter-067-contrib-megafuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-067-contrib-megafuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-067-contrib-megafuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-067-contrib-megafuse/side_diff10.png" target="_blank"><img src="screenshots/iter-067-contrib-megafuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-067-contrib-megafuse/top_diff10.png" target="_blank"><img src="screenshots/iter-067-contrib-megafuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✗ tile_grid_seams: top_diff10 shows a clearly visible grid-like mesh pattern overlaid across the body of the figure — regular horizontal an</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 flat-fill blocks replacing detail regions visible in hero/side/top renders. Object detail is preserved</li><li>✓ missing_splat_holes: No dark holes or missing coverage regions visible in any view beyond normal background black.</li><li>✓ color_clipping_bands: No saturated color stripes or flat-colored clipping bands observed in hero/side/top renders.</li><li>✓ ringing_halos: Edge regions in diff10 show some fringe but it appears to be normal edge noise from alpha accumulation differences, not </li><li>✓ nan_inf_signatures: No pure black/white/magenta patches in spatially-correlated patterns. No firefly outlier pixels (isolated 1-3 px hot dot</li><li>✓ geometry_shift: The diff10 images do not show the silhouette of the object shifted — error is distributed over the object body, not a di</li><li>✗ diff10_structure: top_diff10 shows a clearly structured grid mesh pattern across the figure body — this is not uniform speckle. The mesh p</li></ul>
+    <p class="reasoning">REJECT on three independent grounds. First, tile_structure_check fails: max tile_structure_ratio is 17.94 (top view), which is in the &gt;14 REJECT band — the rule is REJECT for any iter that does not strictly reduce the ratio vs. prev best. The prev best (iter-064) had max 17.75; iter-067 is 17.94 (+0.19), a slight increase, not a reduction. Second, visual_checks tile_grid_seams and diff10_structure both fail: top_diff10 shows a conspicuous regular grid mesh pattern across the figure body at ~32px spacing, confirming the tile_structure_ratio reading is a real visible artifact. Third, timing fails: kernel_ms_median=26.195 vs prev_best=23.98 is a +9.2% regression (well above the 1.02× break-even threshold). Additionally, class is kernel-algebra whose PSNR floor is &gt;40 dB; hero (39.43) and top (38.63) fall below that floor, constituting a NEEDS_REVIEW-level numeric signal that reinforces the REJECT. The CB_CONTRIB megafuse intent was to attack tile quilting, but the ratio increased rather than decreased, the kernel regressed +9.2%, and the tile grid seams are visually confirmed — all three primary gates fail.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-066-weight-cap-fireflies
@@ -2228,6 +2261,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.2 / side 41.0 / top 38.4
 - Validator reasoning: NEEDS_REVIEW on two numeric failures. (1) PSNR: class is kernel-algebra with floor 40 dB; hero=39.21 dB and top=38.42 dB are both below floor. Per the prompt table this is NEEDS_REVIEW rather than REJECT because 35-40 dB with clean visuals is perceptually acceptable, but it still fails the stated floor. (2) Timing: kernel_ms_median=24.519 ms vs prev_best=23.98 ms is +2.25% regression, outside the break-even window of ≤1.02×. (3) Tile structure: the stated goal of iter-064 was to reduce tile_structure_ratio by switching state CBs to fp32, but the ratio is bit-identical to iter-059/060 (max=17.746 in both), delta_vs_prev=0.0 — the intervention had zero effect on tile-structure quality. Max ratio 17.75 remains in the 13&lt;r≤18 band. Visual checks all pass: renders are clean, diff10 images show only object-correlated speckle with no tile grid seams, no missing-splat holes, no color clipping, no geometry shift. The fp32 state CB approach has neither improved tile structure nor improved performance — it is a regression in timing with no quality gain, warranting NEEDS_REVIEW.
 - Thumbnails: ![hero](screenshots/iter-064-fp32-state-cbs/hero.png) ![diff10](screenshots/iter-064-fp32-state-cbs/hero_diff10.png)
+
+
+## iter-067-contrib-megafuse — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 26.20 / p99 31.73
+- PSNR per view: hero 39.4 / side 40.9 / top 38.6
+- Validator reasoning: REJECT on three independent grounds. First, tile_structure_check fails: max tile_structure_ratio is 17.94 (top view), which is in the &gt;14 REJECT band — the rule is REJECT for any iter that does not strictly reduce the ratio vs. prev best. The prev best (iter-064) had max 17.75; iter-067 is 17.94 (+0.19), a slight increase, not a reduction. Second, visual_checks tile_grid_seams and diff10_structure both fail: top_diff10 shows a conspicuous regular grid mesh pattern across the figure body at ~32px spacing, confirming the tile_structure_ratio reading is a real visible artifact. Third, timing fails: kernel_ms_median=26.195 vs prev_best=23.98 is a +9.2% regression (well above the 1.02× break-even threshold). Additionally, class is kernel-algebra whose PSNR floor is &gt;40 dB; hero (39.43) and top (38.63) fall below that floor, constituting a NEEDS_REVIEW-level numeric signal that reinforces the REJECT. The CB_CONTRIB megafuse intent was to attack tile quilting, but the ratio increased rather than decreased, the kernel regressed +9.2%, and the tile grid seams are visually confirmed — all three primary gates fail.
+- Thumbnails: ![hero](screenshots/iter-067-contrib-megafuse/hero.png) ![diff10](screenshots/iter-067-contrib-megafuse/hero_diff10.png)
 
 </pre>
   </section>
