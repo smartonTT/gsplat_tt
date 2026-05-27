@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 26 · current best: 46.96 ms · target: 1.0 ms
+      iters: 27 · current best: 45.50 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-026-contrib-floor-3-of-255
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T00:24:28.727161+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All eight visual checks pass: diff×10 images show only fine stochastic speckle with no tile grid seams, no uniform-fill blocks, no geometry shift, no clipping, no NaN signatures, and no halos. PSNR for all three views (39.91, 44.02, 39.15 dB) is above the 35 dB floor for the binning class. Per-view PSNR delta is 4.87 dB (limit 20 dB) and per-view kernel-ms ratio is 1.29× (limit 2×). Timing shows kernel_ms_median 45.50 ms vs prev_best 46.96 ms — a 3.1% improvement, satisfying the ≤ prev_best × 1.02 progress criterion. p99/median ratio is 1.24× (limit 3×). All numeric gates pass. Verdict: KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>45.50 ms</b> median · 56.50 ms p99</div>
+    <div class="per-view">per-view: hero 45.50 / side 43.77 / top 56.48</div>
+    <div class="psnr">PSNR: hero 39.9 / side 44.0 / top 39.1 (min <b>39.1</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-026-contrib-floor-3-of-255/hero.png" target="_blank"><img src="screenshots/iter-026-contrib-floor-3-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-026-contrib-floor-3-of-255/side.png" target="_blank"><img src="screenshots/iter-026-contrib-floor-3-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-026-contrib-floor-3-of-255/top.png" target="_blank"><img src="screenshots/iter-026-contrib-floor-3-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-026-contrib-floor-3-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-026-contrib-floor-3-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-026-contrib-floor-3-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-026-contrib-floor-3-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-026-contrib-floor-3-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-026-contrib-floor-3-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32- or 16-pixel spacing visible in any of the three diff×10 images. All three diff×10</li><li>✓ tile_uniform_fill: No constant-color 32×32 or 16×16 square blocks detected in any render. Texture variation matches reference throughout.</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions larger than ~16 pixels in any view. Speckle in diff×10 is distributed at fine </li><li>✓ color_clipping_bands: No saturated R/G/B flat-stripe regions present in hero, side, or top renders. Color values match reference range through</li><li>✓ ringing_halos: No structured ringing or halos visible at object silhouettes in any view. Edges appear natural and match reference.</li><li>✓ nan_inf_signatures: No pure-black, pure-white, or magenta spatially-correlated patches in any render. Background is clean black, foreground </li><li>✓ geometry_shift: Diff×10 does not show the silhouette of the object as a coherent shifted outline. Object boundaries are in the correct p</li><li>✓ diff10_structure: All three diff×10 images (hero, side, top) show uniform stochastic speckle distributed across the figure&#x27;s textured</li></ul>
+    <p class="reasoning">All eight visual checks pass: diff×10 images show only fine stochastic speckle with no tile grid seams, no uniform-fill blocks, no geometry shift, no clipping, no NaN signatures, and no halos. PSNR for all three views (39.91, 44.02, 39.15 dB) is above the 35 dB floor for the binning class. Per-view PSNR delta is 4.87 dB (limit 20 dB) and per-view kernel-ms ratio is 1.29× (limit 2×). Timing shows kernel_ms_median 45.50 ms vs prev_best 46.96 ms — a 3.1% improvement, satisfying the ≤ prev_best × 1.02 progress criterion. p99/median ratio is 1.24× (limit 3×). All numeric gates pass. Verdict: KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-025-contrib-floor-2-of-255
