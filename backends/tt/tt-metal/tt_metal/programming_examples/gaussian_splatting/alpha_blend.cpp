@@ -222,8 +222,8 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_tile(CB_T_STATE, 1);
     cb_tile(CB_SAT_MASK, 1);
 
-    cb_tile(CB_CONST_ZERO, 1);
-    cb_tile(CB_CONST_099, 1);
+    // iter-054: CB_CONST_ZERO/CB_CONST_099 dropped — no consumer remains after
+    // iter-050 (power clamp) and iter-051 (alpha cap) removals.
     // CB_CONST_NEG88 (index 11) is reserved but unused now that the kernel
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.

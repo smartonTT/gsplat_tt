@@ -101,34 +101,9 @@ void kernel_main() {
     // binary tile ops on this core. Must come before any tile op.
     binary_op_init_common(CB_PX, CB_PY, CB_COLOR_OUT);
 
-    // ----- Pre-fill the two constant tiles used by the inner loop. -----
-    // These are pushed once per kernel invocation, never popped; the kernel
-    // copies them into Dst whenever it needs a 0.0 or 0.99 operand for
-    // binary_min_tile.
-    fill_tile_init();
-
-    // CB_CONST_ZERO ← tile of 0.0
-    cb_reserve_back(CB_CONST_ZERO, 1);
-    tile_regs_acquire();
-    fill_tile(0, 0.0f);
-    tile_regs_commit();
-    tile_regs_wait();
-    pack_tile(0, CB_CONST_ZERO);
-    tile_regs_release();
-    cb_push_back(CB_CONST_ZERO, 1);
-
-    // CB_CONST_099 ← tile of 0.99 (the alpha clamp ceiling)
-    cb_reserve_back(CB_CONST_099, 1);
-    tile_regs_acquire();
-    fill_tile(0, 0.99f);
-    tile_regs_commit();
-    tile_regs_wait();
-    pack_tile(0, CB_CONST_099);
-    tile_regs_release();
-    cb_push_back(CB_CONST_099, 1);
-
-    cb_wait_front(CB_CONST_ZERO, 1);
-    cb_wait_front(CB_CONST_099, 1);
+    // iter-054: CB_CONST_ZERO/CB_CONST_099 prologue dropped. The min(power,0)
+    // clamp (iter-050) and min(alpha,0.99) cap (iter-051) were the only consumers;
+    // both removed. Slots 22/23 reserved but no longer allocated/filled.
 
     for (uint32_t t = 0; t < num_tiles; t++) {
         // Per-tile profiling zone. In non-profile builds DeviceZoneScopedN is
