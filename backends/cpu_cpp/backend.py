@@ -163,16 +163,19 @@ class CpuCppBackend(Backend):
         image_height: int,
         image_width: int,
     ) -> tuple[np.ndarray, dict[str, float]]:
-        # Delegate to numpy reference for now.
-        from backends.cpu.backend import CpuBackend
-
-        return CpuBackend().blend(
-            means_2d,
-            covs_2d,
-            colors,
-            opacities,
-            sorted_gaussian_ids,
-            tile_ranges,
-            image_height,
-            image_width,
+        img = self._mod.blend(
+            np.ascontiguousarray(means_2d.detach().cpu().numpy(), dtype=np.float32),
+            np.ascontiguousarray(
+                covs_2d.detach().cpu().numpy().reshape(-1, 4), dtype=np.float32
+            ),
+            np.ascontiguousarray(colors.detach().cpu().numpy(), dtype=np.float32),
+            np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32),
+            np.ascontiguousarray(
+                sorted_gaussian_ids.detach().cpu().numpy(), dtype=np.int64
+            ),
+            np.ascontiguousarray(tile_ranges.detach().cpu().numpy(), dtype=np.int64),
+            int(image_height),
+            int(image_width),
+            32,
         )
+        return img, {}
