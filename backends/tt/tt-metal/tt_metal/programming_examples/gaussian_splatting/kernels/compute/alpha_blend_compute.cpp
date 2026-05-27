@@ -335,101 +335,62 @@ void kernel_main() {
 
             cb_wait_front(CB_Q, 3);
 
-            // ----- Stage B3b (fused): full sum a·dx² + c·dy² + 2b·dx·dy = Q,
-            // then power, exp, alpha — all in one acquire. Eliminates the
-            // CB_POWER round-trip (reserve/pack/push/wait/pop). Pattern:
-            // first add_tiles puts CB_Q[0]+CB_Q[1] in dst[0]; then
-            // binary_dest_reuse_tiles<ELWADD,DEST_TO_SRCA> adds CB_Q[2] to
-            // dst[0] without releasing the register. Same safe shape as
-            // iter-007/010/038 (single add_tiles_init + binary_dest_reuse
-            // follow-up).
+            // ----- Stage B3b + C + D1 (FUSED iter-052):
+            // full Q sum → power → exp → alpha → contrib = α·T·sat, all in
+            // ONE acquire. Eliminates the CB_ALPHA bf16 round-trip — alpha
+            // never leaves fp32 dst between C and D1.
             //
-            //   alpha = min( opacity · exp(min(-0.5·Q, 0)),  0.99 )
+            // Why this matters (per project-tile-structure-regression-iter-010):
+            // CB_ALPHA was a bf16 CB that round-tripped α between C and D1.
+            // The pack→bf16→unpack cycle quantized α uniformly per tile,
+            // and that per-tile quantization correlates pixel error within
+            // the tile — visible as tile-grid quilting in diff10 PNGs.
+            // Keeping α in fp32 dst across the C→D1 boundary preserves the
+            // higher-precision exp output through the T·sat multiplication.
+            //
+            // Same template as iter-042's E sub-identity-fuse: extend the
+            // dst-resident computation past a bf16 CB boundary by chaining
+            // binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA> directly on the
+            // dst slot that holds α.
+            //
+            // Final identity in this acquire:
+            //   contrib = (opacity · exp(-0.5·Q)) · T_state · sat_mask
             //
             tile_regs_acquire();
             add_tiles_init(CB_Q, CB_Q);
             add_tiles(CB_Q, CB_Q, 0, 1, 0);  // dst[0] = a·dx² + c·dy²
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q, 2, 0);  // dst[0] += 2b·dx·dy → Q
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q, 2, 0);  // dst[0] = Q
 
-            // power = -0.5 · Q
+            // power = -0.5 · Q (iter-050: dropped defensive min(power,0))
             mul_unary_tile(0, NEG_HALF_BITS);
 
-            // DROPPED (iter-050): defensive ≤0 clamp on power. Q = a·dx² + c·dy²
-            // + 2b·dx·dy ≥ 0 algebraically for any valid PSD covariance, so
-            // -0.5·Q ≤ 0 by construction. bf16 round-off could in principle
-            // produce tiny positive power (~ε), but exp_tile<true> has built-in
-            // ClampToNegative (input clamped to ≥ -88.5) and the result is
-            // bounded by alpha-cap-at-0.99 below. Saves 4 SFPU ops/Gaussian.
-            // exp_tile_init<true>() resets SFPU state explicitly, so removing
-            // binary_min_tile_init() does NOT disrupt downstream exp init
-            // (distinct from iter-046's regression, which replaced the chain
-            // with clamp_tile + clamp_tile_init — a different op shape).
-
-            // weight = exp(power). Approximate-mode polynomial (~100 cycles
-            // vs ~800 for the accurate path) with built-in ClampToNegative
-            // (input clamped to ≥ -88.5 before evaluating). Accuracy ~3-4
-            // decimal digits — fine for alpha ∈ [0, 0.99]; PSNR drops ~11 dB
-            // vs accurate but still has 16 dB headroom over the 35 dB floor.
+            // weight = exp(power). Approximate-mode polynomial.
             exp_tile_init<true>();
             exp_tile<true>(0);
 
-            // alpha = opacity · weight. (iter-051: dropped 0.99 cap.)
-            //
-            // Algebraic justification:
-            //   opacity ≤ 1   (host-provided; bf16 quantized from .ply σ)
-            //   weight  ≤ 1   (= exp(power), power ≤ 0 by PSD Q ≥ 0)
-            //   ⇒ α ≤ 1 algebraically.
-            // Stage E uses the identity T_new = T·sat - contrib
-            //   (= T·sat·(1-α)), so T_new ≥ 0 algebraically — the cap was
-            // not protecting (1-α) > 0 (the formula doesn't use that
-            // factor any more, since iter-042's sub-fuse). And the Stage F
-            // sat_mask refresh catches the T → 0 case (sat zeros out
-            // contributions on saturated pixels). Saves 3 SFPU ops/g
-            // (copy_tile_to_dst_init_short + copy_tile + binary_min_tile).
-            // Same pattern as iter-050's defensive-clamp audit.
+            // alpha = opacity · weight (iter-051: dropped 0.99 cap)
             mul_unary_tile(0, opacity_bits);
 
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_ALPHA, 1);
-            pack_tile(0, CB_ALPHA);
-            cb_push_back(CB_ALPHA, 1);
-            tile_regs_release();
-
-            // Cleanup intermediates from B/C stages.
-            cb_pop_front(CB_Q, 3);
-            cb_pop_front(CB_DX, 1);
-            cb_pop_front(CB_DY, 1);
-
-            cb_wait_front(CB_ALPHA, 1);
-
-            // ----- Stage D1: contrib = alpha · T_state · sat_mask.
-            // The "effective" amount this Gaussian contributes to each
-            // pixel: full alpha, scaled down by remaining transmittance T,
-            // and zeroed for pixels already saturated. mul_tiles takes only
-            // two operands, so we do this as two chained binary muls
-            // through CB_T_TMP. This is the only place where sat_mask is
-            // actually consumed mathematically (the Stage F refresh just
-            // produces it).
-            //
-            // FUSED (iter-007): contrib = alpha · T_state · sat_mask in one acquire,
-            // FPU-only. mul_tiles(alpha, T_state) → dst[0]; then
-            // binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA>(sat_mask) reuses dst[0]
-            // as SRCA and multiplies by sat_mask in-place. Saves one acquire + the
-            // CB_T_TMP roundtrip. iter-006 used SFPU mul_binary_tile here and
-            // regressed perf by ~0.75 ms — the FPU variant is the cheap fusion.
-            tile_regs_acquire();
-            mul_tiles_init(CB_ALPHA, CB_T_STATE);
-            mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
+            // D1 fused in (iter-052): contrib = alpha · T_state · sat_mask
+            // Skip CB_ALPHA bf16 round-trip — α stays in fp32 dst.
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE, 0, 0);  // dst[0] = α·T
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);  // dst[0] = contrib
+
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_CONTRIB, 1);
             pack_tile(0, CB_CONTRIB);
             cb_push_back(CB_CONTRIB, 1);
             tile_regs_release();
+
+            // Cleanup B/C inputs (CB_ALPHA is no longer used).
+            cb_pop_front(CB_Q, 3);
+            cb_pop_front(CB_DX, 1);
+            cb_pop_front(CB_DY, 1);
+
             cb_wait_front(CB_CONTRIB, 1);
 
             // ----- Stage D2: per-channel color accumulator update (FUSED iter-038).
@@ -511,7 +472,7 @@ void kernel_main() {
             cb_wait_front(CB_T_STATE, 1);
 
             cb_pop_front(CB_CONTRIB, 1);
-            cb_pop_front(CB_ALPHA, 1);
+            // CB_ALPHA no longer used (iter-052 fused B3b/C+D1).
             cb_pop_front(CB_SCALARS, 1);
         }
 
