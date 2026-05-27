@@ -169,6 +169,11 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+    // iter-094: SetCommonRuntimeArgs can only be called ONCE per kernel; after
+    // that we must mutate the args in place via GetCommonRuntimeArgs. Track
+    // the initialization so the first frame uses Set and subsequent frames
+    // use Get + mutate.
+    bool common_rt_args_initialized = false;
     // iter-082: persisted output_zero buffer reused across frames. Sized once
     // when num_tiles first stabilises; sentinel 0 forces (re)allocation.
     std::vector<uint16_t> output_zero_cache;
@@ -532,7 +537,7 @@ static FrameDramBuffers allocate_frame_buffers(
 // via this slice.
 static void set_per_core_runtime_args(
     Program& program,
-    const DeviceContext& ctx,
+    DeviceContext& ctx,
     const FrameDramBuffers& bufs,
     const TileAssignment& assign,
     uint32_t num_tiles) {
@@ -545,15 +550,29 @@ static void set_per_core_runtime_args(
     const uint32_t out_addr      = static_cast<uint32_t>(bufs.output->address());
     const uint32_t tile_ids_addr = static_cast<uint32_t>(bufs.tile_ids->address());
 
-    // iter-094: same-across-cores args move to common runtime args (one
-    // SetCommonRuntimeArgs call writes them for all cores at once, vs the
-    // prior pattern of repeating them in every per-core SetRuntimeArgs).
-    SetCommonRuntimeArgs(program, ctx.reader, {
-        packs_addr, offsets_addr, px_addr, py_addr, tile_ids_addr, num_tiles,
-    });
-    SetCommonRuntimeArgs(program, ctx.writer, {
-        out_addr, tile_ids_addr,
-    });
+    // iter-094: same-across-cores args move to common runtime args. The Set
+    // API can only be called ONCE per kernel — subsequent frames mutate the
+    // args in place via GetCommonRuntimeArgs (returns a writable view).
+    if (!ctx.common_rt_args_initialized) {
+        SetCommonRuntimeArgs(program, ctx.reader, {
+            packs_addr, offsets_addr, px_addr, py_addr, tile_ids_addr, num_tiles,
+        });
+        SetCommonRuntimeArgs(program, ctx.writer, {
+            out_addr, tile_ids_addr,
+        });
+        ctx.common_rt_args_initialized = true;
+    } else {
+        auto& reader_crta = GetCommonRuntimeArgs(program, ctx.reader);
+        reader_crta[0] = packs_addr;
+        reader_crta[1] = offsets_addr;
+        reader_crta[2] = px_addr;
+        reader_crta[3] = py_addr;
+        reader_crta[4] = tile_ids_addr;
+        reader_crta[5] = num_tiles;
+        auto& writer_crta = GetCommonRuntimeArgs(program, ctx.writer);
+        writer_crta[0] = out_addr;
+        writer_crta[1] = tile_ids_addr;
+    }
 
     uint32_t core_index = 0;
     for (const auto& range : ctx.all_cores.ranges()) {
