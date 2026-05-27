@@ -145,49 +145,9 @@ TileAssignResult tile_assign(
         // prefix-sum + parallel scatter (same pattern as project's iter-020).
         std::vector<uint8_t> keep_mask(P, 0);
 
-        // iter-042: precompute per-Gaussian m2_thresh and reformulate the
-        // per-pair check to avoid both the div-by-det AND the std::exp on
-        // every pair. Comparison
-        //   opacity * exp(-0.5 * num/det) >= contrib_floor
-        // is equivalent to
-        //   num <= det * m2_thresh_g       where m2_thresh_g = -2 ln(contrib_floor / opacity_g)
-        // for opacity > contrib_floor, and an unconditional drop when
-        // opacity <= contrib_floor (the Gaussian can never contribute even
-        // at its peak alpha). We pay 1 log per Gaussian (M = ~234k, parallel)
-        // and save 1 div + 1 exp per pair (P = ~294k, parallel) -
-        // approximately 60% of the per-pair cycles.
-        std::vector<float> m2_thresh_g(M, 0.0f);
-        std::vector<uint8_t> opacity_above_floor(M, 0);
-        {
-            auto precompute_one = [&](std::size_t m) {
-                const float op = opacities[m];
-                if (op > contrib_floor) {
-                    m2_thresh_g[m] = -2.0f * std::log(contrib_floor / op);
-                    opacity_above_floor[m] = 1;
-                } else {
-                    m2_thresh_g[m] = 0.0f;
-                    opacity_above_floor[m] = 0;
-                }
-            };
-            if (pool != nullptr && W > 1 && M >= 4096) {
-                for (std::size_t w = 0; w < W; ++w) {
-                    pool->submit([w, W, M, &precompute_one]() {
-                        for (std::size_t m = w; m < M; m += W) precompute_one(m);
-                    });
-                }
-                pool->wait();
-            } else {
-                for (std::size_t m = 0; m < M; ++m) precompute_one(m);
-            }
-        }
-
         auto cull_stripe = [&](std::size_t w) {
             for (std::size_t p = w; p < P; p += W) {
                 const int64_t g = result.gaussian_ids[p];
-                if (!opacity_above_floor[static_cast<std::size_t>(g)]) {
-                    keep_mask[p] = 0;
-                    continue;
-                }
                 const int64_t tile_id = result.tile_ids[p];
 
                 const float a = covs_2d[static_cast<std::size_t>(g) * 4 + 0];
@@ -209,11 +169,11 @@ TileAssignResult tile_assign(
                 const float cy = clamp_float(py, ty_tile, ty_tile + static_cast<float>(tile_size));
                 const float dx_c = cx - px;
                 const float dy_c = cy - py;
-                const float num =
-                    c * dx_c * dx_c - 2.0f * b * dx_c * dy_c + a * dy_c * dy_c;
-                const float scaled_thresh =
-                    det * m2_thresh_g[static_cast<std::size_t>(g)];
-                keep_mask[p] = (num <= scaled_thresh) ? 1 : 0;
+                const float m2 =
+                    (c * dx_c * dx_c - 2.0f * b * dx_c * dy_c + a * dy_c * dy_c) / det;
+                const float contrib =
+                    opacities[static_cast<std::size_t>(g)] * std::exp(-0.5f * m2);
+                keep_mask[p] = contrib >= contrib_floor ? 1 : 0;
             }
         };
 
