@@ -156,12 +156,19 @@ inline float max_t_neon(const MbAccum& acc) {
 }
 #endif  // GSPLAT_HAS_NEON
 
-// Per-worker scratch buffer for the cull pass. One contiguous int64_t array
+// Per-worker scratch buffer for the cull pass. One contiguous uint32_t array
 // of size 32 * L is partitioned into 32 microblock slots; per-tile reset
 // just resets the per-microblock offsets, the heap buffer survives across
 // tiles. Eliminates ~256 * 32 std::vector heap allocations per frame.
+//
+// uint32_t (vs int64_t in iter-023) halves the per-worker working set: at
+// the stitch hero scene's max-Gaussian tile (~11k entries), 32 microblock
+// slots = 32 * 11k = 352k entries -> 1.4 MB (uint32) vs 2.8 MB (int64).
+// 1.4 MB still spills L1 (M-Pro: 192 KB) but fits L2 comfortably; the
+// sequential per-microblock read pattern in the blend loop is now twice
+// as cache-bandwidth-efficient.
 struct TileScratch {
-    std::vector<int64_t> kept_flat;          // flat buffer, capacity grown as needed
+    std::vector<uint32_t> kept_flat;          // flat buffer, capacity grown as needed
     std::array<int32_t, kNumMicroblocks + 1> offsets{};  // offsets[m] = start of mb m in kept_flat
     int32_t stride{0};                       // capacity per microblock
 };
@@ -272,7 +279,8 @@ void cull_and_blend_tile(
                 if (power_c >= log_thresh) {
                     const int mb = (my << 2) | mx;
                     scratch.kept_flat[static_cast<std::size_t>(
-                        scratch.offsets[static_cast<std::size_t>(mb)]++)] = g;
+                        scratch.offsets[static_cast<std::size_t>(mb)]++)] =
+                        static_cast<uint32_t>(g);
                     kept_any = true;
                     ++kept_total;
                 }
@@ -290,7 +298,7 @@ void cull_and_blend_tile(
         const int32_t slot_end = scratch.offsets[static_cast<std::size_t>(m)];
         const int32_t kn = slot_end - slot_base;
         if (kn == 0) continue;
-        const int64_t* kg_data = scratch.kept_flat.data() + slot_base;
+        const uint32_t* kg_data = scratch.kept_flat.data() + slot_base;
 
         const int mb_ox_i = (m & 3) * 8;
         const int mb_oy_i = (m >> 2) * 4;
@@ -308,8 +316,7 @@ void cull_and_blend_tile(
             MbAccum acc;
             init_mb_accum(acc);
             for (int32_t k = 0; k < kn; ++k) {
-                const int64_t g = kg_data[k];
-                const std::size_t gs = static_cast<std::size_t>(g);
+                const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
                 const GaussianCullRec& rec = gauss_rec[gs];
                 apply_gaussian_neon(acc,
                     rec.ci_a, rec.ci_b, rec.ci_c,
@@ -340,8 +347,7 @@ void cull_and_blend_tile(
         for (int k = 0; k < npix; ++k) T[k] = 1.0f;
         for (int k = 0; k < npix * 3; ++k) accum[k] = 0.0f;
         for (int32_t kk = 0; kk < kn; ++kk) {
-            const int64_t g = kg_data[kk];
-            const std::size_t gs = static_cast<std::size_t>(g);
+            const std::size_t gs = static_cast<std::size_t>(kg_data[kk]);
             const GaussianCullRec& rec = gauss_rec[gs];
             const float ci_a = rec.ci_a;
             const float ci_b = rec.ci_b;
