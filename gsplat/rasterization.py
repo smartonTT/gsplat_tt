@@ -180,7 +180,7 @@ def get_tile_assignments(
     tile_size: int = 32,
     covs_2d: torch.Tensor | None = None,
     opacities: torch.Tensor | None = None,
-    contrib_floor: float = 1.0 / 255.0,
+    contrib_floor: float = 2.0 / 255.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.
