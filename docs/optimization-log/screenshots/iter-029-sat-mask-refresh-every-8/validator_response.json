@@ -1,0 +1,17 @@
+{
+  "verdict": "NEEDS_REVIEW",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32px or 16px spacing visible in any diff×10 image. All three views clean."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color square regions detected in any rendered view. Fur texture and gradients are spatially continuous."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing coverage regions in hero, side, or top renders. Diff×10 bright spots are small (<16px) and distributed as speckle noise."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes in any channel. Tongue red, ear orange, and body blue all match reference without clipping artifacts."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Silhouette edges in hero and top diff×10 show soft edge noise, not structured ringing. No correlated halo patterns at object boundaries."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No spatially-correlated pure black, white, or magenta patches in any render or diff×10."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 images do not show object silhouette outlines indicative of coordinate error. Differences are distributed within object boundaries as texture noise."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images show uniform fine speckle consistent with Gaussian approximation noise. Hero has moderate speckle over fur; side is very faint; top has moderate speckle with some brighter edge patches. No grids, bands, or structured gradients detected."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 39.78656407669385, "side": 44.11113741730396, "top": 39.022434067323275}, "pass": false},
+  "per_view_consistency": {"max_psnr_delta_db": 5.088703349980685, "max_ms_ratio": 1.2978, "pass": true},
+  "timing": {"median_ms": 42.4345, "p99_ms": 53.28142, "vs_prev_best_pct": 0.29, "pass": true},
+  "reasoning": "Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP."
+}

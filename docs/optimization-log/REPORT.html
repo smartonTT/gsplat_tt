@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 29 · current best: 42.31 ms · target: 1.0 ms
+      iters: 30 · current best: 42.31 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-029-sat-mask-refresh-every-8
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">NEEDS_REVIEW</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T00:38:23.213317+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>42.43 ms</b> median · 53.28 ms p99</div>
+    <div class="per-view">per-view: hero 42.43 / side 40.99 / top 53.20</div>
+    <div class="psnr">PSNR: hero 39.8 / side 44.1 / top 39.0 (min <b>39.0</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-029-sat-mask-refresh-every-8/hero.png" target="_blank"><img src="screenshots/iter-029-sat-mask-refresh-every-8/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-029-sat-mask-refresh-every-8/side.png" target="_blank"><img src="screenshots/iter-029-sat-mask-refresh-every-8/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-029-sat-mask-refresh-every-8/top.png" target="_blank"><img src="screenshots/iter-029-sat-mask-refresh-every-8/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-029-sat-mask-refresh-every-8/hero_diff10.png" target="_blank"><img src="screenshots/iter-029-sat-mask-refresh-every-8/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-029-sat-mask-refresh-every-8/side_diff10.png" target="_blank"><img src="screenshots/iter-029-sat-mask-refresh-every-8/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-029-sat-mask-refresh-every-8/top_diff10.png" target="_blank"><img src="screenshots/iter-029-sat-mask-refresh-every-8/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (NEEDS_REVIEW)</summary>
+    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32px or 16px spacing visible in any diff×10 image. All three views clean.</li><li>✓ tile_uniform_fill: No constant-color square regions detected in any rendered view. Fur texture and gradients are spatially continuous.</li><li>✓ missing_splat_holes: No dark holes or missing coverage regions in hero, side, or top renders. Diff×10 bright spots are small (&lt;16px) and d</li><li>✓ color_clipping_bands: No saturated flat-colored stripes in any channel. Tongue red, ear orange, and body blue all match reference without clip</li><li>✓ ringing_halos: Silhouette edges in hero and top diff×10 show soft edge noise, not structured ringing. No correlated halo patterns at ob</li><li>✓ nan_inf_signatures: No spatially-correlated pure black, white, or magenta patches in any render or diff×10.</li><li>✓ geometry_shift: Diff×10 images do not show object silhouette outlines indicative of coordinate error. Differences are distributed within</li><li>✓ diff10_structure: All three diff×10 images show uniform fine speckle consistent with Gaussian approximation noise. Hero has moderate speck</li></ul>
+    <p class="reasoning">Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-028-aabb-k-omega-matched-5-of-255
@@ -1076,6 +1109,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 40.4 / side 43.7 / top 40.1
 - Validator reasoning: iter-017 (tt-metal Trace API) achieved kernel_ms_median of 96.655 ms, a negligible -0.145 ms change vs the iter-015 baseline of 96.80 ms — well below the KEEP gate of ≤91.96 ms (iter-015 × 0.95) and far short of the explicit ≥10 ms improvement goal of ≤86 ms. PSNR is identical to baseline across all three views (hero 40.40 dB, side 43.70 dB, top 40.15 dB), all above the 40 dB floor, confirming kernel math is unchanged and render quality is correct. PNG screenshots were written to /tmp/iter-017-trace-api (not copied to the artifacts dir), but the bit-identical PSNR values and the flat timing signal together confirm no visual artifacts were introduced. The near-zero improvement is a major architectural finding: the host overhead is NOT in dispatch command construction or per-core SetRuntimeArgs push but upstream of it (likely EnqueueRead blocking semantics or driver-level serialization), exactly the secondary hypothesis flagged in the plan doc.
 - Thumbnails: ![hero](screenshots/iter-017-trace-api/hero.png) ![diff10](screenshots/iter-017-trace-api/hero_diff10.png)
+
+
+## iter-029-sat-mask-refresh-every-8 — NEEDS_REVIEW 
+
+- Class: `kernel-algebra`
+- kernel ms: median 42.43 / p99 53.28
+- PSNR per view: hero 39.8 / side 44.1 / top 39.0
+- Validator reasoning: Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP.
+- Thumbnails: ![hero](screenshots/iter-029-sat-mask-refresh-every-8/hero.png) ![diff10](screenshots/iter-029-sat-mask-refresh-every-8/hero_diff10.png)
 
 </pre>
   </section>

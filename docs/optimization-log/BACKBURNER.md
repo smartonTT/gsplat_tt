@@ -96,3 +96,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: iter-017 (tt-metal Trace API) achieved kernel_ms_median of 96.655 ms, a negligible -0.145 ms change vs the iter-015 baseline of 96.80 ms — well below the KEEP gate of ≤91.96 ms (iter-015 × 0.95) and far short of the explicit ≥10 ms improvement goal of ≤86 ms. PSNR is identical to baseline across all three views (hero 40.40 dB, side 43.70 dB, top 40.15 dB), all above the 40 dB floor, confirming kernel math is unchanged and render quality is correct. PNG screenshots were written to /tmp/iter-017-trace-api (not copied to the artifacts dir), but the bit-identical PSNR values and the flat timing signal together confirm no visual artifacts were introduced. The near-zero improvement is a major architectural finding: the host overhead is NOT in dispatch command construction or per-core SetRuntimeArgs push but upstream of it (likely EnqueueRead blocking semantics or driver-level serialization), exactly the secondary hypothesis flagged in the plan doc.
 - Thumbnails: ![hero](screenshots/iter-017-trace-api/hero.png) ![diff10](screenshots/iter-017-trace-api/hero_diff10.png)
 
+
+## iter-029-sat-mask-refresh-every-8 — NEEDS_REVIEW 
+
+- Class: `kernel-algebra`
+- kernel ms: median 42.43 / p99 53.28
+- PSNR per view: hero 39.8 / side 44.1 / top 39.0
+- Validator reasoning: Visual gate passes cleanly on all eight checks — no tile seams, no uniform-fill blocks, no geometry shift, no NaN signatures, and diff×10 images show only uniform high-frequency speckle consistent with Gaussian approximation noise. However, the numeric gate fails: class is kernel-algebra with a 40 dB floor, and both hero (39.79 dB) and top (39.02 dB) fall below that floor, triggering NEEDS_REVIEW per the class PSNR table. Side view (44.11 dB) is comfortably above floor. Timing is break-even: kernel_ms_median 42.43 ms vs prev_best 42.31 ms (+0.29%, within the 1.02× threshold). p99/median ratio is 1.26×, well under the 3× suspicious-tail threshold. Per-view PSNR spread is 5.09 dB (under 20 dB limit) and per-view ms ratio is 1.30× (under 2× limit). The sat_mask refresh-every-8 optimization does not cause visible quality regressions but the PSNR drop on hero and top views below the 40 dB floor for this class requires human review before accepting as KEEP.
+- Thumbnails: ![hero](screenshots/iter-029-sat-mask-refresh-every-8/hero.png) ![diff10](screenshots/iter-029-sat-mask-refresh-every-8/hero_diff10.png)
+
