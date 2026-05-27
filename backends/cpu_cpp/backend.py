@@ -26,7 +26,9 @@ class CpuCppBackend(Backend):
         mb_contrib_floor: float = 1.0 / 16384.0,
         fused: bool = True,
         render_fused: bool = True,
+        verbose: bool = False,
     ):
+        self.verbose = verbose
         # Lazily import the compiled module so import doesn't fail when the
         # extension hasn't been built yet.
         from backends.cpu_cpp import _gsplat_cpu  # the pybind11 extension

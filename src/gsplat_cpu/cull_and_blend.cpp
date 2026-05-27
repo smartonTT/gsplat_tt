@@ -32,18 +32,17 @@ constexpr int kNumMicroblocks = 32;
 //   log_thresh       log(mb_contrib_floor / opacity); >= 0 = drop sentinel
 //   x_half/y_half    BB half-extents
 //   opacity          alpha multiplier (used by blend, kept here for locality)
-//   _pad             pad to 48 bytes; combined with the AoS colors record
-//                    (12 bytes) every kept-Gaussian fits in one cache line
-//                    pair at most.
+//   cr, cg, cb       per-Gaussian color (iter-056: fused into prelude so
+//                    blend reads one 48 B record instead of gauss_rec + colors)
 struct alignas(8) GaussianCullRec {
     float mx, my;
     float ci_a, ci_b, ci_c;
     float log_thresh;
     float x_half, y_half;
     float opacity;
-    float _pad;  // total 40 bytes, pad to 40-aligned (no need to grow to 64)
+    float cr, cg, cb;
 };
-static_assert(sizeof(GaussianCullRec) == 40, "GaussianCullRec must be 40 bytes");
+static_assert(sizeof(GaussianCullRec) == 48, "GaussianCullRec must be 48 bytes");
 
 #if GSPLAT_HAS_NEON
 struct MbAccum {
@@ -346,7 +345,7 @@ void cull_and_blend_tile(
                         rec.ci_a, rec.ci_b, rec.ci_c,
                         rec.mx, rec.my,
                         rec.opacity,
-                        colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
+                        rec.cr, rec.cg, rec.cb,
                         px_start, py_start);
                 }
                 if (max_t_neon(acc) < 0.0001f) { k = kn; break; }
@@ -358,7 +357,7 @@ void cull_and_blend_tile(
                     rec.ci_a, rec.ci_b, rec.ci_c,
                     rec.mx, rec.my,
                     rec.opacity,
-                    colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
+                    rec.cr, rec.cg, rec.cb,
                     px_start, py_start);
             }
             for (int i = 0; i < 4; ++i) {
@@ -390,9 +389,9 @@ void cull_and_blend_tile(
             const float mx = rec.mx;
             const float my = rec.my;
             const float opacity = rec.opacity;
-            const float cr = colors[gs * 3 + 0];
-            const float cg = colors[gs * 3 + 1];
-            const float cb = colors[gs * 3 + 2];
+            const float cr = rec.cr;
+            const float cg = rec.cg;
+            const float cb = rec.cb;
             for (int i = 0; i < mb_h; ++i) {
                 const float py = static_cast<float>(py_start + i) + 0.5f;
                 for (int j = 0; j < mb_w; ++j) {
@@ -493,6 +492,9 @@ CullAndBlendResult cull_and_blend(
             r.ci_b = -b / det;
             r.ci_c = a / det;
             r.opacity = opacities[i];
+            r.cr = colors[i * 3 + 0];
+            r.cg = colors[i * 3 + 1];
+            r.cb = colors[i * 3 + 2];
 
             if (r.opacity <= mb_contrib_floor) {
                 r.log_thresh = 0.0f;  // sentinel: drop in per-tile cull
