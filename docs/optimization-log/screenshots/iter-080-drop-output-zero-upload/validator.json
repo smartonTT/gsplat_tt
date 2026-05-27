@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "fail", "evidence": "diff10 images show large-scale structured white patches and hard-edged rectangular missing regions; side_diff10 and top_diff10 show white rectangular blobs covering substantial portions of the image, indicating systematic zero-fill artifacts rather than noise"},
+    {"name": "tile_uniform_fill", "result": "fail", "evidence": "side.png and top.png show large white rectangular constant-fill regions where reference has object detail (e.g., bottom half of top.png is mostly white/zeroed, side.png has large white bands on left side)"},
+    {"name": "missing_splat_holes", "result": "fail", "evidence": "top.png shows the bottom portion of the image zeroed out (large black/white regions absent of content vs reference); side.png shows significant left/right edge coverage missing; these are far larger than 16px threshold"},
+    {"name": "color_clipping_bands", "result": "fail", "evidence": "side.png shows horizontal blue/cyan/red color banding across the right portion of the image not present in reference; these are flat-colored stripes indicating partial output buffer corruption"},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouettes visible beyond the general corruption artifacts"},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure magenta patches; the white regions appear to be zero-valued pixels (0,0,0 or 255,255,255 from zeroed output buffer) rather than NaN/Inf signatures per se"},
+    {"name": "geometry_shift", "result": "pass", "evidence": "The core object geometry in hero.png appears correctly positioned; corruption is in coverage regions not coordinate drift"},
+    {"name": "diff10_structure", "result": "fail", "evidence": "All three diff10 images are dominated by large structured bright patches, rectangular missing regions, and color banding — not uniform speckle. hero_diff10 shows the entire object body as a solid dark silhouette with bright edges; side_diff10 and top_diff10 show massive white rectangular zones indicating systematic zero-fill of output buffer tiles"}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 16.715, "side": 9.361, "top": 8.310}, "pass": false},
+  "tile_structure_check": {"max_ratio": 31.514, "actual": {"hero": 30.328, "side": 31.236, "top": 31.514}, "pass": false, "delta_vs_prev": 13.37},
+  "per_view_consistency": {"max_psnr_delta_db": 8.4, "max_ms_ratio": 1.24, "pass": true},
+  "timing": {"median_ms": 24.48, "p99_ms": 29.310, "vs_prev_best_pct": -0.91, "pass": true},
+  "reasoning": "REJECT on multiple hard gates. (1) PSNR is catastrophically below floor on all views: hero 16.72 dB, side 9.36 dB, top 8.31 dB vs. dispatch-class floor of 38 dB — these indicate functional breakage, not a mild regression. (2) tile_structure_ratio_per_view max is 31.51 vs. architectural baseline ~18.14 (prev_best); delta of +13.37 far exceeds the +0.3 ratchet threshold and is well above the >14 REJECT tripwire (31.51 >> 14). (3) Visual checks confirm multiple structural failures: side.png and top.png show large white rectangular zero-fill regions where reference has object detail (missing_splat_holes, tile_uniform_fill failures), horizontal color banding stripes in side view (color_clipping_bands failure), and diff10 images dominated by large structured white patches rather than uniform speckle (diff10_structure failure). The iter drops the output_zero upload but this has corrupted the output buffer — pixels from prior frames or uninitialized L1 memory are bleeding through. Timing is technically a win (-0.91%) but the correctness breakage is total."
+}

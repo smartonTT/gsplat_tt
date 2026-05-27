@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 75 · current best: 23.98 ms · target: 1.0 ms
+      iters: 76 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-080-drop-output-zero-upload
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T11:10:44.555712+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> REJECT on multiple hard gates. (1) PSNR is catastrophically below floor on all views: hero 16.72 dB, side 9.36 dB, top 8.31 dB vs. dispatch-class floor of 38 dB — these indicate functional breakage, not a mild regression. (2) tile_structure_ratio_per_view max is 31.51 vs. architectural baseline ~18.14 (prev_best); delta of +13.37 far exceeds the +0.3 ratchet threshold and is well above the &gt;14 REJECT tripwire (31.51 &gt;&gt; 14). (3) Visual checks confirm multiple structural failures: side.png and top.png show large white rectangular zero-fill regions where reference has object detail (missing_splat_holes, tile_uniform_fill failures), horizontal color banding stripes in side view (color_clipping_bands failure), and diff10 images dominated by large structured white patches rather than uniform speckle (diff10_structure failure). The iter drops the output_zero upload but this has corrupted the output buffer — pixels from prior frames or uninitialized L1 memory are bleeding through. Timing is technically a win (-0.91%) but the correctness breakage is total.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.48 ms</b> median · 29.31 ms p99</div>
+    <div class="per-view">per-view: hero 24.48 / side 23.63 / top 29.31</div>
+    <div class="psnr">PSNR: hero 16.7 / side 9.4 / top 8.3 (min <b>8.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-080-drop-output-zero-upload/hero.png" target="_blank"><img src="screenshots/iter-080-drop-output-zero-upload/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-080-drop-output-zero-upload/side.png" target="_blank"><img src="screenshots/iter-080-drop-output-zero-upload/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-080-drop-output-zero-upload/top.png" target="_blank"><img src="screenshots/iter-080-drop-output-zero-upload/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-080-drop-output-zero-upload/hero_diff10.png" target="_blank"><img src="screenshots/iter-080-drop-output-zero-upload/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-080-drop-output-zero-upload/side_diff10.png" target="_blank"><img src="screenshots/iter-080-drop-output-zero-upload/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-080-drop-output-zero-upload/top_diff10.png" target="_blank"><img src="screenshots/iter-080-drop-output-zero-upload/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✗ tile_grid_seams: diff10 images show large-scale structured white patches and hard-edged rectangular missing regions; side_diff10 and top_</li><li>✗ tile_uniform_fill: side.png and top.png show large white rectangular constant-fill regions where reference has object detail (e.g., bottom </li><li>✗ missing_splat_holes: top.png shows the bottom portion of the image zeroed out (large black/white regions absent of content vs reference); sid</li><li>✗ color_clipping_bands: side.png shows horizontal blue/cyan/red color banding across the right portion of the image not present in reference; th</li><li>✓ ringing_halos: No structured ringing at silhouettes visible beyond the general corruption artifacts</li><li>✓ nan_inf_signatures: No pure magenta patches; the white regions appear to be zero-valued pixels (0,0,0 or 255,255,255 from zeroed output buff</li><li>✓ geometry_shift: The core object geometry in hero.png appears correctly positioned; corruption is in coverage regions not coordinate drif</li><li>✗ diff10_structure: All three diff10 images are dominated by large structured bright patches, rectangular missing regions, and color banding</li></ul>
+    <p class="reasoning">REJECT on multiple hard gates. (1) PSNR is catastrophically below floor on all views: hero 16.72 dB, side 9.36 dB, top 8.31 dB vs. dispatch-class floor of 38 dB — these indicate functional breakage, not a mild regression. (2) tile_structure_ratio_per_view max is 31.51 vs. architectural baseline ~18.14 (prev_best); delta of +13.37 far exceeds the +0.3 ratchet threshold and is well above the &gt;14 REJECT tripwire (31.51 &gt;&gt; 14). (3) Visual checks confirm multiple structural failures: side.png and top.png show large white rectangular zero-fill regions where reference has object detail (missing_splat_holes, tile_uniform_fill failures), horizontal color banding stripes in side view (color_clipping_bands failure), and diff10 images dominated by large structured white patches rather than uniform speckle (diff10_structure failure). The iter drops the output_zero upload but this has corrupted the output buffer — pixels from prior frames or uninitialized L1 memory are bleeding through. Timing is technically a win (-0.91%) but the correctness breakage is total.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-079-combine-px-py-upload
@@ -2702,6 +2735,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.4 / side 41.0 / top 38.6
 - Validator reasoning: REJECT. dst_full_sync_en=true adds synchronization overhead that makes the kernel 1.61% slower (25.41 ms vs prev_best 25.0075 ms) while delivering zero benefit: PSNR across all views is bit-identical to the iter-074 baseline (hero 39.41, side 41.00, top 38.60) and tile_structure_ratio_per_view is also bit-identical (delta 0.0, within ±0.05 on all views). Although the timing technically clears the 1.02× budget ceiling (25.41 ≤ 25.508 ms), a change that is strictly worse on perf with no compensating quality improvement provides no net value and must be rejected. Visual checks all pass — no fireflies, no seams, no geometry shift, no NaN artifacts. The dst_full_sync flag is not a viable optimization lever on this workload.
 - Thumbnails: ![hero](screenshots/iter-075-dst-full-sync/hero.png) ![diff10](screenshots/iter-075-dst-full-sync/hero_diff10.png)
+
+
+## iter-080-drop-output-zero-upload — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 24.48 / p99 29.31
+- PSNR per view: hero 16.7 / side 9.4 / top 8.3
+- Validator reasoning: REJECT on multiple hard gates. (1) PSNR is catastrophically below floor on all views: hero 16.72 dB, side 9.36 dB, top 8.31 dB vs. dispatch-class floor of 38 dB — these indicate functional breakage, not a mild regression. (2) tile_structure_ratio_per_view max is 31.51 vs. architectural baseline ~18.14 (prev_best); delta of +13.37 far exceeds the +0.3 ratchet threshold and is well above the &gt;14 REJECT tripwire (31.51 &gt;&gt; 14). (3) Visual checks confirm multiple structural failures: side.png and top.png show large white rectangular zero-fill regions where reference has object detail (missing_splat_holes, tile_uniform_fill failures), horizontal color banding stripes in side view (color_clipping_bands failure), and diff10 images dominated by large structured white patches rather than uniform speckle (diff10_structure failure). The iter drops the output_zero upload but this has corrupted the output buffer — pixels from prior frames or uninitialized L1 memory are bleeding through. Timing is technically a win (-0.91%) but the correctness breakage is total.
+- Thumbnails: ![hero](screenshots/iter-080-drop-output-zero-upload/hero.png) ![diff10](screenshots/iter-080-drop-output-zero-upload/hero_diff10.png)
 
 </pre>
   </section>

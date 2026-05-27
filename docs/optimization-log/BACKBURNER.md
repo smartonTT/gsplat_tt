@@ -204,3 +204,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT. dst_full_sync_en=true adds synchronization overhead that makes the kernel 1.61% slower (25.41 ms vs prev_best 25.0075 ms) while delivering zero benefit: PSNR across all views is bit-identical to the iter-074 baseline (hero 39.41, side 41.00, top 38.60) and tile_structure_ratio_per_view is also bit-identical (delta 0.0, within ±0.05 on all views). Although the timing technically clears the 1.02× budget ceiling (25.41 ≤ 25.508 ms), a change that is strictly worse on perf with no compensating quality improvement provides no net value and must be rejected. Visual checks all pass — no fireflies, no seams, no geometry shift, no NaN artifacts. The dst_full_sync flag is not a viable optimization lever on this workload.
 - Thumbnails: ![hero](screenshots/iter-075-dst-full-sync/hero.png) ![diff10](screenshots/iter-075-dst-full-sync/hero_diff10.png)
 
+
+## iter-080-drop-output-zero-upload — REJECT 
+
+- Class: `dispatch`
+- kernel ms: median 24.48 / p99 29.31
+- PSNR per view: hero 16.7 / side 9.4 / top 8.3
+- Validator reasoning: REJECT on multiple hard gates. (1) PSNR is catastrophically below floor on all views: hero 16.72 dB, side 9.36 dB, top 8.31 dB vs. dispatch-class floor of 38 dB — these indicate functional breakage, not a mild regression. (2) tile_structure_ratio_per_view max is 31.51 vs. architectural baseline ~18.14 (prev_best); delta of +13.37 far exceeds the +0.3 ratchet threshold and is well above the >14 REJECT tripwire (31.51 >> 14). (3) Visual checks confirm multiple structural failures: side.png and top.png show large white rectangular zero-fill regions where reference has object detail (missing_splat_holes, tile_uniform_fill failures), horizontal color banding stripes in side view (color_clipping_bands failure), and diff10 images dominated by large structured white patches rather than uniform speckle (diff10_structure failure). The iter drops the output_zero upload but this has corrupted the output buffer — pixels from prior frames or uninitialized L1 memory are bleeding through. Timing is technically a win (-0.91%) but the correctness breakage is total.
+- Thumbnails: ![hero](screenshots/iter-080-drop-output-zero-upload/hero.png) ![diff10](screenshots/iter-080-drop-output-zero-upload/hero_diff10.png)
+
