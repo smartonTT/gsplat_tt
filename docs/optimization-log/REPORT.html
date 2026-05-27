@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 87 · current best: 23.98 ms · target: 1.0 ms
+      iters: 88 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-095-four-fill-tile-init
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T14:33:51.006339+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All checks pass. PSNR is bit-identical to the previous committed iter across all three views (hero 39.368, side 40.950, top 38.574 - all above the 38 dB dispatch-class floor). Tile structure ratios are bit-identical to the prior baseline (max 18.132, delta ~0.000 on all views), well within the +-0.3 ratchet threshold - this is the established architectural bf16 floor, not new drift. Kernel_ms_median is 24.457 vs prev_best 24.434 (+0.09%), comfortably within the 2% break-even threshold. p99/median ratio is 1.19, far below the 3x NEEDS_REVIEW threshold. Visual inspection of all rendered PNGs and diff10 images confirms no tile seams, no fill blocks, no missing-splat holes, no color clipping, no ringing, no fireflies, no geometry shift, and no structured patterns in the diff - only uniform speckle consistent with the architectural baseline.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.46 ms</b> median · 29.18 ms p99</div>
+    <div class="per-view">per-view: hero 24.46 / side 23.63 / top 29.17</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-095-four-fill-tile-init/hero.png" target="_blank"><img src="screenshots/iter-095-four-fill-tile-init/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-095-four-fill-tile-init/side.png" target="_blank"><img src="screenshots/iter-095-four-fill-tile-init/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-095-four-fill-tile-init/top.png" target="_blank"><img src="screenshots/iter-095-four-fill-tile-init/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-095-four-fill-tile-init/hero_diff10.png" target="_blank"><img src="screenshots/iter-095-four-fill-tile-init/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-095-four-fill-tile-init/side_diff10.png" target="_blank"><img src="screenshots/iter-095-four-fill-tile-init/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-095-four-fill-tile-init/top_diff10.png" target="_blank"><img src="screenshots/iter-095-four-fill-tile-init/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images for all three views show uniform speckle noise across the object surface with no horizontal/vertical grid </li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color fill blocks visible in hero, side, or top renders. All detail is preserved.</li><li>✓ missing_splat_holes: No dark holes or missing coverage regions in any rendered view. Coverage is continuous across the object.</li><li>✓ color_clipping_bands: No saturated R/G/B bands or flat colored stripes in any rendered view. Color transitions appear natural.</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes in any view. Edge transitions look normal.</li><li>✓ nan_inf_signatures: No isolated bright outlier pixels (fireflies), pure black/white/magenta patches, or NaN/Inf signatures visible in hero, </li><li>✓ geometry_shift: Diff10 does not show the silhouette of the object as a bright outline indicating coordinate shift. Differences are distr</li><li>✓ diff10_structure: All three diff10 images are dominated by uniform speckle noise consistent with the established bf16 architectural baseli</li></ul>
+    <p class="reasoning">All checks pass. PSNR is bit-identical to the previous committed iter across all three views (hero 39.368, side 40.950, top 38.574 - all above the 38 dB dispatch-class floor). Tile structure ratios are bit-identical to the prior baseline (max 18.132, delta ~0.000 on all views), well within the +-0.3 ratchet threshold - this is the established architectural bf16 floor, not new drift. Kernel_ms_median is 24.457 vs prev_best 24.434 (+0.09%), comfortably within the 2% break-even threshold. p99/median ratio is 1.19, far below the 3x NEEDS_REVIEW threshold. Visual inspection of all rendered PNGs and diff10 images confirms no tile seams, no fill blocks, no missing-splat holes, no color clipping, no ringing, no fireflies, no geometry shift, and no structured patterns in the diff - only uniform speckle consistent with the architectural baseline.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-094-set-common-runtime-args
