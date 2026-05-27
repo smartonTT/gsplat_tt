@@ -195,3 +195,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on tile_structure_check hard gate: max tile_structure_ratio is 18.775 (top view), up from prev_best max of 18.153, a delta of +0.622 which exceeds the +0.3 threshold. The spec states 'Any iter that increases the max tile_ratio by > 0.3 vs. its baseline is REJECT regardless of PSNR or kernel-ms wins.' Additionally the max ratio of 18.775 is well above the >14 threshold requiring the iter to strictly reduce ratio vs prev_best — instead it increases it. PSNR is fine (all views ≥35 dB binning floor) and kernel_ms improved 5.18% to 24.274 ms, but the tile structure regression overrides both wins. The contrib_floor lever continues to push tile_structure_ratio upward; this confirms the iter-063 pattern that this lever is exhausted on quality gates.
 - Thumbnails: ![hero](screenshots/iter-071-contrib-floor-16/hero.png) ![diff10](screenshots/iter-071-contrib-floor-16/hero_diff10.png)
 
+
+## iter-075-dst-full-sync — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 25.41 / p99 30.37
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: REJECT. dst_full_sync_en=true adds synchronization overhead that makes the kernel 1.61% slower (25.41 ms vs prev_best 25.0075 ms) while delivering zero benefit: PSNR across all views is bit-identical to the iter-074 baseline (hero 39.41, side 41.00, top 38.60) and tile_structure_ratio_per_view is also bit-identical (delta 0.0, within ±0.05 on all views). Although the timing technically clears the 1.02× budget ceiling (25.41 ≤ 25.508 ms), a change that is strictly worse on perf with no compensating quality improvement provides no net value and must be rejected. Visual checks all pass — no fireflies, no seams, no geometry shift, no NaN artifacts. The dst_full_sync flag is not a viable optimization lever on this workload.
+- Thumbnails: ![hero](screenshots/iter-075-dst-full-sync/hero.png) ![diff10](screenshots/iter-075-dst-full-sync/hero_diff10.png)
+

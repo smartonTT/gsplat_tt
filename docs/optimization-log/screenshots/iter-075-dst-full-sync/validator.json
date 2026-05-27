@@ -1,0 +1,32 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 across all three views shows uniform speckle confined to the object silhouette; no horizontal/vertical lines at 32- or 16-pixel spacing visible."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32×32 or 16×16 square patches replacing textured detail in any view."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark-hole regions in hero/side/top renders where coverage is expected; brightness distribution matches reference shape."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat-colored bands visible in any rendered PNG."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Silhouette edges in diff10 show only the expected speckle noise from the established bf16 pack_tile floor; no structured ringing pattern."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure-black, pure-white, or magenta patches in spatially-correlated clusters; no isolated bright firefly pixels detected in hero/side/top renders."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not outline object silhouettes with a shifted ghost — speckle is coincident with the object, not offset."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform speckle (established architectural bf16 noise floor); no grids, bands, or gradients introduced by this iter."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.41496520322124, "side": 40.99648830708902, "top": 38.59546500629706}, "pass": true},
+  "tile_structure_check": {
+    "max_ratio": 18.1422622408487,
+    "actual": {"hero": 17.137658028356157, "side": 17.278351895106663, "top": 18.1422622408487},
+    "pass": true,
+    "delta_vs_prev": 0.0,
+    "note": "Bit-identical to iter-074 baseline (delta within ±0.05 on all views). Architectural-baseline carve-out applies — no new drift introduced."
+  },
+  "per_view_consistency": {"max_psnr_delta_db": 2.401, "max_ms_ratio": 1.236, "pass": true},
+  "timing": {
+    "median_ms": 25.41,
+    "p99_ms": 30.37013,
+    "prev_best_ms": 25.0075,
+    "budget_ceiling_ms": 25.50765,
+    "vs_prev_best_pct": 1.61,
+    "pass": false,
+    "note": "25.41 is within the 1.02× budget ceiling of 25.508 ms (only +1.61% vs +2.0% threshold), but this iter provides zero benefit: PSNR and tile_structure_ratio are bit-identical to prev_best, so the kernel is strictly slower for no gain."
+  },
+  "reasoning": "REJECT. dst_full_sync_en=true adds synchronization overhead that makes the kernel 1.61% slower (25.41 ms vs prev_best 25.0075 ms) while delivering zero benefit: PSNR across all views is bit-identical to the iter-074 baseline (hero 39.41, side 41.00, top 38.60) and tile_structure_ratio_per_view is also bit-identical (delta 0.0, within ±0.05 on all views). Although the timing technically clears the 1.02× budget ceiling (25.41 ≤ 25.508 ms), a change that is strictly worse on perf with no compensating quality improvement provides no net value and must be rejected. Visual checks all pass — no fireflies, no seams, no geometry shift, no NaN artifacts. The dst_full_sync flag is not a viable optimization lever on this workload."
+}
