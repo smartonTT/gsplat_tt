@@ -46,7 +46,37 @@ class CpuCppBackend(Backend):
         # will simply miss and recompute — correct, not faster.
         self._cov3d_cache_key: tuple | None = None
         self._cov3d_cache_buf: np.ndarray | None = None
+        # iter-055: cache the per-Gaussian numpy views (means/opacities/colors).
+        # In the 30-view training-pattern bench, these tensors are identical
+        # across frames — only extrinsics/intrinsics change. Each
+        # detach().cpu().numpy().astype(...) call is cheap individually
+        # (~5-10 µs) but we make 5 of them per render_fused call, so 5 * 30
+        # frames = ~1.5 ms of unrecoverable pybind/numpy boundary overhead
+        # per benchmark. Cache key = (tensor data_ptr, shape) — same idea
+        # as the cov3d cache.
+        self._gauss_np_cache_key: tuple | None = None
+        self._gauss_np_cache: dict[str, np.ndarray] | None = None
         assert self._mod.hello() == "hello from gsplat_cpu"
+
+    def _cached_gauss_np(self, gaussians) -> dict[str, np.ndarray]:
+        key = (
+            gaussians.means.data_ptr(),
+            tuple(gaussians.means.shape),
+            gaussians.opacities.data_ptr(),
+            gaussians.colors.data_ptr(),
+        )
+        if self._gauss_np_cache_key == key and self._gauss_np_cache is not None:
+            return self._gauss_np_cache
+        cache = {
+            "means": gaussians.means.detach().cpu().numpy().astype(np.float32, copy=False),
+            "scales": gaussians.scales.detach().cpu().numpy().astype(np.float32, copy=False),
+            "rotations": gaussians.rotations.detach().cpu().numpy().astype(np.float32, copy=False),
+            "opacities": gaussians.opacities.detach().cpu().numpy().astype(np.float32, copy=False),
+            "colors": gaussians.colors.detach().cpu().numpy().astype(np.float32, copy=False),
+        }
+        self._gauss_np_cache_key = key
+        self._gauss_np_cache = cache
+        return cache
 
     def _cached_cov3d(
         self, scales_np: np.ndarray, rotations_np: np.ndarray
@@ -276,11 +306,12 @@ class CpuCppBackend(Backend):
           num_visible, num_entries,
           pairs_in, pairs_dropped, pairs_kept_per_mb.
         """
-        means_np = gaussians.means.detach().cpu().numpy().astype(np.float32, copy=False)
-        scales_np = gaussians.scales.detach().cpu().numpy().astype(np.float32, copy=False)
-        rotations_np = gaussians.rotations.detach().cpu().numpy().astype(np.float32, copy=False)
-        opacities_np = gaussians.opacities.detach().cpu().numpy().astype(np.float32, copy=False)
-        colors_np = gaussians.colors.detach().cpu().numpy().astype(np.float32, copy=False)
+        gnp = self._cached_gauss_np(gaussians)
+        means_np = gnp["means"]
+        scales_np = gnp["scales"]
+        rotations_np = gnp["rotations"]
+        opacities_np = gnp["opacities"]
+        colors_np = gnp["colors"]
         extr_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
         intr_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
 
