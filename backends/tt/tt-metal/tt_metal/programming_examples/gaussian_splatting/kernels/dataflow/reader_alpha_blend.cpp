@@ -46,14 +46,20 @@
 // RUNTIME ARGS
 //   0: packs_addr         DRAM base of scalar packs buffer (64B page each)
 //   1: tile_offsets_addr  DRAM base of tile_offsets[] (4B per uint32)
-//   2: px_addr            DRAM base of px tiles       (2KB per bf16 32x32)
-//   3: py_addr            DRAM base of py tiles
+//   2: px_addr            DRAM base of combined px+py tiles (2KB per bf16 32x32);
+//                         tile IDs [0, num_tiles) are px, [num_tiles, 2N) are py.
+//   3: py_addr            DRAM base of py tiles (iter-079: same as px_addr —
+//                         px and py share one buffer; kept for accessor symmetry)
 //   4: tile_ids_addr      DRAM base of concatenated tile-id list (uint32 each)
 //   5: tile_ids_start     this core's element offset into that list
 //   6: tile_ids_count     number of tile IDs this core handles
+//   7: num_tiles_total    iter-079: total tile count, used as page-index
+//                         offset to address py tiles within the combined buffer.
 //
 // COMPILE-TIME ARGS: 5 TensorAccessorArgs in order: packs, tile_offsets,
-// px, py, tile_ids. All DRAM-interleaved.
+// px, py, tile_ids. All DRAM-interleaved. iter-079: px and py accessors
+// point at the same combined buffer (different runtime base addrs are the
+// same value), so layout & bank interleave are identical.
 
 // Max per-core tile IDs we cache in L1. Sized to handle a 4K render
 // (120x68 = 8160 tiles, ~128/core after round-robin balancing). At 1080p
@@ -69,6 +75,7 @@ void kernel_main() {
     uint32_t tile_ids_addr     = get_arg_val<uint32_t>(4);
     uint32_t tile_ids_start    = get_arg_val<uint32_t>(5);
     uint32_t tile_ids_count    = get_arg_val<uint32_t>(6);
+    uint32_t num_tiles_total   = get_arg_val<uint32_t>(7);  // iter-079: py offset
 
     constexpr uint32_t CB_PX        = 0;
     constexpr uint32_t CB_PY        = 1;
@@ -183,13 +190,12 @@ void kernel_main() {
         meta_ptr[0] = g_count;
         cb_push_back(CB_TILE_META, 1);
 
-        // (3) Push px and py tiles. noc_async_read_tile uses the
-        // TensorAccessor's tile stride to fetch the right 32x32 region
-        // for this tile_id.
+        // (3) Push px and py tiles. iter-079: px and py share one DRAM
+        // buffer; tile IDs [0, N) are px, [N, 2N) are py.
         cb_reserve_back(CB_PX, 1);
         noc_async_read_tile(tile_id, px_acc, get_write_ptr(CB_PX));
         cb_reserve_back(CB_PY, 1);
-        noc_async_read_tile(tile_id, py_acc, get_write_ptr(CB_PY));
+        noc_async_read_tile(tile_id + num_tiles_total, py_acc, get_write_ptr(CB_PY));
         noc_async_read_barrier();
         cb_push_back(CB_PX, 1);
         cb_push_back(CB_PY, 1);

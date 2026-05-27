@@ -437,13 +437,16 @@ static std::vector<float> tiles_to_image(
 struct FrameDramBuffers {
     std::shared_ptr<distributed::MeshBuffer> packs;
     std::shared_ptr<distributed::MeshBuffer> offsets;
+    // iter-079: px and py are now a single 2x-sized buffer. Both members
+    // alias the same MeshBuffer; the reader differentiates py reads by
+    // adding num_tiles_total to the tile_id (page index).
     std::shared_ptr<distributed::MeshBuffer> px;
     std::shared_ptr<distributed::MeshBuffer> py;
     std::shared_ptr<distributed::MeshBuffer> output;
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
 };
 
-// Allocate the 6 DRAM buffers a frame needs. Sizes are derived from the
+// Allocate the DRAM buffers a frame needs. Sizes are derived from the
 // scene's total_entries + tile count + the LPT-balanced tile-id list.
 // All buffers are RAII via shared_ptr; they free on scope exit.
 static FrameDramBuffers allocate_frame_buffers(
@@ -461,8 +464,11 @@ static FrameDramBuffers allocate_frame_buffers(
     FrameDramBuffers b;
     b.packs    = make_dram(static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
     b.offsets  = make_dram(offsets_count * sizeof(uint32_t), sizeof(uint32_t));
-    b.px       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.py       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    // Combined px+py buffer: 2*num_tiles pages of TILE_BYTES_BF16. Tile IDs
+    // [0, num_tiles) are px; [num_tiles, 2*num_tiles) are py. One EnqueueWrite
+    // replaces the prior two.
+    b.px       = make_dram(static_cast<size_t>(num_tiles) * 2 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    b.py       = b.px;
     b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
     b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
     return b;
@@ -476,11 +482,14 @@ static void set_per_core_runtime_args(
     Program& program,
     const DeviceContext& ctx,
     const FrameDramBuffers& bufs,
-    const TileAssignment& assign) {
+    const TileAssignment& assign,
+    uint32_t num_tiles) {
     const uint32_t packs_addr    = static_cast<uint32_t>(bufs.packs->address());
     const uint32_t offsets_addr  = static_cast<uint32_t>(bufs.offsets->address());
+    // iter-079: px and py share the same MeshBuffer (px is the combined
+    // [px-tiles, py-tiles] buffer). py reads use tile_id + num_tiles_total.
     const uint32_t px_addr       = static_cast<uint32_t>(bufs.px->address());
-    const uint32_t py_addr       = static_cast<uint32_t>(bufs.py->address());
+    const uint32_t py_addr       = px_addr;
     const uint32_t out_addr      = static_cast<uint32_t>(bufs.output->address());
     const uint32_t tile_ids_addr = static_cast<uint32_t>(bufs.tile_ids->address());
 
@@ -493,7 +502,7 @@ static void set_per_core_runtime_args(
                 const uint32_t count = assign.per_core_count[core_index];
                 SetRuntimeArgs(program, ctx.reader, core, {
                     packs_addr, offsets_addr, px_addr, py_addr,
-                    tile_ids_addr, start, count,
+                    tile_ids_addr, start, count, num_tiles,
                 });
                 SetRuntimeArgs(program, ctx.compute, core, {count});
                 SetRuntimeArgs(program, ctx.writer, core, {
@@ -565,12 +574,16 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
     auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
     auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
     auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
+    // iter-079: concatenate px+py for a single combined EnqueueWriteMeshBuffer.
+    std::vector<uint16_t> pxpy_bf16(px_bf16.size() + py_bf16.size());
+    std::memcpy(pxpy_bf16.data(),                  px_bf16.data(), px_bf16.size() * sizeof(uint16_t));
+    std::memcpy(pxpy_bf16.data() + px_bf16.size(), py_bf16.data(), py_bf16.size() * sizeof(uint16_t));
     std::vector<uint32_t> offsets_u32(offsets_f32.size());
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
     }
     Program& program = get_program_for_workload(ctx);
-    set_per_core_runtime_args(program, ctx, bufs, assign);
+    set_per_core_runtime_args(program, ctx, bufs, assign, num_tiles);
     std::vector<uint16_t> output_zero(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
     std::vector<uint16_t> result_bf16(
@@ -586,8 +599,9 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       px_bf16);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py,       py_bf16);
+    // iter-079: single write for combined px+py (drops one EnqueueWriteMeshBuffer
+    // vs the prior separate px and py writes).
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       pxpy_bf16);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
     clk::time_point t_after_upload;
     if (profile_phases) {
