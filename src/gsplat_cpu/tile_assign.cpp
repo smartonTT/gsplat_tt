@@ -82,10 +82,17 @@ TileAssignResult tile_assign(
         result.tiles_per_gaussian[m] = static_cast<int64_t>(w) * static_cast<int64_t>(h);
     };
 
+    // iter-053: blocked dispatch (same rationale as iter-051/052). Strided
+    // (m=w; m+=W) writes to tile_min_x/max_x/min_y/max_y/widths/heights/
+    // tiles_per_gaussian — all per-Gaussian arrays — caused false sharing
+    // between adjacent workers' writes to the same 64 B cache lines.
     if (pool != nullptr && W > 1 && M >= 4096) {
+        const std::size_t chunk_m = (M + W - 1) / W;
         for (std::size_t w = 0; w < W; ++w) {
-            pool->submit([w, W, M, &bbox_one]() {
-                for (std::size_t m = w; m < M; m += W) bbox_one(m);
+            pool->submit([w, chunk_m, M, &bbox_one]() {
+                const std::size_t lo = w * chunk_m;
+                const std::size_t hi = std::min(lo + chunk_m, M);
+                for (std::size_t m = lo; m < hi; ++m) bbox_one(m);
             });
         }
         pool->wait();
@@ -127,9 +134,12 @@ TileAssignResult tile_assign(
     };
 
     if (pool != nullptr && W > 1 && M >= 4096) {
+        const std::size_t chunk_m = (M + W - 1) / W;
         for (std::size_t w = 0; w < W; ++w) {
-            pool->submit([w, W, M, &scatter_one]() {
-                for (std::size_t m = w; m < M; m += W) scatter_one(m);
+            pool->submit([w, chunk_m, M, &scatter_one]() {
+                const std::size_t lo = w * chunk_m;
+                const std::size_t hi = std::min(lo + chunk_m, M);
+                for (std::size_t m = lo; m < hi; ++m) scatter_one(m);
             });
         }
         pool->wait();
@@ -171,9 +181,12 @@ TileAssignResult tile_assign(
                 }
             };
             if (pool != nullptr && W > 1 && M >= 4096) {
+                const std::size_t chunk_m = (M + W - 1) / W;
                 for (std::size_t w = 0; w < W; ++w) {
-                    pool->submit([w, W, M, &precompute_one]() {
-                        for (std::size_t m = w; m < M; m += W) precompute_one(m);
+                    pool->submit([w, chunk_m, M, &precompute_one]() {
+                        const std::size_t lo = w * chunk_m;
+                        const std::size_t hi = std::min(lo + chunk_m, M);
+                        for (std::size_t m = lo; m < hi; ++m) precompute_one(m);
                     });
                 }
                 pool->wait();
@@ -182,8 +195,19 @@ TileAssignResult tile_assign(
             }
         }
 
+        // iter-053: cull dispatch changed from strided to block-chunked.
+        // The strided pattern wrote keep_mask[p] (1 byte each) at p, p+W,
+        // p+2W with W=10 — every 64 B cache line of keep_mask was touched
+        // by every worker, causing intense cross-core line invalidation
+        // on each store. Block-chunked dispatch makes each worker own a
+        // contiguous span of keep_mask -> zero cross-core line traffic,
+        // and hw-prefetcher-friendly sequential reads of gaussian_ids/
+        // tile_ids.
+        const std::size_t chunk_p = (P + W - 1) / W;
         auto cull_stripe = [&](std::size_t w) {
-            for (std::size_t p = w; p < P; p += W) {
+            const std::size_t lo = w * chunk_p;
+            const std::size_t hi = std::min(lo + chunk_p, P);
+            for (std::size_t p = lo; p < hi; ++p) {
                 const int64_t g = result.gaussian_ids[p];
                 if (!opacity_above_floor[static_cast<std::size_t>(g)]) {
                     keep_mask[p] = 0;
