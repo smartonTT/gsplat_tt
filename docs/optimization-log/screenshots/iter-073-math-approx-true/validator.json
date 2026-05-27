@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 images (hero/side/top) show distributed noise at object silhouettes and body; no horizontal or vertical lines at 32- or 16-pixel spacing visible in any view."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32×32 or 16×16 constant-color blocks visible in any rendered PNG; all views show correct fine detail and texture."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark voids or missing-coverage regions in any rendered view; coverage matches reference stitch_hero."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes or clipping artifacts visible in hero, side, or top renders."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes; edge noise in diff10 is consistent with established architectural noise floor."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches in any view. No isolated bright firefly pixels (>5) visible on any rendered PNG."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show the silhouette of the object as a solid bright outline; geometry positions match reference."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images show uniform speckle distributed across the object body and edges — consistent with bf16 pack_tile architectural noise floor established since iter-052/066. No structured grids, bands, or gradients."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.41496520322124, "side": 40.99648830708902, "top": 38.59546500629706}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.1423, "actual": {"hero": 17.137658028356157, "side": 17.278351895106663, "top": 18.1422622408487}, "pass": true, "delta_vs_prev": -0.0001},
+  "per_view_consistency": {"max_psnr_delta_db": 2.401, "max_ms_ratio": 1.232, "pass": true},
+  "timing": {"median_ms": 25.0415, "p99_ms": 30.09137, "vs_prev_best_pct": -0.41, "pass": true},
+  "reasoning": "All checks pass. Tile_structure_ratio is bit-identical to prev_best (iter-072) across all three views (delta < 0.0001 on all views), well within the ±0.05 architectural-baseline carve-out; the >14 ratio is the established bf16 pack_tile floor and does NOT trigger the strictly-reduce rule. PSNR is bit-identical to prev_best (delta < 0.01 dB all views), all above the 38 dB kernel-algebra floor. Kernel timing improved -0.41% (25.1445→25.0415 ms), within prev_best×1.02 budget. p99/median ratio 1.20× well under the 3× alert threshold. Per-view PSNR spread 2.4 dB and ms ratio 1.23× both well under their thresholds. Visual inspection shows clean renders with no tile seams, no fireflies, no geometry shift, no color clipping, and diff10 shows uniform architectural noise speckle consistent with the established baseline."
+}
