@@ -9,13 +9,26 @@ You MUST cite specific check failures. "Looks okay" is not a valid reasoning.
 - 3 rendered PNGs: `{iter_dir}/{hero,side,top}.png`
 - 3 frozen reference PNGs: `{ref_dir}/stitch_{hero,side,top}.png`
 - 3 diff×10 images: `{iter_dir}/{hero,side,top}_diff10.png`
-- `{iter_dir}/metrics.json` — `{kernel_ms_median, kernel_ms_p99, per_view_median, psnr_per_view, prev_best_kernel_ms, class}`
+- `{iter_dir}/metrics.json` — `{kernel_ms_median, kernel_ms_p99, per_view_median, psnr_per_view, tile_structure_ratio_per_view, prev_best_kernel_ms, class}`
 
-## Visual checks (primary gate — any ✗ on a structural-artifact check = REJECT, regardless of numbers)
+## Numerical structural check (HARD GATE — applied BEFORE visual checks)
+
+`tile_structure_ratio_per_view` quantifies how much the per-pixel diff against the reference is correlated within 32×32 tile blocks vs. uniform i.i.d. noise. The reference is the unmodified main-branch kernel; any tile_ratio > 1 means the candidate's per-tile precision differs from the reference. A purely random-noise diff would give ratio ≈ 1; structured per-tile precision drift produces high ratios.
+
+| ratio (max across views) | meaning | verdict |
+|---|---|---|
+| ≤ 8 | clean, near-reference precision | continue to visual checks |
+| 8 < r ≤ 13 | mild tile structure (single-fuse era) | continue, note in reasoning |
+| 13 < r ≤ 18 | visible tile quilting present, no regression from prev_best | NEEDS_REVIEW unless explicitly improving — see below |
+| > 18 | tile_grid_seams structurally bad | REJECT |
+
+Compare `tile_structure_ratio_per_view` to the prior iter (read recent iter metrics from `docs/optimization-log/iters.jsonl` if the calling prompt provides it; otherwise infer from `prev_best_kernel_ms`). **Any iter that increases the max tile_ratio by > 0.5 vs. its baseline is REJECT regardless of PSNR or kernel-ms wins.** Quality-restoring iters (ratio decreases ≥ 0.5) are HIGH-PRIORITY KEEPS even at modest or zero perf gain.
+
+## Visual checks (secondary gate — any ✗ on a structural-artifact check = REJECT, regardless of numbers)
 
 For each rendered PNG and its diff×10 image:
 
-1. **Tile grid seams?** Diff×10 shows horizontal/vertical lines at 32-pixel or 16-pixel spacing → REJECT.
+1. **Tile grid seams?** Diff×10 shows horizontal/vertical lines at 32-pixel or 16-pixel spacing, OR the diff10 brightness distribution shows visible quilting blocks → REJECT. Cross-check: if `tile_structure_ratio_per_view` > 13 you SHOULD see this visually; if you don't, look harder — the metric is mechanical and reliable.
 2. **Tile-shaped uniform-fill blocks?** Square 32×32 or 16×16 regions that are constant color where reference has detail → REJECT.
 3. **Missing-splat black holes?** Local regions in render darker than reference where there should be coverage (bright spots in diff×10) → REJECT if hole > ~16 pixels in any dimension; smaller speckle is acceptable noise.
 4. **Color channel clipping bands?** Saturated R/G/B regions not in reference, often flat colored stripes → REJECT.
@@ -65,6 +78,7 @@ Write ONLY this JSON to stdout, nothing else:
     {"name": "diff10_structure", "result": "pass" | "fail", "evidence": "..."}
   ],
   "psnr_check": {"floor": 100.0, "actual": {"hero": ..., "side": ..., "top": ...}, "pass": true | false},
+  "tile_structure_check": {"max_ratio": ..., "actual": {"hero": ..., "side": ..., "top": ...}, "pass": true | false, "delta_vs_prev": ...},
   "per_view_consistency": {"max_psnr_delta_db": ..., "max_ms_ratio": ..., "pass": true | false},
   "timing": {"median_ms": ..., "p99_ms": ..., "vs_prev_best_pct": ..., "pass": true | false},
   "reasoning": "one paragraph citing specific check failures if any"
