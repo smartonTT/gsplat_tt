@@ -84,6 +84,7 @@ class Backend(ABC):
         tile_size: int = 32,
         covs_2d: torch.Tensor | None = None,
         opacities: torch.Tensor | None = None,
+        colors: torch.Tensor | None = None,
         sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Tile-overlap assignment.
@@ -93,7 +94,7 @@ class Backend(ABC):
         return rasterization.get_tile_assignments(
             means_2d, radii, image_height, image_width,
             tile_size=tile_size,
-            covs_2d=covs_2d, opacities=opacities,
+            covs_2d=covs_2d, opacities=opacities, colors=colors,
             sub_timings=sub_timings,
         )
 

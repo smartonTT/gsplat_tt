@@ -127,11 +127,12 @@ class Pipeline:
 
         # Stage 2: tile assignment (+ per-pair Mahalanobis cull when cov+ω
         # are available — drops ~22% more pairs on stitch_doll, iter-024).
+        # iter-084: pass colors so the cull scales by peak channel magnitude.
         with self._timer(timings, "tile_assign"):
             gaussian_ids, tile_ids, _ = self.backend.tile_assign(
                 means_2d, radii, image_height, image_width,
                 tile_size=self.tile_size,
-                covs_2d=covs_2d, opacities=opacities,
+                covs_2d=covs_2d, opacities=opacities, colors=colors,
                 sub_timings=sub_timings,
             )
         tiles_x = (image_width + self.tile_size - 1) // self.tile_size
