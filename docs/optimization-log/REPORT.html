@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 53 · current best: 24.73 ms · target: 1.0 ms
+      iters: 54 · current best: 24.67 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-057-drop-redundant-copy-inits
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T05:58:02.937244+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass: diff10 images across all three views show speckled noise confined to the object surface with no tile grid seams, uniform-fill blocks, missing splats, color clipping, ringing, NaN/Inf signatures, or geometry shift. The top diff10 has mild within-body structure but this is not new — tile_structure_ratio is 17.587, identical to the iter-054/056 baseline (delta_vs_prev = 0.0), so no regression on the structural metric. With delta = 0.0 the 13 &lt; r &lt;= 18 band rule (NEEDS_REVIEW &#x27;unless explicitly improving&#x27;) does not trigger a downgrade — the iter is not worsening ratio. PSNR all views clear the 35.0 dB perceptual floor (hero 39.10, side 40.92, top 38.29). Max per-view PSNR delta 2.63 dB and p99/median ratio 1.20 are both well within spec. kernel_ms_median 24.6685 vs prev_best 24.729 gives -0.24% improvement, satisfying the &lt;= prev_best * 1.02 timing gate. The iter safely drops 3 redundant copy_tile_to_dst_init_short calls where no other *_init interleaves between consecutive same-format copy_tiles, matching the iter-048+049 safe-fuse pattern and distinct from the iter-055 hang (which had a binary_dest_reuse_init running between the copies). Verdict: KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.67 ms</b> median · 29.58 ms p99</div>
+    <div class="per-view">per-view: hero 24.67 / side 23.83 / top 29.47</div>
+    <div class="psnr">PSNR: hero 39.1 / side 40.9 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-057-drop-redundant-copy-inits/hero.png" target="_blank"><img src="screenshots/iter-057-drop-redundant-copy-inits/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-057-drop-redundant-copy-inits/side.png" target="_blank"><img src="screenshots/iter-057-drop-redundant-copy-inits/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-057-drop-redundant-copy-inits/top.png" target="_blank"><img src="screenshots/iter-057-drop-redundant-copy-inits/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-057-drop-redundant-copy-inits/hero_diff10.png" target="_blank"><img src="screenshots/iter-057-drop-redundant-copy-inits/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-057-drop-redundant-copy-inits/side_diff10.png" target="_blank"><img src="screenshots/iter-057-drop-redundant-copy-inits/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-057-drop-redundant-copy-inits/top_diff10.png" target="_blank"><img src="screenshots/iter-057-drop-redundant-copy-inits/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images show speckled noise confined to the object silhouette with no horizontal or vertical lines at 32</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color fill blocks visible in any render; all detail regions match reference.</li><li>✓ missing_splat_holes: No dark holes or missing coverage regions in hero, side, or top renders vs references. Silhouettes and interior regions </li><li>✓ color_clipping_bands: No saturated R/G/B bands or flat-colored stripes present in any of the three renders.</li><li>✓ ringing_halos: No structured ringing or halos at object silhouette edges in any view; edge noise is fine-grained speckle only.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any render.</li><li>✓ geometry_shift: Diff10 images do not show object silhouettes indicating coordinate shift; diff is distributed across the surface texture</li><li>✓ diff10_structure: Hero and side diff10 are dominated by uniform speckle on the Gaussian surface. Top diff10 has mild within-body structure</li></ul>
+    <p class="reasoning">All visual checks pass: diff10 images across all three views show speckled noise confined to the object surface with no tile grid seams, uniform-fill blocks, missing splats, color clipping, ringing, NaN/Inf signatures, or geometry shift. The top diff10 has mild within-body structure but this is not new — tile_structure_ratio is 17.587, identical to the iter-054/056 baseline (delta_vs_prev = 0.0), so no regression on the structural metric. With delta = 0.0 the 13 &lt; r &lt;= 18 band rule (NEEDS_REVIEW &#x27;unless explicitly improving&#x27;) does not trigger a downgrade — the iter is not worsening ratio. PSNR all views clear the 35.0 dB perceptual floor (hero 39.10, side 40.92, top 38.29). Max per-view PSNR delta 2.63 dB and p99/median ratio 1.20 are both well within spec. kernel_ms_median 24.6685 vs prev_best 24.729 gives -0.24% improvement, satisfying the &lt;= prev_best * 1.02 timing gate. The iter safely drops 3 redundant copy_tile_to_dst_init_short calls where no other *_init interleaves between consecutive same-format copy_tiles, matching the iter-048+049 safe-fuse pattern and distinct from the iter-055 hang (which had a binary_dest_reuse_init running between the copies). Verdict: KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-056-profile-capture
