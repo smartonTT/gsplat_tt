@@ -1,4 +1,6 @@
+#include <cstdlib>
 #include <cstring>
+#include <string>
 
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
@@ -15,6 +17,11 @@
 namespace py = pybind11;
 
 namespace {
+
+// Forward declarations of pool getters (definitions below).
+gsplat_cpu::ThreadPool& global_blend_pool();
+gsplat_cpu::ThreadPool& global_cull_pool();
+gsplat_cpu::ThreadPool& global_sort_pool();
 
 py::tuple pack_project_result(const gsplat_cpu::ProjectResult& result, std::size_t N) {
     const std::size_t M = result.depths.size();
@@ -312,18 +319,34 @@ py::tuple sort_py(
         P,
         M,
         tiles_x,
-        tiles_y);
+        tiles_y,
+        &global_sort_pool());
 
     return pack_sort_result(result, tiles_x, tiles_y);
 }
 
+std::size_t resolve_pool_size() {
+    if (const char* env = std::getenv("GSPLAT_TT_NUM_THREADS")) {
+        try {
+            const long v = std::stol(env);
+            if (v > 0) return static_cast<std::size_t>(v);
+        } catch (...) {}
+    }
+    return 0;
+}
+
 gsplat_cpu::ThreadPool& global_blend_pool() {
-    static gsplat_cpu::ThreadPool pool(0);
+    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
     return pool;
 }
 
 gsplat_cpu::ThreadPool& global_cull_pool() {
-    static gsplat_cpu::ThreadPool pool(0);
+    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
+    return pool;
+}
+
+gsplat_cpu::ThreadPool& global_sort_pool() {
+    static gsplat_cpu::ThreadPool pool(resolve_pool_size());
     return pool;
 }
 
