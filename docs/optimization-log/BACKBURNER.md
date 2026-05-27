@@ -177,3 +177,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on three grounds: (1) tile_structure_ratio top=18.150 exceeds the >14 hard floor and delta vs prev best is +0.404 (>0.3 threshold); (2) PSNR hero=39.40 and top=38.59 are below the 40 dB kernel-algebra floor; (3) kernel_ms_median=25.661 is +6.93% above prev_best=23.98. The CB_DX/CB_DY fuse degrades both quality and perf — dst-resident SFPU mul_binary + square_tile cost more than the CB pack/unpack saved, and pack_tile bf16 quantization is now confirmed architectural (fourth CB-hop fuse to fail flat).
 - Thumbnails: ![hero](screenshots/iter-068-dxdy-fuse/hero.png) ![diff10](screenshots/iter-068-dxdy-fuse/hero_diff10.png)
 
+
+## iter-069-state-init-fuse — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 25.47 / p99 30.57
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the >14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.
+- Thumbnails: ![hero](screenshots/iter-069-state-init-fuse/hero.png) ![diff10](screenshots/iter-069-state-init-fuse/hero_diff10.png)
+

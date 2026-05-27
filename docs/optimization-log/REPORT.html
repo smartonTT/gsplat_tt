@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 64 · current best: 23.98 ms · target: 1.0 ms
+      iters: 65 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-069-state-init-fuse
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T09:22:24.973974+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the &gt;14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.47 ms</b> median · 30.57 ms p99</div>
+    <div class="per-view">per-view: hero 25.47 / side 24.78 / top 30.52</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-069-state-init-fuse/hero.png" target="_blank"><img src="screenshots/iter-069-state-init-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-069-state-init-fuse/side.png" target="_blank"><img src="screenshots/iter-069-state-init-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-069-state-init-fuse/top.png" target="_blank"><img src="screenshots/iter-069-state-init-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-069-state-init-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-069-state-init-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-069-state-init-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-069-state-init-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-069-state-init-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-069-state-init-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✓ tile_grid_seams: diff10 shows object-shaped speckle noise; no visible 32px or 16px horizontal/vertical grid lines</li><li>✓ tile_uniform_fill: no 32x32 or 16x16 constant-fill blocks visible; detail preserved across all views</li><li>✓ missing_splat_holes: no local black holes or missing-coverage regions in any view</li><li>✓ color_clipping_bands: no saturated R/G/B stripe artifacts; color distribution looks normal</li><li>✓ ringing_halos: silhouette edges show only noise-level diff, no structured ringing</li><li>✓ nan_inf_signatures: no pure black/white/magenta correlated patches; no firefly outlier pixels visible in rendered PNGs across all three view</li><li>✓ geometry_shift: diff10 does not show object silhouette shift; error concentrated on body not edges</li><li>✓ diff10_structure: diff10 dominated by uniform speckle on object body; no grid, gradient, or band patterns</li></ul>
+    <p class="reasoning">REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the &gt;14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-068-dxdy-fuse
@@ -2312,6 +2345,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.4 / side 41.0 / top 38.6
 - Validator reasoning: REJECT on three grounds: (1) tile_structure_ratio top=18.150 exceeds the &gt;14 hard floor and delta vs prev best is +0.404 (&gt;0.3 threshold); (2) PSNR hero=39.40 and top=38.59 are below the 40 dB kernel-algebra floor; (3) kernel_ms_median=25.661 is +6.93% above prev_best=23.98. The CB_DX/CB_DY fuse degrades both quality and perf — dst-resident SFPU mul_binary + square_tile cost more than the CB pack/unpack saved, and pack_tile bf16 quantization is now confirmed architectural (fourth CB-hop fuse to fail flat).
 - Thumbnails: ![hero](screenshots/iter-068-dxdy-fuse/hero.png) ![diff10](screenshots/iter-068-dxdy-fuse/hero_diff10.png)
+
+
+## iter-069-state-init-fuse — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 25.47 / p99 30.57
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the &gt;14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.
+- Thumbnails: ![hero](screenshots/iter-069-state-init-fuse/hero.png) ![diff10](screenshots/iter-069-state-init-fuse/hero_diff10.png)
 
 </pre>
   </section>
