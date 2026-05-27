@@ -203,20 +203,18 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     cb_tile(CB_DX, 2);
     cb_tile(CB_DY, 2);
-    cb_tile(CB_DX2, 2);
-    cb_tile(CB_DY2, 2);
-    cb_tile(CB_DXDY, 2);
+    // iter-053: CB_DX2/CB_DY2/CB_DXDY/CB_POWER/CB_ALPHA/CB_ONE_MINUS_ALPHA/CB_T_TMP
+    // allocations dropped — slots 6,7,8,10,12,14,15 reserved but unused after
+    // the per-Gaussian fuse chain (iter-040 B3 power, iter-041 B2+B3a per-term,
+    // iter-042 E sub-identity, iter-052 B3b/C+D1). Indices kept to avoid
+    // renumbering risk; ~24 KB/core L1 reclaimed.
     {
         CircularBufferConfig c(3 * TILE_BYTES_BF16, {{CB_Q, DataFormat::Float16_b}});
         c.set_page_size(CB_Q, TILE_BYTES_BF16);
         CreateCircularBuffer(program, cores, c);
     }
-    cb_tile(CB_POWER, 2);
-    cb_tile(CB_ALPHA, 2);
 
     cb_tile(CB_CONTRIB, 1);
-    cb_tile(CB_ONE_MINUS_ALPHA, 1);
-    cb_tile(CB_T_TMP, 1);
 
     cb_tile(CB_COLOR_R_STATE, 1);
     cb_tile(CB_COLOR_G_STATE, 1);
