@@ -203,17 +203,37 @@ void kernel_main() {
         // (4) Stream Gaussian scalar packs for this tile. One 64-byte
         // page per Gaussian; compute pops one per inner-loop iteration.
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
-        for (uint32_t g = 0; g < g_count; g++) {
+        //
+        // iter-089: wrap-aware K=2 burst. Coalesce 2 noc_async_read_tile
+        // calls per barrier when the CB has 2 contiguous slots free at
+        // the current write pointer. iter-087 (K=4, no wrap check) hung
+        // on CB wrap-straddle; we cap `batch` to pages_until_wrap so the
+        // burst always lands in contiguous L1.
+        constexpr uint32_t K = 2;
+        const auto& cb_scal = get_local_cb_interface(CB_SCALARS);
+        uint32_t g = 0;
+        while (g < g_count) {
             // Accumulator zone for per-Gaussian scalar fetch (SumN1 slot 0).
             // Reports total cycles spent in the per-Gaussian DRAM→L1 stream
             // for this RISC, which is the dominant work on the reader.
             DeviceZoneScopedSumN1("Z_R_g");
 
-            uint32_t entry_id = g_start + g;
-            cb_reserve_back(CB_SCALARS, 1);
-            noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));
+            uint32_t remaining = g_count - g;
+            uint32_t batch = remaining < K ? remaining : K;
+            uint32_t wptr  = get_write_ptr(CB_SCALARS);
+            // fifo_limit is inclusive; +1 gives bytes through end of CB.
+            uint32_t bytes_until_wrap = cb_scal.fifo_limit + 1 - wptr;
+            uint32_t pages_until_wrap = bytes_until_wrap / cb_scal.fifo_page_size;
+            if (batch > pages_until_wrap) batch = pages_until_wrap;
+
+            cb_reserve_back(CB_SCALARS, batch);
+            for (uint32_t k = 0; k < batch; k++) {
+                noc_async_read_tile(g_start + g + k, packs_acc,
+                                    wptr + k * pack_bytes_padded);
+            }
             noc_async_read_barrier();
-            cb_push_back(CB_SCALARS, 1);
+            cb_push_back(CB_SCALARS, batch);
+            g += batch;
         }
 
         // CB_TILE_META's write pointer wraps after each push_back, so
