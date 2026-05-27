@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 86 · current best: 23.98 ms · target: 1.0 ms
+      iters: 87 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-094-set-common-runtime-args
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T14:16:22.243401+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> iter-094 is a pure host-side dispatch refactor (SetCommonRuntimeArgs + per-core args slimmed to start/count). All eight visual checks pass: diff10 images show only the established architectural bf16 speckle noise with no tile grid seams, no geometry shift, no fireflies, no color bands, no NaN/Inf signatures. Tile_structure_ratio max is 18.132 (top view), which is within the established architectural baseline of ~17-18 set by iter-052/064/067/068; per the architectural-baseline carve-out, the delta vs prev_best iter-093 is effectively 0.0 (bit-identical at 5th+ decimal), which is within the ±0.05 threshold, so only the +0.3 ratchet rule applies and is not triggered. PSNR is above the 38 dB dispatch-class floor on all three views (hero 39.37, side 40.95, top 38.57), all bit-identical to prev_best per the calling prompt. Timing is flat at -0.09% vs prev_best (24.434 vs 24.4555 ms), well within the ≤+2% break-even threshold. p99/median ratio is 1.19, well below the 3× suspicious-tail threshold. Per-view PSNR delta is 2.38 dB (far below 20 dB gate) and per-view ms ratio is 1.23 (far below 2× gate). No check failures; verdict KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.43 ms</b> median · 29.16 ms p99</div>
+    <div class="per-view">per-view: hero 24.43 / side 23.62 / top 29.14</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-094-set-common-runtime-args/hero.png" target="_blank"><img src="screenshots/iter-094-set-common-runtime-args/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-094-set-common-runtime-args/side.png" target="_blank"><img src="screenshots/iter-094-set-common-runtime-args/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-094-set-common-runtime-args/top.png" target="_blank"><img src="screenshots/iter-094-set-common-runtime-args/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-094-set-common-runtime-args/hero_diff10.png" target="_blank"><img src="screenshots/iter-094-set-common-runtime-args/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-094-set-common-runtime-args/side_diff10.png" target="_blank"><img src="screenshots/iter-094-set-common-runtime-args/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-094-set-common-runtime-args/top_diff10.png" target="_blank"><img src="screenshots/iter-094-set-common-runtime-args/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images show noise concentrated on the object body and edges with no visible horizontal/vertical lines a</li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color block regions visible in any render. Hero, side, and top all show smooth Gaussian splat</li><li>✓ missing_splat_holes: No dark holes or under-covered regions relative to expected object coverage. All three views show continuous coverage of</li><li>✓ color_clipping_bands: No saturated flat-colored stripes or clipping bands in any of the three rendered views. Color gradients are smooth and n</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes in any view. Edge transitions in the renders appear natural; diff10</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any render. No firefly outlier pixels (isolated 1-3px hot do</li><li>✓ geometry_shift: Diff10 images do not show the silhouette of the object in a shifted position. The noise is distributed over the object b</li><li>✓ diff10_structure: All three diff10 images are dominated by uniform speckle noise distributed over the object region. The top_diff10 shows </li></ul>
+    <p class="reasoning">iter-094 is a pure host-side dispatch refactor (SetCommonRuntimeArgs + per-core args slimmed to start/count). All eight visual checks pass: diff10 images show only the established architectural bf16 speckle noise with no tile grid seams, no geometry shift, no fireflies, no color bands, no NaN/Inf signatures. Tile_structure_ratio max is 18.132 (top view), which is within the established architectural baseline of ~17-18 set by iter-052/064/067/068; per the architectural-baseline carve-out, the delta vs prev_best iter-093 is effectively 0.0 (bit-identical at 5th+ decimal), which is within the ±0.05 threshold, so only the +0.3 ratchet rule applies and is not triggered. PSNR is above the 38 dB dispatch-class floor on all three views (hero 39.37, side 40.95, top 38.57), all bit-identical to prev_best per the calling prompt. Timing is flat at -0.09% vs prev_best (24.434 vs 24.4555 ms), well within the ≤+2% break-even threshold. p99/median ratio is 1.19, well below the 3× suspicious-tail threshold. Per-view PSNR delta is 2.38 dB (far below 20 dB gate) and per-view ms ratio is 1.23 (far below 2× gate). No check failures; verdict KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-093-cq1-upload-split
