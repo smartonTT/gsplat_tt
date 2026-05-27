@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 50 · current best: 24.73 ms · target: 1.0 ms
+      iters: 51 · current best: 24.73 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-053-dead-cb-cleanup
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T04:29:43.152925+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> iter-053 is a pure host-side dead-CB cleanup: 7 unused cb_tile() allocations removed from alpha_blend.cpp with no kernel logic changes. PNG MD5s are bit-identical to iter-052 across all three views, confirming zero output change. PSNR values are identical to iter-052 (hero 39.10, side 40.92, top 38.29 — all above the 35 dB binning floor). Tile_structure_ratio max is 17.587 vs iter-052 max of 17.518, a delta of +0.069 — well below the +0.5 REJECT threshold. All visual checks pass. Kernel_ms_median 24.729 vs prev_best 25.0555 is -1.31% (improvement). All checks pass; KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.73 ms</b> median · 29.62 ms p99</div>
+    <div class="per-view">per-view: hero 24.73 / side 23.90 / top 29.58</div>
+    <div class="psnr">PSNR: hero 39.1 / side 40.9 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-053-dead-cb-cleanup/hero.png" target="_blank"><img src="screenshots/iter-053-dead-cb-cleanup/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-053-dead-cb-cleanup/side.png" target="_blank"><img src="screenshots/iter-053-dead-cb-cleanup/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-053-dead-cb-cleanup/top.png" target="_blank"><img src="screenshots/iter-053-dead-cb-cleanup/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-053-dead-cb-cleanup/hero_diff10.png" target="_blank"><img src="screenshots/iter-053-dead-cb-cleanup/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-053-dead-cb-cleanup/side_diff10.png" target="_blank"><img src="screenshots/iter-053-dead-cb-cleanup/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-053-dead-cb-cleanup/top_diff10.png" target="_blank"><img src="screenshots/iter-053-dead-cb-cleanup/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff×10 images show speckle noise distributed across the object silhouette with no visible horizontal/vertical lines at </li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color blocks visible in diff×10 images. Error distribution is fine-grained speckle confined t</li><li>✓ missing_splat_holes: No dark holes or bright spots in diff×10 indicating missing coverage. Error is distributed across the lit surface area a</li><li>✓ color_clipping_bands: No saturated flat-color stripes in any diff×10. Small red/blue/yellow speckles are isolated subpixel artifacts consisten</li><li>✓ ringing_halos: No structured ringing at object silhouettes. Edge brightness in diff×10 is uniform noise-level glow at the silhouette bo</li><li>✓ nan_inf_signatures: No pure black/white/magenta patches in spatially-correlated regions. PNG MD5-identical to iter-052 confirms no NaN/Inf i</li><li>✓ geometry_shift: Diff×10 does not show a displaced silhouette of the object. Error is confined within the object boundary, not offset — n</li><li>✓ diff10_structure: All three diff×10 images (hero/side/top) show uniform fine speckle consistent with prior iterations. No grids, edges, gr</li></ul>
+    <p class="reasoning">iter-053 is a pure host-side dead-CB cleanup: 7 unused cb_tile() allocations removed from alpha_blend.cpp with no kernel logic changes. PNG MD5s are bit-identical to iter-052 across all three views, confirming zero output change. PSNR values are identical to iter-052 (hero 39.10, side 40.92, top 38.29 — all above the 35 dB binning floor). Tile_structure_ratio max is 17.587 vs iter-052 max of 17.518, a delta of +0.069 — well below the +0.5 REJECT threshold. All visual checks pass. Kernel_ms_median 24.729 vs prev_best 25.0555 is -1.31% (improvement). All checks pass; KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-053-dead-cb-cleanup
