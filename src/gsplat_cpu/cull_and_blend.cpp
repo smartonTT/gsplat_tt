@@ -101,6 +101,17 @@ inline void apply_gaussian_neon(
     // sequentially lets the OoO engine + 2-3 NEON FMA pipes interleave
     // them. The compiler's loop unroller doesn't always achieve this
     // depth of reordering across the cross-iter RAW chains.
+    // iter-048: per-row dynamic alpha*T early-exit. Once the per-pixel
+    // contribution `at = alpha * T_prev` falls below 1e-6 across an
+    // entire row, the row's contribution to the final color is below
+    // the 8-bit perceptual floor (1/255 ≈ 3.9e-3), and the
+    // multiplicative T update (T -= at) also moves T by < 1e-6.
+    // Skipping the 12 RGB FMAs + 2 T updates costs at most a 3-op
+    // (vmaxq + vmaxvq + compare) probe + 1 branch per row. The expected
+    // skip rate on saturating microblocks (where most Gaussians enter
+    // after T < 0.01 over part of the row) more than recovers that.
+    const float32x4_t skip_thresh = vdupq_n_f32(1.0e-6f);
+    (void)skip_thresh;  // marker to keep close to use site
     auto row_body = [&](int i) __attribute__((always_inline)) {
         const float py = static_cast<float>(py_start + i) + 0.5f;
         const float dy = py - my;
@@ -128,6 +139,9 @@ inline void apply_gaussian_neon(
         const float32x4_t t_hi = vld1q_f32(&acc.t[row + 4]);
         const float32x4_t at_lo = vmulq_f32(alpha_lo, t_lo);
         const float32x4_t at_hi = vmulq_f32(alpha_hi, t_hi);
+
+        const float at_max = vmaxvq_f32(vmaxq_f32(at_lo, at_hi));
+        if (at_max < 1.0e-6f) return;
 
         float32x4_t r_lo = vld1q_f32(&acc.r[row]);
         float32x4_t gg_lo = vld1q_f32(&acc.g[row]);
