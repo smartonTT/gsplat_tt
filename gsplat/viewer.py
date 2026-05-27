@@ -427,7 +427,7 @@ class GaussianViewer:
 
         @self._azim_slider.on_update
         def _on_azim(_event: viser.GuiEvent) -> None:
-            if self._slider_suppress or self._preset_c2w is not None:
+            if self._slider_suppress:
                 return
             self._preset_active = False
             _apply_orbit_to_all_clients(
@@ -438,7 +438,7 @@ class GaussianViewer:
 
         @self._elev_slider.on_update
         def _on_elev(_event: viser.GuiEvent) -> None:
-            if self._slider_suppress or self._preset_c2w is not None:
+            if self._slider_suppress:
                 return
             self._preset_active = False
             _apply_orbit_to_all_clients(
@@ -449,7 +449,7 @@ class GaussianViewer:
 
         @self._dist_slider.on_update
         def _on_dist(_event: viser.GuiEvent) -> None:
-            if self._slider_suppress or self._preset_c2w is not None:
+            if self._slider_suppress:
                 return
             self._preset_active = False
             _apply_orbit_to_all_clients(
@@ -578,19 +578,10 @@ class GaussianViewer:
         if W <= 0 or H <= 0:
             return np.zeros((max(H, 1), max(W, 1), 3), dtype=np.uint8)
 
-        if self._preset_c2w is not None and self._preset_active:
-            render_c2w = self._preset_c2w
-            if self._preset_fov_deg is not None:
-                intrinsics = _intrinsics_from_fov(W, H, self._preset_fov_deg)
-            else:
-                intrinsics = torch.tensor(
-                    camera_state.get_K((W, H)), dtype=torch.float32,
-                )
-        else:
-            render_c2w = camera_state.c2w
-            intrinsics = torch.tensor(
-                camera_state.get_K((W, H)), dtype=torch.float32,
-            )
+        render_c2w = camera_state.c2w
+        intrinsics = torch.tensor(
+            camera_state.get_K((W, H)), dtype=torch.float32,
+        )
         extrinsics = c2w_to_w2c(render_c2w)
 
         try:
