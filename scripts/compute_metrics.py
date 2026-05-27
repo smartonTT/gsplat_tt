@@ -103,7 +103,21 @@ def main():
     ap.add_argument("--prev-best-ms", default="Infinity")
     ap.add_argument("--views", nargs="*", default=None,
                     help="optional whitelist; default = all PNGs in iter-dir matching ref-dir")
+    ap.add_argument(
+        "--reference-backend",
+        default=None,
+        help="backend recorded in reference _summary.json; warns if not 'cpu' when "
+             "validating cpu_cpp (frozen PNG refs must come from numpy cpu, not cpu_cpp)",
+    )
     args = ap.parse_args()
+
+    ref_summary_path = args.reference_dir / "_summary.json"
+    ref_backend = args.reference_backend
+    if ref_backend is None and ref_summary_path.exists():
+        try:
+            ref_backend = json.loads(ref_summary_path.read_text()).get("backend")
+        except json.JSONDecodeError:
+            ref_backend = None
 
     timing = aggregate_timing(args.iter_dir / "timing.jsonl")
 
@@ -142,7 +156,14 @@ def main():
         "psnr_per_view": psnr_per_view,
         "tile_structure_per_view": tile_structure_per_view,
         "prev_best_sum_ms": prev_best,
+        "reference_backend": ref_backend,
     }
+    if ref_backend and ref_backend != "cpu":
+        out["reference_warning"] = (
+            "reference PNGs were not generated with numpy cpu; PSNR vs them does not "
+            "validate cpu_cpp against ground truth. Regenerate with "
+            "capture_reference.py --backend cpu or use scripts/compare_backends.py."
+        )
     out_path = args.iter_dir / "metrics.json"
     out_path.write_text(json.dumps(out, indent=2))
     print(json.dumps(out, indent=2))
