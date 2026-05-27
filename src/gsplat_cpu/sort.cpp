@@ -3,11 +3,88 @@
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cstdint>
 #include <vector>
 
 namespace gsplat_cpu {
+
+namespace {
+
+// Per-worker scratch for the per-tile radix sort. One worker reuses these
+// buffers across every tile it processes. Sized lazily to the largest tile's
+// entry count it sees. Avoids ~768 std::vector heap allocations per frame
+// (3 per tile * 256 tiles).
+struct SortScratch {
+    std::vector<uint32_t> tmp_keys;
+    std::vector<int64_t>  tmp_ids;
+};
+
+// LSD radix sort on uint32 keys, stable, 4 passes of 8 bits each. Sorts the
+// (key, id) pair in place over [base, base + n). The caller owns the
+// data buffers; we just swap the contents twice per pass (in/out -> out/in).
+// Stability is required to match numpy's stable radix-argsort tie-break.
+inline void radix_sort_tile(
+    uint32_t* keys, int64_t* ids, std::size_t n, SortScratch& sc) {
+    if (n <= 1) return;
+    // Tiny-tile fallback: a stable insertion sort is faster than 4 passes
+    // of 256-bucket histograms when n is small. Threshold tuned to favor
+    // the heavy-tile case (where radix wins decisively).
+    if (n <= 16) {
+        for (std::size_t i = 1; i < n; ++i) {
+            const uint32_t k = keys[i];
+            const int64_t  v = ids[i];
+            std::size_t j = i;
+            while (j > 0 && keys[j - 1] > k) {
+                keys[j] = keys[j - 1];
+                ids[j]  = ids[j - 1];
+                --j;
+            }
+            keys[j] = k;
+            ids[j]  = v;
+        }
+        return;
+    }
+
+    if (sc.tmp_keys.size() < n) sc.tmp_keys.resize(n);
+    if (sc.tmp_ids.size()  < n) sc.tmp_ids.resize(n);
+
+    uint32_t* in_k  = keys;
+    int64_t*  in_v  = ids;
+    uint32_t* out_k = sc.tmp_keys.data();
+    int64_t*  out_v = sc.tmp_ids.data();
+
+    uint32_t counts[256];
+    uint32_t offsets[256];
+
+    for (int byte_idx = 0; byte_idx < 4; ++byte_idx) {
+        const int shift = byte_idx * 8;
+        for (int i = 0; i < 256; ++i) counts[i] = 0;
+
+        for (std::size_t i = 0; i < n; ++i) {
+            ++counts[(in_k[i] >> shift) & 0xFF];
+        }
+        uint32_t sum = 0;
+        for (int i = 0; i < 256; ++i) {
+            offsets[i] = sum;
+            sum += counts[i];
+        }
+        for (std::size_t i = 0; i < n; ++i) {
+            const uint8_t b = static_cast<uint8_t>((in_k[i] >> shift) & 0xFF);
+            const uint32_t pos = offsets[b]++;
+            out_k[pos] = in_k[i];
+            out_v[pos] = in_v[i];
+        }
+        std::swap(in_k, out_k);
+        std::swap(in_v, out_v);
+    }
+
+    // After 4 passes (even), in_k/in_v are the originals: data is in keys/ids.
+    // No final copy needed.
+}
+
+}  // namespace
 
 SortResult sort_and_bin(
     const int64_t* gaussian_ids,
@@ -67,50 +144,60 @@ SortResult sort_and_bin(
         cursors[t] = static_cast<int64_t>(pos + 1);
     }
 
-    // Pass 3: per-tile STABLE sort by depth_bits (parallel across tiles via pool).
-    // Stable is required so tied depths preserve input order, matching numpy's
-    // radix argsort tie-breaking exactly.
-    auto sort_one_tile = [&](int t) {
+    // Pass 3: per-tile STABLE LSD radix sort by depth_bits.
+    // - LSD 8-bit radix, 4 passes for uint32 depth_bits: ~4n work per tile
+    //   vs std::stable_sort's ~n log n on indirect index permutation. On the
+    //   stitch hero scene's largest tiles (~11k entries) this is roughly
+    //   3-4x faster than the iter-023 stable_sort indirect-permutation path.
+    // - Each worker reuses its SortScratch (tmp_keys + tmp_ids) across all
+    //   tiles it processes; lazy resize means at most one heap grow per
+    //   worker per frame.
+    // - Dispatch via LPT atomic counter (heaviest tile first), so workers
+    //   never starve waiting on a long-tail giant tile.
+    const std::size_t W = (pool != nullptr) ? std::max<std::size_t>(1, pool->size()) : 1;
+    std::vector<SortScratch> scratches(W);
+
+    // LPT order: sort tile indices by descending entry count so heavy tiles
+    // get dispatched first.
+    std::vector<int> tile_order(static_cast<std::size_t>(num_tiles));
+    for (int i = 0; i < num_tiles; ++i) tile_order[static_cast<std::size_t>(i)] = i;
+    std::sort(tile_order.begin(), tile_order.end(), [&](int a, int b) {
+        return counts[static_cast<std::size_t>(a)] > counts[static_cast<std::size_t>(b)];
+    });
+
+    auto sort_one_tile = [&](int t, SortScratch& sc) {
         const std::size_t lo = static_cast<std::size_t>(starts[static_cast<std::size_t>(t)]);
         const std::size_t hi = static_cast<std::size_t>(starts[static_cast<std::size_t>(t) + 1]);
         const std::size_t n = hi - lo;
         if (n <= 1) return;
-        // Index permutation over [0, n). std::stable_sort on indices is stable
-        // in the input order, which matches numpy radix-sort tie-breaking.
-        std::vector<uint32_t> idx(n);
-        for (std::size_t k = 0; k < n; ++k) idx[k] = static_cast<uint32_t>(k);
-        std::stable_sort(idx.begin(), idx.end(),
-                         [&](uint32_t a, uint32_t b) {
-                             return packed_keys[lo + a] < packed_keys[lo + b];
-                         });
-        std::vector<uint32_t> out_keys(n);
-        std::vector<int64_t> out_ids(n);
-        for (std::size_t k = 0; k < n; ++k) {
-            out_keys[k] = packed_keys[lo + idx[k]];
-            out_ids[k] = packed_ids[lo + idx[k]];
-        }
-        for (std::size_t k = 0; k < n; ++k) {
-            packed_keys[lo + k] = out_keys[k];
-            packed_ids[lo + k] = out_ids[k];
-        }
+        radix_sort_tile(packed_keys.data() + lo, packed_ids.data() + lo, n, sc);
     };
 
     if (pool != nullptr && num_tiles > 1) {
-        for (int t = 0; t < num_tiles; ++t) {
-            pool->submit([t, &sort_one_tile]() { sort_one_tile(t); });
+        // Collapse 256 individual pool.submit() calls down to W tasks pulling
+        // from a shared atomic counter (LPT scheduling). Two wins over per-tile
+        // submit: mutex contention on the task queue drops from ~256 to W,
+        // and workers race to grab the heaviest tiles first.
+        std::atomic<int> next_idx{0};
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([&, w]() {
+                SortScratch& sc = scratches[w];
+                for (;;) {
+                    const int idx = next_idx.fetch_add(1, std::memory_order_relaxed);
+                    if (idx >= num_tiles) return;
+                    const int t = tile_order[static_cast<std::size_t>(idx)];
+                    sort_one_tile(t, sc);
+                }
+            });
         }
         pool->wait();
     } else {
-        for (int t = 0; t < num_tiles; ++t) {
-            sort_one_tile(t);
-        }
+        SortScratch& sc = scratches[0];
+        for (int t = 0; t < num_tiles; ++t) sort_one_tile(t, sc);
     }
 
-    // Pass 4: gather final gaussian_ids in sorted order.
-    result.sorted_gaussian_ids.resize(P);
-    for (std::size_t i = 0; i < P; ++i) {
-        result.sorted_gaussian_ids[i] = packed_ids[i];
-    }
+    // Pass 4: move packed_ids into result.sorted_gaussian_ids (no copy).
+    result.sorted_gaussian_ids = std::move(packed_ids);
 
     return result;
 }
