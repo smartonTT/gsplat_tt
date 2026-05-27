@@ -194,7 +194,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     cb_tile(CB_PX, 2);
     cb_tile(CB_PY, 2);
-    cb_small(CB_SCALARS, SCALAR_PACK_PAGE_BYTES, 8, DataFormat::Float32);
+    cb_small(CB_SCALARS, SCALAR_PACK_PAGE_BYTES, 4, DataFormat::Float32);
     cb_small(CB_TILE_META, META_PAGE_BYTES, 2, DataFormat::UInt32);
     // Depth must be a multiple of 3 (the per-tile batch size) so no
     // single push-of-3 ever straddles the CB wrap. Picking 6 keeps two
