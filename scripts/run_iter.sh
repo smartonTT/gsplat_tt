@@ -33,9 +33,9 @@ ITER_DIR="$ITER_DIR_PARENT/$ITER_NAME"
 SENTINEL="$REPO_ROOT/.last-build-commit"
 BUILD_DIR="$REPO_ROOT/build"
 
-mkdir -p "$ITER_DIR"
+SCENE="${SCENE:-bicycle}"
 
-# Step 1: clean tree gate. Allow uncommitted iter outputs only.
+mkdir -p "$ITER_DIR"
 if [[ -n "$(git -C "$REPO_ROOT" status --porcelain | grep -v '^?? opt/screenshots/' | grep -v '^?? build/' || true)" ]]; then
   echo "ERROR: working tree not clean; supervisor must resolve before next iter" >&2
   git -C "$REPO_ROOT" status --short >&2
@@ -82,6 +82,7 @@ echo "[run_iter] rendering 30 frames (backend=$BACKEND)"
 "$LOCAL_PY" "$REPO_ROOT/scripts/render_30frame.py" \
   --backend "$BACKEND" \
   --cameras "$REPO_ROOT/benchmarks/cameras_v2.json" \
+  --scene "$SCENE" \
   --out-dir "$ITER_DIR" \
   >>"$ITER_DIR/run.log" 2>&1 || { touch "$ITER_DIR/RENDER_FAIL"; exit 3; }
 

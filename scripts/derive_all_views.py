@@ -15,7 +15,7 @@ bounding box still fits inside the square 1024x1024 frame with margin.
 
 View angles (relative to scene_center, using viewer's orbit conventions):
 
-  hero  azim=180  elev= 0    front
+  hero  azim=220  elev= 0    front
   side  azim=90   elev= 0    profile
   top   azim=180  elev=60    above-front
 
@@ -42,7 +42,7 @@ from scripts.derive_camera import look_at_c2w  # noqa: E402
 
 # (azim_deg, elev_deg, distance_factor)
 VIEWS: dict[str, tuple[float, float, float]] = {
-    "hero": (180.0, 0.0, 1.2),
+    "hero": (220.0, 0.0, 1.2),
     "side": (90.0, 0.0, 1.3),
     "top":  (180.0, 60.0, 1.3),
 }
@@ -64,9 +64,8 @@ def scene_bounds(ply_path: Path) -> tuple[np.ndarray, float]:
 
 def build_c2w(center: np.ndarray, distance: float, azim_deg: float, elev_deg: float) -> np.ndarray:
     position, look_at, up = _orbit_pose(center, distance, azim_deg=azim_deg, elev_deg=elev_deg)
-    # viewer.py uses _WORLD_UP_INITIAL = -Y for viser; cameras.json/render_fixed
-    # uses world_up = +Y. Negate so the resulting c2w renders right-side-up.
-    return look_at_c2w(eye=position, target=look_at, world_up=-up)
+    # Match viewer up_direction from _orbit_pose (world up = -Y for these scenes).
+    return look_at_c2w(eye=position, target=look_at, world_up=up)
 
 
 def main() -> None:

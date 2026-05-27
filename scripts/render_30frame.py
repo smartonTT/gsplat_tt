@@ -41,7 +41,7 @@ def main():
                     help=f"one of: {', '.join(sorted(REGISTRY))}")
     ap.add_argument("--cameras", required=True, type=Path)
     ap.add_argument("--out-dir", required=True, type=Path)
-    ap.add_argument("--scene", default="stitch")
+    ap.add_argument("--scene", default="bicycle")
     ap.add_argument("--warmup", type=int, default=1, help="discard-then-render warmup runs")
     ap.add_argument("--contrib-floor", type=float, default=None,
                     help="override cameras.json contrib_floor")

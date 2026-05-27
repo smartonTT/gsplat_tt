@@ -1,6 +1,7 @@
 """Browser-based interactive viewer for 3D Gaussian Splatting scenes."""
 from __future__ import annotations
 
+import json
 import os
 import socket
 import statistics
@@ -13,6 +14,7 @@ from typing import NamedTuple
 import numpy as np
 import torch
 import viser
+import viser.transforms as vt
 import nerfview
 
 from backends import get_backend
@@ -129,6 +131,92 @@ def _orbit_pose(
     return position, look_at, up_direction
 
 
+def _repo_cameras_json() -> Path:
+    return Path(__file__).resolve().parent.parent / "benchmarks" / "cameras.json"
+
+
+def _load_scene_preset(
+    scene_path: str | None,
+) -> tuple[np.ndarray, float] | None:
+    """Return (hero c2w, fov_deg) from cameras.json for a fixed iconic view."""
+    if not scene_path:
+        return None
+    cam_file = _repo_cameras_json()
+    if not cam_file.exists():
+        return None
+    ply_name = Path(scene_path).name
+    cams = json.loads(cam_file.read_text())
+    for entry in cams.values():
+        if Path(entry.get("ply", "")).name != ply_name:
+            continue
+        hero = (entry.get("views") or {}).get("hero") or {}
+        c2w = hero.get("c2w")
+        if c2w is not None:
+            fov_deg = float(entry.get("fov_deg", 50.0))
+            return np.asarray(c2w, dtype=np.float64), fov_deg
+    return None
+
+
+def _intrinsics_from_fov(W: int, H: int, fov_deg: float) -> torch.Tensor:
+    """Square-pixel K; fov_deg applies to the longer image dimension."""
+    longer = max(W, H)
+    f = 0.5 * longer / np.tan(0.5 * np.deg2rad(fov_deg))
+    K = np.array([
+        [f, 0.0, W * 0.5],
+        [0.0, f, H * 0.5],
+        [0.0, 0.0, 1.0],
+    ], dtype=np.float32)
+    return torch.from_numpy(K)
+
+
+def _fov_deg_to_viser_vertical(fov_deg: float, aspect: float) -> float:
+    """Convert cameras.json fov (longer dim) to viser's vertical fov radians."""
+    if aspect >= 1.0:
+        fov_h = np.deg2rad(fov_deg)
+        return float(2.0 * np.arctan(np.tan(fov_h * 0.5) / aspect))
+    return float(np.deg2rad(fov_deg))
+
+
+def _c2w_to_viser_pose(c2w: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """OpenCV c2w (cols: right, down, forward) → viser camera tuple."""
+    eye = c2w[:3, 3].copy()
+    forward = c2w[:3, 2]
+    fn = float(np.linalg.norm(forward))
+    if fn < 1e-9:
+        forward = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    else:
+        forward = forward / fn
+    look_at = eye + forward
+    down = c2w[:3, 1]
+    dn = float(np.linalg.norm(down))
+    up = (-down / dn) if dn > 1e-9 else _WORLD_UP_INITIAL.copy()
+    return eye, look_at, up
+
+
+def _apply_opencv_c2w(
+    client: viser.ClientHandle,
+    c2w: np.ndarray,
+    *,
+    fov_deg: float | None = None,
+) -> None:
+    """Pin viser to an OpenCV c2w (cols: right, down, forward).
+
+    viser's wxyz setter follows the same convention (see viser CameraHandle).
+    Set ``wxyz`` last so look_at/position do not re-derive a different basis.
+    """
+    eye = c2w[:3, 3].copy()
+    rot = c2w[:3, :3].copy()
+    forward = rot[:, 2]
+    fn = float(np.linalg.norm(forward))
+    if fn > 1e-9:
+        forward = forward / fn
+    client.camera.position = eye
+    client.camera.look_at = eye + forward
+    client.camera.wxyz = vt.SO3.from_matrix(rot).wxyz.astype(np.float64)
+    if fov_deg is not None and client.camera.aspect > 0:
+        client.camera.fov = _fov_deg_to_viser_vertical(fov_deg, client.camera.aspect)
+
+
 class GaussianViewer:
     """Interactive viewer for 3D Gaussian Splatting scenes.
 
@@ -187,6 +275,23 @@ class GaussianViewer:
         self._scene_center = (lo + hi) * 0.5
         self._camera_distance = float(np.linalg.norm(hi - lo)) * 1.2
 
+        preset = _load_scene_preset(scene_path)
+        if preset is not None:
+            preset_c2w, preset_fov_deg = preset
+            self._preset_c2w: np.ndarray | None = preset_c2w
+            self._preset_fov_deg: float | None = preset_fov_deg
+            self._preset_active = True
+            pos, look, _up = _c2w_to_viser_pose(preset_c2w)
+            self._scene_center = look
+            self._camera_distance = float(np.linalg.norm(pos - look))
+        else:
+            self._preset_c2w = None
+            self._preset_fov_deg = None
+            self._preset_active = False
+
+        self._programmatic_camera = False
+        self._ignore_camera_updates_until = 0.0
+
         self.server = viser.ViserServer(host=host, port=port, verbose=False)
         self.server.scene.world_axes.visible = True
 
@@ -210,8 +315,8 @@ class GaussianViewer:
         with self._control_folder:
             self._azim_slider = self.server.gui.add_slider(
                 "Azimuth (°)",
-                min=-180.0, max=180.0, step=1.0, initial_value=180.0,
-                hint="Rotate around the world up axis. Wraps freely.",
+                min=0.0, max=360.0, step=1.0, initial_value=220.0,
+                hint="Rotate around the world up axis. 0° = front, 90° = right.",
             )
             self._elev_slider = self.server.gui.add_slider(
                 "Elevation (°)",
@@ -231,7 +336,17 @@ class GaussianViewer:
             )
             self._reset_view_button = self.server.gui.add_button(
                 "Reset view",
-                hint="Snap azimuth/elevation/distance back to defaults.",
+                hint=(
+                    "Snap back to the iconic hero camera."
+                    if self._preset_c2w is not None
+                    else "Snap azimuth/elevation/distance back to defaults."
+                ),
+            )
+
+        if self._preset_c2w is not None:
+            self.server.gui.add_markdown(
+                "**Iconic view** — drag to explore; Reset restores hero camera.",
+                order=-899,
             )
 
         self.viewer = GsplatViewer(
@@ -253,7 +368,38 @@ class GaussianViewer:
         # camera. Read by the slider on_update to compute deltas, and by
         # the camera-update callback to detect "user dragged away from
         # what the sliders say".
-        self._last_orbit_state: tuple[float, float, float] = (180.0, 0.0, default_distance)
+        self._last_orbit_state: tuple[float, float, float] = (220.0, 0.0, default_distance)
+
+        def _apply_opencv_to_all_clients(c2w: np.ndarray) -> None:
+            self._programmatic_camera = True
+            self._slider_suppress = True
+            self._ignore_camera_updates_until = time.perf_counter() + 0.5
+            try:
+                for client in self.server.get_clients().values():
+                    _apply_opencv_c2w(
+                        client,
+                        c2w,
+                        fov_deg=self._preset_fov_deg,
+                    )
+            finally:
+                self._slider_suppress = False
+                self._programmatic_camera = False
+
+        def _apply_pose_to_all_clients(
+            position: np.ndarray,
+            look_at: np.ndarray,
+            up_dir: np.ndarray,
+        ) -> None:
+            self._programmatic_camera = True
+            self._slider_suppress = True
+            try:
+                for client in self.server.get_clients().values():
+                    client.camera.position = position
+                    client.camera.look_at = look_at
+                    client.camera.up_direction = up_dir
+            finally:
+                self._slider_suppress = False
+                self._programmatic_camera = False
 
         def _apply_orbit_to_all_clients(
             azim_deg: float, elev_deg: float, dist: float
@@ -271,10 +417,19 @@ class GaussianViewer:
                     self._slider_suppress = False
             self._last_orbit_state = (azim_deg, elev_deg, dist)
 
+        def _apply_default_view() -> None:
+            if self._preset_c2w is not None:
+                self._preset_active = True
+                _apply_opencv_to_all_clients(self._preset_c2w)
+            else:
+                self._preset_active = False
+                _apply_orbit_to_all_clients(220.0, 0.0, default_distance)
+
         @self._azim_slider.on_update
         def _on_azim(_event: viser.GuiEvent) -> None:
-            if self._slider_suppress:
+            if self._slider_suppress or self._preset_c2w is not None:
                 return
+            self._preset_active = False
             _apply_orbit_to_all_clients(
                 float(self._azim_slider.value),
                 float(self._elev_slider.value),
@@ -283,8 +438,9 @@ class GaussianViewer:
 
         @self._elev_slider.on_update
         def _on_elev(_event: viser.GuiEvent) -> None:
-            if self._slider_suppress:
+            if self._slider_suppress or self._preset_c2w is not None:
                 return
+            self._preset_active = False
             _apply_orbit_to_all_clients(
                 float(self._azim_slider.value),
                 float(self._elev_slider.value),
@@ -293,8 +449,9 @@ class GaussianViewer:
 
         @self._dist_slider.on_update
         def _on_dist(_event: viser.GuiEvent) -> None:
-            if self._slider_suppress:
+            if self._slider_suppress or self._preset_c2w is not None:
                 return
+            self._preset_active = False
             _apply_orbit_to_all_clients(
                 float(self._azim_slider.value),
                 float(self._elev_slider.value),
@@ -303,14 +460,15 @@ class GaussianViewer:
 
         @self._reset_view_button.on_click
         def _on_reset(_event: viser.GuiEvent) -> None:
-            self._slider_suppress = True
-            try:
-                self._azim_slider.value = 180.0
-                self._elev_slider.value = 0.0
-                self._dist_slider.value = default_distance
-            finally:
-                self._slider_suppress = False
-            _apply_orbit_to_all_clients(180.0, 0.0, default_distance)
+            if self._preset_c2w is None:
+                self._slider_suppress = True
+                try:
+                    self._azim_slider.value = 220.0
+                    self._elev_slider.value = 0.0
+                    self._dist_slider.value = default_distance
+                finally:
+                    self._slider_suppress = False
+            _apply_default_view()
 
         @self.server.on_client_connect
         def _on_client_connect(client: viser.ClientHandle) -> None:
@@ -318,20 +476,46 @@ class GaussianViewer:
             controller.set_mode(ClientCameraController.ORBIT)
             self._camera_controllers[client.client_id] = controller
 
-            # Apply the slider state (or defaults) to this client.
-            position, look_at, up_dir = _orbit_pose(
-                center,
-                float(self._dist_slider.value),
-                float(self._azim_slider.value),
-                float(self._elev_slider.value),
-            )
-            self._slider_suppress = True
-            try:
-                client.camera.position = position
-                client.camera.look_at = look_at
-                client.camera.up_direction = up_dir
-            finally:
-                self._slider_suppress = False
+            if self._preset_c2w is not None:
+                self._preset_active = True
+                self._programmatic_camera = True
+                self._slider_suppress = True
+                self._ignore_camera_updates_until = time.perf_counter() + 0.5
+                try:
+                    _apply_opencv_c2w(
+                        client,
+                        self._preset_c2w,
+                        fov_deg=self._preset_fov_deg,
+                    )
+                finally:
+                    self._slider_suppress = False
+                    self._programmatic_camera = False
+            else:
+                position, look_at, up_dir = _orbit_pose(
+                    center,
+                    float(self._dist_slider.value),
+                    float(self._azim_slider.value),
+                    float(self._elev_slider.value),
+                )
+                self._slider_suppress = True
+                try:
+                    client.camera.position = position
+                    client.camera.look_at = look_at
+                    client.camera.up_direction = up_dir
+                finally:
+                    self._slider_suppress = False
+
+            @client.camera.on_update
+            def _on_camera_update(_cam: viser.CameraHandle) -> None:
+                if (
+                    self._programmatic_camera
+                    or self._slider_suppress
+                    or time.perf_counter() < self._ignore_camera_updates_until
+                ):
+                    return
+                if self._preset_c2w is not None:
+                    self._preset_active = False
+                controller.on_camera_update(client.camera)
 
         self._running = False
         if self.force_square is not None:
@@ -394,8 +578,20 @@ class GaussianViewer:
         if W <= 0 or H <= 0:
             return np.zeros((max(H, 1), max(W, 1), 3), dtype=np.uint8)
 
-        extrinsics = c2w_to_w2c(camera_state.c2w)
-        intrinsics = torch.tensor(camera_state.get_K((W, H)), dtype=torch.float32)
+        if self._preset_c2w is not None and self._preset_active:
+            render_c2w = self._preset_c2w
+            if self._preset_fov_deg is not None:
+                intrinsics = _intrinsics_from_fov(W, H, self._preset_fov_deg)
+            else:
+                intrinsics = torch.tensor(
+                    camera_state.get_K((W, H)), dtype=torch.float32,
+                )
+        else:
+            render_c2w = camera_state.c2w
+            intrinsics = torch.tensor(
+                camera_state.get_K((W, H)), dtype=torch.float32,
+            )
+        extrinsics = c2w_to_w2c(render_c2w)
 
         try:
             result = self.pipeline.render(

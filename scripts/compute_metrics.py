@@ -61,6 +61,7 @@ def tile_structure_ratio(ref: np.ndarray, cand: np.ndarray, tile: int = 32) -> f
 
 
 def write_diff10(ref: np.ndarray, cand: np.ndarray, out: Path) -> None:
+    """10× amplified per-channel absolute color difference, clipped to [0, 1]."""
     amp = np.clip(np.abs(ref - cand) * 10.0, 0.0, 1.0)
     Image.fromarray((amp * 255.0).astype(np.uint8)).save(out)
 
@@ -70,6 +71,8 @@ def aggregate_timing(timing_path: Path) -> dict:
     if not rows:
         raise ValueError(f"{timing_path} has no rows")
 
+    stage_keys = ("project", "tile_assign", "sort", "blend")
+
     # Sum-of-all-frames is the primary metric. Per-view median is informative.
     total_ms_all = sum(r.get("total_ms", 0.0) for r in rows)
     per_view: dict[str, list[float]] = {}
@@ -77,9 +80,12 @@ def aggregate_timing(timing_path: Path) -> dict:
     for r in rows:
         v = r.get("view", "unknown")
         per_view.setdefault(v, []).append(r.get("total_ms", 0.0))
+        for k in stage_keys:
+            if k in r:
+                per_stage.setdefault(f"{k}_ms", []).append(float(r[k]))
         for k, val in r.items():
-            if k.endswith("_ms") and k != "total_ms":
-                per_stage.setdefault(k, []).append(val)
+            if k.endswith("_ms") and k != "total_ms" and k not in per_stage:
+                per_stage.setdefault(k, []).append(float(val))
 
     return {
         "n_frames": len(rows),

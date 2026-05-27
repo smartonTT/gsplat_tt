@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import statistics
 from pathlib import Path
 
 import matplotlib
@@ -23,9 +24,99 @@ import matplotlib.pyplot as plt
 
 OPT_DIR = Path(__file__).resolve().parent
 ITERS_JSONL = OPT_DIR / "iters.jsonl"
+METAL_ITERS_JSONL = OPT_DIR / "metal-iters.jsonl"
+METAL_SCREENSHOTS_DIR = OPT_DIR / "metal-screenshots"
 REPORT_HTML = OPT_DIR / "REPORT.html"
 SCREENSHOTS_DIR = OPT_DIR / "screenshots"
 TARGET_SUM_MS = 1000.0
+STAGE_KEYS = ("project_ms", "tile_assign_ms", "sort_ms", "blend_ms")
+STAGE_TIMING_KEYS = ("project", "tile_assign", "sort", "blend")
+REF_DIR = OPT_DIR.parent / "benchmarks" / "reference_v2"
+
+
+def img_link(src: str, cls: str = "thumb") -> str:
+    return f'<a href="{src}" target="_blank" rel="noopener"><img src="{src}" class="{cls}" alt=""></a>'
+
+
+def enrich_stage_medians(row: dict) -> dict:
+    """Fill per_stage_median_ms from timing.jsonl when the jsonl row lacks it."""
+    stages = dict(row.get("per_stage_median_ms") or {})
+    if stages:
+        return stages
+    timing_path = SCREENSHOTS_DIR / row.get("iter_dir", "") / "timing.jsonl"
+    if not timing_path.exists():
+        return stages
+    timing_rows = [
+        json.loads(line)
+        for line in timing_path.read_text().splitlines()
+        if line.strip()
+    ]
+    per_stage: dict[str, list[float]] = {}
+    for tr in timing_rows:
+        for src_key, dst_key in zip(STAGE_TIMING_KEYS, STAGE_KEYS):
+            if src_key in tr:
+                per_stage.setdefault(dst_key, []).append(float(tr[src_key]))
+    return {k: statistics.median(v) for k, v in per_stage.items()}
+
+
+def rows_with_stages(rows: list[dict]) -> list[dict]:
+    return [{**r, "per_stage_median_ms": enrich_stage_medians(r)} for r in rows]
+
+
+def ensure_hero_diff10(iter_dir: str) -> None:
+    """Write hero_diff10.png as 10× per-channel abs color diff vs reference."""
+    if not iter_dir:
+        return
+    iter_path = SCREENSHOTS_DIR / iter_dir
+    hero = iter_path / "hero.png"
+    ref = REF_DIR / "hero.png"
+    if not hero.exists() or not ref.exists():
+        return
+    import numpy as np
+    from PIL import Image
+
+    ref_rgb = np.asarray(Image.open(ref).convert("RGB"), dtype=np.float64) / 255.0
+    cand_rgb = np.asarray(Image.open(hero).convert("RGB"), dtype=np.float64) / 255.0
+    if ref_rgb.shape != cand_rgb.shape:
+        return
+    amp = np.clip(np.abs(ref_rgb - cand_rgb) * 10.0, 0.0, 1.0)
+    Image.fromarray((amp * 255.0).astype(np.uint8)).save(iter_path / "hero_diff10.png")
+
+
+def load_metal_iters() -> list[dict]:
+    if not METAL_ITERS_JSONL.exists():
+        return []
+    rows = []
+    for line in METAL_ITERS_JSONL.read_text().splitlines():
+        line = line.strip()
+        if line:
+            rows.append(json.loads(line))
+    return rows
+
+
+def metal_section(rows: list[dict]) -> str:
+    if not rows:
+        return """
+<section>
+  <h2>Metal port (Phase 5)</h2>
+  <p>Target: bh-30 P150 Blackhole, 1 ms/frame. See
+  <a href='plan-amendment-001-metal-port.md'>plan-amendment-001-metal-port.md</a>.
+  No metal iters logged yet.</p>
+</section>
+"""
+    head = "<tr><th>iter</th><th>verdict</th><th>action</th><th>sum_ms</th><th>min_psnr</th><th>class</th></tr>"
+    body = ""
+    for r in reversed(rows):
+        psnr_d = r.get("psnr_per_view") or {}
+        finite = [v for v in psnr_d.values() if isinstance(v, (int, float)) and v != float("inf") and v == v]
+        psnr_min_str = f"{min(finite):.1f}" if finite else "—"
+        body += (
+            f"<tr><td><a href='metal-screenshots/{r['iter_dir']}/'>{r['iter_dir']}</a></td>"
+            f"<td>{r.get('verdict','')}</td><td>{r.get('action','')}</td>"
+            f"<td>{r.get('sum_total_ms',0):.1f}</td><td>{psnr_min_str}</td>"
+            f"<td>{r.get('class','')}</td></tr>"
+        )
+    return f"<section><h2>Metal port (Phase 5)</h2><table class='ledger'>{head}{body}</table></section>"
 
 
 def load_iters() -> list[dict]:
@@ -49,19 +140,20 @@ def plot_b64(fig) -> str:
 def fig_sum_ms(rows: list[dict]) -> str:
     fig, ax = plt.subplots(figsize=(10, 3.5))
     xs = list(range(len(rows)))
-    ys = [r.get("sum_total_ms", float("nan")) for r in rows]
+    ys = [max(r.get("sum_total_ms", float("nan")), 1e-3) for r in rows]
     colors = ["#2a9d8f" if r.get("action") == "commit" else "#e76f51" for r in rows]
+    ax.set_yscale("log")
     ax.plot(xs, ys, color="#264653", linewidth=1.5, zorder=1)
     ax.scatter(xs, ys, c=colors, s=46, zorder=2, edgecolors="white", linewidths=1.2)
     ax.axhline(TARGET_SUM_MS, color="#e9c46a", linestyle="--", linewidth=1.0, label=f"target {TARGET_SUM_MS:.0f} ms")
     for i, r in enumerate(rows):
         ax.annotate(r.get("iter_dir", "")[:12], (xs[i], ys[i]), fontsize=6, alpha=0.65,
                     xytext=(0, 6), textcoords="offset points", ha="center")
-    ax.set_xlabel("iter index")
-    ax.set_ylabel("sum-of-30 ms")
+    ax.set_xlabel("iter index (oldest → newest)")
+    ax.set_ylabel("sum-of-30 ms (log scale)")
     ax.set_title("30-frame benchmark total (lower is better)")
     ax.legend(loc="upper right", fontsize=8)
-    ax.grid(alpha=0.25)
+    ax.grid(alpha=0.25, which="both")
     return plot_b64(fig)
 
 
@@ -88,18 +180,27 @@ def fig_psnr(rows: list[dict]) -> str:
 
 
 def fig_stages(rows: list[dict]) -> str:
-    """Stacked line plot of per-stage median across the iter history."""
-    keys = ("project_ms", "tile_assign_ms", "sort_ms", "blend_ms")
+    """Line plot of per-stage median ms/frame across iter history."""
+    enriched = rows_with_stages(rows)
     fig, ax = plt.subplots(figsize=(10, 3.5))
-    xs = list(range(len(rows)))
-    for k in keys:
-        ys = [(r.get("per_stage_median_ms") or {}).get(k, None) for r in rows]
-        ax.plot(xs, ys, marker=".", label=k.replace("_ms", ""), linewidth=1.2)
-    ax.set_xlabel("iter index")
+    xs = list(range(len(enriched)))
+    plotted = False
+    for k in STAGE_KEYS:
+        ys = [(r.get("per_stage_median_ms") or {}).get(k) for r in enriched]
+        xs_plot = [x for x, y in zip(xs, ys) if y is not None]
+        ys_plot = [y for y in ys if y is not None]
+        if ys_plot:
+            ax.plot(xs_plot, ys_plot, marker=".", label=k.replace("_ms", ""), linewidth=1.2)
+            plotted = True
+    if not plotted:
+        ax.text(0.5, 0.5, "no per-stage timing data", ha="center", va="center", transform=ax.transAxes)
+    ax.set_xlabel("iter index (oldest → newest)")
     ax.set_ylabel("median ms / frame")
     ax.set_title("Per-stage breakdown")
     ax.legend(loc="upper right", fontsize=8)
     ax.grid(alpha=0.25)
+    if plotted:
+        ax.set_ylim(bottom=0)
     return plot_b64(fig)
 
 
@@ -145,11 +246,14 @@ def backburner_section(rows: list[dict]) -> str:
         thumb_dir = SCREENSHOTS_DIR / r.get("iter_dir", "")
         hero = thumb_dir / "hero.png"
         diff = thumb_dir / "hero_diff10.png"
+        ensure_hero_diff10(r.get("iter_dir", ""))
+        hero_src = f"screenshots/{r['iter_dir']}/hero.png"
+        diff_src = f"screenshots/{r['iter_dir']}/hero_diff10.png"
         thumb_html = ""
         if hero.exists():
-            thumb_html = f"<img src='screenshots/{r['iter_dir']}/hero.png' class='thumb'>"
+            thumb_html = img_link(hero_src)
         if diff.exists():
-            thumb_html += f"<img src='screenshots/{r['iter_dir']}/hero_diff10.png' class='thumb'>"
+            thumb_html += img_link(diff_src)
         items.append(f"""
 <div class='backburner-row'>
   <div class='backburner-meta'>
@@ -160,13 +264,13 @@ def backburner_section(rows: list[dict]) -> str:
   <div class='backburner-thumbs'>{thumb_html}</div>
 </div>
 """)
-    return f"<section><h2>Backburner ({len(parked)})</h2>{''.join(items)}</section>"
+    return f"<section><h2>Backburner ({len(parked)})</h2>{''.join(reversed(items))}</section>"
 
 
 def ledger_section(rows: list[dict]) -> str:
     head = "<tr><th>iter</th><th>verdict</th><th>action</th><th>sum_ms</th><th>min_psnr</th><th>class</th><th>commit</th></tr>"
     body = ""
-    for r in rows:
+    for r in reversed(rows):
         psnr_d = r.get("psnr_per_view") or {}
         finite = [v for v in psnr_d.values() if isinstance(v, (int, float)) and v != float("inf") and v == v]
         psnr_min_str = f"{min(finite):.1f}" if finite else "—"
@@ -193,7 +297,8 @@ def algorithm_snapshot(rows: list[dict]) -> str:
     <li><b>cpu_cpp</b> (C++): in progress, see Phase 2. std::thread-pool, one tile per task.
         Per-tile loop, scalar inner blend (microblock-major comes in iter-008).</li>
     <li><b>contrib_floor</b> = 1/255 (4ms / 255). Lower = render everything visible.</li>
-    <li><b>Reference</b>: <code>benchmarks/reference_v2/</code> @ 512×512, 30 views, seed 0.</li>
+    <li><b>Reference</b>: <code>benchmarks/reference_v2/</code> @ 1024×1024, 30 views, seed 0, scene <b>bicycle</b>.</li>
+    <li><b>Metal</b>: tt-metal on bh-30 (P150); see plan-amendment-001-metal-port.md.</li>
   </ul>
 </section>
 """
@@ -225,7 +330,9 @@ def build_html(rows: list[dict]) -> str:
   .escalations { background: #ffe5e0; border-left: 4px solid #e76f51; padding: 8px 12px; margin-bottom: 12px; }
   .backburner-row { display: flex; gap: 16px; padding: 10px 0; border-bottom: 1px solid #eee; }
   .backburner-meta { flex: 1; }
-  .backburner-thumbs img { height: 100px; margin-right: 6px; border-radius: 4px; }
+  .backburner-thumbs a { display: inline-block; margin-right: 6px; }
+  .backburner-thumbs img { height: 100px; border-radius: 4px; }
+  a img.thumb, a img { cursor: zoom-in; }
   .thumb { height: 100px; border-radius: 4px; }
   .reason { color: #555; font-size: 12px; }
   code { background: #f1faee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
@@ -241,6 +348,7 @@ def build_html(rows: list[dict]) -> str:
 {figs_html}
 {backburner_section(rows)}
 {ledger_section(rows)}
+{metal_section(load_metal_iters())}
 {algorithm_snapshot(rows)}
 </body>
 </html>

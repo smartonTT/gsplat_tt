@@ -262,8 +262,8 @@ def main():
     parser.add_argument("--cycles", action="store_true",
                         help="Training-pattern mode: loop hero/side/top for "
                              "warmup + measure cycles")
-    parser.add_argument("--scene", default="stitch", dest="cycles_scene",
-                        help="Scene for --cycles mode (default: stitch)")
+    parser.add_argument("--scene", default="bicycle", dest="cycles_scene",
+                        help="Scene for --cycles mode (default: bicycle)")
     parser.add_argument("--measure-cycles", type=int, default=10,
                         help="Number of measured cycles in --cycles mode (default: 10)")
     parser.add_argument("--warmup-cycles", type=int, default=1,
