@@ -295,51 +295,51 @@ void kernel_main() {
             cb_wait_front(CB_DX, 1);
             cb_wait_front(CB_DY, 1);
 
-            // ----- Stage B2+B3a (fused): three acquire blocks, each computing
-            // one Q term directly:  mul_tiles → mul_unary_tile in same acquire.
-            // Eliminates CB_DX2/CB_DY2/CB_DXDY scratch round-trips. Single
-            // mul_tiles_init per block + SFPU mul_unary — safe (NOT the
-            // iter-039 multi-init footgun: that hung from chaining ≥2
-            // mul_tiles_init in one acquire; here it's one FPU init followed
-            // by SFPU scalar mul, which is the standard pipeline).
+            // ----- Stage B2+B3a (fused iter-044): all 3 Q terms in ONE acquire
+            // using dst slots 0/1/2. Pattern per slot:
+            //   copy_tile(CB_DX or CB_DY, dst_slot)
+            //   binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA>(other_CB) — dst *= other
+            //   mul_unary_tile(slot, cov_bits)
+            // Avoids the iter-039 multi-mul_tiles_init hang by using
+            // copy_tile + binary_dest_reuse (which only reconfigures unpack_A
+            // per call, not full FPU AB-init). Same multi-binary_dest_reuse_init
+            // safe pattern proven by iter-043 (D2 3-channel fuse with ELWADD;
+            // here ELWMUL — both are valid binary types per eltwise_binary.h).
+            // Saves 2 acquires per Gaussian (3 → 1) and reduces 3 separate
+            // CB_Q pushes to 1 batched push of 3.
             //   CB_Q[0] = a · dx²
             //   CB_Q[1] = c · dy²
             //   CB_Q[2] = 2b · dx·dy
-
-            // Stage B2a + B3a[0]: dst[0] = (dx · dx) · a → CB_Q[0]
             tile_regs_acquire();
-            mul_tiles_init(CB_DX, CB_DX);
-            mul_tiles(CB_DX, CB_DX, 0, 0, 0);
+
+            // slot 0: dx² · a → CB_Q[0]
+            copy_tile_to_dst_init_short(CB_DX);
+            copy_tile(CB_DX, 0, 0);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_DX);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_DX, 0, 0);
             mul_unary_tile(0, cov_a_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 1);
-            pack_tile(0, CB_Q);
-            cb_push_back(CB_Q, 1);
-            tile_regs_release();
 
-            // Stage B2b + B3a[1]: dst[0] = (dy · dy) · c → CB_Q[1]
-            tile_regs_acquire();
-            mul_tiles_init(CB_DY, CB_DY);
-            mul_tiles(CB_DY, CB_DY, 0, 0, 0);
-            mul_unary_tile(0, cov_c_bits);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_Q, 1);
-            pack_tile(0, CB_Q);
-            cb_push_back(CB_Q, 1);
-            tile_regs_release();
+            // slot 1: dy² · c → CB_Q[1]
+            copy_tile_to_dst_init_short(CB_DY);
+            copy_tile(CB_DY, 0, 1);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_DY);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_DY, 0, 1);
+            mul_unary_tile(1, cov_c_bits);
 
-            // Stage B2c + B3a[2]: dst[0] = (dx · dy) · 2b → CB_Q[2]
-            tile_regs_acquire();
-            mul_tiles_init(CB_DX, CB_DY);
-            mul_tiles(CB_DX, CB_DY, 0, 0, 0);
-            mul_unary_tile(0, two_cov_b_bits);
+            // slot 2: dx·dy · 2b → CB_Q[2]
+            copy_tile_to_dst_init_short(CB_DX);
+            copy_tile(CB_DX, 0, 2);
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_DY);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_DY, 0, 2);
+            mul_unary_tile(2, two_cov_b_bits);
+
             tile_regs_commit();
             tile_regs_wait();
-            cb_reserve_back(CB_Q, 1);
+            cb_reserve_back(CB_Q, 3);
             pack_tile(0, CB_Q);
-            cb_push_back(CB_Q, 1);
+            pack_tile(1, CB_Q);
+            pack_tile(2, CB_Q);
+            cb_push_back(CB_Q, 3);
             tile_regs_release();
 
             cb_wait_front(CB_Q, 3);
