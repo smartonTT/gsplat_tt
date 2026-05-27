@@ -68,14 +68,18 @@
 constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 
 void kernel_main() {
-    uint32_t packs_addr        = get_arg_val<uint32_t>(0);
-    uint32_t tile_offsets_addr = get_arg_val<uint32_t>(1);
-    uint32_t px_addr           = get_arg_val<uint32_t>(2);
-    uint32_t py_addr           = get_arg_val<uint32_t>(3);
-    uint32_t tile_ids_addr     = get_arg_val<uint32_t>(4);
-    uint32_t tile_ids_start    = get_arg_val<uint32_t>(5);
-    uint32_t tile_ids_count    = get_arg_val<uint32_t>(6);
-    uint32_t num_tiles_total   = get_arg_val<uint32_t>(7);  // iter-079: py offset
+    // iter-094: same-across-cores values (DRAM buffer addresses + num_tiles)
+    // moved to common runtime args; per-core args slimmed to (start, count).
+    // Host now writes 1 SetCommonRuntimeArgs + 64 small SetRuntimeArgs per
+    // frame instead of 64 large SetRuntimeArgs.
+    uint32_t packs_addr        = get_common_arg_val<uint32_t>(0);
+    uint32_t tile_offsets_addr = get_common_arg_val<uint32_t>(1);
+    uint32_t px_addr           = get_common_arg_val<uint32_t>(2);
+    uint32_t py_addr           = get_common_arg_val<uint32_t>(3);
+    uint32_t tile_ids_addr     = get_common_arg_val<uint32_t>(4);
+    uint32_t num_tiles_total   = get_common_arg_val<uint32_t>(5);  // iter-079: py offset
+    uint32_t tile_ids_start    = get_arg_val<uint32_t>(0);
+    uint32_t tile_ids_count    = get_arg_val<uint32_t>(1);
 
     constexpr uint32_t CB_PX        = 0;
     constexpr uint32_t CB_PY        = 1;

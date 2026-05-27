@@ -45,10 +45,12 @@
 constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 
 void kernel_main() {
-    uint32_t out_addr        = get_arg_val<uint32_t>(0);
-    uint32_t tile_ids_addr   = get_arg_val<uint32_t>(1);
-    uint32_t tile_ids_start  = get_arg_val<uint32_t>(2);
-    uint32_t tile_ids_count  = get_arg_val<uint32_t>(3);
+    // iter-094: out_addr and tile_ids_addr are same-across-cores so moved to
+    // common runtime args. Per-core args are now just (start, count).
+    uint32_t out_addr        = get_common_arg_val<uint32_t>(0);
+    uint32_t tile_ids_addr   = get_common_arg_val<uint32_t>(1);
+    uint32_t tile_ids_start  = get_arg_val<uint32_t>(0);
+    uint32_t tile_ids_count  = get_arg_val<uint32_t>(1);
 
     constexpr uint32_t CB_COLOR_OUT = 16;
     const uint32_t tile_bytes = get_tile_size(CB_COLOR_OUT);

@@ -545,6 +545,16 @@ static void set_per_core_runtime_args(
     const uint32_t out_addr      = static_cast<uint32_t>(bufs.output->address());
     const uint32_t tile_ids_addr = static_cast<uint32_t>(bufs.tile_ids->address());
 
+    // iter-094: same-across-cores args move to common runtime args (one
+    // SetCommonRuntimeArgs call writes them for all cores at once, vs the
+    // prior pattern of repeating them in every per-core SetRuntimeArgs).
+    SetCommonRuntimeArgs(program, ctx.reader, {
+        packs_addr, offsets_addr, px_addr, py_addr, tile_ids_addr, num_tiles,
+    });
+    SetCommonRuntimeArgs(program, ctx.writer, {
+        out_addr, tile_ids_addr,
+    });
+
     uint32_t core_index = 0;
     for (const auto& range : ctx.all_cores.ranges()) {
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
@@ -552,14 +562,9 @@ static void set_per_core_runtime_args(
                 CoreCoord core{x, y};
                 const uint32_t start = assign.per_core_offset[core_index];
                 const uint32_t count = assign.per_core_count[core_index];
-                SetRuntimeArgs(program, ctx.reader, core, {
-                    packs_addr, offsets_addr, px_addr, py_addr,
-                    tile_ids_addr, start, count, num_tiles,
-                });
+                SetRuntimeArgs(program, ctx.reader,  core, {start, count});
                 SetRuntimeArgs(program, ctx.compute, core, {count});
-                SetRuntimeArgs(program, ctx.writer, core, {
-                    out_addr, tile_ids_addr, start, count,
-                });
+                SetRuntimeArgs(program, ctx.writer,  core, {start, count});
                 core_index++;
             }
         }
