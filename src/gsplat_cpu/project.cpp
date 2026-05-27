@@ -485,6 +485,7 @@ ProjectResult project_full_fused(
     const float* cov3d,
     const float* extrinsics,
     const float* intrinsics,
+    const float* colors,
     const float* opacities,
     const float min_opacity,
     const std::size_t N,
@@ -687,6 +688,14 @@ ProjectResult project_full_fused(
             result.depths.push_back(depths[i]);
             result.radii.push_back(radii_scratch[i].x);
             result.radii.push_back(radii_scratch[i].y);
+            if (opacities != nullptr) {
+                result.opacities.push_back(opacities[i]);
+            }
+            if (colors != nullptr) {
+                result.colors.push_back(colors[i * 3 + 0]);
+                result.colors.push_back(colors[i * 3 + 1]);
+                result.colors.push_back(colors[i * 3 + 2]);
+            }
         }
         return result;
     }
@@ -713,10 +722,16 @@ ProjectResult project_full_fused(
     result.covs_2d.resize(V * 4);
     result.depths.resize(V);
     result.radii.resize(V * 2);
+    if (opacities != nullptr) {
+        result.opacities.resize(V);
+    }
+    if (colors != nullptr) {
+        result.colors.resize(V * 3);
+    }
 
     for (std::size_t w = 0; w < W; ++w) {
         pool->submit([w, W, chunk, N, &means_2d, &covs_2d, &depths, &radii_scratch,
-                      &valid_mask, &chunk_starts, &result]() {
+                      colors, opacities, &valid_mask, &chunk_starts, &result]() {
             const std::size_t lo = std::min(w * chunk, N);
             const std::size_t hi = std::min(lo + chunk, N);
             std::size_t out = chunk_starts[w];
@@ -731,6 +746,14 @@ ProjectResult project_full_fused(
                 result.depths[out] = depths[i];
                 result.radii[out*2+0] = radii_scratch[i].x;
                 result.radii[out*2+1] = radii_scratch[i].y;
+                if (opacities != nullptr) {
+                    result.opacities[out] = opacities[i];
+                }
+                if (colors != nullptr) {
+                    result.colors[out * 3 + 0] = colors[i * 3 + 0];
+                    result.colors[out * 3 + 1] = colors[i * 3 + 1];
+                    result.colors[out * 3 + 2] = colors[i * 3 + 2];
+                }
                 ++out;
             }
         });

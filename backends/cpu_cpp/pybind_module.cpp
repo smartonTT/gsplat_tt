@@ -194,6 +194,7 @@ py::tuple project_full_with_cov3d_py(
         static_cast<const float*>(cov3d.request().ptr),
         static_cast<const float*>(extrinsics.request().ptr),
         static_cast<const float*>(intrinsics.request().ptr),
+        nullptr,
         opacities_ptr,
         min_opacity,
         N,
@@ -814,6 +815,7 @@ py::tuple render_full_py(
         static_cast<const float*>(cov3d.request().ptr),
         static_cast<const float*>(extrinsics.request().ptr),
         static_cast<const float*>(intrinsics.request().ptr),
+        colors_ptr,
         opacities_ptr,
         min_opacity,
         N,
@@ -846,9 +848,12 @@ py::tuple render_full_py(
         return py::make_tuple(image_zero, stats);
     }
 
-    // Stage 1.5: filter colors/opacities by valid_mask.
-    const VisibleFiltered vis = filter_visible(
-        colors_ptr, opacities_ptr, proj.valid_mask.data(), N, M, global_project_pool());
+    // iter-057: colors/opacities compacted during project gather — skip the
+    // separate filter_visible scan over all N Gaussians (2 parallel passes
+    // + pool.wait that duplicated work already done in the gather).
+    const float* vis_colors = proj.colors.empty() ? colors_ptr : proj.colors.data();
+    const float* vis_opacities =
+        proj.opacities.empty() ? opacities_ptr : proj.opacities.data();
 
     // Stage 2: tile_assign with per-pair Mahalanobis cull.
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
@@ -862,7 +867,7 @@ py::tuple render_full_py(
         image_width,
         tile_size,
         proj.covs_2d.data(),
-        vis.opacities.data(),
+        vis_opacities,
         contrib_floor,
         &global_tile_assign_pool(),
         /*recompute_tiles_per_gaussian=*/false);
@@ -900,8 +905,8 @@ py::tuple render_full_py(
     const gsplat_cpu::CullAndBlendResult cb = gsplat_cpu::cull_and_blend(
         proj.means_2d.data(),
         proj.covs_2d.data(),
-        vis.colors.data(),
-        vis.opacities.data(),
+        vis_colors,
+        vis_opacities,
         sr.sorted_gaussian_ids.data(),
         sr.tile_ranges.data(),
         M,
