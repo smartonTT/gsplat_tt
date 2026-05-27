@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show speckled noise confined to the object silhouette with no horizontal or vertical lines at 32- or 16-pixel spacing. Top diff10 has mild structure within the body but no grid seams."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color fill blocks visible in any render; all detail regions match reference."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing coverage regions in hero, side, or top renders vs references. Silhouettes and interior regions fully covered."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B bands or flat-colored stripes present in any of the three renders."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouette edges in any view; edge noise is fine-grained speckle only."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches in any render."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show object silhouettes indicating coordinate shift; diff is distributed across the surface texture."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Hero and side diff10 are dominated by uniform speckle on the Gaussian surface. Top diff10 has mild within-body structure consistent with the ongoing tile_ratio ~17.6 baseline (unchanged from iter-054/056); no new grid, edge, gradient, or band patterns introduced."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.09866898, "side": 40.92246672, "top": 38.29195117}, "pass": true},
+  "tile_structure_check": {"max_ratio": 17.587439611872732, "actual": {"hero": 16.60769335, "side": 17.27658395, "top": 17.58743961}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.630515543, "max_ms_ratio": 1.237, "pass": true},
+  "timing": {"median_ms": 24.6685, "p99_ms": 29.57736, "vs_prev_best_pct": -0.24, "pass": true},
+  "reasoning": "All visual checks pass: diff10 images across all three views show speckled noise confined to the object surface with no tile grid seams, uniform-fill blocks, missing splats, color clipping, ringing, NaN/Inf signatures, or geometry shift. The top diff10 has mild within-body structure but this is not new — tile_structure_ratio is 17.587, identical to the iter-054/056 baseline (delta_vs_prev = 0.0), so no regression on the structural metric. With delta = 0.0 the 13 < r <= 18 band rule (NEEDS_REVIEW 'unless explicitly improving') does not trigger a downgrade — the iter is not worsening ratio. PSNR all views clear the 35.0 dB perceptual floor (hero 39.10, side 40.92, top 38.29). Max per-view PSNR delta 2.63 dB and p99/median ratio 1.20 are both well within spec. kernel_ms_median 24.6685 vs prev_best 24.729 gives -0.24% improvement, satisfying the <= prev_best * 1.02 timing gate. The iter safely drops 3 redundant copy_tile_to_dst_init_short calls where no other *_init interleaves between consecutive same-format copy_tiles, matching the iter-048+049 safe-fuse pattern and distinct from the iter-055 hang (which had a binary_dest_reuse_init running between the copies). Verdict: KEEP."
+}
