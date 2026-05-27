@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 94 · current best: 23.98 ms · target: 1.0 ms
+      iters: 95 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-102-drop-pertile-state-waits
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">NEEDS_REVIEW</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T17:16:03.588860+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> NEEDS_REVIEW: all visual checks pass and PSNR is clean (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch floor). Tile_structure_ratio (max 18.132 on top) is within the established bf16 architectural baseline; no new drift introduced; architectural-baseline carve-out applies and the +0.3 ratchet is not triggered. Per-view PSNR delta (2.38 dB) and kernel-ms ratio (1.22×) are within consistency thresholds. The sole failure is timing: kernel_ms_median 25.3735 vs prev_best 24.434 = +3.85%, which exceeds the ≤1.02× break-even gate. However, as noted in the calling prompt, this is a cross-board measurement (bh-08 vs bh-14 baseline) — the +3.85% almost certainly reflects board-to-board clock/thermal variation rather than a real kernel regression. A human reviewer should re-run on the bh-14 baseline board before rendering a final KEEP or REJECT verdict on timing grounds.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.37 ms</b> median · 30.07 ms p99</div>
+    <div class="per-view">per-view: hero 25.37 / side 24.53 / top 30.04</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-102-drop-pertile-state-waits/hero.png" target="_blank"><img src="screenshots/iter-102-drop-pertile-state-waits/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-102-drop-pertile-state-waits/side.png" target="_blank"><img src="screenshots/iter-102-drop-pertile-state-waits/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-102-drop-pertile-state-waits/top.png" target="_blank"><img src="screenshots/iter-102-drop-pertile-state-waits/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-102-drop-pertile-state-waits/hero_diff10.png" target="_blank"><img src="screenshots/iter-102-drop-pertile-state-waits/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-102-drop-pertile-state-waits/side_diff10.png" target="_blank"><img src="screenshots/iter-102-drop-pertile-state-waits/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-102-drop-pertile-state-waits/top_diff10.png" target="_blank"><img src="screenshots/iter-102-drop-pertile-state-waits/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (NEEDS_REVIEW)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images (hero/side/top) show no horizontal or vertical lines at 32px or 16px intervals. Noise is distributed as ir</li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color fill blocks visible in any render. All three views show continuous, detail-preserving c</li><li>✓ missing_splat_holes: No dark holes or missing-coverage patches observed in hero, side, or top renders. Object body is fully covered. Diff10 b</li><li>✓ color_clipping_bands: No saturated color stripes or clipped R/G/B bands in any render. Color range matches reference faithfully across all thr</li><li>✓ ringing_halos: Diff10 shows edge noise at silhouettes, but this is incoherent speckle rather than structured ringing or halos. No regul</li><li>✓ nan_inf_signatures: No pure-black, pure-white, or magenta spatially-correlated patches in any render. No fireflies (isolated 1-3 px hot dots</li><li>✓ geometry_shift: Diff10 images do not show the silhouette of the object as a bright outline, which would indicate coordinate-level geomet</li><li>✓ diff10_structure: All three diff10 images are dominated by incoherent speckle noise concentrated on the object surface, with no structured</li></ul>
+    <p class="reasoning">NEEDS_REVIEW: all visual checks pass and PSNR is clean (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch floor). Tile_structure_ratio (max 18.132 on top) is within the established bf16 architectural baseline; no new drift introduced; architectural-baseline carve-out applies and the +0.3 ratchet is not triggered. Per-view PSNR delta (2.38 dB) and kernel-ms ratio (1.22×) are within consistency thresholds. The sole failure is timing: kernel_ms_median 25.3735 vs prev_best 24.434 = +3.85%, which exceeds the ≤1.02× break-even gate. However, as noted in the calling prompt, this is a cross-board measurement (bh-08 vs bh-14 baseline) — the +3.85% almost certainly reflects board-to-board clock/thermal variation rather than a real kernel regression. A human reviewer should re-run on the bh-14 baseline board before rendering a final KEEP or REJECT verdict on timing grounds.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-101-k3-burst-retry2
@@ -3383,6 +3416,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.4 / side 40.9 / top 38.6
 - Validator reasoning: REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089&#x27;s finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted.
 - Thumbnails: ![hero](screenshots/iter-101-k3-burst-retry2/hero.png) ![diff10](screenshots/iter-101-k3-burst-retry2/hero_diff10.png)
+
+
+## iter-102-drop-pertile-state-waits — NEEDS_REVIEW 
+
+- Class: `dispatch`
+- kernel ms: median 25.37 / p99 30.07
+- PSNR per view: hero 39.4 / side 40.9 / top 38.6
+- Validator reasoning: NEEDS_REVIEW: all visual checks pass and PSNR is clean (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch floor). Tile_structure_ratio (max 18.132 on top) is within the established bf16 architectural baseline; no new drift introduced; architectural-baseline carve-out applies and the +0.3 ratchet is not triggered. Per-view PSNR delta (2.38 dB) and kernel-ms ratio (1.22×) are within consistency thresholds. The sole failure is timing: kernel_ms_median 25.3735 vs prev_best 24.434 = +3.85%, which exceeds the ≤1.02× break-even gate. However, as noted in the calling prompt, this is a cross-board measurement (bh-08 vs bh-14 baseline) — the +3.85% almost certainly reflects board-to-board clock/thermal variation rather than a real kernel regression. A human reviewer should re-run on the bh-14 baseline board before rendering a final KEEP or REJECT verdict on timing grounds.
+- Thumbnails: ![hero](screenshots/iter-102-drop-pertile-state-waits/hero.png) ![diff10](screenshots/iter-102-drop-pertile-state-waits/hero_diff10.png)
 
 </pre>
   </section>

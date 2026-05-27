@@ -258,3 +258,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT solely on timing regression. kernel_ms_median is 25.388 ms vs prev_best 24.434 ms, a +3.91% increase that exceeds the 1.02× (2%) break-even threshold. All quality checks pass: tile_structure_ratio is bit-identical to the architectural baseline (hero 17.107, side 17.292, top 18.132; delta=0.000 on all views, well within ±0.3 ratchet), PSNR is bit-identical to prev_best on all three views (hero 39.368, side 40.950, top 38.574, all ≥38 dB floor), visuals show no fireflies, tile seams, geometry shift, or other structural artifacts. The K=3 burst reader optimization added overhead rather than reducing it, consistent with iter-089's finding that reader NoC is not the gate in this host-dominated bound class. The code must be reverted.
 - Thumbnails: ![hero](screenshots/iter-101-k3-burst-retry2/hero.png) ![diff10](screenshots/iter-101-k3-burst-retry2/hero_diff10.png)
 
+
+## iter-102-drop-pertile-state-waits — NEEDS_REVIEW 
+
+- Class: `dispatch`
+- kernel ms: median 25.37 / p99 30.07
+- PSNR per view: hero 39.4 / side 40.9 / top 38.6
+- Validator reasoning: NEEDS_REVIEW: all visual checks pass and PSNR is clean (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch floor). Tile_structure_ratio (max 18.132 on top) is within the established bf16 architectural baseline; no new drift introduced; architectural-baseline carve-out applies and the +0.3 ratchet is not triggered. Per-view PSNR delta (2.38 dB) and kernel-ms ratio (1.22×) are within consistency thresholds. The sole failure is timing: kernel_ms_median 25.3735 vs prev_best 24.434 = +3.85%, which exceeds the ≤1.02× break-even gate. However, as noted in the calling prompt, this is a cross-board measurement (bh-08 vs bh-14 baseline) — the +3.85% almost certainly reflects board-to-board clock/thermal variation rather than a real kernel regression. A human reviewer should re-run on the bh-14 baseline board before rendering a final KEEP or REJECT verdict on timing grounds.
+- Thumbnails: ![hero](screenshots/iter-102-drop-pertile-state-waits/hero.png) ![diff10](screenshots/iter-102-drop-pertile-state-waits/hero_diff10.png)
+
