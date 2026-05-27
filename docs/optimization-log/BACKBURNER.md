@@ -114,3 +114,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Timing is a clear win: kernel_ms_median 29.334 ms vs prev_best 31.335 ms, a 6.4% improvement, and p99/median ratio is 1.25× (well under the 3× threshold). Visuals pass all structural checks — no tile seams, no geometry shift, no NaN signatures, no clipping. However, the 'top' view PSNR of 34.83 dB falls below the 35 dB binning-class floor, triggering NEEDS_REVIEW per the numeric rules. Hero (35.59 dB) is only marginally above the floor. This is consistent with the iter-034 memo that 17/255 was a boundary test; the top view has crossed the floor. Per-view PSNR delta is 4.03 dB (well under 20 dB), and per-view kernel-ms ratio is 1.295× (under 2×). The sole failure is top-view PSNR 34.83 dB < 35 dB floor for class 'binning'.
 - Thumbnails: ![hero](screenshots/iter-035-contrib-floor-17-of-255/hero.png) ![diff10](screenshots/iter-035-contrib-floor-17-of-255/hero_diff10.png)
 
+
+## iter-044-b2-b3a-fuse-one — REJECT 
+
+- Class: `binning`
+- kernel ms: median 27.68 / p99 33.92
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: Visual quality fine (bit-identical to iter-043) but kernel REGRESSED by +3.9% (26.64 → 27.68 ms). The fused approach traded one efficient FPU mul_tiles (32×32 MAC) per slot for a copy_tile + binary_dest_reuse<ELWMUL> chain per slot — adding SFPU copy_tile work that the original 3-separate-acquires pattern didn't have. Unlike iter-043's D2 fuse (which only consolidated existing copy_tile+ELWADD work into one acquire with zero added ops), this iter ADDED ops per slot. Lesson: when fusion changes the underlying compute primitive from FPU mul_tiles to copy_tile+binary_dest_reuse_ELWMUL, the per-slot cost increases enough to swamp the acquire-overhead savings. REJECT and revert.
+- Thumbnails: ![hero](screenshots/iter-044-b2-b3a-fuse-one/hero.png) ![diff10](screenshots/iter-044-b2-b3a-fuse-one/hero_diff10.png)
+
