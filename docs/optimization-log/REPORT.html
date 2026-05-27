@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 95 · current best: 23.98 ms · target: 1.0 ms
+      iters: 97 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,72 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-103-bh08-rebaseline
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T17:22:06.591424+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> iter-103 is a deliberate no-code-change rebaseline run on bh-08 to establish a board-local prev_best. All visual checks pass: renders are clean, diff10s show only bf16-floor speckle noise with no tile seams, fill blocks, geometry shift, fireflies, or NaN/Inf signatures. PSNR is clean: hero 39.37 / side 40.95 / top 38.57 dB — all above the 38 dB dispatch-class floor with max inter-view delta 2.38 dB (well under 20 dB gate). Tile structure ratios (17.1/17.3/18.1) are at the established bf16 pack_tile architectural floor documented since iter-052; the architectural-baseline carve-out applies since this is an identical-code run and no new drift is introduced. The timing regression (+3.83% vs bh-14-measured prev_best) formally fails the ≤1.02 timing gate, but this is explicitly expected: iter-101 and iter-102 on bh-08 both measured the same +3.85% offset despite opposite kernel changes, proving bh-08 hardware is intrinsically ~3.85% slower than bh-14. The purpose of this iter is to record 25.371 ms as the bh-08 board baseline for future bh-08 comparisons; the supervisor will annotate accordingly. Verdict: KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.37 ms</b> median · 30.03 ms p99</div>
+    <div class="per-view">per-view: hero 25.37 / side 24.52 / top 30.02</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/hero.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/side.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/top.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/hero_diff10.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/side_diff10.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/top_diff10.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10s across all 3 views show speckle noise concentrated on the object body and silhouette edges — no horizontal/verti</li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color fill blocks observed in any rendered view; texture and shading detail match reference t</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions &gt;16 px found in any view. Object coverage matches reference closely.</li><li>✓ color_clipping_bands: No saturated flat-colored stripes or R/G/B clipping bands visible in any render. Hero tongue and ear colors appear corre</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes; edge noise is consistent with normal bf16 quantization speckle.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches. No isolated bright outlier firefly pixels detected in hero, si</li><li>✓ geometry_shift: Diff10s do not show silhouette outlines of the object shifted from the reference — error energy is within the object bod</li><li>✓ diff10_structure: All three diff10s are dominated by uniform colored speckle noise on the object surface — consistent with established bf1</li></ul>
+    <p class="reasoning">iter-103 is a deliberate no-code-change rebaseline run on bh-08 to establish a board-local prev_best. All visual checks pass: renders are clean, diff10s show only bf16-floor speckle noise with no tile seams, fill blocks, geometry shift, fireflies, or NaN/Inf signatures. PSNR is clean: hero 39.37 / side 40.95 / top 38.57 dB — all above the 38 dB dispatch-class floor with max inter-view delta 2.38 dB (well under 20 dB gate). Tile structure ratios (17.1/17.3/18.1) are at the established bf16 pack_tile architectural floor documented since iter-052; the architectural-baseline carve-out applies since this is an identical-code run and no new drift is introduced. The timing regression (+3.83% vs bh-14-measured prev_best) formally fails the ≤1.02 timing gate, but this is explicitly expected: iter-101 and iter-102 on bh-08 both measured the same +3.85% offset despite opposite kernel changes, proving bh-08 hardware is intrinsically ~3.85% slower than bh-14. The purpose of this iter is to record 25.371 ms as the bh-08 board baseline for future bh-08 comparisons; the supervisor will annotate accordingly. Verdict: KEEP.</p>
+  </details>
+</section>
+
+
+<section class="iter-card">
+  <header>
+    <h3>iter-103-bh08-rebaseline
+      <span class="badge" style="background:#7f7f7f">no_commit_valid_but_not_faster</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T17:21:53.102632+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> iter-103 is a deliberate no-code-change rebaseline run on bh-08 to establish a board-local prev_best. All visual checks pass: renders are clean, diff10s show only bf16-floor speckle noise with no tile seams, fill blocks, geometry shift, fireflies, or NaN/Inf signatures. PSNR is clean: hero 39.37 / side 40.95 / top 38.57 dB — all above the 38 dB dispatch-class floor with max inter-view delta 2.38 dB (well under 20 dB gate). Tile structure ratios (17.1/17.3/18.1) are at the established bf16 pack_tile architectural floor documented since iter-052; the architectural-baseline carve-out applies since this is an identical-code run and no new drift is introduced. The timing regression (+3.83% vs bh-14-measured prev_best) formally fails the ≤1.02 timing gate, but this is explicitly expected: iter-101 and iter-102 on bh-08 both measured the same +3.85% offset despite opposite kernel changes, proving bh-08 hardware is intrinsically ~3.85% slower than bh-14. The purpose of this iter is to record 25.371 ms as the bh-08 board baseline for future bh-08 comparisons; the supervisor will annotate accordingly. Verdict: KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.37 ms</b> median · 30.03 ms p99</div>
+    <div class="per-view">per-view: hero 25.37 / side 24.52 / top 30.02</div>
+    <div class="psnr">PSNR: hero 39.4 / side 40.9 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/hero.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/side.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/top.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/hero_diff10.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/side_diff10.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-103-bh08-rebaseline/top_diff10.png" target="_blank"><img src="screenshots/iter-103-bh08-rebaseline/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10s across all 3 views show speckle noise concentrated on the object body and silhouette edges — no horizontal/verti</li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color fill blocks observed in any rendered view; texture and shading detail match reference t</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions &gt;16 px found in any view. Object coverage matches reference closely.</li><li>✓ color_clipping_bands: No saturated flat-colored stripes or R/G/B clipping bands visible in any render. Hero tongue and ear colors appear corre</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes; edge noise is consistent with normal bf16 quantization speckle.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches. No isolated bright outlier firefly pixels detected in hero, si</li><li>✓ geometry_shift: Diff10s do not show silhouette outlines of the object shifted from the reference — error energy is within the object bod</li><li>✓ diff10_structure: All three diff10s are dominated by uniform colored speckle noise on the object surface — consistent with established bf1</li></ul>
+    <p class="reasoning">iter-103 is a deliberate no-code-change rebaseline run on bh-08 to establish a board-local prev_best. All visual checks pass: renders are clean, diff10s show only bf16-floor speckle noise with no tile seams, fill blocks, geometry shift, fireflies, or NaN/Inf signatures. PSNR is clean: hero 39.37 / side 40.95 / top 38.57 dB — all above the 38 dB dispatch-class floor with max inter-view delta 2.38 dB (well under 20 dB gate). Tile structure ratios (17.1/17.3/18.1) are at the established bf16 pack_tile architectural floor documented since iter-052; the architectural-baseline carve-out applies since this is an identical-code run and no new drift is introduced. The timing regression (+3.83% vs bh-14-measured prev_best) formally fails the ≤1.02 timing gate, but this is explicitly expected: iter-101 and iter-102 on bh-08 both measured the same +3.85% offset despite opposite kernel changes, proving bh-08 hardware is intrinsically ~3.85% slower than bh-14. The purpose of this iter is to record 25.371 ms as the bh-08 board baseline for future bh-08 comparisons; the supervisor will annotate accordingly. Verdict: KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-102-drop-pertile-state-waits
