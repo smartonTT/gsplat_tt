@@ -864,7 +864,8 @@ py::tuple render_full_py(
         proj.covs_2d.data(),
         vis.opacities.data(),
         contrib_floor,
-        &global_tile_assign_pool());
+        &global_tile_assign_pool(),
+        /*recompute_tiles_per_gaussian=*/false);
     auto t_ta1 = clock::now();
 
     // Stage 3: sort + bin.
