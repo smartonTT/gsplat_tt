@@ -539,7 +539,27 @@ ProjectResult project_full_fused(
         const float tz = means_cam[i*3+2] + t2;
         depths[i] = tz;
 
-        bool valid = tz > k_near;
+        // iter-031: short-circuit two cheap per-Gaussian invalidations BEFORE
+        // touching cov3d / cov_cam / cov2d. tz <= k_near (near-plane / behind
+        // camera) and opacity < min_opacity are independent of the
+        // 36-byte cov3d read and the two 3x3 matmuls + Jacobian-by-cov_cam
+        // sandwich; skipping them for the 20-30% of Gaussians that fail
+        // these cheap checks shaves both the 36-byte cov3d memory read and
+        // the cov_cam + cov2d compute. Each invalidated Gaussian also
+        // writes 0/sentinel into the scratch arrays so the downstream
+        // gather skips them correctly.
+        if (tz <= k_near ||
+            (opacities != nullptr && opacities[i] < min_opacity)) {
+            means_2d[i*2+0] = 0.0f;
+            means_2d[i*2+1] = 0.0f;
+            covs_2d[i*4+0] = 0.0f;
+            covs_2d[i*4+1] = 0.0f;
+            covs_2d[i*4+2] = 0.0f;
+            covs_2d[i*4+3] = 0.0f;
+            radii_scratch[i] = Vec2f{0.0f, 0.0f};
+            valid_mask[i] = 0;
+            return;
+        }
 
         const float inv_tz = 1.0f / tz;
         const float mean_x = fx * tx * inv_tz + cx;
@@ -562,16 +582,12 @@ ProjectResult project_full_fused(
         const float m00 = j00 * cov_cam(0,0) + j02 * cov_cam(2,0);
         const float m01 = j00 * cov_cam(0,1) + j02 * cov_cam(2,1);
         const float m02 = j00 * cov_cam(0,2) + j02 * cov_cam(2,2);
-        const float m10 = j11 * cov_cam(1,0) + j12 * cov_cam(2,0);
         const float m11 = j11 * cov_cam(1,1) + j12 * cov_cam(2,1);
         const float m12 = j11 * cov_cam(1,2) + j12 * cov_cam(2,2);
 
         const float a = m00 * j00 + m02 * j02 + 0.3f;
-        const float b = m00 * 0.0f + m01 * j11 + m02 * j12;  // (M @ J^T)[0,1]
-        // Equivalent algebraic form (avoids the 0 multiply):
         const float b_canonical = m01 * j11 + m02 * j12;
         const float c_diag = m11 * j11 + m12 * j12 + 0.3f;
-        (void)b;
         covs_2d[i*4+0] = a;
         covs_2d[i*4+1] = b_canonical;
         covs_2d[i*4+2] = b_canonical;
@@ -582,14 +598,13 @@ ProjectResult project_full_fused(
         const float ry = std::ceil(k * std::sqrt(std::max(c_diag, 0.0f)));
         radii_scratch[i] = Vec2f{rx, ry};
 
-        valid = valid && (mean_x + rx > 0.0f)
-                      && (mean_x - rx < static_cast<float>(image_width))
-                      && (mean_y + ry > 0.0f)
-                      && (mean_y - ry < static_cast<float>(image_height))
-                      && (rx > 0.0f) && (ry > 0.0f)
-                      && (rx <= static_cast<float>(max_radius))
-                      && (ry <= static_cast<float>(max_radius));
-        if (opacities != nullptr) valid = valid && (opacities[i] >= min_opacity);
+        const bool valid = (mean_x + rx > 0.0f)
+                        && (mean_x - rx < static_cast<float>(image_width))
+                        && (mean_y + ry > 0.0f)
+                        && (mean_y - ry < static_cast<float>(image_height))
+                        && (rx > 0.0f) && (ry > 0.0f)
+                        && (rx <= static_cast<float>(max_radius))
+                        && (ry <= static_cast<float>(max_radius));
         valid_mask[i] = valid ? 1 : 0;
     };
 
