@@ -41,15 +41,45 @@ FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 
 # pybind11 — resolved via the project venv's pybind11 module.
-# iter-001 will activate this once the C++ library has anything to bind.
-# find_package(pybind11 CONFIG REQUIRED)
+set(PYBIND11_FINDPYTHON ON)
+set(Python_EXECUTABLE "${CMAKE_SOURCE_DIR}/../.venv/bin/python")
+execute_process(
+  COMMAND "${CMAKE_SOURCE_DIR}/../.venv/bin/python" -m pybind11 --cmakedir
+  OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  ERROR_QUIET
+)
+if(NOT PYBIND11_CMAKE_DIR)
+  # Fallback: brew pybind11
+  execute_process(
+    COMMAND pybind11-config --cmakedir
+    OUTPUT_VARIABLE PYBIND11_CMAKE_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+endif()
+list(APPEND CMAKE_PREFIX_PATH "${PYBIND11_CMAKE_DIR}")
+find_package(pybind11 CONFIG REQUIRED)
 
-# Library target — placeholder. iter-001 fleshes this out.
+# Library target — thread pool (iter-001).
 add_library(gsplat_cpu STATIC
-  gsplat_cpu/dummy.cpp
+  gsplat_cpu/thread_pool.cpp
 )
 target_include_directories(gsplat_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+set_target_properties(gsplat_cpu PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-# Tests
-enable_testing()
+# pybind11 extension — lives next to backends/cpu_cpp/backend.py
+pybind11_add_module(_gsplat_cpu MODULE
+  ${CMAKE_SOURCE_DIR}/../backends/cpu_cpp/pybind_module.cpp
+)
+target_link_libraries(_gsplat_cpu PRIVATE gsplat_cpu)
+set_target_properties(_gsplat_cpu PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../backends/cpu_cpp
+)
+
+# Tests. include(CTest) (rather than bare enable_testing()) writes
+# CTestTestfile.cmake at the cmake binary root, so `ctest --test-dir build`
+# at the top-level build dir finds tests even though tests/ lives outside
+# the src/ source tree.
+include(CTest)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../tests ${CMAKE_BINARY_DIR}/tests)
