@@ -1,0 +1,36 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show noise concentrated on the object body and edges with no visible horizontal/vertical lines at 32px or 16px spacing. The speckle is spatially random within the object silhouette, consistent with the established architectural bf16 floor at ratio ~17-18."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32×32 or 16×16 constant-color block regions visible in any render. Hero, side, and top all show smooth Gaussian splat coverage with natural color gradients."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or under-covered regions relative to expected object coverage. All three views show continuous coverage of the Stitch doll geometry with no black-hole artifacts exceeding 16px."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes or clipping bands in any of the three rendered views. Color gradients are smooth and natural across hero (front-lit), side (dark back), and top (overhead)."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes in any view. Edge transitions in the renders appear natural; diff10 edges show only the expected bf16 quantization noise, not structured ringing patterns."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches in any render. No firefly outlier pixels (isolated 1-3px hot dots) visible on any of the three rendered PNGs. The firefly fix (iter-066 relu_max_tile, eb0843a) is present in HEAD."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show the silhouette of the object in a shifted position. The noise is distributed over the object body, not as a solid-silhouette displacement artifact."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform speckle noise distributed over the object region. The top_diff10 shows somewhat more internal structure consistent with the known ratio ~18 architectural floor, but no grid lines, gradients, or banding patterns that would indicate new structural drift."}
+  ],
+  "psnr_check": {
+    "floor": 38.0,
+    "actual": {"hero": 39.36803565955834, "side": 40.949644684083964, "top": 38.5740701046262},
+    "pass": true
+  },
+  "tile_structure_check": {
+    "max_ratio": 18.132174863668705,
+    "actual": {"hero": 17.107328028167462, "side": 17.29181297057425, "top": 18.132174863668705},
+    "pass": true,
+    "delta_vs_prev": 0.0
+  },
+  "per_view_consistency": {
+    "max_psnr_delta_db": 2.38,
+    "max_ms_ratio": 1.234,
+    "pass": true
+  },
+  "timing": {
+    "median_ms": 24.433999999999997,
+    "p99_ms": 29.16126,
+    "vs_prev_best_pct": -0.09,
+    "pass": true
+  },
+  "reasoning": "iter-094 is a pure host-side dispatch refactor (SetCommonRuntimeArgs + per-core args slimmed to start/count). All eight visual checks pass: diff10 images show only the established architectural bf16 speckle noise with no tile grid seams, no geometry shift, no fireflies, no color bands, no NaN/Inf signatures. Tile_structure_ratio max is 18.132 (top view), which is within the established architectural baseline of ~17-18 set by iter-052/064/067/068; per the architectural-baseline carve-out, the delta vs prev_best iter-093 is effectively 0.0 (bit-identical at 5th+ decimal), which is within the ±0.05 threshold, so only the +0.3 ratchet rule applies and is not triggered. PSNR is above the 38 dB dispatch-class floor on all three views (hero 39.37, side 40.95, top 38.57), all bit-identical to prev_best per the calling prompt. Timing is flat at -0.09% vs prev_best (24.434 vs 24.4555 ms), well within the ≤+2% break-even threshold. p99/median ratio is 1.19, well below the 3× suspicious-tail threshold. Per-view PSNR delta is 2.38 dB (far below 20 dB gate) and per-view ms ratio is 1.23 (far below 2× gate). No check failures; verdict KEEP."
+}
