@@ -132,8 +132,8 @@ def project_gaussians(
         if opacities is not None:
             # k(ω) = sqrt(2·ln(ω / contrib_floor)) is the σ-multiplier at which
             # the Gaussian's contribution drops below contrib_floor. tile_assign
-            # uses contrib_floor = 17/255, so we match here: ω·255/17 = ω·15.
-            arg = torch.clamp(opacities * (255.0 / 17.0), min=1.0)
+            # uses contrib_floor = 15/255, so we match here: ω·255/15 = ω·17.
+            arg = torch.clamp(opacities * (255.0 / 15.0), min=1.0)
             k = torch.clamp(torch.sqrt(2.0 * torch.log(arg)), max=3.0)
         else:
             k = torch.full_like(a, 3.0)
@@ -183,7 +183,7 @@ def get_tile_assignments(
     tile_size: int = 32,
     covs_2d: torch.Tensor | None = None,
     opacities: torch.Tensor | None = None,
-    contrib_floor: float = 17.0 / 255.0,
+    contrib_floor: float = 15.0 / 255.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.
