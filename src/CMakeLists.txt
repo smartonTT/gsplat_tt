@@ -64,8 +64,14 @@ find_package(pybind11 CONFIG REQUIRED)
 # Library target — thread pool (iter-001).
 add_library(gsplat_cpu STATIC
   gsplat_cpu/thread_pool.cpp
+  gsplat_cpu/project.cpp
 )
 target_include_directories(gsplat_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(gsplat_cpu PRIVATE -ffp-contract=off)
+if(APPLE)
+  find_library(GSPLAT_ACCELERATE Accelerate REQUIRED)
+  target_link_libraries(gsplat_cpu PUBLIC ${GSPLAT_ACCELERATE})
+endif()
 set_target_properties(gsplat_cpu PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # pybind11 extension — lives next to backends/cpu_cpp/backend.py

@@ -29,6 +29,66 @@ class CpuCppBackend(Backend):
         # Smoke check: call hello() to confirm the binding works.
         assert self._mod.hello() == "hello from gsplat_cpu"
 
+    def project(
+        self,
+        means: torch.Tensor,
+        scales: torch.Tensor,
+        rotations: torch.Tensor,
+        extrinsics: torch.Tensor,
+        intrinsics: torch.Tensor,
+        image_height: int,
+        image_width: int,
+        opacities: torch.Tensor | None = None,
+        sub_timings: dict[str, float] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        del sub_timings  # C++ path does not emit sub-timings yet.
+        means_np = means.detach().cpu().numpy().astype(np.float32, copy=False)
+        scales_np = scales.detach().cpu().numpy().astype(np.float32, copy=False)
+        rotations_np = rotations.detach().cpu().numpy().astype(np.float32, copy=False)
+        extrinsics_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        intrinsics_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        opacities_np = None
+        if opacities is not None:
+            opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        prep = self._mod.project_prepare(
+            means_np,
+            scales_np,
+            rotations_np,
+            extrinsics_np,
+            intrinsics_np,
+            image_height,
+            image_width,
+        )
+
+        from gsplat.utils import build_covariance_3d
+
+        cov3d = build_covariance_3d(
+            torch.from_numpy(scales_np), torch.from_numpy(rotations_np)
+        )
+        r = torch.from_numpy(extrinsics_np[:3, :3])
+        cov_cam = torch.matmul(torch.matmul(r, cov3d), r.transpose(0, 1))
+
+        j = torch.from_numpy(np.asarray(prep.jacobian)).view(prep.N, 2, 3)
+        covs_2d = torch.bmm(torch.bmm(j, cov_cam), j.transpose(1, 2))
+        covs_2d[:, 0, 0] += 0.3
+        covs_2d[:, 1, 1] += 0.3
+        covs_np = covs_2d.detach().cpu().numpy().astype(np.float32, copy=False)
+        covs_flat = covs_np.reshape(prep.N, 4)
+
+        result = self._mod.project_finalize(
+            prep, covs_flat, opacities_np if opacities_np is not None else None, 1.0 / 255.0
+        )
+        means_2d, covs_2d_out, depths, radii, valid_mask = result
+
+        return (
+            torch.from_numpy(np.asarray(means_2d)),
+            torch.from_numpy(np.asarray(covs_2d_out)),
+            torch.from_numpy(np.asarray(depths)),
+            torch.from_numpy(np.asarray(radii)),
+            torch.from_numpy(np.asarray(valid_mask)),
+        )
+
     def blend(
         self,
         means_2d: torch.Tensor,
