@@ -15,19 +15,11 @@ compile_commands.json
 # Test artifacts
 .pytest_cache/
 
-# Per-iter renders (large PNG blobs).
-# We track the iters.jsonl + decision JSON to record history, but the PNG
-# bodies live in opt/screenshots/ and are not committed to keep the repo size
-# manageable. The validator subagent reads them from disk only.
-opt/screenshots/*/hero.png
-opt/screenshots/*/side.png
-opt/screenshots/*/top.png
-opt/screenshots/*/back.png
-opt/screenshots/*/adj_*.png
-opt/screenshots/*/orbit_*.png
-opt/screenshots/*/elev_*.png
-opt/screenshots/*/chal_*.png
-opt/screenshots/*/*_diff10.png
+# Per-iter renders (large PNG blobs). Everything inside opt/screenshots/<iter>/ is
+# regeneratable from iters.jsonl + the source code, and we keep the canonical
+# references in benchmarks/reference_v2/ instead. Track only the iter folders'
+# JSON metadata + log so we have an audit trail.
+opt/screenshots/*/*.png
 opt/screenshots/*/timing.jsonl
 opt/screenshots/*/run.log
 opt/screenshots/*/build.log
@@ -45,6 +37,12 @@ opt/REPORT.html
 scenes/stitch_doll.ply
 scenes/strawberry.ply
 scenes/point_cloud.ply
+
+# Per-stage fixtures (regenerable derivatives of the PLY + numpy reference path).
+# `scripts/capture_reference.py --scene stitch` rewrites them; we keep only the
+# meta.json so the dir tree is visible in git.
+tests/fixtures/hero/*.npz
+tests/fixtures/hero/*.npy
 
 # IDE / OS
 .DS_Store

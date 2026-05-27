@@ -1,0 +1,8 @@
+{
+  "sum_total_ms": 140717.0089999854,
+  "n_frames": 30,
+  "backend": "cpu",
+  "size": 512,
+  "contrib_floor": 0.00392156862745098,
+  "seed": 0
+}
