@@ -37,7 +37,11 @@ TOLS = {
     "project": {"means_2d": 1e-4, "covs_2d": 1e-5, "depths": 1e-5,
                 "radii": 1e-3, "valid_mask": 0},
     "tile_assign": {"gaussian_ids": 0, "tile_ids": 0, "tiles_per_gaussian": 0},
-    "sort": {"sorted_gaussian_ids": 0, "tile_ranges": 0},
+    "sort": {
+        "sorted_gaussian_ids_depth_sequence": 0,
+        "sorted_gaussian_ids_per_tile_set": 0,
+        "tile_ranges": 0,
+    },
     "blend": {"image": 1.0},   # max-abs check is informational; PSNR gates
     "microblock_cull": {"mb_header": 0, "mb_stream": 0},
 }
@@ -115,9 +119,44 @@ def run_sort(backend, fixtures_dir: Path):
         torch.from_numpy(inp["depths"]),
         int(inp["tiles_x"]), int(inp["tiles_y"]),
     )
+    # Semantic check for sorted_gaussian_ids: torch.argsort is unstable, so
+    # tied depths within a tile can land in any order across implementations.
+    # The downstream-meaningful invariant is:
+    #   (1) the depths gathered through sorted_gaussian_ids are identical to
+    #       the depths gathered through the reference, position-by-position.
+    #   (2) per-tile, the set of gids is identical.
+    # We materialize a "canonical" form for both arrays by re-sorting each
+    # tile's gid slice in ascending gid order, then comparing — that wipes out
+    # tie-break variation but preserves all real ordering errors. Also we
+    # compare depths arrays directly, which catches any non-tie misordering.
+    sgids_np = _to_np(sgids).astype(np.int64)
+    ref_sgids_np = np.asarray(out["sorted_gaussian_ids"], np.int64)
+    tranges_np = _to_np(tranges).astype(np.int64)
+    ref_tranges = np.asarray(out["tile_ranges"], np.int64)
+    depths_full = np.asarray(inp["depths"])
+
+    def depths_in_order(sgids_arr):
+        return depths_full[sgids_arr]
+
+    cand_depth_seq = depths_in_order(sgids_np)
+    ref_depth_seq = depths_in_order(ref_sgids_np)
+
+    def canonical(sgids_arr, tranges_arr):
+        out_arr = sgids_arr.copy()
+        for t in range(tranges_arr.shape[0]):
+            lo, hi = tranges_arr[t, 0], tranges_arr[t, 1]
+            if lo == hi:
+                continue
+            out_arr[lo:hi] = np.sort(out_arr[lo:hi])
+        return out_arr
+
+    cand_canon = canonical(sgids_np, tranges_np)
+    ref_canon = canonical(ref_sgids_np, ref_tranges)
+
     return {
-        "sorted_gaussian_ids": (sgids,   out["sorted_gaussian_ids"]),
-        "tile_ranges":         (tranges, out["tile_ranges"]),
+        "sorted_gaussian_ids_depth_sequence": (cand_depth_seq, ref_depth_seq),
+        "sorted_gaussian_ids_per_tile_set": (cand_canon, ref_canon),
+        "tile_ranges": (tranges_np, ref_tranges),
     }
 
 
