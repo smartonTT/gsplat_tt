@@ -442,76 +442,71 @@ void kernel_main() {
             // Saves 1 acquire + the CB_T_TMP roundtrip per channel — same pattern as
             // iter-007 Stage D1 and iter-010 Stage E.
 
-            // D2 fused 3-channel (iter-043): all R/G/B in one acquire, using
-            // dst slots 0/1/2. Multi binary_dest_reuse_tiles_init in one
-            // acquire is OK because each call reconfigures only the unpack_A
-            // side for a different source CB — same binary type (ELWADD,
-            // DEST_TO_SRCA) throughout. Distinct from iter-039 which hung
-            // from multiple mul_tiles_init calls (full AB-init for binary
-            // mul). Saves 2 acquires per Gaussian.
+            // D2+E mega-fuse (iter-045): merge D2's R/G/B 3-channel update
+            // with Stage E's T_new = T·sat - contrib into ONE acquire using
+            // dst slots 0/1/2/3. Algebra unchanged from iter-042+043:
+            //   slot 0: R_state += contrib · color_r
+            //   slot 1: G_state += contrib · color_g
+            //   slot 2: B_state += contrib · color_b
+            //   slot 3: T_new = T·sat - contrib       (= T·(1-α)·sat)
+            // The acquire has ONE mul_tiles_init (for E's T·sat) following
+            // a sequence of binary_dest_reuse_tiles_init calls (for D2's
+            // ELWADD per channel). iter-039 hang was MULTIPLE mul_tiles_init;
+            // here it's a single mul_tiles_init mid-acquire — testing this
+            // novel pattern. Saves 1 acquire per Gaussian.
             tile_regs_acquire();
 
-            // R: dst[0] = contrib · color_r + R_state
+            // D2-R: dst[0] = contrib · color_r + R_state
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 0);
             mul_unary_tile(0, color_r_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
 
-            // G: dst[1] = contrib · color_g + G_state
+            // D2-G: dst[1] = contrib · color_g + G_state
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 1);
             mul_unary_tile(1, color_g_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 1);
 
-            // B: dst[2] = contrib · color_b + B_state
+            // D2-B: dst[2] = contrib · color_b + B_state
             copy_tile_to_dst_init_short(CB_CONTRIB);
             copy_tile(CB_CONTRIB, 0, 2);
             mul_unary_tile(2, color_b_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
 
+            // E: dst[3] = T·sat - contrib = T_new
+            mul_tiles_init(CB_T_STATE, CB_SAT_MASK);
+            mul_tiles(CB_T_STATE, CB_SAT_MASK, 0, 0, 3);  // dst[3] = T·sat
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB, 0, 3);  // dst[3] -= contrib
+
             tile_regs_commit();
             tile_regs_wait();
+
             cb_pop_front(CB_COLOR_R_STATE, 1);
             cb_pop_front(CB_COLOR_G_STATE, 1);
             cb_pop_front(CB_COLOR_B_STATE, 1);
+            cb_pop_front(CB_T_STATE, 1);
             cb_reserve_back(CB_COLOR_R_STATE, 1);
             cb_reserve_back(CB_COLOR_G_STATE, 1);
             cb_reserve_back(CB_COLOR_B_STATE, 1);
+            cb_reserve_back(CB_T_STATE, 1);
             pack_tile(0, CB_COLOR_R_STATE);
             pack_tile(1, CB_COLOR_G_STATE);
             pack_tile(2, CB_COLOR_B_STATE);
+            pack_tile(3, CB_T_STATE);
             cb_push_back(CB_COLOR_R_STATE, 1);
             cb_push_back(CB_COLOR_G_STATE, 1);
             cb_push_back(CB_COLOR_B_STATE, 1);
+            cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
+
             cb_wait_front(CB_COLOR_R_STATE, 1);
             cb_wait_front(CB_COLOR_G_STATE, 1);
             cb_wait_front(CB_COLOR_B_STATE, 1);
-
-            // ----- Stage E (fused iter-042): T_new = T·sat - contrib.
-            // Algebra: T·(1-α)·sat = T·sat - α·T·sat = T·sat - contrib
-            //          (since contrib = α·T·sat from D1).
-            // One acquire: mul_tiles(T_STATE, SAT_MASK) → dst[0] = T·sat,
-            //              then binary_dest_reuse<ELWSUB, DEST_TO_SRCA>(CONTRIB)
-            //              subtracts contrib in-place. Eliminates the entire
-            //              CB_ONE_MINUS_ALPHA round-trip and the rsub_unary
-            //              acquire. Note: ELWSUB runs at LoFi fidelity (vs
-            //              ELWMUL HiFi3) — PSNR check confirms no regression.
-            tile_regs_acquire();
-            mul_tiles_init(CB_T_STATE, CB_SAT_MASK);
-            mul_tiles(CB_T_STATE, CB_SAT_MASK, 0, 0, 0);  // dst[0] = T·sat
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB, 0, 0);  // dst[0] -= contrib = T·(1-α)·sat
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_pop_front(CB_T_STATE, 1);
-            cb_reserve_back(CB_T_STATE, 1);
-            pack_tile(0, CB_T_STATE);
-            cb_push_back(CB_T_STATE, 1);
-            tile_regs_release();
             cb_wait_front(CB_T_STATE, 1);
 
             cb_pop_front(CB_CONTRIB, 1);
