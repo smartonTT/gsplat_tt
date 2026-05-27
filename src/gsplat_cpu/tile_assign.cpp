@@ -1,6 +1,9 @@
 #include "gsplat_cpu/tile_assign.h"
 
+#include "gsplat_cpu/thread_pool.h"
+
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <vector>
@@ -28,7 +31,8 @@ TileAssignResult tile_assign(
     const int tile_size,
     const float* covs_2d,
     const float* opacities,
-    const float contrib_floor) {
+    const float contrib_floor,
+    ThreadPool* pool) {
     TileAssignResult result;
     result.tiles_per_gaussian.assign(M, 0);
 
@@ -82,41 +86,66 @@ TileAssignResult tile_assign(
     }
 
     if (covs_2d != nullptr && opacities != nullptr && P > 0) {
+        // Parallel per-pair Mahalanobis cull. The cull is embarrassingly
+        // parallel — each pair's contribution-at-tile-center depends only on
+        // read-only inputs. Step 1: every worker writes its survival decision
+        // into a shared keep_mask in a striped slice (no false sharing on
+        // separate chunks). Step 2: serial compaction preserves the original
+        // p-order so the result is bit-identical to the single-threaded run.
+        std::vector<uint8_t> keep_mask(P, 0);
+        const std::size_t W = pool ? pool->size() : 1;
+
+        auto cull_stripe = [&](std::size_t w) {
+            for (std::size_t p = w; p < P; p += W) {
+                const int64_t g = result.gaussian_ids[p];
+                const int64_t tile_id = result.tile_ids[p];
+
+                const float a = covs_2d[static_cast<std::size_t>(g) * 4 + 0];
+                const float b = covs_2d[static_cast<std::size_t>(g) * 4 + 1];
+                const float c = covs_2d[static_cast<std::size_t>(g) * 4 + 3];
+                const float det = std::max(a * c - b * b, 1e-6f);
+
+                const float px = means_2d[static_cast<std::size_t>(g) * 2 + 0];
+                const float py = means_2d[static_cast<std::size_t>(g) * 2 + 1];
+
+                const float tx_tile =
+                    static_cast<float>(tile_id % static_cast<int64_t>(tiles_x)) *
+                    static_cast<float>(tile_size);
+                const float ty_tile =
+                    static_cast<float>(tile_id / static_cast<int64_t>(tiles_x)) *
+                    static_cast<float>(tile_size);
+
+                const float cx = clamp_float(px, tx_tile, tx_tile + static_cast<float>(tile_size));
+                const float cy = clamp_float(py, ty_tile, ty_tile + static_cast<float>(tile_size));
+                const float dx_c = cx - px;
+                const float dy_c = cy - py;
+                const float m2 =
+                    (c * dx_c * dx_c - 2.0f * b * dx_c * dy_c + a * dy_c * dy_c) / det;
+                const float contrib =
+                    opacities[static_cast<std::size_t>(g)] * std::exp(-0.5f * m2);
+                keep_mask[p] = contrib >= contrib_floor ? 1 : 0;
+            }
+        };
+
+        if (pool != nullptr && W > 1) {
+            for (std::size_t w = 0; w < W; ++w) {
+                pool->submit([w, &cull_stripe]() { cull_stripe(w); });
+            }
+            pool->wait();
+        } else {
+            cull_stripe(0);
+        }
+
+        std::size_t total_kept = 0;
+        for (std::size_t p = 0; p < P; ++p) total_kept += keep_mask[p];
         std::vector<int64_t> kept_gids;
         std::vector<int64_t> kept_tids;
-        kept_gids.reserve(P);
-        kept_tids.reserve(P);
-
+        kept_gids.reserve(total_kept);
+        kept_tids.reserve(total_kept);
         for (std::size_t p = 0; p < P; ++p) {
-            const int64_t g = result.gaussian_ids[p];
-            const int64_t tile_id = result.tile_ids[p];
-
-            const float a = covs_2d[static_cast<std::size_t>(g) * 4 + 0];
-            const float b = covs_2d[static_cast<std::size_t>(g) * 4 + 1];
-            const float c = covs_2d[static_cast<std::size_t>(g) * 4 + 3];
-            const float det = std::max(a * c - b * b, 1e-6f);
-
-            const float px = means_2d[static_cast<std::size_t>(g) * 2 + 0];
-            const float py = means_2d[static_cast<std::size_t>(g) * 2 + 1];
-
-            const float tx_tile =
-                static_cast<float>(tile_id % static_cast<int64_t>(tiles_x)) *
-                static_cast<float>(tile_size);
-            const float ty_tile =
-                static_cast<float>(tile_id / static_cast<int64_t>(tiles_x)) *
-                static_cast<float>(tile_size);
-
-            const float cx = clamp_float(px, tx_tile, tx_tile + static_cast<float>(tile_size));
-            const float cy = clamp_float(py, ty_tile, ty_tile + static_cast<float>(tile_size));
-            const float dx_c = cx - px;
-            const float dy_c = cy - py;
-            const float m2 =
-                (c * dx_c * dx_c - 2.0f * b * dx_c * dy_c + a * dy_c * dy_c) / det;
-            const float contrib = opacities[static_cast<std::size_t>(g)] * std::exp(-0.5f * m2);
-
-            if (contrib >= contrib_floor) {
-                kept_gids.push_back(g);
-                kept_tids.push_back(tile_id);
+            if (keep_mask[p]) {
+                kept_gids.push_back(result.gaussian_ids[p]);
+                kept_tids.push_back(result.tile_ids[p]);
             }
         }
 
