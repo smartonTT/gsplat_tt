@@ -32,7 +32,8 @@ TileAssignResult tile_assign(
     const float* covs_2d,
     const float* opacities,
     const float contrib_floor,
-    ThreadPool* pool) {
+    ThreadPool* pool,
+    bool recompute_tiles_per_gaussian) {
     TileAssignResult result;
     result.tiles_per_gaussian.assign(M, 0);
 
@@ -285,11 +286,19 @@ TileAssignResult tile_assign(
         result.gaussian_ids = std::move(kept_gids);
         result.tile_ids = std::move(kept_tids);
 
-        // Recompute tiles_per_gaussian post-cull. Single serial pass over
-        // total_kept (~234k); negligible.
-        std::fill(result.tiles_per_gaussian.begin(), result.tiles_per_gaussian.end(), 0);
-        for (const int64_t g : result.gaussian_ids) {
-            ++result.tiles_per_gaussian[static_cast<std::size_t>(g)];
+        // iter-046: skip recomputing tiles_per_gaussian post-cull when
+        // recompute_tiles_per_gaussian == false. render_full's fast path
+        // never reads ta.tiles_per_gaussian (sort/blend don't need it),
+        // and pipeline.py's standalone tile_assign caller is the only
+        // consumer — that path uses recompute_tiles_per_gaussian=true so
+        // verify_stage's bit-identity check still passes. Saves a 234k
+        // serial increment loop in the hot path.
+        if (recompute_tiles_per_gaussian) {
+            std::fill(result.tiles_per_gaussian.begin(),
+                      result.tiles_per_gaussian.end(), 0);
+            for (const int64_t g : result.gaussian_ids) {
+                ++result.tiles_per_gaussian[static_cast<std::size_t>(g)];
+            }
         }
     }
 
