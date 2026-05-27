@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "fail", "evidence": "All three diff10 images show extreme tile-correlated structured patterns — dense checkerboard/quilting artifacts far beyond acceptable noise. Side and top diff10 show uniform high-amplitude colored blocks tightly aligned to 32-pixel boundaries."},
+    {"name": "tile_uniform_fill", "result": "fail", "evidence": "Side render shows large regions of constant dark-blue rectangular blocks where reference has smooth surface detail. Top render shows severe 32×32 tile-shaped color patches with pink/orange contamination that does not exist in reference."},
+    {"name": "missing_splat_holes", "result": "fail", "evidence": "Side view render is dramatically darker overall than reference — large regions that should have coverage are nearly black, indicating wholesale splat dropout across multiple tile regions."},
+    {"name": "color_clipping_bands", "result": "fail", "evidence": "Top render shows bright orange/pink saturated regions in the upper area (near ear/antenna) that are absent from the reference. Color values are clearly out-of-range for those regions."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No distinct ringing or halo artifacts visible at silhouette edges beyond the general tile-corruption noise."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure magenta/white/black patches in spatially-correlated patches consistent with NaN/Inf. Corruption appears to be numerical drift rather than NaN propagation."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show a clean silhouette edge pattern indicating geometry shift. Object is present at correct location in all views."},
+    {"name": "diff10_structure", "result": "fail", "evidence": "All three diff10 images are dominated by highly structured tile-correlated patterns (dense colored checkerboard blocks), not uniform speckle. This is the signature of catastrophic per-tile state corruption, consistent with tile_structure_ratio max of 23.08."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 23.743964087774398, "side": 27.499973603986238, "top": 24.092302914183822}, "pass": false},
+  "tile_structure_check": {"max_ratio": 23.075649511883455, "actual": {"hero": 21.63733979831807, "side": 21.00183693069384, "top": 23.075649511883455}, "pass": false, "delta_vs_prev": 5.08},
+  "per_view_consistency": {"max_psnr_delta_db": 3.756009516212, "max_ms_ratio": 1.215, "pass": true},
+  "timing": {"median_ms": 23.1995, "p99_ms": 27.27523, "vs_prev_best_pct": -5.24, "pass": true},
+  "reasoning": "REJECT on multiple hard gates. (1) PSNR catastrophic: all three views are in the 23-27 dB range, 10-15 dB below the 38 dB kernel-algebra floor — this is not architectural baseline drift but a wholesale rendering failure. (2) tile_structure_ratio max 23.08 (top view), delta +5.08 vs architectural baseline ~17-18 — far exceeds the +0.3 ratchet limit. (3) Visual inspection confirms the failure: side render shows severe 32×32 uniform-fill dark blocks with detail lost; top render shows pink/orange color contamination in large tile-shaped regions; all diff10 images show extreme tile-correlated structured noise rather than uniform speckle. Dropping same-RISC cb_wait_fronts has caused per-tile state corruption — data races between reader and compute on the same RISC are apparently load-bearing synchronization, not redundant waits. The timing win (-5.2%) is real but irrelevant given the quality collapse."
+}

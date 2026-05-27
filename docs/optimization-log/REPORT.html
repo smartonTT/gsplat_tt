@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 81 · current best: 23.98 ms · target: 1.0 ms
+      iters: 82 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-086-drop-all-same-risc-waits
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T12:11:28.406233+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> REJECT on multiple hard gates. (1) PSNR catastrophic: all three views are in the 23-27 dB range, 10-15 dB below the 38 dB kernel-algebra floor — this is not architectural baseline drift but a wholesale rendering failure. (2) tile_structure_ratio max 23.08 (top view), delta +5.08 vs architectural baseline ~17-18 — far exceeds the +0.3 ratchet limit. (3) Visual inspection confirms the failure: side render shows severe 32×32 uniform-fill dark blocks with detail lost; top render shows pink/orange color contamination in large tile-shaped regions; all diff10 images show extreme tile-correlated structured noise rather than uniform speckle. Dropping same-RISC cb_wait_fronts has caused per-tile state corruption — data races between reader and compute on the same RISC are apparently load-bearing synchronization, not redundant waits. The timing win (-5.2%) is real but irrelevant given the quality collapse.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>23.20 ms</b> median · 27.28 ms p99</div>
+    <div class="per-view">per-view: hero 23.20 / side 22.43 / top 27.26</div>
+    <div class="psnr">PSNR: hero 23.7 / side 27.5 / top 24.1 (min <b>23.7</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-086-drop-all-same-risc-waits/hero.png" target="_blank"><img src="screenshots/iter-086-drop-all-same-risc-waits/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-086-drop-all-same-risc-waits/side.png" target="_blank"><img src="screenshots/iter-086-drop-all-same-risc-waits/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-086-drop-all-same-risc-waits/top.png" target="_blank"><img src="screenshots/iter-086-drop-all-same-risc-waits/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-086-drop-all-same-risc-waits/hero_diff10.png" target="_blank"><img src="screenshots/iter-086-drop-all-same-risc-waits/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-086-drop-all-same-risc-waits/side_diff10.png" target="_blank"><img src="screenshots/iter-086-drop-all-same-risc-waits/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-086-drop-all-same-risc-waits/top_diff10.png" target="_blank"><img src="screenshots/iter-086-drop-all-same-risc-waits/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✗ tile_grid_seams: All three diff10 images show extreme tile-correlated structured patterns — dense checkerboard/quilting artifacts far bey</li><li>✗ tile_uniform_fill: Side render shows large regions of constant dark-blue rectangular blocks where reference has smooth surface detail. Top </li><li>✗ missing_splat_holes: Side view render is dramatically darker overall than reference — large regions that should have coverage are nearly blac</li><li>✗ color_clipping_bands: Top render shows bright orange/pink saturated regions in the upper area (near ear/antenna) that are absent from the refe</li><li>✓ ringing_halos: No distinct ringing or halo artifacts visible at silhouette edges beyond the general tile-corruption noise.</li><li>✓ nan_inf_signatures: No pure magenta/white/black patches in spatially-correlated patches consistent with NaN/Inf. Corruption appears to be nu</li><li>✓ geometry_shift: Diff10 does not show a clean silhouette edge pattern indicating geometry shift. Object is present at correct location in</li><li>✗ diff10_structure: All three diff10 images are dominated by highly structured tile-correlated patterns (dense colored checkerboard blocks),</li></ul>
+    <p class="reasoning">REJECT on multiple hard gates. (1) PSNR catastrophic: all three views are in the 23-27 dB range, 10-15 dB below the 38 dB kernel-algebra floor — this is not architectural baseline drift but a wholesale rendering failure. (2) tile_structure_ratio max 23.08 (top view), delta +5.08 vs architectural baseline ~17-18 — far exceeds the +0.3 ratchet limit. (3) Visual inspection confirms the failure: side render shows severe 32×32 uniform-fill dark blocks with detail lost; top render shows pink/orange color contamination in large tile-shaped regions; all diff10 images show extreme tile-correlated structured noise rather than uniform speckle. Dropping same-RISC cb_wait_fronts has caused per-tile state corruption — data races between reader and compute on the same RISC are apparently load-bearing synchronization, not redundant waits. The timing win (-5.2%) is real but irrelevant given the quality collapse.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-085-drop-state-wait-fronts
@@ -2918,6 +2951,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 27.1 / side 28.0 / top 28.2
 - Validator reasoning: REJECT on two independent hard gates. (1) PSNR catastrophic: all three views are 27.1-28.2 dB, approximately 11-13 dB below the 38 dB class-dispatch floor and 11-13 dB below the architectural baseline of ~39-41 dB. This is not a borderline regression but a catastrophic quality collapse indicating the color-magnitude culling threshold is discarding the majority of contributing Gaussians. (2) Tile_structure_ratio hard REJECT: max ratio 25.47 vs prev_best max 18.14 (iter-083), delta +7.33, far exceeding the +0.3 ratchet limit. The architectural-baseline carve-out does not apply here because this iter introduces new structural drift well above the ~17-18 baseline floor. (3) Visual confirmation: all three diff10 images show the full object body lit up with high-magnitude structured error (bright white/multicolor covering the entire figure silhouette and interior), consistent with systematic removal of a large fraction of splat pairs. The renders are visibly darker and lower-contrast than reference across all views. The kernel timing win (-38.6%) is real but purchased entirely through quality destruction — the culling criterion is far too aggressive.
 - Thumbnails: ![hero](screenshots/iter-084-color-magnitude-cull/hero.png) ![diff10](screenshots/iter-084-color-magnitude-cull/hero_diff10.png)
+
+
+## iter-086-drop-all-same-risc-waits — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 23.20 / p99 27.28
+- PSNR per view: hero 23.7 / side 27.5 / top 24.1
+- Validator reasoning: REJECT on multiple hard gates. (1) PSNR catastrophic: all three views are in the 23-27 dB range, 10-15 dB below the 38 dB kernel-algebra floor — this is not architectural baseline drift but a wholesale rendering failure. (2) tile_structure_ratio max 23.08 (top view), delta +5.08 vs architectural baseline ~17-18 — far exceeds the +0.3 ratchet limit. (3) Visual inspection confirms the failure: side render shows severe 32×32 uniform-fill dark blocks with detail lost; top render shows pink/orange color contamination in large tile-shaped regions; all diff10 images show extreme tile-correlated structured noise rather than uniform speckle. Dropping same-RISC cb_wait_fronts has caused per-tile state corruption — data races between reader and compute on the same RISC are apparently load-bearing synchronization, not redundant waits. The timing win (-5.2%) is real but irrelevant given the quality collapse.
+- Thumbnails: ![hero](screenshots/iter-086-drop-all-same-risc-waits/hero.png) ![diff10](screenshots/iter-086-drop-all-same-risc-waits/hero_diff10.png)
 
 </pre>
   </section>
