@@ -170,6 +170,18 @@ struct DeviceContext {
     // iter-083: persisted readback scratch buffer. Overwritten by every
     // EnqueueReadMeshBuffer, so it never needs zeroing.
     std::vector<uint16_t> result_bf16_cache;
+    // iter-092: persisted DRAM MeshBuffers reused across frames for the
+    // num_tiles-derived inputs (offsets, pxpy, output). Their byte size is
+    // a deterministic function of image dims and stays constant for a
+    // cycle, so we can detect "same size as last frame" and skip the
+    // MeshBuffer::create call. The packs and tile_ids buffers vary in
+    // size per frame and still allocate-per-frame.
+    std::shared_ptr<distributed::MeshBuffer> persist_offsets;
+    std::shared_ptr<distributed::MeshBuffer> persist_pxpy;
+    std::shared_ptr<distributed::MeshBuffer> persist_output;
+    size_t persist_offsets_bytes = 0;
+    size_t persist_pxpy_bytes = 0;
+    size_t persist_output_bytes = 0;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -457,7 +469,12 @@ struct FrameDramBuffers {
 
 // Allocate the DRAM buffers a frame needs. Sizes are derived from the
 // scene's total_entries + tile count + the LPT-balanced tile-id list.
-// All buffers are RAII via shared_ptr; they free on scope exit.
+// iter-092: persist the num_tiles-derived MeshBuffers across frames
+// (offsets/pxpy/output). Their byte size is a deterministic function of
+// image dims and is stable across a cycle, so EnqueueWriteMeshBuffer's
+// "src.size() >= buffer->size()" assert can't trip. The packs/tile_ids
+// buffers vary in size each frame (per-frame splat count, per-frame
+// LPT assignment) and continue to allocate-per-frame as before.
 static FrameDramBuffers allocate_frame_buffers(
     DeviceContext& ctx,
     uint32_t total_entries,
@@ -470,15 +487,29 @@ static FrameDramBuffers allocate_frame_buffers(
             .page_size = page_bytes, .buffer_type = BufferType::DRAM};
         return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
     };
+    auto ensure_exact = [&](std::shared_ptr<distributed::MeshBuffer>& slot,
+                             size_t& tracked_bytes, size_t need_bytes, size_t page_bytes) {
+        if (!slot || tracked_bytes != need_bytes) {
+            slot.reset();
+            slot = make_dram(need_bytes, page_bytes);
+            tracked_bytes = need_bytes;
+        }
+    };
+
+    const size_t offsets_bytes = offsets_count * sizeof(uint32_t);
+    const size_t pxpy_bytes    = static_cast<size_t>(num_tiles) * 2 * TILE_BYTES_BF16;
+    const size_t output_bytes  = static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16;
+
+    ensure_exact(ctx.persist_offsets, ctx.persist_offsets_bytes, offsets_bytes, sizeof(uint32_t));
+    ensure_exact(ctx.persist_pxpy,    ctx.persist_pxpy_bytes,    pxpy_bytes,    TILE_BYTES_BF16);
+    ensure_exact(ctx.persist_output,  ctx.persist_output_bytes,  output_bytes,  TILE_BYTES_BF16);
+
     FrameDramBuffers b;
     b.packs    = make_dram(static_cast<size_t>(total_entries) * SCALAR_PACK_PAGE_BYTES, SCALAR_PACK_PAGE_BYTES);
-    b.offsets  = make_dram(offsets_count * sizeof(uint32_t), sizeof(uint32_t));
-    // Combined px+py buffer: 2*num_tiles pages of TILE_BYTES_BF16. Tile IDs
-    // [0, num_tiles) are px; [num_tiles, 2*num_tiles) are py. One EnqueueWrite
-    // replaces the prior two.
-    b.px       = make_dram(static_cast<size_t>(num_tiles) * 2 * TILE_BYTES_BF16, TILE_BYTES_BF16);
-    b.py       = b.px;
-    b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    b.offsets  = ctx.persist_offsets;
+    b.px       = ctx.persist_pxpy;
+    b.py       = ctx.persist_pxpy;
+    b.output   = ctx.persist_output;
     b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
     return b;
 }
