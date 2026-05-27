@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 46 · current best: 26.32 ms · target: 1.0 ms
+      iters: 47 · current best: 25.44 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-050-drop-power-clamp
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T03:48:18.288586+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> Kernel 26.321 → 25.442 ms (-3.34%) — a real win. PSNR drops slightly (-0.27 dB hero, -0.03 side, -0.26 top) but all views comfortably above 35 dB floor. The change drops the defensive `min(power, 0)` clamp before exp_tile&lt;true&gt;. For valid PSD covariance, Q ≥ 0 mathematically so -0.5·Q ≤ 0 by construction. bf16 round-off can produce tiny positive `power` (~ε), but exp_tile&lt;true&gt;&#x27;s built-in ClampToNegative and the downstream 0.99 alpha cap bound any deviation. Distinct from iter-046&#x27;s regression: iter-046 REPLACED the clamp with clamp_tile + clamp_tile_init (a different op shape that was internally slower); this iter simply REMOVES the chain. The explicit `exp_tile_init&lt;true&gt;()` after `mul_unary_tile` resets SFPU state directly, so removing binary_min_tile_init() before it doesn&#x27;t disrupt exp init — unlike iter-046&#x27;s hypothesized state dependency. Saved 4 SFPU ops/Gaussian. Visual: 3 views look clean and identical to reference, diff10 shows low-magnitude scattered pixel deltas with no structural patterns. KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.44 ms</b> median · 30.64 ms p99</div>
+    <div class="per-view">per-view: hero 25.44 / side 24.57 / top 30.62</div>
+    <div class="psnr">PSNR: hero 39.1 / side 41.0 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-050-drop-power-clamp/hero.png" target="_blank"><img src="screenshots/iter-050-drop-power-clamp/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-050-drop-power-clamp/side.png" target="_blank"><img src="screenshots/iter-050-drop-power-clamp/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-050-drop-power-clamp/top.png" target="_blank"><img src="screenshots/iter-050-drop-power-clamp/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-050-drop-power-clamp/hero_diff10.png" target="_blank"><img src="screenshots/iter-050-drop-power-clamp/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-050-drop-power-clamp/side_diff10.png" target="_blank"><img src="screenshots/iter-050-drop-power-clamp/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-050-drop-power-clamp/top_diff10.png" target="_blank"><img src="screenshots/iter-050-drop-power-clamp/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No seam artifacts in any view.</li><li>✓ tile_uniform_fill: No tile-uniform colors.</li><li>✓ missing_splat_holes: Stitch fully rendered, no missing patches.</li><li>✓ color_clipping_bands: Colors smooth, no clipping.</li><li>✓ ringing_halos: No ringing visible.</li><li>✓ nan_inf_signatures: All finite values.</li><li>✓ geometry_shift: Geometry positioned correctly across all 3 views.</li><li>✓ diff10_structure: Diff PNG shows scattered low-magnitude per-pixel deltas (expected from bf16 round-off propagating through exp), but no s</li></ul>
+    <p class="reasoning">Kernel 26.321 → 25.442 ms (-3.34%) — a real win. PSNR drops slightly (-0.27 dB hero, -0.03 side, -0.26 top) but all views comfortably above 35 dB floor. The change drops the defensive `min(power, 0)` clamp before exp_tile&lt;true&gt;. For valid PSD covariance, Q ≥ 0 mathematically so -0.5·Q ≤ 0 by construction. bf16 round-off can produce tiny positive `power` (~ε), but exp_tile&lt;true&gt;&#x27;s built-in ClampToNegative and the downstream 0.99 alpha cap bound any deviation. Distinct from iter-046&#x27;s regression: iter-046 REPLACED the clamp with clamp_tile + clamp_tile_init (a different op shape that was internally slower); this iter simply REMOVES the chain. The explicit `exp_tile_init&lt;true&gt;()` after `mul_unary_tile` resets SFPU state directly, so removing binary_min_tile_init() before it doesn&#x27;t disrupt exp init — unlike iter-046&#x27;s hypothesized state dependency. Saved 4 SFPU ops/Gaussian. Visual: 3 views look clean and identical to reference, diff10 shows low-magnitude scattered pixel deltas with no structural patterns. KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-049-b2-3way-fuse
