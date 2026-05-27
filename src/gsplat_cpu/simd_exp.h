@@ -57,11 +57,27 @@ inline float32x4_t simd_exp_f32x4_fast(float32x4_t x) {
 
     const float32x4_t r = vfmsq_f32(x, fn, LN2);
 
-    float32x4_t p = vdupq_n_f32(0.041666666667f);              // 1/24
-    p = vfmaq_f32(vdupq_n_f32(0.166666666667f), p, r);          // 1/6 + r/24
-    p = vfmaq_f32(vdupq_n_f32(0.5f),            p, r);          // 1/2 + r*(...)
-    p = vfmaq_f32(vdupq_n_f32(1.0f),            p, r);          // 1   + r*(...)
-    p = vfmaq_f32(vdupq_n_f32(1.0f),            p, r);          // 1   + r*(...)
+    // iter-041: Estrin's polynomial scheme for the degree-4 Maclaurin of
+    // exp(r) = 1 + r + r²/2 + r³/6 + r⁴/24.  Horner had a 4-FMA serial
+    // chain (latency ~12 cycles on Apple Silicon NEON @ 3-cycle FMA).
+    // Estrin pre-computes r² once and evaluates two independent linear
+    // factors that combine at the end, cutting the critical path to
+    // ~3 FMAs (~9 cycles) at the cost of one extra fmul (r * r).
+    //
+    //   r2  = r * r                       (1 mul, fully independent)
+    //   p0  = 1 + r                       (1 fma, independent of r2)
+    //   p1  = 1/2 + r * (1/6)              (1 fma, independent)
+    //   p1' = p1 + r2 * (1/24)             (1 fma, depends on r2 + p1)
+    //   p   = p0 + r2 * p1'                (1 fma, the only true tail dep)
+    //
+    // The OoO engine + NEON's two FMA pipes can fuse the three
+    // independent initial ops into the same issue slot, leaving only the
+    // last two FMAs on the critical path.
+    const float32x4_t r2 = vmulq_f32(r, r);
+    const float32x4_t p0 = vfmaq_f32(vdupq_n_f32(1.0f), r, vdupq_n_f32(1.0f));
+    float32x4_t p1 = vfmaq_f32(vdupq_n_f32(0.5f), r, vdupq_n_f32(0.166666666667f));
+    p1 = vfmaq_f32(p1, r2, vdupq_n_f32(0.041666666667f));
+    const float32x4_t p = vfmaq_f32(p0, r2, p1);
 
     const int32x4_t two_n_bits =
         vshlq_n_s32(vaddq_s32(n, vdupq_n_s32(127)), 23);
