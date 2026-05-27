@@ -1,0 +1,40 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "diff10 images show uniform speckle confined to object body; no horizontal/vertical lines at 32px or 16px spacing visible in hero_diff10, side_diff10, or top_diff10"},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "All three renders show continuous texture detail across the Stitch doll body; no 32x32 or 16x16 constant-color blocks detected"},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing coverage visible in any view; doll silhouette fully rendered in all three views"},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat color bands; pink tongue and ear color appear correct without clipping artifacts"},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at object silhouettes; silhouette edges appear clean against black background in all views"},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No isolated bright outlier pixels (fireflies) detected in hero, side, or top renders; no pure-black/white/magenta patches visible; fewer than 5 anomalous pixels in any view"},
+    {"name": "geometry_shift", "result": "pass", "evidence": "diff10 images do not show object silhouette outlines that would indicate coordinate shift; error is distributed within the doll body, not at translated edges"},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images dominated by uniform fine speckle within object body; no grid patterns, bands, or structured gradients visible — consistent with architectural bf16 quantization baseline, not new artifacts"}
+  ],
+  "psnr_check": {
+    "floor": 35.0,
+    "actual": {"hero": 39.368038413011824, "side": 40.949644684083964, "top": 38.57405435659632},
+    "pass": true
+  },
+  "tile_structure_check": {
+    "max_ratio": 18.132159046877224,
+    "actual": {"hero": 17.10734728220348, "side": 17.29181297057425, "top": 18.132159046877224},
+    "pass": true,
+    "delta_vs_prev": {
+      "hero": 0.000000,
+      "side": 0.000000,
+      "top": -0.000007
+    }
+  },
+  "per_view_consistency": {
+    "max_psnr_delta_db": 2.38,
+    "max_ms_ratio": 1.23,
+    "pass": true
+  },
+  "timing": {
+    "median_ms": 24.4905,
+    "p99_ms": 29.18397,
+    "vs_prev_best_pct": 0.068,
+    "pass": true
+  },
+  "reasoning": "All checks pass. PSNR is bit-identical to prev_best (iter-089/090): hero 39.368 vs 39.368, side 40.950 vs 40.950, top 38.574 vs 38.574 — delta < 0.001 dB on all views, no regression. tile_structure_ratio_per_view is bit-identical to prev_best (max delta -0.000007 on top view, all views within ±0.05), confirming no new structural drift from the buffer-persistence change — the architectural-baseline carve-out applies and the +0.3 ratchet rule is satisfied. kernel_ms_median 24.4905 vs prev_best 24.474 is +0.068% (flat, well within 1.02× budget). p99/median ratio 1.19× is well under 3× tail threshold. Per-view PSNR spread 2.38 dB and ms ratio 1.23× are both well within limits. Visual inspection of all six images (3 renders + 3 diff10) shows clean uniform speckle with no tile grid seams, no fireflies, no geometry shift, no color clipping, no missing-splat holes. This is a pure host-side refactor (persist 3 of 5 DRAM MeshBuffers) with exactly the expected outcome: bit-identical numerics and flat kernel_ms."
+}
