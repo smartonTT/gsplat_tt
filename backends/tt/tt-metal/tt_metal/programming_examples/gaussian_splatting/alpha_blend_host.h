@@ -6,7 +6,6 @@ namespace gsplat {
 constexpr uint32_t TILE_H = 32;
 constexpr uint32_t TILE_W = 32;
 constexpr uint32_t TILE_BYTES_BF16 = TILE_H * TILE_W * 2;     // 2 KB
-constexpr uint32_t TILE_BYTES_FP32 = TILE_H * TILE_W * 4;     // 4 KB
 constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars
 constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // padded for NoC alignment
 constexpr uint32_t META_PAGE_BYTES = 64;                       // padded uint32 page
