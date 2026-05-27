@@ -255,7 +255,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
         OVERRIDE_KERNEL_PREFIX "gaussian_splatting/kernels/compute/alpha_blend_compute.cpp",
         cores,
         ComputeConfig{
-            .math_fidelity = MathFidelity::HiFi3,
+            .math_fidelity = MathFidelity::HiFi2,
             .fp32_dest_acc_en = true,
             .math_approx_mode = false,
         });
