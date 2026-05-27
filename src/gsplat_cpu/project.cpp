@@ -62,24 +62,87 @@ ProjectResult gather_visible(
     const ProjectPrepared& prep,
     const float* covs_2d,
     const std::vector<Vec2f>& radii_scratch,
-    const std::vector<uint8_t>& valid_mask) {
+    const std::vector<uint8_t>& valid_mask,
+    ThreadPool* pool = nullptr) {
     ProjectResult result;
     result.valid_mask = valid_mask;
 
-    for (std::size_t i = 0; i < prep.N; ++i) {
-        if (valid_mask[i] == 0) {
-            continue;
+    const std::size_t N = prep.N;
+
+    if (pool == nullptr || pool->size() <= 1 || N < 8192) {
+        // Serial path: small N or no pool — direct push_back, exactly preserves
+        // the original semantics.
+        for (std::size_t i = 0; i < N; ++i) {
+            if (valid_mask[i] == 0) {
+                continue;
+            }
+            result.means_2d.push_back(prep.means_2d[i * 2 + 0]);
+            result.means_2d.push_back(prep.means_2d[i * 2 + 1]);
+            result.covs_2d.push_back(covs_2d[i * 4 + 0]);
+            result.covs_2d.push_back(covs_2d[i * 4 + 1]);
+            result.covs_2d.push_back(covs_2d[i * 4 + 2]);
+            result.covs_2d.push_back(covs_2d[i * 4 + 3]);
+            result.depths.push_back(prep.depths[i]);
+            result.radii.push_back(radii_scratch[i].x);
+            result.radii.push_back(radii_scratch[i].y);
         }
-        result.means_2d.push_back(prep.means_2d[i * 2 + 0]);
-        result.means_2d.push_back(prep.means_2d[i * 2 + 1]);
-        result.covs_2d.push_back(covs_2d[i * 4 + 0]);
-        result.covs_2d.push_back(covs_2d[i * 4 + 1]);
-        result.covs_2d.push_back(covs_2d[i * 4 + 2]);
-        result.covs_2d.push_back(covs_2d[i * 4 + 3]);
-        result.depths.push_back(prep.depths[i]);
-        result.radii.push_back(radii_scratch[i].x);
-        result.radii.push_back(radii_scratch[i].y);
+        return result;
     }
+
+    // iter-020 parallel filter: contiguous-chunk count -> prefix sum ->
+    // parallel scatter into pre-sized output arrays. Preserves the input
+    // order (chunks are contiguous index ranges, scatter goes in-order
+    // within each chunk).
+    const std::size_t W = pool->size();
+    const std::size_t chunk = (N + W - 1) / W;
+    std::vector<std::size_t> chunk_counts(W, 0);
+    std::vector<std::size_t> chunk_starts(W + 1, 0);
+
+    for (std::size_t w = 0; w < W; ++w) {
+        pool->submit([w, W, chunk, N, &valid_mask, &chunk_counts]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            std::size_t cnt = 0;
+            for (std::size_t i = lo; i < hi; ++i) {
+                cnt += (valid_mask[i] != 0);
+            }
+            chunk_counts[w] = cnt;
+        });
+    }
+    pool->wait();
+
+    for (std::size_t w = 0; w < W; ++w) {
+        chunk_starts[w + 1] = chunk_starts[w] + chunk_counts[w];
+    }
+    const std::size_t V = chunk_starts[W];  // visible count
+
+    result.means_2d.resize(V * 2);
+    result.covs_2d.resize(V * 4);
+    result.depths.resize(V);
+    result.radii.resize(V * 2);
+
+    for (std::size_t w = 0; w < W; ++w) {
+        pool->submit([w, W, chunk, N, &prep, covs_2d, &radii_scratch, &valid_mask,
+                      &chunk_starts, &result]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            std::size_t out = chunk_starts[w];
+            for (std::size_t i = lo; i < hi; ++i) {
+                if (valid_mask[i] == 0) continue;
+                result.means_2d[out * 2 + 0] = prep.means_2d[i * 2 + 0];
+                result.means_2d[out * 2 + 1] = prep.means_2d[i * 2 + 1];
+                result.covs_2d[out * 4 + 0] = covs_2d[i * 4 + 0];
+                result.covs_2d[out * 4 + 1] = covs_2d[i * 4 + 1];
+                result.covs_2d[out * 4 + 2] = covs_2d[i * 4 + 2];
+                result.covs_2d[out * 4 + 3] = covs_2d[i * 4 + 3];
+                result.depths[out] = prep.depths[i];
+                result.radii[out * 2 + 0] = radii_scratch[i].x;
+                result.radii[out * 2 + 1] = radii_scratch[i].y;
+                ++out;
+            }
+        });
+    }
+    pool->wait();
 
     return result;
 }
@@ -315,7 +378,7 @@ ProjectResult project_finalize_parallel(
         }
     }
 
-    return gather_visible(prep, covs_2d, radii_scratch, valid_mask);
+    return gather_visible(prep, covs_2d, radii_scratch, valid_mask, pool);
 }
 
 ProjectResult project_finalize(
