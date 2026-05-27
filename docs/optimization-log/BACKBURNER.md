@@ -150,3 +150,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on tile_structure hard gate: the top view tile_structure_ratio is 19.27, which exceeds the >18 threshold for 'tile_grid_seams structurally bad'. Additionally, the delta_vs_prev is +1.52 (19.27 - 17.75 from prior KEEP iter-060), which exceeds the +0.5 max-delta rule and mandates REJECT regardless of PSNR or kernel-ms gains. The top_diff10 visually confirms structured internal patterning across the object body consistent with tile-correlated precision drift rather than uniform speckle. The kernel-ms gain is real (-4.28%, 23.98→22.95 ms) and PSNR remains above the 35 dB binning floor (hero 37.89, top 37.12), but the tile structure regression is unacceptable. This contrib_floor=17/255 bump structurally worsens tile quantization beyond the permitted threshold; the iter-035 REJECT precedent at 17/255 is now confirmed a second time with a different quality metric. Do not retry this threshold.
 - Thumbnails: ![hero](screenshots/iter-063-contrib-floor-17-of-255/hero.png) ![diff10](screenshots/iter-063-contrib-floor-17-of-255/hero_diff10.png)
 
+
+## iter-064-fp32-state-cbs — NEEDS_REVIEW 
+
+- Class: `kernel-algebra`
+- kernel ms: median 24.52 / p99 29.07
+- PSNR per view: hero 39.2 / side 41.0 / top 38.4
+- Validator reasoning: NEEDS_REVIEW on two numeric failures. (1) PSNR: class is kernel-algebra with floor 40 dB; hero=39.21 dB and top=38.42 dB are both below floor. Per the prompt table this is NEEDS_REVIEW rather than REJECT because 35-40 dB with clean visuals is perceptually acceptable, but it still fails the stated floor. (2) Timing: kernel_ms_median=24.519 ms vs prev_best=23.98 ms is +2.25% regression, outside the break-even window of ≤1.02×. (3) Tile structure: the stated goal of iter-064 was to reduce tile_structure_ratio by switching state CBs to fp32, but the ratio is bit-identical to iter-059/060 (max=17.746 in both), delta_vs_prev=0.0 — the intervention had zero effect on tile-structure quality. Max ratio 17.75 remains in the 13<r≤18 band. Visual checks all pass: renders are clean, diff10 images show only object-correlated speckle with no tile grid seams, no missing-splat holes, no color clipping, no geometry shift. The fp32 state CB approach has neither improved tile structure nor improved performance — it is a regression in timing with no quality gain, warranting NEEDS_REVIEW.
+- Thumbnails: ![hero](screenshots/iter-064-fp32-state-cbs/hero.png) ![diff10](screenshots/iter-064-fp32-state-cbs/hero_diff10.png)
+

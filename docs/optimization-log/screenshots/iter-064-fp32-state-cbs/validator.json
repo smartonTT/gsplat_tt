@@ -1,0 +1,18 @@
+{
+  "verdict": "NEEDS_REVIEW",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show noise following object contours and texture detail with no horizontal/vertical lines at 32- or 16-pixel spacing. Top view diff10 has structured noise but it tracks object geometry, not tile boundaries."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color square regions visible in any render; all views show continuous texture matching reference coverage."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No localized dark voids or coverage gaps exceeding 16px in any dimension. Diff10 bright spots are scattered and sub-pixel-cluster scale."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B stripes or flat-colored bands not present in reference. Color reproduction appears faithful across all three views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Silhouette edges in diff10 show noise at boundaries consistent with alpha-blend precision, not structured ringing or halo artifacts."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches. Diff10 shows expected low-level speckle throughout the object region."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show the silhouette of objects in shifted position — the bright region in diff10 coincides exactly with the object mask in the render, not displaced."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Hero and side diff10 are dominated by uniform speckle tracking fur texture. Top diff10 has slightly elevated structured noise along the body contour but no tile-grid periodicity. Overall consistent with prior-iter noise character."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 39.20974508325555, "side": 40.979845205494414, "top": 38.41531255268442}, "pass": false},
+  "tile_structure_check": {"max_ratio": 17.746483244498126, "actual": {"hero": 16.74427602297702, "side": 17.26100085898212, "top": 17.746483244498126}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.5645326522099717, "max_ms_ratio": 1.2224, "pass": true},
+  "timing": {"median_ms": 24.519, "p99_ms": 29.06536, "vs_prev_best_pct": 2.25, "pass": false},
+  "reasoning": "NEEDS_REVIEW on two numeric failures. (1) PSNR: class is kernel-algebra with floor 40 dB; hero=39.21 dB and top=38.42 dB are both below floor. Per the prompt table this is NEEDS_REVIEW rather than REJECT because 35-40 dB with clean visuals is perceptually acceptable, but it still fails the stated floor. (2) Timing: kernel_ms_median=24.519 ms vs prev_best=23.98 ms is +2.25% regression, outside the break-even window of ≤1.02×. (3) Tile structure: the stated goal of iter-064 was to reduce tile_structure_ratio by switching state CBs to fp32, but the ratio is bit-identical to iter-059/060 (max=17.746 in both), delta_vs_prev=0.0 — the intervention had zero effect on tile-structure quality. Max ratio 17.75 remains in the 13<r≤18 band. Visual checks all pass: renders are clean, diff10 images show only object-correlated speckle with no tile grid seams, no missing-splat holes, no color clipping, no geometry shift. The fp32 state CB approach has neither improved tile structure nor improved performance — it is a regression in timing with no quality gain, warranting NEEDS_REVIEW."
+}
