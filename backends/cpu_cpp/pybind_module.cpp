@@ -4,6 +4,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
+#include "gsplat_cpu/blend.h"
 #include "gsplat_cpu/project.h"
 #include "gsplat_cpu/sort.h"
 #include "gsplat_cpu/thread_pool.h"
@@ -265,6 +266,78 @@ py::tuple sort_py(
     return pack_sort_result(result, tiles_x, tiles_y);
 }
 
+gsplat_cpu::ThreadPool& global_blend_pool() {
+    static gsplat_cpu::ThreadPool pool(0);
+    return pool;
+}
+
+py::array_t<float> blend_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> means_2d,
+    py::array_t<float, py::array::c_style | py::array::forcecast> covs_2d,
+    py::array_t<float, py::array::c_style | py::array::forcecast> colors,
+    py::array_t<float, py::array::c_style | py::array::forcecast> opacities,
+    py::array_t<int64_t, py::array::c_style | py::array::forcecast> sorted_gaussian_ids,
+    py::array_t<int64_t, py::array::c_style | py::array::forcecast> tile_ranges,
+    int image_height,
+    int image_width,
+    int tile_size) {
+    const auto means_info = means_2d.request();
+    const auto covs_info = covs_2d.request();
+    const auto colors_info = colors.request();
+    const auto opacities_info = opacities.request();
+    const auto sgids_info = sorted_gaussian_ids.request();
+    const auto ranges_info = tile_ranges.request();
+
+    if (means_info.ndim != 2 || means_info.shape[1] != 2) {
+        throw std::invalid_argument("means_2d must have shape (M, 2)");
+    }
+    if (covs_info.ndim != 2 || covs_info.shape[1] != 4) {
+        throw std::invalid_argument("covs_2d must have shape (M, 4)");
+    }
+    if (colors_info.ndim != 2 || colors_info.shape[1] != 3) {
+        throw std::invalid_argument("colors must have shape (M, 3)");
+    }
+    if (opacities_info.ndim != 1) {
+        throw std::invalid_argument("opacities must have shape (M,)");
+    }
+    if (sgids_info.ndim != 1) {
+        throw std::invalid_argument("sorted_gaussian_ids must be 1-D");
+    }
+    if (ranges_info.ndim != 2 || ranges_info.shape[1] != 2) {
+        throw std::invalid_argument("tile_ranges must have shape (num_tiles, 2)");
+    }
+
+    const std::size_t M = static_cast<std::size_t>(means_info.shape[0]);
+    if (static_cast<std::size_t>(covs_info.shape[0]) != M ||
+        static_cast<std::size_t>(colors_info.shape[0]) != M ||
+        static_cast<std::size_t>(opacities_info.shape[0]) != M) {
+        throw std::invalid_argument("means_2d, covs_2d, colors, opacities must share M");
+    }
+
+    const std::size_t P = static_cast<std::size_t>(sgids_info.shape[0]);
+
+    py::array_t<float> image(
+        {static_cast<py::ssize_t>(image_height), static_cast<py::ssize_t>(image_width),
+         static_cast<py::ssize_t>(3)});
+
+    gsplat_cpu::blend(
+        static_cast<const float*>(means_info.ptr),
+        static_cast<const float*>(covs_info.ptr),
+        static_cast<const float*>(colors_info.ptr),
+        static_cast<const float*>(opacities_info.ptr),
+        static_cast<const int64_t*>(sgids_info.ptr),
+        static_cast<const int64_t*>(ranges_info.ptr),
+        M,
+        P,
+        image_height,
+        image_width,
+        tile_size,
+        image.mutable_data(),
+        global_blend_pool());
+
+    return image;
+}
+
 }  // namespace
 
 PYBIND11_MODULE(_gsplat_cpu, m) {
@@ -344,6 +417,19 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("depths"),
         py::arg("tiles_x"),
         py::arg("tiles_y"));
+
+    m.def(
+        "blend",
+        &blend_py,
+        py::arg("means_2d"),
+        py::arg("covs_2d"),
+        py::arg("colors"),
+        py::arg("opacities"),
+        py::arg("sorted_gaussian_ids"),
+        py::arg("tile_ranges"),
+        py::arg("image_height"),
+        py::arg("image_width"),
+        py::arg("tile_size") = 32);
 
     py::class_<gsplat_cpu::ThreadPool>(m, "ThreadPool")
         .def(py::init<std::size_t>(), py::arg("num_threads") = 0)

@@ -49,41 +49,47 @@ struct BlendResult {
 };
 
 BlendResult blend(
-    const float* means_2d,             // M * 2
-    const float* covs_2d,              // M * 4 (a, b, b, c)
-    const float* colors,               // M * 3
-    const float* opacities,            // M
-    const int32_t* sorted_gaussian_ids,// P
-    const int64_t* tile_ranges,        // num_tiles * 2 (start, end)
+    const float*   means_2d,             // M * 2
+    const float*   covs_2d,              // M * 4 (a, b, b, c — symmetric, off-diag duplicated)
+    const float*   colors,               // M * 3
+    const float*   opacities,            // M
+    const int64_t* sorted_gaussian_ids,  // P  (int64 to match iter-003 sort output)
+    const int64_t* tile_ranges,          // num_tiles * 2 (start, end)
     std::size_t M, std::size_t P,
     int image_height, int image_width,
-    int tile_size,                     // 32
-    ThreadPool& pool                   // shared per-process pool (constructed once)
+    int tile_size,                       // 32
+    ThreadPool& pool                     // shared per-process pool (constructed once)
 );
 
 } // namespace gsplat_cpu
 ```
 
-## Algorithm spec (mirror numpy)
+## Algorithm spec (mirror numpy — line for line)
 
 For each tile (parallelized over the pool):
-1. Read `(start, end) = tile_ranges[tile_id]`. If `start == end`, skip.
+1. Read `(start, end) = tile_ranges[tile_id]`. If `start == end`, skip (output remains 0).
 2. Determine tile pixel bounds: `py_start = ty * tile_size; px_start = tx * tile_size`. Clamp `py_end / px_end` at image bounds (edge tiles may be partial).
-3. Precompute inverse covariance per ENTRY (or per gaussian; entries reference gaussians, so per-gaussian cache is fine and matches numpy):
+3. Inverse covariance: precomputed ONCE per blend call across all M Gaussians (NOT per-tile, not per-iteration). Numpy does this. C++ does the same — allocate a length-`4*M` fp32 array up front (or `M` `Mat2f`), fill, then read inside the per-tile inner loop. This is ~0.5 ms on stitch (60k visible) and amortizes across all tiles.
    - `det = max(a*c - b*b, 1e-6f)`
-   - `cov_inv = [c/det, -b/det, -b/det, a/det]`
-4. Allocate `T[tile_h, tile_w] = 1.0`, `accum[tile_h, tile_w, 3] = 0.0` (stack or per-thread scratch — see notes).
+   - `cov_inv = [c/det, -b/det, -b/det, a/det]` (only 3 unique entries; you can pack as `(c/det, -b/det, a/det)`)
+4. Per-tile scratch: `T[tile_h * tile_w] = 1.0f`, `accum[tile_h * tile_w * 3] = 0.0f`. Stack allocation is fine — 32*32*4 = 4KB for T and 32*32*3*4 = 12KB for accum, comfortably below the 8MB default stack on macOS. Per-tile, NOT per-thread global — one tile at a time per task.
 5. Iterate `idx ∈ [start, end)`:
-   - `g = sorted_gaussian_ids[idx]`
-   - For each pixel (i, j) in the tile, with global coords `(px = px_start+j+0.5, py = py_start+i+0.5)`:
-     - `dx = px - means_2d[g, 0]; dy = py - means_2d[g, 1]`
-     - `power = -0.5 * (cov_inv[g, 0,0]*dx² + 2*cov_inv[g, 0,1]*dx*dy + cov_inv[g, 1,1]*dy²)`
-     - `gw = std::exp(std::min(power, 0.0f))`
-     - `alpha = std::clamp(opacities[g] * gw, 0.0f, 0.99f)`
-     - `accum[i, j, c] += alpha * T[i, j] * colors[g, c]` for c in {0, 1, 2}
-     - `T[i, j] *= (1 - alpha)`
-   - After processing this Gaussian for the whole tile, if `max(T) < 1e-4` for the entire tile, break out of the for-idx loop.
-6. Write `accum[i, j, c]` to `image[(py_start+i)*W*3 + (px_start+j)*3 + c]`.
+   - `g = sorted_gaussian_ids[idx]` (int64 — careful with the index type)
+   - For each pixel (i, j) in the tile, with global coords `(px = px_start+j+0.5f, py = py_start+i+0.5f)`:
+     - `dx = px - means_2d[g*2 + 0]; dy = py - means_2d[g*2 + 1]`
+     - `power = -0.5f * (ci_a*dx*dx + 2.0f*ci_b*dx*dy + ci_c*dy*dy)` where `(ci_a, ci_b, ci_c) = cov_inv[g]`
+     - `gw = std::exp(std::min(power, 0.0f))` — numpy uses `np.exp(np.minimum(power, 0.0))`; the min is for numerical safety when `power` slightly overflows zero due to fp error.
+     - `alpha = std::min(opacities[g] * gw, 0.99f)` — numpy uses `np.clip(x, None, 0.99)`, which is upper-only. There is NO lower-bound clamp (alpha never goes negative because gw≥0 and opacity≥0). Match: no `std::max(..., 0.0f)` needed; a single `std::min(..., 0.99f)` is correct.
+     - `t = T[i*tile_w + j]; at = alpha * t`
+     - `accum[(i*tile_w + j)*3 + c] += at * colors[g*3 + c]` for c in {0, 1, 2}
+     - `T[i*tile_w + j] = t * (1.0f - alpha)`
+   - After processing this Gaussian for the whole tile, compute `tmax = max over T[]`. If `tmax < 0.0001f`, break out of the for-idx loop. (numpy uses 0.0001 exactly — match the literal so PSNR stays infinite for visible Gaussians.)
+6. Write `accum[(i*tile_w+j)*3 + c]` to `image[(py_start+i)*W*3 + (px_start+j)*3 + c]`.
+
+### Do NOT add these (matches numpy exactly)
+- **No per-pixel alpha-skip** (numpy doesn't have `if alpha < 1/255: continue` — the comment in `rasterization.py:476-479` explicitly says it's removed). Adding this in C++ will drop PSNR below 60 dB.
+- **No fp64 accumulator** — numpy uses fp32 throughout. Use fp32 for T, accum, all multiplies. (C++ may benefit from fp64 accumulation per tile later for image quality, but iter-004 is "mirror the spec".)
+- **No microblock subdivision** — that's iter-008. Iter-004 is a pure scalar per-pixel loop, full tile.
 
 ## Performance notes (you can defer these to iter-005 / iter-008 BUT keep an eye on them)
 
@@ -97,13 +103,20 @@ For each tile (parallelized over the pool):
 ```python
 def blend(self, means_2d, covs_2d, colors, opacities,
           sorted_gaussian_ids, tile_ranges, image_height, image_width):
+    # Force contiguous + correct dtypes — torch -> numpy on a non-contig
+    # slice can produce strided arrays that confuse the pybind11 buffer view.
     img = self._mod.blend(
-        means_2d.numpy(), covs_2d.numpy().reshape(-1, 4),
-        colors.numpy(), opacities.numpy(),
-        sorted_gaussian_ids.numpy(), tile_ranges.numpy(),
+        np.ascontiguousarray(means_2d.detach().cpu().numpy(), dtype=np.float32),
+        np.ascontiguousarray(covs_2d.detach().cpu().numpy().reshape(-1, 4), dtype=np.float32),
+        np.ascontiguousarray(colors.detach().cpu().numpy(), dtype=np.float32),
+        np.ascontiguousarray(opacities.detach().cpu().numpy(), dtype=np.float32),
+        np.ascontiguousarray(sorted_gaussian_ids.detach().cpu().numpy(), dtype=np.int64),
+        np.ascontiguousarray(tile_ranges.detach().cpu().numpy(), dtype=np.int64),
         int(image_height), int(image_width), 32,
     )
-    return img.reshape(image_height, image_width, 3), {}
+    # The C++ side returns a (H, W, 3) fp32 numpy array. Match the numpy
+    # backend's contract (returns (image, sub_timings_dict)).
+    return img, {}
 ```
 
 The C++ side allocates a shared `gsplat_cpu::ThreadPool` (lazily, on first blend call, sized to `hardware_concurrency()`) and reuses it across all calls — DO NOT construct a new pool per frame (that's a ~ms allocation per call, way too much).
