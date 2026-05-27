@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "iter-018: port covs_2d = J @ cov_cam @ J.T + 0.3*I to pure-C++ fp32 (was python -> torch.bmm round-trip). Added gsplat_cpu::compute_covs_2d (per-Gaussian Mat3x3 @ Jacobian2x3 matmul, parallelised over the project pool when N>=4096). Replaces ~5 lines of py::module_::import('torch') + bmm + transpose + iadd + detach + cpu + numpy + reshape with a single parallel C++ loop. Layer 1: 42/42 ctest. Layer 2: project verify_stage passes (means_2d 3.05e-5, covs_2d 4.88e-4, depths/radii/valid_mask 0.0 — covs_2d diff magnitude unchanged from torch.bmm path; both fall under the 1e-3 tolerance and are dominated by fp32 accumulation order, not algorithm). Macro 30-frame: 666.1 -> 650.3 ms (1.024x speedup). PSNR distribution UNCHANGED: min 60.33, mean 63.26, max 69.74. Cumulative since iter-014 (1138 ms quiet baseline -> 650 ms on this loaded system): 1.75x wall-clock speedup despite the loaded system."
+}
