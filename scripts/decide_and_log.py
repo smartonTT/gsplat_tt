@@ -161,6 +161,7 @@ def main():
         "kernel_ms_p99": metrics["kernel_ms_p99"],
         "per_view_median": metrics["per_view_median"],
         "psnr_per_view": metrics["psnr_per_view"],
+        "tile_structure_ratio_per_view": metrics.get("tile_structure_ratio_per_view"),
         "class": metrics["class"],
         "commit_sha": commit_sha,
         "high_promotion_priority": decision["high_promotion_priority"],
