@@ -649,11 +649,22 @@ ProjectResult project_full_fused(
         valid_mask[i] = valid ? 1 : 0;
     };
 
+    // iter-052: blocked dispatch (same rationale as iter-051 for gauss_rec).
+    // The strided pattern caused false-sharing on means_2d/covs_2d/depths/
+    // radii writes — each is contiguous per-Gaussian so adjacent Gaussian
+    // writes from different workers shared cache lines. Blocked per-worker
+    // chunks give each worker a private contiguous span -> no cross-core
+    // line traffic + prefetcher-friendly sequential reads of all input
+    // arrays. project_full_fused is the heaviest stage (~2.9 ms / frame)
+    // so this is the highest-impact place to apply the pattern.
     if (pool != nullptr && pool->size() > 1 && N >= 4096) {
         const std::size_t W = pool->size();
+        const std::size_t chunk_n = (N + W - 1) / W;
         for (std::size_t w = 0; w < W; ++w) {
-            pool->submit([w, W, N, &per_gaussian]() {
-                for (std::size_t i = w; i < N; i += W) per_gaussian(i);
+            pool->submit([w, chunk_n, N, &per_gaussian]() {
+                const std::size_t lo = w * chunk_n;
+                const std::size_t hi = std::min(lo + chunk_n, N);
+                for (std::size_t i = lo; i < hi; ++i) per_gaussian(i);
             });
         }
         pool->wait();
