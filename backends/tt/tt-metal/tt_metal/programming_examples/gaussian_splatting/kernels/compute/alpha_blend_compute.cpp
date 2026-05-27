@@ -374,15 +374,21 @@ void kernel_main() {
             exp_tile_init<true>();
             exp_tile<true>(0);
 
-            // dst[0] *= opacity
+            // alpha = opacity · weight. (iter-051: dropped 0.99 cap.)
+            //
+            // Algebraic justification:
+            //   opacity ≤ 1   (host-provided; bf16 quantized from .ply σ)
+            //   weight  ≤ 1   (= exp(power), power ≤ 0 by PSD Q ≥ 0)
+            //   ⇒ α ≤ 1 algebraically.
+            // Stage E uses the identity T_new = T·sat - contrib
+            //   (= T·sat·(1-α)), so T_new ≥ 0 algebraically — the cap was
+            // not protecting (1-α) > 0 (the formula doesn't use that
+            // factor any more, since iter-042's sub-fuse). And the Stage F
+            // sat_mask refresh catches the T → 0 case (sat zeros out
+            // contributions on saturated pixels). Saves 3 SFPU ops/g
+            // (copy_tile_to_dst_init_short + copy_tile + binary_min_tile).
+            // Same pattern as iter-050's defensive-clamp audit.
             mul_unary_tile(0, opacity_bits);
-
-            // alpha = min(opacity · weight, 0.99). Cap at 0.99 (instead of
-            // 1.0) so transmittance T can never reach exactly 0 — keeps
-            // (1-alpha) > 0 in Stage E and avoids degenerate compositing.
-            copy_tile_to_dst_init_short(CB_CONST_099);
-            copy_tile(CB_CONST_099, 0, 1);
-            binary_min_tile(0, 1, 0);
 
             tile_regs_commit();
             tile_regs_wait();
