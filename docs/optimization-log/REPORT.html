@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 37 · current best: 30.06 ms · target: 1.0 ms
+      iters: 36 · current best: 31.34 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,39 +20,6 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
-<section class="iter-card">
-  <header>
-    <h3>iter-038-d2-channel-fuse
-      <span class="badge" style="background:#2ca02c">commit</span>
-      <span class="badge verdict">KEEP</span>
-      <span class="class-tag">binning</span>
-      
-      <span class="ts">2026-05-27T01:34:05.974952+00:00</span>
-    </h3>
-  </header>
-  
-  <p class="brief outcome"><b>Outcome.</b> All 8 visual checks pass. Diff×10 images show uniform random speckle consistent with bf16 dst-slot rounding differences from the D2 channel acquire fusion — no tile grid seams, no geometry shift, no color clipping, no NaN/Inf signatures. PSNR: all three views above the 35 dB binning floor (hero=36.32, side=39.87, top=35.57). Per-view PSNR delta is 4.30 dB (threshold 20 dB). Per-view kernel-ms ratio is 1.29× (threshold 2×). Timing: kernel_ms_median improved 30.06 vs prev_best 31.34 (-4.1%), p99/median ratio 1.25× well under the 3× threshold. The D2 channel fusion delivers a clean kernel win with no structural regressions.</p>
-  <div class="metrics">
-    <div class="ms">kernel: <b>30.06 ms</b> median · 37.44 ms p99</div>
-    <div class="per-view">per-view: hero 30.06 / side 28.95 / top 37.41</div>
-    <div class="psnr">PSNR: hero 36.3 / side 39.9 / top 35.6 (min <b>35.6</b>)</div>
-  </div>
-  <div class="thumbs">
-    <figure><a href="screenshots/iter-038-d2-channel-fuse/hero.png" target="_blank"><img src="screenshots/iter-038-d2-channel-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
-    <figure><a href="screenshots/iter-038-d2-channel-fuse/side.png" target="_blank"><img src="screenshots/iter-038-d2-channel-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
-    <figure><a href="screenshots/iter-038-d2-channel-fuse/top.png" target="_blank"><img src="screenshots/iter-038-d2-channel-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
-    <figure><a href="screenshots/iter-038-d2-channel-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-038-d2-channel-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
-    <figure><a href="screenshots/iter-038-d2-channel-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-038-d2-channel-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
-    <figure><a href="screenshots/iter-038-d2-channel-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-038-d2-channel-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
-  </div>
-  <details>
-    <summary>Validator checks (KEEP)</summary>
-    <ul><li>✓ tile_grid_seams: No horizontal or vertical lines at 32px or 16px spacing visible in any diff×10 image. All three diffs show spatially ran</li><li>✓ tile_uniform_fill: No constant-color 32×32 or 16×16 blocks in any render. Object surface shows normal Gaussian splat texture throughout.</li><li>✓ missing_splat_holes: No localized dark regions in renders relative to reference. Object coverage matches reference in all three views with no</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes present in any view. Color distribution matches reference.</li><li>✓ ringing_halos: No structured ringing at object silhouettes. Edge noise in diff×10 is commensurate with normal bf16 rounding at boundari</li><li>✓ nan_inf_signatures: No pure black, white, or magenta patches in spatially-correlated patterns in any render.</li><li>✓ geometry_shift: Diff×10 images do not show object-silhouette-shaped bright edges that would indicate coordinate error. Geometry placemen</li><li>✓ diff10_structure: All three diff×10 images (hero, side, top) are dominated by uniform random speckle distributed across the object surface</li></ul>
-    <p class="reasoning">All 8 visual checks pass. Diff×10 images show uniform random speckle consistent with bf16 dst-slot rounding differences from the D2 channel acquire fusion — no tile grid seams, no geometry shift, no color clipping, no NaN/Inf signatures. PSNR: all three views above the 35 dB binning floor (hero=36.32, side=39.87, top=35.57). Per-view PSNR delta is 4.30 dB (threshold 20 dB). Per-view kernel-ms ratio is 1.29× (threshold 2×). Timing: kernel_ms_median improved 30.06 vs prev_best 31.34 (-4.1%), p99/median ratio 1.25× well under the 3× threshold. The D2 channel fusion delivers a clean kernel win with no structural regressions.</p>
-  </details>
-</section>
-
-
 <section class="iter-card">
   <header>
     <h3>iter-035-contrib-floor-17-of-255
