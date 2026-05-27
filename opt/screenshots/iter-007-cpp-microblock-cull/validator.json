@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "C++ port of microblock_cull. mb_header (256x32x2) and mb_stream (2,046,181 entries) are bit-identical to the iter-006 numpy reference on the hero fixture (verify_stage --stage microblock_cull pass with tol=0). Layer 1: 34/34 ctest (5 new microblock_cull tests + 29 existing). Layer 2: all five stages pass on the relevant backend. Layer 3: 30-view render with cpu_cpp_mb matches iter-006 numpy cpu_mb to within the same PSNR distribution (min 60.34 dB, mean 63.26 dB, max 69.73 dB). Work reduction 77.36% mean. Sum_total_ms is still slow (400s) because alpha_blend_microblock is numpy until iter-008. Cull stage itself is ~50ms/frame in C++ (vs ~2s/frame in numpy)."
+}
