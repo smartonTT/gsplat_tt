@@ -168,3 +168,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on three independent grounds. First, tile_structure_check fails: max tile_structure_ratio is 17.94 (top view), which is in the >14 REJECT band — the rule is REJECT for any iter that does not strictly reduce the ratio vs. prev best. The prev best (iter-064) had max 17.75; iter-067 is 17.94 (+0.19), a slight increase, not a reduction. Second, visual_checks tile_grid_seams and diff10_structure both fail: top_diff10 shows a conspicuous regular grid mesh pattern across the figure body at ~32px spacing, confirming the tile_structure_ratio reading is a real visible artifact. Third, timing fails: kernel_ms_median=26.195 vs prev_best=23.98 is a +9.2% regression (well above the 1.02× break-even threshold). Additionally, class is kernel-algebra whose PSNR floor is >40 dB; hero (39.43) and top (38.63) fall below that floor, constituting a NEEDS_REVIEW-level numeric signal that reinforces the REJECT. The CB_CONTRIB megafuse intent was to attack tile quilting, but the ratio increased rather than decreased, the kernel regressed +9.2%, and the tile grid seams are visually confirmed — all three primary gates fail.
 - Thumbnails: ![hero](screenshots/iter-067-contrib-megafuse/hero.png) ![diff10](screenshots/iter-067-contrib-megafuse/hero_diff10.png)
 
+
+## iter-068-dxdy-fuse — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 25.66 / p99 30.95
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: REJECT on three grounds: (1) tile_structure_ratio top=18.150 exceeds the >14 hard floor and delta vs prev best is +0.404 (>0.3 threshold); (2) PSNR hero=39.40 and top=38.59 are below the 40 dB kernel-algebra floor; (3) kernel_ms_median=25.661 is +6.93% above prev_best=23.98. The CB_DX/CB_DY fuse degrades both quality and perf — dst-resident SFPU mul_binary + square_tile cost more than the CB pack/unpack saved, and pack_tile bf16 quantization is now confirmed architectural (fourth CB-hop fuse to fail flat).
+- Thumbnails: ![hero](screenshots/iter-068-dxdy-fuse/hero.png) ![diff10](screenshots/iter-068-dxdy-fuse/hero_diff10.png)
+

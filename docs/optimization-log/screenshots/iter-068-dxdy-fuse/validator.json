@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "fail", "evidence": "top_diff10.png shows visible grid/quilting structure on the body of the figure consistent with tile_structure_ratio_per_view top=18.15 (>14 hard floor)."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32x32 blocks replacing detail."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated stripe artifacts."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No firefly hot pixels."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "No silhouette outlines."},
+    {"name": "diff10_structure", "result": "fail", "evidence": "top_diff10.png shows structured grid-like pattern, not uniform speckle."}
+  ],
+  "psnr_check": {"floor": 40.0, "actual": {"hero": 39.40, "side": 40.98, "top": 38.59}, "pass": false},
+  "tile_structure_check": {"max_ratio": 18.15, "actual": {"hero": 17.149, "side": 17.266, "top": 18.150}, "pass": false, "delta_vs_prev": 0.404},
+  "per_view_consistency": {"max_psnr_delta_db": 2.40, "max_ms_ratio": 1.25, "pass": true},
+  "timing": {"median_ms": 25.661, "p99_ms": 30.954, "vs_prev_best_pct": 6.93, "pass": false},
+  "reasoning": "REJECT on three grounds: (1) tile_structure_ratio top=18.150 exceeds the >14 hard floor and delta vs prev best is +0.404 (>0.3 threshold); (2) PSNR hero=39.40 and top=38.59 are below the 40 dB kernel-algebra floor; (3) kernel_ms_median=25.661 is +6.93% above prev_best=23.98. The CB_DX/CB_DY fuse degrades both quality and perf — dst-resident SFPU mul_binary + square_tile cost more than the CB pack/unpack saved, and pack_tile bf16 quantization is now confirmed architectural (fourth CB-hop fuse to fail flat)."
+}
