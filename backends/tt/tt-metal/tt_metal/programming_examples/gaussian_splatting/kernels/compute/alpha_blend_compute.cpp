@@ -367,31 +367,22 @@ void kernel_main() {
             tile_regs_release();
             cb_wait_front(CB_Q, 3);
 
-            // ----- Stage B3b1: partial sum a·dx² + c·dy² → CB_POWER.
-            // Just adding CB_Q[0] + CB_Q[1]. The third term (2b·dx·dy)
-            // is folded in within the next acquire block (B3b2+C) below.
-            tile_regs_acquire();
-            add_tiles_init(CB_Q, CB_Q);
-            add_tiles(CB_Q, CB_Q, 0, 1, 0);
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_POWER, 1);
-            pack_tile(0, CB_POWER);
-            cb_push_back(CB_POWER, 1);
-            tile_regs_release();
-            cb_wait_front(CB_POWER, 1);
-
-            // ----- Stage B3b2 + C: finish Q, compute power, exp, and alpha.
-            // This is the longest single Dst block in the kernel — it folds
-            // the last add into Q, then runs the entire exp / clamp / opacity
-            // chain to produce the per-pixel alpha. Doing it as one block
-            // avoids extra spill/reload to L1 between sub-stages.
+            // ----- Stage B3b (fused): full sum a·dx² + c·dy² + 2b·dx·dy = Q,
+            // then power, exp, alpha — all in one acquire. Eliminates the
+            // CB_POWER round-trip (reserve/pack/push/wait/pop). Pattern:
+            // first add_tiles puts CB_Q[0]+CB_Q[1] in dst[0]; then
+            // binary_dest_reuse_tiles<ELWADD,DEST_TO_SRCA> adds CB_Q[2] to
+            // dst[0] without releasing the register. Same safe shape as
+            // iter-007/010/038 (single add_tiles_init + binary_dest_reuse
+            // follow-up).
             //
             //   alpha = min( opacity · exp(min(-0.5·Q, 0)),  0.99 )
             //
             tile_regs_acquire();
-            add_tiles_init(CB_POWER, CB_Q);
-            add_tiles(CB_POWER, CB_Q, 0, 2, 0);  // dst[0] = (a·dx² + c·dy²) + 2b·dx·dy = Q
+            add_tiles_init(CB_Q, CB_Q);
+            add_tiles(CB_Q, CB_Q, 0, 1, 0);  // dst[0] = a·dx² + c·dy²
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q, 2, 0);  // dst[0] += 2b·dx·dy → Q
 
             // power = -0.5 · Q
             mul_unary_tile(0, NEG_HALF_BITS);
@@ -429,7 +420,6 @@ void kernel_main() {
             tile_regs_release();
 
             // Cleanup intermediates from B/C stages.
-            cb_pop_front(CB_POWER, 1);
             cb_pop_front(CB_Q, 3);
             cb_pop_front(CB_DX, 1);
             cb_pop_front(CB_DY, 1);
