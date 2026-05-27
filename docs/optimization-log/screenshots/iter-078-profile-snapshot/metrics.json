@@ -1,0 +1,62 @@
+{
+  "iter_dir": "iter-078-profile-snapshot",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 24.7055,
+  "psnr_per_view": {
+    "hero": 39.41496520322124,
+    "side": 40.99648830708902,
+    "top": 38.59546500629706
+  },
+  "tile_structure_ratio_per_view": {
+    "hero": 17.137658028356157,
+    "side": 17.278351895106663,
+    "top": 18.1422622408487
+  },
+  "kernel_ms_median": 24.913,
+  "kernel_ms_p99": 29.7741,
+  "per_view_median": {
+    "hero": 24.913,
+    "side": 24.1445,
+    "top": 29.7515
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 106.0624719975749,
+    "project_ms": 17.557731014676392,
+    "tile_assign_ms": 7.186141505371779,
+    "sort_ms": 1.8353900086367503,
+    "blend_ms": 78.0719064787263
+  },
+  "sub_medians": {
+    "blend.daemon_rt": 51.793260499835014,
+    "blend.daemon_rt.device_kernel": 24.913,
+    "blend.daemon_rt.dispatch_ms": 11.244499999999999,
+    "blend.daemon_rt.encode_ms": 2.0415,
+    "blend.daemon_rt.io_load_ms": 2.455,
+    "blend.daemon_rt.io_save_ms": 12.061,
+    "blend.daemon_rt.readback_ms": 0.4435,
+    "blend.daemon_rt.upload_ms": 12.931999999999999,
+    "blend.load_npy": 1.4262535114539787,
+    "blend.prep": 7.624607009347528,
+    "blend.prep.cov_inv": 0.4188864986645058,
+    "blend.prep.gather": 6.405056992662139,
+    "blend.prep.offsets": 0.049078997108154,
+    "blend.prep.px_py_grid": 0.0023899920051917434,
+    "blend.prep.tile_origin": 0.693163980031386,
+    "blend.save_npy": 16.89017600438092,
+    "project.cam_xform": 1.7217059939866886,
+    "project.cov2d": 8.327561503392644,
+    "project.cov3d": 4.4948330032639205,
+    "project.radii": 1.1131704959552735,
+    "project.screen_xy": 0.33502199221402407,
+    "sort.argsort": 1.0568715224508196,
+    "sort.gather": 0.2571780059952289,
+    "sort.keys": 0.33615199208725244,
+    "sort.ranges": 0.18319798982702196,
+    "tile_assign.bbox": 0.5035959911765531,
+    "tile_assign.contrib_cull": 2.964191007777117,
+    "tile_assign.flat_ids": 1.851919005275704,
+    "tile_assign.repeat": 1.8389850010862574
+  },
+  "tracy_zones": []
+}
