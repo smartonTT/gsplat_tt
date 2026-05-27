@@ -53,7 +53,7 @@ class CpuCppBackend(Backend):
         if opacities is not None:
             opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
 
-        prep = self._mod.project_prepare(
+        means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full(
             means_np,
             scales_np,
             rotations_np,
@@ -61,27 +61,9 @@ class CpuCppBackend(Backend):
             intrinsics_np,
             image_height,
             image_width,
+            opacities_np if opacities_np is not None else None,
+            1.0 / 255.0,
         )
-
-        from gsplat.utils import build_covariance_3d
-
-        cov3d = build_covariance_3d(
-            torch.from_numpy(scales_np), torch.from_numpy(rotations_np)
-        )
-        r = torch.from_numpy(extrinsics_np[:3, :3])
-        cov_cam = torch.matmul(torch.matmul(r, cov3d), r.transpose(0, 1))
-
-        j = torch.from_numpy(np.asarray(prep.jacobian)).view(prep.N, 2, 3)
-        covs_2d = torch.bmm(torch.bmm(j, cov_cam), j.transpose(1, 2))
-        covs_2d[:, 0, 0] += 0.3
-        covs_2d[:, 1, 1] += 0.3
-        covs_np = covs_2d.detach().cpu().numpy().astype(np.float32, copy=False)
-        covs_flat = covs_np.reshape(prep.N, 4)
-
-        result = self._mod.project_finalize(
-            prep, covs_flat, opacities_np if opacities_np is not None else None, 1.0 / 255.0
-        )
-        means_2d, covs_2d_out, depths, radii, valid_mask = result
 
         return (
             torch.from_numpy(np.asarray(means_2d)),

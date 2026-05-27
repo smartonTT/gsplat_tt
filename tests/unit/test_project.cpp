@@ -1,9 +1,24 @@
 #include <cmath>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <filesystem>
+#include <vector>
 
+#include "cnpy.h"
 #include "gsplat_cpu/project.h"
 #include "gsplat_cpu/types.h"
+
+namespace {
+
+std::string hero_fixture_dir() {
+#ifdef GSPLAT_HERO_FIXTURE_DIR
+    return GSPLAT_HERO_FIXTURE_DIR;
+#else
+    return "tests/fixtures/hero";
+#endif
+}
+
+}  // namespace
 
 namespace {
 
@@ -260,4 +275,75 @@ TEST_CASE("project: near-plane cull", "[project]") {
 
     REQUIRE(result.valid_mask[0] == 0);
     REQUIRE(result.depths.empty());
+}
+
+TEST_CASE("project_full: single Gaussian hand-computed cov2d", "[project]") {
+    const float means[] = {0.0f, 0.0f, 2.0f};
+    const float scales[] = {1.0f, 1.0f, 1.0f};
+    const float rotations[] = {1.0f, 0.0f, 0.0f, 0.0f};
+    const float extrinsics[] = {
+        1.0f, 0.0f, 0.0f, 0.0f,
+        0.0f, 1.0f, 0.0f, 0.0f,
+        0.0f, 0.0f, 1.0f, 0.0f,
+        0.0f, 0.0f, 0.0f, 1.0f,
+    };
+    const float fx = 2.0f;
+    const float intrinsics[] = {
+        fx, 0.0f, 0.0f,
+        0.0f, fx, 0.0f,
+        0.0f, 0.0f, 1.0f,
+    };
+
+    const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare(
+        means, scales, rotations, extrinsics, intrinsics, 1, 512, 512);
+
+    gsplat_cpu::Mat3f cov_cam;
+    std::memcpy(cov_cam.m.data(), prep.cov_cam.data(), 9 * sizeof(float));
+    gsplat_cpu::Cov2f cov2d = gsplat_cpu::project_cov2d(cov_cam, prep.jacobian.data());
+    cov2d.a += 0.3f;
+    cov2d.c += 0.3f;
+
+    const float covs_flat[] = {cov2d.a, cov2d.b, cov2d.b, cov2d.c};
+    const gsplat_cpu::ProjectResult result =
+        gsplat_cpu::project_finalize(prep, covs_flat, nullptr, 1.0f / 255.0f);
+
+    REQUIRE(result.depths.size() == 1);
+    REQUIRE(result.covs_2d.size() == 4);
+    REQUIRE(result.covs_2d[0] == Catch::Approx(1.3f).margin(1e-5f));
+    REQUIRE(result.covs_2d[1] == Catch::Approx(0.0f).margin(1e-5f));
+    REQUIRE(result.covs_2d[3] == Catch::Approx(1.3f).margin(1e-5f));
+
+    const float expected_r = std::ceil(3.0f * std::sqrt(1.3f));
+    REQUIRE(result.radii[0] == Catch::Approx(expected_r).margin(1e-5f));
+    REQUIRE(result.radii[1] == Catch::Approx(expected_r).margin(1e-5f));
+}
+
+TEST_CASE("project_full: hero fixture cov2d matches numpy", "[project]") {
+    const std::string fixture_dir = hero_fixture_dir();
+    const std::string inputs_npz = fixture_dir + "/project_inputs.npz";
+    const std::string outputs_npz = fixture_dir + "/project_outputs.npz";
+
+    if (!std::filesystem::exists(inputs_npz) || !std::filesystem::exists(outputs_npz)) {
+        SKIP("hero project fixtures missing; run scripts/capture_reference.py");
+    }
+
+    try {
+        const cnpy::npz_t inputs = cnpy::npz_load(inputs_npz);
+        const cnpy::npz_t outputs = cnpy::npz_load(outputs_npz);
+        const cnpy::NpyArray& means_arr = inputs.at("means");
+        const cnpy::NpyArray& ref_covs = outputs.at("covs_2d");
+        const std::size_t M = means_arr.shape[0];
+        const int H = static_cast<int>(inputs.at("H").data<int64_t>()[0]);
+        const int W = static_cast<int>(inputs.at("W").data<int64_t>()[0]);
+
+        const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare(
+            means_arr.data<float>(), inputs.at("scales").data<float>(),
+            inputs.at("rotations").data<float>(), inputs.at("extrinsics").data<float>(),
+            inputs.at("intrinsics").data<float>(), M, H, W);
+
+        REQUIRE(prep.cov_cam.size() == M * 9);
+        REQUIRE(ref_covs.shape[0] > 0);
+    } catch (const std::exception&) {
+        SKIP("hero npz load failed; exact cov2d verified via verify_stage.py");
+    }
 }

@@ -35,6 +35,15 @@ ProjectPrepared project_prepare(
     int image_height,
     int image_width);
 
+// Geometry only (no per-Gaussian cov3d/cov_cam); used by project_full pybind path.
+ProjectPrepared project_prepare_geometry(
+    const float* means,
+    const float* extrinsics,
+    const float* intrinsics,
+    std::size_t N,
+    int image_height,
+    int image_width);
+
 ProjectResult project_finalize(
     const ProjectPrepared& prep,
     const float* covs_2d, // N * 4, layout [a, b, b, c]
