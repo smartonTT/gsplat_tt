@@ -1,0 +1,431 @@
+#include "gsplat_cpu/cull_and_blend.h"
+
+#include "gsplat_cpu/simd_exp.h"
+#include "gsplat_cpu/thread_pool.h"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <vector>
+
+#if defined(__ARM_NEON)
+#include <arm_neon.h>
+#define GSPLAT_HAS_NEON 1
+#else
+#define GSPLAT_HAS_NEON 0
+#endif
+
+namespace gsplat_cpu {
+
+namespace {
+
+constexpr int kNumMicroblocks = 32;
+
+#if GSPLAT_HAS_NEON
+struct MbAccum {
+    alignas(16) float r[32];
+    alignas(16) float g[32];
+    alignas(16) float b[32];
+    alignas(16) float t[32];
+};
+
+inline void init_mb_accum(MbAccum& a) {
+    const float32x4_t ones = vdupq_n_f32(1.0f);
+    const float32x4_t zeros = vdupq_n_f32(0.0f);
+    for (int k = 0; k < 32; k += 4) {
+        vst1q_f32(&a.r[k], zeros);
+        vst1q_f32(&a.g[k], zeros);
+        vst1q_f32(&a.b[k], zeros);
+        vst1q_f32(&a.t[k], ones);
+    }
+}
+
+inline void apply_gaussian_neon(
+    MbAccum& acc,
+    float ci_a, float ci_b, float ci_c,
+    float mx, float my,
+    float opacity,
+    float cr, float cg, float cb,
+    int px_start, int py_start) {
+    const float A = -0.5f * ci_a;
+    const float B = -ci_b;
+    const float C = -0.5f * ci_c;
+    const float32x4_t A_v = vdupq_n_f32(A);
+    const float32x4_t op_v = vdupq_n_f32(opacity);
+    const float32x4_t alpha_cap = vdupq_n_f32(0.99f);
+    const float32x4_t zero = vdupq_n_f32(0.0f);
+    const float32x4_t pwr_lo_bound = vdupq_n_f32(-30.0f);
+    const float32x4_t cr_v = vdupq_n_f32(cr);
+    const float32x4_t cg_v = vdupq_n_f32(cg);
+    const float32x4_t cb_v = vdupq_n_f32(cb);
+
+    static const float dx_offs_lo[4] = {0.5f, 1.5f, 2.5f, 3.5f};
+    static const float dx_offs_hi[4] = {4.5f, 5.5f, 6.5f, 7.5f};
+    const float32x4_t dx_off_lo = vld1q_f32(dx_offs_lo);
+    const float32x4_t dx_off_hi = vld1q_f32(dx_offs_hi);
+
+    const float px_base = static_cast<float>(px_start) - mx;
+    const float32x4_t dx_lo = vaddq_f32(vdupq_n_f32(px_base), dx_off_lo);
+    const float32x4_t dx_hi = vaddq_f32(vdupq_n_f32(px_base), dx_off_hi);
+    const float32x4_t dx_lo_sq = vmulq_f32(dx_lo, dx_lo);
+    const float32x4_t dx_hi_sq = vmulq_f32(dx_hi, dx_hi);
+
+    for (int i = 0; i < 4; ++i) {
+        const float py = static_cast<float>(py_start + i) + 0.5f;
+        const float dy = py - my;
+        const float y_term = C * dy * dy;
+        const float xy_coef = B * dy;
+        const float32x4_t y_term_v = vdupq_n_f32(y_term);
+        const float32x4_t xy_coef_v = vdupq_n_f32(xy_coef);
+
+        float32x4_t pwr_lo = vfmaq_f32(y_term_v, xy_coef_v, dx_lo);
+        pwr_lo = vfmaq_f32(pwr_lo, A_v, dx_lo_sq);
+        float32x4_t pwr_hi = vfmaq_f32(y_term_v, xy_coef_v, dx_hi);
+        pwr_hi = vfmaq_f32(pwr_hi, A_v, dx_hi_sq);
+
+        pwr_lo = vmaxq_f32(vminq_f32(pwr_lo, zero), pwr_lo_bound);
+        pwr_hi = vmaxq_f32(vminq_f32(pwr_hi, zero), pwr_lo_bound);
+
+        const float32x4_t gw_lo = simd_exp_f32x4(pwr_lo);
+        const float32x4_t gw_hi = simd_exp_f32x4(pwr_hi);
+
+        const float32x4_t alpha_lo = vminq_f32(vmulq_f32(op_v, gw_lo), alpha_cap);
+        const float32x4_t alpha_hi = vminq_f32(vmulq_f32(op_v, gw_hi), alpha_cap);
+
+        const int row = i * 8;
+        const float32x4_t t_lo = vld1q_f32(&acc.t[row]);
+        const float32x4_t t_hi = vld1q_f32(&acc.t[row + 4]);
+        const float32x4_t at_lo = vmulq_f32(alpha_lo, t_lo);
+        const float32x4_t at_hi = vmulq_f32(alpha_hi, t_hi);
+
+        float32x4_t r_lo = vld1q_f32(&acc.r[row]);
+        float32x4_t gg_lo = vld1q_f32(&acc.g[row]);
+        float32x4_t bb_lo = vld1q_f32(&acc.b[row]);
+        r_lo = vfmaq_f32(r_lo, at_lo, cr_v);
+        gg_lo = vfmaq_f32(gg_lo, at_lo, cg_v);
+        bb_lo = vfmaq_f32(bb_lo, at_lo, cb_v);
+        vst1q_f32(&acc.r[row], r_lo);
+        vst1q_f32(&acc.g[row], gg_lo);
+        vst1q_f32(&acc.b[row], bb_lo);
+
+        float32x4_t r_hi = vld1q_f32(&acc.r[row + 4]);
+        float32x4_t gg_hi = vld1q_f32(&acc.g[row + 4]);
+        float32x4_t bb_hi = vld1q_f32(&acc.b[row + 4]);
+        r_hi = vfmaq_f32(r_hi, at_hi, cr_v);
+        gg_hi = vfmaq_f32(gg_hi, at_hi, cg_v);
+        bb_hi = vfmaq_f32(bb_hi, at_hi, cb_v);
+        vst1q_f32(&acc.r[row + 4], r_hi);
+        vst1q_f32(&acc.g[row + 4], gg_hi);
+        vst1q_f32(&acc.b[row + 4], bb_hi);
+
+        vst1q_f32(&acc.t[row],     vsubq_f32(t_lo, at_lo));
+        vst1q_f32(&acc.t[row + 4], vsubq_f32(t_hi, at_hi));
+    }
+}
+
+inline float max_t_neon(const MbAccum& acc) {
+    float32x4_t m = vld1q_f32(&acc.t[0]);
+    for (int k = 4; k < 32; k += 4) {
+        m = vmaxq_f32(m, vld1q_f32(&acc.t[k]));
+    }
+    return vmaxvq_f32(m);
+}
+#endif  // GSPLAT_HAS_NEON
+
+// Per-tile fused cull + blend kernel.
+// In-tile per-microblock kept-id buffer never escapes the thread; mb_stream
+// global allocation is avoided entirely. The blend loop is bit-identical to
+// blend_microblock's SIMD path because the per-microblock Gaussian-id order
+// equals the depth-sorted order of mb_stream.
+void cull_and_blend_tile(
+    const int tile_id,
+    const int tiles_x,
+    const int tile_size,
+    const int image_height,
+    const int image_width,
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    const float mb_contrib_floor,
+    const float* cov_inv_a,
+    const float* cov_inv_b,
+    const float* cov_inv_c,
+    float* image_out,
+    int64_t* tile_dropped_count,
+    int64_t* tile_kept_count) {
+    const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
+    const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
+    if (start == end) {
+        return;
+    }
+
+    const int ty = tile_id / tiles_x;
+    const int tx = tile_id % tiles_x;
+    const float tx_tile = static_cast<float>(tx * tile_size);
+    const float ty_tile = static_cast<float>(ty * tile_size);
+    const int py_tile = ty * tile_size;
+    const int px_tile = tx * tile_size;
+    const int py_end_tile = std::min(py_tile + tile_size, image_height);
+    const int px_end_tile = std::min(px_tile + tile_size, image_width);
+
+    const int64_t L = end - start;
+
+    // Per-microblock kept Gaussian-id lists. Reserve up-front capacity = L
+    // since worst case each microblock keeps all L Gaussians. The arrays
+    // live on the thread stack via std::vector<>.reserve(L) for amortised
+    // O(1) push_back and stay hot in L1 (sizeof(int64)*L is typically
+    // <<128KB).
+    std::array<std::vector<int64_t>, kNumMicroblocks> kept;
+    for (auto& v : kept) v.reserve(static_cast<std::size_t>(L));
+
+    int64_t dropped = 0;
+    int64_t kept_total = 0;
+
+    for (int64_t l = 0; l < L; ++l) {
+        const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
+        const std::size_t gs = static_cast<std::size_t>(g);
+
+        const float mean_x = means_2d[gs * 2 + 0];
+        const float mean_y = means_2d[gs * 2 + 1];
+        const float a = covs_2d[gs * 4 + 0];
+        const float c = covs_2d[gs * 4 + 3];
+        const float g_op = opacities[gs];
+
+        if (g_op <= mb_contrib_floor) {
+            ++dropped;
+            continue;
+        }
+
+        // ci_a/b/c precomputed globally (passed in).
+        const float ci_a = cov_inv_a[gs];
+        const float ci_b = cov_inv_b[gs];
+        const float ci_c = cov_inv_c[gs];
+
+        const float log_thresh = std::log(mb_contrib_floor / g_op);
+        const float r = std::sqrt(-2.0f * log_thresh);
+        const float x_half = r * std::sqrt(a);
+        const float y_half = r * std::sqrt(c);
+
+        const float bb_x_min = mean_x - x_half;
+        const float bb_x_max = mean_x + x_half;
+        const float bb_y_min = mean_y - y_half;
+        const float bb_y_max = mean_y + y_half;
+
+        const int mx_lo = std::max(0, static_cast<int>(std::floor((bb_x_min - tx_tile) / 8.0f)));
+        const int mx_hi = std::min(3, static_cast<int>(std::floor((bb_x_max - tx_tile) / 8.0f)));
+        const int my_lo = std::max(0, static_cast<int>(std::floor((bb_y_min - ty_tile) / 4.0f)));
+        const int my_hi = std::min(7, static_cast<int>(std::floor((bb_y_max - ty_tile) / 4.0f)));
+
+        if (mx_lo > mx_hi || my_lo > my_hi) {
+            ++dropped;
+            continue;
+        }
+
+        bool kept_any = false;
+        for (int my = my_lo; my <= my_hi; ++my) {
+            const float mb_oy = ty_tile + static_cast<float>(my * 4);
+            const float cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0f);
+            const float dy_c = cy - mean_y;
+            for (int mx = mx_lo; mx <= mx_hi; ++mx) {
+                const float mb_ox = tx_tile + static_cast<float>(mx * 8);
+                const float cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0f);
+                const float dx_c = cx - mean_x;
+                const float power_c =
+                    -0.5f * (ci_a * dx_c * dx_c + 2.0f * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
+                if (power_c >= log_thresh) {
+                    kept[static_cast<std::size_t>((my << 2) | mx)].push_back(g);
+                    kept_any = true;
+                    ++kept_total;
+                }
+            }
+        }
+
+        if (!kept_any) {
+            ++dropped;
+        }
+    }
+
+    // Blend each microblock from the in-tile kept list.
+    for (int m = 0; m < kNumMicroblocks; ++m) {
+        const auto& kg = kept[static_cast<std::size_t>(m)];
+        if (kg.empty()) continue;
+
+        const int mb_ox_i = (m & 3) * 8;
+        const int mb_oy_i = (m >> 2) * 4;
+        const int py_start = py_tile + mb_oy_i;
+        const int px_start = px_tile + mb_ox_i;
+        const int py_end = std::min(py_start + 4, py_end_tile);
+        const int px_end = std::min(px_start + 8, px_end_tile);
+        if (py_start >= py_end || px_start >= px_end) continue;
+        const int mb_h = py_end - py_start;
+        const int mb_w = px_end - px_start;
+        const int npix = mb_h * mb_w;
+
+#if GSPLAT_HAS_NEON
+        if (mb_h == 4 && mb_w == 8) {
+            MbAccum acc;
+            init_mb_accum(acc);
+            for (int64_t g : kg) {
+                const std::size_t gs = static_cast<std::size_t>(g);
+                apply_gaussian_neon(acc,
+                    cov_inv_a[gs], cov_inv_b[gs], cov_inv_c[gs],
+                    means_2d[gs * 2 + 0], means_2d[gs * 2 + 1],
+                    opacities[gs],
+                    colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
+                    px_start, py_start);
+                if (max_t_neon(acc) < 0.0001f) break;
+            }
+            for (int i = 0; i < 4; ++i) {
+                const int gy = py_start + i;
+                for (int j = 0; j < 8; ++j) {
+                    const int gx = px_start + j;
+                    const int out_base = (gy * image_width + gx) * 3;
+                    const int ij = i * 8 + j;
+                    image_out[out_base + 0] = acc.r[ij];
+                    image_out[out_base + 1] = acc.g[ij];
+                    image_out[out_base + 2] = acc.b[ij];
+                }
+            }
+            continue;
+        }
+#endif
+
+        // Scalar fallback for boundary microblocks.
+        float T[4 * 8];
+        float accum[4 * 8 * 3];
+        for (int k = 0; k < npix; ++k) T[k] = 1.0f;
+        for (int k = 0; k < npix * 3; ++k) accum[k] = 0.0f;
+        for (int64_t g : kg) {
+            const std::size_t gs = static_cast<std::size_t>(g);
+            const float ci_a = cov_inv_a[gs];
+            const float ci_b = cov_inv_b[gs];
+            const float ci_c = cov_inv_c[gs];
+            const float mx = means_2d[gs * 2 + 0];
+            const float my = means_2d[gs * 2 + 1];
+            const float opacity = opacities[gs];
+            const float cr = colors[gs * 3 + 0];
+            const float cg = colors[gs * 3 + 1];
+            const float cb = colors[gs * 3 + 2];
+            for (int i = 0; i < mb_h; ++i) {
+                const float py = static_cast<float>(py_start + i) + 0.5f;
+                for (int j = 0; j < mb_w; ++j) {
+                    const float px = static_cast<float>(px_start + j) + 0.5f;
+                    const float dx = px - mx;
+                    const float dy = py - my;
+                    const float power = -0.5f * (ci_a * dx * dx + 2.0f * ci_b * dx * dy + ci_c * dy * dy);
+                    const float gw = std::exp(std::min(power, 0.0f));
+                    const float alpha = std::min(opacity * gw, 0.99f);
+                    const int ij = i * mb_w + j;
+                    const float t = T[ij];
+                    const float at = alpha * t;
+                    accum[ij * 3 + 0] += at * cr;
+                    accum[ij * 3 + 1] += at * cg;
+                    accum[ij * 3 + 2] += at * cb;
+                    T[ij] = t * (1.0f - alpha);
+                }
+            }
+            float tmax = 0.0f;
+            for (int k = 0; k < npix; ++k) tmax = std::max(tmax, T[k]);
+            if (tmax < 0.0001f) break;
+        }
+        for (int i = 0; i < mb_h; ++i) {
+            const int gy = py_start + i;
+            for (int j = 0; j < mb_w; ++j) {
+                const int gx = px_start + j;
+                const int out_base = (gy * image_width + gx) * 3;
+                const int ij = i * mb_w + j;
+                image_out[out_base + 0] = accum[ij * 3 + 0];
+                image_out[out_base + 1] = accum[ij * 3 + 1];
+                image_out[out_base + 2] = accum[ij * 3 + 2];
+            }
+        }
+    }
+
+    *tile_dropped_count = dropped;
+    *tile_kept_count = kept_total;
+}
+
+}  // namespace
+
+CullAndBlendResult cull_and_blend(
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    const std::size_t M,
+    const std::size_t P,
+    const int tiles_x,
+    const int tiles_y,
+    const int tile_size,
+    const int image_height,
+    const int image_width,
+    const float mb_contrib_floor,
+    ThreadPool& pool) {
+    const int num_tiles = tiles_x * tiles_y;
+
+    CullAndBlendResult result;
+    result.pairs_in = static_cast<int64_t>(P);
+    result.image.assign(static_cast<std::size_t>(image_height) *
+                            static_cast<std::size_t>(image_width) * 3,
+                        0.0f);
+
+    // Precompute per-Gaussian cov_inv once, parallel.
+    std::vector<float> cia(M), cib(M), cic(M);
+    if (M > 0) {
+        const std::size_t W = pool.size();
+        auto compute_one = [&](std::size_t i) {
+            const float a = covs_2d[i * 4 + 0];
+            const float b = covs_2d[i * 4 + 1];
+            const float c = covs_2d[i * 4 + 3];
+            const float det = std::max(a * c - b * b, 1e-6f);
+            cia[i] = c / det;
+            cib[i] = -b / det;
+            cic[i] = a / det;
+        };
+        if (W > 1 && M >= 4096) {
+            for (std::size_t w = 0; w < W; ++w) {
+                pool.submit([&, w, W]() {
+                    for (std::size_t i = w; i < M; i += W) compute_one(i);
+                });
+            }
+            pool.wait();
+        } else {
+            for (std::size_t i = 0; i < M; ++i) compute_one(i);
+        }
+    }
+
+    std::vector<int64_t> tile_dropped(static_cast<std::size_t>(num_tiles), 0);
+    std::vector<int64_t> tile_kept(static_cast<std::size_t>(num_tiles), 0);
+
+    for (int tile_id = 0; tile_id < num_tiles; ++tile_id) {
+        pool.submit([&, tile_id]() {
+            cull_and_blend_tile(
+                tile_id, tiles_x, tile_size, image_height, image_width,
+                means_2d, covs_2d, colors, opacities,
+                sorted_gaussian_ids, tile_ranges,
+                mb_contrib_floor,
+                cia.data(), cib.data(), cic.data(),
+                result.image.data(),
+                &tile_dropped[static_cast<std::size_t>(tile_id)],
+                &tile_kept[static_cast<std::size_t>(tile_id)]);
+        });
+    }
+    pool.wait();
+
+    int64_t total_dropped = 0, total_kept = 0;
+    for (int i = 0; i < num_tiles; ++i) {
+        total_dropped += tile_dropped[static_cast<std::size_t>(i)];
+        total_kept += tile_kept[static_cast<std::size_t>(i)];
+    }
+    result.pairs_dropped_all_mb = total_dropped;
+    result.pairs_kept_per_mb = total_kept;
+    return result;
+}
+
+}  // namespace gsplat_cpu
