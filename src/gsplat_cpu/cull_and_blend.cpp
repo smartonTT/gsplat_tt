@@ -23,37 +23,27 @@ namespace {
 
 constexpr int kNumMicroblocks = 32;
 
-// iter-033: 64-byte (cache-line) aligned per-Gaussian record. The blend
-// inner loop previously did TWO random fetches per (g, mb) pair —
-// gauss_rec[g] (40 B record, straddles a 64 B cache line ~38% of the
-// time) and colors[g*3] (12 B from a separate 2.8 MB array). Packing
-// colors into the same 64-byte record means each blend (g, mb) pair
-// touches exactly one cache line for both cull metadata and per-Gaussian
-// blend inputs.
-//
-// Cull pays no extra: cull reads gauss_rec[g] which is already a 64-byte
-// line load on the cache hardware — the old struct was 40 B but the
-// cache line holding it was still 64 B. The new layout makes that
-// implicit load explicit.
-//
-//   mx,my            screen-space mean       (8 B, used by cull + blend)
-//   ci_a/b/c         cov inverse             (12 B, used by cull + blend)
-//   log_thresh       cull threshold sentinel (4 B,  cull only)
-//   x_half/y_half    BB half-extents         (8 B,  cull only)
-//   opacity          alpha multiplier        (4 B,  blend only)
-//   cr,cg,cb         pre-baked SH0 color     (12 B, blend only)
-//   _pad[4]          pad to 64 B             (16 B reserved for future
-//                    blend-side fields; e.g. depth, per-Gaussian early-out)
-struct alignas(64) GaussianCullRec {
+// Per-Gaussian packed cull record. Sized to fit a 64-byte cache line
+// so the cull inner loop touches one line per Gaussian id instead of
+// 5-6 (means_2d / log_thresh / x_half / y_half / cov_inv arrays were
+// previously each a separate strided read).
+//   mx,my            screen-space mean
+//   ci_a/b/c         cov inverse (per-microblock power coefficients)
+//   log_thresh       log(mb_contrib_floor / opacity); >= 0 = drop sentinel
+//   x_half/y_half    BB half-extents
+//   opacity          alpha multiplier (used by blend, kept here for locality)
+//   _pad             pad to 48 bytes; combined with the AoS colors record
+//                    (12 bytes) every kept-Gaussian fits in one cache line
+//                    pair at most.
+struct alignas(8) GaussianCullRec {
     float mx, my;
     float ci_a, ci_b, ci_c;
     float log_thresh;
     float x_half, y_half;
     float opacity;
-    float cr, cg, cb;
-    float _pad[4];
+    float _pad;  // total 40 bytes, pad to 40-aligned (no need to grow to 64)
 };
-static_assert(sizeof(GaussianCullRec) == 64, "GaussianCullRec must be 64 bytes (one cache line)");
+static_assert(sizeof(GaussianCullRec) == 40, "GaussianCullRec must be 40 bytes");
 
 #if GSPLAT_HAS_NEON
 struct MbAccum {
@@ -332,7 +322,7 @@ void cull_and_blend_tile(
                     rec.ci_a, rec.ci_b, rec.ci_c,
                     rec.mx, rec.my,
                     rec.opacity,
-                    rec.cr, rec.cg, rec.cb,
+                    colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                     px_start, py_start);
                 if (max_t_neon(acc) < 0.0001f) break;
             }
@@ -365,9 +355,9 @@ void cull_and_blend_tile(
             const float mx = rec.mx;
             const float my = rec.my;
             const float opacity = rec.opacity;
-            const float cr = rec.cr;
-            const float cg = rec.cg;
-            const float cb = rec.cb;
+            const float cr = colors[gs * 3 + 0];
+            const float cg = colors[gs * 3 + 1];
+            const float cb = colors[gs * 3 + 2];
             for (int i = 0; i < mb_h; ++i) {
                 const float py = static_cast<float>(py_start + i) + 0.5f;
                 for (int j = 0; j < mb_w; ++j) {
@@ -456,9 +446,6 @@ CullAndBlendResult cull_and_blend(
             r.ci_b = -b / det;
             r.ci_c = a / det;
             r.opacity = opacities[i];
-            r.cr = colors[i * 3 + 0];
-            r.cg = colors[i * 3 + 1];
-            r.cb = colors[i * 3 + 2];
 
             if (r.opacity <= mb_contrib_floor) {
                 r.log_thresh = 0.0f;  // sentinel: drop in per-tile cull
