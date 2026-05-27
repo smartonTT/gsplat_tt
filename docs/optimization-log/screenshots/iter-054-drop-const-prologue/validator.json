@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "diff10 images show diffuse speckle concentrated on object silhouettes and surfaces; no horizontal/vertical grid lines at 32- or 16-pixel spacing visible in hero, side, or top diff10. Tile structure ratio 16.6-17.6 is carried over from iter-053 (bit-identical renders), not a new regression."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32×32 or 16×16 constant-color fill blocks visible in any render. All three views show smooth Gaussian splatting coverage with expected per-splat variation."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage regions larger than ~16 pixels observed. Renders show continuous coverage on the stitch_doll subject across all three views."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-color stripes or clipping bands visible in hero, side, or top renders. Color gradients look natural."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes beyond expected soft Gaussian falloff edges."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches in any render. All pixels show expected color values."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "diff10 images do not show object silhouette outlines that would indicate coordinate shift. Diff energy is interior/surface noise, not edge-displaced geometry."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "diff10 images show diffuse speckle within object bounds consistent with cumulative bf16 precision drift from iter-010 onward (same pattern as iter-053). No new grid patterns, gradients, or bands introduced by this iter's dead-code removal. Structure is identical to iter-053 per bit-identical MD5s."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.09866898, "side": 40.92246673, "top": 38.29195118}, "pass": true},
+  "tile_structure_check": {"max_ratio": 17.587439611872732, "actual": {"hero": 16.60769335026065, "side": 17.27658395374453, "top": 17.587439611872732}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.630517743, "max_ms_ratio": 1.234, "pass": true},
+  "timing": {"median_ms": 24.7885, "p99_ms": 29.64856, "vs_prev_best_pct": 0.24, "pass": true},
+  "reasoning": "Pure dead-code removal: PNG MD5s bit-identical to iter-053; PSNR and tile_structure_ratio bit-identical (delta 0.0). Kernel +0.24% within break-even tolerance. All visual checks pass."
+}
