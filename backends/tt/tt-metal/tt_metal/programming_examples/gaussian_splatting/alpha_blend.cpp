@@ -200,7 +200,10 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     cb_tile(CB_PX, 2);
     cb_tile(CB_PY, 2);
-    cb_small(CB_SCALARS, SCALAR_PACK_PAGE_BYTES, 8, DataFormat::Float32);
+    // iter-088: depth 8→4 (revert of iter-081). iter-081 was flat bumping
+    // 4→8; this symmetric revert reclaims 8×64 = 512 bytes/core (~32KB total)
+    // of L1 used for headroom the reader-prefetch pipeline never consumed.
+    cb_small(CB_SCALARS, SCALAR_PACK_PAGE_BYTES, 4, DataFormat::Float32);
     cb_small(CB_TILE_META, META_PAGE_BYTES, 2, DataFormat::UInt32);
     // Depth must be a multiple of 3 (the per-tile batch size) so no
     // single push-of-3 ever straddles the CB wrap. Picking 6 keeps two
