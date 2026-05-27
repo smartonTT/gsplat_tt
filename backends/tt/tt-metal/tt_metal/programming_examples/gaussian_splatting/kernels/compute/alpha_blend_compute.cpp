@@ -413,11 +413,14 @@ void kernel_main() {
             mul_unary_tile(1, color_g_bits);
             mul_unary_tile(2, color_b_bits);
 
+            // iter-076: one ELWADD/DEST_TO_SRCA init shared by 3 cross-CB ops
+            // (R/G/B state). Same safe-drop pattern as iter-048+049 for mul_tiles
+            // (ONE init + 3 cross-CB ops). The template (ELWADD, DEST_TO_SRCA) is
+            // identical across the 3; unpack_A reconfig happens per-call inside
+            // binary_dest_reuse_tiles based on the source CB arg.
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 1);
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
 
             // E: dst[3] = T - contrib = T_new
