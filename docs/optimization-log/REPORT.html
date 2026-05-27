@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 74 · current best: 23.98 ms · target: 1.0 ms
+      iters: 75 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-079-combine-px-py-upload
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T11:03:40.098458+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass: diff10 images show only uniform per-pixel speckle with no tile-grid seams, no uniform-fill blocks, no geometry shift, and no fireflies in any rendered PNG. Tile structure ratios are bit-identical to the architectural baseline established in iter-072 through iter-078 (hero 17.138, side 17.278, top 18.142 — delta = 0.000 across all views), so the +0.3 ratchet rule is not triggered and the architectural-baseline carve-out applies. PSNR is bit-identical to prev_best (hero 39.41, side 40.99, top 38.60), all above the 38 dB dispatch-class floor. Kernel timing at 24.748 ms vs prev_best 24.7055 ms is +0.17% (within the 1.02x break-even band), p99/median ratio is 1.20x (well within 3x threshold). This is a host-side dispatch optimization (combined px+py upload buffer); the kernel silicon time is unchanged confirming the iter targets the upload bucket identified in iter-078 profile. Per-view kernel ms ratio (top 29.58 / side 23.91 = 1.24x) is within acceptable bounds.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.75 ms</b> median · 29.60 ms p99</div>
+    <div class="per-view">per-view: hero 24.75 / side 23.91 / top 29.58</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-079-combine-px-py-upload/hero.png" target="_blank"><img src="screenshots/iter-079-combine-px-py-upload/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-079-combine-px-py-upload/side.png" target="_blank"><img src="screenshots/iter-079-combine-px-py-upload/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-079-combine-px-py-upload/top.png" target="_blank"><img src="screenshots/iter-079-combine-px-py-upload/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-079-combine-px-py-upload/hero_diff10.png" target="_blank"><img src="screenshots/iter-079-combine-px-py-upload/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-079-combine-px-py-upload/side_diff10.png" target="_blank"><img src="screenshots/iter-079-combine-px-py-upload/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-079-combine-px-py-upload/top_diff10.png" target="_blank"><img src="screenshots/iter-079-combine-px-py-upload/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: diff10 for all 3 views shows uniform per-pixel speckle confined to the object silhouette region; no horizontal or vertic</li><li>✓ tile_uniform_fill: Rendered PNGs show continuous texture detail across the stitch_doll surface; no 32x32 or 16x16 constant-color blocks rep</li><li>✓ missing_splat_holes: No local dark regions or missing-coverage holes visible in any rendered PNG vs the expected object shape; diff10 shows n</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes present in any view; color distribution in hero, side, top renders matches expected natu</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes in any view; edges appear natural.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any rendered PNG. Firefly check: inspected hero, side, top P</li><li>✓ geometry_shift: diff10 images show noise on the object body interior, not a silhouette outline shift pattern. Object position consistent</li><li>✓ diff10_structure: All 3 diff10 images dominated by uniform per-pixel speckle over the object region. No grid patterns, banding, gradients,</li></ul>
+    <p class="reasoning">All visual checks pass: diff10 images show only uniform per-pixel speckle with no tile-grid seams, no uniform-fill blocks, no geometry shift, and no fireflies in any rendered PNG. Tile structure ratios are bit-identical to the architectural baseline established in iter-072 through iter-078 (hero 17.138, side 17.278, top 18.142 — delta = 0.000 across all views), so the +0.3 ratchet rule is not triggered and the architectural-baseline carve-out applies. PSNR is bit-identical to prev_best (hero 39.41, side 40.99, top 38.60), all above the 38 dB dispatch-class floor. Kernel timing at 24.748 ms vs prev_best 24.7055 ms is +0.17% (within the 1.02x break-even band), p99/median ratio is 1.20x (well within 3x threshold). This is a host-side dispatch optimization (combined px+py upload buffer); the kernel silicon time is unchanged confirming the iter targets the upload bucket identified in iter-078 profile. Per-view kernel ms ratio (top 29.58 / side 23.91 = 1.24x) is within acceptable bounds.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-078-profile-snapshot
