@@ -23,6 +23,28 @@ namespace {
 
 constexpr int kNumMicroblocks = 32;
 
+// Per-Gaussian packed cull record. Sized to fit a 64-byte cache line
+// so the cull inner loop touches one line per Gaussian id instead of
+// 5-6 (means_2d / log_thresh / x_half / y_half / cov_inv arrays were
+// previously each a separate strided read).
+//   mx,my            screen-space mean
+//   ci_a/b/c         cov inverse (per-microblock power coefficients)
+//   log_thresh       log(mb_contrib_floor / opacity); >= 0 = drop sentinel
+//   x_half/y_half    BB half-extents
+//   opacity          alpha multiplier (used by blend, kept here for locality)
+//   _pad             pad to 48 bytes; combined with the AoS colors record
+//                    (12 bytes) every kept-Gaussian fits in one cache line
+//                    pair at most.
+struct alignas(8) GaussianCullRec {
+    float mx, my;
+    float ci_a, ci_b, ci_c;
+    float log_thresh;
+    float x_half, y_half;
+    float opacity;
+    float _pad;  // total 40 bytes, pad to 40-aligned (no need to grow to 64)
+};
+static_assert(sizeof(GaussianCullRec) == 40, "GaussianCullRec must be 40 bytes");
+
 #if GSPLAT_HAS_NEON
 struct MbAccum {
     alignas(16) float r[32];
@@ -162,12 +184,7 @@ void cull_and_blend_tile(
     const int64_t* sorted_gaussian_ids,
     const int64_t* tile_ranges,
     const float mb_contrib_floor,
-    const float* cov_inv_a,
-    const float* cov_inv_b,
-    const float* cov_inv_c,
-    const float* log_thresh_arr,
-    const float* x_half_arr,
-    const float* y_half_arr,
+    const GaussianCullRec* gauss_rec,
     float* image_out,
     int64_t* tile_dropped_count,
     int64_t* tile_kept_count,
@@ -209,25 +226,22 @@ void cull_and_blend_tile(
 
     for (int64_t l = 0; l < L; ++l) {
         const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
-        const std::size_t gs = static_cast<std::size_t>(g);
+        const GaussianCullRec& rec = gauss_rec[static_cast<std::size_t>(g)];
 
-        const float mean_x = means_2d[gs * 2 + 0];
-        const float mean_y = means_2d[gs * 2 + 1];
-
-        const float log_thresh = log_thresh_arr[gs];
-        // log_thresh == 0 sentinel = "Gaussian below mb_contrib_floor".
-        // Precomputed in the parallel prelude; we still need the cheap drop here.
+        const float log_thresh = rec.log_thresh;
+        // log_thresh >= 0 sentinel = "Gaussian below mb_contrib_floor".
         if (log_thresh >= 0.0f) {
             ++dropped;
             continue;
         }
 
-        const float ci_a = cov_inv_a[gs];
-        const float ci_b = cov_inv_b[gs];
-        const float ci_c = cov_inv_c[gs];
-
-        const float x_half = x_half_arr[gs];
-        const float y_half = y_half_arr[gs];
+        const float mean_x = rec.mx;
+        const float mean_y = rec.my;
+        const float ci_a = rec.ci_a;
+        const float ci_b = rec.ci_b;
+        const float ci_c = rec.ci_c;
+        const float x_half = rec.x_half;
+        const float y_half = rec.y_half;
 
         const float bb_x_min = mean_x - x_half;
         const float bb_x_max = mean_x + x_half;
@@ -296,10 +310,11 @@ void cull_and_blend_tile(
             for (int32_t k = 0; k < kn; ++k) {
                 const int64_t g = kg_data[k];
                 const std::size_t gs = static_cast<std::size_t>(g);
+                const GaussianCullRec& rec = gauss_rec[gs];
                 apply_gaussian_neon(acc,
-                    cov_inv_a[gs], cov_inv_b[gs], cov_inv_c[gs],
-                    means_2d[gs * 2 + 0], means_2d[gs * 2 + 1],
-                    opacities[gs],
+                    rec.ci_a, rec.ci_b, rec.ci_c,
+                    rec.mx, rec.my,
+                    rec.opacity,
                     colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                     px_start, py_start);
                 if (max_t_neon(acc) < 0.0001f) break;
@@ -327,12 +342,13 @@ void cull_and_blend_tile(
         for (int32_t kk = 0; kk < kn; ++kk) {
             const int64_t g = kg_data[kk];
             const std::size_t gs = static_cast<std::size_t>(g);
-            const float ci_a = cov_inv_a[gs];
-            const float ci_b = cov_inv_b[gs];
-            const float ci_c = cov_inv_c[gs];
-            const float mx = means_2d[gs * 2 + 0];
-            const float my = means_2d[gs * 2 + 1];
-            const float opacity = opacities[gs];
+            const GaussianCullRec& rec = gauss_rec[gs];
+            const float ci_a = rec.ci_a;
+            const float ci_b = rec.ci_b;
+            const float ci_c = rec.ci_c;
+            const float mx = rec.mx;
+            const float my = rec.my;
+            const float opacity = rec.opacity;
             const float cr = colors[gs * 3 + 0];
             const float cg = colors[gs * 3 + 1];
             const float cb = colors[gs * 3 + 2];
@@ -401,17 +417,14 @@ CullAndBlendResult cull_and_blend(
                             static_cast<std::size_t>(image_width) * 3,
                         0.0f);
 
-    // Precompute per-Gaussian cull data once, parallel. Pulls log/sqrt out
-    // of the per-tile cull inner loop where they would otherwise be
-    // recomputed for every (Gaussian, tile) pair.
-    //   cia/cib/cic        cov inverse (used inside the per-microblock check)
-    //   log_thresh         log(mb_contrib_floor / opacity), <= 0 for visible;
-    //                      log_thresh >= 0 is a sentinel meaning "drop this
-    //                      Gaussian, opacity below floor".
-    //   x_half / y_half    BB half-extents = r * sqrt(a) / sqrt(c)
-    //                      with r = sqrt(-2 * log_thresh).
-    std::vector<float> cia(M), cib(M), cic(M);
-    std::vector<float> log_thresh(M), x_half(M), y_half(M);
+    // Precompute per-Gaussian cull data into one AoS array, parallel.
+    // Pulls log/sqrt out of the per-tile cull inner loop AND packs every
+    // field the inner loop reads (mx,my, ci_a/b/c, log_thresh, x_half/y_half,
+    // opacity) into one 40-byte record. Cull loop now does 1 cache-line
+    // fetch per Gaussian instead of 5-6 strided fetches across separate
+    // arrays — meaningful at the 294k (Gaussian, tile) pairs scanned per
+    // hero frame.
+    std::vector<GaussianCullRec> gauss_rec(M);
     if (M > 0) {
         const std::size_t W = pool.size();
         auto compute_one = [&](std::size_t i) {
@@ -419,21 +432,25 @@ CullAndBlendResult cull_and_blend(
             const float b = covs_2d[i * 4 + 1];
             const float c = covs_2d[i * 4 + 3];
             const float det = std::max(a * c - b * b, 1e-6f);
-            cia[i] = c / det;
-            cib[i] = -b / det;
-            cic[i] = a / det;
 
-            const float g_op = opacities[i];
-            if (g_op <= mb_contrib_floor) {
-                log_thresh[i] = 0.0f;  // sentinel: drop in per-tile cull
-                x_half[i] = 0.0f;
-                y_half[i] = 0.0f;
+            GaussianCullRec& r = gauss_rec[i];
+            r.mx = means_2d[i * 2 + 0];
+            r.my = means_2d[i * 2 + 1];
+            r.ci_a = c / det;
+            r.ci_b = -b / det;
+            r.ci_c = a / det;
+            r.opacity = opacities[i];
+
+            if (r.opacity <= mb_contrib_floor) {
+                r.log_thresh = 0.0f;  // sentinel: drop in per-tile cull
+                r.x_half = 0.0f;
+                r.y_half = 0.0f;
             } else {
-                const float lt = std::log(mb_contrib_floor / g_op);
-                log_thresh[i] = lt;  // <= 0 for visible
-                const float r = std::sqrt(-2.0f * lt);
-                x_half[i] = r * std::sqrt(std::max(a, 0.0f));
-                y_half[i] = r * std::sqrt(std::max(c, 0.0f));
+                const float lt = std::log(mb_contrib_floor / r.opacity);
+                r.log_thresh = lt;  // <= 0 for visible
+                const float rd = std::sqrt(-2.0f * lt);
+                r.x_half = rd * std::sqrt(std::max(a, 0.0f));
+                r.y_half = rd * std::sqrt(std::max(c, 0.0f));
             }
         };
         if (W > 1 && M >= 4096) {
@@ -485,8 +502,7 @@ CullAndBlendResult cull_and_blend(
                     means_2d, covs_2d, colors, opacities,
                     sorted_gaussian_ids, tile_ranges,
                     mb_contrib_floor,
-                    cia.data(), cib.data(), cic.data(),
-                    log_thresh.data(), x_half.data(), y_half.data(),
+                    gauss_rec.data(),
                     result.image.data(),
                     &tile_dropped[static_cast<std::size_t>(tile_id)],
                     &tile_kept[static_cast<std::size_t>(tile_id)],
