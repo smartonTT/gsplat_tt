@@ -1,0 +1,4 @@
+{
+  "verdict": "REVERT",
+  "reasoning": "iter-040: SW prefetch (PLDL2KEEP) the next blend batch's gauss_rec + colors entries (distance 4 Gaussians ahead, both arrays). Hypothesis: blend's per-(g, mb) apply has ~60-100 cycles of compute window per Gaussian, enough to overlap an L2 fetch (~14 cycles) for the next Gaussian's 40 B record + 12 B colors. Result: REGRESSION. 3-trial median sum_total 335 ms (vs iter-039 ~326 ms); blend median 148 ms (vs iter-039 ~142 ms). PSNR unchanged. Same finding as iter-034 (cull-side prefetch): Apple Silicon's hardware prefetcher already tracks the sequential-id-driven random-access pattern; extra __builtin_prefetch instructions compete with NEON FMA pipes for issue bandwidth and dispatch slots, paying ~4 extra ops per loop iter without saving any L1 fill latency. Reverting. Conclusion: blend is NOT memory-latency-bound; the bottleneck is RAW chains / NEON throughput inside apply_gaussian_neon."
+}
