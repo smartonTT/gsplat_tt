@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal/vertical lines at 32px or 16px spacing visible in diff10 or renders. Diff10 shows broad object-level error, not grid-aligned seams."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color square blocks replacing detail regions observed in any render."},
+    {"name": "missing_splat_holes", "result": "fail", "evidence": "All three diff10 images show the full object silhouette lit up with high-magnitude error (bright white/multicolor across entire object body), indicating systematic loss of splat contribution covering the entire figure. Side and top renders appear significantly darker and lower-contrast vs reference, consistent with broad missing-coverage rather than isolated holes."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat R/G/B stripes or clipping bands visible in renders."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at object silhouettes observed."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta correlated patches. No fireflies (isolated 1-3 px hot dots) visible in any render."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show a clean silhouette displacement pattern; error is distributed across the interior of the object, not a shifted outline."},
+    {"name": "diff10_structure", "result": "fail", "evidence": "All three diff10 images are dominated by structured high-magnitude error covering the entire object extent rather than uniform i.i.d. speckle. Hero diff10 shows bright white halo around full body with dense color noise interior; side and top similarly show full-body structured error. This indicates systematic culling of too many Gaussians across all views."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 27.138392264355065, "side": 27.983747913116083, "top": 28.160975019206937}, "pass": false},
+  "tile_structure_check": {"max_ratio": 25.47088092958879, "actual": {"hero": 25.204206008152312, "side": 25.47088092958879, "top": 24.776416115664563}, "pass": false, "delta_vs_prev": 7.328529034482127},
+  "per_view_consistency": {"max_psnr_delta_db": 1.0225827548518716, "max_ms_ratio": 1.4676506946588017, "pass": true},
+  "timing": {"median_ms": 15.1615, "p99_ms": 17.364169999999998, "vs_prev_best_pct": -38.6, "pass": true},
+  "reasoning": "REJECT on two independent hard gates. (1) PSNR catastrophic: all three views are 27.1-28.2 dB, approximately 11-13 dB below the 38 dB class-dispatch floor and 11-13 dB below the architectural baseline of ~39-41 dB. This is not a borderline regression but a catastrophic quality collapse indicating the color-magnitude culling threshold is discarding the majority of contributing Gaussians. (2) Tile_structure_ratio hard REJECT: max ratio 25.47 vs prev_best max 18.14 (iter-083), delta +7.33, far exceeding the +0.3 ratchet limit. The architectural-baseline carve-out does not apply here because this iter introduces new structural drift well above the ~17-18 baseline floor. (3) Visual confirmation: all three diff10 images show the full object body lit up with high-magnitude structured error (bright white/multicolor covering the entire figure silhouette and interior), consistent with systematic removal of a large fraction of splat pairs. The renders are visibly darker and lower-contrast than reference across all views. The kernel timing win (-38.6%) is real but purchased entirely through quality destruction — the culling criterion is far too aggressive."
+}
