@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 54 · current best: 24.67 ms · target: 1.0 ms
+      iters: 55 · current best: 24.67 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-058-restructure-d2-shared-init
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T06:07:00.594288+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual gates pass. Renders are perceptually identical to reference across all three views; diff10 images show the same diffuse speckle pattern as prior KEEP iters with no new grid seams, holes, clipping, or geometry shifts. Tile_structure_ratio is bit-identical to the last five KEEP iters (max 17.587, delta 0.000 vs prev_best) — the existing mild tile structure is a known pre-existing condition from iter-010 and is not worsened here. PSNR hero/top are below the nominal 40 dB kernel-algebra floor but identical to iter-054/057 which were both KEEP; per project memory the perceptual floor is 35-40 dB + clean visuals. Timing is essentially flat at +0.03% vs prev_best (24.676 vs 24.6685 ms), within the 1.02x break-even threshold. p99/median ratio is 1.20x, well under the 3x suspicious-tail threshold. Per-view PSNR spread is 2.6 dB and per-view ms ratio is 1.23x, both within bounds. Verdict: KEEP — code-restructure iter with bit-identical quality and flat timing.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.68 ms</b> median · 29.51 ms p99</div>
+    <div class="per-view">per-view: hero 24.68 / side 23.84 / top 29.47</div>
+    <div class="psnr">PSNR: hero 39.1 / side 40.9 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-058-restructure-d2-shared-init/hero.png" target="_blank"><img src="screenshots/iter-058-restructure-d2-shared-init/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-058-restructure-d2-shared-init/side.png" target="_blank"><img src="screenshots/iter-058-restructure-d2-shared-init/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-058-restructure-d2-shared-init/top.png" target="_blank"><img src="screenshots/iter-058-restructure-d2-shared-init/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-058-restructure-d2-shared-init/hero_diff10.png" target="_blank"><img src="screenshots/iter-058-restructure-d2-shared-init/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-058-restructure-d2-shared-init/side_diff10.png" target="_blank"><img src="screenshots/iter-058-restructure-d2-shared-init/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-058-restructure-d2-shared-init/top_diff10.png" target="_blank"><img src="screenshots/iter-058-restructure-d2-shared-init/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 across all three views shows diffuse speckle noise along object silhouettes with no horizontal or vertical grid l</li><li>✓ tile_uniform_fill: No constant-color square blocks visible in hero, side, or top renders; all detail present matches reference.</li><li>✓ missing_splat_holes: No dark holes or missing coverage regions observed in any view relative to the reference.</li><li>✓ color_clipping_bands: No saturated R/G/B stripes or banding artifacts in any rendered view.</li><li>✓ ringing_halos: No structured ringing at object silhouettes visible in renders or diff10 images.</li><li>✓ nan_inf_signatures: No pure black, white, or magenta spatially-correlated patches in any view.</li><li>✓ geometry_shift: Diff10 does not show silhouette outlines of displaced objects; error is confined to interior surface detail.</li><li>✓ diff10_structure: Diff10 images are dominated by random fine-grain speckle within the object boundary; no grid, band, or gradient patterns</li></ul>
+    <p class="reasoning">All visual gates pass. Renders are perceptually identical to reference across all three views; diff10 images show the same diffuse speckle pattern as prior KEEP iters with no new grid seams, holes, clipping, or geometry shifts. Tile_structure_ratio is bit-identical to the last five KEEP iters (max 17.587, delta 0.000 vs prev_best) — the existing mild tile structure is a known pre-existing condition from iter-010 and is not worsened here. PSNR hero/top are below the nominal 40 dB kernel-algebra floor but identical to iter-054/057 which were both KEEP; per project memory the perceptual floor is 35-40 dB + clean visuals. Timing is essentially flat at +0.03% vs prev_best (24.676 vs 24.6685 ms), within the 1.02x break-even threshold. p99/median ratio is 1.20x, well under the 3x suspicious-tail threshold. Per-view PSNR spread is 2.6 dB and per-view ms ratio is 1.23x, both within bounds. Verdict: KEEP — code-restructure iter with bit-identical quality and flat timing.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-057-drop-redundant-copy-inits
