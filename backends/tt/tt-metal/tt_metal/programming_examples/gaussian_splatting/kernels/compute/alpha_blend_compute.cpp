@@ -405,15 +405,14 @@ void kernel_main() {
             mul_unary_tile(1, color_g_bits);
             mul_unary_tile(2, color_b_bits);
 
-            // iter-076: one ELWADD/DEST_TO_SRCA init shared by 3 cross-CB ops
-            // (R/G/B state). Same safe-drop pattern as iter-048+049 for mul_tiles
-            // (ONE init + 3 cross-CB ops). The template (ELWADD, DEST_TO_SRCA) is
-            // identical across the 3; unpack_A reconfig happens per-call inside
-            // binary_dest_reuse_tiles based on the source CB arg.
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 1);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
+            // iter-096: dropped the 3 binary_dest_reuse<ELWADD,DEST_TO_SRCA>
+            // ops that added the running state into dst. Instead, enable the
+            // packer's L1 accumulate mode around the 3 R/G/B pack_tile calls
+            // below — pack adds dst[0/1/2] (= contrib·color) directly to the
+            // existing L1 tile contents at CB_COLOR_{R,G,B}_STATE slot 0.
+            // Saves 3 SFPU ops + 1 shared init per Gaussian. T_state uses
+            // subtract (not supported by L1 acc), so keep its binary path and
+            // disable L1 acc before the T pack.
 
             // E: dst[3] = T - contrib = T_new
             // iter-059: dropped T·sat_mask (sat_mask is constant 1.0).
@@ -434,9 +433,13 @@ void kernel_main() {
             cb_reserve_back(CB_COLOR_G_STATE, 1);
             cb_reserve_back(CB_COLOR_B_STATE, 1);
             cb_reserve_back(CB_T_STATE, 1);
+            // iter-096: L1 accumulate ON for R/G/B (state += dst).
+            pack_reconfig_l1_acc(1);
             pack_tile(0, CB_COLOR_R_STATE);
             pack_tile(1, CB_COLOR_G_STATE);
             pack_tile(2, CB_COLOR_B_STATE);
+            // L1 accumulate OFF for T (overwrite — dst[3] already holds T-contrib).
+            pack_reconfig_l1_acc(0);
             pack_tile(3, CB_T_STATE);
             cb_push_back(CB_COLOR_R_STATE, 1);
             cb_push_back(CB_COLOR_G_STATE, 1);
