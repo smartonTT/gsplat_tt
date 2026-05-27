@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 48 · current best: 25.23 ms · target: 1.0 ms
+      iters: 49 · current best: 25.06 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-052-fuse-c-d1-alpha-roundtrip
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T04:17:41.782222+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass: no tile grid seams, uniform-fill blocks, missing-splat holes, color clipping, ringing, NaN/Inf signatures, or geometry shifts in any of the three views or their diff10 images. The diff10 images show diffuse speckle noise consistent with minor bf16 precision differences, not structural artifacts. Tile_structure_ratio max is 17.59 (top view), which falls in the 13-18 range requiring no regression from prev_best; delta vs iter-051 is +0.067, well under the +0.5 REJECT threshold. PSNR floor is 35 dB per project-psnr-floor-perceptual policy; all three views pass (min 38.29 dB top, hero 39.10, side 40.92). Per-view PSNR delta is 2.63 dB (far under 20 dB limit) and per-view ms ratio is 1.23x (far under 2x limit). Kernel ms improved 25.226 -&gt; 25.056 (-0.68%), p99/median ratio is 1.194 (well under 3x). No check failures found; verdict is KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.06 ms</b> median · 29.95 ms p99</div>
+    <div class="per-view">per-view: hero 25.06 / side 24.28 / top 29.92</div>
+    <div class="psnr">PSNR: hero 39.1 / side 40.9 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/hero.png" target="_blank"><img src="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/side.png" target="_blank"><img src="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/top.png" target="_blank"><img src="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/hero_diff10.png" target="_blank"><img src="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/side_diff10.png" target="_blank"><img src="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/top_diff10.png" target="_blank"><img src="screenshots/iter-052-fuse-c-d1-alpha-roundtrip/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All three diff10 images show diffuse speckle noise distributed across the object silhouette with no horizontal or vertic</li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color blocks visible in any of the three renders. All views show continuous detail across the</li><li>✓ missing_splat_holes: No dark holes or missing coverage regions visible in hero, side, or top renders. Object surfaces appear fully covered wi</li><li>✓ color_clipping_bands: No saturated flat-colored stripes or clipped R/G/B bands visible in any render. Colors appear natural and continuous acr</li><li>✓ ringing_halos: Edge transitions in all three renders appear smooth. Diff10 shows edge brightening at the object silhouette consistent w</li><li>✓ nan_inf_signatures: No pure black, white, or magenta spatially-correlated patches visible in any render. All pixel values appear within norm</li><li>✓ geometry_shift: Diff10 images do not show the object silhouette as a bright outline (which would indicate coordinate error). The diff is</li><li>✓ diff10_structure: hero_diff10 and side_diff10 are dominated by uniform speckle noise concentrated on the object body. top_diff10 shows sli</li></ul>
+    <p class="reasoning">All visual checks pass: no tile grid seams, uniform-fill blocks, missing-splat holes, color clipping, ringing, NaN/Inf signatures, or geometry shifts in any of the three views or their diff10 images. The diff10 images show diffuse speckle noise consistent with minor bf16 precision differences, not structural artifacts. Tile_structure_ratio max is 17.59 (top view), which falls in the 13-18 range requiring no regression from prev_best; delta vs iter-051 is +0.067, well under the +0.5 REJECT threshold. PSNR floor is 35 dB per project-psnr-floor-perceptual policy; all three views pass (min 38.29 dB top, hero 39.10, side 40.92). Per-view PSNR delta is 2.63 dB (far under 20 dB limit) and per-view ms ratio is 1.23x (far under 2x limit). Kernel ms improved 25.226 -&gt; 25.056 (-0.68%), p99/median ratio is 1.194 (well under 3x). No check failures found; verdict is KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-051-drop-alpha-cap
