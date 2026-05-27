@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32- or 16-pixel spacing visible in any of the three diff×10 images. All three diff×10 images show only non-periodic speckle."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32×32 or 16×16 square blocks detected in any render. Texture variation matches reference throughout."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage regions larger than ~16 pixels in any view. Speckle in diff×10 is distributed at fine sub-tile scale consistent with per-Gaussian culling threshold change."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat-stripe regions present in hero, side, or top renders. Color values match reference range throughout."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos visible at object silhouettes in any view. Edges appear natural and match reference."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure-black, pure-white, or magenta spatially-correlated patches in any render. Background is clean black, foreground pixels are well-valued."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 does not show the silhouette of the object as a coherent shifted outline. Object boundaries are in the correct position across all three views."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images (hero, side, top) show uniform stochastic speckle distributed across the figure's textured surface. No grids, edges, gradients, or banded patterns present. Top view shows slightly more activity in fur/texture regions consistent with the binning cull threshold change, but no structural artifacts."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.91237629235195, "side": 44.01797329178072, "top": 39.146061759037366}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 4.871911999, "max_ms_ratio": 1.29, "pass": true},
+  "timing": {"median_ms": 45.5015, "p99_ms": 56.49539, "vs_prev_best_pct": -3.11, "pass": true},
+  "reasoning": "All eight visual checks pass: diff×10 images show only fine stochastic speckle with no tile grid seams, no uniform-fill blocks, no geometry shift, no clipping, no NaN signatures, and no halos. PSNR for all three views (39.91, 44.02, 39.15 dB) is above the 35 dB floor for the binning class. Per-view PSNR delta is 4.87 dB (limit 20 dB) and per-view kernel-ms ratio is 1.29× (limit 2×). Timing shows kernel_ms_median 45.50 ms vs prev_best 46.96 ms — a 3.1% improvement, satisfying the ≤ prev_best × 1.02 progress criterion. p99/median ratio is 1.24× (limit 3×). All numeric gates pass. Verdict: KEEP."
+}
