@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 images show uniform speckle over the object body; no horizontal/vertical lines at 32- or 16-pixel spacing visible in hero, side, or top diff10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32×32 or 16×16 square regions visible in any rendered PNG; all surface detail preserved."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage regions in any view; silhouette and body coverage match reference appearance."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes or clipping bands observed in hero, side, or top renders."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes; edge transitions look smooth and consistent with prior iters."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches or firefly hot dots observed in any rendered PNG."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show silhouette-shaped bright outlines indicating coordinate shift."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images dominated by uniform speckle across object surface; no grids, bands, gradients, or structured patterns."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.368, "side": 40.950, "top": 38.574}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.132, "actual": {"hero": 17.107, "side": 17.292, "top": 18.132}, "pass": true, "delta_vs_prev": {"hero": 0.000, "side": 0.000, "top": -0.000}},
+  "per_view_consistency": {"max_psnr_delta_db": 2.376, "max_ms_ratio": 1.232, "pass": true},
+  "timing": {"median_ms": 24.508, "p99_ms": 29.222, "vs_prev_best_pct": 0.12, "pass": true},
+  "reasoning": "iter-088 reverts CB_SCALARS depth 8→4 (revert of iter-081). All visual checks pass; PSNR + tile_structure_ratio bit-identical to architectural baseline (iter-085). Kernel_ms +0.12% within break-even noise band. iter-081 found this lever symmetric flat; this confirms reclaim of ~32KB L1 with zero regression."
+}
