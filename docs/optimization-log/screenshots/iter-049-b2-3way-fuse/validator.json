@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "PNG MD5-identical to iter-045/048 (hero/side/top all match)."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Bit-identical."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.405854042771026, "side": 40.985048050319115, "top": 38.592830113577335}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.39, "max_ms_ratio": 1.26, "pass": true},
+  "timing": {"median_ms": 26.321, "p99_ms": 31.93872, "vs_prev_best_pct": -0.10, "pass": true},
+  "reasoning": "PNG bit-identical to iter-045 (MD5 match all 3 views). Kernel: 26.3485 → 26.321 ms (-0.10%). Extended iter-048's pattern to 3-way: one mul_tiles_init(CB_DX, CB_DX) followed by THREE mul_tiles calls — (DX,DX), (DY,DY), and (DX,DY). The cross-CB pairing (DX,DY) in the third call did NOT need re-init — proving the safe pattern extends to mixed CB pairs of the same format. Saves 2 acquires per Gaussian (was 3 separate B2a/B2b/B2c acquires). Down to ~5 acquires/Gaussian (B1, B2-fused, B3b/C, D1, D2+E). PERF gain is small in absolute terms but it's a clean bit-identical improvement and a strong pattern unlock for further fusion."
+}
