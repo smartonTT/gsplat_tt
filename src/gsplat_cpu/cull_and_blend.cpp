@@ -94,7 +94,14 @@ inline void apply_gaussian_neon(
     const float32x4_t dx_lo_sq = vmulq_f32(dx_lo, dx_lo);
     const float32x4_t dx_hi_sq = vmulq_f32(dx_hi, dx_hi);
 
-    for (int i = 0; i < 4; ++i) {
+    // iter-039: process the 4 rows as 4 independent pipelines instead of a
+    // 4-iter loop. Each row's pwr build, range clamp, simd_exp and alpha
+    // cap+mul are entirely independent of other rows (rows act on
+    // different pixels and different acc.t/r/g/b slots). Listing them
+    // sequentially lets the OoO engine + 2-3 NEON FMA pipes interleave
+    // them. The compiler's loop unroller doesn't always achieve this
+    // depth of reordering across the cross-iter RAW chains.
+    auto row_body = [&](int i) __attribute__((always_inline)) {
         const float py = static_cast<float>(py_start + i) + 0.5f;
         const float dy = py - my;
         const float y_term = C * dy * dy;
@@ -144,7 +151,11 @@ inline void apply_gaussian_neon(
 
         vst1q_f32(&acc.t[row],     vsubq_f32(t_lo, at_lo));
         vst1q_f32(&acc.t[row + 4], vsubq_f32(t_hi, at_hi));
-    }
+    };
+    row_body(0);
+    row_body(1);
+    row_body(2);
+    row_body(3);
 }
 
 inline float max_t_neon(const MbAccum& acc) {
