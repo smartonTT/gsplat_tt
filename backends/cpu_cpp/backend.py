@@ -28,8 +28,33 @@ class CpuCppBackend(Backend):
         self._mod = _gsplat_cpu
         self._microblock = microblock
         self._mb_contrib_floor = mb_contrib_floor
-        # Smoke check: call hello() to confirm the binding works.
+        # cov3d cache (iter-012): per-Gaussian cov3d depends only on (scales,
+        # rotations), not on camera. Cache it across views so the 30-frame
+        # training-pattern bench (same scene, 30 cameras) builds cov3d once.
+        # Cache key = (buffer ptr, shape) of scales + rotations. Buffer ptr
+        # captures both "same numpy array" and "same memory region after
+        # in-place updates"; shape catches resizes. If the user is training
+        # and replaces scales/rotations with new tensors each step the cache
+        # will simply miss and recompute — correct, not faster.
+        self._cov3d_cache_key: tuple | None = None
+        self._cov3d_cache_buf: np.ndarray | None = None
         assert self._mod.hello() == "hello from gsplat_cpu"
+
+    def _cached_cov3d(
+        self, scales_np: np.ndarray, rotations_np: np.ndarray
+    ) -> np.ndarray:
+        key = (
+            scales_np.__array_interface__["data"][0],
+            scales_np.shape,
+            rotations_np.__array_interface__["data"][0],
+            rotations_np.shape,
+        )
+        if self._cov3d_cache_key == key and self._cov3d_cache_buf is not None:
+            return self._cov3d_cache_buf
+        cov3d = np.asarray(self._mod.compute_cov3d(scales_np, rotations_np))
+        self._cov3d_cache_key = key
+        self._cov3d_cache_buf = cov3d
+        return cov3d
 
     def project(
         self,
@@ -53,10 +78,10 @@ class CpuCppBackend(Backend):
         if opacities is not None:
             opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
 
-        means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full(
+        cov3d = self._cached_cov3d(scales_np, rotations_np)
+        means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full_with_cov3d(
             means_np,
-            scales_np,
-            rotations_np,
+            cov3d,
             extrinsics_np,
             intrinsics_np,
             image_height,

@@ -44,6 +44,27 @@ ProjectPrepared project_prepare_geometry(
     int image_height,
     int image_width);
 
+// Compute cov3d (= R(q) @ S^2 @ R(q).T) for N Gaussians once per scene. Caller
+// caches the (N*9, row-major 3x3) buffer across views; cov3d is view-independent.
+// Used by project_prepare_from_cov3d to amortise cov3d build over many camera
+// poses (training loop, 30-frame bench).
+void compute_cov3d_batch(
+    const float* scales,
+    const float* rotations,
+    std::size_t N,
+    float* cov3d_out);  // N * 9
+
+// Same as project_prepare but reuses a precomputed cov3d buffer (skips
+// per-Gaussian cov3d math).
+ProjectPrepared project_prepare_from_cov3d(
+    const float* means,
+    const float* cov3d,  // N * 9, row-major 3x3 (use compute_cov3d_batch to fill)
+    const float* extrinsics,
+    const float* intrinsics,
+    std::size_t N,
+    int image_height,
+    int image_width);
+
 ProjectResult project_finalize(
     const ProjectPrepared& prep,
     const float* covs_2d, // N * 4, layout [a, b, b, c]
