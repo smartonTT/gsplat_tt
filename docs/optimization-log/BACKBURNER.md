@@ -132,3 +132,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Bit-identical output but kernel REGRESSED +5.9% (26.35 → 27.91 ms). Replacing 2× (copy_tile_to_dst_init_short + copy_tile + binary_min) chains with 2× clamp_tile calls saved ~5 SFPU ops on paper but made the kernel slower. Either clamp_tile internally costs more cycles than the simpler copy_tile+binary_min pattern, OR removing the explicit binary_min_tile_init() disrupted SFPU init state that exp_tile_init<true>() relied on. The conservative reading: tt-metal's SFPU pipeline state is more subtle than 'fewer ops = faster' — the explicit inits matter. REJECT and revert.
 - Thumbnails: ![hero](screenshots/iter-046-clamp-tile/hero.png) ![diff10](screenshots/iter-046-clamp-tile/hero_diff10.png)
 
+
+## iter-039-fill-tile-mega-fuse — REJECT 
+
+- Class: `kernel-algebra`
+- kernel ms: median 26.38 / p99 32.03
+- PSNR per view: hero 14.6 / side 15.2 / top 16.5
+- Validator reasoning: Kernel runs but output is catastrophically wrong — PSNR collapsed from 39 dB to 14-16 dB (20+ dB drop). Visual: scattered red pixels across all 3 views. The change fused 5 per-tile fill_tile inits (R/G/B=0.0, T/SAT=1.0) into ONE acquire using dst slots 0/1/2/3/4 with 5 packs from those slots. Symptoms suggest some dst slots did not get the requested fill value — likely a tt-metal SFPU pipeline constraint where multiple sequential fill_tile calls in one acquire silently corrupt some lanes/slots. This is the same family of issue as the reverted iter-014 (which fused fills differently and also failed). RULE: do NOT fuse multiple fill_tile calls in one acquire — fill_tile is not safe-multi-slot. Each state CB init needs its own acquire. REJECT and revert.
+- Thumbnails: ![hero](screenshots/iter-039-fill-tile-mega-fuse/hero.png) ![diff10](screenshots/iter-039-fill-tile-mega-fuse/hero_diff10.png)
+

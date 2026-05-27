@@ -1,0 +1,17 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No seam artifacts."},
+    {"name": "tile_uniform_fill", "result": "fail", "evidence": "CRITICAL: random red pixels scattered across all 3 views — per-pixel data corruption. The 5 fill_tile calls in one acquire did not correctly fill all dst slots. R_state appears to retain garbage on some lanes."},
+    {"name": "missing_splat_holes", "result": "fail", "evidence": "Image structure mostly visible but heavily corrupted by red pixel noise."},
+    {"name": "color_clipping_bands", "result": "fail", "evidence": "Saturated red pixels everywhere — clearly wrong color accumulator initialization."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Not the failure mode."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "Values appear finite, just wrong."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Geometry positioned correctly; only color corruption."},
+    {"name": "diff10_structure", "result": "fail", "evidence": "Diff PNGs show widespread per-pixel deltas vs reference."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 14.555378596438581, "side": 15.207853553088801, "top": 16.48588811348929}, "pass": false},
+  "per_view_consistency": {"max_psnr_delta_db": 1.93, "max_ms_ratio": 1.21, "pass": true},
+  "timing": {"median_ms": 26.378, "p99_ms": 32.02963, "vs_prev_best_pct": 0.1, "pass": true},
+  "reasoning": "Kernel runs but output is catastrophically wrong — PSNR collapsed from 39 dB to 14-16 dB (20+ dB drop). Visual: scattered red pixels across all 3 views. The change fused 5 per-tile fill_tile inits (R/G/B=0.0, T/SAT=1.0) into ONE acquire using dst slots 0/1/2/3/4 with 5 packs from those slots. Symptoms suggest some dst slots did not get the requested fill value — likely a tt-metal SFPU pipeline constraint where multiple sequential fill_tile calls in one acquire silently corrupt some lanes/slots. This is the same family of issue as the reverted iter-014 (which fused fills differently and also failed). RULE: do NOT fuse multiple fill_tile calls in one acquire — fill_tile is not safe-multi-slot. Each state CB init needs its own acquire. REJECT and revert."
+}
