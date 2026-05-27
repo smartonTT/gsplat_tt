@@ -1,0 +1,17 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "PNG MD5-identical to iter-045 (same algebra)."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "Bit-identical to iter-045."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Bit-identical."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Bit-identical to iter-045."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.405854042771026, "side": 40.985048050319115, "top": 38.592830113577335}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.39, "max_ms_ratio": 1.26, "pass": true},
+  "timing": {"median_ms": 27.9115, "p99_ms": 34.10792, "vs_prev_best_pct": 5.9, "pass": false},
+  "reasoning": "Bit-identical output but kernel REGRESSED +5.9% (26.35 → 27.91 ms). Replacing 2× (copy_tile_to_dst_init_short + copy_tile + binary_min) chains with 2× clamp_tile calls saved ~5 SFPU ops on paper but made the kernel slower. Either clamp_tile internally costs more cycles than the simpler copy_tile+binary_min pattern, OR removing the explicit binary_min_tile_init() disrupted SFPU init state that exp_tile_init<true>() relied on. The conservative reading: tt-metal's SFPU pipeline state is more subtle than 'fewer ops = faster' — the explicit inits matter. REJECT and revert."
+}

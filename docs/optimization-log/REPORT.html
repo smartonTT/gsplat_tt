@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 42 · current best: 26.35 ms · target: 1.0 ms
+      iters: 43 · current best: 26.35 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-046-clamp-tile
+      <span class="badge" style="background:#d62728">backburner</span>
+      <span class="badge verdict">REJECT</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T03:27:05.942088+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> Bit-identical output but kernel REGRESSED +5.9% (26.35 → 27.91 ms). Replacing 2× (copy_tile_to_dst_init_short + copy_tile + binary_min) chains with 2× clamp_tile calls saved ~5 SFPU ops on paper but made the kernel slower. Either clamp_tile internally costs more cycles than the simpler copy_tile+binary_min pattern, OR removing the explicit binary_min_tile_init() disrupted SFPU init state that exp_tile_init&lt;true&gt;() relied on. The conservative reading: tt-metal&#x27;s SFPU pipeline state is more subtle than &#x27;fewer ops = faster&#x27; — the explicit inits matter. REJECT and revert.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>27.91 ms</b> median · 34.11 ms p99</div>
+    <div class="per-view">per-view: hero 27.91 / side 27.04 / top 34.06</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-046-clamp-tile/hero.png" target="_blank"><img src="screenshots/iter-046-clamp-tile/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-046-clamp-tile/side.png" target="_blank"><img src="screenshots/iter-046-clamp-tile/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-046-clamp-tile/top.png" target="_blank"><img src="screenshots/iter-046-clamp-tile/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-046-clamp-tile/hero_diff10.png" target="_blank"><img src="screenshots/iter-046-clamp-tile/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-046-clamp-tile/side_diff10.png" target="_blank"><img src="screenshots/iter-046-clamp-tile/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-046-clamp-tile/top_diff10.png" target="_blank"><img src="screenshots/iter-046-clamp-tile/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (REJECT)</summary>
+    <ul><li>✓ tile_grid_seams: PNG MD5-identical to iter-045 (same algebra).</li><li>✓ tile_uniform_fill: Bit-identical to iter-045.</li><li>✓ missing_splat_holes: Bit-identical.</li><li>✓ color_clipping_bands: Bit-identical.</li><li>✓ ringing_halos: Bit-identical.</li><li>✓ nan_inf_signatures: Bit-identical.</li><li>✓ geometry_shift: Bit-identical.</li><li>✓ diff10_structure: Bit-identical to iter-045.</li></ul>
+    <p class="reasoning">Bit-identical output but kernel REGRESSED +5.9% (26.35 → 27.91 ms). Replacing 2× (copy_tile_to_dst_init_short + copy_tile + binary_min) chains with 2× clamp_tile calls saved ~5 SFPU ops on paper but made the kernel slower. Either clamp_tile internally costs more cycles than the simpler copy_tile+binary_min pattern, OR removing the explicit binary_min_tile_init() disrupted SFPU init state that exp_tile_init&lt;true&gt;() relied on. The conservative reading: tt-metal&#x27;s SFPU pipeline state is more subtle than &#x27;fewer ops = faster&#x27; — the explicit inits matter. REJECT and revert.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-045-d2-e-fuse
@@ -1532,6 +1565,15 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - PSNR per view: hero 39.4 / side 41.0 / top 38.6
 - Validator reasoning: Visual quality fine (bit-identical to iter-043) but kernel REGRESSED by +3.9% (26.64 → 27.68 ms). The fused approach traded one efficient FPU mul_tiles (32×32 MAC) per slot for a copy_tile + binary_dest_reuse&lt;ELWMUL&gt; chain per slot — adding SFPU copy_tile work that the original 3-separate-acquires pattern didn&#x27;t have. Unlike iter-043&#x27;s D2 fuse (which only consolidated existing copy_tile+ELWADD work into one acquire with zero added ops), this iter ADDED ops per slot. Lesson: when fusion changes the underlying compute primitive from FPU mul_tiles to copy_tile+binary_dest_reuse_ELWMUL, the per-slot cost increases enough to swamp the acquire-overhead savings. REJECT and revert.
 - Thumbnails: ![hero](screenshots/iter-044-b2-b3a-fuse-one/hero.png) ![diff10](screenshots/iter-044-b2-b3a-fuse-one/hero_diff10.png)
+
+
+## iter-046-clamp-tile — REJECT 
+
+- Class: `binning`
+- kernel ms: median 27.91 / p99 34.11
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: Bit-identical output but kernel REGRESSED +5.9% (26.35 → 27.91 ms). Replacing 2× (copy_tile_to_dst_init_short + copy_tile + binary_min) chains with 2× clamp_tile calls saved ~5 SFPU ops on paper but made the kernel slower. Either clamp_tile internally costs more cycles than the simpler copy_tile+binary_min pattern, OR removing the explicit binary_min_tile_init() disrupted SFPU init state that exp_tile_init&lt;true&gt;() relied on. The conservative reading: tt-metal&#x27;s SFPU pipeline state is more subtle than &#x27;fewer ops = faster&#x27; — the explicit inits matter. REJECT and revert.
+- Thumbnails: ![hero](screenshots/iter-046-clamp-tile/hero.png) ![diff10](screenshots/iter-046-clamp-tile/hero_diff10.png)
 
 </pre>
   </section>

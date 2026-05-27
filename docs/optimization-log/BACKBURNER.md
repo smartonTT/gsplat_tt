@@ -123,3 +123,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: Visual quality fine (bit-identical to iter-043) but kernel REGRESSED by +3.9% (26.64 → 27.68 ms). The fused approach traded one efficient FPU mul_tiles (32×32 MAC) per slot for a copy_tile + binary_dest_reuse<ELWMUL> chain per slot — adding SFPU copy_tile work that the original 3-separate-acquires pattern didn't have. Unlike iter-043's D2 fuse (which only consolidated existing copy_tile+ELWADD work into one acquire with zero added ops), this iter ADDED ops per slot. Lesson: when fusion changes the underlying compute primitive from FPU mul_tiles to copy_tile+binary_dest_reuse_ELWMUL, the per-slot cost increases enough to swamp the acquire-overhead savings. REJECT and revert.
 - Thumbnails: ![hero](screenshots/iter-044-b2-b3a-fuse-one/hero.png) ![diff10](screenshots/iter-044-b2-b3a-fuse-one/hero_diff10.png)
 
+
+## iter-046-clamp-tile — REJECT 
+
+- Class: `binning`
+- kernel ms: median 27.91 / p99 34.11
+- PSNR per view: hero 39.4 / side 41.0 / top 38.6
+- Validator reasoning: Bit-identical output but kernel REGRESSED +5.9% (26.35 → 27.91 ms). Replacing 2× (copy_tile_to_dst_init_short + copy_tile + binary_min) chains with 2× clamp_tile calls saved ~5 SFPU ops on paper but made the kernel slower. Either clamp_tile internally costs more cycles than the simpler copy_tile+binary_min pattern, OR removing the explicit binary_min_tile_init() disrupted SFPU init state that exp_tile_init<true>() relied on. The conservative reading: tt-metal's SFPU pipeline state is more subtle than 'fewer ops = faster' — the explicit inits matter. REJECT and revert.
+- Thumbnails: ![hero](screenshots/iter-046-clamp-tile/hero.png) ![diff10](screenshots/iter-046-clamp-tile/hero_diff10.png)
+
