@@ -132,6 +132,68 @@ py::tuple project_py(
     return pack_project_result(result, N);
 }
 
+py::array_t<float> compute_cov3d_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> scales,
+    py::array_t<float, py::array::c_style | py::array::forcecast> rotations) {
+    const auto sc_info = scales.request();
+    const std::size_t N = static_cast<std::size_t>(sc_info.shape[0]);
+    py::array_t<float> out({static_cast<py::ssize_t>(N), static_cast<py::ssize_t>(3),
+                            static_cast<py::ssize_t>(3)});
+    if (N > 0) {
+        gsplat_cpu::compute_cov3d_batch(
+            static_cast<const float*>(sc_info.ptr),
+            static_cast<const float*>(rotations.request().ptr),
+            N,
+            out.mutable_data());
+    }
+    return out;
+}
+
+py::tuple project_full_with_cov3d_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> means,
+    py::array_t<float, py::array::c_style | py::array::forcecast> cov3d,
+    py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics,
+    py::array_t<float, py::array::c_style | py::array::forcecast> intrinsics,
+    int image_height,
+    int image_width,
+    py::object opacities_obj = py::none(),
+    float min_opacity = 1.0f / 255.0f) {
+    const auto means_info = means.request();
+    const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
+    const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare_from_cov3d(
+        static_cast<const float*>(means_info.ptr),
+        static_cast<const float*>(cov3d.request().ptr),
+        static_cast<const float*>(extrinsics.request().ptr),
+        static_cast<const float*>(intrinsics.request().ptr),
+        N,
+        image_height,
+        image_width);
+
+    const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
+    py::module_ torch = py::module_::import("torch");
+
+    py::array_t<float> cov_cam_arr({n, static_cast<py::ssize_t>(3), static_cast<py::ssize_t>(3)});
+    if (prep.N > 0) {
+        std::memcpy(cov_cam_arr.mutable_data(), prep.cov_cam.data(), prep.N * 9 * sizeof(float));
+    }
+    py::array_t<float> j_arr({n, static_cast<py::ssize_t>(2), static_cast<py::ssize_t>(3)});
+    if (prep.N > 0) {
+        std::memcpy(j_arr.mutable_data(), prep.jacobian.data(), prep.N * 6 * sizeof(float));
+    }
+    py::object cov_cam_t = torch.attr("from_numpy")(cov_cam_arr);
+    py::object j = torch.attr("from_numpy")(j_arr);
+    py::object covs_2d =
+        torch.attr("bmm")(torch.attr("bmm")(j, cov_cam_t), j.attr("transpose")(1, 2));
+    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 0, 0)).attr("__iadd__")(0.3);
+    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 1, 1)).attr("__iadd__")(0.3);
+
+    py::array_t<float, py::array::c_style | py::array::forcecast> covs_flat =
+        py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
+            covs_2d.attr("detach")().attr("cpu")().attr("numpy")().attr("reshape")(n, 4));
+
+    return project_finalize_py(prep, covs_flat, opacities_obj, min_opacity);
+}
+
 py::tuple project_full_py(
     py::array_t<float, py::array::c_style | py::array::forcecast> means,
     py::array_t<float, py::array::c_style | py::array::forcecast> scales,
@@ -640,6 +702,24 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("means"),
         py::arg("scales"),
         py::arg("rotations"),
+        py::arg("extrinsics"),
+        py::arg("intrinsics"),
+        py::arg("image_height"),
+        py::arg("image_width"),
+        py::arg("opacities") = py::none(),
+        py::arg("min_opacity") = 1.0f / 255.0f);
+
+    m.def(
+        "compute_cov3d",
+        &compute_cov3d_py,
+        py::arg("scales"),
+        py::arg("rotations"));
+
+    m.def(
+        "project_full_with_cov3d",
+        &project_full_with_cov3d_py,
+        py::arg("means"),
+        py::arg("cov3d"),
         py::arg("extrinsics"),
         py::arg("intrinsics"),
         py::arg("image_height"),

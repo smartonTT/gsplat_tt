@@ -97,26 +97,16 @@ ProjectPrepared project_prepare(
         project_prepare_geometry(means, extrinsics, intrinsics, N, image_height, image_width);
     prep.cov_cam.resize(N * 9);
 
-    const float r00 = extrinsics[0];
-    const float r01 = extrinsics[1];
-    const float r02 = extrinsics[2];
-    const float r10 = extrinsics[4];
-    const float r11 = extrinsics[5];
-    const float r12 = extrinsics[6];
-    const float r20 = extrinsics[8];
-    const float r21 = extrinsics[9];
-    const float r22 = extrinsics[10];
-
     Mat3f r_mat;
-    r_mat(0, 0) = r00;
-    r_mat(0, 1) = r01;
-    r_mat(0, 2) = r02;
-    r_mat(1, 0) = r10;
-    r_mat(1, 1) = r11;
-    r_mat(1, 2) = r12;
-    r_mat(2, 0) = r20;
-    r_mat(2, 1) = r21;
-    r_mat(2, 2) = r22;
+    r_mat(0, 0) = extrinsics[0];
+    r_mat(0, 1) = extrinsics[1];
+    r_mat(0, 2) = extrinsics[2];
+    r_mat(1, 0) = extrinsics[4];
+    r_mat(1, 1) = extrinsics[5];
+    r_mat(1, 2) = extrinsics[6];
+    r_mat(2, 0) = extrinsics[8];
+    r_mat(2, 1) = extrinsics[9];
+    r_mat(2, 2) = extrinsics[10];
 
     for (std::size_t i = 0; i < N; ++i) {
         const Vec3f scale{scales[i * 3 + 0], scales[i * 3 + 1], scales[i * 3 + 2]};
@@ -125,6 +115,54 @@ ProjectPrepared project_prepare(
 
         const Mat3f cov3d = build_covariance_3d(scale, quat);
         const Mat3f cov_cam = mat3_mul(mat3_mul(r_mat, cov3d), mat3_transpose(r_mat));
+        std::memcpy(prep.cov_cam.data() + i * 9, cov_cam.m.data(), 9 * sizeof(float));
+    }
+
+    return prep;
+}
+
+void compute_cov3d_batch(
+    const float* scales,
+    const float* rotations,
+    const std::size_t N,
+    float* cov3d_out) {
+    for (std::size_t i = 0; i < N; ++i) {
+        const Vec3f scale{scales[i * 3 + 0], scales[i * 3 + 1], scales[i * 3 + 2]};
+        const Quatf quat{rotations[i * 4 + 0], rotations[i * 4 + 1], rotations[i * 4 + 2],
+                         rotations[i * 4 + 3]};
+        const Mat3f cov3d = build_covariance_3d(scale, quat);
+        std::memcpy(cov3d_out + i * 9, cov3d.m.data(), 9 * sizeof(float));
+    }
+}
+
+ProjectPrepared project_prepare_from_cov3d(
+    const float* means,
+    const float* cov3d,
+    const float* extrinsics,
+    const float* intrinsics,
+    const std::size_t N,
+    const int image_height,
+    const int image_width) {
+    ProjectPrepared prep =
+        project_prepare_geometry(means, extrinsics, intrinsics, N, image_height, image_width);
+    prep.cov_cam.resize(N * 9);
+
+    Mat3f r_mat;
+    r_mat(0, 0) = extrinsics[0];
+    r_mat(0, 1) = extrinsics[1];
+    r_mat(0, 2) = extrinsics[2];
+    r_mat(1, 0) = extrinsics[4];
+    r_mat(1, 1) = extrinsics[5];
+    r_mat(1, 2) = extrinsics[6];
+    r_mat(2, 0) = extrinsics[8];
+    r_mat(2, 1) = extrinsics[9];
+    r_mat(2, 2) = extrinsics[10];
+
+    const Mat3f r_t = mat3_transpose(r_mat);
+    for (std::size_t i = 0; i < N; ++i) {
+        Mat3f c;
+        std::memcpy(c.m.data(), cov3d + i * 9, 9 * sizeof(float));
+        const Mat3f cov_cam = mat3_mul(mat3_mul(r_mat, c), r_t);
         std::memcpy(prep.cov_cam.data() + i * 9, cov_cam.m.data(), 9 * sizeof(float));
     }
 
