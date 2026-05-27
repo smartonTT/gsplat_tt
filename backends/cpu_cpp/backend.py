@@ -89,6 +89,69 @@ class CpuCppBackend(Backend):
             torch.from_numpy(np.asarray(valid_mask)),
         )
 
+    def tile_assign(
+        self,
+        means_2d: torch.Tensor,
+        radii: torch.Tensor,
+        image_height: int,
+        image_width: int,
+        tile_size: int = 32,
+        covs_2d: torch.Tensor | None = None,
+        opacities: torch.Tensor | None = None,
+        sub_timings: dict[str, float] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        del sub_timings
+        means_np = means_2d.detach().cpu().numpy().astype(np.float32, copy=False)
+        radii_np = radii.detach().cpu().numpy().astype(np.float32, copy=False)
+        covs_np = None
+        if covs_2d is not None:
+            covs_np = covs_2d.detach().cpu().numpy().astype(np.float32, copy=False)
+        opacities_np = None
+        if opacities is not None:
+            opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        gids, tids, tpg = self._mod.tile_assign(
+            means_np,
+            radii_np,
+            int(image_height),
+            int(image_width),
+            int(tile_size),
+            covs_np,
+            opacities_np,
+            15.0 / 255.0,
+        )
+        return (
+            torch.from_numpy(np.asarray(gids)),
+            torch.from_numpy(np.asarray(tids)),
+            torch.from_numpy(np.asarray(tpg)),
+        )
+
+    def sort(
+        self,
+        gaussian_ids: torch.Tensor,
+        tile_ids: torch.Tensor,
+        depths: torch.Tensor,
+        tiles_x: int,
+        tiles_y: int,
+        sub_timings: dict[str, float] | None = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        del sub_timings
+        gids_np = gaussian_ids.detach().cpu().numpy().astype(np.int64, copy=False)
+        tids_np = tile_ids.detach().cpu().numpy().astype(np.int64, copy=False)
+        depths_np = depths.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        sgids, tranges = self._mod.sort(
+            gids_np,
+            tids_np,
+            depths_np,
+            int(tiles_x),
+            int(tiles_y),
+        )
+        return (
+            torch.from_numpy(np.asarray(sgids)),
+            torch.from_numpy(np.asarray(tranges)),
+        )
+
     def blend(
         self,
         means_2d: torch.Tensor,

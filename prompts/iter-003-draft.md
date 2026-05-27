@@ -44,9 +44,9 @@ In `src/gsplat_cpu/tile_assign.h`:
 namespace gsplat_cpu {
 
 struct TileAssignResult {
-    std::vector<int32_t>  gaussian_ids;        // (P,)
-    std::vector<int32_t>  tile_ids;            // (P,)
-    std::vector<int32_t>  tiles_per_gaussian;  // (M,)
+    std::vector<int64_t>  gaussian_ids;        // (P,)
+    std::vector<int64_t>  tile_ids;            // (P,)
+    std::vector<int64_t>  tiles_per_gaussian;  // (M,)
 };
 
 TileAssignResult tile_assign(
@@ -75,14 +75,14 @@ In `src/gsplat_cpu/sort.h`:
 namespace gsplat_cpu {
 
 struct SortResult {
-    std::vector<int32_t> sorted_gaussian_ids;   // (P,)
-    std::vector<int64_t> tile_ranges;           // num_tiles * 2  (start, end pairs)
+    std::vector<int64_t> sorted_gaussian_ids;   // (P,)
+    std::vector<int64_t> tile_ranges;           // num_tiles * 2  (start, end pairs, row-major)
 };
 
 SortResult sort_and_bin(
-    const int32_t* gaussian_ids,      // P
-    const int32_t* tile_ids,          // P
-    const float* depths,              // M (indexed by gaussian_ids[i])
+    const int64_t* gaussian_ids,      // P
+    const int64_t* tile_ids,          // P
+    const float*   depths,            // M (indexed by gaussian_ids[i])
     std::size_t P,
     std::size_t M,
     int tiles_x,
@@ -111,21 +111,25 @@ Mirror `get_tile_assignments` line-for-line:
    - `dx_c = cx - px; dy_c = cy - py`
    - `m2 = (c*dx_c² - 2*b*dx_c*dy_c + a*dy_c²) / det`
    - keep iff `opacities[g] * std::exp(-0.5 * m2) >= contrib_floor`
-5. After culling, recompute `tiles_per_gaussian` via `std::bincount`-equivalent (just iterate the kept pairs).
+5. After culling, recompute `tiles_per_gaussian` as a length-M zero-initialized vector, then `++tiles_per_gaussian[gaussian_ids[i]]` for each surviving pair. Equivalent to `torch.bincount(gaussian_ids, minlength=M)` — Gaussians with no surviving pairs MUST keep their slot at 0 (do not skip them in the output).
+
+NB on dtypes: numpy returns int64 for all three arrays (mixed-type promotion via `arange(P).long()`). The C++ result MUST also be int64 so `verify_stage --stage tile_assign` value-compares cleanly against the int64 fixture.
 
 ## Algorithm spec — sort
 
 Mirror `sort_and_bin` exactly:
 
-1. Compose `int64` sort key per pair: `key[i] = (int64(tile_ids[i]) << 32) | reinterpret_cast<uint32_t>(depths[gaussian_ids[i]])`.
+1. Compose `int64` sort key per pair: `key[i] = (int64(tile_ids[i]) << 32) | uint32_bits(depths[gaussian_ids[i]])`.
    - Use `std::bit_cast<uint32_t, float>` (C++20) or memcpy aliasing. The float bit pattern for positive floats is monotonic in the float value — that's why we can sort fp32-depth as int.
    - All visible depths are > 0.2 (near plane) so the sign-bit is always 0; no special handling needed.
 
-2. Stable-sort the index permutation by key (use `std::sort` with the (key, index) tuple, or `std::iota` + `std::sort` on a `std::vector<size_t>` index array with custom comparator). Stability not required (depths are distinct per pair within a tile in practice; ties allowed).
+2. Sort the index permutation by key. Use `std::iota` + `std::sort` on a `std::vector<size_t>` index array with a custom comparator on the precomputed key array (don't re-derive the key inside the comparator — that wastes ~30% on stitch).
 
-3. Build `tile_ranges`: for each tile compute `(start, end)`. Walk the sorted `tile_ids` and detect change points — same algorithm as numpy.
+3. `sorted_gaussian_ids[i] = gaussian_ids[perm[i]]`. Also produce `sorted_tile_ids[i] = tile_ids[perm[i]]` as a scratch buffer for the range build.
 
-4. Result: `sorted_gaussian_ids[i] = gaussian_ids[permutation[i]]`.
+4. Build `tile_ranges`: a length-`(tiles_x*tiles_y)*2` int64 array, zero-initialized. Walk the sorted `tile_ids`; when the tile changes from `t_prev` to `t_curr`, set `tile_ranges[t_prev*2 + 1] = i` and `tile_ranges[t_curr*2 + 0] = i`. Also set `tile_ranges[sorted_tile_ids[0]*2 + 0] = 0` and `tile_ranges[sorted_tile_ids[P-1]*2 + 1] = P`. Tiles with no pairs keep their default `(0, 0)` — that's correct because numpy uses `torch.zeros(num_tiles, 2)`.
+
+NB on dtypes: numpy returns int64 for both `sorted_gaussian_ids` and `tile_ranges`. C++ must match. Pybind11 will pass numpy arrays as `py::array_t<int64_t>` to `tile_assign(...)` (since iter-003's `tile_assign` now returns int64), so the downstream `sort()` binding receives int64 buffers naturally.
 
 ## CpuCppBackend.tile_assign / .sort (Python side)
 
