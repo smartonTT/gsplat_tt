@@ -41,8 +41,7 @@ scenes/point_cloud.ply
 # Per-stage fixtures (regenerable derivatives of the PLY + numpy reference path).
 # `scripts/capture_reference.py --scene stitch` rewrites them; we keep only the
 # meta.json so the dir tree is visible in git.
-tests/fixtures/hero/*.npz
-tests/fixtures/hero/*.npy
+# Hero fixtures are tracked (iter-007+). Do not ignore tests/fixtures/hero/*.npz.
 
 # IDE / OS
 .DS_Store

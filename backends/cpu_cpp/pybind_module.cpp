@@ -5,6 +5,7 @@
 #include <pybind11/stl.h>
 
 #include "gsplat_cpu/blend.h"
+#include "gsplat_cpu/microblock_cull.h"
 #include "gsplat_cpu/project.h"
 #include "gsplat_cpu/sort.h"
 #include "gsplat_cpu/thread_pool.h"
@@ -271,6 +272,11 @@ gsplat_cpu::ThreadPool& global_blend_pool() {
     return pool;
 }
 
+gsplat_cpu::ThreadPool& global_cull_pool() {
+    static gsplat_cpu::ThreadPool pool(0);
+    return pool;
+}
+
 py::array_t<float> blend_py(
     py::array_t<float, py::array::c_style | py::array::forcecast> means_2d,
     py::array_t<float, py::array::c_style | py::array::forcecast> covs_2d,
@@ -336,6 +342,97 @@ py::array_t<float> blend_py(
         global_blend_pool());
 
     return image;
+}
+
+py::tuple microblock_cull_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> means_2d,
+    py::array_t<float, py::array::c_style | py::array::forcecast> covs_2d,
+    py::array_t<float, py::array::c_style | py::array::forcecast> opacities,
+    py::array_t<int64_t, py::array::c_style | py::array::forcecast> sorted_gaussian_ids,
+    py::array_t<int64_t, py::array::c_style | py::array::forcecast> tile_ranges,
+    int tiles_x,
+    int tiles_y,
+    int tile_size,
+    float mb_contrib_floor) {
+    const auto means_info = means_2d.request();
+    const auto covs_info = covs_2d.request();
+    const auto opacities_info = opacities.request();
+    const auto sgids_info = sorted_gaussian_ids.request();
+    const auto ranges_info = tile_ranges.request();
+
+    if (means_info.ndim != 2 || means_info.shape[1] != 2) {
+        throw std::invalid_argument("means_2d must have shape (M, 2)");
+    }
+    if (covs_info.ndim != 2 || covs_info.shape[1] != 4) {
+        throw std::invalid_argument("covs_2d must have shape (M, 4)");
+    }
+    if (opacities_info.ndim != 1) {
+        throw std::invalid_argument("opacities must have shape (M,)");
+    }
+    if (sgids_info.ndim != 1) {
+        throw std::invalid_argument("sorted_gaussian_ids must be 1-D");
+    }
+    if (ranges_info.ndim != 2 || ranges_info.shape[1] != 2) {
+        throw std::invalid_argument("tile_ranges must have shape (num_tiles, 2)");
+    }
+
+    const std::size_t M = static_cast<std::size_t>(means_info.shape[0]);
+    if (static_cast<std::size_t>(covs_info.shape[0]) != M ||
+        static_cast<std::size_t>(opacities_info.shape[0]) != M) {
+        throw std::invalid_argument("means_2d, covs_2d, opacities must share M");
+    }
+
+    const std::size_t P = static_cast<std::size_t>(sgids_info.shape[0]);
+    const int num_tiles = tiles_x * tiles_y;
+    if (ranges_info.shape[0] != num_tiles) {
+        throw std::invalid_argument("tile_ranges first dimension must equal tiles_x * tiles_y");
+    }
+
+    const gsplat_cpu::MicroblockCullResult result = gsplat_cpu::microblock_cull(
+        static_cast<const float*>(means_info.ptr),
+        static_cast<const float*>(covs_info.ptr),
+        static_cast<const float*>(opacities_info.ptr),
+        static_cast<const int64_t*>(sgids_info.ptr),
+        static_cast<const int64_t*>(ranges_info.ptr),
+        M,
+        P,
+        tiles_x,
+        tiles_y,
+        tile_size,
+        mb_contrib_floor,
+        global_cull_pool());
+
+    py::array_t<int64_t> mb_header(static_cast<py::ssize_t>(result.mb_header.size()));
+    py::array_t<int64_t> mb_stream(static_cast<py::ssize_t>(result.mb_stream.size()));
+    if (!result.mb_header.empty()) {
+        std::memcpy(mb_header.mutable_data(), result.mb_header.data(),
+                    result.mb_header.size() * sizeof(int64_t));
+    }
+    if (!result.mb_stream.empty()) {
+        std::memcpy(mb_stream.mutable_data(), result.mb_stream.data(),
+                    result.mb_stream.size() * sizeof(int64_t));
+    }
+
+    const double drop_pct =
+        result.pairs_in == 0
+            ? 0.0
+            : 100.0 * static_cast<double>(result.pairs_dropped_in_all_mb) /
+                  static_cast<double>(result.pairs_in);
+    constexpr int kNumMicroblocks = 32;
+    const double full_replay =
+        static_cast<double>(result.pairs_in) * static_cast<double>(kNumMicroblocks);
+    const double work_reduction_pct =
+        full_replay == 0.0
+            ? 0.0
+            : 100.0 * (1.0 - static_cast<double>(result.pairs_out) / full_replay);
+
+    py::dict stats;
+    stats["pairs_in"] = result.pairs_in;
+    stats["pairs_out"] = result.pairs_out;
+    stats["drop_pct"] = drop_pct;
+    stats["work_reduction_pct"] = work_reduction_pct;
+
+    return py::make_tuple(mb_header, mb_stream, stats);
 }
 
 }  // namespace
@@ -430,6 +527,19 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_height"),
         py::arg("image_width"),
         py::arg("tile_size") = 32);
+
+    m.def(
+        "microblock_cull",
+        &microblock_cull_py,
+        py::arg("means_2d"),
+        py::arg("covs_2d"),
+        py::arg("opacities"),
+        py::arg("sorted_gaussian_ids"),
+        py::arg("tile_ranges"),
+        py::arg("tiles_x"),
+        py::arg("tiles_y"),
+        py::arg("tile_size") = 32,
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
 
     py::class_<gsplat_cpu::ThreadPool>(m, "ThreadPool")
         .def(py::init<std::size_t>(), py::arg("num_threads") = 0)
