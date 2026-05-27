@@ -167,30 +167,21 @@ inline float max_t_neon(const MbAccum& acc) {
 }
 #endif  // GSPLAT_HAS_NEON
 
-// iter-047: per-slot inline blend record. The cull loop writes the FULL
-// 36-byte blend payload (mx, my, ci_a, ci_b, ci_c, opacity, cr, cg, cb)
-// directly into the microblock slot instead of just the Gaussian id, so
-// the blend loop streams these sequentially (HW prefetch friendly) rather
-// than randomly indexing gauss_rec[g] + colors[g*3] for every kept entry.
+// Per-worker scratch buffer for the cull pass. One contiguous uint32_t array
+// of size 32 * L is partitioned into 32 microblock slots; per-tile reset
+// just resets the per-microblock offsets, the heap buffer survives across
+// tiles. Eliminates ~256 * 32 std::vector heap allocations per frame.
 //
-// Memory cost: ~10x more cull writes than the prior uint32 layout, but
-// stride stays bounded (per-tile max ~11k Gaussians * 32 microblocks *
-// 36 B per slot worst-case is offset by ~30% prune via log_thresh, and
-// the working set stays in L2 because we only need scratch per-tile, not
-// per-frame).
-struct alignas(8) BlendSlot {
-    float mx, my;            // screen-space mean (also used in cull's power_c)
-    float ci_a, ci_b, ci_c;  // cov inverse coefficients
-    float opacity;           // alpha multiplier
-    float cr, cg, cb;        // base colors
-    float _pad;              // pad to 40 bytes (matches GaussianCullRec size).
-};
-static_assert(sizeof(BlendSlot) == 40, "BlendSlot must be 40 bytes");
-
+// uint32_t (vs int64_t in iter-023) halves the per-worker working set: at
+// the stitch hero scene's max-Gaussian tile (~11k entries), 32 microblock
+// slots = 32 * 11k = 352k entries -> 1.4 MB (uint32) vs 2.8 MB (int64).
+// 1.4 MB still spills L1 (M-Pro: 192 KB) but fits L2 comfortably; the
+// sequential per-microblock read pattern in the blend loop is now twice
+// as cache-bandwidth-efficient.
 struct TileScratch {
-    std::vector<BlendSlot> kept_flat;
-    std::array<int32_t, kNumMicroblocks + 1> offsets{};
-    int32_t stride{0};
+    std::vector<uint32_t> kept_flat;          // flat buffer, capacity grown as needed
+    std::array<int32_t, kNumMicroblocks + 1> offsets{};  // offsets[m] = start of mb m in kept_flat
+    int32_t stride{0};                       // capacity per microblock
 };
 
 // Per-tile fused cull + blend kernel.
@@ -285,19 +276,6 @@ void cull_and_blend_tile(
             continue;
         }
 
-        // iter-047: prebuild the BlendSlot once per (Gaussian, tile), reused
-        // across however many microblocks of this tile end up keeping it.
-        BlendSlot bs;
-        bs.mx = mean_x;
-        bs.my = mean_y;
-        bs.ci_a = ci_a;
-        bs.ci_b = ci_b;
-        bs.ci_c = ci_c;
-        bs.opacity = rec.opacity;
-        bs.cr = colors[static_cast<std::size_t>(g) * 3 + 0];
-        bs.cg = colors[static_cast<std::size_t>(g) * 3 + 1];
-        bs.cb = colors[static_cast<std::size_t>(g) * 3 + 2];
-
         bool kept_any = false;
         for (int my = my_lo; my <= my_hi; ++my) {
             const float mb_oy = ty_tile + static_cast<float>(my * 4);
@@ -312,7 +290,8 @@ void cull_and_blend_tile(
                 if (power_c >= log_thresh) {
                     const int mb = (my << 2) | mx;
                     scratch.kept_flat[static_cast<std::size_t>(
-                        scratch.offsets[static_cast<std::size_t>(mb)]++)] = bs;
+                        scratch.offsets[static_cast<std::size_t>(mb)]++)] =
+                        static_cast<uint32_t>(g);
                     kept_any = true;
                     ++kept_total;
                 }
@@ -330,7 +309,7 @@ void cull_and_blend_tile(
         const int32_t slot_end = scratch.offsets[static_cast<std::size_t>(m)];
         const int32_t kn = slot_end - slot_base;
         if (kn == 0) continue;
-        const BlendSlot* kg_data = scratch.kept_flat.data() + slot_base;
+        const uint32_t* kg_data = scratch.kept_flat.data() + slot_base;
 
         const int mb_ox_i = (m & 3) * 8;
         const int mb_oy_i = (m >> 2) * 4;
@@ -361,23 +340,25 @@ void cull_and_blend_tile(
             int32_t k = 0;
             for (; k + 4 <= kn; k += 4) {
                 for (int j = 0; j < 4; ++j) {
-                    const BlendSlot& bs = kg_data[k + j];
+                    const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
+                    const GaussianCullRec& rec = gauss_rec[gs];
                     apply_gaussian_neon(acc,
-                        bs.ci_a, bs.ci_b, bs.ci_c,
-                        bs.mx, bs.my,
-                        bs.opacity,
-                        bs.cr, bs.cg, bs.cb,
+                        rec.ci_a, rec.ci_b, rec.ci_c,
+                        rec.mx, rec.my,
+                        rec.opacity,
+                        colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                         px_start, py_start);
                 }
                 if (max_t_neon(acc) < 0.0001f) { k = kn; break; }
             }
             for (; k < kn; ++k) {
-                const BlendSlot& bs = kg_data[k];
+                const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
+                const GaussianCullRec& rec = gauss_rec[gs];
                 apply_gaussian_neon(acc,
-                    bs.ci_a, bs.ci_b, bs.ci_c,
-                    bs.mx, bs.my,
-                    bs.opacity,
-                    bs.cr, bs.cg, bs.cb,
+                    rec.ci_a, rec.ci_b, rec.ci_c,
+                    rec.mx, rec.my,
+                    rec.opacity,
+                    colors[gs * 3 + 0], colors[gs * 3 + 1], colors[gs * 3 + 2],
                     px_start, py_start);
             }
             for (int i = 0; i < 4; ++i) {
@@ -401,16 +382,17 @@ void cull_and_blend_tile(
         for (int k = 0; k < npix; ++k) T[k] = 1.0f;
         for (int k = 0; k < npix * 3; ++k) accum[k] = 0.0f;
         for (int32_t kk = 0; kk < kn; ++kk) {
-            const BlendSlot& bs = kg_data[kk];
-            const float ci_a = bs.ci_a;
-            const float ci_b = bs.ci_b;
-            const float ci_c = bs.ci_c;
-            const float mx = bs.mx;
-            const float my = bs.my;
-            const float opacity = bs.opacity;
-            const float cr = bs.cr;
-            const float cg = bs.cg;
-            const float cb = bs.cb;
+            const std::size_t gs = static_cast<std::size_t>(kg_data[kk]);
+            const GaussianCullRec& rec = gauss_rec[gs];
+            const float ci_a = rec.ci_a;
+            const float ci_b = rec.ci_b;
+            const float ci_c = rec.ci_c;
+            const float mx = rec.mx;
+            const float my = rec.my;
+            const float opacity = rec.opacity;
+            const float cr = colors[gs * 3 + 0];
+            const float cg = colors[gs * 3 + 1];
+            const float cb = colors[gs * 3 + 2];
             for (int i = 0; i < mb_h; ++i) {
                 const float py = static_cast<float>(py_start + i) + 0.5f;
                 for (int j = 0; j < mb_w; ++j) {
@@ -546,6 +528,8 @@ CullAndBlendResult cull_and_blend(
 
     std::atomic<int> next_idx{0};
     const std::size_t W = std::max<std::size_t>(1, pool.size());
+    // Per-worker scratch lives for the duration of the parallel section.
+    // Resized lazily by each tile based on that tile's Gaussian count L.
     std::vector<TileScratch> scratches(W);
     for (std::size_t w = 0; w < W; ++w) {
         pool.submit([&, w]() {
