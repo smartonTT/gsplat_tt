@@ -1,0 +1,24 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal/vertical lines at 32px or 16px spacing visible in any diff10. All three diff10 images show diffuse speckle concentrated at object boundaries — no grid pattern."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32×32 or 16×16 blocks replacing detail in any rendered view. Hero/side/top all show expected fur texture and silhouette fidelity."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark voids or locally dark patches relative to reference. Coverage appears complete across all views."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes present. Color gradients and blending look normal across all three views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouette edges. Edge noise in diff10 is the established architectural-baseline speckle, not periodic halos."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure-black, pure-white, or magenta spatially-correlated patches. No fireflies (isolated 1-3px hot dots) visible in any render."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not reveal a silhouette-shaped bright outline; geometry matches reference."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images show uniform speckle at object boundaries — the established architectural bf16/pack_tile noise floor. No structured grids, gradients, or banding."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.41496520322124, "side": 40.99648830708902, "top": 38.59546500629706}, "pass": true},
+  "tile_structure_check": {
+    "max_ratio": 18.1422622408487,
+    "actual": {"hero": 17.137658028356157, "side": 17.278351895106663, "top": 18.1422622408487},
+    "pass": true,
+    "delta_vs_prev": {"hero": -0.000000000000, "side": -0.000000000000, "top": -0.000000000000},
+    "note": "Bit-identical to iter-074 baseline (hero 17.1377, side 17.2784, top 18.1423). Delta is 0.000 on all views — well within ±0.05 architectural-baseline carve-out. +0.3 ratchet rule: not triggered. Ratio >14 is the established bf16 pack_tile floor per architectural-baseline carve-out (2026-05-27)."
+  },
+  "per_view_consistency": {"max_psnr_delta_db": 2.581523303867782, "max_ms_ratio": 1.2381, "pass": true},
+  "timing": {"median_ms": 24.7055, "p99_ms": 29.548550000000002, "vs_prev_best_pct": -1.21, "pass": true},
+  "reasoning": "All checks pass. Tile_structure_ratio is bit-identical to the iter-074 baseline (delta 0.000 on all three views), satisfying the architectural-baseline carve-out and the +0.3 ratchet rule. PSNR is also bit-identical to baseline (hero 39.41, side 40.99, top 38.60 — all above the 38 dB kernel-algebra floor). Kernel timing improved -1.21% (24.7055 vs prev_best 25.0075), p99/median ratio 1.196 (well under 3× threshold), per-view ms ratio 1.238 (well under 2×). Visual inspection of all three rendered PNGs shows clean renders with no fireflies, no tile seams, no fill blocks, no geometry shift, and no color artifacts. Diff10 images show the established architectural speckle pattern at object boundaries only. This is a clean init-drop win matching the iter-048+049 safe-drop pattern (one binary_dest_reuse_tiles_init<ELWADD,DEST_TO_SRCA> shared by 3 cross-CB ops, no interleaving inits of a different type)."
+}
