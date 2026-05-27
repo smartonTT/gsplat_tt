@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 69 · current best: 23.98 ms · target: 1.0 ms
+      iters: 70 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-074-reprofile-baseline
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T10:06:04.921218+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All checks pass. This is a code-NO-OP profile run (same source as iter-073: HiFi2 + math_approx_mode=true); bit-identical results are expected and confirmed. PSNR is bit-identical to iter-073 across all views (delta &lt; 0.001 dB; hero 39.415, side 40.996, top 38.595), all well above the 38 dB kernel-algebra floor. Tile_structure_ratio is bit-identical to iter-073 (delta &lt; 0.001 on all views; max 18.142); per the §4 architectural-baseline carve-out, this is the established bf16 pack_tile floor and does NOT trigger the strictly-reduce rule — no new drift introduced. Kernel_ms_median 25.0075 vs prev_best 25.0415 is -0.14% (noise-level variation from Tracy instrumentation overhead differences), within the 1.02× break-even budget. p99/median ratio 1.22× well under the 3× alert threshold. Per-view PSNR spread 2.40 dB and per-view ms ratio 1.24× both well under their respective thresholds. Visual inspection of all rendered PNGs and diff10 images shows clean renders with no tile seams, no fireflies, no geometry shift, no color clipping; diff10 shows uniform architectural speckle consistent with the baseline.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.01 ms</b> median · 30.45 ms p99</div>
+    <div class="per-view">per-view: hero 25.01 / side 24.17 / top 30.02</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-074-reprofile-baseline/hero.png" target="_blank"><img src="screenshots/iter-074-reprofile-baseline/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-074-reprofile-baseline/side.png" target="_blank"><img src="screenshots/iter-074-reprofile-baseline/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-074-reprofile-baseline/top.png" target="_blank"><img src="screenshots/iter-074-reprofile-baseline/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-074-reprofile-baseline/hero_diff10.png" target="_blank"><img src="screenshots/iter-074-reprofile-baseline/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-074-reprofile-baseline/side_diff10.png" target="_blank"><img src="screenshots/iter-074-reprofile-baseline/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-074-reprofile-baseline/top_diff10.png" target="_blank"><img src="screenshots/iter-074-reprofile-baseline/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images (hero/side/top) show distributed speckle across object body and silhouette edges; no horizontal or vertica</li><li>✓ tile_uniform_fill: No 32×32 or 16×16 constant-color blocks visible in any rendered PNG; all views show correct fine detail and texture matc</li><li>✓ missing_splat_holes: No dark voids or missing-coverage regions in hero, side, or top renders; coverage matches reference stitch PNGs.</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes or clipping artifacts visible in any view.</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes; edge noise in diff10 is consistent with established architectural </li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches in any view. No isolated bright firefly pixels (&gt;5) visible </li><li>✓ geometry_shift: Diff10 does not show the silhouette of the object as a solid bright outline; geometry positions match reference across a</li><li>✓ diff10_structure: All three diff10 images show uniform speckle distributed across the object body and edges — consistent with the bf16 pac</li></ul>
+    <p class="reasoning">All checks pass. This is a code-NO-OP profile run (same source as iter-073: HiFi2 + math_approx_mode=true); bit-identical results are expected and confirmed. PSNR is bit-identical to iter-073 across all views (delta &lt; 0.001 dB; hero 39.415, side 40.996, top 38.595), all well above the 38 dB kernel-algebra floor. Tile_structure_ratio is bit-identical to iter-073 (delta &lt; 0.001 on all views; max 18.142); per the §4 architectural-baseline carve-out, this is the established bf16 pack_tile floor and does NOT trigger the strictly-reduce rule — no new drift introduced. Kernel_ms_median 25.0075 vs prev_best 25.0415 is -0.14% (noise-level variation from Tracy instrumentation overhead differences), within the 1.02× break-even budget. p99/median ratio 1.22× well under the 3× alert threshold. Per-view PSNR spread 2.40 dB and per-view ms ratio 1.24× both well under their respective thresholds. Visual inspection of all rendered PNGs and diff10 images shows clean renders with no tile seams, no fireflies, no geometry shift, no color clipping; diff10 shows uniform architectural speckle consistent with the baseline.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-073-math-approx-true
