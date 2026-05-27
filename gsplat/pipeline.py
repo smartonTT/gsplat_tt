@@ -92,6 +92,45 @@ class Pipeline:
         dict of internal sub-timings, prefixed and copied into
         `result.sub_timings` (e.g. `{"blend.kernel": 70.0}`).
         """
+        # iter-029 fast path: backend implements all-stage fused render in
+        # a single pybind crossing. Eliminates per-stage numpy<->torch
+        # conversions, per-stage pybind call overhead, and the Python-side
+        # colors[valid_mask] / opacities[valid_mask] torch indexing.
+        if getattr(self.backend, "has_render_fused", lambda: False)():
+            t_total = time.perf_counter()
+            image, stats = self.backend.render_fused(
+                gaussians, extrinsics, intrinsics, image_height, image_width,
+            )
+            wall_ms = (time.perf_counter() - t_total) * 1000.0
+            timings = {
+                "project": float(stats.get("project_ms", 0.0)),
+                "tile_assign": float(stats.get("tile_assign_ms", 0.0)),
+                "sort": float(stats.get("sort_ms", 0.0)),
+                "blend": float(stats.get("blend_ms", 0.0)),
+                "total": wall_ms,
+            }
+            pairs_in = int(stats.get("pairs_in", 0) or 0)
+            pairs_kept = int(stats.get("pairs_kept_per_mb", 0) or 0)
+            pairs_dropped = int(stats.get("pairs_dropped", 0) or 0)
+            full_replay = float(pairs_in) * 32.0
+            sub_timings: dict[str, float] = {
+                "blend.microblock_drop_pct": (
+                    0.0 if pairs_in == 0 else 100.0 * pairs_dropped / pairs_in
+                ),
+                "blend.microblock_work_reduction_pct": (
+                    0.0 if full_replay == 0.0 else 100.0 * (1.0 - pairs_kept / full_replay)
+                ),
+            }
+            return RenderResult(
+                image=image,
+                timings=timings,
+                sub_timings=sub_timings,
+                num_visible=int(stats.get("num_visible", 0) or 0),
+                num_entries=int(stats.get("num_entries", 0) or 0),
+                height=image_height,
+                width=image_width,
+            )
+
         timings: dict[str, float] = {}
         sub_timings: dict[str, float] = {}
         t_total = time.perf_counter()
