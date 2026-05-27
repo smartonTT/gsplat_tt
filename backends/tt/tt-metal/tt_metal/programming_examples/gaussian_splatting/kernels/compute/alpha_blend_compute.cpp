@@ -443,6 +443,14 @@ void kernel_main() {
             cb_pop_front(CB_SCALARS, 1);
         }
 
+        // iter-065: drain reader's tail-clamp padding when g_count is odd.
+        // Reader rounds up to even and duplicates the last real entry; the
+        // inner loop ran g_count times so 1 extra page sits in CB_SCALARS.
+        if ((g_count & 1u) != 0u) {
+            cb_wait_front(CB_SCALARS, 1);
+            cb_pop_front(CB_SCALARS, 1);
+        }
+
         // ----- Per-tile finalize: pack the running R/G/B accumulators to
         // CB_COLOR_OUT in a single 3-tile push. The writer kernel waits on
         // 3-at-a-time pushes here and DMAs them out to DRAM at the correct
