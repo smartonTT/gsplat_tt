@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32px or 16px spacing visible in any diff×10 image. All three diffs show spatially random speckle only."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32×32 or 16×16 blocks in any render. Object surface shows normal Gaussian splat texture throughout."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No localized dark regions in renders relative to reference. Object coverage matches reference in all three views with no black holes exceeding the 16px threshold."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes present in any view. Color distribution matches reference."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at object silhouettes. Edge noise in diff×10 is commensurate with normal bf16 rounding at boundaries."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta patches in spatially-correlated patterns in any render."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 images do not show object-silhouette-shaped bright edges that would indicate coordinate error. Geometry placement matches reference in all three views."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images (hero, side, top) are dominated by uniform random speckle distributed across the object surface. No grids, gradients, bands, or structured patterns present. Top diff×10 is brighter overall consistent with its lower PSNR (35.57 dB) but remains structurally unordered."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 36.3224777038022, "side": 39.87142805877202, "top": 35.57169972635318}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 4.30, "max_ms_ratio": 1.29, "pass": true},
+  "timing": {"median_ms": 30.0625, "p99_ms": 37.4366, "vs_prev_best_pct": -4.1, "pass": true},
+  "reasoning": "All 8 visual checks pass. Diff×10 images show uniform random speckle consistent with bf16 dst-slot rounding differences from the D2 channel acquire fusion — no tile grid seams, no geometry shift, no color clipping, no NaN/Inf signatures. PSNR: all three views above the 35 dB binning floor (hero=36.32, side=39.87, top=35.57). Per-view PSNR delta is 4.30 dB (threshold 20 dB). Per-view kernel-ms ratio is 1.29× (threshold 2×). Timing: kernel_ms_median improved 30.06 vs prev_best 31.34 (-4.1%), p99/median ratio 1.25× well under the 3× threshold. The D2 channel fusion delivers a clean kernel win with no structural regressions."
+}
