@@ -153,7 +153,12 @@ static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
 
 struct DeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
+    // iter-093: 2-CQ split. cq (CQ0) handles workload+readback. cq_upload (CQ1)
+    // handles the 5 input EnqueueWriteMeshBuffer calls. A MeshEvent recorded on
+    // CQ1 after the writes and waited-on by CQ0 before the workload enforces
+    // write-before-read ordering. Same-frame; no cross-frame pipelining yet.
     distributed::MeshCommandQueue* cq = nullptr;
+    distributed::MeshCommandQueue* cq_upload = nullptr;
     distributed::MeshWorkload workload;
     KernelHandle reader{};
     KernelHandle compute{};
@@ -302,8 +307,15 @@ static void build_program_and_workload(DeviceContext& ctx) {
 static DeviceContext init_device_context() {
     DeviceContext ctx;
     constexpr int device_id = 0;
-    ctx.mesh_device = distributed::MeshDevice::create_unit_mesh(device_id);
-    ctx.cq = &ctx.mesh_device->mesh_command_queue();
+    // iter-093: request 2 hw command queues so we can split uploads (CQ1) from
+    // workload+readback (CQ0). All other defaults preserved.
+    ctx.mesh_device = distributed::MeshDevice::create_unit_mesh(
+        device_id,
+        /*l1_small_size=*/DEFAULT_L1_SMALL_SIZE,
+        /*trace_region_size=*/DEFAULT_TRACE_REGION_SIZE,
+        /*num_command_queues=*/2);
+    ctx.cq        = &ctx.mesh_device->mesh_command_queue(/*cq_id=*/0);
+    ctx.cq_upload = &ctx.mesh_device->mesh_command_queue(/*cq_id=*/1);
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
     ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program_and_workload(ctx);
@@ -647,19 +659,26 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
     // serialization overhead, so it's off by default and toggled via env
     // GSPLAT_PROFILE_PHASES=1.
     const auto t_start = clk::now();
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
+    // iter-093: uploads on CQ1; workload + readback on CQ0. A MeshEvent
+    // recorded on CQ1 after all 5 writes, and waited-on by CQ0 before the
+    // workload, enforces write-before-read ordering. Same-frame split — no
+    // cross-frame pipelining yet (frame N+1's uploads still wait for
+    // frame N's blocking readback to return).
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq_upload, bufs.output,   output_zero);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq_upload, bufs.packs,    packs_payload);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq_upload, bufs.offsets,  offsets_u32);
     // iter-079: single write for combined px+py (drops one EnqueueWriteMeshBuffer
     // vs the prior separate px and py writes).
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       pxpy_bf16);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq_upload, bufs.px,       pxpy_bf16);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq_upload, bufs.tile_ids, assign.tile_id_buffer_padded);
+    const distributed::MeshEvent upload_done = ctx.cq_upload->enqueue_record_event();
     clk::time_point t_after_upload;
     if (profile_phases) {
-        distributed::Finish(*ctx.cq);
+        distributed::Finish(*ctx.cq_upload);
         t_after_upload = clk::now();
         T.upload_ms = ms_between(t_start, t_after_upload);
     }
+    ctx.cq->enqueue_wait_for_event(upload_done);
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     clk::time_point t_after_dispatch;
     if (profile_phases) {
