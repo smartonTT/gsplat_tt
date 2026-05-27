@@ -134,6 +134,16 @@ inline float max_t_neon(const MbAccum& acc) {
 }
 #endif  // GSPLAT_HAS_NEON
 
+// Per-worker scratch buffer for the cull pass. One contiguous int64_t array
+// of size 32 * L is partitioned into 32 microblock slots; per-tile reset
+// just resets the per-microblock offsets, the heap buffer survives across
+// tiles. Eliminates ~256 * 32 std::vector heap allocations per frame.
+struct TileScratch {
+    std::vector<int64_t> kept_flat;          // flat buffer, capacity grown as needed
+    std::array<int32_t, kNumMicroblocks + 1> offsets{};  // offsets[m] = start of mb m in kept_flat
+    int32_t stride{0};                       // capacity per microblock
+};
+
 // Per-tile fused cull + blend kernel.
 // In-tile per-microblock kept-id buffer never escapes the thread; mb_stream
 // global allocation is avoided entirely. The blend loop is bit-identical to
@@ -157,7 +167,8 @@ void cull_and_blend_tile(
     const float* cov_inv_c,
     float* image_out,
     int64_t* tile_dropped_count,
-    int64_t* tile_kept_count) {
+    int64_t* tile_kept_count,
+    TileScratch& scratch) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
     if (start == end) {
@@ -175,13 +186,20 @@ void cull_and_blend_tile(
 
     const int64_t L = end - start;
 
-    // Per-microblock kept Gaussian-id lists. Reserve up-front capacity = L
-    // since worst case each microblock keeps all L Gaussians. The arrays
-    // live on the thread stack via std::vector<>.reserve(L) for amortised
-    // O(1) push_back and stay hot in L1 (sizeof(int64)*L is typically
-    // <<128KB).
-    std::array<std::vector<int64_t>, kNumMicroblocks> kept;
-    for (auto& v : kept) v.reserve(static_cast<std::size_t>(L));
+    // Use the per-worker TileScratch buffer: one contiguous int64_t array of
+    // size 32*L, partitioned into 32 microblock slots of stride L. Counters
+    // track how many ids have been pushed into each slot. Avoids ~32 heap
+    // allocations per tile (= 8192 per frame on a 256-tile image).
+    const int32_t stride = static_cast<int32_t>(L);
+    const std::size_t needed =
+        static_cast<std::size_t>(kNumMicroblocks) * static_cast<std::size_t>(L);
+    if (scratch.kept_flat.size() < needed) scratch.kept_flat.resize(needed);
+    scratch.stride = stride;
+    for (int m = 0; m < kNumMicroblocks; ++m) {
+        scratch.offsets[static_cast<std::size_t>(m)] = m * stride;
+    }
+    // offsets[m] starts at the slot base, incremented as ids are pushed.
+    // The slot for microblock m holds ids in [m*stride, offsets[m]).
 
     int64_t dropped = 0;
     int64_t kept_total = 0;
@@ -238,7 +256,9 @@ void cull_and_blend_tile(
                 const float power_c =
                     -0.5f * (ci_a * dx_c * dx_c + 2.0f * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
                 if (power_c >= log_thresh) {
-                    kept[static_cast<std::size_t>((my << 2) | mx)].push_back(g);
+                    const int mb = (my << 2) | mx;
+                    scratch.kept_flat[static_cast<std::size_t>(
+                        scratch.offsets[static_cast<std::size_t>(mb)]++)] = g;
                     kept_any = true;
                     ++kept_total;
                 }
@@ -252,8 +272,11 @@ void cull_and_blend_tile(
 
     // Blend each microblock from the in-tile kept list.
     for (int m = 0; m < kNumMicroblocks; ++m) {
-        const auto& kg = kept[static_cast<std::size_t>(m)];
-        if (kg.empty()) continue;
+        const int32_t slot_base = m * stride;
+        const int32_t slot_end = scratch.offsets[static_cast<std::size_t>(m)];
+        const int32_t kn = slot_end - slot_base;
+        if (kn == 0) continue;
+        const int64_t* kg_data = scratch.kept_flat.data() + slot_base;
 
         const int mb_ox_i = (m & 3) * 8;
         const int mb_oy_i = (m >> 2) * 4;
@@ -270,7 +293,8 @@ void cull_and_blend_tile(
         if (mb_h == 4 && mb_w == 8) {
             MbAccum acc;
             init_mb_accum(acc);
-            for (int64_t g : kg) {
+            for (int32_t k = 0; k < kn; ++k) {
+                const int64_t g = kg_data[k];
                 const std::size_t gs = static_cast<std::size_t>(g);
                 apply_gaussian_neon(acc,
                     cov_inv_a[gs], cov_inv_b[gs], cov_inv_c[gs],
@@ -300,7 +324,8 @@ void cull_and_blend_tile(
         float accum[4 * 8 * 3];
         for (int k = 0; k < npix; ++k) T[k] = 1.0f;
         for (int k = 0; k < npix * 3; ++k) accum[k] = 0.0f;
-        for (int64_t g : kg) {
+        for (int32_t kk = 0; kk < kn; ++kk) {
+            const int64_t g = kg_data[kk];
             const std::size_t gs = static_cast<std::size_t>(g);
             const float ci_a = cov_inv_a[gs];
             const float ci_b = cov_inv_b[gs];
@@ -423,8 +448,12 @@ CullAndBlendResult cull_and_blend(
 
     std::atomic<int> next_idx{0};
     const std::size_t W = std::max<std::size_t>(1, pool.size());
+    // Per-worker scratch lives for the duration of the parallel section.
+    // Resized lazily by each tile based on that tile's Gaussian count L.
+    std::vector<TileScratch> scratches(W);
     for (std::size_t w = 0; w < W; ++w) {
-        pool.submit([&]() {
+        pool.submit([&, w]() {
+            TileScratch& sc = scratches[w];
             for (;;) {
                 const int idx = next_idx.fetch_add(1, std::memory_order_relaxed);
                 if (idx >= num_tiles) return;
@@ -437,7 +466,8 @@ CullAndBlendResult cull_and_blend(
                     cia.data(), cib.data(), cic.data(),
                     result.image.data(),
                     &tile_dropped[static_cast<std::size_t>(tile_id)],
-                    &tile_kept[static_cast<std::size_t>(tile_id)]);
+                    &tile_kept[static_cast<std::size_t>(tile_id)],
+                    sc);
             }
         });
     }
