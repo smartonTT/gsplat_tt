@@ -29,7 +29,7 @@ void cull_tile(
     const float* opacities,
     const int64_t* sorted_gaussian_ids,
     const int64_t* tile_ranges,
-    const double mb_contrib_floor,
+    const float mb_contrib_floor,
     TileCullLocal& out) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
@@ -39,8 +39,8 @@ void cull_tile(
 
     const int ty = tile_id / tiles_x;
     const int tx = tile_id % tiles_x;
-    const double tx_tile = static_cast<double>(tx * tile_size);
-    const double ty_tile = static_cast<double>(ty * tile_size);
+    const float tx_tile = static_cast<float>(tx * tile_size);
+    const float ty_tile = static_cast<float>(ty * tile_size);
 
     const int64_t L = end - start;
     std::vector<int64_t> tile_g_ids(static_cast<std::size_t>(L));
@@ -56,17 +56,17 @@ void cull_tile(
         const int64_t g = tile_g_ids[static_cast<std::size_t>(l)];
         const std::size_t gs = static_cast<std::size_t>(g);
 
-        const double mean_x = static_cast<double>(means_2d[gs * 2 + 0]);
-        const double mean_y = static_cast<double>(means_2d[gs * 2 + 1]);
-        const double a = static_cast<double>(covs_2d[gs * 4 + 0]);
-        const double b = static_cast<double>(covs_2d[gs * 4 + 1]);
-        const double c = static_cast<double>(covs_2d[gs * 4 + 3]);
-        const double g_op = static_cast<double>(opacities[gs]);
+        const float mean_x = means_2d[gs * 2 + 0];
+        const float mean_y = means_2d[gs * 2 + 1];
+        const float a = covs_2d[gs * 4 + 0];
+        const float b = covs_2d[gs * 4 + 1];
+        const float c = covs_2d[gs * 4 + 3];
+        const float g_op = opacities[gs];
 
-        const double det = std::max(a * c - b * b, 1e-6);
-        const double ci_a = c / det;
-        const double ci_b = -b / det;
-        const double ci_c = a / det;
+        const float det = std::max(a * c - b * b, 1e-6f);
+        const float ci_a = c / det;
+        const float ci_b = -b / det;
+        const float ci_c = a / det;
 
         // iter-015 BB prefilter + iter-017 exp-elimination:
         //   keep = (alpha_peak >= mb_contrib_floor)
@@ -79,26 +79,26 @@ void cull_tile(
             continue;
         }
 
-        const double log_thresh = std::log(mb_contrib_floor / g_op);  // <= 0
-        const double r_sq = -2.0 * log_thresh;                         // > 0
-        const double r = std::sqrt(r_sq);
-        const double x_half = r * std::sqrt(a);
-        const double y_half = r * std::sqrt(c);
+        const float log_thresh = std::log(mb_contrib_floor / g_op);  // <= 0
+        const float r_sq = -2.0f * log_thresh;                        // > 0
+        const float r = std::sqrt(r_sq);
+        const float x_half = r * std::sqrt(a);
+        const float y_half = r * std::sqrt(c);
 
-        const double bb_x_min = mean_x - x_half;
-        const double bb_x_max = mean_x + x_half;
-        const double bb_y_min = mean_y - y_half;
-        const double bb_y_max = mean_y + y_half;
+        const float bb_x_min = mean_x - x_half;
+        const float bb_x_max = mean_x + x_half;
+        const float bb_y_min = mean_y - y_half;
+        const float bb_y_max = mean_y + y_half;
 
-        const double tile_x_local_min = bb_x_min - tx_tile;
-        const double tile_x_local_max = bb_x_max - tx_tile;
-        const double tile_y_local_min = bb_y_min - ty_tile;
-        const double tile_y_local_max = bb_y_max - ty_tile;
+        const float tile_x_local_min = bb_x_min - tx_tile;
+        const float tile_x_local_max = bb_x_max - tx_tile;
+        const float tile_y_local_min = bb_y_min - ty_tile;
+        const float tile_y_local_max = bb_y_max - ty_tile;
 
-        const int mx_lo = std::max(0, static_cast<int>(std::floor(tile_x_local_min / 8.0)));
-        const int mx_hi = std::min(3, static_cast<int>(std::floor(tile_x_local_max / 8.0)));
-        const int my_lo = std::max(0, static_cast<int>(std::floor(tile_y_local_min / 4.0)));
-        const int my_hi = std::min(7, static_cast<int>(std::floor(tile_y_local_max / 4.0)));
+        const int mx_lo = std::max(0, static_cast<int>(std::floor(tile_x_local_min / 8.0f)));
+        const int mx_hi = std::min(3, static_cast<int>(std::floor(tile_x_local_max / 8.0f)));
+        const int my_lo = std::max(0, static_cast<int>(std::floor(tile_y_local_min / 4.0f)));
+        const int my_hi = std::min(7, static_cast<int>(std::floor(tile_y_local_max / 4.0f)));
 
         if (mx_lo > mx_hi || my_lo > my_hi) {
             continue;
@@ -107,14 +107,14 @@ void cull_tile(
         for (int my = my_lo; my <= my_hi; ++my) {
             for (int mx = mx_lo; mx <= mx_hi; ++mx) {
                 const int m = (my << 2) | mx;
-                const double mb_ox = tx_tile + static_cast<double>(mx * 8);
-                const double mb_oy = ty_tile + static_cast<double>(my * 4);
-                const double cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0);
-                const double cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0);
-                const double dx_c = cx - mean_x;
-                const double dy_c = cy - mean_y;
-                const double power_c =
-                    -0.5 * (ci_a * dx_c * dx_c + 2.0 * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
+                const float mb_ox = tx_tile + static_cast<float>(mx * 8);
+                const float mb_oy = ty_tile + static_cast<float>(my * 4);
+                const float cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0f);
+                const float cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0f);
+                const float dx_c = cx - mean_x;
+                const float dy_c = cy - mean_y;
+                const float power_c =
+                    -0.5f * (ci_a * dx_c * dx_c + 2.0f * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
                 const bool keep = power_c >= log_thresh;
                 keep_mask[static_cast<std::size_t>(l)][static_cast<std::size_t>(m)] = keep;
                 if (keep) {
@@ -160,7 +160,7 @@ MicroblockCullResult microblock_cull(
     (void)M;
 
     const int num_tiles = tiles_x * tiles_y;
-    const double floor = static_cast<double>(mb_contrib_floor);
+    const float floor = mb_contrib_floor;
 
     MicroblockCullResult result;
     result.pairs_in = static_cast<int64_t>(P);
