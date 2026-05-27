@@ -201,30 +201,16 @@ void kernel_main() {
             // headline "compute spent N cycles in per-Gaussian work."
             DeviceZoneScopedSumN1("Z_C_g");
 
-            // ----- Stage F: sat_mask refresh (every 16 Gaussians, skip g=0) -----
-            // Recompute which pixels are still "active" (T >= 1e-4). For pixels
-            // whose transmittance has saturated below 1e-4, sat_mask becomes 0
-            // and zeroes their contribution in stages D1/E going forward —
-            // effectively a per-pixel early termination without breaking the
-            // SFPU's vector lock-step (we can't actually skip lanes, but multiplying
-            // by 0 does the same job at the same op cost). g=0 is skipped because
-            // T is freshly initialized to 1 above.
-            if (g > 0 && (g & 0xFu) == 0u) {
-                tile_regs_acquire();
-                copy_tile_to_dst_init_short(CB_T_STATE);
-                copy_tile(CB_T_STATE, 0, 0);
-                unary_ge_tile_init();
-                unary_ge_tile(0, T_THRESH_BITS);
-                tile_regs_commit();
-                tile_regs_wait();
-                // Spill: replace existing sat_mask tile.
-                cb_pop_front(CB_SAT_MASK, 1);
-                cb_reserve_back(CB_SAT_MASK, 1);
-                pack_tile(0, CB_SAT_MASK);
-                cb_push_back(CB_SAT_MASK, 1);
-                tile_regs_release();
-                cb_wait_front(CB_SAT_MASK, 1);
-            }
+            // ----- Stage F: sat_mask refresh — DROPPED in iter-059. -----
+            // Per project-saturation-noop-on-stitch (iter-038), no per-pixel
+            // saturation events occur on stitch_doll: g_break/g_count=1.000
+            // across all views means no tile ever saturates and individual
+            // pixel saturation is also rare to absent. Without refresh, sat_mask
+            // stays at its init value (1.0) forever, making the D1 and E
+            // multiplications by sat_mask no-ops — which we also drop below.
+            // This kernel is now scene-tuned to stitch_doll-class translucent
+            // scenes. Denser scenes that need saturation handling must re-add
+            // refresh + D1/E muls.
 
             cb_wait_front(CB_SCALARS, 1);
 
@@ -353,11 +339,9 @@ void kernel_main() {
             mul_unary_tile(0, opacity_bits);
 
             // D1 fused in (iter-052): contrib = alpha · T_state · sat_mask
-            // Skip CB_ALPHA bf16 round-trip — α stays in fp32 dst.
+            // iter-059: dropped *·sat_mask (sat_mask is constant 1.0; see Stage F).
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE, 0, 0);  // dst[0] = α·T
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_SAT_MASK, 0, 0);  // dst[0] = contrib
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE, 0, 0);  // dst[0] = α·T = contrib
 
             tile_regs_commit();
             tile_regs_wait();
@@ -427,9 +411,11 @@ void kernel_main() {
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
 
-            // E: dst[3] = T·sat - contrib = T_new
-            mul_tiles_init(CB_T_STATE, CB_SAT_MASK);
-            mul_tiles(CB_T_STATE, CB_SAT_MASK, 0, 0, 3);  // dst[3] = T·sat
+            // E: dst[3] = T - contrib = T_new
+            // iter-059: dropped T·sat_mask (sat_mask is constant 1.0).
+            // Replaces FPU mul_tiles with copy_tile (same FPU pipeline, no multiply).
+            copy_tile_to_dst_init_short(CB_T_STATE);
+            copy_tile(CB_T_STATE, 0, 3);  // dst[3] = T
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB, 0, 3);  // dst[3] -= contrib
 
