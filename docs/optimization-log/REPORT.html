@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 34 · current best: 33.55 ms · target: 1.0 ms
+      iters: 35 · current best: 31.34 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-034-contrib-floor-15-of-255
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T01:03:30.022859+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass: renders are structurally clean with no tile artifacts, holes, clipping, halos, NaN/Inf, or geometry shift. Diff×10 shows only dispersed edge/fur speckle consistent with higher contrib_floor culling (15/255 vs prev 5/255) — not structured. PSNR is above the 35 dB floor on all three views (hero 36.53, side 40.01, top 35.76); the floor margin on hero and top is narrow but passes. PSNR delta across views is 4.25 dB (well under 20 dB). Per-view timing ratio is 39.30/30.17 = 1.30× (under 2×). Median kernel_ms 31.34 vs prev_best 33.55 is -6.6%, meeting the ≤prev_best×1.02 progress criterion. p99 39.37 vs median 31.34 = 1.26× (well under 3×). KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>31.34 ms</b> median · 39.37 ms p99</div>
+    <div class="per-view">per-view: hero 31.34 / side 30.17 / top 39.30</div>
+    <div class="psnr">PSNR: hero 36.5 / side 40.0 / top 35.8 (min <b>35.8</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-034-contrib-floor-15-of-255/hero.png" target="_blank"><img src="screenshots/iter-034-contrib-floor-15-of-255/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-034-contrib-floor-15-of-255/side.png" target="_blank"><img src="screenshots/iter-034-contrib-floor-15-of-255/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-034-contrib-floor-15-of-255/top.png" target="_blank"><img src="screenshots/iter-034-contrib-floor-15-of-255/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-034-contrib-floor-15-of-255/hero_diff10.png" target="_blank"><img src="screenshots/iter-034-contrib-floor-15-of-255/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-034-contrib-floor-15-of-255/side_diff10.png" target="_blank"><img src="screenshots/iter-034-contrib-floor-15-of-255/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-034-contrib-floor-15-of-255/top_diff10.png" target="_blank"><img src="screenshots/iter-034-contrib-floor-15-of-255/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: No 32px or 16px grid lines visible in hero, side, or top renders. Boundaries blend smoothly across the subject.</li><li>✓ tile_uniform_fill: No tile-shaped uniform-color blocks observed in any view. Color variation is continuous and organic.</li><li>✓ missing_splat_holes: No black holes or missing-splat voids larger than 16px detected in any of the three views. Subject is fully covered.</li><li>✓ color_clipping_bands: No saturated banding or color clipping visible. Highlights and shadows transition smoothly in all views.</li><li>✓ ringing_halos: Silhouette edges in hero, side, and top views show no ringing or halo artifacts. Edges are clean against the black backg</li><li>✓ nan_inf_signatures: No black patches, white patches, or magenta artifacts indicating NaN/Inf in any view.</li><li>✓ geometry_shift: Render geometry aligns with reference across all three views. No positional shift of the subject detected.</li><li>✓ diff10_structure: Diff×10 images show distributed speckle noise concentrated at silhouette edges and fine fur detail — consistent with thr</li></ul>
+    <p class="reasoning">All visual checks pass: renders are structurally clean with no tile artifacts, holes, clipping, halos, NaN/Inf, or geometry shift. Diff×10 shows only dispersed edge/fur speckle consistent with higher contrib_floor culling (15/255 vs prev 5/255) — not structured. PSNR is above the 35 dB floor on all three views (hero 36.53, side 40.01, top 35.76); the floor margin on hero and top is narrow but passes. PSNR delta across views is 4.25 dB (well under 20 dB). Per-view timing ratio is 39.30/30.17 = 1.30× (under 2×). Median kernel_ms 31.34 vs prev_best 33.55 is -6.6%, meeting the ≤prev_best×1.02 progress criterion. p99 39.37 vs median 31.34 = 1.26× (well under 3×). KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-033-contrib-floor-13-of-255
