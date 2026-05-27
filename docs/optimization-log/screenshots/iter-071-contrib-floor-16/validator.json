@@ -1,0 +1,18 @@
+{
+  "verdict": "REJECT",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "diff10 images show speckle noise distributed across object body without clear horizontal/vertical lines at 32px spacing; no quilting grid pattern visible"},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "no 32x32 or 16x16 constant-color fill blocks visible in rendered PNGs; object detail preserved throughout"},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "no local dark holes or missing coverage regions >16px visible in hero/side/top renders"},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "no saturated color stripes or clipping bands visible in any of the three rendered views"},
+    {"name": "ringing_halos", "result": "pass", "evidence": "object silhouettes show only edge noise typical of binning changes, no structured ringing or halos"},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "no pure black/white/magenta patches or firefly hot pixels visible in any rendered view"},
+    {"name": "geometry_shift", "result": "pass", "evidence": "diff10 does not show silhouette of shifted geometry; error concentrated within object body not at displaced edges"},
+    {"name": "diff10_structure", "result": "pass", "evidence": "diff10 dominated by uniform speckle within object body; some slight edge brightening at silhouettes consistent with binning threshold change, but no grid/band/gradient structure"}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 38.706, "side": 40.289, "top": 37.966}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.775, "actual": {"hero": 17.527, "side": 17.493, "top": 18.775}, "pass": false, "delta_vs_prev": 0.622},
+  "per_view_consistency": {"max_psnr_delta_db": 2.323, "max_ms_ratio": 1.246, "pass": true},
+  "timing": {"median_ms": 24.2745, "p99_ms": 29.26626, "vs_prev_best_pct": -5.18, "pass": true},
+  "reasoning": "REJECT on tile_structure_check hard gate: max tile_structure_ratio is 18.775 (top view), up from prev_best max of 18.153, a delta of +0.622 which exceeds the +0.3 threshold. The spec states 'Any iter that increases the max tile_ratio by > 0.3 vs. its baseline is REJECT regardless of PSNR or kernel-ms wins.' Additionally the max ratio of 18.775 is well above the >14 threshold requiring the iter to strictly reduce ratio vs prev_best — instead it increases it. PSNR is fine (all views ≥35 dB binning floor) and kernel_ms improved 5.18% to 24.274 ms, but the tile structure regression overrides both wins. The contrib_floor lever continues to push tile_structure_ratio upward; this confirms the iter-063 pattern that this lever is exhausted on quality gates."
+}

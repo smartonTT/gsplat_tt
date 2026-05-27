@@ -186,3 +186,12 @@ Parked experiments — REJECT or NEEDS_REVIEW iters that the user may want to pr
 - Validator reasoning: REJECT on three independent grounds. (1) Tile_structure_ratio hard gate: max ratio 18.153 (top view) exceeds the >14 threshold; the validator rule requires any iter at this level to strictly REDUCE the ratio vs prev best — iter-069 is flat (identical to iter-066 baseline at 18.153), not a reduction. Delta vs iter-060 effective baseline is +0.406, well above the +0.3 delta-increase rejection threshold. (2) PSNR floor: class is kernel-algebra with a 40 dB floor; hero 39.40 dB and top 38.59 dB are both below the 40 dB floor, triggering NEEDS_REVIEW at minimum; combined with the tile_ratio failure this confirms REJECT. (3) Timing regression: kernel_ms_median 25.47 vs prev_best 23.98 = +6.2% regression (threshold is +2%); the state-init fuse did not save cycles and in fact added overhead. The three-way failure (ratio not reduced, PSNR below floor, kernel +6.2%) is unambiguous. Visuals are structurally clean (no fireflies, no tile seams, no geometry shift) confirming the REJECT is numeric/perf not visual-catastrophe.
 - Thumbnails: ![hero](screenshots/iter-069-state-init-fuse/hero.png) ![diff10](screenshots/iter-069-state-init-fuse/hero_diff10.png)
 
+
+## iter-071-contrib-floor-16 — REJECT 
+
+- Class: `binning`
+- kernel ms: median 24.27 / p99 29.27
+- PSNR per view: hero 38.7 / side 40.3 / top 38.0
+- Validator reasoning: REJECT on tile_structure_check hard gate: max tile_structure_ratio is 18.775 (top view), up from prev_best max of 18.153, a delta of +0.622 which exceeds the +0.3 threshold. The spec states 'Any iter that increases the max tile_ratio by > 0.3 vs. its baseline is REJECT regardless of PSNR or kernel-ms wins.' Additionally the max ratio of 18.775 is well above the >14 threshold requiring the iter to strictly reduce ratio vs prev_best — instead it increases it. PSNR is fine (all views ≥35 dB binning floor) and kernel_ms improved 5.18% to 24.274 ms, but the tile structure regression overrides both wins. The contrib_floor lever continues to push tile_structure_ratio upward; this confirms the iter-063 pattern that this lever is exhausted on quality gates.
+- Thumbnails: ![hero](screenshots/iter-071-contrib-floor-16/hero.png) ![diff10](screenshots/iter-071-contrib-floor-16/hero_diff10.png)
+
