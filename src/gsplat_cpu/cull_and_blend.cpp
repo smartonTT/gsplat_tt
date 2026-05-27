@@ -231,7 +231,19 @@ void cull_and_blend_tile(
     int64_t dropped = 0;
     int64_t kept_total = 0;
 
+    // iter-034: SW prefetch the next Gaussian's record into L1 while we
+    // process the current one. The cull's inner cost per (g, tile) is
+    // dominated by the random L2/L3 fetch on gauss_rec[g] (the sorted_ids
+    // are sequential per tile but the global ids point at scattered slots
+    // of the 9.4 MB rec table). Distance of 4 hides ~120 cycles of L2/L3
+    // latency at typical throughput, without polluting L1.
+    constexpr int kPrefetchDist = 4;
     for (int64_t l = 0; l < L; ++l) {
+        if (l + kPrefetchDist < L) {
+            const int64_t g_pf = sorted_gaussian_ids[
+                static_cast<std::size_t>(start + l + kPrefetchDist)];
+            __builtin_prefetch(&gauss_rec[static_cast<std::size_t>(g_pf)], 0, 1);
+        }
         const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
         const GaussianCullRec& rec = gauss_rec[static_cast<std::size_t>(g)];
 
