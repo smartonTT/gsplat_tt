@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 PNGs show fine-grained body noise consistent with established bf16 architectural baseline; no horizontal or vertical lines at 32px or 16px spacing visible in hero, side, or top diff10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color blocks visible in any rendered PNG; fur detail, ear gradient, and tongue color all appear continuous across tile boundaries."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No local dark regions in render where reference has coverage; object body coverage matches reference stitch PNGs across all three views."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes visible in hero, side, or top renders; color palette matches references (blue fur, peach ear, pink tongue, dark side/top)."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouette edges in any render; object edges are soft and consistent with reference."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta spatially-correlated patches in any render; no isolated 1-3px bright hot dots (fireflies) detected in hero, side, or top PNGs."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 shows noise distributed across object body, not a silhouette-edge shift pattern; geometry position matches reference in all three views."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform fine-grained speckle on the object body — no grids, edges, gradients, or banded patterns beyond the established architectural baseline tile_structure noise."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.368, "side": 40.950, "top": 38.574}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.132, "actual": {"hero": 17.107, "side": 17.292, "top": 18.132}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.376, "max_ms_ratio": 1.234, "pass": true},
+  "timing": {"median_ms": 24.4555, "p99_ms": 29.169, "vs_prev_best_pct": -0.075, "pass": true},
+  "reasoning": "All gates pass. PSNR is bit-identical to prev_best (hero 39.37, side 40.95, top 38.57 — all above 38 dB dispatch-class floor, delta ~0). tile_structure_ratio is bit-identical to prev_best established architectural baseline (max 18.132 top, delta ~0.0); architectural-baseline carve-out applies, +0.3 ratchet rule is satisfied with delta=0. kernel_ms_median 24.4555 vs prev_best 24.474 = -0.075%, flat/break-even within the 1.02x threshold. p99/median ratio = 1.193, well under 3x tail threshold. Per-view PSNR delta 2.38 dB and per-view ms ratio 1.23x are both within their respective 20 dB and 2x limits. All eight visual checks pass: renders show faithful geometry matching references, no fireflies, no tile-grid seams, no geometry shift, no color clipping, no missing-splat holes above speckle level; diff10 images show the established architectural bf16 body-noise pattern without any structured grid or banding artifacts. This is a pure host-side dispatch refactor; numerical and visual identity with prev_best is expected and confirmed."
+}
