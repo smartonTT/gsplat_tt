@@ -93,10 +93,9 @@ ProjectPrepared project_prepare(
     const std::size_t N,
     const int image_height,
     const int image_width) {
-    const float fx = intrinsics[0];
-    const float fy = intrinsics[4];
-    const float cx = intrinsics[2];
-    const float cy = intrinsics[5];
+    ProjectPrepared prep =
+        project_prepare_geometry(means, extrinsics, intrinsics, N, image_height, image_width);
+    prep.cov_cam.resize(N * 9);
 
     const float r00 = extrinsics[0];
     const float r01 = extrinsics[1];
@@ -107,21 +106,6 @@ ProjectPrepared project_prepare(
     const float r20 = extrinsics[8];
     const float r21 = extrinsics[9];
     const float r22 = extrinsics[10];
-
-    constexpr float k_near = 0.2f;
-
-    ProjectPrepared prep;
-    prep.N = N;
-    prep.image_height = image_height;
-    prep.image_width = image_width;
-    prep.means_2d.resize(N * 2);
-    prep.depths.resize(N);
-    prep.cov_cam.resize(N * 9);
-    prep.jacobian.resize(N * 6);
-    prep.near_valid.resize(N);
-
-    std::vector<float> means_cam;
-    transform_means_cam(means, extrinsics, N, means_cam);
 
     Mat3f r_mat;
     r_mat(0, 0) = r00;
@@ -142,7 +126,38 @@ ProjectPrepared project_prepare(
         const Mat3f cov3d = build_covariance_3d(scale, quat);
         const Mat3f cov_cam = mat3_mul(mat3_mul(r_mat, cov3d), mat3_transpose(r_mat));
         std::memcpy(prep.cov_cam.data() + i * 9, cov_cam.m.data(), 9 * sizeof(float));
+    }
 
+    return prep;
+}
+
+ProjectPrepared project_prepare_geometry(
+    const float* means,
+    const float* extrinsics,
+    const float* intrinsics,
+    const std::size_t N,
+    const int image_height,
+    const int image_width) {
+    const float fx = intrinsics[0];
+    const float fy = intrinsics[4];
+    const float cx = intrinsics[2];
+    const float cy = intrinsics[5];
+
+    constexpr float k_near = 0.2f;
+
+    ProjectPrepared prep;
+    prep.N = N;
+    prep.image_height = image_height;
+    prep.image_width = image_width;
+    prep.means_2d.resize(N * 2);
+    prep.depths.resize(N);
+    prep.jacobian.resize(N * 6);
+    prep.near_valid.resize(N);
+
+    std::vector<float> means_cam;
+    transform_means_cam(means, extrinsics, N, means_cam);
+
+    for (std::size_t i = 0; i < N; ++i) {
         const float tx = means_cam[i * 3 + 0];
         const float ty = means_cam[i * 3 + 1];
         const float tz = means_cam[i * 3 + 2];

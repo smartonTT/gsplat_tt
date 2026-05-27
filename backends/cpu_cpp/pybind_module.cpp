@@ -125,6 +125,55 @@ py::tuple project_py(
     return pack_project_result(result, N);
 }
 
+py::tuple project_full_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> means,
+    py::array_t<float, py::array::c_style | py::array::forcecast> scales,
+    py::array_t<float, py::array::c_style | py::array::forcecast> rotations,
+    py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics,
+    py::array_t<float, py::array::c_style | py::array::forcecast> intrinsics,
+    int image_height,
+    int image_width,
+    py::object opacities_obj = py::none(),
+    float min_opacity = 1.0f / 255.0f) {
+    const auto means_info = means.request();
+    const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
+    const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare_geometry(
+        static_cast<const float*>(means_info.ptr),
+        static_cast<const float*>(extrinsics.request().ptr),
+        static_cast<const float*>(intrinsics.request().ptr),
+        N,
+        image_height,
+        image_width);
+
+    py::module_ torch = py::module_::import("torch");
+    py::module_ utils = py::module_::import("gsplat.utils");
+    const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
+
+    py::object scales_t = torch.attr("from_numpy")(scales);
+    py::object rotations_t = torch.attr("from_numpy")(rotations);
+    py::object extr_t = torch.attr("from_numpy")(extrinsics);
+    py::object cov3d = utils.attr("build_covariance_3d")(scales_t, rotations_t);
+    py::object r = extr_t.attr("__getitem__")(py::make_tuple(py::slice(0, 3, 1), py::slice(0, 3, 1)));
+    py::object cov_cam =
+        torch.attr("matmul")(torch.attr("matmul")(r, cov3d), r.attr("transpose")(0, 1));
+
+    py::array_t<float> j_arr({n, static_cast<py::ssize_t>(2), static_cast<py::ssize_t>(3)});
+    if (prep.N > 0) {
+        std::memcpy(j_arr.mutable_data(), prep.jacobian.data(), prep.N * 6 * sizeof(float));
+    }
+    py::object j = torch.attr("from_numpy")(j_arr);
+    py::object covs_2d =
+        torch.attr("bmm")(torch.attr("bmm")(j, cov_cam), j.attr("transpose")(1, 2));
+    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 0, 0)).attr("__iadd__")(0.3);
+    covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 1, 1)).attr("__iadd__")(0.3);
+
+    py::array_t<float, py::array::c_style | py::array::forcecast> covs_flat =
+        py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
+            covs_2d.attr("detach")().attr("cpu")().attr("numpy")().attr("reshape")(n, 4));
+
+    return project_finalize_py(prep, covs_flat, opacities_obj, min_opacity);
+}
+
 py::tuple pack_tile_assign_result(const gsplat_cpu::TileAssignResult& result, std::size_t M) {
     const std::size_t P = result.gaussian_ids.size();
 
@@ -562,6 +611,19 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
     m.def(
         "project",
         &project_py,
+        py::arg("means"),
+        py::arg("scales"),
+        py::arg("rotations"),
+        py::arg("extrinsics"),
+        py::arg("intrinsics"),
+        py::arg("image_height"),
+        py::arg("image_width"),
+        py::arg("opacities") = py::none(),
+        py::arg("min_opacity") = 1.0f / 255.0f);
+
+    m.def(
+        "project_full",
+        &project_full_py,
         py::arg("means"),
         py::arg("scales"),
         py::arg("rotations"),
