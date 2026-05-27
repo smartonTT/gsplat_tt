@@ -109,4 +109,27 @@ ProjectResult project(
     const float* opacities,
     float min_opacity);
 
+// Fused per-Gaussian project pipeline (iter-022). Replaces the prior
+// 5-pool.wait() chain (geometry -> cov_cam -> cov2d -> valid/radii ->
+// gather count+scatter) with one big per-Gaussian parallel pass over
+// raw N inputs, followed by the existing parallel-filter compaction.
+//
+// In the wide pass every Gaussian computes: depths, means_2d, jacobian,
+// near_valid, cov_cam (held in registers, never materialised to memory),
+// cov_2d, validity, radii. Bit-equivalent visual output to the unfused
+// chain — the math is identical, just scheduled differently — and saves
+// 3 pool.wait() round-trips + 21.6 MB of cov_cam memory traffic per
+// frame at N=601k.
+ProjectResult project_full_fused(
+    const float* means,
+    const float* cov3d,
+    const float* extrinsics,
+    const float* intrinsics,
+    const float* opacities,
+    float min_opacity,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr);
+
 }  // namespace gsplat_cpu
