@@ -197,29 +197,17 @@ void kernel_main() {
         // (4) Stream Gaussian scalar packs for this tile. One 64-byte
         // page per Gaussian; compute pops one per inner-loop iteration.
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
-        //
-        // iter-065: always-2 batched reads halve the NoC barrier count
-        // (one barrier per pair instead of one per Gaussian). Tail is
-        // padded by duplicating the last real entry; compute drains the
-        // dummy item after its g_count inner-loop iterations. Safe per
-        // iter-061 lesson: ONLY size-2 reservations on this CB (no mixed
-        // sizes), and depth=4 is a multiple of 2 — no wrap-straddle.
-        uint32_t safe_count = (g_count + 1u) & ~1u;  // round up to even
-        for (uint32_t g = 0; g < safe_count; g += 2) {
+        for (uint32_t g = 0; g < g_count; g++) {
             // Accumulator zone for per-Gaussian scalar fetch (SumN1 slot 0).
             // Reports total cycles spent in the per-Gaussian DRAM→L1 stream
             // for this RISC, which is the dominant work on the reader.
             DeviceZoneScopedSumN1("Z_R_g");
 
-            cb_reserve_back(CB_SCALARS, 2);
-            uint32_t base_wp = get_write_ptr(CB_SCALARS);
-            uint32_t e0 = g;
-            uint32_t e1 = g + 1;
-            if (e1 >= g_count) e1 = g_count - 1;  // tail-clamp duplicate
-            noc_async_read_tile(g_start + e0, packs_acc, base_wp);
-            noc_async_read_tile(g_start + e1, packs_acc, base_wp + pack_bytes_padded);
+            uint32_t entry_id = g_start + g;
+            cb_reserve_back(CB_SCALARS, 1);
+            noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));
             noc_async_read_barrier();
-            cb_push_back(CB_SCALARS, 2);
+            cb_push_back(CB_SCALARS, 1);
         }
 
         // CB_TILE_META's write pointer wraps after each push_back, so
