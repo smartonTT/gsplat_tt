@@ -126,7 +126,11 @@ if [[ "$PROFILE" == "1" ]]; then
     # iter-PROF first attempt hung 33+ minutes because a daemon from a prior
     # session was still alive. Belt-and-suspenders since render_fixed.py spawns
     # its own daemon: anything holding the device WILL hang the new spawn.
-    pkill -f 'metal_example_gaussian_splatting' 2>/dev/null || true
+    # NOTE: use pkill WITHOUT -f to match only the executable name (truncated
+    # to 15 chars by Linux). -f matches the full command line, which on this
+    # ssh-spawned bash shell includes the search string in argv → pkill kills
+    # its own shell and ssh exits 255 with no output, leaving run.log empty.
+    pkill metal_example_g 2>/dev/null || true
     sleep 1
     export TT_METAL_DEVICE_PROFILER=1
     export TT_METAL_HOME=$REMOTE_REPO/backends/tt/tt-metal
