@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 77 · current best: 23.98 ms · target: 1.0 ms
+      iters: 78 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-082-persist-output-zero
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">dispatch</span>
+      
+      <span class="ts">2026-05-27T11:32:54.470272+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> All visual checks pass. The three renders (hero, side, top) are visually indistinguishable from their references; diff10 images show only uniform speckle consistent with the established architectural noise floor. No tile grid seams, uniform-fill blocks, missing-splat holes, color clipping, ringing, NaN/Inf signatures, geometry shift, or fireflies detected. Tile_structure_ratio values (17.14/17.28/18.14) are within the established ~17-18 architectural baseline set by iter-068 and confirmed across subsequent iters; the architectural-baseline carve-out applies, and no new drift is introduced. PSNR for all views (hero 39.41, side 41.00, top 38.60) meets the dispatch-class floor of &gt;38 dB and is bit-identical to the architectural baseline (hero 39.4, side 41.0, top 38.6). Timing at +0.54% vs prev_best is within the 2% break-even band; p99/median ratio of 1.195 is well under the 3× flag threshold. Per-view PSNR delta of 2.40 dB and ms ratio of 1.24 are both within consistency limits. KEEP as break-even with bit-identical quality.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>24.84 ms</b> median · 29.69 ms p99</div>
+    <div class="per-view">per-view: hero 24.84 / side 23.99 / top 29.68</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-082-persist-output-zero/hero.png" target="_blank"><img src="screenshots/iter-082-persist-output-zero/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-082-persist-output-zero/side.png" target="_blank"><img src="screenshots/iter-082-persist-output-zero/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-082-persist-output-zero/top.png" target="_blank"><img src="screenshots/iter-082-persist-output-zero/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-082-persist-output-zero/hero_diff10.png" target="_blank"><img src="screenshots/iter-082-persist-output-zero/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-082-persist-output-zero/side_diff10.png" target="_blank"><img src="screenshots/iter-082-persist-output-zero/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-082-persist-output-zero/top_diff10.png" target="_blank"><img src="screenshots/iter-082-persist-output-zero/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: Diff10 images for all three views show uniform speckle distributed over the object body with no horizontal or vertical l</li><li>✓ tile_uniform_fill: No square constant-color 32x32 or 16x16 blocks visible in any render vs reference comparison. All three renders show con</li><li>✓ missing_splat_holes: No local dark regions or coverage holes larger than ~16px detected in hero, side, or top renders. Diff10 speckle is dist</li><li>✓ color_clipping_bands: No saturated R/G/B regions or flat-color stripes visible in any view. Color rendition matches reference across hero (war</li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes observed in any of the three renders. Edge transitions appear natur</li><li>✓ nan_inf_signatures: No pure-black, pure-white, or magenta spatially-correlated patches in any render. No fireflies (isolated 1-3px bright ou</li><li>✓ geometry_shift: Diff10 images do not show clean silhouette outlines of the object. The bright regions in diff10 correspond to textured s</li><li>✓ diff10_structure: All three diff10 images are dominated by uniform speckle over the object body with no quilting blocks, gradients, or ban</li></ul>
+    <p class="reasoning">All visual checks pass. The three renders (hero, side, top) are visually indistinguishable from their references; diff10 images show only uniform speckle consistent with the established architectural noise floor. No tile grid seams, uniform-fill blocks, missing-splat holes, color clipping, ringing, NaN/Inf signatures, geometry shift, or fireflies detected. Tile_structure_ratio values (17.14/17.28/18.14) are within the established ~17-18 architectural baseline set by iter-068 and confirmed across subsequent iters; the architectural-baseline carve-out applies, and no new drift is introduced. PSNR for all views (hero 39.41, side 41.00, top 38.60) meets the dispatch-class floor of &gt;38 dB and is bit-identical to the architectural baseline (hero 39.4, side 41.0, top 38.6). Timing at +0.54% vs prev_best is within the 2% break-even band; p99/median ratio of 1.195 is well under the 3× flag threshold. Per-view PSNR delta of 2.40 dB and ms ratio of 1.24 are both within consistency limits. KEEP as break-even with bit-identical quality.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-081-cb-scalars-depth-8

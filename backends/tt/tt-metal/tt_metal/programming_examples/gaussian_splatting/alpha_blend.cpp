@@ -167,6 +167,9 @@ struct DeviceContext {
     // iter-082: persisted output_zero buffer reused across frames. Sized once
     // when num_tiles first stabilises; sentinel 0 forces (re)allocation.
     std::vector<uint16_t> output_zero_cache;
+    // iter-083: persisted readback scratch buffer. Overwritten by every
+    // EnqueueReadMeshBuffer, so it never needs zeroing.
+    std::vector<uint16_t> result_bf16_cache;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -596,8 +599,12 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
         ctx.output_zero_cache.assign(output_zero_needed, 0);
     }
     std::vector<uint16_t>& output_zero = ctx.output_zero_cache;
-    std::vector<uint16_t> result_bf16(
-        static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
+    // iter-083: reuse cached result_bf16 across frames. It is overwritten
+    // wholesale by EnqueueReadMeshBuffer, so we just need it sized correctly.
+    if (ctx.result_bf16_cache.size() != output_zero_needed) {
+        ctx.result_bf16_cache.resize(output_zero_needed);
+    }
+    std::vector<uint16_t>& result_bf16 = ctx.result_bf16_cache;
     T.encode_ms = ms_between(t_encode_start, clk::now());
 
     // 5. Kernel timing window: DRAM upload start -> output readback end.
