@@ -257,7 +257,6 @@ static void build_program_and_workload(DeviceContext& ctx) {
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi2,
             .fp32_dest_acc_en = true,
-            .dst_full_sync_en = true,
             .math_approx_mode = true,
         });
 
