@@ -163,9 +163,10 @@ void kernel_main() {
         // unused in the per-Gaussian path (constant=1 assumption on stitch_doll).
         // Saves 1 acquire per tile (CB fill + pack).
 
-        // iter-086: dropped 4× cb_wait_front for state CBs (same-RISC push→wait
-        // redundant per iter-085 rule). The per-tile finalize at line ~448 will
-        // re-validate via copy_tile reads which use the consumer-side ptr.
+        cb_wait_front(CB_COLOR_R_STATE, 1);
+        cb_wait_front(CB_COLOR_G_STATE, 1);
+        cb_wait_front(CB_COLOR_B_STATE, 1);
+        cb_wait_front(CB_T_STATE, 1);
 
         // Read the per-tile Gaussian count the reader wrote into CB_TILE_META.
         // This tells us how many entries from CB_SCALARS we'll consume in the
@@ -250,8 +251,8 @@ void kernel_main() {
             pack_tile(1, CB_DY);
             cb_push_back(CB_DY, 1);
             tile_regs_release();
-            // iter-086: dropped cb_wait_front(CB_DX,1) + cb_wait_front(CB_DY,1).
-            // Same-RISC push→wait redundant per iter-085 rule.
+            cb_wait_front(CB_DX, 1);
+            cb_wait_front(CB_DY, 1);
 
             // ----- Stage B2+B3a (fused): three acquire blocks, each computing
             // one Q term directly:  mul_tiles → mul_unary_tile in same acquire.
@@ -291,8 +292,7 @@ void kernel_main() {
             cb_push_back(CB_Q, 3);
             tile_regs_release();
 
-            // iter-086: dropped cb_wait_front(CB_Q, 3). Same-RISC push→wait
-            // redundant per iter-085 rule.
+            cb_wait_front(CB_Q, 3);
 
             // ----- Stage B3b + C + D1 (FUSED iter-052):
             // full Q sum → power → exp → alpha → contrib = α·T·sat, all in
@@ -357,8 +357,7 @@ void kernel_main() {
             cb_pop_front(CB_DX, 1);
             cb_pop_front(CB_DY, 1);
 
-            // iter-086: dropped cb_wait_front(CB_CONTRIB, 1). Same-RISC
-            // push→wait redundant per iter-085 rule.
+            cb_wait_front(CB_CONTRIB, 1);
 
             // ----- Stage D2: per-channel color accumulator update (FUSED iter-038).
             //   color_c_state ← color_c_state + color_c · contrib
