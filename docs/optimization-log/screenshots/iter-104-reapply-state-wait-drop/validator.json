@@ -1,0 +1,24 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All three diff10 images show uniform speckle confined to the object silhouette region. No horizontal or vertical lines at 32-px or 16-px spacing are visible in hero_diff10, side_diff10, or top_diff10."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color blocks observed in any rendered PNG. All three renders (hero, side, top) show normal textural variation matching the reference stitch doll."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No regions of unexpected darkness or bright diff10 spots indicating coverage gaps. Splat coverage appears complete and consistent with reference."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-color stripes or clipped R/G/B regions present in any of the three rendered PNGs."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halo artifacts at object silhouettes. Diff10 edge brightness is consistent with normal accumulated precision noise."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No isolated bright outlier pixels (fireflies), pure black/white/magenta patches, or spatially-correlated NaN/Inf signatures detected in hero, side, or top renders."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show object silhouette outlines that would indicate coordinate displacement. Diff is confined to the interior body of the object."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images are dominated by uniform fine speckle within the object region. No grids, banding, gradients, or structured per-tile patterns visible."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.36803565955834, "side": 40.949644684083964, "top": 38.57406490624109}, "pass": true},
+  "tile_structure_check": {
+    "max_ratio": 18.132167903177493,
+    "actual": {"hero": 17.107328028167462, "side": 17.29181297057425, "top": 18.132167903177493},
+    "pass": true,
+    "delta_vs_prev": {"hero": 0.000000, "side": 0.000000, "top": 0.000010,
+      "note": "Bit-identical to iter-103 bh-08 baseline (delta <0.00001 on all views, well within +-0.05 threshold). Architectural-baseline carve-out applies: max ratio ~17-18 is established bf16 pack_tile floor; +0.3 ratchet NOT triggered. No new structural drift introduced."}
+  },
+  "per_view_consistency": {"max_psnr_delta_db": 2.381, "max_ms_ratio": 1.225, "pass": true},
+  "timing": {"median_ms": 25.383, "p99_ms": 30.063, "vs_prev_best_pct": 0.047, "pass": true},
+  "reasoning": "iter-104 re-applies the iter-102 per-tile state CB wait_front drop on the established bh-08 baseline (25.371 ms). kernel_ms_median is 25.383 ms = +0.047% vs prev_best, well within the 1.02x break-even threshold. PSNR on all three views is bit-identical to the iter-085/iter-103 architectural baseline (delta < 0.001 dB on all views; hero 39.368, side 40.950, top 38.574 all >= 38 dB floor). tile_structure_ratio is bit-identical to iter-103 baseline (top delta = 0.000010, far below the +-0.05 threshold), so the architectural-baseline carve-out applies and no new drift is introduced. All visual checks pass: diff10 images show only uniform fine speckle within the object body with no tile grid seams, uniform fill blocks, missing splat holes, color clipping, ringing, NaN/Inf signatures, or geometry shift. p99/median ratio is 1.184x (well under 3x). Per-view PSNR delta is 2.381 dB and per-view kernel-ms ratio is 1.225x (both well under review thresholds). The diff is structurally identical to iter-085 (KEEP/-0.92%) and satisfies iter-086's narrowed rule (wait-drops safe when no consumer-acquire is the very next acquire). This is a flat-but-safe KEEP: the change is confirmed correct on bh-08 hardware with bit-identical quality."
+}
