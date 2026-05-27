@@ -16,7 +16,9 @@
 #include "api/compute/eltwise_unary/comp.h"
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/eltwise_unary/relu.h"
+#include "api/compute/eltwise_unary/negative.h"
 #include "api/compute/binary_max_min.h"
+#include "api/compute/copy_dest_values.h"
 
 #include "tools/profiler/kernel_profiler.hpp"
 
@@ -300,152 +302,96 @@ void kernel_main() {
 
             cb_wait_front(CB_Q, 3);
 
-            // ----- Stage B3b + C + D1 (FUSED iter-052):
-            // full Q sum → power → exp → alpha → contrib = α·T·sat, all in
-            // ONE acquire. Eliminates the CB_ALPHA bf16 round-trip — alpha
-            // never leaves fp32 dst between C and D1.
+            // ----- Stage B3b + C + D1 + D2 + E (FUSED iter-067):
+            // Q sum → power → exp → α → contrib → R/G/B accumulate + T_new,
+            // all in ONE acquire. Eliminates the CB_CONTRIB bf16 round-trip
+            // that previously sat between D1 (produced contrib) and D2/E
+            // (consumed contrib 4 times: 3× channel mul, 1× T sub).
             //
-            // Why this matters (per project-tile-structure-regression-iter-010):
-            // CB_ALPHA was a bf16 CB that round-tripped α between C and D1.
-            // The pack→bf16→unpack cycle quantized α uniformly per tile,
-            // and that per-tile quantization correlates pixel error within
-            // the tile — visible as tile-grid quilting in diff10 PNGs.
-            // Keeping α in fp32 dst across the C→D1 boundary preserves the
-            // higher-precision exp output through the T·sat multiplication.
+            // Why this matters (per project-tile-structure-regression-iter-010
+            // and iter-064 falsification of state-CB hypothesis):
+            // CB_CONTRIB was the LAST bf16 pack→unpack hop in the per-Gaussian
+            // path. iter-052 fused out CB_ALPHA; iter-064 proved fp32 state
+            // CBs don't help (pack_tile likely quantizes to bf16 internally).
+            // Skipping the contrib hop entirely is the only remaining lever
+            // to attack the tile-structure ratio in this acquire chain.
             //
-            // Same template as iter-042's E sub-identity-fuse: extend the
-            // dst-resident computation past a bf16 CB boundary by chaining
-            // binary_dest_reuse_tiles<ELWMUL, DEST_TO_SRCA> directly on the
-            // dst slot that holds α.
-            //
-            // Final identity in this acquire:
-            //   contrib = (opacity · exp(-0.5·Q)) · T_state · sat_mask
-            //
+            // Dst slot layout (fp32_dest_acc_en → 4 fp32 slots available):
+            //   dst[0]: contrib  → after E: T_new
+            //   dst[1]: contrib  → contrib·color_r → R_state += that
+            //   dst[2]: contrib  → contrib·color_g → G_state += that
+            //   dst[3]: contrib  → contrib·color_b → B_state += that
+            // copy_dest_values<Float32> duplicates contrib (dst[0]) into the
+            // 3 channel slots without ever leaving fp32. For T_new = T-contrib
+            // we negate dst[0] then add T_state via binary_dest_reuse<ELWADD>.
             tile_regs_acquire();
+
+            // ---- B3b: dst[0] = Q ----
             add_tiles_init(CB_Q, CB_Q);
             add_tiles(CB_Q, CB_Q, 0, 1, 0);  // dst[0] = a·dx² + c·dy²
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q);
             binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_Q, 2, 0);  // dst[0] = Q
 
-            // power = -0.5 · Q
-            mul_unary_tile(0, NEG_HALF_BITS);
-
-            // weight = exp(power). Approximate-mode polynomial.
+            // ---- C: dst[0] = α ----
+            mul_unary_tile(0, NEG_HALF_BITS);   // dst[0] = -0.5·Q = power
             exp_tile_init<true>();
-            exp_tile<true>(0);
-
-            // iter-066: cap weight ≤ 1.0 (single SFPU op, single init).
-            // For valid PSD covariance Q ≥ 0 algebraically → exp(power) ≤ 1,
-            // but bf16 quantization of CB_Q can push Q slightly negative,
-            // making exp produce > 1. Uncapped, the resulting α > 1 yields
-            // contrib > T → T_new < 0 → bright firefly pixels in later
-            // color accumulation. relu_max_tile(0, ONE_F_BITS) clamps to
-            // [0, 1] in one pass.
+            exp_tile<true>(0);                  // dst[0] = exp(power) = weight
+            // iter-066: clamp weight ≤ 1 (kills the α>1 → T<0 → firefly chain).
             relu_max_tile(0, ONE_F_BITS);
+            mul_unary_tile(0, opacity_bits);    // dst[0] = α
 
-            // alpha = opacity · weight (iter-051: dropped 0.99 cap)
-            mul_unary_tile(0, opacity_bits);
-
-            // D1 fused in (iter-052): contrib = alpha · T_state · sat_mask
-            // iter-059: dropped *·sat_mask (sat_mask is constant 1.0; see Stage F).
+            // ---- D1: dst[0] = α · T_state = contrib  (still fp32 in dst) ----
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE, 0, 0);  // dst[0] = α·T = contrib
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWMUL, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE, 0, 0);
 
-            tile_regs_commit();
-            tile_regs_wait();
-            cb_reserve_back(CB_CONTRIB, 1);
-            pack_tile(0, CB_CONTRIB);
-            cb_push_back(CB_CONTRIB, 1);
-            tile_regs_release();
+            // ---- Duplicate contrib (dst[0]) into dst[1/2/3] in fp32 ----
+            copy_dest_values_init();
+            copy_dest_values<DataFormat::Float32>(0, 1);
+            copy_dest_values<DataFormat::Float32>(0, 2);
+            copy_dest_values<DataFormat::Float32>(0, 3);
 
-            // Cleanup B/C inputs (CB_ALPHA is no longer used).
-            cb_pop_front(CB_Q, 3);
-            cb_pop_front(CB_DX, 1);
-            cb_pop_front(CB_DY, 1);
-
-            cb_wait_front(CB_CONTRIB, 1);
-
-            // ----- Stage D2: per-channel color accumulator update (FUSED iter-038).
-            //   color_c_state ← color_c_state + color_c · contrib
-            // Done independently for R, G, B (3 channels × 1 fused acquire each).
-            //
-            // FUSED (iter-038): per channel one acquire
-            //   dst[0] = contrib · color_c
-            //   binary_dest_reuse_tiles<ELWADD, DEST_TO_SRCA>(state_c) → dst[0] += state_c
-            //   pack back to state_c (with pop_front → reserve_back → push_back)
-            // Saves 1 acquire + the CB_T_TMP roundtrip per channel — same pattern as
-            // iter-007 Stage D1 and iter-010 Stage E.
-
-            // D2+E mega-fuse (iter-045): merge D2's R/G/B 3-channel update
-            // with Stage E's T_new = T·sat - contrib into ONE acquire using
-            // dst slots 0/1/2/3. Algebra unchanged from iter-042+043:
-            //   slot 0: R_state += contrib · color_r
-            //   slot 1: G_state += contrib · color_g
-            //   slot 2: B_state += contrib · color_b
-            //   slot 3: T_new = T·sat - contrib       (= T·(1-α)·sat)
-            // The acquire has ONE mul_tiles_init (for E's T·sat) following
-            // a sequence of binary_dest_reuse_tiles_init calls (for D2's
-            // ELWADD per channel). iter-039 hang was MULTIPLE mul_tiles_init;
-            // here it's a single mul_tiles_init mid-acquire — testing this
-            // novel pattern. Saves 1 acquire per Gaussian.
-            tile_regs_acquire();
-
-            // iter-058: restructure D2 to do all 3 copy_tile(CB_CONTRIB) calls
-            // up-front before any binary_dest_reuse_tiles_init. This collapses
-            // 3× copy_tile_to_dst_init_short(CB_CONTRIB) → 1 init (iter-048+049
-            // safe pattern: ONE init shared by multiple same-CB ops, with NO
-            // interleaving _init). Previous layout interleaved binary-reuse
-            // inits between the 3 copies, forcing each copy to re-init (the
-            // iter-055 footgun made that mandatory there). SFPU mul_unary_tile
-            // doesn't mutate unpacker state, so the 3 copies + 3 muls are safe
-            // back-to-back.
-            //
-            // Final D2 contents (slots 0/1/2 hold R/G/B contributions):
-            //   dst[0] = contrib · color_r + R_state
-            //   dst[1] = contrib · color_g + G_state
-            //   dst[2] = contrib · color_b + B_state
-            copy_tile_to_dst_init_short(CB_CONTRIB);
-            copy_tile(CB_CONTRIB, 0, 0);
-            copy_tile(CB_CONTRIB, 0, 1);
-            copy_tile(CB_CONTRIB, 0, 2);
-            mul_unary_tile(0, color_r_bits);
-            mul_unary_tile(1, color_g_bits);
-            mul_unary_tile(2, color_b_bits);
-
+            // ---- D2: dst[k] = contrib · color_k + state_k for k in {R,G,B} ----
+            mul_unary_tile(1, color_r_bits);
+            mul_unary_tile(2, color_g_bits);
+            mul_unary_tile(3, color_b_bits);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 0);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_R_STATE, 0, 1);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 1);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_G_STATE, 0, 2);
             binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 2);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_COLOR_B_STATE, 0, 3);
 
-            // E: dst[3] = T - contrib = T_new
-            // iter-059: dropped T·sat_mask (sat_mask is constant 1.0).
-            // Replaces FPU mul_tiles with copy_tile (same FPU pipeline, no multiply).
-            copy_tile_to_dst_init_short(CB_T_STATE);
-            copy_tile(CB_T_STATE, 0, 3);  // dst[3] = T
-            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB);
-            binary_dest_reuse_tiles<EltwiseBinaryType::ELWSUB, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_CONTRIB, 0, 3);  // dst[3] -= contrib
+            // ---- E: dst[0] = T_state - contrib = T_new ----
+            // dst[0] still holds contrib. Negate, then add T_state.
+            negative_tile_init();
+            negative_tile(0);                   // dst[0] = -contrib
+            binary_dest_reuse_tiles_init<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE);
+            binary_dest_reuse_tiles<EltwiseBinaryType::ELWADD, EltwiseBinaryReuseDestType::DEST_TO_SRCA>(CB_T_STATE, 0, 0);  // dst[0] = T - contrib
 
             tile_regs_commit();
             tile_regs_wait();
 
+            // Pop old per-tile state CBs, then pack new states. Slot→CB map:
+            //   dst[0] → CB_T_STATE      (T_new)
+            //   dst[1] → CB_COLOR_R_STATE (R_new)
+            //   dst[2] → CB_COLOR_G_STATE (G_new)
+            //   dst[3] → CB_COLOR_B_STATE (B_new)
             cb_pop_front(CB_COLOR_R_STATE, 1);
             cb_pop_front(CB_COLOR_G_STATE, 1);
             cb_pop_front(CB_COLOR_B_STATE, 1);
             cb_pop_front(CB_T_STATE, 1);
+            cb_reserve_back(CB_T_STATE, 1);
             cb_reserve_back(CB_COLOR_R_STATE, 1);
             cb_reserve_back(CB_COLOR_G_STATE, 1);
             cb_reserve_back(CB_COLOR_B_STATE, 1);
-            cb_reserve_back(CB_T_STATE, 1);
-            pack_tile(0, CB_COLOR_R_STATE);
-            pack_tile(1, CB_COLOR_G_STATE);
-            pack_tile(2, CB_COLOR_B_STATE);
-            pack_tile(3, CB_T_STATE);
+            pack_tile(0, CB_T_STATE);
+            pack_tile(1, CB_COLOR_R_STATE);
+            pack_tile(2, CB_COLOR_G_STATE);
+            pack_tile(3, CB_COLOR_B_STATE);
+            cb_push_back(CB_T_STATE, 1);
             cb_push_back(CB_COLOR_R_STATE, 1);
             cb_push_back(CB_COLOR_G_STATE, 1);
             cb_push_back(CB_COLOR_B_STATE, 1);
-            cb_push_back(CB_T_STATE, 1);
             tile_regs_release();
 
             cb_wait_front(CB_COLOR_R_STATE, 1);
@@ -453,8 +399,10 @@ void kernel_main() {
             cb_wait_front(CB_COLOR_B_STATE, 1);
             cb_wait_front(CB_T_STATE, 1);
 
-            cb_pop_front(CB_CONTRIB, 1);
-            // CB_ALPHA no longer used (iter-052 fused B3b/C+D1).
+            // Cleanup B/C inputs (CB_CONTRIB no longer used after iter-067).
+            cb_pop_front(CB_Q, 3);
+            cb_pop_front(CB_DX, 1);
+            cb_pop_front(CB_DY, 1);
             cb_pop_front(CB_SCALARS, 1);
         }
 
