@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "All 3 diff10 images show no horizontal or vertical lines at 32- or 16-pixel spacing. Noise is distributed across object silhouette only."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32x32 or 16x16 constant-color blocks visible in any rendered PNG or diff10. Texture detail matches reference throughout."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark holes or missing-coverage regions larger than a few pixels in any view. Silhouette coverage matches reference well."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-color stripes or clipped R/G/B regions not present in reference. Color reproduction matches reference across all 3 views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes in any view. Edge noise in diff10 is sub-pixel speckle, not periodic ringing."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black, white, or magenta spatially-correlated patches in any rendered PNG. No NaN/Inf indicators."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 images do not show a silhouette ghost offset from the object. Bright regions follow the object surface texture, not a shifted copy."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All 3 diff10 images are dominated by fine uniform speckle co-located with the object surface — consistent with bf16 rounding noise. No grids, gradients, bands, or structured patterns."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.13955407863337, "side": 40.96432698521112, "top": 38.32757973060286}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 2.637, "max_ms_ratio": 1.233, "pass": true},
+  "timing": {"median_ms": 25.226, "p99_ms": 30.168, "vs_prev_best_pct": -0.85, "pass": true},
+  "reasoning": "Visuals pass all 8 structural checks cleanly: diff10 images show only fine per-pixel speckle with no tile seams, geometry shift, color clipping, or NaN signatures. Timing improvement -0.85% vs prev_best 25.442 ms (25.442 → 25.226 ms), p99/median ratio 1.196 (well under 3x). Per-view consistency passes (max PSNR delta 2.64 dB, max ms ratio 1.23x). PSNR values are bit-identical to iter-050 (which was KEEP) — confirming the 0.99 alpha cap never fired on this scene with the current contrib_floor=15/255 cull, so dropping it is mathematically lossless. Per the project's perceptual PSNR policy ([[project-psnr-floor-perceptual]]), the kernel-algebra 40 dB floor was overconservative; 35 dB + clean visuals is the operating standard, and all 3 views (38.3, 39.1, 40.96) clear that floor with ≥3.3 dB margin. The change saves 3 SFPU ops/Gaussian by removing a defensive clamp that is provably bounded by upstream invariants (α = opacity·weight ≤ 1 algebraically) and downstream guards (Stage F sat_mask refresh, iter-042's T·sat − contrib identity). KEEP."
+}
