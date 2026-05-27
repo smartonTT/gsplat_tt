@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal or vertical lines at 32px or 16px spacing visible in any diff10 image. All three diff10 images lack grid-pattern artifacts."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No square constant-color blocks in rendered images. All rendered images show continuous smooth shading matching reference character geometry."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No local dark regions larger than ~16px where reference has coverage. Brightness and coverage match reference across all three views. Some fine speckle at surface edges is below the threshold."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated flat-colored stripes in any rendered image. Color distribution matches reference in hero (orange ear, pink tongue, blue body), side (dark navy), and top (blue/pink ear) views."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes visible in any view. Edges appear natural in both rendered and diff10 images."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches in spatially-correlated patterns. All pixel values appear within normal color range across all three renders."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 shows distributed surface speckle on the object body — a characteristic of binning/culling changes reducing low-contribution splats — not a hard silhouette shift indicating wrong coordinates. Object shape, ears, and facial features are in correct positions matching reference."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "Hero diff10 shows uniform fine speckle across the object surface with no grid lines or banding. Side diff10 is very dark with minimal uniform noise. Top diff10 shows distributed speckle concentrated on object surface. No structured grid, band, or edge patterns that would indicate tile-level artifacts."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 39.9158031867637, "side": 43.86427432193215, "top": 39.14657771534432}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 4.717696604568850, "max_ms_ratio": 1.288, "pass": true},
+  "timing": {"median_ms": 46.961, "p99_ms": 58.27097, "vs_prev_best_pct": -4.83, "pass": true},
+  "reasoning": "All visual checks pass. No tile grid seams, uniform fill blocks, color clipping, ringing, NaN/Inf signatures, or geometry shift detected in any of the three views. The diff10 images show fine-grained speckle distributed across the object surface, consistent with a binning/contribution-floor change that culls low-opacity splats — not structured artifacts. PSNR for all three views (hero 39.92 dB, side 43.86 dB, top 39.15 dB) exceeds the binning-class floor of 35 dB. Max per-view PSNR delta is 4.72 dB (well within 20 dB limit). Max per-view kernel-ms ratio is 1.29x (well within 2x limit). kernel_ms_median of 46.961 ms represents a 4.83% improvement over prev_best of 49.447 ms, comfortably within the 1.02x break-even threshold. p99/median ratio of 1.241x is well within the 3x suspicious-tail threshold. This iteration is a clear KEEP."
+}
