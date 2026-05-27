@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #if defined(__ARM_NEON)
@@ -275,18 +276,62 @@ void cull_and_blend_tile(
             continue;
         }
 
+        // Per-microblock cull: keep this (Gaussian, microblock) pair iff
+        // the true min m² over the 8×4 microblock rectangle gives a
+        // contribution ≥ mb_contrib_floor (i.e., -½·m²_min ≥ log_thresh).
+        //
+        // CORRECTNESS NOTE: the previous version used an L∞-clamp (per-axis
+        // clamp of the Gaussian center onto the microblock rectangle) to
+        // evaluate m². For tilted Gaussians the L∞-clamp m² can be much
+        // larger than the true min m² over the rectangle — the cull then
+        // drops microblocks where the Gaussian's elongated axis actually
+        // passes through with high density. Result: visible 32×32 tile
+        // artifacts at silhouettes. This version computes the true
+        // constrained-min m² over the rectangle.
+        //
+        // ci_a, ci_b, ci_c are the entries of Σ⁻¹ (= c/det, -b/det, a/det).
+        // m²(u,v) = ci_a·u² + 2·ci_b·u·v + ci_c·v².
+        const float thresh_m2 = -2.0f * log_thresh;  // m² ≤ thresh_m2 ⇔ keep
+        const float ci_a_safe = std::max(ci_a, 1e-12f);
+        const float ci_c_safe = std::max(ci_c, 1e-12f);
+
         bool kept_any = false;
         for (int my = my_lo; my <= my_hi; ++my) {
             const float mb_oy = ty_tile + static_cast<float>(my * 4);
-            const float cy = std::clamp(mean_y, mb_oy, mb_oy + 4.0f);
-            const float dy_c = cy - mean_y;
+            const float v_lo = mb_oy - mean_y;
+            const float v_hi = v_lo + 4.0f;
+            const bool y_inside = (v_lo <= 0.0f) && (0.0f <= v_hi);
+            const float v_fix = (v_lo > 0.0f) ? v_lo : v_hi;
             for (int mx = mx_lo; mx <= mx_hi; ++mx) {
                 const float mb_ox = tx_tile + static_cast<float>(mx * 8);
-                const float cx = std::clamp(mean_x, mb_ox, mb_ox + 8.0f);
-                const float dx_c = cx - mean_x;
-                const float power_c =
-                    -0.5f * (ci_a * dx_c * dx_c + 2.0f * ci_b * dx_c * dy_c + ci_c * dy_c * dy_c);
-                if (power_c >= log_thresh) {
+                const float u_lo = mb_ox - mean_x;
+                const float u_hi = u_lo + 8.0f;
+                const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+
+                float m2_min;
+                if (x_inside && y_inside) {
+                    m2_min = 0.0f;
+                } else {
+                    float m2_v = std::numeric_limits<float>::infinity();
+                    if (!x_inside) {
+                        const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
+                        float v_star = -ci_b * u_fix / ci_c_safe;
+                        v_star = std::clamp(v_star, v_lo, v_hi);
+                        m2_v = ci_a * u_fix * u_fix
+                               + 2.0f * ci_b * u_fix * v_star
+                               + ci_c * v_star * v_star;
+                    }
+                    float m2_h = std::numeric_limits<float>::infinity();
+                    if (!y_inside) {
+                        float u_star = -ci_b * v_fix / ci_a_safe;
+                        u_star = std::clamp(u_star, u_lo, u_hi);
+                        m2_h = ci_a * u_star * u_star
+                               + 2.0f * ci_b * u_star * v_fix
+                               + ci_c * v_fix * v_fix;
+                    }
+                    m2_min = std::min(m2_v, m2_h);
+                }
+                if (m2_min <= thresh_m2) {
                     const int mb = (my << 2) | mx;
                     scratch.kept_flat[static_cast<std::size_t>(
                         scratch.offsets[static_cast<std::size_t>(mb)]++)] =
