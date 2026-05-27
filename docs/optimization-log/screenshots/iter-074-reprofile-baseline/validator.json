@@ -1,0 +1,18 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "Diff10 images (hero/side/top) show distributed speckle across object body and silhouette edges; no horizontal or vertical lines at 32- or 16-pixel spacing visible in any view."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No 32×32 or 16×16 constant-color blocks visible in any rendered PNG; all views show correct fine detail and texture matching the reference."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No dark voids or missing-coverage regions in hero, side, or top renders; coverage matches reference stitch PNGs."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes or clipping artifacts visible in any view."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing or halos at object silhouettes; edge noise in diff10 is consistent with established architectural noise floor."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta spatially-correlated patches in any view. No isolated bright firefly pixels (>5) visible in any rendered PNG."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff10 does not show the silhouette of the object as a solid bright outline; geometry positions match reference across all three views."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff10 images show uniform speckle distributed across the object body and edges — consistent with the bf16 pack_tile architectural noise floor established since iter-052/066. No structured grids, bands, or gradients visible."}
+  ],
+  "psnr_check": {"floor": 38.0, "actual": {"hero": 39.41496520322124, "side": 40.99648830708902, "top": 38.59546500629706}, "pass": true},
+  "tile_structure_check": {"max_ratio": 18.1423, "actual": {"hero": 17.137658028356157, "side": 17.278351895106663, "top": 18.1422622408487}, "pass": true, "delta_vs_prev": 0.0},
+  "per_view_consistency": {"max_psnr_delta_db": 2.401, "max_ms_ratio": 1.243, "pass": true},
+  "timing": {"median_ms": 25.0075, "p99_ms": 30.44827, "vs_prev_best_pct": -0.14, "pass": true},
+  "reasoning": "All checks pass. This is a code-NO-OP profile run (same source as iter-073: HiFi2 + math_approx_mode=true); bit-identical results are expected and confirmed. PSNR is bit-identical to iter-073 across all views (delta < 0.001 dB; hero 39.415, side 40.996, top 38.595), all well above the 38 dB kernel-algebra floor. Tile_structure_ratio is bit-identical to iter-073 (delta < 0.001 on all views; max 18.142); per the §4 architectural-baseline carve-out, this is the established bf16 pack_tile floor and does NOT trigger the strictly-reduce rule — no new drift introduced. Kernel_ms_median 25.0075 vs prev_best 25.0415 is -0.14% (noise-level variation from Tracy instrumentation overhead differences), within the 1.02× break-even budget. p99/median ratio 1.22× well under the 3× alert threshold. Per-view PSNR spread 2.40 dB and per-view ms ratio 1.24× both well under their respective thresholds. Visual inspection of all rendered PNGs and diff10 images shows clean renders with no tile seams, no fireflies, no geometry shift, no color clipping; diff10 shows uniform architectural speckle consistent with the baseline."
+}

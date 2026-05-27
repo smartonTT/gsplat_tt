@@ -1,0 +1,62 @@
+{
+  "iter_dir": "iter-074-reprofile-baseline",
+  "class": "kernel-algebra",
+  "prev_best_kernel_ms": 25.0415,
+  "psnr_per_view": {
+    "hero": 39.41496520322124,
+    "side": 40.99648830708902,
+    "top": 38.59546500629706
+  },
+  "tile_structure_ratio_per_view": {
+    "hero": 17.137658028356157,
+    "side": 17.278351895106663,
+    "top": 18.1422622408487
+  },
+  "kernel_ms_median": 25.0075,
+  "kernel_ms_p99": 30.44827,
+  "per_view_median": {
+    "hero": 25.0075,
+    "side": 24.1675,
+    "top": 30.022
+  },
+  "frame_count": 30,
+  "stage_medians": {
+    "total_ms": 105.27606699906755,
+    "project_ms": 17.47538649942726,
+    "tile_assign_ms": 7.201395506854169,
+    "sort_ms": 1.7961105040740222,
+    "blend_ms": 77.02969849924557
+  },
+  "sub_medians": {
+    "blend.daemon_rt": 51.045737011008896,
+    "blend.daemon_rt.device_kernel": 25.0075,
+    "blend.daemon_rt.dispatch_ms": 11.3275,
+    "blend.daemon_rt.encode_ms": 1.9375,
+    "blend.daemon_rt.io_load_ms": 2.356,
+    "blend.daemon_rt.io_save_ms": 11.651,
+    "blend.daemon_rt.readback_ms": 0.4455,
+    "blend.daemon_rt.upload_ms": 12.9405,
+    "blend.load_npy": 1.3660690019605681,
+    "blend.prep": 7.498378516174853,
+    "blend.prep.cov_inv": 0.41141149995382875,
+    "blend.prep.gather": 6.309084012173116,
+    "blend.prep.offsets": 0.04854900180362165,
+    "blend.prep.px_py_grid": 0.0025899935280904174,
+    "blend.prep.tile_origin": 0.6873044912936166,
+    "blend.save_npy": 16.687277995515615,
+    "project.cam_xform": 1.7004815163090825,
+    "project.cov2d": 8.17550250212662,
+    "project.cov3d": 4.500812501646578,
+    "project.radii": 1.1298559984425083,
+    "project.screen_xy": 0.3241920057917014,
+    "sort.argsort": 1.03839099756442,
+    "sort.gather": 0.2564030000939965,
+    "sort.keys": 0.3246279957238585,
+    "sort.ranges": 0.17897349607665092,
+    "tile_assign.bbox": 0.49371599743608385,
+    "tile_assign.contrib_cull": 2.95204998110421,
+    "tile_assign.flat_ids": 1.8163399945478886,
+    "tile_assign.repeat": 1.8059249850921333
+  },
+  "tracy_zones": []
+}
