@@ -596,10 +596,7 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
     // serialization overhead, so it's off by default and toggled via env
     // GSPLAT_PROFILE_PHASES=1.
     const auto t_start = clk::now();
-    // iter-080: drop the 2.76 MB output_zero EnqueueWriteMeshBuffer to test the
-    // byte-vs-call upload hypothesis. Empty (KI-2-filtered) tiles will contain
-    // garbage; expected to fail the visual validator. Pure measurement iter.
-    // distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.packs,    packs_payload);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.offsets,  offsets_u32);
     // iter-079: single write for combined px+py (drops one EnqueueWriteMeshBuffer
