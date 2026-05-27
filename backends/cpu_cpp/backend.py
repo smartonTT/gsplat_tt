@@ -20,7 +20,7 @@ class CpuCppBackend(Backend):
     give a concrete registration target in backends/__init__.py.
     """
 
-    def __init__(self, microblock: bool = False, mb_contrib_floor: float = 1.0 / 16384.0):
+    def __init__(self, microblock: bool = True, mb_contrib_floor: float = 1.0 / 16384.0):
         # Lazily import the compiled module so import doesn't fail when the
         # extension hasn't been built yet.
         from backends.cpu_cpp import _gsplat_cpu  # the pybind11 extension
