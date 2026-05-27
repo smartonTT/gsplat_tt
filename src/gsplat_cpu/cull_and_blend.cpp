@@ -206,7 +206,8 @@ void cull_and_blend_tile(
     float* image_out,
     int64_t* tile_dropped_count,
     int64_t* tile_kept_count,
-    TileScratch& scratch) {
+    TileScratch& scratch,
+    const bool cull_disabled) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
     if (start == end) {
@@ -248,6 +249,9 @@ void cull_and_blend_tile(
 
         const float log_thresh = rec.log_thresh;
         // log_thresh >= 0 sentinel = "Gaussian below mb_contrib_floor".
+        // Honoured even when cull_disabled because such Gaussians have peak
+        // alpha < mb_contrib_floor everywhere → blending them is genuinely
+        // a no-op (they cannot exceed the 8-bit perceptual floor).
         if (log_thresh >= 0.0f) {
             ++dropped;
             continue;
@@ -309,7 +313,10 @@ void cull_and_blend_tile(
                 const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
 
                 float m2_min;
-                if (x_inside && y_inside) {
+                if (cull_disabled) {
+                    // Keep every microblock the Gaussian's AABB overlaps.
+                    m2_min = 0.0f;
+                } else if (x_inside && y_inside) {
                     m2_min = 0.0f;
                 } else {
                     float m2_v = std::numeric_limits<float>::infinity();
@@ -494,7 +501,8 @@ CullAndBlendResult cull_and_blend(
     const int image_width,
     const float mb_contrib_floor,
     ThreadPool& pool,
-    float* image_out_external) {
+    float* image_out_external,
+    const bool cull_disabled) {
     const int num_tiles = tiles_x * tiles_y;
 
     CullAndBlendResult result;
@@ -618,7 +626,8 @@ CullAndBlendResult cull_and_blend(
                     image_out,
                     &tile_dropped[static_cast<std::size_t>(tile_id)],
                     &tile_kept[static_cast<std::size_t>(tile_id)],
-                    sc);
+                    sc,
+                    cull_disabled);
             }
         });
     }

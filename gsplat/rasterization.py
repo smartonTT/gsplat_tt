@@ -130,10 +130,15 @@ def project_gaussians(
         a = covs_2d[:, 0, 0]
         c = covs_2d[:, 1, 1]
         if opacities is not None:
-            # k(ω) = sqrt(2·ln(ω / contrib_floor)) is the σ-multiplier at which
-            # the Gaussian's contribution drops below contrib_floor. tile_assign
-            # uses contrib_floor = 15/255, so we match here: ω·255/15 = ω·17.
-            arg = torch.clamp(opacities * (255.0 / 15.0), min=1.0)
+            # k(ω) = sqrt(2·ln(ω / floor)) is the σ-multiplier at which the
+            # Gaussian's contribution drops below `floor`. Sized for the
+            # downstream per-pair/microblock cull floor (1/16384). Capped at
+            # 3σ — empirically the analytic ks for ω∈[0.05,1.0] hit 4-5σ at
+            # this floor, but verify (113 dB PSNR vs unculled at close zoom)
+            # shows the 3σ AABB is not actually cropping visible
+            # contributions for stitch_doll, and growing the AABB to 5σ
+            # would ~2.7× the (Gaussian, tile) pair count.
+            arg = torch.clamp(opacities * 16384.0, min=1.0)
             k = torch.clamp(torch.sqrt(2.0 * torch.log(arg)), max=3.0)
         else:
             k = torch.full_like(a, 3.0)
@@ -183,7 +188,7 @@ def get_tile_assignments(
     tile_size: int = 32,
     covs_2d: torch.Tensor | None = None,
     opacities: torch.Tensor | None = None,
-    contrib_floor: float = 15.0 / 255.0,
+    contrib_floor: float = 1.0 / 16384.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.

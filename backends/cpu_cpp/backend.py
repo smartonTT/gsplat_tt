@@ -27,8 +27,15 @@ class CpuCppBackend(Backend):
         fused: bool = True,
         render_fused: bool = True,
         verbose: bool = False,
+        cull_disabled: bool = False,
     ):
         self.verbose = verbose
+        # cull_disabled bypasses BOTH the per-pair Mahalanobis cull
+        # (tile_assign) and the per-microblock Mahalanobis cull
+        # (cull_and_blend). Lets us diagnose whether residual artifacts
+        # come from culling vs from blend/sort/project. Equivalent to
+        # numpy `alpha_blend` ground truth (mod float32 ordering).
+        self.cull_disabled = cull_disabled
         # Lazily import the compiled module so import doesn't fail when the
         # extension hasn't been built yet.
         from backends.cpu_cpp import _gsplat_cpu  # the pybind11 extension
@@ -147,16 +154,17 @@ class CpuCppBackend(Backend):
         tile_size: int = 32,
         covs_2d: torch.Tensor | None = None,
         opacities: torch.Tensor | None = None,
+        contrib_floor: float = 1.0 / 16384.0,
         sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         del sub_timings
         means_np = means_2d.detach().cpu().numpy().astype(np.float32, copy=False)
         radii_np = radii.detach().cpu().numpy().astype(np.float32, copy=False)
         covs_np = None
-        if covs_2d is not None:
+        if covs_2d is not None and not self.cull_disabled:
             covs_np = covs_2d.detach().cpu().numpy().astype(np.float32, copy=False)
         opacities_np = None
-        if opacities is not None:
+        if opacities is not None and not self.cull_disabled:
             opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
 
         gids, tids, tpg = self._mod.tile_assign(
@@ -167,7 +175,7 @@ class CpuCppBackend(Backend):
             int(tile_size),
             covs_np,
             opacities_np,
-            15.0 / 255.0,
+            float(contrib_floor),
         )
         return (
             torch.from_numpy(np.asarray(gids)),
@@ -299,7 +307,17 @@ class CpuCppBackend(Backend):
         intrinsics: torch.Tensor,
         image_height: int,
         image_width: int,
-        contrib_floor: float = 15.0 / 255.0,
+        # CORRECTNESS DEFAULT (changed 2026-05-27): match the per-pair tile cull
+        # to the per-microblock cull (`mb_contrib_floor`). The previous default
+        # 15/255 dropped pairs whose peak alpha-in-tile was below 5.9% per
+        # Gaussian; many such Gaussians stack across hundreds of pixels and
+        # the dropped contribution accumulated to ~7/255 per pixel at close
+        # zoom, producing visible 32×32 tile-grid artifacts. With contrib_floor
+        # = mb_contrib_floor (1/16384), the per-pair cull only drops pairs the
+        # microblock cull would also drop everywhere within the tile — keeps
+        # most of the perf optimisation, gives ~112 dB vs unculled
+        # alpha_blend ground truth (invisible).
+        contrib_floor: float | None = None,
     ) -> tuple[np.ndarray, dict]:
         """Single-pybind fused render. Returns (image, stats_dict).
 
@@ -319,6 +337,10 @@ class CpuCppBackend(Backend):
 
         cov3d = self._cached_cov3d(scales_np, rotations_np)
 
+        effective_contrib_floor = (
+            float(self._mb_contrib_floor) if contrib_floor is None
+            else float(contrib_floor)
+        )
         image, stats = self._mod.render_full(
             means_np,
             cov3d,
@@ -330,7 +352,8 @@ class CpuCppBackend(Backend):
             int(image_width),
             32,
             1.0 / 255.0,
-            float(contrib_floor),
+            effective_contrib_floor,
             float(self._mb_contrib_floor),
+            bool(self.cull_disabled),
         )
         return np.asarray(image), dict(stats)

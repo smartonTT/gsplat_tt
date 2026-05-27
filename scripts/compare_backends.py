@@ -1,15 +1,22 @@
-"""Visual regression: compare cpu_cpp renders against numpy cpu ground truth.
+"""Visual regression: compare cpu_cpp renders against the numpy *unculled*
+alpha_blend ground truth.
 
-PSNR vs a frozen PNG reference misses two failure modes:
-  1. Viewer-only bugs (camera/render mismatch) — offline PNG compare never runs.
-  2. Systematic errors shared with an outdated/wrong reference set.
+The ground truth deliberately bypasses every cull stage — no per-pair
+Mahalanobis cull in tile_assign, no per-microblock cull in blend — so the
+reference is the pixel-accurate forward pass. Comparing cpu_cpp against this
+catches:
 
-This script renders the same cameras with both backends and reports per-view
-PSNR, coverage delta, and tile-correlated error (bad_tiles count).
+  - Tile-grid artifacts from the per-pair Mahalanobis cull when stacked
+    Gaussians accumulate dropped contribution (this is what produced the
+    "head has holes / 32×32 stair-step silhouette" bug at close zoom).
+  - Microblock cull regressions.
+  - Any divergence between the optimised C++ blend kernel and the numpy
+    reference (project / sort / accumulator order).
 
 Usage:
-  python3 scripts/compare_backends.py --scene stitch --size 1024
-  python3 scripts/compare_backends.py --cameras benchmarks/cameras_v2.json --view hero
+  python3 scripts/compare_backends.py --scene stitch --size 1024 --orbit-sweep
+  python3 scripts/compare_backends.py --close-zoom        # the user-reported view
+  python3 scripts/compare_backends.py --cull-disabled     # validate the diagnostic mode
 """
 from __future__ import annotations
 
@@ -25,6 +32,7 @@ from PIL import Image
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backends import get_backend  # noqa: E402
+from gsplat import rasterization  # noqa: E402
 from gsplat.loading_gaussians import load_ply  # noqa: E402
 from gsplat.pipeline import Pipeline  # noqa: E402
 from gsplat.utils import c2w_to_w2c  # noqa: E402
@@ -39,9 +47,7 @@ def build_intrinsics(W: int, H: int, fov_deg: float = 50.0) -> torch.Tensor:
     return torch.from_numpy(K)
 
 
-def scene_orbit_cameras(
-    ply_path: Path, azimuths: list[float], elev: float = 0.0, dist_mul: float = 1.2,
-) -> dict[str, np.ndarray]:
+def scene_center_and_diag(ply_path: Path) -> tuple[np.ndarray, float]:
     gauss = load_ply(str(ply_path))
     means = gauss.means.numpy()
     opacities = gauss.opacities.numpy()
@@ -52,6 +58,13 @@ def scene_orbit_cameras(
     hi = np.percentile(visible, 95, axis=0)
     center = (lo + hi) * 0.5
     diagonal = float(np.linalg.norm(hi - lo))
+    return center, diagonal
+
+
+def scene_orbit_cameras(
+    ply_path: Path, azimuths: list[float], elev: float = 0.0, dist_mul: float = 1.2,
+) -> dict[str, np.ndarray]:
+    center, diagonal = scene_center_and_diag(ply_path)
     dist = diagonal * dist_mul
     out: dict[str, np.ndarray] = {}
     for az in azimuths:
@@ -61,10 +74,59 @@ def scene_orbit_cameras(
     return out
 
 
+def close_zoom_cameras(ply_path: Path) -> dict[str, np.ndarray]:
+    """Close-zoom views that fill the screen with the doll's head.
+
+    These match the user's 2026-05-27 screenshot ("head still has holes") —
+    at this distance many small Gaussians stack in each tile so the per-pair
+    Mahalanobis cull's accumulated error is the most visible. Adding them
+    here means future cull regressions show up immediately in CI.
+    """
+    center, diagonal = scene_center_and_diag(ply_path)
+    out: dict[str, np.ndarray] = {}
+    for label, dist_mul, az in [
+        ("close_az220_d030", 0.30, 220.0),
+        ("close_az220_d050", 0.50, 220.0),
+        ("close_az260_d030", 0.30, 260.0),
+        ("close_az190_d030", 0.30, 190.0),
+    ]:
+        pos, look, up = _orbit_pose(center, diagonal * dist_mul, az, 0.0)
+        out[label] = look_at_c2w(pos, look, up)
+    return out
+
+
+def render_unculled_ground_truth(
+    gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float,
+) -> np.ndarray:
+    """numpy reference: project → tile_assign WITHOUT per-pair cull → sort
+    → alpha_blend WITHOUT microblock cull. This is the most pristine
+    forward pass available in the codebase.
+    """
+    extr = c2w_to_w2c(torch.from_numpy(c2w.astype(np.float32)))
+    K = build_intrinsics(W, H, fov_deg)
+    means_2d, covs_2d, depths, radii, valid = rasterization.project_gaussians(
+        gauss.means, gauss.scales, gauss.rotations, extr, K, H, W,
+        opacities=gauss.opacities,
+    )
+    gids, tids, _ = rasterization.get_tile_assignments(
+        means_2d, radii, H, W, tile_size=32,
+        # covs_2d=None, opacities=None → no per-pair Mahalanobis cull.
+    )
+    tiles_x = (W + 31) // 32
+    tiles_y = (H + 31) // 32
+    sgids, tr = rasterization.sort_and_bin(gids, tids, depths, tiles_x, tiles_y)
+    img = rasterization.alpha_blend(
+        means_2d, covs_2d, gauss.colors[valid], gauss.opacities[valid],
+        sgids, tr, H, W, tile_size=32,
+    ).numpy()
+    return img.astype(np.float64)
+
+
 def render_one(
     backend_name: str, gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float,
+    *, cull_disabled: bool = False,
 ) -> np.ndarray:
-    pipe = Pipeline(get_backend(backend_name), tile_size=32)
+    pipe = Pipeline(get_backend(backend_name), tile_size=32, cull_disabled=cull_disabled)
     extr = c2w_to_w2c(torch.from_numpy(c2w.astype(np.float32)))
     K = build_intrinsics(W, H, fov_deg)
     res = pipe.render(gauss, extr, K, H, W)
@@ -111,6 +173,34 @@ def main() -> None:
         action="store_true",
         help="also test azimuths 130..280 step 15 (catches viewer orbit angles)",
     )
+    ap.add_argument(
+        "--close-zoom",
+        action="store_true",
+        help=(
+            "include 4 close-zoom views where the doll fills the screen — "
+            "exposes per-pair Mahalanobis cull accumulation bugs that are "
+            "invisible at the default 1.2× diag distance."
+        ),
+    )
+    ap.add_argument(
+        "--cull-disabled",
+        action="store_true",
+        help=(
+            "render cpu_cpp with cull_disabled=True (no per-pair or "
+            "per-microblock cull) — diagnostic mode that should match the "
+            "ground truth to within float32 noise (>=100 dB)."
+        ),
+    )
+    ap.add_argument(
+        "--min-psnr",
+        type=float,
+        default=95.0,
+        help=(
+            "PSNR floor for PASS (default 95 dB). The previous 55 dB floor "
+            "tolerated the 32×32 tile cull bug; 95 dB ensures cull-driven "
+            "error stays below the 8-bit perceptual floor (≈48 dB)."
+        ),
+    )
     args = ap.parse_args()
 
     ply_path = Path(args.ply) if args.ply else Path(f"scenes/{args.scene}_doll.ply")
@@ -133,6 +223,8 @@ def main() -> None:
         if args.orbit_sweep:
             azs = list(range(130, 281, 15))
         views = scene_orbit_cameras(ply_path, azs)
+    if args.close_zoom:
+        views.update(close_zoom_cameras(ply_path))
 
     if not views:
         raise SystemExit("no views to compare")
@@ -141,33 +233,44 @@ def main() -> None:
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[compare_backends] ply={ply_path}  size={W}  views={len(views)}")
-    print(f"{'view':14s}  {'PSNR':>7s}  {'max':>6s}  {'bad_tiles':>9s}  {'cov_Δ':>7s}")
+    mode_label = "cull_disabled" if args.cull_disabled else "default"
+    print(
+        f"[compare_backends] ply={ply_path}  size={W}  views={len(views)}  "
+        f"mode={mode_label}  ref=numpy_unculled_alpha_blend"
+    )
+    print(f"{'view':18s}  {'PSNR':>7s}  {'max':>6s}  {'bad_tiles':>9s}  {'cov_Δ':>7s}")
     worst_psnr = float("inf")
     worst_bad = 0
     summary_rows = []
     for name, c2w in views.items():
-        ref = render_one("cpu", gauss, c2w, W, H, args.fov_deg)
-        cand = render_one("cpu_cpp", gauss, c2w, W, H, args.fov_deg)
+        ref = render_unculled_ground_truth(gauss, c2w, W, H, args.fov_deg)
+        cand = render_one(
+            "cpu_cpp", gauss, c2w, W, H, args.fov_deg,
+            cull_disabled=args.cull_disabled,
+        )
         m = analyze(ref, cand)
         worst_psnr = min(worst_psnr, m["psnr"])
         worst_bad = max(worst_bad, m["bad_tiles_gt_0.1"])
         summary_rows.append({"view": name, **m})
         print(
-            f"{name:14s}  {m['psnr']:7.2f}  {m['max_abs']:6.4f}  "
+            f"{name:18s}  {m['psnr']:7.2f}  {m['max_abs']:6.4f}  "
             f"{m['bad_tiles_gt_0.1']:9d}  {m['coverage_delta']:7.5f}"
         )
         if out_dir:
             Image.fromarray((np.clip(cand, 0, 1) * 255).astype(np.uint8)).save(out_dir / f"{name}_cpp.png")
-            amp = np.clip(np.abs(ref - cand) * 10.0, 0.0, 1.0)
-            Image.fromarray((amp * 255).astype(np.uint8)).save(out_dir / f"{name}_diff10.png")
+            Image.fromarray((np.clip(ref, 0, 1) * 255).astype(np.uint8)).save(out_dir / f"{name}_gt.png")
+            amp = np.clip(np.abs(ref - cand) * 40.0, 0.0, 1.0)
+            Image.fromarray((amp * 255).astype(np.uint8)).save(out_dir / f"{name}_diff40.png")
 
     print(f"[compare_backends] worst_psnr={worst_psnr:.2f} dB  worst_bad_tiles={worst_bad}")
     worst_max = max(r["max_abs"] for r in summary_rows)
     worst_cov = max(abs(r["coverage_delta"]) for r in summary_rows)
     print(f"[compare_backends] worst_max_abs={worst_max:.4f}  worst|coverage_Δ|={worst_cov:.5f}")
-    if worst_psnr < 55.0 or worst_max > 0.2 or worst_cov > 0.01:
-        print("[compare_backends] FAIL — cpu_cpp diverges from numpy cpu ground truth")
+    if worst_psnr < args.min_psnr or worst_max > 0.05 or worst_cov > 0.005:
+        print(
+            f"[compare_backends] FAIL — cpu_cpp ({mode_label}) diverges from "
+            f"unculled numpy ground truth (PSNR floor {args.min_psnr} dB)"
+        )
         raise SystemExit(1)
     print("[compare_backends] PASS")
 

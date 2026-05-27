@@ -30,6 +30,10 @@ struct CullAndBlendResult {
 // empty — eliminates a ~3 MB std::vector alloc+zero plus the same-sized
 // memcpy out of the C++ stage. The Python wrapper (`render_full_py`) zeros
 // the pybind numpy buffer once and threads it through.
+// cull_disabled=true: bypass the per-microblock Mahalanobis cull entirely
+// (every Gaussian-microblock pair that AABB-overlaps the microblock gets
+// blended). Used for diagnostic comparisons against the numpy unfused
+// alpha_blend ground truth — lets us isolate cull bugs from blend bugs.
 CullAndBlendResult cull_and_blend(
     const float* means_2d,
     const float* covs_2d,
@@ -46,6 +50,7 @@ CullAndBlendResult cull_and_blend(
     int image_width,
     float mb_contrib_floor,
     ThreadPool& pool,
-    float* image_out_external = nullptr);
+    float* image_out_external = nullptr,
+    bool cull_disabled = false);
 
 }  // namespace gsplat_cpu

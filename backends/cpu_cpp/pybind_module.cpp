@@ -798,7 +798,8 @@ py::tuple render_full_py(
     int tile_size,
     float min_opacity,
     float contrib_floor,
-    float mb_contrib_floor) {
+    float mb_contrib_floor,
+    bool cull_disabled) {
     using clock = std::chrono::steady_clock;
     auto t0 = clock::now();
 
@@ -855,7 +856,9 @@ py::tuple render_full_py(
     const float* vis_opacities =
         proj.opacities.empty() ? opacities_ptr : proj.opacities.data();
 
-    // Stage 2: tile_assign with per-pair Mahalanobis cull.
+    // Stage 2: tile_assign. When cull_disabled, skip the per-pair Mahalanobis
+    // cull by passing null cov/opacity pointers — only the AABB-based tile
+    // overlap stays. Otherwise the per-pair cull at contrib_floor runs.
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
     auto t_ta0 = clock::now();
@@ -866,8 +869,8 @@ py::tuple render_full_py(
         image_height,
         image_width,
         tile_size,
-        proj.covs_2d.data(),
-        vis_opacities,
+        cull_disabled ? nullptr : proj.covs_2d.data(),
+        cull_disabled ? nullptr : vis_opacities,
         contrib_floor,
         &global_tile_assign_pool(),
         /*recompute_tiles_per_gaussian=*/false);
@@ -918,7 +921,8 @@ py::tuple render_full_py(
         image_width,
         mb_contrib_floor,
         global_blend_pool(),
-        /*image_out_external=*/image.mutable_data());
+        /*image_out_external=*/image.mutable_data(),
+        /*cull_disabled=*/cull_disabled);
     auto t_b1 = clock::now();
 
     py::dict stats;
@@ -1102,7 +1106,8 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("tile_size") = 32,
         py::arg("min_opacity") = 1.0f / 255.0f,
         py::arg("contrib_floor") = 15.0f / 255.0f,
-        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f,
+        py::arg("cull_disabled") = false);
 
     m.def(
         "microblock_cull",
