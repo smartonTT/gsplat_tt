@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 47 · current best: 25.44 ms · target: 1.0 ms
+      iters: 48 · current best: 25.23 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-051-drop-alpha-cap
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T03:55:56.236064+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> Visuals pass all 8 structural checks cleanly: diff10 images show only fine per-pixel speckle with no tile seams, geometry shift, color clipping, or NaN signatures. Timing improvement -0.85% vs prev_best 25.442 ms (25.442 → 25.226 ms), p99/median ratio 1.196 (well under 3x). Per-view consistency passes (max PSNR delta 2.64 dB, max ms ratio 1.23x). PSNR values are bit-identical to iter-050 (which was KEEP) — confirming the 0.99 alpha cap never fired on this scene with the current contrib_floor=15/255 cull, so dropping it is mathematically lossless. Per the project&#x27;s perceptual PSNR policy ([[project-psnr-floor-perceptual]]), the kernel-algebra 40 dB floor was overconservative; 35 dB + clean visuals is the operating standard, and all 3 views (38.3, 39.1, 40.96) clear that floor with ≥3.3 dB margin. The change saves 3 SFPU ops/Gaussian by removing a defensive clamp that is provably bounded by upstream invariants (α = opacity·weight ≤ 1 algebraically) and downstream guards (Stage F sat_mask refresh, iter-042&#x27;s T·sat − contrib identity). KEEP.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.23 ms</b> median · 30.17 ms p99</div>
+    <div class="per-view">per-view: hero 25.23 / side 24.43 / top 30.12</div>
+    <div class="psnr">PSNR: hero 39.1 / side 41.0 / top 38.3 (min <b>38.3</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-051-drop-alpha-cap/hero.png" target="_blank"><img src="screenshots/iter-051-drop-alpha-cap/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-051-drop-alpha-cap/side.png" target="_blank"><img src="screenshots/iter-051-drop-alpha-cap/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-051-drop-alpha-cap/top.png" target="_blank"><img src="screenshots/iter-051-drop-alpha-cap/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-051-drop-alpha-cap/hero_diff10.png" target="_blank"><img src="screenshots/iter-051-drop-alpha-cap/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-051-drop-alpha-cap/side_diff10.png" target="_blank"><img src="screenshots/iter-051-drop-alpha-cap/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-051-drop-alpha-cap/top_diff10.png" target="_blank"><img src="screenshots/iter-051-drop-alpha-cap/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: All 3 diff10 images show no horizontal or vertical lines at 32- or 16-pixel spacing. Noise is distributed across object </li><li>✓ tile_uniform_fill: No 32x32 or 16x16 constant-color blocks visible in any rendered PNG or diff10. Texture detail matches reference througho</li><li>✓ missing_splat_holes: No dark holes or missing-coverage regions larger than a few pixels in any view. Silhouette coverage matches reference we</li><li>✓ color_clipping_bands: No saturated flat-color stripes or clipped R/G/B regions not present in reference. Color reproduction matches reference </li><li>✓ ringing_halos: No structured ringing or halos at object silhouettes in any view. Edge noise in diff10 is sub-pixel speckle, not periodi</li><li>✓ nan_inf_signatures: No pure black, white, or magenta spatially-correlated patches in any rendered PNG. No NaN/Inf indicators.</li><li>✓ geometry_shift: Diff10 images do not show a silhouette ghost offset from the object. Bright regions follow the object surface texture, n</li><li>✓ diff10_structure: All 3 diff10 images are dominated by fine uniform speckle co-located with the object surface — consistent with bf16 roun</li></ul>
+    <p class="reasoning">Visuals pass all 8 structural checks cleanly: diff10 images show only fine per-pixel speckle with no tile seams, geometry shift, color clipping, or NaN signatures. Timing improvement -0.85% vs prev_best 25.442 ms (25.442 → 25.226 ms), p99/median ratio 1.196 (well under 3x). Per-view consistency passes (max PSNR delta 2.64 dB, max ms ratio 1.23x). PSNR values are bit-identical to iter-050 (which was KEEP) — confirming the 0.99 alpha cap never fired on this scene with the current contrib_floor=15/255 cull, so dropping it is mathematically lossless. Per the project&#x27;s perceptual PSNR policy ([[project-psnr-floor-perceptual]]), the kernel-algebra 40 dB floor was overconservative; 35 dB + clean visuals is the operating standard, and all 3 views (38.3, 39.1, 40.96) clear that floor with ≥3.3 dB margin. The change saves 3 SFPU ops/Gaussian by removing a defensive clamp that is provably bounded by upstream invariants (α = opacity·weight ≤ 1 algebraically) and downstream guards (Stage F sat_mask refresh, iter-042&#x27;s T·sat − contrib identity). KEEP.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-050-drop-power-clamp

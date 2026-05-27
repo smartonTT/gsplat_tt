@@ -1,0 +1,8 @@
+{
+  "verdict": "KEEP",
+  "action": "commit",
+  "high_promotion_priority": false,
+  "kernel_ms_median": 25.226,
+  "prev_best_kernel_ms": 25.442,
+  "commit_sha": "9310fd471e0264aae06b4381a7d91ba4c9f3118d"
+}
