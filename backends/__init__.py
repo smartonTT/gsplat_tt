@@ -13,12 +13,13 @@ required.
 from __future__ import annotations
 
 from gsplat.backend import Backend
-from backends.cpu.backend import CpuBackend
+from backends.cpu.backend import CpuBackend, CpuMicroblockBackend
 from backends.tt.backend import KernelBackend
 
 
 REGISTRY: dict[str, type[Backend]] = {
     "cpu": CpuBackend,
+    "cpu_mb": CpuMicroblockBackend,
     "tt":  KernelBackend,
 }
 

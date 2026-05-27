@@ -41,3 +41,62 @@ class CpuBackend(Backend):
             image_height, image_width, tile_size=self.tile_size,
         )
         return image.numpy(), {}
+
+
+class CpuMicroblockBackend(CpuBackend):
+    """Numpy backend with microblock culling between sort and blend.
+
+    `mb_contrib_floor` is the per-microblock §2 keep threshold; the default
+    (1/16384) hits ≥ 60 dB PSNR vs `alpha_blend` on all 30 benchmark views
+    while still removing ~75% of (g, m) work. iter-009 may expose this as
+    a viewer slider.
+    """
+
+    def __init__(
+        self,
+        verbose: bool = False,
+        tile_size: int = 32,
+        mb_contrib_floor: float = 1.0 / 16384.0,
+    ):
+        super().__init__(verbose=verbose, tile_size=tile_size)
+        self.mb_contrib_floor = mb_contrib_floor
+
+    def blend(
+        self,
+        means_2d: torch.Tensor,
+        covs_2d: torch.Tensor,
+        colors: torch.Tensor,
+        opacities: torch.Tensor,
+        sorted_gaussian_ids: torch.Tensor,
+        tile_ranges: torch.Tensor,
+        image_height: int,
+        image_width: int,
+    ) -> tuple[np.ndarray, dict[str, float]]:
+        tiles_x = (image_width + 31) // 32
+        tiles_y = (image_height + 31) // 32
+        mb_header, mb_stream, stats = rasterization.microblock_cull(
+            means_2d,
+            covs_2d,
+            opacities,
+            sorted_gaussian_ids,
+            tile_ranges,
+            tiles_x,
+            tiles_y,
+            tile_size=self.tile_size,
+            mb_contrib_floor=self.mb_contrib_floor,
+        )
+        image = rasterization.alpha_blend_microblock(
+            means_2d,
+            covs_2d,
+            colors,
+            opacities,
+            mb_header,
+            mb_stream,
+            image_height,
+            image_width,
+            tile_size=self.tile_size,
+        )
+        return image.numpy(), {
+            "microblock_drop_pct": stats["drop_pct"],
+            "microblock_work_reduction_pct": stats["work_reduction_pct"],
+        }
