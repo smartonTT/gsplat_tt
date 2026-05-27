@@ -1,0 +1,17 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {"name": "tile_grid_seams", "result": "pass", "evidence": "No horizontal/vertical 32px or 16px lines in any diff×10 image. Speckle is spatially random."},
+    {"name": "tile_uniform_fill", "result": "pass", "evidence": "No constant-color 32×32/16×16 blocks. Object surface shows normal Gaussian splat texture."},
+    {"name": "missing_splat_holes", "result": "pass", "evidence": "No localized dark regions vs reference. Object coverage matches in all three views; no black holes."},
+    {"name": "color_clipping_bands", "result": "pass", "evidence": "No saturated R/G/B flat stripes. Color distribution matches reference; blues, pinks, oranges correct."},
+    {"name": "ringing_halos", "result": "pass", "evidence": "No structured ringing at silhouettes. Edge noise in diff×10 is commensurate with bf16 rounding."},
+    {"name": "nan_inf_signatures", "result": "pass", "evidence": "No pure black/white/magenta patches in spatially-correlated patterns. Background uniform black."},
+    {"name": "geometry_shift", "result": "pass", "evidence": "Diff×10 does not show object-silhouette-shaped bright edges. Geometry placement matches reference in all three views."},
+    {"name": "diff10_structure", "result": "pass", "evidence": "All three diff×10 images dominated by uniform random speckle conforming to the doll silhouette. No grids/bands/ghosts/missing features — consistent with bf16 round-trip elimination."}
+  ],
+  "psnr_check": {"floor": 35.0, "actual": {"hero": 36.41512724905431, "side": 39.924548674347385, "top": 35.66242932663711}, "pass": true},
+  "per_view_consistency": {"max_psnr_delta_db": 4.26, "max_ms_ratio": 1.29, "pass": true},
+  "timing": {"median_ms": 29.756, "p99_ms": 37.013, "vs_prev_best_pct": -5.0, "pass": true},
+  "reasoning": "All 8 visual checks pass. Diff×10 shows uniform low-amplitude speckle consistent with eliminating the bf16 CB_POWER round-trip at the splat level. PSNR: all three views above the 35 dB binning floor (hero 36.42, side 39.92, top 35.66) — slightly improved vs iter-038 (less bf16 rounding). Timing: kernel_ms_median 29.756 vs prev_best 31.34 (-5.0%); 30.06 (iter-038 KEEP) → 29.756 is the -1.0% real per-iter delta. p99/median 1.24× under 3× threshold. Clean kernel win with no structural regressions."
+}
