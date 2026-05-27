@@ -636,11 +636,7 @@ static FramePhaseTimings process_frame(DeviceContext& ctx, const FrameInputs& f,
         t_after_dispatch = clk::now();
         T.dispatch_ms = ms_between(t_after_upload, t_after_dispatch);
     }
-    // iter-091: split blocking=true into async-read + explicit Finish().
-    // Probes whether the implicit barrier inside blocking=true has the same
-    // latency as an explicit Finish(); if equivalent (likely), this is flat.
-    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, bufs.output, /*blocking=*/false);
-    distributed::Finish(*ctx.cq);
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, bufs.output, /*blocking=*/true);
     const auto t_end = clk::now();
     T.kernel_ms = ms_between(t_start, t_end);
     if (profile_phases) {
