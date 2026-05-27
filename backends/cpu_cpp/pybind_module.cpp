@@ -144,33 +144,36 @@ py::tuple project_full_py(
     float min_opacity = 1.0f / 255.0f) {
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
-    const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare_geometry(
+    // C++ path for cov3d + cov_cam — `project_prepare` does both per-Gaussian
+    // scalar fp32 with -ffp-contract=off. Saves ~8 ms over torch matmul calls
+    // (iter-011). cov2d still goes through torch.bmm because the (N,2,3) @
+    // (N,3,3) @ (N,3,2) batched matmul drops below 1 ms in torch on M-series
+    // and bit-matches the numpy reference.
+    const gsplat_cpu::ProjectPrepared prep = gsplat_cpu::project_prepare(
         static_cast<const float*>(means_info.ptr),
+        static_cast<const float*>(scales.request().ptr),
+        static_cast<const float*>(rotations.request().ptr),
         static_cast<const float*>(extrinsics.request().ptr),
         static_cast<const float*>(intrinsics.request().ptr),
         N,
         image_height,
         image_width);
 
-    py::module_ torch = py::module_::import("torch");
-    py::module_ utils = py::module_::import("gsplat.utils");
     const py::ssize_t n = static_cast<py::ssize_t>(prep.N);
+    py::module_ torch = py::module_::import("torch");
 
-    py::object scales_t = torch.attr("from_numpy")(scales);
-    py::object rotations_t = torch.attr("from_numpy")(rotations);
-    py::object extr_t = torch.attr("from_numpy")(extrinsics);
-    py::object cov3d = utils.attr("build_covariance_3d")(scales_t, rotations_t);
-    py::object r = extr_t.attr("__getitem__")(py::make_tuple(py::slice(0, 3, 1), py::slice(0, 3, 1)));
-    py::object cov_cam =
-        torch.attr("matmul")(torch.attr("matmul")(r, cov3d), r.attr("transpose")(0, 1));
-
+    py::array_t<float> cov_cam_arr({n, static_cast<py::ssize_t>(3), static_cast<py::ssize_t>(3)});
+    if (prep.N > 0) {
+        std::memcpy(cov_cam_arr.mutable_data(), prep.cov_cam.data(), prep.N * 9 * sizeof(float));
+    }
     py::array_t<float> j_arr({n, static_cast<py::ssize_t>(2), static_cast<py::ssize_t>(3)});
     if (prep.N > 0) {
         std::memcpy(j_arr.mutable_data(), prep.jacobian.data(), prep.N * 6 * sizeof(float));
     }
+    py::object cov_cam_t = torch.attr("from_numpy")(cov_cam_arr);
     py::object j = torch.attr("from_numpy")(j_arr);
     py::object covs_2d =
-        torch.attr("bmm")(torch.attr("bmm")(j, cov_cam), j.attr("transpose")(1, 2));
+        torch.attr("bmm")(torch.attr("bmm")(j, cov_cam_t), j.attr("transpose")(1, 2));
     covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 0, 0)).attr("__iadd__")(0.3);
     covs_2d.attr("__getitem__")(py::make_tuple(py::ellipsis(), 1, 1)).attr("__iadd__")(0.3);
 
