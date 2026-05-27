@@ -17,7 +17,6 @@
 #include "api/compute/eltwise_unary/rsub.h"
 #include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/binary_max_min.h"
-#include "api/compute/copy_dest_values.h"  // iter-069: state-init fuse
 
 #include "tools/profiler/kernel_profiler.hpp"
 
@@ -128,32 +127,32 @@ void kernel_main() {
         // many Gaussian iterations).
         // =====================================================================
 
-        // R_state, G_state, B_state = 0.0 — iter-069: fused into ONE acquire.
-        // Single fill_tile(0, 0.0) + copy_dest_values<Float32>(0,1)/(0,2)
-        // duplicates zero into dst[1]/dst[2], then pack 3 different CBs from
-        // 3 dst slots. Saves 2 acquires per tile (~680 acquires per frame).
-        //
-        // Safe pattern: ONE fill_tile (iter-047 forbade ≥5 fill_tile chains
-        // due to silent corruption; one fill is fine), then SFPU copy_dest
-        // duplication (iter-067 used this exact API). Multi-pack from
-        // different dst slots to different CBs is established (iter-043,
-        // iter-045 D2+E megafuse).
+        // R_state, G_state, B_state = 0.0
         cb_reserve_back(CB_COLOR_R_STATE, 1);
-        cb_reserve_back(CB_COLOR_G_STATE, 1);
-        cb_reserve_back(CB_COLOR_B_STATE, 1);
         tile_regs_acquire();
         fill_tile(0, 0.0f);
-        copy_dest_values_init();
-        copy_dest_values<DataFormat::Float32>(0, 1);
-        copy_dest_values<DataFormat::Float32>(0, 2);
         tile_regs_commit();
         tile_regs_wait();
         pack_tile(0, CB_COLOR_R_STATE);
-        pack_tile(1, CB_COLOR_G_STATE);
-        pack_tile(2, CB_COLOR_B_STATE);
         tile_regs_release();
         cb_push_back(CB_COLOR_R_STATE, 1);
+
+        cb_reserve_back(CB_COLOR_G_STATE, 1);
+        tile_regs_acquire();
+        fill_tile(0, 0.0f);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_tile(0, CB_COLOR_G_STATE);
+        tile_regs_release();
         cb_push_back(CB_COLOR_G_STATE, 1);
+
+        cb_reserve_back(CB_COLOR_B_STATE, 1);
+        tile_regs_acquire();
+        fill_tile(0, 0.0f);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_tile(0, CB_COLOR_B_STATE);
+        tile_regs_release();
         cb_push_back(CB_COLOR_B_STATE, 1);
 
         // T_state = 1.0
