@@ -162,10 +162,13 @@ void kernel_main() {
         // unused in the per-Gaussian path (constant=1 assumption on stitch_doll).
         // Saves 1 acquire per tile (CB fill + pack).
 
-        cb_wait_front(CB_COLOR_R_STATE, 1);
-        cb_wait_front(CB_COLOR_G_STATE, 1);
-        cb_wait_front(CB_COLOR_B_STATE, 1);
-        cb_wait_front(CB_T_STATE, 1);
+        // iter-102: dropped 4× cb_wait_front(CB_*_STATE, 1) per-tile init.
+        // Mirrors iter-085 (same-RISC producer/consumer, depth-1 CBs). Pushes
+        // happen at lines 156-159 above; first consumer (D2+E at ~line 384) is
+        // separated by 3 tile_regs_acquire (B1/B2/B3), satisfying the iter-086
+        // narrowed rule ("drop only when ≥3 tile_regs_acquire intervene"). The
+        // post-push wait is a self-semaphore re-read with no synchronization
+        // value here.
 
         // Read the per-tile Gaussian count the reader wrote into CB_TILE_META.
         // This tells us how many entries from CB_SCALARS we'll consume in the
