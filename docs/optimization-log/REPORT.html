@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 65 · current best: 23.98 ms · target: 1.0 ms
+      iters: 66 · current best: 23.98 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-070-state-init-fuse
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">kernel-algebra</span>
+      
+      <span class="ts">2026-05-27T09:34:06.626573+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> KEEP. All visual checks pass: no fireflies, no tile seams, no geometry shift, no color clipping, no NaN/Inf. PSNR is bit-identical to iter-066 architectural baseline (hero 39.40, side 40.98, top 38.59 — all &gt;= 38 dB floor). Per the validator rule, bit-identical PSNR to prev_best is not a regression — the 38 dB floor is a tripwire for new drops, not the established architectural baseline. Tile_structure_ratio is also bit-identical (max delta 0.000 vs iter-066); the &gt;14 ratio is the documented pack_tile bf16 architectural floor, not a new regression introduced by this iter. Timing is break-even at +0.187% (within 2% threshold). The state-init acquire fuse is algebraically correct, produces bit-identical output, and is a valid code-hygiene commit establishing the post-firefly baseline state.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>25.65 ms</b> median · 30.71 ms p99</div>
+    <div class="per-view">per-view: hero 25.65 / side 24.64 / top 30.38</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-070-state-init-fuse/hero.png" target="_blank"><img src="screenshots/iter-070-state-init-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-070-state-init-fuse/side.png" target="_blank"><img src="screenshots/iter-070-state-init-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-070-state-init-fuse/top.png" target="_blank"><img src="screenshots/iter-070-state-init-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-070-state-init-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-070-state-init-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-070-state-init-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-070-state-init-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-070-state-init-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-070-state-init-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: diff10 hero/side/top show uniform object-body noise with silhouette-edge emphasis consistent with the known architectura</li><li>✓ tile_uniform_fill: All three rendered PNGs show natural Gaussian splat coverage with continuous texture variation. No 32x32 or 16x16 consta</li><li>✓ missing_splat_holes: No dark holes in coverage vs reference. Render fills the object body uniformly in all three views.</li><li>✓ color_clipping_bands: No saturated R/G/B flat stripes observed in any rendered PNG. Colors are natural and within expected range.</li><li>✓ ringing_halos: Object silhouettes show normal edge noise consistent with bf16 quantization, not structured ringing or halos.</li><li>✓ nan_inf_signatures: No pure black/white/magenta spatially-correlated patches. No isolated bright outlier firefly pixels visible in hero/side</li><li>✓ geometry_shift: diff10 images do not reveal a shifted object silhouette. Error is distributed over the object body, not tracing a displa</li><li>✓ diff10_structure: diff10 hero and side dominated by uniform speckle noise over the object. diff10 top shows the known architectural tile-c</li></ul>
+    <p class="reasoning">KEEP. All visual checks pass: no fireflies, no tile seams, no geometry shift, no color clipping, no NaN/Inf. PSNR is bit-identical to iter-066 architectural baseline (hero 39.40, side 40.98, top 38.59 — all &gt;= 38 dB floor). Per the validator rule, bit-identical PSNR to prev_best is not a regression — the 38 dB floor is a tripwire for new drops, not the established architectural baseline. Tile_structure_ratio is also bit-identical (max delta 0.000 vs iter-066); the &gt;14 ratio is the documented pack_tile bf16 architectural floor, not a new regression introduced by this iter. Timing is break-even at +0.187% (within 2% threshold). The state-init acquire fuse is algebraically correct, produces bit-identical output, and is a valid code-hygiene commit establishing the post-firefly baseline state.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-069-state-init-fuse
