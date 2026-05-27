@@ -9,7 +9,7 @@
   <header class="top">
     <h1>gsplat_tt opt-v2 — autonomous loop</h1>
     <div class="topbar">
-      iters: 41 · current best: 26.64 ms · target: 1.0 ms
+      iters: 42 · current best: 26.35 ms · target: 1.0 ms
     </div>
     <p><a href="STATUS.md">STATUS</a> · <a href="BACKBURNER.md">BACKBURNER</a> · <a href="iters.jsonl">iters.jsonl</a></p>
   </header>
@@ -20,6 +20,39 @@
   <section class="iters">
     <h2>Per-iter cards (newest first)</h2>
     
+<section class="iter-card">
+  <header>
+    <h3>iter-045-d2-e-fuse
+      <span class="badge" style="background:#2ca02c">commit</span>
+      <span class="badge verdict">KEEP</span>
+      <span class="class-tag">binning</span>
+      
+      <span class="ts">2026-05-27T03:20:26.346775+00:00</span>
+    </h3>
+  </header>
+  
+  <p class="brief outcome"><b>Outcome.</b> PNG output MD5-identical to iter-043 (algebra unchanged). Kernel: 26.6435 → 26.3485 ms (-1.1%). Successfully merged D2&#x27;s 3-channel acquire with Stage E&#x27;s T_new acquire into ONE acquire using dst slots 0/1/2/3 (R/G/B/T_new). Saves 1 acquire per Gaussian — small but meaningful given we&#x27;re now down to ~7 acquires/g. Critical safety insight: ONE mul_tiles_init mid-acquire (for E&#x27;s T·sat) following a chain of binary_dest_reuse_tiles_init calls (for D2&#x27;s per-channel ELWADD) is SAFE. iter-039&#x27;s hang was MULTIPLE mul_tiles_init in one acquire; a single mul_tiles_init mixed with binary_dest_reuse_init calls is a different pattern and works fine.</p>
+  <div class="metrics">
+    <div class="ms">kernel: <b>26.35 ms</b> median · 32.00 ms p99</div>
+    <div class="per-view">per-view: hero 26.35 / side 25.41 / top 31.98</div>
+    <div class="psnr">PSNR: hero 39.4 / side 41.0 / top 38.6 (min <b>38.6</b>)</div>
+  </div>
+  <div class="thumbs">
+    <figure><a href="screenshots/iter-045-d2-e-fuse/hero.png" target="_blank"><img src="screenshots/iter-045-d2-e-fuse/hero.png" alt="hero"></a><figcaption>hero</figcaption></figure>
+    <figure><a href="screenshots/iter-045-d2-e-fuse/side.png" target="_blank"><img src="screenshots/iter-045-d2-e-fuse/side.png" alt="side"></a><figcaption>side</figcaption></figure>
+    <figure><a href="screenshots/iter-045-d2-e-fuse/top.png" target="_blank"><img src="screenshots/iter-045-d2-e-fuse/top.png" alt="top"></a><figcaption>top</figcaption></figure>
+    <figure><a href="screenshots/iter-045-d2-e-fuse/hero_diff10.png" target="_blank"><img src="screenshots/iter-045-d2-e-fuse/hero_diff10.png" alt="hero diff10"></a><figcaption>hero × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-045-d2-e-fuse/side_diff10.png" target="_blank"><img src="screenshots/iter-045-d2-e-fuse/side_diff10.png" alt="side diff10"></a><figcaption>side × 10</figcaption></figure>
+    <figure><a href="screenshots/iter-045-d2-e-fuse/top_diff10.png" target="_blank"><img src="screenshots/iter-045-d2-e-fuse/top_diff10.png" alt="top diff10"></a><figcaption>top × 10</figcaption></figure>
+  </div>
+  <details>
+    <summary>Validator checks (KEEP)</summary>
+    <ul><li>✓ tile_grid_seams: PNG output bit-identical to iter-043 (MD5 match all 3 views).</li><li>✓ tile_uniform_fill: Bit-identical to iter-043.</li><li>✓ missing_splat_holes: Bit-identical.</li><li>✓ color_clipping_bands: Bit-identical.</li><li>✓ ringing_halos: Bit-identical.</li><li>✓ nan_inf_signatures: Bit-identical.</li><li>✓ geometry_shift: Bit-identical.</li><li>✓ diff10_structure: Bit-identical to iter-043.</li></ul>
+    <p class="reasoning">PNG output MD5-identical to iter-043 (algebra unchanged). Kernel: 26.6435 → 26.3485 ms (-1.1%). Successfully merged D2&#x27;s 3-channel acquire with Stage E&#x27;s T_new acquire into ONE acquire using dst slots 0/1/2/3 (R/G/B/T_new). Saves 1 acquire per Gaussian — small but meaningful given we&#x27;re now down to ~7 acquires/g. Critical safety insight: ONE mul_tiles_init mid-acquire (for E&#x27;s T·sat) following a chain of binary_dest_reuse_tiles_init calls (for D2&#x27;s per-channel ELWADD) is SAFE. iter-039&#x27;s hang was MULTIPLE mul_tiles_init in one acquire; a single mul_tiles_init mixed with binary_dest_reuse_init calls is a different pattern and works fine.</p>
+  </details>
+</section>
+
+
 <section class="iter-card">
   <header>
     <h3>iter-044-b2-b3a-fuse-one
