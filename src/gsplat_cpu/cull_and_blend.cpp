@@ -110,8 +110,8 @@ inline void apply_gaussian_neon(
         pwr_lo = vmaxq_f32(vminq_f32(pwr_lo, zero), pwr_lo_bound);
         pwr_hi = vmaxq_f32(vminq_f32(pwr_hi, zero), pwr_lo_bound);
 
-        const float32x4_t gw_lo = simd_exp_f32x4_fast(pwr_lo);
-        const float32x4_t gw_hi = simd_exp_f32x4_fast(pwr_hi);
+        const float32x4_t gw_lo = simd_exp_f32x4(pwr_lo);
+        const float32x4_t gw_hi = simd_exp_f32x4(pwr_hi);
 
         const float32x4_t alpha_lo = vminq_f32(vmulq_f32(op_v, gw_lo), alpha_cap);
         const float32x4_t alpha_hi = vminq_f32(vmulq_f32(op_v, gw_hi), alpha_cap);
