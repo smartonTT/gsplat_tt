@@ -56,9 +56,27 @@ class RenderResult:
 class Pipeline:
     """Glue between a chosen backend and the per-frame stage sequence."""
 
-    def __init__(self, backend: Backend, *, tile_size: int = TILE_SIZE):
+    def __init__(
+        self,
+        backend: Backend,
+        *,
+        tile_size: int = TILE_SIZE,
+        cull_disabled: bool = False,
+        contrib_floor: float = 1.0 / 16384.0,
+    ):
         self.backend = backend
         self.tile_size = tile_size
+        # cull_disabled bypasses the per-pair Mahalanobis cull AND the
+        # per-microblock cull (where applicable). Used for diagnostic
+        # comparison against the unfused `alpha_blend` ground truth.
+        self.cull_disabled = cull_disabled
+        # contrib_floor matches the per-microblock cull threshold by default
+        # (was 15/255 — too aggressive, accumulated visible 7/255 per-pixel
+        # error at close zoom).
+        self.contrib_floor = contrib_floor
+        # Propagate cull_disabled to the backend if it supports it.
+        if hasattr(backend, "cull_disabled"):
+            backend.cull_disabled = cull_disabled
 
     # ------------------------------------------------------------------
     # Per-stage timer
@@ -166,11 +184,14 @@ class Pipeline:
 
         # Stage 2: tile assignment (+ per-pair Mahalanobis cull when cov+ω
         # are available — drops ~22% more pairs on stitch_doll, iter-024).
+        # Cull bypassed when self.cull_disabled is set, for diagnostics.
         with self._timer(timings, "tile_assign"):
             gaussian_ids, tile_ids, _ = self.backend.tile_assign(
                 means_2d, radii, image_height, image_width,
                 tile_size=self.tile_size,
-                covs_2d=covs_2d, opacities=opacities,
+                covs_2d=None if self.cull_disabled else covs_2d,
+                opacities=None if self.cull_disabled else opacities,
+                contrib_floor=self.contrib_floor,
                 sub_timings=sub_timings,
             )
         tiles_x = (image_width + self.tile_size - 1) // self.tile_size

@@ -137,8 +137,17 @@ inline void build_jacobian(float fx, float fy, float tx, float ty, float tz, flo
     jacobian[5] = -fy * ty / tz2;
 }
 
+// AABB σ-multiplier matching `rasterization.project_gaussians` (numpy).
+// Uses contrib_floor = 1/16384, matching the per-microblock cull threshold —
+// so the AABB never crops a tile/microblock pair the downstream cull would
+// actually keep. The previous floor was 15/255 (≈ 0.0588): with that, every
+// Gaussian with ω in [1/255, 15/255] got `k=0` (clamp(arg, 1) → 1 → ln=0),
+// then was dropped because `(rx > 0) & (ry > 0)` was false. That silent
+// drop is exactly what produced the "head still has holes" silhouette
+// thinning at close zoom. The new floor + 3σ cap keeps every Gaussian
+// above min_opacity (1/255) and capped at 3σ AABB for perf.
 inline float opacity_aware_k(float opacity) {
-    const float arg = std::max(opacity * (255.0f / 15.0f), 1.0f);
+    const float arg = std::max(opacity * 16384.0f, 1.0f);
     return std::min(std::sqrt(2.0f * std::log(arg)), 3.0f);
 }
 

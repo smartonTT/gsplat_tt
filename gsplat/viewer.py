@@ -348,6 +348,29 @@ class GaussianViewer:
                 "**Iconic view** — drag to explore; Reset restores hero camera.",
                 order=-899,
             )
+            # cull_disabled toggle: bypasses BOTH per-pair Mahalanobis and
+            # per-microblock culls in the cpu_cpp backend. Useful for
+            # eyeballing "is this artifact a cull bug or a blend bug?" —
+            # if the artifact disappears with the cull disabled it's a
+            # cull-quality issue; if it persists, it's downstream.
+            self._cull_disabled_checkbox = self.server.gui.add_checkbox(
+                "Disable culling (ground-truth blend)",
+                initial_value=False,
+                hint=(
+                    "Skip per-pair and per-microblock Mahalanobis culls. "
+                    "Slower but pixel-equivalent to the numpy alpha_blend "
+                    "reference — use to verify culling isn't the source of "
+                    "any visible artifact."
+                ),
+            )
+
+            @self._cull_disabled_checkbox.on_update
+            def _on_cull_toggle(_):
+                self.pipeline.cull_disabled = bool(self._cull_disabled_checkbox.value)
+                if hasattr(self.pipeline.backend, "cull_disabled"):
+                    self.pipeline.backend.cull_disabled = bool(
+                        self._cull_disabled_checkbox.value
+                    )
 
         self.viewer = GsplatViewer(
             server=self.server,
