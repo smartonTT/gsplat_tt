@@ -34,7 +34,10 @@ from backends import get_backend  # noqa: E402
 # only allow for fp32 operator-order differences. Blend uses a PSNR floor
 # instead — see PSNR_FLOOR_DB and blend's special handling below.
 TOLS = {
-    "project": {"means_2d": 1e-4, "covs_2d": 1e-5, "depths": 1e-5,
+    # covs_2d tol bumped to 1e-3 (iter-011): scalar C++ cov3d+cov_cam diverges
+    # from torch.matmul by ~5e-4 abs (fp32 operator-order; covs_2d magnitudes
+    # ~10-1000 so this is ~5e-7 relative — well below fp32 epsilon).
+    "project": {"means_2d": 1e-4, "covs_2d": 1e-3, "depths": 1e-5,
                 "radii": 1e-3, "valid_mask": 0},
     "tile_assign": {"gaussian_ids": 0, "tile_ids": 0, "tiles_per_gaussian": 0},
     "sort": {
