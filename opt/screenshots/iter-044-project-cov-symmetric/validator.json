@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "iter-044: exploit cov3d's symmetry in project_full_fused's per-Gaussian cov_cam = R @ cov3d @ R^T computation. cov3d is a symmetric 3x3 matrix stored as 9 floats (6 unique entries: c00, c01, c02, c11, c12, c22). Instead of two general 3x3 matmuls (54 mul + 36 add, producing a symmetric 9-element result of which only 6 are read), directly compute v_j = cov3d @ R(j,:)^T (3 vectors, 27 mul + 18 add using symmetry) and then cov_cam(i,j) = R(i,:) . v_j for the 6 unique upper-triangular entries (18 mul + 12 add). Total per-Gaussian covariance flops: 45 mul + 30 add, a ~17% reduction. PSNR mean 63.26 dB (bit-identical to iter-043). Project stage p50: 2.97 -> 2.82 ms (5% stage speedup); sum: 89.7 -> 85.2 ms (-4.5ms / 30 frames). Macro sum_total_ms: 5 trials = {319.4, 319.2, 305.3, 308.2, 306.8}, median 308.2; iter-043's 4 trials = {318.7, 316.7, 315.7, 319.8}, median 317.7. ~3.2% sustained overall speedup outside noise. KEEP."
+}
