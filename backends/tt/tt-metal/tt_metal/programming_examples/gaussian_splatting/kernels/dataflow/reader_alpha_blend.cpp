@@ -202,18 +202,25 @@ void kernel_main() {
 
         // (4) Stream Gaussian scalar packs for this tile. One 64-byte
         // page per Gaussian; compute pops one per inner-loop iteration.
-        // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
-        for (uint32_t g = 0; g < g_count; g++) {
-            // Accumulator zone for per-Gaussian scalar fetch (SumN1 slot 0).
-            // Reports total cycles spent in the per-Gaussian DRAM→L1 stream
-            // for this RISC, which is the dominant work on the reader.
+        // CB_SCALARS depth=8 (iter-081) lets the reader prefetch ahead of
+        // compute. iter-087: burst K=4 reads per barrier so the NoC can
+        // pipeline multiple DRAM bank fetches in flight.
+        constexpr uint32_t BURST_K = 4;
+        uint32_t g = 0;
+        while (g < g_count) {
             DeviceZoneScopedSumN1("Z_R_g");
 
-            uint32_t entry_id = g_start + g;
-            cb_reserve_back(CB_SCALARS, 1);
-            noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));
+            uint32_t batch = g_count - g;
+            if (batch > BURST_K) batch = BURST_K;
+            cb_reserve_back(CB_SCALARS, batch);
+            uint32_t wptr = get_write_ptr(CB_SCALARS);
+            for (uint32_t k = 0; k < batch; k++) {
+                noc_async_read_tile(g_start + g + k, packs_acc,
+                                    wptr + k * pack_bytes_padded);
+            }
             noc_async_read_barrier();
-            cb_push_back(CB_SCALARS, 1);
+            cb_push_back(CB_SCALARS, batch);
+            g += batch;
         }
 
         // CB_TILE_META's write pointer wraps after each push_back, so
