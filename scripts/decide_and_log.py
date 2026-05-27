@@ -46,14 +46,25 @@ def atomic_append_jsonl(path: Path, row: dict) -> None:
 
 
 def latest_best(jsonl: Path) -> float:
-    """Lowest kernel_ms_median among committed KEEPs in the log; inf if none."""
+    """Lowest kernel_ms_median among committed KEEPs since the most recent
+    baseline_reset_note row. A baseline_reset_note marks an iter where a
+    permanent correctness fix raised the achievable kernel_ms above prior
+    bests (e.g. iter-066 firefly fix). Rows before that point are pre-fix
+    history and should NOT factor into prev_best. Returns inf if no commits."""
     if not jsonl.exists() or not jsonl.read_text().strip():
         return float("inf")
-    best = float("inf")
+    rows = []
     for line in jsonl.read_text().splitlines():
         if not line.strip():
             continue
-        row = json.loads(line)
+        rows.append(json.loads(line))
+    # Find the latest baseline_reset_note row; only consider rows from there onward.
+    reset_idx = 0
+    for i, row in enumerate(rows):
+        if row.get("baseline_reset_note"):
+            reset_idx = i
+    best = float("inf")
+    for row in rows[reset_idx:]:
         if row.get("action") == "commit":
             best = min(best, row.get("kernel_ms_median", float("inf")))
     return best

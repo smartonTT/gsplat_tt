@@ -196,8 +196,11 @@ if [[ "$PROFILE" == "1" ]]; then
 fi
 
 # Step 7: compute metrics locally
-PREV_BEST="$(jq -r '[.[]?] | map(select(.action=="commit")) | min_by(.kernel_ms_median).kernel_ms_median // "Infinity"' \
-              < <(cat "$REPO/docs/optimization-log/iters.jsonl" | jq -s '.') 2>/dev/null || echo "Infinity")"
+PREV_BEST="$(jq -r '
+  . as $rows |
+  ($rows | to_entries | map(select(.value.baseline_reset_note)) | (last | .key) // 0) as $reset_idx |
+  $rows[$reset_idx:] | map(select(.action=="commit")) | min_by(.kernel_ms_median).kernel_ms_median // "Infinity"
+' < <(cat "$REPO/docs/optimization-log/iters.jsonl" | jq -s '.') 2>/dev/null || echo "Infinity")"
 "$LOCAL_PY" "$REPO/scripts/compute_metrics.py" \
   --iter-dir "$ITER_DIR" \
   --reference-dir "$REPO/benchmarks/reference" \
