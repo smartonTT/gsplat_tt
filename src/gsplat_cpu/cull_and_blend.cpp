@@ -327,8 +327,8 @@ void cull_and_blend_tile(
             // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
             // for the typical ~100+ Gaussians per saturating microblock.
             int32_t k = 0;
-            for (; k + 4 <= kn; k += 4) {
-                for (int j = 0; j < 4; ++j) {
+            for (; k + 8 <= kn; k += 8) {
+                for (int j = 0; j < 8; ++j) {
                     const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
                     const GaussianCullRec& rec = gauss_rec[gs];
                     apply_gaussian_neon(acc,
