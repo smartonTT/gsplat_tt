@@ -98,26 +98,43 @@ void kernel_main() {
 
     // Main per-tile loop: drain 3 R/G/B tiles compute pushed for this screen
     // tile and async-write them to their global slots in the output buffer.
+    //
+    // iter-105: barrier pipelined across iterations. Each loop body now:
+    //   1) cb_wait_front(3) for THIS iter's tiles
+    //   2) if t > 0: barrier + pop_front for the PREVIOUS iter's writes
+    //   3) issue THIS iter's 3 async writes
+    // Net effect: iter t-1's NoC drain runs concurrently with iter t's
+    // cb_wait_front (and compute's push). CB_COLOR_OUT depth=6 = 2 batches,
+    // so holding one batch in flight + one batch resident is exactly safe.
+    // After the loop, one final barrier+pop finishes the last iter.
     for (uint32_t t = 0; t < tile_ids_count; t++) {
-        // Per-tile profiling zone. No-op in non-profile builds.
         DeviceZoneScopedN("Z_W_tile");
 
-        uint32_t screen_tile = tile_ids[t];
-
-        // Wait for compute's batch of 3 tiles (R, then G, then B) in order.
-        // Note: CB_COLOR_OUT has depth 6 (multiple of 3) on the host side so
-        // this 3-tile batch never straddles a CB wrap, which would break the
-        // `read_ptr += tile_bytes` arithmetic below.
+        // (1) Wait for compute's next batch of 3 tiles.
         cb_wait_front(CB_COLOR_OUT, 3);
+
+        // (2) Finalize previous iter's writes (if any) BEFORE popping. The
+        // barrier waits only for iter t-1's writes (iter t hasn't issued
+        // any yet). Pop releases iter t-1's slots so compute can refill.
+        if (t > 0) {
+            noc_async_write_barrier();
+            cb_pop_front(CB_COLOR_OUT, 3);
+        }
+
+        // (3) Re-read read_ptr AFTER any pop so it points to THIS iter's
+        // tiles (oldest unpopped). Output buffer layout: (num_tiles, 3, 32,
+        // 32) bf16, tile-major with R/G/B interleaved per screen tile.
+        uint32_t screen_tile = tile_ids[t];
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
         for (uint32_t ch = 0; ch < 3; ch++) {
-            // Output buffer layout: (num_tiles, 3, 32, 32) bf16. Tile-major
-            // order with R/G/B interleaved per screen tile, so the global
-            // page index for channel `ch` of `screen_tile` is `3*screen_tile + ch`.
             uint32_t out_tile_id = 3 * screen_tile + ch;
             noc_async_write_tile(out_tile_id, out, read_ptr);
             read_ptr += tile_bytes;
         }
+    }
+
+    // Final barrier + pop for the last iter's writes.
+    if (tile_ids_count > 0) {
         noc_async_write_barrier();
         cb_pop_front(CB_COLOR_OUT, 3);
     }
