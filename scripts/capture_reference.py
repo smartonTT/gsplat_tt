@@ -1,8 +1,7 @@
 """iter-000: generate 30-view cameras_v2.json + render the numpy reference set.
 
 Usage:
-  python3 scripts/capture_reference.py --seed 0 --size 512 --scene stitch \
-      --out-cameras benchmarks/cameras_v2.json --out-renders benchmarks/reference_v2
+  python3 scripts/capture_reference.py --seed 0 --size 512 --scene stitch
 
 Produces 30 views: hero + 5 hero-adjacent + 12 orbit + 6 elevation + 6 challenge,
 sorted by camera-position proximity (greedy nearest-next from hero). Each view is
@@ -10,16 +9,18 @@ rendered with the cpu (numpy) backend at the requested resolution.
 
 The reference images this writes are FROZEN at iter-000 and never regenerated.
 Any later iter compares its renders against these.
+
+Camera basis (center / up / forward / right / half_extents) is derived via PCA on
+the filtered Gaussian positions — see scripts/derive_camera.py. Hero @ (elev=15°,
+az=0°) reproduces the same c2w that ships in benchmarks/cameras.json[<scene>][hero].
 """
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 import time
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import torch
@@ -31,6 +32,9 @@ from backends import get_backend  # noqa: E402
 from gsplat.loading_gaussians import load_ply  # noqa: E402
 from gsplat.pipeline import Pipeline  # noqa: E402
 from gsplat.utils import c2w_to_w2c  # noqa: E402
+from scripts.derive_camera import (  # noqa: E402
+    derive_basis, filter_positions, derive_camera_for_preset,
+)
 
 
 def build_intrinsics(W: int, H: int, fov_deg: float) -> torch.Tensor:
@@ -40,100 +44,65 @@ def build_intrinsics(W: int, H: int, fov_deg: float) -> torch.Tensor:
     return torch.from_numpy(K)
 
 
-def look_at_matrix(eye: np.ndarray, target: np.ndarray, up: np.ndarray) -> np.ndarray:
-    """OpenCV-style c2w: camera looks toward -Z in camera frame.
-
-    The image was authored with +Y pointing DOWN (see camera_controls.py),
-    so by default we use world_up = -Y for the up vector.
-    """
-    z = (eye - target)
-    z = z / max(float(np.linalg.norm(z)), 1e-9)   # camera +Z = away from target
-    x = np.cross(up, z)
-    x_norm = float(np.linalg.norm(x))
-    if x_norm < 1e-9:
-        # up parallel to z — pick an arbitrary perpendicular
-        alt = np.array([1.0, 0.0, 0.0]) if abs(z[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
-        x = np.cross(alt, z)
-        x_norm = float(np.linalg.norm(x))
-    x = x / x_norm
-    y = np.cross(z, x)
-    c2w = np.eye(4, dtype=np.float64)
-    c2w[:3, 0] = x
-    c2w[:3, 1] = y
-    c2w[:3, 2] = z
-    c2w[:3, 3] = eye
-    return c2w
-
-
 def cam_pos(c2w: np.ndarray) -> np.ndarray:
     return c2w[:3, 3].copy()
 
 
-def infer_scene_center(hero_c2w: np.ndarray) -> tuple[np.ndarray, float]:
-    """Scene center = point the hero camera looks at, assumed at distance ||eye||.
+def generate_views(
+    center: np.ndarray, half: np.ndarray, up: np.ndarray,
+    forward: np.ndarray, right: np.ndarray, seed: int,
+    base_elev_deg: float = 15.0, base_az_deg: float = 220.0,
+) -> dict[str, np.ndarray]:
+    """Return {name: c2w} for 30 views.
 
-    Returns (center, distance).
+    Hero is placed at `(base_elev_deg, base_az_deg)` in the PCA basis. The
+    other 29 views are parameterized off the same basis as deltas from hero,
+    so changing `base_az_deg` shifts ALL views together (preserving relative
+    layout) — only the orbit-class views name themselves by absolute degree.
+
+    Default `base_az_deg=220` per user spec (was 180 in the first cut).
     """
-    eye = hero_c2w[:3, 3]
-    # camera-forward in world = -camera-Z. c2w's 3rd column is camera-Z.
-    cam_z = hero_c2w[:3, 2]
-    distance = float(np.linalg.norm(eye))
-    center = eye - cam_z * distance
-    return center, distance
-
-
-def generate_views(hero_c2w: np.ndarray, seed: int) -> dict[str, np.ndarray]:
-    """Return {name: c2w} for 30 views."""
     rng = np.random.default_rng(seed)
-    world_up = np.array([0.0, -1.0, 0.0], dtype=np.float64)
-    center, dist = infer_scene_center(hero_c2w)
-    views: dict[str, np.ndarray] = {"hero": hero_c2w.copy()}
+    views: dict[str, np.ndarray] = {}
 
-    hero_eye = cam_pos(hero_c2w)
-    hero_dir = (hero_eye - center) / dist   # unit vector from center toward hero
-    azimuth0 = math.atan2(hero_dir[0], hero_dir[2])    # XY-plane azimuth around -Y
-    elevation0 = math.asin(np.clip(-hero_dir[1], -1.0, 1.0))  # because up = -Y
+    def place(elev_deg: float, az_deg: float, dist_mul: float = 1.0) -> np.ndarray:
+        """Place camera with distance = 1.5 * norm(half) * dist_mul.
 
-    def from_az_el(az: float, el: float, r: float) -> np.ndarray:
-        """Place camera at (az, el, r) relative to center; look at center, world_up=-Y."""
-        # Using the convention: world_up = -Y, so +elevation tilts camera "above" scene (more -Y).
-        cos_el, sin_el = math.cos(el), math.sin(el)
-        sin_az, cos_az = math.sin(az), math.cos(az)
-        # Unit direction from center to camera:
-        d = np.array([cos_el * sin_az, -sin_el, cos_el * cos_az], dtype=np.float64)
-        eye = center + d * r
-        return look_at_matrix(eye, center, world_up)
+        Implemented by scaling `half` because derive_camera_for_preset uses
+        norm(half) as the orbit radius. Scaling preserves the look-at center
+        and the (up, forward, right) basis.
+        """
+        return derive_camera_for_preset(center, half * dist_mul,
+                                        up, forward, right,
+                                        elev_deg=elev_deg, az_deg=az_deg)
 
-    # 5 hero-adjacent (small jitter in az/el and ±5% distance)
+    views["hero"] = place(base_elev_deg, base_az_deg)
+
+    # 5 hero-adjacent: ±8° elev/az jitter, ±5% distance.
     for i in range(5):
-        d_az = rng.uniform(-math.radians(8.0), math.radians(8.0))
-        d_el = rng.uniform(-math.radians(8.0), math.radians(8.0))
-        d_r = 1.0 + rng.uniform(-0.05, 0.05)
-        views[f"adj_{i+1}"] = from_az_el(azimuth0 + d_az, elevation0 + d_el, dist * d_r)
+        d_el = float(rng.uniform(-8.0, 8.0))
+        d_az = float(rng.uniform(-8.0, 8.0))
+        d_r = 1.0 + float(rng.uniform(-0.05, 0.05))
+        views[f"adj_{i+1}"] = place(base_elev_deg + d_el, base_az_deg + d_az, d_r)
 
-    # 12 orbit (every 30° starting at +30°), keep hero elevation
+    # 12 orbit at hero elevation, every 30° (named by absolute az for clarity).
     for k in range(1, 13):
-        az = azimuth0 + math.radians(30.0 * k)
-        views[f"orbit_{int(round(math.degrees(az - azimuth0)) % 360):03d}"] = \
-            from_az_el(az, elevation0, dist)
+        abs_az = (base_az_deg + 30.0 * k) % 360.0
+        views[f"orbit_{int(round(abs_az)):03d}"] = place(base_elev_deg, base_az_deg + 30.0 * k)
 
-    # 6 elevation (-30, -20, -10, +10, +20, +30 deg of pitch from hero), keep hero azimuth
-    for d_el_deg in (-30, -20, -10, 10, 20, 30):
-        el = elevation0 + math.radians(d_el_deg)
-        # Clamp to (-89, +89) to avoid look_at gimbal
-        el = max(min(el, math.radians(89.0)), math.radians(-89.0))
-        sign = "p" if d_el_deg > 0 else "n"
-        views[f"elev_{sign}{abs(d_el_deg):02d}"] = from_az_el(azimuth0, el, dist)
+    # 6 elevation steps. Clamp to (-85, +85) to avoid look-at gimbal.
+    for d_el in (-30, -20, -10, 10, 20, 30):
+        el = max(min(base_elev_deg + d_el, 85.0), -85.0)
+        sign = "p" if d_el > 0 else "n"
+        views[f"elev_{sign}{abs(d_el):02d}"] = place(el, base_az_deg)
 
-    # 6 challenge views
-    views["chal_top"]      = from_az_el(azimuth0, math.radians(85.0), dist)
-    views["chal_bottom"]   = from_az_el(azimuth0, math.radians(-85.0), dist)
-    views["chal_close"]    = from_az_el(azimuth0, elevation0, dist * 0.35)
-    views["chal_far"]      = from_az_el(azimuth0, elevation0, dist * 2.2)
-    views["chal_quarter"]  = from_az_el(azimuth0 + math.radians(45.0),
-                                        elevation0 + math.radians(15.0), dist * 0.6)
-    views["chal_behind"]   = from_az_el(azimuth0 + math.radians(180.0),
-                                        elevation0 - math.radians(10.0), dist * 1.3)
+    # 6 challenge views.
+    views["chal_top"]     = place(85.0, base_az_deg)
+    views["chal_bottom"]  = place(-85.0, base_az_deg)
+    views["chal_close"]   = place(base_elev_deg, base_az_deg, dist_mul=0.50)
+    views["chal_far"]     = place(base_elev_deg, base_az_deg, dist_mul=2.2)
+    views["chal_quarter"] = place(base_elev_deg + 15.0, base_az_deg + 45.0, dist_mul=0.8)
+    views["chal_behind"]  = place(base_elev_deg - 10.0, base_az_deg + 180.0, dist_mul=1.3)
 
     return views
 
@@ -162,26 +131,127 @@ def render_one(pipeline, gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float)
     return res.image, wall_ms, dict(res.timings) if hasattr(res, "timings") else {}
 
 
+def dump_per_stage_fixtures(
+    fixtures_dir: Path,
+    backend, gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float,
+    contrib_floor: float,
+) -> None:
+    """Step through the pipeline manually, dump inputs+outputs of each stage.
+
+    Used by Phase 2+ C++ ports to verify equivalence against numpy.
+    The fixture set is built from the hero view; one snapshot is enough — the
+    tests are about per-stage I/O equivalence, not viewpoint coverage.
+    """
+    fixtures_dir.mkdir(parents=True, exist_ok=True)
+    extr = c2w_to_w2c(torch.from_numpy(c2w.astype(np.float32)))
+    K = build_intrinsics(W, H, fov_deg)
+    means, scales, rotations, opacities, colors = (
+        gauss.means, gauss.scales, gauss.rotations, gauss.opacities, gauss.colors
+    )
+
+    means_2d, covs_2d, depths, radii, valid_mask = backend.project(
+        means, scales, rotations, extr, K, H, W, opacities=opacities,
+    )
+    np.savez_compressed(fixtures_dir / "project_inputs.npz",
+                        means=means.numpy(), scales=scales.numpy(),
+                        rotations=rotations.numpy(), extrinsics=extr.numpy(),
+                        intrinsics=K.numpy(), H=H, W=W,
+                        opacities=opacities.numpy())
+    np.savez_compressed(fixtures_dir / "project_outputs.npz",
+                        means_2d=means_2d.numpy(), covs_2d=covs_2d.numpy(),
+                        depths=depths.numpy(), radii=radii.numpy(),
+                        valid_mask=valid_mask.numpy())
+
+    colors_v = colors[valid_mask]
+    opacities_v = opacities[valid_mask]
+
+    gaussian_ids, tile_ids, tiles_per_g = backend.tile_assign(
+        means_2d, radii, H, W, tile_size=32,
+        covs_2d=covs_2d, opacities=opacities_v,
+    )
+    np.savez_compressed(fixtures_dir / "tile_assign_inputs.npz",
+                        means_2d=means_2d.numpy(), radii=radii.numpy(),
+                        covs_2d=covs_2d.numpy(), opacities=opacities_v.numpy(),
+                        H=H, W=W, tile_size=32, contrib_floor=contrib_floor)
+    np.savez_compressed(fixtures_dir / "tile_assign_outputs.npz",
+                        gaussian_ids=gaussian_ids.numpy(),
+                        tile_ids=tile_ids.numpy(),
+                        tiles_per_gaussian=tiles_per_g.numpy())
+
+    tiles_x = (W + 31) // 32
+    tiles_y = (H + 31) // 32
+    sorted_gids, tile_ranges = backend.sort(
+        gaussian_ids, tile_ids, depths, tiles_x, tiles_y,
+    )
+    np.savez_compressed(fixtures_dir / "sort_inputs.npz",
+                        gaussian_ids=gaussian_ids.numpy(),
+                        tile_ids=tile_ids.numpy(),
+                        depths=depths.numpy(),
+                        tiles_x=tiles_x, tiles_y=tiles_y)
+    np.savez_compressed(fixtures_dir / "sort_outputs.npz",
+                        sorted_gaussian_ids=sorted_gids.numpy(),
+                        tile_ranges=tile_ranges.numpy())
+
+    image, blend_sub = backend.blend(
+        means_2d, covs_2d, colors_v, opacities_v,
+        sorted_gids, tile_ranges, H, W,
+    )
+    np.savez_compressed(fixtures_dir / "blend_inputs.npz",
+                        means_2d=means_2d.numpy(), covs_2d=covs_2d.numpy(),
+                        colors=colors_v.numpy(), opacities=opacities_v.numpy(),
+                        sorted_gaussian_ids=sorted_gids.numpy(),
+                        tile_ranges=tile_ranges.numpy(),
+                        H=H, W=W, tile_size=32)
+    np.save(fixtures_dir / "blend_output.npy", image)
+    (fixtures_dir / "meta.json").write_text(json.dumps({
+        "fov_deg": fov_deg, "contrib_floor": contrib_floor,
+        "n_visible": int(valid_mask.sum().item()),
+        "n_entries": int(sorted_gids.numel()),
+    }, indent=2))
+    print(f"[capture_reference] dumped fixtures to {fixtures_dir}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--size", type=int, default=512, help="square render size")
     ap.add_argument("--scene", default="stitch")
-    ap.add_argument("--source-cameras", default="benchmarks/cameras.json",
-                    help="provides the hero pose for the scene")
+    ap.add_argument("--ply", default=None, help="override scenes/<scene>.ply path")
     ap.add_argument("--out-cameras", default="benchmarks/cameras_v2.json")
     ap.add_argument("--out-renders", default="benchmarks/reference_v2")
     ap.add_argument("--backend", default="cpu", help="cpu (numpy) or cpu_cpp")
     ap.add_argument("--contrib-floor", type=float, default=1.0 / 255.0)
+    ap.add_argument("--fov-deg", type=float, default=50.0)
+    ap.add_argument("--hero-elev", type=float, default=15.0,
+                    help="hero camera elevation in degrees (PCA basis)")
+    ap.add_argument("--hero-az", type=float, default=220.0,
+                    help="hero camera azimuth in degrees (PCA basis); user-set 220 vs the initial 0/180 default")
     args = ap.parse_args()
 
-    src_cameras = json.loads(Path(args.source_cameras).read_text())
-    scene_entry = src_cameras[args.scene]
-    fov_deg = float(scene_entry["fov_deg"])
-    ply_path = Path(scene_entry["ply"])
-    hero_c2w = np.asarray(scene_entry["views"]["hero"]["c2w"], dtype=np.float64)
+    # Discover PLY: use --ply if given, else derive_camera.SCENE_PLY entry.
+    if args.ply:
+        ply_path = Path(args.ply)
+    else:
+        from scripts.derive_camera import SCENE_PLY
+        if args.scene not in SCENE_PLY:
+            raise SystemExit(f"unknown scene {args.scene!r}; known: {list(SCENE_PLY)}")
+        ply_path = Path(SCENE_PLY[args.scene])
 
-    views = generate_views(hero_c2w, args.seed)
+    print(f"[capture_reference] scene={args.scene}  ply={ply_path}  size={args.size}  seed={args.seed}")
+    print(f"[capture_reference] loading PLY ...")
+    gauss = load_ply(str(ply_path))
+    means_np = gauss.means.numpy() if hasattr(gauss.means, "numpy") else np.asarray(gauss.means)
+    opacities_np = gauss.opacities.numpy() if hasattr(gauss.opacities, "numpy") else np.asarray(gauss.opacities)
+    scales_np = gauss.scales.numpy() if hasattr(gauss.scales, "numpy") else np.asarray(gauss.scales)
+    pos = filter_positions(means_np, opacities_np, scales_np)
+    print(f"[capture_reference] after filter: {len(pos):,} / {len(means_np):,} Gaussians")
+
+    center, half, up, forward, right = derive_basis(pos)
+    print(f"[capture_reference] hero: elev={args.hero_elev}° az={args.hero_az}° (PCA basis)")
+
+    views = generate_views(center, half, up, forward, right, args.seed,
+                            base_elev_deg=args.hero_elev,
+                            base_az_deg=args.hero_az)
     order = proximity_sort(views)
     print(f"[capture_reference] {len(views)} views generated, proximity-sorted")
 
@@ -189,7 +259,7 @@ def main():
         args.scene: {
             "ply": str(ply_path),
             "image_size": [args.size, args.size],
-            "fov_deg": fov_deg,
+            "fov_deg": args.fov_deg,
             "contrib_floor": args.contrib_floor,
             "order": order,
             "views": {name: {"c2w": views[name].tolist(), "manual": False} for name in order},
@@ -201,22 +271,33 @@ def main():
     out_dir = Path(args.out_renders)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[capture_reference] loading PLY: {ply_path}")
-    gauss = load_ply(str(ply_path))
-
     backend = get_backend(args.backend)
     pipeline = Pipeline(backend, tile_size=32)
+
+    hero_c2w = views["hero"]
+    repo_root = Path(__file__).resolve().parent.parent
+    fixtures_dir = repo_root / "tests" / "fixtures" / "hero"
+    dump_per_stage_fixtures(fixtures_dir, backend, gauss, hero_c2w, args.size, args.size,
+                             args.fov_deg, args.contrib_floor)
 
     timing_rows = []
     total_t0 = time.perf_counter()
     for i, name in enumerate(order):
         c2w = views[name]
-        img, wall_ms, timings = render_one(pipeline, gauss, c2w, args.size, args.size, fov_deg)
+        img, wall_ms, timings = render_one(pipeline, gauss, c2w, args.size, args.size, args.fov_deg)
+        if img is None:
+            img = np.zeros((args.size, args.size, 3), dtype=np.float32)
+            empty_flag = " [EMPTY-FRAME]"
+        else:
+            empty_flag = ""
+        if hasattr(img, "numpy"):
+            img = img.numpy()
         img_u8 = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
         Image.fromarray(img_u8).save(out_dir / f"{name}.png")
-        row = {"view": name, "view_idx": i, "total_ms": wall_ms, **timings}
+        row = {"view": name, "view_idx": i, "total_ms": wall_ms,
+               "empty_frame": empty_flag != "", **timings}
         timing_rows.append(row)
-        print(f"[capture_reference] {i+1:2d}/{len(order)} {name:14s} {wall_ms:7.1f} ms")
+        print(f"[capture_reference] {i+1:2d}/{len(order)} {name:14s} {wall_ms:7.1f} ms{empty_flag}")
 
     sum_ms = (time.perf_counter() - total_t0) * 1000.0
     timing_path = out_dir / "timing.jsonl"
