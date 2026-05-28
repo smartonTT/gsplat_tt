@@ -493,7 +493,10 @@ ProjectResult project_full_fused(
     const int image_height,
     const int image_width,
     ThreadPool* pool,
-    const int max_radius_param) {
+    const int max_radius_param,
+    const float contrib_floor_k,
+    const float k_cap,
+    const bool use_isoellipse) {
     // Extrinsics (column-3 translation).
     Mat3f r_mat;
     r_mat(0, 0) = extrinsics[0]; r_mat(0, 1) = extrinsics[1]; r_mat(0, 2) = extrinsics[2];
@@ -641,9 +644,22 @@ ProjectResult project_full_fused(
         covs_2d[i*4+2] = b_canonical;
         covs_2d[i*4+3] = c_diag;
 
-        const float k = opacities != nullptr ? opacity_aware_k(opacities[i]) : 3.0f;
-        const float rx = std::ceil(k * std::sqrt(std::max(a, 0.0f)));
-        const float ry = std::ceil(k * std::sqrt(std::max(c_diag, 0.0f)));
+        const float k_raw = opacities != nullptr
+            ? opacity_aware_k(opacities[i], contrib_floor_k)
+            : 3.0f;
+        const float k = std::max(apply_k_cap(k_raw, k_cap), 3.0f);
+        float rx;
+        float ry;
+        if (use_isoellipse) {
+            float hx;
+            float hy;
+            isoellipse_aabb_half_extents(a, b_canonical, c_diag, k, hx, hy);
+            rx = std::ceil(hx);
+            ry = std::ceil(hy);
+        } else {
+            rx = std::ceil(k * std::sqrt(std::max(a, 0.0f)));
+            ry = std::ceil(k * std::sqrt(std::max(c_diag, 0.0f)));
+        }
         radii_scratch[i] = Vec2f{rx, ry};
 
         const bool valid = (mean_x + rx > 0.0f)

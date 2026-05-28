@@ -26,6 +26,8 @@ opt/screenshots/*/build.log
 opt/screenshots/*/test.log
 opt/screenshots/*/.validator_prompt.md
 opt/REPORT.html
+opt/viewer-*.pid
+opt/viewer-*.log
 
 # CPython byproducts of our pyd extensions (iter-001+)
 *.so

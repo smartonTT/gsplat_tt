@@ -77,7 +77,7 @@ def fig_psnr(rows: list[dict]) -> str:
     valid_ys = [y for y in psnr_mins if y is not None]
     if valid_ys:
         ax.plot(valid_xs, valid_ys, color="#1d3557", marker="o", markersize=4, linewidth=1.2)
-    ax.axhline(60.0, color="#e9c46a", linestyle="--", linewidth=1.0, label="invariant 60 dB")
+    ax.axhline(PSNR_FLOOR, color="#e9c46a", linestyle="--", linewidth=1.0, label=f"floor {PSNR_FLOOR:.0f} dB")
     ax.set_xlabel("iter index")
     ax.set_ylabel("min PSNR across views (dB)")
     ax.set_title("Visual fidelity floor (higher is better; ∞ = bit-identical)")
@@ -180,6 +180,75 @@ def ledger_section(rows: list[dict]) -> str:
     return f"<section><h2>Ledger</h2><table class='ledger'>{head}{body}</table></section>"
 
 
+CULL_JSONL = OPT_DIR / "cull_tune.jsonl"
+CULL_SUMMARY = OPT_DIR / "cull_tune_summary.json"
+PSNR_FLOOR = 67.5
+
+
+def load_cull_tune() -> list[dict]:
+    if not CULL_JSONL.exists():
+        return []
+    return [json.loads(line) for line in CULL_JSONL.read_text().splitlines() if line.strip()]
+
+
+def cull_tune_section() -> str:
+    summary = {}
+    if CULL_SUMMARY.exists():
+        summary = json.loads(CULL_SUMMARY.read_text())
+    rows = load_cull_tune()
+    if not summary and not rows:
+        return ""
+
+    rec = summary.get("recommended", {})
+    head = (
+        f"<tr><th>assign</th><td>{rec.get('assign_mode', '—')}</td></tr>"
+        f"<tr><th>contrib_floor</th><td>1/{rec.get('contrib_floor_n', 0):.0f}</td></tr>"
+        f"<tr><th>transmittance</th><td>1/{rec.get('transmittance_n', 0):.0f}</td></tr>"
+        f"<tr><th>min_opacity</th><td>{rec.get('min_opacity', 0):.5f}</td></tr>"
+        f"<tr><th>k_cap</th><td>{rec.get('k_cap', 0)}</td></tr>"
+        f"<tr><th>worst PSNR vs GT</th><td>{summary.get('worst_psnr', 0):.2f} dB</td></tr>"
+        f"<tr><th>worst max_abs</th><td>{summary.get('worst_max_abs', 0):.4f}</td></tr>"
+        f"<tr><th>mean ms / view</th><td>{summary.get('mean_ms', 0):.1f}</td></tr>"
+        f"<tr><th>Maha vs iso ms</th><td>{summary.get('maha_ms', 0):.1f} / {summary.get('iso_ms', 0):.1f}</td></tr>"
+    )
+    iter_rows = ""
+    for r in rows:
+        if r.get("phase") not in ("final", "baseline_loose") and r.get("search") != "contrib_floor_n":
+            continue
+        cfg = r.get("config") or {}
+        iter_rows += (
+            f"<tr><td>{r.get('phase','')}</td>"
+            f"<td>{cfg.get('assign_mode','')}</td>"
+            f"<td>1/{cfg.get('contrib_floor_n',0):.0f}</td>"
+            f"<td>{r.get('worst_psnr',0):.2f}</td>"
+            f"<td>{r.get('worst_max_abs',0):.4f}</td>"
+            f"<td>{r.get('mean_ms',0):.1f}</td>"
+            f"<td>{r.get('ok','')}</td></tr>"
+        )
+    table = ""
+    if iter_rows:
+        table = (
+            "<h3>Iteration log (selected)</h3>"
+            "<table class='ledger'><tr><th>phase</th><th>mode</th><th>floor</th>"
+            "<th>PSNR</th><th>max</th><th>ms</th><th>pass</th></tr>"
+            f"{iter_rows}</table>"
+        )
+    return f"""
+<section>
+  <h2>Cull threshold tuning (2026-05-27)</h2>
+  <p>Reference: numpy <b>true ground truth</b> — project with min_opacity=0,
+  max_radius disabled, fixed 3σ AABB; tile_assign without per-pair Mahalanobis;
+  alpha_blend without microblock cull. Quality floor: PSNR ≥ {PSNR_FLOOR} dB,
+  max_abs ≤ 0.05 @ 1024² stitch_doll (+ orbit + close-zoom views).</p>
+  <p>Production default: <b>Mahalanobis</b> per-pair and per-microblock cull with
+  <code>contrib_floor=1/3000</code> (78–86 dB vs 1/16384 reference; ~21 ms/view).</p>
+  <table class='kv'>{head}</table>
+  {table}
+  <p>Full log: <code>opt/cull_tune.jsonl</code></p>
+</section>
+"""
+
+
 def algorithm_snapshot(rows: list[dict]) -> str:
     return """
 <section>
@@ -188,12 +257,13 @@ def algorithm_snapshot(rows: list[dict]) -> str:
   <a href='microblock-cpu-spec.md'>microblock-cpu-spec.md</a> for the
   microblock binning contract.</p>
   <ul>
-    <li><b>cpu-ref</b> (numpy): existing per-tile-per-pixel <code>alpha_blend</code>.
-        Algorithm spec, slow. Bit-truth.</li>
-    <li><b>cpu_cpp</b> (C++): in progress, see Phase 2. std::thread-pool, one tile per task.
-        Per-tile loop, scalar inner blend (microblock-major comes in iter-008).</li>
-    <li><b>contrib_floor</b> = 1/255 (4ms / 255). Lower = render everything visible.</li>
-    <li><b>Reference</b>: <code>benchmarks/reference_v2/</code> @ 512×512, 30 views, seed 0.</li>
+    <li><b>Ground truth</b>: numpy alpha_blend, all quality culls off
+        (min_opacity=0, max_radius=-1, no Mahalanobis/microblock cull).</li>
+    <li><b>cpu_cpp default</b>: diagonal AABB from k=sqrt(2·ln(ω/floor)) with
+        floor=1/3000, k_cap=3, min k=3; Mahalanobis cull on tile assign + blend.</li>
+    <li><b>contrib_floor</b> = 1/3000 (~86 dB vs 1/30k tight ref; 67.85 dB worst vs true GT).</li>
+    <li><b>Reference views</b>: <code>benchmarks/reference_v2/</code> @ 1024×1024,
+        orbit sweep + close-zoom.</li>
   </ul>
 </section>
 """
@@ -235,9 +305,10 @@ def build_html(rows: list[dict]) -> str:
 <html lang='en'>
 <head><meta charset='utf-8'><title>gsplat_tt_2 — Optimization Report</title>{css}</head>
 <body>
-<h1>gsplat_tt_2 — Optimization Report</h1>
-<p>Local-Mac CPU-first sprint. Target: 30-frame sum-of-ms below {TARGET_SUM_MS:.0f} ms at PSNR ≥ 60 dB vs reference.</p>
+<h1>gsplat_tt_3 — Optimization Report</h1>
+<p>Local-Mac CPU-first sprint. Target: 30-frame sum-of-ms below {TARGET_SUM_MS:.0f} ms at PSNR ≥ {PSNR_FLOOR:.0f} dB vs true GT (all culls off).</p>
 {status_section(rows)}
+{cull_tune_section()}
 {figs_html}
 {backburner_section(rows)}
 {ledger_section(rows)}

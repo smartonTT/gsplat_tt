@@ -6,6 +6,7 @@ import socket
 import statistics
 import time
 import traceback
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple
@@ -30,6 +31,7 @@ from gsplat.utils import c2w_to_w2c
 # Tile size matches the kernel (32x32) for both backends so CPU and
 # kernel renders use the same tiling and are directly comparable.
 TILE_SIZE = 32
+_FPS_WINDOW = 10
 
 # Pipeline stages, in execution order — used to lay out the benchmark table.
 _STAGE_KEYS = ("project", "tile_assign", "sort", "blend")
@@ -170,10 +172,14 @@ class GaussianViewer:
         self.force_square = force_square
         self.verbose = verbose
 
-        self.pipeline = Pipeline(get_backend(backend, verbose=verbose),
-                                 tile_size=TILE_SIZE)
+        self.pipeline = Pipeline(
+            get_backend(backend, verbose=verbose, k_cap=3.0),
+            tile_size=TILE_SIZE,
+            k_cap=3.0,
+        )
 
         self._frame_samples: list[_FrameSample] = []
+        self._fps_samples: deque[float] = deque(maxlen=_FPS_WINDOW)
         self._session_start = datetime.now()
         self._camera_controllers: dict[int, ClientCameraController] = {}
 
@@ -250,7 +256,7 @@ class GaussianViewer:
             self._transmittance_slider = self.server.gui.add_slider(
                 "Transmittance threshold",
                 min=1.0 / 65536.0,
-                max=1.0,
+                max=0.1,
                 step=1.0 / 65536.0,
                 initial_value=1.0 / 255.0,
                 hint=(
@@ -272,10 +278,11 @@ class GaussianViewer:
                 min=-1.0,
                 max=1024.0,
                 step=1.0,
-                initial_value=0.0,
+                initial_value=-1.0,
                 hint=(
                     "Project-stage cull: drop Gaussians whose AABB half-extent "
-                    "exceeds this (pixels). 0 = min(H,W)/2. −1 = disabled."
+                    "exceeds this (pixels). 0 = min(H,W)/2. −1 = disabled (needed "
+                    "for close-zoom vs true GT)."
                 ),
             )
             self._contrib_floor_slider = self.server.gui.add_slider(
@@ -283,7 +290,7 @@ class GaussianViewer:
                 min=1.0,
                 max=65536.0,
                 step=1.0,
-                initial_value=16384.0,
+                initial_value=3000.0,
                 hint=(
                     "Mahalanobis keep threshold: keep pair iff peak "
                     "ω·exp(−½m²) ≥ 1/N. Higher N = tighter cull."
@@ -293,19 +300,6 @@ class GaussianViewer:
         # Saved slider values restored when Mahalanobis is re-enabled.
         self._saved_min_opacity = float(self._min_opacity_slider.value)
         self._saved_max_radius = int(self._max_radius_slider.value)
-
-        def _apply_mahalanobis_ground_truth(enabled: bool) -> None:
-            if enabled:
-                self.pipeline.cull_disabled = False
-                self.pipeline.min_opacity = self._saved_min_opacity
-                self.pipeline.max_radius = self._saved_max_radius
-            else:
-                self._saved_min_opacity = float(self.pipeline.min_opacity)
-                self._saved_max_radius = int(self.pipeline.max_radius)
-                self.pipeline.cull_disabled = True
-                self.pipeline.min_opacity = 0.0
-                self.pipeline.max_radius = -1
-            self.pipeline._sync_render_settings_to_backend()
 
         def _sync_sliders_to_pipeline() -> None:
             n = float(self._contrib_floor_slider.value)
@@ -318,27 +312,43 @@ class GaussianViewer:
                 self.pipeline.max_radius = int(self._max_radius_slider.value)
             self.pipeline._sync_render_settings_to_backend()
 
+        def _apply_cull_mode(enabled: bool) -> None:
+            if enabled:
+                self.pipeline.cull_disabled = False
+                self.pipeline.min_opacity = self._saved_min_opacity
+                self.pipeline.max_radius = self._saved_max_radius
+            else:
+                self._saved_min_opacity = float(self.pipeline.min_opacity)
+                self._saved_max_radius = int(self.pipeline.max_radius)
+                self.pipeline.cull_disabled = True
+                self.pipeline.min_opacity = 0.0
+                self.pipeline.max_radius = -1
+            self.pipeline._sync_render_settings_to_backend()
+            self._request_rerender()
+
         @self._mahalanobis_checkbox.on_update
-        def _on_mahalanobis(_):
-            _apply_mahalanobis_ground_truth(bool(self._mahalanobis_checkbox.value))
+        def _on_cull_mode(_):
+            _apply_cull_mode(bool(self._mahalanobis_checkbox.value))
 
         @self._transmittance_slider.on_update
         def _on_transmittance(_):
             _sync_sliders_to_pipeline()
+            self._request_rerender()
 
         @self._min_opacity_slider.on_update
         def _on_min_opacity(_):
             _sync_sliders_to_pipeline()
+            self._request_rerender()
 
         @self._max_radius_slider.on_update
         def _on_max_radius(_):
             _sync_sliders_to_pipeline()
+            self._request_rerender()
 
         @self._contrib_floor_slider.on_update
         def _on_contrib_floor(_):
             _sync_sliders_to_pipeline()
-
-        _sync_sliders_to_pipeline()
+            self._request_rerender()
 
         self.viewer = GsplatViewer(
             server=self.server,
@@ -347,6 +357,8 @@ class GaussianViewer:
             default_render_width=render_width,
             default_render_height=render_height,
         )
+        _sync_sliders_to_pipeline()
+        self._request_rerender()
 
         center = self._scene_center
         default_distance = self._camera_distance
@@ -386,6 +398,7 @@ class GaussianViewer:
                 float(self._elev_slider.value),
                 float(self._dist_slider.value),
             )
+            self._request_rerender()
 
         @self._elev_slider.on_update
         def _on_elev(_event: viser.GuiEvent) -> None:
@@ -396,6 +409,7 @@ class GaussianViewer:
                 float(self._elev_slider.value),
                 float(self._dist_slider.value),
             )
+            self._request_rerender()
 
         @self._dist_slider.on_update
         def _on_dist(_event: viser.GuiEvent) -> None:
@@ -406,6 +420,7 @@ class GaussianViewer:
                 float(self._elev_slider.value),
                 float(self._dist_slider.value),
             )
+            self._request_rerender()
 
         @self._reset_view_button.on_click
         def _on_reset(_event: viser.GuiEvent) -> None:
@@ -417,6 +432,7 @@ class GaussianViewer:
             finally:
                 self._slider_suppress = False
             _apply_orbit_to_all_clients(220.0, 0.0, default_distance)
+            self._request_rerender()
 
         @self.server.on_client_connect
         def _on_client_connect(client: viser.ClientHandle) -> None:
@@ -454,6 +470,11 @@ class GaussianViewer:
             f"Viewer running at http://localhost:{port} ({', '.join(flags)})",
             flush=True,
         )
+
+    def _request_rerender(self, event: viser.GuiEvent | None = None) -> None:
+        """Ask nerfview to render the current camera with latest pipeline settings."""
+        self.viewer.mark_ui_active()
+        self.viewer.rerender(event)
 
     def _resolve_render_size(
         self, render_tab_state: nerfview.RenderTabState
@@ -549,9 +570,17 @@ class GaussianViewer:
     def _update_stats(
         self, elapsed: float, width: int, height: int, num_visible: int,
     ) -> None:
-        fps = 1.0 / elapsed if elapsed > 0 else 0.0
+        instant_fps = 1.0 / elapsed if elapsed > 0 else 0.0
+        # nerfview's trailing static/high pass after the UI burst ends is
+        # slower than the move/burst frames — exclude it from the average.
+        if time.time() <= self.viewer._ui_active_deadline:
+            self._fps_samples.append(instant_fps)
+        if self._fps_samples:
+            smoothed_fps = sum(self._fps_samples) / len(self._fps_samples)
+        else:
+            smoothed_fps = instant_fps
         self._stats_display.content = (
-            f"**FPS:** {fps:.1f} | "
+            f"**FPS:** {smoothed_fps:.1f} | "
             f"**Render:** {width}x{height} | "
             f"**Visible:** {num_visible:,}"
         )
@@ -652,6 +681,7 @@ class GaussianViewer:
             print("\nViewer stopped.")
         finally:
             self._write_benchmark()
+            self.viewer.stop_burst()
             self.pipeline.close()
             os._exit(0)
 

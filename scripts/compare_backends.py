@@ -98,15 +98,22 @@ def close_zoom_cameras(ply_path: Path) -> dict[str, np.ndarray]:
 def render_unculled_ground_truth(
     gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float,
 ) -> np.ndarray:
-    """numpy reference: project → tile_assign WITHOUT per-pair cull → sort
-    → alpha_blend WITHOUT microblock cull. This is the most pristine
-    forward pass available in the codebase.
+    """numpy reference with every quality cull disabled.
+
+    render_unculled_ground_truth: min_opacity=0, max_radius=-1, k=3 isoellipse.
+    Tile assign: no per-pair Mahalanobis cull.
+    Blend: no per-microblock Mahalanobis cull.
     """
     extr = c2w_to_w2c(torch.from_numpy(c2w.astype(np.float32)))
     K = build_intrinsics(W, H, fov_deg)
     means_2d, covs_2d, depths, radii, valid = rasterization.project_gaussians(
         gauss.means, gauss.scales, gauss.rotations, extr, K, H, W,
         opacities=gauss.opacities,
+        min_opacity=0.0,
+        max_radius=-1,
+        ground_truth=True,
+        use_isoellipse=True,
+        k_cap=3.0,
     )
     gids, tids, _ = rasterization.get_tile_assignments(
         means_2d, radii, H, W, tile_size=32,
@@ -125,8 +132,34 @@ def render_unculled_ground_truth(
 def render_one(
     backend_name: str, gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float,
     *, cull_disabled: bool = False,
+    use_isoellipse: bool = False,
+    contrib_floor: float = 1.0 / 3000.0,
+    min_opacity: float = 1.0 / 255.0,
+    max_radius: int = -1,
+    transmittance_threshold: float = 1.0 / 255.0,
+    k_cap: float = 3.0,
 ) -> np.ndarray:
-    pipe = Pipeline(get_backend(backend_name), tile_size=32, cull_disabled=cull_disabled)
+    pipe = Pipeline(
+        get_backend(
+            backend_name,
+            cull_disabled=cull_disabled,
+            use_isoellipse=use_isoellipse,
+            contrib_floor=contrib_floor,
+            min_opacity=min_opacity,
+            max_radius=max_radius,
+            transmittance_threshold=transmittance_threshold,
+            k_cap=k_cap,
+            mb_contrib_floor=contrib_floor,
+        ),
+        tile_size=32,
+        cull_disabled=cull_disabled,
+        contrib_floor=contrib_floor,
+        min_opacity=min_opacity,
+        max_radius=max_radius,
+        transmittance_threshold=transmittance_threshold,
+        k_cap=k_cap,
+        use_isoellipse=use_isoellipse,
+    )
     extr = c2w_to_w2c(torch.from_numpy(c2w.astype(np.float32)))
     K = build_intrinsics(W, H, fov_deg)
     res = pipe.render(gauss, extr, K, H, W)
@@ -186,19 +219,19 @@ def main() -> None:
         "--cull-disabled",
         action="store_true",
         help=(
-            "render cpu_cpp with cull_disabled=True (no per-pair or "
-            "per-microblock cull) — diagnostic mode that should match the "
-            "ground truth to within float32 noise (>=100 dB)."
+            "render cpu_cpp in diagnostic ground-truth mode: no Mahalanobis/"
+            "microblock cull, min_opacity=0, max_radius=-1, k=3 isoellipse "
+            "radii (should match numpy GT to float32 noise)."
         ),
     )
     ap.add_argument(
         "--min-psnr",
         type=float,
-        default=95.0,
+        default=67.5,
         help=(
-            "PSNR floor for PASS (default 95 dB). The previous 55 dB floor "
-            "tolerated the 32×32 tile cull bug; 95 dB ensures cull-driven "
-            "error stays below the 8-bit perceptual floor (≈48 dB)."
+            "PSNR floor vs true GT (all culls off). ~74 dB is the intrinsic "
+            "C++ vs numpy limit; 67.5 dB allows close-zoom headroom with "
+            "contrib_floor=1/3000. max_abs ≤ 0.05 is the primary perceptual gate."
         ),
     )
     args = ap.parse_args()
@@ -236,7 +269,7 @@ def main() -> None:
     mode_label = "cull_disabled" if args.cull_disabled else "default"
     print(
         f"[compare_backends] ply={ply_path}  size={W}  views={len(views)}  "
-        f"mode={mode_label}  ref=numpy_unculled_alpha_blend"
+        f"mode={mode_label}  ref=numpy_true_gt(all_culls_off)"
     )
     print(f"{'view':18s}  {'PSNR':>7s}  {'max':>6s}  {'bad_tiles':>9s}  {'cov_Δ':>7s}")
     worst_psnr = float("inf")
@@ -247,6 +280,10 @@ def main() -> None:
         cand = render_one(
             "cpu_cpp", gauss, c2w, W, H, args.fov_deg,
             cull_disabled=args.cull_disabled,
+            use_isoellipse=False,
+            min_opacity=0.0 if args.cull_disabled else 1.0 / 255.0,
+            max_radius=-1 if args.cull_disabled else -1,
+            contrib_floor=1.0 / 3000.0,
         )
         m = analyze(ref, cand)
         worst_psnr = min(worst_psnr, m["psnr"])

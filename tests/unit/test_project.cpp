@@ -151,20 +151,15 @@ TEST_CASE("project: 3-Gaussian synthetic smoke", "[project]") {
 }
 
 TEST_CASE("opacity_aware_k matches numpy formula", "[project]") {
-    // Updated 2026-05-27: floor 15/255 → 1/16384 to fix the close-zoom
-    // "head still has holes" silhouette thinning. With the old floor every
-    // Gaussian with ω∈[1/255, 15/255] got k=0 and was silently dropped by
-    // `(rx > 0) & (ry > 0)`; numpy and C++ shared that bug.
+    constexpr float floor = 1.0f / 16384.0f;
     const auto k_for = [](float opacity) {
-        const float arg = std::max(opacity * 16384.0f, 1.0f);
-        return std::min(std::sqrt(2.0f * std::log(arg)), 3.0f);
+        const float arg = std::max(opacity / floor, 1.0f);
+        return std::sqrt(2.0f * std::log(arg));
     };
 
     REQUIRE(gsplat_cpu::opacity_aware_k(0.01f) == Catch::Approx(k_for(0.01f)).margin(1e-6f));
     REQUIRE(gsplat_cpu::opacity_aware_k(0.5f) == Catch::Approx(k_for(0.5f)).margin(1e-6f));
     REQUIRE(gsplat_cpu::opacity_aware_k(1.0f) == Catch::Approx(k_for(1.0f)).margin(1e-6f));
-    // Verify the bug regression: ω=0.05 was dropped under the 15/255 floor
-    // (k=0) and must now be kept (k>0).
     REQUIRE(gsplat_cpu::opacity_aware_k(0.05f) > 0.5f);
 }
 
@@ -257,11 +252,9 @@ TEST_CASE("project: hero fixture Gaussian 4102", "[project]") {
     REQUIRE(result.depths.size() == 1);
     REQUIRE(result.means_2d[0] == Catch::Approx(-4.3763f).margin(1e-3f));
     REQUIRE(result.means_2d[1] == Catch::Approx(475.2522f).margin(1e-3f));
-    // Updated radii expectations match opacity_aware_k change (floor now
-    // 1/16384). At ω=0.2, k = min(sqrt(2·ln(0.2·16384)), 3) = 3.0 (saturates
-    // at the 3σ cap), so radii grow proportional to the projected sigma.
-    REQUIRE(result.radii[0] == Catch::Approx(18.0f).margin(1e-3f));
-    REQUIRE(result.radii[1] == Catch::Approx(12.0f).margin(1e-3f));
+    // At ω=0.2, k = sqrt(2·ln(0.2/(1/16384))) ≈ 4.02 (uncapped in legacy project()).
+    REQUIRE(result.radii[0] == Catch::Approx(24.0f).margin(1e-3f));
+    REQUIRE(result.radii[1] == Catch::Approx(17.0f).margin(1e-3f));
 }
 
 TEST_CASE("project: near-plane cull", "[project]") {
