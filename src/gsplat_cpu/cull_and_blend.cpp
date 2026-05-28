@@ -207,7 +207,8 @@ void cull_and_blend_tile(
     int64_t* tile_dropped_count,
     int64_t* tile_kept_count,
     TileScratch& scratch,
-    const bool cull_disabled) {
+    const bool cull_disabled,
+    const float transmittance_threshold) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
     if (start == end) {
@@ -400,7 +401,7 @@ void cull_and_blend_tile(
                         rec.cr, rec.cg, rec.cb,
                         px_start, py_start);
                 }
-                if (max_t_neon(acc) < 0.0001f) { k = kn; break; }
+                if (max_t_neon(acc) < transmittance_threshold) { k = kn; break; }
             }
             for (; k < kn; ++k) {
                 const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
@@ -464,7 +465,7 @@ void cull_and_blend_tile(
             }
             float tmax = 0.0f;
             for (int k = 0; k < npix; ++k) tmax = std::max(tmax, T[k]);
-            if (tmax < 0.0001f) break;
+            if (tmax < transmittance_threshold) break;
         }
         for (int i = 0; i < mb_h; ++i) {
             const int gy = py_start + i;
@@ -502,7 +503,8 @@ CullAndBlendResult cull_and_blend(
     const float mb_contrib_floor,
     ThreadPool& pool,
     float* image_out_external,
-    const bool cull_disabled) {
+    const bool cull_disabled,
+    const float transmittance_threshold) {
     const int num_tiles = tiles_x * tiles_y;
 
     CullAndBlendResult result;
@@ -627,7 +629,8 @@ CullAndBlendResult cull_and_blend(
                     &tile_dropped[static_cast<std::size_t>(tile_id)],
                     &tile_kept[static_cast<std::size_t>(tile_id)],
                     sc,
-                    cull_disabled);
+                    cull_disabled,
+                    transmittance_threshold);
             }
         });
     }

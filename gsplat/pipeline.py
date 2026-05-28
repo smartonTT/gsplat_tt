@@ -63,6 +63,9 @@ class Pipeline:
         tile_size: int = TILE_SIZE,
         cull_disabled: bool = False,
         contrib_floor: float = 1.0 / 16384.0,
+        transmittance_threshold: float = 1.0 / 255.0,
+        min_opacity: float = 1.0 / 255.0,
+        max_radius: int = 0,
     ):
         self.backend = backend
         self.tile_size = tile_size
@@ -70,13 +73,27 @@ class Pipeline:
         # per-microblock cull (where applicable). Used for diagnostic
         # comparison against the unfused `alpha_blend` ground truth.
         self.cull_disabled = cull_disabled
-        # contrib_floor matches the per-microblock cull threshold by default
-        # (was 15/255 — too aggressive, accumulated visible 7/255 per-pixel
-        # error at close zoom).
         self.contrib_floor = contrib_floor
-        # Propagate cull_disabled to the backend if it supports it.
-        if hasattr(backend, "cull_disabled"):
-            backend.cull_disabled = cull_disabled
+        self.transmittance_threshold = transmittance_threshold
+        self.min_opacity = min_opacity
+        self.max_radius = max_radius
+        self._sync_render_settings_to_backend()
+
+    def _sync_render_settings_to_backend(self) -> None:
+        """Push Pipeline render knobs into the fused backend when supported."""
+        b = self.backend
+        if hasattr(b, "cull_disabled"):
+            b.cull_disabled = self.cull_disabled
+        if hasattr(b, "transmittance_threshold"):
+            b.transmittance_threshold = self.transmittance_threshold
+        if hasattr(b, "min_opacity"):
+            b.min_opacity = self.min_opacity
+        if hasattr(b, "max_radius"):
+            b.max_radius = self.max_radius
+        if hasattr(b, "contrib_floor_override"):
+            b.contrib_floor_override = self.contrib_floor
+        if hasattr(b, "_mb_contrib_floor"):
+            b._mb_contrib_floor = self.contrib_floor
 
     # ------------------------------------------------------------------
     # Per-stage timer

@@ -200,7 +200,8 @@ py::tuple project_full_with_cov3d_py(
         N,
         image_height,
         image_width,
-        &global_project_pool());
+        &global_project_pool(),
+        0);
 
     return pack_project_result(result, N);
 }
@@ -799,7 +800,9 @@ py::tuple render_full_py(
     float min_opacity,
     float contrib_floor,
     float mb_contrib_floor,
-    bool cull_disabled) {
+    bool cull_disabled,
+    float transmittance_threshold,
+    int max_radius) {
     using clock = std::chrono::steady_clock;
     auto t0 = clock::now();
 
@@ -822,7 +825,8 @@ py::tuple render_full_py(
         N,
         image_height,
         image_width,
-        &global_project_pool());
+        &global_project_pool(),
+        max_radius);
     const std::size_t M = proj.depths.size();
     auto t_p1 = clock::now();
 
@@ -922,7 +926,8 @@ py::tuple render_full_py(
         mb_contrib_floor,
         global_blend_pool(),
         /*image_out_external=*/image.mutable_data(),
-        /*cull_disabled=*/cull_disabled);
+        /*cull_disabled=*/cull_disabled,
+        /*transmittance_threshold=*/transmittance_threshold);
     auto t_b1 = clock::now();
 
     py::dict stats;
@@ -1105,9 +1110,11 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_width"),
         py::arg("tile_size") = 32,
         py::arg("min_opacity") = 1.0f / 255.0f,
-        py::arg("contrib_floor") = 15.0f / 255.0f,
+        py::arg("contrib_floor") = 1.0f / 16384.0f,
         py::arg("mb_contrib_floor") = 1.0f / 16384.0f,
-        py::arg("cull_disabled") = false);
+        py::arg("cull_disabled") = false,
+        py::arg("transmittance_threshold") = 1.0f / 255.0f,
+        py::arg("max_radius") = 0);
 
     m.def(
         "microblock_cull",
