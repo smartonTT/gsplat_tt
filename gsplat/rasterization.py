@@ -35,7 +35,7 @@ def project_gaussians(
     image_width: int,
     opacities: torch.Tensor | None = None,
     min_opacity: float = 1.0 / 255.0,
-    max_radius: int = 0,
+    max_radius: int = -1,
     contrib_floor: float = 1.0 / 16384.0,
     k_cap: float = 3.0,
     use_isoellipse: bool = False,
@@ -143,7 +143,6 @@ def project_gaussians(
             k = torch.sqrt(2.0 * torch.log(arg))
             if k_cap > 0.0:
                 k = torch.clamp(k, max=float(k_cap))
-            k = torch.clamp(k, min=3.0)
         else:
             k = torch.full_like(a, 3.0)
 

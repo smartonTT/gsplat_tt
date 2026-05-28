@@ -647,7 +647,7 @@ ProjectResult project_full_fused(
         const float k_raw = opacities != nullptr
             ? opacity_aware_k(opacities[i], contrib_floor_k)
             : 3.0f;
-        const float k = std::max(apply_k_cap(k_raw, k_cap), 3.0f);
+        const float k = apply_k_cap(k_raw, k_cap);
         float rx;
         float ry;
         if (use_isoellipse) {
