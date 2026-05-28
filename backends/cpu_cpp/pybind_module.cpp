@@ -16,6 +16,11 @@
 #include "gsplat_cpu/thread_pool.h"
 #include "gsplat_cpu/tile_assign.h"
 
+#ifdef GSPLAT_WITH_TT
+#include "gsplat_tt/blend.h"
+#include "gsplat_tt/project.h"
+#endif
+
 namespace py = pybind11;
 
 namespace {
@@ -168,13 +173,19 @@ py::tuple project_full_with_cov3d_py(
     int image_height,
     int image_width,
     py::object opacities_obj = py::none(),
-    float min_opacity = 1.0f / 255.0f) {
+    float min_opacity = 1.0f / 255.0f,
+    py::object means_cam_obj = py::none()) {
     // iter-022: fused per-Gaussian project_full. Replaces the prior 5-pool.wait()
     // sub-stage chain (geometry -> cov_cam -> cov2d -> valid/radii ->
     // gather count/scatter) with one big parallel pass over N plus the
     // gather count+scatter (3 waits total). cov_cam is held in registers
     // only — never materialised to memory (saves ~21.6 MB of memory
     // traffic per frame at N=601k).
+    //
+    // amendment-002 tt-005: optional means_cam (N, 3) fp32 lets callers
+    // (e.g. TtBackend) supply a device-precomputed R@mean array, skipping
+    // the inline host matmul. Translation +t is still applied inside
+    // project_full_fused, so the precomp must NOT include translation.
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
 
@@ -187,6 +198,19 @@ py::tuple project_full_with_cov3d_py(
             throw std::invalid_argument("opacities must have shape (N,)");
         }
         opacities_ptr = static_cast<const float*>(opacities.request().ptr);
+    }
+
+    const float* means_cam_ptr = nullptr;
+    py::array_t<float, py::array::c_style | py::array::forcecast> means_cam_arr;
+    if (!means_cam_obj.is_none()) {
+        means_cam_arr = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
+            means_cam_obj);
+        const auto mc_info = means_cam_arr.request();
+        if (mc_info.ndim != 2 || mc_info.shape[1] != 3 ||
+            static_cast<std::size_t>(mc_info.shape[0]) != N) {
+            throw std::invalid_argument("means_cam must have shape (N, 3)");
+        }
+        means_cam_ptr = static_cast<const float*>(mc_info.ptr);
     }
 
     const gsplat_cpu::ProjectResult result = gsplat_cpu::project_full_fused(
@@ -204,7 +228,8 @@ py::tuple project_full_with_cov3d_py(
         0,
         1.0f / 16384.0f,
         3.0f,
-        false);
+        false,
+        means_cam_ptr);
 
     return pack_project_result(result, N);
 }
@@ -996,6 +1021,137 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
             });
 
     m.def("hello", []() { return std::string("hello from gsplat_cpu"); });
+
+    m.def("simd_backend", []() -> std::string {
+#if defined(GSPLAT_SCALAR_ONLY)
+        return "scalar";
+#elif defined(GSPLAT_SIMD_AVX2) && defined(__AVX2__)
+        return "avx2";
+#elif defined(__ARM_NEON) || defined(__ARM_NEON)
+        return "neon";
+#else
+        return "scalar";
+#endif
+    });
+
+    m.def("has_tt_support", []() {
+#ifdef GSPLAT_WITH_TT
+        return true;
+#else
+        return false;
+#endif
+    });
+
+#ifdef GSPLAT_WITH_TT
+    m.def(
+        "blend_microblock_tt",
+        [](py::array_t<float, py::array::c_style | py::array::forcecast> packs,
+           py::array_t<float, py::array::c_style | py::array::forcecast> offsets,
+           py::array_t<float, py::array::c_style | py::array::forcecast> px,
+           py::array_t<float, py::array::c_style | py::array::forcecast> py,
+           py::array_t<float, py::array::c_style | py::array::forcecast> coeff_table,
+           py::array_t<uint32_t, py::array::c_style | py::array::forcecast> mb_header,
+           py::array_t<uint32_t, py::array::c_style | py::array::forcecast> mb_stream,
+           int image_height,
+           int image_width) {
+            const auto packs_info = packs.request();
+            const auto offsets_info = offsets.request();
+            const auto px_info = px.request();
+            const auto py_info = py.request();
+            const auto coeff_info = coeff_table.request();
+            const auto header_info = mb_header.request();
+            const auto stream_info = mb_stream.request();
+
+            std::vector<float> packs_vec(
+                static_cast<const float*>(packs_info.ptr),
+                static_cast<const float*>(packs_info.ptr) + packs_info.size);
+            std::vector<float> offsets_vec(
+                static_cast<const float*>(offsets_info.ptr),
+                static_cast<const float*>(offsets_info.ptr) + offsets_info.size);
+            std::vector<float> px_vec(
+                static_cast<const float*>(px_info.ptr),
+                static_cast<const float*>(px_info.ptr) + px_info.size);
+            std::vector<float> py_vec(
+                static_cast<const float*>(py_info.ptr),
+                static_cast<const float*>(py_info.ptr) + py_info.size);
+            std::vector<float> coeff_vec(
+                static_cast<const float*>(coeff_info.ptr),
+                static_cast<const float*>(coeff_info.ptr) + coeff_info.size);
+            std::vector<uint32_t> header_vec(
+                static_cast<const uint32_t*>(header_info.ptr),
+                static_cast<const uint32_t*>(header_info.ptr) + header_info.size);
+            std::vector<uint32_t> stream_vec(
+                static_cast<const uint32_t*>(stream_info.ptr),
+                static_cast<const uint32_t*>(stream_info.ptr) + stream_info.size);
+
+            std::vector<float> image_out;
+            const double kernel_ms = gsplat_tt::blend_from_payload(
+                packs_vec,
+                offsets_vec,
+                px_vec,
+                py_vec,
+                coeff_vec,
+                header_vec,
+                stream_vec,
+                image_height,
+                image_width,
+                image_out);
+
+            py::array_t<float> image(
+                {static_cast<py::ssize_t>(image_height),
+                 static_cast<py::ssize_t>(image_width),
+                 static_cast<py::ssize_t>(3)});
+            if (!image_out.empty()) {
+                std::memcpy(image.mutable_data(), image_out.data(),
+                            image_out.size() * sizeof(float));
+            }
+            return py::make_tuple(image, kernel_ms);
+        },
+        py::arg("packs"),
+        py::arg("offsets"),
+        py::arg("px"),
+        py::arg("py"),
+        py::arg("coeff_table"),
+        py::arg("mb_header"),
+        py::arg("mb_stream"),
+        py::arg("image_height"),
+        py::arg("image_width"));
+
+    m.def("tt_device_shutdown", []() {
+        gsplat_tt::device_shutdown();
+        gsplat_tt::project_device_shutdown();
+    });
+
+    // amendment-002 tt-005: device transform_means_cam (bounded hotspot port).
+    // Input: means (N, 3) fp32 world-space, extrinsics (4, 4) fp32 row-major.
+    // Output: (means_cam_np, kernel_ms). means_cam_np is (N, 3) fp32.
+    // Returns kernel_ms = -1.0 if device init failed (caller should fall back).
+    m.def(
+        "transform_means_cam_tt",
+        [](py::array_t<float, py::array::c_style | py::array::forcecast> means,
+           py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics) {
+            const auto means_info = means.request();
+            const auto extr_info = extrinsics.request();
+            if (means_info.ndim != 2 || means_info.shape[1] != 3) {
+                throw std::invalid_argument("means must have shape (N, 3)");
+            }
+            if (extr_info.size != 16) {
+                throw std::invalid_argument("extrinsics must have 16 elements (4x4)");
+            }
+            const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
+            py::array_t<float> means_cam({static_cast<py::ssize_t>(N), static_cast<py::ssize_t>(3)});
+            const double kernel_ms = gsplat_tt::transform_means_cam_tt(
+                static_cast<const float*>(means_info.ptr),
+                static_cast<const float*>(extr_info.ptr),
+                N,
+                means_cam.mutable_data());
+            return py::make_tuple(means_cam, kernel_ms);
+        },
+        py::arg("means"),
+        py::arg("extrinsics"));
+
+    m.def("tt_project_device_ready", []() { return gsplat_tt::project_device_ready(); });
+#endif
     m.def("project_prepare", &project_prepare_py);
     m.def("project_finalize", &project_finalize_py);
     m.def(
@@ -1027,7 +1183,8 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_height"),
         py::arg("image_width"),
         py::arg("opacities") = py::none(),
-        py::arg("min_opacity") = 1.0f / 255.0f);
+        py::arg("min_opacity") = 1.0f / 255.0f,
+        py::arg("means_cam") = py::none());
 
     m.def(
         "project_full",

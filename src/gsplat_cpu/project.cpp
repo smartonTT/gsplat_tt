@@ -496,7 +496,8 @@ ProjectResult project_full_fused(
     const int max_radius_param,
     const float contrib_floor_k,
     const float k_cap,
-    const bool use_isoellipse) {
+    const bool use_isoellipse,
+    const float* means_cam_precomp) {
     // Extrinsics (column-3 translation).
     Mat3f r_mat;
     r_mat(0, 0) = extrinsics[0]; r_mat(0, 1) = extrinsics[1]; r_mat(0, 2) = extrinsics[2];
@@ -515,24 +516,35 @@ ProjectResult project_full_fused(
                : std::min(image_height, image_width) / 2);
 
     // Single-shot means_cam via Accelerate (already <1ms even at 600k Gaussians).
-    std::vector<float> means_cam(N * 3);
+    // amendment-002 tt-005: when caller supplies means_cam_precomp (e.g. via
+    // gsplat_tt::transform_means_cam_tt on Tenstorrent), skip the host matmul
+    // entirely — the device output is already in the right layout (R@mean,
+    // translation added in per_gaussian below).
+    std::vector<float> means_cam_local;
+    const float* means_cam = nullptr;
+    if (means_cam_precomp != nullptr) {
+        means_cam = means_cam_precomp;
+    } else {
+        means_cam_local.resize(N * 3);
 #if defined(__APPLE__)
-    {
-        const float r9[9] = {r_mat(0,0), r_mat(0,1), r_mat(0,2),
-                             r_mat(1,0), r_mat(1,1), r_mat(1,2),
-                             r_mat(2,0), r_mat(2,1), r_mat(2,2)};
-        cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
-                    static_cast<int>(N), 3, 3, 1.0f, means, 3, r9, 3, 0.0f,
-                    means_cam.data(), 3);
-    }
+        {
+            const float r9[9] = {r_mat(0,0), r_mat(0,1), r_mat(0,2),
+                                 r_mat(1,0), r_mat(1,1), r_mat(1,2),
+                                 r_mat(2,0), r_mat(2,1), r_mat(2,2)};
+            cblas_sgemm(CblasRowMajor, CblasNoTrans, CblasTrans,
+                        static_cast<int>(N), 3, 3, 1.0f, means, 3, r9, 3, 0.0f,
+                        means_cam_local.data(), 3);
+        }
 #else
-    for (std::size_t i = 0; i < N; ++i) {
-        const float mx = means[i*3+0], my = means[i*3+1], mz = means[i*3+2];
-        means_cam[i*3+0] = mx*r_mat(0,0) + my*r_mat(0,1) + mz*r_mat(0,2);
-        means_cam[i*3+1] = mx*r_mat(1,0) + my*r_mat(1,1) + mz*r_mat(1,2);
-        means_cam[i*3+2] = mx*r_mat(2,0) + my*r_mat(2,1) + mz*r_mat(2,2);
-    }
+        for (std::size_t i = 0; i < N; ++i) {
+            const float mx = means[i*3+0], my = means[i*3+1], mz = means[i*3+2];
+            means_cam_local[i*3+0] = mx*r_mat(0,0) + my*r_mat(0,1) + mz*r_mat(0,2);
+            means_cam_local[i*3+1] = mx*r_mat(1,0) + my*r_mat(1,1) + mz*r_mat(1,2);
+            means_cam_local[i*3+2] = mx*r_mat(2,0) + my*r_mat(2,1) + mz*r_mat(2,2);
+        }
 #endif
+        means_cam = means_cam_local.data();
+    }
 
     // Per-Gaussian scratch: means_2d (2), depths (1), cov2d (4), valid (1),
     // radii (2). Final compact arrays are built by the parallel-filter

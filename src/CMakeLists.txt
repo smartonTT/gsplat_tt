@@ -19,6 +19,20 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
+# Build options for portable cpu_cpp + optional TT-metal link.
+option(GSPLAT_SCALAR_ONLY "Force scalar blend kernels (no NEON/AVX2 SIMD)" OFF)
+option(GSPLAT_SIMD_AVX2 "Enable AVX2 blend kernels on x86 (bh-30 default)" OFF)
+option(GSPLAT_WITH_TT "Link tt-metal into _gsplat_cpu for device kernels" OFF)
+
+set(GSPLAT_CXX_FLAGS "")
+if(GSPLAT_SCALAR_ONLY)
+  list(APPEND GSPLAT_CXX_FLAGS -DGSPLAT_SCALAR_ONLY)
+endif()
+if(GSPLAT_SIMD_AVX2)
+  list(APPEND GSPLAT_CXX_FLAGS -DGSPLAT_SIMD_AVX2)
+  list(APPEND GSPLAT_CXX_FLAGS -mavx2 -mfma)
+endif()
+
 add_compile_options(
   -Wall -Wextra -Wpedantic
   -fno-omit-frame-pointer
@@ -73,7 +87,7 @@ add_library(gsplat_cpu STATIC
   gsplat_cpu/cull_and_blend.cpp
 )
 target_include_directories(gsplat_cpu PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_compile_options(gsplat_cpu PRIVATE -ffp-contract=off)
+target_compile_options(gsplat_cpu PRIVATE -ffp-contract=off ${GSPLAT_CXX_FLAGS})
 if(APPLE)
   find_library(GSPLAT_ACCELERATE Accelerate REQUIRED)
   target_link_libraries(gsplat_cpu PUBLIC ${GSPLAT_ACCELERATE})
@@ -85,9 +99,27 @@ pybind11_add_module(_gsplat_cpu MODULE
   ${CMAKE_SOURCE_DIR}/../backends/cpu_cpp/pybind_module.cpp
 )
 target_link_libraries(_gsplat_cpu PRIVATE gsplat_cpu)
+target_compile_options(_gsplat_cpu PRIVATE ${GSPLAT_CXX_FLAGS})
 set_target_properties(_gsplat_cpu PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/../backends/cpu_cpp
 )
+
+if(GSPLAT_WITH_TT)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TtMetalInTree.cmake)
+  add_library(gsplat_tt STATIC
+    gsplat_tt/blend_device.cpp
+    gsplat_tt/project_device.cpp
+  )
+  set_target_properties(gsplat_tt PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  target_include_directories(gsplat_tt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_definitions(gsplat_tt PRIVATE
+    GSPLAT_WITH_TT
+    "OVERRIDE_KERNEL_PREFIX=\"${CMAKE_CURRENT_SOURCE_DIR}/gsplat_tt/\"")
+  gsplat_link_tt_metal(gsplat_tt)
+  target_link_libraries(gsplat_tt PRIVATE gsplat_cpu)
+  target_link_libraries(_gsplat_cpu PRIVATE gsplat_tt)
+  target_compile_definitions(_gsplat_cpu PRIVATE GSPLAT_WITH_TT)
+endif()
 
 # Tests. include(CTest) (rather than bare enable_testing()) writes
 # CTestTestfile.cmake at the cmake binary root, so `ctest --test-dir build`

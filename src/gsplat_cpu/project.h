@@ -124,6 +124,14 @@ ProjectResult project(
 // chain — the math is identical, just scheduled differently — and saves
 // 3 pool.wait() round-trips + 21.6 MB of cov_cam memory traffic per
 // frame at N=601k.
+// Fused per-Gaussian project pipeline. See implementation notes in project.cpp.
+//
+// amendment-002 tt-005: `means_cam_precomp` is an optional pre-computed
+// world→camera mean array (N*3 fp32, layout = same as `means_cam` local
+// scratch, i.e. R(extr) @ means WITHOUT translation — translation is added
+// in the per-Gaussian inner loop). When non-null, the inline matmul step
+// (project.cpp:518-535) is skipped and means_cam_precomp is used directly.
+// Default nullptr preserves existing behaviour.
 ProjectResult project_full_fused(
     const float* means,
     const float* cov3d,
@@ -139,6 +147,7 @@ ProjectResult project_full_fused(
     int max_radius = 0,
     float contrib_floor_k = 1.0f / 16384.0f,
     float k_cap = 0.0f,
-    bool use_isoellipse = false);
+    bool use_isoellipse = false,
+    const float* means_cam_precomp = nullptr);
 
 }  // namespace gsplat_cpu
