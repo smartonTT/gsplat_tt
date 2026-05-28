@@ -2,18 +2,23 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// In-process host driver for gsplat_tt pfwc — amendment-002 tt-008a.
+// In-process host driver for gsplat_tt pfwc — amendment-002 tt-008c.
 //
 // Companion to project_device.cpp; runs after the project kernel has
 // populated means_cam_x/y/z (registered in gsplat_tt::device_state by
-// the project context). This kernel reads those device-resident buffers
-// via NoC (no host→device round-trip for means_cam), plus a one-time
-// cached cov3d upload, and produces:
-//   mean_2d (N×2), depth (N), cov_cam_unique (N×6).
-// These outputs are downloaded so the existing host pfwc finisher (cov2d /
-// radii / valid_mask) can consume them. The host pfwc finisher is a new
-// pybind entry point — pfwc_finish_with_precomp — that skips the perspective
-// and cov_cam compute (now done on device).
+// the project context). The kernel reads those buffers via NoC plus a
+// one-time cached cov3d upload, and produces 8 per-Gaussian outputs:
+//   mean_2d.{x,y}, depth, cov2d.{a,b,c}, radii.{x,y}
+// All 8 outputs are registered in device_state under
+//   pfwc_m2x / pfwc_m2y / pfwc_depth / pfwc_a / pfwc_b / pfwc_c /
+//   pfwc_rx / pfwc_ry
+// so downstream device kernels (tt-006 tile_assign) can consume them
+// directly without going through host memory.
+//
+// When mean_2d_out / depth_out / cov2d_out / radii_out are non-null, the
+// matching streams are still D2H'd + unpacked SoA→AoS into the caller-
+// provided buffers (legacy host-finisher path; this is the tt-008b
+// behavior, just with cov2d/radii instead of cov_cam).
 
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/device_state.h"
@@ -53,7 +58,7 @@ constexpr uint32_t TILE_W = 32;
 constexpr uint32_t ELEMS_PER_TILE = TILE_H * TILE_W;
 constexpr uint32_t TILE_BYTES_FP32 = ELEMS_PER_TILE * sizeof(float);
 
-// CB layout — must match pfwc_compute.cpp.
+// CB layout — must match pfwc_compute.cpp and writer_pfwc.cpp.
 constexpr uint32_t CB_MCX = 0;
 constexpr uint32_t CB_MCY = 1;
 constexpr uint32_t CB_MCZ = 2;
@@ -63,18 +68,24 @@ constexpr uint32_t CB_C02 = 5;
 constexpr uint32_t CB_C11 = 6;
 constexpr uint32_t CB_C12 = 7;
 constexpr uint32_t CB_C22 = 8;
-constexpr uint32_t CB_M2X  = 9;
-constexpr uint32_t CB_M2Y  = 10;
-constexpr uint32_t CB_DEP  = 11;
-constexpr uint32_t CB_CC00 = 12;
-constexpr uint32_t CB_CC01 = 13;
-constexpr uint32_t CB_CC02 = 14;
-constexpr uint32_t CB_CC11 = 15;
-constexpr uint32_t CB_CC12 = 16;
-constexpr uint32_t CB_CC22 = 17;
-constexpr uint32_t CB_TMP_TX = 18;
-constexpr uint32_t CB_TMP_TY = 19;
-constexpr uint32_t CB_TMP_TZ = 20;
+constexpr uint32_t CB_M2X = 9;
+constexpr uint32_t CB_M2Y = 10;
+constexpr uint32_t CB_DEP = 11;
+constexpr uint32_t CB_A   = 12;
+constexpr uint32_t CB_B   = 13;
+constexpr uint32_t CB_C   = 14;
+constexpr uint32_t CB_RX  = 15;
+constexpr uint32_t CB_RY  = 16;
+constexpr uint32_t CB_TMP_TX     = 17;
+constexpr uint32_t CB_TMP_TY     = 18;
+constexpr uint32_t CB_TMP_TZ     = 19;
+constexpr uint32_t CB_TMP_INV_TZ = 20;
+constexpr uint32_t CB_TMP_CC00   = 21;
+constexpr uint32_t CB_TMP_CC01   = 22;
+constexpr uint32_t CB_TMP_CC02   = 23;
+constexpr uint32_t CB_TMP_CC11   = 24;
+constexpr uint32_t CB_TMP_CC12   = 25;
+constexpr uint32_t CB_TMP_CC22   = 26;
 
 struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
@@ -101,12 +112,11 @@ struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_m2x;
     std::shared_ptr<distributed::MeshBuffer> buf_m2y;
     std::shared_ptr<distributed::MeshBuffer> buf_dep;
-    std::shared_ptr<distributed::MeshBuffer> buf_cc00;
-    std::shared_ptr<distributed::MeshBuffer> buf_cc01;
-    std::shared_ptr<distributed::MeshBuffer> buf_cc02;
-    std::shared_ptr<distributed::MeshBuffer> buf_cc11;
-    std::shared_ptr<distributed::MeshBuffer> buf_cc12;
-    std::shared_ptr<distributed::MeshBuffer> buf_cc22;
+    std::shared_ptr<distributed::MeshBuffer> buf_a;
+    std::shared_ptr<distributed::MeshBuffer> buf_b;
+    std::shared_ptr<distributed::MeshBuffer> buf_c;
+    std::shared_ptr<distributed::MeshBuffer> buf_rx;
+    std::shared_ptr<distributed::MeshBuffer> buf_ry;
     std::size_t output_cached_bytes = 0;
 };
 
@@ -154,7 +164,6 @@ static Cov3dSoa pack_cov3d_soa(const float* cov3d_unique, std::size_t N) {
         });
     }
     pool.wait();
-    // Zero-pad tail.
     for (std::size_t i = N; i < padded_n; ++i) {
         s.c00[i] = 0.0f; s.c01[i] = 0.0f; s.c02[i] = 0.0f;
         s.c11[i] = 0.0f; s.c12[i] = 0.0f; s.c22[i] = 0.0f;
@@ -199,17 +208,21 @@ static void build_program(PfwcDeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     };
 
-    // 9 input CBs (means_cam + cov3d)
+    // 9 input CBs (means_cam + cov3d unique)
     cb_fp32(CB_MCX, 2); cb_fp32(CB_MCY, 2); cb_fp32(CB_MCZ, 2);
     cb_fp32(CB_C00, 2); cb_fp32(CB_C01, 2); cb_fp32(CB_C02, 2);
     cb_fp32(CB_C11, 2); cb_fp32(CB_C12, 2); cb_fp32(CB_C22, 2);
-    // 9 output CBs
+    // 8 output CBs (mean_2d, depth, cov2d, radii)
     cb_fp32(CB_M2X, 2); cb_fp32(CB_M2Y, 2); cb_fp32(CB_DEP, 2);
-    cb_fp32(CB_CC00, 2); cb_fp32(CB_CC01, 2); cb_fp32(CB_CC02, 2);
-    cb_fp32(CB_CC11, 2); cb_fp32(CB_CC12, 2); cb_fp32(CB_CC22, 2);
-    // 3 scratch CBs (tx, ty, tz)
-    cb_fp32(CB_TMP_TX, 2); cb_fp32(CB_TMP_TY, 2); cb_fp32(CB_TMP_TZ, 2);
+    cb_fp32(CB_A, 2);   cb_fp32(CB_B, 2);   cb_fp32(CB_C, 2);
+    cb_fp32(CB_RX, 2);  cb_fp32(CB_RY, 2);
+    // 10 scratch CBs (tx, ty, tz, inv_tz, cc00..cc22)
+    cb_fp32(CB_TMP_TX, 2);     cb_fp32(CB_TMP_TY, 2);     cb_fp32(CB_TMP_TZ, 2);
+    cb_fp32(CB_TMP_INV_TZ, 2);
+    cb_fp32(CB_TMP_CC00, 2);   cb_fp32(CB_TMP_CC01, 2);   cb_fp32(CB_TMP_CC02, 2);
+    cb_fp32(CB_TMP_CC11, 2);   cb_fp32(CB_TMP_CC12, 2);   cb_fp32(CB_TMP_CC22, 2);
 
+    // Reader: 9 input streams (unchanged layout).
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < 9; ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -224,15 +237,24 @@ static void build_program(PfwcDeviceContext& ctx) {
             .compile_args = reader_ct,
         });
 
-    // tt-007 fp32 unpack-to-DEST for ALL input CBs.
+    // tt-007 fp32 unpack-to-DEST for every FP32 CB the compute kernel reads
+    // (inputs + scratch). Outputs are pack-only, no unpack mode needed.
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     for (uint32_t cb : {CB_MCX, CB_MCY, CB_MCZ,
                         CB_C00, CB_C01, CB_C02,
                         CB_C11, CB_C12, CB_C22,
-                        CB_TMP_TX, CB_TMP_TY, CB_TMP_TZ}) {
+                        CB_TMP_TX, CB_TMP_TY, CB_TMP_TZ, CB_TMP_INV_TZ,
+                        CB_TMP_CC00, CB_TMP_CC01, CB_TMP_CC02,
+                        CB_TMP_CC11, CB_TMP_CC12, CB_TMP_CC22}) {
         u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
     }
 
+    // dst_full_sync_en = true disables double-buffering, which is the only way
+    // to get 8 fp32 DEST tile slots (vs the default 4 with double-buffering).
+    // tt-008c's cov2d/radii kernel uses 6 DEST slots in a single acquire block
+    // (j00, j02, j11, j12, accumulator, scratch) so we MUST disable
+    // double-buffering. Trade-off: math and pack can't overlap, but the kernel
+    // is dominated by math anyway.
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/pfwc_compute.cpp",
@@ -240,12 +262,14 @@ static void build_program(PfwcDeviceContext& ctx) {
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi4,
             .fp32_dest_acc_en = true,
+            .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
         });
 
+    // Writer: 8 output streams.
     std::vector<uint32_t> writer_ct;
-    for (int i = 0; i < 9; ++i) {
+    for (int i = 0; i < 8; ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     }
     ctx.writer = CreateKernel(
@@ -291,16 +315,6 @@ static PfwcDeviceContext* ensure_context() {
 }
 
 // Pack 36 cov_cam scale floats for a given row-major R (extrinsics 3×3).
-// Order: 6 entries × 6 scales per entry, in the order the kernel expects:
-//   entry = [cc00, cc01, cc02, cc11, cc12, cc22]
-//   scale = [c00, c11, c22, c01, c02, c12]
-// where the dot-product expansion is:
-//   cc_ij = c00*r(i,0)*r(j,0)
-//         + c11*r(i,1)*r(j,1)
-//         + c22*r(i,2)*r(j,2)
-//         + c01*(r(i,0)*r(j,1) + r(i,1)*r(j,0))
-//         + c02*(r(i,0)*r(j,2) + r(i,2)*r(j,0))
-//         + c12*(r(i,1)*r(j,2) + r(i,2)*r(j,1))
 static void pack_cc_scales(const float r[9], std::vector<uint32_t>& out) {
     const std::pair<int, int> entries[6] = {
         {0, 0}, {0, 1}, {0, 2}, {1, 1}, {1, 2}, {2, 2}};
@@ -336,8 +350,8 @@ void pfwc_device_shutdown() {
         slot->buf_c00.reset(); slot->buf_c01.reset(); slot->buf_c02.reset();
         slot->buf_c11.reset(); slot->buf_c12.reset(); slot->buf_c22.reset();
         slot->buf_m2x.reset(); slot->buf_m2y.reset(); slot->buf_dep.reset();
-        slot->buf_cc00.reset(); slot->buf_cc01.reset(); slot->buf_cc02.reset();
-        slot->buf_cc11.reset(); slot->buf_cc12.reset(); slot->buf_cc22.reset();
+        slot->buf_a.reset();   slot->buf_b.reset();   slot->buf_c.reset();
+        slot->buf_rx.reset();  slot->buf_ry.reset();
         slot->cov3d_cached_bytes = 0;
         slot->output_cached_bytes = 0;
         slot->uploaded_cov3d_ptr = nullptr;
@@ -353,7 +367,8 @@ double pfwc_tt(
     std::size_t N,
     float* mean_2d_out,
     float* depth_out,
-    float* cov_cam_out,
+    float* cov2d_out,
+    float* radii_out,
     PfwcCallTimings* timings_out) {
     if (N == 0) {
         return 0.0;
@@ -365,7 +380,6 @@ double pfwc_tt(
     PfwcCallTimings tlocal;
     auto& T = (timings_out ? *timings_out : tlocal);
 
-    // Extrinsics row-major 4×4. R is rows 0..2, cols 0..2; t is the 4th col.
     const float r[9] = {
         extrinsics[0],  extrinsics[1],  extrinsics[2],
         extrinsics[4],  extrinsics[5],  extrinsics[6],
@@ -375,7 +389,6 @@ double pfwc_tt(
     const float t1 = extrinsics[7];
     const float t2 = extrinsics[11];
 
-    // Intrinsics 3×3 row-major.
     const float fx = intrinsics[0];
     const float fy = intrinsics[4];
     const float cx = intrinsics[2];
@@ -405,26 +418,24 @@ double pfwc_tt(
         distributed::DeviceLocalBufferConfig dram_cfg{
             .page_size = TILE_BYTES_FP32, .buffer_type = BufferType::DRAM};
         distributed::ReplicatedBufferConfig rep_cfg{.size = soa_bytes};
-        ctx->buf_m2x  = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_m2y  = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_dep  = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_cc00 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_cc01 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_cc02 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_cc11 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_cc12 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
-        ctx->buf_cc22 = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_m2x = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_m2y = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_dep = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_a   = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_b   = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_c   = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_rx  = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_ry  = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->output_cached_bytes = soa_bytes;
 
         device_state::register_buffer("pfwc_m2x", ctx->buf_m2x);
         device_state::register_buffer("pfwc_m2y", ctx->buf_m2y);
         device_state::register_buffer("pfwc_depth", ctx->buf_dep);
-        device_state::register_buffer("pfwc_cc00", ctx->buf_cc00);
-        device_state::register_buffer("pfwc_cc01", ctx->buf_cc01);
-        device_state::register_buffer("pfwc_cc02", ctx->buf_cc02);
-        device_state::register_buffer("pfwc_cc11", ctx->buf_cc11);
-        device_state::register_buffer("pfwc_cc12", ctx->buf_cc12);
-        device_state::register_buffer("pfwc_cc22", ctx->buf_cc22);
+        device_state::register_buffer("pfwc_a", ctx->buf_a);
+        device_state::register_buffer("pfwc_b", ctx->buf_b);
+        device_state::register_buffer("pfwc_c", ctx->buf_c);
+        device_state::register_buffer("pfwc_rx", ctx->buf_rx);
+        device_state::register_buffer("pfwc_ry", ctx->buf_ry);
     }
 
     // cov3d upload (cached across views).
@@ -448,8 +459,7 @@ double pfwc_tt(
     }
 
     // Pull mc{x,y,z} addresses from the project context's device-registered
-    // buffers. If the project kernel hasn't been invoked this view (or for
-    // this scene), bail back to CPU pfwc.
+    // buffers.
     auto buf_mcx = device_state::get_buffer("means_cam_x");
     auto buf_mcy = device_state::get_buffer("means_cam_y");
     auto buf_mcz = device_state::get_buffer("means_cam_z");
@@ -465,6 +475,12 @@ double pfwc_tt(
     const WorkSplit ws = split_chunks(num_tiles, num_cores);
 
     Program& program = ctx->workload.get_programs().begin()->second;
+
+    // Pre-pack k = 3.0, -fx, -fy as fp32 bits — match project_full_fused k_cap.
+    constexpr float K_RADII = 3.0f;
+    const uint32_t k_bits      = fp32_bits(K_RADII);
+    const uint32_t neg_fx_bits = fp32_bits(-fx);
+    const uint32_t neg_fy_bits = fp32_bits(-fy);
 
     const auto t_launch0 = std::chrono::high_resolution_clock::now();
     for (uint32_t c = 0; c < num_cores; ++c) {
@@ -486,7 +502,7 @@ double pfwc_tt(
              chunk_start, num_chunks});
 
         std::vector<uint32_t> compute_args;
-        compute_args.reserve(53);
+        compute_args.reserve(56);
         compute_args.push_back(num_chunks);
         for (int k = 0; k < 9; ++k) compute_args.push_back(fp32_bits(r[k]));
         compute_args.push_back(fp32_bits(t0));
@@ -497,6 +513,9 @@ double pfwc_tt(
         compute_args.push_back(fp32_bits(cx));
         compute_args.push_back(fp32_bits(cy));
         for (uint32_t s : cc_scales) compute_args.push_back(s);
+        compute_args.push_back(k_bits);        // arg 53
+        compute_args.push_back(neg_fx_bits);   // arg 54
+        compute_args.push_back(neg_fy_bits);   // arg 55
         SetRuntimeArgs(program, ctx->compute, core, compute_args);
 
         SetRuntimeArgs(
@@ -504,12 +523,11 @@ double pfwc_tt(
             {static_cast<uint32_t>(ctx->buf_m2x->address()),
              static_cast<uint32_t>(ctx->buf_m2y->address()),
              static_cast<uint32_t>(ctx->buf_dep->address()),
-             static_cast<uint32_t>(ctx->buf_cc00->address()),
-             static_cast<uint32_t>(ctx->buf_cc01->address()),
-             static_cast<uint32_t>(ctx->buf_cc02->address()),
-             static_cast<uint32_t>(ctx->buf_cc11->address()),
-             static_cast<uint32_t>(ctx->buf_cc12->address()),
-             static_cast<uint32_t>(ctx->buf_cc22->address()),
+             static_cast<uint32_t>(ctx->buf_a->address()),
+             static_cast<uint32_t>(ctx->buf_b->address()),
+             static_cast<uint32_t>(ctx->buf_c->address()),
+             static_cast<uint32_t>(ctx->buf_rx->address()),
+             static_cast<uint32_t>(ctx->buf_ry->address()),
              chunk_start, num_chunks});
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, /*blocking=*/false);
@@ -519,33 +537,53 @@ double pfwc_tt(
     T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
     T.compute_ms = std::chrono::duration<double, std::milli>(t_launch_end - t_launch1).count();
 
-    // Download outputs into per-stream scratch buffers.
+    // Skip D2H + unpack when all caller pointers are null (full device-resident
+    // mode for tt-006 tile_assign etc.).
+    const bool any_download =
+        (mean_2d_out != nullptr) ||
+        (depth_out   != nullptr) ||
+        (cov2d_out   != nullptr) ||
+        (radii_out   != nullptr);
+    if (!any_download) {
+        T.download_ms = 0.0;
+        T.unpack_ms = 0.0;
+        return std::chrono::duration<double, std::milli>(t_launch_end - t_launch0).count();
+    }
+
+    // Selective D2H: each stream only downloads when its caller buffer is non-null.
+    // Outputs already in SoA → unpack to AoS per stream group.
     const auto t_dl0 = std::chrono::high_resolution_clock::now();
-    std::vector<float> m2x_out(padded_n);
-    std::vector<float> m2y_out(padded_n);
-    std::vector<float> dep_out(padded_n);
-    std::vector<float> cc00_out(padded_n);
-    std::vector<float> cc01_out(padded_n);
-    std::vector<float> cc02_out(padded_n);
-    std::vector<float> cc11_out(padded_n);
-    std::vector<float> cc12_out(padded_n);
-    std::vector<float> cc22_out(padded_n);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, m2x_out,  ctx->buf_m2x,  /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, m2y_out,  ctx->buf_m2y,  /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, dep_out,  ctx->buf_dep,  /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, cc00_out, ctx->buf_cc00, /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, cc01_out, ctx->buf_cc01, /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, cc02_out, ctx->buf_cc02, /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, cc11_out, ctx->buf_cc11, /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, cc12_out, ctx->buf_cc12, /*blocking=*/true);
-    distributed::EnqueueReadMeshBuffer(*ctx->cq, cc22_out, ctx->buf_cc22, /*blocking=*/true);
+    std::vector<float> m2x_out, m2y_out, dep_out;
+    std::vector<float> a_out, b_out, c_out;
+    std::vector<float> rx_out, ry_out;
+    if (mean_2d_out != nullptr) {
+        m2x_out.resize(padded_n);
+        m2y_out.resize(padded_n);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, m2x_out, ctx->buf_m2x, /*blocking=*/true);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, m2y_out, ctx->buf_m2y, /*blocking=*/true);
+    }
+    if (depth_out != nullptr) {
+        dep_out.resize(padded_n);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, dep_out, ctx->buf_dep, /*blocking=*/true);
+    }
+    if (cov2d_out != nullptr) {
+        a_out.resize(padded_n);
+        b_out.resize(padded_n);
+        c_out.resize(padded_n);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, a_out, ctx->buf_a, /*blocking=*/true);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, b_out, ctx->buf_b, /*blocking=*/true);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, c_out, ctx->buf_c, /*blocking=*/true);
+    }
+    if (radii_out != nullptr) {
+        rx_out.resize(padded_n);
+        ry_out.resize(padded_n);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, rx_out, ctx->buf_rx, /*blocking=*/true);
+        distributed::EnqueueReadMeshBuffer(*ctx->cq, ry_out, ctx->buf_ry, /*blocking=*/true);
+    }
     const auto t_dl1 = std::chrono::high_resolution_clock::now();
     T.download_ms = std::chrono::duration<double, std::milli>(t_dl1 - t_dl0).count();
 
-    // Unpack SoA → caller-supplied AoS layouts:
-    //   mean_2d_out [N, 2]
-    //   depth_out   [N]
-    //   cov_cam_out [N, 6]   (order: cc00, cc01, cc02, cc11, cc12, cc22)
+    // Unpack SoA → caller AoS.
     {
         auto& pool = soa_pool();
         const std::size_t W = pool.size();
@@ -553,21 +591,28 @@ double pfwc_tt(
         for (std::size_t w = 0; w < W; ++w) {
             pool.submit([w, chunk, N,
                          &m2x_out, &m2y_out, &dep_out,
-                         &cc00_out, &cc01_out, &cc02_out,
-                         &cc11_out, &cc12_out, &cc22_out,
-                         mean_2d_out, depth_out, cov_cam_out]() {
+                         &a_out, &b_out, &c_out,
+                         &rx_out, &ry_out,
+                         mean_2d_out, depth_out, cov2d_out, radii_out]() {
                 const std::size_t lo = std::min(w * chunk, N);
                 const std::size_t hi = std::min(lo + chunk, N);
                 for (std::size_t i = lo; i < hi; ++i) {
-                    mean_2d_out[i * 2 + 0] = m2x_out[i];
-                    mean_2d_out[i * 2 + 1] = m2y_out[i];
-                    depth_out[i] = dep_out[i];
-                    cov_cam_out[i * 6 + 0] = cc00_out[i];
-                    cov_cam_out[i * 6 + 1] = cc01_out[i];
-                    cov_cam_out[i * 6 + 2] = cc02_out[i];
-                    cov_cam_out[i * 6 + 3] = cc11_out[i];
-                    cov_cam_out[i * 6 + 4] = cc12_out[i];
-                    cov_cam_out[i * 6 + 5] = cc22_out[i];
+                    if (mean_2d_out != nullptr) {
+                        mean_2d_out[i * 2 + 0] = m2x_out[i];
+                        mean_2d_out[i * 2 + 1] = m2y_out[i];
+                    }
+                    if (depth_out != nullptr) {
+                        depth_out[i] = dep_out[i];
+                    }
+                    if (cov2d_out != nullptr) {
+                        cov2d_out[i * 3 + 0] = a_out[i];
+                        cov2d_out[i * 3 + 1] = b_out[i];
+                        cov2d_out[i * 3 + 2] = c_out[i];
+                    }
+                    if (radii_out != nullptr) {
+                        radii_out[i * 2 + 0] = rx_out[i];
+                        radii_out[i * 2 + 1] = ry_out[i];
+                    }
                 }
             });
         }

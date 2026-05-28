@@ -1005,4 +1005,138 @@ ProjectResult project_finish_with_cov_cam(
     return result;
 }
 
+// amendment-002 tt-008c: finisher for the FULL device pfwc kernel.
+// The device kernel now computes mean_2d, depth, cov2d, and radii. All this
+// finisher does is run the valid_mask check + compact gather on the host
+// (cheap; ~5-10 ms/view for 6.13M Gaussians).
+ProjectResult project_finish_with_cov2d_radii(
+    const float* mean_2d_precomp,
+    const float* depth_precomp,
+    const float* cov2d_precomp,
+    const float* radii_precomp,
+    const float* opacities,
+    const float min_opacity,
+    const std::size_t N,
+    const int image_height,
+    const int image_width,
+    ThreadPool* pool,
+    const int max_radius_param) {
+    constexpr float k_near = 0.2f;
+    const int max_radius = (max_radius_param < 0)
+        ? std::numeric_limits<int>::max()
+        : ((max_radius_param > 0)
+               ? max_radius_param
+               : std::min(image_height, image_width) / 2);
+
+    std::vector<uint8_t> valid_mask(N);
+
+    auto per_gaussian = [&](std::size_t i) {
+        const float mean_x = mean_2d_precomp[i * 2 + 0];
+        const float mean_y = mean_2d_precomp[i * 2 + 1];
+        const float tz     = depth_precomp[i];
+        const float rx     = radii_precomp[i * 2 + 0];
+        const float ry     = radii_precomp[i * 2 + 1];
+
+        if (tz <= k_near ||
+            (opacities != nullptr && opacities[i] < min_opacity)) {
+            valid_mask[i] = 0;
+            return;
+        }
+        const bool valid = (mean_x + rx > 0.0f)
+                        && (mean_x - rx < static_cast<float>(image_width))
+                        && (mean_y + ry > 0.0f)
+                        && (mean_y - ry < static_cast<float>(image_height))
+                        && (rx > 0.0f) && (ry > 0.0f)
+                        && (rx <= static_cast<float>(max_radius))
+                        && (ry <= static_cast<float>(max_radius));
+        valid_mask[i] = valid ? 1 : 0;
+    };
+
+    if (pool != nullptr && pool->size() > 1 && N >= 4096) {
+        const std::size_t W = pool->size();
+        const std::size_t chunk_n = (N + W - 1) / W;
+        for (std::size_t w = 0; w < W; ++w) {
+            pool->submit([w, chunk_n, N, &per_gaussian]() {
+                const std::size_t lo = w * chunk_n;
+                const std::size_t hi = std::min(lo + chunk_n, N);
+                for (std::size_t i = lo; i < hi; ++i) per_gaussian(i);
+            });
+        }
+        pool->wait();
+    } else {
+        for (std::size_t i = 0; i < N; ++i) per_gaussian(i);
+    }
+
+    ProjectResult result;
+    result.valid_mask = valid_mask;
+    if (pool == nullptr || pool->size() <= 1 || N < 8192) {
+        for (std::size_t i = 0; i < N; ++i) {
+            if (!valid_mask[i]) continue;
+            result.means_2d.push_back(mean_2d_precomp[i * 2 + 0]);
+            result.means_2d.push_back(mean_2d_precomp[i * 2 + 1]);
+            // Expand cov2d[a, b, c] → [a, b, b, c] (matches project_full_fused layout).
+            const float a = cov2d_precomp[i * 3 + 0];
+            const float b = cov2d_precomp[i * 3 + 1];
+            const float c = cov2d_precomp[i * 3 + 2];
+            result.covs_2d.push_back(a);
+            result.covs_2d.push_back(b);
+            result.covs_2d.push_back(b);
+            result.covs_2d.push_back(c);
+            result.depths.push_back(depth_precomp[i]);
+            result.radii.push_back(radii_precomp[i * 2 + 0]);
+            result.radii.push_back(radii_precomp[i * 2 + 1]);
+        }
+        return result;
+    }
+    const std::size_t W = pool->size();
+    const std::size_t chunk = (N + W - 1) / W;
+    std::vector<std::size_t> chunk_counts(W, 0);
+    std::vector<std::size_t> chunk_starts(W + 1, 0);
+    for (std::size_t w = 0; w < W; ++w) {
+        pool->submit([w, chunk, N, &valid_mask, &chunk_counts]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            std::size_t cnt = 0;
+            for (std::size_t i = lo; i < hi; ++i) cnt += (valid_mask[i] != 0);
+            chunk_counts[w] = cnt;
+        });
+    }
+    pool->wait();
+    for (std::size_t w = 0; w < W; ++w) {
+        chunk_starts[w + 1] = chunk_starts[w] + chunk_counts[w];
+    }
+    const std::size_t V = chunk_starts[W];
+    result.means_2d.resize(V * 2);
+    result.covs_2d.resize(V * 4);
+    result.depths.resize(V);
+    result.radii.resize(V * 2);
+    for (std::size_t w = 0; w < W; ++w) {
+        pool->submit([w, chunk, N, mean_2d_precomp, cov2d_precomp,
+                      depth_precomp, radii_precomp,
+                      &valid_mask, &chunk_starts, &result]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            std::size_t out = chunk_starts[w];
+            for (std::size_t i = lo; i < hi; ++i) {
+                if (!valid_mask[i]) continue;
+                result.means_2d[out * 2 + 0] = mean_2d_precomp[i * 2 + 0];
+                result.means_2d[out * 2 + 1] = mean_2d_precomp[i * 2 + 1];
+                const float a = cov2d_precomp[i * 3 + 0];
+                const float b = cov2d_precomp[i * 3 + 1];
+                const float c = cov2d_precomp[i * 3 + 2];
+                result.covs_2d[out * 4 + 0] = a;
+                result.covs_2d[out * 4 + 1] = b;
+                result.covs_2d[out * 4 + 2] = b;
+                result.covs_2d[out * 4 + 3] = c;
+                result.depths[out] = depth_precomp[i];
+                result.radii[out * 2 + 0] = radii_precomp[i * 2 + 0];
+                result.radii[out * 2 + 1] = radii_precomp[i * 2 + 1];
+                ++out;
+            }
+        });
+    }
+    pool->wait();
+    return result;
+}
+
 }  // namespace gsplat_cpu

@@ -178,4 +178,26 @@ ProjectResult project_finish_with_cov_cam(
     float k_cap = 0.0f,
     bool use_isoellipse = false);
 
+// amendment-002 tt-008c: finisher for the FULL device pfwc kernel. The kernel
+// now computes mean_2d + depth + cov2d + radii on-device; this finisher only
+// does the valid_mask check + compact gather. ~5-10 ms/view for N=6.13M
+// vs ~80 ms/view for project_finish_with_cov_cam.
+//
+//   mean_2d_precomp : (N, 2)
+//   depth_precomp   : (N,)
+//   cov2d_precomp   : (N, 3) — [a, b, c]; expanded to [a, b, b, c] in output
+//   radii_precomp   : (N, 2) — [rx, ry] (already ceil'd from device)
+ProjectResult project_finish_with_cov2d_radii(
+    const float* mean_2d_precomp,
+    const float* depth_precomp,
+    const float* cov2d_precomp,
+    const float* radii_precomp,
+    const float* opacities,
+    float min_opacity,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr,
+    int max_radius = 0);
+
 }  // namespace gsplat_cpu

@@ -46,6 +46,7 @@ class TtBackend(CpuCppBackend):
         self._tt_transform_means_cam_no_download = None
         self._tt_transform_pfwc = None
         self._tt_project_finish_with_cov_cam = None
+        self._tt_project_finish_with_cov2d_radii = None
         # tt-008b: cache the (N, 6) cov3d_unique layout the device pfwc kernel
         # wants; cov3d is view-invariant so we only repack on cov3d-array
         # identity change. id(cov3d_arr) is the cheap cache key.
@@ -66,6 +67,8 @@ class TtBackend(CpuCppBackend):
                     self._tt_transform_pfwc = mod.transform_pfwc_tt
             if hasattr(mod, "project_finish_with_cov_cam"):
                 self._tt_project_finish_with_cov_cam = mod.project_finish_with_cov_cam
+            if hasattr(mod, "project_finish_with_cov2d_radii"):
+                self._tt_project_finish_with_cov2d_radii = mod.project_finish_with_cov2d_radii
         except (ImportError, AttributeError):
             pass
 
@@ -151,7 +154,7 @@ class TtBackend(CpuCppBackend):
         pfwc_device_enabled = (
             os.environ.get("GSPLAT_TT_DEVICE_PFWC") == "1"
             and self._tt_transform_pfwc is not None
-            and self._tt_project_finish_with_cov_cam is not None
+            and self._tt_project_finish_with_cov2d_radii is not None
         )
         skip_means_cam_download = (
             pfwc_device_enabled
@@ -194,34 +197,33 @@ class TtBackend(CpuCppBackend):
         cov3d = self._cached_cov3d(scales_np, rotations_np)
         _t_cov3d1 = _time.perf_counter()
 
-        # tt-008a: optional device pfwc path. When GSPLAT_TT_DEVICE_PFWC=1 and
-        # all the bindings are available, compute mean_2d + depth + cov_cam
-        # on-device (the 70%-of-pfwc heavy steps), then run the host finisher
-        # for the residual cov2d + radii + valid_mask + gather. The fallback
-        # remains the original project_full_with_cov3d call below.
+        # tt-008c: optional FULL device pfwc path. When GSPLAT_TT_DEVICE_PFWC=1
+        # and all the bindings are available, the device kernel computes
+        # mean_2d + depth + cov2d + radii. The host finisher only does the
+        # valid_mask check + compact gather (~5-10 ms vs ~80 ms for the
+        # tt-008a/b cov_cam path).
         pfwc_via_device = pfwc_device_enabled
         if pfwc_via_device:
-            # tt-008b: cached (N, 6) repack of cov3d unique entries.
             cov3d_unique = self._cov3d_unique(cov3d)
             intrinsics_3x3 = np.ascontiguousarray(intrinsics_np[:3, :3])
             _t_pfwc_dev0 = _time.perf_counter()
-            mean_2d_dev, depth_dev, cov_cam_dev, pfwc_timings = self._tt_transform_pfwc(
-                cov3d_unique, extrinsics_np, intrinsics_3x3
+            mean_2d_dev, depth_dev, cov2d_dev, radii_dev, pfwc_timings = (
+                self._tt_transform_pfwc(
+                    cov3d_unique, extrinsics_np, intrinsics_3x3, True
+                )
             )
             _t_pfwc_dev1 = _time.perf_counter()
             pfwc_dev_kernel_ms = float(pfwc_timings.get("total_ms", -1.0))
             if pfwc_dev_kernel_ms < 0.0:
-                # Device pfwc failed — fall back to host pfwc for this view.
                 pfwc_via_device = False
 
         if pfwc_via_device:
             means_2d, covs_2d_out, depths, radii, valid_mask = (
-                self._tt_project_finish_with_cov_cam(
+                self._tt_project_finish_with_cov2d_radii(
                     mean_2d_dev,
                     depth_dev,
-                    cov_cam_dev,
-                    extrinsics_np,
-                    np.ascontiguousarray(intrinsics_np[:3, :3]),
+                    cov2d_dev,
+                    radii_dev,
                     image_height,
                     image_width,
                     opacities_np if opacities_np is not None else None,
