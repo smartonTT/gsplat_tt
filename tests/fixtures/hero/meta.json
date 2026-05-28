@@ -1,6 +1,6 @@
 {
   "fov_deg": 50.0,
-  "contrib_floor": 0.00392156862745098,
-  "n_visible": 233928,
-  "n_entries": 315466
+  "contrib_floor": 6.103515625e-05,
+  "n_visible": 340588,
+  "n_entries": 586585
 }

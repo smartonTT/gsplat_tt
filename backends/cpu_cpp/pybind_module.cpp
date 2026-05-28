@@ -203,7 +203,7 @@ py::tuple project_full_with_cov3d_py(
         &global_project_pool(),
         0,
         1.0f / 16384.0f,
-        0.0f,
+        3.0f,
         false);
 
     return pack_project_result(result, N);
