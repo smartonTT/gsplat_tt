@@ -647,7 +647,12 @@ ProjectResult project_full_fused(
         const float k_raw = opacities != nullptr
             ? opacity_aware_k(opacities[i], contrib_floor_k)
             : 3.0f;
-        const float k = std::max(apply_k_cap(k_raw, k_cap), 3.0f);
+        // No `std::max(k, 3.0f)` floor: the floor turns `k_cap = 3` into
+        // "k = 3 always" (cap-then-floor cancels out for k_raw < 3 and
+        // forces k = 3 for the cap branch), which silently inflates the
+        // AABB of low-opacity Gaussians and diverges from both the staged
+        // C++ path and the numpy reference.
+        const float k = apply_k_cap(k_raw, k_cap);
         float rx;
         float ry;
         if (use_isoellipse) {

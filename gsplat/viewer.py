@@ -278,11 +278,12 @@ class GaussianViewer:
                 min=-1.0,
                 max=1024.0,
                 step=1.0,
-                initial_value=-1.0,
+                initial_value=0.0,
                 hint=(
                     "Project-stage cull: drop Gaussians whose AABB half-extent "
-                    "exceeds this (pixels). 0 = min(H,W)/2. −1 = disabled (needed "
-                    "for close-zoom vs true GT)."
+                    "exceeds this (pixels). 0 = min(H,W)/2 (default — matches "
+                    "the numpy reference). −1 = disabled; only safe for far "
+                    "views, near-camera Gaussians overdraw into a stipple."
                 ),
             )
             self._contrib_floor_slider = self.server.gui.add_slider(

@@ -38,6 +38,8 @@ opt/viewer-*.log
 # and is copied into scenes/ by Phase 0 setup.
 scenes/stitch_doll.ply
 scenes/strawberry.ply
+scenes/bicycle.ply
+scenes/point_cloud.ply
 scenes/point_cloud.ply
 
 # Per-stage fixtures (regenerable derivatives of the PLY + numpy reference path).

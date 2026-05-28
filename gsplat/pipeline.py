@@ -66,7 +66,13 @@ class Pipeline:
         contrib_floor: float = DEFAULT_CONTRIB_FLOOR,
         transmittance_threshold: float = 1.0 / 255.0,
         min_opacity: float = 1.0 / 255.0,
-        max_radius: int = -1,
+        # max_radius semantics: 0 = default cap min(H,W)/2 (matches numpy
+        # `project_gaussians`); >0 = explicit pixel cap; <0 = disabled.
+        # Disabling the cap (-1) lets near-camera, nearly-edge-on Gaussians
+        # project to enormous radii — at close zoom these ill-conditioned
+        # Gaussians stack into a regular halftone "stipple" pattern (≈ -50 dB
+        # vs numpy reference). See tests/spec/test_thin_splat_stipple.py.
+        max_radius: int = 0,
         k_cap: float = 3.0,
         use_isoellipse: bool = False,
     ):
