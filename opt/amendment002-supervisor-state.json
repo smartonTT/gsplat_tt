@@ -1,19 +1,23 @@
 {
-  "updated_at": "2026-05-28T12:10:00+00:00",
-  "phase": "tt-005-project-port-bounded-hotspot-shipped",
-  "target_ms_per_view": 1.0,
-  "next_action": "Persist means_cam device-resident across project->cov2d->finalize to amortize the 60ms/frame host<->device marshaling tax; investigate fp32 CB unpacker mode (hi/lo bf16 split or RowMajor fp32 path) to lift hero PSNR from 34.5 dB toward 45 dB gate.",
+  "updated_at": "2026-05-28T16:08:00+00:00",
+  "phase": "tt-008-pfwc-device",
+  "target_ms_per_view": 80.0,
+  "stretch_target_ms_per_view": 1.0,
+  "next_action": "tt-008c: compute cov2d on device (reduce D2H 9 streams -> 6, eliminate host cov2d). Then tt-006 tile_assign device-resident so pfwc outputs need no D2H.",
   "milestones": {
     "scalar_cpu_cpp": true,
     "avx2_cpu_cpp": true,
     "tt000_ttbackend": true,
-    "tt001a_inprocess_blend": true,
+    "tt001a_inprocess_blend": false,
     "tt001a_host_packs_blend_psnr_45db": true,
     "tt001b_device_microblock_4x8": false,
     "tt002_microblock_cull_device": false,
     "tt003_sort_device": false,
     "tt004_tile_assign_device": false,
-    "tt005_project_device": "partial: transform_means_cam shipped, microbench 63.3 dB SNR, kernel 22ms wall @ N=6.13M",
+    "tt005_project_device": "shipped: transform_means_cam_tt + tt-005b means_cam device-resident buffer (saves D2H 26 ms/view when downstream is on-device)",
+    "tt007_fp32_means_cam": "shipped: UnpackToDestFp32 + SFPU add_binary_tile -> hero_psnr 34.5 -> 82.36 dB",
+    "tt008a_pfwc_device_partial": "shipped: perspective + cov_cam on device; cov2d/radii/valid_mask on host; PSNR 47 dB (passes >=45), 553 ms/view (REGRESSION vs 268 baseline)",
+    "tt008b_skip_means_cam_d2h": "shipped: pfwc-on-device skips means_cam download + caches cov3d_unique; 370 ms/view (still REGRESSION vs 268 baseline); D2H of pfwc outputs (148 ms/view across 9 streams) is the new bottleneck",
     "full_port_all_stages": false
   },
   "last_gates": {
@@ -23,23 +27,15 @@
     "simd_backend": "avx2",
     "has_tt_support": true,
     "build_tt_ok": true,
-    "hero_psnr_tt_dB_default_off": 47.28,
-    "hero_psnr_tt_dB_device_project_on": 34.49,
-    "sum_total_ms_30view_baseline": 6758.5,
-    "sum_total_ms_30view_device_project_on_v3": 10982.1,
-    "psnr_gate_passed": false,
-    "perf_gate_passed": false,
-    "code_shipped": [
-      "src/gsplat_tt/project.h",
-      "src/gsplat_tt/project_device.cpp",
-      "src/gsplat_tt/kernels/compute/project_means_cam_compute.cpp",
-      "src/gsplat_tt/kernels/dataflow/reader_project_means_cam.cpp",
-      "src/gsplat_tt/kernels/dataflow/writer_project_means_cam.cpp",
-      "backends/cpu_cpp/pybind_module.cpp",
-      "backends/tt/backend.py",
-      "src/CMakeLists.txt",
-      "src/gsplat_cpu/project.cpp",
-      "src/gsplat_cpu/project.h"
-    ]
+    "hero_psnr_tt_dB": 47.09,
+    "sum_total_ms_30_view_bicycle_ms": 11103.57,
+    "ms_per_view_estimate": 370.12,
+    "gap_to_target_x": 4.6,
+    "cpu_baseline_ms_per_view": 226.35,
+    "tt_baseline_ms_per_view_iter07": 268.0
+  },
+  "blockers": {
+    "pfwc_d2h_dominates": "9-stream blocking EnqueueReadMeshBuffer = 148 ms/view at N=6.13M -> need to fold radii/valid_mask onto device OR port next stages so pfwc outputs stay device-resident",
+    "shm_resource_tracker_double_free": "deferred to opt/backburner.md; doesn't affect measurements"
   }
 }
