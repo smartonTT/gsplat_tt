@@ -1,0 +1,25 @@
+{
+  "pairs": [
+    {
+      "label": "tt_current_vs_numpy_ref",
+      "psnr_dB": 47.783193503109935,
+      "max_abs": 0.42748165130615234,
+      "mean_abs": 0.0024662247304080617,
+      "tile_structure_ratio": 7.1166634035579115
+    },
+    {
+      "label": "tt_master_vs_numpy_ref",
+      "psnr_dB": 47.47943623715681,
+      "max_abs": 0.42162227630615234,
+      "mean_abs": 0.00266879684693223,
+      "tile_structure_ratio": 7.211671565983828
+    },
+    {
+      "label": "tt_current_vs_tt_master",
+      "psnr_dB": 50.3705978190774,
+      "max_abs": 0.03515625,
+      "mean_abs": 0.0019692729676042595,
+      "tile_structure_ratio": 5.548510445141409
+    }
+  ]
+}

@@ -48,16 +48,20 @@ def main() -> None:
     H, W = int(data["H"]), int(data["W"])
 
     backend = get_backend(args.backend)
-    image, _sub = backend.blend(
-        torch.from_numpy(data["means_2d"]),
-        torch.from_numpy(data["covs_2d"]),
-        torch.from_numpy(data["colors"]),
-        torch.from_numpy(data["opacities"]),
-        torch.from_numpy(data["sorted_gaussian_ids"]),
-        torch.from_numpy(data["tile_ranges"]),
-        H,
-        W,
-    )
+    try:
+        image, _sub = backend.blend(
+            torch.from_numpy(data["means_2d"]),
+            torch.from_numpy(data["covs_2d"]),
+            torch.from_numpy(data["colors"]),
+            torch.from_numpy(data["opacities"]),
+            torch.from_numpy(data["sorted_gaussian_ids"]),
+            torch.from_numpy(data["tile_ranges"]),
+            H,
+            W,
+        )
+    finally:
+        if hasattr(backend, "close"):
+            backend.close()
     cand = np.asarray(image, dtype=np.float32)
     p = psnr(ref, cand)
     max_abs = float(np.max(np.abs(ref.astype(np.float64) - cand.astype(np.float64))))
@@ -65,9 +69,9 @@ def main() -> None:
     out = {
         "stage": "blend",
         "backend": args.backend,
-        "pass": ok,
-        "psnr_dB": p,
-        "psnr_floor_dB": args.psnr_floor,
+        "layer2_pass": bool(ok),
+        "psnr_dB": float(p),
+        "psnr_floor_dB": float(args.psnr_floor),
         "max_abs_diff": max_abs,
         "ref_shape": list(ref.shape),
         "cand_shape": list(cand.shape),

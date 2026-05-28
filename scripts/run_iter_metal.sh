@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Metal-port iter driver (run on bh-30 or any TT box with device).
 #
-# Usage: scripts/run_iter_metal.sh <iter_num> <slug> <class> [--backend tt]
+# Usage:
+#   scripts/run_iter_metal.sh <iter_num> <slug> <class> [--backend tt]
+#   REMOTE_HOST=bh-30 scripts/run_iter_metal.sh ...   # SSH wrapper (Mac supervisor)
 #
 # Steps:
 #   1. verify tt-metal binary exists (build if missing)
@@ -11,6 +13,14 @@
 #   5. append opt/metal-iters.jsonl (via decide_and_log_metal.py when present)
 #
 set -euo pipefail
+
+REMOTE_HOST="${REMOTE_HOST:-}"
+if [[ -n "$REMOTE_HOST" && -z "${RUN_ITER_METAL_REMOTE:-}" ]]; then
+  REPO_ROOT_LOCAL="$(cd "$(dirname "$0")/.." && pwd)"
+  exec ssh "$REMOTE_HOST" \
+    "cd /proj_sw/user_dev/smarton/gsplat_tt_2 && RUN_ITER_METAL_REMOTE=1 REMOTE_HOST= bash scripts/run_iter_metal.sh $(printf '%q ' "$@")"
+fi
+
 source "$(dirname "$0")/_env.sh"
 
 ITER_NUM="${1:?usage: $0 <iter_num> <slug> <class> [--backend ...]}"
@@ -22,9 +32,14 @@ if [[ "${4:-}" == "--backend" ]]; then BACKEND="${5:-tt}"; fi
 SCENE="${SCENE:-bicycle}"
 ITER_NAME="$(printf "metal-iter-%03d-%s" "$ITER_NUM" "$SLUG")"
 ITER_DIR="$REPO_ROOT/opt/metal-screenshots/$ITER_NAME"
-TT_BIN="$REPO_ROOT/backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
-
 mkdir -p "$ITER_DIR"
+
+# Repair tt-metal symlink if devsync dropped a stub tree on the remote box.
+if [[ -f "$REPO_ROOT/scripts/setup_bh30_metal.sh" ]]; then
+  bash "$REPO_ROOT/scripts/setup_bh30_metal.sh" >>"$ITER_DIR/setup.log" 2>&1 || true
+fi
+
+TT_BIN="$REPO_ROOT/backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
 
 export TT_METAL_HOME="${TT_METAL_HOME:-$REPO_ROOT/backends/tt/tt-metal}"
 export TT_METAL_RUNTIME_ROOT="${TT_METAL_RUNTIME_ROOT:-$TT_METAL_HOME}"

@@ -25,11 +25,10 @@ You are the metal-port iter worker for gsplat_tt_2 Phase 5. Read before coding:
 ```
 1. Read metal-iter-NNN prompt
 2. Edit kernels on Mac (devsync mirrors to bh-30)
-3. devsync is-finished bh-30
-4. SSH bh-30: ninja metal_example_gaussian_splatting
-5. SSH bh-30: python scripts/verify_blend_metal.py --backend tt
-6. SSH bh-30: scripts/run_iter_metal.sh NNN slug port
-7. Return metrics.json path + layer2/layer3 pass/fail
+3. scripts/sync_kernels_bh30.sh   # rsync + sudo ninja on bh-30
+4. REMOTE_HOST=bh-30 scripts/run_iter_metal.sh NNN slug port
+5. python3 scripts/decide_and_log_metal.py --iter-dir opt/metal-screenshots/... --opt-dir opt
+6. Return metrics.json path + layer2/layer3 pass/fail
 ```
 
 ## Iter-specific prompt (filled by supervisor)

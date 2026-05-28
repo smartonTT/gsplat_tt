@@ -109,11 +109,19 @@ def metal_section(rows: list[dict]) -> str:
     for r in reversed(rows):
         psnr_d = r.get("psnr_per_view") or {}
         finite = [v for v in psnr_d.values() if isinstance(v, (int, float)) and v != float("inf") and v == v]
-        psnr_min_str = f"{min(finite):.1f}" if finite else "—"
+        hero_psnr = r.get("hero_psnr_dB")
+        if hero_psnr is not None and hero_psnr == hero_psnr:
+            psnr_min_str = f"{hero_psnr:.1f}"
+        elif finite:
+            psnr_min_str = f"{min(finite):.1f}"
+        else:
+            psnr_min_str = "—"
+        sum_ms = r.get("sum_total_ms")
+        sum_ms_str = f"{sum_ms:.1f}" if isinstance(sum_ms, (int, float)) and sum_ms == sum_ms else "—"
         body += (
             f"<tr><td><a href='metal-screenshots/{r['iter_dir']}/'>{r['iter_dir']}</a></td>"
             f"<td>{r.get('verdict','')}</td><td>{r.get('action','')}</td>"
-            f"<td>{r.get('sum_total_ms',0):.1f}</td><td>{psnr_min_str}</td>"
+            f"<td>{sum_ms_str}</td><td>{psnr_min_str}</td>"
             f"<td>{r.get('class','')}</td></tr>"
         )
     return f"<section><h2>Metal port (Phase 5)</h2><table class='ledger'>{head}{body}</table></section>"

@@ -1,0 +1,16 @@
+{
+  "updated_at": "2026-05-28T04:31:43.518727+00:00",
+  "phase": "iter-001-stage3",
+  "next_action": "Stage 3 compute kernel: microblock-major + fp32 Dst state; verify on bh-30.",
+  "milestones": {
+    "stage1_host": true,
+    "stage2_reader": true,
+    "stage3_compute": false
+  },
+  "last_gates": {
+    "blend_rc": 1,
+    "mb_host_rc": 1,
+    "hero_psnr_dB": 47.783193503109935,
+    "mb_host_psnr_dB": 49.44267816579695
+  }
+}

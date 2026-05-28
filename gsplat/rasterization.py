@@ -784,6 +784,138 @@ def prepare_kernel_inputs(
     return attribute_packs, tile_offsets, px_tiles, py_tiles
 
 
+def _packs_to_basis_coeff_rows(
+    mean_x: np.ndarray,
+    mean_y: np.ndarray,
+    cov_a: np.ndarray,
+    two_cov_b: np.ndarray,
+    cov_c: np.ndarray,
+    opacity: np.ndarray,
+    color_r: np.ndarray,
+    color_g: np.ndarray,
+    color_b: np.ndarray,
+) -> np.ndarray:
+    """Convert per-gaussian tile-local packs to basis-form coeff rows for metal.
+
+    Q = A·x² + B·xy + C·y² + D·x + E·y + F  with x,y tile-local px/py.
+    Host folds -0.5 into A..F so the device evaluates exp(Q) directly.
+    Returns (N, 10) fp32: A, B, C, D, E, F, opacity, R, G, B.
+    """
+    neg_half = -0.5
+    a = cov_a
+    b = two_cov_b  # already 2·cov_inv_b in packs
+    c = cov_c
+    mx = mean_x
+    my = mean_y
+    a_q = neg_half * a
+    b_q = neg_half * b
+    c_q = neg_half * c
+    d_q = neg_half * (-2.0 * a * mx - b * my)
+    e_q = neg_half * (-2.0 * c * my - b * mx)
+    f_q = neg_half * (a * mx * mx + b * mx * my + c * my * my)
+    return np.stack(
+        [a_q, b_q, c_q, d_q, e_q, f_q, opacity, color_r, color_g, color_b],
+        axis=1,
+    ).astype(np.float32)
+
+
+def prepare_microblock_payload(
+    means_2d: torch.Tensor,
+    covs_2d: torch.Tensor,
+    colors: torch.Tensor,
+    opacities: torch.Tensor,
+    sorted_gaussian_ids: torch.Tensor,
+    tile_ranges: torch.Tensor,
+    image_height: int,
+    image_width: int,
+    mb_contrib_floor: float = 1.0 / 16384.0,
+    sub_timings: dict[str, float] | None = None,
+) -> dict[str, np.ndarray | dict]:
+    """Pack legacy blend inputs plus microblock-major payloads for metal iter-001.
+
+    Returns a dict with:
+      attribute_packs, tile_offsets, px_tiles, py_tiles  — legacy daemon path
+      coeff_table  — (total_entries, 10) fp32 basis coeffs (same row order as packs)
+      mb_header    — (num_tiles, 32, 2) uint32 (offset, count) into mb_stream
+      mb_stream    — (L_prime,) uint32 LOCAL gaussian indices per tile list
+      mb_stats     — drop/work reduction stats from microblock_cull
+    """
+    packs, tile_offsets, px_tiles, py_tiles = prepare_kernel_inputs(
+        means_2d,
+        covs_2d,
+        colors,
+        opacities,
+        sorted_gaussian_ids,
+        tile_ranges,
+        image_height,
+        image_width,
+        sub_timings=sub_timings,
+    )
+    tiles_x = (image_width + 31) // 32
+    tiles_y = (image_height + 31) // 32
+
+    mb_header_t, mb_stream_global, mb_stats = microblock_cull(
+        means_2d,
+        covs_2d,
+        opacities,
+        sorted_gaussian_ids,
+        tile_ranges,
+        tiles_x,
+        tiles_y,
+        32,
+        mb_contrib_floor=mb_contrib_floor,
+    )
+    mb_header = mb_header_t.numpy().astype(np.uint32)
+    stream_global = mb_stream_global.numpy()
+
+    # coeff_table: same row order as attribute_packs (depth-sorted per tile).
+    coeff_table = _packs_to_basis_coeff_rows(
+        packs[:, 0],
+        packs[:, 1],
+        packs[:, 2],
+        packs[:, 3],
+        packs[:, 4],
+        packs[:, 5],
+        packs[:, 6],
+        packs[:, 7],
+        packs[:, 8],
+    )
+
+    # Metal kernel indexes coeff_table by LOCAL gaussian index; legacy CPU
+    # alpha_blend_microblock still consumes GLOBAL g-ids (see mb_stream).
+    gids_np = sorted_gaussian_ids.numpy()
+    ranges_np = tile_ranges.numpy()
+    num_tiles = tiles_x * tiles_y
+    if stream_global.size == 0:
+        mb_stream_local = np.empty(0, dtype=np.uint32)
+    else:
+        local_stream: list[int] = []
+        for tile_id in range(num_tiles):
+            start, end = ranges_np[tile_id, 0], ranges_np[tile_id, 1]
+            if start == end:
+                continue
+            tile_gids = gids_np[start:end]
+            g_to_local = {int(g): i for i, g in enumerate(tile_gids)}
+            for m in range(_NUM_MICROBLOCKS):
+                off = int(mb_header[tile_id, m, 0])
+                cnt = int(mb_header[tile_id, m, 1])
+                for g in stream_global[off : off + cnt]:
+                    local_stream.append(g_to_local[int(g)])
+        mb_stream_local = np.asarray(local_stream, dtype=np.uint32)
+
+    return {
+        "attribute_packs": packs,
+        "tile_offsets": tile_offsets,
+        "px_tiles": px_tiles,
+        "py_tiles": py_tiles,
+        "coeff_table": coeff_table,
+        "mb_header": mb_header,
+        "mb_stream": stream_global.astype(np.uint32),
+        "mb_stream_local": mb_stream_local,
+        "mb_stats": mb_stats,
+    }
+
+
 # Cache of (px_tiles, py_tiles) keyed by (image_height, image_width).
 # Each entry is ~num_tiles * 32 * 32 * 4 * 2 bytes — at 640x640 that's ~3 MB.
 # Bounded by the small set of distinct resolutions an interactive session

@@ -21,7 +21,7 @@ import numpy as np
 import torch
 
 from gsplat.backend import Backend
-from gsplat.rasterization import prepare_kernel_inputs
+from gsplat.rasterization import prepare_kernel_inputs, prepare_microblock_payload
 
 
 class KernelBackend(Backend):
@@ -33,15 +33,27 @@ class KernelBackend(Backend):
     non-protocol log lines on stdout are skipped.
     """
 
-    BINARY_PATH = "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
+    BINARY_CANDIDATES = (
+        "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting",
+        "backends/tt/tt-metal/build_Release/programming_examples/metal_example_gaussian_splatting",
+    )
+
+    @classmethod
+    def _resolve_binary(cls) -> str:
+        for rel in cls.BINARY_CANDIDATES:
+            path = os.path.abspath(rel)
+            if os.path.isfile(path):
+                return path
+        return os.path.abspath(cls.BINARY_CANDIDATES[0])
 
     def __init__(self, verbose: bool = False):
         self.verbose = verbose
+        binary = self._resolve_binary()
         env = os.environ.copy()
         env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
         env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
         self._proc = subprocess.Popen(
-            [self.BINARY_PATH, "--daemon"],
+            [binary, "--daemon"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             env=env,
@@ -84,10 +96,25 @@ class KernelBackend(Backend):
 
         # Sub-stage A: SoA repack (kernel-friendly layout).
         t_prep = time.perf_counter()
-        packs, offsets, px, py = prepare_kernel_inputs(
-            means_2d, covs_2d, colors, opacities,
-            sorted_gaussian_ids, tile_ranges, H, W,
-        )
+        use_mb = os.environ.get("GSPLAT_METAL_MB", "1") != "0"
+        if use_mb:
+            payload = prepare_microblock_payload(
+                means_2d, covs_2d, colors, opacities,
+                sorted_gaussian_ids, tile_ranges, H, W,
+            )
+            packs = payload["attribute_packs"]
+            offsets = payload["tile_offsets"]
+            px = payload["px_tiles"]
+            py = payload["py_tiles"]
+            coeff_table = payload["coeff_table"]
+            mb_header = payload["mb_header"]
+            mb_stream = payload["mb_stream"]
+        else:
+            packs, offsets, px, py = prepare_kernel_inputs(
+                means_2d, covs_2d, colors, opacities,
+                sorted_gaussian_ids, tile_ranges, H, W,
+            )
+            coeff_table = mb_header = mb_stream = None
         prep_ms = (time.perf_counter() - t_prep) * 1000.0
 
         # Sub-stage B: serialize SoA buffers as .npy for the daemon.
@@ -97,14 +124,25 @@ class KernelBackend(Backend):
         np.save(f"{td}/offsets.npy", offsets.astype(np.float32))
         np.save(f"{td}/px.npy", px)
         np.save(f"{td}/py.npy", py)
+        if coeff_table is not None:
+            np.save(f"{td}/coeff_table.npy", coeff_table)
+            np.save(f"{td}/mb_header.npy", mb_header)
+            np.save(f"{td}/mb_stream.npy", mb_stream)
         save_ms = (time.perf_counter() - t_save) * 1000.0
 
         # Sub-stage C: daemon round-trip (DRAM upload + kernel + readback).
         t_rt = time.perf_counter()
-        line = (
-            f"FRAME {H} {W} "
-            f"{td}/packs.npy {td}/offsets.npy {td}/px.npy {td}/py.npy {td}/out.npy\n"
-        )
+        if coeff_table is not None:
+            line = (
+                f"FRAME {H} {W} "
+                f"{td}/packs.npy {td}/offsets.npy {td}/px.npy {td}/py.npy {td}/out.npy "
+                f"{td}/coeff_table.npy {td}/mb_header.npy {td}/mb_stream.npy\n"
+            )
+        else:
+            line = (
+                f"FRAME {H} {W} "
+                f"{td}/packs.npy {td}/offsets.npy {td}/px.npy {td}/py.npy {td}/out.npy\n"
+            )
         self._proc.stdin.write(line)
         self._proc.stdin.flush()
 
