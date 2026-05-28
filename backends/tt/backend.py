@@ -100,6 +100,8 @@ class TtBackend(CpuCppBackend):
                 sub_timings=sub_timings,
             )
 
+        import time as _time
+        _t_detach0 = _time.perf_counter()
         means_np = means.detach().cpu().numpy().astype(np.float32, copy=False)
         scales_np = scales.detach().cpu().numpy().astype(np.float32, copy=False)
         rotations_np = rotations.detach().cpu().numpy().astype(np.float32, copy=False)
@@ -109,9 +111,24 @@ class TtBackend(CpuCppBackend):
         if opacities is not None:
             opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
 
+        _t_marshal_in = _time.perf_counter()
         means_np_c = np.ascontiguousarray(means_np)
         extr_np_c = np.ascontiguousarray(extrinsics_np)
-        means_cam_np, kernel_ms = self._tt_transform_means_cam(means_np_c, extr_np_c)
+        _t_tt0 = _time.perf_counter()
+        tt_ret = self._tt_transform_means_cam(means_np_c, extr_np_c)
+        _t_tt1 = _time.perf_counter()
+        # Backward-compat: legacy binding returned (means_cam, float kernel_ms).
+        # tt-005c binding returns (means_cam, dict).
+        if isinstance(tt_ret, tuple) and len(tt_ret) == 2:
+            means_cam_np, _meta = tt_ret
+        else:
+            means_cam_np, _meta = tt_ret, {}
+        if isinstance(_meta, dict):
+            kernel_ms = float(_meta.get("total_ms", -1.0))
+            tt_timings = _meta
+        else:
+            kernel_ms = float(_meta)
+            tt_timings = {}
 
         if kernel_ms < 0.0:
             # Device init failed — fall back to CPU path for this frame.
@@ -127,7 +144,9 @@ class TtBackend(CpuCppBackend):
                 sub_timings=sub_timings,
             )
 
+        _t_cov3d0 = _time.perf_counter()
         cov3d = self._cached_cov3d(scales_np, rotations_np)
+        _t_cov3d1 = _time.perf_counter()
         means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full_with_cov3d(
             means_np,
             cov3d,
@@ -139,9 +158,17 @@ class TtBackend(CpuCppBackend):
             1.0 / 255.0,
             means_cam_np,
         )
+        _t_pfwc = _time.perf_counter()
 
         if sub_timings is not None:
             sub_timings["tt_means_cam_kernel_ms"] = float(kernel_ms)
+            for k, v in tt_timings.items():
+                sub_timings[f"tt_mc_{k}"] = v
+            sub_timings["tt_py_detach_ms"] = (_t_marshal_in - _t_detach0) * 1000.0
+            sub_timings["tt_py_marshal_ms"] = (_t_tt0 - _t_marshal_in) * 1000.0
+            sub_timings["tt_py_call_ms"] = (_t_tt1 - _t_tt0) * 1000.0
+            sub_timings["tt_py_cov3d_ms"] = (_t_cov3d1 - _t_cov3d0) * 1000.0
+            sub_timings["tt_py_pfwc_ms"] = (_t_pfwc - _t_cov3d1) * 1000.0
 
         return (
             torch.from_numpy(np.asarray(means_2d)),

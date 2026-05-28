@@ -26,12 +26,26 @@
 
 namespace gsplat_tt {
 
+// Per-call sub-timing breakdown for transform_means_cam_tt. All times in ms.
+// Cache-hit path skips pack/upload — those fields will be 0.0 in that case.
+// tt-005c instrumentation: helps tease apart kernel vs DMA vs host work.
+struct ProjectCallTimings {
+    double pack_ms = 0.0;      // host SoA pack (means -> 3 column vectors)
+    double upload_ms = 0.0;    // 3 x EnqueueWriteMeshBuffer (means H2D)
+    double launch_ms = 0.0;    // SetRuntimeArgs + EnqueueMeshWorkload
+    double compute_ms = 0.0;   // Finish() — actual device kernel wall time
+    double download_ms = 0.0;  // 3 x EnqueueReadMeshBuffer (means_cam D2H)
+    double unpack_ms = 0.0;    // SoA -> AoS host repack into means_cam_out
+    bool cache_hit = false;    // true if pack+upload skipped this call
+};
+
 // Device transform_means_cam: means_cam[i] = R(extr) @ means[i] + t(extr).
 //
 //   means        N * 3 fp32, world-space means (row-major)
 //   extrinsics   16 fp32, row-major 4x4 view matrix. R is rows 0..2 col 0..2;
 //                t is column 3 (i.e. extrinsics[3], extrinsics[7], extrinsics[11]).
 //   means_cam_out N * 3 fp32 output (caller allocates).
+//   timings_out  optional, filled with per-phase timings if non-null.
 //
 // Returns the wall-clock kernel execution time in ms (device kernel only —
 // excludes host-side pack/upload/download overhead).
@@ -42,7 +56,8 @@ double transform_means_cam_tt(
     const float* means,
     const float* extrinsics,
     std::size_t N,
-    float* means_cam_out);
+    float* means_cam_out,
+    ProjectCallTimings* timings_out = nullptr);
 
 // Returns true if the TT device project path is initialized and operational.
 bool project_device_ready();

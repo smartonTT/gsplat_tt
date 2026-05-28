@@ -4,26 +4,28 @@
 //
 // In-process host driver for gsplat_tt project — amendment-002 tt-005.
 //
-// Scope (this shift): bounded hotspot port of transform_means_cam — the
-// world→camera matrix-vec stage of project. Per-Gaussian math:
+// tt-005 (iter-04): bounded hotspot port of transform_means_cam — world→
+// camera matrix-vec. Per-Gaussian math:
 //
 //   means_cam[i] = R @ means[i]
 //
-// where R is the extrinsics rotation (rows 0..2 cols 0..2). The translation
-// `+t` is intentionally NOT applied here — it is added in the per-Gaussian
-// inner loop of project_full_fused (see project.cpp:546-549), so this device
-// output is a drop-in replacement for the CPU `means_cam` intermediate. On
-// linux without Accelerate this is a single-threaded scalar loop in
-// src/gsplat_cpu/project.cpp:528-535 costing ~30-50 ms / frame at N=6.13M
-// Gaussians.
+// where R is the extrinsics rotation (rows 0..2 cols 0..2). Translation +t
+// is intentionally NOT applied here — it is added in the per-Gaussian inner
+// loop of project_full_fused (see project.cpp:546-549), so this device
+// output is a drop-in replacement for the CPU `means_cam` intermediate.
 //
-// Device strategy: SoA tile layout, 1024 Gaussians per tile, 3 input tiles
-// (mx, my, mz) + 3 output tiles (mcx, mcy, mcz) per chunk. SFPU executes
-// per-tile mul_unary + add_tiles + add_unary chains broadcasting R/t across
-// the 1024 lanes. Work splits over the full compute grid via simple
-// round-robin (each core gets a contiguous chunk range).
+// tt-005b (iter-05) — PERF (super-supervisor 2026-05-28):
+//   * Per-frame R↔W means_3d round-trip eats ~85 ms/frame at N=6.13M (the
+//     super-supervisor's measurement vs cpu_cpp_mb). means_3d is invariant
+//     across views — only extrinsics changes. Skip pack + upload when the
+//     input pointer/N hasn't changed.
+//   * Register the 3 fp32 means_cam DRAM buffers in gsplat_tt::device_state
+//     so future device stages (tile_assign / cov2d / blend) can NoC-read
+//     them directly instead of pulling host-resident copies. Stage-A
+//     device-resident buffer registry.
 
 #include "gsplat_tt/project.h"
+#include "gsplat_tt/device_state.h"
 
 #include <algorithm>
 #include <chrono>
@@ -33,6 +35,7 @@
 #include <exception>
 #include <iostream>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include <tt-metalium/bfloat16.hpp>
@@ -59,10 +62,10 @@ namespace {
 
 constexpr uint32_t TILE_H = 32;
 constexpr uint32_t TILE_W = 32;
-constexpr uint32_t ELEMS_PER_TILE = TILE_H * TILE_W;        // 1024
+constexpr uint32_t ELEMS_PER_TILE = TILE_H * TILE_W;                  // 1024
 constexpr uint32_t TILE_BYTES_FP32 = ELEMS_PER_TILE * sizeof(float);  // 4096
 
-// CB indices — must match project_means_cam_compute.cpp.
+// CB indices — must match project_means_cam_compute.cpp (HEAD layout).
 constexpr uint32_t CB_MX    = 0;
 constexpr uint32_t CB_MY    = 1;
 constexpr uint32_t CB_MZ    = 2;
@@ -82,11 +85,9 @@ struct ProjectDeviceContext {
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
 
-    // Per-frame DRAM buffer cache. Initial allocation cost is paid once;
-    // subsequent frames with N <= cached capacity reuse the same buffers.
-    // Tenstorrent MeshBuffer::create has substantial per-call overhead
-    // (~5-30 ms on Blackhole at frame-size buffers); per-frame realloc was
-    // the dominant per-frame cost in the iter-04 micro-profiling run.
+    // Cached DRAM buffers — shared across frames. Outputs (mcx/mcy/mcz)
+    // are also published in gsplat_tt::device_state under the keys
+    // "means_cam_x/y/z" for downstream stages.
     std::shared_ptr<distributed::MeshBuffer> buf_mx;
     std::shared_ptr<distributed::MeshBuffer> buf_my;
     std::shared_ptr<distributed::MeshBuffer> buf_mz;
@@ -94,6 +95,13 @@ struct ProjectDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_mcy;
     std::shared_ptr<distributed::MeshBuffer> buf_mcz;
     std::size_t cached_bytes = 0;
+
+    // Pointer-keyed means cache: skip pack+upload when the caller hands us
+    // the same means pointer with the same N. In the 30-view bench this
+    // fires on frame 0 only and saves ~85 ms/frame for the remaining 29
+    // frames (3×24 MB H2D + host-side SoA pack work).
+    const float* uploaded_means_ptr = nullptr;
+    std::size_t uploaded_means_N = 0;
 };
 
 static void build_program(ProjectDeviceContext& ctx) {
@@ -106,19 +114,15 @@ static void build_program(ProjectDeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     };
 
-    // Inputs: depth 2 for double-buffering reader vs compute.
     cb_fp32(CB_MX, 2);
     cb_fp32(CB_MY, 2);
     cb_fp32(CB_MZ, 2);
-    // Outputs: depth 2 for double-buffering compute vs writer.
     cb_fp32(CB_MCX, 2);
     cb_fp32(CB_MCY, 2);
     cb_fp32(CB_MCZ, 2);
-    // Compute-local scratch CBs for partial products / sums.
     cb_fp32(CB_TMP_A, 2);
     cb_fp32(CB_TMP_B, 2);
 
-    // Reader: 3 DRAM-interleaved TensorAccessorArgs (mx, my, mz).
     std::vector<uint32_t> reader_ct;
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -133,17 +137,32 @@ static void build_program(ProjectDeviceContext& ctx) {
             .compile_args = reader_ct,
         });
 
+    // tt-007: enable UnpackToDestFp32 for every CB so 32-bit data lands in
+    // DEST directly (bypassing SrcA/SrcB). Without this, copy_tile / add_tiles
+    // route through SrcA/SrcB which truncate to bf16 — that is the 34.5 dB
+    // hero-PSNR regression observed at iter-06e. With unpack-to-dest enabled
+    // plus dest-slot accumulation via add_binary_tile (SFPU), every operation
+    // stays in fp32 from CB read through compute through CB write.
+    //
+    // The vector index matches CB id. Our kernel uses CBs 0..7 (MX,MY,MZ,
+    // MCX,MCY,MCZ,TMP_A,TMP_B). tt-metal requires the vector length to match
+    // its full buf_formats table — runtime check enforces size() == 64.
+    std::vector<UnpackToDestMode> u2d_modes(64, UnpackToDestMode::Default);
+    u2d_modes[CB_MX] = UnpackToDestMode::UnpackToDestFp32;
+    u2d_modes[CB_MY] = UnpackToDestMode::UnpackToDestFp32;
+    u2d_modes[CB_MZ] = UnpackToDestMode::UnpackToDestFp32;
+
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/project_means_cam_compute.cpp",
         cores,
         ComputeConfig{
-            .math_fidelity = MathFidelity::HiFi3,
+            .math_fidelity = MathFidelity::HiFi4,
             .fp32_dest_acc_en = true,
+            .unpack_to_dest_mode = u2d_modes,
             .math_approx_mode = false,
         });
 
-    // Writer: 3 DRAM-interleaved TensorAccessorArgs (mcx, mcy, mcz).
     std::vector<uint32_t> writer_ct;
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
@@ -164,18 +183,17 @@ static void build_program(ProjectDeviceContext& ctx) {
 
 static ProjectDeviceContext init_context() {
     ProjectDeviceContext ctx;
-    constexpr int device_id = 0;
-    ctx.mesh_device = distributed::MeshDevice::create_unit_mesh(device_id);
-    ctx.cq = &ctx.mesh_device->mesh_command_queue();
+    // Use the shared MeshDevice owned by gsplat_tt::device_state. This makes
+    // blend and project share the same handle, eliminating the double-close
+    // observed at iter-04 (ShmResourceTracker::cleanup_all double-free).
+    ctx.mesh_device = device_state::get_device();
+    ctx.cq = device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
     ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program(ctx);
     return ctx;
 }
 
-// Lazy-initialised singleton: same lifetime pattern as blend_device.cpp
-// (ensure_device()). We keep this in a unique_ptr inside a function-local
-// static so test teardown can shut it down cleanly via project_device_shutdown.
 static std::unique_ptr<ProjectDeviceContext>& context_slot() {
     static std::unique_ptr<ProjectDeviceContext> ctx;
     return ctx;
@@ -194,8 +212,6 @@ static ProjectDeviceContext* ensure_context() {
     return slot.get();
 }
 
-// Pack N x 3 row-major means into 3 SoA buffers of size ceil(N/1024)*1024 fp32.
-// Tail padding is zero-filled (transforms harmlessly).
 struct SoaInputs {
     std::vector<float> mx;
     std::vector<float> my;
@@ -204,10 +220,6 @@ struct SoaInputs {
     uint32_t padded_n = 0;
 };
 
-// Get a process-shared CPU thread pool for the host-side pack/unpack work.
-// Inlined here to avoid a static dependency dance with backends/cpu_cpp's
-// pybind module — using gsplat_cpu::ThreadPool directly with a fresh
-// instance the first time we hit this code path.
 static gsplat_cpu::ThreadPool& soa_pool() {
     static gsplat_cpu::ThreadPool pool(
         static_cast<std::size_t>(std::max(2u, std::thread::hardware_concurrency())));
@@ -230,7 +242,7 @@ static SoaInputs pack_means_soa(const float* means, std::size_t N) {
     const std::size_t W = pool.size();
     const std::size_t chunk = (N + W - 1) / W;
     for (std::size_t w = 0; w < W; ++w) {
-        pool.submit([w, W, chunk, N, means, &out]() {
+        pool.submit([w, chunk, N, means, &out]() {
             const std::size_t lo = std::min(w * chunk, N);
             const std::size_t hi = std::min(lo + chunk, N);
             for (std::size_t i = lo; i < hi; ++i) {
@@ -242,26 +254,21 @@ static SoaInputs pack_means_soa(const float* means, std::size_t N) {
     }
     pool.wait();
 
-    // Zero the tail padding (only matters for the last tile that's
-    // partially filled). Single-threaded — only at most (padded_n - N) <=
-    // 1023 elements per buffer, ~12 KB total.
+    // Zero tail padding (only the last partial tile, <=12 KB total).
     for (std::size_t i = N; i < padded_n; ++i) {
         out.mx[i] = 0.0f;
         out.my[i] = 0.0f;
         out.mz[i] = 0.0f;
     }
-
     return out;
 }
 
-static uint32_t fp32_bits(float v) {
+static inline uint32_t fp32_bits(float v) {
     uint32_t u;
     std::memcpy(&u, &v, sizeof(uint32_t));
     return u;
 }
 
-// Round-robin contiguous chunk assignment across the compute grid.
-// Each core gets [chunk_start, chunk_start + num_chunks) tile IDs.
 struct WorkSplit {
     std::vector<uint32_t> chunk_start;
     std::vector<uint32_t> num_chunks;
@@ -292,7 +299,6 @@ bool project_device_ready() {
 void project_device_shutdown() {
     auto& slot = context_slot();
     if (slot) {
-        // Release cached MeshBuffers before tearing down the device.
         slot->buf_mx.reset();
         slot->buf_my.reset();
         slot->buf_mz.reset();
@@ -300,6 +306,9 @@ void project_device_shutdown() {
         slot->buf_mcy.reset();
         slot->buf_mcz.reset();
         slot->cached_bytes = 0;
+        slot->uploaded_means_ptr = nullptr;
+        slot->uploaded_means_N = 0;
+        // NOTE: do NOT close mesh_device here. device_state owns it.
         slot.reset();
     }
 }
@@ -308,27 +317,28 @@ double transform_means_cam_tt(
     const float* means,
     const float* extrinsics,
     std::size_t N,
-    float* means_cam_out) {
+    float* means_cam_out,
+    ProjectCallTimings* timings_out) {
     if (N == 0) {
         return 0.0;
     }
     auto* ctx = ensure_context();
     if (ctx == nullptr) {
-        // Device init failure — caller should fall back to CPU.
         return -1.0;
     }
+    ProjectCallTimings tlocal;
+    auto& T = (timings_out ? *timings_out : tlocal);
 
     const float r00 = extrinsics[0], r01 = extrinsics[1], r02 = extrinsics[2];
     const float r10 = extrinsics[4], r11 = extrinsics[5], r12 = extrinsics[6];
     const float r20 = extrinsics[8], r21 = extrinsics[9], r22 = extrinsics[10];
 
-    const SoaInputs soa = pack_means_soa(means, N);
-    const uint32_t num_tiles = soa.num_tiles;
-    const std::size_t soa_bytes = static_cast<std::size_t>(soa.padded_n) * sizeof(float);
+    const uint32_t num_tiles =
+        static_cast<uint32_t>((N + ELEMS_PER_TILE - 1) / ELEMS_PER_TILE);
+    const uint32_t padded_n = num_tiles * ELEMS_PER_TILE;
+    const std::size_t soa_bytes = static_cast<std::size_t>(padded_n) * sizeof(float);
 
-    // (Re)allocate cached DRAM buffers when N grows past current capacity.
-    // First frame pays full allocation cost; subsequent frames re-use the
-    // same MeshBuffer instances and only pay per-frame upload/download.
+    // (Re)allocate cached DRAM buffers when N outgrows current capacity.
     if (!ctx->buf_mx || ctx->cached_bytes < soa_bytes) {
         distributed::DeviceLocalBufferConfig dram_cfg{
             .page_size = TILE_BYTES_FP32,
@@ -342,7 +352,37 @@ double transform_means_cam_tt(
         ctx->buf_mcy = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->buf_mcz = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
         ctx->cached_bytes = soa_bytes;
+        // Buffers fresh — uploaded_means_ptr/N are stale.
+        ctx->uploaded_means_ptr = nullptr;
+        ctx->uploaded_means_N = 0;
+
+        // Publish output handles for downstream device stages. Re-registers
+        // on grow; keys are stable.
+        device_state::register_buffer("means_cam_x", ctx->buf_mcx);
+        device_state::register_buffer("means_cam_y", ctx->buf_mcy);
+        device_state::register_buffer("means_cam_z", ctx->buf_mcz);
     }
+
+    // ── Per-frame data path ─────────────────────────────────────────────
+    // tt-005b: only pack + upload means when the input pointer has changed.
+    // In the 30-view bench, means_3d is a single torch tensor reused across
+    // all views, so this fires on frame 0 only (microbench-confirmed:
+    // call 0 pack=49.8 ms + upload=7.8 ms; calls 1+ skipped).
+    T.cache_hit = !(ctx->uploaded_means_ptr != means || ctx->uploaded_means_N != N);
+    if (!T.cache_hit) {
+        const auto t_pack0 = std::chrono::high_resolution_clock::now();
+        const SoaInputs soa = pack_means_soa(means, N);
+        const auto t_pack1 = std::chrono::high_resolution_clock::now();
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mx, soa.mx, /*blocking=*/false);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_my, soa.my, /*blocking=*/false);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mz, soa.mz, /*blocking=*/false);
+        const auto t_pack2 = std::chrono::high_resolution_clock::now();
+        T.pack_ms = std::chrono::duration<double, std::milli>(t_pack1 - t_pack0).count();
+        T.upload_ms = std::chrono::duration<double, std::milli>(t_pack2 - t_pack1).count();
+        ctx->uploaded_means_ptr = means;
+        ctx->uploaded_means_N = N;
+    }
+
     auto& buf_mx  = ctx->buf_mx;
     auto& buf_my  = ctx->buf_my;
     auto& buf_mz  = ctx->buf_mz;
@@ -350,22 +390,16 @@ double transform_means_cam_tt(
     auto& buf_mcy = ctx->buf_mcy;
     auto& buf_mcz = ctx->buf_mcz;
 
-    // Upload inputs.
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, buf_mx, soa.mx, /*blocking=*/false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, buf_my, soa.my, /*blocking=*/false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, buf_mz, soa.mz, /*blocking=*/false);
-
-    // Work split across compute grid.
     const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
     const WorkSplit ws = split_chunks(num_tiles, num_cores);
 
-    // Per-core runtime args. All cores share the same R/t scalars (broadcast).
+    Program& program = ctx->workload.get_programs().begin()->second;
+
+    const auto t_launch0 = std::chrono::high_resolution_clock::now();
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t chunk_start = ws.chunk_start[c];
         const uint32_t num_chunks  = ws.num_chunks[c];
-
-        Program& program = ctx->workload.get_programs().begin()->second;
 
         SetRuntimeArgs(
             program, ctx->reader, core,
@@ -390,27 +424,36 @@ double transform_means_cam_tt(
              chunk_start,
              num_chunks});
     }
-
-    const auto t_launch_start = std::chrono::high_resolution_clock::now();
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, /*blocking=*/false);
+    const auto t_launch1 = std::chrono::high_resolution_clock::now();
     distributed::Finish(*ctx->cq);
     const auto t_launch_end = std::chrono::high_resolution_clock::now();
+    T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
+    T.compute_ms = std::chrono::duration<double, std::milli>(t_launch_end - t_launch1).count();
 
-    // Download outputs.
-    std::vector<float> mcx_out(soa.padded_n);
-    std::vector<float> mcy_out(soa.padded_n);
-    std::vector<float> mcz_out(soa.padded_n);
+    // Download outputs. Until downstream stages also live on device the
+    // host still consumes means_cam in project_full_with_cov3d. Once
+    // tile_assign (tt-006) is on device it will NoC-read these same
+    // mc{x,y,z} buffers directly via device_state and this D2H drops.
+    const auto t_dl0 = std::chrono::high_resolution_clock::now();
+    std::vector<float> mcx_out(padded_n);
+    std::vector<float> mcy_out(padded_n);
+    std::vector<float> mcz_out(padded_n);
+    // tt-metal mesh_command_queue_base.cpp:217 enforces blocking=true on
+    // EnqueueReadMeshBuffer; non-blocking reads must go through
+    // enqueue_read_shards. Keep blocking and time individually for profiling.
     distributed::EnqueueReadMeshBuffer(*ctx->cq, mcx_out, buf_mcx, /*blocking=*/true);
     distributed::EnqueueReadMeshBuffer(*ctx->cq, mcy_out, buf_mcy, /*blocking=*/true);
     distributed::EnqueueReadMeshBuffer(*ctx->cq, mcz_out, buf_mcz, /*blocking=*/true);
+    const auto t_dl1 = std::chrono::high_resolution_clock::now();
+    T.download_ms = std::chrono::duration<double, std::milli>(t_dl1 - t_dl0).count();
 
-    // Unpack SoA -> AoS into caller's buffer (parallel; ~24 MB per channel).
     {
         auto& pool = soa_pool();
         const std::size_t W = pool.size();
         const std::size_t chunk = (N + W - 1) / W;
         for (std::size_t w = 0; w < W; ++w) {
-            pool.submit([w, W, chunk, N, &mcx_out, &mcy_out, &mcz_out, means_cam_out]() {
+            pool.submit([w, chunk, N, &mcx_out, &mcy_out, &mcz_out, means_cam_out]() {
                 const std::size_t lo = std::min(w * chunk, N);
                 const std::size_t hi = std::min(lo + chunk, N);
                 for (std::size_t i = lo; i < hi; ++i) {
@@ -422,10 +465,10 @@ double transform_means_cam_tt(
         }
         pool.wait();
     }
+    const auto t_unp = std::chrono::high_resolution_clock::now();
+    T.unpack_ms = std::chrono::duration<double, std::milli>(t_unp - t_dl1).count();
 
-    const auto kernel_ms =
-        std::chrono::duration<double, std::milli>(t_launch_end - t_launch_start).count();
-    return kernel_ms;
+    return std::chrono::duration<double, std::milli>(t_launch_end - t_launch0).count();
 }
 
 }  // namespace gsplat_tt

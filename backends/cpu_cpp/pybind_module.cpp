@@ -18,6 +18,7 @@
 
 #ifdef GSPLAT_WITH_TT
 #include "gsplat_tt/blend.h"
+#include "gsplat_tt/device_state.h"
 #include "gsplat_tt/project.h"
 #endif
 
@@ -1118,8 +1119,11 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_width"));
 
     m.def("tt_device_shutdown", []() {
+        // Per-stage shutdowns only release their local pointers/buffers.
+        // The MeshDevice itself is closed exactly once by device_state.
         gsplat_tt::device_shutdown();
         gsplat_tt::project_device_shutdown();
+        gsplat_tt::device_state::shutdown();
     });
 
     // amendment-002 tt-005: device transform_means_cam (bounded hotspot port).
@@ -1140,12 +1144,23 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
             }
             const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
             py::array_t<float> means_cam({static_cast<py::ssize_t>(N), static_cast<py::ssize_t>(3)});
+            gsplat_tt::ProjectCallTimings timings;
             const double kernel_ms = gsplat_tt::transform_means_cam_tt(
                 static_cast<const float*>(means_info.ptr),
                 static_cast<const float*>(extr_info.ptr),
                 N,
-                means_cam.mutable_data());
-            return py::make_tuple(means_cam, kernel_ms);
+                means_cam.mutable_data(),
+                &timings);
+            py::dict d;
+            d["total_ms"]    = kernel_ms;
+            d["pack_ms"]     = timings.pack_ms;
+            d["upload_ms"]   = timings.upload_ms;
+            d["launch_ms"]   = timings.launch_ms;
+            d["compute_ms"]  = timings.compute_ms;
+            d["download_ms"] = timings.download_ms;
+            d["unpack_ms"]   = timings.unpack_ms;
+            d["cache_hit"]   = timings.cache_hit;
+            return py::make_tuple(means_cam, d);
         },
         py::arg("means"),
         py::arg("extrinsics"));
