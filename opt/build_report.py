@@ -182,7 +182,7 @@ def ledger_section(rows: list[dict]) -> str:
 
 CULL_JSONL = OPT_DIR / "cull_tune.jsonl"
 CULL_SUMMARY = OPT_DIR / "cull_tune_summary.json"
-PSNR_FLOOR = 67.5
+PSNR_FLOOR = 68.0
 
 
 def load_cull_tune() -> list[dict]:
@@ -241,7 +241,7 @@ def cull_tune_section() -> str:
   alpha_blend without microblock cull. Quality floor: PSNR ≥ {PSNR_FLOOR} dB,
   max_abs ≤ 0.05 @ 1024² stitch_doll (+ orbit + close-zoom views).</p>
   <p>Production default: <b>Mahalanobis</b> per-pair and per-microblock cull with
-  <code>contrib_floor=1/3000</code> (78–86 dB vs 1/16384 reference; ~21 ms/view).</p>
+  <code>contrib_floor=1/16384</code> (~68.6 dB worst vs true GT; ~18 ms/view).</p>
   <table class='kv'>{head}</table>
   {table}
   <p>Full log: <code>opt/cull_tune.jsonl</code></p>
@@ -260,8 +260,8 @@ def algorithm_snapshot(rows: list[dict]) -> str:
     <li><b>Ground truth</b>: numpy alpha_blend, all quality culls off
         (min_opacity=0, max_radius=-1, no Mahalanobis/microblock cull).</li>
     <li><b>cpu_cpp default</b>: diagonal AABB from k=sqrt(2·ln(ω/floor)) with
-        floor=1/3000, k_cap=3, min k=3; Mahalanobis cull on tile assign + blend.</li>
-    <li><b>contrib_floor</b> = 1/3000 (~86 dB vs 1/30k tight ref; 67.85 dB worst vs true GT).</li>
+        floor=1/16384, k_cap=3, min k=3; Mahalanobis cull on tile assign + blend.</li>
+    <li><b>contrib_floor</b> = 1/16384 (68.6 dB worst vs true GT; max_abs 0.0038).</li>
     <li><b>Reference views</b>: <code>benchmarks/reference_v2/</code> @ 1024×1024,
         orbit sweep + close-zoom.</li>
   </ul>

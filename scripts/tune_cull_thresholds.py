@@ -281,7 +281,7 @@ def main() -> None:
 
     base = CullConfig(
         assign_mode="mahalanobis",
-        contrib_floor_n=3000.0,
+        contrib_floor_n=16384.0,
         transmittance_n=255.0,
         min_opacity=1.0 / 255.0,
         max_radius=-1,

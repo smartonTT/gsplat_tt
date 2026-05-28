@@ -290,7 +290,7 @@ class GaussianViewer:
                 min=1.0,
                 max=65536.0,
                 step=1.0,
-                initial_value=3000.0,
+                initial_value=16384.0,
                 hint=(
                     "Mahalanobis keep threshold: keep pair iff peak "
                     "ω·exp(−½m²) ≥ 1/N. Higher N = tighter cull."
