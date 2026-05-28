@@ -1,16 +1,19 @@
 {
-  "updated_at": "2026-05-28T04:31:43.518727+00:00",
+  "updated_at": "2026-05-28T04:35:00+00:00",
+  "remote_host": "bh-30",
+  "supervisor_loop": "stopped",
   "phase": "iter-001-stage3",
-  "next_action": "Stage 3 compute kernel: microblock-major + fp32 Dst state; verify on bh-30.",
+  "next_action": "Stage 3b: compute reads mb_header/mb_stream from DRAM; microblock outer loop. Gate hero PSNR >= 47.78 dB.",
   "milestones": {
     "stage1_host": true,
     "stage2_reader": true,
     "stage3_compute": false
   },
   "last_gates": {
-    "blend_rc": 1,
-    "mb_host_rc": 1,
+    "blend_rc": 0,
+    "mb_host_rc": 0,
     "hero_psnr_dB": 47.783193503109935,
-    "mb_host_psnr_dB": 49.44267816579695
+    "mb_host_psnr_dB": 49.44267816579695,
+    "device_kernel_ms": 216.06
   }
 }
