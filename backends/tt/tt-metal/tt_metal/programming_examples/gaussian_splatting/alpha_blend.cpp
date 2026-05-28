@@ -102,6 +102,15 @@ static std::vector<float> load_npy_f32(const std::string& path, std::vector<size
     return data;
 }
 
+static std::vector<uint32_t> load_npy_u32(const std::string& path, std::vector<size_t>& shape) {
+    auto f32 = load_npy_f32(path, shape);
+    std::vector<uint32_t> out(f32.size());
+    for (size_t i = 0; i < f32.size(); i++) {
+        out[i] = static_cast<uint32_t>(f32[i]);
+    }
+    return out;
+}
+
 static void save_npy_f32(const std::string& path, const std::vector<float>& data, const std::vector<size_t>& shape) {
     std::ofstream f(path, std::ios::binary);
     f.write("\x93NUMPY", 6);
@@ -180,6 +189,12 @@ static void build_program_and_workload(DeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
 
+    // All tile CBs bf16 baseline (47.78 dB hero PSNR). Whole-pipeline fp32
+    // experiments regressed to ~34 dB on Blackhole — the unpacker / packer
+    // interaction with fp32 CBs + fp32_dest_acc_en exposes a precision bug
+    // we don't yet understand. Sticking with bf16 here; the T_state
+    // accumulator precision fix is applied at the kernel level via a
+    // 2-bf16-halves fp32 reconstruction (see CB_T_STATE_HI / CB_T_STATE_LO).
     auto cb_tile = [&](uint32_t id, uint32_t depth) {
         CircularBufferConfig c(depth * TILE_BYTES_BF16, {{id, DataFormat::Float16_b}});
         c.set_page_size(id, TILE_BYTES_BF16);
@@ -195,9 +210,6 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_tile(CB_PY, 2);
     cb_small(CB_SCALARS, SCALAR_PACK_PAGE_BYTES, 4, DataFormat::Float32);
     cb_small(CB_TILE_META, META_PAGE_BYTES, 2, DataFormat::UInt32);
-    // Depth must be a multiple of 3 (the per-tile batch size) so no
-    // single push-of-3 ever straddles the CB wrap. Picking 6 keeps two
-    // batches in flight (parity with the previous double-buffering depth).
     cb_tile(CB_COLOR_OUT, 6);
 
     cb_tile(CB_DX, 2);
@@ -225,6 +237,11 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     cb_tile(CB_CONST_ZERO, 1);
     cb_tile(CB_CONST_099, 1);
+    // Stage 2 shadow CBs: reader fills these in parallel with legacy scalars;
+    // compute ignores them until Stage 3 microblock-major rewrite.
+    cb_small(CB_MB_COEFF_SHADOW, COEFF_ROW_BYTES, 4, DataFormat::Float32);
+    cb_small(CB_MB_HEADER_SHADOW, META_PAGE_BYTES, 4, DataFormat::UInt32);
+    cb_small(CB_MB_STREAM_SHADOW, META_PAGE_BYTES, 4, DataFormat::UInt32);
     // CB_CONST_NEG88 (index 11) is reserved but unused now that the kernel
     // uses exp_tile<approx=true>, which clamps negative inputs internally.
     // Slot kept reserved to avoid renumbering downstream CBs.
@@ -235,6 +252,9 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // are compile-time constants, so this is independent of any specific
     // buffer instance.
     std::vector<uint32_t> reader_ct;
+    TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -299,8 +319,14 @@ struct FrameInputs {
     std::string px_path;
     std::string py_path;
     std::string out_path;
+    std::string coeff_table_path;
+    std::string mb_header_path;
+    std::string mb_stream_path;
     uint32_t image_h;
     uint32_t image_w;
+    bool use_microblock_payload() const {
+        return !coeff_table_path.empty() && !mb_header_path.empty() && !mb_stream_path.empty();
+    }
 };
 
 // Result of LPT load balancing for one frame.
@@ -395,6 +421,20 @@ static std::vector<uint32_t> encode_attribute_packs(
     return packs_payload;
 }
 
+static std::vector<uint32_t> encode_coeff_table(
+    const std::vector<float>& coeff_f32, uint32_t total_entries) {
+    std::vector<uint32_t> payload(
+        (static_cast<size_t>(total_entries) * COEFF_ROW_BYTES) / 4, 0);
+    constexpr size_t row_bytes = COEFF_LANES_PER_GAUSSIAN * sizeof(float);
+    for (uint32_t e = 0; e < total_entries; e++) {
+        std::memcpy(
+            reinterpret_cast<uint8_t*>(payload.data()) + static_cast<size_t>(e) * COEFF_ROW_BYTES,
+            &coeff_f32[e * COEFF_LANES_PER_GAUSSIAN],
+            row_bytes);
+    }
+    return payload;
+}
+
 // Encode (num_tiles, 32, 32) fp32 input as bf16 tile-major bytes.
 static std::vector<uint16_t> encode_tiles_to_bf16(
     const std::vector<float>& f32, uint32_t num_tiles) {
@@ -441,6 +481,9 @@ struct FrameDramBuffers {
     std::shared_ptr<distributed::MeshBuffer> py;
     std::shared_ptr<distributed::MeshBuffer> output;
     std::shared_ptr<distributed::MeshBuffer> tile_ids;
+    std::shared_ptr<distributed::MeshBuffer> coeff_table;
+    std::shared_ptr<distributed::MeshBuffer> mb_header;
+    std::shared_ptr<distributed::MeshBuffer> mb_stream;
 };
 
 // Allocate the 6 DRAM buffers a frame needs. Sizes are derived from the
@@ -451,7 +494,10 @@ static FrameDramBuffers allocate_frame_buffers(
     uint32_t total_entries,
     uint32_t num_tiles,
     size_t offsets_count,
-    size_t tile_ids_bytes) {
+    size_t tile_ids_bytes,
+    bool use_mb,
+    size_t mb_header_bytes,
+    size_t mb_stream_bytes) {
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
         distributed::DeviceLocalBufferConfig lc{
@@ -465,6 +511,12 @@ static FrameDramBuffers allocate_frame_buffers(
     b.py       = make_dram(static_cast<size_t>(num_tiles) * TILE_BYTES_BF16, TILE_BYTES_BF16);
     b.output   = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
     b.tile_ids = make_dram(tile_ids_bytes, TILE_IDS_PAGE_BYTES);
+    if (use_mb) {
+        b.coeff_table = make_dram(
+            static_cast<size_t>(total_entries) * COEFF_ROW_BYTES, COEFF_ROW_BYTES);
+        b.mb_header = make_dram(mb_header_bytes, META_PAGE_BYTES);
+        b.mb_stream = make_dram(mb_stream_bytes, META_PAGE_BYTES);
+    }
     return b;
 }
 
@@ -476,13 +528,21 @@ static void set_per_core_runtime_args(
     Program& program,
     const DeviceContext& ctx,
     const FrameDramBuffers& bufs,
-    const TileAssignment& assign) {
+    const TileAssignment& assign,
+    uint32_t num_tiles) {
     const uint32_t packs_addr    = static_cast<uint32_t>(bufs.packs->address());
     const uint32_t offsets_addr  = static_cast<uint32_t>(bufs.offsets->address());
     const uint32_t px_addr       = static_cast<uint32_t>(bufs.px->address());
     const uint32_t py_addr       = static_cast<uint32_t>(bufs.py->address());
     const uint32_t out_addr      = static_cast<uint32_t>(bufs.output->address());
     const uint32_t tile_ids_addr = static_cast<uint32_t>(bufs.tile_ids->address());
+    const uint32_t coeff_addr =
+        bufs.coeff_table ? static_cast<uint32_t>(bufs.coeff_table->address()) : 0;
+    const uint32_t mb_header_addr =
+        bufs.mb_header ? static_cast<uint32_t>(bufs.mb_header->address()) : 0;
+    const uint32_t mb_stream_addr =
+        bufs.mb_stream ? static_cast<uint32_t>(bufs.mb_stream->address()) : 0;
+    const bool use_mb = bufs.coeff_table != nullptr;
 
     uint32_t core_index = 0;
     for (const auto& range : ctx.all_cores.ranges()) {
@@ -494,8 +554,11 @@ static void set_per_core_runtime_args(
                 SetRuntimeArgs(program, ctx.reader, core, {
                     packs_addr, offsets_addr, px_addr, py_addr,
                     tile_ids_addr, start, count,
+                    coeff_addr, mb_header_addr, mb_stream_addr, num_tiles,
                 });
-                SetRuntimeArgs(program, ctx.compute, core, {count});
+                SetRuntimeArgs(program, ctx.compute, core, {
+                    count, use_mb ? 1u : 0u,
+                });
                 SetRuntimeArgs(program, ctx.writer, core, {
                     out_addr, tile_ids_addr, start, count,
                 });
@@ -534,6 +597,27 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     auto py_f32      = load_npy_f32(f.py_path,      py_shape);
     const uint32_t total_entries = static_cast<uint32_t>(packs_shape[0]);
 
+    const bool use_mb = f.use_microblock_payload();
+    std::vector<float> coeff_f32;
+    std::vector<uint32_t> mb_header_u32;
+    std::vector<uint32_t> mb_stream_u32;
+    size_t mb_header_bytes = 0;
+    size_t mb_stream_bytes = 0;
+    if (use_mb) {
+        std::vector<size_t> coeff_shape, mb_header_shape, mb_stream_shape;
+        coeff_f32 = load_npy_f32(f.coeff_table_path, coeff_shape);
+        mb_header_u32 = load_npy_u32(f.mb_header_path, mb_header_shape);
+        mb_stream_u32 = load_npy_u32(f.mb_stream_path, mb_stream_shape);
+        if (coeff_shape[0] != total_entries) {
+            throw std::runtime_error("coeff_table rows != packs rows");
+        }
+        mb_header_bytes = mb_header_u32.size() * sizeof(uint32_t);
+        mb_stream_bytes = mb_stream_u32.size() * sizeof(uint32_t);
+        // Pad to page multiples for DRAM write.
+        mb_header_bytes = ((mb_header_bytes + META_PAGE_BYTES - 1) / META_PAGE_BYTES) * META_PAGE_BYTES;
+        mb_stream_bytes = ((mb_stream_bytes + META_PAGE_BYTES - 1) / META_PAGE_BYTES) * META_PAGE_BYTES;
+    }
+
     // 2. LPT-balanced tile-to-core assignment.
     const TileAssignment assign = build_tile_assignment(offsets_f32, num_tiles, num_cores);
 
@@ -542,18 +626,34 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     // refs to shared_ptr<MeshBuffer>.)
     FrameDramBuffers bufs = allocate_frame_buffers(
         ctx, total_entries, num_tiles, offsets_f32.size(),
-        assign.tile_id_buffer_bytes_padded);
+        assign.tile_id_buffer_bytes_padded, use_mb, mb_header_bytes, mb_stream_bytes);
     auto packs_payload = encode_attribute_packs(packs_f32, total_entries);
+    std::vector<uint32_t> coeff_payload;
+    if (use_mb) {
+        coeff_payload = encode_coeff_table(coeff_f32, total_entries);
+    }
     auto px_bf16 = encode_tiles_to_bf16(px_f32, num_tiles);
     auto py_bf16 = encode_tiles_to_bf16(py_f32, num_tiles);
     std::vector<uint32_t> offsets_u32(offsets_f32.size());
     for (size_t i = 0; i < offsets_f32.size(); i++) {
         offsets_u32[i] = static_cast<uint32_t>(offsets_f32[i]);
     }
+    std::vector<uint32_t> mb_header_payload;
+    std::vector<uint32_t> mb_stream_payload;
+    if (use_mb) {
+        mb_header_payload.assign(mb_header_bytes / 4, 0);
+        std::memcpy(
+            mb_header_payload.data(), mb_header_u32.data(),
+            mb_header_u32.size() * sizeof(uint32_t));
+        mb_stream_payload.assign(mb_stream_bytes / 4, 0);
+        std::memcpy(
+            mb_stream_payload.data(), mb_stream_u32.data(),
+            mb_stream_u32.size() * sizeof(uint32_t));
+    }
 
     // 4. Refresh runtime args for this frame.
     Program& program = get_program_for_workload(ctx);
-    set_per_core_runtime_args(program, ctx, bufs, assign);
+    set_per_core_runtime_args(program, ctx, bufs, assign, num_tiles);
 
     // 5. Kernel timing window: DRAM upload start -> output readback end.
     const auto t_start = std::chrono::steady_clock::now();
@@ -561,6 +661,7 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     // empty tiles, so their slots are never written by the writer kernel.
     // The DRAM allocator may reuse addresses across frames in daemon mode,
     // so without this fill, empty regions would show stale pixels.
+    // Output is fp32 tile-major now; size matches CB_COLOR_OUT page (4 KB).
     std::vector<uint16_t> output_zero(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.output,   output_zero);
@@ -569,6 +670,11 @@ static double process_frame(DeviceContext& ctx, const FrameInputs& f) {
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.px,       px_bf16);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.py,       py_bf16);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.tile_ids, assign.tile_id_buffer_padded);
+    if (use_mb) {
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.coeff_table, coeff_payload);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.mb_header, mb_header_payload);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, bufs.mb_stream, mb_stream_payload);
+    }
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     std::vector<uint16_t> result_bf16(
         static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
@@ -621,6 +727,12 @@ static int run_daemon() {
             std::cout << "ERR malformed FRAME line" << std::endl;
             std::cout.flush();
             continue;
+        }
+        // Optional Stage 2 microblock payloads (backward compatible).
+        if (!(iss >> f.coeff_table_path >> f.mb_header_path >> f.mb_stream_path)) {
+            f.coeff_table_path.clear();
+            f.mb_header_path.clear();
+            f.mb_stream_path.clear();
         }
         try {
             double ms = process_frame(ctx, f);

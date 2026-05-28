@@ -45,20 +45,31 @@
 // RUNTIME ARGS
 //   0: packs_addr         DRAM base of scalar packs buffer (64B page each)
 //   1: tile_offsets_addr  DRAM base of tile_offsets[] (4B per uint32)
-//   2: px_addr            DRAM base of px tiles       (2KB per bf16 32x32)
+//   2: px_addr            DRAM base of px tiles       (4KB per fp32 32x32)
 //   3: py_addr            DRAM base of py tiles
 //   4: tile_ids_addr      DRAM base of concatenated tile-id list (uint32 each)
 //   5: tile_ids_start     this core's element offset into that list
 //   6: tile_ids_count     number of tile IDs this core handles
+//   7: coeff_table_addr   DRAM base of coeff rows (48B each); 0 = legacy-only
+//   8: mb_header_addr     DRAM base of (num_tiles, 32, 2) uint32 headers; 0 = off
+//   9: mb_stream_addr     DRAM base of flat uint32 stream; 0 = off
+//  10: num_tiles           total screen tiles (for mb_header indexing)
 //
-// COMPILE-TIME ARGS: 5 TensorAccessorArgs in order: packs, tile_offsets,
-// px, py, tile_ids. All DRAM-interleaved.
+// COMPILE-TIME ARGS: 8 TensorAccessorArgs in order: packs, tile_offsets,
+// px, py, tile_ids, coeff_table, mb_header, mb_stream. All DRAM-interleaved.
 
 // Max per-core tile IDs we cache in L1. Sized to handle a 4K render
 // (120x68 = 8160 tiles, ~128/core after round-robin balancing). At 1080p
 // (60x34 = 2040 tiles) average is ~32/core, leaving plenty of headroom.
 // Cost: 1024 bytes per core (still trivial against the 1.5 MB total L1).
 constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
+constexpr uint32_t NUM_MICROBLOCKS = 32;
+constexpr uint32_t COEFF_ROW_BYTES = 48;
+constexpr uint32_t META_PAGE_BYTES = 64;
+
+constexpr uint32_t CB_MB_COEFF_SHADOW  = 24;
+constexpr uint32_t CB_MB_HEADER_SHADOW = 25;
+constexpr uint32_t CB_MB_STREAM_SHADOW = 26;
 
 void kernel_main() {
     uint32_t packs_addr        = get_arg_val<uint32_t>(0);
@@ -68,6 +79,10 @@ void kernel_main() {
     uint32_t tile_ids_addr     = get_arg_val<uint32_t>(4);
     uint32_t tile_ids_start    = get_arg_val<uint32_t>(5);
     uint32_t tile_ids_count    = get_arg_val<uint32_t>(6);
+    uint32_t coeff_table_addr  = get_arg_val<uint32_t>(7);
+    uint32_t mb_header_addr    = get_arg_val<uint32_t>(8);
+    uint32_t mb_stream_addr    = get_arg_val<uint32_t>(9);
+    uint32_t num_tiles         = get_arg_val<uint32_t>(10);
 
     constexpr uint32_t CB_PX        = 0;
     constexpr uint32_t CB_PY        = 1;
@@ -90,12 +105,20 @@ void kernel_main() {
     constexpr auto px_args        = TensorAccessorArgs<offsets_args.next_compile_time_args_offset()>();
     constexpr auto py_args        = TensorAccessorArgs<px_args.next_compile_time_args_offset()>();
     constexpr auto tile_ids_args  = TensorAccessorArgs<py_args.next_compile_time_args_offset()>();
+    constexpr auto coeff_args     = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
+    constexpr auto mb_header_args = TensorAccessorArgs<coeff_args.next_compile_time_args_offset()>();
+    constexpr auto mb_stream_args = TensorAccessorArgs<mb_header_args.next_compile_time_args_offset()>();
 
     const auto packs_acc    = TensorAccessor(packs_args,    packs_addr,        pack_bytes_padded);
     const auto offsets_acc  = TensorAccessor(offsets_args,  tile_offsets_addr, /*page_size=*/4);
     const auto px_acc       = TensorAccessor(px_args,       px_addr,           tile_bytes);
     const auto py_acc       = TensorAccessor(py_args,       py_addr,           tile_bytes);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr,     tile_ids_page_bytes);
+    const auto coeff_acc    = TensorAccessor(coeff_args,    coeff_table_addr,  COEFF_ROW_BYTES);
+    const auto mb_header_acc = TensorAccessor(mb_header_args, mb_header_addr,   META_PAGE_BYTES);
+    const auto mb_stream_acc = TensorAccessor(mb_stream_args, mb_stream_addr,  META_PAGE_BYTES);
+
+    const bool use_mb_shadow = (coeff_table_addr != 0) && (mb_header_addr != 0) && (mb_stream_addr != 0);
 
     // No-work cores (LPT may leave some cores empty when num_tiles < num_cores).
     if (tile_ids_count == 0) {
@@ -171,9 +194,7 @@ void kernel_main() {
         uint32_t g_end   = scratch_ptr[0];
         uint32_t g_count = g_end - g_start;
 
-        // (2) Push g_count into CB_TILE_META as a single uint32. Writes
-        // directly into the meta CB's write pointer (the scratch slot we
-        // just used is safe to overwrite — we no longer need it).
+        // (2) Push g_count into CB_TILE_META as a single uint32.
         cb_reserve_back(CB_TILE_META, 1);
         auto meta_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_META));
         meta_ptr[0] = g_count;
@@ -195,6 +216,12 @@ void kernel_main() {
         // CB_SCALARS depth (4) lets the reader prefetch ahead of compute.
         for (uint32_t g = 0; g < g_count; g++) {
             uint32_t entry_id = g_start + g;
+            if (use_mb_shadow) {
+                cb_reserve_back(CB_MB_COEFF_SHADOW, 1);
+                noc_async_read_tile(entry_id, coeff_acc, get_write_ptr(CB_MB_COEFF_SHADOW));
+                noc_async_read_barrier();
+                cb_push_back(CB_MB_COEFF_SHADOW, 1);
+            }
             cb_reserve_back(CB_SCALARS, 1);
             noc_async_read_tile(entry_id, packs_acc, get_write_ptr(CB_SCALARS));
             noc_async_read_barrier();

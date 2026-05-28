@@ -6,6 +6,7 @@ namespace gsplat {
 constexpr uint32_t TILE_H = 32;
 constexpr uint32_t TILE_W = 32;
 constexpr uint32_t TILE_BYTES_BF16 = TILE_H * TILE_W * 2;     // 2 KB
+constexpr uint32_t TILE_BYTES_FP32 = TILE_H * TILE_W * 4;     // 4 KB
 constexpr uint32_t SCALAR_PACK_BYTES = 9 * 4;                  // 9 fp32 scalars
 constexpr uint32_t SCALAR_PACK_PAGE_BYTES = 64;                // padded for NoC alignment
 constexpr uint32_t META_PAGE_BYTES = 64;                       // padded uint32 page
@@ -54,5 +55,42 @@ constexpr uint32_t CB_CONST_099  = 23;  // 0.99 (used to clamp alpha = min(., 0.
 // "saturated" (further Gaussians contribute < 1/255 to it). Used by the Stage F
 // sat_mask refresh to freeze saturated pixels in subsequent compositing steps.
 constexpr float T_SAT_THRESHOLD = 1e-4f;
+
+// ---------------------------------------------------------------------------
+// Microblock-major blend (metal-iter-001) — host ↔ device agreement.
+// See docs/optimization-log/microblock-kernel-design.md §3.4 + §6.3.
+// ---------------------------------------------------------------------------
+constexpr uint32_t NUM_MICROBLOCKS = 32;
+
+constexpr uint32_t COEFF_LANES_PER_GAUSSIAN = 10;  // A..F, opacity, color_rgb
+constexpr uint32_t COEFF_ROW_BYTES          = 48;  // 10 fp32 + 2 fp32 pad (NoC align)
+constexpr uint32_t MB_HEADER_BYTES          = NUM_MICROBLOCKS * 8;  // 32 × (offset,count)
+
+struct MicroblockHeader {
+    uint32_t offset;
+    uint32_t count;
+};
+static_assert(sizeof(MicroblockHeader) == 8, "8B per microblock header entry");
+
+// Microblock m → DST addr offset within one 32×32 tile slot (§6.3 table).
+constexpr uint32_t MB_TO_DST_ADDR[NUM_MICROBLOCKS] = {
+    0,  2,  16, 18,  4,  6,  20, 22,
+    8,  10, 24, 26, 12, 14, 28, 30,
+    32, 34, 48, 50, 36, 38, 52, 54,
+    40, 42, 56, 58, 44, 46, 60, 62,
+};
+
+// Planned CB indices when microblock reader lands (Stage 2+):
+//   CB_COEFF_TABLE replaces CB_SCALARS
+//   CB_MB_HEADER   replaces CB_TILE_META
+//   CB_MB_STREAM   new
+constexpr uint32_t CB_COEFF_TABLE = 2;
+constexpr uint32_t CB_MB_HEADER   = 3;
+constexpr uint32_t CB_MB_STREAM   = 4;
+
+// Stage 2 shadow CBs (parallel legacy path; compute unchanged until Stage 3).
+constexpr uint32_t CB_MB_COEFF_SHADOW  = 24;
+constexpr uint32_t CB_MB_HEADER_SHADOW = 25;
+constexpr uint32_t CB_MB_STREAM_SHADOW = 26;
 
 }  // namespace gsplat

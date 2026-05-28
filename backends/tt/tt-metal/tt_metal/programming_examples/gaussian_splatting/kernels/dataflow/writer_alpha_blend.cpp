@@ -12,7 +12,7 @@
 // ROLE
 // ----
 // The mirror of the reader on the output side. For each screen tile this
-// core processed, the compute kernel pushes 3 bf16 32x32 tiles (R, G, B in
+// core processed, the compute kernel pushes 3 fp32 32x32 tiles (R, G, B in
 // that order) to CB_COLOR_OUT. We async-write them to consecutive DRAM
 // pages at offsets `3*screen_tile + {0, 1, 2}` of the output buffer. The
 // writer uses NoC0 while the reader uses NoC1 — bidirectional dual-NoC
@@ -32,7 +32,7 @@
 //   3. cb_pop_front(CB_COLOR_OUT, 3)
 //
 // RUNTIME ARGS
-//   0: out_addr           DRAM base of the (num_tiles, 3, 32, 32) bf16 output buffer
+//   0: out_addr           DRAM base of the (num_tiles, 3, 32, 32) fp32 output buffer
 //   1: tile_ids_addr      DRAM base of concatenated tile-id list
 //   2: tile_ids_start     this core's element offset into that list
 //   3: tile_ids_count     number of tile IDs this core handles
@@ -105,7 +105,7 @@ void kernel_main() {
         cb_wait_front(CB_COLOR_OUT, 3);
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
         for (uint32_t ch = 0; ch < 3; ch++) {
-            // Output buffer layout: (num_tiles, 3, 32, 32) bf16. Tile-major
+            // Output buffer layout: (num_tiles, 3, 32, 32) fp32. Tile-major
             // order with R/G/B interleaved per screen tile, so the global
             // page index for channel `ch` of `screen_tile` is `3*screen_tile + ch`.
             uint32_t out_tile_id = 3 * screen_tile + ch;
