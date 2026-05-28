@@ -135,6 +135,7 @@ ProjectResult project_full_fused(
     std::size_t N,
     int image_height,
     int image_width,
-    ThreadPool* pool = nullptr);
+    ThreadPool* pool = nullptr,
+    int max_radius = 0);
 
 }  // namespace gsplat_cpu

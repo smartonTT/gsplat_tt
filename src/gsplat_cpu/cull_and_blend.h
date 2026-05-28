@@ -51,6 +51,7 @@ CullAndBlendResult cull_and_blend(
     float mb_contrib_floor,
     ThreadPool& pool,
     float* image_out_external = nullptr,
-    bool cull_disabled = false);
+    bool cull_disabled = false,
+    float transmittance_threshold = 1.0f / 255.0f);
 
 }  // namespace gsplat_cpu

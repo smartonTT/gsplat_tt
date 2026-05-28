@@ -28,6 +28,10 @@ class CpuCppBackend(Backend):
         render_fused: bool = True,
         verbose: bool = False,
         cull_disabled: bool = False,
+        transmittance_threshold: float = 1.0 / 255.0,
+        min_opacity: float = 1.0 / 255.0,
+        max_radius: int = 0,
+        contrib_floor: float | None = None,
     ):
         self.verbose = verbose
         # cull_disabled bypasses BOTH the per-pair Mahalanobis cull
@@ -36,6 +40,11 @@ class CpuCppBackend(Backend):
         # come from culling vs from blend/sort/project. Equivalent to
         # numpy `alpha_blend` ground truth (mod float32 ordering).
         self.cull_disabled = cull_disabled
+        self.transmittance_threshold = float(transmittance_threshold)
+        self.min_opacity = float(min_opacity)
+        # max_radius: 0 = default min(H,W)/2; >0 = pixel cap; <0 = disable.
+        self.max_radius = int(max_radius)
+        self.contrib_floor_override = contrib_floor
         # Lazily import the compiled module so import doesn't fail when the
         # extension hasn't been built yet.
         from backends.cpu_cpp import _gsplat_cpu  # the pybind11 extension
@@ -338,8 +347,8 @@ class CpuCppBackend(Backend):
         cov3d = self._cached_cov3d(scales_np, rotations_np)
 
         effective_contrib_floor = (
-            float(self._mb_contrib_floor) if contrib_floor is None
-            else float(contrib_floor)
+            float(self._mb_contrib_floor) if self.contrib_floor_override is None
+            else float(self.contrib_floor_override)
         )
         image, stats = self._mod.render_full(
             means_np,
@@ -351,9 +360,11 @@ class CpuCppBackend(Backend):
             int(image_height),
             int(image_width),
             32,
-            1.0 / 255.0,
+            float(self.min_opacity),
             effective_contrib_floor,
             float(self._mb_contrib_floor),
             bool(self.cull_disabled),
+            float(self.transmittance_threshold),
+            int(self.max_radius),
         )
         return np.asarray(image), dict(stats)

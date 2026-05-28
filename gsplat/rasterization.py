@@ -430,6 +430,7 @@ def alpha_blend(
     image_height: int,
     image_width: int,
     tile_size: int = 32,
+    transmittance_threshold: float = 1.0 / 255.0,
 ) -> torch.Tensor:
     """Render the final image by compositing Gaussians front-to-back per pixel.
 
@@ -440,7 +441,8 @@ def alpha_blend(
         T *= (1 - alpha_i)
 
     where T is the accumulated transmittance (starts at 1, decreases as Gaussians are
-    composited). Early termination when T < 0.0001 (pixel is effectively saturated).
+    composited). Early termination when T < transmittance_threshold (default
+    1/255 — the 8-bit perceptual floor; further Gaussians cannot change output).
 
     The alpha for each Gaussian at a pixel is:
         alpha = opacity * exp(-0.5 * d^T @ Σ_2D⁻¹ @ d)
@@ -534,7 +536,7 @@ def alpha_blend(
                 transmittance *= (1.0 - alpha)
 
                 # Early termination: if all pixels in tile are saturated, stop
-                if transmittance.max() < 0.0001:
+                if transmittance.max() < transmittance_threshold:
                     break
 
             image[py_start:py_end, px_start:px_end] = accumulated_color

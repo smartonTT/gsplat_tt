@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 #if defined(__APPLE__)
@@ -491,7 +492,8 @@ ProjectResult project_full_fused(
     const std::size_t N,
     const int image_height,
     const int image_width,
-    ThreadPool* pool) {
+    ThreadPool* pool,
+    const int max_radius_param) {
     // Extrinsics (column-3 translation).
     Mat3f r_mat;
     r_mat(0, 0) = extrinsics[0]; r_mat(0, 1) = extrinsics[1]; r_mat(0, 2) = extrinsics[2];
@@ -503,7 +505,11 @@ ProjectResult project_full_fused(
     const float fx = intrinsics[0], fy = intrinsics[4];
     const float cx = intrinsics[2], cy = intrinsics[5];
     constexpr float k_near = 0.2f;
-    const int max_radius = std::min(image_height, image_width) / 2;
+    const int max_radius = (max_radius_param < 0)
+        ? std::numeric_limits<int>::max()
+        : ((max_radius_param > 0)
+               ? max_radius_param
+               : std::min(image_height, image_width) / 2);
 
     // Single-shot means_cam via Accelerate (already <1ms even at 600k Gaussians).
     std::vector<float> means_cam(N * 3);

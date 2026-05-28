@@ -233,29 +233,112 @@ class GaussianViewer:
                 "Reset view",
                 hint="Snap azimuth/elevation/distance back to defaults.",
             )
-            # cull_disabled toggle: bypasses BOTH per-pair Mahalanobis and
-            # per-microblock culls in the cpu_cpp backend. Useful for
-            # eyeballing "is this artifact a cull bug or a blend bug?" —
-            # if the artifact disappears with the cull disabled it's a
-            # cull-quality issue; if it persists, it's downstream.
-            self._cull_disabled_checkbox = self.server.gui.add_checkbox(
-                "Disable culling (ground-truth blend)",
-                initial_value=False,
+
+        # Render tuning (cpu_cpp fused path). Sliders push into Pipeline and
+        # are forwarded to the C++ backend each frame.
+        self._render_folder = self.server.gui.add_folder("Render tuning")
+        with self._render_folder:
+            self._mahalanobis_checkbox = self.server.gui.add_checkbox(
+                "Mahalanobis cull",
+                initial_value=True,
                 hint=(
-                    "Skip per-pair and per-microblock Mahalanobis culls. "
-                    "Slower but pixel-equivalent to the numpy alpha_blend "
-                    "reference — use to verify culling isn't the source of "
-                    "any visible artifact."
+                    "Per-pair + per-microblock contribution cull. Uncheck for "
+                    "ground-truth mode (also disables min-opacity and "
+                    "max-radius culls)."
+                ),
+            )
+            self._transmittance_slider = self.server.gui.add_slider(
+                "Transmittance threshold",
+                min=1.0 / 65536.0,
+                max=1.0,
+                step=1.0 / 65536.0,
+                initial_value=1.0 / 255.0,
+                hint=(
+                    "Stop blending when remaining transmittance T drops below "
+                    "this. 1/255 ≈ 8-bit floor; lower = slower, negligible "
+                    "visual change."
+                ),
+            )
+            self._min_opacity_slider = self.server.gui.add_slider(
+                "Min opacity",
+                min=0.0,
+                max=0.25,
+                step=1.0 / 255.0,
+                initial_value=1.0 / 255.0,
+                hint="Project-stage cull: drop Gaussians with peak α below this.",
+            )
+            self._max_radius_slider = self.server.gui.add_slider(
+                "Max radius (px, 0=default)",
+                min=-1.0,
+                max=1024.0,
+                step=1.0,
+                initial_value=0.0,
+                hint=(
+                    "Project-stage cull: drop Gaussians whose AABB half-extent "
+                    "exceeds this (pixels). 0 = min(H,W)/2. −1 = disabled."
+                ),
+            )
+            self._contrib_floor_slider = self.server.gui.add_slider(
+                "Contrib floor (1/N)",
+                min=1.0,
+                max=65536.0,
+                step=1.0,
+                initial_value=16384.0,
+                hint=(
+                    "Mahalanobis keep threshold: keep pair iff peak "
+                    "ω·exp(−½m²) ≥ 1/N. Higher N = tighter cull."
                 ),
             )
 
-            @self._cull_disabled_checkbox.on_update
-            def _on_cull_toggle(_):
-                self.pipeline.cull_disabled = bool(self._cull_disabled_checkbox.value)
-                if hasattr(self.pipeline.backend, "cull_disabled"):
-                    self.pipeline.backend.cull_disabled = bool(
-                        self._cull_disabled_checkbox.value
-                    )
+        # Saved slider values restored when Mahalanobis is re-enabled.
+        self._saved_min_opacity = float(self._min_opacity_slider.value)
+        self._saved_max_radius = int(self._max_radius_slider.value)
+
+        def _apply_mahalanobis_ground_truth(enabled: bool) -> None:
+            if enabled:
+                self.pipeline.cull_disabled = False
+                self.pipeline.min_opacity = self._saved_min_opacity
+                self.pipeline.max_radius = self._saved_max_radius
+            else:
+                self._saved_min_opacity = float(self.pipeline.min_opacity)
+                self._saved_max_radius = int(self.pipeline.max_radius)
+                self.pipeline.cull_disabled = True
+                self.pipeline.min_opacity = 0.0
+                self.pipeline.max_radius = -1
+            self.pipeline._sync_render_settings_to_backend()
+
+        def _sync_sliders_to_pipeline() -> None:
+            n = float(self._contrib_floor_slider.value)
+            self.pipeline.contrib_floor = 1.0 / max(n, 1.0)
+            self.pipeline.transmittance_threshold = float(
+                self._transmittance_slider.value
+            )
+            if self._mahalanobis_checkbox.value:
+                self.pipeline.min_opacity = float(self._min_opacity_slider.value)
+                self.pipeline.max_radius = int(self._max_radius_slider.value)
+            self.pipeline._sync_render_settings_to_backend()
+
+        @self._mahalanobis_checkbox.on_update
+        def _on_mahalanobis(_):
+            _apply_mahalanobis_ground_truth(bool(self._mahalanobis_checkbox.value))
+
+        @self._transmittance_slider.on_update
+        def _on_transmittance(_):
+            _sync_sliders_to_pipeline()
+
+        @self._min_opacity_slider.on_update
+        def _on_min_opacity(_):
+            _sync_sliders_to_pipeline()
+
+        @self._max_radius_slider.on_update
+        def _on_max_radius(_):
+            _sync_sliders_to_pipeline()
+
+        @self._contrib_floor_slider.on_update
+        def _on_contrib_floor(_):
+            _sync_sliders_to_pipeline()
+
+        _sync_sliders_to_pipeline()
 
         self.viewer = GsplatViewer(
             server=self.server,
