@@ -137,18 +137,42 @@ inline void build_jacobian(float fx, float fy, float tx, float ty, float tz, flo
     jacobian[5] = -fy * ty / tz2;
 }
 
-// AABB σ-multiplier matching `rasterization.project_gaussians` (numpy).
-// Uses contrib_floor = 1/16384, matching the per-microblock cull threshold —
-// so the AABB never crops a tile/microblock pair the downstream cull would
-// actually keep. The previous floor was 15/255 (≈ 0.0588): with that, every
-// Gaussian with ω in [1/255, 15/255] got `k=0` (clamp(arg, 1) → 1 → ln=0),
-// then was dropped because `(rx > 0) & (ry > 0)` was false. That silent
-// drop is exactly what produced the "head still has holes" silhouette
-// thinning at close zoom. The new floor + 3σ cap keeps every Gaussian
-// above min_opacity (1/255) and capped at 3σ AABB for perf.
+// σ-multiplier from opacity and contrib floor: k where ω·exp(−½k²) = floor.
+inline float opacity_aware_k(float opacity, float contrib_floor) {
+    const float arg = std::max(opacity / contrib_floor, 1.0f);
+    return std::sqrt(2.0f * std::log(arg));
+}
+
+// Legacy wrapper (floor = 1/16384).
 inline float opacity_aware_k(float opacity) {
-    const float arg = std::max(opacity * 16384.0f, 1.0f);
-    return std::min(std::sqrt(2.0f * std::log(arg)), 3.0f);
+    return opacity_aware_k(opacity, 1.0f / 16384.0f);
+}
+
+// Tight axis-aligned bbox half-extents of the iso-α ellipse
+// {p : ω·exp(−½·m²(p)) ≥ floor} = {p : m² ≤ k²} with k = opacity_aware_k(ω, floor).
+// Uses eigen-decomposition of Σ₂D — correct for tilted Gaussians (unlike k·√diag(Σ)).
+inline void isoellipse_aabb_half_extents(
+    const float a,
+    const float b,
+    const float c,
+    const float k,
+    float& hx,
+    float& hy) {
+    const float trace = a + c;
+    const float disc = std::sqrt(std::max(trace * trace - 4.0f * (a * c - b * b), 0.0f));
+    const float l1 = 0.5f * (trace + disc);
+    const float l2 = 0.5f * (trace - disc);
+    const float theta = 0.5f * std::atan2(2.0f * b, a - c);
+    const float cos_t = std::cos(theta);
+    const float sin_t = std::sin(theta);
+    const float cos2 = cos_t * cos_t;
+    const float sin2 = sin_t * sin_t;
+    hx = k * std::sqrt(std::max(l1 * cos2 + l2 * sin2, 0.0f));
+    hy = k * std::sqrt(std::max(l1 * sin2 + l2 * cos2, 0.0f));
+}
+
+inline float apply_k_cap(const float k, const float k_cap) {
+    return (k_cap > 0.0f) ? std::min(k, k_cap) : k;
 }
 
 }  // namespace gsplat_cpu

@@ -201,7 +201,10 @@ py::tuple project_full_with_cov3d_py(
         image_height,
         image_width,
         &global_project_pool(),
-        0);
+        0,
+        1.0f / 3000.0f,
+        0.0f,
+        false);
 
     return pack_project_result(result, N);
 }
@@ -802,7 +805,9 @@ py::tuple render_full_py(
     float mb_contrib_floor,
     bool cull_disabled,
     float transmittance_threshold,
-    int max_radius) {
+    int max_radius,
+    float k_cap,
+    bool use_isoellipse) {
     using clock = std::chrono::steady_clock;
     auto t0 = clock::now();
 
@@ -826,7 +831,10 @@ py::tuple render_full_py(
         image_height,
         image_width,
         &global_project_pool(),
-        max_radius);
+        max_radius,
+        contrib_floor,
+        k_cap,
+        use_isoellipse);
     const std::size_t M = proj.depths.size();
     auto t_p1 = clock::now();
 
@@ -1095,7 +1103,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("tile_size") = 32,
         py::arg("image_height") = 0,
         py::arg("image_width") = 0,
-        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
+        py::arg("mb_contrib_floor") = 1.0f / 3000.0f);
 
     m.def(
         "render_full",
@@ -1110,11 +1118,13 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_width"),
         py::arg("tile_size") = 32,
         py::arg("min_opacity") = 1.0f / 255.0f,
-        py::arg("contrib_floor") = 1.0f / 16384.0f,
-        py::arg("mb_contrib_floor") = 1.0f / 16384.0f,
+        py::arg("contrib_floor") = 1.0f / 3000.0f,
+        py::arg("mb_contrib_floor") = 1.0f / 3000.0f,
         py::arg("cull_disabled") = false,
         py::arg("transmittance_threshold") = 1.0f / 255.0f,
-        py::arg("max_radius") = 0);
+        py::arg("max_radius") = 0,
+        py::arg("k_cap") = 3.0f,
+        py::arg("use_isoellipse") = false);
 
     m.def(
         "microblock_cull",
@@ -1127,7 +1137,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("tiles_x"),
         py::arg("tiles_y"),
         py::arg("tile_size") = 32,
-        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
+        py::arg("mb_contrib_floor") = 1.0f / 3000.0f);
 
     py::class_<gsplat_cpu::ThreadPool>(m, "ThreadPool")
         .def(py::init<std::size_t>(), py::arg("num_threads") = 0)

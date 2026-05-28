@@ -23,15 +23,17 @@ class CpuCppBackend(Backend):
     def __init__(
         self,
         microblock: bool = True,
-        mb_contrib_floor: float = 1.0 / 16384.0,
+        mb_contrib_floor: float = 1.0 / 3000.0,
         fused: bool = True,
         render_fused: bool = True,
         verbose: bool = False,
         cull_disabled: bool = False,
         transmittance_threshold: float = 1.0 / 255.0,
         min_opacity: float = 1.0 / 255.0,
-        max_radius: int = 0,
+        max_radius: int = -1,
         contrib_floor: float | None = None,
+        k_cap: float = 3.0,
+        use_isoellipse: bool = False,
     ):
         self.verbose = verbose
         # cull_disabled bypasses BOTH the per-pair Mahalanobis cull
@@ -45,6 +47,8 @@ class CpuCppBackend(Backend):
         # max_radius: 0 = default min(H,W)/2; >0 = pixel cap; <0 = disable.
         self.max_radius = int(max_radius)
         self.contrib_floor_override = contrib_floor
+        self.k_cap = float(k_cap)
+        self.use_isoellipse = bool(use_isoellipse)
         # Lazily import the compiled module so import doesn't fail when the
         # extension hasn't been built yet.
         from backends.cpu_cpp import _gsplat_cpu  # the pybind11 extension
@@ -163,7 +167,7 @@ class CpuCppBackend(Backend):
         tile_size: int = 32,
         covs_2d: torch.Tensor | None = None,
         opacities: torch.Tensor | None = None,
-        contrib_floor: float = 1.0 / 16384.0,
+        contrib_floor: float = 1.0 / 3000.0,
         sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         del sub_timings
@@ -322,11 +326,13 @@ class CpuCppBackend(Backend):
         # Gaussian; many such Gaussians stack across hundreds of pixels and
         # the dropped contribution accumulated to ~7/255 per pixel at close
         # zoom, producing visible 32×32 tile-grid artifacts. With contrib_floor
-        # = mb_contrib_floor (1/16384), the per-pair cull only drops pairs the
+        # = mb_contrib_floor (1/3000), the per-pair cull only drops pairs the
         # microblock cull would also drop everywhere within the tile — keeps
         # most of the perf optimisation, gives ~112 dB vs unculled
         # alpha_blend ground truth (invisible).
         contrib_floor: float | None = None,
+        k_cap: float = 3.0,
+        use_isoellipse: bool = False,
     ) -> tuple[np.ndarray, dict]:
         """Single-pybind fused render. Returns (image, stats_dict).
 
@@ -350,6 +356,8 @@ class CpuCppBackend(Backend):
             float(self._mb_contrib_floor) if self.contrib_floor_override is None
             else float(self.contrib_floor_override)
         )
+        # isoellipse AABB is optional; default path uses diagonal AABB + Mahalanobis.
+        effective_cull_disabled = bool(self.cull_disabled)
         image, stats = self._mod.render_full(
             means_np,
             cov3d,
@@ -363,8 +371,10 @@ class CpuCppBackend(Backend):
             float(self.min_opacity),
             effective_contrib_floor,
             float(self._mb_contrib_floor),
-            bool(self.cull_disabled),
+            effective_cull_disabled,
             float(self.transmittance_threshold),
             int(self.max_radius),
+            float(self.k_cap),
+            bool(self.use_isoellipse),
         )
         return np.asarray(image), dict(stats)

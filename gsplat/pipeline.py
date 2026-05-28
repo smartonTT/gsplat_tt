@@ -33,6 +33,7 @@ from gsplat.data_structures import Gaussians
 
 
 TILE_SIZE = 32
+DEFAULT_CONTRIB_FLOOR = 1.0 / 3000.0
 
 
 @dataclass
@@ -62,10 +63,12 @@ class Pipeline:
         *,
         tile_size: int = TILE_SIZE,
         cull_disabled: bool = False,
-        contrib_floor: float = 1.0 / 16384.0,
+        contrib_floor: float = DEFAULT_CONTRIB_FLOOR,
         transmittance_threshold: float = 1.0 / 255.0,
         min_opacity: float = 1.0 / 255.0,
-        max_radius: int = 0,
+        max_radius: int = -1,
+        k_cap: float = 3.0,
+        use_isoellipse: bool = False,
     ):
         self.backend = backend
         self.tile_size = tile_size
@@ -77,6 +80,8 @@ class Pipeline:
         self.transmittance_threshold = transmittance_threshold
         self.min_opacity = min_opacity
         self.max_radius = max_radius
+        self.k_cap = k_cap
+        self.use_isoellipse = use_isoellipse
         self._sync_render_settings_to_backend()
 
     def _sync_render_settings_to_backend(self) -> None:
@@ -94,6 +99,10 @@ class Pipeline:
             b.contrib_floor_override = self.contrib_floor
         if hasattr(b, "_mb_contrib_floor"):
             b._mb_contrib_floor = self.contrib_floor
+        if hasattr(b, "k_cap"):
+            b.k_cap = self.k_cap
+        if hasattr(b, "use_isoellipse"):
+            b.use_isoellipse = self.use_isoellipse
 
     # ------------------------------------------------------------------
     # Per-stage timer

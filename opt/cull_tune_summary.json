@@ -1,0 +1,15 @@
+{
+  "recommended": {
+    "assign_mode": "mahalanobis",
+    "contrib_floor_n": 3000.0,
+    "transmittance_n": 255.0,
+    "min_opacity": 0.00392156862745098,
+    "max_radius": -1,
+    "k_cap": 3.0
+  },
+  "worst_psnr": 67.85,
+  "worst_max_abs": 0.0039,
+  "mean_ms": 21.0,
+  "ref_vs_16384_psnr_db": "78-86",
+  "notes": "Mahalanobis + contrib_floor=1/3000: near-identical to 1/16384 for training (78-86 dB close-zoom), faster than isoellipse. True GT worst 67.85 dB at close_az220_d050; max_abs 0.0039, 0 bad tiles. max_radius=-1 required for close-zoom."
+}

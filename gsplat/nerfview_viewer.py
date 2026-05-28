@@ -1,11 +1,18 @@
 """Gsplat-specific nerfview integration."""
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 import nerfview
 import viser
+from nerfview._renderer import Renderer, RenderTask
 from nerfview.render_panel import RenderTabState, populate_general_render_tab
+
+# Keep rendering for 1 s after any UI action so the FPS readout settles.
+_UI_BURST_SEC = 1.0
+_UI_BURST_POLL_SEC = 0.016
 
 
 class GsplatViewer(nerfview.Viewer):
@@ -24,7 +31,46 @@ class GsplatViewer(nerfview.Viewer):
     ) -> None:
         self._default_render_width = default_render_width
         self._default_render_height = default_render_height
+        self._ui_active_deadline = 0.0
+        self._burst_running = True
         super().__init__(**kwargs)
+        self._burst_thread = threading.Thread(
+            target=self._ui_burst_loop,
+            name="gsplat-ui-burst",
+            daemon=True,
+        )
+        self._burst_thread.start()
+
+    def mark_ui_active(self) -> None:
+        """Extend the post-action render burst window (now + 1 s)."""
+        self._ui_active_deadline = time.time() + _UI_BURST_SEC
+
+    # Back-compat alias.
+    mark_camera_active = mark_ui_active
+
+    def _ui_burst_loop(self) -> None:
+        while self._burst_running:
+            if self._renderers and time.time() < self._ui_active_deadline:
+                self.rerender(None)
+            time.sleep(_UI_BURST_POLL_SEC)
+
+    def _connect_client(self, client: viser.ClientHandle) -> None:
+        client_id = client.client_id
+        self._renderers[client_id] = Renderer(
+            viewer=self, client=client, lock=self.lock,
+        )
+        self._renderers[client_id].start()
+
+        @client.camera.on_update
+        def _(_: viser.CameraHandle) -> None:
+            self._last_move_time = time.time()
+            self.mark_ui_active()
+            with self.server.atomic():
+                camera_state = self.get_camera_state(client)
+                self._renderers[client_id].submit(RenderTask("move", camera_state))
+
+    def stop_burst(self) -> None:
+        self._burst_running = False
 
     def _init_rendering_tab(self) -> None:
         self.render_tab_state = RenderTabState(
@@ -62,4 +108,5 @@ class GsplatViewer(nerfview.Viewer):
         def _on_render_res(_event: viser.GuiEvent) -> None:
             self.render_tab_state.render_width = int(render_res.value[0])
             self.render_tab_state.render_height = int(render_res.value[1])
+            self.mark_ui_active()
             self.rerender(_event)

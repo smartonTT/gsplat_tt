@@ -35,6 +35,11 @@ def project_gaussians(
     image_width: int,
     opacities: torch.Tensor | None = None,
     min_opacity: float = 1.0 / 255.0,
+    max_radius: int = 0,
+    contrib_floor: float = 1.0 / 3000.0,
+    k_cap: float = 3.0,
+    use_isoellipse: bool = False,
+    ground_truth: bool = False,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Project 3D Gaussians to 2D screen-space ellipses.
@@ -128,22 +133,35 @@ def project_gaussians(
     # scripts/measure_splat_count.py.
     with _sub_timer(sub_timings, "project.radii"):
         a = covs_2d[:, 0, 0]
+        b = covs_2d[:, 0, 1]
         c = covs_2d[:, 1, 1]
-        if opacities is not None:
-            # k(ω) = sqrt(2·ln(ω / floor)) is the σ-multiplier at which the
-            # Gaussian's contribution drops below `floor`. Sized for the
-            # downstream per-pair/microblock cull floor (1/16384). Capped at
-            # 3σ — empirically the analytic ks for ω∈[0.05,1.0] hit 4-5σ at
-            # this floor, but verify (113 dB PSNR vs unculled at close zoom)
-            # shows the 3σ AABB is not actually cropping visible
-            # contributions for stitch_doll, and growing the AABB to 5σ
-            # would ~2.7× the (Gaussian, tile) pair count.
-            arg = torch.clamp(opacities * 16384.0, min=1.0)
-            k = torch.clamp(torch.sqrt(2.0 * torch.log(arg)), max=3.0)
+        if ground_truth:
+            k = torch.full_like(a, 3.0)
+        elif opacities is not None:
+            floor = max(float(contrib_floor), 1e-12)
+            arg = torch.clamp(opacities / floor, min=1.0)
+            k = torch.sqrt(2.0 * torch.log(arg))
+            if k_cap > 0.0:
+                k = torch.clamp(k, max=float(k_cap))
+            k = torch.clamp(k, min=3.0)
         else:
             k = torch.full_like(a, 3.0)
-        rx = torch.ceil(k * torch.sqrt(torch.clamp(a, min=0.0)))
-        ry = torch.ceil(k * torch.sqrt(torch.clamp(c, min=0.0)))
+
+        if use_isoellipse:
+            trace = a + c
+            disc = torch.sqrt(torch.clamp(trace * trace - 4.0 * (a * c - b * b), min=0.0))
+            l1 = 0.5 * (trace + disc)
+            l2 = 0.5 * (trace - disc)
+            theta = 0.5 * torch.atan2(2.0 * b, a - c)
+            cos_t = torch.cos(theta)
+            sin_t = torch.sin(theta)
+            cos2 = cos_t * cos_t
+            sin2 = sin_t * sin_t
+            rx = torch.ceil(k * torch.sqrt(torch.clamp(l1 * cos2 + l2 * sin2, min=0.0)))
+            ry = torch.ceil(k * torch.sqrt(torch.clamp(l1 * sin2 + l2 * cos2, min=0.0)))
+        else:
+            rx = torch.ceil(k * torch.sqrt(torch.clamp(a, min=0.0)))
+            ry = torch.ceil(k * torch.sqrt(torch.clamp(c, min=0.0)))
         radii = torch.stack([rx, ry], dim=-1)  # (N, 2)
 
         # Also cull Gaussians that project entirely outside the screen.
@@ -155,24 +173,14 @@ def project_gaussians(
         valid_mask = valid_mask & (means_2d[:, 1] - ry < image_height)
         valid_mask = valid_mask & (rx > 0) & (ry > 0)
 
-    # Cap the bounding radius. The Jacobian linearization of the perspective
-    # transform (Step 5 above) breaks down when a Gaussian's 3D extent is
-    # comparable to its distance from the camera — producing wildly wrong 2D
-    # covariances and massive bounding boxes. Visually these show up as
-    # giant fuzzy blobs right in front of the camera when zooming in.
-    # Drop any Gaussian where either AABB half-extent exceeds half the smaller
-    # image dim, since a single splat covering more than half the viewport is
-    # almost always an artifact, not real geometry.
-    max_radius = min(image_height, image_width) // 2
-    valid_mask = valid_mask & (rx <= max_radius) & (ry <= max_radius)
+    # Cap the bounding radius. max_radius: 0 = min(H,W)/2; >0 = cap; <0 = off.
+    if max_radius < 0:
+        pass
+    else:
+        cap = min(image_height, image_width) // 2 if max_radius == 0 else int(max_radius)
+        valid_mask = valid_mask & (rx <= cap) & (ry <= cap)
 
-    # Optional opacity cull: a Gaussian's peak per-pixel contribution is
-    # `opacity * exp(0) = opacity` (at its center). If that's below the 8-bit
-    # quantization step (1/255), the Gaussian is invisible everywhere and can
-    # be dropped — significant kernel speedup on translucent-heavy scenes
-    # like Mip-NeRF 360 captures (median opacity ~0.16). Synthetic / luigi
-    # scenes are typically opaque, so this filter is a no-op for them.
-    if opacities is not None:
+    if opacities is not None and not ground_truth:
         valid_mask = valid_mask & (opacities >= min_opacity)
 
     depths = means_cam[valid_mask, 2]
@@ -188,7 +196,7 @@ def get_tile_assignments(
     tile_size: int = 32,
     covs_2d: torch.Tensor | None = None,
     opacities: torch.Tensor | None = None,
-    contrib_floor: float = 1.0 / 16384.0,
+    contrib_floor: float = 1.0 / 3000.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.
@@ -558,14 +566,14 @@ def microblock_cull(
     tiles_x: int,
     tiles_y: int,
     tile_size: int = 32,
-    mb_contrib_floor: float = 1.0 / 16384.0,
+    mb_contrib_floor: float = 1.0 / 3000.0,
     contrib_floor: float = 15.0 / 255.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, dict]:
     """Per-microblock Mahalanobis cull; emit mb_header and mb_stream.
 
     `mb_contrib_floor` is the tight per-microblock keep threshold (default
-    1/16384). Hero hits ~63 dB at 1/4096 but a few off-axis benchmark views
+    1/3000). Hero hits ~63 dB at 1/4096 but a few off-axis benchmark views
     (chal_bottom, orbit_*) need a tighter floor to stay ≥ 60 dB on the full
     30-frame sweep. `contrib_floor`
     is retained for backwards compatibility with callers that want the looser

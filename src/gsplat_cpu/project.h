@@ -136,6 +136,9 @@ ProjectResult project_full_fused(
     int image_height,
     int image_width,
     ThreadPool* pool = nullptr,
-    int max_radius = 0);
+    int max_radius = 0,
+    float contrib_floor_k = 1.0f / 3000.0f,
+    float k_cap = 0.0f,
+    bool use_isoellipse = false);
 
 }  // namespace gsplat_cpu
