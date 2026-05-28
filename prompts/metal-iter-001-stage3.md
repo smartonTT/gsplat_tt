@@ -20,5 +20,5 @@ Prerequisite: Stage 2 done (hero 47.783 dB with GSPLAT_METAL_MB=1).
 ## Verify
 
 ```bash
-ssh bh-30 "cd /proj_sw/user_dev/smarton/gsplat_tt_2 && rm -rf /proj_sw/user_dev/smarton/.cache/tt-metal-cache/* && source .venv/bin/activate && GSPLAT_METAL_MB=1 python3 scripts/verify_blend_metal.py"
+ssh bh-30 "cd /proj_sw/user_dev/smarton/gstt2 && rm -rf /proj_sw/user_dev/smarton/.cache/tt-metal-cache/* && source .venv/bin/activate && GSPLAT_METAL_MB=1 python3 scripts/verify_blend_metal.py"
 ```

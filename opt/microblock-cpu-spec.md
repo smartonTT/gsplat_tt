@@ -1,4 +1,4 @@
-# Microblock CPU Spec (gsplat_tt_2)
+# Microblock CPU Spec (gstt2)
 
 Status: **frozen at iter-000**. Source: `../gsplat_tt/docs/optimization-log/microblock-kernel-design.md` §0, §2, §3, §7, §9.1.
 TT-specific sections (§1, §4, §5, §6, §8, §11 of the source) are deferred to Phase 5.

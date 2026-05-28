@@ -30,7 +30,10 @@ class CpuCppBackend(Backend):
         cull_disabled: bool = False,
         transmittance_threshold: float = 1.0 / 255.0,
         min_opacity: float = 1.0 / 255.0,
-        max_radius: int = -1,
+        # max_radius semantics in render_full: 0 = default cap min(H,W)/2;
+        # >0 = explicit pixel cap; <0 = disabled. Disabling lets close-zoom
+        # gaussians project to enormous radii and stipple — see Pipeline.
+        max_radius: int = 0,
         contrib_floor: float | None = None,
         k_cap: float = 3.0,
         use_isoellipse: bool = False,

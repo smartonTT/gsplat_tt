@@ -1,163 +1,117 @@
-# 3D Gaussian Splatting on Tenstorrent
+# Backends
 
-Forward-pass renderer for [3D Gaussian Splatting](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/)
-running on Tenstorrent's [tt-metal](https://github.com/tenstorrent/tt-metal)
-hardware. Loads a pre-trained `.ply` and renders it interactively in the
-browser.
+One subpackage per hardware target. Each backend implements the
+`gsplat.backend.Backend` ABC and registers itself in `backends/REGISTRY`,
+so the viewer / CLI can swap them by name (`--backend cpu|tt|cuda|...`).
+The backend name on the CLI matches the dictionary key in `REGISTRY`.
 
-MSc thesis project — inference only, no training or backward pass.
+## Layout per backend
 
-## Backends
+```
+backends/<arch>/
+├── __init__.py
+├── backend.py                  # the Backend subclass
+├── kernels/                    # native source (.cpp / .cu / ...) — optional
+└── <vendored-sdk>/             # e.g. tt-metal/, cuda-toolkit/ — optional
+```
 
-The same viewer can dispatch to multiple rasterizers:
+## Adding a new backend
 
-| `backend` | Status | What |
+```python
+# backends/cuda/backend.py
+import numpy as np
+import torch
+from gsplat.backend import Backend
+
+class CudaBackend(Backend):
+    def __init__(self, verbose: bool = False):
+        self.verbose = verbose
+        # ... CUDA context init, allocate persistent buffers, etc.
+
+    def blend(
+        self,
+        means_2d, covs_2d, colors, opacities,
+        sorted_gaussian_ids, tile_ranges,
+        image_height, image_width,
+    ) -> tuple[np.ndarray, dict[str, float]]:
+        # ... your CUDA blend implementation ...
+        # (synchronize the stream before returning so wall-clock timing
+        # captures actual completion, not just kernel launch!)
+        torch.cuda.synchronize()
+        return image, {"upload": ..., "kernel": ..., "download": ...}
+
+    def close(self):
+        ...
+```
+
+Then add one line in `backends/__init__.py`:
+
+```python
+from backends.cuda.backend import CudaBackend
+REGISTRY = {"cpu": CpuBackend, "tt": KernelBackend, "cuda": CudaBackend}
+```
+
+That's it. The viewer's `--backend` argument auto-discovers the new
+choice; `gsplat.pipeline.Pipeline` times the new backend's stages
+without the implementer writing any timing code.
+
+## Stage ownership
+
+The Backend ABC defines four stages:
+
+| Stage | Default | When to override |
 |---|---|---|
-| `cpu`  | shipping | Pure PyTorch reference. Slow (~1–2 s/frame at 256×256), used as the correctness baseline. |
-| `tt`   | shipping | tt-metal kernels on a Tenstorrent Wormhole device. ~80 ms/frame at 640×640 (21.7× CPU). |
-| `cuda` | experimental | JIT-compiles on first use via `torch.utils.cpp_extension`. Requires a CUDA-capable GPU and `requirements-cuda.txt` installed. |
+| `project`     | CPU PyTorch | If your hardware can do EWA splatting + culling faster |
+| `tile_assign` | CPU         | If you have a parallel tile-overlap routine |
+| `sort`        | CPU         | If you have GPU/device sort (often not worth it) |
+| `blend`       | **(abstract)** | Always — this is where the rasterization happens |
 
-Pipeline (CPU does setup, the chosen backend does the alpha-blend):
+Only `blend` is required. Override the others only if your backend
+genuinely accelerates them; otherwise the CPU defaults run on the host
+in lock-step.
 
-```
-load_ply → project → tile-assign → sort  ──►  alpha_blend (cpu | tt | cuda)
-            └────────────── CPU ──────────┘   └── per-backend rasterizer ──┘
-```
+## Per-stage benchmarking
 
-## Quick start
+`gsplat.pipeline.Pipeline` wraps each stage call in
+`time.perf_counter()`. Backend implementers do not write outer-timing
+code — every backend gets per-stage `project / tile_assign / sort /
+blend` measurements automatically.
 
-```bash
-# 1) one-shot bootstrap (creates ./venv, vendors tt-metal, builds the kernel)
-./setup.sh
+If you want a finer breakdown of what happens *inside* `blend` (e.g.
+prep / kernel / readback split), return a dict of sub-stage names →
+milliseconds as the second element of `blend(...)`'s return tuple. An
+empty dict is fine for backends that don't measure internally.
 
-# 2) CPU viewer (no Tenstorrent device required)
-source venv/bin/activate
-gsplat scenes/luigi.ply
-
-# 3) TT viewer (Wormhole device required)
-source venv/bin/activate
-export TT_METAL_HOME=$PWD/backends/tt/tt-metal
-export TT_METAL_RUNTIME_ROOT=$PWD/backends/tt/tt-metal
-gsplat scenes/luigi.ply --backend tt
-
-# 4) CUDA viewer (NVIDIA GPU required; first run JIT-compiles the kernel)
-source venv/bin/activate
-pip install -r requirements-cuda.txt   # one-time: swap cpu torch wheel for cu121, install ninja
-gsplat scenes/luigi.ply --backend cuda
+```python
+return image, {"prep": 3.5, "kernel": 70.0, "readback": 0.3}
 ```
 
-Then open <http://localhost:8080>. Drag to orbit, **WASD / QE / arrows** to fly.
+These show up in `RenderResult.sub_timings` prefixed with `blend.`
+(e.g. `blend.kernel`). Dotted keys are treated as nesting in the
+benchmark markdown — e.g. returning `{"upload": ..., "kernel": ...,
+"kernel.device": ...}` renders `kernel.device` indented under `kernel`,
+which is the convention for "this is a sub-measurement of that one".
 
-For the CUDA backend on a CUDA-capable host, after `./setup.sh`:
+**Async-backend caveat:** if your backend dispatches asynchronously
+(CUDA streams, etc.), synchronize before returning from `blend(...)` so
+the outer wall-clock timer captures actual completion, not just
+kernel-launch time. The TT backend is naturally synchronous because
+`EnqueueReadMeshBuffer` blocks until the device finishes.
 
-```bash
-source venv/bin/activate
-pip install -r requirements-cuda.txt
-```
+## Existing backends
 
-This swaps the CPU torch wheel for the cu121 build in place and installs
-`ninja` (used by the JIT compiler). The TT dev box can skip this — `cuda`
-will simply not appear in the backend registry.
-
-## CLI flags
-
-| Flag | Default | What |
-|---|---|---|
-| `--backend {cpu,tt,cuda}` | `cpu` | Rasterizer (see table above). |
-| `--max-resolution N` | `640`  | Shorter render dim (480p/720p/1080p convention). Longer dim follows from browser aspect; both snap to multiples of 32. |
-| `--port N` | `8080` | Viewer port. |
-| `-v` / `--verbose` | off | Per-frame stage timing. |
-
-## Benchmarks
-
-Each viewer session writes a markdown summary to `benchmarks/` on shutdown
-(Ctrl+C). Filename is `{scene}_{backend}_{max-resolution}_{timestamp}.md`;
-the directory is created on demand and gitignored. Empty frames (no
-visible Gaussians) are excluded from the aggregate.
-
-The report records date, backend, scene, Gaussian count, the actual
-modal `W×H`, and the per-stage **median** across all sampled frames —
-plus the median total and the FPS implied by it. Each backend's
-`blend(...)` may also report sub-timings (e.g. `blend.device_kernel`),
-which are nested under the parent stage in the table.
-
-## Setup details
-
-`./setup.sh` is idempotent and does:
-
-1. Create `./venv`, install `requirements.txt`, and `pip install -e .`
-   (this puts the `gsplat` command on PATH).
-2. Clone `tenstorrent/tt-metal` into `backends/tt/tt-metal/` (~5 GB).
-3. Register our kernel subdir in tt-metal's CMake (`add_subdirectory`).
-4. `sudo ./build_metal.sh --build-programming-examples --without-python-bindings`
-   to compile the C++ libs + our kernel host binary. `sudo` is needed for
-   tt-metal's root-owned SFPI / CPM caches; we skip the `ttnn` Python wheel
-   because the runtime only invokes the binary as a subprocess.
-
-Pin a specific tt-metal version with `TT_METAL_REF=v1.2.3 ./setup.sh`.
-
-After editing kernel C++ sources, rebuild just the binary:
-
-```bash
-sudo ninja -C backends/tt/tt-metal/build metal_example_gaussian_splatting
-```
-
-## Repository layout
-
-```
-gsplat_tt/
-├── pyproject.toml, setup.sh, README.md, CLAUDE.md, .gitignore
-├── docs/                      # design notes (plan_progress.md, …)
-├── scenes/                    # *.ply (only luigi tracked; others gitignored)
-├── tests/                     # pytest suite
-├── scripts/                   # one-off dev helpers
-├── gsplat/                    # host-side Python package
-│   ├── __main__.py            # CLI entry — installed as `gsplat` console-script
-│   ├── viewer.py              # interactive viewer (viser + nerfview)
-│   ├── rasterization.py       # project, tile, sort, CPU alpha_blend, prep
-│   └── …                      # data_structures, loading_gaussians, utils
-└── backends/                  # one subpackage per accelerator
-    ├── README.md              # how to add a new backend
-    ├── tt/                    # Tenstorrent (tt-metal)
-    │   ├── backend.py         # daemon-subprocess wrapper
-    │   └── tt-metal/          # vendored SDK + our kernels under
-    │       └── tt_metal/programming_examples/gaussian_splatting/
-    └── cuda/                  # CUDA backend (kernels JIT-compiled on first use)
-```
-
-## Performance
-
-640×640, 10K random Gaussians:
-
-| Backend | Frame time | Speedup |
-|---|---|---|
-| CPU PyTorch (16 x86 cores) | ~1740 ms | 1.0× |
-| TT, single Tensix core | ~2515 ms | 0.69× |
-| TT, 64 cores (contiguous split) | ~120 ms | 14.5× |
-| **TT, 64 cores (LPT load balancing)** | **~80 ms** | **21.7×** |
-
-bonsai.ply (1.16M Gaussians, Mip-NeRF 360) at 640×384:
-
-| State | Frame time |
-|---|---|
-| Naive (accurate exp, no culls) | ~6.0 s |
-| + approx exp | ~5.1 s |
-| + opacity cull (< 1/255) | ~2.5 s |
-| **+ radius cap** | **~0.6–0.9 s** |
-
-## Testing
-
-```bash
-source venv/bin/activate
-pytest tests/
-```
-
-`test_numeric_sanity.py` runs anywhere; the three `test_kernel_integration.py`
-tests need a Tenstorrent device.
-
-## References
-
-- [3D Gaussian Splatting (INRIA)](https://repo-sam.inria.fr/fungraph/3d-gaussian-splatting/) — the paper
-- [tenstorrent/tt-metal](https://github.com/tenstorrent/tt-metal) — runtime + SDK
-- [hbb1/torch-splatting](https://github.com/hbb1/torch-splatting) — PyTorch reference
-- [graphdeco-inria/diff-gaussian-rasterization](https://github.com/graphdeco-inria/diff-gaussian-rasterization) — original CUDA rasterizer
+- **`cpu/`** — pure-PyTorch reference (`gsplat.rasterization`). Slow but
+  correct; used as the golden reference for kernel-correctness tests.
+- **`tt/`** — Tenstorrent Blackhole / tt-metal. Spawns a long-lived
+  daemon process; per-frame data goes through stdin/stdout + .npy files.
+  Kernel sources live in `../gsplat_tt/backends/tt/tt-metal/`; on bh-30
+  `scripts/setup_bh30_metal.sh` symlinks `tt/tt-metal` there. Reports
+  `blend.{prep, save_npy, daemon_rt, daemon_rt.device_kernel, load_npy}`
+  sub-timings — the dotted key nests `device_kernel` under `daemon_rt` in
+  the benchmark table, since it's the on-device portion of the round-trip.
+- **`cuda/`** — NVIDIA GPU via a custom CUDA kernel JIT-compiled by
+  `torch.utils.cpp_extension`. Block-per-tile / thread-per-pixel
+  alpha-blend, sources in `cuda/kernels/`. Reports
+  `blend.{upload, kernel, kernel.device}` sub-timings — the dotted key
+  nests `kernel.device` (CUDA event elapsed time) under `kernel` (host
+  wall including dispatch + D2H sync).

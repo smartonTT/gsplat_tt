@@ -23,4 +23,17 @@ BlendResult blend_microblock(
     int tile_size,                    // 32
     ThreadPool& pool);
 
+// tt-001b host path: same microblock-major 4×8 math as blend_microblock, but
+// reads per-tile attribute_packs rows and LOCAL stream indices (mb_stream_local).
+BlendResult blend_microblock_from_packs(
+    const float* attribute_packs,     // num_entries * 9
+    const int64_t* mb_header,         // num_tiles * 32 * 2 (offset, count)
+    const int64_t* mb_stream_local,   // L_prime local pack indices
+    std::size_t num_entries,
+    std::size_t L_prime,
+    int image_height,
+    int image_width,
+    int tile_size,
+    ThreadPool& pool);
+
 }  // namespace gsplat_cpu

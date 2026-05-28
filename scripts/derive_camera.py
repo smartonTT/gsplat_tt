@@ -60,7 +60,7 @@ SCENE_PLY = {
     "stitch": "scenes/stitch_doll.ply",
     "luigi": "scenes/luigi.ply",
     "strawberry": "scenes/strawberry.ply",
-    "bicycle": "scenes/point_cloud.ply",
+    "bicycle": "scenes/bicycle.ply",
 }
 
 # Default render size for the locked cameras. Width chosen as 640; the height

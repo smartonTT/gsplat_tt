@@ -1,11 +1,18 @@
-# Plan Amendment 001 — Metal Port (Phase 5)
+# Plan Amendment 001 — Metal Port (Phase 5) [SUPERSEDED]
 
-**Date:** 2026-05-27  
+> **SUPERSEDED by `opt/plan-amendment-002-tt-emulator-port.md` (2026-05-27).**
+> The daemon + `.npy` IPC + legacy full-tile kernel approach in this amendment
+> diverged from the `cpu_cpp` emulator design and produced an 8× slower blend
+> with no microblock cull on device. Amendment 002 replaces it with an
+> in-process pybind port that swaps one C++ kernel at a time. Keep this file
+> for historical context only.
+
+**Date:** 2026-05-27
 **Supersedes:** Phase 5 deferral in `opt/plan.md` (CPU plateau reached: iter-057 sum30 ≈ 322 ms @ 1024²).
 
 ## Pivot
 
-- **Benchmark scene:** `bicycle` (`scenes/point_cloud.ply`, 6.1M Gaussians, iconic hero = Mip-NeRF360 `_DSC8679`).
+- **Benchmark scene:** `bicycle` (`scenes/bicycle.ply`, 6.1M Gaussians, iconic hero = Mip-NeRF360 `_DSC8679`).
 - **Reference:** `benchmarks/reference_v2/` regenerated with numpy `cpu` backend @ 1024² (frozen iter-000 bicycle).
 - **Correctness target:** PSNR vs numpy reference ≥ 60 dB (same north-star invariant). Metal fp32 alpha blend should aim for ≥ 80 dB on hero fixture before microblock cull lands.
 - **Hardware:** `bh-30` on `tt_aus` (P150 Blackhole). Workflow: `dev/tt-workflows/README.md`.

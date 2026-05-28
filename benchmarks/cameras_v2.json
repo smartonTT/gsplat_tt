@@ -1,12 +1,12 @@
 {
   "bicycle": {
-    "ply": "scenes/point_cloud.ply",
+    "ply": "scenes/bicycle.ply",
     "image_size": [
       1024,
       1024
     ],
     "fov_deg": 50.0,
-    "contrib_floor": 0.00392156862745098,
+    "contrib_floor": 6.103515625e-05,
     "order": [
       "hero",
       "orbit_141",

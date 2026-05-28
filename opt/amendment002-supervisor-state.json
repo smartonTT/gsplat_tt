@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-05-28T19:22:54.877579+00:00",
+  "updated_at": "2026-05-28T19:34:17.012748+00:00",
   "phase": "tt-001a-inprocess-blend",
   "target_ms_per_view": 1.0,
   "next_action": "tt-001a: GSPLAT_WITH_TT built. Run verify_blend_metal --backend tt; fix PSNR if < 47.28 dB; log opt/metal-iters.jsonl. Then tt-001b 4x8 microblock kernel.",

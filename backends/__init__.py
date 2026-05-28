@@ -14,13 +14,13 @@ from __future__ import annotations
 
 from gsplat.backend import Backend
 from backends.cpu.backend import CpuBackend, CpuMicroblockBackend
-from backends.tt.backend import KernelBackend
+from backends.tt.backend import TtBackend
 
 
 REGISTRY: dict[str, type[Backend]] = {
     "cpu": CpuBackend,
     "cpu_mb": CpuMicroblockBackend,
-    "tt":  KernelBackend,
+    "tt": TtBackend,
 }
 
 # CudaBackend is optional — register only if its module imports cleanly.

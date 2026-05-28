@@ -1,14 +1,14 @@
 # iter-002 worker prompt (draft — supervisor finalizes before dispatch)
 
-You are the iter-002 worker for the gsplat_tt_2 sprint.
+You are the iter-002 worker for the gstt2 sprint.
 
 ## Read these first (mandatory)
-1. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-2. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-3. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 28-175 (`project_gaussians` — the algorithm spec you are porting)
-4. `/Users/smarton/dev/gsplat_tt_2/gsplat/utils.py::build_covariance_3d` (the helper `project_gaussians` calls in step 1)
-5. `/Users/smarton/dev/gsplat_tt_2/backends/cpu_cpp/backend.py` (the class you are extending)
-6. `/Users/smarton/dev/gsplat_tt_2/scripts/verify_stage.py` (your Layer 2 gate)
+1. `/Users/smarton/dev/gstt2/opt/plan.md`
+2. `/Users/smarton/dev/gstt2/prompts/worker.md`
+3. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 28-175 (`project_gaussians` — the algorithm spec you are porting)
+4. `/Users/smarton/dev/gstt2/gsplat/utils.py::build_covariance_3d` (the helper `project_gaussians` calls in step 1)
+5. `/Users/smarton/dev/gstt2/backends/cpu_cpp/backend.py` (the class you are extending)
+6. `/Users/smarton/dev/gstt2/scripts/verify_stage.py` (your Layer 2 gate)
 
 ## Iter spec
 

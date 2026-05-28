@@ -1,19 +1,19 @@
 # iter-003 worker prompt (draft)
 
-You are the iter-003 worker for the gsplat_tt_2 sprint. iter-002 just landed —
+You are the iter-003 worker for the gstt2 sprint. iter-002 just landed —
 project_gaussians is now in C++. Your job is to port BOTH `get_tile_assignments`
 (including the per-pair Mahalanobis cull) AND `sort_and_bin` to C++. After this
 iter, only `alpha_blend` is left in numpy.
 
 ## Read first (mandatory)
 
-1. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-2. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-3. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 178-371 (`get_tile_assignments` + `sort_and_bin`)
-4. `/Users/smarton/dev/gsplat_tt_2/scripts/verify_stage.py` (Layer 2 gate for both `tile_assign` and `sort`)
-5. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/project.{h,cpp}` (from iter-002 — style template)
-6. `/Users/smarton/dev/gsplat_tt_2/backends/cpu_cpp/pybind_module.cpp` (where to add bindings)
-7. `/Users/smarton/dev/gsplat_tt_2/backends/cpu_cpp/backend.py` (where to add `tile_assign` and `sort` overrides)
+1. `/Users/smarton/dev/gstt2/opt/plan.md`
+2. `/Users/smarton/dev/gstt2/prompts/worker.md`
+3. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 178-371 (`get_tile_assignments` + `sort_and_bin`)
+4. `/Users/smarton/dev/gstt2/scripts/verify_stage.py` (Layer 2 gate for both `tile_assign` and `sort`)
+5. `/Users/smarton/dev/gstt2/src/gsplat_cpu/project.{h,cpp}` (from iter-002 — style template)
+6. `/Users/smarton/dev/gstt2/backends/cpu_cpp/pybind_module.cpp` (where to add bindings)
+7. `/Users/smarton/dev/gstt2/backends/cpu_cpp/backend.py` (where to add `tile_assign` and `sort` overrides)
 
 ## Iter spec
 

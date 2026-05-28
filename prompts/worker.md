@@ -1,6 +1,6 @@
 # Worker prompt template (Composer 2.5)
 
-You are the iter worker for the gsplat_tt_2 optimization sprint. You receive a
+You are the iter worker for the gstt2 optimization sprint. You receive a
 filled-in copy of this template per iter from the supervisor (Opus 4.7).
 
 ## Your unbreakable rules

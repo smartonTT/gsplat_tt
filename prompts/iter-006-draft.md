@@ -4,12 +4,12 @@ You are the iter-006 worker. The full forward pipeline now runs in C++ end-to-en
 
 ## Read first (mandatory)
 
-1. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-2. `/Users/smarton/dev/gsplat_tt_2/opt/microblock-cpu-spec.md` ← **THE SPEC** (read end to end)
-3. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-4. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 178-493 (`get_tile_assignments`, `sort_and_bin`, `alpha_blend` — the existing per-tile pipeline)
-5. `/Users/smarton/dev/gsplat_tt_2/backends/cpu/backend.py` (the numpy backend you'll extend)
-6. `/Users/smarton/dev/gsplat_tt_2/backends/__init__.py` (registry)
+1. `/Users/smarton/dev/gstt2/opt/plan.md`
+2. `/Users/smarton/dev/gstt2/opt/microblock-cpu-spec.md` ← **THE SPEC** (read end to end)
+3. `/Users/smarton/dev/gstt2/prompts/worker.md`
+4. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 178-493 (`get_tile_assignments`, `sort_and_bin`, `alpha_blend` — the existing per-tile pipeline)
+5. `/Users/smarton/dev/gstt2/backends/cpu/backend.py` (the numpy backend you'll extend)
+6. `/Users/smarton/dev/gstt2/backends/__init__.py` (registry)
 
 ## Iter spec
 

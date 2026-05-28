@@ -35,7 +35,7 @@ def project_gaussians(
     image_width: int,
     opacities: torch.Tensor | None = None,
     min_opacity: float = 1.0 / 255.0,
-    max_radius: int = -1,
+    max_radius: int = 0,
     contrib_floor: float = 1.0 / 16384.0,
     k_cap: float = 3.0,
     use_isoellipse: bool = False,
@@ -126,11 +126,17 @@ def project_gaussians(
     # equal to the 8-bit perceptual floor 1/255 yields:
     #     d² = 2 * ln(ω * 255)   →   k(ω) = sqrt(2 * ln(ω * 255))
     # For ω≥1/255 this is well-defined; the min_opacity cull already drops
-    # ω<1/255. We additionally clamp k ≤ 3 so high-opacity Gaussians never
-    # grow beyond the iter-022 3σ baseline (k(1.0)=3.33 without the cap).
-    # On stitch_doll (most Gaussians have ω∈[0.01, 0.5]) this cuts another
-    # ~11% (gaussian, tile) pairs on top of iter-022 — measurement:
-    # scripts/measure_splat_count.py.
+    # ω<1/255. We additionally clamp k ≤ k_cap (default 3) so high-opacity
+    # Gaussians never grow beyond the iter-022 3σ baseline (k(1.0)=3.33
+    # without the cap). On stitch_doll (most ω∈[0.01, 0.5]) this cuts ~11 %
+    # (Gaussian, tile) pairs on top of iter-022.
+    #
+    # NB: there used to be a `torch.clamp(k, min=3.0)` floor here that the
+    # cpu_cpp staged path never had; combined with `k_cap=3` it forced k=3
+    # everywhere and silently inflated low-opacity AABBs (typical bicycle
+    # grass blades with ω≈1/255 want k≈2.9). Removed for consistency with
+    # the cpu_cpp `apply_k_cap` formula and the staged path. Regression
+    # locked by tests/spec/test_thin_splat_stipple.py.
     with _sub_timer(sub_timings, "project.radii"):
         a = covs_2d[:, 0, 0]
         b = covs_2d[:, 0, 1]
@@ -1001,11 +1007,12 @@ def prepare_microblock_payload(
                 continue
             tile_gids = gids_np[start:end]
             g_to_local = {int(g): i for i, g in enumerate(tile_gids)}
+            pack_base = int(tile_offsets[tile_id])
             for m in range(_NUM_MICROBLOCKS):
                 off = int(mb_header[tile_id, m, 0])
                 cnt = int(mb_header[tile_id, m, 1])
                 for g in stream_global[off : off + cnt]:
-                    local_stream.append(g_to_local[int(g)])
+                    local_stream.append(pack_base + g_to_local[int(g)])
         mb_stream_local = np.asarray(local_stream, dtype=np.uint32)
 
     return {

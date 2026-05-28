@@ -62,7 +62,7 @@ def main():
     gauss = load_ply(str(ply_path))
 
     backend = get_backend(args.backend)
-    pipeline = Pipeline(backend, tile_size=32)
+    pipeline = Pipeline(backend, tile_size=32, contrib_floor=contrib_floor)
 
     # Warmup: load + project the first view once to settle any lazy caches.
     if args.warmup > 0:
@@ -83,9 +83,14 @@ def main():
         wall_ms = (time.perf_counter() - t0) * 1000.0
 
         img = res.image
-        if hasattr(img, "numpy"):
-            img = img.numpy()
-        img_u8 = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
+        if img is None:
+            print(f"[render_30frame] WARNING: view {name} returned None image; "
+                  f"writing black PNG to keep view count stable")
+            img_u8 = np.zeros((H, W, 3), dtype=np.uint8)
+        else:
+            if hasattr(img, "numpy"):
+                img = img.numpy()
+            img_u8 = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
         Image.fromarray(img_u8).save(args.out_dir / f"{name}.png")
 
         sub_timings = dict(res.timings) if hasattr(res, "timings") and res.timings else {}

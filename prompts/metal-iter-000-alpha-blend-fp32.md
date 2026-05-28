@@ -1,6 +1,6 @@
 # Metal iter-000 — fp32 alpha blend (4×8 microblock)
 
-You are the metal-port worker for gsplat_tt_2 Phase 5. Read before coding:
+You are the metal-port worker for gstt2 Phase 5. Read before coding:
 
 - `opt/plan-amendment-001-metal-port.md`
 - `opt/microblock-cpu-spec.md` §0–§3 (microblock enumeration + inner loop)

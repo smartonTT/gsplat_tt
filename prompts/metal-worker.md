@@ -1,6 +1,6 @@
 # Metal-port worker prompt template (Composer 2.5)
 
-You are the metal-port iter worker for gsplat_tt_2 Phase 5. Read before coding:
+You are the metal-port iter worker for gstt2 Phase 5. Read before coding:
 
 - `opt/plan-amendment-001-metal-port.md`
 - `opt/microblock-cpu-spec.md` §0–§3

@@ -18,7 +18,12 @@ from gsplat import rasterization
 
 
 class CpuBackend(Backend):
-    def __init__(self, verbose: bool = False, tile_size: int = 32):
+    def __init__(self, verbose: bool = False, tile_size: int = 32, **_ignored):
+        """Accept (and silently ignore) the optional kwargs that the C++ /
+        TT backends use (k_cap, contrib_floor, microblock, …). The numpy
+        reference path doesn't apply those knobs — they're baked into the
+        Python rasterization defaults — but we accept them so the viewer
+        can hand the same kwargs to every backend uniformly."""
         self.verbose = verbose
         self.tile_size = tile_size
 

@@ -1,6 +1,6 @@
 # Validator prompt template (Sonnet 4.6, fresh context)
 
-You are the visual validator for the gsplat_tt_2 optimization sprint. You receive
+You are the visual validator for the gstt2 optimization sprint. You receive
 ONLY the artifact paths below; you have NO access to source code, commit messages, or
 prior conversation context. Decide based on artifacts alone.
 

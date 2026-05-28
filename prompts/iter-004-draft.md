@@ -1,6 +1,6 @@
 # iter-004 worker prompt (draft)
 
-You are the iter-004 worker for the gsplat_tt_2 sprint. iter-002 and iter-003
+You are the iter-004 worker for the gstt2 sprint. iter-002 and iter-003
 landed (project + tile_assign + sort are in C++). Your job is the BIG one:
 port `alpha_blend` to C++. After this iter, the full forward pipeline runs in
 C++ end-to-end — and 95%+ of the speedup the sprint will see comes from this
@@ -8,13 +8,13 @@ iter.
 
 ## Read first (mandatory)
 
-1. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-2. `/Users/smarton/dev/gsplat_tt_2/opt/microblock-cpu-spec.md` (for context; the microblock structure is NOT used in iter-004 — only iter-008 onward — but read it so you know what's coming)
-3. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-4. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 374-493 (`alpha_blend` — the algorithm spec)
-5. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/thread_pool.h` (use this to parallelize per-tile)
-6. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/project.{h,cpp}` + `tile_assign.{h,cpp}` + `sort.{h,cpp}` (style template + numpy↔C++ binding pattern)
-7. `/Users/smarton/dev/gsplat_tt_2/scripts/verify_stage.py` (Layer 2 gate; blend uses PSNR ≥ 60 dB)
+1. `/Users/smarton/dev/gstt2/opt/plan.md`
+2. `/Users/smarton/dev/gstt2/opt/microblock-cpu-spec.md` (for context; the microblock structure is NOT used in iter-004 — only iter-008 onward — but read it so you know what's coming)
+3. `/Users/smarton/dev/gstt2/prompts/worker.md`
+4. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 374-493 (`alpha_blend` — the algorithm spec)
+5. `/Users/smarton/dev/gstt2/src/gsplat_cpu/thread_pool.h` (use this to parallelize per-tile)
+6. `/Users/smarton/dev/gstt2/src/gsplat_cpu/project.{h,cpp}` + `tile_assign.{h,cpp}` + `sort.{h,cpp}` (style template + numpy↔C++ binding pattern)
+7. `/Users/smarton/dev/gstt2/scripts/verify_stage.py` (Layer 2 gate; blend uses PSNR ≥ 60 dB)
 
 ## Iter spec
 

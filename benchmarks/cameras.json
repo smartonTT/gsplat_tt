@@ -320,7 +320,7 @@
     }
   },
   "bicycle": {
-    "ply": "scenes/point_cloud.ply",
+    "ply": "scenes/bicycle.ply",
     "image_size": [
       640,
       224

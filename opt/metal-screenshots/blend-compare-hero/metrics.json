@@ -1,25 +1,33 @@
 {
+  "fixtures": "/localdev/smarton/gstt2/tests/fixtures/hero",
+  "tt_metal_home": "/localdev/smarton/tt-metal",
+  "build_dir": "/localdev/smarton/tt-metal/build",
+  "shape": [
+    1024,
+    1024,
+    3
+  ],
   "pairs": [
     {
       "label": "tt_current_vs_numpy_ref",
-      "psnr_dB": 47.783193503109935,
-      "max_abs": 0.42748165130615234,
-      "mean_abs": 0.0024662247304080617,
-      "tile_structure_ratio": 7.1166634035579115
+      "psnr_dB": 44.81452767936011,
+      "max_abs": 0.46669107746129157,
+      "mean_abs": 0.002389508676093284,
+      "tile_structure_ratio": 20.365958236705506
     },
     {
       "label": "tt_master_vs_numpy_ref",
-      "psnr_dB": 47.47943623715681,
-      "max_abs": 0.42162227630615234,
-      "mean_abs": 0.00266879684693223,
-      "tile_structure_ratio": 7.211671565983828
+      "psnr_dB": 44.81452767936011,
+      "max_abs": 0.46669107746129157,
+      "mean_abs": 0.002389508676093284,
+      "tile_structure_ratio": 20.365958236705506
     },
     {
       "label": "tt_current_vs_tt_master",
-      "psnr_dB": 50.3705978190774,
-      "max_abs": 0.03515625,
-      "mean_abs": 0.0019692729676042595,
-      "tile_structure_ratio": 5.548510445141409
+      "psnr_dB": Infinity,
+      "max_abs": 0.0,
+      "mean_abs": 0.0,
+      "tile_structure_ratio": NaN
     }
   ]
 }

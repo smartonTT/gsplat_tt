@@ -18,7 +18,7 @@ REMOTE_HOST="${REMOTE_HOST:-}"
 if [[ -n "$REMOTE_HOST" && -z "${RUN_ITER_METAL_REMOTE:-}" ]]; then
   REPO_ROOT_LOCAL="$(cd "$(dirname "$0")/.." && pwd)"
   exec ssh "$REMOTE_HOST" \
-    "cd /proj_sw/user_dev/smarton/gsplat_tt_2 && RUN_ITER_METAL_REMOTE=1 REMOTE_HOST= bash scripts/run_iter_metal.sh $(printf '%q ' "$@")"
+    "cd /proj_sw/user_dev/smarton/gstt2 && RUN_ITER_METAL_REMOTE=1 REMOTE_HOST= bash scripts/run_iter_metal.sh $(printf '%q ' "$@")"
 fi
 
 source "$(dirname "$0")/_env.sh"

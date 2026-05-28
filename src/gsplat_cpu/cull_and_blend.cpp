@@ -1,6 +1,6 @@
 #include "gsplat_cpu/cull_and_blend.h"
 
-#include "gsplat_cpu/simd_exp.h"
+#include "gsplat_cpu/simd_config.h"
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
@@ -11,11 +11,14 @@
 #include <limits>
 #include <vector>
 
-#if defined(__ARM_NEON)
+#if GSPLAT_HAS_NEON
+#include "gsplat_cpu/simd_exp.h"
 #include <arm_neon.h>
-#define GSPLAT_HAS_NEON 1
-#else
-#define GSPLAT_HAS_NEON 0
+#endif
+
+#if GSPLAT_HAS_AVX2
+#include "gsplat_cpu/simd_exp_avx2.h"
+#include <immintrin.h>
 #endif
 
 namespace gsplat_cpu {
@@ -166,6 +169,125 @@ inline float max_t_neon(const MbAccum& acc) {
     return vmaxvq_f32(m);
 }
 #endif  // GSPLAT_HAS_NEON
+
+#if GSPLAT_HAS_AVX2
+struct MbAccumAvx {
+    alignas(32) float r[32];
+    alignas(32) float g[32];
+    alignas(32) float b[32];
+    alignas(32) float t[32];
+};
+
+inline void init_mb_accum_avx(MbAccumAvx& acc) {
+    const __m128 ones = _mm_set1_ps(1.0f);
+    const __m128 zeros = _mm_setzero_ps();
+    for (int k = 0; k < 32; k += 4) {
+        _mm_store_ps(&acc.r[k], zeros);
+        _mm_store_ps(&acc.g[k], zeros);
+        _mm_store_ps(&acc.b[k], zeros);
+        _mm_store_ps(&acc.t[k], ones);
+    }
+}
+
+inline void apply_gaussian_avx2(
+    MbAccumAvx& acc,
+    float ci_a, float ci_b, float ci_c,
+    float mx, float my,
+    float opacity,
+    float cr, float cg, float cb,
+    int px_start, int py_start) {
+    const float A = -0.5f * ci_a;
+    const float B = -ci_b;
+    const float C = -0.5f * ci_c;
+    const __m128 A_v = _mm_set1_ps(A);
+    const __m128 op_v = _mm_set1_ps(opacity);
+    const __m128 alpha_cap = _mm_set1_ps(0.99f);
+    const __m128 zero = _mm_setzero_ps();
+    const __m128 pwr_lo_bound = _mm_set1_ps(-30.0f);
+    const __m128 cr_v = _mm_set1_ps(cr);
+    const __m128 cg_v = _mm_set1_ps(cg);
+    const __m128 cb_v = _mm_set1_ps(cb);
+
+    static const float dx_offs_lo[4] = {0.5f, 1.5f, 2.5f, 3.5f};
+    static const float dx_offs_hi[4] = {4.5f, 5.5f, 6.5f, 7.5f};
+    const __m128 dx_off_lo = _mm_load_ps(dx_offs_lo);
+    const __m128 dx_off_hi = _mm_load_ps(dx_offs_hi);
+
+    const float px_base = static_cast<float>(px_start) - mx;
+    const __m128 dx_lo = _mm_add_ps(_mm_set1_ps(px_base), dx_off_lo);
+    const __m128 dx_hi = _mm_add_ps(_mm_set1_ps(px_base), dx_off_hi);
+    const __m128 dx_lo_sq = _mm_mul_ps(dx_lo, dx_lo);
+    const __m128 dx_hi_sq = _mm_mul_ps(dx_hi, dx_hi);
+
+    auto row_body = [&](int i) __attribute__((always_inline)) {
+        const float py = static_cast<float>(py_start + i) + 0.5f;
+        const float dy = py - my;
+        const float y_term = C * dy * dy;
+        const float xy_coef = B * dy;
+        const __m128 y_term_v = _mm_set1_ps(y_term);
+        const __m128 xy_coef_v = _mm_set1_ps(xy_coef);
+
+        __m128 pwr_lo = _mm_fmadd_ps(xy_coef_v, dx_lo, y_term_v);
+        pwr_lo = _mm_fmadd_ps(A_v, dx_lo_sq, pwr_lo);
+        __m128 pwr_hi = _mm_fmadd_ps(xy_coef_v, dx_hi, y_term_v);
+        pwr_hi = _mm_fmadd_ps(A_v, dx_hi_sq, pwr_hi);
+
+        pwr_lo = _mm_max_ps(_mm_min_ps(pwr_lo, zero), pwr_lo_bound);
+        pwr_hi = _mm_max_ps(_mm_min_ps(pwr_hi, zero), pwr_lo_bound);
+
+        const __m128 gw_lo = simd_exp_f32x4_fast_avx2(pwr_lo);
+        const __m128 gw_hi = simd_exp_f32x4_fast_avx2(pwr_hi);
+
+        const __m128 alpha_lo = _mm_min_ps(_mm_mul_ps(op_v, gw_lo), alpha_cap);
+        const __m128 alpha_hi = _mm_min_ps(_mm_mul_ps(op_v, gw_hi), alpha_cap);
+
+        const int row = i * 8;
+        const __m128 t_lo = _mm_load_ps(&acc.t[row]);
+        const __m128 t_hi = _mm_load_ps(&acc.t[row + 4]);
+        const __m128 at_lo = _mm_mul_ps(alpha_lo, t_lo);
+        const __m128 at_hi = _mm_mul_ps(alpha_hi, t_hi);
+
+        __m128 r_lo = _mm_load_ps(&acc.r[row]);
+        __m128 gg_lo = _mm_load_ps(&acc.g[row]);
+        __m128 bb_lo = _mm_load_ps(&acc.b[row]);
+        r_lo = _mm_fmadd_ps(at_lo, cr_v, r_lo);
+        gg_lo = _mm_fmadd_ps(at_lo, cg_v, gg_lo);
+        bb_lo = _mm_fmadd_ps(at_lo, cb_v, bb_lo);
+        _mm_store_ps(&acc.r[row], r_lo);
+        _mm_store_ps(&acc.g[row], gg_lo);
+        _mm_store_ps(&acc.b[row], bb_lo);
+
+        __m128 r_hi = _mm_load_ps(&acc.r[row + 4]);
+        __m128 gg_hi = _mm_load_ps(&acc.g[row + 4]);
+        __m128 bb_hi = _mm_load_ps(&acc.b[row + 4]);
+        r_hi = _mm_fmadd_ps(at_hi, cr_v, r_hi);
+        gg_hi = _mm_fmadd_ps(at_hi, cg_v, gg_hi);
+        bb_hi = _mm_fmadd_ps(at_hi, cb_v, bb_hi);
+        _mm_store_ps(&acc.r[row + 4], r_hi);
+        _mm_store_ps(&acc.g[row + 4], gg_hi);
+        _mm_store_ps(&acc.b[row + 4], bb_hi);
+
+        _mm_store_ps(&acc.t[row], _mm_sub_ps(t_lo, at_lo));
+        _mm_store_ps(&acc.t[row + 4], _mm_sub_ps(t_hi, at_hi));
+    };
+    row_body(0);
+    row_body(1);
+    row_body(2);
+    row_body(3);
+}
+
+inline float max_t_avx2(const MbAccumAvx& acc) {
+    __m128 m = _mm_load_ps(&acc.t[0]);
+    for (int k = 4; k < 32; k += 4) {
+        m = _mm_max_ps(m, _mm_load_ps(&acc.t[k]));
+    }
+    __m128 shuf = _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 3, 0, 1));
+    m = _mm_max_ps(m, shuf);
+    shuf = _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 0, 3, 2));
+    m = _mm_max_ps(m, shuf);
+    return _mm_cvtss_f32(m);
+}
+#endif  // GSPLAT_HAS_AVX2
 
 // Per-worker scratch buffer for the cull pass. One contiguous uint32_t array
 // of size 32 * L is partitioned into 32 microblock slots; per-tile reset
@@ -426,7 +548,48 @@ void cull_and_blend_tile(
             }
             continue;
         }
-#endif
+#elif GSPLAT_HAS_AVX2
+        if (mb_h == 4 && mb_w == 8) {
+            MbAccumAvx acc;
+            init_mb_accum_avx(acc);
+            int32_t k = 0;
+            for (; k + 4 <= kn; k += 4) {
+                for (int j = 0; j < 4; ++j) {
+                    const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
+                    const GaussianCullRec& rec = gauss_rec[gs];
+                    apply_gaussian_avx2(acc,
+                        rec.ci_a, rec.ci_b, rec.ci_c,
+                        rec.mx, rec.my,
+                        rec.opacity,
+                        rec.cr, rec.cg, rec.cb,
+                        px_start, py_start);
+                }
+                if (max_t_avx2(acc) < transmittance_threshold) { k = kn; break; }
+            }
+            for (; k < kn; ++k) {
+                const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
+                const GaussianCullRec& rec = gauss_rec[gs];
+                apply_gaussian_avx2(acc,
+                    rec.ci_a, rec.ci_b, rec.ci_c,
+                    rec.mx, rec.my,
+                    rec.opacity,
+                    rec.cr, rec.cg, rec.cb,
+                    px_start, py_start);
+            }
+            for (int i = 0; i < 4; ++i) {
+                const int gy = py_start + i;
+                for (int j = 0; j < 8; ++j) {
+                    const int gx = px_start + j;
+                    const int out_base = (gy * image_width + gx) * 3;
+                    const int ij = i * 8 + j;
+                    image_out[out_base + 0] = acc.r[ij];
+                    image_out[out_base + 1] = acc.g[ij];
+                    image_out[out_base + 2] = acc.b[ij];
+                }
+            }
+            continue;
+        }
+#endif  // GSPLAT_HAS_NEON || GSPLAT_HAS_AVX2
 
         // Scalar fallback for boundary microblocks.
         float T[4 * 8];

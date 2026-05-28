@@ -4,13 +4,13 @@ You are the iter-008 worker. iter-007 just landed the C++ `microblock_cull` (bit
 
 ## Read first
 
-1. `/Users/smarton/dev/gsplat_tt_2/opt/microblock-cpu-spec.md`
-2. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-3. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-4. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 600-684 (`alpha_blend_microblock` numpy reference)
-5. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/blend.{h,cpp}` (your per-tile scalar template — heavy reuse)
-6. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/microblock_cull.{h,cpp}` (style)
-7. `/Users/smarton/dev/gsplat_tt_2/backends/cpu_cpp/{backend.py,pybind_module.cpp}`
+1. `/Users/smarton/dev/gstt2/opt/microblock-cpu-spec.md`
+2. `/Users/smarton/dev/gstt2/opt/plan.md`
+3. `/Users/smarton/dev/gstt2/prompts/worker.md`
+4. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 600-684 (`alpha_blend_microblock` numpy reference)
+5. `/Users/smarton/dev/gstt2/src/gsplat_cpu/blend.{h,cpp}` (your per-tile scalar template — heavy reuse)
+6. `/Users/smarton/dev/gstt2/src/gsplat_cpu/microblock_cull.{h,cpp}` (style)
+7. `/Users/smarton/dev/gstt2/backends/cpu_cpp/{backend.py,pybind_module.cpp}`
 
 ## Iter spec
 

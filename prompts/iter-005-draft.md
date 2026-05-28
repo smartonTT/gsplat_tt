@@ -7,10 +7,10 @@ numbers that all future algorithmic iters will be measured against.**
 
 ## Read first
 
-1. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md` — iter-005 is the Phase 2 capstone
-2. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md` — the rules
-3. `/Users/smarton/dev/gsplat_tt_2/opt/iters.jsonl` — previous iters' numbers (the prev-best is 3253 ms from iter-004)
-4. `/Users/smarton/dev/gsplat_tt_2/scripts/render_30frame.py` — the harness
+1. `/Users/smarton/dev/gstt2/opt/plan.md` — iter-005 is the Phase 2 capstone
+2. `/Users/smarton/dev/gstt2/prompts/worker.md` — the rules
+3. `/Users/smarton/dev/gstt2/opt/iters.jsonl` — previous iters' numbers (the prev-best is 3253 ms from iter-004)
+4. `/Users/smarton/dev/gstt2/scripts/render_30frame.py` — the harness
 
 ## Iter spec
 

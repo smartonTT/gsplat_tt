@@ -3,14 +3,45 @@ __pycache__/
 *.py[cod]
 *$py.class
 .venv/
+.venv-*/
+.venv*
 *.egg-info/
 
 # CMake / build artifacts
 build/
+build-*/
+build_*/
 .last-build-commit
 *.o
 *.obj
 compile_commands.json
+
+# bh-30 rsync / flat-layout mirror copies at repo root (canonical paths: backends/, gsplat/, src/)
+/__init__.py
+/backend.py
+/pipeline.py
+/rasterization.py
+/pybind_module.cpp
+/render_30frame.py
+/cpu/
+/cpu_cpp/
+/cuda/
+/gsplat_cpu/
+/gsplat_tt/
+/tt/
+/unit/
+/fixtures/
+/test_cuda_backend.py
+/test_cuda_kernel.py
+/test_kernel_integration.py
+/test_numeric_sanity.py
+/test_thin_splat_stipple.py
+
+# Backup / temp
+*.bak
+*.bak/
+*.tmp
+*.pid
 
 # Test artifacts
 .pytest_cache/
@@ -38,6 +69,7 @@ opt/viewer-*.log
 # and is copied into scenes/ by Phase 0 setup.
 scenes/stitch_doll.ply
 scenes/strawberry.ply
+scenes/bicycle.ply
 scenes/point_cloud.ply
 
 # Per-stage fixtures (regenerable derivatives of the PLY + numpy reference path).
@@ -48,10 +80,19 @@ scenes/point_cloud.ply
 # Metal port runtime artifacts (regenerable on bh-30)
 generated/
 opt/metal-supervisor.log
+opt/amendment002-*.log
+opt/amendment002-supervisor.pid
+opt/amendment002-supervisor-state.json.tmp
+opt/amendment002-workers/
+opt/backfill-*.log
+opt/logs/
+opt/cull_tune.jsonl
+opt/cull_tune_summary.json
 opt/metal-screenshots/**/*.png
 opt/metal-screenshots/**/*.npy
 opt/metal-screenshots/**/.DS_Store
 opt/metal-screenshots/metal-iter-*/
+opt/metal-screenshots/amendment-*/
 
 # setup_bh30_metal.sh symlinks tt-metal from gsplat_tt on the remote box
 backends/tt/tt-metal

@@ -12,13 +12,13 @@ You are the iter-009 worker. The cpu_cpp_mb pipeline now does sum30=1706ms with 
 iter-009 attacks **project**. Sub-profile: project_prepare 4 ms (C++), build_covariance_3d 4 ms (torch), R cov3d R.T 4 ms (torch.matmul), J cov_cam J.T 0.7 ms (torch.bmm), project_finalize 4 ms (C++). **~9 ms of project lives in the Python/torch glue path.** Port it to C++ to drop project to ~5–7 ms median.
 
 ## Read first
-1. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-2. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-3. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/project.{h,cpp}` (existing C++ project)
-4. `/Users/smarton/dev/gsplat_tt_2/backends/cpu_cpp/backend.py` (current orchestration — note `torch.matmul` and `torch.bmm` lines in `project()`)
-5. `/Users/smarton/dev/gsplat_tt_2/gsplat/utils.py` (`quat_to_rotation_matrix`, `build_covariance_3d` — your contract)
-6. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 1-177 (`project_gaussians` numpy reference — your top-level contract)
-7. `/Users/smarton/dev/gsplat_tt_2/scripts/verify_stage.py` (Layer 2 gate; project tolerance is 0)
+1. `/Users/smarton/dev/gstt2/opt/plan.md`
+2. `/Users/smarton/dev/gstt2/prompts/worker.md`
+3. `/Users/smarton/dev/gstt2/src/gsplat_cpu/project.{h,cpp}` (existing C++ project)
+4. `/Users/smarton/dev/gstt2/backends/cpu_cpp/backend.py` (current orchestration — note `torch.matmul` and `torch.bmm` lines in `project()`)
+5. `/Users/smarton/dev/gstt2/gsplat/utils.py` (`quat_to_rotation_matrix`, `build_covariance_3d` — your contract)
+6. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 1-177 (`project_gaussians` numpy reference — your top-level contract)
+7. `/Users/smarton/dev/gstt2/scripts/verify_stage.py` (Layer 2 gate; project tolerance is 0)
 
 ## Iter spec
 

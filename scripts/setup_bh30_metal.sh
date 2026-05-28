@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-time bh-30 setup for gsplat_tt_2 metal port.
+# One-time bh-30 setup for gstt2 metal port.
 # Run ON bh-30 after devsync: bash scripts/setup_bh30_metal.sh
 set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -23,11 +23,24 @@ if [[ ! -L "$TT_DST" ]]; then
   echo "linked tt-metal -> $TT_SRC"
 fi
 
-# Mac-absolute symlink from devsync; use stitch on box until bicycle PLY is copied.
-if [[ -L scenes/point_cloud.ply ]] && ! test -f scenes/point_cloud.ply; then
-  rm -f scenes/point_cloud.ply
-  ln -sf stitch_doll.ply scenes/point_cloud.ply
-  echo "WARNING: bicycle PLY not on box; scenes/point_cloud.ply -> stitch_doll.ply placeholder"
+# Mac-absolute symlink from devsync may be broken on bh-30; prefer gsplat_tt copy.
+BICYCLE_SRC="/proj_sw/user_dev/smarton/gsplat_tt/scenes/bicycle.ply"
+BICYCLE_DST="$REPO/scenes/bicycle.ply"
+if [[ ! -f "$BICYCLE_DST" ]]; then
+  if [[ -f "$BICYCLE_SRC" ]]; then
+    ln -sf "$BICYCLE_SRC" "$BICYCLE_DST"
+    echo "linked scenes/bicycle.ply -> $BICYCLE_SRC"
+  else
+    echo "WARNING: bicycle PLY not found at $BICYCLE_DST or $BICYCLE_SRC" >&2
+  fi
+elif [[ -L "$BICYCLE_DST" ]] && ! test -f "$BICYCLE_DST"; then
+  rm -f "$BICYCLE_DST"
+  if [[ -f "$BICYCLE_SRC" ]]; then
+    ln -sf "$BICYCLE_SRC" "$BICYCLE_DST"
+    echo "repaired broken scenes/bicycle.ply -> $BICYCLE_SRC"
+  else
+    echo "WARNING: broken bicycle symlink and no copy at $BICYCLE_SRC" >&2
+  fi
 fi
 
 export TT_METAL_HOME="$TT_DST"

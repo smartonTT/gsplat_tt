@@ -3,7 +3,7 @@
 set -euo pipefail
 source "$(dirname "$0")/_env.sh"
 REMOTE="${REMOTE_HOST}"
-# Prefer gsplat_tt canonical tree (gsplat_tt_2 symlink may be broken on Mac).
+# Prefer gsplat_tt canonical tree (gstt2 symlink may be broken on Mac).
 if [[ -d "$REPO_ROOT/../gsplat_tt/backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting" ]]; then
   GS="$REPO_ROOT/../gsplat_tt/backends/tt/tt-metal/tt_metal/programming_examples/gaussian_splatting"
 else

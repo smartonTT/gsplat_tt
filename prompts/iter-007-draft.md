@@ -1,16 +1,16 @@
 # iter-007 worker prompt
 
-You are the iter-007 worker for the gsplat_tt_2 sprint. iter-006 just landed the numpy spec for per-microblock ellipse culling at `mb_contrib_floor = 1/16384`. Your job: **port `microblock_cull` to C++**, producing bit-identical `(mb_header, mb_stream)` output. The microblock-major C++ blend is iter-008; for iter-007 you wire C++ cull + numpy blend so we can prove the cull is correct in isolation.
+You are the iter-007 worker for the gstt2 sprint. iter-006 just landed the numpy spec for per-microblock ellipse culling at `mb_contrib_floor = 1/16384`. Your job: **port `microblock_cull` to C++**, producing bit-identical `(mb_header, mb_stream)` output. The microblock-major C++ blend is iter-008; for iter-007 you wire C++ cull + numpy blend so we can prove the cull is correct in isolation.
 
 ## Read first (mandatory)
 
-1. `/Users/smarton/dev/gsplat_tt_2/opt/microblock-cpu-spec.md` — algorithm contract
-2. `/Users/smarton/dev/gsplat_tt_2/opt/plan.md`
-3. `/Users/smarton/dev/gsplat_tt_2/prompts/worker.md`
-4. `/Users/smarton/dev/gsplat_tt_2/gsplat/rasterization.py` lines 501-597 (`microblock_cull` numpy reference — your contract)
-5. `/Users/smarton/dev/gsplat_tt_2/src/gsplat_cpu/{tile_assign,sort,project,blend}.{h,cpp}` — style template
-6. `/Users/smarton/dev/gsplat_tt_2/backends/cpu_cpp/{pybind_module.cpp,backend.py}` — binding + override pattern
-7. `/Users/smarton/dev/gsplat_tt_2/scripts/verify_stage.py` — Layer 2 gate (you will add a `microblock_cull` stage)
+1. `/Users/smarton/dev/gstt2/opt/microblock-cpu-spec.md` — algorithm contract
+2. `/Users/smarton/dev/gstt2/opt/plan.md`
+3. `/Users/smarton/dev/gstt2/prompts/worker.md`
+4. `/Users/smarton/dev/gstt2/gsplat/rasterization.py` lines 501-597 (`microblock_cull` numpy reference — your contract)
+5. `/Users/smarton/dev/gstt2/src/gsplat_cpu/{tile_assign,sort,project,blend}.{h,cpp}` — style template
+6. `/Users/smarton/dev/gstt2/backends/cpu_cpp/{pybind_module.cpp,backend.py}` — binding + override pattern
+7. `/Users/smarton/dev/gstt2/scripts/verify_stage.py` — Layer 2 gate (you will add a `microblock_cull` stage)
 
 ## Iter spec
 
