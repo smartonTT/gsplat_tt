@@ -49,6 +49,7 @@ opt/metal-supervisor.log
 opt/metal-screenshots/**/*.png
 opt/metal-screenshots/**/*.npy
 opt/metal-screenshots/**/.DS_Store
+opt/metal-screenshots/metal-iter-*/
 
 # setup_bh30_metal.sh symlinks tt-metal from gsplat_tt on the remote box
 backends/tt/tt-metal
