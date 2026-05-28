@@ -431,6 +431,15 @@ double transform_means_cam_tt(
     T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
     T.compute_ms = std::chrono::duration<double, std::milli>(t_launch_end - t_launch1).count();
 
+    // tt-008b: skip D2H when caller passed nullptr — means_cam stays purely
+    // device-resident for downstream stages (pfwc_tt etc.) to consume via NoC.
+    // The means_cam_{x,y,z} buffers remain registered in device_state.
+    if (means_cam_out == nullptr) {
+        T.download_ms = 0.0;
+        T.unpack_ms = 0.0;
+        return std::chrono::duration<double, std::milli>(t_launch_end - t_launch0).count();
+    }
+
     // Download outputs. Until downstream stages also live on device the
     // host still consumes means_cam in project_full_with_cov3d. Once
     // tile_assign (tt-006) is on device it will NoC-read these same
@@ -469,6 +478,18 @@ double transform_means_cam_tt(
     T.unpack_ms = std::chrono::duration<double, std::milli>(t_unp - t_dl1).count();
 
     return std::chrono::duration<double, std::milli>(t_launch_end - t_launch0).count();
+}
+
+double transform_means_cam_tt_no_download(
+    const float* means,
+    const float* extrinsics,
+    std::size_t N,
+    ProjectCallTimings* timings_out) {
+    // Convenience wrapper — nullptr means_cam_out tells the main path to
+    // skip the D2H readback and SoA→AoS unpack work. Saves 25-30 ms/view
+    // when downstream stages (e.g. pfwc_tt) consume means_cam directly
+    // from device-resident buffers via NoC.
+    return transform_means_cam_tt(means, extrinsics, N, /*means_cam_out=*/nullptr, timings_out);
 }
 
 }  // namespace gsplat_tt

@@ -19,6 +19,7 @@
 #ifdef GSPLAT_WITH_TT
 #include "gsplat_tt/blend.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
 #endif
 
@@ -232,6 +233,69 @@ py::tuple project_full_with_cov3d_py(
         false,
         means_cam_ptr);
 
+    return pack_project_result(result, N);
+}
+
+// amendment-002 tt-008a host finisher.
+//
+// Consumes the (mean_2d, depth, cov_cam_unique) the TT pfwc kernel produced
+// on the Tenstorrent device and runs the residual cov2d + radii +
+// valid_mask + compact-gather work on host. Matches the math of
+// project_full_with_cov3d when given the same input (the device produced
+// mean_2d / depth / cov_cam from the same R/t and cov3d).
+py::tuple project_finish_with_cov_cam_py(
+    py::array_t<float, py::array::c_style | py::array::forcecast> mean_2d_precomp,
+    py::array_t<float, py::array::c_style | py::array::forcecast> depth_precomp,
+    py::array_t<float, py::array::c_style | py::array::forcecast> cov_cam_precomp,
+    py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics,
+    py::array_t<float, py::array::c_style | py::array::forcecast> intrinsics,
+    int image_height,
+    int image_width,
+    py::object opacities_obj = py::none(),
+    float min_opacity = 1.0f / 255.0f) {
+    const auto m_info = mean_2d_precomp.request();
+    const auto d_info = depth_precomp.request();
+    const auto c_info = cov_cam_precomp.request();
+    if (m_info.ndim != 2 || m_info.shape[1] != 2) {
+        throw std::invalid_argument("mean_2d_precomp must have shape (N, 2)");
+    }
+    if (d_info.ndim != 1) {
+        throw std::invalid_argument("depth_precomp must have shape (N,)");
+    }
+    if (c_info.ndim != 2 || c_info.shape[1] != 6) {
+        throw std::invalid_argument("cov_cam_precomp must have shape (N, 6)");
+    }
+    const std::size_t N = static_cast<std::size_t>(m_info.shape[0]);
+    if (static_cast<std::size_t>(d_info.shape[0]) != N ||
+        static_cast<std::size_t>(c_info.shape[0]) != N) {
+        throw std::invalid_argument("mean_2d / depth / cov_cam_precomp N mismatch");
+    }
+    const float* opacities_ptr = nullptr;
+    py::array_t<float, py::array::c_style | py::array::forcecast> opacities;
+    if (!opacities_obj.is_none()) {
+        opacities = py::cast<py::array_t<float, py::array::c_style | py::array::forcecast>>(
+            opacities_obj);
+        if (static_cast<std::size_t>(opacities.request().shape[0]) != N) {
+            throw std::invalid_argument("opacities must have shape (N,)");
+        }
+        opacities_ptr = static_cast<const float*>(opacities.request().ptr);
+    }
+    const gsplat_cpu::ProjectResult result = gsplat_cpu::project_finish_with_cov_cam(
+        static_cast<const float*>(m_info.ptr),
+        static_cast<const float*>(d_info.ptr),
+        static_cast<const float*>(c_info.ptr),
+        static_cast<const float*>(extrinsics.request().ptr),
+        static_cast<const float*>(intrinsics.request().ptr),
+        opacities_ptr,
+        min_opacity,
+        N,
+        image_height,
+        image_width,
+        &global_project_pool(),
+        /*max_radius=*/0,
+        /*contrib_floor_k=*/1.0f / 16384.0f,
+        /*k_cap=*/3.0f,
+        /*use_isoellipse=*/false);
     return pack_project_result(result, N);
 }
 
@@ -1123,6 +1187,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         // The MeshDevice itself is closed exactly once by device_state.
         gsplat_tt::device_shutdown();
         gsplat_tt::project_device_shutdown();
+        gsplat_tt::pfwc_device_shutdown();
         gsplat_tt::device_state::shutdown();
     });
 
@@ -1166,6 +1231,102 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("extrinsics"));
 
     m.def("tt_project_device_ready", []() { return gsplat_tt::project_device_ready(); });
+
+    // amendment-002 tt-008b: device-resident means_cam — same as
+    // transform_means_cam_tt but skips the D2H readback (the means_cam
+    // buffers stay live in DRAM and are consumed via NoC by downstream
+    // device stages like pfwc_tt). Returns just the timing dict.
+    m.def(
+        "transform_means_cam_tt_no_download",
+        [](py::array_t<float, py::array::c_style | py::array::forcecast> means,
+           py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics) {
+            const auto means_info = means.request();
+            const auto extr_info = extrinsics.request();
+            if (means_info.ndim != 2 || means_info.shape[1] != 3) {
+                throw std::invalid_argument("means must have shape (N, 3)");
+            }
+            if (extr_info.size != 16) {
+                throw std::invalid_argument("extrinsics must have 16 elements (4x4)");
+            }
+            const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
+            gsplat_tt::ProjectCallTimings timings;
+            const double kernel_ms = gsplat_tt::transform_means_cam_tt_no_download(
+                static_cast<const float*>(means_info.ptr),
+                static_cast<const float*>(extr_info.ptr),
+                N,
+                &timings);
+            py::dict d;
+            d["total_ms"]    = kernel_ms;
+            d["pack_ms"]     = timings.pack_ms;
+            d["upload_ms"]   = timings.upload_ms;
+            d["launch_ms"]   = timings.launch_ms;
+            d["compute_ms"]  = timings.compute_ms;
+            d["download_ms"] = timings.download_ms;
+            d["unpack_ms"]   = timings.unpack_ms;
+            d["cache_hit"]   = timings.cache_hit;
+            return d;
+        },
+        py::arg("means"),
+        py::arg("extrinsics"));
+
+    // amendment-002 tt-008a: device pfwc — replaces perspective + cov_cam
+    // (the heaviest sub-steps of project_full_with_cov3d). Reads means_cam
+    // from the device-resident buffers populated by transform_means_cam_tt;
+    // writes mean_2d, depth, cov_cam_unique. The host finisher
+    // project_finish_with_cov_cam_tt below consumes these.
+    //
+    // Inputs:
+    //   cov3d_unique (N, 6) fp32 — [c00 c01 c02 c11 c12 c22]
+    //   extrinsics   (4, 4) fp32 row-major
+    //   intrinsics   (3, 3) fp32 row-major
+    // Returns: (mean_2d (N, 2), depth (N,), cov_cam (N, 6), timing_dict).
+    m.def(
+        "transform_pfwc_tt",
+        [](py::array_t<float, py::array::c_style | py::array::forcecast> cov3d_unique,
+           py::array_t<float, py::array::c_style | py::array::forcecast> extrinsics,
+           py::array_t<float, py::array::c_style | py::array::forcecast> intrinsics) {
+            const auto c_info = cov3d_unique.request();
+            const auto e_info = extrinsics.request();
+            const auto i_info = intrinsics.request();
+            if (c_info.ndim != 2 || c_info.shape[1] != 6) {
+                throw std::invalid_argument("cov3d_unique must have shape (N, 6)");
+            }
+            if (e_info.size != 16) {
+                throw std::invalid_argument("extrinsics must have 16 elements (4x4)");
+            }
+            if (i_info.size != 9) {
+                throw std::invalid_argument("intrinsics must have 9 elements (3x3)");
+            }
+            const std::size_t N = static_cast<std::size_t>(c_info.shape[0]);
+            py::array_t<float> mean_2d({static_cast<py::ssize_t>(N), static_cast<py::ssize_t>(2)});
+            py::array_t<float> depth({static_cast<py::ssize_t>(N)});
+            py::array_t<float> cov_cam({static_cast<py::ssize_t>(N), static_cast<py::ssize_t>(6)});
+            gsplat_tt::PfwcCallTimings timings;
+            const double kernel_ms = gsplat_tt::pfwc_tt(
+                static_cast<const float*>(c_info.ptr),
+                static_cast<const float*>(e_info.ptr),
+                static_cast<const float*>(i_info.ptr),
+                N,
+                mean_2d.mutable_data(),
+                depth.mutable_data(),
+                cov_cam.mutable_data(),
+                &timings);
+            py::dict d;
+            d["total_ms"]    = kernel_ms;
+            d["pack_ms"]     = timings.pack_ms;
+            d["upload_ms"]   = timings.upload_ms;
+            d["launch_ms"]   = timings.launch_ms;
+            d["compute_ms"]  = timings.compute_ms;
+            d["download_ms"] = timings.download_ms;
+            d["unpack_ms"]   = timings.unpack_ms;
+            d["cache_hit"]   = timings.cache_hit;
+            return py::make_tuple(mean_2d, depth, cov_cam, d);
+        },
+        py::arg("cov3d_unique"),
+        py::arg("extrinsics"),
+        py::arg("intrinsics"));
+
+    m.def("tt_pfwc_device_ready", []() { return gsplat_tt::pfwc_device_ready(); });
 #endif
     m.def("project_prepare", &project_prepare_py);
     m.def("project_finalize", &project_finalize_py);
@@ -1200,6 +1361,19 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("opacities") = py::none(),
         py::arg("min_opacity") = 1.0f / 255.0f,
         py::arg("means_cam") = py::none());
+
+    m.def(
+        "project_finish_with_cov_cam",
+        &project_finish_with_cov_cam_py,
+        py::arg("mean_2d_precomp"),
+        py::arg("depth_precomp"),
+        py::arg("cov_cam_precomp"),
+        py::arg("extrinsics"),
+        py::arg("intrinsics"),
+        py::arg("image_height"),
+        py::arg("image_width"),
+        py::arg("opacities") = py::none(),
+        py::arg("min_opacity") = 1.0f / 255.0f);
 
     m.def(
         "project_full",

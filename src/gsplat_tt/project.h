@@ -59,6 +59,18 @@ double transform_means_cam_tt(
     float* means_cam_out,
     ProjectCallTimings* timings_out = nullptr);
 
+// tt-008b: skip-download variant. means_cam_out is allowed to be nullptr;
+// then the D2H readback of means_cam_{x,y,z} is omitted entirely. The
+// device buffers are still registered with device_state (means_cam_x/y/z)
+// so downstream device-resident stages (pfwc_tt) can read them via NoC.
+// Saves the 25-30 ms/view wasted on the means_cam download whenever the
+// downstream stage is on-device too.
+double transform_means_cam_tt_no_download(
+    const float* means,
+    const float* extrinsics,
+    std::size_t N,
+    ProjectCallTimings* timings_out = nullptr);
+
 // Returns true if the TT device project path is initialized and operational.
 bool project_device_ready();
 

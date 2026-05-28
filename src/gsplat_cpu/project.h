@@ -150,4 +150,32 @@ ProjectResult project_full_fused(
     bool use_isoellipse = false,
     const float* means_cam_precomp = nullptr);
 
+// amendment-002 tt-008a: finish pfwc from device-precomputed (mean_2d,
+// depth, cov_cam_unique). The device kernel pfwc_tt produces the heavy
+// per-Gaussian sub-results (perspective + cov_cam = ~70% of pfwc); this
+// CPU finisher consumes them and runs the cheap cov2d + radii +
+// valid_mask + gather steps. Matches the math of project_full_fused
+// exactly when given the same inputs.
+//
+//   mean_2d_precomp : (N, 2) fp32 — fx*tx/tz + cx, fy*ty/tz + cy
+//   depth_precomp   : (N,)   fp32 — tz
+//   cov_cam_precomp : (N, 6) fp32 — cc00 cc01 cc02 cc11 cc12 cc22
+//                     (symmetric R · cov3d · R^T unique entries)
+ProjectResult project_finish_with_cov_cam(
+    const float* mean_2d_precomp,
+    const float* depth_precomp,
+    const float* cov_cam_precomp,
+    const float* extrinsics,
+    const float* intrinsics,
+    const float* opacities,
+    float min_opacity,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr,
+    int max_radius = 0,
+    float contrib_floor_k = 1.0f / 16384.0f,
+    float k_cap = 0.0f,
+    bool use_isoellipse = false);
+
 }  // namespace gsplat_cpu

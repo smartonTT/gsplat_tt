@@ -43,6 +43,14 @@ class TtBackend(CpuCppBackend):
         super().__init__(**kwargs)
         self._tt_blend = None
         self._tt_transform_means_cam = None
+        self._tt_transform_means_cam_no_download = None
+        self._tt_transform_pfwc = None
+        self._tt_project_finish_with_cov_cam = None
+        # tt-008b: cache the (N, 6) cov3d_unique layout the device pfwc kernel
+        # wants; cov3d is view-invariant so we only repack on cov3d-array
+        # identity change. id(cov3d_arr) is the cheap cache key.
+        self._cov3d_unique_cache_id = None
+        self._cov3d_unique_cache_arr = None
         try:
             from backends.cpu_cpp import _gsplat_cpu as mod
 
@@ -50,8 +58,30 @@ class TtBackend(CpuCppBackend):
                 self._tt_blend = mod.blend_microblock_tt
                 if hasattr(mod, "transform_means_cam_tt"):
                     self._tt_transform_means_cam = mod.transform_means_cam_tt
+                if hasattr(mod, "transform_means_cam_tt_no_download"):
+                    self._tt_transform_means_cam_no_download = (
+                        mod.transform_means_cam_tt_no_download
+                    )
+                if hasattr(mod, "transform_pfwc_tt"):
+                    self._tt_transform_pfwc = mod.transform_pfwc_tt
+            if hasattr(mod, "project_finish_with_cov_cam"):
+                self._tt_project_finish_with_cov_cam = mod.project_finish_with_cov_cam
         except (ImportError, AttributeError):
             pass
+
+    def _cov3d_unique(self, cov3d):
+        if self._cov3d_unique_cache_id == id(cov3d):
+            return self._cov3d_unique_cache_arr
+        flat = np.ascontiguousarray(cov3d.reshape(-1, 9))
+        unique = np.ascontiguousarray(
+            np.column_stack([
+                flat[:, 0], flat[:, 1], flat[:, 2],
+                flat[:, 4], flat[:, 5], flat[:, 8],
+            ]).astype(np.float32, copy=False)
+        )
+        self._cov3d_unique_cache_id = id(cov3d)
+        self._cov3d_unique_cache_arr = unique
+        return unique
 
     def has_render_fused(self) -> bool:
         # Defensive: parent class also reads self._render_fused, but make
@@ -114,15 +144,31 @@ class TtBackend(CpuCppBackend):
         _t_marshal_in = _time.perf_counter()
         means_np_c = np.ascontiguousarray(means_np)
         extr_np_c = np.ascontiguousarray(extrinsics_np)
+
+        # tt-008b: when pfwc is also on-device we can skip the means_cam D2H
+        # entirely — pfwc reads them via NoC from device_state. Saves ~25 ms /
+        # view of pointless host work.
+        pfwc_device_enabled = (
+            os.environ.get("GSPLAT_TT_DEVICE_PFWC") == "1"
+            and self._tt_transform_pfwc is not None
+            and self._tt_project_finish_with_cov_cam is not None
+        )
+        skip_means_cam_download = (
+            pfwc_device_enabled
+            and self._tt_transform_means_cam_no_download is not None
+        )
+
         _t_tt0 = _time.perf_counter()
-        tt_ret = self._tt_transform_means_cam(means_np_c, extr_np_c)
-        _t_tt1 = _time.perf_counter()
-        # Backward-compat: legacy binding returned (means_cam, float kernel_ms).
-        # tt-005c binding returns (means_cam, dict).
-        if isinstance(tt_ret, tuple) and len(tt_ret) == 2:
-            means_cam_np, _meta = tt_ret
+        if skip_means_cam_download:
+            _meta = self._tt_transform_means_cam_no_download(means_np_c, extr_np_c)
+            means_cam_np = None
         else:
-            means_cam_np, _meta = tt_ret, {}
+            tt_ret = self._tt_transform_means_cam(means_np_c, extr_np_c)
+            if isinstance(tt_ret, tuple) and len(tt_ret) == 2:
+                means_cam_np, _meta = tt_ret
+            else:
+                means_cam_np, _meta = tt_ret, {}
+        _t_tt1 = _time.perf_counter()
         if isinstance(_meta, dict):
             kernel_ms = float(_meta.get("total_ms", -1.0))
             tt_timings = _meta
@@ -147,17 +193,53 @@ class TtBackend(CpuCppBackend):
         _t_cov3d0 = _time.perf_counter()
         cov3d = self._cached_cov3d(scales_np, rotations_np)
         _t_cov3d1 = _time.perf_counter()
-        means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full_with_cov3d(
-            means_np,
-            cov3d,
-            extrinsics_np,
-            intrinsics_np,
-            image_height,
-            image_width,
-            opacities_np if opacities_np is not None else None,
-            1.0 / 255.0,
-            means_cam_np,
-        )
+
+        # tt-008a: optional device pfwc path. When GSPLAT_TT_DEVICE_PFWC=1 and
+        # all the bindings are available, compute mean_2d + depth + cov_cam
+        # on-device (the 70%-of-pfwc heavy steps), then run the host finisher
+        # for the residual cov2d + radii + valid_mask + gather. The fallback
+        # remains the original project_full_with_cov3d call below.
+        pfwc_via_device = pfwc_device_enabled
+        if pfwc_via_device:
+            # tt-008b: cached (N, 6) repack of cov3d unique entries.
+            cov3d_unique = self._cov3d_unique(cov3d)
+            intrinsics_3x3 = np.ascontiguousarray(intrinsics_np[:3, :3])
+            _t_pfwc_dev0 = _time.perf_counter()
+            mean_2d_dev, depth_dev, cov_cam_dev, pfwc_timings = self._tt_transform_pfwc(
+                cov3d_unique, extrinsics_np, intrinsics_3x3
+            )
+            _t_pfwc_dev1 = _time.perf_counter()
+            pfwc_dev_kernel_ms = float(pfwc_timings.get("total_ms", -1.0))
+            if pfwc_dev_kernel_ms < 0.0:
+                # Device pfwc failed — fall back to host pfwc for this view.
+                pfwc_via_device = False
+
+        if pfwc_via_device:
+            means_2d, covs_2d_out, depths, radii, valid_mask = (
+                self._tt_project_finish_with_cov_cam(
+                    mean_2d_dev,
+                    depth_dev,
+                    cov_cam_dev,
+                    extrinsics_np,
+                    np.ascontiguousarray(intrinsics_np[:3, :3]),
+                    image_height,
+                    image_width,
+                    opacities_np if opacities_np is not None else None,
+                    1.0 / 255.0,
+                )
+            )
+        else:
+            means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full_with_cov3d(
+                means_np,
+                cov3d,
+                extrinsics_np,
+                intrinsics_np,
+                image_height,
+                image_width,
+                opacities_np if opacities_np is not None else None,
+                1.0 / 255.0,
+                means_cam_np,
+            )
         _t_pfwc = _time.perf_counter()
 
         if sub_timings is not None:
@@ -169,6 +251,11 @@ class TtBackend(CpuCppBackend):
             sub_timings["tt_py_call_ms"] = (_t_tt1 - _t_tt0) * 1000.0
             sub_timings["tt_py_cov3d_ms"] = (_t_cov3d1 - _t_cov3d0) * 1000.0
             sub_timings["tt_py_pfwc_ms"] = (_t_pfwc - _t_cov3d1) * 1000.0
+            if pfwc_via_device:
+                sub_timings["tt_pfwc_kernel_ms"] = float(pfwc_dev_kernel_ms)
+                sub_timings["tt_py_pfwc_dev_call_ms"] = (_t_pfwc_dev1 - _t_pfwc_dev0) * 1000.0
+                for k, v in pfwc_timings.items():
+                    sub_timings[f"tt_pfwc_{k}"] = v
 
         return (
             torch.from_numpy(np.asarray(means_2d)),

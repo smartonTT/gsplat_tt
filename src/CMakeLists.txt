@@ -109,6 +109,8 @@ if(GSPLAT_WITH_TT)
   add_library(gsplat_tt STATIC
     gsplat_tt/blend_device.cpp
     gsplat_tt/project_device.cpp
+    gsplat_tt/pfwc_device.cpp
+    gsplat_tt/device_state.cpp
   )
   set_target_properties(gsplat_tt PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_include_directories(gsplat_tt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
