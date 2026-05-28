@@ -16,6 +16,7 @@ import os
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -50,8 +51,17 @@ class KernelBackend(Backend):
         self.verbose = verbose
         binary = self._resolve_binary()
         env = os.environ.copy()
-        env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
-        env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
+        tt_home = os.environ.get("TT_METAL_HOME")
+        if not tt_home:
+            link = Path("backends/tt/tt-metal")
+            if link.exists():
+                tt_home = str(link.resolve())
+        if tt_home:
+            env["TT_METAL_HOME"] = tt_home
+            env["TT_METAL_RUNTIME_ROOT"] = tt_home
+        else:
+            env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
+            env.setdefault("TT_METAL_RUNTIME_ROOT", os.environ["TT_METAL_HOME"])
         self._proc = subprocess.Popen(
             [binary, "--daemon"],
             stdin=subprocess.PIPE,

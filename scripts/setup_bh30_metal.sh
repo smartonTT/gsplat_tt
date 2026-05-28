@@ -43,7 +43,9 @@ if [[ ! -x "$VENV_PY" ]]; then
   rm -rf "$REPO/.venv"
   python3 -m venv "$REPO/.venv"
   "$REPO/.venv/bin/pip" install -q --upgrade pip
-  "$REPO/.venv/bin/pip" install -q numpy torch
+  "$REPO/.venv/bin/pip" install -q numpy torch pillow
+else
+  "$REPO/.venv/bin/pip" install -q numpy torch pillow 2>/dev/null || true
 fi
 
 BIN="$TT_DST/build/programming_examples/metal_example_gaussian_splatting"
