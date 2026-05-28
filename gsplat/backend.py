@@ -84,15 +84,15 @@ class Backend(ABC):
         tile_size: int = 32,
         covs_2d: torch.Tensor | None = None,
         opacities: torch.Tensor | None = None,
-        contrib_floor: float = 1.0 / 3000.0,
+        contrib_floor: float = 1.0 / 16384.0,
         sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Tile-overlap assignment.
 
         Returns: (gaussian_ids, tile_ids, tiles_per_gaussian).
 
-        `contrib_floor` defaults to 1/3000 for near-GT quality at lower cost
-        than 1/16384 while keeping Mahalanobis culls enabled.
+        `contrib_floor` defaults to 1/16384 to match the per-microblock cull
+        used downstream (tight enough for training-quality renders).
         """
         return rasterization.get_tile_assignments(
             means_2d, radii, image_height, image_width,

@@ -133,7 +133,7 @@ def render_one(
     backend_name: str, gauss, c2w: np.ndarray, W: int, H: int, fov_deg: float,
     *, cull_disabled: bool = False,
     use_isoellipse: bool = False,
-    contrib_floor: float = 1.0 / 3000.0,
+    contrib_floor: float = 1.0 / 16384.0,
     min_opacity: float = 1.0 / 255.0,
     max_radius: int = -1,
     transmittance_threshold: float = 1.0 / 255.0,
@@ -227,11 +227,11 @@ def main() -> None:
     ap.add_argument(
         "--min-psnr",
         type=float,
-        default=67.5,
+        default=68.0,
         help=(
             "PSNR floor vs true GT (all culls off). ~74 dB is the intrinsic "
-            "C++ vs numpy limit; 67.5 dB allows close-zoom headroom with "
-            "contrib_floor=1/3000. max_abs ≤ 0.05 is the primary perceptual gate."
+            "C++ vs numpy limit; 68 dB allows close-zoom headroom with "
+            "contrib_floor=1/16384. max_abs ≤ 0.05 is the primary perceptual gate."
         ),
     )
     args = ap.parse_args()
@@ -283,7 +283,7 @@ def main() -> None:
             use_isoellipse=False,
             min_opacity=0.0 if args.cull_disabled else 1.0 / 255.0,
             max_radius=-1 if args.cull_disabled else -1,
-            contrib_floor=1.0 / 3000.0,
+            contrib_floor=1.0 / 16384.0,
         )
         m = analyze(ref, cand)
         worst_psnr = min(worst_psnr, m["psnr"])

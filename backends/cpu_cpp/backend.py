@@ -23,7 +23,7 @@ class CpuCppBackend(Backend):
     def __init__(
         self,
         microblock: bool = True,
-        mb_contrib_floor: float = 1.0 / 3000.0,
+        mb_contrib_floor: float = 1.0 / 16384.0,
         fused: bool = True,
         render_fused: bool = True,
         verbose: bool = False,
@@ -167,7 +167,7 @@ class CpuCppBackend(Backend):
         tile_size: int = 32,
         covs_2d: torch.Tensor | None = None,
         opacities: torch.Tensor | None = None,
-        contrib_floor: float = 1.0 / 3000.0,
+        contrib_floor: float = 1.0 / 16384.0,
         sub_timings: dict[str, float] | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         del sub_timings
@@ -326,7 +326,7 @@ class CpuCppBackend(Backend):
         # Gaussian; many such Gaussians stack across hundreds of pixels and
         # the dropped contribution accumulated to ~7/255 per pixel at close
         # zoom, producing visible 32×32 tile-grid artifacts. With contrib_floor
-        # = mb_contrib_floor (1/3000), the per-pair cull only drops pairs the
+        # = mb_contrib_floor (1/16384), the per-pair cull only drops pairs the
         # microblock cull would also drop everywhere within the tile — keeps
         # most of the perf optimisation, gives ~112 dB vs unculled
         # alpha_blend ground truth (invisible).

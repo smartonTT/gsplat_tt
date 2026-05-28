@@ -33,7 +33,7 @@ from gsplat.data_structures import Gaussians
 
 
 TILE_SIZE = 32
-DEFAULT_CONTRIB_FLOOR = 1.0 / 3000.0
+DEFAULT_CONTRIB_FLOOR = 1.0 / 16384.0
 
 
 @dataclass

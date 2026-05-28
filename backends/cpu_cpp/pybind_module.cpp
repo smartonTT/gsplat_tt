@@ -202,7 +202,7 @@ py::tuple project_full_with_cov3d_py(
         image_width,
         &global_project_pool(),
         0,
-        1.0f / 3000.0f,
+        1.0f / 16384.0f,
         0.0f,
         false);
 
@@ -1103,7 +1103,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("tile_size") = 32,
         py::arg("image_height") = 0,
         py::arg("image_width") = 0,
-        py::arg("mb_contrib_floor") = 1.0f / 3000.0f);
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
 
     m.def(
         "render_full",
@@ -1118,8 +1118,8 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_width"),
         py::arg("tile_size") = 32,
         py::arg("min_opacity") = 1.0f / 255.0f,
-        py::arg("contrib_floor") = 1.0f / 3000.0f,
-        py::arg("mb_contrib_floor") = 1.0f / 3000.0f,
+        py::arg("contrib_floor") = 1.0f / 16384.0f,
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f,
         py::arg("cull_disabled") = false,
         py::arg("transmittance_threshold") = 1.0f / 255.0f,
         py::arg("max_radius") = 0,
@@ -1137,7 +1137,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("tiles_x"),
         py::arg("tiles_y"),
         py::arg("tile_size") = 32,
-        py::arg("mb_contrib_floor") = 1.0f / 3000.0f);
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f);
 
     py::class_<gsplat_cpu::ThreadPool>(m, "ThreadPool")
         .def(py::init<std::size_t>(), py::arg("num_threads") = 0)

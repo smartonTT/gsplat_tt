@@ -294,7 +294,7 @@ def ledger_section(rows: list[dict]) -> str:
 
 CULL_JSONL = OPT_DIR / "cull_tune.jsonl"
 CULL_SUMMARY = OPT_DIR / "cull_tune_summary.json"
-PSNR_FLOOR = 67.5
+PSNR_FLOOR = 68.0
 
 
 def load_cull_tune() -> list[dict]:
@@ -353,7 +353,7 @@ def cull_tune_section() -> str:
   alpha_blend without microblock cull. Quality floor: PSNR ≥ {PSNR_FLOOR} dB,
   max_abs ≤ 0.05 @ 1024² stitch_doll (+ orbit + close-zoom views).</p>
   <p>Production default: <b>Mahalanobis</b> per-pair and per-microblock cull with
-  <code>contrib_floor=1/3000</code> (78–86 dB vs 1/16384 reference; ~21 ms/view).</p>
+  <code>contrib_floor=1/16384</code> (~68.6 dB worst vs true GT; ~18 ms/view).</p>
   <table class='kv'>{head}</table>
   {table}
   <p>Full log: <code>opt/cull_tune.jsonl</code></p>

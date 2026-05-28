@@ -36,7 +36,7 @@ def project_gaussians(
     opacities: torch.Tensor | None = None,
     min_opacity: float = 1.0 / 255.0,
     max_radius: int = 0,
-    contrib_floor: float = 1.0 / 3000.0,
+    contrib_floor: float = 1.0 / 16384.0,
     k_cap: float = 3.0,
     use_isoellipse: bool = False,
     ground_truth: bool = False,
@@ -196,7 +196,7 @@ def get_tile_assignments(
     tile_size: int = 32,
     covs_2d: torch.Tensor | None = None,
     opacities: torch.Tensor | None = None,
-    contrib_floor: float = 1.0 / 3000.0,
+    contrib_floor: float = 1.0 / 16384.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Assign each visible Gaussian to the screen tiles it overlaps.
@@ -566,14 +566,14 @@ def microblock_cull(
     tiles_x: int,
     tiles_y: int,
     tile_size: int = 32,
-    mb_contrib_floor: float = 1.0 / 3000.0,
+    mb_contrib_floor: float = 1.0 / 16384.0,
     contrib_floor: float = 15.0 / 255.0,
     sub_timings: dict[str, float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor, dict]:
     """Per-microblock Mahalanobis cull; emit mb_header and mb_stream.
 
     `mb_contrib_floor` is the tight per-microblock keep threshold (default
-    1/3000). Hero hits ~63 dB at 1/4096 but a few off-axis benchmark views
+    1/16384). Hero hits ~63 dB at 1/4096 but a few off-axis benchmark views
     (chal_bottom, orbit_*) need a tighter floor to stay ≥ 60 dB on the full
     30-frame sweep. `contrib_floor`
     is retained for backwards compatibility with callers that want the looser
