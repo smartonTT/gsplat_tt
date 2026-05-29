@@ -119,7 +119,22 @@ upload). The "TT port" is barely started.
   migrate to core-partial+device scan. Pairs ~51MB DRAM (preallocate P_max).
   WIN fully lands only with M3b resident project + M6 device sort (else pair D2H
   negates the 87ms). Do NOT combine S2 (cull correctness) with S4 (residency).
-- [ ] M6 Device sort (per-tile depth) with resident sorted lists.
+- [ ] M6 Device sort (per-tile depth) with resident sorted lists. DESIGN DONE
+  (read-only subagent). KEY: sort's value is RESIDENCY (eliminate ~77MB/frame
+  pair D2H + sorted H2D), NOT the ~8ms compute (device radix won't beat tuned
+  AVX2). Algorithm = bin pairs by tile_id (count -> prefix-sum -> stable
+  chunk-order scatter) then per-tile STABLE LSD radix (4x8-bit) on
+  bitcast(depth) front-to-back; insertion sort for n<=16. Output:
+  sorted_gaussian_ids[P] (global concat of per-tile segments) + tile_ranges
+  (start,end per tile). Staged: S0 register sort outputs in device_state + CPU
+  sort writes them resident (zero PSNR risk, immediate blend-read win) -> S1
+  GSPLAT_TT_DEVICE_SORT=1 host-bin + DEVICE per-tile radix (LPT tile->core,
+  skip empty tiles to avoid CB deadlock; worst tile ~11k fits L1 ~264KB) ->
+  S2 device count+scatter (host prefix on 1024 counts ~0.01ms) -> S3 full device.
+  GSPLAT_TT_SORT_VERIFY=1 asserts byte-identical vs CPU. New
+  src/gsplat_tt/sort_device.cpp + reader/compute(radix)/writer kernels. Port the
+  device kernel AFTER M5 tile_assign residency (else 8ms saved but 51MB D2H
+  remains). Reuse blend LPT (compute_lpt_assignment) + pfwc no-download pattern.
 - [ ] M7 Fuse into a single resident program; camera in, image out; no python loop.
 
 ## Loop protocol (autonomous)
