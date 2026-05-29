@@ -137,6 +137,28 @@ upload). The "TT port" is barely started.
   remains). Reuse blend LPT (compute_lpt_assignment) + pfwc no-download pattern.
 - [ ] M7 Fuse into a single resident program; camera in, image out; no python loop.
 
+## Residency integration pass (DESIGN DONE — the actual speedup)
+
+Each ported stage today is gated independently and pays a full host<->device
+boundary tax (D2H then H2D), so enabling one alone REGRESSES (proven: device
+project alone = 400ms). The win is keeping intermediates RESIDENT in DRAM
+(device_state keys) and reading them stage-to-stage over NoC. Removes ~400MB+/
+frame of transfers; hero DRAM budget ~400-500MB peak (alias blend_attrs<->proj_m_*,
+drop pfwc_* after gather). CRITICAL PATH: on-device gather_visible (N->M compact,
+replaces host project_finish) -> resident tile_assign in/out -> resident sort ->
+resident blend. Hierarchical gates under master GSPLAT_TT_RESIDENT=1
+(+ per-stage GSPLAT_TT_RESIDENT_{PROJECT,GATHER,TA_IN,TA_OUT,SORT,BLEND}), CPU
+fallback, GSPLAT_TT_RESIDENT_VERIFY=1 for per-stage parity. Standardize device ids
+on uint32; gids are M-local in increasing-N order (sort uses depths[gid]).
+STAGED: R0 key registry/device_state grow -> R1 pfwc null-D2H in fused path ->
+R2a host-finisher writes into registered proj_m_* (validate keys/PSNR) ->
+R2b NEW gather_visible_device.cpp kernel (valid_mask+prefix+compact on device) ->
+R3 tile_assign reads proj_m_* over NoC (drop M H2D) -> R4 register ta_gids/ta_tids
+(drop pair D2H) -> R5a CPU sort writes sort_* resident -> R5b device radix ->
+R6 blend reads resident attrs+ids (drop per-frame upload) -> R7 unified resident
+dispatch in render_full_py -> R8 on-device prefix/compaction -> R9 single fused
+program. R2b (device gather_visible) is the next critical-path port after sort.
+
 ## Loop protocol (autonomous)
 
 1. Measure: run `a003_verify.py --views 1` with `GSPLAT_TT_MB_TIMING=1`; read the
