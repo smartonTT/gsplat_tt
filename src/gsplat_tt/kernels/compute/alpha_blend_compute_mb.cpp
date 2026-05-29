@@ -38,7 +38,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
-#if defined(MB_DEBUG_DPRINT) || defined(MB_DEBUG_PAGEDBG)
+#if defined(MB_DEBUG_DPRINT)
 #include "api/debug/dprint.h"
 #endif
 #include "api/compute/cb_api.h"
@@ -63,11 +63,6 @@ constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock cou
 constexpr uint32_t CB_COLOR_OUT = 16;
 
 constexpr uint32_t NUM_MB = 32;
-
-// Gaussian rows per streamed CB page (MUST match COEFF_PAGE_ROWS in
-// blend_device.cpp / reader_alpha_blend_mb.cpp). One CB page == one big DRAM read.
-constexpr uint32_t CHUNK_ROWS = 64;
-constexpr uint32_t COEFF_ROW_BYTES_MB = 64;  // 16 words: 10 coeff + mask + pad
 
 // Volatile sink so profiling variants can't dead-code-eliminate the coeff loads.
 volatile uint32_t g_prof_sink = 0;
@@ -256,25 +251,9 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #endif
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
     uint32_t shown = 0;  // debug "frontmost-per-microblock" tracking only
-    // Page cursor: one CB handshake per CHUNK_ROWS-row page (filled by one big DRAM
-    // read in the reader). Rows within a page are read from L1 by direct indexing.
-    const uint32_t* base = nullptr;
-    uint32_t idx = 0, chunk_n = 0, remaining = num_g;
-    bool loaded = false;
     for (uint32_t g = 0; g < num_g; g++) {
-        if (idx >= chunk_n) {
-            if (loaded) {
-                cb_pop_front(CB_MB_COEFF, 1);
-            }
-            chunk_n = remaining < CHUNK_ROWS ? remaining : CHUNK_ROWS;
-            cb_wait_front(CB_MB_COEFF, 1);
-            base = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
-            remaining -= chunk_n;
-            idx = 0;
-            loaded = true;
-        }
-        const uint32_t* row = base + idx * (COEFF_ROW_BYTES_MB / 4);
-        idx++;
+        cb_wait_front(CB_MB_COEFF, 1);
+        const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
         // read + the full 32-way dispatch + SFPU blend. Isolates SFPU/dispatch cost.
@@ -301,8 +280,6 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #endif
         dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
 #endif
-    }
-    if (loaded) {
         cb_pop_front(CB_MB_COEFF, 1);
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
@@ -376,9 +353,6 @@ void kernel_main() {
             auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
             num_g = cptr[0];
         }
-#if defined(MB_DEBUG_PAGEDBG)
-        MATH((DPRINT << "C" << t << "g" << num_g << "P" << ((num_g + CHUNK_ROWS - 1) / CHUNK_ROWS) << ENDL()));
-#endif
 
         cb_wait_front(CB_XRAMP, 1);
         cb_wait_front(CB_YRAMP, 1);
@@ -397,19 +371,18 @@ void kernel_main() {
         copy_tile_to_dst_init_short(CB_YRAMP);
         copy_tile(CB_YRAMP, 0, 5);
 
-#if defined(MB_DEBUG_VECMAP) || defined(MB_DEBUG_RAMP)
 #if defined(MB_DEBUG_VECMAP)
         MATH((debug_vecmap()));
-#else
-        debug_all_microblocks<0>();
-#endif
-        // Still drain CB_MB_COEFF (one CB page per COEFF_PAGE_ROWS rows) so the
-        // page-streaming reader doesn't deadlock.
-        for (uint32_t rem = num_g; rem > 0;) {
-            const uint32_t n = rem < CHUNK_ROWS ? rem : CHUNK_ROWS;
+        // Still drain CB_MB_COEFF so the reader doesn't deadlock.
+        for (uint32_t i = 0; i < num_g; i++) {
             cb_wait_front(CB_MB_COEFF, 1);
             cb_pop_front(CB_MB_COEFF, 1);
-            rem -= n;
+        }
+#elif defined(MB_DEBUG_RAMP)
+        debug_all_microblocks<0>();
+        for (uint32_t i = 0; i < num_g; i++) {
+            cb_wait_front(CB_MB_COEFF, 1);
+            cb_pop_front(CB_MB_COEFF, 1);
         }
 #else
         process_tile_gaussians(num_g);
