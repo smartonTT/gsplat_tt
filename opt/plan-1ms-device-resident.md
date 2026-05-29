@@ -81,7 +81,28 @@ upload). The "TT port" is barely started.
 - [ ] M3b Keep project outputs (mean_2d/cov2d/depth/radii + compact colors/opac)
   RESIDENT in DRAM (skip the pfwc D2H + cov3d_unique re-upload); requires a device
   consumer (M5 tile_assign) to read them over NoC. This is where device project pays off.
-- [ ] M4 Move microblock cull + coeff computation ON-DEVICE (consume resident
+- [ ] M4 Eliminate the 200MB per-(gaussian,tile) coeff stream. DESIGN DONE
+  (read-only subagent). Per-row 64B = 10 coeff + mask(word10) + 5 pad; A,B,C,
+  opacity,rgb are PER-GAUSSIAN (identical across a gaussian's tiles), only the
+  tile-local center (mx,my) and 32-bit mask are per-PAIR. Plan: split into a
+  resident per-gaussian attr table (M*64B: a,b,c,mean_x,mean_y,opacity,rgb) +
+  a compact per-tile (gaussian_id, mask) pair stream (~3.2M*8B=26MB), reader
+  gathers attrs by id over NoC and derives tile-local center from mean - tile
+  origin (needs tiles_x as a runtime arg). Upload 205MB -> 26MB.
+  STAGED ROLLOUT (smallest-correct-first, each behind an env gate + revertible):
+    A. Pack mask into the unused word[5], drop pad words (validate mask move;
+       64B keeps 0 upload win but de-risks; 48B needs the amendment-003 align fix).
+    B. Split: attr table + (id,mask) pairs; reader gathers + assembles the SAME
+       64B CB row so the COMPUTE KERNEL IS UNCHANGED (lowest risk). ~179MB less
+       H2D/frame + host stops emitting 10 coeff floats/row. <- the real win.
+    C. On-device conic: kernel derives A,B,C from raw {a,b,c}; attrs shrink.
+    D. On-device microblock cull (host emits only sorted per-tile g lists).
+    E. Resident attrs via M3b (project writes buf_attrs; blend reads resident).
+  RISKS: NoC random gather by id (~3.2M/frame, non-sequential), 64B DRAM page
+  alignment (48B caused a silent zero-row bug before), depth-order MUST stay
+  sorted (don't reorder by id), numerical parity (keep centered conic, det floor
+  1e-6). Do NOT combine B and C in one change. Gate PSNR >= ~39.5dB each step.
+- [ ] M4-legacy Move microblock cull + coeff computation ON-DEVICE (consume resident
   attrs + sorted lists; no 200MB, no host cull). Big win + big risk.
 - [ ] M5 Device tile_assign (binning) with resident pair lists.
 - [ ] M6 Device sort (per-tile depth) with resident sorted lists.
