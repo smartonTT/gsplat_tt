@@ -38,8 +38,9 @@ try:
     REGISTRY["cpu_cpp"] = CpuCppBackend
 
     class CpuCppMbBackend(CpuCppBackend):
-        def __init__(self):
-            super().__init__(microblock=True)
+        def __init__(self, **kwargs):
+            kwargs["microblock"] = True
+            super().__init__(**kwargs)
 
     REGISTRY["cpu_cpp_mb"] = CpuCppMbBackend
 except (ImportError, ModuleNotFoundError, AssertionError):

@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -14,8 +15,10 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -226,15 +229,31 @@ static void build_program_and_workload(DeviceContext& ctx) {
     }
     cb_tile_bf16(CB_POWER, 2);
 
-    // ---- Precision-critical CBs: fp32 ----
-    cb_tile_fp32(CB_ALPHA, 2);
-    cb_tile_fp32(CB_CONTRIB, 1);
-    cb_tile_fp32(CB_ONE_MINUS_ALPHA, 1);
-    cb_tile_fp32(CB_T_TMP, 1);
-    cb_tile_fp32(CB_COLOR_R_STATE, 1);
-    cb_tile_fp32(CB_COLOR_G_STATE, 1);
-    cb_tile_fp32(CB_COLOR_B_STATE, 1);
-    cb_tile_fp32(CB_T_STATE, 1);
+    // metal-iter-000 baseline: all tile CBs bf16 + no fp32_dest_acc. The tt-001b
+    // fp32 state/alpha CB experiment corrupts rows >= 8 on Blackhole and is
+    // opt-in via GSPLAT_TT_BLEND_FP32=1.
+    const char* blend_fp32_env = std::getenv("GSPLAT_TT_BLEND_FP32");
+    const bool blend_fp32 = blend_fp32_env != nullptr && blend_fp32_env[0] == '1';
+
+    if (blend_fp32) {
+        cb_tile_fp32(CB_ALPHA, 2);
+        cb_tile_fp32(CB_CONTRIB, 1);
+        cb_tile_fp32(CB_ONE_MINUS_ALPHA, 1);
+        cb_tile_fp32(CB_T_TMP, 1);
+        cb_tile_fp32(CB_COLOR_R_STATE, 1);
+        cb_tile_fp32(CB_COLOR_G_STATE, 1);
+        cb_tile_fp32(CB_COLOR_B_STATE, 1);
+        cb_tile_fp32(CB_T_STATE, 1);
+    } else {
+        cb_tile_bf16(CB_ALPHA, 2);
+        cb_tile_bf16(CB_CONTRIB, 1);
+        cb_tile_bf16(CB_ONE_MINUS_ALPHA, 1);
+        cb_tile_bf16(CB_T_TMP, 1);
+        cb_tile_bf16(CB_COLOR_R_STATE, 1);
+        cb_tile_bf16(CB_COLOR_G_STATE, 1);
+        cb_tile_bf16(CB_COLOR_B_STATE, 1);
+        cb_tile_bf16(CB_T_STATE, 1);
+    }
 
     cb_tile_bf16(CB_SAT_MASK, 1);  // 0/1 mask; bf16 exact.
 
@@ -280,19 +299,36 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // The vector must be sized to the full buf_formats table (64); tt-metal
     // asserts on a mismatch at program build time.
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
-    for (uint32_t cb : {CB_ALPHA, CB_CONTRIB, CB_ONE_MINUS_ALPHA, CB_T_TMP,
-                        CB_COLOR_R_STATE, CB_COLOR_G_STATE, CB_COLOR_B_STATE,
-                        CB_T_STATE}) {
-        u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
+    if (blend_fp32) {
+        for (uint32_t cb : {CB_ALPHA, CB_CONTRIB, CB_ONE_MINUS_ALPHA, CB_T_TMP,
+                            CB_COLOR_R_STATE, CB_COLOR_G_STATE, CB_COLOR_B_STATE,
+                            CB_T_STATE}) {
+            u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
+        }
     }
+
+    // DST-persistent fp32 kernel is the default device blend: keeps R/G/B/T in
+    // fp32 DEST across the Gaussian loop -> 56-64 dB vs cpu_cpp_mb (vs ~26 dB
+    // for the legacy bf16-CB-spill kernel). Opt out with GSPLAT_TT_DST_PERSISTENT=0.
+    const char* dst_persist = std::getenv("GSPLAT_TT_DST_PERSISTENT");
+    const bool use_dst_persistent =
+        (dst_persist == nullptr) || (dst_persist[0] != '0');
+    const char* compute_kernel = use_dst_persistent
+        ? OVERRIDE_KERNEL_PREFIX
+          "kernels/compute/alpha_blend_compute_dst_persistent.cpp"
+        : OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute.cpp";
 
     ctx.compute = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute.cpp",
+        compute_kernel,
         cores,
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi3,
-            .fp32_dest_acc_en = true,
+            // DST-persistent kernel keeps R/G/B/T in fp32 DEST across the whole
+            // Gaussian loop, so it ALWAYS needs fp32 dest-acc (+ full-sync for 8
+            // fp32 DEST tiles), independent of the legacy fp32-state-CB toggle.
+            .fp32_dest_acc_en = blend_fp32 || use_dst_persistent,
+            .dst_full_sync_en = use_dst_persistent,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
         });
@@ -701,13 +737,342 @@ static double process_frame(DeviceContext& ctx, const FrameBufferInputs& f) {
     return kernel_ms;
 }
 
+// ===========================================================================
+// Microblock-major (4x8) device blend path (amendment-003 step 3).
+// Self-contained: its own program/CBs/kernels + context, selected at runtime.
+// ===========================================================================
+
+namespace mb {
+
+constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp
+constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp
+constexpr uint32_t CB_MB_COEFF  = 2;   // 48B coeff row per gaussian (mb-major)
+constexpr uint32_t CB_MB_COUNTS = 3;   // 128B = 32 uint32 per tile
+constexpr uint32_t CB_OUT       = 16;  // 3 bf16 color tiles per screen tile
+
+constexpr uint32_t COUNTS_PAGE_BYTES = 128;
+// 10 real fp32 lanes (A,B,C,mx,my,f,op,r,g,b) padded to a 64B DRAM-aligned page.
+// MUST be a multiple of the DRAM alignment (64B on Blackhole): an unaligned page
+// size (e.g. 48B) makes the interleaved per-bank page stride diverge between the
+// host EnqueueWriteBuffer layout and the device TensorAccessor, so only some rows
+// land and the rest read as zero.
+constexpr uint32_t COEFF_ROW_BYTES_MB = 64;
+constexpr uint32_t RAMP_TILE_BYTES = TILE_H * TILE_W * 4;  // fp32 32x32
+
+static void build_program_and_workload_mb(DeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+
+    auto cb_cfg = [&](uint32_t id, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+        CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
+        c.set_page_size(id, page_bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+
+    cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+    cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+    cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
+    cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
+    cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+
+    std::vector<uint32_t> reader_ct;
+    for (int i = 0; i < 6; i++) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    }
+    ctx.reader = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = reader_ct,
+        });
+
+    std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+    u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
+
+    std::map<std::string, std::string> mb_defines;
+    if (const char* dbg = std::getenv("GSPLAT_TT_MB_DEBUG")) {
+        // e.g. GSPLAT_TT_MB_DEBUG=ANALYTIC -> -DMB_DEBUG_ANALYTIC
+        mb_defines["MB_DEBUG_" + std::string(dbg)] = "1";
+    }
+    ctx.compute = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
+        cores,
+        ComputeConfig{
+            .math_fidelity = MathFidelity::HiFi3,
+            .fp32_dest_acc_en = true,
+            .dst_full_sync_en = true,
+            .unpack_to_dest_mode = u2d,
+            .math_approx_mode = false,
+            .defines = mb_defines,
+        });
+
+    std::vector<uint32_t> writer_ct;
+    TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    ctx.writer = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_alpha_blend.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = writer_ct,
+        });
+
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.workload.add_program(device_range, std::move(program));
+}
+
+static DeviceContext init_device_context_mb() {
+    DeviceContext ctx;
+    ctx.mesh_device = gsplat_tt::device_state::get_device();
+    ctx.cq = gsplat_tt::device_state::command_queue();
+    ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
+    build_program_and_workload_mb(ctx);
+    return ctx;
+}
+
+// Tile-local coordinate ramp (one 32x32 fp32 tile, row-major per-pixel,
+// identical for every screen tile): xramp[r*32+c] = c + 0.5, yramp = r + 0.5.
+// Uploaded the same per-pixel way the proven full-tile kernel uploads px/py:
+// copy_tile + pack_tile apply an identical tilization permutation to input and
+// output, so x = dst_reg[vector] yields the correct per-pixel coords for
+// whatever raster pixels that SFPU vector covers (the permutation cancels).
+// Fixed permutation tbl[devpos] = imgpos mapping a device tile-local raster
+// position (row-major i*32+j, as produced/consumed by the standard tilize/
+// untilize) to the image tile-local raster position it represents.
+//
+// WHY: a single SFPU 32-lane vector dst_reg[V] (fp32 dest) owns the 2 tile rows
+// {2*(r/2), +1} at the 16 columns of parity (V&1) -- i.e. V = 2*(r/2)+(c&1) --
+// NOT a contiguous 4x8 raster block. To run true 4x8-microblock culling we make
+// vector V compute microblock V (host index m=(my<<2)|mx, region rows
+// [my*4,+4) x cols [mx*8,+8)). The ramp upload puts microblock V's coords into
+// vector V's real pixel slots P(V); the output is scattered back here. Because
+// the device tilize (input) and untilize (output) are exact inverses at the
+// pixel level (proven: the full-tile kernel renders pixel-correct with the
+// natural ramp), the same table serves both directions.
+static const std::array<uint32_t, TILE_H * TILE_W>& mb_perm_img_of_dev() {
+    static const std::array<uint32_t, TILE_H * TILE_W> tbl = [] {
+        std::array<uint32_t, TILE_H * TILE_W> t{};
+        for (int V = 0; V < 32; ++V) {
+            // P(V): device raster positions owned by vector V, row-major.
+            std::vector<int> Pv;
+            Pv.reserve(32);
+            for (int r = 0; r < 32; ++r) {
+                for (int c = 0; c < 32; ++c) {
+                    if (2 * (r / 2) + (c & 1) == V) {
+                        Pv.push_back(r * 32 + c);
+                    }
+                }
+            }
+            // T(V): microblock V's true 4x8 raster block, row-major.
+            const int my = V >> 2;   // row-band (4 rows)
+            const int mx = V & 3;    // col-group (8 cols)
+            std::vector<int> Tv;
+            Tv.reserve(32);
+            for (int dr = 0; dr < 4; ++dr) {
+                for (int dc = 0; dc < 8; ++dc) {
+                    Tv.push_back((my * 4 + dr) * 32 + (mx * 8 + dc));
+                }
+            }
+            for (int k = 0; k < 32; ++k) {
+                t[static_cast<size_t>(Pv[k])] = static_cast<uint32_t>(Tv[k]);
+            }
+        }
+        return t;
+    }();
+    return tbl;
+}
+
+static std::vector<uint32_t> make_ramp(bool is_x) {
+    // Permuted ramp: at each device raster slot store the coordinate of the
+    // microblock pixel that the SFPU vector owning that slot must compute.
+    const auto& tbl = mb_perm_img_of_dev();
+    std::vector<uint32_t> r(TILE_H * TILE_W);
+    for (uint32_t dev = 0; dev < TILE_H * TILE_W; dev++) {
+        const uint32_t img = tbl[dev];
+        const uint32_t img_i = img / TILE_W;  // row
+        const uint32_t img_j = img % TILE_W;  // col
+        const float v = (is_x ? static_cast<float>(img_j) : static_cast<float>(img_i)) + 0.5f;
+        uint32_t bits;
+        std::memcpy(&bits, &v, 4);
+        r[dev] = bits;
+    }
+    return r;
+}
+
+// Microblock-permuted variant of tiles_to_image: scatters each device tile-
+// local raster slot back to its true microblock raster position via the fixed
+// permutation, then places the tile into the full image.
+static std::vector<float> tiles_to_image_mb(
+    const std::vector<uint16_t>& result_bf16,
+    uint32_t num_tiles,
+    uint32_t tiles_x,
+    uint32_t image_h,
+    uint32_t image_w) {
+    const auto& tbl = mb_perm_img_of_dev();
+    std::vector<float> img(static_cast<size_t>(image_h) * image_w * 3, 0.0f);
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        const uint32_t ty = t / tiles_x;
+        const uint32_t tx = t % tiles_x;
+        for (uint32_t ch = 0; ch < 3; ch++) {
+            const auto fp = bf16_tile_to_fp32(&result_bf16[(3 * t + ch) * TILE_H * TILE_W]);
+            for (uint32_t dev = 0; dev < TILE_H * TILE_W; dev++) {
+                const uint32_t imgpos = tbl[dev];
+                const uint32_t i = imgpos / TILE_W;
+                const uint32_t j = imgpos % TILE_W;
+                const uint32_t y = ty * TILE_H + i;
+                const uint32_t x = tx * TILE_W + j;
+                if (y < image_h && x < image_w) {
+                    img[(static_cast<size_t>(y) * image_w + x) * 3 + ch] = fp[dev];
+                }
+            }
+        }
+    }
+    return img;
+}
+
+static double process_frame_mb(
+    DeviceContext& ctx,
+    const std::vector<uint32_t>& mb_counts,
+    const std::vector<uint32_t>& mb_coeff_off,
+    const std::vector<float>& mb_coeff_stream,
+    uint32_t num_tiles,
+    uint32_t tiles_x,
+    uint32_t image_h,
+    uint32_t image_w,
+    std::vector<float>& image_out) {
+    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
+    const uint32_t total_pairs = static_cast<uint32_t>(mb_coeff_stream.size() / COEFF_LANES_PER_GAUSSIAN);
+
+    // LPT cost = pairs per tile = coeff_off[t+1] - coeff_off[t].
+    std::vector<float> cost_f32(num_tiles + 1);
+    for (uint32_t t = 0; t <= num_tiles; t++) {
+        cost_f32[t] = static_cast<float>(mb_coeff_off[t]);
+    }
+    const TileAssignment assign = build_tile_assignment(cost_f32, num_tiles, num_cores);
+
+    // Allocate DRAM buffers.
+    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    };
+    const size_t counts_bytes = static_cast<size_t>(num_tiles) * mb::COUNTS_PAGE_BYTES;
+    const size_t coeff_bytes = std::max<size_t>(1, total_pairs) * mb::COEFF_ROW_BYTES_MB;
+    auto buf_counts    = make_dram(counts_bytes, mb::COUNTS_PAGE_BYTES);
+    auto buf_coeff_off = make_dram((static_cast<size_t>(num_tiles) + 1) * sizeof(uint32_t), sizeof(uint32_t));
+    auto buf_coeff     = make_dram(coeff_bytes, mb::COEFF_ROW_BYTES_MB);
+    auto buf_xramp     = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
+    auto buf_yramp     = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
+    auto buf_out       = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+    auto buf_tile_ids  = make_dram(assign.tile_id_buffer_bytes_padded, TILE_IDS_PAGE_BYTES);
+
+    // Encode payloads.
+    std::vector<uint32_t> counts_payload(counts_bytes / 4, 0);  // 32 uint32 per 128B page
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        for (uint32_t m = 0; m < NUM_MICROBLOCKS; m++) {
+            counts_payload[t * (mb::COUNTS_PAGE_BYTES / 4) + m] =
+                mb_counts[static_cast<size_t>(t) * NUM_MICROBLOCKS + m];
+        }
+    }
+    std::vector<uint32_t> coeff_payload(coeff_bytes / 4, 0);
+    for (uint32_t e = 0; e < total_pairs; e++) {
+        std::memcpy(
+            reinterpret_cast<uint8_t*>(coeff_payload.data()) + static_cast<size_t>(e) * mb::COEFF_ROW_BYTES_MB,
+            &mb_coeff_stream[static_cast<size_t>(e) * COEFF_LANES_PER_GAUSSIAN],
+            COEFF_LANES_PER_GAUSSIAN * sizeof(float));
+    }
+    std::vector<uint32_t> coeff_off_u32(mb_coeff_off);
+    auto xramp = make_ramp(/*is_x=*/true);
+    auto yramp = make_ramp(/*is_x=*/false);
+
+    Program& program = get_program_for_workload(ctx);
+    uint32_t core_index = 0;
+    const uint32_t counts_addr     = static_cast<uint32_t>(buf_counts->address());
+    const uint32_t coeff_addr      = static_cast<uint32_t>(buf_coeff->address());
+    const uint32_t coeff_off_addr  = static_cast<uint32_t>(buf_coeff_off->address());
+    const uint32_t xramp_addr      = static_cast<uint32_t>(buf_xramp->address());
+    const uint32_t yramp_addr      = static_cast<uint32_t>(buf_yramp->address());
+    const uint32_t out_addr        = static_cast<uint32_t>(buf_out->address());
+    const uint32_t tile_ids_addr   = static_cast<uint32_t>(buf_tile_ids->address());
+    for (const auto& range : ctx.all_cores.ranges()) {
+        for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+            for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                CoreCoord core{x, y};
+                const uint32_t start = assign.per_core_offset[core_index];
+                const uint32_t count = assign.per_core_count[core_index];
+                SetRuntimeArgs(program, ctx.reader, core, {
+                    counts_addr, coeff_addr, coeff_off_addr, xramp_addr, yramp_addr,
+                    tile_ids_addr, start, count, num_tiles,
+                });
+                SetRuntimeArgs(program, ctx.compute, core, {count});
+                SetRuntimeArgs(program, ctx.writer, core, {
+                    out_addr, tile_ids_addr, start, count,
+                });
+                core_index++;
+            }
+        }
+    }
+
+    const auto t_start = std::chrono::steady_clock::now();
+    std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_out,       output_zero);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_counts,    counts_payload);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_coeff_off, coeff_off_u32);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_coeff,     coeff_payload);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_xramp,     xramp);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_yramp,     yramp);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_tile_ids,  assign.tile_id_buffer_padded);
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, buf_out, /*blocking=*/true);
+    const auto t_end = std::chrono::steady_clock::now();
+
+    image_out = tiles_to_image_mb(result_bf16, num_tiles, tiles_x, image_h, image_w);
+    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
+}
+
+}  // namespace mb
+
 namespace gsplat_tt {
 
 namespace {
 std::unique_ptr<DeviceContext> g_ctx;
+std::unique_ptr<DeviceContext> g_ctx_mb;
 }  // namespace
 
-bool device_ready() { return g_ctx != nullptr; }
+bool device_ready() { return g_ctx != nullptr || g_ctx_mb != nullptr; }
+
+double blend_mb_from_payload(
+    const std::vector<uint32_t>& mb_counts,
+    const std::vector<uint32_t>& mb_coeff_off,
+    const std::vector<float>& mb_coeff_stream,
+    int num_tiles,
+    int tiles_x,
+    int image_height,
+    int image_width,
+    std::vector<float>& image_out) {
+    if (!g_ctx_mb) {
+        // Initialize the shared MeshDevice BEFORE constructing the context: the
+        // DeviceContext default-constructs a MeshWorkload member, which would
+        // otherwise create an uninitialized MetalContext (root_dir unset) if no
+        // device stage ran first.
+        (void)gsplat_tt::device_state::get_device();
+        g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
+    }
+    return ::mb::process_frame_mb(
+        *g_ctx_mb, mb_counts, mb_coeff_off, mb_coeff_stream,
+        static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
+        static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
+        image_out);
+}
 
 static DeviceContext& ensure_device() {
     if (!g_ctx) {
@@ -770,14 +1135,18 @@ double blend_from_payload(
     int image_height,
     int image_width,
     std::vector<float>& image_out) {
+    // Empty coeff/mb payloads mean "no microblock shadow" (full-tile blend);
+    // pass nullptr so use_microblock_payload() reports false.
+    const bool has_mb = !coeff_f32.empty() && !mb_header_u32.empty() &&
+                        !mb_stream_u32.empty();
     FrameBufferInputs f{
         packs_f32,
         offsets_f32,
         px_f32,
         py_f32,
-        &coeff_f32,
-        &mb_header_u32,
-        &mb_stream_u32,
+        has_mb ? &coeff_f32 : nullptr,
+        has_mb ? &mb_header_u32 : nullptr,
+        has_mb ? &mb_stream_u32 : nullptr,
         static_cast<uint32_t>(image_height),
         static_cast<uint32_t>(image_width),
         image_out,
@@ -796,6 +1165,7 @@ void device_shutdown() {
     // tracker entries (observed 2026-05-28 as "double free or corruption
     // (fasttop)" during process exit).
     g_ctx.reset();
+    g_ctx_mb.reset();
 }
 
 }  // namespace gsplat_tt

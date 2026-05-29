@@ -451,31 +451,31 @@ void kernel_main() {
 
             cb_wait_front(CB_ALPHA, 1);
 
-            // ----- Stage D1: contrib = alpha · T_state · sat_mask (SFPU fp32).
-            // Both alpha and T_state are precision-critical here — T can drop
-            // many decades over the course of front-to-back compositing, and
-            // anything we do with T must preserve fp32 through SFPU DEST. The
-            // previous FPU `mul_tiles` path truncated T to bf16 in SrcA every
-            // Gaussian, which is the primary contributor to the 39 dB PSNR
-            // observed in iter-12. sat_mask is a 0/1 indicator and stays bf16.
-            //
-            // Single acquire block — DEST holds 4 fp32 slots in dest-acc mode;
-            // we use 3 (alpha, T, sat_mask) and reuse slot 0 for products.
+            // ----- Stage D1: contrib = alpha · T_state · sat_mask.
+            // Default host config uses bf16 state CBs (row-stable on Blackhole).
+            // FPU mul_tiles is correct for bf16 operands; SFPU fp32 path is only
+            // for GSPLAT_TT_STATE_FP32=1 (higher PSNR but row>=8 corruption).
             tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_ALPHA);
-            copy_tile(CB_ALPHA, 0, 0);              // DEST[0] = alpha (fp32)
-            copy_tile_to_dst_init_short(CB_T_STATE);
-            copy_tile(CB_T_STATE, 0, 1);            // DEST[1] = T_state (fp32, no trunc)
-            mul_binary_tile(0, 1, 0);               // DEST[0] = alpha · T_state (SFPU)
-            copy_tile_to_dst_init_short(CB_SAT_MASK);
-            copy_tile(CB_SAT_MASK, 0, 2);           // DEST[2] = sat_mask
-            mul_binary_tile(0, 2, 0);               // DEST[0] = alpha·T·sat (SFPU)
+            mul_tiles_init(CB_ALPHA, CB_T_STATE);
+            mul_tiles(CB_ALPHA, CB_T_STATE, 0, 0, 0);
+            tile_regs_commit();
+            tile_regs_wait();
+            cb_reserve_back(CB_T_TMP, 1);
+            pack_tile(0, CB_T_TMP);
+            cb_push_back(CB_T_TMP, 1);
+            tile_regs_release();
+            cb_wait_front(CB_T_TMP, 1);
+
+            tile_regs_acquire();
+            mul_tiles_init(CB_T_TMP, CB_SAT_MASK);
+            mul_tiles(CB_T_TMP, CB_SAT_MASK, 0, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
             cb_reserve_back(CB_CONTRIB, 1);
             pack_tile(0, CB_CONTRIB);
             cb_push_back(CB_CONTRIB, 1);
             tile_regs_release();
+            cb_pop_front(CB_T_TMP, 1);
             cb_wait_front(CB_CONTRIB, 1);
 
             // ----- Stage D2: per-channel color accumulator update.

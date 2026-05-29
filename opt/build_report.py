@@ -381,6 +381,17 @@ def _normalize_metal_row(r: dict) -> dict:
     }
     graph_sum = sum_ms if sum_src in comparable_sum_sources else None
 
+    # Carry through per-stage subtimings (project/tile_assign/sort/blend) so the
+    # graph's subtiming lines render for the metal/Blackhole port iters too —
+    # these are the per-frame medians already (median over the 30 views).
+    per_stage = {}
+    raw_stage = r.get("per_stage_median_ms") or {}
+    if isinstance(raw_stage, dict):
+        for k in STAGE_KEYS:
+            v = raw_stage.get(k)
+            if isinstance(v, (int, float)) and v == v:
+                per_stage[k] = float(v)
+
     return {
         "iter_dir": r.get("iter_dir", ""),
         "_label": short_label,
@@ -390,7 +401,7 @@ def _normalize_metal_row(r: dict) -> dict:
         "sum_total_ms": graph_sum,
         "_sum_total_ms_any": sum_ms,
         "_sum_src": sum_src,
-        "per_stage_median_ms": {},
+        "per_stage_median_ms": per_stage,
         "psnr_per_view": {"hero": psnr} if psnr is not None else {},
         "_psnr_src": psnr_src,
         "_runtime": "blackhole",
@@ -499,13 +510,28 @@ def fig_combined(rows: list[dict]) -> str:
         "sort_ms":       "#e9c46a",
         "blend_ms":      "#2a9d8f",
     }
+    stage_marker = {
+        "project_ms":     "o",
+        "tile_assign_ms": "s",
+        "sort_ms":        "^",
+        "blend_ms":       "P",
+    }
     for k in STAGE_KEYS:
-        ys_s = [(r.get("per_stage_median_ms") or {}).get(k) for r in enriched]
-        xs_s = [x for x, y in zip(xs, ys_s) if y is not None]
-        ys_s = [y for y in ys_s if y is not None]
-        if ys_s:
-            ax_top.plot(xs_s, ys_s, marker=".", linewidth=1.0, alpha=0.65,
-                        color=stage_palette.get(k), label=k.replace("_ms", "") + " (per-frame median)")
+        ys_s_all = [(r.get("per_stage_median_ms") or {}).get(k) for r in enriched]
+        pts = [(x, y) for x, y in zip(xs, ys_s_all) if isinstance(y, (int, float)) and y == y and y > 0]
+        if not pts:
+            continue
+        xs_s = [p[0] for p in pts]
+        ys_s = [p[1] for p in pts]
+        ax_top.plot(xs_s, ys_s, marker=stage_marker.get(k, "."), markersize=5,
+                    linewidth=1.3, alpha=0.8, color=stage_palette.get(k),
+                    label=k.replace("_ms", "") + " (per-frame median)")
+        # Annotate the most-recent value of this subtiming so the breakdown is
+        # readable at a glance (these are the per-stage medians per frame).
+        lx, ly = xs_s[-1], ys_s[-1]
+        ax_top.annotate(f"{ly:.1f}", (lx, ly), xytext=(4, 3),
+                        textcoords="offset points", fontsize=6.5,
+                        color=stage_palette.get(k), fontweight="bold")
 
     ax_top.axhline(TARGET_MS_PER_FRAME, color="#e9c46a", linestyle="--", linewidth=1.0,
                    alpha=0.7, label=f"target {TARGET_MS_PER_FRAME:.0f} ms/frame")

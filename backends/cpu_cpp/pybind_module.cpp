@@ -21,6 +21,7 @@
 #include "gsplat_tt/device_state.h"
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
+#include "gsplat_tt/render_blend.h"
 #endif
 
 namespace py = pybind11;
@@ -897,7 +898,12 @@ py::tuple render_full_py(
     float transmittance_threshold,
     int max_radius,
     float k_cap,
-    bool use_isoellipse) {
+    bool use_isoellipse,
+    // amendment-003: stage dispatch selector for the fused C++ render loop.
+    // blend_mode 0 = CPU cull_and_blend (default; bit-identical to cpu_cpp_mb).
+    // blend_mode 1 = TT device microblock blend (gsplat_tt). Higher stages
+    // (tile_assign / sort / project on device) are added the same way.
+    int blend_mode = 0) {
     using clock = std::chrono::steady_clock;
     auto t0 = clock::now();
 
@@ -1005,27 +1011,57 @@ py::tuple render_full_py(
                 static_cast<std::size_t>(image_height) *
                     static_cast<std::size_t>(image_width) * 3 * sizeof(float));
 
-    // Stage 4: cull + blend.
+    // Stage 4: cull + blend. blend_mode selects the implementation; the
+    // microblock cull always runs on CPU and produces the per-(tile,
+    // microblock) kept-Gaussian structure. For blend_mode != 0 the TT device
+    // kernel consumes that same structure (added in amendment-003 step 3).
     auto t_b0 = clock::now();
-    const gsplat_cpu::CullAndBlendResult cb = gsplat_cpu::cull_and_blend(
-        proj.means_2d.data(),
-        proj.covs_2d.data(),
-        vis_colors,
-        vis_opacities,
-        sr.sorted_gaussian_ids.data(),
-        sr.tile_ranges.data(),
-        M,
-        sr.sorted_gaussian_ids.size(),
-        tiles_x,
-        tiles_y,
-        tile_size,
-        image_height,
-        image_width,
-        mb_contrib_floor,
-        global_blend_pool(),
-        /*image_out_external=*/image.mutable_data(),
-        /*cull_disabled=*/cull_disabled,
-        /*transmittance_threshold=*/transmittance_threshold);
+    gsplat_cpu::CullAndBlendResult cb;
+#ifdef GSPLAT_WITH_TT
+    if (blend_mode >= 1) {
+        cb = gsplat_tt::render_blend_tt(
+            proj.means_2d.data(),
+            proj.covs_2d.data(),
+            vis_colors,
+            vis_opacities,
+            sr.sorted_gaussian_ids.data(),
+            sr.tile_ranges.data(),
+            M,
+            sr.sorted_gaussian_ids.size(),
+            tiles_x,
+            tiles_y,
+            tile_size,
+            image_height,
+            image_width,
+            mb_contrib_floor,
+            global_blend_pool(),
+            /*image_out_external=*/image.mutable_data(),
+            /*cull_disabled=*/cull_disabled,
+            /*transmittance_threshold=*/transmittance_threshold,
+            /*blend_mode=*/blend_mode);
+    } else
+#endif
+    {
+        cb = gsplat_cpu::cull_and_blend(
+            proj.means_2d.data(),
+            proj.covs_2d.data(),
+            vis_colors,
+            vis_opacities,
+            sr.sorted_gaussian_ids.data(),
+            sr.tile_ranges.data(),
+            M,
+            sr.sorted_gaussian_ids.size(),
+            tiles_x,
+            tiles_y,
+            tile_size,
+            image_height,
+            image_width,
+            mb_contrib_floor,
+            global_blend_pool(),
+            /*image_out_external=*/image.mutable_data(),
+            /*cull_disabled=*/cull_disabled,
+            /*transmittance_threshold=*/transmittance_threshold);
+    }
     auto t_b1 = clock::now();
 
     py::dict stats;
@@ -1554,7 +1590,36 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("transmittance_threshold") = 1.0f / 255.0f,
         py::arg("max_radius") = 0,
         py::arg("k_cap") = 3.0f,
-        py::arg("use_isoellipse") = false);
+        py::arg("use_isoellipse") = false,
+        py::arg("blend_mode") = 0);
+
+    // amendment-003: fused C++ render loop for the TT backend. Identical to
+    // render_full but the C++ owns stage dispatch (no Python per-stage
+    // orchestration). blend_mode selects the blend implementation; the TT
+    // device path is only available when has_tt_support(). The default
+    // blend_mode here is read from the GSPLAT_TT_BLEND_MODE env in the Python
+    // backend so device kernels can be toggled without rebuilding.
+    m.def(
+        "render_full_tt",
+        &render_full_py,
+        py::arg("means"),
+        py::arg("cov3d"),
+        py::arg("opacities"),
+        py::arg("colors"),
+        py::arg("extrinsics"),
+        py::arg("intrinsics"),
+        py::arg("image_height"),
+        py::arg("image_width"),
+        py::arg("tile_size") = 32,
+        py::arg("min_opacity") = 1.0f / 255.0f,
+        py::arg("contrib_floor") = 1.0f / 16384.0f,
+        py::arg("mb_contrib_floor") = 1.0f / 16384.0f,
+        py::arg("cull_disabled") = false,
+        py::arg("transmittance_threshold") = 1.0f / 255.0f,
+        py::arg("max_radius") = 0,
+        py::arg("k_cap") = 3.0f,
+        py::arg("use_isoellipse") = false,
+        py::arg("blend_mode") = 0);
 
     m.def(
         "microblock_cull",

@@ -906,26 +906,26 @@ def _packs_to_basis_coeff_rows(
     color_g: np.ndarray,
     color_b: np.ndarray,
 ) -> np.ndarray:
-    """Convert per-gaussian tile-local packs to basis-form coeff rows for metal.
+    """Convert per-gaussian tile-local packs to conic (centered) coeff rows.
 
-    Q = A·x² + B·xy + C·y² + D·x + E·y + F  with x,y tile-local px/py.
-    Host folds -0.5 into A..F so the device evaluates exp(Q) directly.
-    Returns (N, 10) fp32: A, B, C, D, E, F, opacity, R, G, B.
+    power = A·dx² + B·dx·dy + C·dy²,  dx = x-mx, dy = y-my  (tile-local px/py).
+    A=-0.5·ci_a, B=-ci_b, C=-0.5·ci_c. This centered form is algebraically
+    identical to the expanded A x²+...+F basis but numerically stable on the
+    SFPU: the expanded form's ~1e8 terms cancel to a tiny power near the
+    gaussian center (where it matters), destroying fp32 precision and turning
+    the weight into binary noise. Centered form keeps near-center terms small.
+    Returns (N, 10) fp32: A, B, C, mx, my, 0, opacity, R, G, B.
     """
     neg_half = -0.5
     a = cov_a
     b = two_cov_b  # already 2·cov_inv_b in packs
     c = cov_c
-    mx = mean_x
-    my = mean_y
     a_q = neg_half * a
     b_q = neg_half * b
     c_q = neg_half * c
-    d_q = neg_half * (-2.0 * a * mx - b * my)
-    e_q = neg_half * (-2.0 * c * my - b * mx)
-    f_q = neg_half * (a * mx * mx + b * mx * my + c * my * my)
+    zero = np.zeros_like(a_q)
     return np.stack(
-        [a_q, b_q, c_q, d_q, e_q, f_q, opacity, color_r, color_g, color_b],
+        [a_q, b_q, c_q, mean_x, mean_y, zero, opacity, color_r, color_g, color_b],
         axis=1,
     ).astype(np.float32)
 

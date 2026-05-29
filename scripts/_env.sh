@@ -14,9 +14,13 @@ __env_script="${__env_script:-$0}"
 __env_dir="$(cd "$(dirname "$__env_script")" && pwd)"
 export REPO_ROOT="$(cd "$__env_dir/.." && pwd)"
 
-# Prefer the project venv (python 3.12 + torch/numpy/viser/...). Fall back to
-# /usr/bin/python3 (Apple stock 3.9) only if the venv is missing.
-if [[ -x "$REPO_ROOT/.venv/bin/python3" ]]; then
+# Pick a working LOCAL_PY for Mac-side orchestration (report gen needs
+# numpy+matplotlib). On the Mac the `.venv` symlink points at a bh-30 path and
+# is unusable, so prefer the dedicated Mac venv `.venv-mac`. On bh-30 the real
+# `.venv` works. Fall back to /usr/bin/python3 (no deps) only as a last resort.
+if [[ -x "$REPO_ROOT/.venv-mac/bin/python3" ]]; then
+  export LOCAL_PY="$REPO_ROOT/.venv-mac/bin/python3"
+elif [[ -x "$REPO_ROOT/.venv/bin/python3" ]]; then
   export LOCAL_PY="$REPO_ROOT/.venv/bin/python3"
 elif [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
   export LOCAL_PY="$REPO_ROOT/.venv/bin/python"

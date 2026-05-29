@@ -29,11 +29,13 @@ class TtBackend(CpuCppBackend):
     def __init__(self, **kwargs):
         kwargs.setdefault("microblock", True)
         kwargs.setdefault("fused", True)
-        # Force render_fused OFF: the fused C++ render_full() entrypoint
-        # bypasses .project()/.tile_assign()/.sort()/.blend() overrides, so
-        # any TT kernel we wire in would never execute during full-pipeline
-        # rendering. The 30-view bench would silently measure cpu_cpp_mb.
-        kwargs["render_fused"] = False
+        # amendment-003: render through the fused C++ loop `render_full_tt`
+        # (no Python in the render loop). The C++ owns stage dispatch; TT
+        # device kernels are selected inside render_full_tt via blend_mode
+        # (and, later, per-stage modes). The legacy per-stage .project()/
+        # .blend() overrides remain only as opt-in diagnostics — they are not
+        # used when render_full_tt drives the frame.
+        kwargs["render_fused"] = True
         # bh-30 hosts have 96 hardware threads but the per-tile cpu_cpp blend
         # tops out around 48 workers (measured 2026-05-28: 96=578 ms,
         # 48=514 ms, 24=518 ms, 12=684 ms hero render). Cap the pool unless
@@ -87,10 +89,70 @@ class TtBackend(CpuCppBackend):
         return unique
 
     def has_render_fused(self) -> bool:
-        # Defensive: parent class also reads self._render_fused, but make
-        # the contract explicit so any future code path that introspects
-        # this can't accidentally re-enable the fused bypass on TtBackend.
-        return False
+        # amendment-003: drive the frame through the fused C++ loop when the
+        # build exposes render_full_tt. Falls back to the Python per-stage
+        # pipeline only if the symbol is missing (e.g. a stale build).
+        return self._render_fused and hasattr(self._mod, "render_full_tt")
+
+    def _blend_mode(self) -> int:
+        """TT blend implementation selector for render_full_tt.
+
+        0 = CPU cull_and_blend (bit-identical to cpu_cpp_mb).
+        1 = TT device microblock blend kernel.
+        Controlled by GSPLAT_TT_BLEND_MODE so kernels toggle without rebuild.
+        """
+        try:
+            return int(os.environ.get("GSPLAT_TT_BLEND_MODE", "0"))
+        except ValueError:
+            return 0
+
+    def render_fused(
+        self,
+        gaussians,
+        extrinsics,
+        intrinsics,
+        image_height: int,
+        image_width: int,
+        contrib_floor: float | None = None,
+        k_cap: float = 3.0,
+        use_isoellipse: bool = False,
+    ):
+        """Single-pybind fused render via the C++ render_full_tt loop.
+
+        Mirrors CpuCppBackend.render_fused but routes through render_full_tt so
+        the C++ owns stage dispatch and TT kernels run in-loop (no Python
+        per-stage marshaling). Returns (image, stats_dict).
+        """
+        gnp = self._cached_gauss_np(gaussians)
+        extr_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        intr_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        cov3d = self._cached_cov3d(gnp["scales"], gnp["rotations"])
+
+        effective_contrib_floor = (
+            float(self._mb_contrib_floor) if self.contrib_floor_override is None
+            else float(self.contrib_floor_override)
+        )
+        image, stats = self._mod.render_full_tt(
+            gnp["means"],
+            cov3d,
+            gnp["opacities"],
+            gnp["colors"],
+            extr_np,
+            intr_np,
+            int(image_height),
+            int(image_width),
+            32,
+            float(self.min_opacity),
+            effective_contrib_floor,
+            float(self._mb_contrib_floor),
+            bool(self.cull_disabled),
+            float(self.transmittance_threshold),
+            int(self.max_radius),
+            float(self.k_cap),
+            bool(self.use_isoellipse),
+            self._blend_mode(),
+        )
+        return np.asarray(image), dict(stats)
 
     def project(
         self,

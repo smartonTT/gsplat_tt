@@ -31,7 +31,10 @@ pkill -f 'metal_example_gaussian_splatting --daemon' 2>/dev/null || true
 bash scripts/fix_tt_metal_cmake_exports.sh
 
 source .venv/bin/activate 2>/dev/null || true
-pip install -q torch numpy 2>/dev/null || true
+# pybind11 is required by src/CMakeLists.txt cmake configure (resolved via
+# `python -m pybind11 --cmakedir`). Keep it installed so the loop self-heals
+# after a fresh venv / device re-reservation.
+pip install -q torch numpy pybind11 2>/dev/null || true
 
 echo "[work] building GSPLAT_WITH_TT..."
 GSPLAT_WITH_TT=ON GSPLAT_SIMD_AVX2=ON BUILD_DIR=build-tt bash scripts/build_cpu_cpp.sh
