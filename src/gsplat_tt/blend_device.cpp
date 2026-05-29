@@ -804,7 +804,16 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         constexpr uint32_t CB_SCR_IDS = 4;
         constexpr uint32_t CB_SCR_ATTR = 5;
         cb_cfg(CB_SCR_IDS, 64, 2, DataFormat::UInt32);
-        cb_cfg(CB_SCR_ATTR, COEFF_ROW_BYTES_MB, 2, DataFormat::Float32);
+        if (resident_blend) {
+            // Pipelined double-buffered batched gather scratch: 2 chunks x 16
+            // gaussians x 9 SoA pages (64B each) = 18432B. The resident reader
+            // issues a whole chunk's reads ahead of one barrier and overlaps
+            // cull of chunk K with the in-flight reads of chunk K+1.
+            constexpr uint32_t GATHER_PAGES = 2u * 16u * 9u;  // 288 pages
+            cb_cfg(CB_SCR_ATTR, 64, GATHER_PAGES, DataFormat::Float32);
+        } else {
+            cb_cfg(CB_SCR_ATTR, COEFF_ROW_BYTES_MB, 2, DataFormat::Float32);
+        }
     }
 
     // Accessor count: resident devcull reader binds 12 DRAM-interleaved buffers

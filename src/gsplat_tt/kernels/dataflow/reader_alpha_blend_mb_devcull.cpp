@@ -93,6 +93,57 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
     noc_async_read_barrier();
     return reinterpret_cast<volatile uint32_t*>(scratch_addr)[off];
 }
+
+// Pipelined gather: number of 64B page slots per gaussian (a,b,c,px,py,op +
+// 3 AoS color pages). Same nine reads as the per-gaussian read_soa_u32 path,
+// but issued back-to-back into distinct L1 slots so ONE barrier covers the
+// whole chunk instead of paying full NoC latency per field.
+constexpr uint32_t GATHER_FIELDS = 9;
+constexpr uint32_t GATHER_SLOT_BYTES = GATHER_FIELDS * 64u;   // 576B / gaussian
+
+// Issue (no barrier) all SoA page reads for `take` gaussians into `buf_addr`.
+// Reads are left in flight; caller barriers once before consuming `buf_addr`.
+template <typename A, typename B, typename C, typename PX, typename PY,
+          typename OP, typename COL>
+inline void issue_chunk_reads(
+    const uint32_t* gids, uint32_t take, uint32_t buf_addr,
+    const A& a_acc, const B& b_acc, const C& c_acc, const PX& px_acc,
+    const PY& py_acc, const OP& op_acc, const COL& col_acc) {
+    for (uint32_t j = 0; j < take; ++j) {
+        const uint32_t g = gids[j];
+        const uint32_t s = buf_addr + j * GATHER_SLOT_BYTES;
+        const uint32_t pg = g >> 4;            // scalar SoA page (elem == g)
+        noc_async_read_tile(pg, a_acc,  s + 0u * 64u);
+        noc_async_read_tile(pg, b_acc,  s + 1u * 64u);
+        noc_async_read_tile(pg, c_acc,  s + 2u * 64u);
+        noc_async_read_tile(pg, px_acc, s + 3u * 64u);
+        noc_async_read_tile(pg, py_acc, s + 4u * 64u);
+        noc_async_read_tile(pg, op_acc, s + 5u * 64u);
+        const uint32_t e0 = g * 3u;            // AoS M*3 colors
+        noc_async_read_tile((e0 + 0u) >> 4, col_acc, s + 6u * 64u);
+        noc_async_read_tile((e0 + 1u) >> 4, col_acc, s + 7u * 64u);
+        noc_async_read_tile((e0 + 2u) >> 4, col_acc, s + 8u * 64u);
+    }
+}
+
+// Load one ids page worth of candidate ids ([<=16]) for the current tile into
+// `out`, returning the count. Self-contained read+barrier (cheap: one page).
+template <typename IDS>
+inline uint32_t load_ids_chunk(
+    const IDS& ids_acc, uint32_t id_start, uint32_t processed, uint32_t L,
+    uint32_t scratch_addr, uint32_t* out) {
+    constexpr uint32_t ids_per_page = IDS_PAGE_BYTES / 4;  // 16
+    const uint32_t global_idx = id_start + processed;
+    const uint32_t page_idx = global_idx / ids_per_page;
+    const uint32_t in_page  = global_idx % ids_per_page;
+    auto ids_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
+    noc_async_read_tile(page_idx, ids_acc, scratch_addr);
+    noc_async_read_barrier();
+    uint32_t take = ids_per_page - in_page;
+    if (take > L - processed) take = L - processed;
+    for (uint32_t i = 0; i < take; ++i) out[i] = ids_ptr[in_page + i];
+    return take;
+}
 #endif
 
 // Reproduce build_gaussian_major_tile's per-gaussian microblock cull EXACTLY.
@@ -139,6 +190,39 @@ inline uint32_t compute_microblock_mask(
     const float thresh_m2 = -2.0f * log_thresh;
     const float ci_a_safe = ci_a > 1e-12f ? ci_a : 1e-12f;
     const float ci_c_safe = ci_c > 1e-12f ? ci_c : 1e-12f;
+    // Soft-float divides on the RISC data-mover dominate the cull. The inner
+    // constrained-min recomputed two divides PER microblock, but each divide is
+    // loop-invariant: v_star = -ci_b*u_fix/ci_c_safe depends only on the column
+    // (mx, via u_fix) and u_star = -ci_b*v_fix/ci_a_safe only on the row (my,
+    // via v_fix). Hoisting them — plus the u_fix/v_fix-only polynomial terms —
+    // out of the inner loop is BIT-IDENTICAL (same operands, same op order, so
+    // same rounding => same mask) and collapses up-to-(2*Wmb*Hmb) divides per
+    // gaussian to (Wmb + Hmb).
+    const float two_ci_b = 2.0f * ci_b;
+
+    // Per-column (mx-invariant across rows) precompute.
+    bool  col_x_inside[4] = {false, false, false, false};
+    float col_u_lo[4]     = {0.0f, 0.0f, 0.0f, 0.0f};
+    float col_u_hi[4]     = {0.0f, 0.0f, 0.0f, 0.0f};
+    float col_v_star[4]   = {0.0f, 0.0f, 0.0f, 0.0f};  // unclamped -ci_b*u_fix/ci_c_safe
+    float col_t1v[4]      = {0.0f, 0.0f, 0.0f, 0.0f};  // ci_a*u_fix*u_fix
+    float col_t2v[4]      = {0.0f, 0.0f, 0.0f, 0.0f};  // (2*ci_b)*u_fix
+    for (int mx = mx_lo; mx <= mx_hi; ++mx) {
+        const float mb_ox = tx_tile + static_cast<float>(mx * 8);
+        const float u_lo = mb_ox - mean_x;
+        const float u_hi = u_lo + 8.0f;
+        const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+        col_x_inside[mx] = x_inside;
+        col_u_lo[mx] = u_lo;
+        col_u_hi[mx] = u_hi;
+        if (!cull_disabled && !x_inside) {
+            const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
+            col_v_star[mx] = -ci_b * u_fix / ci_c_safe;
+            col_t1v[mx] = ci_a * u_fix * u_fix;
+            col_t2v[mx] = two_ci_b * u_fix;
+        }
+    }
+
     uint32_t mask = 0u;
     for (int my = my_lo; my <= my_hi; ++my) {
         const float mb_oy = ty_tile + static_cast<float>(my * 4);
@@ -146,11 +230,15 @@ inline uint32_t compute_microblock_mask(
         const float v_hi = v_lo + 4.0f;
         const bool y_inside = (v_lo <= 0.0f) && (0.0f <= v_hi);
         const float v_fix = (v_lo > 0.0f) ? v_lo : v_hi;
+        // Per-row (my-invariant across columns) precompute.
+        float row_u_star = 0.0f;  // unclamped -ci_b*v_fix/ci_a_safe
+        float row_t3h = 0.0f;     // ci_c*v_fix*v_fix
+        if (!cull_disabled && !y_inside) {
+            row_u_star = -ci_b * v_fix / ci_a_safe;
+            row_t3h = ci_c * v_fix * v_fix;
+        }
         for (int mx = mx_lo; mx <= mx_hi; ++mx) {
-            const float mb_ox = tx_tile + static_cast<float>(mx * 8);
-            const float u_lo = mb_ox - mean_x;
-            const float u_hi = u_lo + 8.0f;
-            const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+            const bool x_inside = col_x_inside[mx];
 
             float m2_min;
             if (cull_disabled || (x_inside && y_inside)) {
@@ -158,20 +246,19 @@ inline uint32_t compute_microblock_mask(
             } else {
                 float m2_v = kInf;
                 if (!x_inside) {
-                    const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
-                    float v_star = -ci_b * u_fix / ci_c_safe;
+                    float v_star = col_v_star[mx];
                     if (v_star < v_lo) v_star = v_lo;
                     if (v_star > v_hi) v_star = v_hi;
-                    m2_v = ci_a * u_fix * u_fix + 2.0f * ci_b * u_fix * v_star +
+                    m2_v = col_t1v[mx] + col_t2v[mx] * v_star +
                            ci_c * v_star * v_star;
                 }
                 float m2_h = kInf;
                 if (!y_inside) {
-                    float u_star = -ci_b * v_fix / ci_a_safe;
-                    if (u_star < u_lo) u_star = u_lo;
-                    if (u_star > u_hi) u_star = u_hi;
-                    m2_h = ci_a * u_star * u_star + 2.0f * ci_b * u_star * v_fix +
-                           ci_c * v_fix * v_fix;
+                    float u_star = row_u_star;
+                    if (u_star < col_u_lo[mx]) u_star = col_u_lo[mx];
+                    if (u_star > col_u_hi[mx]) u_star = col_u_hi[mx];
+                    m2_h = ci_a * u_star * u_star + two_ci_b * u_star * v_fix +
+                           row_t3h;
                 }
                 m2_min = (m2_v < m2_h) ? m2_v : m2_h;
             }
@@ -350,6 +437,97 @@ void kernel_main() {
         cb_push_back(CB_MB_COUNTS, 1);
 
         // (4) Stream the candidate ids: gather attr, cull, emit coeff row.
+#ifdef MB_RESIDENT
+        // RESIDENT pipelined gather. The old path issued 9 blocking
+        // read+barrier pairs per gaussian (~9 full NoC latencies each) — the
+        // dominant blend cost. Here we batch one ids-page worth of gaussians
+        // (<=16) per chunk: issue all 9*take SoA page reads ahead of a SINGLE
+        // barrier, and double-buffer so the cull/emit of chunk K overlaps the
+        // in-flight reads of chunk K+1 (separate L1 buffer by parity). Same
+        // reads / same bytes / byte-identical emitted rows as before.
+        if (L > 0) {
+            const uint32_t attr_base = get_write_ptr(CB_SCR_ATTR);
+            constexpr uint32_t CHUNK_MAX = IDS_PAGE_BYTES / 4;          // 16
+            constexpr uint32_t BUF_BYTES = CHUNK_MAX * GATHER_SLOT_BYTES;
+            const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
+            uint32_t gids[2][CHUNK_MAX];
+            uint32_t take_buf[2];
+
+            uint32_t processed = 0;
+            // Prologue: load + issue chunk 0 into buffer 0.
+            take_buf[0] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[0]);
+            issue_chunk_reads(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES,
+                              a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
+            processed += take_buf[0];
+
+            uint32_t cur = 0;
+            while (take_buf[cur] > 0) {
+                noc_async_read_barrier();   // chunk `cur` attrs have landed
+                const uint32_t take = take_buf[cur];
+                const uint32_t nxt = cur ^ 1u;
+
+                // Prefetch chunk `nxt` into the other buffer (reads stay in
+                // flight while we cull/emit chunk `cur` below).
+                if (processed < L) {
+                    take_buf[nxt] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[nxt]);
+                    issue_chunk_reads(gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES,
+                                      a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
+                    processed += take_buf[nxt];
+                } else {
+                    take_buf[nxt] = 0;
+                }
+
+                const uint32_t buf = attr_base + cur * BUF_BYTES;
+                for (uint32_t j = 0; j < take; ++j) {
+                    const uint32_t g = gids[cur][j];
+                    const uint32_t s = buf + j * GATHER_SLOT_BYTES;
+                    const uint32_t lane = g & 0xF;
+                    const uint32_t cov_a_bits = reinterpret_cast<volatile uint32_t*>(s + 0u * 64u)[lane];
+                    const uint32_t cov_b_bits = reinterpret_cast<volatile uint32_t*>(s + 1u * 64u)[lane];
+                    const uint32_t cov_c_bits = reinterpret_cast<volatile uint32_t*>(s + 2u * 64u)[lane];
+                    const uint32_t mx_bits    = reinterpret_cast<volatile uint32_t*>(s + 3u * 64u)[lane];
+                    const uint32_t my_bits    = reinterpret_cast<volatile uint32_t*>(s + 4u * 64u)[lane];
+                    const uint32_t op_bits    = reinterpret_cast<volatile uint32_t*>(s + 5u * 64u)[lane];
+                    const uint32_t e0 = g * 3u;
+                    const uint32_t cr = reinterpret_cast<volatile uint32_t*>(s + 6u * 64u)[(e0 + 0u) & 0xF];
+                    const uint32_t cg = reinterpret_cast<volatile uint32_t*>(s + 7u * 64u)[(e0 + 1u) & 0xF];
+                    const uint32_t cb = reinterpret_cast<volatile uint32_t*>(s + 8u * 64u)[(e0 + 2u) & 0xF];
+
+                    const float cov_a  = bits_to_f(cov_a_bits);
+                    const float cov_b  = bits_to_f(cov_b_bits);
+                    const float cov_c  = bits_to_f(cov_c_bits);
+                    const float mean_x = bits_to_f(mx_bits);
+                    const float mean_y = bits_to_f(my_bits);
+                    const float opac   = bits_to_f(op_bits);
+
+                    const uint32_t mask = compute_microblock_mask(
+                        cov_a, cov_b, cov_c, mean_x, mean_y, opac, tx_tile, ty_tile,
+                        contrib_floor, cull_disabled);
+
+                    cb_reserve_back(CB_MB_COEFF, 1);
+                    auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+                    row[0] = cov_a_bits;                         // raw cov_a
+                    row[1] = cov_b_bits;                         // raw cov_b
+                    row[2] = cov_c_bits;                         // raw cov_c
+                    row[3] = f_to_bits(mean_x - tx_tile);        // mx_local
+                    row[4] = f_to_bits(mean_y - ty_tile);        // my_local
+                    row[5] = 0u;
+                    row[6] = op_bits;                            // opacity
+                    row[7] = cr;
+                    row[8] = cg;
+                    row[9] = cb;
+                    row[10] = mask;
+                    row[11] = 0u;
+                    row[12] = 0u;
+                    row[13] = 0u;
+                    row[14] = 0u;
+                    row[15] = 0u;
+                    cb_push_back(CB_MB_COEFF, 1);
+                }
+                cur = nxt;
+            }
+        }
+#else
         const uint32_t ids_per_page = IDS_PAGE_BYTES / 4;  // 16
         uint32_t processed = 0;
         while (processed < L) {
@@ -366,41 +544,21 @@ void kernel_main() {
             for (uint32_t j = 0; j < take; j++) {
                 const uint32_t g = ids_ptr[in_page + j];
 
-                // Gather this gaussian's attributes (raw cov a,b,c, image-space
-                // center, opacity, color rgb) as raw 32-bit words.
-                uint32_t cov_a_bits, cov_b_bits, cov_c_bits;
-                uint32_t mx_bits, my_bits, op_bits, cr, cg, cb;
-#ifdef MB_RESIDENT
-                // Gather straight from the resident per-component SoA buffers by
-                // id g. Byte-identical to the values the host attr table carried
-                // (proj_finish output == gather_visible output). colors are AoS
-                // M*3, so element index is g*3 + channel.
-                const uint32_t scr = get_write_ptr(CB_SCR_ATTR);
-                cov_a_bits = read_soa_u32(a_acc,  g, scr);
-                cov_b_bits = read_soa_u32(b_acc,  g, scr);
-                cov_c_bits = read_soa_u32(c_acc,  g, scr);
-                mx_bits    = read_soa_u32(px_acc, g, scr);
-                my_bits    = read_soa_u32(py_acc, g, scr);
-                op_bits    = read_soa_u32(op_acc, g, scr);
-                cr         = read_soa_u32(col_acc, g * 3u + 0u, scr);
-                cg         = read_soa_u32(col_acc, g * 3u + 1u, scr);
-                cb         = read_soa_u32(col_acc, g * 3u + 2u, scr);
-#else
                 // Gather attr[g] (64B) into the private attr scratch.
                 const uint32_t attr_scratch = get_write_ptr(CB_SCR_ATTR);
                 auto attr_ptr = reinterpret_cast<volatile uint32_t*>(attr_scratch);
                 noc_async_read_tile(g, attrs_acc, attr_scratch);
                 noc_async_read_barrier();
-                cov_a_bits = attr_ptr[0];
-                cov_b_bits = attr_ptr[1];
-                cov_c_bits = attr_ptr[2];
-                mx_bits    = attr_ptr[3];
-                my_bits    = attr_ptr[4];
-                op_bits    = attr_ptr[5];
-                cr         = attr_ptr[6];
-                cg         = attr_ptr[7];
-                cb         = attr_ptr[8];
-#endif
+                const uint32_t cov_a_bits = attr_ptr[0];
+                const uint32_t cov_b_bits = attr_ptr[1];
+                const uint32_t cov_c_bits = attr_ptr[2];
+                const uint32_t mx_bits    = attr_ptr[3];
+                const uint32_t my_bits    = attr_ptr[4];
+                const uint32_t op_bits    = attr_ptr[5];
+                const uint32_t cr         = attr_ptr[6];
+                const uint32_t cg         = attr_ptr[7];
+                const uint32_t cb         = attr_ptr[8];
+
                 const float cov_a  = bits_to_f(cov_a_bits);
                 const float cov_b  = bits_to_f(cov_b_bits);
                 const float cov_c  = bits_to_f(cov_c_bits);
@@ -434,5 +592,6 @@ void kernel_main() {
             }
             processed += take;
         }
+#endif
     }
 }
