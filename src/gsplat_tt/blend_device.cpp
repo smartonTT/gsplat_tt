@@ -1057,6 +1057,7 @@ static double process_frame_mb(
         }
     }
 
+    const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
     const auto t_start = std::chrono::steady_clock::now();
     std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_out,       output_zero);
@@ -1066,10 +1067,31 @@ static double process_frame_mb(
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_xramp,     xramp);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_yramp,     yramp);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_tile_ids,  assign.tile_id_buffer_padded);
+    std::chrono::steady_clock::time_point t_upload = t_start;
+    if (timing) {
+        distributed::Finish(*ctx.cq);  // force all H2D uploads to complete
+        t_upload = std::chrono::steady_clock::now();
+    }
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    std::chrono::steady_clock::time_point t_exec = t_upload;
+    if (timing) {
+        distributed::Finish(*ctx.cq);  // force workload (blend kernels) to complete
+        t_exec = std::chrono::steady_clock::now();
+    }
     std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, buf_out, /*blocking=*/true);
     const auto t_end = std::chrono::steady_clock::now();
+
+    if (timing) {
+        auto ms = [](auto a, auto b) {
+            return std::chrono::duration<double, std::milli>(b - a).count();
+        };
+        const double coeff_mb = static_cast<double>(coeff_bytes) / (1024.0 * 1024.0);
+        std::fprintf(stderr,
+            "[BLEND_SPLIT] upload=%.1f (coeff=%.1fMB pages=%u) exec=%.1f readback=%.1f total=%.1f ms\n",
+            ms(t_start, t_upload), coeff_mb, total_pages,
+            ms(t_upload, t_exec), ms(t_exec, t_end), ms(t_start, t_end));
+    }
 
     image_out = tiles_to_image_mb(result_bf16, num_tiles, tiles_x, image_h, image_w);
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
