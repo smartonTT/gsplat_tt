@@ -110,6 +110,7 @@ if(GSPLAT_WITH_TT)
     gsplat_tt/blend_device.cpp
     gsplat_tt/project_device.cpp
     gsplat_tt/pfwc_device.cpp
+    gsplat_tt/tile_assign_device.cpp
     gsplat_tt/device_state.cpp
     gsplat_tt/render_blend.cpp
     gsplat_tt/mb_payload.cpp

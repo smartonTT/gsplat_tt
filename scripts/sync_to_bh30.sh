@@ -34,6 +34,7 @@ rsync -av \
   "$REPO_ROOT/scripts/sync_to_bh30.sh" \
   "$REPO_ROOT/scripts/amendment002_diagnose_blend.sh" \
   "$REPO_ROOT/scripts/render_iter_preview.sh" \
+  "$REPO_ROOT/scripts/a003_verify.py" \
   "$REMOTE:$DST/scripts/"
 
 rsync -av \

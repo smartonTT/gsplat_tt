@@ -24,6 +24,7 @@
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
 #include "gsplat_tt/render_blend.h"
+#include "gsplat_tt/tile_assign.h"
 #endif
 
 namespace py = pybind11;
@@ -1071,18 +1072,47 @@ py::tuple render_full_py(
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
     auto t_ta0 = clock::now();
-    const gsplat_cpu::TileAssignResult ta = gsplat_cpu::tile_assign(
-        proj.means_2d.data(),
-        proj.radii.data(),
-        M,
-        image_height,
-        image_width,
-        tile_size,
-        cull_disabled ? nullptr : proj.covs_2d.data(),
-        cull_disabled ? nullptr : vis_opacities,
-        contrib_floor,
-        &global_tile_assign_pool(),
-        /*recompute_tiles_per_gaussian=*/false);
+    gsplat_cpu::TileAssignResult ta;
+    bool ta_done = false;
+#ifdef GSPLAT_WITH_TT
+    // tt-006: opt-in device tile_assign (GSPLAT_TT_DEVICE_TILE_ASSIGN=1).
+    // Produces a layout-identical TileAssignResult (same (gid,tid) pair set
+    // and gaussian-major order); falls back to CPU on device failure. Mirrors
+    // how GSPLAT_TT_DEVICE_PROJECT gates project_via_device above.
+    if (const char* dt = std::getenv("GSPLAT_TT_DEVICE_TILE_ASSIGN");
+        dt != nullptr && dt[0] == '1') {
+        bool device_ok = false;
+        gsplat_cpu::TileAssignResult ta_dev = gsplat_tt::tile_assign_tt(
+            proj.means_2d.data(),
+            proj.radii.data(),
+            M,
+            image_height,
+            image_width,
+            tile_size,
+            cull_disabled ? nullptr : proj.covs_2d.data(),
+            cull_disabled ? nullptr : vis_opacities,
+            contrib_floor,
+            &device_ok);
+        if (device_ok) {
+            ta = std::move(ta_dev);
+            ta_done = true;
+        }
+    }
+#endif
+    if (!ta_done) {
+        ta = gsplat_cpu::tile_assign(
+            proj.means_2d.data(),
+            proj.radii.data(),
+            M,
+            image_height,
+            image_width,
+            tile_size,
+            cull_disabled ? nullptr : proj.covs_2d.data(),
+            cull_disabled ? nullptr : vis_opacities,
+            contrib_floor,
+            &global_tile_assign_pool(),
+            /*recompute_tiles_per_gaussian=*/false);
+    }
     auto t_ta1 = clock::now();
 
     // Stage 3: sort + bin.
@@ -1325,6 +1355,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         gsplat_tt::device_shutdown();
         gsplat_tt::project_device_shutdown();
         gsplat_tt::pfwc_device_shutdown();
+        gsplat_tt::tile_assign_device_shutdown();
         gsplat_tt::device_state::shutdown();
     });
 
