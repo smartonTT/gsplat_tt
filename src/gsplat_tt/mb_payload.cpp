@@ -198,6 +198,7 @@ void build_gaussian_major_tile(
     const int64_t* tile_ranges,
     float mb_contrib_floor,
     bool cull_disabled,
+    bool device_conic,
     GmTileOut& out) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
@@ -229,10 +230,20 @@ void build_gaussian_major_tile(
         const float my_local = mean_y - ty_tile;
 
         // Centered conic form -- identical arithmetic to build_tile rows[0..9].
+        // DEVCONIC gate: ship the RAW covariance {a,b,c} instead of the conic
+        // A,B,C; the device kernel recomputes det + A,B,C bit-for-bit from them.
+        // The host cull below still uses the conic (ci_*) internally, so the
+        // kept microblock set / mask is byte-identical to the non-DEVCONIC path.
         float coeff[kMbCoeffLanes];
-        coeff[0] = -0.5f * ci_a;  // A
-        coeff[1] = -ci_b;         // B
-        coeff[2] = -0.5f * ci_c;  // C
+        if (device_conic) {
+            coeff[0] = a;  // raw cov_a
+            coeff[1] = b;  // raw cov_b
+            coeff[2] = c;  // raw cov_c
+        } else {
+            coeff[0] = -0.5f * ci_a;  // A
+            coeff[1] = -ci_b;         // B
+            coeff[2] = -0.5f * ci_c;  // C
+        }
         coeff[3] = mx_local;      // gaussian center x (tile-local)
         coeff[4] = my_local;      // gaussian center y (tile-local)
         coeff[5] = 0.0f;          // unused
@@ -416,7 +427,8 @@ GaussianMajorPayload build_gaussian_major_payload(
     int tile_size,
     float mb_contrib_floor,
     gsplat_cpu::ThreadPool& pool,
-    bool cull_disabled) {
+    bool cull_disabled,
+    bool device_conic) {
     const int num_tiles = tiles_x * tiles_y;
     GaussianMajorPayload p;
     p.pairs_in = static_cast<int64_t>(P);
@@ -435,7 +447,7 @@ GaussianMajorPayload build_gaussian_major_payload(
                 build_gaussian_major_tile(
                     t, tiles_x, tile_size, means_2d, covs_2d, colors,
                     opacities, sorted_gaussian_ids, tile_ranges,
-                    mb_contrib_floor, cull_disabled,
+                    mb_contrib_floor, cull_disabled, device_conic,
                     outs[static_cast<std::size_t>(t)]);
             }
         });

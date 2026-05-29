@@ -32,6 +32,10 @@ namespace gsplat_tt {
 constexpr int kMbNumMicroblocks = 32;
 constexpr int kMbCoeffLanes = 10;  // A,B,C,D,E,F,opacity,cr,cg,cb
 constexpr int kMbGmLanes = 16;     // gaussian-major row: 10 coeff + mask + 5 pad
+// Per-gaussian attribute row for the device-cull path: raw cov {a,b,c}, image-
+// space center {mean_x,mean_y}, opacity, color {r,g,b} = 9 fp32, padded to a
+// 16-float (64B DRAM-aligned) page.
+constexpr int kMbAttrLanes = 16;
 
 struct MbPayload {
     // Per-tile coefficient table: one row of kMbCoeffLanes floats per local
@@ -108,6 +112,12 @@ struct GaussianMajorPayload {
 };
 
 // Fused cull + gaussian-major emit. Same projected inputs as build_mb_payload.
+//
+// When device_conic is true (GSPLAT_TT_MB_DEVCONIC gate), words[0..2] of each
+// emitted row carry the RAW 2D covariance {cov_a,cov_b,cov_c} instead of the
+// precomputed conic A,B,C; the device compute kernel derives det + A,B,C from
+// them at row load. The host-side microblock cull (which still runs here)
+// continues to use the conic internally, so the kept set is unchanged.
 GaussianMajorPayload build_gaussian_major_payload(
     const float* means_2d,
     const float* covs_2d,
@@ -121,7 +131,8 @@ GaussianMajorPayload build_gaussian_major_payload(
     int tile_size,
     float mb_contrib_floor,
     gsplat_cpu::ThreadPool& pool,
-    bool cull_disabled);
+    bool cull_disabled,
+    bool device_conic = false);
 
 // CPU reference blend FROM the payload (basis form). Validates the payload +
 // basis math against cull_and_blend before the device kernel consumes the

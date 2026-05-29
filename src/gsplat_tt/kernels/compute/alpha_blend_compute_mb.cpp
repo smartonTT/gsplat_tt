@@ -154,9 +154,31 @@ inline void blend_one_gaussian_math(
     // sfpi emit a non-uniform per-lane load (the value is not broadcast to all
     // 32 lanes), which is harmless for the gentle center subtraction but, once
     // multiplied by dx^2 (up to ~1e3), explodes into per-lane noise.
+#if defined(MB_DEVCONIC)
+    // DEVCONIC: a_bits/b_bits/c_bits carry the RAW 2D covariance {cov_a,cov_b,
+    // cov_c}. Reproduce the host conic math bit-for-bit on the SFPU:
+    //   det  = max(cov_a*cov_c - cov_b*cov_b, 1e-6)
+    //   ci_a = cov_c/det, ci_b = -cov_b/det, ci_c = cov_a/det
+    //   A = -0.5 ci_a, B = -ci_b (= cov_b/det), C = -0.5 ci_c
+    // Reciprocal: 7-bit seed (approx_recip) + 2 Newton-Raphson iters (~24-bit),
+    // using literal 2.0 so we do NOT depend on the programmed vConstFloatPrgm0.
+    vFloat cov_a = ckernel::sfpu::Converter::as_float(a_bits);
+    vFloat cov_b = ckernel::sfpu::Converter::as_float(b_bits);
+    vFloat cov_c = ckernel::sfpu::Converter::as_float(c_bits);
+    vFloat det = cov_a * cov_c - cov_b * cov_b;
+    vFloat det_floor = 1e-6f;
+    vec_min_max(det_floor, det);  // det = max(det, 1e-6)
+    vFloat inv = approx_recip(det);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    vFloat A = vFloat(-0.5f) * (cov_c * inv);
+    vFloat B = cov_b * inv;
+    vFloat C = vFloat(-0.5f) * (cov_a * inv);
+#else
     vFloat A  = ckernel::sfpu::Converter::as_float(a_bits);
     vFloat B  = ckernel::sfpu::Converter::as_float(b_bits);
     vFloat C  = ckernel::sfpu::Converter::as_float(c_bits);
+#endif
     vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
     vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
     vFloat dx = x - mx;

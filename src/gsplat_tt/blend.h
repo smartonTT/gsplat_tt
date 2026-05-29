@@ -33,6 +33,27 @@ double blend_mb_from_payload(
     int image_width,
     std::vector<float>& image_out);
 
+// Device microblock-cull blend (GSPLAT_TT_MB_DEVCULL gate). The host ships only
+// compact per-gaussian attributes + per-tile depth-sorted gaussian-id lists; the
+// device reader gathers each gaussian's attributes, computes the conic + the
+// 32-bit microblock-coverage mask on-core (bit-identical to the host cull), and
+// the SFPU compute kernel blends exactly as the standard mb path. This removes
+// the host conic/cull and the ~200MB per-frame coeff-row upload.
+//   attrs:   M * kMbAttrLanes fp32 (per visible gaussian, 64B page)
+//   ids:     concatenated per-tile depth-sorted compact gaussian ids (uint32)
+//   ids_off: num_tiles + 1 prefix-sum offsets into ids
+double blend_mb_devcull_from_payload(
+    const std::vector<float>& attrs,
+    const std::vector<uint32_t>& ids,
+    const std::vector<uint32_t>& ids_off,
+    float contrib_floor,
+    bool cull_disabled,
+    int num_tiles,
+    int tiles_x,
+    int image_height,
+    int image_width,
+    std::vector<float>& image_out);
+
 void device_shutdown();
 
 bool device_ready();

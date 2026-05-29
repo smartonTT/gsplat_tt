@@ -1,0 +1,330 @@
+// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+// Device-cull microblock-major alpha-blend READER (GSPLAT_TT_MB_DEVCULL).
+//
+// Unlike reader_alpha_blend_mb.cpp (which streams pre-culled, pre-conic 16-word
+// rows the host built), this reader is fed ONLY compact per-gaussian attributes
+// + per-tile depth-sorted candidate id lists. For each candidate it:
+//   1. gathers attr[g] (raw cov a,b,c, image-space center, opacity, color),
+//   2. computes the conic ci_a/ci_b/ci_c (det = max(a*c-b*b,1e-6)),
+//   3. reproduces build_gaussian_major_tile's microblock cull on-core (opacity
+//      floor -> bbox -> per-microblock constrained-min Mahalanobis vs the
+//      contrib_floor threshold) to build the 32-bit microblock-coverage mask,
+//   4. emits the SAME 16-word row the standard mb compute kernel consumes:
+//        [cov_a, cov_b, cov_c, mx_local, my_local, 0, opacity, cr, cg, cb,
+//         mask, 0,0,0,0,0]
+// The compute kernel (MB_DEVCONIC) recomputes A,B,C from the raw cov on the
+// SFPU and dispatches the blend to the masked microblocks exactly as today.
+//
+// This moves the host conic + microblock cull onto the device and removes the
+// ~200MB/frame coeff-row upload (we ship M*64B attrs + P*4B ids instead).
+//
+// RUNTIME ARGS
+//   0: attrs_addr        DRAM base of per-gaussian attr pages (64B each)
+//   1: ids_addr          DRAM base of concatenated per-tile id lists (uint32)
+//   2: ids_off_addr      DRAM base of per-tile prefix-sum offsets (uint32)
+//   3: xramp_addr        DRAM base of the shared permuted xramp tile
+//   4: yramp_addr        DRAM base of the shared permuted yramp tile
+//   5: tile_ids_addr     DRAM base of this frame's LPT tile-id list (uint32)
+//   6: tile_ids_start    this core's element offset into that list
+//   7: tile_ids_count    number of tile IDs this core handles
+//   8: tiles_x           tiles per image row (for tile origin)
+//   9: contrib_floor     fp32 (bit-reinterpreted) microblock contrib floor
+//  10: cull_disabled     1 => skip the constrained-min (m2_min := 0 in bbox)
+//
+// COMPILE-TIME ARGS: 6 TensorAccessorArgs: attrs, ids, ids_off, xramp, yramp,
+// tile_ids. All DRAM-interleaved.
+
+#include <cstdint>
+
+#include "api/dataflow/dataflow_api.h"
+
+namespace {
+
+constexpr uint32_t NUM_MB = 32;
+constexpr uint32_t ATTR_PAGE_BYTES = 64;   // 16 fp32, 9 used
+constexpr uint32_t COEFF_ROW_BYTES = 64;   // 16 fp32 row the compute kernel reads
+constexpr uint32_t IDS_PAGE_BYTES = 64;    // 16 uint32 ids per page
+constexpr uint32_t RAMP_TILE_BYTES = 32 * 32 * 4;
+constexpr uint32_t TILE_SIZE = 32;
+
+constexpr uint32_t CB_XRAMP     = 0;
+constexpr uint32_t CB_YRAMP     = 1;
+constexpr uint32_t CB_MB_COEFF  = 2;
+constexpr uint32_t CB_MB_COUNTS = 3;
+constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
+constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
+
+constexpr float kInf = 1e30f;
+
+inline int ifloor(float v) {
+    int i = static_cast<int>(v);
+    if (static_cast<float>(i) > v) {
+        i -= 1;
+    }
+    return i;
+}
+
+inline float bits_to_f(uint32_t b) {
+    float f;
+    __builtin_memcpy(&f, &b, 4);
+    return f;
+}
+
+inline uint32_t f_to_bits(float f) {
+    uint32_t b;
+    __builtin_memcpy(&b, &f, 4);
+    return b;
+}
+
+// Reproduce build_gaussian_major_tile's per-gaussian microblock cull EXACTLY.
+// Returns the 32-bit microblock-coverage mask. tx_tile/ty_tile are the float
+// tile-origin pixel coords (tx*32, ty*32).
+inline uint32_t compute_microblock_mask(
+    float a, float b, float c, float mean_x, float mean_y, float opacity,
+    float tx_tile, float ty_tile, float contrib_floor, bool cull_disabled) {
+    float det = a * c - b * b;
+    if (det < 1e-6f) {
+        det = 1e-6f;
+    }
+    const float ci_a = c / det;
+    const float ci_b = -b / det;
+    const float ci_c = a / det;
+
+    if (opacity <= contrib_floor) {
+        return 0u;  // peak alpha below floor everywhere.
+    }
+
+    const float log_thresh = __builtin_logf(contrib_floor / opacity);  // <= 0
+    const float rd = __builtin_sqrtf(-2.0f * log_thresh);
+    const float a_pos = a > 0.0f ? a : 0.0f;
+    const float c_pos = c > 0.0f ? c : 0.0f;
+    const float x_half = rd * __builtin_sqrtf(a_pos);
+    const float y_half = rd * __builtin_sqrtf(c_pos);
+
+    const float bb_x_min = mean_x - x_half;
+    const float bb_x_max = mean_x + x_half;
+    const float bb_y_min = mean_y - y_half;
+    const float bb_y_max = mean_y + y_half;
+    int mx_lo = ifloor((bb_x_min - tx_tile) * 0.125f);
+    int mx_hi = ifloor((bb_x_max - tx_tile) * 0.125f);
+    int my_lo = ifloor((bb_y_min - ty_tile) * 0.25f);
+    int my_hi = ifloor((bb_y_max - ty_tile) * 0.25f);
+    if (mx_lo < 0) mx_lo = 0;
+    if (mx_hi > 3) mx_hi = 3;
+    if (my_lo < 0) my_lo = 0;
+    if (my_hi > 7) my_hi = 7;
+    if (mx_lo > mx_hi || my_lo > my_hi) {
+        return 0u;
+    }
+
+    const float thresh_m2 = -2.0f * log_thresh;
+    const float ci_a_safe = ci_a > 1e-12f ? ci_a : 1e-12f;
+    const float ci_c_safe = ci_c > 1e-12f ? ci_c : 1e-12f;
+    uint32_t mask = 0u;
+    for (int my = my_lo; my <= my_hi; ++my) {
+        const float mb_oy = ty_tile + static_cast<float>(my * 4);
+        const float v_lo = mb_oy - mean_y;
+        const float v_hi = v_lo + 4.0f;
+        const bool y_inside = (v_lo <= 0.0f) && (0.0f <= v_hi);
+        const float v_fix = (v_lo > 0.0f) ? v_lo : v_hi;
+        for (int mx = mx_lo; mx <= mx_hi; ++mx) {
+            const float mb_ox = tx_tile + static_cast<float>(mx * 8);
+            const float u_lo = mb_ox - mean_x;
+            const float u_hi = u_lo + 8.0f;
+            const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+
+            float m2_min;
+            if (cull_disabled || (x_inside && y_inside)) {
+                m2_min = 0.0f;
+            } else {
+                float m2_v = kInf;
+                if (!x_inside) {
+                    const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
+                    float v_star = -ci_b * u_fix / ci_c_safe;
+                    if (v_star < v_lo) v_star = v_lo;
+                    if (v_star > v_hi) v_star = v_hi;
+                    m2_v = ci_a * u_fix * u_fix + 2.0f * ci_b * u_fix * v_star +
+                           ci_c * v_star * v_star;
+                }
+                float m2_h = kInf;
+                if (!y_inside) {
+                    float u_star = -ci_b * v_fix / ci_a_safe;
+                    if (u_star < u_lo) u_star = u_lo;
+                    if (u_star > u_hi) u_star = u_hi;
+                    m2_h = ci_a * u_star * u_star + 2.0f * ci_b * u_star * v_fix +
+                           ci_c * v_fix * v_fix;
+                }
+                m2_min = (m2_v < m2_h) ? m2_v : m2_h;
+            }
+            if (m2_min <= thresh_m2) {
+                mask |= (1u << ((my << 2) | mx));
+            }
+        }
+    }
+    return mask;
+}
+
+}  // namespace
+
+void kernel_main() {
+    const uint32_t attrs_addr     = get_arg_val<uint32_t>(0);
+    const uint32_t ids_addr       = get_arg_val<uint32_t>(1);
+    const uint32_t ids_off_addr   = get_arg_val<uint32_t>(2);
+    const uint32_t xramp_addr     = get_arg_val<uint32_t>(3);
+    const uint32_t yramp_addr     = get_arg_val<uint32_t>(4);
+    const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(5);
+    const uint32_t tile_ids_start = get_arg_val<uint32_t>(6);
+    const uint32_t tile_ids_count = get_arg_val<uint32_t>(7);
+    const uint32_t tiles_x        = get_arg_val<uint32_t>(8);
+    const float contrib_floor     = bits_to_f(get_arg_val<uint32_t>(9));
+    const bool cull_disabled      = get_arg_val<uint32_t>(10) != 0;
+
+    constexpr auto attrs_args    = TensorAccessorArgs<0>();
+    constexpr auto ids_args      = TensorAccessorArgs<attrs_args.next_compile_time_args_offset()>();
+    constexpr auto ids_off_args  = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
+    constexpr auto xramp_args    = TensorAccessorArgs<ids_off_args.next_compile_time_args_offset()>();
+    constexpr auto yramp_args    = TensorAccessorArgs<xramp_args.next_compile_time_args_offset()>();
+    constexpr auto tile_ids_args = TensorAccessorArgs<yramp_args.next_compile_time_args_offset()>();
+
+    const auto attrs_acc    = TensorAccessor(attrs_args,    attrs_addr,    ATTR_PAGE_BYTES);
+    const auto ids_acc      = TensorAccessor(ids_args,      ids_addr,      IDS_PAGE_BYTES);
+    const auto ids_off_acc  = TensorAccessor(ids_off_args,  ids_off_addr,  /*page=*/4);
+    const auto xramp_acc    = TensorAccessor(xramp_args,    xramp_addr,    RAMP_TILE_BYTES);
+    const auto yramp_acc    = TensorAccessor(yramp_args,    yramp_addr,    RAMP_TILE_BYTES);
+    const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, 64);
+
+    if (tile_ids_count == 0) {
+        return;
+    }
+
+    // Cache this core's tile-ID slice in L1 (private ids scratch CB).
+    constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
+    uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
+    {
+        const uint32_t scratch_addr = get_write_ptr(CB_SCR_IDS);
+        auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
+        const uint32_t ids_per_page = 64 / 4;  // 16
+        uint32_t page_idx = tile_ids_start / ids_per_page;
+        uint32_t in_page  = tile_ids_start % ids_per_page;
+        uint32_t remaining = tile_ids_count;
+        uint32_t out_idx = 0;
+        while (remaining > 0) {
+            uint64_t page_noc = get_noc_addr(page_idx, tile_ids_acc);
+            noc_async_read(page_noc, scratch_addr, 64);
+            noc_async_read_barrier();
+            uint32_t take = ids_per_page - in_page;
+            if (take > remaining) take = remaining;
+            for (uint32_t i = 0; i < take; i++) {
+                tile_ids[out_idx + i] = scratch_ptr[in_page + i];
+            }
+            out_idx   += take;
+            remaining -= take;
+            page_idx  += 1;
+            in_page    = 0;
+        }
+    }
+
+    for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
+        const uint32_t tile_id = tile_ids[ti];
+        const uint32_t tx = tile_id % tiles_x;
+        const uint32_t ty = tile_id / tiles_x;
+        const float tx_tile = static_cast<float>(tx * TILE_SIZE);
+        const float ty_tile = static_cast<float>(ty * TILE_SIZE);
+
+        // (1) Shared permuted coordinate ramps (page 0 of each ramp buffer).
+        cb_reserve_back(CB_XRAMP, 1);
+        noc_async_read_tile(0, xramp_acc, get_write_ptr(CB_XRAMP));
+        cb_reserve_back(CB_YRAMP, 1);
+        noc_async_read_tile(0, yramp_acc, get_write_ptr(CB_YRAMP));
+        noc_async_read_barrier();
+        cb_push_back(CB_XRAMP, 1);
+        cb_push_back(CB_YRAMP, 1);
+
+        // (2) Per-tile candidate id range [id_start, id_end).
+        uint32_t id_start, id_end;
+        {
+            const uint32_t off_scratch = get_write_ptr(CB_SCR_IDS);
+            auto off_ptr = reinterpret_cast<volatile uint32_t*>(off_scratch);
+            uint64_t off_noc = get_noc_addr(tile_id, ids_off_acc);
+            noc_async_read(off_noc, off_scratch, 4);
+            noc_async_read_barrier();
+            id_start = off_ptr[0];
+            off_noc = get_noc_addr(tile_id + 1, ids_off_acc);
+            noc_async_read(off_noc, off_scratch, 4);
+            noc_async_read_barrier();
+            id_end = off_ptr[0];
+        }
+        const uint32_t L = id_end - id_start;
+
+        // (3) Per-tile gaussian-row count (compute reads slot 0). One row is
+        // emitted per candidate (mask==0 candidates dispatch nothing).
+        cb_reserve_back(CB_MB_COUNTS, 1);
+        {
+            auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+            cnt_ptr[0] = L;
+        }
+        cb_push_back(CB_MB_COUNTS, 1);
+
+        // (4) Stream the candidate ids: gather attr, cull, emit coeff row.
+        const uint32_t ids_per_page = IDS_PAGE_BYTES / 4;  // 16
+        uint32_t processed = 0;
+        while (processed < L) {
+            const uint32_t global_idx = id_start + processed;
+            const uint32_t page_idx = global_idx / ids_per_page;
+            const uint32_t in_page  = global_idx % ids_per_page;
+            const uint32_t ids_scratch = get_write_ptr(CB_SCR_IDS);
+            auto ids_ptr = reinterpret_cast<volatile uint32_t*>(ids_scratch);
+            noc_async_read(get_noc_addr(page_idx, ids_acc), ids_scratch, IDS_PAGE_BYTES);
+            noc_async_read_barrier();
+            uint32_t take = ids_per_page - in_page;
+            if (take > L - processed) take = L - processed;
+
+            for (uint32_t j = 0; j < take; j++) {
+                const uint32_t g = ids_ptr[in_page + j];
+
+                // Gather attr[g] (64B) into the private attr scratch.
+                const uint32_t attr_scratch = get_write_ptr(CB_SCR_ATTR);
+                auto attr_ptr = reinterpret_cast<volatile uint32_t*>(attr_scratch);
+                noc_async_read_tile(g, attrs_acc, attr_scratch);
+                noc_async_read_barrier();
+                const float cov_a  = bits_to_f(attr_ptr[0]);
+                const float cov_b  = bits_to_f(attr_ptr[1]);
+                const float cov_c  = bits_to_f(attr_ptr[2]);
+                const float mean_x = bits_to_f(attr_ptr[3]);
+                const float mean_y = bits_to_f(attr_ptr[4]);
+                const float opac   = bits_to_f(attr_ptr[5]);
+                const uint32_t cr  = attr_ptr[6];
+                const uint32_t cg  = attr_ptr[7];
+                const uint32_t cb  = attr_ptr[8];
+
+                const uint32_t mask = compute_microblock_mask(
+                    cov_a, cov_b, cov_c, mean_x, mean_y, opac, tx_tile, ty_tile,
+                    contrib_floor, cull_disabled);
+
+                cb_reserve_back(CB_MB_COEFF, 1);
+                auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+                row[0] = attr_ptr[0];                        // raw cov_a
+                row[1] = attr_ptr[1];                        // raw cov_b
+                row[2] = attr_ptr[2];                        // raw cov_c
+                row[3] = f_to_bits(mean_x - tx_tile);        // mx_local
+                row[4] = f_to_bits(mean_y - ty_tile);        // my_local
+                row[5] = 0u;
+                row[6] = attr_ptr[5];                        // opacity
+                row[7] = cr;
+                row[8] = cg;
+                row[9] = cb;
+                row[10] = mask;
+                row[11] = 0u;
+                row[12] = 0u;
+                row[13] = 0u;
+                row[14] = 0u;
+                row[15] = 0u;
+                cb_push_back(CB_MB_COEFF, 1);
+            }
+            processed += take;
+        }
+    }
+}

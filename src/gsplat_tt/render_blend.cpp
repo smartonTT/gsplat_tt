@@ -201,11 +201,82 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
             constexpr uint32_t GM_LANES = 16;  // 10 coeff + mask + pad, 64B row
             const int num_tiles = tiles_x * tiles_y;
 
+            // DEVCONIC gate (also implied by DEVCULL): the host stops folding the
+            // conic into the row and ships the raw 2D covariance instead; the
+            // device compute kernel derives det + A,B,C on the SFPU at row load.
+            auto env_on = [](const char* n) {
+                const char* v = std::getenv(n);
+                return v != nullptr && v[0] == '1';
+            };
+            const bool device_cull = env_on("GSPLAT_TT_MB_DEVCULL");
+            const bool device_conic = device_cull || env_on("GSPLAT_TT_MB_DEVCONIC");
+
+            // DEVCULL: the host does NO conic and NO microblock cull. It only
+            // gathers a compact per-gaussian attribute table (raw cov, image-space
+            // center, opacity, color) and emits the per-tile depth-sorted
+            // candidate id lists (== sorted_gaussian_ids per tile range). The
+            // device reader computes the conic + microblock mask on-core.
+            if (device_cull) {
+                const auto _c0 = std::chrono::steady_clock::now();
+                std::vector<float> attrs(static_cast<std::size_t>(M) * kMbAttrLanes, 0.0f);
+                for (std::size_t g = 0; g < M; ++g) {
+                    float* r = &attrs[g * kMbAttrLanes];
+                    r[0] = covs_2d[g * 4 + 0];   // cov_a
+                    r[1] = covs_2d[g * 4 + 1];   // cov_b
+                    r[2] = covs_2d[g * 4 + 3];   // cov_c
+                    r[3] = means_2d[g * 2 + 0];  // mean_x (image-space)
+                    r[4] = means_2d[g * 2 + 1];  // mean_y
+                    r[5] = opacities[g];
+                    r[6] = colors[g * 3 + 0];
+                    r[7] = colors[g * 3 + 1];
+                    r[8] = colors[g * 3 + 2];
+                }
+                // Per-tile sorted candidate ids + prefix-sum offsets. The
+                // per-tile range [start,end) is exactly the order
+                // build_gaussian_major_tile iterates, pre-microblock-cull.
+                std::vector<uint32_t> ids(P);
+                std::vector<uint32_t> ids_off(static_cast<std::size_t>(num_tiles) + 1, 0);
+                uint32_t cursor = 0;
+                for (int t = 0; t < num_tiles; ++t) {
+                    const int64_t s = tile_ranges[static_cast<std::size_t>(t) * 2 + 0];
+                    const int64_t e = tile_ranges[static_cast<std::size_t>(t) * 2 + 1];
+                    ids_off[static_cast<std::size_t>(t)] = cursor;
+                    for (int64_t k = s; k < e; ++k) {
+                        ids[cursor++] =
+                            static_cast<uint32_t>(sorted_gaussian_ids[static_cast<std::size_t>(k)]);
+                    }
+                }
+                ids_off[static_cast<std::size_t>(num_tiles)] = cursor;
+                const auto _c1 = std::chrono::steady_clock::now();
+
+                std::vector<float> img;
+                blend_mb_devcull_from_payload(
+                    attrs, ids, ids_off, mb_contrib_floor, cull_disabled,
+                    num_tiles, tiles_x, image_height, image_width, img);
+                const auto _c2 = std::chrono::steady_clock::now();
+                if (mb_timing) {
+                    auto ms = [](auto a, auto b) {
+                        return std::chrono::duration<double, std::milli>(b - a).count();
+                    };
+                    std::fprintf(stderr,
+                        "[BLEND_HOST] devcull_gather=%.1f device_blend=%.1f (ids=%zu attrs=%zu) total=%.1f ms\n",
+                        ms(_c0, _c1), ms(_c1, _c2), ids.size(), static_cast<std::size_t>(M),
+                        ms(_c0, _c2));
+                }
+                const std::size_t n = static_cast<std::size_t>(image_height) *
+                                      static_cast<std::size_t>(image_width) * 3;
+                if (img.size() == n) {
+                    std::memcpy(image_out, img.data(), n * sizeof(float));
+                }
+                result.pairs_in = static_cast<int64_t>(P);
+                return result;
+            }
+
             const auto _t0 = std::chrono::steady_clock::now();
             GaussianMajorPayload gp = build_gaussian_major_payload(
                 means_2d, covs_2d, colors, opacities, sorted_gaussian_ids,
                 tile_ranges, P, tiles_x, tiles_y, tile_size, mb_contrib_floor,
-                pool, cull_disabled);
+                pool, cull_disabled, device_conic);
             const auto _t1 = std::chrono::steady_clock::now();
             result.pairs_in = gp.pairs_in;
             result.pairs_dropped_all_mb = gp.pairs_dropped_all_mb;
