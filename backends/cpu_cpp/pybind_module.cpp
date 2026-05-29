@@ -1,4 +1,6 @@
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -875,6 +877,87 @@ VisibleFiltered filter_visible(
     return out;
 }
 
+#ifdef GSPLAT_WITH_TT
+// amendment-003 M3: run the PROJECT stage on the TT device instead of the host
+// CPU project_full_fused (~242ms over 6.13M gaussians). The device kernels
+// (transform_means_cam_tt + pfwc_tt) already exist; this wires them into the
+// fused loop and produces a ProjectResult IDENTICAL in layout to the CPU path
+// so tile_assign/sort/blend are unchanged. Opt-in via GSPLAT_TT_DEVICE_PROJECT=1.
+//
+// Returns a ProjectResult with empty depths on failure / unsupported config, so
+// the caller transparently falls back to the CPU path. The device pfwc kernel
+// hardcodes the 3-sigma radius (k=3.0) and no isoellipse, so we only take this
+// path when the requested config matches; otherwise we fall back.
+static gsplat_cpu::ProjectResult project_via_device(
+    const float* means, const float* cov3d, const float* extrinsics,
+    const float* intrinsics, const float* colors, const float* opacities,
+    float min_opacity, std::size_t N, int image_height, int image_width,
+    float k_cap, bool use_isoellipse, int max_radius,
+    gsplat_cpu::ThreadPool* pool) {
+    gsplat_cpu::ProjectResult empty;
+    if (use_isoellipse || std::fabs(k_cap - 3.0f) > 1e-3f) {
+        // pfwc_tt only implements the k=3.0, non-isoellipse radius. Signal
+        // fallback rather than silently producing a different cull.
+        static bool warned = false;
+        if (!warned) {
+            std::fprintf(stderr,
+                "[DEVICE_PROJECT] config mismatch (k_cap=%.3f isoellipse=%d) -> "
+                "CPU fallback\n", k_cap, (int)use_isoellipse);
+            warned = true;
+        }
+        return empty;
+    }
+    if (!gsplat_tt::project_device_ready() || !gsplat_tt::pfwc_device_ready()) {
+        // ready() lazily inits the device on first call; if it can't, fall back.
+    }
+
+    // 1) means_cam = R@means + t, kept device-resident (no D2H).
+    gsplat_tt::ProjectCallTimings mc_t;
+    if (gsplat_tt::transform_means_cam_tt_no_download(means, extrinsics, N, &mc_t) < 0.0)
+        return empty;
+
+    // 2) cov3d N*9 -> unique N*6 [c00 c01 c02 c11 c12 c22] for pfwc.
+    std::vector<float> cov3d_u(N * 6);
+    for (std::size_t i = 0; i < N; ++i) {
+        cov3d_u[i * 6 + 0] = cov3d[i * 9 + 0];
+        cov3d_u[i * 6 + 1] = cov3d[i * 9 + 1];
+        cov3d_u[i * 6 + 2] = cov3d[i * 9 + 2];
+        cov3d_u[i * 6 + 3] = cov3d[i * 9 + 4];
+        cov3d_u[i * 6 + 4] = cov3d[i * 9 + 5];
+        cov3d_u[i * 6 + 5] = cov3d[i * 9 + 8];
+    }
+
+    // 3) pfwc on device -> mean_2d, depth, cov2d(a,b,c), radii (D2H for now;
+    //    a later step keeps these resident and skips the readback).
+    std::vector<float> mean_2d(N * 2), depth(N), cov2d(N * 3), radii(N * 2);
+    gsplat_tt::PfwcCallTimings pf_t;
+    if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+                           mean_2d.data(), depth.data(), cov2d.data(),
+                           radii.data(), &pf_t) < 0.0)
+        return empty;
+
+    // 4) Host finisher: valid_mask + M-compact gather (identical math to
+    //    project_full_fused), then compact colors/opacities in the SAME
+    //    increasing-i order (the finisher's parallel gather preserves it).
+    gsplat_cpu::ProjectResult proj = gsplat_cpu::project_finish_with_cov2d_radii(
+        mean_2d.data(), depth.data(), cov2d.data(), radii.data(), opacities,
+        min_opacity, N, image_height, image_width, pool, max_radius);
+    const std::size_t M = proj.depths.size();
+    proj.colors.resize(M * 3);
+    proj.opacities.resize(M);
+    std::size_t out = 0;
+    for (std::size_t i = 0; i < N; ++i) {
+        if (!proj.valid_mask[i]) continue;
+        proj.colors[out * 3 + 0] = colors[i * 3 + 0];
+        proj.colors[out * 3 + 1] = colors[i * 3 + 1];
+        proj.colors[out * 3 + 2] = colors[i * 3 + 2];
+        proj.opacities[out] = opacities[i];
+        ++out;
+    }
+    return proj;
+}
+#endif  // GSPLAT_WITH_TT
+
 // All-stage fused render. Orchestrates project_full_fused -> filter colors/
 // opacities by valid_mask -> tile_assign -> sort_and_bin -> cull_and_blend
 // entirely in C++. Eliminates ~4 pybind boundary crossings + ~7 numpy<->C++
@@ -915,22 +998,40 @@ py::tuple render_full_py(
 
     // Stage 1: project.
     auto t_p0 = clock::now();
-    const gsplat_cpu::ProjectResult proj = gsplat_cpu::project_full_fused(
-        static_cast<const float*>(means_info.ptr),
-        static_cast<const float*>(cov3d.request().ptr),
-        static_cast<const float*>(extrinsics.request().ptr),
-        static_cast<const float*>(intrinsics.request().ptr),
-        colors_ptr,
-        opacities_ptr,
-        min_opacity,
-        N,
-        image_height,
-        image_width,
-        &global_project_pool(),
-        max_radius,
-        contrib_floor,
-        k_cap,
-        use_isoellipse);
+    gsplat_cpu::ProjectResult proj;
+#ifdef GSPLAT_WITH_TT
+    // M3: opt-in device project (GSPLAT_TT_DEVICE_PROJECT=1). Produces a
+    // layout-identical ProjectResult; falls back to CPU on empty result
+    // (device unavailable / unsupported config).
+    if (const char* dp = std::getenv("GSPLAT_TT_DEVICE_PROJECT");
+        dp != nullptr && dp[0] == '1') {
+        proj = project_via_device(
+            static_cast<const float*>(means_info.ptr),
+            static_cast<const float*>(cov3d.request().ptr),
+            static_cast<const float*>(extrinsics.request().ptr),
+            static_cast<const float*>(intrinsics.request().ptr),
+            colors_ptr, opacities_ptr, min_opacity, N, image_height, image_width,
+            k_cap, use_isoellipse, max_radius, &global_project_pool());
+    }
+#endif
+    if (proj.depths.empty()) {
+        proj = gsplat_cpu::project_full_fused(
+            static_cast<const float*>(means_info.ptr),
+            static_cast<const float*>(cov3d.request().ptr),
+            static_cast<const float*>(extrinsics.request().ptr),
+            static_cast<const float*>(intrinsics.request().ptr),
+            colors_ptr,
+            opacities_ptr,
+            min_opacity,
+            N,
+            image_height,
+            image_width,
+            &global_project_pool(),
+            max_radius,
+            contrib_floor,
+            k_cap,
+            use_isoellipse);
+    }
     const std::size_t M = proj.depths.size();
     auto t_p1 = clock::now();
 

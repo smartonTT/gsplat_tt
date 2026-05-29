@@ -71,8 +71,16 @@ upload). The "TT port" is barely started.
 - [ ] M2 Fuse cull+coeff+gaussian-major emit into one parallel host pass
   (eliminate the separate 131ms stream-build + 128MB p.coeff intermediate).
   IN PROGRESS (subagent). Target blend ~450->~320ms.
-- [ ] M3 Keep PROJECT outputs (means_2d, covs_2d, colors, opacities) RESIDENT in
-  DRAM; eliminate project D2H + blend re-upload. (pending project investigation)
+- [x] M3 Wire device project (transform_means_cam_tt_no_download + pfwc_tt) into
+  render_full_tt via `project_via_device()`; gated opt-in `GSPLAT_TT_DEVICE_PROJECT=1`,
+  default path unchanged. VERIFIED correct (PSNR 39.68dB, layout-identical
+  ProjectResult, config-guarded to k_cap==3.0/!isoellipse w/ CPU fallback).
+  FINDING: standalone it is a REGRESSION (project 220->400ms) — D2H-bound
+  (H2D means + 147MB cov3d_unique, D2H 4 arrays, host repack) while tile_assign
+  still reads on host. Kept as resident scaffolding; the win only lands with M3b.
+- [ ] M3b Keep project outputs (mean_2d/cov2d/depth/radii + compact colors/opac)
+  RESIDENT in DRAM (skip the pfwc D2H + cov3d_unique re-upload); requires a device
+  consumer (M5 tile_assign) to read them over NoC. This is where device project pays off.
 - [ ] M4 Move microblock cull + coeff computation ON-DEVICE (consume resident
   attrs + sorted lists; no 200MB, no host cull). Big win + big risk.
 - [ ] M5 Device tile_assign (binning) with resident pair lists.
