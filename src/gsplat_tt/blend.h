@@ -54,6 +54,28 @@ double blend_mb_devcull_from_payload(
     int image_width,
     std::vector<float>& image_out);
 
+// RESIDENT device microblock-cull blend (GSPLAT_TT_RESIDENT_BLEND gate; requires
+// RESIDENT_GATHER + DEVICE_SORT + MB_DEVCULL). Identical device kernel + conic/
+// microblock-cull math as blend_mb_devcull_from_payload, but the reader gathers
+// every gaussian's attributes from the device-resident per-component SoA
+// proj_m_* buffers by id and consumes the resident sort_sorted_ids +
+// sort_tile_ranges instead of host-built+uploaded attr/id payloads. This drops
+// the host attr-table build, the host id-list build, and the ~127MB/frame upload.
+// The only host input is the per-tile candidate count (for LPT tile->core load
+// balancing). Returns false (device_ok=false) if any required resident buffer is
+// missing, so the caller can fall back to the uploaded devcull path.
+//   per_tile_count: num_tiles uint32, candidates per tile (== tile_ranges end-start)
+double blend_mb_devcull_resident(
+    const std::vector<uint32_t>& per_tile_count,
+    float contrib_floor,
+    bool cull_disabled,
+    int num_tiles,
+    int tiles_x,
+    int image_height,
+    int image_width,
+    std::vector<float>& image_out,
+    bool* device_ok);
+
 void device_shutdown();
 
 bool device_ready();

@@ -79,6 +79,22 @@ inline uint32_t f_to_bits(float f) {
     return b;
 }
 
+#ifdef MB_RESIDENT
+// RESIDENT gather helper: read one fp32/uint32 element `elem` from a 64B-page
+// (16-elem) DRAM-interleaved SoA buffer via `acc`, returning the raw 32-bit
+// word. Used to gather each visible gaussian's attributes straight out of the
+// resident proj_m_* / sort_* buffers (no host-built+uploaded attr table). The
+// whole 64B page is fetched and the requested lane extracted.
+template <typename Acc>
+inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_addr) {
+    const uint32_t page = elem >> 4;     // / 16
+    const uint32_t off = elem & 0xF;     // % 16
+    noc_async_read_tile(page, acc, scratch_addr);
+    noc_async_read_barrier();
+    return reinterpret_cast<volatile uint32_t*>(scratch_addr)[off];
+}
+#endif
+
 // Reproduce build_gaussian_major_tile's per-gaussian microblock cull EXACTLY.
 // Returns the 32-bit microblock-coverage mask. tx_tile/ty_tile are the float
 // tile-origin pixel coords (tx*32, ty*32).
@@ -170,6 +186,57 @@ inline uint32_t compute_microblock_mask(
 }  // namespace
 
 void kernel_main() {
+#ifdef MB_RESIDENT
+    // RESIDENT blend (GSPLAT_TT_RESIDENT_BLEND): attrs gathered straight from
+    // the device-resident per-component SoA proj_m_* buffers by id, candidate
+    // ids consumed from resident sort_sorted_ids, per-tile [start,end) from
+    // resident sort_tile_ranges. No host-built/uploaded attr table or id list.
+    const uint32_t a_addr         = get_arg_val<uint32_t>(0);   // proj_m_a
+    const uint32_t b_addr         = get_arg_val<uint32_t>(1);   // proj_m_b
+    const uint32_t c_addr         = get_arg_val<uint32_t>(2);   // proj_m_c
+    const uint32_t px_addr        = get_arg_val<uint32_t>(3);   // proj_m_px
+    const uint32_t py_addr        = get_arg_val<uint32_t>(4);   // proj_m_py
+    const uint32_t op_addr        = get_arg_val<uint32_t>(5);   // proj_m_opacity
+    const uint32_t col_addr       = get_arg_val<uint32_t>(6);   // proj_m_colors (AoS M*3)
+    const uint32_t ids_addr       = get_arg_val<uint32_t>(7);   // sort_sorted_ids
+    const uint32_t ranges_addr    = get_arg_val<uint32_t>(8);   // sort_tile_ranges
+    const uint32_t xramp_addr     = get_arg_val<uint32_t>(9);
+    const uint32_t yramp_addr     = get_arg_val<uint32_t>(10);
+    const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(11);
+    const uint32_t tile_ids_start = get_arg_val<uint32_t>(12);
+    const uint32_t tile_ids_count = get_arg_val<uint32_t>(13);
+    const uint32_t tiles_x        = get_arg_val<uint32_t>(14);
+    const float contrib_floor     = bits_to_f(get_arg_val<uint32_t>(15));
+    const bool cull_disabled      = get_arg_val<uint32_t>(16) != 0;
+
+    constexpr auto a_args        = TensorAccessorArgs<0>();
+    constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
+    constexpr auto c_args        = TensorAccessorArgs<b_args.next_compile_time_args_offset()>();
+    constexpr auto px_args       = TensorAccessorArgs<c_args.next_compile_time_args_offset()>();
+    constexpr auto py_args       = TensorAccessorArgs<px_args.next_compile_time_args_offset()>();
+    constexpr auto op_args       = TensorAccessorArgs<py_args.next_compile_time_args_offset()>();
+    constexpr auto col_args      = TensorAccessorArgs<op_args.next_compile_time_args_offset()>();
+    constexpr auto ids_args      = TensorAccessorArgs<col_args.next_compile_time_args_offset()>();
+    constexpr auto ranges_args   = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
+    constexpr auto xramp_args    = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
+    constexpr auto yramp_args    = TensorAccessorArgs<xramp_args.next_compile_time_args_offset()>();
+    constexpr auto tile_ids_args = TensorAccessorArgs<yramp_args.next_compile_time_args_offset()>();
+
+    // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
+    constexpr uint32_t SOA_PAGE_BYTES = 64;
+    const auto a_acc        = TensorAccessor(a_args,        a_addr,        SOA_PAGE_BYTES);
+    const auto b_acc        = TensorAccessor(b_args,        b_addr,        SOA_PAGE_BYTES);
+    const auto c_acc        = TensorAccessor(c_args,        c_addr,        SOA_PAGE_BYTES);
+    const auto px_acc       = TensorAccessor(px_args,       px_addr,       SOA_PAGE_BYTES);
+    const auto py_acc       = TensorAccessor(py_args,       py_addr,       SOA_PAGE_BYTES);
+    const auto op_acc       = TensorAccessor(op_args,       op_addr,       SOA_PAGE_BYTES);
+    const auto col_acc      = TensorAccessor(col_args,      col_addr,      SOA_PAGE_BYTES);
+    const auto ids_acc      = TensorAccessor(ids_args,      ids_addr,      IDS_PAGE_BYTES);
+    const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   SOA_PAGE_BYTES);
+    const auto xramp_acc    = TensorAccessor(xramp_args,    xramp_addr,    RAMP_TILE_BYTES);
+    const auto yramp_acc    = TensorAccessor(yramp_args,    yramp_addr,    RAMP_TILE_BYTES);
+    const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, 64);
+#else
     const uint32_t attrs_addr     = get_arg_val<uint32_t>(0);
     const uint32_t ids_addr       = get_arg_val<uint32_t>(1);
     const uint32_t ids_off_addr   = get_arg_val<uint32_t>(2);
@@ -195,6 +262,7 @@ void kernel_main() {
     const auto xramp_acc    = TensorAccessor(xramp_args,    xramp_addr,    RAMP_TILE_BYTES);
     const auto yramp_acc    = TensorAccessor(yramp_args,    yramp_addr,    RAMP_TILE_BYTES);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, 64);
+#endif
 
     if (tile_ids_count == 0) {
         return;
@@ -245,6 +313,18 @@ void kernel_main() {
 
         // (2) Per-tile candidate id range [id_start, id_end).
         uint32_t id_start, id_end;
+#ifdef MB_RESIDENT
+        // Resident sort_tile_ranges: (start,end) uint32 pair per tile at
+        // elements [tile_id*2, tile_id*2+1]. Equivalent to the host ids_off
+        // prefix because sort_sorted_ids IS the per-tile depth-sorted concat
+        // (start/end into it == ids_off[t]/ids_off[t+1]); empty tiles read
+        // (0,0) -> L==0, matching the uploaded path.
+        {
+            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+            id_start = read_soa_u32(ranges_acc, tile_id * 2u + 0u, scr);
+            id_end   = read_soa_u32(ranges_acc, tile_id * 2u + 1u, scr);
+        }
+#else
         {
             const uint32_t off_scratch = get_write_ptr(CB_SCR_IDS);
             auto off_ptr = reinterpret_cast<volatile uint32_t*>(off_scratch);
@@ -257,6 +337,7 @@ void kernel_main() {
             noc_async_read_barrier();
             id_end = off_ptr[0];
         }
+#endif
         const uint32_t L = id_end - id_start;
 
         // (3) Per-tile gaussian-row count (compute reads slot 0). One row is
@@ -285,20 +366,47 @@ void kernel_main() {
             for (uint32_t j = 0; j < take; j++) {
                 const uint32_t g = ids_ptr[in_page + j];
 
+                // Gather this gaussian's attributes (raw cov a,b,c, image-space
+                // center, opacity, color rgb) as raw 32-bit words.
+                uint32_t cov_a_bits, cov_b_bits, cov_c_bits;
+                uint32_t mx_bits, my_bits, op_bits, cr, cg, cb;
+#ifdef MB_RESIDENT
+                // Gather straight from the resident per-component SoA buffers by
+                // id g. Byte-identical to the values the host attr table carried
+                // (proj_finish output == gather_visible output). colors are AoS
+                // M*3, so element index is g*3 + channel.
+                const uint32_t scr = get_write_ptr(CB_SCR_ATTR);
+                cov_a_bits = read_soa_u32(a_acc,  g, scr);
+                cov_b_bits = read_soa_u32(b_acc,  g, scr);
+                cov_c_bits = read_soa_u32(c_acc,  g, scr);
+                mx_bits    = read_soa_u32(px_acc, g, scr);
+                my_bits    = read_soa_u32(py_acc, g, scr);
+                op_bits    = read_soa_u32(op_acc, g, scr);
+                cr         = read_soa_u32(col_acc, g * 3u + 0u, scr);
+                cg         = read_soa_u32(col_acc, g * 3u + 1u, scr);
+                cb         = read_soa_u32(col_acc, g * 3u + 2u, scr);
+#else
                 // Gather attr[g] (64B) into the private attr scratch.
                 const uint32_t attr_scratch = get_write_ptr(CB_SCR_ATTR);
                 auto attr_ptr = reinterpret_cast<volatile uint32_t*>(attr_scratch);
                 noc_async_read_tile(g, attrs_acc, attr_scratch);
                 noc_async_read_barrier();
-                const float cov_a  = bits_to_f(attr_ptr[0]);
-                const float cov_b  = bits_to_f(attr_ptr[1]);
-                const float cov_c  = bits_to_f(attr_ptr[2]);
-                const float mean_x = bits_to_f(attr_ptr[3]);
-                const float mean_y = bits_to_f(attr_ptr[4]);
-                const float opac   = bits_to_f(attr_ptr[5]);
-                const uint32_t cr  = attr_ptr[6];
-                const uint32_t cg  = attr_ptr[7];
-                const uint32_t cb  = attr_ptr[8];
+                cov_a_bits = attr_ptr[0];
+                cov_b_bits = attr_ptr[1];
+                cov_c_bits = attr_ptr[2];
+                mx_bits    = attr_ptr[3];
+                my_bits    = attr_ptr[4];
+                op_bits    = attr_ptr[5];
+                cr         = attr_ptr[6];
+                cg         = attr_ptr[7];
+                cb         = attr_ptr[8];
+#endif
+                const float cov_a  = bits_to_f(cov_a_bits);
+                const float cov_b  = bits_to_f(cov_b_bits);
+                const float cov_c  = bits_to_f(cov_c_bits);
+                const float mean_x = bits_to_f(mx_bits);
+                const float mean_y = bits_to_f(my_bits);
+                const float opac   = bits_to_f(op_bits);
 
                 const uint32_t mask = compute_microblock_mask(
                     cov_a, cov_b, cov_c, mean_x, mean_y, opac, tx_tile, ty_tile,
@@ -306,13 +414,13 @@ void kernel_main() {
 
                 cb_reserve_back(CB_MB_COEFF, 1);
                 auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
-                row[0] = attr_ptr[0];                        // raw cov_a
-                row[1] = attr_ptr[1];                        // raw cov_b
-                row[2] = attr_ptr[2];                        // raw cov_c
+                row[0] = cov_a_bits;                         // raw cov_a
+                row[1] = cov_b_bits;                         // raw cov_b
+                row[2] = cov_c_bits;                         // raw cov_c
                 row[3] = f_to_bits(mean_x - tx_tile);        // mx_local
                 row[4] = f_to_bits(mean_y - ty_tile);        // my_local
                 row[5] = 0u;
-                row[6] = attr_ptr[5];                        // opacity
+                row[6] = op_bits;                            // opacity
                 row[7] = cr;
                 row[8] = cg;
                 row[9] = cb;

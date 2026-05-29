@@ -167,6 +167,18 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+
+    // RESIDENT blend scratch (GSPLAT_TT_RESIDENT_BLEND): persistent per-context
+    // DRAM buffers reused across frames (the render intermediates themselves —
+    // attrs/ids — live in device_state and are read over NoC, not reallocated).
+    // xramp/yramp are constant; upload once. out/tile_ids grow on demand.
+    std::shared_ptr<distributed::MeshBuffer> res_xramp;
+    std::shared_ptr<distributed::MeshBuffer> res_yramp;
+    std::shared_ptr<distributed::MeshBuffer> res_out;
+    std::shared_ptr<distributed::MeshBuffer> res_tile_ids;
+    uint32_t res_out_tiles = 0;
+    size_t res_tile_ids_bytes = 0;
+    bool res_ramp_uploaded = false;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -779,6 +791,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     };
     const bool dev_cull = env_on("GSPLAT_TT_MB_DEVCULL");
     const bool dev_conic = dev_cull || env_on("GSPLAT_TT_MB_DEVCONIC");
+    // RESIDENT blend: the devcull reader gathers attrs from resident SoA
+    // proj_m_* and consumes resident sort_* instead of host-uploaded payloads.
+    const bool resident_blend = dev_cull && env_on("GSPLAT_TT_RESIDENT_BLEND");
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
@@ -792,13 +807,21 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         cb_cfg(CB_SCR_ATTR, COEFF_ROW_BYTES_MB, 2, DataFormat::Float32);
     }
 
+    // Accessor count: resident devcull reader binds 12 DRAM-interleaved buffers
+    // (proj_m_a/b/c/px/py/opacity/colors + sort_sorted_ids + sort_tile_ranges +
+    // xramp/yramp/tile_ids); the uploaded paths bind 6.
+    const int num_reader_accessors = resident_blend ? 12 : 6;
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 6; i++) {
+    for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     const char* reader_src =
         dev_cull ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp"
                  : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb.cpp";
+    std::map<std::string, std::string> reader_defines;
+    if (resident_blend) {
+        reader_defines["MB_RESIDENT"] = "1";
+    }
     ctx.reader = CreateKernel(
         program,
         reader_src,
@@ -807,6 +830,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
+            .defines = reader_defines,
         });
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
@@ -1219,6 +1243,155 @@ static double process_frame_mb_devcull(
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
 
+// RESIDENT device-cull blend frame (GSPLAT_TT_RESIDENT_BLEND): reads the
+// per-gaussian attributes from the device-resident per-component SoA proj_m_*
+// buffers and the candidate ids/ranges from resident sort_sorted_ids /
+// sort_tile_ranges (all registered in device_state by the on-device gather +
+// sort stages). NOTHING about attrs/ids is uploaded per frame — only the tiny
+// per-tile LPT bookkeeping (tile-id list) + the constant coordinate ramps,
+// both cached persistently in the context. Returns elapsed ms; sets *ok=false
+// (no work done) if any required resident buffer is absent.
+static double process_frame_mb_devcull_resident(
+    DeviceContext& ctx,
+    const std::vector<uint32_t>& per_tile_count,  // num_tiles
+    float contrib_floor,
+    bool cull_disabled,
+    uint32_t num_tiles,
+    uint32_t tiles_x,
+    uint32_t image_h,
+    uint32_t image_w,
+    std::vector<float>& image_out,
+    bool* ok) {
+    namespace ds = gsplat_tt::device_state;
+    auto buf_a   = ds::get_buffer("proj_m_a");
+    auto buf_b   = ds::get_buffer("proj_m_b");
+    auto buf_c   = ds::get_buffer("proj_m_c");
+    auto buf_px  = ds::get_buffer("proj_m_px");
+    auto buf_py  = ds::get_buffer("proj_m_py");
+    auto buf_op  = ds::get_buffer("proj_m_opacity");
+    auto buf_col = ds::get_buffer("proj_m_colors");
+    auto buf_ids = ds::get_buffer("sort_sorted_ids");
+    auto buf_rng = ds::get_buffer("sort_tile_ranges");
+    if (!buf_a || !buf_b || !buf_c || !buf_px || !buf_py || !buf_op || !buf_col ||
+        !buf_ids || !buf_rng) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+    if (ok) *ok = true;
+
+    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
+
+    // LPT cost = candidate count per tile (from the host-side tile_ranges, which
+    // equals the resident sort_tile_ranges). This is num_tiles ints, NOT the
+    // 127MB attr/id payload.
+    std::vector<float> cost_f32(num_tiles + 1, 0.0f);
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        cost_f32[t + 1] = cost_f32[t] + static_cast<float>(per_tile_count[t]);
+    }
+    const TileAssignment assign = build_tile_assignment(cost_f32, num_tiles, num_cores);
+
+    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    };
+
+    // Persistent scratch: ramps (constant), output + tile-id list (grow-on-demand).
+    if (!ctx.res_xramp) {
+        ctx.res_xramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
+        ctx.res_yramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
+        ctx.res_ramp_uploaded = false;
+    }
+    if (!ctx.res_out || ctx.res_out_tiles < num_tiles) {
+        ctx.res_out = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
+        ctx.res_out_tiles = num_tiles;
+    }
+    if (!ctx.res_tile_ids || ctx.res_tile_ids_bytes < assign.tile_id_buffer_bytes_padded) {
+        ctx.res_tile_ids = make_dram(assign.tile_id_buffer_bytes_padded, TILE_IDS_PAGE_BYTES);
+        ctx.res_tile_ids_bytes = assign.tile_id_buffer_bytes_padded;
+    }
+
+    Program& program = get_program_for_workload(ctx);
+    uint32_t core_index = 0;
+    const uint32_t a_addr     = static_cast<uint32_t>(buf_a->address());
+    const uint32_t b_addr     = static_cast<uint32_t>(buf_b->address());
+    const uint32_t c_addr     = static_cast<uint32_t>(buf_c->address());
+    const uint32_t px_addr    = static_cast<uint32_t>(buf_px->address());
+    const uint32_t py_addr    = static_cast<uint32_t>(buf_py->address());
+    const uint32_t op_addr    = static_cast<uint32_t>(buf_op->address());
+    const uint32_t col_addr   = static_cast<uint32_t>(buf_col->address());
+    const uint32_t ids_addr   = static_cast<uint32_t>(buf_ids->address());
+    const uint32_t rng_addr   = static_cast<uint32_t>(buf_rng->address());
+    const uint32_t xramp_addr = static_cast<uint32_t>(ctx.res_xramp->address());
+    const uint32_t yramp_addr = static_cast<uint32_t>(ctx.res_yramp->address());
+    const uint32_t tile_ids_addr = static_cast<uint32_t>(ctx.res_tile_ids->address());
+    const uint32_t out_addr   = static_cast<uint32_t>(ctx.res_out->address());
+    uint32_t floor_bits;
+    std::memcpy(&floor_bits, &contrib_floor, 4);
+    for (const auto& range : ctx.all_cores.ranges()) {
+        for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+            for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                CoreCoord core{x, y};
+                const uint32_t start = assign.per_core_offset[core_index];
+                const uint32_t count = assign.per_core_count[core_index];
+                SetRuntimeArgs(program, ctx.reader, core, {
+                    a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
+                    ids_addr, rng_addr, xramp_addr, yramp_addr,
+                    tile_ids_addr, start, count, tiles_x, floor_bits,
+                    cull_disabled ? 1u : 0u,
+                });
+                SetRuntimeArgs(program, ctx.compute, core, {count});
+                SetRuntimeArgs(program, ctx.writer, core, {
+                    out_addr, tile_ids_addr, start, count,
+                });
+                core_index++;
+            }
+        }
+    }
+
+    const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
+    const auto t_start = std::chrono::steady_clock::now();
+    std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
+    // Constant ramps: upload once, then reuse the resident copy every frame.
+    if (!ctx.res_ramp_uploaded) {
+        auto xramp = make_ramp(/*is_x=*/true);
+        auto yramp = make_ramp(/*is_x=*/false);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_xramp, xramp);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_yramp, yramp);
+        ctx.res_ramp_uploaded = true;
+    }
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_tile_ids, assign.tile_id_buffer_padded);
+    std::chrono::steady_clock::time_point t_upload = t_start;
+    if (timing) {
+        distributed::Finish(*ctx.cq);
+        t_upload = std::chrono::steady_clock::now();
+    }
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    std::chrono::steady_clock::time_point t_exec = t_upload;
+    if (timing) {
+        distributed::Finish(*ctx.cq);
+        t_exec = std::chrono::steady_clock::now();
+    }
+    std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
+    const auto t_end = std::chrono::steady_clock::now();
+
+    if (timing) {
+        auto ms = [](auto a, auto b) {
+            return std::chrono::duration<double, std::milli>(b - a).count();
+        };
+        // attrs/ids are RESIDENT (read over NoC) — per-frame upload is just the
+        // zeroed output + tiny tile-id list (+ one-time ramps).
+        std::fprintf(stderr,
+            "[BLEND_SPLIT] upload=%.1f (attrs=0.0MB ids=0.0MB resident) exec=%.1f readback=%.1f total=%.1f ms\n",
+            ms(t_start, t_upload), ms(t_upload, t_exec), ms(t_exec, t_end), ms(t_start, t_end));
+    }
+
+    image_out = tiles_to_image_mb(result_bf16, num_tiles, tiles_x, image_h, image_w);
+    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
+}
+
 }  // namespace mb
 
 namespace gsplat_tt {
@@ -1274,6 +1447,27 @@ double blend_mb_devcull_from_payload(
         static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
         static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
         image_out);
+}
+
+double blend_mb_devcull_resident(
+    const std::vector<uint32_t>& per_tile_count,
+    float contrib_floor,
+    bool cull_disabled,
+    int num_tiles,
+    int tiles_x,
+    int image_height,
+    int image_width,
+    std::vector<float>& image_out,
+    bool* device_ok) {
+    if (!g_ctx_mb) {
+        (void)gsplat_tt::device_state::get_device();
+        g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
+    }
+    return ::mb::process_frame_mb_devcull_resident(
+        *g_ctx_mb, per_tile_count, contrib_floor, cull_disabled,
+        static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
+        static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
+        image_out, device_ok);
 }
 
 static DeviceContext& ensure_device() {

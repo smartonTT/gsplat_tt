@@ -217,6 +217,47 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
             // candidate id lists (== sorted_gaussian_ids per tile range). The
             // device reader computes the conic + microblock mask on-core.
             if (device_cull) {
+                // RESIDENT blend (R6): when the on-device gather + sort have left
+                // the projected attrs (proj_m_*) and depth-sorted ids
+                // (sort_sorted_ids / sort_tile_ranges) resident in DRAM, the
+                // reader gathers them over NoC by id — the host builds NEITHER the
+                // M*64B attr table NOR the per-tile id lists, and uploads neither
+                // (~127MB/frame eliminated). Only the per-tile candidate count
+                // (num_tiles ints, for LPT load balancing) is computed host-side.
+                if (env_on("GSPLAT_TT_RESIDENT_BLEND")) {
+                    std::vector<uint32_t> counts(static_cast<std::size_t>(num_tiles), 0);
+                    for (int t = 0; t < num_tiles; ++t) {
+                        const int64_t s = tile_ranges[static_cast<std::size_t>(t) * 2 + 0];
+                        const int64_t e = tile_ranges[static_cast<std::size_t>(t) * 2 + 1];
+                        counts[static_cast<std::size_t>(t)] = static_cast<uint32_t>(e - s);
+                    }
+                    const auto _r0 = std::chrono::steady_clock::now();
+                    std::vector<float> img;
+                    bool resident_ok = false;
+                    blend_mb_devcull_resident(
+                        counts, mb_contrib_floor, cull_disabled, num_tiles,
+                        tiles_x, image_height, image_width, img, &resident_ok);
+                    const auto _r1 = std::chrono::steady_clock::now();
+                    if (resident_ok) {
+                        if (mb_timing) {
+                            std::fprintf(stderr,
+                                "[BLEND_HOST] resident_blend device=%.1f (host attr/id build=0, upload=0) total=%.1f ms\n",
+                                std::chrono::duration<double, std::milli>(_r1 - _r0).count(),
+                                std::chrono::duration<double, std::milli>(_r1 - _r0).count());
+                        }
+                        const std::size_t n = static_cast<std::size_t>(image_height) *
+                                              static_cast<std::size_t>(image_width) * 3;
+                        if (img.size() == n) {
+                            std::memcpy(image_out, img.data(), n * sizeof(float));
+                        }
+                        result.pairs_in = static_cast<int64_t>(P);
+                        return result;
+                    }
+                    // Resident buffers missing -> fall back to host build+upload.
+                    std::fprintf(stderr,
+                        "[BLEND_HOST] RESIDENT_BLEND requested but resident buffers "
+                        "absent; falling back to uploaded devcull path\n");
+                }
                 const auto _c0 = std::chrono::steady_clock::now();
                 std::vector<float> attrs(static_cast<std::size_t>(M) * kMbAttrLanes, 0.0f);
                 for (std::size_t g = 0; g < M; ++g) {
