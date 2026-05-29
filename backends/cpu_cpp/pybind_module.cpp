@@ -24,6 +24,7 @@
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
 #include "gsplat_tt/render_blend.h"
+#include "gsplat_tt/sort.h"
 #include "gsplat_tt/tile_assign.h"
 #endif
 
@@ -1117,15 +1118,44 @@ py::tuple render_full_py(
 
     // Stage 3: sort + bin.
     auto t_s0 = clock::now();
-    const gsplat_cpu::SortResult sr = gsplat_cpu::sort_and_bin(
-        ta.gaussian_ids.data(),
-        ta.tile_ids.data(),
-        proj.depths.data(),
-        ta.gaussian_ids.size(),
-        M,
-        tiles_x,
-        tiles_y,
-        &global_sort_pool());
+    gsplat_cpu::SortResult sr;
+    bool sort_done = false;
+#ifdef GSPLAT_WITH_TT
+    // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
+    // layout-identical SortResult (byte-identical sorted_gaussian_ids +
+    // tile_ranges) and publishes the contiguous outputs resident in
+    // device_state; falls back to CPU on device failure. Mirrors how
+    // GSPLAT_TT_DEVICE_TILE_ASSIGN gates tile_assign_tt above.
+    if (const char* ds = std::getenv("GSPLAT_TT_DEVICE_SORT");
+        ds != nullptr && ds[0] != '0' && ds[0] != '\0') {
+        bool device_ok = false;
+        gsplat_cpu::SortResult sr_dev = gsplat_tt::sort_and_bin_tt(
+            ta.gaussian_ids.data(),
+            ta.tile_ids.data(),
+            proj.depths.data(),
+            ta.gaussian_ids.size(),
+            M,
+            tiles_x,
+            tiles_y,
+            &global_sort_pool(),
+            &device_ok);
+        if (device_ok) {
+            sr = std::move(sr_dev);
+            sort_done = true;
+        }
+    }
+#endif
+    if (!sort_done) {
+        sr = gsplat_cpu::sort_and_bin(
+            ta.gaussian_ids.data(),
+            ta.tile_ids.data(),
+            proj.depths.data(),
+            ta.gaussian_ids.size(),
+            M,
+            tiles_x,
+            tiles_y,
+            &global_sort_pool());
+    }
     auto t_s1 = clock::now();
 
     // iter-049: pre-allocate + zero the pybind output buffer and thread its
