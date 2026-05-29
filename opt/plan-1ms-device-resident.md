@@ -104,7 +104,21 @@ upload). The "TT port" is barely started.
   1e-6). Do NOT combine B and C in one change. Gate PSNR >= ~39.5dB each step.
 - [ ] M4-legacy Move microblock cull + coeff computation ON-DEVICE (consume resident
   attrs + sorted lists; no 200MB, no host cull). Big win + big risk.
-- [ ] M5 Device tile_assign (binning) with resident pair lists.
+- [ ] M5 Device tile_assign (binning) with resident pair lists. DESIGN DONE
+  (read-only subagent). Keep CPU's Gaussian-centric structure (NOT tile-centric:
+  that is O(M*num_tiles)=1.9B tests). Pipeline: K1 per-gaussian AABB+count ->
+  prefix-sum -> K2 disjoint-range scatter of (gid,tid) pairs (NO atomics) ->
+  K3 per-gaussian m2_thresh precompute -> K4 per-pair Mahalanobis cull (rectangle
+  min m^2, NOT L-inf clamp; det floor 1e-6) -> K5 compaction. New
+  src/gsplat_tt/tile_assign_device.cpp + 6 kernels + gather_visible_device.cpp
+  (N-indexed pfwc outputs -> M-compact). Gate GSPLAT_TT_DEVICE_TILE_ASSIGN=1,
+  CPU fallback. Staged S0 infra -> S1 AABB-only (pair-count parity) -> S2 full cull
+  (P'=3,212,720, PSNR>=39.5) -> S3 register ta_* resident -> S4 resident inputs
+  (needs M3b gather) -> S5 on-device prefix (host->~0) -> S6 fused cull-scatter ->
+  S7 device sort handoff. Prefix-sum: start as tiny host scan on M counts (~1-2ms),
+  migrate to core-partial+device scan. Pairs ~51MB DRAM (preallocate P_max).
+  WIN fully lands only with M3b resident project + M6 device sort (else pair D2H
+  negates the 87ms). Do NOT combine S2 (cull correctness) with S4 (residency).
 - [ ] M6 Device sort (per-tile depth) with resident sorted lists.
 - [ ] M7 Fuse into a single resident program; camera in, image out; no python loop.
 
