@@ -38,6 +38,9 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
+#if defined(MB_DEBUG_DPRINT)
+#include "api/debug/dprint.h"
+#endif
 #include "api/compute/cb_api.h"
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
@@ -60,6 +63,9 @@ constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock cou
 constexpr uint32_t CB_COLOR_OUT = 16;
 
 constexpr uint32_t NUM_MB = 32;
+
+// Volatile sink so profiling variants can't dead-code-eliminate the coeff loads.
+volatile uint32_t g_prof_sink = 0;
 
 // DST slot bases (in dst_reg ix units; tile = 32 vectors).
 constexpr uint32_t DR_R = 0 * 32;
@@ -214,57 +220,69 @@ inline void blend_one_gaussian_math(
     vFloat one_minus = vFloat(1.0f) - alpha;
     dst_reg[DR_T + IX] = t * one_minus;
 }
+
 #endif
 
-// Process all gaussians of microblock m (vector index IX). Reads coeff rows
-// from CB_MB_COEFF on the compute thread; runs the SFPU body on the math thread.
-template <uint32_t IX>
-inline void process_microblock(uint32_t cnt) {
-    if (cnt == 0) {
+// Dispatch one gaussian (coeffs in GPRs) to every microblock its mask selects,
+// each blend as its OWN MATH() invocation (mirrors the working mb-major kernel:
+// one blend_one_gaussian_math per MATH call). Compile-time unrolled; the runtime
+// mask test skips untouched microblocks. Identity permutation: bit m -> vector m.
+template <uint32_t M>
+inline void dispatch_blend_guarded(
+    uint32_t mask, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e,
+    uint32_t fc, uint32_t op, uint32_t cr, uint32_t cg, uint32_t cbv) {
+    if constexpr (M < NUM_MB) {
+        if (mask & (1u << M)) {
+            MATH((blend_one_gaussian_math<M>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+        }
+        dispatch_blend_guarded<M + 1>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+    }
+}
+
+// Stream all of a tile's gaussian-major rows. Each row's 10 coeffs + mask word
+// are read ONCE (not once per microblock), then dispatched to the masked
+// microblocks. One start_/done_ for the whole tile (proven safe by VECMAP).
+inline void process_tile_gaussians(uint32_t num_g) {
+    if (num_g == 0) {
         return;
     }
-    // Enter the SFPU dest-addressing context ONCE per microblock (proven by the
-    // ramp diagnostic). Calling start_/done_ per gaussian drifts the dest RWC and
-    // corrupts the persistent R/G/B/T read-modify-write across the loop.
-    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-    for (uint32_t i = 0; i < cnt; i++) {
-#if defined(MB_DEBUG_WEIGHT) || defined(MB_DEBUG_SHOWA)
-        // Only the frontmost gaussian matters for this diagnostic; still drain
-        // the rest of the CB so the reader doesn't block.
-        const bool do_math = (i == 0);
-#else
-        const bool do_math = true;
+#if defined(MB_DEBUG_DPRINT)
+    MATH((DPRINT << "G num_g=" << num_g << ENDL()));
 #endif
+    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+    uint32_t shown = 0;  // debug "frontmost-per-microblock" tracking only
+    for (uint32_t g = 0; g < num_g; g++) {
         cb_wait_front(CB_MB_COEFF, 1);
-        // get_tile_address reads the CB rd_ptr on the UNPACK thread and broadcasts
-        // the byte address to all threads via mailbox; L1 is shared so MATH can
-        // then deref it directly. (Compute kernels can't call get_read_ptr.)
-        auto row = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
-        const uint32_t a   = row[0];
-        const uint32_t b   = row[1];
-        const uint32_t c   = row[2];
-        const uint32_t d   = row[3];
-        const uint32_t e   = row[4];
-        const uint32_t fc  = row[5];
-        const uint32_t op  = row[6];
-        const uint32_t cr  = row[7];
-        const uint32_t cg  = row[8];
-        const uint32_t cbv = row[9];
-        if (do_math) {
-            MATH((blend_one_gaussian_math<IX>(a, b, c, d, e, fc, op, cr, cg, cbv)));
-        }
+        const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
+#if defined(MB_DEBUG_PROF_NOREAD)
+        // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
+        // read + the full 32-way dispatch + SFPU blend. Isolates SFPU/dispatch cost.
+        const uint32_t mask = row[10];
+        const uint32_t a = 0xBDCCCCCDu, b = 0u, c = 0xBDCCCCCDu, d = 0x40800000u, e = 0x40000000u;
+        const uint32_t fc = 0u, op = 0x3F000000u, cr = 0x3F000000u, cg = 0x3F000000u, cbv = 0x3F000000u;
+        dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+#elif defined(MB_DEBUG_PROF_NOBLEND)
+        // Profiling: do the 10 coeff L1 loads + loop, but skip the SFPU dispatch.
+        // Isolates the per-gaussian coeff-read + loop cost. Volatile sink defeats
+        // dead-code elimination of the loads.
+        g_prof_sink = row[0] + row[1] + row[2] + row[3] + row[4] +
+                      row[5] + row[6] + row[7] + row[8] + row[9] + row[10];
+        (void)shown;
+#else
+        const uint32_t a = row[0], b = row[1], c = row[2], d = row[3], e = row[4];
+        const uint32_t fc = row[5], op = row[6], cr = row[7], cg = row[8], cbv = row[9];
+        uint32_t mask = row[10];
+#if defined(MB_DEBUG_WEIGHT) || defined(MB_DEBUG_SHOWA)
+        mask &= ~shown;
+        shown |= row[10];
+#else
+        (void)shown;
+#endif
+        dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+#endif
         cb_pop_front(CB_MB_COEFF, 1);
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
-}
-
-// Compile-time unroll over the 32 microblocks.
-template <uint32_t M>
-inline void process_all_microblocks(const uint32_t* counts) {
-    if constexpr (M < NUM_MB) {
-        process_microblock<MB_IX[M]>(counts[M]);
-        process_all_microblocks<M + 1>(counts);
-    }
 }
 
 #ifdef TRISC_MATH
@@ -329,12 +347,11 @@ void kernel_main() {
 
     for (uint32_t t = 0; t < num_tiles; t++) {
         cb_wait_front(CB_MB_COUNTS, 1);
-        uint32_t counts[NUM_MB];
+        // Gaussian-major: counts page slot 0 holds this tile's gaussian-row count.
+        uint32_t num_g;
         {
             auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
-            for (uint32_t m = 0; m < NUM_MB; m++) {
-                counts[m] = cptr[m];
-            }
+            num_g = cptr[0];
         }
 
         cb_wait_front(CB_XRAMP, 1);
@@ -357,23 +374,18 @@ void kernel_main() {
 #if defined(MB_DEBUG_VECMAP)
         MATH((debug_vecmap()));
         // Still drain CB_MB_COEFF so the reader doesn't deadlock.
-        for (uint32_t m = 0; m < NUM_MB; m++) {
-            for (uint32_t i = 0; i < counts[m]; i++) {
-                cb_wait_front(CB_MB_COEFF, 1);
-                cb_pop_front(CB_MB_COEFF, 1);
-            }
+        for (uint32_t i = 0; i < num_g; i++) {
+            cb_wait_front(CB_MB_COEFF, 1);
+            cb_pop_front(CB_MB_COEFF, 1);
         }
 #elif defined(MB_DEBUG_RAMP)
         debug_all_microblocks<0>();
-        // Still drain CB_MB_COEFF so the reader doesn't deadlock.
-        for (uint32_t m = 0; m < NUM_MB; m++) {
-            for (uint32_t i = 0; i < counts[m]; i++) {
-                cb_wait_front(CB_MB_COEFF, 1);
-                cb_pop_front(CB_MB_COEFF, 1);
-            }
+        for (uint32_t i = 0; i < num_g; i++) {
+            cb_wait_front(CB_MB_COEFF, 1);
+            cb_pop_front(CB_MB_COEFF, 1);
         }
 #else
-        process_all_microblocks<0>(counts);
+        process_tile_gaussians(num_g);
 #endif
 
         tile_regs_commit();

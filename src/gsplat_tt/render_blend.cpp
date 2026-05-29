@@ -195,45 +195,73 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
         // it linearly; the compute kernel processes one 4x8 microblock at a time.
         const char* mb_kernel = std::getenv("GSPLAT_TT_MB_KERNEL");
         if (mb_kernel != nullptr && mb_kernel[0] == '1') {
+            // GAUSSIAN-MAJOR stream: emit ONE 16-word row per (tile, gaussian)
+            // that survives the microblock cull, carrying the 10 basis coeffs plus
+            // a 32-bit microblock mask (bit m set => gaussian touches microblock m).
+            // The device reads each gaussian's coeffs ONCE and dispatches the SFPU
+            // blend to just the masked microblocks. This collapses the coeff-read
+            // count from sum-of-per-microblock-counts (~15M) to distinct
+            // per-tile gaussians (~1.9M) -- the per-row L1 coeff read was the
+            // dominant blend cost (~140 cyc/row, serialized).
+            constexpr uint32_t GM_LANES = 16;  // 10 coeff + mask + pad, 64B row
             const int num_tiles = tiles_x * tiles_y;
+            // counts[t*32 + 0] holds tile t's gaussian-row count (rest unused).
             std::vector<uint32_t> mb_counts(static_cast<std::size_t>(num_tiles) * 32, 0);
             std::vector<uint32_t> mb_coeff_off(static_cast<std::size_t>(num_tiles) + 1, 0);
             std::vector<float> mb_coeff_stream;
-            mb_coeff_stream.reserve(static_cast<std::size_t>(p.pairs_kept_per_mb) * 10);
             uint32_t row = 0;
+            std::vector<uint32_t> mask;
             for (int t = 0; t < num_tiles; ++t) {
                 mb_coeff_off[static_cast<std::size_t>(t)] = row;
                 const uint32_t coeff_base = p.coeff_tile_off[static_cast<std::size_t>(t)];
+                const uint32_t L =
+                    p.coeff_tile_off[static_cast<std::size_t>(t) + 1] - coeff_base;
                 const uint32_t stream_base = p.mb_stream_tile_off[static_cast<std::size_t>(t)];
                 const uint32_t* hdr = &p.mb_header[static_cast<std::size_t>(t) * 32 * 2];
+                // Build per-local-gaussian microblock mask from the mb-major keep lists.
+                mask.assign(L, 0u);
                 for (int m = 0; m < 32; ++m) {
                     const uint32_t off = hdr[m * 2 + 0];
                     const uint32_t cnt = hdr[m * 2 + 1];
-                    mb_counts[static_cast<std::size_t>(t) * 32 + m] = cnt;
                     for (uint32_t i = 0; i < cnt; ++i) {
                         const uint32_t lidx = p.mb_stream[stream_base + off + i];
-                        const float* src =
-                            &p.coeff[static_cast<std::size_t>(coeff_base + lidx) * 10];
-                        mb_coeff_stream.insert(mb_coeff_stream.end(), src, src + 10);
-                        ++row;
+                        mask[lidx] |= (1u << m);
                     }
                 }
+                uint32_t gtile = 0;
+                for (uint32_t lidx = 0; lidx < L; ++lidx) {
+                    if (mask[lidx] == 0u) continue;  // culled from every microblock
+                    const float* src =
+                        &p.coeff[static_cast<std::size_t>(coeff_base + lidx) * 10];
+                    const std::size_t base = mb_coeff_stream.size();
+                    mb_coeff_stream.resize(base + GM_LANES, 0.0f);
+                    for (int k = 0; k < 10; ++k) mb_coeff_stream[base + k] = src[k];
+                    std::memcpy(&mb_coeff_stream[base + 10], &mask[lidx], 4);
+                    ++row;
+                    ++gtile;
+                }
+                mb_counts[static_cast<std::size_t>(t) * 32 + 0] = gtile;
             }
             mb_coeff_off[static_cast<std::size_t>(num_tiles)] = row;
 
             if (const char* d = std::getenv("GSPLAT_TT_MB_DUMP"); d && d[0] == '1') {
-                std::fprintf(stderr, "[MB_DUMP] total_rows=%u coeff_off[0..2]=%u,%u,%u\n",
-                             row, mb_coeff_off[0], mb_coeff_off.size() > 1 ? mb_coeff_off[1] : 0,
-                             mb_coeff_off.size() > 2 ? mb_coeff_off[2] : 0);
-                std::fprintf(stderr, "[MB_DUMP] tile0 counts:");
-                for (int m = 0; m < 32; ++m) std::fprintf(stderr, " %u", mb_counts[m]);
-                std::fprintf(stderr, "\n");
-                for (uint32_t r2 = 0; r2 < row && r2 < 6; ++r2) {
-                    std::fprintf(stderr, "[MB_DUMP] row%u: A=%.4f B=%.4f C=%.4f mx=%.3f my=%.3f f=%.1f op=%.3f rgb=%.3f,%.3f,%.3f\n",
-                                 r2, mb_coeff_stream[r2*10+0], mb_coeff_stream[r2*10+1], mb_coeff_stream[r2*10+2],
-                                 mb_coeff_stream[r2*10+3], mb_coeff_stream[r2*10+4], mb_coeff_stream[r2*10+5],
-                                 mb_coeff_stream[r2*10+6], mb_coeff_stream[r2*10+7], mb_coeff_stream[r2*10+8], mb_coeff_stream[r2*10+9]);
+                uint32_t maxpt = 0, nonempty = 0;
+                double sumpt = 0;
+                for (int t = 0; t < num_tiles; ++t) {
+                    const uint32_t pt = mb_coeff_off[t + 1] - mb_coeff_off[t];
+                    if (pt > maxpt) maxpt = pt;
+                    if (pt > 0) ++nonempty;
+                    sumpt += pt;
                 }
+                uint64_t bits = 0;
+                for (std::size_t e = 0; e * 16 < mb_coeff_stream.size(); ++e) {
+                    uint32_t mk;
+                    std::memcpy(&mk, &mb_coeff_stream[e * 16 + 10], 4);
+                    bits += static_cast<uint64_t>(__builtin_popcount(mk));
+                }
+                std::fprintf(stderr, "[MB_STAT] gaussian-major: num_tiles=%d nonempty=%u total_gaussian_rows=%u max/tile=%u mean/nonempty=%.1f sum_popcount=%llu (should==pairs_kept_per_mb=%lld)\n",
+                             num_tiles, nonempty, row, maxpt, nonempty ? sumpt / nonempty : 0.0,
+                             (unsigned long long)bits, (long long)p.pairs_kept_per_mb);
             }
 
             std::vector<float> img;

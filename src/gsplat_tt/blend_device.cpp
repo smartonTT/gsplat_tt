@@ -949,7 +949,9 @@ static double process_frame_mb(
     uint32_t image_w,
     std::vector<float>& image_out) {
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
-    const uint32_t total_pairs = static_cast<uint32_t>(mb_coeff_stream.size() / COEFF_LANES_PER_GAUSSIAN);
+    // Gaussian-major rows are a full 64B page each (16 words: 10 coeff + mask + pad).
+    constexpr uint32_t GM_LANES = mb::COEFF_ROW_BYTES_MB / 4;  // 16
+    const uint32_t total_pairs = static_cast<uint32_t>(mb_coeff_stream.size() / GM_LANES);
 
     // LPT cost = pairs per tile = coeff_off[t+1] - coeff_off[t].
     std::vector<float> cost_f32(num_tiles + 1);
@@ -983,12 +985,9 @@ static double process_frame_mb(
         }
     }
     std::vector<uint32_t> coeff_payload(coeff_bytes / 4, 0);
-    for (uint32_t e = 0; e < total_pairs; e++) {
-        std::memcpy(
-            reinterpret_cast<uint8_t*>(coeff_payload.data()) + static_cast<size_t>(e) * mb::COEFF_ROW_BYTES_MB,
-            &mb_coeff_stream[static_cast<size_t>(e) * COEFF_LANES_PER_GAUSSIAN],
-            COEFF_LANES_PER_GAUSSIAN * sizeof(float));
-    }
+    // Each gaussian-major row is already a full GM_LANES-word (64B) page.
+    std::memcpy(coeff_payload.data(), mb_coeff_stream.data(),
+                static_cast<size_t>(total_pairs) * mb::COEFF_ROW_BYTES_MB);
     std::vector<uint32_t> coeff_off_u32(mb_coeff_off);
     auto xramp = make_ramp(/*is_x=*/true);
     auto yramp = make_ramp(/*is_x=*/false);
