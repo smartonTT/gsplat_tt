@@ -985,10 +985,14 @@ static double process_frame_mb(
                 mb_counts[static_cast<size_t>(t) * NUM_MICROBLOCKS + m];
         }
     }
-    std::vector<uint32_t> coeff_payload(coeff_bytes / 4, 0);
-    // Each gaussian-major row is already a full GM_LANES-word (64B) page.
-    std::memcpy(coeff_payload.data(), mb_coeff_stream.data(),
-                static_cast<size_t>(total_pairs) * mb::COEFF_ROW_BYTES_MB);
+    // mb_coeff_stream ALREADY has the exact 64B-per-row (GM_LANES-word) byte
+    // layout the device expects, so upload it directly. The old code zero-init'd
+    // a 200MB coeff_payload and memcpy'd the whole stream into it -- a redundant
+    // ~100ms (50ms zero-init + 50ms copy) for no reason. Only the empty-frame
+    // edge case needs a placeholder page (buf_coeff is sized max(1,total_pairs)).
+    static const std::vector<float> kEmptyCoeffPage(GM_LANES, 0.0f);
+    const std::vector<float>& coeff_upload =
+        mb_coeff_stream.empty() ? kEmptyCoeffPage : mb_coeff_stream;
     std::vector<uint32_t> coeff_off_u32(mb_coeff_off);
     auto xramp = make_ramp(/*is_x=*/true);
     auto yramp = make_ramp(/*is_x=*/false);
@@ -1027,7 +1031,7 @@ static double process_frame_mb(
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_out,       output_zero);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_counts,    counts_payload);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_coeff_off, coeff_off_u32);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_coeff,     coeff_payload);
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_coeff,     coeff_upload);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_xramp,     xramp);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_yramp,     yramp);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, buf_tile_ids,  assign.tile_id_buffer_padded);
