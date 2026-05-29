@@ -36,6 +36,9 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#if defined(MB_DEBUG_PAGEDBG)
+#include "api/debug/dprint.h"
+#endif
 
 constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 constexpr uint32_t NUM_MB = 32;
@@ -43,12 +46,31 @@ constexpr uint32_t COUNTS_PAGE_BYTES = 128;  // 32 uint32
 // 10 real fp32 lanes padded to a 64B DRAM-aligned page (see blend_device.cpp:
 // an unaligned 48B page corrupts interleaved per-bank addressing).
 constexpr uint32_t COEFF_ROW_BYTES = 64;
+// Gaussian rows are streamed in large interleaved pages of COEFF_PAGE_ROWS rows
+// (must match COEFF_PAGE_ROWS in blend_device.cpp / CHUNK_ROWS in the compute
+// kernel). One noc_async_read_tile per page == one big DRAM transaction.
+constexpr uint32_t COEFF_PAGE_ROWS  = 64;
+constexpr uint32_t COEFF_PAGE_BYTES = COEFF_PAGE_ROWS * COEFF_ROW_BYTES;  // 4096
+// Pipeline depth for coeff page reads. The blend is DRAM-LATENCY bound: a
+// barrier after every page read serializes one outstanding read at a time
+// (~720ms even after coalescing to 4KB pages). Issuing COEFF_READ_BATCH reads
+// before a single barrier lets the DRAM banks service them in parallel, hiding
+// latency. COEFF_CB_DEPTH MUST match CB_MB_COEFF depth in blend_device.cpp.
+constexpr uint32_t COEFF_CB_DEPTH   = 16;
+constexpr uint32_t COEFF_READ_BATCH = 8;
 constexpr uint32_t RAMP_TILE_BYTES = 32 * 32 * 4;  // fp32 32x32 tile
 
-constexpr uint32_t CB_XRAMP     = 0;
-constexpr uint32_t CB_YRAMP     = 1;
-constexpr uint32_t CB_MB_COEFF  = 2;
-constexpr uint32_t CB_MB_COUNTS = 3;
+constexpr uint32_t CB_XRAMP      = 0;
+constexpr uint32_t CB_YRAMP      = 1;
+constexpr uint32_t CB_MB_COEFF   = 2;
+constexpr uint32_t CB_MB_COUNTS  = 3;
+// Reader-private scratch (64B). NEVER pushed/popped, so compute never sees it
+// and its write pointer is stable. Used for the small tile-id + page-offset
+// DRAM reads. MUST NOT reuse CB_MB_COUNTS for this: when the reader runs ahead
+// of compute (big-page makes the reader fast), writing scratch into a COUNTS
+// slot clobbers the next tile's gaussian count before compute reads it, so
+// compute reads a page offset as num_g and deadlocks on cb_wait_front.
+constexpr uint32_t CB_RD_SCRATCH = 4;
 
 void kernel_main() {
     uint32_t counts_addr       = get_arg_val<uint32_t>(0);
@@ -68,7 +90,7 @@ void kernel_main() {
     constexpr auto tile_ids_args = TensorAccessorArgs<yramp_args.next_compile_time_args_offset()>();
 
     const auto counts_acc    = TensorAccessor(counts_args,    counts_addr,       COUNTS_PAGE_BYTES);
-    const auto coeff_acc     = TensorAccessor(coeff_args,     coeff_stream_addr, COEFF_ROW_BYTES);
+    const auto coeff_acc     = TensorAccessor(coeff_args,     coeff_stream_addr, COEFF_PAGE_BYTES);
     const auto coeff_off_acc = TensorAccessor(coeff_off_args, coeff_off_addr,    /*page=*/4);
     const auto xramp_acc     = TensorAccessor(xramp_args,     xramp_addr,        RAMP_TILE_BYTES);
     const auto yramp_acc     = TensorAccessor(yramp_args,     yramp_addr,        RAMP_TILE_BYTES);
@@ -78,8 +100,8 @@ void kernel_main() {
         return;
     }
 
-    // Cache this core's tile-ID slice in L1 (scratch grabbed from CB_MB_COUNTS).
-    uint32_t scratch_addr = get_write_ptr(CB_MB_COUNTS);
+    // Cache this core's tile-ID slice in L1 (reader-private scratch CB).
+    const uint32_t scratch_addr = get_write_ptr(CB_RD_SCRATCH);
     auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
     uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
     {
@@ -104,6 +126,10 @@ void kernel_main() {
         }
     }
 
+    // Logical write slot of CB_MB_COEFF (this core is its sole producer). Used to
+    // cap each read batch so it never wraps past the CB's physical end.
+    uint32_t coeff_back_slot = 0;
+
     for (uint32_t t = 0; t < tile_ids_count; t++) {
         uint32_t tile_id = tile_ids[t];
 
@@ -123,30 +149,43 @@ void kernel_main() {
         noc_async_read_barrier();
         cb_push_back(CB_MB_COUNTS, 1);
 
-        // The counts page is now owned by compute. Move scratch to the next
-        // (free) CB_MB_COUNTS slot before reusing it for offset reads, so we
-        // don't clobber the counts compute is about to consume.
-        scratch_addr = get_write_ptr(CB_MB_COUNTS);
-        scratch_ptr  = reinterpret_cast<volatile uint32_t*>(scratch_addr);
-
-        // (3) Coeff stream slice [coeff_off[t], coeff_off[t+1]).
-        uint32_t row_start, row_end;
+        // (3) Coeff PAGE slice [page_off[t], page_off[t+1]). Each page holds up to
+        // COEFF_PAGE_ROWS gaussian rows, packed contiguously host-side.
+        uint32_t page_start, page_end;
         {
             uint64_t off_noc = get_noc_addr(tile_id, coeff_off_acc);
             noc_async_read(off_noc, scratch_addr, 4);
             noc_async_read_barrier();
-            row_start = scratch_ptr[0];
+            page_start = scratch_ptr[0];
             off_noc = get_noc_addr(tile_id + 1, coeff_off_acc);
             noc_async_read(off_noc, scratch_addr, 4);
             noc_async_read_barrier();
-            row_end = scratch_ptr[0];
+            page_end = scratch_ptr[0];
         }
+#if defined(MB_DEBUG_PAGEDBG)
+        DPRINT << "R" << t << "t" << tile_id << "p" << page_start << "-" << page_end << ENDL();
+#endif
 
-        for (uint32_t r = row_start; r < row_end; r++) {
-            cb_reserve_back(CB_MB_COEFF, 1);
-            noc_async_read_tile(r, coeff_acc, get_write_ptr(CB_MB_COEFF));
+        // Stream the tile's pages in batches: issue up to COEFF_READ_BATCH page
+        // reads, then ONE barrier, so the DRAM banks service them in parallel
+        // (latency hiding). Each batch is capped to not wrap past the CB end, so
+        // the contiguous write region [wp, wp + n*page) stays in-bounds.
+        uint32_t p = page_start;
+        while (p < page_end) {
+            uint32_t n = page_end - p;
+            if (n > COEFF_READ_BATCH) n = COEFF_READ_BATCH;
+            const uint32_t to_end = COEFF_CB_DEPTH - coeff_back_slot;
+            if (n > to_end) n = to_end;
+            cb_reserve_back(CB_MB_COEFF, n);
+            const uint32_t wp = get_write_ptr(CB_MB_COEFF);
+            for (uint32_t i = 0; i < n; i++) {
+                noc_async_read_tile(p + i, coeff_acc, wp + i * COEFF_PAGE_BYTES);
+            }
             noc_async_read_barrier();
-            cb_push_back(CB_MB_COEFF, 1);
+            cb_push_back(CB_MB_COEFF, n);
+            p += n;
+            coeff_back_slot += n;
+            if (coeff_back_slot >= COEFF_CB_DEPTH) coeff_back_slot -= COEFF_CB_DEPTH;
         }
     }
 }

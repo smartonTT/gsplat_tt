@@ -757,6 +757,13 @@ constexpr uint32_t COUNTS_PAGE_BYTES = 128;
 // host EnqueueWriteBuffer layout and the device TensorAccessor, so only some rows
 // land and the rest read as zero.
 constexpr uint32_t COEFF_ROW_BYTES_MB = 64;
+// Gaussian rows are streamed in LARGE interleaved DRAM pages (not one tiny 64B
+// page per row). Each tile's contiguous rows are packed page-aligned host-side so
+// the reader issues ONE big noc_async_read per page instead of millions of 64B
+// reads -- the per-row reads were the blend's DRAM-stall bottleneck (NARW/NRBW).
+// MUST match CHUNK_ROWS in reader_alpha_blend_mb.cpp / alpha_blend_compute_mb.cpp.
+constexpr uint32_t COEFF_PAGE_ROWS  = 64;
+constexpr uint32_t COEFF_PAGE_BYTES = COEFF_PAGE_ROWS * COEFF_ROW_BYTES_MB;  // 4096
 constexpr uint32_t RAMP_TILE_BYTES = TILE_H * TILE_W * 4;  // fp32 32x32
 
 static void build_program_and_workload_mb(DeviceContext& ctx) {
@@ -771,9 +778,21 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
-    cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
+    // Depth 16 (MUST match COEFF_CB_DEPTH in reader_alpha_blend_mb.cpp): lets the
+    // reader keep COEFF_READ_BATCH (8) DRAM page reads in flight to hide latency.
+    cb_cfg(CB_MB_COEFF, COEFF_PAGE_BYTES, 16, DataFormat::Float32);
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    // Reader-private scratch (CB index 4, 64B): tile-id + page-offset DRAM reads.
+    // Never pushed/popped, so it never aliases CB_MB_COUNTS (which would clobber
+    // num_g when the reader runs ahead of compute -> deadlock).
+    cb_cfg(/*CB_RD_SCRATCH=*/4, 64, 1, DataFormat::UInt32);
+
+    std::map<std::string, std::string> mb_defines;
+    if (const char* dbg = std::getenv("GSPLAT_TT_MB_DEBUG")) {
+        // e.g. GSPLAT_TT_MB_DEBUG=ANALYTIC -> -DMB_DEBUG_ANALYTIC
+        mb_defines["MB_DEBUG_" + std::string(dbg)] = "1";
+    }
 
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < 6; i++) {
@@ -787,17 +806,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
+            .defines = mb_defines,
         });
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
-
-    std::map<std::string, std::string> mb_defines;
-    if (const char* dbg = std::getenv("GSPLAT_TT_MB_DEBUG")) {
-        // e.g. GSPLAT_TT_MB_DEBUG=ANALYTIC -> -DMB_DEBUG_ANALYTIC
-        mb_defines["MB_DEBUG_" + std::string(dbg)] = "1";
-    }
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
@@ -951,7 +965,6 @@ static double process_frame_mb(
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
     // Gaussian-major rows are a full 64B page each (16 words: 10 coeff + mask + pad).
     constexpr uint32_t GM_LANES = mb::COEFF_ROW_BYTES_MB / 4;  // 16
-    const uint32_t total_pairs = static_cast<uint32_t>(mb_coeff_stream.size() / GM_LANES);
 
     // LPT cost = pairs per tile = coeff_off[t+1] - coeff_off[t].
     std::vector<float> cost_f32(num_tiles + 1);
@@ -966,11 +979,26 @@ static double process_frame_mb(
         distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = BufferType::DRAM};
         return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
     };
+    // Page-align each tile's contiguous rows into COEFF_PAGE_ROWS-row pages so the
+    // reader streams whole pages (one big DRAM transaction each). page_off is in
+    // PAGE units (replaces the per-row coeff_off for the reader); compute still
+    // reads the exact gaussian count from the counts page.
+    constexpr uint32_t PAGE_ROWS = mb::COEFF_PAGE_ROWS;
+    constexpr uint32_t PAGE_BYTES = mb::COEFF_PAGE_BYTES;
+    std::vector<uint32_t> page_off(num_tiles + 1, 0);
+    uint32_t total_pages = 0;
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        page_off[t] = total_pages;
+        const uint32_t ng = mb_coeff_off[t + 1] - mb_coeff_off[t];
+        total_pages += (ng + PAGE_ROWS - 1) / PAGE_ROWS;
+    }
+    page_off[num_tiles] = total_pages;
+
     const size_t counts_bytes = static_cast<size_t>(num_tiles) * mb::COUNTS_PAGE_BYTES;
-    const size_t coeff_bytes = std::max<size_t>(1, total_pairs) * mb::COEFF_ROW_BYTES_MB;
+    const size_t coeff_bytes = std::max<size_t>(1, total_pages) * PAGE_BYTES;
     auto buf_counts    = make_dram(counts_bytes, mb::COUNTS_PAGE_BYTES);
     auto buf_coeff_off = make_dram((static_cast<size_t>(num_tiles) + 1) * sizeof(uint32_t), sizeof(uint32_t));
-    auto buf_coeff     = make_dram(coeff_bytes, mb::COEFF_ROW_BYTES_MB);
+    auto buf_coeff     = make_dram(coeff_bytes, PAGE_BYTES);
     auto buf_xramp     = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
     auto buf_yramp     = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
     auto buf_out       = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
@@ -985,10 +1013,19 @@ static double process_frame_mb(
         }
     }
     std::vector<uint32_t> coeff_payload(coeff_bytes / 4, 0);
-    // Each gaussian-major row is already a full GM_LANES-word (64B) page.
-    std::memcpy(coeff_payload.data(), mb_coeff_stream.data(),
-                static_cast<size_t>(total_pairs) * mb::COEFF_ROW_BYTES_MB);
-    std::vector<uint32_t> coeff_off_u32(mb_coeff_off);
+    // Copy each tile's contiguous rows to its page-aligned destination (padding the
+    // tail of the last page with zeros; compute only reads num_g real rows).
+    constexpr uint32_t PAGE_WORDS = PAGE_BYTES / 4;
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        const uint32_t ng = mb_coeff_off[t + 1] - mb_coeff_off[t];
+        if (ng == 0) continue;
+        const size_t src_word = static_cast<size_t>(mb_coeff_off[t]) * GM_LANES;
+        const size_t dst_word = static_cast<size_t>(page_off[t]) * PAGE_WORDS;
+        std::memcpy(coeff_payload.data() + dst_word,
+                    mb_coeff_stream.data() + src_word,
+                    static_cast<size_t>(ng) * mb::COEFF_ROW_BYTES_MB);
+    }
+    std::vector<uint32_t> coeff_off_u32(page_off);  // reader consumes PAGE offsets
     auto xramp = make_ramp(/*is_x=*/true);
     auto yramp = make_ramp(/*is_x=*/false);
 
