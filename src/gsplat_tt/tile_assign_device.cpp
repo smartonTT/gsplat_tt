@@ -287,20 +287,68 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
     const uint32_t M_pad = round_up(Mu, ELEMS_PER_PAGE);
     const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
 
+    // ── R3: resident tile_assign inputs (GSPLAT_TT_RESIDENT_TA_IN=1) ──────
+    // When on, K1/K2/K4 read the M-compact proj_m_* buffers the gather stage
+    // left resident in device DRAM (SoA px/py/rx/ry means+radii, cov a/b/c)
+    // over NoC instead of us re-uploading the host arrays each frame. The
+    // kernels already consume per-component SoA, so the resident format drops
+    // in with no repack. The m2_thresh/opacok precompute (K3), exclusive
+    // prefix-sum (H1), compaction (H2) and the D2H of the final pairs stay
+    // host-side bridges (removed in R4). Requires RESIDENT_PROJECT+
+    // RESIDENT_GATHER; falls back to CPU (device_ok=false) if proj_m_* absent.
+    const bool resident_in = [] {
+        const char* v = std::getenv("GSPLAT_TT_RESIDENT_TA_IN");
+        return v != nullptr && v[0] == '1';
+    }();
+    std::shared_ptr<distributed::MeshBuffer> res_px, res_py, res_rx, res_ry,
+        res_a, res_b, res_c;
+
     try {
+        if (resident_in) {
+            res_px = device_state::get_buffer("proj_m_px");
+            res_py = device_state::get_buffer("proj_m_py");
+            res_rx = device_state::get_buffer("proj_m_rx");
+            res_ry = device_state::get_buffer("proj_m_ry");
+            res_a  = device_state::get_buffer("proj_m_a");
+            res_b  = device_state::get_buffer("proj_m_b");
+            res_c  = device_state::get_buffer("proj_m_c");
+            auto res_M = device_state::get_buffer("proj_M");
+            if (!res_px || !res_py || !res_rx || !res_ry || !res_a || !res_b ||
+                !res_c || !res_M) {
+                std::cerr << "[gsplat_tt::tile_assign] RESIDENT_TA_IN set but "
+                             "proj_m_* not resident; needs RESIDENT_PROJECT+"
+                             "RESIDENT_GATHER\n";
+                return set_fail();
+            }
+            // M from the resident scalar (proj_M) must equal the host M.
+            std::vector<uint32_t> mbuf(ELEMS_PER_PAGE);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, mbuf, res_M, true);
+            if (mbuf[0] != Mu) {
+                std::fprintf(stderr,
+                    "[TA resident] proj_M=%u != host M=%u — abort resident\n",
+                    mbuf[0], Mu);
+                return set_fail();
+            }
+        }
+
         // ── Allocate / grow M-sized buffers ─────────────────────────────
         const std::size_t m_bytes = static_cast<std::size_t>(M_pad) * 4;
-        if (!ctx->buf_px || ctx->cap_m_bytes < m_bytes) {
-            ctx->buf_px     = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_py     = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_rx     = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_ry     = make_dram(ctx->mesh_device.get(), m_bytes);
+        if (!ctx->buf_tpg || ctx->cap_m_bytes < m_bytes) {
             ctx->buf_tpg    = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_a      = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_b      = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_c      = make_dram(ctx->mesh_device.get(), m_bytes);
             ctx->buf_m2thr  = make_dram(ctx->mesh_device.get(), m_bytes);
             ctx->buf_opacok = make_dram(ctx->mesh_device.get(), m_bytes);
+            // Host-array input buffers: only needed when NOT reading resident.
+            // In resident mode K1/K2/K4 read proj_m_* directly over NoC, so we
+            // neither allocate nor H2D-upload these.
+            if (!resident_in) {
+                ctx->buf_px = make_dram(ctx->mesh_device.get(), m_bytes);
+                ctx->buf_py = make_dram(ctx->mesh_device.get(), m_bytes);
+                ctx->buf_rx = make_dram(ctx->mesh_device.get(), m_bytes);
+                ctx->buf_ry = make_dram(ctx->mesh_device.get(), m_bytes);
+                ctx->buf_a  = make_dram(ctx->mesh_device.get(), m_bytes);
+                ctx->buf_b  = make_dram(ctx->mesh_device.get(), m_bytes);
+                ctx->buf_c  = make_dram(ctx->mesh_device.get(), m_bytes);
+            }
             ctx->cap_m_bytes = m_bytes;
         }
         const uint32_t offs_count = Mu + 1;
@@ -312,17 +360,37 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         }
 
         // ── Pack inputs (SoA px,py,rx,ry), zero-padded tail ─────────────
-        std::vector<uint32_t> px(M_pad, 0), py(M_pad, 0), rx(M_pad, 0), ry(M_pad, 0);
-        for (uint32_t m = 0; m < Mu; m++) {
-            std::memcpy(&px[m], &means_2d[m * 2 + 0], 4);
-            std::memcpy(&py[m], &means_2d[m * 2 + 1], 4);
-            std::memcpy(&rx[m], &radii[m * 2 + 0], 4);
-            std::memcpy(&ry[m], &radii[m * 2 + 1], 4);
+        // Resident mode skips this H2D entirely — K1/K2 read proj_m_* over NoC.
+        if (!resident_in) {
+            std::vector<uint32_t> px(M_pad, 0), py(M_pad, 0), rx(M_pad, 0), ry(M_pad, 0);
+            for (uint32_t m = 0; m < Mu; m++) {
+                std::memcpy(&px[m], &means_2d[m * 2 + 0], 4);
+                std::memcpy(&py[m], &means_2d[m * 2 + 1], 4);
+                std::memcpy(&rx[m], &radii[m * 2 + 0], 4);
+                std::memcpy(&ry[m], &radii[m * 2 + 1], 4);
+            }
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_px, px, false);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_py, py, false);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_rx, rx, false);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_ry, ry, false);
         }
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_px, px, false);
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_py, py, false);
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_rx, rx, false);
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_ry, ry, false);
+
+        // Reader input addresses: resident proj_m_* (NoC) or the host arrays we
+        // just uploaded. K1/K2 use means+radii (px,py,rx,ry); K4 adds cov a,b,c.
+        const uint32_t in_px = static_cast<uint32_t>(
+            (resident_in ? res_px : ctx->buf_px)->address());
+        const uint32_t in_py = static_cast<uint32_t>(
+            (resident_in ? res_py : ctx->buf_py)->address());
+        const uint32_t in_rx = static_cast<uint32_t>(
+            (resident_in ? res_rx : ctx->buf_rx)->address());
+        const uint32_t in_ry = static_cast<uint32_t>(
+            (resident_in ? res_ry : ctx->buf_ry)->address());
+        const uint32_t in_a = static_cast<uint32_t>(
+            (resident_in ? res_a : ctx->buf_a)->address());
+        const uint32_t in_b = static_cast<uint32_t>(
+            (resident_in ? res_b : ctx->buf_b)->address());
+        const uint32_t in_c = static_cast<uint32_t>(
+            (resident_in ? res_c : ctx->buf_c)->address());
 
         // ── K1: per-Gaussian AABB -> tiles_per_gaussian ─────────────────
         const auto t_k1_0 = clk::now();
@@ -332,10 +400,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         for (uint32_t c = 0; c < num_cores; c++) {
             CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
             SetRuntimeArgs(prog1, ctx->k1, core, {
-                static_cast<uint32_t>(ctx->buf_px->address()),
-                static_cast<uint32_t>(ctx->buf_py->address()),
-                static_cast<uint32_t>(ctx->buf_rx->address()),
-                static_cast<uint32_t>(ctx->buf_ry->address()),
+                in_px,
+                in_py,
+                in_rx,
+                in_ry,
                 static_cast<uint32_t>(ctx->buf_tpg->address()),
                 ws1.start[c], ws1.count[c], Mu,
                 static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y),
@@ -396,10 +464,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
             SetRuntimeArgs(prog2, ctx->k2, core, {
                 static_cast<uint32_t>(ctx->buf_offs->address()),
-                static_cast<uint32_t>(ctx->buf_px->address()),
-                static_cast<uint32_t>(ctx->buf_py->address()),
-                static_cast<uint32_t>(ctx->buf_rx->address()),
-                static_cast<uint32_t>(ctx->buf_ry->address()),
+                in_px,
+                in_py,
+                in_rx,
+                in_ry,
                 static_cast<uint32_t>(ctx->buf_gids->address()),
                 static_cast<uint32_t>(ctx->buf_tids->address()),
                 ws2.start[c], ws2.count[c], P, Mu,
@@ -433,16 +501,26 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             const auto t_cull0 = clk::now();
             // K3 (host bridge): per-Gaussian m2_thresh + opacity-floor.
             // Bit-exact match to gsplat_cpu::tile_assign lines 174-182.
-            std::vector<uint32_t> a_v(M_pad, 0), b_v(M_pad, 0), c_v(M_pad, 0);
+            // The cov a/b/c packing+upload is only needed when NOT resident:
+            // in resident mode K4 reads proj_m_a/b/c over NoC. m2_thresh/opacok
+            // remain a host bridge (computed from the host opacities array).
+            std::vector<uint32_t> a_v, b_v, c_v;
+            if (!resident_in) {
+                a_v.assign(M_pad, 0);
+                b_v.assign(M_pad, 0);
+                c_v.assign(M_pad, 0);
+            }
             std::vector<uint32_t> m2t_v(M_pad, 0);
             std::vector<uint32_t> ok_v(M_pad, 0);
             for (uint32_t m = 0; m < Mu; m++) {
-                const float a = covs_2d[m * 4 + 0];
-                const float b = covs_2d[m * 4 + 1];
-                const float c = covs_2d[m * 4 + 3];
-                std::memcpy(&a_v[m], &a, 4);
-                std::memcpy(&b_v[m], &b, 4);
-                std::memcpy(&c_v[m], &c, 4);
+                if (!resident_in) {
+                    const float a = covs_2d[m * 4 + 0];
+                    const float b = covs_2d[m * 4 + 1];
+                    const float c = covs_2d[m * 4 + 3];
+                    std::memcpy(&a_v[m], &a, 4);
+                    std::memcpy(&b_v[m], &b, 4);
+                    std::memcpy(&c_v[m], &c, 4);
+                }
                 const float op = opacities[m];
                 float m2t = 0.0f;
                 int32_t ok = 0;
@@ -453,9 +531,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 std::memcpy(&m2t_v[m], &m2t, 4);
                 ok_v[m] = static_cast<uint32_t>(ok);
             }
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_a, a_v, false);
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b, b_v, false);
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c_v, false);
+            if (!resident_in) {
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_a, a_v, false);
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b, b_v, false);
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c_v, false);
+            }
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_m2thr, m2t_v, false);
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_opacok, ok_v, false);
 
@@ -466,11 +546,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 SetRuntimeArgs(progc, ctx->k4, core, {
                     static_cast<uint32_t>(ctx->buf_gids->address()),
                     static_cast<uint32_t>(ctx->buf_tids->address()),
-                    static_cast<uint32_t>(ctx->buf_a->address()),
-                    static_cast<uint32_t>(ctx->buf_b->address()),
-                    static_cast<uint32_t>(ctx->buf_c->address()),
-                    static_cast<uint32_t>(ctx->buf_px->address()),
-                    static_cast<uint32_t>(ctx->buf_py->address()),
+                    in_a,
+                    in_b,
+                    in_c,
+                    in_px,
+                    in_py,
                     static_cast<uint32_t>(ctx->buf_m2thr->address()),
                     static_cast<uint32_t>(ctx->buf_opacok->address()),
                     static_cast<uint32_t>(ctx->buf_keep->address()),
