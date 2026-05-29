@@ -87,6 +87,10 @@ struct TileAssignDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_tids;
     std::shared_ptr<distributed::MeshBuffer> buf_keep;
     std::size_t cap_p_bytes = 0;
+
+    // R4/R5: tiny 1-page buffer publishing the full P (pre-cull pair count) so
+    // the resident-pairs sort path knows how many pairs to bin.
+    std::shared_ptr<distributed::MeshBuffer> buf_pairs_P;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -247,6 +251,7 @@ void tile_assign_device_shutdown() {
         slot->buf_gids.reset();
         slot->buf_tids.reset();
         slot->buf_keep.reset();
+        slot->buf_pairs_P.reset();
         // NOTE: do NOT close mesh_device — device_state owns it.
         slot.reset();
     }
@@ -298,6 +303,16 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
     // RESIDENT_GATHER; falls back to CPU (device_ok=false) if proj_m_* absent.
     const bool resident_in = [] {
         const char* v = std::getenv("GSPLAT_TT_RESIDENT_TA_IN");
+        return v != nullptr && v[0] == '1';
+    }();
+    // ── R4/R5: resident-pairs handoff (GSPLAT_TT_RESIDENT_PAIRS=1) ────────
+    // When on (and the per-pair cull runs), TA keeps the full-P gaussian-major
+    // (gid,tid) pairs + keep mask RESIDENT in DRAM and registers them in
+    // device_state for the sort stage to bin on-device. The host D2H of the
+    // pairs (28ms) and the sequential gaussian-major compaction (37ms) are
+    // dropped — sort's device binning reads keep[] and compacts implicitly.
+    const bool resident_pairs = [] {
+        const char* v = std::getenv("GSPLAT_TT_RESIDENT_PAIRS");
         return v != nullptr && v[0] == '1';
     }();
     std::shared_ptr<distributed::MeshBuffer> res_px, res_py, res_rx, res_ry,
@@ -480,23 +495,31 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const auto t_k2_1 = clk::now();
         T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
 
-        // ── D2H pairs ───────────────────────────────────────────────────
-        const auto t_d2h0 = clk::now();
-        std::vector<uint32_t> gids(P_pad), tids(P_pad);
-        distributed::EnqueueReadMeshBuffer(*ctx->cq, gids, ctx->buf_gids, true);
-        distributed::EnqueueReadMeshBuffer(*ctx->cq, tids, ctx->buf_tids, true);
-        const auto t_d2h1 = clk::now();
-        T.d2h_ms = std::chrono::duration<double, std::milli>(t_d2h1 - t_d2h0).count();
+        const bool do_cull = (covs_2d != nullptr) && (opacities != nullptr);
+        // Resident-pairs is only valid when the cull runs (keep mask is the
+        // implicit compaction). Otherwise fall through to the host path.
+        const bool resident_pairs_active = resident_pairs && do_cull;
 
-        result.gaussian_ids.resize(P);
-        result.tile_ids.resize(P);
-        for (uint32_t p = 0; p < P; p++) {
-            result.gaussian_ids[p] = static_cast<int64_t>(static_cast<int32_t>(gids[p]));
-            result.tile_ids[p] = static_cast<int64_t>(static_cast<int32_t>(tids[p]));
+        // ── D2H pairs ───────────────────────────────────────────────────
+        // Skipped in resident-pairs mode: the (gid,tid) pairs stay resident and
+        // sort's device binning consumes them directly.
+        if (!resident_pairs_active) {
+            const auto t_d2h0 = clk::now();
+            std::vector<uint32_t> gids(P_pad), tids(P_pad);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, gids, ctx->buf_gids, true);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, tids, ctx->buf_tids, true);
+            const auto t_d2h1 = clk::now();
+            T.d2h_ms = std::chrono::duration<double, std::milli>(t_d2h1 - t_d2h0).count();
+
+            result.gaussian_ids.resize(P);
+            result.tile_ids.resize(P);
+            for (uint32_t p = 0; p < P; p++) {
+                result.gaussian_ids[p] = static_cast<int64_t>(static_cast<int32_t>(gids[p]));
+                result.tile_ids[p] = static_cast<int64_t>(static_cast<int32_t>(tids[p]));
+            }
         }
 
         // ── Phase 4: per-pair Mahalanobis cull (K3 host precompute + K4) ──
-        const bool do_cull = (covs_2d != nullptr) && (opacities != nullptr);
         if (do_cull) {
             const auto t_cull0 = clk::now();
             // K3 (host bridge): per-Gaussian m2_thresh + opacity-floor.
@@ -563,37 +586,60 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             const auto t_cull1 = clk::now();
             T.cull_ms = std::chrono::duration<double, std::milli>(t_cull1 - t_cull0).count();
 
-            // D2H keep_mask.
-            const auto t_kd0 = clk::now();
-            std::vector<uint32_t> keep(P_pad);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, keep, ctx->buf_keep, true);
-            const auto t_kd1 = clk::now();
-            T.d2h_ms += std::chrono::duration<double, std::milli>(t_kd1 - t_kd0).count();
-
-            // H2 (host bridge): sequential gaussian-major compaction. Identical
-            // ordering to gsplat_cpu::tile_assign's chunked compaction (which
-            // tiles [0,P) in order and preserves within-chunk order).
-            const auto t_comp0 = clk::now();
-            std::vector<int64_t> kg, kt;
-            kg.reserve(P);
-            kt.reserve(P);
-            for (uint32_t p = 0; p < P; p++) {
-                if (keep[p]) {
-                    kg.push_back(result.gaussian_ids[p]);
-                    kt.push_back(result.tile_ids[p]);
+            if (resident_pairs_active) {
+                // R4/R5: publish the full-P resident pairs + keep mask for the
+                // device-binning sort path. No keep D2H, no host compaction —
+                // sort reads keep[] and compacts implicitly while binning.
+                device_state::register_buffer("ta_pairs_gid", ctx->buf_gids);
+                device_state::register_buffer("ta_pairs_tid", ctx->buf_tids);
+                device_state::register_buffer("ta_pairs_keep", ctx->buf_keep);
+                if (!ctx->buf_pairs_P) {
+                    ctx->buf_pairs_P = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
+                    device_state::register_buffer("ta_pairs_P", ctx->buf_pairs_P);
                 }
+                std::vector<uint32_t> pbuf(ELEMS_PER_PAGE, 0);
+                pbuf[0] = P;        // full pre-cull pair count
+                pbuf[1] = P_pad;    // padded count (page-aligned)
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pairs_P, pbuf, false);
+                distributed::Finish(*ctx->cq);
+                // result.gaussian_ids / tile_ids intentionally left empty: the
+                // resident-pairs sort path does not read them.
+            } else {
+                // D2H keep_mask.
+                const auto t_kd0 = clk::now();
+                std::vector<uint32_t> keep(P_pad);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, keep, ctx->buf_keep, true);
+                const auto t_kd1 = clk::now();
+                T.d2h_ms += std::chrono::duration<double, std::milli>(t_kd1 - t_kd0).count();
+
+                // H2 (host bridge): sequential gaussian-major compaction.
+                // Identical ordering to gsplat_cpu::tile_assign's chunked
+                // compaction (which tiles [0,P) in order, preserving order).
+                const auto t_comp0 = clk::now();
+                std::vector<int64_t> kg, kt;
+                kg.reserve(P);
+                kt.reserve(P);
+                for (uint32_t p = 0; p < P; p++) {
+                    if (keep[p]) {
+                        kg.push_back(result.gaussian_ids[p]);
+                        kt.push_back(result.tile_ids[p]);
+                    }
+                }
+                result.gaussian_ids = std::move(kg);
+                result.tile_ids = std::move(kt);
+                const auto t_comp1 = clk::now();
+                T.compact_ms = std::chrono::duration<double, std::milli>(t_comp1 - t_comp0).count();
             }
-            result.gaussian_ids = std::move(kg);
-            result.tile_ids = std::move(kt);
-            const auto t_comp1 = clk::now();
-            T.compact_ms = std::chrono::duration<double, std::milli>(t_comp1 - t_comp0).count();
         }
 
         T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
 
         // Optional self-check vs the matching CPU reference (AABB-only when
-        // cull disabled, full Phase-4 cull otherwise).
-        if (const char* dbg = std::getenv("GSPLAT_TT_TA_DEBUG"); dbg && dbg[0] == '1') {
+        // cull disabled, full Phase-4 cull otherwise). Skipped in resident-pairs
+        // mode (host pairs intentionally absent — correctness is checked
+        // end-to-end via the sort verify / PSNR).
+        if (const char* dbg = std::getenv("GSPLAT_TT_TA_DEBUG");
+            dbg && dbg[0] == '1' && !resident_pairs_active) {
             const gsplat_cpu::TileAssignResult cpu = gsplat_cpu::tile_assign(
                 means_2d, radii, M, image_height, image_width, tile_size,
                 covs_2d, opacities, contrib_floor,
