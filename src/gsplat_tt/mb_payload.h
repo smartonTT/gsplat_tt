@@ -31,6 +31,7 @@ namespace gsplat_tt {
 
 constexpr int kMbNumMicroblocks = 32;
 constexpr int kMbCoeffLanes = 10;  // A,B,C,D,E,F,opacity,cr,cg,cb
+constexpr int kMbGmLanes = 16;     // gaussian-major row: 10 coeff + mask + 5 pad
 
 struct MbPayload {
     // Per-tile coefficient table: one row of kMbCoeffLanes floats per local
@@ -74,6 +75,50 @@ MbPayload build_mb_payload(
     int tile_size,
     int image_height,
     int image_width,
+    float mb_contrib_floor,
+    gsplat_cpu::ThreadPool& pool,
+    bool cull_disabled);
+
+// ---------------------------------------------------------------------------
+// Fused gaussian-major payload (MB_KERNEL=1 path only).
+//
+// Computes the gaussian-major rows DIRECTLY during the microblock cull,
+// replacing the build_mb_payload + separate gaussian-major stream-build two-pass
+// pipeline with a single fused pass. The per-tile cull is bit-identical to
+// build_tile (same det/conic/centered-form coeff math, opacity floor drop, bbox
+// computation, and constrained-min Mahalanobis m2_min logic); instead of
+// per-microblock keep lists it accumulates a 32-bit microblock-coverage mask per
+// local gaussian and emits ONE 16-word row per surviving gaussian (mask != 0):
+//   words[0..9]  = the 10 basis coeffs (A,B,C,mx_local,my_local,0,opacity,r,g,b)
+//   word[10]     = mask (uint32 bit-cast into the float array)
+//   words[11..15]= 0
+// Rows are emitted in depth/sorted order (l = 0..L-1) per tile, tiles
+// concatenated in tile order.
+struct GaussianMajorPayload {
+    // counts[t*32 + 0] = surviving gaussian-row count for tile t (rest 0).
+    std::vector<uint32_t> mb_counts;       // num_tiles * 32
+    // ROW offsets into mb_coeff_stream (in 16-word rows), num_tiles + 1.
+    std::vector<uint32_t> mb_coeff_off;    // num_tiles + 1
+    // Gaussian-major rows: total_rows * kMbGmLanes floats.
+    std::vector<float> mb_coeff_stream;    // total_rows * 16
+
+    int64_t pairs_in = 0;
+    int64_t pairs_dropped_all_mb = 0;
+    int64_t pairs_kept_per_mb = 0;
+};
+
+// Fused cull + gaussian-major emit. Same projected inputs as build_mb_payload.
+GaussianMajorPayload build_gaussian_major_payload(
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    std::size_t P,
+    int tiles_x,
+    int tiles_y,
+    int tile_size,
     float mb_contrib_floor,
     gsplat_cpu::ThreadPool& pool,
     bool cull_disabled);

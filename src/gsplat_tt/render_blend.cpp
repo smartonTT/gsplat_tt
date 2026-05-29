@@ -186,117 +186,55 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
 
     if (blend_mode == 2) {
         const bool mb_timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
-        const auto _t0 = std::chrono::steady_clock::now();
-        MbPayload p = build_mb_payload(
-            means_2d, covs_2d, colors, opacities, sorted_gaussian_ids,
-            tile_ranges, M, P, tiles_x, tiles_y, tile_size, image_height,
-            image_width, mb_contrib_floor, pool, cull_disabled);
-        const auto _t1 = std::chrono::steady_clock::now();
-        result.pairs_dropped_all_mb = p.pairs_dropped_all_mb;
-        result.pairs_kept_per_mb = p.pairs_kept_per_mb;
 
         // Microblock-major (4x8) device kernel path (amendment-003 step 3).
-        // Opt in with GSPLAT_TT_MB_KERNEL=1. De-references the per-tile mb_stream
-        // into a flat microblock-major coeff stream so the device reader streams
-        // it linearly; the compute kernel processes one 4x8 microblock at a time.
+        // Opt in with GSPLAT_TT_MB_KERNEL=1. Builds the GAUSSIAN-MAJOR stream:
+        // ONE 16-word row per (tile, gaussian) that survives the microblock cull,
+        // carrying the 10 basis coeffs plus a 32-bit microblock mask (bit m set =>
+        // gaussian touches microblock m). The device reads each gaussian's coeffs
+        // ONCE and dispatches the SFPU blend to just the masked microblocks. The
+        // rows are now produced DIRECTLY during the cull (build_gaussian_major_payload),
+        // fusing what used to be a separate build_mb_payload + two-pass mask/emit
+        // stage into a single parallel pass.
         const char* mb_kernel = std::getenv("GSPLAT_TT_MB_KERNEL");
         if (mb_kernel != nullptr && mb_kernel[0] == '1') {
-            // GAUSSIAN-MAJOR stream: emit ONE 16-word row per (tile, gaussian)
-            // that survives the microblock cull, carrying the 10 basis coeffs plus
-            // a 32-bit microblock mask (bit m set => gaussian touches microblock m).
-            // The device reads each gaussian's coeffs ONCE and dispatches the SFPU
-            // blend to just the masked microblocks. This collapses the coeff-read
-            // count from sum-of-per-microblock-counts (~15M) to distinct
-            // per-tile gaussians (~1.9M) -- the per-row L1 coeff read was the
-            // dominant blend cost (~140 cyc/row, serialized).
             constexpr uint32_t GM_LANES = 16;  // 10 coeff + mask + pad, 64B row
             const int num_tiles = tiles_x * tiles_y;
-            // counts[t*32 + 0] holds tile t's gaussian-row count (rest unused).
-            std::vector<uint32_t> mb_counts(static_cast<std::size_t>(num_tiles) * 32, 0);
-            std::vector<uint32_t> mb_coeff_off(static_cast<std::size_t>(num_tiles) + 1, 0);
-            std::vector<float> mb_coeff_stream;
 
-            // The per-tile mask build + row emit is embarrassingly parallel (each
-            // tile owns a disjoint coeff range). Building it single-threaded with
-            // incremental vector::resize was the dominant blend-stage cost (~360ms,
-            // dwarfing the ~50ms device kernel). Two parallel passes + a pre-sized
-            // buffer keep the output bit-identical (same in-tile row order).
-            const std::size_t total_L =
-                p.coeff_tile_off[static_cast<std::size_t>(num_tiles)];
-            // Per global coeff entry: 32-bit microblock-coverage mask (0 == culled).
-            std::vector<uint32_t> gmask(total_L, 0u);
-            std::vector<uint32_t> tile_ng(static_cast<std::size_t>(num_tiles), 0);
-
-            // Pass 1: build masks + count surviving gaussians per tile.
-            pool.parallel_for(static_cast<std::size_t>(num_tiles), [&](std::size_t t) {
-                const uint32_t coeff_base = p.coeff_tile_off[t];
-                const uint32_t L = p.coeff_tile_off[t + 1] - coeff_base;
-                const uint32_t stream_base = p.mb_stream_tile_off[t];
-                const uint32_t* hdr = &p.mb_header[t * 32 * 2];
-                for (int m = 0; m < 32; ++m) {
-                    const uint32_t off = hdr[m * 2 + 0];
-                    const uint32_t cnt = hdr[m * 2 + 1];
-                    for (uint32_t i = 0; i < cnt; ++i) {
-                        const uint32_t lidx = p.mb_stream[stream_base + off + i];
-                        gmask[coeff_base + lidx] |= (1u << m);
-                    }
-                }
-                uint32_t ng = 0;
-                for (uint32_t lidx = 0; lidx < L; ++lidx) {
-                    if (gmask[coeff_base + lidx] != 0u) ++ng;
-                }
-                tile_ng[t] = ng;
-            });
-
-            // Prefix sum -> per-tile row offsets + counts (cheap, serial).
-            uint32_t row = 0;
-            for (int t = 0; t < num_tiles; ++t) {
-                mb_coeff_off[static_cast<std::size_t>(t)] = row;
-                mb_counts[static_cast<std::size_t>(t) * 32 + 0] = tile_ng[t];
-                row += tile_ng[t];
-            }
-            mb_coeff_off[static_cast<std::size_t>(num_tiles)] = row;
-
-            // Pass 2: fill the pre-sized stream in parallel at each tile's offset.
-            mb_coeff_stream.resize(static_cast<std::size_t>(row) * GM_LANES, 0.0f);
-            pool.parallel_for(static_cast<std::size_t>(num_tiles), [&](std::size_t t) {
-                const uint32_t coeff_base = p.coeff_tile_off[t];
-                const uint32_t L = p.coeff_tile_off[t + 1] - coeff_base;
-                std::size_t out = static_cast<std::size_t>(mb_coeff_off[t]) * GM_LANES;
-                for (uint32_t lidx = 0; lidx < L; ++lidx) {
-                    const uint32_t mk = gmask[coeff_base + lidx];
-                    if (mk == 0u) continue;  // culled from every microblock
-                    const float* src =
-                        &p.coeff[static_cast<std::size_t>(coeff_base + lidx) * 10];
-                    for (int k = 0; k < 10; ++k) mb_coeff_stream[out + k] = src[k];
-                    std::memcpy(&mb_coeff_stream[out + 10], &mk, 4);
-                    out += GM_LANES;
-                }
-            });
+            const auto _t0 = std::chrono::steady_clock::now();
+            GaussianMajorPayload gp = build_gaussian_major_payload(
+                means_2d, covs_2d, colors, opacities, sorted_gaussian_ids,
+                tile_ranges, P, tiles_x, tiles_y, tile_size, mb_contrib_floor,
+                pool, cull_disabled);
+            const auto _t1 = std::chrono::steady_clock::now();
+            result.pairs_in = gp.pairs_in;
+            result.pairs_dropped_all_mb = gp.pairs_dropped_all_mb;
+            result.pairs_kept_per_mb = gp.pairs_kept_per_mb;
+            const uint32_t row = gp.mb_coeff_off[static_cast<std::size_t>(num_tiles)];
 
             if (const char* d = std::getenv("GSPLAT_TT_MB_DUMP"); d && d[0] == '1') {
                 uint32_t maxpt = 0, nonempty = 0;
                 double sumpt = 0;
                 for (int t = 0; t < num_tiles; ++t) {
-                    const uint32_t pt = mb_coeff_off[t + 1] - mb_coeff_off[t];
+                    const uint32_t pt = gp.mb_coeff_off[t + 1] - gp.mb_coeff_off[t];
                     if (pt > maxpt) maxpt = pt;
                     if (pt > 0) ++nonempty;
                     sumpt += pt;
                 }
                 uint64_t bits = 0;
-                for (std::size_t e = 0; e * 16 < mb_coeff_stream.size(); ++e) {
+                for (std::size_t e = 0; e * GM_LANES < gp.mb_coeff_stream.size(); ++e) {
                     uint32_t mk;
-                    std::memcpy(&mk, &mb_coeff_stream[e * 16 + 10], 4);
+                    std::memcpy(&mk, &gp.mb_coeff_stream[e * GM_LANES + 10], 4);
                     bits += static_cast<uint64_t>(__builtin_popcount(mk));
                 }
                 std::fprintf(stderr, "[MB_STAT] gaussian-major: num_tiles=%d nonempty=%u total_gaussian_rows=%u max/tile=%u mean/nonempty=%.1f sum_popcount=%llu (should==pairs_kept_per_mb=%lld)\n",
                              num_tiles, nonempty, row, maxpt, nonempty ? sumpt / nonempty : 0.0,
-                             (unsigned long long)bits, (long long)p.pairs_kept_per_mb);
+                             (unsigned long long)bits, (long long)gp.pairs_kept_per_mb);
             }
 
             const auto _t2 = std::chrono::steady_clock::now();
             std::vector<float> img;
-            blend_mb_from_payload(mb_counts, mb_coeff_off, mb_coeff_stream,
+            blend_mb_from_payload(gp.mb_counts, gp.mb_coeff_off, gp.mb_coeff_stream,
                                   num_tiles, tiles_x, image_height, image_width, img);
             const auto _t3 = std::chrono::steady_clock::now();
             if (mb_timing) {
@@ -304,9 +242,8 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
                     return std::chrono::duration<double, std::milli>(b - a).count();
                 };
                 std::fprintf(stderr,
-                    "[BLEND_HOST] build_mb_payload=%.1f gmajor_stream_build=%.1f "
-                    "device_blend=%.1f (rows=%u) total=%.1f ms\n",
-                    ms(_t0, _t1), ms(_t1, _t2), ms(_t2, _t3), row, ms(_t0, _t3));
+                    "[BLEND_HOST] fused_build=%.1f device_blend=%.1f (rows=%u) total=%.1f ms\n",
+                    ms(_t0, _t1), ms(_t2, _t3), row, ms(_t0, _t3));
             }
             const std::size_t n = static_cast<std::size_t>(image_height) *
                                   static_cast<std::size_t>(image_width) * 3;
@@ -315,6 +252,15 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
             }
             return result;
         }
+
+        // Non-MB_KERNEL paths still need the per-microblock payload (CPU oracle
+        // reference + the device fallback below both consume it).
+        MbPayload p = build_mb_payload(
+            means_2d, covs_2d, colors, opacities, sorted_gaussian_ids,
+            tile_ranges, M, P, tiles_x, tiles_y, tile_size, image_height,
+            image_width, mb_contrib_floor, pool, cull_disabled);
+        result.pairs_dropped_all_mb = p.pairs_dropped_all_mb;
+        result.pairs_kept_per_mb = p.pairs_kept_per_mb;
 
         // blend_mode=2 runs the TT DEVICE blend by default (DST-persistent fp32
         // full-tile kernel: 56-64 dB vs cpu_cpp_mb, runs entirely on-device per

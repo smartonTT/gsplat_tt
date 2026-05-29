@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstring>
 #include <limits>
 
 #include "gsplat_cpu/thread_pool.h"
@@ -172,6 +173,156 @@ void build_tile(
     }
 }
 
+// Per-tile staging for the fused gaussian-major path: rows already in final
+// 16-word layout, plus the cull bookkeeping counters.
+struct GmTileOut {
+    std::vector<float> rows;   // surviving * kMbGmLanes
+    uint32_t surviving = 0;
+    int64_t dropped = 0;
+    int64_t kept = 0;
+};
+
+// Per-tile cull + gaussian-major emit. The cull is bit-identical to build_tile
+// (same coeff math, opacity floor, bbox, constrained-min Mahalanobis m2_min);
+// instead of per-microblock keep lists it accumulates a 32-bit microblock mask
+// per local gaussian and emits ONE 16-word row per surviving gaussian.
+void build_gaussian_major_tile(
+    int tile_id,
+    int tiles_x,
+    int tile_size,
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    float mb_contrib_floor,
+    bool cull_disabled,
+    GmTileOut& out) {
+    const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
+    const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
+    const int64_t L = end - start;
+    if (L <= 0) return;
+
+    const int ty = tile_id / tiles_x;
+    const int tx = tile_id % tiles_x;
+    const float tx_tile = static_cast<float>(tx * tile_size);
+    const float ty_tile = static_cast<float>(ty * tile_size);
+
+    // Reserve the upper bound once (one row per local gaussian) so the per-row
+    // append never reallocates -- no incremental resize inside the loop.
+    out.rows.reserve(static_cast<std::size_t>(L) * kMbGmLanes);
+
+    for (int64_t l = 0; l < L; ++l) {
+        const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
+        const float a = covs_2d[static_cast<std::size_t>(g) * 4 + 0];
+        const float b = covs_2d[static_cast<std::size_t>(g) * 4 + 1];
+        const float c = covs_2d[static_cast<std::size_t>(g) * 4 + 3];
+        const float det = std::max(a * c - b * b, 1e-6f);
+        const float ci_a = c / det;
+        const float ci_b = -b / det;
+        const float ci_c = a / det;
+        const float opacity = opacities[static_cast<std::size_t>(g)];
+        const float mean_x = means_2d[static_cast<std::size_t>(g) * 2 + 0];
+        const float mean_y = means_2d[static_cast<std::size_t>(g) * 2 + 1];
+        const float mx_local = mean_x - tx_tile;
+        const float my_local = mean_y - ty_tile;
+
+        // Centered conic form -- identical arithmetic to build_tile rows[0..9].
+        float coeff[kMbCoeffLanes];
+        coeff[0] = -0.5f * ci_a;  // A
+        coeff[1] = -ci_b;         // B
+        coeff[2] = -0.5f * ci_c;  // C
+        coeff[3] = mx_local;      // gaussian center x (tile-local)
+        coeff[4] = my_local;      // gaussian center y (tile-local)
+        coeff[5] = 0.0f;          // unused
+        coeff[6] = opacity;
+        coeff[7] = colors[static_cast<std::size_t>(g) * 3 + 0];
+        coeff[8] = colors[static_cast<std::size_t>(g) * 3 + 1];
+        coeff[9] = colors[static_cast<std::size_t>(g) * 3 + 2];
+
+        if (opacity <= mb_contrib_floor) {
+            ++out.dropped;
+            continue;  // sentinel: peak alpha below floor everywhere.
+        }
+        const float log_thresh = std::log(mb_contrib_floor / opacity);  // <= 0
+        const float rd = std::sqrt(-2.0f * log_thresh);
+        const float x_half = rd * std::sqrt(std::max(a, 0.0f));
+        const float y_half = rd * std::sqrt(std::max(c, 0.0f));
+
+        const float bb_x_min = mean_x - x_half;
+        const float bb_x_max = mean_x + x_half;
+        const float bb_y_min = mean_y - y_half;
+        const float bb_y_max = mean_y + y_half;
+        const int mx_lo = std::max(0, static_cast<int>(std::floor((bb_x_min - tx_tile) / 8.0f)));
+        const int mx_hi = std::min(3, static_cast<int>(std::floor((bb_x_max - tx_tile) / 8.0f)));
+        const int my_lo = std::max(0, static_cast<int>(std::floor((bb_y_min - ty_tile) / 4.0f)));
+        const int my_hi = std::min(7, static_cast<int>(std::floor((bb_y_max - ty_tile) / 4.0f)));
+        if (mx_lo > mx_hi || my_lo > my_hi) {
+            ++out.dropped;
+            continue;
+        }
+
+        const float thresh_m2 = -2.0f * log_thresh;
+        const float ci_a_safe = std::max(ci_a, 1e-12f);
+        const float ci_c_safe = std::max(ci_c, 1e-12f);
+        uint32_t mask = 0u;
+        for (int my = my_lo; my <= my_hi; ++my) {
+            const float mb_oy = ty_tile + static_cast<float>(my * 4);
+            const float v_lo = mb_oy - mean_y;
+            const float v_hi = v_lo + 4.0f;
+            const bool y_inside = (v_lo <= 0.0f) && (0.0f <= v_hi);
+            const float v_fix = (v_lo > 0.0f) ? v_lo : v_hi;
+            for (int mx = mx_lo; mx <= mx_hi; ++mx) {
+                const float mb_ox = tx_tile + static_cast<float>(mx * 8);
+                const float u_lo = mb_ox - mean_x;
+                const float u_hi = u_lo + 8.0f;
+                const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+
+                float m2_min;
+                if (cull_disabled || (x_inside && y_inside)) {
+                    m2_min = 0.0f;
+                } else {
+                    float m2_v = std::numeric_limits<float>::infinity();
+                    if (!x_inside) {
+                        const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
+                        float v_star = -ci_b * u_fix / ci_c_safe;
+                        v_star = std::clamp(v_star, v_lo, v_hi);
+                        m2_v = ci_a * u_fix * u_fix + 2.0f * ci_b * u_fix * v_star
+                               + ci_c * v_star * v_star;
+                    }
+                    float m2_h = std::numeric_limits<float>::infinity();
+                    if (!y_inside) {
+                        float u_star = -ci_b * v_fix / ci_a_safe;
+                        u_star = std::clamp(u_star, u_lo, u_hi);
+                        m2_h = ci_a * u_star * u_star + 2.0f * ci_b * u_star * v_fix
+                               + ci_c * v_fix * v_fix;
+                    }
+                    m2_min = std::min(m2_v, m2_h);
+                }
+                if (m2_min <= thresh_m2) {
+                    const int m = (my << 2) | mx;  // canonical enumeration
+                    mask |= (1u << m);
+                    ++out.kept;  // mirrors build_tile: once per kept microblock.
+                }
+            }
+        }
+        if (mask == 0u) {
+            ++out.dropped;
+            continue;
+        }
+        // Emit one 16-word gaussian-major row (capacity reserved above).
+        out.rows.insert(out.rows.end(), coeff, coeff + kMbCoeffLanes);
+        float mask_f;
+        std::memcpy(&mask_f, &mask, sizeof(uint32_t));
+        out.rows.push_back(mask_f);                  // word[10] = mask
+        for (int k = 0; k < kMbGmLanes - kMbCoeffLanes - 1; ++k) {
+            out.rows.push_back(0.0f);                // words[11..15] = 0
+        }
+        ++out.surviving;
+    }
+}
+
 }  // namespace
 
 MbPayload build_mb_payload(
@@ -249,6 +400,74 @@ MbPayload build_mb_payload(
         static_cast<uint32_t>(p.coeff.size() / kMbCoeffLanes);
     p.mb_stream_tile_off[static_cast<std::size_t>(num_tiles)] =
         static_cast<uint32_t>(p.mb_stream.size());
+    return p;
+}
+
+GaussianMajorPayload build_gaussian_major_payload(
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    std::size_t P,
+    int tiles_x,
+    int tiles_y,
+    int tile_size,
+    float mb_contrib_floor,
+    gsplat_cpu::ThreadPool& pool,
+    bool cull_disabled) {
+    const int num_tiles = tiles_x * tiles_y;
+    GaussianMajorPayload p;
+    p.pairs_in = static_cast<int64_t>(P);
+
+    std::vector<GmTileOut> outs(static_cast<std::size_t>(num_tiles));
+
+    // Phase 1: parallel per-tile cull + gaussian-major row emit (each tile owns
+    // a disjoint coeff range; same round-robin atomic pattern as build_mb_payload).
+    std::atomic<int> next_idx{0};
+    const std::size_t W = std::max<std::size_t>(1, pool.size());
+    for (std::size_t w = 0; w < W; ++w) {
+        pool.submit([&]() {
+            for (;;) {
+                const int t = next_idx.fetch_add(1, std::memory_order_relaxed);
+                if (t >= num_tiles) return;
+                build_gaussian_major_tile(
+                    t, tiles_x, tile_size, means_2d, covs_2d, colors,
+                    opacities, sorted_gaussian_ids, tile_ranges,
+                    mb_contrib_floor, cull_disabled,
+                    outs[static_cast<std::size_t>(t)]);
+            }
+        });
+    }
+    pool.wait();
+
+    // Phase 2a: serial prefix-sum -> per-tile ROW offsets + counts + total rows.
+    p.mb_counts.assign(static_cast<std::size_t>(num_tiles) * kNumMb, 0u);
+    p.mb_coeff_off.assign(static_cast<std::size_t>(num_tiles) + 1, 0u);
+    uint32_t row = 0;
+    for (int t = 0; t < num_tiles; ++t) {
+        const GmTileOut& o = outs[static_cast<std::size_t>(t)];
+        p.mb_coeff_off[static_cast<std::size_t>(t)] = row;
+        p.mb_counts[static_cast<std::size_t>(t) * kNumMb + 0] = o.surviving;
+        row += o.surviving;
+        p.pairs_dropped_all_mb += o.dropped;
+        p.pairs_kept_per_mb += o.kept;
+    }
+    p.mb_coeff_off[static_cast<std::size_t>(num_tiles)] = row;
+
+    // Phase 2b: pre-size the stream once, then parallel per-tile memcpy into
+    // each tile's row offset (rows already in final 16-word layout).
+    p.mb_coeff_stream.resize(static_cast<std::size_t>(row) * kMbGmLanes, 0.0f);
+    float* stream = p.mb_coeff_stream.data();
+    const uint32_t* coff = p.mb_coeff_off.data();
+    pool.parallel_for(static_cast<std::size_t>(num_tiles), [&](std::size_t t) {
+        const GmTileOut& o = outs[t];
+        if (o.rows.empty()) return;
+        std::memcpy(stream + static_cast<std::size_t>(coff[t]) * kMbGmLanes,
+                    o.rows.data(), o.rows.size() * sizeof(float));
+    });
+
     return p;
 }
 
