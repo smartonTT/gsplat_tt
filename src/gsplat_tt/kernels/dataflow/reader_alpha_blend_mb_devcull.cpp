@@ -40,6 +40,9 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#if defined(MB_SFPU_CULL_DEBUG)
+#include "api/debug/dprint.h"
+#endif
 
 namespace {
 
@@ -56,6 +59,7 @@ constexpr uint32_t CB_MB_COEFF  = 2;
 constexpr uint32_t CB_MB_COUNTS = 3;
 constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
 constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
+constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 
 constexpr float kInf = 1e30f;
 
@@ -144,12 +148,35 @@ inline uint32_t load_ids_chunk(
     for (uint32_t i = 0; i < take; ++i) out[i] = ids_ptr[in_page + i];
     return take;
 }
+
+#ifdef MB_SFPU_CULL
+// SFPU-cull path: the 32-bit microblock mask is precomputed on the SFPU and
+// kept resident in cull_masks, indexed identically to sort_sorted_ids (global
+// candidate index == id_start + position). Each ids chunk (<=16, page-aligned
+// by load_ids_chunk) maps to exactly one 64B/16-elem cull_masks page, so we
+// prefetch that page alongside the chunk's attr reads (covered by the same
+// barrier) and read the masks back with a pure integer load -> NO float and NO
+// constrained-min on this data mover. Returns the in-page offset of the chunk.
+template <typename Acc>
+inline uint32_t load_mask_page(const Acc& acc, uint32_t global_idx, uint32_t scratch_addr) {
+    // global_idx == cull_base (16-aligned) + chunk-start position. A chunk holds
+    // <=16 candidates starting at in-page offset (global_idx&0xF), so its masks
+    // span at most TWO 64B/16-elem pages. Load both so mask_ptr[(global_idx&0xF)+j]
+    // (j in [0,take)) is always in-window.
+    const uint32_t pg = global_idx >> 4;
+    noc_async_read_tile(pg, acc, scratch_addr);
+    noc_async_read_tile(pg + 1u, acc, scratch_addr + IDS_PAGE_BYTES);
+    return global_idx & 0xF;
+}
+#endif
 #endif
 
 // Reproduce build_gaussian_major_tile's per-gaussian microblock cull EXACTLY.
 // Returns the 32-bit microblock-coverage mask. tx_tile/ty_tile are the float
 // tile-origin pixel coords (tx*32, ty*32).
-inline uint32_t compute_microblock_mask(
+// [[maybe_unused]]: under GSPLAT_TT_SFPU_CULL the mask is precomputed on the
+// SFPU (resident cull_masks) and this soft-float cull is bypassed.
+[[maybe_unused]] inline uint32_t compute_microblock_mask(
     float a, float b, float c, float mean_x, float mean_y, float opacity,
     float tx_tile, float ty_tile, float contrib_floor, bool cull_disabled) {
     float det = a * c - b * b;
@@ -295,6 +322,10 @@ void kernel_main() {
     const uint32_t tiles_x        = get_arg_val<uint32_t>(14);
     const float contrib_floor     = bits_to_f(get_arg_val<uint32_t>(15));
     const bool cull_disabled      = get_arg_val<uint32_t>(16) != 0;
+#ifdef MB_SFPU_CULL
+    const uint32_t cull_masks_addr = get_arg_val<uint32_t>(17);  // resident cull_masks
+    const uint32_t cull_base_addr  = get_arg_val<uint32_t>(18);  // per-tile page-aligned mask base
+#endif
 
     constexpr auto a_args        = TensorAccessorArgs<0>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -308,6 +339,10 @@ void kernel_main() {
     constexpr auto xramp_args    = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
     constexpr auto yramp_args    = TensorAccessorArgs<xramp_args.next_compile_time_args_offset()>();
     constexpr auto tile_ids_args = TensorAccessorArgs<yramp_args.next_compile_time_args_offset()>();
+#ifdef MB_SFPU_CULL
+    constexpr auto cull_masks_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
+    constexpr auto cull_base_args  = TensorAccessorArgs<cull_masks_args.next_compile_time_args_offset()>();
+#endif
 
     // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
     constexpr uint32_t SOA_PAGE_BYTES = 64;
@@ -323,6 +358,16 @@ void kernel_main() {
     const auto xramp_acc    = TensorAccessor(xramp_args,    xramp_addr,    RAMP_TILE_BYTES);
     const auto yramp_acc    = TensorAccessor(yramp_args,    yramp_addr,    RAMP_TILE_BYTES);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, 64);
+#ifdef MB_SFPU_CULL
+    const auto cull_masks_acc = TensorAccessor(cull_masks_args, cull_masks_addr, IDS_PAGE_BYTES);
+    const auto cull_base_acc  = TensorAccessor(cull_base_args,  cull_base_addr,  64);
+    // Cull math (and thus these scalars) moved to the SFPU cull pass; the mask
+    // is now read precomputed. Keep the args for ABI/signature parity.
+#if !defined(MB_SFPU_CULL_DEBUG)
+    (void)contrib_floor;
+    (void)cull_disabled;
+#endif
+#endif
 #else
     const uint32_t attrs_addr     = get_arg_val<uint32_t>(0);
     const uint32_t ids_addr       = get_arg_val<uint32_t>(1);
@@ -426,6 +471,14 @@ void kernel_main() {
         }
 #endif
         const uint32_t L = id_end - id_start;
+#ifdef MB_SFPU_CULL
+        // Per-tile PAGE-ALIGNED base of this tile's masks in cull_masks (the cull
+        // writer uses the same base). cull_masks is NOT indexed by the dense sort
+        // range (those id_start values are not 16-aligned, and unaligned NoC->DRAM
+        // writes get shifted), so the mask for tile-local candidate p is at
+        // cull_masks[cull_base + p].
+        const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
+#endif
 
         // (3) Per-tile gaussian-row count (compute reads slot 0). One row is
         // emitted per candidate (mask==0 candidates dispatch nothing).
@@ -452,17 +505,31 @@ void kernel_main() {
             const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
             uint32_t gids[2][CHUNK_MAX];
             uint32_t take_buf[2];
+#ifdef MB_SFPU_CULL
+            // Per-buffer cull_masks scratch (2 buffers x 2 pages x 64B = 256B) +
+            // in-page offset. The 2-page window for a chunk is prefetched
+            // alongside its attr reads and consumed (pure integer load) when that
+            // chunk is emitted. Indexed by the tile's page-aligned cull_base.
+            constexpr uint32_t MASK_BUF_BYTES = 2u * IDS_PAGE_BYTES;  // 128B
+            const uint32_t mask_scr = get_write_ptr(CB_SCR_MASK);
+            uint32_t mask_off_buf[2];
+            uint32_t gstart_buf[2];
+#endif
 
             uint32_t processed = 0;
             // Prologue: load + issue chunk 0 into buffer 0.
             take_buf[0] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[0]);
+#ifdef MB_SFPU_CULL
+            gstart_buf[0] = processed;
+            mask_off_buf[0] = load_mask_page(cull_masks_acc, cull_base + processed, mask_scr + 0u * MASK_BUF_BYTES);
+#endif
             issue_chunk_reads(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES,
                               a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
             processed += take_buf[0];
 
             uint32_t cur = 0;
             while (take_buf[cur] > 0) {
-                noc_async_read_barrier();   // chunk `cur` attrs have landed
+                noc_async_read_barrier();   // chunk `cur` attrs + mask page have landed
                 const uint32_t take = take_buf[cur];
                 const uint32_t nxt = cur ^ 1u;
 
@@ -470,6 +537,10 @@ void kernel_main() {
                 // flight while we cull/emit chunk `cur` below).
                 if (processed < L) {
                     take_buf[nxt] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[nxt]);
+#ifdef MB_SFPU_CULL
+                    gstart_buf[nxt] = processed;
+                    mask_off_buf[nxt] = load_mask_page(cull_masks_acc, cull_base + processed, mask_scr + nxt * MASK_BUF_BYTES);
+#endif
                     issue_chunk_reads(gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES,
                                       a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
                     processed += take_buf[nxt];
@@ -478,6 +549,10 @@ void kernel_main() {
                 }
 
                 const uint32_t buf = attr_base + cur * BUF_BYTES;
+#ifdef MB_SFPU_CULL
+                auto mask_ptr = reinterpret_cast<volatile uint32_t*>(mask_scr + cur * MASK_BUF_BYTES);
+                const uint32_t mask_off = mask_off_buf[cur];
+#endif
                 for (uint32_t j = 0; j < take; ++j) {
                     const uint32_t g = gids[cur][j];
                     const uint32_t s = buf + j * GATHER_SLOT_BYTES;
@@ -493,16 +568,83 @@ void kernel_main() {
                     const uint32_t cg = reinterpret_cast<volatile uint32_t*>(s + 7u * 64u)[(e0 + 1u) & 0xF];
                     const uint32_t cb = reinterpret_cast<volatile uint32_t*>(s + 8u * 64u)[(e0 + 2u) & 0xF];
 
+                    const float mean_x = bits_to_f(mx_bits);
+                    const float mean_y = bits_to_f(my_bits);
+
+#ifdef MB_SFPU_CULL
+                    // Mask precomputed on the SFPU (resident cull_masks): pure
+                    // integer load from the prefetched page. No float / no cull
+                    // math on this data mover.
+#if defined(MB_SFPU_CULL_USEREF)
+                    // Diagnostic: cull pass still runs (cull_masks written) but
+                    // the blend USES the locally recomputed scalar mask. Isolates
+                    // "cull pass corrupts resident state" from "stored/read mask
+                    // value wrong". If this matches the scalar path PSNR, the
+                    // resident state is intact and the bug is in the mask itself.
+                    (void)mask_ptr; (void)mask_off;
+                    const uint32_t mask = compute_microblock_mask(
+                        bits_to_f(cov_a_bits), bits_to_f(cov_b_bits),
+                        bits_to_f(cov_c_bits), mean_x, mean_y,
+                        bits_to_f(op_bits), tx_tile, ty_tile,
+                        contrib_floor, cull_disabled);
+#elif defined(MB_SFPU_CULL_BLOCKING)
+                    // Diagnostic / safe path: ignore the prefetched window and
+                    // read this candidate's mask with a self-contained
+                    // read+barrier (correct-by-construction, no prefetch race).
+                    (void)mask_ptr; (void)mask_off;
+                    const uint32_t mask = read_soa_u32(
+                        cull_masks_acc, cull_base + gstart_buf[cur] + j,
+                        mask_scr + cur * MASK_BUF_BYTES);
+#else
+                    const uint32_t mask = mask_ptr[mask_off + j];
+#endif
+#if defined(MB_SFPU_CULL_KVAL)
+                    {
+                        const uint32_t k_exp = cull_base + gstart_buf[cur] + j;
+                        static uint32_t kv_mm = 0;
+                        if (mask != k_exp && kv_mm < 80u) {
+                            kv_mm++;
+                            DPRINT << "CULLKV t=" << tile_id << " base=" << cull_base
+                                   << " gs=" << gstart_buf[cur] << " j=" << j << " L=" << L
+                                   << " exp=" << k_exp << " got=" << mask << ENDL();
+                        }
+                    }
+#endif
+#if defined(MB_SFPU_CULL_DEBUG)
+                    {
+                        const uint32_t ref_mask = compute_microblock_mask(
+                            bits_to_f(cov_a_bits), bits_to_f(cov_b_bits),
+                            bits_to_f(cov_c_bits), mean_x, mean_y,
+                            bits_to_f(op_bits), tx_tile, ty_tile,
+                            contrib_floor, cull_disabled);
+                        static uint32_t dbg_n = 0;
+                        static uint32_t dbg_mm = 0;
+                        const uint32_t k_dbg = cull_base + gstart_buf[cur] + j;
+                        dbg_n++;
+                        if (ref_mask != mask && dbg_mm < 60u) {
+                            dbg_mm++;
+                            DPRINT << "CULLMM t=" << tile_id << " g=" << g << " k=" << k_dbg
+                                   << " base=" << cull_base << " gs=" << gstart_buf[cur]
+                                   << " j=" << j << " L=" << L
+                                   << " ref=" << ref_mask << " sfpu=" << mask << ENDL();
+                            DPRINT << "CULLMC k=" << k_dbg
+                                   << " a=" << F32(bits_to_f(cov_a_bits))
+                                   << " b=" << F32(bits_to_f(cov_b_bits))
+                                   << " c=" << F32(bits_to_f(cov_c_bits))
+                                   << " mx=" << F32(mean_x) << " my=" << F32(mean_y)
+                                   << " op=" << F32(bits_to_f(op_bits)) << ENDL();
+                        }
+                    }
+#endif
+#else
                     const float cov_a  = bits_to_f(cov_a_bits);
                     const float cov_b  = bits_to_f(cov_b_bits);
                     const float cov_c  = bits_to_f(cov_c_bits);
-                    const float mean_x = bits_to_f(mx_bits);
-                    const float mean_y = bits_to_f(my_bits);
                     const float opac   = bits_to_f(op_bits);
-
                     const uint32_t mask = compute_microblock_mask(
                         cov_a, cov_b, cov_c, mean_x, mean_y, opac, tx_tile, ty_tile,
                         contrib_floor, cull_disabled);
+#endif
 
                     cb_reserve_back(CB_MB_COEFF, 1);
                     auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
