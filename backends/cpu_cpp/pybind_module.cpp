@@ -896,7 +896,7 @@ static gsplat_cpu::ProjectResult project_via_device(
     const float* intrinsics, const float* colors, const float* opacities,
     float min_opacity, std::size_t N, int image_height, int image_width,
     float k_cap, bool use_isoellipse, int max_radius,
-    gsplat_cpu::ThreadPool* pool) {
+    gsplat_cpu::ThreadPool* pool, int blend_mode) {
     gsplat_cpu::ProjectResult empty;
     if (use_isoellipse || std::fabs(k_cap - 3.0f) > 1e-3f) {
         // pfwc_tt only implements the k=3.0, non-isoellipse radius. Signal
@@ -1014,9 +1014,15 @@ static gsplat_cpu::ProjectResult project_via_device(
         bool gather_ok = false;
         gsplat_tt::GatherCallTimings g_t;
         const auto t_g0 = prof_clock::now();
+        // Only authorize the M-only readback when THIS render's blend is the
+        // device blend (blend_mode>=1). The cpu_cpp_mb reference render shares
+        // this process + the GSPLAT_TT_DEVICE_PROJECT env but uses blend_mode=0
+        // (CPU cull_and_blend), which still consumes the host proj_m_* arrays.
+        const bool downstream_resident = (blend_mode >= 1);
         gsplat_cpu::ProjectResult proj = gsplat_tt::gather_visible_tt(
             colors, opacities, N, image_height, image_width, min_opacity,
-            max_radius, gather_host, gather_verify, pool, &gather_ok, &g_t);
+            max_radius, gather_host, gather_verify, pool, &gather_ok, &g_t,
+            downstream_resident);
         const auto t_g1 = prof_clock::now();
         if (proj_timing) {
             auto ms = [](auto a, auto b) {
@@ -1127,7 +1133,7 @@ py::tuple render_full_py(
             static_cast<const float*>(extrinsics.request().ptr),
             static_cast<const float*>(intrinsics.request().ptr),
             colors_ptr, opacities_ptr, min_opacity, N, image_height, image_width,
-            k_cap, use_isoellipse, max_radius, &global_project_pool());
+            k_cap, use_isoellipse, max_radius, &global_project_pool(), blend_mode);
     }
 #endif
     if (proj.depths.empty()) {

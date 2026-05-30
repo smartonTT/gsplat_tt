@@ -420,6 +420,59 @@ static gsplat_cpu::ProjectResult readback_proj_m(
     return proj;
 }
 
+// True when the full on-device resident downstream chain is active, i.e. when
+// tile_assign reads the resident proj_m_* over NoC, sort reads resident
+// proj_m_depth + the resident pairs, and blend reads resident proj_m_* attrs.
+// In that configuration the host-side proj.{means_2d,covs_2d,radii,colors}
+// arrays are NEVER dereferenced downstream — only proj.opacities (the
+// tile_assign host-side m2_thresh/opacity-floor cull precompute) and
+// proj.depths (its size == M; values feed only the CPU sort fallback) are
+// consumed. So we can skip the bulk proj_m_* D2H readback (~the dominant
+// ~150ms/hero, ~75-90ms median sub-component of project_ms) and return an
+// M-only-plus-opacities/depths ProjectResult — bit-identical, since the copy
+// being removed is unused in this path.
+static bool downstream_chain_resident() {
+    auto on = [](const char* n) {
+        const char* v = std::getenv(n);
+        return v != nullptr && v[0] == '1';
+    };
+    auto on_nonzero = [](const char* n) {
+        const char* v = std::getenv(n);
+        return v != nullptr && v[0] != '0' && v[0] != '\0';
+    };
+    return on("GSPLAT_TT_RESIDENT_TA_IN") &&
+           on("GSPLAT_TT_DEVICE_TILE_ASSIGN") &&
+           on_nonzero("GSPLAT_TT_DEVICE_SORT") &&
+           on("GSPLAT_TT_RESIDENT_PAIRS") &&
+           on("GSPLAT_TT_RESIDENT_BLEND") &&
+           on("GSPLAT_TT_MB_DEVCULL");
+}
+
+// Read back ONLY the host-consumed compact attrs (opacity + depth) and assemble
+// a metadata-only ProjectResult. means_2d/covs_2d/radii/colors are left EMPTY:
+// in the resident downstream chain those are read from DRAM over NoC and never
+// touched on host. Drops 10 of the 12 cap-sized D2H reads (px,py,rx,ry,a,b,c
+// and the 3-wide colors) that readback_proj_m would otherwise copy and waste.
+static gsplat_cpu::ProjectResult readback_proj_m_minimal(
+    GatherDeviceContext* ctx, std::size_t M, double* readback_ms) {
+    const auto t0 = std::chrono::high_resolution_clock::now();
+    const uint32_t cap = static_cast<uint32_t>(ctx->cap_m_elems);
+    std::vector<float> dep(cap), op(cap);
+    distributed::EnqueueReadMeshBuffer(*ctx->cq, dep, ctx->buf_depth, true);
+    distributed::EnqueueReadMeshBuffer(*ctx->cq, op, ctx->buf_opacity, true);
+
+    gsplat_cpu::ProjectResult proj;
+    proj.depths.resize(M);
+    proj.opacities.resize(M);
+    for (std::size_t m = 0; m < M; ++m) {
+        proj.depths[m] = dep[m];
+        proj.opacities[m] = op[m];
+    }
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    if (readback_ms) *readback_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return proj;
+}
+
 // Write a host ProjectResult (R2a) into the resident proj_m_* buffers.
 static void write_proj_m_from_host(
     GatherDeviceContext* ctx, const gsplat_cpu::ProjectResult& proj,
@@ -638,7 +691,8 @@ gsplat_cpu::ProjectResult gather_visible_tt(
     bool verify,
     gsplat_cpu::ThreadPool* pool,
     bool* device_ok,
-    GatherCallTimings* timings) {
+    GatherCallTimings* timings,
+    bool downstream_resident) {
     auto set_fail = [&]() {
         if (device_ok) *device_ok = false;
         return gsplat_cpu::ProjectResult{};
@@ -742,7 +796,19 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         const auto t_k1 = std::chrono::high_resolution_clock::now();
         T.kernel_ms = std::chrono::duration<double, std::milli>(t_k1 - t_k0).count();
 
-        gsplat_cpu::ProjectResult proj = readback_proj_m(ctx, M, &T.readback_ms);
+        // PERF: skip the wasted bulk proj_m_* D2H iff (a) the caller confirms
+        // THIS render's downstream blend is the device resident blend
+        // (downstream_resident, i.e. blend_mode>=1 — NOT the cpu_cpp_mb CPU-blend
+        // reference render), (b) the full resident chain env gates are on, and
+        // (c) we are not verifying. Then tile_assign/sort/blend read the
+        // resident DRAM over NoC; only opacity (TA cull) + depth (M / CPU-sort
+        // fallback) are consumed host-side. Bit-identical: the dropped copy is
+        // never read in this path.
+        const bool minimal_readback =
+            downstream_resident && downstream_chain_resident() && !verify;
+        gsplat_cpu::ProjectResult proj =
+            minimal_readback ? readback_proj_m_minimal(ctx, M, &T.readback_ms)
+                             : readback_proj_m(ctx, M, &T.readback_ms);
 
         if (verify) {
             const auto tv0 = std::chrono::high_resolution_clock::now();
