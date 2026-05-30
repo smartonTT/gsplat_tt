@@ -21,6 +21,7 @@
 #ifdef GSPLAT_WITH_TT
 #include "gsplat_tt/blend.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/gather_visible.h"
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
 #include "gsplat_tt/render_blend.h"
@@ -913,34 +914,147 @@ static gsplat_cpu::ProjectResult project_via_device(
         // ready() lazily inits the device on first call; if it can't, fall back.
     }
 
+    // Env-gated sub-component profiling (GSPLAT_TT_PROJECT_TIMING=1). Off by
+    // default — pure stderr instrumentation, no effect on the render path.
+    const bool proj_timing = [] {
+        const char* v = std::getenv("GSPLAT_TT_PROJECT_TIMING");
+        return v != nullptr && v[0] == '1';
+    }();
+    using prof_clock = std::chrono::steady_clock;
+
     // 1) means_cam = R@means + t, kept device-resident (no D2H).
     gsplat_tt::ProjectCallTimings mc_t;
+    const auto t_mc0 = prof_clock::now();
     if (gsplat_tt::transform_means_cam_tt_no_download(means, extrinsics, N, &mc_t) < 0.0)
         return empty;
+    const auto t_mc1 = prof_clock::now();
 
     // 2) cov3d N*9 -> unique N*6 [c00 c01 c02 c11 c12 c22] for pfwc.
-    std::vector<float> cov3d_u(N * 6);
-    for (std::size_t i = 0; i < N; ++i) {
-        cov3d_u[i * 6 + 0] = cov3d[i * 9 + 0];
-        cov3d_u[i * 6 + 1] = cov3d[i * 9 + 1];
-        cov3d_u[i * 6 + 2] = cov3d[i * 9 + 2];
-        cov3d_u[i * 6 + 3] = cov3d[i * 9 + 4];
-        cov3d_u[i * 6 + 4] = cov3d[i * 9 + 5];
-        cov3d_u[i * 6 + 5] = cov3d[i * 9 + 8];
+    //
+    // PERF: cov3d is VIEW-INVARIANT across the 30-view bench (the same scene
+    // tensor is reused for every view), yet this SoA repack was a serial O(N)
+    // host loop costing a constant ~104 ms/frame at N=6.13M — the dominant
+    // *constant* sub-component of project_ms (profiled on bh-30). Cache the
+    // result keyed on (cov3d pointer, N) so it runs ONCE per scene instead of
+    // once per view. Bit-identical output (same source bytes, same gather
+    // order). Mirrors the established pointer-keyed caches in
+    // project_device.cpp (means) and pfwc_device.cpp (cov3d upload). Safe for
+    // the single-threaded render loop (same pattern as the device-context
+    // singletons); the cache vector is only ever read by pfwc_tt, never
+    // mutated downstream.
+    static std::vector<float> s_cov3d_u_cache;
+    static const float* s_cov3d_u_cached_ptr = nullptr;
+    static std::size_t s_cov3d_u_cached_N = 0;
+    const bool cov3d_cache_hit =
+        (s_cov3d_u_cached_ptr == cov3d) && (s_cov3d_u_cached_N == N) &&
+        (s_cov3d_u_cache.size() == N * 6);
+    if (!cov3d_cache_hit) {
+        s_cov3d_u_cache.resize(N * 6);
+        float* __restrict cu = s_cov3d_u_cache.data();
+        for (std::size_t i = 0; i < N; ++i) {
+            cu[i * 6 + 0] = cov3d[i * 9 + 0];
+            cu[i * 6 + 1] = cov3d[i * 9 + 1];
+            cu[i * 6 + 2] = cov3d[i * 9 + 2];
+            cu[i * 6 + 3] = cov3d[i * 9 + 4];
+            cu[i * 6 + 4] = cov3d[i * 9 + 5];
+            cu[i * 6 + 5] = cov3d[i * 9 + 8];
+        }
+        s_cov3d_u_cached_ptr = cov3d;
+        s_cov3d_u_cached_N = N;
+    }
+    const std::vector<float>& cov3d_u = s_cov3d_u_cache;
+    const auto t_cov1 = prof_clock::now();
+
+    // Residency gates (amendment-003 R1/R2a/R2b). Default (all off) keeps the
+    // legacy path: pfwc D2H + host finisher.
+    const bool resident_project = [] {
+        const char* v = std::getenv("GSPLAT_TT_RESIDENT_PROJECT");
+        return v != nullptr && v[0] == '1';
+    }();
+    const bool resident_gather = [] {
+        const char* v = std::getenv("GSPLAT_TT_RESIDENT_GATHER");
+        return v != nullptr && v[0] == '1';
+    }();
+    const bool gather_host = [] {
+        const char* v = std::getenv("GSPLAT_TT_GATHER_HOST");
+        return v != nullptr && v[0] == '1';
+    }();
+    const bool gather_verify = [] {
+        const char* v = std::getenv("GSPLAT_TT_GATHER_VERIFY");
+        return v != nullptr && v[0] == '1';
+    }();
+
+    // 3) pfwc on device -> mean_2d, depth, cov2d(a,b,c), radii.
+    //    R1 (GSPLAT_TT_RESIDENT_PROJECT=1): call with all four output pointers
+    //    NULL so NOTHING is D2H'd — the N-indexed pfwc_* stay resident. The
+    //    default path keeps the D2H (non-null outputs).
+    gsplat_tt::PfwcCallTimings pf_t;
+    std::vector<float> mean_2d, depth, cov2d, radii;
+    const auto t_pf0 = prof_clock::now();
+    if (resident_project) {
+        if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+                               nullptr, nullptr, nullptr, nullptr, &pf_t) < 0.0)
+            return empty;
+    } else {
+        mean_2d.resize(N * 2);
+        depth.resize(N);
+        cov2d.resize(N * 3);
+        radii.resize(N * 2);
+        if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+                               mean_2d.data(), depth.data(), cov2d.data(),
+                               radii.data(), &pf_t) < 0.0)
+            return empty;
     }
 
-    // 3) pfwc on device -> mean_2d, depth, cov2d(a,b,c), radii (D2H for now;
-    //    a later step keeps these resident and skips the readback).
-    std::vector<float> mean_2d(N * 2), depth(N), cov2d(N * 3), radii(N * 2);
-    gsplat_tt::PfwcCallTimings pf_t;
-    if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
-                           mean_2d.data(), depth.data(), cov2d.data(),
-                           radii.data(), &pf_t) < 0.0)
-        return empty;
+    // 4) R2a/R2b: gather the visible M-compact outputs into device-resident
+    //    DRAM. Returns a layout-identical ProjectResult assembled from the
+    //    resident buffers.
+    const auto t_pf1 = prof_clock::now();
+    if (resident_gather) {
+        bool gather_ok = false;
+        gsplat_tt::GatherCallTimings g_t;
+        const auto t_g0 = prof_clock::now();
+        gsplat_cpu::ProjectResult proj = gsplat_tt::gather_visible_tt(
+            colors, opacities, N, image_height, image_width, min_opacity,
+            max_radius, gather_host, gather_verify, pool, &gather_ok, &g_t);
+        const auto t_g1 = prof_clock::now();
+        if (proj_timing) {
+            auto ms = [](auto a, auto b) {
+                return std::chrono::duration<double, std::milli>(b - a).count();
+            };
+            std::fprintf(stderr,
+                "[PROJECT_TIMING] N=%zu M=%zu | means_cam=%.2f (kern_launch=%.2f "
+                "kern_compute=%.2f hit=%d) | cov3d_repack=%.2f (hit=%d) | "
+                "pfwc=%.2f (kern_launch=%.2f kern_compute=%.2f hit=%d) | "
+                "gather=%.2f (upload=%.2f kernel=%.2f readback=%.2f host=%.2f hit=%d) | "
+                "TOTAL_project=%.2f\n",
+                N, proj.depths.size(),
+                ms(t_mc0, t_mc1), mc_t.launch_ms, mc_t.compute_ms, (int)mc_t.cache_hit,
+                ms(t_mc1, t_cov1), (int)cov3d_cache_hit,
+                ms(t_pf0, t_pf1), pf_t.launch_ms, pf_t.compute_ms, (int)pf_t.cache_hit,
+                ms(t_g0, t_g1), g_t.upload_ms, g_t.kernel_ms, g_t.readback_ms,
+                g_t.host_ms, (int)g_t.cache_hit,
+                ms(t_mc0, t_g1));
+        }
+        if (gather_ok) return proj;
+        // On gather failure fall through to the host finisher, reading the
+        // resident pfwc_* back if R1 skipped the D2H.
+    }
 
-    // 4) Host finisher: valid_mask + M-compact gather (identical math to
-    //    project_full_fused), then compact colors/opacities in the SAME
-    //    increasing-i order (the finisher's parallel gather preserves it).
+    // Legacy / fallback host finisher: valid_mask + M-compact gather (identical
+    // math to project_full_fused), then compact colors/opacities in the SAME
+    // increasing-i order. When R1 skipped the pfwc D2H, read the resident
+    // pfwc_* back here so the host has the per-Gaussian data.
+    if (mean_2d.empty()) {
+        mean_2d.resize(N * 2);
+        depth.resize(N);
+        cov2d.resize(N * 3);
+        radii.resize(N * 2);
+        if (!gsplat_tt::readback_pfwc_resident(
+                N, mean_2d.data(), depth.data(), cov2d.data(), radii.data())) {
+            return empty;
+        }
+    }
     gsplat_cpu::ProjectResult proj = gsplat_cpu::project_finish_with_cov2d_radii(
         mean_2d.data(), depth.data(), cov2d.data(), radii.data(), opacities,
         min_opacity, N, image_height, image_width, pool, max_radius);
@@ -1386,6 +1500,8 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         gsplat_tt::project_device_shutdown();
         gsplat_tt::pfwc_device_shutdown();
         gsplat_tt::tile_assign_device_shutdown();
+        gsplat_tt::sort_device_shutdown();
+        gsplat_tt::gather_visible_device_shutdown();
         gsplat_tt::device_state::shutdown();
     });
 
