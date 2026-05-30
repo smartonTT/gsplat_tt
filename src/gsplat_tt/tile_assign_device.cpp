@@ -366,6 +366,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             }
             ctx->cap_m_bytes = m_bytes;
         }
+        // The M-sized DRAM buffers are grow-only: a smaller-M frame keeps the
+        // larger capacity allocated by an earlier (e.g. hero) frame. Every
+        // EnqueueRead/WriteMeshBuffer writes/reads the WHOLE buffer, so the host
+        // vector MUST be sized to the buffer capacity, not the current M_pad —
+        // otherwise tt-metal asserts "source vector too small" (and crashes the
+        // 30-view sweep). Kernel work-splits still use the real M_pad so only
+        // the current data is processed; the capacity tail stays zero-padded and
+        // unread. (gather's readback already follows this cap-sizing pattern.)
+        const uint32_t cap_m_elems = static_cast<uint32_t>(ctx->cap_m_bytes / 4);
         const uint32_t offs_count = Mu + 1;
         const uint32_t offs_pad = round_up(offs_count, ELEMS_PER_PAGE);
         const std::size_t offs_bytes = static_cast<std::size_t>(offs_pad) * 4;
@@ -373,11 +382,13 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             ctx->buf_offs = make_dram(ctx->mesh_device.get(), offs_bytes);
             ctx->cap_offs_bytes = offs_bytes;
         }
+        const uint32_t cap_offs_elems = static_cast<uint32_t>(ctx->cap_offs_bytes / 4);
 
         // ── Pack inputs (SoA px,py,rx,ry), zero-padded tail ─────────────
         // Resident mode skips this H2D entirely — K1/K2 read proj_m_* over NoC.
         if (!resident_in) {
-            std::vector<uint32_t> px(M_pad, 0), py(M_pad, 0), rx(M_pad, 0), ry(M_pad, 0);
+            std::vector<uint32_t> px(cap_m_elems, 0), py(cap_m_elems, 0),
+                rx(cap_m_elems, 0), ry(cap_m_elems, 0);
             for (uint32_t m = 0; m < Mu; m++) {
                 std::memcpy(&px[m], &means_2d[m * 2 + 0], 4);
                 std::memcpy(&py[m], &means_2d[m * 2 + 1], 4);
@@ -430,20 +441,20 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const auto t_k1_1 = clk::now();
         T.k1_ms = std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
 
-        // D2H tiles_per_gaussian.
-        std::vector<uint32_t> tpg(M_pad);
+        // D2H tiles_per_gaussian (read the whole grow-only buffer -> size to cap).
+        std::vector<uint32_t> tpg(cap_m_elems);
         distributed::EnqueueReadMeshBuffer(*ctx->cq, tpg, ctx->buf_tpg, true);
 
         // ── H1: host exclusive prefix-sum ───────────────────────────────
         const auto t_pre0 = clk::now();
-        std::vector<uint32_t> offs(offs_pad, 0);
+        std::vector<uint32_t> offs(cap_offs_elems, 0);
         uint64_t acc = 0;
         for (uint32_t m = 0; m < Mu; m++) {
             offs[m] = static_cast<uint32_t>(acc);
             acc += tpg[m];
         }
         const uint32_t P = static_cast<uint32_t>(acc);
-        for (uint32_t m = Mu; m < offs_pad; m++) offs[m] = P;  // offs[M..] = P
+        for (uint32_t m = Mu; m < cap_offs_elems; m++) offs[m] = P;  // offs[M..] = P
         const auto t_pre1 = clk::now();
         T.prefix_ms = std::chrono::duration<double, std::milli>(t_pre1 - t_pre0).count();
 
@@ -469,6 +480,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             ctx->buf_keep = make_dram(ctx->mesh_device.get(), p_bytes);
             ctx->cap_p_bytes = p_bytes;
         }
+        const uint32_t cap_p_elems = static_cast<uint32_t>(ctx->cap_p_bytes / 4);
 
         // ── K2: pair-centric scatter ────────────────────────────────────
         const auto t_k2_0 = clk::now();
@@ -495,7 +507,18 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const auto t_k2_1 = clk::now();
         T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
 
-        const bool do_cull = (covs_2d != nullptr) && (opacities != nullptr);
+        // The per-pair Mahalanobis cull needs the per-Gaussian cov (a,b,c) and
+        // opacities. In resident mode the cov comes from the resident
+        // proj_m_a/b/c (read over NoC by K4), so the host covs_2d pointer is
+        // intentionally absent — gate the cull on the resident cov buffers
+        // (already validated present above) + the host opacities the m2_thresh
+        // precompute still consumes. (When the caller disables the cull it
+        // passes opacities==nullptr in both modes.) Without this, an M-only
+        // ProjectResult (empty host covs_2d) would silently drop the cull and
+        // the resident-pairs publish, breaking the resident sort/blend handoff.
+        const bool do_cull = resident_in
+            ? (opacities != nullptr)
+            : ((covs_2d != nullptr) && (opacities != nullptr));
         // Resident-pairs is only valid when the cull runs (keep mask is the
         // implicit compaction). Otherwise fall through to the host path.
         const bool resident_pairs_active = resident_pairs && do_cull;
@@ -505,7 +528,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // sort's device binning consumes them directly.
         if (!resident_pairs_active) {
             const auto t_d2h0 = clk::now();
-            std::vector<uint32_t> gids(P_pad), tids(P_pad);
+            std::vector<uint32_t> gids(cap_p_elems), tids(cap_p_elems);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, gids, ctx->buf_gids, true);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, tids, ctx->buf_tids, true);
             const auto t_d2h1 = clk::now();
@@ -529,12 +552,12 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             // remain a host bridge (computed from the host opacities array).
             std::vector<uint32_t> a_v, b_v, c_v;
             if (!resident_in) {
-                a_v.assign(M_pad, 0);
-                b_v.assign(M_pad, 0);
-                c_v.assign(M_pad, 0);
+                a_v.assign(cap_m_elems, 0);
+                b_v.assign(cap_m_elems, 0);
+                c_v.assign(cap_m_elems, 0);
             }
-            std::vector<uint32_t> m2t_v(M_pad, 0);
-            std::vector<uint32_t> ok_v(M_pad, 0);
+            std::vector<uint32_t> m2t_v(cap_m_elems, 0);
+            std::vector<uint32_t> ok_v(cap_m_elems, 0);
             for (uint32_t m = 0; m < Mu; m++) {
                 if (!resident_in) {
                     const float a = covs_2d[m * 4 + 0];
@@ -607,7 +630,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             } else {
                 // D2H keep_mask.
                 const auto t_kd0 = clk::now();
-                std::vector<uint32_t> keep(P_pad);
+                std::vector<uint32_t> keep(cap_p_elems);
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, keep, ctx->buf_keep, true);
                 const auto t_kd1 = clk::now();
                 T.d2h_ms += std::chrono::duration<double, std::milli>(t_kd1 - t_kd0).count();

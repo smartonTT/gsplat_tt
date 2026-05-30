@@ -301,7 +301,12 @@ static void publish_resident(
         ctx->cap_sorted_bytes = sorted_bytes;
         device_state::register_buffer("sort_sorted_ids", ctx->buf_sorted_ids);
     }
-    std::vector<uint32_t> sids(P_pad, 0);
+    // buf_sorted_ids is grow-only: a smaller-P frame keeps a larger (hero)
+    // capacity. EnqueueWriteMeshBuffer writes the WHOLE buffer, so the host
+    // vector must be sized to capacity (not the current P_pad) or tt-metal
+    // asserts "source vector too small" and crashes the 30-view sweep.
+    const uint32_t cap_sorted_elems = static_cast<uint32_t>(ctx->cap_sorted_bytes / 4);
+    std::vector<uint32_t> sids(cap_sorted_elems, 0);
     for (uint32_t i = 0; i < P; i++)
         sids[i] = static_cast<uint32_t>(sorted_ids[i]);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_sorted_ids, sids, false);
@@ -314,7 +319,8 @@ static void publish_resident(
         ctx->cap_ranges_bytes = ranges_bytes;
         device_state::register_buffer("sort_tile_ranges", ctx->buf_tile_ranges);
     }
-    std::vector<uint32_t> ranges(R_pad, 0);
+    const uint32_t cap_ranges_elems = static_cast<uint32_t>(ctx->cap_ranges_bytes / 4);
+    std::vector<uint32_t> ranges(cap_ranges_elems, 0);
     for (uint32_t i = 0; i < R; i++)
         ranges[i] = static_cast<uint32_t>(tile_ranges[i]);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ranges, ranges, false);
@@ -560,7 +566,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->buf_tile_ids = make_dram(ctx->mesh_device.get(), tile_ids_bytes);
             ctx->cap_tile_ids_bytes = tile_ids_bytes;
         }
-        std::vector<uint32_t> tile_ids_flat(tile_ids_pad, 0);
+        // Grow-only buffer: size the upload to capacity (whole-buffer write).
+        const uint32_t cap_tile_ids_elems =
+            static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
+        std::vector<uint32_t> tile_ids_flat(cap_tile_ids_elems, 0);
         std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
 
         // ── Upload: base offsets (into bin2d), tmeta, tile_ids ──────────
@@ -605,8 +614,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         T.kernel_ms = std::chrono::duration<double, std::milli>(t_k1 - t_k0).count();
 
         // ── D2H aligned sorted ids + Pass4 compact -> contiguous ────────
+        // buf_out is grow-only: read the whole buffer -> size dst to capacity.
+        const uint32_t cap_aligned_elems =
+            static_cast<uint32_t>(ctx->cap_aligned_bytes / 4);
         const auto t_d0 = clk::now();
-        std::vector<uint32_t> out_aligned(P_aligned);
+        std::vector<uint32_t> out_aligned(cap_aligned_elems);
         distributed::EnqueueReadMeshBuffer(*ctx->cq, out_aligned, ctx->buf_out, true);
         const auto t_d1 = clk::now();
         T.d2h_ms = std::chrono::duration<double, std::milli>(t_d1 - t_d0).count();
@@ -981,7 +993,15 @@ gsplat_cpu::SortResult sort_and_bin_tt(
             ctx->buf_tile_ids = make_dram(ctx->mesh_device.get(), tile_ids_bytes);
             ctx->cap_tile_ids_bytes = tile_ids_bytes;
         }
-        std::vector<uint32_t> tile_ids_flat(tile_ids_pad, 0);
+        // Grow-only buffers: keys/ids/tile_ids whole-buffer writes must be sized
+        // to capacity (a smaller-P frame keeps a larger hero-frame allocation).
+        const uint32_t cap_aligned_elems =
+            static_cast<uint32_t>(ctx->cap_aligned_bytes / 4);
+        const uint32_t cap_tile_ids_elems =
+            static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
+        keys.resize(cap_aligned_elems, 0);
+        ids.resize(cap_aligned_elems, 0);
+        std::vector<uint32_t> tile_ids_flat(cap_tile_ids_elems, 0);
         std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
 
         // ── Upload ──────────────────────────────────────────────────────
@@ -1015,8 +1035,9 @@ gsplat_cpu::SortResult sort_and_bin_tt(
         T.kernel_ms = std::chrono::duration<double, std::milli>(t_k1 - t_k0).count();
 
         // ── D2H aligned sorted ids ──────────────────────────────────────
+        // buf_out is grow-only: read the whole buffer -> size dst to capacity.
         const auto t_d0 = clk::now();
-        std::vector<uint32_t> out_aligned(P_aligned);
+        std::vector<uint32_t> out_aligned(cap_aligned_elems);
         distributed::EnqueueReadMeshBuffer(*ctx->cq, out_aligned, ctx->buf_out, true);
         const auto t_d1 = clk::now();
         T.d2h_ms = std::chrono::duration<double, std::milli>(t_d1 - t_d0).count();
