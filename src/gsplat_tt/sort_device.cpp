@@ -89,6 +89,10 @@ struct SortDeviceContext {
     distributed::MeshWorkload workload;
     KernelHandle kernel{};
 
+    // On-device compact+publish (buf_out -> sort_sorted_ids).
+    distributed::MeshWorkload wl_publish;
+    KernelHandle kpublish{};
+
     // R4/R5 device-binning program (count + scatter) for resident pairs.
     distributed::MeshWorkload wl_bin;
     KernelHandle kbin{};
@@ -153,6 +157,33 @@ static void build_program(SortDeviceContext& ctx) {
     ctx.workload.add_program(device_range, std::move(program));
 }
 
+static void build_program_publish(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    auto page_cb = [&](uint32_t id) {
+        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, PAGE_BYTES);
+        CreateCircularBuffer(program, cores, c);
+    };
+    page_cb(0);  // CB_TIDS
+    page_cb(1);  // CB_META
+    page_cb(2);  // CB_SCRATCH
+
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.kpublish = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_publish.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_publish.add_program(device_range, std::move(program));
+}
+
 // R4/R5 binning program: one data-movement kernel (count + scatter modes).
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
@@ -202,6 +233,7 @@ static SortDeviceContext init_context() {
         CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program(ctx);
     build_program_bin(ctx);
+    build_program_publish(ctx);
     return ctx;
 }
 
@@ -329,6 +361,40 @@ static void publish_resident(
     if (publish_ms) *publish_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 }
 
+// Grow-only resident sort_sorted_ids buffer (no host id upload).
+static void ensure_resident_sorted_buffer(SortDeviceContext* ctx, uint32_t P_kept) {
+    const uint32_t P_pad = round_up(std::max<uint32_t>(P_kept, 1), ELEMS_PER_PAGE);
+    const std::size_t sorted_bytes = static_cast<std::size_t>(P_pad) * 4;
+    if (!ctx->buf_sorted_ids || ctx->cap_sorted_bytes < sorted_bytes) {
+        ctx->buf_sorted_ids = make_dram(ctx->mesh_device.get(), sorted_bytes);
+        ctx->cap_sorted_bytes = sorted_bytes;
+        device_state::register_buffer("sort_sorted_ids", ctx->buf_sorted_ids);
+    }
+}
+
+// Upload tile_ranges only (grow-on-demand whole-buffer write).
+static void upload_resident_tile_ranges(
+    SortDeviceContext* ctx, const std::vector<int64_t>& tile_ranges) {
+    const uint32_t R = static_cast<uint32_t>(tile_ranges.size());
+    const uint32_t R_pad = round_up(std::max<uint32_t>(R, 1), ELEMS_PER_PAGE);
+    const std::size_t ranges_bytes = static_cast<std::size_t>(R_pad) * 4;
+    if (!ctx->buf_tile_ranges || ctx->cap_ranges_bytes < ranges_bytes) {
+        ctx->buf_tile_ranges = make_dram(ctx->mesh_device.get(), ranges_bytes);
+        ctx->cap_ranges_bytes = ranges_bytes;
+        device_state::register_buffer("sort_tile_ranges", ctx->buf_tile_ranges);
+    }
+    const uint32_t cap_ranges_elems = static_cast<uint32_t>(ctx->cap_ranges_bytes / 4);
+    std::vector<uint32_t> ranges(cap_ranges_elems, 0);
+    for (uint32_t i = 0; i < R; i++)
+        ranges[i] = static_cast<uint32_t>(tile_ranges[i]);
+    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ranges, ranges, false);
+}
+
+static bool sort_device_publish_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_SORT_DEVICE_PUBLISH");
+    return v != nullptr && v[0] == '1';
+}
+
 // Compare device result against gsplat_cpu::sort_and_bin. Prints a SORT line;
 // aborts on any byte mismatch when GSPLAT_TT_SORT_VERIFY=1.
 static void verify_vs_cpu(
@@ -363,6 +429,24 @@ static void verify_vs_cpu(
         (int)(ids_match && rng_match), id_mism, first_id, rng_mism,
         ok ? "IDENTICAL" : "MISMATCH");
     if (!ok) {
+        if (ids_match && id_mism) {
+            std::size_t bt = 0, blo = 0, bhi = 0;
+            for (std::size_t t = 0; t * 2 + 1 < cpu.tile_ranges.size(); t++) {
+                const std::size_t lo = static_cast<std::size_t>(cpu.tile_ranges[2 * t]);
+                const std::size_t hi = static_cast<std::size_t>(cpu.tile_ranges[2 * t + 1]);
+                if (first_id >= lo && first_id < hi) { bt = t; blo = lo; bhi = hi; break; }
+            }
+            std::fprintf(stderr,
+                "[SORT verify] first_id@%zu in tile=%zu off=%zu count=%zu\n",
+                first_id, bt, first_id - blo, bhi - blo);
+            std::fprintf(stderr, "  cpu:");
+            for (std::size_t k = (first_id > 4 ? first_id - 4 : 0); k < first_id + 6 && k < cpu.sorted_gaussian_ids.size(); k++)
+                std::fprintf(stderr, " %lld", (long long)cpu.sorted_gaussian_ids[k]);
+            std::fprintf(stderr, "\n  dev:");
+            for (std::size_t k = (first_id > 4 ? first_id - 4 : 0); k < first_id + 6 && k < dev.sorted_gaussian_ids.size(); k++)
+                std::fprintf(stderr, " %lld", (long long)dev.sorted_gaussian_ids[k]);
+            std::fprintf(stderr, "\n");
+        }
         std::fprintf(stderr, "[SORT verify] FATAL: device sort not byte-identical to CPU\n");
         std::abort();
     }
@@ -613,29 +697,95 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         const auto t_k1 = clk::now();
         T.kernel_ms = std::chrono::duration<double, std::milli>(t_k1 - t_k0).count();
 
-        // ── D2H aligned sorted ids + Pass4 compact -> contiguous ────────
-        // buf_out is grow-only: read the whole buffer -> size dst to capacity.
-        const uint32_t cap_aligned_elems =
-            static_cast<uint32_t>(ctx->cap_aligned_bytes / 4);
-        const auto t_d0 = clk::now();
-        std::vector<uint32_t> out_aligned(cap_aligned_elems);
-        distributed::EnqueueReadMeshBuffer(*ctx->cq, out_aligned, ctx->buf_out, true);
-        const auto t_d1 = clk::now();
-        T.d2h_ms = std::chrono::duration<double, std::milli>(t_d1 - t_d0).count();
+        const bool dev_publish = sort_device_publish_enabled();
+        std::vector<uint32_t> out_aligned;  // host fallback / BIN_DEBUG only
 
-        const auto t_c0 = clk::now();
-        result.sorted_gaussian_ids.resize(P_kept);
-        for (uint32_t t = 0; t < num_tiles; t++) {
-            const uint32_t n = static_cast<uint32_t>(counts[t]);
-            if (n == 0) continue;
-            const uint32_t src = pstart_elem[t];
-            const std::size_t dst = static_cast<std::size_t>(starts[t]);
-            for (uint32_t k = 0; k < n; k++)
-                result.sorted_gaussian_ids[dst + k] =
-                    static_cast<int64_t>(out_aligned[src + k]);
+        if (dev_publish) {
+            // ── Device compact+publish (skip D2H buf_out + host Pass4) ────
+            // sort_publish.cpp copies WHOLE 16-elem pages from the page-aligned
+            // radix output into sort_sorted_ids at dst_base = range_start/16, which
+            // is only bit-correct when each tile's dst slice is page-aligned. So we
+            // publish a PADDED layout: every tile starts on a 16-elem boundary. The
+            // resident sort_tile_ranges carries the padded [start, start+count) so
+            // all downstream resident readers (cull/blend) index the right slice.
+            const auto t_pub0 = clk::now();
+            std::vector<int64_t> padded_ranges(result.tile_ranges.size(), 0);
+            uint32_t padded_cursor = 0;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                const uint32_t s = static_cast<uint32_t>(result.tile_ranges[2 * t]);
+                const uint32_t e = static_cast<uint32_t>(result.tile_ranges[2 * t + 1]);
+                const uint32_t cnt = (e > s) ? (e - s) : 0u;
+                padded_ranges[2 * t] = static_cast<int64_t>(padded_cursor);
+                padded_ranges[2 * t + 1] = static_cast<int64_t>(padded_cursor + cnt);
+                padded_cursor += round_up(cnt, ELEMS_PER_PAGE);
+            }
+            ensure_resident_sorted_buffer(ctx, padded_cursor);
+            upload_resident_tile_ranges(ctx, padded_ranges);
+            Program& pub_prog = ctx->wl_publish.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                SetRuntimeArgs(pub_prog, ctx->kpublish, core, {
+                    static_cast<uint32_t>(ctx->buf_out->address()),
+                    static_cast<uint32_t>(ctx->buf_sorted_ids->address()),
+                    static_cast<uint32_t>(ctx->buf_tile_ranges->address()),
+                    static_cast<uint32_t>(ctx->buf_tile_ids->address()),
+                    static_cast<uint32_t>(ctx->buf_tmeta->address()),
+                    lpt.per_core_offset[c],
+                    lpt.per_core_count[c],
+                });
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_publish, false);
+            distributed::Finish(*ctx->cq);
+            T.publish_ms =
+                std::chrono::duration<double, std::milli>(clk::now() - t_pub0).count();
+            {
+                // Always read back + reconstruct the dense ids. The publish kernel
+                // skips the host Pass4 compact (its expensive part), but downstream
+                // consumers — the blend host fallback (render_blend.cpp) and the
+                // optional byte-verify — both read the host sorted_gaussian_ids;
+                // leaving it empty indexes out of bounds and corrupts the heap.
+                const uint32_t cap_sorted_elems =
+                    static_cast<uint32_t>(ctx->cap_sorted_bytes / 4);
+                const auto t_d0 = clk::now();
+                std::vector<uint32_t> sids(cap_sorted_elems);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, sids, ctx->buf_sorted_ids, true);
+                T.d2h_ms = std::chrono::duration<double, std::milli>(clk::now() - t_d0).count();
+                // Reconstruct the dense ordering from the padded device layout so
+                // the byte-compare-vs-CPU still validates and the host fallback sees
+                // the same contiguous ids the default Pass4 would have produced.
+                result.sorted_gaussian_ids.assign(P_kept, 0);
+                for (uint32_t t = 0; t < num_tiles; t++) {
+                    const uint32_t ds = static_cast<uint32_t>(result.tile_ranges[2 * t]);
+                    const uint32_t de = static_cast<uint32_t>(result.tile_ranges[2 * t + 1]);
+                    const uint32_t ps = static_cast<uint32_t>(padded_ranges[2 * t]);
+                    for (uint32_t k = 0; k + ds < de && (ds + k) < P_kept; k++)
+                        result.sorted_gaussian_ids[ds + k] = static_cast<int64_t>(sids[ps + k]);
+                }
+            }
+        } else {
+            // ── D2H aligned sorted ids + Pass4 compact -> contiguous ────
+            const uint32_t cap_aligned_elems =
+                static_cast<uint32_t>(ctx->cap_aligned_bytes / 4);
+            const auto t_d0 = clk::now();
+            out_aligned.resize(cap_aligned_elems);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, out_aligned, ctx->buf_out, true);
+            const auto t_d1 = clk::now();
+            T.d2h_ms = std::chrono::duration<double, std::milli>(t_d1 - t_d0).count();
+
+            const auto t_c0 = clk::now();
+            result.sorted_gaussian_ids.resize(P_kept);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                const uint32_t n = static_cast<uint32_t>(counts[t]);
+                if (n == 0) continue;
+                const uint32_t src = pstart_elem[t];
+                const std::size_t dst = static_cast<std::size_t>(starts[t]);
+                for (uint32_t k = 0; k < n; k++)
+                    result.sorted_gaussian_ids[dst + k] =
+                        static_cast<int64_t>(out_aligned[src + k]);
+            }
+            const auto t_c1 = clk::now();
+            T.compact_ms = std::chrono::duration<double, std::milli>(t_c1 - t_c0).count();
         }
-        const auto t_c1 = clk::now();
-        T.compact_ms = std::chrono::duration<double, std::milli>(t_c1 - t_c0).count();
 
         // ── Optional binning self-check (GSPLAT_TT_BIN_DEBUG=1) ─────────
         // D2H the device-filled (pre-radix) keys/ids and compare to a host
@@ -755,7 +905,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             }
         }
 
-        publish_resident(ctx, result.sorted_gaussian_ids, result.tile_ranges, &T.publish_ms);
+        if (!dev_publish)
+            publish_resident(ctx, result.sorted_gaussian_ids, result.tile_ranges, &T.publish_ms);
 
         T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
         std::fprintf(stderr,
