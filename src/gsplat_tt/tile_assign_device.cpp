@@ -17,6 +17,7 @@
 
 #include "gsplat_tt/tile_assign.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
 #include <chrono>
@@ -52,6 +53,17 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t PAGE_BYTES = ELEMS_PER_PAGE * 4;  // 64
 
 inline uint32_t round_up(uint32_t v, uint32_t m) { return ((v + m - 1) / m) * m; }
+
+// Persistent host pool for the K3 per-Gaussian m2_thresh/opacity precompute.
+// The loop is embarrassingly parallel and dominated by std::log over M (~9ms
+// single-threaded on the hero frame). Each element is computed independently
+// and identically (same std::log, same memcpy bit-pattern) so the result is
+// byte-identical regardless of thread count / split — no reduction, no
+// ordering dependence. Lazily constructed once (hardware_concurrency threads).
+static gsplat_cpu::ThreadPool& k3_pool() {
+    static gsplat_cpu::ThreadPool pool(0);
+    return pool;
+}
 
 struct TileAssignDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
@@ -315,6 +327,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const char* v = std::getenv("GSPLAT_TT_RESIDENT_PAIRS");
         return v != nullptr && v[0] == '1';
     }();
+    // GSPLAT_TT_TA_TIMING=1: print a per-call host/device sub-stage breakdown
+    // to stderr (works in resident-pairs mode, unlike GSPLAT_TT_TA_DEBUG). To
+    // attribute the H2D bridges in isolation it inserts an extra Finish after
+    // the offs upload and after the cull H2D — these syncs are ONLY added when
+    // timing is enabled so the production path is unperturbed.
+    const bool ta_timing = [] {
+        const char* v = std::getenv("GSPLAT_TT_TA_TIMING");
+        return v != nullptr && v[0] == '1';
+    }();
     std::shared_ptr<distributed::MeshBuffer> res_px, res_py, res_rx, res_ry,
         res_a, res_b, res_c;
 
@@ -442,8 +463,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         T.k1_ms = std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
 
         // D2H tiles_per_gaussian (read the whole grow-only buffer -> size to cap).
+        const auto t_d2htpg0 = clk::now();
         std::vector<uint32_t> tpg(cap_m_elems);
         distributed::EnqueueReadMeshBuffer(*ctx->cq, tpg, ctx->buf_tpg, true);
+        T.d2h_tpg_ms = std::chrono::duration<double, std::milli>(clk::now() - t_d2htpg0).count();
 
         // ── H1: host exclusive prefix-sum ───────────────────────────────
         const auto t_pre0 = clk::now();
@@ -469,7 +492,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             return result;
         }
 
+        const auto t_h2doffs0 = clk::now();
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_offs, offs, false);
+        if (ta_timing) distributed::Finish(*ctx->cq);
+        T.h2d_offs_ms = std::chrono::duration<double, std::milli>(clk::now() - t_h2doffs0).count();
 
         // ── Allocate / grow pair buffers ────────────────────────────────
         const uint32_t P_pad = round_up(P, ELEMS_PER_PAGE);
@@ -558,25 +584,52 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             }
             std::vector<uint32_t> m2t_v(cap_m_elems, 0);
             std::vector<uint32_t> ok_v(cap_m_elems, 0);
-            for (uint32_t m = 0; m < Mu; m++) {
-                if (!resident_in) {
-                    const float a = covs_2d[m * 4 + 0];
-                    const float b = covs_2d[m * 4 + 1];
-                    const float c = covs_2d[m * 4 + 3];
-                    std::memcpy(&a_v[m], &a, 4);
-                    std::memcpy(&b_v[m], &b, 4);
-                    std::memcpy(&c_v[m], &c, 4);
+            const auto t_k3c0 = clk::now();
+            // Per-Gaussian m2_thresh / opacity-floor (and cov repack when not
+            // resident). Parallelized over a persistent host pool in contiguous
+            // [lo,hi) ranges; each element is independent and computed with the
+            // SAME std::log + memcpy as the serial path -> byte-identical
+            // m2t_v/ok_v (a_v/b_v/c_v) regardless of worker count.
+            auto k3_range = [&](uint32_t lo, uint32_t hi) {
+                for (uint32_t m = lo; m < hi; m++) {
+                    if (!resident_in) {
+                        const float a = covs_2d[m * 4 + 0];
+                        const float b = covs_2d[m * 4 + 1];
+                        const float c = covs_2d[m * 4 + 3];
+                        std::memcpy(&a_v[m], &a, 4);
+                        std::memcpy(&b_v[m], &b, 4);
+                        std::memcpy(&c_v[m], &c, 4);
+                    }
+                    const float op = opacities[m];
+                    float m2t = 0.0f;
+                    int32_t ok = 0;
+                    if (op > contrib_floor) {
+                        m2t = -2.0f * std::log(contrib_floor / op);
+                        ok = 1;
+                    }
+                    std::memcpy(&m2t_v[m], &m2t, 4);
+                    ok_v[m] = static_cast<uint32_t>(ok);
                 }
-                const float op = opacities[m];
-                float m2t = 0.0f;
-                int32_t ok = 0;
-                if (op > contrib_floor) {
-                    m2t = -2.0f * std::log(contrib_floor / op);
-                    ok = 1;
+            };
+            auto& pool = k3_pool();
+            const uint32_t W = std::max<uint32_t>(1, static_cast<uint32_t>(pool.size()));
+            // Page-aligned chunking keeps each worker on whole 16-elem pages
+            // (matches the SoA layout; avoids false sharing across cache lines).
+            const uint32_t chunk_pages = (M_pad / ELEMS_PER_PAGE + W - 1) / W;
+            const uint32_t chunk = chunk_pages * ELEMS_PER_PAGE;
+            if (W <= 1 || Mu <= ELEMS_PER_PAGE) {
+                k3_range(0, Mu);
+            } else {
+                for (uint32_t w = 0; w < W; w++) {
+                    const uint32_t lo = w * chunk;
+                    if (lo >= Mu) break;
+                    const uint32_t hi = std::min(lo + chunk, Mu);
+                    pool.submit([k3_range, lo, hi]() { k3_range(lo, hi); });
                 }
-                std::memcpy(&m2t_v[m], &m2t, 4);
-                ok_v[m] = static_cast<uint32_t>(ok);
+                pool.wait();
             }
+            T.k3_compute_ms = std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
+            const auto t_k3h0 = clk::now();
             if (!resident_in) {
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_a, a_v, false);
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b, b_v, false);
@@ -584,6 +637,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             }
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_m2thr, m2t_v, false);
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_opacok, ok_v, false);
+            if (ta_timing) distributed::Finish(*ctx->cq);
+            T.k3_h2d_ms = std::chrono::duration<double, std::milli>(clk::now() - t_k3h0).count();
+            const auto t_k3_1 = clk::now();
+            T.k3_ms = std::chrono::duration<double, std::milli>(t_k3_1 - t_cull0).count();
 
             // K4: per-pair cull -> keep_mask.
             Program& progc = ctx->wl_cull.get_programs().begin()->second;
@@ -607,9 +664,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_cull, false);
             distributed::Finish(*ctx->cq);
             const auto t_cull1 = clk::now();
+            T.k4_ms = std::chrono::duration<double, std::milli>(t_cull1 - t_k3_1).count();
             T.cull_ms = std::chrono::duration<double, std::milli>(t_cull1 - t_cull0).count();
 
             if (resident_pairs_active) {
+                const auto t_pub0 = clk::now();
                 // R4/R5: publish the full-P resident pairs + keep mask for the
                 // device-binning sort path. No keep D2H, no host compaction —
                 // sort reads keep[] and compacts implicitly while binning.
@@ -625,6 +684,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 pbuf[1] = P_pad;    // padded count (page-aligned)
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pairs_P, pbuf, false);
                 distributed::Finish(*ctx->cq);
+                T.publish_ms = std::chrono::duration<double, std::milli>(clk::now() - t_pub0).count();
                 // result.gaussian_ids / tile_ids intentionally left empty: the
                 // resident-pairs sort path does not read them.
             } else {
@@ -656,6 +716,20 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         }
 
         T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
+
+        // GSPLAT_TT_TA_TIMING: per-call host/device sub-stage breakdown. Works
+        // in every mode (incl. resident-pairs, where TA_DEBUG is skipped).
+        if (ta_timing) {
+            std::fprintf(stderr,
+                "[TA] M=%u P=%u resident_in=%d resident_pairs=%d cull=%d | "
+                "k1=%.2f d2h_tpg=%.2f prefix=%.2f h2d_offs=%.2f k2=%.2f "
+                "k3=%.2f(c=%.2f h2d=%.2f) k4=%.2f publish=%.2f compact=%.2f "
+                "d2h=%.2f total=%.2fms\n",
+                Mu, P, (int)resident_in, (int)resident_pairs_active, (int)do_cull,
+                T.k1_ms, T.d2h_tpg_ms, T.prefix_ms, T.h2d_offs_ms, T.k2_ms,
+                T.k3_ms, T.k3_compute_ms, T.k3_h2d_ms, T.k4_ms, T.publish_ms,
+                T.compact_ms, T.d2h_ms, T.total_ms);
+        }
 
         // Optional self-check vs the matching CPU reference (AABB-only when
         // cull disabled, full Phase-4 cull otherwise). Skipped in resident-pairs

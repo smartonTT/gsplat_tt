@@ -34,11 +34,18 @@ namespace gsplat_tt {
 // the host prefix-sum / compaction / DMA bridges.
 struct TileAssignCallTimings {
     double k1_ms = 0.0;        // bbox kernel (device)
+    double d2h_tpg_ms = 0.0;   // D2H of tiles_per_gaussian (host bridge)
     double prefix_ms = 0.0;    // host exclusive prefix-sum (H1)
+    double h2d_offs_ms = 0.0;  // H2D of offs[] (host bridge)
     double k2_ms = 0.0;        // scatter kernel (device)
-    double cull_ms = 0.0;      // m2_thresh precompute + cull kernel (K3/K4)
+    double k3_ms = 0.0;        // m2_thresh/cov precompute + H2D (host bridge)
+    double k3_compute_ms = 0.0;// m2_thresh/opacok host loop (CPU)
+    double k3_h2d_ms = 0.0;    // H2D of m2thr/opacok (+cov when !resident)
+    double k4_ms = 0.0;        // per-pair cull kernel (device)
+    double cull_ms = 0.0;      // K3 + K4 combined (back-compat)
+    double publish_ms = 0.0;   // resident-pairs publish (write P + Finish)
     double compact_ms = 0.0;   // host compaction (H2)
-    double d2h_ms = 0.0;       // device->host readbacks
+    double d2h_ms = 0.0;       // device->host readbacks (pairs/keep)
     double total_ms = 0.0;     // wall clock of the whole call
 };
 
