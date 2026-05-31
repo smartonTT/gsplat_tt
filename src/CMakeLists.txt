@@ -115,6 +115,7 @@ if(GSPLAT_WITH_TT)
     gsplat_tt/device_state.cpp
     gsplat_tt/render_blend.cpp
     gsplat_tt/mb_payload.cpp
+    gsplat_tt/gather_visible_device.cpp
   )
   set_target_properties(gsplat_tt PROPERTIES POSITION_INDEPENDENT_CODE ON)
   target_include_directories(gsplat_tt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
