@@ -93,7 +93,6 @@ struct TileAssignDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_b;
     std::shared_ptr<distributed::MeshBuffer> buf_c;
     std::shared_ptr<distributed::MeshBuffer> buf_m2thr;
-    std::shared_ptr<distributed::MeshBuffer> buf_opacok;
     std::size_t cap_m_bytes = 0;  // capacity of the M-sized buffers (bytes)
 
     std::shared_ptr<distributed::MeshBuffer> buf_offs;
@@ -179,11 +178,11 @@ static void build_program_cull(TileAssignDeviceContext& ctx) {
         c.set_page_size(id, PAGE_BYTES);
         CreateCircularBuffer(program, cores, c);
     };
-    // gid,tid,a,b,c,px,py,m2thr,opacok,keep
-    for (uint32_t id = 0; id < 10; id++) scratch_cb(id);
+    // gid,tid,a,b,c,px,py,m2thr,keep (opacok folded into the m2thr sentinel)
+    for (uint32_t id = 0; id < 9; id++) scratch_cb(id);
 
     std::vector<uint32_t> ct;
-    for (int i = 0; i < 10; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    for (int i = 0; i < 9; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     ctx.k4 = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_cull.cpp",
@@ -322,7 +321,6 @@ void tile_assign_device_shutdown() {
         slot->buf_b.reset();
         slot->buf_c.reset();
         slot->buf_m2thr.reset();
-        slot->buf_opacok.reset();
         slot->buf_offs.reset();
         slot->buf_core_total.reset();
         slot->buf_gids.reset();
@@ -446,7 +444,6 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         if (!ctx->buf_tpg || ctx->cap_m_bytes < m_bytes) {
             ctx->buf_tpg    = make_dram(ctx->mesh_device.get(), m_bytes);
             ctx->buf_m2thr  = make_dram(ctx->mesh_device.get(), m_bytes);
-            ctx->buf_opacok = make_dram(ctx->mesh_device.get(), m_bytes);
             // Host-array input buffers: only needed when NOT reading resident.
             // In resident mode K1/K2/K4 read proj_m_* directly over NoC, so we
             // neither allocate nor H2D-upload these.
@@ -726,13 +723,14 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 c_v.assign(cap_m_elems, 0);
             }
             std::vector<uint32_t> m2t_v(cap_m_elems, 0);
-            std::vector<uint32_t> ok_v(cap_m_elems, 0);
             const auto t_k3c0 = clk::now();
-            // Per-Gaussian m2_thresh / opacity-floor (and cov repack when not
-            // resident). Parallelized over a persistent host pool in contiguous
-            // [lo,hi) ranges; each element is independent and computed with the
-            // SAME std::log + memcpy as the serial path -> byte-identical
-            // m2t_v/ok_v (a_v/b_v/c_v) regardless of worker count.
+            // Per-Gaussian m2_thresh (and cov repack when not resident).
+            // The opacity floor is FOLDED into m2thr: op <= contrib_floor ->
+            // sentinel -1.0f (legitimate m2thr is always >= 0), so K4 needs no
+            // separate opacok buffer (halves the K3 H2D). Parallelized over a
+            // persistent host pool in contiguous [lo,hi) ranges; each element
+            // is independent and computed with the SAME std::log + memcpy as
+            // the serial path -> byte-identical m2t_v (a_v/b_v/c_v).
             auto k3_range = [&](uint32_t lo, uint32_t hi) {
                 for (uint32_t m = lo; m < hi; m++) {
                     if (!resident_in) {
@@ -744,14 +742,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                         std::memcpy(&c_v[m], &c, 4);
                     }
                     const float op = opacities[m];
-                    float m2t = 0.0f;
-                    int32_t ok = 0;
+                    float m2t = -1.0f;  // sentinel: op <= contrib_floor -> drop
                     if (op > contrib_floor) {
                         m2t = -2.0f * std::log(contrib_floor / op);
-                        ok = 1;
                     }
                     std::memcpy(&m2t_v[m], &m2t, 4);
-                    ok_v[m] = static_cast<uint32_t>(ok);
                 }
             };
             auto& pool = k3_pool();
@@ -779,7 +774,6 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c_v, false);
             }
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_m2thr, m2t_v, false);
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_opacok, ok_v, false);
             if (ta_timing) distributed::Finish(*ctx->cq);
             T.k3_h2d_ms = std::chrono::duration<double, std::milli>(clk::now() - t_k3h0).count();
             const auto t_k3_1 = clk::now();
@@ -798,7 +792,6 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     in_px,
                     in_py,
                     static_cast<uint32_t>(ctx->buf_m2thr->address()),
-                    static_cast<uint32_t>(ctx->buf_opacok->address()),
                     static_cast<uint32_t>(ctx->buf_keep->address()),
                     ws2.start[cc], ws2.count[cc], P,
                     static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tile_size),
