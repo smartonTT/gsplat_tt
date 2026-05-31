@@ -34,9 +34,11 @@ namespace gsplat_tt {
 // the host prefix-sum / compaction / DMA bridges.
 struct TileAssignCallTimings {
     double k1_ms = 0.0;        // bbox kernel (device)
-    double d2h_tpg_ms = 0.0;   // D2H of tiles_per_gaussian (host bridge)
-    double prefix_ms = 0.0;    // host exclusive prefix-sum (H1)
-    double h2d_offs_ms = 0.0;  // H2D of offs[] (host bridge)
+    double d2h_tpg_ms = 0.0;   // D2H of tiles_per_gaussian or core_total (host bridge)
+    double prefix_ms = 0.0;    // host exclusive prefix-sum (H1, or core_total scan)
+    double h2d_offs_ms = 0.0;  // H2D of offs[] (host bridge; 0 in device-scan mode)
+    double scan1_ms = 0.0;     // device scan phase 1 (per-core reduce)
+    double scan2_ms = 0.0;     // device scan phase 2 (per-core prefix add)
     double k2_ms = 0.0;        // scatter kernel (device)
     double k3_ms = 0.0;        // m2_thresh/cov precompute + H2D (host bridge)
     double k3_compute_ms = 0.0;// m2_thresh/opacok host loop (CPU)

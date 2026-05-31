@@ -74,9 +74,13 @@ struct TileAssignDeviceContext {
     distributed::MeshWorkload wl_k1;
     distributed::MeshWorkload wl_k2;
     distributed::MeshWorkload wl_cull;
+    distributed::MeshWorkload wl_scan1;
+    distributed::MeshWorkload wl_scan2;
     KernelHandle k1{};
     KernelHandle k2{};
     KernelHandle k4{};
+    KernelHandle ks1{};
+    KernelHandle ks2{};
 
     // Cached DRAM buffers (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -94,6 +98,10 @@ struct TileAssignDeviceContext {
 
     std::shared_ptr<distributed::MeshBuffer> buf_offs;
     std::size_t cap_offs_bytes = 0;
+
+    // On-device exclusive scan (GSPLAT_TT_TA_DEVICE_SCAN): per-core partial
+    // totals, one dedicated 64B page per core (sized at init from num_cores).
+    std::shared_ptr<distributed::MeshBuffer> buf_core_total;
 
     std::shared_ptr<distributed::MeshBuffer> buf_gids;
     std::shared_ptr<distributed::MeshBuffer> buf_tids;
@@ -189,6 +197,56 @@ static void build_program_cull(TileAssignDeviceContext& ctx) {
     ctx.wl_cull.add_program(device_range, std::move(program));
 }
 
+static void build_program_scan_reduce(TileAssignDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    auto scratch_cb = [&](uint32_t id) {
+        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, PAGE_BYTES);
+        CreateCircularBuffer(program, cores, c);
+    };
+    for (uint32_t id = 0; id < 2; id++) scratch_cb(id);  // tpg, total
+
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 2; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.ks1 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scan_reduce.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_scan1.add_program(device_range, std::move(program));
+}
+
+static void build_program_scan_add(TileAssignDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    auto scratch_cb = [&](uint32_t id) {
+        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, PAGE_BYTES);
+        CreateCircularBuffer(program, cores, c);
+    };
+    for (uint32_t id = 0; id < 2; id++) scratch_cb(id);  // tpg, offs
+
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 2; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.ks2 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scan_add.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_scan2.add_program(device_range, std::move(program));
+}
+
 static TileAssignDeviceContext init_context() {
     TileAssignDeviceContext ctx;
     ctx.mesh_device = device_state::get_device();
@@ -199,6 +257,12 @@ static TileAssignDeviceContext init_context() {
     build_program_k1(ctx);
     build_program_k2(ctx);
     build_program_cull(ctx);
+    build_program_scan_reduce(ctx);
+    build_program_scan_add(ctx);
+    // core_total: one dedicated 64B page per core (no cross-core page sharing).
+    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
+    ctx.buf_core_total = make_dram(
+        ctx.mesh_device.get(), static_cast<std::size_t>(num_cores) * PAGE_BYTES);
     return ctx;
 }
 
@@ -260,6 +324,7 @@ void tile_assign_device_shutdown() {
         slot->buf_m2thr.reset();
         slot->buf_opacok.reset();
         slot->buf_offs.reset();
+        slot->buf_core_total.reset();
         slot->buf_gids.reset();
         slot->buf_tids.reset();
         slot->buf_keep.reset();
@@ -334,6 +399,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
     // timing is enabled so the production path is unperturbed.
     const bool ta_timing = [] {
         const char* v = std::getenv("GSPLAT_TT_TA_TIMING");
+        return v != nullptr && v[0] == '1';
+    }();
+    // GSPLAT_TT_TA_DEVICE_SCAN=1: compute the exclusive prefix-sum of
+    // tiles_per_gaussian ON-DEVICE (two-phase: per-core reduce -> tiny
+    // per-core-totals D2H + host scan of num_cores partials -> per-core
+    // prefix). Eliminates the full-M D2H(tpg)+H2D(offs) round-trips (~8ms on
+    // hero); only the num_cores partials cross the bus. Integer = byte-exact.
+    const bool device_scan = [] {
+        const char* v = std::getenv("GSPLAT_TT_TA_DEVICE_SCAN");
         return v != nullptr && v[0] == '1';
     }();
     std::shared_ptr<distributed::MeshBuffer> res_px, res_py, res_rx, res_ry,
@@ -462,40 +536,109 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const auto t_k1_1 = clk::now();
         T.k1_ms = std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
 
-        // D2H tiles_per_gaussian (read the whole grow-only buffer -> size to cap).
-        const auto t_d2htpg0 = clk::now();
-        std::vector<uint32_t> tpg(cap_m_elems);
-        distributed::EnqueueReadMeshBuffer(*ctx->cq, tpg, ctx->buf_tpg, true);
-        T.d2h_tpg_ms = std::chrono::duration<double, std::milli>(clk::now() - t_d2htpg0).count();
-
-        // ── H1: host exclusive prefix-sum ───────────────────────────────
-        const auto t_pre0 = clk::now();
-        std::vector<uint32_t> offs(cap_offs_elems, 0);
-        uint64_t acc = 0;
-        for (uint32_t m = 0; m < Mu; m++) {
-            offs[m] = static_cast<uint32_t>(acc);
-            acc += tpg[m];
-        }
-        const uint32_t P = static_cast<uint32_t>(acc);
-        for (uint32_t m = Mu; m < cap_offs_elems; m++) offs[m] = P;  // offs[M..] = P
-        const auto t_pre1 = clk::now();
-        T.prefix_ms = std::chrono::duration<double, std::milli>(t_pre1 - t_pre0).count();
-
         gsplat_cpu::TileAssignResult result;
-        result.tiles_per_gaussian.assign(M, 0);
-        for (uint32_t m = 0; m < Mu; m++)
-            result.tiles_per_gaussian[m] = static_cast<int64_t>(tpg[m]);
+        uint32_t P = 0;
+        std::vector<uint32_t> offs;  // host-scan path only
 
-        if (P == 0) {
-            if (device_ok) *device_ok = true;
-            T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
-            return result;
+        if (device_scan) {
+            // ── On-device exclusive scan (two-phase) ────────────────────
+            // Cover offs_pad pages so offs[M] (read by K2) is produced even
+            // when M is a multiple of 16 (then offs lives one page past the
+            // K1-written tpg range); the kernels' g0>=M guard makes those
+            // padding pages = P without reading tpg out of bounds.
+            const uint32_t scan_pages = offs_pad / ELEMS_PER_PAGE;
+            const WorkSplit wss = split_pages(scan_pages, num_cores);
+
+            // Phase 1: per-core reduce of tpg -> core_total partials.
+            const auto t_s1_0 = clk::now();
+            Program& progs1 = ctx->wl_scan1.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                SetRuntimeArgs(progs1, ctx->ks1, core, {
+                    static_cast<uint32_t>(ctx->buf_tpg->address()),
+                    static_cast<uint32_t>(ctx->buf_core_total->address()),
+                    wss.start[c], wss.count[c], Mu, c,
+                });
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan1, false);
+            distributed::Finish(*ctx->cq);
+            T.scan1_ms = std::chrono::duration<double, std::milli>(clk::now() - t_s1_0).count();
+
+            // Tiny D2H of the num_cores partials (one per dedicated page).
+            const auto t_ct0 = clk::now();
+            std::vector<uint32_t> ctot(
+                static_cast<std::size_t>(num_cores) * ELEMS_PER_PAGE);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, ctot, ctx->buf_core_total, true);
+            T.d2h_tpg_ms = std::chrono::duration<double, std::milli>(clk::now() - t_ct0).count();
+
+            // Host exclusive scan of the partials -> per-core base + P.
+            const auto t_pre0 = clk::now();
+            std::vector<uint32_t> core_base(num_cores, 0);
+            uint64_t acc = 0;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                core_base[c] = static_cast<uint32_t>(acc);
+                acc += ctot[static_cast<std::size_t>(c) * ELEMS_PER_PAGE];
+            }
+            P = static_cast<uint32_t>(acc);
+            T.prefix_ms = std::chrono::duration<double, std::milli>(clk::now() - t_pre0).count();
+            T.h2d_offs_ms = 0.0;
+
+            if (P == 0) {
+                if (device_ok) *device_ok = true;
+                T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
+                return result;
+            }
+
+            // Phase 2: per-core exclusive prefix-add seeded by core_base -> offs.
+            const auto t_s2_0 = clk::now();
+            Program& progs2 = ctx->wl_scan2.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                SetRuntimeArgs(progs2, ctx->ks2, core, {
+                    static_cast<uint32_t>(ctx->buf_tpg->address()),
+                    static_cast<uint32_t>(ctx->buf_offs->address()),
+                    wss.start[c], wss.count[c], Mu, core_base[c],
+                });
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan2, false);
+            distributed::Finish(*ctx->cq);
+            T.scan2_ms = std::chrono::duration<double, std::milli>(clk::now() - t_s2_0).count();
+            // result.tiles_per_gaussian intentionally left empty: render_full's
+            // fast path never reads it (sort/blend don't need it).
+        } else {
+            // D2H tiles_per_gaussian (read whole grow-only buffer -> size to cap).
+            const auto t_d2htpg0 = clk::now();
+            std::vector<uint32_t> tpg(cap_m_elems);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, tpg, ctx->buf_tpg, true);
+            T.d2h_tpg_ms = std::chrono::duration<double, std::milli>(clk::now() - t_d2htpg0).count();
+
+            // ── H1: host exclusive prefix-sum ───────────────────────────
+            const auto t_pre0 = clk::now();
+            offs.assign(cap_offs_elems, 0);
+            uint64_t acc = 0;
+            for (uint32_t m = 0; m < Mu; m++) {
+                offs[m] = static_cast<uint32_t>(acc);
+                acc += tpg[m];
+            }
+            P = static_cast<uint32_t>(acc);
+            for (uint32_t m = Mu; m < cap_offs_elems; m++) offs[m] = P;  // offs[M..] = P
+            T.prefix_ms = std::chrono::duration<double, std::milli>(clk::now() - t_pre0).count();
+
+            result.tiles_per_gaussian.assign(M, 0);
+            for (uint32_t m = 0; m < Mu; m++)
+                result.tiles_per_gaussian[m] = static_cast<int64_t>(tpg[m]);
+
+            if (P == 0) {
+                if (device_ok) *device_ok = true;
+                T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
+                return result;
+            }
+
+            const auto t_h2doffs0 = clk::now();
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_offs, offs, false);
+            if (ta_timing) distributed::Finish(*ctx->cq);
+            T.h2d_offs_ms = std::chrono::duration<double, std::milli>(clk::now() - t_h2doffs0).count();
         }
-
-        const auto t_h2doffs0 = clk::now();
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_offs, offs, false);
-        if (ta_timing) distributed::Finish(*ctx->cq);
-        T.h2d_offs_ms = std::chrono::duration<double, std::milli>(clk::now() - t_h2doffs0).count();
 
         // ── Allocate / grow pair buffers ────────────────────────────────
         const uint32_t P_pad = round_up(P, ELEMS_PER_PAGE);
@@ -721,14 +864,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // in every mode (incl. resident-pairs, where TA_DEBUG is skipped).
         if (ta_timing) {
             std::fprintf(stderr,
-                "[TA] M=%u P=%u resident_in=%d resident_pairs=%d cull=%d | "
-                "k1=%.2f d2h_tpg=%.2f prefix=%.2f h2d_offs=%.2f k2=%.2f "
-                "k3=%.2f(c=%.2f h2d=%.2f) k4=%.2f publish=%.2f compact=%.2f "
-                "d2h=%.2f total=%.2fms\n",
+                "[TA] M=%u P=%u resident_in=%d resident_pairs=%d cull=%d "
+                "dev_scan=%d | k1=%.2f scan1=%.2f d2h_tpg=%.2f prefix=%.2f "
+                "scan2=%.2f h2d_offs=%.2f k2=%.2f k3=%.2f(c=%.2f h2d=%.2f) "
+                "k4=%.2f publish=%.2f compact=%.2f d2h=%.2f total=%.2fms\n",
                 Mu, P, (int)resident_in, (int)resident_pairs_active, (int)do_cull,
-                T.k1_ms, T.d2h_tpg_ms, T.prefix_ms, T.h2d_offs_ms, T.k2_ms,
-                T.k3_ms, T.k3_compute_ms, T.k3_h2d_ms, T.k4_ms, T.publish_ms,
-                T.compact_ms, T.d2h_ms, T.total_ms);
+                (int)device_scan, T.k1_ms, T.scan1_ms, T.d2h_tpg_ms, T.prefix_ms,
+                T.scan2_ms, T.h2d_offs_ms, T.k2_ms, T.k3_ms, T.k3_compute_ms,
+                T.k3_h2d_ms, T.k4_ms, T.publish_ms, T.compact_ms, T.d2h_ms,
+                T.total_ms);
         }
 
         // Optional self-check vs the matching CPU reference (AABB-only when
