@@ -1,2 +1,1 @@
-tests/fixtures/hero filter=lfs diff=lfs merge=lfs -text
 tests/fixtures/hero/*.npz filter=lfs diff=lfs merge=lfs -text
