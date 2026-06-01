@@ -430,3 +430,90 @@ strip:
 for §3a). Promote each step only after hero_vs_ref **≥ 63.85 dB ×2** on 30-view
 (`a003_verify.py`), recorded in `opt/metal-iters.jsonl`. Device hygiene and the
 bh-30 reset procedure: `opt/sfpu-cull-next.md`.
+
+---
+
+## UPDATE 2026-06-01 (iter 17, commit 3b54b2e) — §3a payload path: 11→43 dB partial fix, BANKED gated-OFF
+
+**Status: `GSPLAT_TT_BLEND_PAYLOAD` defaults OFF.** Baseline restored and verified:
+`hero_vs_ref=63.85 dB`, `blend=191.0 ms`, `ms/view=391.4` (gate PASS, DoD DONE).
+The payload scaffold (`payload_pack.cpp` + `reader_alpha_blend_mb_payload.cpp`) and
+the sizing fix below stay in-tree but are inert unless the env var is set. All
+diagnostic probes (rowck/rdump in `alpha_blend_compute_mb.cpp`, the `GSPLAT_TT_ROWCK`
+wiring + payload-coverage readback in `blend_device.cpp`) were removed; the
+`GSPLAT_TT_DIFF_DUMP` reporting helper in `a003_verify.py` stays but is env-gated.
+
+When ON, the payload path runs `blend≈26 ms` (the ~7× win, near the ~7 ms roofline)
+but plateaus at **~42–43 dB** (was **11.23 dB** before this fix). Not landable yet.
+
+### What was FIXED (11 → 43 dB): payload buffer was undersized vs the PADDED id space
+
+Root cause was **not** a reader/writer tile-sync / push-pop mismatch (those match the
+proven devcull reader exactly — per-tile `num_g` is identical, verified via an
+order-independent compute-side checksum). It was a **DRAM buffer-sizing OOB**:
+
+- The pack and reader index `blend_payload` by the **global candidate index**
+  `id_start[t] + p`, where `id_start` comes from resident `sort_tile_ranges`.
+- The resident sort (`sort_device.cpp`) publishes a **page-aligned PADDED layout**:
+  `padded_cursor += round_up(cnt, 16)` per tile, so `max(id_end) == padded_cursor`,
+  which exceeds the dense kept count `sort_P_kept[0]` by up to `~num_tiles*15`.
+- `ensure_payload_buffer` sized the buffer to `round_up(P_kept,16)` (even +4096 pad),
+  leaving it short by the per-tile padding sum. Pack then wrote payload pages PAST
+  the buffer end; via the interleaved DRAM accessor those OOB pages landed in the
+  next-allocated buffers (`res_xramp`/`res_yramp`/`res_out`), corrupting the
+  coordinate ramps **every timed frame** → the original 8-px vertical stripes +
+  bottom-block garbage. (Confirmed: forcing a per-frame ramp re-upload masked it
+  10.85→26.73 dB; the real fix removed the OOB entirely.)
+- **Fix** (`blend_device.cpp` `ensure_payload_buffer`, ~L2125): size `blend_payload`
+  to exactly one 64B row per `sort_sorted_ids` element
+  (`rows = buf_ids->size()/sizeof(uint32_t)`), which is allocated to exactly
+  `padded_cursor` — i.e. the true index space. 26.73 → **42.09 dB**, ramps clean,
+  no per-frame re-upload needed.
+
+### What the REMAINING ~43 dB residual is
+
+- **Spatial pattern changed**: no longer global vertical stripes. Now a **diffuse,
+  density-correlated error with faint radial streaks** spread across many/most tiles
+  (`diff10x.png` via `GSPLAT_TT_DIFF_DUMP=1`). Error is broad, not localized to a
+  band — consistent with a *systematic* per-candidate data difference, not OOB.
+- **Coverage is complete**: payload readback found `read_sentinel=0`,
+  `bad_tiles=0/1024` — pack writes every page in each tile's `[id_start,id_end)`
+  read range. So no missing/unwritten rows.
+- **Counts match**: per-tile `num_g` (the `L` the reader streams) is identical to
+  devcull for every tile.
+- **Values diverge for EVERY tile**: an order-independent (commutative-XOR) per-tile
+  checksum of the coefficient row data (`row[0..9]`) AND of the mask (`row[10]`)
+  **differs** between the payload and devcull paths on **all 1024 tiles** — i.e. it
+  is not an ordering shift, the actual packed values differ everywhere.
+- **But most candidates are byte-identical**: a per-row dump of tile 0 (`RDUMP`)
+  showed `g=0,2,3` **byte-identical** to devcull, while `g=1` had divergent
+  cov/mean/op (`row[0..6]`, e.g. `a=53.4` vs `18558.4`). (Caveat: single-tile dump,
+  some run-to-run noise observed in which candidate lands at a given `g`.)
+- Ruled out: SFPU-vs-RISC mask math (devcull with `SFPU_CULL=0` RISC masks = 63.85,
+  so `compute_microblock_mask` is fine); pack double-buffer overlap (`CB_SCR_ATTR`
+  is correctly sized to `2*16*GATHER_FIELDS`=288 pages=18432 B in `blend_device.cpp`
+  ~L2069, exactly the ping-pong footprint); sort-publish race (single shared CQ).
+
+### Single best hypothesis + exact next experiment
+
+**Hypothesis:** pack's read window into `sort_sorted_ids` is offset from the devcull
+reader's window by the **padded-vs-dense index convention** — the same padded-layout
+sharp edge that caused the sizing bug. "Count matches but values differ on every
+tile" is exactly the signature of two paths reading **different (but equally long)
+slices** of `sort_sorted_ids`: if pack uses the page-aligned padded `id_start` from
+`sort_tile_ranges` while the devcull reader effectively indexes the dense cursor (or
+vice-versa), then for every tile past tile-0 the accumulated 16-pad offset shifts
+pack's gids to a neighbor's candidates — valid-looking gaussians with wrong
+cov/mean/op, producing the diffuse density-correlated error.
+
+**Next experiment (decisive, ~1 iter):** DPRINT the raw gid pack actually packs
+(`gids[cur][j]` in `payload_pack.cpp`, first 4 of tile 0 AND tile 1) and compare to
+the gid the **devcull reader** gathers for those same two tiles. If they match on
+tile 0 but diverge on tile 1 by tile-0's `round_up(cnt,16)-cnt` padding, the index
+conventions are mismatched → reconcile pack to read `sort_tile_ranges`/
+`sort_sorted_ids` with the identical convention the devcull reader uses (confirm
+whether `id_start` is meant to be the padded page base or the dense cursor, in
+`sort_device.cpp`'s publish). If gids match on both tiles, fall back to: write pack's
+assembled `row[0..10]` for tile-0 candidates to a scratch DRAM buffer and host-diff
+against the devcull reader's row for the same candidates, field by field, to localize
+the systematic divergence to a specific `row[]` slot.
