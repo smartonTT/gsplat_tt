@@ -106,11 +106,17 @@ struct SortDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_out;      // aligned sorted ids
     std::size_t cap_aligned_bytes = 0;
 
-    // T1 (GSPLAT_TT_TILE_BUCKET): per-tile contiguous full-record bucket scattered
-    // by the bin in arbitrary order (1 record == 1 page == 64B; page e ↔ keys/ids
-    // element e). Grow-on-demand, registered as "sort_tile_recs".
+    // T1/T2 (GSPLAT_TT_TILE_BUCKET): per-tile contiguous full-record bucket
+    // scattered by the bin in arbitrary order. DENSE layout: tile t occupies
+    // record-pages [starts[t], starts[t]+counts[t]) (1 record == 1 page == 64B),
+    // no padding. buf_bin2d_rec holds the per-(core,tile) DENSE base (mirrors
+    // bin2d); buf_bucket_meta publishes (start,count) per tile for the reader.
     std::shared_ptr<distributed::MeshBuffer> buf_tile_recs;
     std::size_t cap_tile_recs_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_bin2d_rec;
+    std::size_t cap_bin2d_rec_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_bucket_meta;
+    std::size_t cap_bucket_meta_bytes = 0;
 
     std::shared_ptr<distributed::MeshBuffer> buf_tile_ids;  // LPT tile-id list
     std::size_t cap_tile_ids_bytes = 0;
@@ -223,11 +229,12 @@ static void build_program_bin(SortDeviceContext& ctx) {
         return v && v[0] == '1';
     }();
     if (tile_bucket) {
-        cb(9, PAGE_BYTES);    // rec staging (1 blendrec page)
+        cb(9, PAGE_BYTES);        // rec staging (1 blendrec page)
+        cb(10, BIN_ROW_BYTES);    // recrow (per-(core,tile) DENSE record base)
     }
 
     std::vector<uint32_t> ct;
-    const int bin_accessors = tile_bucket ? 9 : 7;  // +blendrec, +tile_recs
+    const int bin_accessors = tile_bucket ? 10 : 7;  // +blendrec, +tile_recs, +recbase
     for (int i = 0; i < bin_accessors; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
     if (const char* v = std::getenv("GSPLAT_TT_BIN_NODEPTH"); v && v[0] == '1')
@@ -670,6 +677,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }
         const uint32_t blendrec_addr = bbrec ? static_cast<uint32_t>(bbrec->address()) : 0u;
         uint32_t tile_recs_addr = 0u;  // real address set after P_aligned is known
+        uint32_t recbase_addr = 0u;    // dense per-(core,tile) record base (set w/ buf)
 
         // ── Pass A: per-core histogram (count) ──────────────────────────
         const auto t_bin0 = clk::now();
@@ -691,6 +699,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 if (tile_bucket) {
                     args.push_back(blendrec_addr);   // arg15
                     args.push_back(tile_recs_addr);  // arg16 (0 for mode 0; real for mode 1)
+                    args.push_back(recbase_addr);    // arg17 (0 for mode 0; real for mode 1)
                 }
                 SetRuntimeArgs(prog, ctx->kbin, core, args);
             }
@@ -744,6 +753,16 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         std::vector<uint32_t> pstart_page(num_tiles, 0);
         std::vector<uint32_t> pstart_elem(num_tiles, 0);
         std::vector<uint32_t> tile_pad(num_tiles, 0);
+        // T2: DENSE per-(core,tile) record base (no page padding — each record is
+        // its own 64B page so cores never share a page even when dense). Tile t's
+        // records occupy pages [starts[t], starts[t]+counts[t]); core c's block
+        // starts at starts[t] + (sum of kept counts of cores < c for tile t).
+        std::vector<uint32_t> histrec;
+        std::vector<uint32_t> bucket_meta;  // (start,count) per tile
+        if (tile_bucket) {
+            histrec.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
+            bucket_meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
+        }
         int64_t cstart = 0;
         uint32_t apage = 0;
         uint32_t max_pad_n = 0;
@@ -754,9 +773,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             pstart_page[t] = apage;
             pstart_elem[t] = apage * ELEMS_PER_PAGE;
             const uint32_t tile_start_page = apage;
+            uint32_t rec_run = 0;  // dense prefix over cores within this tile
             for (uint32_t c = 0; c < num_cores; c++) {
                 const std::size_t idx = static_cast<std::size_t>(c) * stride + t;
                 const uint32_t h = hist[idx];
+                if (tile_bucket) {
+                    histrec[idx] = static_cast<uint32_t>(starts[t]) + rec_run;
+                    rec_run += h;
+                }
                 hist[idx] = apage * ELEMS_PER_PAGE;  // page-aligned base for (c,t)
                 if (h > 0) apage += (h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
             }
@@ -765,6 +789,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             if (creal > 0) {
                 result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = starts[t];
                 result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] = starts[t] + creal;
+            }
+            if (tile_bucket) {
+                bucket_meta[static_cast<std::size_t>(t) * 2 + 0] = static_cast<uint32_t>(starts[t]);
+                bucket_meta[static_cast<std::size_t>(t) * 2 + 1] = static_cast<uint32_t>(creal);
             }
             if (tile_pad[t] > max_pad_n) max_pad_n = tile_pad[t];
         }
@@ -789,14 +817,34 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->cap_aligned_bytes = aligned_bytes;
         }
         if (tile_bucket) {
-            // One 64B record per aligned element (record page e ↔ keys/ids element e).
-            const std::size_t recs_bytes = static_cast<std::size_t>(P_aligned) * PAGE_BYTES;
+            // DENSE record bucket: one 64B record per kept candidate (P_kept pages).
+            const std::size_t recs_bytes =
+                static_cast<std::size_t>(std::max<uint32_t>(P_kept, 1)) * PAGE_BYTES;
             if (!ctx->buf_tile_recs || ctx->cap_tile_recs_bytes < recs_bytes) {
                 ctx->buf_tile_recs = make_dram(ctx->mesh_device.get(), recs_bytes);
                 ctx->cap_tile_recs_bytes = recs_bytes;
                 device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
             }
             tile_recs_addr = static_cast<uint32_t>(ctx->buf_tile_recs->address());
+            // Per-(core,tile) DENSE base for the record scatter (mirrors bin2d).
+            const std::size_t rec_base_bytes =
+                static_cast<std::size_t>(num_cores) * stride * 4;
+            if (!ctx->buf_bin2d_rec || ctx->cap_bin2d_rec_bytes < rec_base_bytes) {
+                ctx->buf_bin2d_rec = make_dram(ctx->mesh_device.get(), rec_base_bytes);
+                ctx->cap_bin2d_rec_bytes = rec_base_bytes;
+            }
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d_rec, histrec, false);
+            recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
+            // Publish per-tile (start,count) bucket meta for the L1-sort reader.
+            const uint32_t bm_pad = round_up(num_tiles * 2u, ELEMS_PER_PAGE);
+            const std::size_t bm_bytes = static_cast<std::size_t>(bm_pad) * 4;
+            if (!ctx->buf_bucket_meta || ctx->cap_bucket_meta_bytes < bm_bytes) {
+                ctx->buf_bucket_meta = make_dram(ctx->mesh_device.get(), bm_bytes);
+                ctx->cap_bucket_meta_bytes = bm_bytes;
+                device_state::register_buffer("sort_bucket_meta", ctx->buf_bucket_meta);
+            }
+            bucket_meta.resize(static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bucket_meta, bucket_meta, false);
         }
         const uint32_t tmeta_count = num_tiles * 2;
         const uint32_t tmeta_pad = round_up(std::max<uint32_t>(tmeta_count, 1), ELEMS_PER_PAGE);

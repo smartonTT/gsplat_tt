@@ -74,6 +74,7 @@ void kernel_main() {
     // tile_recs mirrors the keys/ids layout: record page e ↔ keys/ids element e.
     const uint32_t blendrec_addr = get_arg_val<uint32_t>(15);
     const uint32_t tile_recs_addr= get_arg_val<uint32_t>(16);
+    const uint32_t recbase_addr  = get_arg_val<uint32_t>(17);  // dense per-(core,tile) base
 #endif
 
     constexpr auto gids_args  = TensorAccessorArgs<0>();
@@ -86,6 +87,7 @@ void kernel_main() {
 #ifdef BIN_EMIT_REC
     constexpr auto blendrec_args = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
     constexpr auto tile_recs_args= TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
+    constexpr auto recbase_args  = TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
 #endif
 
     const auto gids_acc  = TensorAccessor(gids_args,  gids_addr,  PAGE_BYTES);
@@ -98,6 +100,7 @@ void kernel_main() {
 #ifdef BIN_EMIT_REC
     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
     const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
+    const auto recbase_acc  = TensorAccessor(recbase_args,  recbase_addr,  PAGE_BYTES);
 #endif
 
     // CB layout (declared in sort_device.cpp binning program):
@@ -110,7 +113,8 @@ void kernel_main() {
     constexpr uint32_t CB_GID = 0, CB_TID = 1, CB_KEEP = 2, CB_DEP = 3,
                        CB_ROW = 4, CB_CUR = 5, CB_OFF = 6, CB_KS = 7, CB_IS = 8;
 #ifdef BIN_EMIT_REC
-    constexpr uint32_t CB_REC = 9;  // 64B blendrec staging (read page g, +depth, write bucket)
+    constexpr uint32_t CB_REC = 9;     // 64B blendrec staging (read page g, +depth, write bucket)
+    constexpr uint32_t CB_RECROW = 10; // dense per-(core,tile) record base row
 #endif
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
@@ -159,6 +163,16 @@ void kernel_main() {
                        row_l1 + pp * PAGE_BYTES, PAGE_BYTES);
     }
     noc_async_read_barrier();
+#ifdef BIN_EMIT_REC
+    // Load this core's DENSE record base row (same per-(core,tile) shape as bin2d).
+    const uint32_t recrow_l1 = get_write_ptr(CB_RECROW);
+    auto recrowp = reinterpret_cast<volatile uint32_t*>(recrow_l1);
+    for (uint32_t pp = 0; pp < row_pages; pp++) {
+        noc_async_read(get_noc_addr(base_page + pp, recbase_acc),
+                       recrow_l1 + pp * PAGE_BYTES, PAGE_BYTES);
+    }
+    noc_async_read_barrier();
+#endif
 
     const uint32_t cur_l1 = get_write_ptr(CB_CUR);
     const uint32_t off_l1 = get_write_ptr(CB_OFF);
@@ -229,11 +243,12 @@ void kernel_main() {
 #endif
             const uint32_t li = offp[t] + curp[t];
 #ifdef BIN_EMIT_REC
-            // Scatter the full record to its per-tile bucket page. The pair's
-            // GLOBAL keys/ids element is rowp[t] + curp[t] (rowp[t] = this core's
-            // page-aligned base for tile t), so its record (1 record == 1 page)
-            // goes to tile_recs page (rowp[t] + curp[t]) — a unique page, disjoint
-            // across cores (no shared-page race, no atomics). Read blendrec[g]
+            // Scatter the full record to its per-tile bucket page. DENSE layout:
+            // tile t's records occupy pages [starts[t], starts[t]+counts[t]); this
+            // core's k-th kept pair for tile t goes to recrowp[t] + curp[t]
+            // (recrowp[t] = starts[t] + prefix of cores < this core). Each record
+            // is its own 64B page, so even dense, cores never share a page (no
+            // race, no atomics). Read blendrec[g]
             // (page g), inject depth=key as the 10th field, write 64B. T1 keeps
             // it correctness-simple: one staging buffer, read+write barriered per
             // record (the scatter is off the blend critical path; T1b can ring-
@@ -243,7 +258,7 @@ void kernel_main() {
                 noc_async_read(get_noc_addr(g, blendrec_acc), rec_l1, PAGE_BYTES);
                 noc_async_read_barrier();
                 reinterpret_cast<volatile uint32_t*>(rec_l1)[9] = key;  // depth bits
-                const uint32_t rec_page = rowp[t] + curp[t];
+                const uint32_t rec_page = recrowp[t] + curp[t];  // DENSE bucket page
                 noc_async_write(rec_l1, get_noc_addr(rec_page, tile_recs_acc), PAGE_BYTES);
                 noc_async_write_barrier();
             }
