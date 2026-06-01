@@ -1,4 +1,4 @@
-id=5
-sha=7e5bced
-ts=2026-05-31T20:51:26-0700
-desc=iter 5: Fix segfault: D2H sorted ids when blend_mode=0 ref path
+id=6
+sha=e18423e
+ts=2026-05-31T23:19:10-0700
+desc=iter 6: baseline at HEAD e18423e (fused_tile)

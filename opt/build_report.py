@@ -43,11 +43,12 @@ REF_DIR = OPT_DIR.parent / "benchmarks" / "reference_v2"
 
 
 def now_ts_minutes() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    """Current time in the local timezone, minute resolution."""
+    return datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z").rstrip()
 
 
 def format_ts_minutes(ts: str) -> str:
-    """Short UTC timestamp to minute resolution: YYYY-MM-DD HH:MM."""
+    """Parse ISO timestamp and format in local time (YYYY-MM-DD HH:MM)."""
     if not ts:
         return "—"
     try:
@@ -55,7 +56,7 @@ def format_ts_minutes(ts: str) -> str:
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+        return dt.astimezone().strftime("%Y-%m-%d %H:%M")
     except (ValueError, TypeError):
         if len(ts) >= 16:
             return ts[:16].replace("T", " ")
@@ -990,7 +991,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
 <div class='{row_class}'>
   <div class='backburner-meta'>
     <h3>{pos_html}{priority} {iter_dir} — {verdict}</h3>
-    <p class='iter-ts'>{ts_disp} UTC</p>
+    <p class='iter-ts'>{ts_disp}</p>
     <p>ms_per_frame={sum_ms_str}, psnr={psnr_min_str}</p>
     {caveat_html}
     <p class='reason'>{note}</p>
@@ -1337,7 +1338,7 @@ def build_html(rows: list[dict]) -> str:
     if inflight and inflight.get("status") not in ("done", "complete", "finished"):
         inflight_note = f" · in-flight: iter {inflight.get('iter', '?')} ({inflight.get('status', '?')})"
     meta = (
-        f"<p class='report-meta'>Generated {now_ts_minutes()} UTC · "
+        f"<p class='report-meta'>Generated {now_ts_minutes()} · "
         f"{n_metal} metal + {n_ttw} ttw + {n_cpu} cpu ledger rows{inflight_note}</p>"
     )
     return f"""<!DOCTYPE html>
