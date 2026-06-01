@@ -854,6 +854,16 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // cull pass) and kept resident in cull_masks; the blend reader then just
     // reads the mask (pure integer) instead of running the soft-float cull.
     const bool sfpu_cull = resident_blend && env_on("GSPLAT_TT_SFPU_CULL");
+    // S1 (GSPLAT_TT_BLEND_AOS): the blend reader fetches each candidate's attrs
+    // as ONE contiguous 64B AoS record (proj_m_blendrec, emitted by the gather
+    // stage) instead of 7-9 random per-component SoA pages. Layers on top of the
+    // SFPU-cull reader (mask still read from cull_masks); byte-identical fields.
+    // Default ON; set GSPLAT_TT_BLEND_AOS=0 to fall back to the SoA gather.
+    auto env_off = [](const char* n) {
+        const char* v = std::getenv(n);
+        return v != nullptr && v[0] == '0';
+    };
+    const bool blend_aos = sfpu_cull && !env_off("GSPLAT_TT_BLEND_AOS");
     // Stage C2: the blend reader streams a pre-packed contiguous payload instead
     // of gathering attrs + reading cull_masks. Takes precedence over sfpu_cull
     // for reader selection (the mask rides the payload row).
@@ -899,8 +909,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // uploaded paths 6.
     // Stage C2 sequential payload reader: 6 DRAM-interleaved accessors (ranges,
     // xramp, yramp, tile_ids, lpt_meta, payload). No SoA gather, no cull_masks.
+    // +1 accessor (proj_m_blendrec, index 15) under S1 AoS.
     const int num_reader_accessors =
-        payload ? 6 : (resident_blend ? (sfpu_cull ? 15 : 13) : 6);
+        payload ? 6 : (resident_blend ? (sfpu_cull ? (blend_aos ? 16 : 15) : 13) : 6);
     // cull_masks is reader accessor index 13 (after a,b,c,px,py,op,col, ids,
     // ranges, xramp,yramp,tile_ids, lpt_meta). Under the L1 mask handoff it is
     // an L1-interleaved buffer; everything else stays DRAM-interleaved.
@@ -951,6 +962,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         std::string spin = sp ? std::string(sp) : std::string("512");
         if (spin != "0") {
             reader_defines["MB_CULL_SPIN"] = spin;
+        }
+        if (blend_aos) {
+            reader_defines["MB_BLEND_AOS"] = "1";
         }
     }
     ctx.reader = CreateKernel(
@@ -1501,6 +1515,17 @@ static double process_frame_mb_devcull_resident(
     const bool payload = mb::payload_enabled();
     const char* sfpu_cull_env = std::getenv("GSPLAT_TT_SFPU_CULL");
     const bool sfpu_cull = !payload && sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
+    const char* blend_aos_env = std::getenv("GSPLAT_TT_BLEND_AOS");
+    const bool blend_aos = sfpu_cull && !(blend_aos_env != nullptr && blend_aos_env[0] == '0');
+    uint32_t blendrec_addr = 0;
+    if (blend_aos) {
+        auto buf_brec = gsplat_tt::device_state::get_buffer("proj_m_blendrec");
+        if (!buf_brec) {
+            if (ok) *ok = false;
+            return 0.0;
+        }
+        blendrec_addr = static_cast<uint32_t>(buf_brec->address());
+    }
     uint32_t payload_addr = 0;
     if (payload) {
         auto buf_payload = gsplat_tt::device_state::get_buffer("blend_payload");
@@ -1587,6 +1612,9 @@ static double process_frame_mb_devcull_resident(
                     if (sfpu_cull) {
                         reader_args.push_back(cull_masks_addr);  // arg 17
                         reader_args.push_back(cull_base_addr);   // arg 18
+                        if (blend_aos) {
+                            reader_args.push_back(blendrec_addr);  // arg 19
+                        }
                     }
                 }
                 SetRuntimeArgs(program, ctx.reader, core, reader_args);
@@ -2551,6 +2579,21 @@ static double process_frame_resident(
         if (ok) *ok = false;
         return 0.0;
     }
+    // S1 (GSPLAT_TT_BLEND_AOS): the devcull blend reader (built with MB_BLEND_AOS
+    // by build_program) reads one contiguous proj_m_blendrec record/candidate; it
+    // needs the buffer's address as reader arg 19. This fused path always runs the
+    // sfpu-cull reader, so mirror build_program's default-ON gate (=0 disables).
+    const char* blend_aos_env = std::getenv("GSPLAT_TT_BLEND_AOS");
+    const bool blend_aos = !(blend_aos_env != nullptr && blend_aos_env[0] == '0');
+    uint32_t blendrec_addr = 0;
+    if (blend_aos) {
+        auto buf_brec = ds::get_buffer("proj_m_blendrec");
+        if (!buf_brec) {
+            if (ok) *ok = false;
+            return 0.0;
+        }
+        blendrec_addr = static_cast<uint32_t>(buf_brec->address());
+    }
     if (ok) *ok = true;
 
     const ResidentSortLpt lpt = resident_sort_lpt_handles();
@@ -2659,13 +2702,17 @@ static double process_frame_resident(
             for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
                 for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                     CoreCoord core{x, y};
-                    SetRuntimeArgs(prog_blend, ctx_blend.reader, core, {
+                    std::vector<uint32_t> blend_r_args = {
                         a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
                         ids_addr, rng_addr, bxramp_addr, byramp_addr,
                         tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
                         cull_disabled ? 1u : 0u,
                         cull_masks_addr, cull_base_addr,
-                    });
+                    };
+                    if (blend_aos) {
+                        blend_r_args.push_back(blendrec_addr);  // arg 19
+                    }
+                    SetRuntimeArgs(prog_blend, ctx_blend.reader, core, blend_r_args);
                     SetRuntimeArgs(prog_blend, ctx_blend.compute, core, {0u});
                     SetRuntimeArgs(prog_blend, ctx_blend.writer, core, {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,

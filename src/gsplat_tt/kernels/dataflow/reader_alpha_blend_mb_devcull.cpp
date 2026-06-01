@@ -103,8 +103,30 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
 // 3 AoS color pages). Same nine reads as the per-gaussian read_soa_u32 path,
 // but issued back-to-back into distinct L1 slots so ONE barrier covers the
 // whole chunk instead of paying full NoC latency per field.
+//
+// S1 (GSPLAT_TT_BLEND_AOS / MB_BLEND_AOS): the projection/gather stage emits a
+// single contiguous Array-of-Structs record per gaussian (proj_m_blendrec,
+// {a,b,c,px,py,op,cr,cg,cb} padded to one 64B page). Each candidate then needs
+// exactly ONE contiguous 64B NoC read instead of the 7-9 random SoA pages —
+// txns 7-9 -> 1 and over-fetch 16x -> ~1.8x, with byte-identical fields.
+#ifdef MB_BLEND_AOS
+constexpr uint32_t GATHER_FIELDS = 1;        // one packed AoS record page / gaussian
+#else
 constexpr uint32_t GATHER_FIELDS = 9;
-constexpr uint32_t GATHER_SLOT_BYTES = GATHER_FIELDS * 64u;   // 576B / gaussian
+#endif
+constexpr uint32_t GATHER_SLOT_BYTES = GATHER_FIELDS * 64u;   // 64B (AoS) or 576B (SoA) / gaussian
+
+#ifdef MB_BLEND_AOS
+// AoS gather: issue ONE contiguous 64B record read per gaussian (page == g) into
+// the chunk buffer. Reads left in flight; caller barriers once before consuming.
+template <typename REC>
+inline void issue_chunk_reads_aos(
+    const uint32_t* gids, uint32_t take, uint32_t buf_addr, const REC& rec_acc) {
+    for (uint32_t j = 0; j < take; ++j) {
+        noc_async_read_tile(gids[j], rec_acc, buf_addr + j * GATHER_SLOT_BYTES);
+    }
+}
+#endif
 
 // Issue (no barrier) all SoA page reads for `take` gaussians into `buf_addr`.
 // Reads are left in flight; caller barriers once before consuming `buf_addr`.
@@ -342,6 +364,9 @@ void kernel_main() {
 #ifdef MB_SFPU_CULL
     const uint32_t cull_masks_addr = get_arg_val<uint32_t>(17);  // resident cull_masks
     const uint32_t cull_base_addr  = get_arg_val<uint32_t>(18);  // per-tile page-aligned mask base
+#ifdef MB_BLEND_AOS
+    const uint32_t blendrec_addr   = get_arg_val<uint32_t>(19);  // resident proj_m_blendrec (AoS)
+#endif
 #endif
 
     constexpr auto a_args        = TensorAccessorArgs<0>();
@@ -360,6 +385,9 @@ void kernel_main() {
 #ifdef MB_SFPU_CULL
     constexpr auto cull_masks_args = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
     constexpr auto cull_base_args  = TensorAccessorArgs<cull_masks_args.next_compile_time_args_offset()>();
+#ifdef MB_BLEND_AOS
+    constexpr auto blendrec_args   = TensorAccessorArgs<cull_base_args.next_compile_time_args_offset()>();
+#endif
 #endif
 
     // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
@@ -377,6 +405,12 @@ void kernel_main() {
     const auto yramp_acc    = TensorAccessor(yramp_args,    yramp_addr,    RAMP_TILE_BYTES);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, 64);
     const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, 64);
+#ifdef MB_BLEND_AOS
+    // Under AoS the per-component SoA gather is replaced by proj_m_blendrec; the
+    // SoA accessors stay bound (ABI parity) but are unused on this path.
+    (void)a_acc; (void)b_acc; (void)c_acc; (void)px_acc; (void)py_acc;
+    (void)op_acc; (void)col_acc;
+#endif
     // Host-free LPT: read this core's (start,count) from resident sort_lpt_meta.
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
     const uint32_t meta_elem0 = core_index * 2u;
@@ -402,6 +436,10 @@ void kernel_main() {
 #ifdef MB_SFPU_CULL
     const auto cull_masks_acc = TensorAccessor(cull_masks_args, cull_masks_addr, IDS_PAGE_BYTES);
     const auto cull_base_acc  = TensorAccessor(cull_base_args,  cull_base_addr,  64);
+#ifdef MB_BLEND_AOS
+    // proj_m_blendrec: one 64B AoS record page per gaussian (page index == g).
+    const auto blendrec_acc   = TensorAccessor(blendrec_args,   blendrec_addr,   SOA_PAGE_BYTES);
+#endif
     // Cull math (and thus these scalars) moved to the SFPU cull pass; the mask
     // is now read precomputed. Keep the args for ABI/signature parity.
 #if !defined(MB_SFPU_CULL_DEBUG)
@@ -578,8 +616,12 @@ void kernel_main() {
 #ifdef MB_SFPU_CULL
             gstart_buf[0] = processed;
 #endif
+#ifdef MB_BLEND_AOS
+            issue_chunk_reads_aos(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES, blendrec_acc);
+#else
             issue_chunk_reads(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES,
                               a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
+#endif
             processed += take_buf[0];
 
             uint32_t cur = 0;
@@ -611,8 +653,12 @@ void kernel_main() {
 #ifdef MB_SFPU_CULL
                     gstart_buf[nxt] = processed;
 #endif
+#ifdef MB_BLEND_AOS
+                    issue_chunk_reads_aos(gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES, blendrec_acc);
+#else
                     issue_chunk_reads(gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES,
                                       a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
+#endif
                     processed += take_buf[nxt];
                 } else {
                     take_buf[nxt] = 0;
@@ -622,6 +668,22 @@ void kernel_main() {
                 for (uint32_t j = 0; j < take; ++j) {
                     const uint32_t g = gids[cur][j];
                     const uint32_t s = buf + j * GATHER_SLOT_BYTES;
+#ifdef MB_BLEND_AOS
+                    // S1: one contiguous AoS record page. Fields are dense at
+                    // offsets [0..8] of the 64B record (see proj_m_blendrec emit
+                    // in gather_visible_scatter.cpp): {a,b,c,px,py,op,cr,cg,cb}.
+                    auto recp = reinterpret_cast<volatile uint32_t*>(s);
+                    const uint32_t cov_a_bits = recp[0];
+                    const uint32_t cov_b_bits = recp[1];
+                    const uint32_t cov_c_bits = recp[2];
+                    const uint32_t mx_bits    = recp[3];
+                    const uint32_t my_bits    = recp[4];
+                    const uint32_t op_bits    = recp[5];
+                    const uint32_t cr = recp[6];
+                    const uint32_t cg = recp[7];
+                    const uint32_t cb = recp[8];
+                    (void)g;  // only referenced by the SoA lane math / debug path
+#else
                     const uint32_t lane = g & 0xF;
                     const uint32_t cov_a_bits = reinterpret_cast<volatile uint32_t*>(s + 0u * 64u)[lane];
                     const uint32_t cov_b_bits = reinterpret_cast<volatile uint32_t*>(s + 1u * 64u)[lane];
@@ -638,6 +700,7 @@ void kernel_main() {
                     const uint32_t cr = cwin[(e0 + 0u) - cbase];
                     const uint32_t cg = cwin[(e0 + 1u) - cbase];
                     const uint32_t cb = cwin[(e0 + 2u) - cbase];
+#endif
 
                     const float mean_x = bits_to_f(mx_bits);
                     const float mean_y = bits_to_f(my_bits);

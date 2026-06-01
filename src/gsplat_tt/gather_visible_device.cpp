@@ -29,6 +29,7 @@
 #include <exception>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -58,6 +59,16 @@ constexpr uint32_t PAGE_BYTES = PAGE_ELEMS * 4;   // 64
 constexpr uint32_t COLOR_ACC_BYTES = PAGE_ELEMS * 3 * 4;  // 192
 
 inline uint32_t round_up(uint32_t v, uint32_t m) { return ((v + m - 1) / m) * m; }
+
+// S1 (GSPLAT_TT_BLEND_AOS): also emit a contiguous Array-of-Structs blend
+// record (proj_m_blendrec) so the blend reader fetches a candidate with ONE
+// 64B read instead of 7-9 random SoA pages. Default ON (iter21: measured
+// gate-clean ~6ms blend drop, bit-identical PSNR); set GSPLAT_TT_BLEND_AOS=0
+// to fall back to the per-component SoA gather.
+inline bool blend_aos_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_BLEND_AOS");
+    return !(v != nullptr && v[0] == '0');
+}
 
 inline uint32_t fp32_bits(float v) {
     uint32_t u;
@@ -120,6 +131,7 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_depth;
     std::shared_ptr<distributed::MeshBuffer> buf_opacity;
     std::shared_ptr<distributed::MeshBuffer> buf_colors;  // AoS M*3
+    std::shared_ptr<distributed::MeshBuffer> buf_blendrec; // S1: AoS blend record, 64B/gaussian
     std::shared_ptr<distributed::MeshBuffer> buf_M;       // uint32 count
     std::size_t cap_m_elems = 0;
 };
@@ -148,9 +160,18 @@ static void build_program(GatherDeviceContext& ctx) {
     cb(21, COLOR_ACC_BYTES, COLOR_ACC_BYTES);
     cb(22, PAGE_BYTES, PAGE_BYTES);
 
+    const bool aos = blend_aos_enabled();
+    if (aos) {
+        // S1 record staging: 16 records x 64B = 1024B.
+        cb(23, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);
+    }
+
     std::vector<uint32_t> ct;
-    for (int i = 0; i < 24; i++)
+    const int n_acc = aos ? 25 : 24;
+    for (int i = 0; i < n_acc; i++)
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    std::map<std::string, std::string> defines;
+    if (aos) defines["GATHER_EMIT_BLENDREC"] = "1";
     ctx.kernel = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
@@ -159,6 +180,7 @@ static void build_program(GatherDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = ct,
+            .defines = defines,
         });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.workload.add_program(device_range, std::move(program));
@@ -277,6 +299,12 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
     ctx->buf_depth   = make_dram(ctx->mesh_device.get(), m_bytes, PAGE_BYTES);
     ctx->buf_opacity = make_dram(ctx->mesh_device.get(), m_bytes, PAGE_BYTES);
     ctx->buf_colors  = make_dram(ctx->mesh_device.get(), col_bytes, PAGE_BYTES);
+    if (blend_aos_enabled()) {
+        // One 64B page per record (page index == compact gaussian id g).
+        const std::size_t rec_bytes = static_cast<std::size_t>(cap_elems) * PAGE_BYTES;
+        ctx->buf_blendrec = make_dram(ctx->mesh_device.get(), rec_bytes, PAGE_BYTES);
+        device_state::register_buffer("proj_m_blendrec", ctx->buf_blendrec);
+    }
     ctx->cap_m_elems = cap_elems;
     device_state::register_buffer("proj_m_px", ctx->buf_px);
     device_state::register_buffer("proj_m_py", ctx->buf_py);
@@ -557,13 +585,16 @@ static void launch_pass(
     const uint32_t common_h      = fp32_bits(static_cast<float>(H));
     const uint32_t common_maxr   = fp32_bits(max_radius);
     const uint32_t counts_addr   = static_cast<uint32_t>(ctx->buf_counts->address());
+    const bool aos = blend_aos_enabled();
+    const uint32_t blendrec_addr =
+        (aos && ctx->buf_blendrec) ? static_cast<uint32_t>(ctx->buf_blendrec->address()) : 0u;
 
     for (uint32_t c = 0; c < ctx->num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t base = bases ? (*bases)[c] : 0u;
         const uint32_t is_last =
             (bases && static_cast<int>(c) == last_core) ? 1u : 0u;
-        SetRuntimeArgs(program, ctx->kernel, core, {
+        std::vector<uint32_t> args = {
             static_cast<uint32_t>(bm2x->address()),
             static_cast<uint32_t>(bm2y->address()),
             static_cast<uint32_t>(bdep->address()),
@@ -601,7 +632,9 @@ static void launch_pass(
             is_last,
             c,
             counts_addr,
-        });
+        };
+        if (aos) args.push_back(blendrec_addr);  // arg 37
+        SetRuntimeArgs(program, ctx->kernel, core, args);
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
     distributed::Finish(*ctx->cq);

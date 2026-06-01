@@ -119,6 +119,12 @@ void kernel_main() {
     const uint32_t is_last    = get_arg_val<uint32_t>(34);
     const uint32_t core_id    = get_arg_val<uint32_t>(35);
     const uint32_t counts_addr= get_arg_val<uint32_t>(36);
+#ifdef GATHER_EMIT_BLENDREC
+    // S1 (GSPLAT_TT_BLEND_AOS): contiguous AoS blend record buffer. One 64B page
+    // per compacted gaussian == {a,b,c,px,py,op,cr,cg,cb, 0..}. Lets the blend
+    // reader fetch a candidate with ONE contiguous read instead of 7-9 SoA pages.
+    const uint32_t o_blendrec_addr = get_arg_val<uint32_t>(37);
+#endif
     (void)num_tiles;
     (void)o_M_addr;
 
@@ -146,6 +152,9 @@ void kernel_main() {
     constexpr auto a_ocol  = TensorAccessorArgs<a_oop.next_compile_time_args_offset()>();
     constexpr auto a_oM    = TensorAccessorArgs<a_ocol.next_compile_time_args_offset()>();
     constexpr auto a_counts= TensorAccessorArgs<a_oM.next_compile_time_args_offset()>();
+#ifdef GATHER_EMIT_BLENDREC
+    constexpr auto a_brec  = TensorAccessorArgs<a_counts.next_compile_time_args_offset()>();
+#endif
     (void)a_oM;
 
     const auto acc_m2x   = TensorAccessor(a_m2x,   m2x_addr,   TILE_BYTES);
@@ -171,6 +180,9 @@ void kernel_main() {
     const auto acc_oop   = TensorAccessor(a_oop,   o_op_addr,    PAGE_BYTES);
     const auto acc_ocol  = TensorAccessor(a_ocol,  o_colors_addr, PAGE_BYTES);
     const auto acc_counts= TensorAccessor(a_counts, counts_addr,  PAGE_BYTES);
+#ifdef GATHER_EMIT_BLENDREC
+    const auto acc_brec  = TensorAccessor(a_brec,  o_blendrec_addr, PAGE_BYTES);
+#endif
 
     constexpr uint32_t CB_M2X = 0, CB_M2Y = 1, CB_DEP = 2, CB_A = 3, CB_B = 4,
                        CB_C = 5, CB_RX = 6, CB_RY = 7, CB_CR = 8, CB_CG = 9,
@@ -178,6 +190,12 @@ void kernel_main() {
     constexpr uint32_t CB_OPX = 12, CB_OPY = 13, CB_ORX = 14, CB_ORY = 15,
                        CB_OA = 16, CB_OB = 17, CB_OC = 18, CB_ODEP = 19,
                        CB_OOP = 20, CB_OCOL = 21, CB_OM = 22;
+#ifdef GATHER_EMIT_BLENDREC
+    constexpr uint32_t CB_OREC = 23;  // 16 records x 64B AoS staging
+    constexpr uint32_t REC_WORDS = 16;  // 64B / 4
+    const uint32_t l1_orec = get_write_ptr(CB_OREC);
+    auto o_rec = reinterpret_cast<volatile uint32_t*>(l1_orec);
+#endif
 
     const uint32_t l1_m2x = get_write_ptr(CB_M2X);
     const uint32_t l1_m2y = get_write_ptr(CB_M2Y);
@@ -302,6 +320,15 @@ void kernel_main() {
                             get_noc_addr(cpage, acc_ocol) + coff * 4, n * 4);
             f += n;
         }
+#ifdef GATHER_EMIT_BLENDREC
+        // Each AoS record is its OWN full 64B page (record page index == g ==
+        // page*16 + slot). Cores own disjoint, ordered g-ranges so every record
+        // page is written by exactly one core (no neighbour boundary sharing).
+        for (uint32_t s = lo; s < hi; ++s) {
+            noc_async_write(l1_orec + s * 64,
+                            get_noc_addr(page * PAGE_ELEMS + s, acc_brec), 64);
+        }
+#endif
         noc_async_write_barrier();
     };
 
@@ -351,6 +378,16 @@ void kernel_main() {
             o_col[slot * 3 + 0] = p_cr[il];
             o_col[slot * 3 + 1] = p_cg[il];
             o_col[slot * 3 + 2] = p_cb[il];
+#ifdef GATHER_EMIT_BLENDREC
+            {
+                volatile uint32_t* r = o_rec + slot * REC_WORDS;
+                r[0] = p_a[il];   r[1] = p_b[il];   r[2] = p_c[il];
+                r[3] = p_m2x[il]; r[4] = p_m2y[il]; r[5] = p_op[il];
+                r[6] = p_cr[il];  r[7] = p_cg[il];  r[8] = p_cb[il];
+                r[9] = 0; r[10] = 0; r[11] = 0; r[12] = 0;
+                r[13] = 0; r[14] = 0; r[15] = 0;
+            }
+#endif
 
             slot++;
             g++;
@@ -373,6 +410,10 @@ void kernel_main() {
             o_px[s] = 0; o_py[s] = 0; o_rx[s] = 0; o_ry[s] = 0;
             o_a[s] = 0; o_b[s] = 0; o_c[s] = 0; o_dep[s] = 0; o_op[s] = 0;
             o_col[s * 3 + 0] = 0; o_col[s * 3 + 1] = 0; o_col[s * 3 + 2] = 0;
+#ifdef GATHER_EMIT_BLENDREC
+            volatile uint32_t* r = o_rec + s * REC_WORDS;
+            for (uint32_t w = 0; w < REC_WORDS; ++w) r[w] = 0;
+#endif
         }
         hi = PAGE_ELEMS;
     }
