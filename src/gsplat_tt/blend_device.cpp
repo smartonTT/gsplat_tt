@@ -1633,12 +1633,20 @@ static double process_frame_mb_devcull_resident(
         std::fprintf(stderr,
             "[BLEND_SPLIT] upload=%.1f (attrs=0.0MB ids=0.0MB resident) exec=%.1f readback=%.1f total=%.1f ms\n",
             ms(t_start, t_upload), ms(t_upload, t_exec), ms(t_exec, t_end), ms(t_start, t_end));
+        unsigned long pay_a = 0, pay_sz = 0;
+        if (auto bp = gsplat_tt::device_state::get_buffer("blend_payload")) {
+            pay_a = static_cast<unsigned long>(bp->address());
+            pay_sz = static_cast<unsigned long>(bp->size());
+        }
         std::fprintf(stderr,
-            "[BLEND_ADDR] cull_masks=0x%lx out=0x%lx tile_ids=0x%lx xramp=0x%lx\n",
+            "[BLEND_ADDR] cull_masks=0x%lx out=0x%lx(sz=0x%lx) tile_ids=0x%lx xramp=0x%lx yramp=0x%lx payload=0x%lx(sz=0x%lx)\n",
             static_cast<unsigned long>(cull_masks_addr),
             static_cast<unsigned long>(ctx.res_out->address()),
+            static_cast<unsigned long>(ctx.res_out->size()),
             static_cast<unsigned long>(tile_ids_addr),
-            static_cast<unsigned long>(ctx.res_xramp->address()));
+            static_cast<unsigned long>(ctx.res_xramp->address()),
+            static_cast<unsigned long>(ctx.res_yramp->address()),
+            pay_a, pay_sz);
     }
 
     tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
@@ -2098,18 +2106,27 @@ static DeviceContext init_device_context() {
 static bool ensure_payload_buffer(DeviceContext& ctx, uint32_t num_tiles) {
     namespace ds = gsplat_tt::device_state;
     (void)num_tiles;
-    uint32_t p_kept = 0;
-    uint32_t mask_elems = 0;
-    if (!ds::get_sort_blend_pipe_scalars(&p_kept, &mask_elems)) {
-        auto buf_pk = ds::get_buffer("sort_P_kept");
-        if (!buf_pk) {
-            return false;
-        }
-        std::vector<uint32_t> pkept(16, 0);
-        distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
-        p_kept = pkept[0];
+    // ROOT CAUSE (iter 17-19): the pack/reader index the payload by the GLOBAL
+    // candidate index id_start[t] + p, where id_start comes from the resident
+    // sort_tile_ranges. The resident sort publishes a PAGE-ALIGNED PADDED layout
+    // (sort_device.cpp: padded_cursor += round_up(cnt, 16) per tile), so the max
+    // id_end == padded_cursor, which is LARGER than the dense candidate count
+    // (sort_P_kept[0]) by up to ~num_tiles*15. Sizing the payload to P_kept (even
+    // +pad) left it short by the per-tile padding sum, so pack wrote payload pages
+    // PAST the buffer end. Those OOB pages land (via the interleaved accessor) in
+    // the next-allocated buffers (res_xramp/res_yramp/res_out), corrupting the
+    // coordinate ramps every timed frame -> vertical-stripe + block corruption.
+    //
+    // The correct, exact index space is sort_sorted_ids itself: it is allocated to
+    // EXACTLY padded_cursor elements (ensure_resident_sorted_buffer) and the
+    // payload row index == the sort_sorted_ids element index. So size the payload
+    // to one 64B row per sort_sorted_ids element (grow-only buffer => its element
+    // count is >= the current frame's padded_cursor).
+    auto buf_ids = ds::get_buffer("sort_sorted_ids");
+    if (!buf_ids) {
+        return false;
     }
-    const size_t rows = std::max<size_t>(16, (static_cast<size_t>(p_kept) + 15u) & ~static_cast<size_t>(15u));
+    const size_t rows = std::max<size_t>(16, buf_ids->size() / sizeof(uint32_t));
     const size_t payload_bytes = rows * mb::COEFF_ROW_BYTES_MB;
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};

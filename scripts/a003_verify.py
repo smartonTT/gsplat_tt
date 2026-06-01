@@ -149,6 +149,33 @@ def main():
         arr = (tt_imgs[name] * 255.0).astype(np.uint8)
         Image.fromarray(arr).save(shot_dir / out_name)
 
+    # DIAG: dump ref + 10x diff for hero, and report top 32x32-tile error blocks
+    # so payload residual corruption can be localized to tile ids.
+    if os.environ.get("GSPLAT_TT_DIFF_DUMP"):
+        hname = order[0]
+        tt = tt_imgs[hname].astype(np.float32)
+        rf = ref_imgs[hname].astype(np.float32)
+        Image.fromarray((rf * 255.0).astype(np.uint8)).save(shot_dir / "ref.png")
+        d = np.abs(tt - rf)
+        Image.fromarray((np.clip(d * 10.0, 0, 1) * 255.0).astype(np.uint8)).save(
+            shot_dir / "diff10x.png")
+        err = d.mean(axis=2)
+        Hh, Ww = err.shape
+        TS = 32
+        ty_n = (Hh + TS - 1) // TS
+        tx_n = (Ww + TS - 1) // TS
+        blocks = []
+        for tyy in range(ty_n):
+            for txx in range(tx_n):
+                blk = err[tyy * TS:(tyy + 1) * TS, txx * TS:(txx + 1) * TS]
+                blocks.append((float(blk.mean()), txx, tyy, int(txx + tyy * tx_n)))
+        blocks.sort(reverse=True)
+        print(f"DIFFDUMP hero={hname} HxW={Hh}x{Ww} tiles_x={tx_n} tiles_y={ty_n} "
+              f"global_mae={err.mean():.5f}")
+        for mae, txx, tyy, tid in blocks[:20]:
+            print(f"DIFFDUMP_TILE tile_id={tid} tx={txx} ty={tyy} "
+                  f"px=({txx*TS},{tyy*TS}) mae={mae:.5f}")
+
     rows = []
     for name in order:
         gt_path = args.gt_dir / f"{name}.png"
@@ -192,7 +219,6 @@ def main():
     }
     sum_total_ms = sum(r["timings_ms"]["total"] for r in rows)
 
-    import os
     summary = {
         "backend": args.backend,
         "ref_backend": args.ref_backend,

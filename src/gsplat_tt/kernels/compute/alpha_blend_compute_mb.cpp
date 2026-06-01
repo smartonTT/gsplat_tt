@@ -400,6 +400,21 @@ void kernel_main() {
             num_g = cptr[0];
         }
 
+#if defined(MB_COEFF_DEBUG)
+        {
+            static uint32_t dbg_t = 0;
+            if (dbg_t < 8u) {
+                dbg_t++;
+                auto xr = reinterpret_cast<volatile float*>(get_tile_address(CB_XRAMP, 0));
+                auto yr = reinterpret_cast<volatile float*>(get_tile_address(CB_YRAMP, 0));
+                MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+                      << " xr0=" << F32(xr[0]) << " xr1=" << F32(xr[1])
+                      << " xr8=" << F32(xr[8]) << " xr32=" << F32(xr[32])
+                      << " yr0=" << F32(yr[0]) << " yr32=" << F32(yr[32]) << ENDL()));
+            }
+        }
+#endif
+
         tile_regs_acquire();
 
         // Init running state: R=G=B=0, T=1 over the whole tile.
