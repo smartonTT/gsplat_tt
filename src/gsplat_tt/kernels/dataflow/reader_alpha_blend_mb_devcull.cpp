@@ -61,6 +61,7 @@ constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
 constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
 constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
+constexpr uint32_t CB_TILE_MASKS = 8;  // MB_TILE_MASK_L1: whole-tile cull_masks region, bulk-loaded once/tile
 
 constexpr float kInf = 1e30f;
 
@@ -572,6 +573,57 @@ void kernel_main() {
         // cull_masks[cull_base + p].
         const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
 #endif
+#ifdef MB_TILE_MASK_L1
+        // Bulk-load this tile's ENTIRE mask region [cull_base, cull_base+L) into
+        // L1 ONCE (cull_base is 16-aligned, so whole-page reads; ONE barrier).
+        // The candidate loop then reads masks from L1 (pure load) — there is NO
+        // per-candidate cull_masks NoC read, hence no read-completion window and
+        // no need for the per-candidate MB_CULL_SPIN (the ~89 ms blend cost). The
+        // diagnostic showed spin=0 with the per-chunk mask read drops to 37.7 dB;
+        // bulk-loading the whole region with a single barrier lands all masks
+        // before any are consumed.
+        const uint32_t tile_mask_l1 = get_write_ptr(CB_TILE_MASKS);
+        auto tile_mask_ptr = reinterpret_cast<volatile uint32_t*>(tile_mask_l1);
+        // Do NOT assume cull_base is 16-aligned: the per-chunk path indexes with
+        // off=(cull_base+p)&0xF and pg=(cull_base+p)>>4, so it is robust to any
+        // alignment. The bulk path must match: page-0 is (cull_base>>4) and the
+        // mask for tile-local candidate p lives at L1 element (mask_off + p),
+        // where mask_off = cull_base & 0xF. Reading only ceil(L/16) pages (the
+        // old assumption) drops the last partial page when mask_off>0 AND shifts
+        // EVERY mask by mask_off -> garbage masks (the ~38 dB plateau).
+        const uint32_t mask_off0 = cull_base & 0xFu;
+        if (L > 0) {
+            const uint32_t mpg0 = cull_base >> 4;                 // page of cull_base
+            const uint32_t mpages = (mask_off0 + L + 15u) >> 4;   // pages covering [off,off+L)
+#if defined(MB_TILE_MASK_SETTLE)
+            // The cull pass writes cull_masks to DRAM EARLIER in the same Finish-
+            // less dispatch; freshly written DRAM pages need a settle window to
+            // DRAIN before a NoC read returns correct bits (a barrier alone does
+            // not suffice — the per-chunk path spun for the SAME reason). The
+            // settle must precede the read ISSUE: a post-read spin cannot fix bits
+            // already latched stale into L1. ONE settle per tile, not per
+            // candidate (~30x cheaper than the old per-candidate spin).
+            for (volatile int _s = 0; _s < (MB_TILE_MASK_SETTLE); ++_s) { }
+#endif
+            // Drain in batches so the NoC outstanding-read queue never overflows
+            // (issuing thousands of reads before one barrier can silently drop
+            // transactions on a too-deep queue). MB_TILE_MASK_BATCH pages/barrier.
+#ifndef MB_TILE_MASK_BATCH
+#define MB_TILE_MASK_BATCH 64u
+#endif
+            uint32_t pp = 0;
+            while (pp < mpages) {
+                const uint32_t end = (pp + (MB_TILE_MASK_BATCH) < mpages)
+                                         ? pp + (MB_TILE_MASK_BATCH) : mpages;
+                for (uint32_t q = pp; q < end; ++q) {
+                    noc_async_read_tile(mpg0 + q, cull_masks_acc,
+                                        tile_mask_l1 + q * IDS_PAGE_BYTES);
+                }
+                noc_async_read_barrier();
+                pp = end;
+            }
+        }
+#endif
 
         // (3) Per-tile gaussian-row count (compute reads slot 0). One row is
         // emitted per candidate (mask==0 candidates dispatch nothing).
@@ -605,9 +657,14 @@ void kernel_main() {
             // barrier, which did not reliably land the small mask reads under
             // fast timing). gstart_buf records each chunk's within-tile start so
             // the consume can recompute cull_base + gstart for the mask page.
+            // Under MB_TILE_MASK_L1 the whole tile's masks are already resident in
+            // CB_TILE_MASKS (bulk-loaded above), so the per-chunk scratch/read is
+            // skipped; gstart_buf is still used to index the resident L1 masks.
+            uint32_t gstart_buf[2];
+#if !defined(MB_TILE_MASK_L1)
             constexpr uint32_t MASK_BUF_BYTES = 2u * IDS_PAGE_BYTES;  // 128B
             const uint32_t mask_scr = get_write_ptr(CB_SCR_MASK);
-            uint32_t gstart_buf[2];
+#endif
 #endif
 
             uint32_t processed = 0;
@@ -630,7 +687,7 @@ void kernel_main() {
                 const uint32_t take = take_buf[cur];
                 const uint32_t nxt = cur ^ 1u;
 
-#ifdef MB_SFPU_CULL
+#if defined(MB_SFPU_CULL) && !defined(MB_TILE_MASK_L1)
                 // Dedicated per-chunk mask-page read with its OWN barrier, issued
                 // here (after the attr barrier, BEFORE the next chunk's prefetch)
                 // so the barrier waits ONLY for these 2 small page reads. Folding
@@ -705,7 +762,13 @@ void kernel_main() {
                     const float mean_x = bits_to_f(mx_bits);
                     const float mean_y = bits_to_f(my_bits);
 
-#ifdef MB_SFPU_CULL
+#if defined(MB_TILE_MASK_L1)
+                    // Whole-tile masks are resident in L1 (bulk-loaded once per
+                    // tile). Index by within-tile depth position PLUS the page
+                    // offset of cull_base (mask_off0), matching the per-chunk path
+                    // (cull_masks[cull_base + p]); pure L1 load, no NoC read.
+                    const uint32_t mask = tile_mask_ptr[mask_off0 + gstart_buf[cur] + j];
+#elif defined(MB_SFPU_CULL)
                     const uint32_t mask = mask_ptr[mask_off + j];
 #if defined(MB_CULL_SPIN)
                     // DRAM pages freshly written by the cull pass need a brief

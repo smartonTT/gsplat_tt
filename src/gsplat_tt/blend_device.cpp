@@ -864,6 +864,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         return v != nullptr && v[0] == '0';
     };
     const bool blend_aos = sfpu_cull && !env_off("GSPLAT_TT_BLEND_AOS");
+    // GSPLAT_TT_TILE_L1 (default OFF): bulk-load each tile's whole cull_masks
+    // region into L1 ONCE per tile (one barrier), read masks from L1 in the
+    // candidate loop, and DROP the per-candidate MB_CULL_SPIN. The spin (~89 ms
+    // of blend) is a per-candidate read-completion settle for the per-chunk mask
+    // NoC read; a per-tile bulk read with a single barrier removes the need.
+    const bool tile_mask_l1 = sfpu_cull && env_on("GSPLAT_TT_TILE_L1");
     // Stage C2: the blend reader streams a pre-packed contiguous payload instead
     // of gathering attrs + reading cull_masks. Takes precedence over sfpu_cull
     // for reader selection (the mask rides the payload row).
@@ -900,6 +906,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         if (resident_blend) {
             constexpr uint32_t CB_CORE_TILES = 7;
             cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
+        }
+        if (tile_mask_l1) {
+            // Whole-tile cull_masks region resident in L1. Max hero tile is
+            // ~26.5k candidates; size to MAX_TILE_ENTRIES (32768) uint32 = 128 KB
+            // (2048 x 64B pages), well under per-core L1. Used as flat scratch.
+            constexpr uint32_t CB_TILE_MASKS = 8;
+            constexpr uint32_t MAX_TILE_MASK_PAGES = 32768u / 16u;  // 2048
+            cb_cfg(CB_TILE_MASKS, 64, MAX_TILE_MASK_PAGES, DataFormat::UInt32);
         }
     }
 
@@ -950,18 +964,37 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         if (std::getenv("GSPLAT_TT_SFPU_CULL_DEBUG") != nullptr) {
             reader_defines["MB_SFPU_CULL_DEBUG"] = "1";
         }
-        // Per-candidate settle spin after the mask-page read barrier. The mask
-        // page lands in scratch, but consuming it immediately after
-        // noc_async_read_barrier() races the read landing -> dropped microblocks
-        // (PSNR ~30). The default 512 is past the single-view knee (63.85 dB).
-        // This is a READ-COMPLETION window, NOT a DRAM write-settle artifact: an
-        // L1 mask buffer (GSPLAT_TT_L1_MASKS=1) needs the SAME ~512 to hold the
-        // gate (see l1_masks_enabled() note). Override with GSPLAT_TT_CULL_SPIN
-        // ("0" disables the spin entirely).
-        const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN");
-        std::string spin = sp ? std::string(sp) : std::string("512");
-        if (spin != "0") {
-            reader_defines["MB_CULL_SPIN"] = spin;
+        if (tile_mask_l1) {
+            // L1-resident whole-tile masks: the candidate loop reads masks from
+            // L1, so there is NO per-candidate NoC read. The masks still cross the
+            // NoC ONCE per tile (bulk DRAM->L1); the bulk-read barrier can return
+            // before the DMA physically lands all pages in L1, so a ONE-TIME
+            // per-tile settle (MB_TILE_MASK_SETTLE) after the barrier lets them
+            // land before the candidate loop consumes them. This is ~30x cheaper
+            // than the old per-candidate spin (1 settle/tile vs 1/candidate).
+            reader_defines["MB_TILE_MASK_L1"] = "1";
+            const char* st = std::getenv("GSPLAT_TT_TILE_L1_SETTLE");
+            std::string settle = st ? std::string(st) : std::string("4096");
+            if (settle != "0") {
+                reader_defines["MB_TILE_MASK_SETTLE"] = settle;
+            }
+            if (const char* bt = std::getenv("GSPLAT_TT_TILE_L1_BATCH")) {
+                if (bt[0] != '\0') reader_defines["MB_TILE_MASK_BATCH"] = std::string(bt) + "u";
+            }
+        } else {
+            // Per-candidate settle spin after the mask-page read barrier. The
+            // mask page lands in scratch, but consuming it immediately after
+            // noc_async_read_barrier() races the read landing -> dropped
+            // microblocks (PSNR ~30). The default 512 is past the single-view
+            // knee (63.85 dB). This is a READ-COMPLETION window, NOT a DRAM
+            // write-settle artifact: an L1 mask buffer (GSPLAT_TT_L1_MASKS=1)
+            // needs the SAME ~512 to hold the gate. Override with
+            // GSPLAT_TT_CULL_SPIN ("0" disables the spin entirely).
+            const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN");
+            std::string spin = sp ? std::string(sp) : std::string("512");
+            if (spin != "0") {
+                reader_defines["MB_CULL_SPIN"] = spin;
+            }
         }
         if (blend_aos) {
             reader_defines["MB_BLEND_AOS"] = "1";
@@ -2754,7 +2787,16 @@ static double process_frame_resident(
         // DRAM mask pages settle; L1 is coherent after the writer barrier +
         // this Finish). The DRAM-masks fallback keeps the prior single-Finish
         // back-to-back enqueue (its per-candidate spin handles settle).
-        if (mb::l1_masks_enabled()) {
+        // GSPLAT_TT_TILE_L1: the blend reader bulk-loads each tile's whole
+        // cull_masks region DRAM->L1 once and reads masks from L1 (no per-candidate
+        // NoC read). The bulk read still crosses the NoC from DRAM, so the cull's
+        // freshly written mask pages must be GUARANTEED settled first — a single
+        // Finish/frame here does that deterministically and REPLACES the per-
+        // candidate MB_CULL_SPIN (which only ever existed to let those DRAM pages
+        // settle). One device sync/frame << ~3.2 M per-candidate busy-waits.
+        const char* tl1 = std::getenv("GSPLAT_TT_TILE_L1");
+        const bool tile_mask_l1 = (tl1 != nullptr && tl1[0] == '1');
+        if (mb::l1_masks_enabled() || tile_mask_l1) {
             distributed::Finish(*ctx_blend.cq);
         }
         distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_blend.workload, /*blocking=*/false);
