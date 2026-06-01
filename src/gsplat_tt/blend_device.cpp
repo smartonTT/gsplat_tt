@@ -869,7 +869,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         if (const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN")) {
             reader_defines["MB_CULL_SPIN"] = sp;
         } else {
-            reader_defines["MB_CULL_SPIN"] = "896";
+            reader_defines["MB_CULL_SPIN"] = "512";
         }
     }
     ctx.reader = CreateKernel(
