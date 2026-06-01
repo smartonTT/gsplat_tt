@@ -8,6 +8,42 @@ kernels) and `blend_device.cpp`, plus the established prior findings
 (`opt/sfpu-cull-next.md`, `opt/stage-c2-payload-impl.md`,
 `opt/plan-high-utilization-pipeline.md` §0.5-Q4/Q5/Q9, §4, §7).
 
+> **UPDATE 2026-06-01 (iter 14, commit e204f63) — single-program fusion is OFF THE TABLE.**
+> Implementing §8.4 as ONE merged cull+blend program hard-faults at `EnqueueMeshWorkload`:
+> `TT_FATAL: Program size (92688) too large for kernel config buffer (70656) on TENSIX`.
+> The 70656B per-core kernel-config ring-buffer ceiling (= `l1_unreserved_base − KERNEL_CONFIG`)
+> is a HARD limit, not tunable without rebuilding tt-metal. Merged compute trisc1 = 59260B
+> (cull 38152 + blend 21668); the cull is `noinline` uint-bit-ABI templates that can't be
+> cheaply shrunk, and the cull regime must not be retuned. **Do the L1 mask handoff as TWO
+> SMALL programs** (cull, then blend) sharing a fixed RESIDENT-L1 mask region, with a `Finish()`
+> between enqueues to replace the per-candidate `MB_CULL_SPIN` — sidesteps the ceiling entirely.
+> The single-program scaffold is gated off (`GSPLAT_TT_FUSE_BLEND=1`) and kept in-tree.
+
+> **UPDATE 2026-06-01 (iter 15) — TWO-PROGRAM L1 MASK HANDOFF: the spin is NOT a DRAM-settle artifact (§1.2/§1.4 premise FALSIFIED).**
+> Implemented the two-small-program L1 handoff: `cull_masks` allocated as an
+> L1-interleaved buffer (same 64B page layout + per-tile page-aligned base), cull
+> writer writes masks to L1, a host `Finish()` between the cull and blend enqueues,
+> blend reader pops from L1. Gated `GSPLAT_TT_L1_MASKS=1` (DEFAULT OFF; baseline
+> 63.85 dB / 191 ms preserved). On-device (yyzo-bh-03, 1 view):
+> - Masks land **bit-identically** in L1 (`GSPLAT_TT_SFPU_CULL_DEBUG`: 0 CULLMM
+>   mismatches, full **63.85 dB** — proves L1 transport + the Finish are correct).
+> - But removing the spin gives **30 dB**, and a spin sweep shows the gate is met
+>   ONLY at spin≈512, where blend == baseline:
+>   `spin 0→30.1dB/136ms, 256→40.4/143, 384→43.7/167, 448→50.9/178, 512→63.85/190.9`.
+> - So the per-candidate `MB_CULL_SPIN` is a **reader read-completion window**
+>   (the freshly `noc_async_read_tile`'d mask page is consumed too soon after
+>   `noc_async_read_barrier()`), **not** a DRAM-bank write-settle artifact. It is
+>   UNCHANGED by moving masks DRAM→L1. The `cull_masks` DRAM traffic (~0.4 GB) was
+>   already hidden behind the spin + the 1.9 GB random attr gather, so the
+>   round-trip removal yields **no blend win** (L1 spin-512 190.9 ms ≈ DRAM 191.4).
+> - **Decision: REJECT/gate off.** Baseline held. **Next lever: Stage C2** — the
+>   contiguous per-tile payload (`GSPLAT_TT_BLEND_PAYLOAD` scaffold, §3a) makes the
+>   blend reader a pure sequential stream (kills the 1.9 GB random gather AND lets
+>   masks ride the same stream), which is the actual blend bottleneck — not the
+>   mask transport. The spin's true nature (read-completion) should be re-examined
+>   there (a sequential payload read may not need the per-candidate barrier+spin at
+>   all).
+
 Ground truth carried in (do not re-litigate):
 - Blend stage ≈ **196 ms**, reader-bound on one mover RISC (NCRISC).
 - SFPU compute is **100% hidden**: `NOBLEND` exec == full exec (the

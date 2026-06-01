@@ -1,5 +1,5 @@
-id=20
-sha=47257af
-ts=2026-06-01T06:32:12-0700
-desc=iter 14: fuse cull+blend L1 handoff: blocked by 70656B kernel-config ceiling; land gated scaffold, default off (baseline restored)
-bin=891b04a11040e361
+id=22
+sha=e204f63
+ts=2026-06-01T06:57:05-0700
+desc=iter 15: two-program L1 mask handoff: cull_masks resident-L1 + Finish between cull/blend (GSPLAT_TT_L1_MASKS=1, default off); falsified spin-as-DRAM-settle, gate off, baseline held
+bin=9daa4bc077dc8fe5

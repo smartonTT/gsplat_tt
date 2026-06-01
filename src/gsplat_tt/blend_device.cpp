@@ -784,6 +784,34 @@ constexpr uint32_t COUNTS_PAGE_BYTES = 128;
 constexpr uint32_t COEFF_ROW_BYTES_MB = 64;
 constexpr uint32_t RAMP_TILE_BYTES = TILE_H * TILE_W * 4;  // fp32 32x32
 
+// §8.4 Lever 2 (iter 15): hand the per-tile SFPU cull masks from the cull
+// program to the blend program through a RESIDENT-L1 buffer instead of the
+// cull_masks DRAM round-trip. cull_masks becomes an L1-interleaved buffer
+// (same 64B/16-elem page layout + per-tile page-aligned base), the cull writer
+// (writer_microblock_cull / fused_tile_writer) writes masks into it, a Finish()
+// is placed between the cull and blend enqueues, and the blend reader pops them.
+//
+// GATED OFF BY DEFAULT (opt in with GSPLAT_TT_L1_MASKS=1). The masks land in L1
+// BIT-IDENTICALLY (GSPLAT_TT_SFPU_CULL_DEBUG: 0 mismatches, full 63.85 dB), but
+// the iteration's premise — that the per-candidate MB_CULL_SPIN is a DRAM-bank
+// write-settle artifact removable by an L1 handoff — is FALSIFIED on device:
+//   spin   0    256   384    448    512    (GSPLAT_TT_CULL_SPIN, L1, 1 view)
+//   dB    30.1  40.4  43.7   50.9   63.85
+//   blend 136   143   167    178    191  ms
+// The gate (>=63.6) is only met at spin≈512, where blend (190.9 ms) EQUALS the
+// DRAM baseline (191.4 ms): the per-candidate settle window is required for the
+// reader to consume the freshly NoC-read mask page (read-completion after
+// noc_async_read_barrier), NOT for DRAM write-settle — so it is unchanged by
+// moving masks DRAM->L1, and the round-trip removal yields no blend win (mask
+// DRAM traffic ~0.4 GB was already hidden behind the spin + the 1.9 GB random
+// attr gather). Kept in-tree gated for future investigation; see the iter-15
+// report. Next lever: Stage C2 contiguous payload (kills the random gather and
+// lets masks ride the sequential stream), GSPLAT_TT_BLEND_PAYLOAD scaffold.
+inline bool l1_masks_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_L1_MASKS");
+    return v != nullptr && v[0] == '1';
+}
+
 static void build_program_and_workload_mb(DeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -850,9 +878,18 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // xramp/yramp/tile_ids); +2 (cull_masks, cull_mask_base) under SFPU cull;
     // uploaded paths 6.
     const int num_reader_accessors = resident_blend ? (sfpu_cull ? 15 : 13) : 6;
+    // cull_masks is reader accessor index 13 (after a,b,c,px,py,op,col, ids,
+    // ranges, xramp,yramp,tile_ids, lpt_meta). Under the L1 mask handoff it is
+    // an L1-interleaved buffer; everything else stays DRAM-interleaved.
+    const bool l1_masks = sfpu_cull && l1_masks_enabled();
+    constexpr int kCullMasksReaderIdx = 13;
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
-        TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+        if (l1_masks && i == kCullMasksReaderIdx) {
+            TensorAccessorArgs::create_l1_interleaved().append_to(reader_ct);
+        } else {
+            TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+        }
     }
     const char* reader_src =
         dev_cull ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp"
@@ -866,14 +903,18 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         if (std::getenv("GSPLAT_TT_SFPU_CULL_DEBUG") != nullptr) {
             reader_defines["MB_SFPU_CULL_DEBUG"] = "1";
         }
-        // Fresh cull_masks DRAM pages need a brief settle before the blend reader
-        // consumes them; noc_async_read_barrier() alone is insufficient. Default
-        // spin count is past the single-view knee (512->63.64 dB); override via
-        // GSPLAT_TT_CULL_SPIN.
-        if (const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN")) {
-            reader_defines["MB_CULL_SPIN"] = sp;
-        } else {
-            reader_defines["MB_CULL_SPIN"] = "512";
+        // Per-candidate settle spin after the mask-page read barrier. The mask
+        // page lands in scratch, but consuming it immediately after
+        // noc_async_read_barrier() races the read landing -> dropped microblocks
+        // (PSNR ~30). The default 512 is past the single-view knee (63.85 dB).
+        // This is a READ-COMPLETION window, NOT a DRAM write-settle artifact: an
+        // L1 mask buffer (GSPLAT_TT_L1_MASKS=1) needs the SAME ~512 to hold the
+        // gate (see l1_masks_enabled() note). Override with GSPLAT_TT_CULL_SPIN
+        // ("0" disables the spin entirely).
+        const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN");
+        std::string spin = sp ? std::string(sp) : std::string("512");
+        if (spin != "0") {
+            reader_defines["MB_CULL_SPIN"] = spin;
         }
     }
     ctx.reader = CreateKernel(
@@ -1688,11 +1729,17 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .defines = cull_compute_defines,
         });
 
-    // Writer: 4 DRAM-interleaved accessors (cull_masks, ranges, tile_ids,
-    // cull_mask_base).
+    // Writer: 4 accessors (cull_masks, ranges, tile_ids, cull_mask_base).
+    // cull_masks (index 0) is L1-interleaved under the L1 mask handoff so the
+    // writer's masks land in the same resident-L1 buffer the blend reader pops.
     std::vector<uint32_t> writer_ct;
+    const bool l1_masks = mb::l1_masks_enabled();
     for (int i = 0; i < 4; i++) {
-        TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+        if (l1_masks && i == 0) {
+            TensorAccessorArgs::create_l1_interleaved().append_to(writer_ct);
+        } else {
+            TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+        }
     }
     std::map<std::string, std::string> cull_writer_defines;
     if (cull_emit_m2) {
@@ -1764,13 +1811,19 @@ static bool ensure_resident_buffers(
         (void)pipe_p;
     }
     const size_t masks_bytes = (total_elems / 16) * MASKS_PAGE_BYTES;
-    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+    // L1 (iter 15) vs DRAM cull_masks. Interleaved L1 spreads the ~12 MB of
+    // masks across the grid's L1 banks (~95 KB/core over ~130 cores), well
+    // within the ~1.5 MB/core L1 alongside the cull+blend CBs. Same 64B/16-elem
+    // page layout and per-tile page-aligned base as DRAM, so all indexing
+    // (cull_mask_base[tile] + p) is byte-identical — only the bank kind changes.
+    const BufferType masks_bt = mb::l1_masks_enabled() ? BufferType::L1 : BufferType::DRAM;
+    auto make_masks_buf = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
-        distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = masks_bt};
         return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
     };
     if (!ctx.res_masks || ctx.res_masks_bytes < masks_bytes) {
-        ctx.res_masks = make_dram(masks_bytes, MASKS_PAGE_BYTES);
+        ctx.res_masks = make_masks_buf(masks_bytes, MASKS_PAGE_BYTES);
         ctx.res_masks_bytes = masks_bytes;
         ds::register_buffer("cull_masks", ctx.res_masks);
     }
@@ -2064,8 +2117,16 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
 
     std::vector<uint32_t> writer_ct;
     const int writer_accessors = fuse ? 6 : 5;  // +res_out
+    // cull_masks (writer accessor index 0) is L1-interleaved under the L1 mask
+    // handoff (non-fused path). In the single-program FUSE_BLEND path the masks
+    // travel via CB_TILE_MASKS and cull_masks is unused, so the kind is moot.
+    const bool l1_masks = mb::l1_masks_enabled();
     for (int i = 0; i < writer_accessors; i++) {
-        TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+        if (l1_masks && i == 0) {
+            TensorAccessorArgs::create_l1_interleaved().append_to(writer_ct);
+        } else {
+            TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+        }
     }
     ctx.writer = CreateKernel(
         program,
@@ -2273,6 +2334,17 @@ static double process_frame_resident(
     // no cull_masks DRAM round-trip / spin) — enqueue only the single workload.
     distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_fused.workload, /*blocking=*/false);
     if (!fuse) {
+        // §8.4 Lever 2 (iter 15): with the resident-L1 mask handoff, place a
+        // Finish between the cull (ctx_fused) and blend (ctx_blend) programs so
+        // the cull writer's L1 mask writes are guaranteed settled before the
+        // blend reader pops them. This single Finish/frame REPLACES the ~3.2 M
+        // per-candidate MB_CULL_SPIN busy-waits (the spin existed only to let
+        // DRAM mask pages settle; L1 is coherent after the writer barrier +
+        // this Finish). The DRAM-masks fallback keeps the prior single-Finish
+        // back-to-back enqueue (its per-candidate spin handles settle).
+        if (mb::l1_masks_enabled()) {
+            distributed::Finish(*ctx_blend.cq);
+        }
         distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_blend.workload, /*blocking=*/false);
     }
     distributed::Finish(*ctx_blend.cq);
