@@ -298,11 +298,9 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #if defined(MB_COEFF_DEBUG)
         {
             static uint32_t dbg_cmp = 0;
-            if ((g < 4u || g == 15u || g == 16u || g == 17u || g == 31u || g == 32u ||
-                 g == 33u || g == 1000u || g == 5000u) && dbg_cmp < 60u) {
+            if (dbg_cmp < 4u) {
                 dbg_cmp++;
                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
-                      << " b=" << F32(*reinterpret_cast<const float*>(&row[1]))
                       << " mxl=" << F32(*reinterpret_cast<const float*>(&row[3]))
                       << " op=" << F32(*reinterpret_cast<const float*>(&row[6]))
                       << " mask=" << mask << ENDL()));

@@ -183,8 +183,17 @@ void kernel_main() {
             continue;
         }
 
-        // DIAG(iter19): dead-simple SERIAL stream (one row per barrier) to test
-        // whether the double-buffered chunk pipeline corrupts rows past chunk 0.
+        // ROOT CAUSE (iter19): rows freshly written to DRAM by the pack pass are
+        // NOT reliably landed when consumed right after noc_async_read_barrier --
+        // the read returns stale/partial bytes (same DRAM read-completion artifact
+        // as the SFPU cull_masks read, which needs MB_CULL_SPIN). A per-row settle
+        // spin after the barrier recovers the full 63.85 dB gate (serial no-spin
+        // 35.75 -> spin 63.85). The host PAYLOAD_READBACK cross-check passes
+        // regardless because the post-Finish host readback settles differently than
+        // the on-core NoC read. NOTE: this path is GATED OFF by default and is a net
+        // LOSS (the pack pass alone is ~428 ms vs the 191 ms devcull baseline -- it
+        // relocates + amplifies the SoA gather rather than removing it); kept in-tree
+        // correct for future work (e.g. fusing the pack into projection).
         for (uint32_t p = 0; p < L; ++p) {
             noc_async_read_tile(id_start + p, payload_acc, pay_base);
             noc_async_read_barrier();
