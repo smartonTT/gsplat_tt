@@ -75,6 +75,38 @@ def psnr_u8(a: np.ndarray, b_u8_floats: np.ndarray) -> float:
 STAGE_KEYS = ("project", "tile_assign", "sort", "blend", "total")
 
 
+_DEVICE_BACKENDS = {"tt"}
+
+
+def _enforce_device_lock(*backend_names):
+    """Hard guard: the TT device may only be opened through tt-workflows
+    `devrun.sh`, which holds the per-host device lock and exports
+    ``TTW_DEVRUN=1``. A raw ``ssh ... a003_verify.py`` bypasses that lock and
+    can collide with another device job -> firmware wedge. Refuse to open the
+    device unless we were launched via devrun. A human doing a one-off manual
+    run can set ``TTW_ALLOW_DIRECT=1`` (never in the loop / never an agent).
+    """
+    if not any(b in _DEVICE_BACKENDS for b in backend_names):
+        return  # CPU-only run, no TT device touched
+    if os.environ.get("TTW_DEVRUN") == "1":
+        return  # launched through devrun.sh, which holds the per-host lock
+    if os.environ.get("TTW_ALLOW_DIRECT") == "1":
+        print("[a003] WARNING: TTW_ALLOW_DIRECT=1 — opening the TT device "
+              "WITHOUT the devrun lock. Manual human use only; never in the loop.",
+              file=sys.stderr, flush=True)
+        return
+    print(
+        "[a003] REFUSING to open the TT device: not launched via devrun.sh "
+        "(no TTW_DEVRUN marker).\n"
+        "       Every device run MUST go through tt-workflows/scripts/devrun.sh "
+        "so the per-host lock serializes the device — a raw ssh run can collide "
+        "with another job and wedge the device.\n"
+        "       Use:  devrun.sh --tag <name> -- \"<cmd>\"\n"
+        "       (one-off human manual run only:  export TTW_ALLOW_DIRECT=1)",
+        file=sys.stderr, flush=True)
+    sys.exit(3)
+
+
 def render_all(backend_name, gauss, order, views, fov_deg, W, H, contrib_floor):
     backend = get_backend(backend_name)
     pipeline = Pipeline(backend, tile_size=32, contrib_floor=contrib_floor)
@@ -116,6 +148,10 @@ def main():
     ap.add_argument("--save-all-views", action="store_true",
                     help="also save every view PNG (default: hero only)")
     args = ap.parse_args()
+
+    # Device-access discipline: only devrun.sh (which holds the per-host lock)
+    # may open the TT device. Aborts a raw bypass run before it touches HW.
+    _enforce_device_lock(args.backend, args.ref_backend)
 
     cam = json.loads(args.cameras.read_text())[args.scene]
     fov_deg = float(cam["fov_deg"])
