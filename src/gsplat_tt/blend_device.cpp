@@ -2204,19 +2204,39 @@ static double process_frame(
     // against the consumption layout without DPRINT backpressure. Gated by env.
     if (std::getenv("GSPLAT_TT_PAYLOAD_READBACK") != nullptr) {
         const size_t rows_total = buf_pay->size() / mb::COEFF_ROW_BYTES_MB;
-        const size_t dump_rows = std::min<size_t>(rows_total, 8);
         std::vector<uint32_t> rb(rows_total * (mb::COEFF_ROW_BYTES_MB / 4), 0xCDCDCDCDu);
         distributed::EnqueueReadMeshBuffer(*ctx.cq, rb, buf_pay, /*blocking=*/true);
-        std::fprintf(stderr, "[PAYLOAD_RB] rows=%zu (dump %zu) payload=0x%lx\n",
-                     rows_total, dump_rows, static_cast<unsigned long>(pay_addr));
-        for (size_t r = 0; r < dump_rows; ++r) {
+        auto u2f = [](uint32_t b) { float f; std::memcpy(&f, &b, 4); return f; };
+        // Count rows that still hold the pre-fill sentinel (never written by pack)
+        // and the index of the FIRST such row -> tells us pack coverage.
+        size_t unwritten = 0;
+        size_t first_unwritten = rows_total;
+        for (size_t r = 0; r < rows_total; ++r) {
             const uint32_t* row = rb.data() + r * 16;
-            auto u2f = [](uint32_t b) { float f; std::memcpy(&f, &b, 4); return f; };
+            bool sentinel = true;
+            for (int w = 0; w < 16; ++w) {
+                if (row[w] != 0xCDCDCDCDu) { sentinel = false; break; }
+            }
+            if (sentinel) {
+                if (first_unwritten == rows_total) first_unwritten = r;
+                unwritten++;
+            }
+        }
+        std::fprintf(stderr, "[PAYLOAD_RB] rows=%zu unwritten(sentinel)=%zu first_unwritten=%zu payload=0x%lx\n",
+                     rows_total, unwritten, first_unwritten, static_cast<unsigned long>(pay_addr));
+        // Dump strided samples across the WHOLE index range + the last rows.
+        const size_t stride = std::max<size_t>(1, rows_total / 24);
+        for (size_t r = 0; r < rows_total; r += stride) {
+            const uint32_t* row = rb.data() + r * 16;
             std::fprintf(stderr,
-                "[PAYLOAD_RB] g=%zu a=%.4f b=%.4f c=%.4f mxl=%.3f myl=%.3f op=%.4f "
-                "cr=%.4f cg=%.4f cb=%.4f mask=0x%x\n",
-                r, u2f(row[0]), u2f(row[1]), u2f(row[2]), u2f(row[3]), u2f(row[4]),
-                u2f(row[6]), u2f(row[7]), u2f(row[8]), u2f(row[9]), row[10]);
+                "[PAYLOAD_RB] g=%zu a=%.4f mxl=%.3f myl=%.3f op=%.4f cr=%.4f mask=0x%x\n",
+                r, u2f(row[0]), u2f(row[3]), u2f(row[4]), u2f(row[6]), u2f(row[7]), row[10]);
+        }
+        for (size_t r = (rows_total > 4 ? rows_total - 4 : 0); r < rows_total; ++r) {
+            const uint32_t* row = rb.data() + r * 16;
+            std::fprintf(stderr,
+                "[PAYLOAD_RB] LAST g=%zu a=%.4f mxl=%.3f op=%.4f cr=%.4f mask=0x%x\n",
+                r, u2f(row[0]), u2f(row[3]), u2f(row[6]), u2f(row[7]), row[10]);
         }
     }
     return pack_ms;
