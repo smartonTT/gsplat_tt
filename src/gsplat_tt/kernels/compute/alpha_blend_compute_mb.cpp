@@ -38,7 +38,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
-#if defined(MB_DEBUG_DPRINT) || defined(MB_ROWCK)
+#if defined(MB_DEBUG_DPRINT)
 #include "api/debug/dprint.h"
 #endif
 #include "api/compute/cb_api.h"
@@ -266,16 +266,7 @@ inline void dispatch_blend_guarded(
 // are read ONCE (not once per microblock), then dispatched to the masked
 // microblocks. One start_/done_ for the whole tile (proven safe by VECMAP).
 inline void process_tile_gaussians(uint32_t num_g) {
-#if defined(MB_ROWCK)
-    static uint32_t rowck_t = 0;
-    uint32_t rowck = 0;
-    uint32_t rowck_mask = 0;
-    const uint32_t rowck_tile = rowck_t++;
-#endif
     if (num_g == 0) {
-#if defined(MB_ROWCK)
-        MATH((DPRINT << "ROWCK t=" << rowck_tile << " ng=0 cs=0" << ENDL()));
-#endif
         return;
     }
 #if defined(MB_DEBUG_DPRINT)
@@ -286,26 +277,6 @@ inline void process_tile_gaussians(uint32_t num_g) {
     for (uint32_t g = 0; g < num_g; g++) {
         cb_wait_front(CB_MB_COEFF, 1);
         const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
-#if defined(MB_ROWCK)
-        // Per-row hash (word order fixed), combined across gaussians by XOR so the
-        // result is ORDER-INDEPENDENT: distinguishes "same rows, different order"
-        // (rowck matches) from "different values" (rowck differs).
-        uint32_t rh = 0;
-        for (uint32_t w = 0; w < 10u; ++w) {
-            rh = (rh * 1000003u) ^ row[w];
-        }
-        rowck ^= rh;
-        rowck_mask ^= row[10];
-        if (rowck_tile == 0u && g < 16u) {
-            MATH((DPRINT << "RDUMP t0 g=" << g
-                  << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
-                  << " op=" << F32(*reinterpret_cast<const float*>(&row[6]))
-                  << " cr=" << F32(*reinterpret_cast<const float*>(&row[7]))
-                  << " cg=" << F32(*reinterpret_cast<const float*>(&row[8]))
-                  << " cb=" << F32(*reinterpret_cast<const float*>(&row[9]))
-                  << " mask=" << row[10] << ENDL()));
-        }
-#endif
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
         // read + the full 32-way dispatch + SFPU blend. Isolates SFPU/dispatch cost.
@@ -346,10 +317,6 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #endif
         cb_pop_front(CB_MB_COEFF, 1);
     }
-#if defined(MB_ROWCK)
-    MATH((DPRINT << "ROWCK t=" << rowck_tile << " ng=" << num_g << " cs=" << rowck
-          << " csm=" << rowck_mask << ENDL()));
-#endif
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
 }
 
