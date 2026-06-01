@@ -55,6 +55,20 @@ constexpr uint32_t CB_CULL_COUNTS= 3;
 constexpr uint32_t CB_SCR_IDS    = 4;
 constexpr uint32_t CB_SCR_ATTR   = 5;
 constexpr uint32_t CB_CORE_TILES = 7;  // tile count for compute (no host LPT D2H)
+#ifdef FUSE_BLEND
+// §8.4: the SAME reader streams the blend coeff rows after the cull rows,
+// per tile, reading the 32-bit microblock masks from the L1 CB_TILE_MASKS
+// handoff (writer->reader) instead of the cull_masks DRAM round-trip. No spin.
+constexpr uint32_t CB_XRAMP      = 8;   // pixel-center x ramp (streamed once)
+constexpr uint32_t CB_YRAMP      = 9;   // pixel-center y ramp (streamed once)
+constexpr uint32_t CB_MB_COEFF   = 10;  // blend coeff row per gaussian (reader->compute)
+constexpr uint32_t CB_MB_COUNTS  = 11;  // per-tile blend gaussian-row count (== L)
+constexpr uint32_t CB_SCR_ATTR_B = 12;  // reader-private blend gather scratch
+constexpr uint32_t CB_TILE_MASKS = 18;  // L1 mask handoff (writer->reader), 32 u32/page
+constexpr uint32_t BLEND_MASKS_PER_PAGE = 32;
+constexpr uint32_t BLEND_FIELDS = 8;    // a,b,c,px,py,op + 2 color pages
+constexpr uint32_t BLEND_SLOT_BYTES = BLEND_FIELDS * 64u;  // 512B/gaussian
+#endif
 
 constexpr uint32_t SOA_PAGE_BYTES = 64;
 constexpr uint32_t IDS_PAGE_BYTES = 64;
@@ -74,6 +88,19 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
     noc_async_read_barrier();
     return reinterpret_cast<volatile uint32_t*>(scratch_addr)[off];
 }
+
+#ifdef FUSE_BLEND
+inline float bits_to_f(uint32_t b) {
+    float f;
+    __builtin_memcpy(&f, &b, 4);
+    return f;
+}
+inline uint32_t f_to_bits(float f) {
+    uint32_t b;
+    __builtin_memcpy(&b, &f, 4);
+    return b;
+}
+#endif
 
 template <typename IDS>
 inline uint32_t load_ids_chunk(
@@ -111,6 +138,11 @@ void kernel_main() {
     const uint32_t floor_bits    = get_arg_val<uint32_t>(14);
     float contrib_floor;
     __builtin_memcpy(&contrib_floor, &floor_bits, 4);
+#ifdef FUSE_BLEND
+    const uint32_t col_addr      = get_arg_val<uint32_t>(15);  // proj_m_colors (AoS M*3)
+    const uint32_t xramp_addr    = get_arg_val<uint32_t>(16);  // pixel-center x ramp
+    const uint32_t yramp_addr    = get_arg_val<uint32_t>(17);  // pixel-center y ramp
+#endif
 
     constexpr auto a_args      = TensorAccessorArgs<0>();
     constexpr auto b_args      = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -124,6 +156,11 @@ void kernel_main() {
     constexpr auto by_args     = TensorAccessorArgs<bx_args.next_compile_time_args_offset()>();
     constexpr auto tids_args   = TensorAccessorArgs<by_args.next_compile_time_args_offset()>();
     constexpr auto lpt_meta_args = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
+#ifdef FUSE_BLEND
+    constexpr auto col_args    = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
+    constexpr auto xramp_args  = TensorAccessorArgs<col_args.next_compile_time_args_offset()>();
+    constexpr auto yramp_args  = TensorAccessorArgs<xramp_args.next_compile_time_args_offset()>();
+#endif
 
     const auto a_acc      = TensorAccessor(a_args,      a_addr,      SOA_PAGE_BYTES);
     const auto b_acc      = TensorAccessor(b_args,      b_addr,      SOA_PAGE_BYTES);
@@ -137,6 +174,11 @@ void kernel_main() {
     const auto by_acc     = TensorAccessor(by_args,     box_oy_addr, RAMP_TILE_BYTES);
     const auto tids_acc   = TensorAccessor(tids_args,   tile_ids_addr, IDS_PAGE_BYTES);
     const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, SOA_PAGE_BYTES);
+#ifdef FUSE_BLEND
+    const auto col_acc    = TensorAccessor(col_args,    col_addr,    SOA_PAGE_BYTES);
+    const auto xramp_acc  = TensorAccessor(xramp_args,  xramp_addr,  RAMP_TILE_BYTES);
+    const auto yramp_acc  = TensorAccessor(yramp_args,  yramp_addr,  RAMP_TILE_BYTES);
+#endif
 
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
     const uint32_t meta_elem0 = core_index * 2u;
@@ -172,6 +214,18 @@ void kernel_main() {
     noc_async_read_barrier();
     cb_push_back(CB_BOX_OX, 1);
     cb_push_back(CB_BOX_OY, 1);
+
+#ifdef FUSE_BLEND
+    // Stream the two constant pixel-center ramps ONCE for the blend compute
+    // phase; compute keeps them resident (waits once, never pops).
+    cb_reserve_back(CB_XRAMP, 1);
+    noc_async_read_tile(0, xramp_acc, get_write_ptr(CB_XRAMP));
+    cb_reserve_back(CB_YRAMP, 1);
+    noc_async_read_tile(0, yramp_acc, get_write_ptr(CB_YRAMP));
+    noc_async_read_barrier();
+    cb_push_back(CB_XRAMP, 1);
+    cb_push_back(CB_YRAMP, 1);
+#endif
 
     // Cache this core's tile-ID slice in L1.
     constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
@@ -308,5 +362,114 @@ void kernel_main() {
             }
             processed += take;
         }
+
+#ifdef FUSE_BLEND
+        // ---- BLEND-GATHER + EMIT (tile t) -----------------------------------
+        // The cull phase above pushed all L cull rows; by now (concurrently) the
+        // compute culled them -> CB_KEEP -> the writer packed the 32-bit masks
+        // into the L1 CB_TILE_MASKS handoff. Emit one blend coeff row per
+        // candidate, reading its mask from CB_TILE_MASKS (popped every 32) — NO
+        // cull_masks DRAM round-trip, NO settle spin.
+        //
+        // §2.3 invariant: push the per-tile COUNT (== L) BEFORE the first blend
+        // coeff row, so the compute learns num_g immediately and drains the
+        // depth-bounded CB_MB_COEFF one row at a time (no CB-overflow deadlock).
+        cb_reserve_back(CB_MB_COUNTS, 1);
+        reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS))[0] = L;
+        cb_push_back(CB_MB_COUNTS, 1);
+
+        if (L > 0) {
+            const float tx_tile = static_cast<float>(tx * TILE_SIZE);
+            const float ty_tile = static_cast<float>(ty * TILE_SIZE);
+            const uint32_t b_ids_scr  = get_write_ptr(CB_SCR_IDS);
+            const uint32_t b_attr_base = get_write_ptr(CB_SCR_ATTR_B);
+            uint32_t b_gids[CHUNK_MAX];
+            volatile uint32_t* mask_ptr = nullptr;  // current CB_TILE_MASKS page
+            uint32_t b_processed = 0;
+            while (b_processed < L) {
+                const uint32_t take = load_ids_chunk(ids_acc, id_start, b_processed, L, b_ids_scr, b_gids);
+                // Issue this chunk's blend gather (a,b,c,px,py,op + colors).
+                for (uint32_t j = 0; j < take; ++j) {
+                    const uint32_t g = b_gids[j];
+                    const uint32_t pg = g >> 4;
+                    const uint32_t s = b_attr_base + j * BLEND_SLOT_BYTES;
+                    noc_async_read_tile(pg, a_acc,  s + 0u * SOA_PAGE_BYTES);
+                    noc_async_read_tile(pg, b_acc,  s + 1u * SOA_PAGE_BYTES);
+                    noc_async_read_tile(pg, c_acc,  s + 2u * SOA_PAGE_BYTES);
+                    noc_async_read_tile(pg, px_acc, s + 3u * SOA_PAGE_BYTES);
+                    noc_async_read_tile(pg, py_acc, s + 4u * SOA_PAGE_BYTES);
+                    noc_async_read_tile(pg, op_acc, s + 5u * SOA_PAGE_BYTES);
+                    // AoS M*3 colors: r/g/b are 3 consecutive elems spanning 1-2
+                    // 16-elem pages. Read page0 into slot 6, page1 into slot 7
+                    // only on a straddle.
+                    const uint32_t e0 = g * 3u;
+                    const uint32_t cpg0 = e0 >> 4;
+                    const uint32_t cpg1 = (e0 + 2u) >> 4;
+                    noc_async_read_tile(cpg0, col_acc, s + 6u * SOA_PAGE_BYTES);
+                    if (cpg1 != cpg0) {
+                        noc_async_read_tile(cpg1, col_acc, s + 7u * SOA_PAGE_BYTES);
+                    }
+                }
+                noc_async_read_barrier();
+                for (uint32_t j = 0; j < take; ++j) {
+                    const uint32_t p = b_processed + j;
+                    // Pop a fresh 32-mask page from the L1 handoff at each 32
+                    // boundary. cb_wait/cb_pop fencing guarantees the masks are
+                    // present + committed by construction (no DRAM settle).
+                    if ((p & (BLEND_MASKS_PER_PAGE - 1u)) == 0u) {
+                        if (mask_ptr != nullptr) {
+                            cb_pop_front(CB_TILE_MASKS, 1);
+                        }
+                        cb_wait_front(CB_TILE_MASKS, 1);
+                        mask_ptr = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_MASKS));
+                    }
+                    const uint32_t mask = mask_ptr[p & (BLEND_MASKS_PER_PAGE - 1u)];
+
+                    const uint32_t g = b_gids[j];
+                    const uint32_t lane = g & 0xF;
+                    const uint32_t s = b_attr_base + j * BLEND_SLOT_BYTES;
+                    const uint32_t cov_a_bits = reinterpret_cast<volatile uint32_t*>(s + 0u * SOA_PAGE_BYTES)[lane];
+                    const uint32_t cov_b_bits = reinterpret_cast<volatile uint32_t*>(s + 1u * SOA_PAGE_BYTES)[lane];
+                    const uint32_t cov_c_bits = reinterpret_cast<volatile uint32_t*>(s + 2u * SOA_PAGE_BYTES)[lane];
+                    const uint32_t mx_bits    = reinterpret_cast<volatile uint32_t*>(s + 3u * SOA_PAGE_BYTES)[lane];
+                    const uint32_t my_bits    = reinterpret_cast<volatile uint32_t*>(s + 4u * SOA_PAGE_BYTES)[lane];
+                    const uint32_t op_bits    = reinterpret_cast<volatile uint32_t*>(s + 5u * SOA_PAGE_BYTES)[lane];
+                    const uint32_t e0 = g * 3u;
+                    const uint32_t cbase = (e0 >> 4) * 16u;
+                    auto cwin = reinterpret_cast<volatile uint32_t*>(s + 6u * SOA_PAGE_BYTES);
+                    const uint32_t cr = cwin[(e0 + 0u) - cbase];
+                    const uint32_t cg = cwin[(e0 + 1u) - cbase];
+                    const uint32_t cb = cwin[(e0 + 2u) - cbase];
+
+                    const float mean_x = bits_to_f(mx_bits);
+                    const float mean_y = bits_to_f(my_bits);
+
+                    cb_reserve_back(CB_MB_COEFF, 1);
+                    auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+                    row[0] = cov_a_bits;
+                    row[1] = cov_b_bits;
+                    row[2] = cov_c_bits;
+                    row[3] = f_to_bits(mean_x - tx_tile);   // mx_local
+                    row[4] = f_to_bits(mean_y - ty_tile);   // my_local
+                    row[5] = 0u;
+                    row[6] = op_bits;
+                    row[7] = cr;
+                    row[8] = cg;
+                    row[9] = cb;
+                    row[10] = mask;
+                    row[11] = 0u;
+                    row[12] = 0u;
+                    row[13] = 0u;
+                    row[14] = 0u;
+                    row[15] = 0u;
+                    cb_push_back(CB_MB_COEFF, 1);
+                }
+                b_processed += take;
+            }
+            if (mask_ptr != nullptr) {
+                cb_pop_front(CB_TILE_MASKS, 1);
+            }
+        }
+#endif  // FUSE_BLEND
     }
 }

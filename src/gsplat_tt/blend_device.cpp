@@ -1944,9 +1944,44 @@ static bool enabled() {
            env_on("GSPLAT_TT_SFPU_CULL");
 }
 
+// §8.4 L1 mask handoff: collapse cull+blend into ONE program where each core
+// runs cull-then-blend per tile and the 32-bit masks travel writer->reader via
+// the L1 CB_TILE_MASKS instead of the cull_masks DRAM round-trip (which removes
+// the per-candidate MB_CULL_SPIN).
+//
+// DEFAULT OFF (opt in with GSPLAT_TT_FUSE_BLEND=1). The single-program fusion is
+// implemented end-to-end (host CBs/program + reader/compute/writer kernels) and
+// JIT-compiles + binds correctly, but it currently HARD-FAULTS at
+// EnqueueMeshWorkload with "Program size (92688) too large for kernel config
+// buffer (70656) on TENSIX": merging the full cull SFPU (~38 KB trisc1) and the
+// blend SFPU (~22 KB trisc1) into one compute kernel overflows the per-core
+// kernel-config ring buffer (= l1_unreserved_base - KERNEL_CONFIG, a fixed HAL
+// ceiling). The cull math is `noinline` templates taking uint32 bit-args (vFloat
+// can't cross that ABI), so its conic can't be cheaply hoisted, and the proven
+// cull regime must not be retuned. Until the merged compute binary is shrunk
+// (or masks are handed via a fixed resident-L1 region across TWO small programs
+// with a Finish between), the default stays the working two-program scaffold.
+static bool fuse_blend() {
+    const char* v = std::getenv("GSPLAT_TT_FUSE_BLEND");
+    return (v != nullptr && v[0] == '1');
+}
+
+// Blend-side CB ids in the fused program (disjoint from the cull set 0-7,16).
+namespace fb {
+constexpr uint32_t CB_XRAMP      = 8;
+constexpr uint32_t CB_YRAMP      = 9;
+constexpr uint32_t CB_MB_COEFF   = 10;
+constexpr uint32_t CB_MB_COUNTS  = 11;
+constexpr uint32_t CB_SCR_ATTR_B = 12;
+constexpr uint32_t CB_COLOR_OUT  = 17;
+constexpr uint32_t CB_TILE_MASKS = 18;
+constexpr uint32_t BLEND_GATHER_PAGES = 16u * 8u;  // 16 gaussians x 8 SoA pages
+}  // namespace fb
+
 static void build_fused_program_and_workload(DeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
+    const bool fuse = fuse_blend();
 
     auto cb_cfg = [&](uint32_t id, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
         CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
@@ -1965,8 +2000,33 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
     constexpr uint32_t CB_CORE_TILES = 7;
     cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
 
+    if (fuse) {
+        // Blend CBs. CB_TILE_MASKS must buffer a WHOLE tile's masks (⌈L/32⌉
+        // pages): the merged compute does cull-all-then-blend-all per tile (cull
+        // 5 + blend 6 DST tiles can't be co-resident in 8), so a tile's masks
+        // are produced during its cull phase with no consumer until its blend
+        // phase. max_tile_n≈25.9k ⇒ ≈809 pages; size generously (override via
+        // GSPLAT_TT_FUSE_MASK_PAGES). A too-small depth deadlocks at exec.
+        uint32_t mask_pages = 1024;
+        if (const char* mp = std::getenv("GSPLAT_TT_FUSE_MASK_PAGES")) {
+            const uint32_t v = static_cast<uint32_t>(std::atoi(mp));
+            if (v > 0) mask_pages = v;
+        }
+        cb_cfg(fb::CB_XRAMP, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
+        cb_cfg(fb::CB_YRAMP, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
+        cb_cfg(fb::CB_MB_COEFF, mb::COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
+        cb_cfg(fb::CB_MB_COUNTS, mb::COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
+        cb_cfg(fb::CB_SCR_ATTR_B, 64, fb::BLEND_GATHER_PAGES, DataFormat::Float32);
+        cb_cfg(fb::CB_COLOR_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+        cb_cfg(fb::CB_TILE_MASKS, 128, mask_pages, DataFormat::UInt32);
+    }
+
+    std::map<std::string, std::string> fuse_defines;
+    if (fuse) fuse_defines["FUSE_BLEND"] = "1";
+
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 12; i++) {
+    const int reader_accessors = fuse ? 15 : 12;  // +colors,+xramp,+yramp
+    for (int i = 0; i < reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     ctx.reader = CreateKernel(
@@ -1977,11 +2037,18 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
+            .defines = fuse_defines,
         });
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[cull::CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
     u2d[cull::CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
+    if (fuse) {
+        u2d[fb::CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[fb::CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
+    }
+    std::map<std::string, std::string> compute_defines = {{"CULL_LPT_CB", "1"}};
+    if (fuse) compute_defines["FUSE_BLEND"] = "1";
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
@@ -1992,11 +2059,12 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
-            .defines = {{"CULL_LPT_CB", "1"}},
+            .defines = compute_defines,
         });
 
     std::vector<uint32_t> writer_ct;
-    for (int i = 0; i < 5; i++) {
+    const int writer_accessors = fuse ? 6 : 5;  // +res_out
+    for (int i = 0; i < writer_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     }
     ctx.writer = CreateKernel(
@@ -2007,6 +2075,7 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
+            .defines = fuse_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
@@ -2097,13 +2166,19 @@ static double process_frame_resident(
         return bits;
     }();
 
+    const bool fuse = fuse_blend();
+    // Blend pixel-center ramps + bf16 output (allocated/uploaded on ctx_blend).
+    const uint32_t bxramp_addr = static_cast<uint32_t>(ctx_blend.res_xramp->address());
+    const uint32_t byramp_addr = static_cast<uint32_t>(ctx_blend.res_yramp->address());
+    const uint32_t out_addr   = static_cast<uint32_t>(ctx_blend.res_out->address());
+
     Program& prog_fused = get_program_for_workload(ctx_fused);
     uint32_t core_index = 0;
     for (const auto& range : ctx_fused.all_cores.ranges()) {
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
             for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                 CoreCoord core{x, y};
-                SetRuntimeArgs(prog_fused, ctx_fused.reader, core, {
+                std::vector<uint32_t> r_args = {
                     static_cast<uint32_t>(buf_a->address()),
                     static_cast<uint32_t>(buf_b->address()),
                     static_cast<uint32_t>(buf_c->address()),
@@ -2112,56 +2187,65 @@ static double process_frame_resident(
                     static_cast<uint32_t>(buf_op->address()),
                     static_cast<uint32_t>(buf_ids->address()),
                     static_cast<uint32_t>(buf_rng->address()),
-                    static_cast<uint32_t>(ctx_fused.res_xramp->address()),
-                    static_cast<uint32_t>(ctx_fused.res_yramp->address()),
+                    static_cast<uint32_t>(ctx_fused.res_xramp->address()),  // box ox ramp
+                    static_cast<uint32_t>(ctx_fused.res_yramp->address()),  // box oy ramp
                     lpt_tile_ids_addr,
                     lpt_meta_addr, core_index, tiles_x, floor_bits,
-                });
+                };
+                if (fuse) {
+                    r_args.push_back(static_cast<uint32_t>(buf_col->address()));  // arg15 colors
+                    r_args.push_back(bxramp_addr);  // arg16 pixel-center x ramp
+                    r_args.push_back(byramp_addr);  // arg17 pixel-center y ramp
+                }
+                SetRuntimeArgs(prog_fused, ctx_fused.reader, core, r_args);
                 SetRuntimeArgs(prog_fused, ctx_fused.compute, core, {
                     0u, floor_bits, cull_disabled ? 1u : 0u,
                 });
-                SetRuntimeArgs(prog_fused, ctx_fused.writer, core, {
+                std::vector<uint32_t> w_args = {
                     cull_masks_addr,
                     static_cast<uint32_t>(buf_rng->address()),
                     lpt_tile_ids_addr,
                     lpt_meta_addr, core_index, cull_base_addr,
-                });
+                };
+                if (fuse) {
+                    w_args.push_back(out_addr);  // arg6 res_out
+                }
+                SetRuntimeArgs(prog_fused, ctx_fused.writer, core, w_args);
                 core_index++;
             }
         }
     }
 
-    Program& prog_blend = get_program_for_workload(ctx_blend);
-    core_index = 0;
-    const uint32_t a_addr     = static_cast<uint32_t>(buf_a->address());
-    const uint32_t b_addr     = static_cast<uint32_t>(buf_b->address());
-    const uint32_t c_addr     = static_cast<uint32_t>(buf_c->address());
-    const uint32_t px_addr    = static_cast<uint32_t>(buf_px->address());
-    const uint32_t py_addr    = static_cast<uint32_t>(buf_py->address());
-    const uint32_t op_addr    = static_cast<uint32_t>(buf_op->address());
-    const uint32_t col_addr   = static_cast<uint32_t>(buf_col->address());
-    const uint32_t ids_addr   = static_cast<uint32_t>(buf_ids->address());
-    const uint32_t rng_addr   = static_cast<uint32_t>(buf_rng->address());
-    const uint32_t xramp_addr = static_cast<uint32_t>(ctx_blend.res_xramp->address());
-    const uint32_t yramp_addr = static_cast<uint32_t>(ctx_blend.res_yramp->address());
-    const uint32_t tile_ids_addr = lpt_tile_ids_addr;
-    const uint32_t out_addr   = static_cast<uint32_t>(ctx_blend.res_out->address());
-    for (const auto& range : ctx_blend.all_cores.ranges()) {
-        for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
-            for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
-                CoreCoord core{x, y};
-                SetRuntimeArgs(prog_blend, ctx_blend.reader, core, {
-                    a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
-                    ids_addr, rng_addr, xramp_addr, yramp_addr,
-                    tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
-                    cull_disabled ? 1u : 0u,
-                    cull_masks_addr, cull_base_addr,
-                });
-                SetRuntimeArgs(prog_blend, ctx_blend.compute, core, {0u});
-                SetRuntimeArgs(prog_blend, ctx_blend.writer, core, {
-                    out_addr, tile_ids_addr, lpt_meta_addr, core_index,
-                });
-                core_index++;
+    if (!fuse) {
+        Program& prog_blend = get_program_for_workload(ctx_blend);
+        core_index = 0;
+        const uint32_t a_addr     = static_cast<uint32_t>(buf_a->address());
+        const uint32_t b_addr     = static_cast<uint32_t>(buf_b->address());
+        const uint32_t c_addr     = static_cast<uint32_t>(buf_c->address());
+        const uint32_t px_addr    = static_cast<uint32_t>(buf_px->address());
+        const uint32_t py_addr    = static_cast<uint32_t>(buf_py->address());
+        const uint32_t op_addr    = static_cast<uint32_t>(buf_op->address());
+        const uint32_t col_addr   = static_cast<uint32_t>(buf_col->address());
+        const uint32_t ids_addr   = static_cast<uint32_t>(buf_ids->address());
+        const uint32_t rng_addr   = static_cast<uint32_t>(buf_rng->address());
+        const uint32_t tile_ids_addr = lpt_tile_ids_addr;
+        for (const auto& range : ctx_blend.all_cores.ranges()) {
+            for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+                for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                    CoreCoord core{x, y};
+                    SetRuntimeArgs(prog_blend, ctx_blend.reader, core, {
+                        a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
+                        ids_addr, rng_addr, bxramp_addr, byramp_addr,
+                        tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
+                        cull_disabled ? 1u : 0u,
+                        cull_masks_addr, cull_base_addr,
+                    });
+                    SetRuntimeArgs(prog_blend, ctx_blend.compute, core, {0u});
+                    SetRuntimeArgs(prog_blend, ctx_blend.writer, core, {
+                        out_addr, tile_ids_addr, lpt_meta_addr, core_index,
+                    });
+                    core_index++;
+                }
             }
         }
     }
@@ -2185,8 +2269,12 @@ static double process_frame_resident(
         ctx_fused.res_ramp_uploaded = true;
     }
     const bool sort_publish_piped = ds::sort_publish_pending();
+    // §8.4: when fused, cull+blend are ONE program (masks via L1 CB_TILE_MASKS,
+    // no cull_masks DRAM round-trip / spin) — enqueue only the single workload.
     distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_fused.workload, /*blocking=*/false);
-    distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_blend.workload, /*blocking=*/false);
+    if (!fuse) {
+        distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_blend.workload, /*blocking=*/false);
+    }
     distributed::Finish(*ctx_blend.cq);
     ds::clear_sort_publish_pending();
 

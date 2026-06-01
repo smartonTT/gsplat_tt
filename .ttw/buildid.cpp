@@ -1,5 +1,5 @@
-id=17
-sha=eed0abc
-ts=2026-06-01T05:22:56-0700
-desc=yyzo-bh-03 failover baseline (prebuilt .so from /proj_sw; C2 is kernel-JIT)
-bin=8e9d81daf27b65a9
+id=20
+sha=47257af
+ts=2026-06-01T06:32:12-0700
+desc=iter 14: fuse cull+blend L1 handoff: blocked by 70656B kernel-config ceiling; land gated scaffold, default off (baseline restored)
+bin=891b04a11040e361

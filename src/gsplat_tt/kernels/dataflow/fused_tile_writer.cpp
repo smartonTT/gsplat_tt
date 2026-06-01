@@ -52,6 +52,14 @@ namespace {
 
 constexpr uint32_t CB_MASK_SCR = 6;    // writer-private scratch
 constexpr uint32_t CB_KEEP     = 16;   // compute -> writer keep tiles
+#ifdef FUSE_BLEND
+// §8.4: push the packed 32-bit masks into the L1 CB_TILE_MASKS handoff
+// (writer->blend reader) instead of the cull_masks DRAM round-trip, and commit
+// the blend compute's bf16 RGB tiles to res_out — all in one fused program.
+constexpr uint32_t CB_COLOR_OUT  = 17;   // blend compute -> writer (3 bf16 tiles)
+constexpr uint32_t CB_TILE_MASKS = 18;   // writer -> blend reader, 32 u32 / 128B page
+constexpr uint32_t BLEND_MASKS_PER_PAGE = 32;
+#endif
 
 constexpr uint32_t SOA_PAGE_BYTES = 64;
 constexpr uint32_t IDS_PAGE_BYTES = 64;
@@ -83,18 +91,29 @@ void kernel_main() {
     const uint32_t lpt_meta_addr  = get_arg_val<uint32_t>(3);
     const uint32_t core_index     = get_arg_val<uint32_t>(4);
     const uint32_t base_addr      = get_arg_val<uint32_t>(5);
+#ifdef FUSE_BLEND
+    const uint32_t out_addr       = get_arg_val<uint32_t>(6);  // res_out (bf16 tiles)
+#endif
 
     constexpr auto masks_args  = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<masks_args.next_compile_time_args_offset()>();
     constexpr auto tids_args   = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
     constexpr auto lpt_meta_args = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
     constexpr auto base_args   = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
+#ifdef FUSE_BLEND
+    constexpr auto out_args    = TensorAccessorArgs<base_args.next_compile_time_args_offset()>();
+#endif
 
     const auto masks_acc  = TensorAccessor(masks_args,  masks_addr,    SOA_PAGE_BYTES);
     const auto ranges_acc = TensorAccessor(ranges_args, ranges_addr,   SOA_PAGE_BYTES);
     const auto tids_acc   = TensorAccessor(tids_args,   tile_ids_addr, IDS_PAGE_BYTES);
     const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, SOA_PAGE_BYTES);
     const auto base_acc   = TensorAccessor(base_args,   base_addr,     SOA_PAGE_BYTES);
+#ifdef FUSE_BLEND
+    const uint32_t color_tile_bytes = get_tile_size(CB_COLOR_OUT);
+    const auto out_acc    = TensorAccessor(out_args,    out_addr,      color_tile_bytes);
+    (void)masks_acc;  // cull_masks DRAM unused in the fused L1-handoff path
+#endif
 
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
     const uint32_t meta_elem0 = core_index * 2u;
@@ -147,7 +166,7 @@ void kernel_main() {
         uint32_t id_end   = read_soa_u32(ranges_acc, tile_id * 2u + 1u, scratch_addr);
         const uint32_t L = id_end - id_start;
         // Per-tile PAGE-ALIGNED base in cull_masks (multiple of 16).
-        const uint32_t base = read_soa_u32(base_acc, tile_id, scratch_addr);
+        [[maybe_unused]] const uint32_t base = read_soa_u32(base_acc, tile_id, scratch_addr);
 
         uint32_t processed = 0;
         while (processed < L) {
@@ -302,6 +321,20 @@ void kernel_main() {
                 }
             }
 #endif
+#ifdef FUSE_BLEND
+            // L1 mask handoff: push this batch's 32 masks (zero-padded) into
+            // CB_TILE_MASKS for the blend reader to pop. CB fencing removes the
+            // DRAM settle hazard by construction -> no per-candidate spin.
+            cb_reserve_back(CB_TILE_MASKS, 1);
+            {
+                auto mp = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_MASKS));
+                for (uint32_t g = 0; g < BLEND_MASKS_PER_PAGE; g++) {
+                    mp[g] = (g < nb) ? scratch_ptr[g] : 0u;
+                }
+            }
+            cb_push_back(CB_TILE_MASKS, 1);
+            cb_pop_front(CB_KEEP, 1);
+#else
             // Write the batch as WHOLE PAGES from the tile's page-aligned base.
             // base is a multiple of 16 and `processed` is a multiple of the batch
             // size (32) for every batch except possibly the last, so base_k is
@@ -319,8 +352,22 @@ void kernel_main() {
             }
             noc_async_write_barrier();
             cb_pop_front(CB_KEEP, 1);
+#endif
 
             processed += nb;
         }
+
+#ifdef FUSE_BLEND
+        // ---- RGB-OUT (tile t): commit the blend compute's 3 bf16 color tiles
+        // (R,G,B) for this screen tile to res_out at pages 3*tile_id + {0,1,2}. -
+        cb_wait_front(CB_COLOR_OUT, 3);
+        uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
+        for (uint32_t ch = 0; ch < 3; ch++) {
+            noc_async_write_tile(3u * tile_id + ch, out_acc, read_ptr);
+            read_ptr += color_tile_bytes;
+        }
+        noc_async_write_barrier();
+        cb_pop_front(CB_COLOR_OUT, 3);
+#endif
     }
 }

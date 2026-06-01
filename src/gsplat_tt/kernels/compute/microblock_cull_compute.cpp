@@ -65,6 +65,26 @@ constexpr uint32_t CB_CULL_COEFF = 2;   // 64B row per gaussian: cov_a,cov_b,cov
 constexpr uint32_t CB_CULL_COUNTS= 3;   // per-tile [L, tx_pix, ty_pix]
 constexpr uint32_t CB_KEEP       = 16;  // fp32 keep tile (one per 32-gaussian batch)
 
+#ifdef FUSE_BLEND
+// §8.4 L1 mask handoff: the SAME compute kernel runs the blend SFPU after the
+// cull SFPU, per tile (cull-then-blend, DST slots reused). Blend CBs use ids
+// disjoint from the cull set so both coexist in one fused program.
+constexpr uint32_t CB_XRAMP     = 8;    // fp32 tile-local x ramp (c + 0.5)
+constexpr uint32_t CB_YRAMP     = 9;    // fp32 tile-local y ramp (r + 0.5)
+constexpr uint32_t CB_MB_COEFF  = 10;   // one 64B coeff row per gaussian (mb-major)
+constexpr uint32_t CB_MB_COUNTS = 11;   // per-tile gaussian-row count (slot 0 == L)
+constexpr uint32_t CB_COLOR_OUT = 17;   // 3 bf16 color tiles per screen tile
+// Blend DST slot bases (ix*32 units). REUSED across the cull/blend tile_regs
+// brackets (never co-resident): cull uses DR_BOX_OX..DR_QH (0..4), blend uses
+// DR_R..DR_Y (0..5); max 6 live <= 8.
+constexpr uint32_t DR_R = 0 * 32;
+constexpr uint32_t DR_G = 1 * 32;
+constexpr uint32_t DR_B = 2 * 32;
+constexpr uint32_t DR_T = 3 * 32;
+constexpr uint32_t DR_X = 4 * 32;
+constexpr uint32_t DR_Y = 5 * 32;
+#endif
+
 constexpr uint32_t NUM_MB = 32;
 constexpr uint32_t BATCH  = 32;  // gaussians per keep-tile (one per SFPU vector)
 
@@ -322,6 +342,53 @@ __attribute__((noinline, noipa)) void cull_vary(uint32_t keep_base, uint32_t pro
     const uint32_t bit = (local ^ (local >> 5)) & 1u;
     dst_reg[keep_base + V] = vFloat(bit ? 1.0f : 0.0f);
 }
+
+#ifdef FUSE_BLEND
+// One gaussian's contribution to a single microblock's 32-lane vector — the
+// MB_DEVCONIC blend math copied bit-for-bit from alpha_blend_compute_mb.cpp.
+// a/b/c = raw cov; d/e = mean x/y (tile-local); op/cr/cg/cb = opacity+colors.
+template <uint32_t IX>
+inline void blend_one_gaussian_math(
+    uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
+    uint32_t d_bits, uint32_t e_bits,
+    uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
+    using namespace sfpi;
+    namespace cs = ckernel::sfpu;
+    vFloat x = dst_reg[DR_X + IX];
+    vFloat y = dst_reg[DR_Y + IX];
+    vFloat cov_a = cs::Converter::as_float(a_bits);
+    vFloat cov_b = cs::Converter::as_float(b_bits);
+    vFloat cov_c = cs::Converter::as_float(c_bits);
+    vFloat det = cov_a * cov_c - cov_b * cov_b;
+    vFloat det_floor = 1e-6f;
+    vec_min_max(det_floor, det);  // det = max(det, 1e-6)
+    vFloat inv = approx_recip(det);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    vFloat A = vFloat(-0.5f) * (cov_c * inv);
+    vFloat B = cov_b * inv;
+    vFloat C = vFloat(-0.5f) * (cov_a * inv);
+    vFloat mx = cs::Converter::as_float(d_bits);
+    vFloat my = cs::Converter::as_float(e_bits);
+    vFloat dx = x - mx;
+    vFloat dy = y - my;
+    vFloat power = A * (dx * dx);
+    power = power + B * (dx * dy);
+    power = power + C * (dy * dy);
+    vFloat zero = 0.0f;
+    vec_min_max(power, zero);  // power = min(power, 0)
+    vFloat weight = cs::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(power);
+    vFloat alpha = cs::Converter::as_float(op_bits) * weight;
+    vFloat clamp = 0.99f;
+    vec_min_max(alpha, clamp);  // alpha = min(alpha, 0.99)
+    vFloat t = dst_reg[DR_T + IX];
+    vFloat at = alpha * t;
+    dst_reg[DR_R + IX] = vFloat(dst_reg[DR_R + IX]) + at * cs::Converter::as_float(cr_bits);
+    dst_reg[DR_G + IX] = vFloat(dst_reg[DR_G + IX]) + at * cs::Converter::as_float(cg_bits);
+    dst_reg[DR_B + IX] = vFloat(dst_reg[DR_B + IX]) + at * cs::Converter::as_float(cb_bits);
+    dst_reg[DR_T + IX] = t * (vFloat(1.0f) - alpha);
+}
+#endif  // FUSE_BLEND
 #endif  // TRISC_MATH
 
 // PHASED compile-time-unrolled dispatch over the 32 gaussian vectors of a batch.
@@ -416,6 +483,40 @@ inline uint32_t f_to_u32(float f) {
     return b;
 }
 
+#ifdef FUSE_BLEND
+// Identity permutation (bit m -> vector m), as in alpha_blend_compute_mb.cpp.
+template <uint32_t M>
+inline void dispatch_blend_guarded(
+    uint32_t mask, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e,
+    uint32_t op, uint32_t cr, uint32_t cg, uint32_t cbv) {
+    if constexpr (M < NUM_MB) {
+        if (mask & (1u << M)) {
+            MATH((blend_one_gaussian_math<M>(a, b, c, d, e, op, cr, cg, cbv)));
+        }
+        dispatch_blend_guarded<M + 1>(mask, a, b, c, d, e, op, cr, cg, cbv);
+    }
+}
+
+// Stream all of a tile's gaussian rows from CB_MB_COEFF, dispatching each to its
+// masked microblocks. One start_/done_ for the whole tile (proven safe).
+inline void blend_tile_gaussians(uint32_t num_g) {
+    if (num_g == 0) {
+        return;
+    }
+    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+    for (uint32_t g = 0; g < num_g; g++) {
+        cb_wait_front(CB_MB_COEFF, 1);
+        const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
+        const uint32_t a = row[0], b = row[1], c = row[2], d = row[3], e = row[4];
+        const uint32_t op = row[6], cr = row[7], cg = row[8], cbv = row[9];
+        const uint32_t mask = row[10];
+        dispatch_blend_guarded<0>(mask, a, b, c, d, e, op, cr, cg, cbv);
+        cb_pop_front(CB_MB_COEFF, 1);
+    }
+    MATH((_llk_math_eltwise_unary_sfpu_done_()));
+}
+#endif  // FUSE_BLEND
+
 }  // namespace
 
 #ifdef CULL_LPT_CB
@@ -446,6 +547,12 @@ void kernel_main() {
     // the CB (waited once, never popped) and re-copied into DEST each batch.
     cb_wait_front(CB_BOX_OX, 1);
     cb_wait_front(CB_BOX_OY, 1);
+#ifdef FUSE_BLEND
+    // Pixel-center ramps for the blend phase: streamed once by the reader, kept
+    // resident (waited once, never popped), re-copied into DEST each tile.
+    cb_wait_front(CB_XRAMP, 1);
+    cb_wait_front(CB_YRAMP, 1);
+#endif
 
     // Parity for the keep-tile double-buffer: every batch (across tiles) flips
     // which DEST tile (DR_KEEP / DR_KEEP_B) holds + is packed, so the async pack
@@ -465,6 +572,11 @@ void kernel_main() {
         const uint32_t txf_bits = f_to_u32(static_cast<float>(tx_pix));
         const uint32_t tyf_bits = f_to_u32(static_cast<float>(ty_pix));
 
+#ifdef FUSE_BLEND
+        // The previous tile's blend packed bf16 into CB_COLOR_OUT; restore the
+        // fp32 keep-tile pack format before this tile's cull batches.
+        pack_reconfig_data_format(CB_KEEP);
+#endif
         uint32_t processed = 0;
         while (processed < L) {
             uint32_t nb = L - processed;
@@ -548,6 +660,41 @@ void kernel_main() {
         }
 
         cb_pop_front(CB_CULL_COUNTS, 1);
+
+#ifdef FUSE_BLEND
+        // ---- BLEND PHASE (tile t) -------------------------------------------
+        // The reader has, by now, emitted exactly L blend coeff rows into
+        // CB_MB_COEFF (each carrying the L1-handoff mask in row[10]); composite
+        // them into R/G/B/T and pack 3 bf16 color tiles. Runs AFTER the cull
+        // phase so the cull (DR_BOX/QV/QH/KEEP) and blend (DR_R/G/B/T/X/Y) DST
+        // slots are reused, never co-resident (max 6 live <= 8).
+        cb_wait_front(CB_MB_COUNTS, 1);
+        uint32_t num_g;
+        {
+            auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
+            num_g = cptr[0];
+        }
+        tile_regs_acquire();
+        fill_tile(DR_R / 32, 0.0f);
+        fill_tile(DR_G / 32, 0.0f);
+        fill_tile(DR_B / 32, 0.0f);
+        fill_tile(DR_T / 32, 1.0f);
+        copy_tile_to_dst_init_short(CB_XRAMP);
+        copy_tile(CB_XRAMP, 0, DR_X / 32);
+        copy_tile_to_dst_init_short(CB_YRAMP);
+        copy_tile(CB_YRAMP, 0, DR_Y / 32);
+        blend_tile_gaussians(num_g);
+        tile_regs_commit();
+        tile_regs_wait();
+        pack_reconfig_data_format(CB_COLOR_OUT);
+        cb_reserve_back(CB_COLOR_OUT, 3);
+        pack_tile(DR_R / 32, CB_COLOR_OUT);
+        pack_tile(DR_G / 32, CB_COLOR_OUT);
+        pack_tile(DR_B / 32, CB_COLOR_OUT);
+        cb_push_back(CB_COLOR_OUT, 3);
+        tile_regs_release();
+        cb_pop_front(CB_MB_COUNTS, 1);
+#endif  // FUSE_BLEND
     }
     (void)u32_to_f;
     (void)floor_bits;
