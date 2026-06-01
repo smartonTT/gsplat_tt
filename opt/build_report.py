@@ -151,6 +151,7 @@ def normalize_ttw_row(r: dict) -> dict:
         "_runtime": "blackhole",
         "_source": "ttw",
         "validator_reasoning": r.get("reason") or "",
+        "buildid": r.get("buildid"),
     }
 
 
@@ -580,21 +581,48 @@ def _normalize_metal_row(r: dict) -> dict:
 BICYCLE_START_ITER_NUM = 57
 
 
+def _ttw_chart_rows() -> list[dict]:
+    """Live tt-workflows loop rows (opt/ttw/iters.jsonl), normalized for the
+    chart and deduped against any metal-iters.jsonl rows that already cover the
+    same ttw-NNN iter (so a ttw row is never double-counted/double-plotted)."""
+    metal_ttw_nums: set[int] = set()
+    for r in load_metal_iters():
+        d = r.get("iter_dir", "")
+        if d.startswith("ttw-"):
+            tail = d[4:].split("-", 1)[0]
+            if tail.isdigit():
+                metal_ttw_nums.add(int(tail))
+    out: list[dict] = []
+    for r in load_ttw_iters():
+        nr = normalize_ttw_row(r)
+        d = nr.get("iter_dir", "")
+        if d.startswith("ttw-"):
+            tail = d.split("-", 1)[1]
+            if tail.isdigit() and int(tail) in metal_ttw_nums:
+                continue
+        out.append(nr)
+    return out
+
+
 def merged_iter_series() -> list[dict]:
     """Bicycle-scene CPU baseline (iter-057) followed by Blackhole/metal iters
-    in timestamp order. Pre-bicycle CPU sprint iters (stitch_doll) are kept
-    in iters.jsonl and the ledger but excluded from the chart for scene
-    consistency."""
+    AND the live tt-workflows loop iters in a single chronological stream.
+    Pre-bicycle CPU sprint iters (stitch_doll) are kept in iters.jsonl and the
+    ledger but excluded from the chart for scene consistency.
+
+    Both metal-iters.jsonl and ttw/iters.jsonl are Blackhole-runtime rows; they
+    are merged and sorted by timestamp together so the chart's "Mxx" markers and
+    x-axis run through the latest iteration (matching the ledger), rather than
+    stopping at the end of the stale metal-iters.jsonl ledger."""
     cpu_rows = [
         {**r, "_runtime": "cpu", "_label": r.get("iter_dir", "")[5:].lstrip("0123456789-")[:18]}
         for r in load_iters()
         if (n := _iter_num(r.get("iter_dir", ""))) is not None and n >= BICYCLE_START_ITER_NUM
     ]
-    metal_rows_raw = sorted(
-        load_metal_iters(), key=lambda r: r.get("timestamp", "")
-    )
-    metal_rows = [_normalize_metal_row(r) for r in metal_rows_raw]
-    return cpu_rows + metal_rows
+    metal_rows = [_normalize_metal_row(r) for r in load_metal_iters()]
+    ttw_rows = _ttw_chart_rows()
+    bh_rows = sorted(metal_rows + ttw_rows, key=lambda r: r.get("timestamp", ""))
+    return cpu_rows + bh_rows
 
 
 def fig_combined(rows: list[dict]) -> str:
@@ -957,7 +985,29 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         if diff_src:
             thumb_html += img_link(diff_src)
 
+    # Description: the `action` (the idea/what-was-tried) is the primary
+    # human-readable line. For metal rows action is a slug + a descriptive
+    # `note`/commit message; for ttw rows action IS the full idea and the
+    # note/validator_reasoning is the gate string (e.g. "63.85 >= 63.6"). Show
+    # both so every row has a real description, never just a bare gate string.
+    action = (r.get("action") or "").strip()
     note = (r.get("validator_reasoning") or r.get("note") or "").strip()
+    desc_html = ""
+    if action:
+        desc_html += f"<p class='idea-desc'>{action}</p>"
+    if note and note != action:
+        desc_html += f"<p class='reason'>{note}</p>"
+    if not desc_html:
+        desc_html = "<p class='reason' style='color:#bbb'>— no description recorded —</p>"
+
+    commit = (r.get("commit") or r.get("commit_sha") or "").strip()
+    buildid = r.get("buildid")
+    if not commit and isinstance(buildid, dict):
+        cpp_tok = str(buildid.get("cpp") or "").split()
+        if len(cpp_tok) >= 2:
+            commit = cpp_tok[1]
+    build_html = f"<p class='iter-build'><code>{commit}</code></p>" if commit else ""
+
     ts_raw = r.get("timestamp") or r.get("ts") or r.get("updated_at") or r.get("started_at") or ""
     ts_disp = format_ts_minutes(ts_raw)
     in_flight = r.get("_in_flight") is True
@@ -994,7 +1044,8 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
     <p class='iter-ts'>{ts_disp}</p>
     <p>ms_per_frame={sum_ms_str}, psnr={psnr_min_str}</p>
     {caveat_html}
-    <p class='reason'>{note}</p>
+    {desc_html}
+    {build_html}
   </div>
   <div class='backburner-thumbs'>{thumb_html}</div>
 </div>
@@ -1320,6 +1371,8 @@ def build_html(rows: list[dict]) -> str:
   .backburner-thumbs a { display: inline-block; margin-right: 6px; }
   .backburner-thumbs img { height: 100px; border-radius: 4px; }
   .reason { color: #555; font-size: 12px; }
+  .idea-desc { color: #1d3557; font-size: 13px; font-weight: 500; margin: 4px 0 2px; }
+  .iter-build { color: #999; font-size: 11px; margin: 2px 0 0; }
   .caveat { color: #b8860b; font-size: 11px; font-style: italic; margin: 4px 0; }
   .iter-pos { display: inline-block; min-width: 48px; padding: 1px 6px; margin-right: 6px; background: #1d3557; color: #fff; font-size: 11px; font-weight: 700; border-radius: 3px; letter-spacing: 0.4px; }
   .iter-ts { color: #777; font-size: 11px; margin: 0 0 4px; font-variant-numeric: tabular-nums; }
