@@ -232,10 +232,13 @@ def main():
           f"ms/view={summary['ms_per_view']:.1f} "
           f"(proj={ps['project_ms']:.1f} ta={ps['tile_assign_ms']:.1f} "
           f"sort={ps['sort_ms']:.1f} blend={ps['blend_ms']:.1f}) "
-          f"shot={summary['screenshot']}")
+          f"shot={summary['screenshot']}",
+          flush=True)
 
     # TT + tt-metal: skip process-exit teardown races (ProgramImpl vs MeshDevice).
     if args.backend == "tt":
+        sys.stdout.flush()
+        sys.stderr.flush()
         os._exit(0)
 
 
