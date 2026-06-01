@@ -168,15 +168,22 @@ inline uint32_t load_ids_chunk(
 // barrier) and read the masks back with a pure integer load -> NO float and NO
 // constrained-min on this data mover. Returns the in-page offset of the chunk.
 template <typename Acc>
-inline uint32_t load_mask_page(const Acc& acc, uint32_t global_idx, uint32_t scratch_addr) {
+inline uint32_t load_mask_page(const Acc& acc, uint32_t global_idx, uint32_t take, uint32_t scratch_addr) {
     // global_idx == cull_base (16-aligned) + chunk-start position. A chunk holds
-    // <=16 candidates starting at in-page offset (global_idx&0xF), so its masks
-    // span at most TWO 64B/16-elem pages. Load both so mask_ptr[(global_idx&0xF)+j]
-    // (j in [0,take)) is always in-window.
+    // `take` (<=16) candidates starting at in-page offset off=(global_idx&0xF).
+    // The consumer reads mask_ptr[off + j] for j in [0,take), so it only touches
+    // a SECOND 64B/16-elem page when off+take > 16 (the chunk straddles a page
+    // boundary). Issue page pg unconditionally and pg+1 ONLY on a straddle: the
+    // first chunk of every tile (off==0) and all chunks of 16-aligned tiles never
+    // straddle, so this drops one redundant random DRAM read on those chunks.
+    // Byte-identical to the prior 2-page load for the bytes the consumer reads.
+    const uint32_t off = global_idx & 0xF;
     const uint32_t pg = global_idx >> 4;
     noc_async_read_tile(pg, acc, scratch_addr);
-    noc_async_read_tile(pg + 1u, acc, scratch_addr + IDS_PAGE_BYTES);
-    return global_idx & 0xF;
+    if (off + take > 16u) {
+        noc_async_read_tile(pg + 1u, acc, scratch_addr + IDS_PAGE_BYTES);
+    }
+    return off;
 }
 #endif
 #endif
@@ -592,7 +599,7 @@ void kernel_main() {
                 // private barrier is correct-by-construction and costs one barrier
                 // per ~16 candidates without disturbing the attr prefetch overlap.
                 const uint32_t mask_off = load_mask_page(
-                    cull_masks_acc, cull_base + gstart_buf[cur], mask_scr + cur * MASK_BUF_BYTES);
+                    cull_masks_acc, cull_base + gstart_buf[cur], take, mask_scr + cur * MASK_BUF_BYTES);
                 noc_async_read_barrier();
                 auto mask_ptr = reinterpret_cast<volatile uint32_t*>(mask_scr + cur * MASK_BUF_BYTES);
 #endif
