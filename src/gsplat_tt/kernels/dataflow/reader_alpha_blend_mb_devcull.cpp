@@ -317,8 +317,8 @@ void kernel_main() {
     const uint32_t xramp_addr     = get_arg_val<uint32_t>(9);
     const uint32_t yramp_addr     = get_arg_val<uint32_t>(10);
     const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(11);
-    const uint32_t tile_ids_start = get_arg_val<uint32_t>(12);
-    const uint32_t tile_ids_count = get_arg_val<uint32_t>(13);
+    const uint32_t lpt_meta_addr  = get_arg_val<uint32_t>(12);
+    const uint32_t core_index     = get_arg_val<uint32_t>(13);
     const uint32_t tiles_x        = get_arg_val<uint32_t>(14);
     const float contrib_floor     = bits_to_f(get_arg_val<uint32_t>(15));
     const bool cull_disabled      = get_arg_val<uint32_t>(16) != 0;
@@ -339,8 +339,9 @@ void kernel_main() {
     constexpr auto xramp_args    = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
     constexpr auto yramp_args    = TensorAccessorArgs<xramp_args.next_compile_time_args_offset()>();
     constexpr auto tile_ids_args = TensorAccessorArgs<yramp_args.next_compile_time_args_offset()>();
+    constexpr auto lpt_meta_args  = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
 #ifdef MB_SFPU_CULL
-    constexpr auto cull_masks_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
+    constexpr auto cull_masks_args = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
     constexpr auto cull_base_args  = TensorAccessorArgs<cull_masks_args.next_compile_time_args_offset()>();
 #endif
 
@@ -358,6 +359,25 @@ void kernel_main() {
     const auto xramp_acc    = TensorAccessor(xramp_args,    xramp_addr,    RAMP_TILE_BYTES);
     const auto yramp_acc    = TensorAccessor(yramp_args,    yramp_addr,    RAMP_TILE_BYTES);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, 64);
+    const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, 64);
+    // Host-free LPT: read this core's (start,count) from resident sort_lpt_meta.
+    constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
+    const uint32_t meta_elem0 = core_index * 2u;
+    const uint32_t meta_page0 = meta_elem0 / META_ELEMS_PER_PAGE;
+    const uint32_t meta_ip0   = meta_elem0 % META_ELEMS_PER_PAGE;
+    const uint32_t meta_scratch = get_write_ptr(CB_SCR_IDS);
+    auto meta_ptr = reinterpret_cast<volatile uint32_t*>(meta_scratch);
+    noc_async_read(get_noc_addr(meta_page0, lpt_meta_acc), meta_scratch, 64);
+    noc_async_read_barrier();
+    uint32_t tile_ids_start = meta_ptr[meta_ip0];
+    uint32_t tile_ids_count = 0;
+    if (meta_ip0 + 1u < META_ELEMS_PER_PAGE) {
+        tile_ids_count = meta_ptr[meta_ip0 + 1u];
+    } else {
+        noc_async_read(get_noc_addr(meta_page0 + 1u, lpt_meta_acc), meta_scratch, 64);
+        noc_async_read_barrier();
+        tile_ids_count = meta_ptr[0];
+    }
 #ifdef MB_SFPU_CULL
     const auto cull_masks_acc = TensorAccessor(cull_masks_args, cull_masks_addr, IDS_PAGE_BYTES);
     const auto cull_base_acc  = TensorAccessor(cull_base_args,  cull_base_addr,  64);

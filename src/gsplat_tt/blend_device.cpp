@@ -845,7 +845,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // (proj_m_a/b/c/px/py/opacity/colors + sort_sorted_ids + sort_tile_ranges +
     // xramp/yramp/tile_ids); +2 (cull_masks, cull_mask_base) under SFPU cull;
     // uploaded paths 6.
-    const int num_reader_accessors = resident_blend ? (sfpu_cull ? 14 : 12) : 6;
+    const int num_reader_accessors = resident_blend ? (sfpu_cull ? 15 : 13) : 6;
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -1331,15 +1331,25 @@ struct ResidentSortLpt {
     bool ok = false;
 };
 
-static ResidentSortLpt load_resident_sort_lpt(
-    distributed::MeshCommandQueue* cq, uint32_t num_cores) {
+static ResidentSortLpt resident_sort_lpt_handles() {
     namespace ds = gsplat_tt::device_state;
     ResidentSortLpt r;
     r.tile_ids_buf = ds::get_buffer("sort_lpt_tile_ids");
-    auto meta = ds::get_buffer("sort_lpt_meta");
-    if (!r.tile_ids_buf || !meta) {
+    r.ok = static_cast<bool>(r.tile_ids_buf && ds::get_buffer("sort_lpt_meta"));
+    return r;
+}
+
+// One D2H of sort_lpt_meta for kernels that still take (start,count) host args
+// (compute, writer, cull). Blend reader reads meta on-device; this shrinks the
+// hot path and will go away when those kernels are updated (plan C2+D+E fuse).
+static ResidentSortLpt load_resident_sort_lpt(
+    distributed::MeshCommandQueue* cq, uint32_t num_cores) {
+    namespace ds = gsplat_tt::device_state;
+    ResidentSortLpt r = resident_sort_lpt_handles();
+    if (!r.ok) {
         return r;
     }
+    auto meta = ds::get_buffer("sort_lpt_meta");
     r.per_core_offset.assign(num_cores, 0);
     r.per_core_count.assign(num_cores, 0);
     const uint32_t meta_pad =
@@ -1351,29 +1361,7 @@ static ResidentSortLpt load_resident_sort_lpt(
         r.per_core_offset[c] = mbuf[c * 2 + 0];
         r.per_core_count[c] = mbuf[c * 2 + 1];
     }
-    r.ok = true;
     return r;
-}
-
-static bool read_resident_tile_counts(
-    distributed::MeshCommandQueue* cq,
-    uint32_t num_tiles,
-    std::vector<uint32_t>& counts_out) {
-    namespace ds = gsplat_tt::device_state;
-    auto buf = ds::get_buffer("sort_tile_counts");
-    if (!buf) {
-        return false;
-    }
-    const uint32_t pad =
-        ((num_tiles + SORT_META_ELEMS_PER_PAGE - 1) / SORT_META_ELEMS_PER_PAGE) *
-        SORT_META_ELEMS_PER_PAGE;
-    std::vector<uint32_t> raw(pad, 0);
-    distributed::EnqueueReadMeshBuffer(*cq, raw, buf, true);
-    counts_out.resize(num_tiles);
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        counts_out[t] = raw[t];
-    }
-    return true;
 }
 
 }  // namespace
@@ -1432,11 +1420,16 @@ static double process_frame_mb_devcull_resident(
 
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
 
-    const ResidentSortLpt lpt = load_resident_sort_lpt(ctx.cq, num_cores);
+    const ResidentSortLpt lpt = resident_sort_lpt_handles();
     if (!lpt.ok) {
         if (ok) *ok = false;
         return 0.0;
     }
+    auto meta_buf = ds::get_buffer("sort_lpt_meta");
+    const uint32_t lpt_meta_addr =
+        meta_buf ? static_cast<uint32_t>(meta_buf->address()) : 0u;
+    // One meta D2H for compute/writer until fused C2+D+E; blend reader reads LPT on-device.
+    const ResidentSortLpt lpt_host = load_resident_sort_lpt(ctx.cq, num_cores);
 
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
@@ -1476,12 +1469,11 @@ static double process_frame_mb_devcull_resident(
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
             for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                 CoreCoord core{x, y};
-                const uint32_t start = lpt.per_core_offset[core_index];
-                const uint32_t count = lpt.per_core_count[core_index];
+                const uint32_t count = lpt_host.per_core_count[core_index];
                 std::vector<uint32_t> reader_args{
                     a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
                     ids_addr, rng_addr, xramp_addr, yramp_addr,
-                    tile_ids_addr, start, count, tiles_x, floor_bits,
+                    tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
                     cull_disabled ? 1u : 0u,
                 };
                 if (sfpu_cull) {
@@ -1490,6 +1482,7 @@ static double process_frame_mb_devcull_resident(
                 }
                 SetRuntimeArgs(program, ctx.reader, core, reader_args);
                 SetRuntimeArgs(program, ctx.compute, core, {count});
+                const uint32_t start = lpt_host.per_core_offset[core_index];
                 SetRuntimeArgs(program, ctx.writer, core, {
                     out_addr, tile_ids_addr, start, count,
                 });
@@ -1741,20 +1734,15 @@ static bool ensure_resident_buffers(
     DeviceContext& ctx,
     uint32_t num_tiles) {
     namespace ds = gsplat_tt::device_state;
-    std::vector<uint32_t> per_tile_count;
-    if (!read_resident_tile_counts(ctx.cq, num_tiles, per_tile_count)) {
+    auto buf_pk = ds::get_buffer("sort_P_kept");
+    auto published_base = ds::get_buffer("cull_mask_base");
+    if (!buf_pk || !published_base) {
         return false;
     }
-    std::vector<uint32_t> mask_base(num_tiles, 0u);
-    uint64_t acc = 0;
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        mask_base[t] = static_cast<uint32_t>(acc);
-        acc += (static_cast<uint64_t>(per_tile_count[t]) + 15u) & ~static_cast<uint64_t>(15u);
-    }
-    const size_t total_elems = std::max<size_t>(16, static_cast<size_t>(acc));
+    std::vector<uint32_t> pkept(16, 0);
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
+    const size_t total_elems = std::max<size_t>(16, static_cast<size_t>(pkept[1]));
     const size_t masks_bytes = (total_elems / 16) * MASKS_PAGE_BYTES;
-    const size_t base_pages = (static_cast<size_t>(num_tiles) + 15) / 16;
-    const size_t base_bytes = std::max<size_t>(1, base_pages) * 64;
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
         distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = BufferType::DRAM};
@@ -1765,15 +1753,9 @@ static bool ensure_resident_buffers(
         ctx.res_masks_bytes = masks_bytes;
         ds::register_buffer("cull_masks", ctx.res_masks);
     }
-    if (!ctx.res_mask_base || ctx.res_mask_base_bytes < base_bytes) {
-        ctx.res_mask_base = make_dram(base_bytes, 64);
-        ctx.res_mask_base_bytes = base_bytes;
-        ds::register_buffer("cull_mask_base", ctx.res_mask_base);
-    }
-    std::vector<uint32_t> base_padded(ctx.res_mask_base_bytes / 4, 0u);
-    std::copy(mask_base.begin(), mask_base.end(), base_padded.begin());
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_mask_base, base_padded);
-    distributed::Finish(*ctx.cq);
+    // cull_mask_base is published by sort (H2D at sort time); blend only aliases it.
+    ctx.res_mask_base = published_base;
+    ctx.res_mask_base_bytes = static_cast<size_t>(published_base->size());
     return true;
 }
 
@@ -1804,15 +1786,15 @@ static double process_frame(
 
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
 
-    std::vector<uint32_t> per_tile_count;
-    if (!read_resident_tile_counts(ctx.cq, num_tiles, per_tile_count)) {
+    auto buf_pk = ds::get_buffer("sort_P_kept");
+    if (!buf_pk) {
         if (ok) *ok = false;
         return 0.0;
     }
-    uint64_t total_candidates = 0;
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        total_candidates += per_tile_count[t];
-    }
+    std::vector<uint32_t> pkept(16, 0);
+    distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
+    const uint64_t total_candidates = pkept[0];
+    const uint64_t total_mask_elems = std::max<uint64_t>(16, pkept[1]);
 
     const ResidentSortLpt lpt = load_resident_sort_lpt(ctx.cq, num_cores);
     if (!lpt.ok) {
@@ -1845,14 +1827,7 @@ static double process_frame(
         if (ok) *ok = false;
         return 0.0;
     }
-    // Recompute masks_bytes locally for the timing print only (layout matches
-    // ensure_resident_buffers()).
-    uint64_t base_acc_elems = 0;
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        base_acc_elems += (static_cast<uint64_t>(per_tile_count[t]) + 15u) & ~static_cast<uint64_t>(15u);
-    }
-    const size_t total_mask_elems = std::max<size_t>(16, static_cast<size_t>(base_acc_elems));
-    const size_t masks_bytes = (total_mask_elems / 16) * MASKS_PAGE_BYTES;
+    const size_t masks_bytes = (static_cast<size_t>(total_mask_elems) / 16) * MASKS_PAGE_BYTES;
 
     Program& program = get_program_for_workload(ctx);
     uint32_t core_index = 0;

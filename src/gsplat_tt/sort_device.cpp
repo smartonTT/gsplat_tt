@@ -123,6 +123,8 @@ struct SortDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_tile_counts;  // num_tiles u32
     std::size_t cap_tile_counts_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_P_kept;  // 1-page scalar
+    std::shared_ptr<distributed::MeshBuffer> buf_cull_mask_base;  // per-tile page-aligned mask offset
+    std::size_t cap_cull_mask_base_bytes = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -371,16 +373,39 @@ static void publish_sort_downstream_metadata(
     }
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_counts, cu32, false);
 
-    // Scalar P_kept for host-side stats when sorted_gaussian_ids vector is empty.
+    // Scalar P_kept + padded cull-mask footprint for downstream SFPU cull (blend
+    // must not D2H sort_tile_counts to build cull_mask_base).
     if (!ctx->buf_P_kept) {
         ctx->buf_P_kept = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
         device_state::register_buffer("sort_P_kept", ctx->buf_P_kept);
     }
     std::vector<uint32_t> pkept_buf(ELEMS_PER_PAGE, 0);
     uint64_t acc = 0;
-    for (uint32_t t = 0; t < num_tiles; t++) acc += static_cast<uint64_t>(counts[t]);
+    uint64_t mask_elems = 0;
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        acc += static_cast<uint64_t>(counts[t]);
+        mask_elems += (static_cast<uint64_t>(counts[t]) + 15u) & ~static_cast<uint64_t>(15u);
+    }
     pkept_buf[0] = static_cast<uint32_t>(acc);
+    pkept_buf[1] = static_cast<uint32_t>(mask_elems);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_P_kept, pkept_buf, false);
+
+    if (resident_blend_chain_enabled()) {
+        std::vector<uint32_t> mask_base(counts_pad, 0u);
+        uint64_t off = 0;
+        for (uint32_t t = 0; t < num_tiles; t++) {
+            mask_base[t] = static_cast<uint32_t>(off);
+            off += (static_cast<uint64_t>(counts[t]) + 15u) & ~static_cast<uint64_t>(15u);
+        }
+        const std::size_t base_bytes = static_cast<std::size_t>(counts_pad) * 4;
+        if (!ctx->buf_cull_mask_base || ctx->cap_cull_mask_base_bytes < base_bytes) {
+            ctx->buf_cull_mask_base = make_dram(ctx->mesh_device.get(), base_bytes);
+            ctx->cap_cull_mask_base_bytes = base_bytes;
+            device_state::register_buffer("cull_mask_base", ctx->buf_cull_mask_base);
+        }
+        distributed::EnqueueWriteMeshBuffer(
+            *ctx->cq, ctx->buf_cull_mask_base, mask_base, false);
+    }
 }
 
 static void publish_resident(
