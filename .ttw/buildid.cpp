@@ -1,5 +1,5 @@
-id=42
-sha=adef576
-ts=2026-06-01T09:25:44-0700
-desc=iter 26: rowck devcull RISC
+id=44
+sha=b432e84
+ts=2026-06-01T09:28:48-0700
+desc=iter 28: rowck split devcull
 bin=ffc6d81de0e973ce

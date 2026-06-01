@@ -269,6 +269,7 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #if defined(MB_ROWCK)
     static uint32_t rowck_t = 0;
     uint32_t rowck = 0;
+    uint32_t rowck_mask = 0;
     const uint32_t rowck_tile = rowck_t++;
 #endif
     if (num_g == 0) {
@@ -286,9 +287,10 @@ inline void process_tile_gaussians(uint32_t num_g) {
         cb_wait_front(CB_MB_COEFF, 1);
         const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
 #if defined(MB_ROWCK)
-        for (uint32_t w = 0; w < 11u; ++w) {
+        for (uint32_t w = 0; w < 10u; ++w) {
             rowck = (rowck * 1000003u) ^ row[w];
         }
+        rowck_mask = (rowck_mask * 1000003u) ^ row[10];
 #endif
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
@@ -331,7 +333,8 @@ inline void process_tile_gaussians(uint32_t num_g) {
         cb_pop_front(CB_MB_COEFF, 1);
     }
 #if defined(MB_ROWCK)
-    MATH((DPRINT << "ROWCK t=" << rowck_tile << " ng=" << num_g << " cs=" << rowck << ENDL()));
+    MATH((DPRINT << "ROWCK t=" << rowck_tile << " ng=" << num_g << " cs=" << rowck
+          << " csm=" << rowck_mask << ENDL()));
 #endif
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
 }
