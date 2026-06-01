@@ -217,106 +217,40 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
             // candidate id lists (== sorted_gaussian_ids per tile range). The
             // device reader computes the conic + microblock mask on-core.
             if (device_cull) {
-                // RESIDENT blend (R6): when the on-device gather + sort have left
-                // the projected attrs (proj_m_*) and depth-sorted ids
-                // (sort_sorted_ids / sort_tile_ranges) resident in DRAM, the
-                // reader gathers them over NoC by id — the host builds NEITHER the
-                // M*64B attr table NOR the per-tile id lists, and uploads neither
-                // (~127MB/frame eliminated). Only the per-tile candidate count
-                // (num_tiles ints, for LPT load balancing) is computed host-side.
-                if (env_on("GSPLAT_TT_RESIDENT_BLEND")) {
+                if (!env_on("GSPLAT_TT_RESIDENT_BLEND")) {
+                    std::fprintf(stderr,
+                        "[BLEND_HOST] FATAL: MB_DEVCULL requires RESIDENT_BLEND on "
+                        "host-free render\n");
+                    std::abort();
+                }
+                // RESIDENT blend: attrs/ids/LPT all resident — host builds nothing.
+                {
                     if (std::getenv("GSPLAT_TT_BLEND_REDUNDANCY") != nullptr) {
                         const double ratio = M > 0 ? static_cast<double>(P) / static_cast<double>(M) : 0.0;
                         std::fprintf(stderr,
                             "[REDUNDANCY] pairs(P)=%zu unique_visible_gaussians(M)=%zu ratio=%.3f\n",
                             static_cast<std::size_t>(P), static_cast<std::size_t>(M), ratio);
                     }
-                    std::vector<uint32_t> counts(static_cast<std::size_t>(num_tiles), 0);
-                    for (int t = 0; t < num_tiles; ++t) {
-                        const int64_t s = tile_ranges[static_cast<std::size_t>(t) * 2 + 0];
-                        const int64_t e = tile_ranges[static_cast<std::size_t>(t) * 2 + 1];
-                        counts[static_cast<std::size_t>(t)] = static_cast<uint32_t>(e - s);
-                    }
                     const auto _r0 = std::chrono::steady_clock::now();
-                    std::vector<float> img;
                     bool resident_ok = false;
                     blend_mb_devcull_resident(
-                        counts, mb_contrib_floor, cull_disabled, num_tiles,
-                        tiles_x, image_height, image_width, img, &resident_ok);
+                        mb_contrib_floor, cull_disabled, num_tiles, tiles_x,
+                        image_height, image_width, image_out, &resident_ok);
                     const auto _r1 = std::chrono::steady_clock::now();
-                    if (resident_ok) {
-                        if (mb_timing) {
-                            std::fprintf(stderr,
-                                "[BLEND_HOST] resident_blend device=%.1f (host attr/id build=0, upload=0) total=%.1f ms\n",
-                                std::chrono::duration<double, std::milli>(_r1 - _r0).count(),
-                                std::chrono::duration<double, std::milli>(_r1 - _r0).count());
-                        }
-                        const std::size_t n = static_cast<std::size_t>(image_height) *
-                                              static_cast<std::size_t>(image_width) * 3;
-                        if (img.size() == n) {
-                            std::memcpy(image_out, img.data(), n * sizeof(float));
-                        }
-                        result.pairs_in = static_cast<int64_t>(P);
-                        return result;
+                    if (!resident_ok) {
+                        std::fprintf(stderr,
+                            "[BLEND_HOST] FATAL: RESIDENT_BLEND set but resident "
+                            "buffers missing (sort_lpt_* / proj_m_* / sort_*)\n");
+                        std::abort();
                     }
-                    // Resident buffers missing -> fall back to host build+upload.
-                    std::fprintf(stderr,
-                        "[BLEND_HOST] RESIDENT_BLEND requested but resident buffers "
-                        "absent; falling back to uploaded devcull path\n");
-                }
-                const auto _c0 = std::chrono::steady_clock::now();
-                std::vector<float> attrs(static_cast<std::size_t>(M) * kMbAttrLanes, 0.0f);
-                for (std::size_t g = 0; g < M; ++g) {
-                    float* r = &attrs[g * kMbAttrLanes];
-                    r[0] = covs_2d[g * 4 + 0];   // cov_a
-                    r[1] = covs_2d[g * 4 + 1];   // cov_b
-                    r[2] = covs_2d[g * 4 + 3];   // cov_c
-                    r[3] = means_2d[g * 2 + 0];  // mean_x (image-space)
-                    r[4] = means_2d[g * 2 + 1];  // mean_y
-                    r[5] = opacities[g];
-                    r[6] = colors[g * 3 + 0];
-                    r[7] = colors[g * 3 + 1];
-                    r[8] = colors[g * 3 + 2];
-                }
-                // Per-tile sorted candidate ids + prefix-sum offsets. The
-                // per-tile range [start,end) is exactly the order
-                // build_gaussian_major_tile iterates, pre-microblock-cull.
-                std::vector<uint32_t> ids(P);
-                std::vector<uint32_t> ids_off(static_cast<std::size_t>(num_tiles) + 1, 0);
-                uint32_t cursor = 0;
-                for (int t = 0; t < num_tiles; ++t) {
-                    const int64_t s = tile_ranges[static_cast<std::size_t>(t) * 2 + 0];
-                    const int64_t e = tile_ranges[static_cast<std::size_t>(t) * 2 + 1];
-                    ids_off[static_cast<std::size_t>(t)] = cursor;
-                    for (int64_t k = s; k < e; ++k) {
-                        ids[cursor++] =
-                            static_cast<uint32_t>(sorted_gaussian_ids[static_cast<std::size_t>(k)]);
+                    if (mb_timing) {
+                        std::fprintf(stderr,
+                            "[BLEND_DEVICE] resident_blend=%.1f ms (host_build=0)\n",
+                            std::chrono::duration<double, std::milli>(_r1 - _r0).count());
                     }
+                    result.pairs_in = static_cast<int64_t>(P);
+                    return result;
                 }
-                ids_off[static_cast<std::size_t>(num_tiles)] = cursor;
-                const auto _c1 = std::chrono::steady_clock::now();
-
-                std::vector<float> img;
-                blend_mb_devcull_from_payload(
-                    attrs, ids, ids_off, mb_contrib_floor, cull_disabled,
-                    num_tiles, tiles_x, image_height, image_width, img);
-                const auto _c2 = std::chrono::steady_clock::now();
-                if (mb_timing) {
-                    auto ms = [](auto a, auto b) {
-                        return std::chrono::duration<double, std::milli>(b - a).count();
-                    };
-                    std::fprintf(stderr,
-                        "[BLEND_HOST] devcull_gather=%.1f device_blend=%.1f (ids=%zu attrs=%zu) total=%.1f ms\n",
-                        ms(_c0, _c1), ms(_c1, _c2), ids.size(), static_cast<std::size_t>(M),
-                        ms(_c0, _c2));
-                }
-                const std::size_t n = static_cast<std::size_t>(image_height) *
-                                      static_cast<std::size_t>(image_width) * 3;
-                if (img.size() == n) {
-                    std::memcpy(image_out, img.data(), n * sizeof(float));
-                }
-                result.pairs_in = static_cast<int64_t>(P);
-                return result;
             }
 
             const auto _t0 = std::chrono::steady_clock::now();

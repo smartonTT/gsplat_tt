@@ -116,6 +116,13 @@ struct SortDeviceContext {
     std::size_t cap_sorted_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_tile_ranges;  // num_tiles*2
     std::size_t cap_ranges_bytes = 0;
+
+    // Downstream blend/cull LPT + per-tile kept counts (published resident).
+    std::shared_ptr<distributed::MeshBuffer> buf_lpt_meta;  // num_cores*2 u32
+    std::size_t cap_lpt_meta_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_tile_counts;  // num_tiles u32
+    std::size_t cap_tile_counts_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_P_kept;  // 1-page scalar
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -319,6 +326,63 @@ static LptAssignment build_lpt(
 
 // Publish the contiguous (sorted_ids, tile_ranges) into device_state as uint32
 // DRAM buffers so downstream device stages can read them resident.
+static bool resident_blend_chain_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_RESIDENT_BLEND");
+    return v != nullptr && v[0] == '1';
+}
+
+// Publish LPT tile-id list + per-core (offset,count) and per-tile kept counts
+// so blend/cull never scan host tile_ranges or rebuild LPT from host vectors.
+static void publish_sort_downstream_metadata(
+    SortDeviceContext* ctx,
+    const LptAssignment& lpt,
+    const std::vector<int64_t>& counts,
+    uint32_t num_tiles,
+    uint32_t num_cores) {
+    device_state::register_buffer("sort_lpt_tile_ids", ctx->buf_tile_ids);
+
+    const uint32_t meta_elems = num_cores * 2;
+    const uint32_t meta_pad = round_up(std::max(meta_elems, 1u), ELEMS_PER_PAGE);
+    const std::size_t meta_bytes = static_cast<std::size_t>(meta_pad) * 4;
+    if (!ctx->buf_lpt_meta || ctx->cap_lpt_meta_bytes < meta_bytes) {
+        ctx->buf_lpt_meta = make_dram(ctx->mesh_device.get(), meta_bytes);
+        ctx->cap_lpt_meta_bytes = meta_bytes;
+        device_state::register_buffer("sort_lpt_meta", ctx->buf_lpt_meta);
+    }
+    const uint32_t cap_meta = static_cast<uint32_t>(ctx->cap_lpt_meta_bytes / 4);
+    std::vector<uint32_t> meta(cap_meta, 0);
+    for (uint32_t c = 0; c < num_cores; c++) {
+        meta[c * 2 + 0] = lpt.per_core_offset[c];
+        meta[c * 2 + 1] = lpt.per_core_count[c];
+    }
+    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_lpt_meta, meta, false);
+
+    const uint32_t counts_pad = round_up(std::max(num_tiles, 1u), ELEMS_PER_PAGE);
+    const std::size_t counts_bytes = static_cast<std::size_t>(counts_pad) * 4;
+    if (!ctx->buf_tile_counts || ctx->cap_tile_counts_bytes < counts_bytes) {
+        ctx->buf_tile_counts = make_dram(ctx->mesh_device.get(), counts_bytes);
+        ctx->cap_tile_counts_bytes = counts_bytes;
+        device_state::register_buffer("sort_tile_counts", ctx->buf_tile_counts);
+    }
+    const uint32_t cap_counts = static_cast<uint32_t>(ctx->cap_tile_counts_bytes / 4);
+    std::vector<uint32_t> cu32(cap_counts, 0);
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        cu32[t] = static_cast<uint32_t>(counts[t]);
+    }
+    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_counts, cu32, false);
+
+    // Scalar P_kept for host-side stats when sorted_gaussian_ids vector is empty.
+    if (!ctx->buf_P_kept) {
+        ctx->buf_P_kept = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
+        device_state::register_buffer("sort_P_kept", ctx->buf_P_kept);
+    }
+    std::vector<uint32_t> pkept_buf(ELEMS_PER_PAGE, 0);
+    uint64_t acc = 0;
+    for (uint32_t t = 0; t < num_tiles; t++) acc += static_cast<uint64_t>(counts[t]);
+    pkept_buf[0] = static_cast<uint32_t>(acc);
+    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_P_kept, pkept_buf, false);
+}
+
 static void publish_resident(
     SortDeviceContext* ctx,
     const std::vector<int64_t>& sorted_ids,
@@ -458,8 +522,8 @@ static void verify_vs_cpu(
 // publishes. Returns a SortResult identical in shape to the host path.
 static gsplat_cpu::SortResult sort_resident_pairs(
     SortDeviceContext* ctx, uint32_t num_tiles, int tiles_x, int tiles_y,
-    std::size_t M, bool verify, gsplat_cpu::ThreadPool* pool,
-    bool* device_ok, SortCallTimings& T) {
+    std::size_t M, bool verify, bool need_host_sorted_ids,
+    gsplat_cpu::ThreadPool* pool, bool* device_ok, SortCallTimings& T) {
     using clk = std::chrono::high_resolution_clock;
     const auto t_total0_rp = clk::now();
     auto fail = [&]() {
@@ -655,6 +719,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
         std::vector<uint32_t> tile_ids_flat(cap_tile_ids_elems, 0);
         std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
+        publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
 
         // ── Upload: base offsets (into bin2d), tmeta, tile_ids ──────────
         const auto t_up0 = clk::now();
@@ -738,29 +803,30 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             distributed::Finish(*ctx->cq);
             T.publish_ms =
                 std::chrono::duration<double, std::milli>(clk::now() - t_pub0).count();
-            {
-                // Always read back + reconstruct the dense ids. The publish kernel
-                // skips the host Pass4 compact (its expensive part), but downstream
-                // consumers — the blend host fallback (render_blend.cpp) and the
-                // optional byte-verify — both read the host sorted_gaussian_ids;
-                // leaving it empty indexes out of bounds and corrupts the heap.
+            // Resident blend reads sort_sorted_ids over NoC — skip the large ids
+            // D2H + host Pass4 unless verify/debug needs the dense host vector.
+            const bool need_host_ids = verify || need_host_sorted_ids ||
+                                       !resident_blend_chain_enabled();
+            if (need_host_ids) {
                 const uint32_t cap_sorted_elems =
                     static_cast<uint32_t>(ctx->cap_sorted_bytes / 4);
                 const auto t_d0 = clk::now();
                 std::vector<uint32_t> sids(cap_sorted_elems);
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, sids, ctx->buf_sorted_ids, true);
                 T.d2h_ms = std::chrono::duration<double, std::milli>(clk::now() - t_d0).count();
-                // Reconstruct the dense ordering from the padded device layout so
-                // the byte-compare-vs-CPU still validates and the host fallback sees
-                // the same contiguous ids the default Pass4 would have produced.
                 result.sorted_gaussian_ids.assign(P_kept, 0);
                 for (uint32_t t = 0; t < num_tiles; t++) {
                     const uint32_t ds = static_cast<uint32_t>(result.tile_ranges[2 * t]);
                     const uint32_t de = static_cast<uint32_t>(result.tile_ranges[2 * t + 1]);
                     const uint32_t ps = static_cast<uint32_t>(padded_ranges[2 * t]);
-                    for (uint32_t k = 0; k + ds < de && (ds + k) < P_kept; k++)
-                        result.sorted_gaussian_ids[ds + k] = static_cast<int64_t>(sids[ps + k]);
+                    for (uint32_t k = 0; k + ds < de && (ds + k) < P_kept; k++) {
+                        result.sorted_gaussian_ids[ds + k] =
+                            static_cast<int64_t>(sids[ps + k]);
+                    }
                 }
+            } else {
+                T.d2h_ms = 0.0;
+                // tile_ranges kept for stats/timing only; blend uses resident DRAM.
             }
         } else {
             // ── D2H aligned sorted ids + Pass4 compact -> contiguous ────
@@ -980,7 +1046,8 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     const int tiles_y,
     gsplat_cpu::ThreadPool* pool,
     bool* device_ok,
-    SortCallTimings* timings) {
+    SortCallTimings* timings,
+    const bool need_host_sorted_ids) {
     auto set_fail = [&]() {
         if (device_ok) *device_ok = false;
         return gsplat_cpu::SortResult{};
@@ -1019,9 +1086,9 @@ gsplat_cpu::SortResult sort_and_bin_tt(
         return v != nullptr && v[0] == '1';
     }();
     if (resident_pairs && stage >= 1) {
-        gsplat_cpu::SortResult rr =
-            sort_resident_pairs(ctx, num_tiles, tiles_x, tiles_y, M, verify,
-                                pool, device_ok, T);
+        gsplat_cpu::SortResult rr = sort_resident_pairs(
+            ctx, num_tiles, tiles_x, tiles_y, M, verify, need_host_sorted_ids,
+            pool, device_ok, T);
         return rr;
     }
 

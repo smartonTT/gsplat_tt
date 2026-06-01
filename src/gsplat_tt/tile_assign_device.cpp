@@ -76,11 +76,13 @@ struct TileAssignDeviceContext {
     distributed::MeshWorkload wl_cull;
     distributed::MeshWorkload wl_scan1;
     distributed::MeshWorkload wl_scan2;
+    distributed::MeshWorkload wl_m2thr;
     KernelHandle k1{};
     KernelHandle k2{};
     KernelHandle k4{};
     KernelHandle ks1{};
     KernelHandle ks2{};
+    KernelHandle km3{};
 
     // Cached DRAM buffers (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -221,6 +223,32 @@ static void build_program_scan_reduce(TileAssignDeviceContext& ctx) {
     ctx.wl_scan1.add_program(device_range, std::move(program));
 }
 
+static void build_program_m2thr(TileAssignDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    auto scratch_cb = [&](uint32_t id) {
+        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, PAGE_BYTES);
+        CreateCircularBuffer(program, cores, c);
+    };
+    scratch_cb(0);  // op
+    scratch_cb(1);  // m2thr out
+
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 2; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.km3 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_m2thr.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_m2thr.add_program(device_range, std::move(program));
+}
+
 static void build_program_scan_add(TileAssignDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -258,6 +286,7 @@ static TileAssignDeviceContext init_context() {
     build_program_cull(ctx);
     build_program_scan_reduce(ctx);
     build_program_scan_add(ctx);
+    build_program_m2thr(ctx);
     // core_total: one dedicated 64B page per core (no cross-core page sharing).
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
     ctx.buf_core_total = make_dram(
@@ -428,15 +457,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                              "RESIDENT_GATHER\n";
                 return set_fail();
             }
-            // M from the resident scalar (proj_M) must equal the host M.
-            std::vector<uint32_t> mbuf(ELEMS_PER_PAGE);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, mbuf, res_M, true);
-            if (mbuf[0] != Mu) {
-                std::fprintf(stderr,
-                    "[TA resident] proj_M=%u != host M=%u — abort resident\n",
-                    mbuf[0], Mu);
-                return set_fail();
-            }
+            // proj_M is published by gather on-device; host M is the same value
+            // (read back in gather's minimal path). Skip the per-frame proj_M D2H.
+            (void)res_M;
         }
 
         // ── Allocate / grow M-sized buffers ─────────────────────────────
@@ -682,8 +705,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // passes opacities==nullptr in both modes.) Without this, an M-only
         // ProjectResult (empty host covs_2d) would silently drop the cull and
         // the resident-pairs publish, breaking the resident sort/blend handoff.
+        auto res_op = device_state::get_buffer("proj_m_opacity");
         const bool do_cull = resident_in
-            ? (opacities != nullptr)
+            ? static_cast<bool>(res_op)
             : ((covs_2d != nullptr) && (opacities != nullptr));
         // Resident-pairs is only valid when the cull runs (keep mask is the
         // implicit compaction). Otherwise fall through to the host path.
@@ -711,71 +735,86 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // ── Phase 4: per-pair Mahalanobis cull (K3 host precompute + K4) ──
         if (do_cull) {
             const auto t_cull0 = clk::now();
-            // K3 (host bridge): per-Gaussian m2_thresh + opacity-floor.
-            // Bit-exact match to gsplat_cpu::tile_assign lines 174-182.
-            // The cov a/b/c packing+upload is only needed when NOT resident:
-            // in resident mode K4 reads proj_m_a/b/c over NoC. m2_thresh/opacok
-            // remain a host bridge (computed from the host opacities array).
             std::vector<uint32_t> a_v, b_v, c_v;
-            if (!resident_in) {
-                a_v.assign(cap_m_elems, 0);
-                b_v.assign(cap_m_elems, 0);
-                c_v.assign(cap_m_elems, 0);
-            }
-            std::vector<uint32_t> m2t_v(cap_m_elems, 0);
             const auto t_k3c0 = clk::now();
-            // Per-Gaussian m2_thresh (and cov repack when not resident).
-            // The opacity floor is FOLDED into m2thr: op <= contrib_floor ->
-            // sentinel -1.0f (legitimate m2thr is always >= 0), so K4 needs no
-            // separate opacok buffer (halves the K3 H2D). Parallelized over a
-            // persistent host pool in contiguous [lo,hi) ranges; each element
-            // is independent and computed with the SAME std::log + memcpy as
-            // the serial path -> byte-identical m2t_v (a_v/b_v/c_v).
-            auto k3_range = [&](uint32_t lo, uint32_t hi) {
-                for (uint32_t m = lo; m < hi; m++) {
-                    if (!resident_in) {
-                        const float a = covs_2d[m * 4 + 0];
-                        const float b = covs_2d[m * 4 + 1];
-                        const float c = covs_2d[m * 4 + 3];
-                        std::memcpy(&a_v[m], &a, 4);
-                        std::memcpy(&b_v[m], &b, 4);
-                        std::memcpy(&c_v[m], &c, 4);
-                    }
-                    const float op = opacities[m];
-                    float m2t = -1.0f;  // sentinel: op <= contrib_floor -> drop
-                    if (op > contrib_floor) {
-                        m2t = -2.0f * std::log(contrib_floor / op);
-                    }
-                    std::memcpy(&m2t_v[m], &m2t, 4);
+            if (resident_in && res_op) {
+                // K3 on device: m2_thresh from resident proj_m_opacity (no host
+                // opacities[] loop, no m2thr H2D).
+                uint32_t floor_bits = 0;
+                std::memcpy(&floor_bits, &contrib_floor, 4);
+                const uint32_t m3_pages = M_pad / ELEMS_PER_PAGE;
+                const WorkSplit ws_m3 = split_pages(m3_pages, num_cores);
+                Program& progm3 = ctx->wl_m2thr.get_programs().begin()->second;
+                const uint32_t op_addr =
+                    static_cast<uint32_t>(res_op->address());
+                for (uint32_t c = 0; c < num_cores; c++) {
+                    CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                    SetRuntimeArgs(progm3, ctx->km3, core, {
+                        op_addr,
+                        static_cast<uint32_t>(ctx->buf_m2thr->address()),
+                        ws_m3.start[c], ws_m3.count[c], Mu, floor_bits,
+                    });
                 }
-            };
-            auto& pool = k3_pool();
-            const uint32_t W = std::max<uint32_t>(1, static_cast<uint32_t>(pool.size()));
-            // Page-aligned chunking keeps each worker on whole 16-elem pages
-            // (matches the SoA layout; avoids false sharing across cache lines).
-            const uint32_t chunk_pages = (M_pad / ELEMS_PER_PAGE + W - 1) / W;
-            const uint32_t chunk = chunk_pages * ELEMS_PER_PAGE;
-            if (W <= 1 || Mu <= ELEMS_PER_PAGE) {
-                k3_range(0, Mu);
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_m2thr, false);
+                distributed::Finish(*ctx->cq);
+                T.k3_compute_ms =
+                    std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
+                T.k3_h2d_ms = 0.0;
             } else {
-                for (uint32_t w = 0; w < W; w++) {
-                    const uint32_t lo = w * chunk;
-                    if (lo >= Mu) break;
-                    const uint32_t hi = std::min(lo + chunk, Mu);
-                    pool.submit([k3_range, lo, hi]() { k3_range(lo, hi); });
+                // K3 host path (non-resident TA inputs only).
+                if (!resident_in) {
+                    a_v.assign(cap_m_elems, 0);
+                    b_v.assign(cap_m_elems, 0);
+                    c_v.assign(cap_m_elems, 0);
                 }
-                pool.wait();
+                std::vector<uint32_t> m2t_v(cap_m_elems, 0);
+                auto k3_range = [&](uint32_t lo, uint32_t hi) {
+                    for (uint32_t m = lo; m < hi; m++) {
+                        if (!resident_in) {
+                            const float a = covs_2d[m * 4 + 0];
+                            const float b = covs_2d[m * 4 + 1];
+                            const float c = covs_2d[m * 4 + 3];
+                            std::memcpy(&a_v[m], &a, 4);
+                            std::memcpy(&b_v[m], &b, 4);
+                            std::memcpy(&c_v[m], &c, 4);
+                        }
+                        const float op = opacities[m];
+                        float m2t = -1.0f;
+                        if (op > contrib_floor) {
+                            m2t = -2.0f * std::log(contrib_floor / op);
+                        }
+                        std::memcpy(&m2t_v[m], &m2t, 4);
+                    }
+                };
+                auto& pool = k3_pool();
+                const uint32_t W =
+                    std::max<uint32_t>(1, static_cast<uint32_t>(pool.size()));
+                const uint32_t chunk_pages = (M_pad / ELEMS_PER_PAGE + W - 1) / W;
+                const uint32_t chunk = chunk_pages * ELEMS_PER_PAGE;
+                if (W <= 1 || Mu <= ELEMS_PER_PAGE) {
+                    k3_range(0, Mu);
+                } else {
+                    for (uint32_t w = 0; w < W; w++) {
+                        const uint32_t lo = w * chunk;
+                        if (lo >= Mu) break;
+                        const uint32_t hi = std::min(lo + chunk, Mu);
+                        pool.submit([k3_range, lo, hi]() { k3_range(lo, hi); });
+                    }
+                    pool.wait();
+                }
+                T.k3_compute_ms =
+                    std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
+                const auto t_k3h0 = clk::now();
+                if (!resident_in) {
+                    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_a, a_v, false);
+                    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b, b_v, false);
+                    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c_v, false);
+                }
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_m2thr, m2t_v, false);
+                if (ta_timing) distributed::Finish(*ctx->cq);
+                T.k3_h2d_ms =
+                    std::chrono::duration<double, std::milli>(clk::now() - t_k3h0).count();
             }
-            T.k3_compute_ms = std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
-            const auto t_k3h0 = clk::now();
-            if (!resident_in) {
-                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_a, a_v, false);
-                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b, b_v, false);
-                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c_v, false);
-            }
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_m2thr, m2t_v, false);
-            if (ta_timing) distributed::Finish(*ctx->cq);
-            T.k3_h2d_ms = std::chrono::duration<double, std::milli>(clk::now() - t_k3h0).count();
             const auto t_k3_1 = clk::now();
             T.k3_ms = std::chrono::duration<double, std::milli>(t_k3_1 - t_cull0).count();
 

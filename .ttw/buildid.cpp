@@ -1,4 +1,4 @@
-id=2
-sha=b3b6231
-ts=2026-05-31T17:54:55-0700
-desc=iter 1: fix SFPU cull fast path via DRAM settle spin fence after mask read barrier
+id=5
+sha=7e5bced
+ts=2026-05-31T20:51:26-0700
+desc=iter 5: Fix segfault: D2H sorted ids when blend_mode=0 ref path

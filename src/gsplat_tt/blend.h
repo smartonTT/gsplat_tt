@@ -64,16 +64,16 @@ double blend_mb_devcull_from_payload(
 // The only host input is the per-tile candidate count (for LPT tile->core load
 // balancing). Returns false (device_ok=false) if any required resident buffer is
 // missing, so the caller can fall back to the uploaded devcull path.
-//   per_tile_count: num_tiles uint32, candidates per tile (== tile_ranges end-start)
+// LPT + per-tile counts come from resident sort_* buffers (no host tile_ranges
+// scan). Writes the final hero image into image_out (pre-zeroed, H*W*3).
 double blend_mb_devcull_resident(
-    const std::vector<uint32_t>& per_tile_count,
     float contrib_floor,
     bool cull_disabled,
     int num_tiles,
     int tiles_x,
     int image_height,
     int image_width,
-    std::vector<float>& image_out,
+    float* image_out,
     bool* device_ok);
 
 void device_shutdown();

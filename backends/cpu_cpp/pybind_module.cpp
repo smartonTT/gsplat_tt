@@ -1080,6 +1080,18 @@ static gsplat_cpu::ProjectResult project_via_device(
 }
 #endif  // GSPLAT_WITH_TT
 
+// Resident device sort leaves sorted_gaussian_ids empty; kept count is the sum
+// of per-tile [start,end) spans in tile_ranges.
+static std::size_t sort_kept_entry_count(const gsplat_cpu::SortResult& sr) {
+    std::size_t n = 0;
+    for (std::size_t t = 0; 2 * t + 1 < sr.tile_ranges.size(); ++t) {
+        const int64_t lo = sr.tile_ranges[2 * t + 0];
+        const int64_t hi = sr.tile_ranges[2 * t + 1];
+        if (hi > lo) n += static_cast<std::size_t>(hi - lo);
+    }
+    return n;
+}
+
 // All-stage fused render. Orchestrates project_full_fused -> filter colors/
 // opacities by valid_mask -> tile_assign -> sort_and_bin -> cull_and_blend
 // entirely in C++. Eliminates ~4 pybind boundary crossings + ~7 numpy<->C++
@@ -1187,6 +1199,26 @@ py::tuple render_full_py(
     const float* vis_opacities =
         proj.opacities.empty() ? opacities_ptr : proj.opacities.data();
 
+#ifdef GSPLAT_WITH_TT
+    // Production TT render (blend_mode>=1 + device/resident env stack): never
+    // fall back to host tile_assign/sort — abort so misconfig is obvious.
+    const bool tt_host_free_render = (blend_mode >= 1) && [] {
+        auto on = [](const char* n) {
+            const char* v = std::getenv(n);
+            return v != nullptr && v[0] == '1';
+        };
+        auto on_nz = [](const char* n) {
+            const char* v = std::getenv(n);
+            return v != nullptr && v[0] != '0' && v[0] != '\0';
+        };
+        return on("GSPLAT_TT_DEVICE_PROJECT") && on("GSPLAT_TT_RESIDENT_GATHER") &&
+               on("GSPLAT_TT_DEVICE_TILE_ASSIGN") && on_nz("GSPLAT_TT_DEVICE_SORT") &&
+               on("GSPLAT_TT_RESIDENT_PAIRS") && on("GSPLAT_TT_RESIDENT_BLEND");
+    }();
+#else
+    const bool tt_host_free_render = false;
+#endif
+
     // Stage 2: tile_assign. When cull_disabled, skip the per-pair Mahalanobis
     // cull by passing null cov/opacity pointers — only the AABB-based tile
     // overlap stays. Otherwise the per-pair cull at contrib_floor runs.
@@ -1203,24 +1235,39 @@ py::tuple render_full_py(
     if (const char* dt = std::getenv("GSPLAT_TT_DEVICE_TILE_ASSIGN");
         dt != nullptr && dt[0] == '1') {
         bool device_ok = false;
+        const bool resident_ta = [] {
+            const char* v = std::getenv("GSPLAT_TT_RESIDENT_TA_IN");
+            return v != nullptr && v[0] == '1';
+        }();
         gsplat_cpu::TileAssignResult ta_dev = gsplat_tt::tile_assign_tt(
-            proj.means_2d.data(),
-            proj.radii.data(),
+            resident_ta ? nullptr : proj.means_2d.data(),
+            resident_ta ? nullptr : proj.radii.data(),
             M,
             image_height,
             image_width,
             tile_size,
-            cull_disabled ? nullptr : proj.covs_2d.data(),
-            cull_disabled ? nullptr : vis_opacities,
+            cull_disabled ? nullptr : (resident_ta ? nullptr : proj.covs_2d.data()),
+            cull_disabled ? nullptr : (resident_ta ? nullptr : vis_opacities),
             contrib_floor,
             &device_ok);
         if (device_ok) {
             ta = std::move(ta_dev);
             ta_done = true;
+        } else if (tt_host_free_render) {
+            std::fprintf(stderr,
+                "[render_full] FATAL: device tile_assign failed with host-free "
+                "env stack\n");
+            std::abort();
         }
     }
 #endif
     if (!ta_done) {
+        if (tt_host_free_render) {
+            std::fprintf(stderr,
+                "[render_full] FATAL: GSPLAT_TT_DEVICE_TILE_ASSIGN not set or "
+                "disabled on host-free path\n");
+            std::abort();
+        }
         ta = gsplat_cpu::tile_assign(
             proj.means_2d.data(),
             proj.radii.data(),
@@ -1258,14 +1305,25 @@ py::tuple render_full_py(
             tiles_x,
             tiles_y,
             &global_sort_pool(),
-            &device_ok);
+            &device_ok,
+            /*timings=*/nullptr,
+            /*need_host_sorted_ids=*/blend_mode < 1);
         if (device_ok) {
             sr = std::move(sr_dev);
             sort_done = true;
+        } else if (tt_host_free_render) {
+            std::fprintf(stderr,
+                "[render_full] FATAL: device sort failed with host-free env stack\n");
+            std::abort();
         }
     }
 #endif
     if (!sort_done) {
+        if (tt_host_free_render) {
+            std::fprintf(stderr,
+                "[render_full] FATAL: GSPLAT_TT_DEVICE_SORT not set on host-free path\n");
+            std::abort();
+        }
         sr = gsplat_cpu::sort_and_bin(
             ta.gaussian_ids.data(),
             ta.tile_ids.data(),
@@ -1277,6 +1335,12 @@ py::tuple render_full_py(
             &global_sort_pool());
     }
     auto t_s1 = clock::now();
+
+#ifdef GSPLAT_WITH_TT
+    const std::size_t P_kept = sort_kept_entry_count(sr);
+#else
+    const std::size_t P_kept = sr.sorted_gaussian_ids.size();
+#endif
 
     // iter-049: pre-allocate + zero the pybind output buffer and thread its
     // data pointer through cull_and_blend. Eliminates a ~3 MB std::vector
@@ -1305,10 +1369,10 @@ py::tuple render_full_py(
             proj.covs_2d.data(),
             vis_colors,
             vis_opacities,
-            sr.sorted_gaussian_ids.data(),
-            sr.tile_ranges.data(),
+            sr.sorted_gaussian_ids.empty() ? nullptr : sr.sorted_gaussian_ids.data(),
+            sr.tile_ranges.empty() ? nullptr : sr.tile_ranges.data(),
             M,
-            sr.sorted_gaussian_ids.size(),
+            P_kept,
             tiles_x,
             tiles_y,
             tile_size,
@@ -1331,7 +1395,7 @@ py::tuple render_full_py(
             sr.sorted_gaussian_ids.data(),
             sr.tile_ranges.data(),
             M,
-            sr.sorted_gaussian_ids.size(),
+            P_kept,
             tiles_x,
             tiles_y,
             tile_size,
@@ -1347,7 +1411,7 @@ py::tuple render_full_py(
 
     py::dict stats;
     stats["num_visible"] = static_cast<int64_t>(M);
-    stats["num_entries"] = static_cast<int64_t>(sr.sorted_gaussian_ids.size());
+    stats["num_entries"] = static_cast<int64_t>(P_kept);
     stats["pairs_in"] = cb.pairs_in;
     stats["pairs_dropped"] = cb.pairs_dropped_all_mb;
     stats["pairs_kept_per_mb"] = cb.pairs_kept_per_mb;

@@ -68,7 +68,10 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     int tiles_y,
     gsplat_cpu::ThreadPool* pool,
     bool* device_ok,
-    SortCallTimings* timings = nullptr);
+    SortCallTimings* timings = nullptr,
+    // When true, D2H sort_sorted_ids into SortResult even if RESIDENT_BLEND
+    // skips it (required for CPU blend_mode=0 in the same process as TT env).
+    bool need_host_sorted_ids = false);
 
 // Lazily initializes the device sort context (programs + CBs). Returns true
 // if the device path is operational.

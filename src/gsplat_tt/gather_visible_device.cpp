@@ -473,6 +473,25 @@ static gsplat_cpu::ProjectResult readback_proj_m_minimal(
     return proj;
 }
 
+// Depth-only readback for the full resident downstream chain: tile_assign K3
+// reads proj_m_opacity on device; sort/blend never touch host opacities.
+static gsplat_cpu::ProjectResult readback_proj_m_depth_only(
+    GatherDeviceContext* ctx, std::size_t M, double* readback_ms) {
+    const auto t0 = std::chrono::high_resolution_clock::now();
+    const uint32_t cap = static_cast<uint32_t>(ctx->cap_m_elems);
+    std::vector<float> dep(cap);
+    distributed::EnqueueReadMeshBuffer(*ctx->cq, dep, ctx->buf_depth, true);
+
+    gsplat_cpu::ProjectResult proj;
+    proj.depths.resize(M);
+    for (std::size_t m = 0; m < M; ++m) {
+        proj.depths[m] = dep[m];
+    }
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    if (readback_ms) *readback_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return proj;
+}
+
 // Write a host ProjectResult (R2a) into the resident proj_m_* buffers.
 static void write_proj_m_from_host(
     GatherDeviceContext* ctx, const gsplat_cpu::ProjectResult& proj,
@@ -807,8 +826,11 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         const bool minimal_readback =
             downstream_resident && downstream_chain_resident() && !verify;
         gsplat_cpu::ProjectResult proj =
-            minimal_readback ? readback_proj_m_minimal(ctx, M, &T.readback_ms)
-                             : readback_proj_m(ctx, M, &T.readback_ms);
+            minimal_readback
+                ? (downstream_chain_resident()
+                       ? readback_proj_m_depth_only(ctx, M, &T.readback_ms)
+                       : readback_proj_m_minimal(ctx, M, &T.readback_ms))
+                : readback_proj_m(ctx, M, &T.readback_ms);
 
         if (verify) {
             const auto tv0 = std::chrono::high_resolution_clock::now();
