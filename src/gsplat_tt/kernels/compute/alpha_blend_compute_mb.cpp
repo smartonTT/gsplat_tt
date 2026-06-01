@@ -287,10 +287,15 @@ inline void process_tile_gaussians(uint32_t num_g) {
         cb_wait_front(CB_MB_COEFF, 1);
         const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
 #if defined(MB_ROWCK)
+        // Per-row hash (word order fixed), combined across gaussians by XOR so the
+        // result is ORDER-INDEPENDENT: distinguishes "same rows, different order"
+        // (rowck matches) from "different values" (rowck differs).
+        uint32_t rh = 0;
         for (uint32_t w = 0; w < 10u; ++w) {
-            rowck = (rowck * 1000003u) ^ row[w];
+            rh = (rh * 1000003u) ^ row[w];
         }
-        rowck_mask = (rowck_mask * 1000003u) ^ row[10];
+        rowck ^= rh;
+        rowck_mask ^= row[10];
 #endif
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
