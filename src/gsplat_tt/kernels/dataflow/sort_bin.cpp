@@ -215,6 +215,30 @@ void kernel_main() {
 
     int32_t dep_cached_page = -1;
 
+#ifdef BIN_EMIT_REC
+    // T1b: ring-buffered record scatter. Instead of a synchronous read+write
+    // barrier per record (which serialized the bin stage at ~+20 ms), stage up
+    // to REC_BATCH records in CB_REC, issue all reads under ONE barrier, inject
+    // depth, then issue all writes under ONE barrier. The bucket scatter is off
+    // the blend critical path, so this batching just hides the NoC latency.
+    constexpr uint32_t REC_BATCH = 16u;
+    const uint32_t rec_l1_base = get_write_ptr(CB_REC);
+    uint32_t brec_key[REC_BATCH];
+    uint32_t brec_page[REC_BATCH];
+    uint32_t nbrec = 0;
+    auto flush_recs = [&]() {
+        if (nbrec == 0) return;
+        noc_async_read_barrier();
+        for (uint32_t b = 0; b < nbrec; b++) {
+            const uint32_t slot = rec_l1_base + b * PAGE_BYTES;
+            reinterpret_cast<volatile uint32_t*>(slot)[9] = brec_key[b];
+            noc_async_write(slot, get_noc_addr(brec_page[b], tile_recs_acc), PAGE_BYTES);
+        }
+        noc_async_write_barrier();
+        nbrec = 0;
+    };
+#endif
+
     // Sub-pass 2: counting-sort kept pairs into L1, grouped by tile (gaussian-
     // major within each tile). key = depth_bits[g], id = g.
     for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
@@ -254,13 +278,15 @@ void kernel_main() {
             // record (the scatter is off the blend critical path; T1b can ring-
             // buffer to pipeline if the bin stage cost matters).
             {
-                const uint32_t rec_l1 = get_write_ptr(CB_REC);
-                noc_async_read(get_noc_addr(g, blendrec_acc), rec_l1, PAGE_BYTES);
-                noc_async_read_barrier();
-                reinterpret_cast<volatile uint32_t*>(rec_l1)[9] = key;  // depth bits
-                const uint32_t rec_page = recrowp[t] + curp[t];  // DENSE bucket page
-                noc_async_write(rec_l1, get_noc_addr(rec_page, tile_recs_acc), PAGE_BYTES);
-                noc_async_write_barrier();
+                // Stage into the ring; flush in batches (issue-ahead, 1 barrier
+                // per REC_BATCH instead of 2 per record). rec_page captured with
+                // the CURRENT curp[t] (matches the pre-increment dense layout).
+                const uint32_t slot = rec_l1_base + nbrec * PAGE_BYTES;
+                noc_async_read(get_noc_addr(g, blendrec_acc), slot, PAGE_BYTES);
+                brec_key[nbrec] = key;
+                brec_page[nbrec] = recrowp[t] + curp[t];  // DENSE bucket page
+                nbrec++;
+                if (nbrec == REC_BATCH) flush_recs();
             }
 #endif
             curp[t] = curp[t] + 1;
@@ -268,6 +294,9 @@ void kernel_main() {
             isp[li] = g;
         }
     }
+#ifdef BIN_EMIT_REC
+    flush_recs();  // drain the partial final batch
+#endif
 
 #ifdef BIN_DUMP
     // Each core dumps its tile-0 summary into its own (already-consumed) bin2d

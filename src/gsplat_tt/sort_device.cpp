@@ -229,7 +229,7 @@ static void build_program_bin(SortDeviceContext& ctx) {
         return v && v[0] == '1';
     }();
     if (tile_bucket) {
-        cb(9, PAGE_BYTES);        // rec staging (1 blendrec page)
+        cb(9, 16u * PAGE_BYTES);  // rec staging ring (REC_BATCH=16 blendrec pages)
         cb(10, BIN_ROW_BYTES);    // recrow (per-(core,tile) DENSE record base)
     }
 
