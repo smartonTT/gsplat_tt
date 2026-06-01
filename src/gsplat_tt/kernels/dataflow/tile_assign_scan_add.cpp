@@ -19,9 +19,10 @@
 //   2: page_start   first 16-elem page this core handles
 //   3: page_count   number of pages this core handles
 //   4: M            real Gaussian count (entries >= M are padding -> 0)
-//   5: base         this core's exclusive base (sum of all prior cores)
+//   5: base_addr    per-core exclusive bases (from scan_bases on device)
+//   6: core_slot    this core's linear index
 //
-// COMPILE-TIME ARGS: 2 TensorAccessorArgs (tpg, offs), DRAM-interleaved.
+// COMPILE-TIME ARGS: 3 TensorAccessorArgs (tpg, offs, base), DRAM-interleaved.
 
 #include <cstdint>
 
@@ -38,7 +39,8 @@ void kernel_main() {
     const uint32_t page_start = get_arg_val<uint32_t>(2);
     const uint32_t page_count = get_arg_val<uint32_t>(3);
     const uint32_t M          = get_arg_val<uint32_t>(4);
-    const uint32_t base       = get_arg_val<uint32_t>(5);
+    const uint32_t base_addr  = get_arg_val<uint32_t>(5);
+    const uint32_t core_slot  = get_arg_val<uint32_t>(6);
 
     if (page_count == 0) {
         return;
@@ -46,17 +48,24 @@ void kernel_main() {
 
     constexpr auto tpg_args  = TensorAccessorArgs<0>();
     constexpr auto offs_args = TensorAccessorArgs<tpg_args.next_compile_time_args_offset()>();
+    constexpr auto base_args = TensorAccessorArgs<offs_args.next_compile_time_args_offset()>();
     const auto tpg_acc  = TensorAccessor(tpg_args,  tpg_addr,  PAGE_BYTES);
     const auto offs_acc = TensorAccessor(offs_args, offs_addr, PAGE_BYTES);
+    const auto base_acc = TensorAccessor(base_args, base_addr, PAGE_BYTES);
 
     constexpr uint32_t CB_TPG  = 0;
     constexpr uint32_t CB_OFFS = 1;
+    constexpr uint32_t CB_BASE = 2;
     const uint32_t tpg_l1  = get_write_ptr(CB_TPG);
     const uint32_t offs_l1 = get_write_ptr(CB_OFFS);
+    const uint32_t base_l1 = get_write_ptr(CB_BASE);
     auto tpgp  = reinterpret_cast<volatile int32_t*>(tpg_l1);
     auto offsp = reinterpret_cast<volatile int32_t*>(offs_l1);
+    auto basep = reinterpret_cast<volatile uint32_t*>(base_l1);
 
-    uint32_t running = base;
+    noc_async_read(get_noc_addr(core_slot, base_acc), base_l1, PAGE_BYTES);
+    noc_async_read_barrier();
+    uint32_t running = basep[0];
     for (uint32_t pg = 0; pg < page_count; pg++) {
         const uint32_t page = page_start + pg;
         const uint32_t g0 = page * ELEMS_PER_PAGE;
