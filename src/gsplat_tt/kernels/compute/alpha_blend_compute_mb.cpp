@@ -295,6 +295,18 @@ inline void process_tile_gaussians(uint32_t num_g) {
         const uint32_t a = row[0], b = row[1], c = row[2], d = row[3], e = row[4];
         const uint32_t fc = row[5], op = row[6], cr = row[7], cg = row[8], cbv = row[9];
         uint32_t mask = row[10];
+#if defined(MB_COEFF_DEBUG)
+        {
+            static uint32_t dbg_cmp = 0;
+            if (dbg_cmp < 4u) {
+                dbg_cmp++;
+                MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+                      << " mxl=" << F32(*reinterpret_cast<const float*>(&row[3]))
+                      << " op=" << F32(*reinterpret_cast<const float*>(&row[6]))
+                      << " mask=" << mask << ENDL()));
+            }
+        }
+#endif
 #if defined(MB_DEBUG_WEIGHT) || defined(MB_DEBUG_SHOWA)
         mask &= ~shown;
         shown |= row[10];

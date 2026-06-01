@@ -191,6 +191,12 @@ struct DeviceContext {
     // write lands on a 16-element (64B) boundary.
     std::shared_ptr<distributed::MeshBuffer> res_mask_base;
     size_t res_mask_base_bytes = 0;
+
+    // Stage C2 (GSPLAT_TT_BLEND_PAYLOAD): contiguous per-candidate blend payload
+    // (64B rows, global-candidate-index) produced by the pack pass and streamed
+    // sequentially by the payload blend reader. Grow-on-demand like res_masks.
+    std::shared_ptr<distributed::MeshBuffer> res_payload;
+    size_t res_payload_bytes = 0;
 };
 
 // Build a Program with all CBs allocated and the 3 kernels compiled.
@@ -812,6 +818,16 @@ inline bool l1_masks_enabled() {
     return v != nullptr && v[0] == '1';
 }
 
+// Stage C2 (GSPLAT_TT_BLEND_PAYLOAD): a separate pack pass writes a contiguous
+// per-candidate blend payload (attrs + microblock mask) and the blend reader
+// streams it SEQUENTIALLY, killing the ~1.9 GB random attr gather + the
+// cull_masks DRAM round-trip + the per-candidate MB_CULL_SPIN. The pack pass
+// does the gather + scalar cull once; the SFPU cull pass is bypassed.
+inline bool payload_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_BLEND_PAYLOAD");
+    return v != nullptr && v[0] == '1';
+}
+
 static void build_program_and_workload_mb(DeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -838,6 +854,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // cull pass) and kept resident in cull_masks; the blend reader then just
     // reads the mask (pure integer) instead of running the soft-float cull.
     const bool sfpu_cull = resident_blend && env_on("GSPLAT_TT_SFPU_CULL");
+    // Stage C2: the blend reader streams a pre-packed contiguous payload instead
+    // of gathering attrs + reading cull_masks. Takes precedence over sfpu_cull
+    // for reader selection (the mask rides the payload row).
+    const bool payload = resident_blend && payload_enabled();
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
@@ -877,11 +897,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // (proj_m_a/b/c/px/py/opacity/colors + sort_sorted_ids + sort_tile_ranges +
     // xramp/yramp/tile_ids); +2 (cull_masks, cull_mask_base) under SFPU cull;
     // uploaded paths 6.
-    const int num_reader_accessors = resident_blend ? (sfpu_cull ? 15 : 13) : 6;
+    // Stage C2 sequential payload reader: 6 DRAM-interleaved accessors (ranges,
+    // xramp, yramp, tile_ids, lpt_meta, payload). No SoA gather, no cull_masks.
+    const int num_reader_accessors =
+        payload ? 6 : (resident_blend ? (sfpu_cull ? 15 : 13) : 6);
     // cull_masks is reader accessor index 13 (after a,b,c,px,py,op,col, ids,
     // ranges, xramp,yramp,tile_ids, lpt_meta). Under the L1 mask handoff it is
     // an L1-interleaved buffer; everything else stays DRAM-interleaved.
-    const bool l1_masks = sfpu_cull && l1_masks_enabled();
+    const bool l1_masks = sfpu_cull && !payload && l1_masks_enabled();
     constexpr int kCullMasksReaderIdx = 13;
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
@@ -892,13 +915,26 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         }
     }
     const char* reader_src =
-        dev_cull ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp"
-                 : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb.cpp";
+        payload  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_payload.cpp"
+        : dev_cull ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp"
+                   : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb.cpp";
     std::map<std::string, std::string> reader_defines;
     if (resident_blend) {
         reader_defines["MB_RESIDENT"] = "1";
     }
-    if (sfpu_cull) {
+    if (payload) {
+        reader_defines["MB_PAYLOAD"] = "1";
+        if (std::getenv("GSPLAT_TT_PAYLOAD_DEBUG") != nullptr) {
+            reader_defines["MB_PAYLOAD_DEBUG"] = "1";
+        }
+        // Optional per-chunk settle spin for the sequential-read spin/PSNR sweep
+        // (default OFF; sequential reads with a chunk-covering barrier need none).
+        const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN");
+        if (sp != nullptr && sp[0] != '\0' && std::string(sp) != "0") {
+            reader_defines["MB_PAY_SPIN"] = std::string(sp);
+        }
+    }
+    if (sfpu_cull && !payload) {
         reader_defines["MB_SFPU_CULL"] = "1";
         if (std::getenv("GSPLAT_TT_SFPU_CULL_DEBUG") != nullptr) {
             reader_defines["MB_SFPU_CULL_DEBUG"] = "1";
@@ -947,6 +983,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     }
     if (resident_blend) {
         mb_defines["MB_RESIDENT"] = "1";
+    }
+    if (std::getenv("GSPLAT_TT_COEFF_DEBUG") != nullptr) {
+        mb_defines["MB_COEFF_DEBUG"] = "1";
     }
     ctx.compute = CreateKernel(
         program,
@@ -1459,8 +1498,18 @@ static double process_frame_mb_devcull_resident(
     // SFPU cull: the blend reader reads the precomputed 32-bit mask from the
     // resident cull_masks buffer (registered by the cull pass) instead of
     // running the soft-float cull. Built with the matching MB_SFPU_CULL define.
+    const bool payload = mb::payload_enabled();
     const char* sfpu_cull_env = std::getenv("GSPLAT_TT_SFPU_CULL");
-    const bool sfpu_cull = sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
+    const bool sfpu_cull = !payload && sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
+    uint32_t payload_addr = 0;
+    if (payload) {
+        auto buf_payload = gsplat_tt::device_state::get_buffer("blend_payload");
+        if (!buf_payload) {
+            if (ok) *ok = false;
+            return 0.0;
+        }
+        payload_addr = static_cast<uint32_t>(buf_payload->address());
+    }
     uint32_t cull_masks_addr = 0;
     uint32_t cull_base_addr = 0;
     if (sfpu_cull) {
@@ -1522,15 +1571,23 @@ static double process_frame_mb_devcull_resident(
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
             for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                 CoreCoord core{x, y};
-                std::vector<uint32_t> reader_args{
-                    a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
-                    ids_addr, rng_addr, xramp_addr, yramp_addr,
-                    tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
-                    cull_disabled ? 1u : 0u,
-                };
-                if (sfpu_cull) {
-                    reader_args.push_back(cull_masks_addr);  // arg 17
-                    reader_args.push_back(cull_base_addr);   // arg 18
+                std::vector<uint32_t> reader_args;
+                if (payload) {
+                    reader_args = {
+                        rng_addr, xramp_addr, yramp_addr, tile_ids_addr,
+                        lpt_meta_addr, core_index, payload_addr,
+                    };
+                } else {
+                    reader_args = {
+                        a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
+                        ids_addr, rng_addr, xramp_addr, yramp_addr,
+                        tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
+                        cull_disabled ? 1u : 0u,
+                    };
+                    if (sfpu_cull) {
+                        reader_args.push_back(cull_masks_addr);  // arg 17
+                        reader_args.push_back(cull_base_addr);   // arg 18
+                    }
                 }
                 SetRuntimeArgs(program, ctx.reader, core, reader_args);
                 SetRuntimeArgs(program, ctx.compute, core, {0u});
@@ -1971,6 +2028,203 @@ static double process_frame(
 }  // namespace cull
 
 // ===========================================================================
+// Stage C2 payload-pack pass (GSPLAT_TT_BLEND_PAYLOAD).
+//
+// A single dataflow kernel (payload_pack.cpp) that runs BEFORE the blend. Per
+// LPT tile it streams the depth-sorted candidate ids, gathers the proj_m_* SoA
+// attrs (the SAME random gather the blend reader used to do), runs the scalar
+// microblock cull, and writes one CONTIGUOUS 64B row per candidate into
+// blend_payload (indexed by global candidate index). The blend reader then
+// STREAMS those rows sequentially -> the ~1.9 GB random gather + cull_masks
+// round-trip + MB_CULL_SPIN are all gone from the blend. This pass REPLACES the
+// separate SFPU cull pass (it bakes the mask into the payload row).
+// ===========================================================================
+namespace pack {
+
+constexpr uint32_t CB_SCR_IDS  = 0;   // ids / ranges / tile-id scratch
+constexpr uint32_t CB_SCR_ATTR = 1;   // double-buffered 9-field gather scratch
+constexpr uint32_t CB_SCR_ROW  = 2;   // 64B row assembly scratch
+constexpr uint32_t GATHER_FIELDS = 9;
+
+static void build_program_and_workload(DeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+
+    auto cb_cfg = [&](uint32_t id, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+        CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
+        c.set_page_size(id, page_bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+
+    cb_cfg(CB_SCR_IDS, 64, 2, DataFormat::UInt32);
+    // 2 chunks x 16 gaussians x 9 SoA pages (64B each) = 288 pages.
+    cb_cfg(CB_SCR_ATTR, 64, 2u * 16u * GATHER_FIELDS, DataFormat::Float32);
+    cb_cfg(CB_SCR_ROW, 64, 1, DataFormat::UInt32);
+
+    // 11 DRAM-interleaved accessors: a,b,c,px,py,op,col, ids, ranges, payload,
+    // tile_ids.
+    std::vector<uint32_t> reader_ct;
+    for (int i = 0; i < 11; i++) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    }
+    ctx.reader = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/payload_pack.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = reader_ct,
+        });
+
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.workload.add_program(device_range, std::move(program));
+}
+
+static DeviceContext init_device_context() {
+    DeviceContext ctx;
+    ctx.mesh_device = gsplat_tt::device_state::get_device();
+    ctx.cq = gsplat_tt::device_state::command_queue();
+    ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
+    pack::build_program_and_workload(ctx);
+    return ctx;
+}
+
+// Allocate blend_payload from the BLEND context allocator (g_ctx_mb) so it lives
+// in the same allocator that owns res_out / ramps (mirroring cull_masks; a
+// buffer from a different context's allocator is not mutually tracked and can be
+// clobbered). Sized to round_up(P_kept,16) rows of 64B (global-candidate-index).
+static bool ensure_payload_buffer(DeviceContext& ctx, uint32_t num_tiles) {
+    namespace ds = gsplat_tt::device_state;
+    (void)num_tiles;
+    uint32_t p_kept = 0;
+    uint32_t mask_elems = 0;
+    if (!ds::get_sort_blend_pipe_scalars(&p_kept, &mask_elems)) {
+        auto buf_pk = ds::get_buffer("sort_P_kept");
+        if (!buf_pk) {
+            return false;
+        }
+        std::vector<uint32_t> pkept(16, 0);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
+        p_kept = pkept[0];
+    }
+    const size_t rows = std::max<size_t>(16, (static_cast<size_t>(p_kept) + 15u) & ~static_cast<size_t>(15u));
+    const size_t payload_bytes = rows * mb::COEFF_ROW_BYTES_MB;
+    auto make_dram = [&](size_t bytes, size_t page_bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{.page_size = page_bytes, .buffer_type = BufferType::DRAM};
+        return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    };
+    if (!ctx.res_payload || ctx.res_payload_bytes < payload_bytes) {
+        ctx.res_payload = make_dram(payload_bytes, mb::COEFF_ROW_BYTES_MB);
+        ctx.res_payload_bytes = payload_bytes;
+        ds::register_buffer("blend_payload", ctx.res_payload);
+    }
+    return true;
+}
+
+// Run the payload-pack pass over all candidates. Returns elapsed ms (or 0 with
+// *ok=false if a required resident buffer is missing).
+static double process_frame(
+    DeviceContext& ctx,
+    float contrib_floor,
+    bool cull_disabled,
+    uint32_t /*num_tiles*/,
+    uint32_t tiles_x,
+    bool* ok) {
+    namespace ds = gsplat_tt::device_state;
+    auto buf_a   = ds::get_buffer("proj_m_a");
+    auto buf_b   = ds::get_buffer("proj_m_b");
+    auto buf_c   = ds::get_buffer("proj_m_c");
+    auto buf_px  = ds::get_buffer("proj_m_px");
+    auto buf_py  = ds::get_buffer("proj_m_py");
+    auto buf_op  = ds::get_buffer("proj_m_opacity");
+    auto buf_col = ds::get_buffer("proj_m_colors");
+    auto buf_ids = ds::get_buffer("sort_sorted_ids");
+    auto buf_rng = ds::get_buffer("sort_tile_ranges");
+    auto buf_pay = ds::get_buffer("blend_payload");
+    if (!buf_a || !buf_b || !buf_c || !buf_px || !buf_py || !buf_op || !buf_col ||
+        !buf_ids || !buf_rng || !buf_pay) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+    if (ok) *ok = true;
+
+    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
+    const ResidentSortLpt lpt = load_resident_sort_lpt(ctx.cq, num_cores);
+    if (!lpt.ok) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+
+    Program& program = get_program_for_workload(ctx);
+    uint32_t core_index = 0;
+    const uint32_t a_addr   = static_cast<uint32_t>(buf_a->address());
+    const uint32_t b_addr   = static_cast<uint32_t>(buf_b->address());
+    const uint32_t c_addr   = static_cast<uint32_t>(buf_c->address());
+    const uint32_t px_addr  = static_cast<uint32_t>(buf_px->address());
+    const uint32_t py_addr  = static_cast<uint32_t>(buf_py->address());
+    const uint32_t op_addr  = static_cast<uint32_t>(buf_op->address());
+    const uint32_t col_addr = static_cast<uint32_t>(buf_col->address());
+    const uint32_t ids_addr = static_cast<uint32_t>(buf_ids->address());
+    const uint32_t rng_addr = static_cast<uint32_t>(buf_rng->address());
+    const uint32_t pay_addr = static_cast<uint32_t>(buf_pay->address());
+    const uint32_t tile_ids_addr = static_cast<uint32_t>(lpt.tile_ids_buf->address());
+    uint32_t floor_bits;
+    std::memcpy(&floor_bits, &contrib_floor, 4);
+    for (const auto& range : ctx.all_cores.ranges()) {
+        for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+            for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                CoreCoord core{x, y};
+                const uint32_t start = lpt.per_core_offset[core_index];
+                const uint32_t count = lpt.per_core_count[core_index];
+                SetRuntimeArgs(program, ctx.reader, core, {
+                    a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
+                    ids_addr, rng_addr, pay_addr, tile_ids_addr, start, count,
+                    tiles_x, floor_bits, cull_disabled ? 1u : 0u,
+                });
+                core_index++;
+            }
+        }
+    }
+
+    const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
+    const auto t_start = std::chrono::steady_clock::now();
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    distributed::Finish(*ctx.cq);
+    const auto t_end = std::chrono::steady_clock::now();
+    const double pack_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    if (timing) {
+        std::fprintf(stderr, "[PACK_SPLIT] exec=%.1f ms payload=0x%lx\n", pack_ms,
+                     static_cast<unsigned long>(pay_addr));
+    }
+    // Diagnostic: read back the packed payload to host and dump the first few
+    // rows (global-index 0..N) so the pack write-order can be byte-verified
+    // against the consumption layout without DPRINT backpressure. Gated by env.
+    if (std::getenv("GSPLAT_TT_PAYLOAD_READBACK") != nullptr) {
+        const size_t rows_total = buf_pay->size() / mb::COEFF_ROW_BYTES_MB;
+        const size_t dump_rows = std::min<size_t>(rows_total, 8);
+        std::vector<uint32_t> rb(rows_total * (mb::COEFF_ROW_BYTES_MB / 4), 0xCDCDCDCDu);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, rb, buf_pay, /*blocking=*/true);
+        std::fprintf(stderr, "[PAYLOAD_RB] rows=%zu (dump %zu) payload=0x%lx\n",
+                     rows_total, dump_rows, static_cast<unsigned long>(pay_addr));
+        for (size_t r = 0; r < dump_rows; ++r) {
+            const uint32_t* row = rb.data() + r * 16;
+            auto u2f = [](uint32_t b) { float f; std::memcpy(&f, &b, 4); return f; };
+            std::fprintf(stderr,
+                "[PAYLOAD_RB] g=%zu a=%.4f b=%.4f c=%.4f mxl=%.3f myl=%.3f op=%.4f "
+                "cr=%.4f cg=%.4f cb=%.4f mask=0x%x\n",
+                r, u2f(row[0]), u2f(row[1]), u2f(row[2]), u2f(row[3]), u2f(row[4]),
+                u2f(row[6]), u2f(row[7]), u2f(row[8]), u2f(row[9]), row[10]);
+        }
+    }
+    return pack_ms;
+}
+
+}  // namespace pack
+
+// ===========================================================================
 // FUSED_TILE: one command-queue Finish for cull+blend (default ON for resident
 // SFPU stack; GSPLAT_TT_FUSED_TILE=0 to opt out). Scaffold: fused_tile_* cull
 // triple (on-device sort_lpt_meta) + resident mb blend, back-to-back workloads.
@@ -2376,6 +2630,7 @@ std::unique_ptr<DeviceContext> g_ctx;
 std::unique_ptr<DeviceContext> g_ctx_mb;
 std::unique_ptr<DeviceContext> g_ctx_cull;   // SFPU microblock-cull pass
 std::unique_ptr<DeviceContext> g_ctx_fused;  // GSPLAT_TT_FUSED_TILE cull triple
+std::unique_ptr<DeviceContext> g_ctx_pack;   // GSPLAT_TT_BLEND_PAYLOAD pack pass
 }  // namespace
 
 bool device_ready() { return g_ctx != nullptr || g_ctx_mb != nullptr; }
@@ -2438,6 +2693,34 @@ double blend_mb_devcull_resident(
     if (!g_ctx_mb) {
         (void)gsplat_tt::device_state::get_device();
         g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
+    }
+    // Stage C2 (GSPLAT_TT_BLEND_PAYLOAD): pack pass writes a contiguous payload,
+    // then the blend reader streams it sequentially. Takes precedence over the
+    // fused cull+blend path (the pack bakes the mask into the payload row, so the
+    // SFPU cull pass is bypassed). A Finish between pack and blend settles the
+    // payload DRAM writes -> the sequential reads need no per-candidate spin.
+    if (::mb::payload_enabled()) {
+        if (!g_ctx_pack) {
+            g_ctx_pack = std::make_unique<DeviceContext>(::mb::pack::init_device_context());
+        }
+        if (!::mb::pack::ensure_payload_buffer(*g_ctx_mb, static_cast<uint32_t>(num_tiles))) {
+            if (device_ok) *device_ok = false;
+            return 0.0;
+        }
+        bool pack_ok = false;
+        const double pack_ms = ::mb::pack::process_frame(
+            *g_ctx_pack, contrib_floor, cull_disabled,
+            static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x), &pack_ok);
+        if (!pack_ok) {
+            if (device_ok) *device_ok = false;
+            return 0.0;
+        }
+        const double blend_ms = ::mb::process_frame_mb_devcull_resident(
+            *g_ctx_mb, contrib_floor, cull_disabled,
+            static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
+            static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
+            image_out, device_ok);
+        return pack_ms + blend_ms;
     }
     if (::mb::fused::enabled()) {
         if (!g_ctx_fused) {
@@ -2574,6 +2857,7 @@ void device_shutdown() {
     (void)g_ctx_mb.release();
     (void)g_ctx_cull.release();
     (void)g_ctx_fused.release();
+    (void)g_ctx_pack.release();
 }
 
 }  // namespace gsplat_tt
