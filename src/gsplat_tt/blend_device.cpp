@@ -986,6 +986,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         if (std::getenv("GSPLAT_TT_SFPU_CULL_DEBUG") != nullptr) {
             reader_defines["MB_SFPU_CULL_DEBUG"] = "1";
         }
+        if (std::getenv("GSPLAT_TT_FUSE_AB") != nullptr) {
+            reader_defines["FUSE_AB"] = "1";
+        }
         if (tile_mask_l1) {
             // L1-resident whole-tile masks: the candidate loop reads masks from
             // L1, so there is NO per-candidate NoC read. The masks still cross the
@@ -1096,6 +1099,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     std::map<std::string, std::string> writer_defines;
     if (resident_blend) {
         writer_defines["MB_RESIDENT"] = "1";
+    }
+    if (std::getenv("GSPLAT_TT_FUSE_AB") != nullptr) {
+        writer_defines["FUSE_AB"] = "1";
     }
     ctx.writer = CreateKernel(
         program,
@@ -2560,6 +2566,7 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
 
     std::map<std::string, std::string> fuse_defines;
     if (fuse) fuse_defines["FUSE_BLEND"] = "1";
+    if (std::getenv("GSPLAT_TT_FUSE_AB") != nullptr) fuse_defines["FUSE_AB"] = "1";
 
     std::vector<uint32_t> reader_ct;
     const int reader_accessors = fuse ? 15 : 12;  // +colors,+xramp,+yramp

@@ -5,6 +5,9 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#if defined(FUSE_AB)
+#include "api/debug/dprint.h"
+#endif
 
 // Alpha-blend WRITER kernel (BRISC, NoC0; see DataMovementProcessor::RISCV_0
 // in alpha_blend.cpp).
@@ -134,6 +137,17 @@ void kernel_main() {
         // `read_ptr += tile_bytes` arithmetic below.
         cb_wait_front(CB_COLOR_OUT, 3);
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
+#ifdef FUSE_AB
+        {
+            static uint32_t _abc_n = 0;
+            if (_abc_n < 24u) { _abc_n++;
+                auto rch = reinterpret_cast<volatile uint16_t*>(read_ptr);
+                DPRINT << "ABCOL t=" << screen_tile << " L=0"
+                       << " r0=" << rch[0] << " r200=" << rch[200] << " r511=" << rch[511]
+                       << " r800=" << rch[800] << " r1000=" << rch[1000] << ENDL();
+            }
+        }
+#endif
         for (uint32_t ch = 0; ch < 3; ch++) {
             // Output buffer layout: (num_tiles, 3, 32, 32) fp32. Tile-major
             // order with R/G/B interleaved per screen tile, so the global

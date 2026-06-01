@@ -40,7 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(MB_SFPU_CULL_DEBUG)
+#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW)
 #include "api/debug/dprint.h"
 #endif
 
@@ -1025,6 +1025,19 @@ void kernel_main() {
                     row[13] = 0u;
                     row[14] = 0u;
                     row[15] = 0u;
+#ifdef FUSE_AB_ROW
+                    if ((tile_id % 1500u) == 7u) {
+                        static uint32_t _ab_n = 0;
+                        const uint32_t _ab_p = gstart_buf[cur] + j;
+                        if (_ab_n < 320u) { _ab_n++;
+                            DPRINT << "ABROW t=" << tile_id << " p=" << _ab_p << " g=" << g
+                                   << " a=" << F32(bits_to_f(row[0]))
+                                   << " mxl=" << F32(bits_to_f(row[3]))
+                                   << " op=" << F32(bits_to_f(row[6]))
+                                   << " m=" << row[10] << ENDL();
+                        }
+                    }
+#endif
                     cb_push_back(CB_MB_COEFF, 1);
                 }
                 cur = nxt;

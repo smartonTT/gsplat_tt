@@ -33,7 +33,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(CULL_READER_DEBUG) || defined(CULL_DEBUG_REF)
+#if defined(CULL_READER_DEBUG) || defined(CULL_DEBUG_REF) || defined(FUSE_AB_ROW) || defined(FUSE_AB)
 #include "api/debug/dprint.h"
 #endif
 
@@ -462,6 +462,18 @@ void kernel_main() {
                     row[13] = 0u;
                     row[14] = 0u;
                     row[15] = 0u;
+#if defined(FUSE_AB_ROW) || defined(FUSE_AB)
+                    if (p < 6u) {
+                        static uint32_t _ab_n = 0;
+                        if (_ab_n < 240u) { _ab_n++;
+                            DPRINT << "ABROW t=" << tile_id << " p=" << p << " g=" << g
+                                   << " a=" << row[0]
+                                   << " mxl=" << row[3]
+                                   << " op=" << row[6]
+                                   << " m=" << row[10] << ENDL();
+                        }
+                    }
+#endif
                     cb_push_back(CB_MB_COEFF, 1);
                 }
                 b_processed += take;

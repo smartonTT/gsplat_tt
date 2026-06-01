@@ -44,7 +44,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(CULL_DEBUG_EMIT_M2) || defined(CULL_DEBUG_WRITE) || defined(CULL_DEBUG_DUMPBOX) || defined(CULL_DEBUG_BIND) || defined(CULL_DEBUG_VARY)
+#if defined(CULL_DEBUG_EMIT_M2) || defined(CULL_DEBUG_WRITE) || defined(CULL_DEBUG_DUMPBOX) || defined(CULL_DEBUG_BIND) || defined(CULL_DEBUG_VARY) || defined(FUSE_AB)
 #include "api/debug/dprint.h"
 #endif
 
@@ -362,6 +362,17 @@ void kernel_main() {
         // (R,G,B) for this screen tile to res_out at pages 3*tile_id + {0,1,2}. -
         cb_wait_front(CB_COLOR_OUT, 3);
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
+#ifdef FUSE_AB
+        {
+            static uint32_t _abc_n = 0;
+            if (_abc_n < 24u) { _abc_n++;
+                auto rch = reinterpret_cast<volatile uint16_t*>(read_ptr);
+                DPRINT << "ABCOL t=" << tile_id << " L=" << L
+                       << " r0=" << rch[0] << " r200=" << rch[200] << " r511=" << rch[511]
+                       << " r800=" << rch[800] << " r1000=" << rch[1000] << ENDL();
+            }
+        }
+#endif
         for (uint32_t ch = 0; ch < 3; ch++) {
             noc_async_write_tile(3u * tile_id + ch, out_acc, read_ptr);
             read_ptr += color_tile_bytes;
