@@ -987,6 +987,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (std::getenv("GSPLAT_TT_COEFF_DEBUG") != nullptr) {
         mb_defines["MB_COEFF_DEBUG"] = "1";
     }
+    if (std::getenv("GSPLAT_TT_ROWCK") != nullptr) {
+        mb_defines["MB_ROWCK"] = "1";
+    }
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
@@ -2241,6 +2244,36 @@ static double process_frame(
         }
         std::fprintf(stderr, "[PAYLOAD_RB] rows=%zu unwritten(sentinel)=%zu first_unwritten=%zu payload=0x%lx\n",
                      rows_total, unwritten, first_unwritten, static_cast<unsigned long>(pay_addr));
+        // COVERAGE CHECK: the reader streams pages [id_start, id_end) per tile.
+        // Count how many of those READ pages are still sentinel (pack failed to
+        // write them) -> those candidates render as garbage (0xCDCDCDCD float
+        // streaks). This is the exact range the image depends on.
+        if (auto buf_rng2 = ds::get_buffer("sort_tile_ranges")) {
+            std::vector<uint32_t> rng(buf_rng2->size() / 4, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx.cq, rng, buf_rng2, /*blocking=*/true);
+            const size_t ntiles = rng.size() / 2;
+            size_t read_pages = 0, read_sentinel = 0, bad_tiles = 0, first_bad = ntiles;
+            for (size_t t = 0; t < ntiles; ++t) {
+                const uint32_t s = rng[2 * t], e = rng[2 * t + 1];
+                if (e <= s) continue;
+                bool tile_bad = false;
+                for (uint32_t g = s; g < e && g < rows_total; ++g) {
+                    read_pages++;
+                    const uint32_t* row = rb.data() + static_cast<size_t>(g) * 16;
+                    if (row[0] == 0xCDCDCDCDu && row[10] == 0xCDCDCDCDu) {
+                        read_sentinel++;
+                        tile_bad = true;
+                    }
+                }
+                if (tile_bad) {
+                    if (first_bad == ntiles) first_bad = t;
+                    bad_tiles++;
+                }
+            }
+            std::fprintf(stderr,
+                "[PAYLOAD_RB] COVERAGE read_pages=%zu read_sentinel=%zu bad_tiles=%zu/%zu first_bad_tile=%zu\n",
+                read_pages, read_sentinel, bad_tiles, ntiles, first_bad);
+        }
         // Dump strided samples across the WHOLE index range + the last rows.
         const size_t stride = std::max<size_t>(1, rows_total / 24);
         for (size_t r = 0; r < rows_total; r += stride) {

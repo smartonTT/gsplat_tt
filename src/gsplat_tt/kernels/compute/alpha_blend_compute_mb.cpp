@@ -38,7 +38,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
-#if defined(MB_DEBUG_DPRINT)
+#if defined(MB_DEBUG_DPRINT) || defined(MB_ROWCK)
 #include "api/debug/dprint.h"
 #endif
 #include "api/compute/cb_api.h"
@@ -266,7 +266,15 @@ inline void dispatch_blend_guarded(
 // are read ONCE (not once per microblock), then dispatched to the masked
 // microblocks. One start_/done_ for the whole tile (proven safe by VECMAP).
 inline void process_tile_gaussians(uint32_t num_g) {
+#if defined(MB_ROWCK)
+    static uint32_t rowck_t = 0;
+    uint32_t rowck = 0;
+    const uint32_t rowck_tile = rowck_t++;
+#endif
     if (num_g == 0) {
+#if defined(MB_ROWCK)
+        MATH((DPRINT << "ROWCK t=" << rowck_tile << " ng=0 cs=0" << ENDL()));
+#endif
         return;
     }
 #if defined(MB_DEBUG_DPRINT)
@@ -277,6 +285,11 @@ inline void process_tile_gaussians(uint32_t num_g) {
     for (uint32_t g = 0; g < num_g; g++) {
         cb_wait_front(CB_MB_COEFF, 1);
         const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
+#if defined(MB_ROWCK)
+        for (uint32_t w = 0; w < 11u; ++w) {
+            rowck = (rowck * 1000003u) ^ row[w];
+        }
+#endif
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
         // read + the full 32-way dispatch + SFPU blend. Isolates SFPU/dispatch cost.
@@ -317,6 +330,9 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #endif
         cb_pop_front(CB_MB_COEFF, 1);
     }
+#if defined(MB_ROWCK)
+    MATH((DPRINT << "ROWCK t=" << rowck_tile << " ng=" << num_g << " cs=" << rowck << ENDL()));
+#endif
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
 }
 
