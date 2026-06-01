@@ -29,10 +29,10 @@
 // RUNTIME ARGS
 //   0: cull_masks base (uint32, 64B / 16-elem pages)
 //   1: sort_tile_ranges base   2: tile_ids base
-//   3: tile_ids_start   4: tile_ids_count
+//   3: sort_lpt_meta base   4: core_index
 //   5: cull_mask_base base (uint32, 64B SoA: per-tile PAGE-ALIGNED mask offset)
-// COMPILE-TIME: 4 DRAM-interleaved TensorAccessorArgs: cull_masks, ranges,
-// tile_ids, cull_mask_base.
+// COMPILE-TIME: 5 DRAM-interleaved TensorAccessorArgs: cull_masks, ranges,
+// tile_ids, sort_lpt_meta, cull_mask_base.
 //
 // cull_masks is laid out per-tile PAGE-ALIGNED (cull_mask_base[tile] is a
 // multiple of 16): the masks for tile t occupy [base, base+L). This guarantees
@@ -80,25 +80,44 @@ void kernel_main() {
     const uint32_t masks_addr     = get_arg_val<uint32_t>(0);
     const uint32_t ranges_addr    = get_arg_val<uint32_t>(1);
     const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(2);
-    const uint32_t tile_ids_start = get_arg_val<uint32_t>(3);
-    const uint32_t tile_ids_count = get_arg_val<uint32_t>(4);
+    const uint32_t lpt_meta_addr  = get_arg_val<uint32_t>(3);
+    const uint32_t core_index     = get_arg_val<uint32_t>(4);
     const uint32_t base_addr      = get_arg_val<uint32_t>(5);
 
     constexpr auto masks_args  = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<masks_args.next_compile_time_args_offset()>();
     constexpr auto tids_args   = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
-    constexpr auto base_args   = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
+    constexpr auto lpt_meta_args = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
+    constexpr auto base_args   = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
 
     const auto masks_acc  = TensorAccessor(masks_args,  masks_addr,    SOA_PAGE_BYTES);
     const auto ranges_acc = TensorAccessor(ranges_args, ranges_addr,   SOA_PAGE_BYTES);
     const auto tids_acc   = TensorAccessor(tids_args,   tile_ids_addr, IDS_PAGE_BYTES);
+    const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, SOA_PAGE_BYTES);
     const auto base_acc   = TensorAccessor(base_args,   base_addr,     SOA_PAGE_BYTES);
+
+    constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
+    const uint32_t meta_elem0 = core_index * 2u;
+    const uint32_t meta_page0 = meta_elem0 / META_ELEMS_PER_PAGE;
+    const uint32_t meta_ip0   = meta_elem0 % META_ELEMS_PER_PAGE;
+
+    const uint32_t scratch_addr = get_write_ptr(CB_MASK_SCR);
+    auto scratch_ptr_meta = reinterpret_cast<volatile uint32_t*>(scratch_addr);
+    noc_async_read(get_noc_addr(meta_page0, lpt_meta_acc), scratch_addr, 64);
+    noc_async_read_barrier();
+    uint32_t tile_ids_start = scratch_ptr_meta[meta_ip0];
+    uint32_t tile_ids_count = 0;
+    if (meta_ip0 + 1u < META_ELEMS_PER_PAGE) {
+        tile_ids_count = scratch_ptr_meta[meta_ip0 + 1u];
+    } else {
+        noc_async_read(get_noc_addr(meta_page0 + 1u, lpt_meta_acc), scratch_addr, 64);
+        noc_async_read_barrier();
+        tile_ids_count = scratch_ptr_meta[0];
+    }
 
     if (tile_ids_count == 0) {
         return;
     }
-
-    const uint32_t scratch_addr = get_write_ptr(CB_MASK_SCR);
     auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
 
     constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;

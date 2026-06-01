@@ -1907,22 +1907,28 @@ static double process_frame(
 }  // namespace cull
 
 // ===========================================================================
-// FUSED_TILE (GSPLAT_TT_FUSED_TILE): one command-queue Finish for cull+blend.
-// Scaffold v1: fused program runs the cull triple (fused_tile_* kernels);
-// blend still uses the resident mb program, enqueued back-to-back.
+// FUSED_TILE: one command-queue Finish for cull+blend (default ON for resident
+// SFPU stack; GSPLAT_TT_FUSED_TILE=0 to opt out). Scaffold: fused_tile_* cull
+// triple (on-device sort_lpt_meta) + resident mb blend, back-to-back workloads.
+// Next: single program, L1 mask handoff (no cull_masks DRAM), C2 payload fuse.
 // ===========================================================================
 namespace fused {
 
 static bool enabled() {
-    const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
-    if (v == nullptr || v[0] != '1') {
-        return false;
-    }
     auto env_on = [](const char* n) {
         const char* e = std::getenv(n);
         return e != nullptr && e[0] == '1';
     };
-    // Hero-quality resident SFPU path only (see opt/host-free-fusion.md).
+    // Hero-quality resident SFPU path only. Default ON when the production
+    // resident+SFPU stack is active; opt out with GSPLAT_TT_FUSED_TILE=0.
+    const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
+    if (v != nullptr && (v[0] == '0' || (v[0] == '\0' && v[1] == '\0'))) {
+        return false;
+    }
+    if (v != nullptr && v[0] == '1') {
+        return env_on("GSPLAT_TT_MB_DEVCULL") && env_on("GSPLAT_TT_RESIDENT_BLEND") &&
+               env_on("GSPLAT_TT_SFPU_CULL");
+    }
     return env_on("GSPLAT_TT_MB_DEVCULL") && env_on("GSPLAT_TT_RESIDENT_BLEND") &&
            env_on("GSPLAT_TT_SFPU_CULL");
 }
@@ -1945,9 +1951,11 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
     cb_cfg(cull::CB_SCR_ATTR, 64, 16u * cull::GATHER_FIELDS, DataFormat::Float32);
     cb_cfg(cull::CB_MASK_SCR, 128, 1, DataFormat::UInt32);
     cb_cfg(cull::CB_KEEP, mb::RAMP_TILE_BYTES, 4, DataFormat::Float32);
+    constexpr uint32_t CB_CORE_TILES = 7;
+    cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
 
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 12; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     ctx.reader = CreateKernel(
@@ -1973,10 +1981,11 @@ static void build_fused_program_and_workload(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
+            .defines = {{"CULL_LPT_CB", "1"}},
         });
 
     std::vector<uint32_t> writer_ct;
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     }
     ctx.writer = CreateKernel(
@@ -2038,12 +2047,14 @@ static double process_frame_resident(
     }
     if (ok) *ok = true;
 
-    const uint32_t num_cores = ctx_fused.grid.x * ctx_fused.grid.y;
-    const ResidentSortLpt lpt = load_resident_sort_lpt(ctx_blend.cq, num_cores);
+    const ResidentSortLpt lpt = resident_sort_lpt_handles();
     if (!lpt.ok) {
         if (ok) *ok = false;
         return 0.0;
     }
+    auto meta_buf = ds::get_buffer("sort_lpt_meta");
+    const uint32_t lpt_meta_addr =
+        meta_buf ? static_cast<uint32_t>(meta_buf->address()) : 0u;
 
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
@@ -2081,8 +2092,6 @@ static double process_frame_resident(
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
             for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                 CoreCoord core{x, y};
-                const uint32_t start = lpt.per_core_offset[core_index];
-                const uint32_t count = lpt.per_core_count[core_index];
                 SetRuntimeArgs(prog_fused, ctx_fused.reader, core, {
                     static_cast<uint32_t>(buf_a->address()),
                     static_cast<uint32_t>(buf_b->address()),
@@ -2095,16 +2104,16 @@ static double process_frame_resident(
                     static_cast<uint32_t>(ctx_fused.res_xramp->address()),
                     static_cast<uint32_t>(ctx_fused.res_yramp->address()),
                     lpt_tile_ids_addr,
-                    start, count, tiles_x, floor_bits,
+                    lpt_meta_addr, core_index, tiles_x, floor_bits,
                 });
                 SetRuntimeArgs(prog_fused, ctx_fused.compute, core, {
-                    count, floor_bits, cull_disabled ? 1u : 0u,
+                    0u, floor_bits, cull_disabled ? 1u : 0u,
                 });
                 SetRuntimeArgs(prog_fused, ctx_fused.writer, core, {
                     cull_masks_addr,
                     static_cast<uint32_t>(buf_rng->address()),
                     lpt_tile_ids_addr,
-                    start, count, cull_base_addr,
+                    lpt_meta_addr, core_index, cull_base_addr,
                 });
                 core_index++;
             }
@@ -2130,18 +2139,16 @@ static double process_frame_resident(
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
             for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                 CoreCoord core{x, y};
-                const uint32_t start = lpt.per_core_offset[core_index];
-                const uint32_t count = lpt.per_core_count[core_index];
                 SetRuntimeArgs(prog_blend, ctx_blend.reader, core, {
                     a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
                     ids_addr, rng_addr, xramp_addr, yramp_addr,
-                    tile_ids_addr, start, count, tiles_x, floor_bits,
+                    tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
                     cull_disabled ? 1u : 0u,
                     cull_masks_addr, cull_base_addr,
                 });
-                SetRuntimeArgs(prog_blend, ctx_blend.compute, core, {count});
+                SetRuntimeArgs(prog_blend, ctx_blend.compute, core, {0u});
                 SetRuntimeArgs(prog_blend, ctx_blend.writer, core, {
-                    out_addr, tile_ids_addr, start, count,
+                    out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                 });
                 core_index++;
             }

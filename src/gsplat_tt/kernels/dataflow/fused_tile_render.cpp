@@ -26,8 +26,9 @@
 //   6:    sort_sorted_ids base
 //   7:    sort_tile_ranges base
 //   8:    box_ox ramp base   9: box_oy ramp base
-//   10:   tile_ids base   11: tile_ids_start   12: tile_ids_count   13: tiles_x
-// COMPILE-TIME: 11 DRAM-interleaved TensorAccessorArgs in the above buffer order.
+//   10:   tile_ids base   11: sort_lpt_meta base   12: core_index   13: tiles_x
+//   14:   contrib_floor (f32 bits)
+// COMPILE-TIME: 12 DRAM-interleaved TensorAccessorArgs in the above buffer order.
 
 #include <cstdint>
 
@@ -53,6 +54,7 @@ constexpr uint32_t CB_CULL_COEFF = 2;
 constexpr uint32_t CB_CULL_COUNTS= 3;
 constexpr uint32_t CB_SCR_IDS    = 4;
 constexpr uint32_t CB_SCR_ATTR   = 5;
+constexpr uint32_t CB_CORE_TILES = 7;  // tile count for compute (no host LPT D2H)
 
 constexpr uint32_t SOA_PAGE_BYTES = 64;
 constexpr uint32_t IDS_PAGE_BYTES = 64;
@@ -103,8 +105,8 @@ void kernel_main() {
     const uint32_t box_ox_addr   = get_arg_val<uint32_t>(8);
     const uint32_t box_oy_addr   = get_arg_val<uint32_t>(9);
     const uint32_t tile_ids_addr = get_arg_val<uint32_t>(10);
-    const uint32_t tile_ids_start= get_arg_val<uint32_t>(11);
-    const uint32_t tile_ids_count= get_arg_val<uint32_t>(12);
+    const uint32_t lpt_meta_addr = get_arg_val<uint32_t>(11);
+    const uint32_t core_index    = get_arg_val<uint32_t>(12);
     const uint32_t tiles_x       = get_arg_val<uint32_t>(13);
     const uint32_t floor_bits    = get_arg_val<uint32_t>(14);
     float contrib_floor;
@@ -121,6 +123,7 @@ void kernel_main() {
     constexpr auto bx_args     = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
     constexpr auto by_args     = TensorAccessorArgs<bx_args.next_compile_time_args_offset()>();
     constexpr auto tids_args   = TensorAccessorArgs<by_args.next_compile_time_args_offset()>();
+    constexpr auto lpt_meta_args = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
 
     const auto a_acc      = TensorAccessor(a_args,      a_addr,      SOA_PAGE_BYTES);
     const auto b_acc      = TensorAccessor(b_args,      b_addr,      SOA_PAGE_BYTES);
@@ -133,6 +136,28 @@ void kernel_main() {
     const auto bx_acc     = TensorAccessor(bx_args,     box_ox_addr, RAMP_TILE_BYTES);
     const auto by_acc     = TensorAccessor(by_args,     box_oy_addr, RAMP_TILE_BYTES);
     const auto tids_acc   = TensorAccessor(tids_args,   tile_ids_addr, IDS_PAGE_BYTES);
+    const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, SOA_PAGE_BYTES);
+
+    constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
+    const uint32_t meta_elem0 = core_index * 2u;
+    const uint32_t meta_page0 = meta_elem0 / META_ELEMS_PER_PAGE;
+    const uint32_t meta_ip0   = meta_elem0 % META_ELEMS_PER_PAGE;
+    const uint32_t meta_scratch = get_write_ptr(CB_SCR_IDS);
+    auto meta_ptr = reinterpret_cast<volatile uint32_t*>(meta_scratch);
+    noc_async_read(get_noc_addr(meta_page0, lpt_meta_acc), meta_scratch, 64);
+    noc_async_read_barrier();
+    uint32_t tile_ids_start = meta_ptr[meta_ip0];
+    uint32_t tile_ids_count = 0;
+    if (meta_ip0 + 1u < META_ELEMS_PER_PAGE) {
+        tile_ids_count = meta_ptr[meta_ip0 + 1u];
+    } else {
+        noc_async_read(get_noc_addr(meta_page0 + 1u, lpt_meta_acc), meta_scratch, 64);
+        noc_async_read_barrier();
+        tile_ids_count = meta_ptr[0];
+    }
+    cb_reserve_back(CB_CORE_TILES, 1);
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = tile_ids_count;
+    cb_push_back(CB_CORE_TILES, 1);
 
     if (tile_ids_count == 0) {
         return;

@@ -418,10 +418,22 @@ inline uint32_t f_to_u32(float f) {
 
 }  // namespace
 
+#ifdef CULL_LPT_CB
+constexpr uint32_t CB_CORE_TILES = 7;
+#endif
+
 void kernel_main() {
-    const uint32_t num_tiles    = get_arg_val<uint32_t>(0);
+    uint32_t num_tiles    = get_arg_val<uint32_t>(0);
     const uint32_t floor_bits   = get_arg_val<uint32_t>(1);
     const bool cull_disabled    = get_arg_val<uint32_t>(2) != 0;
+
+#ifdef CULL_LPT_CB
+    if (num_tiles == 0) {
+        cb_wait_front(CB_CORE_TILES, 1);
+        num_tiles = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CORE_TILES, 0))[0];
+        cb_pop_front(CB_CORE_TILES, 1);
+    }
+#endif
 
     init_sfpu(CB_BOX_OX, CB_KEEP);
     fill_tile_init();
