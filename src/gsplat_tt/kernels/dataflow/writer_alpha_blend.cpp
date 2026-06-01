@@ -46,8 +46,13 @@ constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 void kernel_main() {
     uint32_t out_addr        = get_arg_val<uint32_t>(0);
     uint32_t tile_ids_addr   = get_arg_val<uint32_t>(1);
+#ifdef MB_RESIDENT
+    const uint32_t lpt_meta_addr = get_arg_val<uint32_t>(2);
+    const uint32_t core_index    = get_arg_val<uint32_t>(3);
+#else
     uint32_t tile_ids_start  = get_arg_val<uint32_t>(2);
     uint32_t tile_ids_count  = get_arg_val<uint32_t>(3);
+#endif
 
     constexpr uint32_t CB_COLOR_OUT = 16;
     const uint32_t tile_bytes = get_tile_size(CB_COLOR_OUT);
@@ -55,9 +60,32 @@ void kernel_main() {
 
     constexpr auto out_args      = TensorAccessorArgs<0>();
     constexpr auto tile_ids_args = TensorAccessorArgs<out_args.next_compile_time_args_offset()>();
+#ifdef MB_RESIDENT
+    constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
+#endif
 
     const auto out          = TensorAccessor(out_args,      out_addr,      tile_bytes);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, tile_ids_page_bytes);
+#ifdef MB_RESIDENT
+    const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, tile_ids_page_bytes);
+    constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
+    const uint32_t meta_elem0 = core_index * 2u;
+    const uint32_t meta_page0 = meta_elem0 / META_ELEMS_PER_PAGE;
+    const uint32_t meta_ip0   = meta_elem0 % META_ELEMS_PER_PAGE;
+    uint32_t scratch_addr = get_write_ptr(CB_COLOR_OUT);
+    auto meta_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
+    noc_async_read(get_noc_addr(meta_page0, lpt_meta_acc), scratch_addr, 64);
+    noc_async_read_barrier();
+    uint32_t tile_ids_start = meta_ptr[meta_ip0];
+    uint32_t tile_ids_count = 0;
+    if (meta_ip0 + 1u < META_ELEMS_PER_PAGE) {
+        tile_ids_count = meta_ptr[meta_ip0 + 1u];
+    } else {
+        noc_async_read(get_noc_addr(meta_page0 + 1u, lpt_meta_acc), scratch_addr, 64);
+        noc_async_read_barrier();
+        tile_ids_count = meta_ptr[0];
+    }
+#endif
 
     if (tile_ids_count == 0) {
         return;
@@ -67,7 +95,9 @@ void kernel_main() {
     // (64 bytes) that we read each page into; no other CB activity happens
     // before we start consuming CB_COLOR_OUT, so we can safely use the
     // CB_COLOR_OUT write pointer region as scratch (it isn't in use yet).
+#ifndef MB_RESIDENT
     uint32_t scratch_addr = get_write_ptr(CB_COLOR_OUT);
+#endif
     auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
 
     uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];

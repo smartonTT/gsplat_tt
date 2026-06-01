@@ -60,6 +60,7 @@ constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp (c + 0.5)
 constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp (r + 0.5)
 constexpr uint32_t CB_MB_COEFF  = 2;   // one 48B coeff row per gaussian (mb-major)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock count)
+constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
 constexpr uint32_t CB_COLOR_OUT = 16;
 
 constexpr uint32_t NUM_MB = 32;
@@ -358,7 +359,14 @@ inline void debug_vecmap() {
 }  // namespace
 
 void kernel_main() {
+#ifdef MB_RESIDENT
+    cb_wait_front(CB_CORE_TILES, 1);
+    const uint32_t num_tiles =
+        reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CORE_TILES, 0))[0];
+    cb_pop_front(CB_CORE_TILES, 1);
+#else
     const uint32_t num_tiles = get_arg_val<uint32_t>(0);
+#endif
 
     init_sfpu(CB_XRAMP, CB_COLOR_OUT);
     fill_tile_init();

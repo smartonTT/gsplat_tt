@@ -60,6 +60,7 @@ constexpr uint32_t CB_MB_COUNTS = 3;
 constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
 constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
 constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
+constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
 
 constexpr float kInf = 1e30f;
 
@@ -378,6 +379,10 @@ void kernel_main() {
         noc_async_read_barrier();
         tile_ids_count = meta_ptr[0];
     }
+    // Host-free: compute reads tile count from this CB instead of a runtime arg.
+    cb_reserve_back(CB_CORE_TILES, 1);
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = tile_ids_count;
+    cb_push_back(CB_CORE_TILES, 1);
 #ifdef MB_SFPU_CULL
     const auto cull_masks_acc = TensorAccessor(cull_masks_args, cull_masks_addr, IDS_PAGE_BYTES);
     const auto cull_base_acc  = TensorAccessor(cull_base_args,  cull_base_addr,  64);

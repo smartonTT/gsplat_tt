@@ -1,19 +1,23 @@
-"""Regenerate opt/REPORT.html from opt/iters.jsonl + opt/metal-iters.jsonl.
+"""Regenerate opt/REPORT.html from opt/iters.jsonl + opt/metal-iters.jsonl + opt/ttw/iters.jsonl.
 
-Single self-contained HTML. Sections:
-  1. Profile line graphs (sum-ms over iters; per-stage breakdown; PSNR floor)
-  2. Per-iter ledger     (one big card per iter — hero/diff thumbnails,
-                          stage timings, PSNR, action, full note)
-  3. Algorithm snapshot  (current pipeline state, brief)
+Also writes an identical copy to opt/ttw/REPORT.html (never the tt-workflows stub).
 
-The supervisor's decide_and_log.py invokes this after every iter.
+Regenerate after every iteration (keep or reject) and whenever opt/current-iter.json
+changes (in-flight card at top of ledger).
+
+CLI:
+  python3 opt/build_report.py
+  python3 opt/build_report.py --set-in-flight '<json object>'
+  python3 opt/build_report.py --clear-in-flight
 """
 from __future__ import annotations
 
+import argparse
 import base64
 import io
 import json
 import statistics
+from datetime import datetime, timezone
 from pathlib import Path
 
 import matplotlib
@@ -24,8 +28,11 @@ import matplotlib.pyplot as plt
 OPT_DIR = Path(__file__).resolve().parent
 ITERS_JSONL = OPT_DIR / "iters.jsonl"
 METAL_ITERS_JSONL = OPT_DIR / "metal-iters.jsonl"
+TTW_ITERS_JSONL = OPT_DIR / "ttw" / "iters.jsonl"
+CURRENT_ITER_JSON = OPT_DIR / "current-iter.json"
 METAL_SCREENSHOTS_DIR = OPT_DIR / "metal-screenshots"
 REPORT_HTML = OPT_DIR / "REPORT.html"
+REPORT_HTML_TTW = OPT_DIR / "ttw" / "REPORT.html"
 SCREENSHOTS_DIR = OPT_DIR / "screenshots"
 VIEWS_PER_RUN = 30  # 30-view bicycle bench; iter sums always cover all 30 views
 TARGET_MS_PER_FRAME = 1.0  # 1 ms per frame on bh-30 — the final goal
@@ -33,6 +40,162 @@ TARGET_SUM_MS = TARGET_MS_PER_FRAME * VIEWS_PER_RUN  # legacy helper (= 30 ms)
 STAGE_KEYS = ("project_ms", "tile_assign_ms", "sort_ms", "blend_ms")
 STAGE_TIMING_KEYS = ("project", "tile_assign", "sort", "blend")
 REF_DIR = OPT_DIR.parent / "benchmarks" / "reference_v2"
+
+
+def now_ts_minutes() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")
+
+
+def format_ts_minutes(ts: str) -> str:
+    """Short UTC timestamp to minute resolution: YYYY-MM-DD HH:MM."""
+    if not ts:
+        return "—"
+    try:
+        s = ts.strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        if len(ts) >= 16:
+            return ts[:16].replace("T", " ")
+        return ts
+
+
+def _read_jsonl(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if line:
+            try:
+                rows.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    return rows
+
+
+def load_current_iter() -> dict | None:
+    if not CURRENT_ITER_JSON.exists():
+        return None
+    try:
+        row = json.loads(CURRENT_ITER_JSON.read_text())
+    except json.JSONDecodeError:
+        return None
+    return row if isinstance(row, dict) else None
+
+
+def write_current_iter(row: dict) -> None:
+    row = dict(row)
+    row.setdefault("updated_at", datetime.now(timezone.utc).replace(microsecond=0).isoformat())
+    CURRENT_ITER_JSON.parent.mkdir(parents=True, exist_ok=True)
+    CURRENT_ITER_JSON.write_text(json.dumps(row, indent=2) + "\n")
+
+
+def clear_current_iter() -> None:
+    if CURRENT_ITER_JSON.exists():
+        CURRENT_ITER_JSON.unlink()
+
+
+def load_ttw_iters() -> list[dict]:
+    return _read_jsonl(TTW_ITERS_JSONL)
+
+
+def normalize_ttw_row(r: dict) -> dict:
+    """Map tt-workflows iterlog entries into ledger card shape."""
+    n = r.get("iter")
+    idea = str(r.get("idea") or "")
+    decision = str(r.get("decision") or "")
+    if decision == "keep":
+        verdict = "WIN"
+    elif decision == "reject":
+        verdict = "FAIL"
+    else:
+        verdict = decision.upper() if decision else "—"
+    timings = r.get("timings") or {}
+    stage_map = {
+        "proj": "project_ms",
+        "project": "project_ms",
+        "ta": "tile_assign_ms",
+        "tile_assign": "tile_assign_ms",
+        "sort": "sort_ms",
+        "blend": "blend_ms",
+    }
+    per_stage: dict[str, float] = {}
+    for src, dst in stage_map.items():
+        v = timings.get(src)
+        if isinstance(v, (int, float)) and v == v:
+            per_stage[dst] = float(v)
+    metrics = r.get("metrics") or {}
+    hero = metrics.get("hero_vs_ref")
+    if not isinstance(hero, (int, float)):
+        for k, v in metrics.items():
+            if isinstance(v, (int, float)) and v == v:
+                hero = v
+                break
+    sum_ms = sum(per_stage.values()) * VIEWS_PER_RUN if per_stage else None
+    ts = r.get("ts") or r.get("timestamp") or ""
+    return {
+        "iter_dir": f"ttw-{int(n):03d}" if n is not None else "ttw-unknown",
+        "timestamp": ts,
+        "verdict": verdict,
+        "action": idea,
+        "note": r.get("reason") or r.get("notes") or "",
+        "hero_psnr_dB": hero,
+        "ms_per_view": (sum_ms / VIEWS_PER_RUN) if sum_ms else None,
+        "sum_total_ms": sum_ms,
+        "per_stage_median_ms": per_stage,
+        "psnr_per_view": {"hero": float(hero)} if isinstance(hero, (int, float)) else {},
+        "_runtime": "blackhole",
+        "_source": "ttw",
+        "validator_reasoning": r.get("reason") or "",
+    }
+
+
+def normalize_in_flight_row(row: dict) -> dict:
+    """Shape opt/current-iter.json for the same card renderer as completed iters."""
+    timings = row.get("timings") or {}
+    stage_map = {
+        "proj": "project_ms",
+        "ta": "tile_assign_ms",
+        "sort": "sort_ms",
+        "blend": "blend_ms",
+    }
+    per_stage: dict[str, float] = {}
+    for src, dst in stage_map.items():
+        v = timings.get(src)
+        if isinstance(v, (int, float)) and v == v:
+            per_stage[dst] = float(v)
+    metrics = row.get("metrics") or {}
+    hero = metrics.get("hero_vs_ref")
+    n = row.get("iter")
+    idea = str(row.get("idea") or "")
+    decision = row.get("decision")
+    status = str(row.get("status") or "in_progress")
+    if decision == "keep":
+        verdict = "WIN"
+    elif decision == "reject":
+        verdict = "FAIL"
+    elif decision:
+        verdict = str(decision).upper()
+    else:
+        verdict = f"IN FLIGHT ({status})"
+    iter_dir = row.get("iter_dir") or (f"ttw-{int(n):03d}" if n is not None else "current")
+    return {
+        "iter_dir": iter_dir,
+        "timestamp": row.get("updated_at") or row.get("started_at") or "",
+        "verdict": verdict,
+        "action": idea,
+        "note": row.get("note") or row.get("reason") or "",
+        "hero_psnr_dB": hero,
+        "per_stage_median_ms": per_stage,
+        "psnr_per_view": {"hero": float(hero)} if isinstance(hero, (int, float)) else {},
+        "_runtime": "blackhole",
+        "_source": "in_flight",
+        "_in_flight": True,
+        "validator_reasoning": row.get("note") or "",
+    }
 
 
 def img_link(src: str, cls: str = "thumb") -> str:
@@ -190,7 +353,7 @@ def metal_section(rows: list[dict]) -> str:
         psnr_html = f"<b>{psnr_str}</b> <small style='color:#777'>{label}</small>"
         sum_ms = r.get("sum_total_ms") or r.get("sum_total_ms_cpu_cpp_mac_30view") or r.get("sum_total_ms_tt") or r.get("sum_total_ms_cpu")
         sum_ms_str = f"{sum_ms:.1f}" if isinstance(sum_ms, (int, float)) and sum_ms == sum_ms else "—"
-        ts = r.get("timestamp", "")[:19].replace("T", " ")
+        ts = format_ts_minutes(r.get("timestamp", ""))
         note = (r.get("note") or "")
         note_short = note[:160] + ("…" if len(note) > 160 else "")
         body += (
@@ -794,6 +957,10 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
             thumb_html += img_link(diff_src)
 
     note = (r.get("validator_reasoning") or r.get("note") or "").strip()
+    ts_raw = r.get("timestamp") or r.get("ts") or r.get("updated_at") or r.get("started_at") or ""
+    ts_disp = format_ts_minutes(ts_raw)
+    in_flight = r.get("_in_flight") is True
+    row_class = "backburner-row in-flight-row" if in_flight else "backburner-row"
 
     # Caveat fires only when:
     #   - the displayed hero is a top-level (no backend subdir) image AND
@@ -820,15 +987,34 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         )
 
     return f"""
-<div class='backburner-row'>
+<div class='{row_class}'>
   <div class='backburner-meta'>
     <h3>{pos_html}{priority} {iter_dir} — {verdict}</h3>
+    <p class='iter-ts'>{ts_disp} UTC</p>
     <p>ms_per_frame={sum_ms_str}, psnr={psnr_min_str}</p>
     {caveat_html}
     <p class='reason'>{note}</p>
   </div>
   <div class='backburner-thumbs'>{thumb_html}</div>
 </div>
+"""
+
+
+def in_flight_section() -> str:
+    row = load_current_iter()
+    if not row:
+        return ""
+    if row.get("status") in ("done", "complete", "finished"):
+        return ""
+    norm = normalize_in_flight_row(row)
+    card = _iter_card_html(norm, "blackhole", "NOW")
+    return f"""
+<section class='in-flight-banner'>
+  <h2>Current iteration (in flight)</h2>
+  <p style='color:#777;font-size:12px;margin-top:0'>Live state from <code>opt/current-iter.json</code>;
+  refreshed on every <code>build_report.py</code> run while work is active.</p>
+  {card}
+</section>
 """
 
 
@@ -847,9 +1033,23 @@ def ledger_section(rows: list[dict]) -> str:
     pre_cpu = [r for r in rows
                if (n := _iter_num(r.get("iter_dir", ""))) is not None
                and n < BICYCLE_START_ITER_NUM]
+    ttw_rows = [normalize_ttw_row(r) for r in load_ttw_iters()]
+    metal_ttw_nums: set[int] = set()
+    for r in metal_rows_raw:
+        d = r.get("iter_dir", "")
+        if d.startswith("ttw-"):
+            tail = d[4:].split("-", 1)[0]
+            if tail.isdigit():
+                metal_ttw_nums.add(int(tail))
+    ttw_rows = [
+        r for r in ttw_rows
+        if not (r.get("iter_dir", "").startswith("ttw-")
+                and int(r["iter_dir"].split("-", 1)[1]) in metal_ttw_nums)
+    ]
     merged = (
         [{**r, "_runtime": "cpu", "_scene": "bicycle"} for r in bicycle_cpu]
         + [{**r, "_scene": "bicycle"} for r in metal_norm]
+        + [{**r, "_scene": "bicycle"} for r in ttw_rows]
     )
     merged.sort(key=lambda r: r.get("timestamp", ""), reverse=True)
 
@@ -1121,15 +1321,32 @@ def build_html(rows: list[dict]) -> str:
   .reason { color: #555; font-size: 12px; }
   .caveat { color: #b8860b; font-size: 11px; font-style: italic; margin: 4px 0; }
   .iter-pos { display: inline-block; min-width: 48px; padding: 1px 6px; margin-right: 6px; background: #1d3557; color: #fff; font-size: 11px; font-weight: 700; border-radius: 3px; letter-spacing: 0.4px; }
+  .iter-ts { color: #777; font-size: 11px; margin: 0 0 4px; font-variant-numeric: tabular-nums; }
+  .report-meta { color: #555; font-size: 12px; margin: 0 0 16px; }
+  .in-flight-banner { background: #fff8e6; border: 1px solid #e9c46a; border-radius: 6px; padding: 12px 16px; margin-bottom: 20px; }
+  .in-flight-row { background: #fffdf5; border-left: 4px solid #e9c46a; padding-left: 12px; }
   .reason { color: #555; font-size: 12px; }
   code { background: #f1faee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
 </style>
 """
+    n_metal = len(load_metal_iters())
+    n_ttw = len(load_ttw_iters())
+    n_cpu = len(rows)
+    inflight = load_current_iter()
+    inflight_note = ""
+    if inflight and inflight.get("status") not in ("done", "complete", "finished"):
+        inflight_note = f" · in-flight: iter {inflight.get('iter', '?')} ({inflight.get('status', '?')})"
+    meta = (
+        f"<p class='report-meta'>Generated {now_ts_minutes()} UTC · "
+        f"{n_metal} metal + {n_ttw} ttw + {n_cpu} cpu ledger rows{inflight_note}</p>"
+    )
     return f"""<!DOCTYPE html>
 <html lang='en'>
 <head><meta charset='utf-8'><title>gstt2 — Optimization Report</title>{css}</head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
+{meta}
+{in_flight_section()}
 {figs_html}
 {ledger_section(rows)}
 {algorithm_snapshot(rows)}
@@ -1138,11 +1355,39 @@ def build_html(rows: list[dict]) -> str:
 """
 
 
-def main():
+def write_reports(html: str) -> None:
+    REPORT_HTML.write_text(html)
+    REPORT_HTML_TTW.parent.mkdir(parents=True, exist_ok=True)
+    REPORT_HTML_TTW.write_text(html)
+
+
+def main() -> None:
     rows = load_iters()
-    REPORT_HTML.write_text(build_html(rows))
-    print(f"wrote {REPORT_HTML}  ({len(rows)} iters)")
+    html = build_html(rows)
+    write_reports(html)
+    n_ledger = len(load_metal_iters()) + len(load_ttw_iters())
+    print(f"wrote {REPORT_HTML}  ({n_ledger} ledger rows, {len(rows)} cpu iters)")
+    print(f"wrote {REPORT_HTML_TTW}  (identical mirror)")
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description="Regenerate opt/REPORT.html (+ ttw mirror).")
+    ap.add_argument(
+        "--set-in-flight",
+        metavar="JSON",
+        help="Write opt/current-iter.json then regenerate reports.",
+    )
+    ap.add_argument(
+        "--clear-in-flight",
+        action="store_true",
+        help="Remove opt/current-iter.json then regenerate reports.",
+    )
+    args = ap.parse_args()
+    if args.set_in_flight:
+        write_current_iter(json.loads(args.set_in_flight))
+        main()
+    elif args.clear_in_flight:
+        clear_current_iter()
+        main()
+    else:
+        main()

@@ -6,7 +6,7 @@ You own Phase 5 metal port progress **without user input**. Each wake:
 2. Run `bash scripts/metal_supervisor_tick.sh` (updates state + runs bh-30 gates).
 3. Execute `next_action` from the tick output — code, sync, rebuild, re-verify.
 4. Append `opt/metal-iters.jsonl` when an iter milestone completes.
-5. Run `python3 opt/build_report.py`.
+5. Run `python3 opt/build_report.py` after every iter (keep or reject); it writes identical copies to `opt/REPORT.html` and `opt/ttw/REPORT.html`. Use `opt/current-iter.json` + `--set-in-flight` while work is active.
 6. Re-arm: ensure `scripts/metal_supervisor_loop.sh` is running.
 
 ## Roadmap (do not skip gates)

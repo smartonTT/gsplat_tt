@@ -839,6 +839,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             constexpr uint32_t CB_SCR_MASK = 6;
             cb_cfg(CB_SCR_MASK, 256, 1, DataFormat::UInt32);
         }
+        if (resident_blend) {
+            constexpr uint32_t CB_CORE_TILES = 7;
+            cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
+        }
     }
 
     // Accessor count: resident devcull reader binds 12 DRAM-interleaved buffers
@@ -900,6 +904,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (dev_cull) {
         mb_defines["MB_DEVCULL"] = "1";
     }
+    if (resident_blend) {
+        mb_defines["MB_RESIDENT"] = "1";
+    }
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
@@ -916,6 +923,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     std::vector<uint32_t> writer_ct;
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    if (resident_blend) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    }
+    std::map<std::string, std::string> writer_defines;
+    if (resident_blend) {
+        writer_defines["MB_RESIDENT"] = "1";
+    }
     ctx.writer = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_alpha_blend.cpp",
@@ -924,6 +938,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
+            .defines = writer_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
@@ -1418,8 +1433,6 @@ static double process_frame_mb_devcull_resident(
         }
     }
 
-    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
-
     const ResidentSortLpt lpt = resident_sort_lpt_handles();
     if (!lpt.ok) {
         if (ok) *ok = false;
@@ -1428,8 +1441,7 @@ static double process_frame_mb_devcull_resident(
     auto meta_buf = ds::get_buffer("sort_lpt_meta");
     const uint32_t lpt_meta_addr =
         meta_buf ? static_cast<uint32_t>(meta_buf->address()) : 0u;
-    // One meta D2H for compute/writer until fused C2+D+E; blend reader reads LPT on-device.
-    const ResidentSortLpt lpt_host = load_resident_sort_lpt(ctx.cq, num_cores);
+    // Reader/compute/writer all read LPT on-device (no sort_lpt_meta D2H).
 
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
@@ -1469,7 +1481,6 @@ static double process_frame_mb_devcull_resident(
         for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
             for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
                 CoreCoord core{x, y};
-                const uint32_t count = lpt_host.per_core_count[core_index];
                 std::vector<uint32_t> reader_args{
                     a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
                     ids_addr, rng_addr, xramp_addr, yramp_addr,
@@ -1481,10 +1492,9 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(cull_base_addr);   // arg 18
                 }
                 SetRuntimeArgs(program, ctx.reader, core, reader_args);
-                SetRuntimeArgs(program, ctx.compute, core, {count});
-                const uint32_t start = lpt_host.per_core_offset[core_index];
+                SetRuntimeArgs(program, ctx.compute, core, {0u});
                 SetRuntimeArgs(program, ctx.writer, core, {
-                    out_addr, tile_ids_addr, start, count,
+                    out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                 });
                 core_index++;
             }

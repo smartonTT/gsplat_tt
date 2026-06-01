@@ -44,6 +44,15 @@ for kv in "${ENV_KV[@]}"; do env_export+="export $kv; "; done
 
 echo "[log_iter] iter_dir=$ITER_DIR backend=$BACKEND env=${ENV_KV[*]:-(none)}" >&2
 
+# Live report: in-flight card while the remote render runs.
+if [[ -f "$REPO_ROOT/opt/build_report.py" ]]; then
+  INFLIGHT_ITER_DIR="$ITER_DIR" INFLIGHT_VERDICT="$VERDICT" INFLIGHT_ACTION="$ACTION" INFLIGHT_NOTE="$NOTE" \
+    "$LOCAL_PY" "$REPO_ROOT/opt/build_report.py" --set-in-flight "$(
+      INFLIGHT_ITER_DIR="$ITER_DIR" INFLIGHT_VERDICT="$VERDICT" INFLIGHT_ACTION="$ACTION" INFLIGHT_NOTE="$NOTE" \
+        "$LOCAL_PY" -c 'import json,datetime,os; print(json.dumps({"iter_dir":os.environ["INFLIGHT_ITER_DIR"],"status":"rendering","verdict":os.environ["INFLIGHT_VERDICT"],"action":os.environ["INFLIGHT_ACTION"],"note":os.environ.get("INFLIGHT_NOTE",""),"started_at":datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}))'
+    )" 2>&1 || true
+fi
+
 set +e
 ssh "$REMOTE" "
 set -e
@@ -135,5 +144,5 @@ with jsonl.open("a") as f:
 print(f"[log_iter] appended row to {jsonl} | hero_psnr={hero_psnr_dB} sum_ms={sum_total_ms} stages={list(per_stage_median_ms.keys())}", file=sys.stderr)
 PY
 
-"$LOCAL_PY" "$REPO_ROOT/opt/build_report.py" >&2 || true
+"$LOCAL_PY" "$REPO_ROOT/opt/build_report.py" --clear-in-flight >&2 || true
 echo "[log_iter] done"
