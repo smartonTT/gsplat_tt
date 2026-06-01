@@ -2168,8 +2168,8 @@ static double process_frame_resident(
 
     const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
     const auto t_start = std::chrono::steady_clock::now();
-    std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
-    distributed::EnqueueWriteMeshBuffer(*ctx_blend.cq, ctx_blend.res_out, output_zero);
+    // res_out is fully overwritten by the blend writer for every tile in the LPT
+    // assignment (all num_tiles). Skip the ~6MB zero H2D each frame.
     if (!ctx_blend.res_ramp_uploaded) {
         auto xramp = make_ramp(/*is_x=*/true);
         auto yramp = make_ramp(/*is_x=*/false);

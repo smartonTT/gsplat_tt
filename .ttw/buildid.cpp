@@ -1,4 +1,5 @@
-id=9
-sha=3010291
-ts=2026-05-31T23:38:24-0700
-desc=iter 9: blend reader: hoist constant ramps once/core + coalesce tile-range SoA read
+id=15
+sha=ffdd218
+ts=2026-06-01T00:56:47-0700
+desc=iter 11: fused blend: drop redundant res_out zero H2D upload
+bin=8e9d81daf27b65a9
