@@ -864,6 +864,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         return v != nullptr && v[0] == '0';
     };
     const bool blend_aos = sfpu_cull && !env_off("GSPLAT_TT_BLEND_AOS");
+    // T2/T3 (GSPLAT_TT_TILE_BUCKET): serve each tile from its DENSE L1-resident
+    // record bucket (sort_tile_recs) — bulk-load once, STABLE depth-sort in L1,
+    // emit coeff rows from L1 (NO per-candidate attr gather). Layers on the AoS
+    // SFPU-cull reader; masks still read from cull_masks (same depth order).
+    const bool tile_bucket = blend_aos && env_on("GSPLAT_TT_TILE_BUCKET");
     // GSPLAT_TT_TILE_L1 (default OFF): bulk-load each tile's whole cull_masks
     // region into L1 ONCE per tile (one barrier), read masks from L1 in the
     // candidate loop, and DROP the per-candidate MB_CULL_SPIN. The spin (~89 ms
@@ -915,6 +920,23 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             constexpr uint32_t MAX_TILE_MASK_PAGES = 32768u / 16u;  // 2048
             cb_cfg(CB_TILE_MASKS, 64, MAX_TILE_MASK_PAGES, DataFormat::UInt32);
         }
+        if (tile_bucket) {
+            // L1-resident dense record bucket (CB_BUCKET) + sort scratch (CB_BSORT:
+            // in_idx[FIT] + out_idx[FIT] + counts[256]). FIT tunable; default 8192
+            // candidates (512 KB bucket + ~66 KB scratch). Tiles above FIT fall
+            // back to the gather path.
+            constexpr uint32_t CB_BUCKET = 9;
+            constexpr uint32_t CB_BSORT  = 10;
+            uint32_t fit = 8192u;
+            if (const char* f = std::getenv("GSPLAT_TT_BUCKET_FIT")) {
+                const uint32_t v = static_cast<uint32_t>(std::atoi(f));
+                if (v >= 16u) fit = v;
+            }
+            constexpr uint32_t CB_BMASK = 11;
+            cb_cfg(CB_BUCKET, 64, fit, DataFormat::Float32);              // fit x 64B records
+            cb_cfg(CB_BSORT, 4, 2u * fit + 256u, DataFormat::UInt32);     // idxA+idxB+counts
+            cb_cfg(CB_BMASK, 64, (fit + 15u) / 16u + 1u, DataFormat::UInt32);  // whole-tile masks
+        }
     }
 
     // Accessor count: resident devcull reader binds 12 DRAM-interleaved buffers
@@ -925,7 +947,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // xramp, yramp, tile_ids, lpt_meta, payload). No SoA gather, no cull_masks.
     // +1 accessor (proj_m_blendrec, index 15) under S1 AoS.
     const int num_reader_accessors =
-        payload ? 6 : (resident_blend ? (sfpu_cull ? (blend_aos ? 16 : 15) : 13) : 6);
+        payload ? 6 : (resident_blend ? (sfpu_cull ? (blend_aos ? (tile_bucket ? 18 : 16) : 15) : 13) : 6);
     // cull_masks is reader accessor index 13 (after a,b,c,px,py,op,col, ids,
     // ranges, xramp,yramp,tile_ids, lpt_meta). Under the L1 mask handoff it is
     // an L1-interleaved buffer; everything else stays DRAM-interleaved.
@@ -998,6 +1020,24 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         }
         if (blend_aos) {
             reader_defines["MB_BLEND_AOS"] = "1";
+        }
+        if (tile_bucket) {
+            reader_defines["MB_TILE_BUCKET"] = "1";
+            if (const char* f = std::getenv("GSPLAT_TT_BUCKET_FIT")) {
+                if (f[0] != '\0') reader_defines["MB_BUCKET_FIT"] = std::string(f) + "u";
+            }
+            if (env_on("GSPLAT_TT_BUCKET_DBG_INLINE")) {
+                reader_defines["MB_BUCKET_DBG_INLINE"] = "1";
+            }
+            if (env_on("GSPLAT_TT_BUCKET_DBG_NOSORT")) {
+                reader_defines["MB_BUCKET_DBG_NOSORT"] = "1";
+            }
+            if (env_on("GSPLAT_TT_BUCKET_NO_FALLBACK_SPIN")) {
+                reader_defines["MB_BUCKET_NO_FALLBACK_SPIN"] = "1";
+            }
+            if (env_on("GSPLAT_TT_BUCKET_PREFETCH_MASK")) {
+                reader_defines["MB_BUCKET_PREFETCH_MASK"] = "1";
+            }
         }
     }
     ctx.reader = CreateKernel(
@@ -1550,6 +1590,20 @@ static double process_frame_mb_devcull_resident(
     const bool sfpu_cull = !payload && sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
     const char* blend_aos_env = std::getenv("GSPLAT_TT_BLEND_AOS");
     const bool blend_aos = sfpu_cull && !(blend_aos_env != nullptr && blend_aos_env[0] == '0');
+    const char* tile_bucket_env = std::getenv("GSPLAT_TT_TILE_BUCKET");
+    const bool tile_bucket = blend_aos && tile_bucket_env != nullptr && tile_bucket_env[0] == '1';
+    uint32_t tile_recs_addr = 0;
+    uint32_t bucket_meta_addr = 0;
+    if (tile_bucket) {
+        auto buf_recs = ds::get_buffer("sort_tile_recs");
+        auto buf_bm   = ds::get_buffer("sort_bucket_meta");
+        if (!buf_recs || !buf_bm) {
+            if (ok) *ok = false;
+            return 0.0;
+        }
+        tile_recs_addr = static_cast<uint32_t>(buf_recs->address());
+        bucket_meta_addr = static_cast<uint32_t>(buf_bm->address());
+    }
     uint32_t blendrec_addr = 0;
     if (blend_aos) {
         auto buf_brec = gsplat_tt::device_state::get_buffer("proj_m_blendrec");
@@ -1647,6 +1701,10 @@ static double process_frame_mb_devcull_resident(
                         reader_args.push_back(cull_base_addr);   // arg 18
                         if (blend_aos) {
                             reader_args.push_back(blendrec_addr);  // arg 19
+                            if (tile_bucket) {
+                                reader_args.push_back(tile_recs_addr);    // arg 20
+                                reader_args.push_back(bucket_meta_addr);  // arg 21
+                            }
                         }
                     }
                 }
@@ -2796,7 +2854,9 @@ static double process_frame_resident(
         // settle). One device sync/frame << ~3.2 M per-candidate busy-waits.
         const char* tl1 = std::getenv("GSPLAT_TT_TILE_L1");
         const bool tile_mask_l1 = (tl1 != nullptr && tl1[0] == '1');
-        if (mb::l1_masks_enabled() || tile_mask_l1) {
+        const char* bf = std::getenv("GSPLAT_TT_BUCKET_FINISH");
+        const bool bucket_finish = (bf != nullptr && bf[0] == '1');
+        if (mb::l1_masks_enabled() || tile_mask_l1 || bucket_finish) {
             distributed::Finish(*ctx_blend.cq);
         }
         distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_blend.workload, /*blocking=*/false);

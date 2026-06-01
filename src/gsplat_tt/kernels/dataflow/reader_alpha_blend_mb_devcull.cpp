@@ -62,6 +62,14 @@ constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
 constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
 constexpr uint32_t CB_TILE_MASKS = 8;  // MB_TILE_MASK_L1: whole-tile cull_masks region, bulk-loaded once/tile
+#ifdef MB_TILE_BUCKET
+constexpr uint32_t CB_BUCKET = 9;      // L1-resident dense record bucket for this tile
+constexpr uint32_t CB_BSORT  = 10;     // L1 sort scratch: in_idx[FIT] + out_idx[FIT] + counts[256]
+constexpr uint32_t CB_BMASK  = 11;     // L1-resident whole-tile cull_masks (bulk-loaded once/tile)
+#ifndef MB_BUCKET_FIT
+#define MB_BUCKET_FIT 8192u            // max candidates/tile served from L1 (else gather fallback)
+#endif
+#endif
 
 constexpr float kInf = 1e30f;
 
@@ -367,6 +375,10 @@ void kernel_main() {
     const uint32_t cull_base_addr  = get_arg_val<uint32_t>(18);  // per-tile page-aligned mask base
 #ifdef MB_BLEND_AOS
     const uint32_t blendrec_addr   = get_arg_val<uint32_t>(19);  // resident proj_m_blendrec (AoS)
+#ifdef MB_TILE_BUCKET
+    const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(20);  // resident sort_tile_recs (dense)
+    const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
+#endif
 #endif
 #endif
 
@@ -388,6 +400,10 @@ void kernel_main() {
     constexpr auto cull_base_args  = TensorAccessorArgs<cull_masks_args.next_compile_time_args_offset()>();
 #ifdef MB_BLEND_AOS
     constexpr auto blendrec_args   = TensorAccessorArgs<cull_base_args.next_compile_time_args_offset()>();
+#ifdef MB_TILE_BUCKET
+    constexpr auto tile_recs_args  = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
+    constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
+#endif
 #endif
 #endif
 
@@ -440,6 +456,13 @@ void kernel_main() {
 #ifdef MB_BLEND_AOS
     // proj_m_blendrec: one 64B AoS record page per gaussian (page index == g).
     const auto blendrec_acc   = TensorAccessor(blendrec_args,   blendrec_addr,   SOA_PAGE_BYTES);
+#ifdef MB_TILE_BUCKET
+    // sort_tile_recs: DENSE per-tile bucket, one 64B record per kept candidate
+    // {a,b,c,px,py,op,r,g,b,depth} (page index == bucket slot). sort_bucket_meta:
+    // per-tile (start,count) u32 pair.
+    const auto tile_recs_acc   = TensorAccessor(tile_recs_args,   tile_recs_addr,   SOA_PAGE_BYTES);
+    const auto bucket_meta_acc = TensorAccessor(bucket_meta_args, bucket_meta_addr, 64);
+#endif
 #endif
     // Cull math (and thus these scalars) moved to the SFPU cull pass; the mask
     // is now read precomputed. Keep the args for ABI/signature parity.
@@ -572,6 +595,177 @@ void kernel_main() {
         // writes get shifted), so the mask for tile-local candidate p is at
         // cull_masks[cull_base + p].
         const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
+#endif
+#ifdef MB_TILE_BUCKET
+        // T2/T3: serve this tile from its DENSE L1-resident record bucket — NO
+        // per-candidate attr gather. Load the whole bucket once (bulk, batched
+        // barriers), STABLE depth-sort the candidates IN L1 (index permutation,
+        // records stay put), and emit coeff rows reading records from L1. The
+        // stable LSD radix reproduces the DRAM radix order, so cull_masks (still
+        // depth-sorted in DRAM, indexed cull_base+k) stays aligned. Tiles whose
+        // record set exceeds MB_BUCKET_FIT*64B of L1 fall through to the gather.
+        uint32_t rec_start = 0;
+        uint32_t Lb = 0;
+        {
+            const uint32_t e0 = tile_id * 2u;
+            const uint32_t pg = e0 >> 4;
+            const uint32_t off = e0 & 0xF;
+            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+            noc_async_read_tile(pg, bucket_meta_acc, scr);
+            noc_async_read_barrier();
+            auto bmp = reinterpret_cast<volatile uint32_t*>(scr);
+            rec_start = bmp[off];
+            Lb = bmp[off + 1u];  // dense bucket count (off even -> off+1 same page)
+        }
+        if (Lb > 0 && Lb <= MB_BUCKET_FIT) {
+            const uint32_t L = Lb;
+            const uint32_t buck = get_write_ptr(CB_BUCKET);
+            {
+                uint32_t i = 0;
+                while (i < L) {
+                    const uint32_t end = (i + 64u < L) ? i + 64u : L;
+                    for (uint32_t q = i; q < end; ++q) {
+                        noc_async_read_tile(rec_start + q, tile_recs_acc, buck + q * SOA_PAGE_BYTES);
+                    }
+                    noc_async_read_barrier();
+                    i = end;
+                }
+            }
+#if defined(MB_BUCKET_PREFETCH_MASK) && !defined(MB_BUCKET_DBG_INLINE)
+            // T3: ISSUE this tile's whole cull_masks bulk read NOW (before the L1
+            // depth sort), so the sort's real compute hides the NoC read latency.
+            // The matching barrier lands just before the emit loop — NO settle spin
+            // (the elapsed sort work is the settle window the spin used to provide).
+            const uint32_t bmask = get_write_ptr(CB_BMASK);
+            auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
+            {
+                const uint32_t mpg0 = cull_base >> 4;
+                const uint32_t mpages = (L + 15u) >> 4;
+                for (uint32_t q = 0; q < mpages; ++q) {
+                    noc_async_read_tile(mpg0 + q, cull_masks_acc, bmask + q * IDS_PAGE_BYTES);
+                }
+            }
+#endif
+            const uint32_t bs = get_write_ptr(CB_BSORT);
+            uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
+            uint32_t* idxB = idxA + MB_BUCKET_FIT;
+            uint32_t* cnt  = idxB + MB_BUCKET_FIT;
+            auto key_of = [&](uint32_t idx) -> uint32_t {
+                return reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES)[9];
+            };
+            uint32_t* sorted;
+#ifdef MB_BUCKET_DBG_NOSORT
+            for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
+            sorted = idxA;
+#else
+            if (L <= 16u) {
+                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
+                for (uint32_t i = 1; i < L; ++i) {
+                    const uint32_t tmp = idxA[i];
+                    const uint32_t ki = key_of(tmp);
+                    uint32_t j = i;
+                    while (j > 0 && key_of(idxA[j - 1]) > ki) { idxA[j] = idxA[j - 1]; --j; }
+                    idxA[j] = tmp;
+                }
+                sorted = idxA;
+            } else {
+                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
+                uint32_t* cur = idxA;
+                uint32_t* nxt = idxB;
+                for (uint32_t byte = 0; byte < 4u; ++byte) {
+                    const uint32_t shift = byte * 8u;
+                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
+                    for (uint32_t i = 0; i < L; ++i) cnt[(key_of(cur[i]) >> shift) & 0xFFu]++;
+                    uint32_t sum = 0;
+                    for (uint32_t c = 0; c < 256u; ++c) { const uint32_t t = cnt[c]; cnt[c] = sum; sum += t; }
+                    for (uint32_t i = 0; i < L; ++i) {
+                        const uint32_t b = (key_of(cur[i]) >> shift) & 0xFFu;
+                        nxt[cnt[b]++] = cur[i];
+                    }
+                    uint32_t* t = cur; cur = nxt; nxt = t;
+                }
+                sorted = cur;  // even pass count -> back in idxA
+            }
+#endif
+            cb_reserve_back(CB_MB_COUNTS, 1);
+            reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS))[0] = L;
+            cb_push_back(CB_MB_COUNTS, 1);
+#if defined(MB_BUCKET_PREFETCH_MASK) && !defined(MB_BUCKET_DBG_INLINE)
+            // Masks were ISSUED before the sort; the sort compute hid the latency.
+            // One barrier lands them now — settle spin (if any) is reduced vs the
+            // non-prefetch path since the sort already provided a settle window.
+            noc_async_read_barrier();
+#if defined(MB_CULL_SPIN)
+            for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
+#endif
+#elif !defined(MB_BUCKET_DBG_INLINE)
+            // Bulk-load this tile's WHOLE cull_masks region into L1 ONCE (cull_base
+            // is 16-aligned -> mask[k] == L1[k]) with batched barriers + a single
+            // per-tile settle, instead of a per-candidate NoC read + spin. The
+            // records are already L1-resident, so the candidate loop is pure L1.
+            const uint32_t bmask = get_write_ptr(CB_BMASK);
+            auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
+            {
+                const uint32_t mpg0 = cull_base >> 4;
+                const uint32_t mpages = (L + 15u) >> 4;
+                uint32_t pp = 0;
+                while (pp < mpages) {
+                    const uint32_t end = (pp + 64u < mpages) ? pp + 64u : mpages;
+                    for (uint32_t q = pp; q < end; ++q) {
+                        noc_async_read_tile(mpg0 + q, cull_masks_acc, bmask + q * IDS_PAGE_BYTES);
+                    }
+                    noc_async_read_barrier();
+                    pp = end;
+                }
+#if defined(MB_CULL_SPIN)
+                for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
+#endif
+            }
+#endif
+            for (uint32_t k = 0; k < L; ++k) {
+                const uint32_t idx = sorted[k];
+                auto recp = reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES);
+                const uint32_t cov_a_bits = recp[0];
+                const uint32_t cov_b_bits = recp[1];
+                const uint32_t cov_c_bits = recp[2];
+                const float mean_x = bits_to_f(recp[3]);
+                const float mean_y = bits_to_f(recp[4]);
+                const uint32_t op_bits = recp[5];
+                const uint32_t cr = recp[6];
+                const uint32_t cg = recp[7];
+                const uint32_t cb = recp[8];
+#ifdef MB_BUCKET_DBG_INLINE
+                // Correctness probe: compute the mask inline from the L1 record
+                // (correct for THIS record regardless of sort order).
+                const uint32_t mask = compute_microblock_mask(
+                    bits_to_f(cov_a_bits), bits_to_f(cov_b_bits), bits_to_f(cov_c_bits),
+                    mean_x, mean_y, bits_to_f(op_bits), tx_tile, ty_tile,
+                    contrib_floor, cull_disabled);
+#else
+                const uint32_t mask = bmptr[k];  // 16-aligned cull_base -> mask[k]==L1[k]
+#endif
+                cb_reserve_back(CB_MB_COEFF, 1);
+                auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+                row[0] = cov_a_bits;
+                row[1] = cov_b_bits;
+                row[2] = cov_c_bits;
+                row[3] = f_to_bits(mean_x - tx_tile);
+                row[4] = f_to_bits(mean_y - ty_tile);
+                row[5] = 0u;
+                row[6] = op_bits;
+                row[7] = cr;
+                row[8] = cg;
+                row[9] = cb;
+                row[10] = mask;
+                row[11] = 0u;
+                row[12] = 0u;
+                row[13] = 0u;
+                row[14] = 0u;
+                row[15] = 0u;
+                cb_push_back(CB_MB_COEFF, 1);
+            }
+            continue;
+        }
 #endif
 #ifdef MB_TILE_MASK_L1
         // Bulk-load this tile's ENTIRE mask region [cull_base, cull_base+L) into
@@ -770,7 +964,7 @@ void kernel_main() {
                     const uint32_t mask = tile_mask_ptr[mask_off0 + gstart_buf[cur] + j];
 #elif defined(MB_SFPU_CULL)
                     const uint32_t mask = mask_ptr[mask_off + j];
-#if defined(MB_CULL_SPIN)
+#if defined(MB_CULL_SPIN) && !defined(MB_BUCKET_NO_FALLBACK_SPIN)
                     // DRAM pages freshly written by the cull pass need a brief
                     // settling window before NoC reads are consumed; barriers
                     // alone do not suffice. Per-candidate volatile spin (count

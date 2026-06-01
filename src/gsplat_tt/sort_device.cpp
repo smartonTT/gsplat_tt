@@ -890,6 +890,26 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         const auto t_sc1 = clk::now();
         T.bin_ms += std::chrono::duration<double, std::milli>(t_sc1 - t_sc0).count();
 
+        if (tile_bucket && std::getenv("GSPLAT_TT_BUCKET_DUMP")) {
+            distributed::Finish(*ctx->cq);
+            const uint32_t ndump = std::min<uint32_t>(P_kept, 6u);
+            std::vector<uint32_t> recs(static_cast<std::size_t>(ndump) * ELEMS_PER_PAGE, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, recs, ctx->buf_tile_recs, true);
+            std::vector<uint32_t> bm(static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, bm, ctx->buf_bucket_meta, true);
+            std::fprintf(stderr, "[BUCKET_DUMP] P_kept=%u recbase_addr=%u meta[t0]=(%u,%u) meta[t1]=(%u,%u)\n",
+                         P_kept, recbase_addr, bm[0], bm[1], bm[2], bm[3]);
+            for (uint32_t s = 0; s < ndump; s++) {
+                const uint32_t* r = &recs[static_cast<std::size_t>(s) * ELEMS_PER_PAGE];
+                float a, b, c, px, py, op, dep;
+                std::memcpy(&a, &r[0], 4); std::memcpy(&b, &r[1], 4); std::memcpy(&c, &r[2], 4);
+                std::memcpy(&px, &r[3], 4); std::memcpy(&py, &r[4], 4); std::memcpy(&op, &r[5], 4);
+                std::memcpy(&dep, &r[9], 4);
+                std::fprintf(stderr, "[BUCKET_DUMP] slot%u a=%.3f b=%.3f c=%.3f px=%.2f py=%.2f op=%.3f depbits=%08x dep=%.4f\n",
+                             s, a, b, c, px, py, op, r[9], dep);
+            }
+        }
+
         // ── Device radix kernel (per-tile stable depth sort) ────────────
         const auto t_k0 = clk::now();
         Program& prog = ctx->workload.get_programs().begin()->second;
