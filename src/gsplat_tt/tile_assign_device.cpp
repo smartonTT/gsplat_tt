@@ -423,6 +423,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
     }();
     std::shared_ptr<distributed::MeshBuffer> res_px, res_py, res_rx, res_ry,
         res_a, res_b, res_c;
+    std::shared_ptr<distributed::MeshBuffer> res_op;
 
     try {
         if (resident_in) {
@@ -433,6 +434,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             res_a  = device_state::get_buffer("proj_m_a");
             res_b  = device_state::get_buffer("proj_m_b");
             res_c  = device_state::get_buffer("proj_m_c");
+            res_op = device_state::get_buffer("proj_m_opacity");
             auto res_M = device_state::get_buffer("proj_M");
             if (!res_px || !res_py || !res_rx || !res_ry || !res_a || !res_b ||
                 !res_c || !res_M) {
@@ -445,6 +447,32 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             // (read back in gather's minimal path). Skip the per-frame proj_M D2H.
             (void)res_M;
         }
+
+        // Resident device K3 (m2thr): independent of K1/scan/K2. In production
+        // overlap it with scan1 (+ scan2/K2 when slow) so m2_thresh does not sit
+        // on the critical path before K4. TA_TIMING keeps the serial schedule so
+        // per-stage numbers stay attributable.
+        const bool k3_on_device = resident_in && static_cast<bool>(res_op);
+        const bool k3_pipeline = k3_on_device && !ta_timing;
+        const uint32_t m3_pages = M_pad / ELEMS_PER_PAGE;
+        const WorkSplit ws_m3 = split_pages(m3_pages, num_cores);
+        auto enqueue_k3_device = [&]() {
+            uint32_t floor_bits = 0;
+            std::memcpy(&floor_bits, &contrib_floor, 4);
+            Program& progm3 = ctx->wl_m2thr.get_programs().begin()->second;
+            const uint32_t op_addr = static_cast<uint32_t>(res_op->address());
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                SetRuntimeArgs(progm3, ctx->km3, core, {
+                    op_addr,
+                    static_cast<uint32_t>(ctx->buf_m2thr->address()),
+                    ws_m3.start[c], ws_m3.count[c], Mu, floor_bits,
+                });
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_m2thr, false);
+        };
+        clk::time_point k3_t0{};
+        bool k3_pipelined = false;
 
         // ── Allocate / grow M-sized buffers ─────────────────────────────
         const std::size_t m_bytes = static_cast<std::size_t>(M_pad) * 4;
@@ -543,6 +571,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         gsplat_cpu::TileAssignResult result;
         uint32_t P = 0;
         std::vector<uint32_t> offs;  // host-scan path only
+        clk::time_point t_s2_0{};
 
         if (device_scan) {
             // ── On-device exclusive scan (two-phase) ────────────────────
@@ -554,6 +583,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             const WorkSplit wss = split_pages(scan_pages, num_cores);
 
             // Phase 1: per-core reduce of tpg -> core_total partials.
+            if (k3_pipeline) {
+                k3_t0 = clk::now();
+                enqueue_k3_device();
+                k3_pipelined = true;
+            }
             const auto t_s1_0 = clk::now();
             Program& progs1 = ctx->wl_scan1.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
@@ -567,6 +601,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan1, false);
             distributed::Finish(*ctx->cq);
             T.scan1_ms = std::chrono::duration<double, std::milli>(clk::now() - t_s1_0).count();
+            if (k3_pipelined) {
+                T.k3_compute_ms =
+                    std::chrono::duration<double, std::milli>(clk::now() - k3_t0).count();
+                T.k3_h2d_ms = 0.0;
+            }
 
             // Tiny D2H of the num_cores partials (one per dedicated page).
             const auto t_ct0 = clk::now();
@@ -588,13 +627,16 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             T.h2d_offs_ms = 0.0;
 
             if (P == 0) {
+                if (k3_pipelined) {
+                    distributed::Finish(*ctx->cq);
+                }
                 if (device_ok) *device_ok = true;
                 T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
                 return result;
             }
 
             // Phase 2: per-core exclusive prefix-add seeded by core_base -> offs.
-            const auto t_s2_0 = clk::now();
+            t_s2_0 = clk::now();
             Program& progs2 = ctx->wl_scan2.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -605,8 +647,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 });
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan2, false);
-            distributed::Finish(*ctx->cq);
-            T.scan2_ms = std::chrono::duration<double, std::milli>(clk::now() - t_s2_0).count();
+            if (!k3_pipelined) {
+                distributed::Finish(*ctx->cq);
+                T.scan2_ms =
+                    std::chrono::duration<double, std::milli>(clk::now() - t_s2_0).count();
+            }
             // result.tiles_per_gaussian intentionally left empty: render_full's
             // fast path never reads it (sort/blend don't need it).
         } else {
@@ -676,9 +721,24 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             });
         }
         distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2, false);
-        distributed::Finish(*ctx->cq);
-        const auto t_k2_1 = clk::now();
-        T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
+        if (k3_pipelined) {
+            // scan2 + K2 share one barrier with any in-flight K3 (started before scan1).
+            distributed::Finish(*ctx->cq);
+            const auto t_barrier = clk::now();
+            if (device_scan) {
+                T.scan2_ms =
+                    std::chrono::duration<double, std::milli>(t_barrier - t_s2_0).count();
+            }
+            T.k2_ms = std::chrono::duration<double, std::milli>(t_barrier - t_k2_0).count();
+            if (T.k3_compute_ms == 0.0) {
+                T.k3_compute_ms =
+                    std::chrono::duration<double, std::milli>(t_barrier - k3_t0).count();
+            }
+        } else {
+            distributed::Finish(*ctx->cq);
+            const auto t_k2_1 = clk::now();
+            T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
+        }
 
         // The per-pair Mahalanobis cull needs the per-Gaussian cov (a,b,c) and
         // opacities. In resident mode the cov comes from the resident
@@ -689,7 +749,6 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // passes opacities==nullptr in both modes.) Without this, an M-only
         // ProjectResult (empty host covs_2d) would silently drop the cull and
         // the resident-pairs publish, breaking the resident sort/blend handoff.
-        auto res_op = device_state::get_buffer("proj_m_opacity");
         const bool do_cull = resident_in
             ? static_cast<bool>(res_op)
             : ((covs_2d != nullptr) && (opacities != nullptr));
@@ -722,28 +781,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             std::vector<uint32_t> a_v, b_v, c_v;
             const auto t_k3c0 = clk::now();
             if (resident_in && res_op) {
-                // K3 on device: m2_thresh from resident proj_m_opacity (no host
-                // opacities[] loop, no m2thr H2D).
-                uint32_t floor_bits = 0;
-                std::memcpy(&floor_bits, &contrib_floor, 4);
-                const uint32_t m3_pages = M_pad / ELEMS_PER_PAGE;
-                const WorkSplit ws_m3 = split_pages(m3_pages, num_cores);
-                Program& progm3 = ctx->wl_m2thr.get_programs().begin()->second;
-                const uint32_t op_addr =
-                    static_cast<uint32_t>(res_op->address());
-                for (uint32_t c = 0; c < num_cores; c++) {
-                    CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-                    SetRuntimeArgs(progm3, ctx->km3, core, {
-                        op_addr,
-                        static_cast<uint32_t>(ctx->buf_m2thr->address()),
-                        ws_m3.start[c], ws_m3.count[c], Mu, floor_bits,
-                    });
+                if (!k3_pipelined) {
+                    // K3 on device: m2_thresh from resident proj_m_opacity (no host
+                    // opacities[] loop, no m2thr H2D).
+                    enqueue_k3_device();
+                    distributed::Finish(*ctx->cq);
+                    T.k3_compute_ms =
+                        std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
+                    T.k3_h2d_ms = 0.0;
                 }
-                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_m2thr, false);
-                distributed::Finish(*ctx->cq);
-                T.k3_compute_ms =
-                    std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
-                T.k3_h2d_ms = 0.0;
             } else {
                 // K3 host path (non-resident TA inputs only).
                 if (!resident_in) {
@@ -842,7 +888,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 pbuf[0] = P;        // full pre-cull pair count
                 pbuf[1] = P_pad;    // padded count (page-aligned)
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pairs_P, pbuf, false);
-                distributed::Finish(*ctx->cq);
+                // Sort's next stage Finish() drains the CQ; no extra stage-lock here.
                 T.publish_ms = std::chrono::duration<double, std::milli>(clk::now() - t_pub0).count();
                 // result.gaussian_ids / tile_ids intentionally left empty: the
                 // resident-pairs sort path does not read them.
