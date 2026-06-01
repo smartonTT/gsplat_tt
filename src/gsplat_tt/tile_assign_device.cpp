@@ -455,6 +455,27 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const char* v = std::getenv("GSPLAT_TT_TA_DEVICE_SCAN");
         return v != nullptr && v[0] == '1';
     }();
+    // GSPLAT_TT_TA_NO_CULL (R1): skip the ta-stage per-pair Mahalanobis cull —
+    // both K3 (per-Gaussian m2_thresh log) and K4 (per-pair cull). The cull
+    // removes only ~4.6% of pairs (P 3.37M -> P_kept 3.21M on hero) while
+    // costing ~80% of the stage (~103 ms of soft-float on the data-mover RISC).
+    // Blend runs its OWN finer per-microblock Mahalanobis cull downstream
+    // (GSPLAT_TT_SFPU_CULL / MB_DEVCULL), which rejects the empty-corner pairs
+    // this skips. When set we publish the resident pairs with an all-ones keep
+    // mask (P_kept == P) so sort passes every AABB pair through. kTaNoCullDefault
+    // is the shipped default when the env var is unset; gate stays env-flippable
+    // (set GSPLAT_TT_TA_NO_CULL=0 to force the old per-pair cull back on).
+    //
+    // SHIPPED DEFAULT ON (R1, iter 20): measured on hero/bicycle (yyzo-bh-03,
+    // 1 view, all-resident): hero_vs_ref 63.85 dB == baseline (NO regression —
+    // blend's microblock cull rejects the corner pairs), ta 128.7 -> 36.9 ms,
+    // ms/view 391.4 -> 306.0. See opt/ta-stage-analysis.md §8.
+    constexpr bool kTaNoCullDefault = true;
+    const bool ta_no_cull = [] {
+        const char* v = std::getenv("GSPLAT_TT_TA_NO_CULL");
+        if (v != nullptr) return v[0] == '1';
+        return kTaNoCullDefault;
+    }();
     std::shared_ptr<distributed::MeshBuffer> res_px, res_py, res_rx, res_ry,
         res_a, res_b, res_c;
     std::shared_ptr<distributed::MeshBuffer> res_op;
@@ -487,7 +508,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // on the critical path before K4. TA_TIMING keeps the serial schedule so
         // per-stage numbers stay attributable.
         const bool k3_on_device = resident_in && static_cast<bool>(res_op);
-        const bool k3_pipeline = k3_on_device && !ta_timing;
+        // R1: when the cull is disabled, K3 (m2_thresh) is dead work — never
+        // enqueue it (nor overlap it with the scans).
+        const bool k3_pipeline = k3_on_device && !ta_timing && !ta_no_cull;
         const uint32_t m3_pages = M_pad / ELEMS_PER_PAGE;
         const WorkSplit ws_m3 = split_pages(m3_pages, num_cores);
         auto enqueue_k3_device = [&]() {
@@ -820,6 +843,23 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // ── Phase 4: per-pair Mahalanobis cull (K3 host precompute + K4) ──
         if (do_cull) {
             const auto t_cull0 = clk::now();
+          if (ta_no_cull) {
+            // R1: skip K3 + K4. Publish an all-ones keep so sort keeps every
+            // AABB pair (P_kept == P); blend's microblock cull rejects the
+            // empty-corner pairs downstream. buf_keep is freshly-grown DRAM
+            // (uninitialized) and sort_bin treats keep==0 as a drop while a
+            // MISSING ta_pairs_keep buffer forces a host fallback — so the mask
+            // MUST be present and explicitly filled with 1s here.
+            const auto t_keep0 = clk::now();
+            std::vector<uint32_t> keep_ones(cap_p_elems, 1u);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_keep, keep_ones, false);
+            distributed::Finish(*ctx->cq);
+            T.k3_compute_ms = 0.0;
+            T.k3_h2d_ms = 0.0;
+            T.k3_ms = 0.0;
+            T.k4_ms = std::chrono::duration<double, std::milli>(clk::now() - t_keep0).count();
+            T.cull_ms = std::chrono::duration<double, std::milli>(clk::now() - t_cull0).count();
+          } else {
             std::vector<uint32_t> a_v, b_v, c_v;
             const auto t_k3c0 = clk::now();
             if (resident_in && res_op) {
@@ -913,6 +953,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             const auto t_cull1 = clk::now();
             T.k4_ms = std::chrono::duration<double, std::milli>(t_cull1 - t_k3_1).count();
             T.cull_ms = std::chrono::duration<double, std::milli>(t_cull1 - t_cull0).count();
+          }  // end !ta_no_cull (K3 + K4)
 
             if (resident_pairs_active) {
                 const auto t_pub0 = clk::now();

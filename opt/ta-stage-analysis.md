@@ -292,3 +292,48 @@ Concrete recipe for the implementation worker:
 - Profiling: `.ttw/logs/ta-timing-20260531-231952.log`,
   `.ttw/logs/verify-latest.log:76`,`:84`–`:89`
 - Pipeline context: `opt/plan-high-utilization-pipeline.md` §1, §2, §4-B, §7, §8
+
+---
+
+## 8. Outcome — R1 SHIPPED (iter 20, 2026-06-01, yyzo-bh-03)
+
+R1 was implemented and measured on device (hero `bicycle`, `a003_verify.py
+--views 1`, full all-resident env from `verify-latest.log:6`). It is a clean win
+and is **shipped default-ON**.
+
+**Implementation.** `GSPLAT_TT_TA_NO_CULL` env gate in
+`tile_assign_tt` (`tile_assign_device.cpp`): when active it skips K3
+(`enqueue_k3_device`) and K4 (`wl_cull`) entirely and publishes the resident
+pairs with `P_kept = P` and an **all-ones keep mask**. Shipped default is ON
+(`kTaNoCullDefault = true`); set `GSPLAT_TT_TA_NO_CULL=0` to force the old cull
+back on.
+
+**Sort keep-contract finding (analysis §6 uncertainty #2 — RESOLVED).**
+`sort_device.cpp::sort_resident_pairs` (`:603`–`612`) **requires
+`ta_pairs_keep` to be present** — a missing buffer triggers the host CPU
+fallback, it is *not* treated as all-ones. The bin kernel reads the mask
+per-pair and drops `keep==0` (`sort_bin.cpp:123,157,194`). `buf_keep` is
+freshly-grown DRAM (uninitialised), so R1 **must explicitly fill it with 1s**
+(one whole-buffer H2D in the no-cull branch). `ta_pairs_P` already carries the
+full pre-cull P, so with an all-ones mask sort's `P_kept` naturally equals P
+(confirmed on device: `[SORT] P=3369033 P_kept=3369033`). No keep-fill kernel,
+no sort-side change needed.
+
+**Measured (two steady-state verifies, identical):**
+
+| metric | baseline | R1 | Δ |
+|---|---:|---:|---:|
+| `hero_vs_ref` | 63.85 dB | **63.85 dB** | **0.00 (no regression)** |
+| ta | 128.7 ms | **36.9 ms** | **−91.8 ms** |
+| ms/view | 391.4 | **306.0** | **−85.4 ms** |
+
+PSNR is **bit-for-bit identical** to baseline → blend's microblock cull rejects
+exactly the empty-corner pairs the ta cull would have (analysis §6 uncertainty
+#1 confirmed: yes). K3 went to 0.00 ms; the residual `[TA]` `k4≈8.4 ms` is the
+all-ones keep-mask H2D (~13.5 MB), not cull compute.
+
+**Follow-up (not blocking).** ta landed at ~37 ms, not the projected ~26 ms; the
+gap is the ~8 ms keep-fill H2D. A tiny on-device memset kernel (write 1s to
+`buf_keep` on the mover) would reclaim most of it → ta ≈ 28 ms. Low priority vs
+the banked −85 ms/view. R2/R3/R4 for ta are now **unnecessary** (R1 subsumes the
+K3+K4 cost they targeted).
