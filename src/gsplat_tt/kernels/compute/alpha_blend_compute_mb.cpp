@@ -296,6 +296,16 @@ inline void process_tile_gaussians(uint32_t num_g) {
         }
         rowck ^= rh;
         rowck_mask ^= row[10];
+        if (rowck_tile == 0u && g < 4u) {
+            MATH((DPRINT << "RDUMP t0 g=" << g
+                  << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+                  << " b=" << F32(*reinterpret_cast<const float*>(&row[1]))
+                  << " mx=" << F32(*reinterpret_cast<const float*>(&row[3]))
+                  << " my=" << F32(*reinterpret_cast<const float*>(&row[4]))
+                  << " op=" << F32(*reinterpret_cast<const float*>(&row[6]))
+                  << " cr=" << F32(*reinterpret_cast<const float*>(&row[7]))
+                  << " mask=" << row[10] << ENDL()));
+        }
 #endif
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
