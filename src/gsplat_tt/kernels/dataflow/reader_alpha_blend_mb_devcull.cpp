@@ -452,6 +452,17 @@ void kernel_main() {
         }
     }
 
+    // Constant permuted coordinate ramps: identical for every tile. Stream
+    // once per core (not once per tile) so compute can reuse the same CB pages
+    // across its whole tile loop without redundant 8KB/tile NoC reads.
+    cb_reserve_back(CB_XRAMP, 1);
+    noc_async_read_tile(0, xramp_acc, get_write_ptr(CB_XRAMP));
+    cb_reserve_back(CB_YRAMP, 1);
+    noc_async_read_tile(0, yramp_acc, get_write_ptr(CB_YRAMP));
+    noc_async_read_barrier();
+    cb_push_back(CB_XRAMP, 1);
+    cb_push_back(CB_YRAMP, 1);
+
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
         const uint32_t tx = tile_id % tiles_x;
@@ -459,16 +470,7 @@ void kernel_main() {
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
         const float ty_tile = static_cast<float>(ty * TILE_SIZE);
 
-        // (1) Shared permuted coordinate ramps (page 0 of each ramp buffer).
-        cb_reserve_back(CB_XRAMP, 1);
-        noc_async_read_tile(0, xramp_acc, get_write_ptr(CB_XRAMP));
-        cb_reserve_back(CB_YRAMP, 1);
-        noc_async_read_tile(0, yramp_acc, get_write_ptr(CB_YRAMP));
-        noc_async_read_barrier();
-        cb_push_back(CB_XRAMP, 1);
-        cb_push_back(CB_YRAMP, 1);
-
-        // (2) Per-tile candidate id range [id_start, id_end).
+        // (1) Per-tile candidate id range [id_start, id_end).
         uint32_t id_start, id_end;
 #ifdef MB_RESIDENT
         // Resident sort_tile_ranges: (start,end) uint32 pair per tile at
@@ -478,8 +480,20 @@ void kernel_main() {
         // (0,0) -> L==0, matching the uploaded path.
         {
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-            id_start = read_soa_u32(ranges_acc, tile_id * 2u + 0u, scr);
-            id_end   = read_soa_u32(ranges_acc, tile_id * 2u + 1u, scr);
+            const uint32_t elem0 = tile_id * 2u;
+            const uint32_t page = elem0 >> 4;
+            const uint32_t off = elem0 & 0xF;
+            auto rng_ptr = reinterpret_cast<volatile uint32_t*>(scr);
+            noc_async_read_tile(page, ranges_acc, scr);
+            noc_async_read_barrier();
+            id_start = rng_ptr[off];
+            if (off + 1u < 16u) {
+                id_end = rng_ptr[off + 1u];
+            } else {
+                noc_async_read_tile(page + 1u, ranges_acc, scr);
+                noc_async_read_barrier();
+                id_end = rng_ptr[0];
+            }
         }
 #else
         {

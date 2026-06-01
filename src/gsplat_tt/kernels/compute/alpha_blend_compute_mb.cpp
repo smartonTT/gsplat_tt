@@ -375,6 +375,10 @@ void kernel_main() {
         return;
     }
 
+    // Ramps are constant across tiles; the reader streams them once per core.
+    cb_wait_front(CB_XRAMP, 1);
+    cb_wait_front(CB_YRAMP, 1);
+
     for (uint32_t t = 0; t < num_tiles; t++) {
         cb_wait_front(CB_MB_COUNTS, 1);
         // Gaussian-major: counts page slot 0 holds this tile's gaussian-row count.
@@ -383,9 +387,6 @@ void kernel_main() {
             auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
             num_g = cptr[0];
         }
-
-        cb_wait_front(CB_XRAMP, 1);
-        cb_wait_front(CB_YRAMP, 1);
 
         tile_regs_acquire();
 
@@ -427,8 +428,9 @@ void kernel_main() {
         cb_push_back(CB_COLOR_OUT, 3);
         tile_regs_release();
 
-        cb_pop_front(CB_XRAMP, 1);
-        cb_pop_front(CB_YRAMP, 1);
         cb_pop_front(CB_MB_COUNTS, 1);
     }
+
+    cb_pop_front(CB_XRAMP, 1);
+    cb_pop_front(CB_YRAMP, 1);
 }
