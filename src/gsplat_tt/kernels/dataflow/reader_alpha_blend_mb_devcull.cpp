@@ -124,10 +124,19 @@ inline void issue_chunk_reads(
         noc_async_read_tile(pg, px_acc, s + 3u * 64u);
         noc_async_read_tile(pg, py_acc, s + 4u * 64u);
         noc_async_read_tile(pg, op_acc, s + 5u * 64u);
-        const uint32_t e0 = g * 3u;            // AoS M*3 colors
-        noc_async_read_tile((e0 + 0u) >> 4, col_acc, s + 6u * 64u);
-        noc_async_read_tile((e0 + 1u) >> 4, col_acc, s + 7u * 64u);
-        noc_async_read_tile((e0 + 2u) >> 4, col_acc, s + 8u * 64u);
+        // AoS M*3 colors: r/g/b are 3 CONSECUTIVE elems (e0,e0+1,e0+2), so they
+        // span at most TWO 16-elem pages and usually ONE (e0%16 <= 13). Read page
+        // p0 into slot 6 and, only when r/g/b straddle a page boundary, the next
+        // page into slot 7 (contiguous 32-elem window). Collapses the old 3 reads
+        // of the same page to 1 (common) or 2 (boundary) -- byte-identical data,
+        // ~2 fewer NoC reads/candidate. Consumer indexes the window by (elem-base).
+        const uint32_t e0 = g * 3u;
+        const uint32_t cpg0 = e0 >> 4;
+        const uint32_t cpg1 = (e0 + 2u) >> 4;
+        noc_async_read_tile(cpg0, col_acc, s + 6u * 64u);
+        if (cpg1 != cpg0) {
+            noc_async_read_tile(cpg1, col_acc, s + 7u * 64u);
+        }
     }
 }
 
@@ -613,10 +622,15 @@ void kernel_main() {
                     const uint32_t mx_bits    = reinterpret_cast<volatile uint32_t*>(s + 3u * 64u)[lane];
                     const uint32_t my_bits    = reinterpret_cast<volatile uint32_t*>(s + 4u * 64u)[lane];
                     const uint32_t op_bits    = reinterpret_cast<volatile uint32_t*>(s + 5u * 64u)[lane];
+                    // Colours live in a contiguous 2-page window at slot 6 (see
+                    // issue_chunk_reads): index by (elem - page0_base), page0_base
+                    // = (e0>>4)*16. e0+2-base <= 17 < 32 so always in-window.
                     const uint32_t e0 = g * 3u;
-                    const uint32_t cr = reinterpret_cast<volatile uint32_t*>(s + 6u * 64u)[(e0 + 0u) & 0xF];
-                    const uint32_t cg = reinterpret_cast<volatile uint32_t*>(s + 7u * 64u)[(e0 + 1u) & 0xF];
-                    const uint32_t cb = reinterpret_cast<volatile uint32_t*>(s + 8u * 64u)[(e0 + 2u) & 0xF];
+                    const uint32_t cbase = (e0 >> 4) * 16u;
+                    auto cwin = reinterpret_cast<volatile uint32_t*>(s + 6u * 64u);
+                    const uint32_t cr = cwin[(e0 + 0u) - cbase];
+                    const uint32_t cg = cwin[(e0 + 1u) - cbase];
+                    const uint32_t cb = cwin[(e0 + 2u) - cbase];
 
                     const float mean_x = bits_to_f(mx_bits);
                     const float mean_y = bits_to_f(my_bits);
