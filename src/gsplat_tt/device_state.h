@@ -56,5 +56,9 @@ std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> get_buffer(
     const std::string& key);
 void clear_buffers();
 
+// Detach stage MeshWorkload contexts (leak) so process exit never runs
+// ProgramImpl after MeshDevice teardown. Safe to call from tt_device_shutdown.
+void leak_stage_contexts_on_exit();
+
 }  // namespace device_state
 }  // namespace gsplat_tt

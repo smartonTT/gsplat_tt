@@ -2403,15 +2403,11 @@ double blend_from_payload(
 }
 
 void device_shutdown() {
-    // NOTE: do NOT close mesh_device here. gsplat_tt::device_state owns the
-    // single MeshDevice instance; it closes once in
-    // device_state::shutdown() (called from tt_device_shutdown after every
-    // per-stage shutdown). Closing here too would double-free the SHM
-    // tracker entries (observed 2026-05-28 as "double free or corruption
-    // (fasttop)" during process exit).
-    g_ctx.reset();
-    g_ctx_mb.reset();
-    g_ctx_cull.reset();
+    // Leak contexts on shutdown — see sort_device_shutdown().
+    (void)g_ctx.release();
+    (void)g_ctx_mb.release();
+    (void)g_ctx_cull.release();
+    (void)g_ctx_fused.release();
 }
 
 }  // namespace gsplat_tt

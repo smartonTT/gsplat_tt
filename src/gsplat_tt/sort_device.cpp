@@ -1023,16 +1023,9 @@ bool sort_device_ready() { return ensure_context() != nullptr; }
 void sort_device_shutdown() {
     auto& slot = context_slot();
     if (slot) {
-        slot->buf_keys.reset();
-        slot->buf_ids.reset();
-        slot->buf_out.reset();
-        slot->buf_tile_ids.reset();
-        slot->buf_tmeta.reset();
-        slot->buf_sorted_ids.reset();
-        slot->buf_tile_ranges.reset();
-        slot->buf_bin2d.reset();
-        // NOTE: do NOT close mesh_device — device_state owns it.
-        slot.reset();
+        // Intentionally leak the context: MeshWorkload::~MeshWorkload can
+        // SIGSEGV in tt_metal if ProgramImpl runs after MeshDevice::close().
+        (void)slot.release();
     }
 }
 

@@ -299,17 +299,7 @@ bool project_device_ready() {
 void project_device_shutdown() {
     auto& slot = context_slot();
     if (slot) {
-        slot->buf_mx.reset();
-        slot->buf_my.reset();
-        slot->buf_mz.reset();
-        slot->buf_mcx.reset();
-        slot->buf_mcy.reset();
-        slot->buf_mcz.reset();
-        slot->cached_bytes = 0;
-        slot->uploaded_means_ptr = nullptr;
-        slot->uploaded_means_N = 0;
-        // NOTE: do NOT close mesh_device here. device_state owns it.
-        slot.reset();
+        (void)slot.release();
     }
 }
 

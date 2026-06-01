@@ -681,20 +681,7 @@ bool gather_visible_device_ready() { return ensure_context() != nullptr; }
 void gather_visible_device_shutdown() {
     auto& slot = context_slot();
     if (slot) {
-        slot->buf_cr.reset(); slot->buf_cg.reset(); slot->buf_cb.reset();
-        slot->buf_op.reset();
-        slot->buf_px.reset(); slot->buf_py.reset(); slot->buf_rx.reset();
-        slot->buf_ry.reset(); slot->buf_a.reset(); slot->buf_b.reset();
-        slot->buf_c.reset(); slot->buf_depth.reset(); slot->buf_opacity.reset();
-        slot->buf_colors.reset(); slot->buf_M.reset();
-        slot->buf_counts.reset();
-        slot->scene_cached_bytes = 0;
-        slot->uploaded_colors_ptr = nullptr;
-        slot->uploaded_opacities_ptr = nullptr;
-        slot->uploaded_N = 0;
-        slot->cap_m_elems = 0;
-        // NOTE: do NOT close mesh_device — device_state owns it.
-        slot.reset();
+        (void)slot.release();
     }
 }
 

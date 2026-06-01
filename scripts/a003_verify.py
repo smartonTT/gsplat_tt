@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 import time
 from pathlib import Path
@@ -232,6 +233,19 @@ def main():
           f"(proj={ps['project_ms']:.1f} ta={ps['tile_assign_ms']:.1f} "
           f"sort={ps['sort_ms']:.1f} blend={ps['blend_ms']:.1f}) "
           f"shot={summary['screenshot']}")
+
+    # TT + tt-metal: skip process-exit teardown races (ProgramImpl vs MeshDevice).
+    if args.backend == "tt":
+        os._exit(0)
+
+
+def _tt_shutdown() -> None:
+    try:
+        from backends.cpu_cpp import _gsplat_cpu as mod
+    except ImportError:
+        return
+    if hasattr(mod, "tt_device_shutdown"):
+        mod.tt_device_shutdown()
 
 
 if __name__ == "__main__":

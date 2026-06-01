@@ -341,23 +341,7 @@ bool tile_assign_device_ready() { return ensure_context() != nullptr; }
 void tile_assign_device_shutdown() {
     auto& slot = context_slot();
     if (slot) {
-        slot->buf_px.reset();
-        slot->buf_py.reset();
-        slot->buf_rx.reset();
-        slot->buf_ry.reset();
-        slot->buf_tpg.reset();
-        slot->buf_a.reset();
-        slot->buf_b.reset();
-        slot->buf_c.reset();
-        slot->buf_m2thr.reset();
-        slot->buf_offs.reset();
-        slot->buf_core_total.reset();
-        slot->buf_gids.reset();
-        slot->buf_tids.reset();
-        slot->buf_keep.reset();
-        slot->buf_pairs_P.reset();
-        // NOTE: do NOT close mesh_device — device_state owns it.
-        slot.reset();
+        (void)slot.release();
     }
 }
 

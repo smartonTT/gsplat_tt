@@ -4,8 +4,16 @@
 
 #include "gsplat_tt/device_state.h"
 
+#include <cstdlib>
 #include <mutex>
 #include <unordered_map>
+
+#include "gsplat_tt/blend.h"
+#include "gsplat_tt/gather_visible.h"
+#include "gsplat_tt/pfwc.h"
+#include "gsplat_tt/project.h"
+#include "gsplat_tt/sort.h"
+#include "gsplat_tt/tile_assign.h"
 
 #include <tt-metalium/distributed.hpp>
 
@@ -30,7 +38,31 @@ State& state() {
 
 }  // namespace
 
+// Leak compiled MeshWorkload contexts at process exit so ProgramImpl is never
+// destroyed after MeshDevice teardown (SIGSEGV). Do not MeshDevice::close() here;
+// tt_metal's own atexit owns ShmResourceTracker (explicit close -> double-free).
+void leak_stage_contexts_on_exit() {
+    gsplat_tt::device_shutdown();
+    gsplat_tt::project_device_shutdown();
+    gsplat_tt::pfwc_device_shutdown();
+    gsplat_tt::tile_assign_device_shutdown();
+    gsplat_tt::sort_device_shutdown();
+    gsplat_tt::gather_visible_device_shutdown();
+}
+
+namespace {
+
+void register_exit_leak_once() {
+    static std::once_flag once;
+    std::call_once(once, []() {
+        std::atexit(+[]() { leak_stage_contexts_on_exit(); });
+    });
+}
+
+}  // namespace
+
 std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
+    register_exit_leak_once();
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     if (!s.mesh_device) {
@@ -55,10 +87,9 @@ void shutdown() {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     s.buffers.clear();
-    if (s.mesh_device) {
-        s.mesh_device->close();
-        s.mesh_device.reset();
-    }
+    // Do not MeshDevice::close() here: leaked stage contexts still hold
+    // MeshWorkload programs that tt_metal must not destroy after close().
+    // Drop our registry only; OS reclaims the device on process exit.
 }
 
 void register_buffer(

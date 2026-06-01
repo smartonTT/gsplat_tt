@@ -27,6 +27,7 @@
 #include "gsplat_tt/render_blend.h"
 #include "gsplat_tt/sort.h"
 #include "gsplat_tt/tile_assign.h"
+
 #endif
 
 namespace py = pybind11;
@@ -1564,15 +1565,7 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
         py::arg("image_width"));
 
     m.def("tt_device_shutdown", []() {
-        // Per-stage shutdowns only release their local pointers/buffers.
-        // The MeshDevice itself is closed exactly once by device_state.
-        gsplat_tt::device_shutdown();
-        gsplat_tt::project_device_shutdown();
-        gsplat_tt::pfwc_device_shutdown();
-        gsplat_tt::tile_assign_device_shutdown();
-        gsplat_tt::sort_device_shutdown();
-        gsplat_tt::gather_visible_device_shutdown();
-        gsplat_tt::device_state::shutdown();
+        gsplat_tt::device_state::leak_stage_contexts_on_exit();
     });
 
     // amendment-002 tt-005: device transform_means_cam (bounded hotspot port).

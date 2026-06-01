@@ -347,16 +347,7 @@ bool pfwc_device_ready() {
 void pfwc_device_shutdown() {
     auto& slot = context_slot();
     if (slot) {
-        slot->buf_c00.reset(); slot->buf_c01.reset(); slot->buf_c02.reset();
-        slot->buf_c11.reset(); slot->buf_c12.reset(); slot->buf_c22.reset();
-        slot->buf_m2x.reset(); slot->buf_m2y.reset(); slot->buf_dep.reset();
-        slot->buf_a.reset();   slot->buf_b.reset();   slot->buf_c.reset();
-        slot->buf_rx.reset();  slot->buf_ry.reset();
-        slot->cov3d_cached_bytes = 0;
-        slot->output_cached_bytes = 0;
-        slot->uploaded_cov3d_ptr = nullptr;
-        slot->uploaded_cov3d_N = 0;
-        slot.reset();
+        (void)slot.release();
     }
 }
 
