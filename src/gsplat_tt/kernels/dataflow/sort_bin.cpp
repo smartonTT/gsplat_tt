@@ -66,6 +66,15 @@ void kernel_main() {
 #ifdef BIN_DUMP
     const uint32_t dbg_addr    = get_arg_val<uint32_t>(14);
 #endif
+#ifdef BIN_EMIT_REC
+    // Step T1 (GSPLAT_TT_TILE_BUCKET): scatter the FULL projected record into a
+    // per-tile contiguous bucket in arbitrary (bin/gaussian) order, so the depth
+    // sort can move into the per-tile L1 pass and NO random DRAM read is needed
+    // to build the bucket. proj_m_blendrec is 1 record (64B) per page (page==g);
+    // tile_recs mirrors the keys/ids layout: record page e ↔ keys/ids element e.
+    const uint32_t blendrec_addr = get_arg_val<uint32_t>(15);
+    const uint32_t tile_recs_addr= get_arg_val<uint32_t>(16);
+#endif
 
     constexpr auto gids_args  = TensorAccessorArgs<0>();
     constexpr auto tids_args  = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -74,6 +83,10 @@ void kernel_main() {
     constexpr auto bin2d_args = TensorAccessorArgs<depth_args.next_compile_time_args_offset()>();
     constexpr auto keys_args  = TensorAccessorArgs<bin2d_args.next_compile_time_args_offset()>();
     constexpr auto ids_args   = TensorAccessorArgs<keys_args.next_compile_time_args_offset()>();
+#ifdef BIN_EMIT_REC
+    constexpr auto blendrec_args = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
+    constexpr auto tile_recs_args= TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
+#endif
 
     const auto gids_acc  = TensorAccessor(gids_args,  gids_addr,  PAGE_BYTES);
     const auto tids_acc  = TensorAccessor(tids_args,  tids_addr,  PAGE_BYTES);
@@ -82,6 +95,10 @@ void kernel_main() {
     const auto bin2d_acc = TensorAccessor(bin2d_args, bin2d_addr, PAGE_BYTES);
     const auto keys_acc  = TensorAccessor(keys_args,  keys_addr,  PAGE_BYTES);
     const auto ids_acc   = TensorAccessor(ids_args,   ids_addr,   PAGE_BYTES);
+#ifdef BIN_EMIT_REC
+    const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
+    const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
+#endif
 
     // CB layout (declared in sort_device.cpp binning program):
     //   0 gid_in (64B)  1 tid_in (64B)  2 keep_in (64B)  3 depth (64B)
@@ -92,6 +109,9 @@ void kernel_main() {
     //   8 isort  (BIN_LOCAL_MAX*4: L1 counting-sort ids)
     constexpr uint32_t CB_GID = 0, CB_TID = 1, CB_KEEP = 2, CB_DEP = 3,
                        CB_ROW = 4, CB_CUR = 5, CB_OFF = 6, CB_KS = 7, CB_IS = 8;
+#ifdef BIN_EMIT_REC
+    constexpr uint32_t CB_REC = 9;  // 64B blendrec staging (read page g, +depth, write bucket)
+#endif
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
     const uint32_t tid_l1  = get_write_ptr(CB_TID);
@@ -208,6 +228,26 @@ void kernel_main() {
             const uint32_t key = depp[g % ELEMS_PER_PAGE];
 #endif
             const uint32_t li = offp[t] + curp[t];
+#ifdef BIN_EMIT_REC
+            // Scatter the full record to its per-tile bucket page. The pair's
+            // GLOBAL keys/ids element is rowp[t] + curp[t] (rowp[t] = this core's
+            // page-aligned base for tile t), so its record (1 record == 1 page)
+            // goes to tile_recs page (rowp[t] + curp[t]) — a unique page, disjoint
+            // across cores (no shared-page race, no atomics). Read blendrec[g]
+            // (page g), inject depth=key as the 10th field, write 64B. T1 keeps
+            // it correctness-simple: one staging buffer, read+write barriered per
+            // record (the scatter is off the blend critical path; T1b can ring-
+            // buffer to pipeline if the bin stage cost matters).
+            {
+                const uint32_t rec_l1 = get_write_ptr(CB_REC);
+                noc_async_read(get_noc_addr(g, blendrec_acc), rec_l1, PAGE_BYTES);
+                noc_async_read_barrier();
+                reinterpret_cast<volatile uint32_t*>(rec_l1)[9] = key;  // depth bits
+                const uint32_t rec_page = rowp[t] + curp[t];
+                noc_async_write(rec_l1, get_noc_addr(rec_page, tile_recs_acc), PAGE_BYTES);
+                noc_async_write_barrier();
+            }
+#endif
             curp[t] = curp[t] + 1;
             ksp[li] = key;
             isp[li] = g;

@@ -106,6 +106,12 @@ struct SortDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_out;      // aligned sorted ids
     std::size_t cap_aligned_bytes = 0;
 
+    // T1 (GSPLAT_TT_TILE_BUCKET): per-tile contiguous full-record bucket scattered
+    // by the bin in arbitrary order (1 record == 1 page == 64B; page e ↔ keys/ids
+    // element e). Grow-on-demand, registered as "sort_tile_recs".
+    std::shared_ptr<distributed::MeshBuffer> buf_tile_recs;
+    std::size_t cap_tile_recs_bytes = 0;
+
     std::shared_ptr<distributed::MeshBuffer> buf_tile_ids;  // LPT tile-id list
     std::size_t cap_tile_ids_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_tmeta;     // (pstart_page, n)
@@ -212,13 +218,23 @@ static void build_program_bin(SortDeviceContext& ctx) {
     cb(7, BIN_LOCAL_BYTES);   // ksort (L1 counting-sort keys)
     cb(8, BIN_LOCAL_BYTES);   // isort (L1 counting-sort ids)
 
+    const bool tile_bucket = [] {
+        const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+        return v && v[0] == '1';
+    }();
+    if (tile_bucket) {
+        cb(9, PAGE_BYTES);    // rec staging (1 blendrec page)
+    }
+
     std::vector<uint32_t> ct;
-    for (int i = 0; i < 7; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    const int bin_accessors = tile_bucket ? 9 : 7;  // +blendrec, +tile_recs
+    for (int i = 0; i < bin_accessors; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
     if (const char* v = std::getenv("GSPLAT_TT_BIN_NODEPTH"); v && v[0] == '1')
         defines["BIN_NO_DEPTH"] = "1";
     if (const char* v = std::getenv("GSPLAT_TT_BIN_DUMP"); v && v[0] == '1')
         defines["BIN_DUMP"] = "1";
+    if (tile_bucket) defines["BIN_EMIT_REC"] = "1";
     ctx.kbin = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
@@ -641,13 +657,27 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->cap_bin2d_bytes = bin2d_bytes;
         }
 
+        // T1 (GSPLAT_TT_TILE_BUCKET): scatter full records into per-tile buckets.
+        const bool tile_bucket = [] {
+            const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+            return v && v[0] == '1';
+        }();
+        auto bbrec = tile_bucket ? device_state::get_buffer("proj_m_blendrec") : nullptr;
+        if (tile_bucket && !bbrec) {
+            std::cerr << "[gsplat_tt::sort] TILE_BUCKET set but proj_m_blendrec missing; "
+                         "host fallback\n";
+            return fail();
+        }
+        const uint32_t blendrec_addr = bbrec ? static_cast<uint32_t>(bbrec->address()) : 0u;
+        uint32_t tile_recs_addr = 0u;  // real address set after P_aligned is known
+
         // ── Pass A: per-core histogram (count) ──────────────────────────
         const auto t_bin0 = clk::now();
         auto launch_bin = [&](uint32_t mode) {
             Program& prog = ctx->wl_bin.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-                SetRuntimeArgs(prog, ctx->kbin, core, {
+                std::vector<uint32_t> args = {
                     static_cast<uint32_t>(bgid->address()),
                     static_cast<uint32_t>(btid->address()),
                     static_cast<uint32_t>(bkeep->address()),
@@ -657,7 +687,12 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     ctx->buf_ids ? static_cast<uint32_t>(ctx->buf_ids->address()) : 0u,
                     ws.start[c], ws.count[c], P_full, num_tiles, stride, c, mode,
                     dump_tile,  // arg14: tile to dump under BIN_DUMP
-                });
+                };
+                if (tile_bucket) {
+                    args.push_back(blendrec_addr);   // arg15
+                    args.push_back(tile_recs_addr);  // arg16 (0 for mode 0; real for mode 1)
+                }
+                SetRuntimeArgs(prog, ctx->kbin, core, args);
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin, false);
             distributed::Finish(*ctx->cq);
@@ -752,6 +787,16 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->buf_ids  = make_dram(ctx->mesh_device.get(), aligned_bytes);
             ctx->buf_out  = make_dram(ctx->mesh_device.get(), aligned_bytes);
             ctx->cap_aligned_bytes = aligned_bytes;
+        }
+        if (tile_bucket) {
+            // One 64B record per aligned element (record page e ↔ keys/ids element e).
+            const std::size_t recs_bytes = static_cast<std::size_t>(P_aligned) * PAGE_BYTES;
+            if (!ctx->buf_tile_recs || ctx->cap_tile_recs_bytes < recs_bytes) {
+                ctx->buf_tile_recs = make_dram(ctx->mesh_device.get(), recs_bytes);
+                ctx->cap_tile_recs_bytes = recs_bytes;
+                device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
+            }
+            tile_recs_addr = static_cast<uint32_t>(ctx->buf_tile_recs->address());
         }
         const uint32_t tmeta_count = num_tiles * 2;
         const uint32_t tmeta_pad = round_up(std::max<uint32_t>(tmeta_count, 1), ELEMS_PER_PAGE);
