@@ -862,14 +862,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         if (std::getenv("GSPLAT_TT_SFPU_CULL_DEBUG") != nullptr) {
             reader_defines["MB_SFPU_CULL_DEBUG"] = "1";
         }
-        if (std::getenv("GSPLAT_TT_SFPU_CULL_BLOCKING") != nullptr) {
-            reader_defines["MB_SFPU_CULL_BLOCKING"] = "1";
-        }
-        if (std::getenv("GSPLAT_TT_SFPU_CULL_USEREF") != nullptr) {
-            reader_defines["MB_SFPU_CULL_USEREF"] = "1";
-        }
-        if (std::getenv("GSPLAT_TT_CULL_KVAL") != nullptr) {
-            reader_defines["MB_SFPU_CULL_KVAL"] = "1";
+        // Fresh cull_masks DRAM pages need a brief settle before the blend reader
+        // consumes them; noc_async_read_barrier() alone is insufficient. Default
+        // spin count is past the single-view knee (512->63.64 dB); override via
+        // GSPLAT_TT_CULL_SPIN.
+        if (const char* sp = std::getenv("GSPLAT_TT_CULL_SPIN")) {
+            reader_defines["MB_CULL_SPIN"] = sp;
+        } else {
+            reader_defines["MB_CULL_SPIN"] = "896";
         }
     }
     ctx.reader = CreateKernel(
@@ -1802,7 +1802,7 @@ static double process_frame(
                 SetRuntimeArgs(program, ctx.reader, core, {
                     a_addr, b_addr, c_addr, px_addr, py_addr, op_addr,
                     ids_addr, rng_addr, box_ox_addr, box_oy_addr,
-                    tile_ids_addr, start, count, tiles_x,
+                    tile_ids_addr, start, count, tiles_x, floor_bits,
                 });
                 SetRuntimeArgs(program, ctx.compute, core, {
                     count, floor_bits, cull_disabled ? 1u : 0u,
@@ -1838,13 +1838,6 @@ static double process_frame(
                      static_cast<unsigned long>(buf_masks_res->address()),
                      static_cast<unsigned long>(buf_masks_res->address() + masks_bytes),
                      static_cast<unsigned long>(buf_base_res->address()));
-    }
-    if (std::getenv("GSPLAT_TT_CULL_HOSTDUMP") != nullptr) {
-        std::vector<uint32_t> hostmasks(masks_bytes / 4);
-        distributed::EnqueueReadMeshBuffer(*ctx.cq, hostmasks, buf_masks_res, /*blocking=*/true);
-        for (uint32_t k = 2026500; k < 2026525 && k < hostmasks.size(); k++) {
-            std::fprintf(stderr, "[CULLHOST] k=%u mask=%u\n", k, hostmasks[k]);
-        }
     }
     return cull_ms;
 }

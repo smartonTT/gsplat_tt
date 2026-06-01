@@ -101,6 +101,9 @@ void kernel_main() {
     const uint32_t tile_ids_start= get_arg_val<uint32_t>(11);
     const uint32_t tile_ids_count= get_arg_val<uint32_t>(12);
     const uint32_t tiles_x       = get_arg_val<uint32_t>(13);
+    const uint32_t floor_bits    = get_arg_val<uint32_t>(14);
+    float contrib_floor;
+    __builtin_memcpy(&contrib_floor, &floor_bits, 4);
 
     constexpr auto a_args      = TensorAccessorArgs<0>();
     constexpr auto b_args      = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -217,6 +220,28 @@ void kernel_main() {
                 row[3] = reinterpret_cast<volatile uint32_t*>(s + 3u * SOA_PAGE_BYTES)[lane];
                 row[4] = reinterpret_cast<volatile uint32_t*>(s + 4u * SOA_PAGE_BYTES)[lane];
                 row[5] = reinterpret_cast<volatile uint32_t*>(s + 5u * SOA_PAGE_BYTES)[lane];
+                // Per-gaussian Mahalanobis threshold computed HERE on the data
+                // mover (BRISC) -- the SAME RISC class on which the soft-float
+                // reference's __builtin_logf is exact (and where the compute TRISC
+                // logf returns garbage). thr = -2*log(floor/op) == the reference's
+                // thresh_m2; <0 sentinel for op<=floor reproduces its early-out
+                // (mask 0). One logf per candidate, NOT per microblock; the heavy
+                // per-microblock metric stays on the SFPU. The compute kernel then
+                // does the divide-free keep test qmin <= det*thr.
+                {
+                    const uint32_t op_bits = row[5];
+                    float opf;
+                    __builtin_memcpy(&opf, &op_bits, 4);
+                    float thrf;
+                    if (opf <= contrib_floor) {
+                        thrf = -1.0f;
+                    } else {
+                        thrf = -2.0f * __builtin_logf(contrib_floor / opf);
+                    }
+                    uint32_t thr_bits;
+                    __builtin_memcpy(&thr_bits, &thrf, 4);
+                    row[6] = thr_bits;
+                }
 #if defined(CULL_DEBUG_REF)
                 {
                     const uint32_t local = processed + j;

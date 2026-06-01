@@ -225,6 +225,12 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
                 // (~127MB/frame eliminated). Only the per-tile candidate count
                 // (num_tiles ints, for LPT load balancing) is computed host-side.
                 if (env_on("GSPLAT_TT_RESIDENT_BLEND")) {
+                    if (std::getenv("GSPLAT_TT_BLEND_REDUNDANCY") != nullptr) {
+                        const double ratio = M > 0 ? static_cast<double>(P) / static_cast<double>(M) : 0.0;
+                        std::fprintf(stderr,
+                            "[REDUNDANCY] pairs(P)=%zu unique_visible_gaussians(M)=%zu ratio=%.3f\n",
+                            static_cast<std::size_t>(P), static_cast<std::size_t>(M), ratio);
+                    }
                     std::vector<uint32_t> counts(static_cast<std::size_t>(num_tiles), 0);
                     for (int t = 0; t < num_tiles; ++t) {
                         const int64_t s = tile_ranges[static_cast<std::size_t>(t) * 2 + 0];

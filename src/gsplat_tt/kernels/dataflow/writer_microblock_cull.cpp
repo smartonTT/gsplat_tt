@@ -40,7 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(CULL_DEBUG_EMIT_M2) || defined(CULL_DEBUG_WRITE) || defined(CULL_DEBUG_DUMPBOX)
+#if defined(CULL_DEBUG_EMIT_M2) || defined(CULL_DEBUG_WRITE) || defined(CULL_DEBUG_DUMPBOX) || defined(CULL_DEBUG_BIND) || defined(CULL_DEBUG_VARY)
 #include "api/debug/dprint.h"
 #endif
 
@@ -134,6 +134,38 @@ void kernel_main() {
             cb_wait_front(CB_KEEP, 1);
             auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
 
+#if defined(CULL_DEBUG_BIND)
+            // Pipeline-binding probe. The compute emitted, for the g-th gaussian
+            // of this batch, the TRIVIAL value (processed_compute + g) into the
+            // keep channel (no cull math). Read it back at CB-linear perm(g,0)
+            // and compare to THIS (writer-side) batch's (processed + g). A clean
+            // run prints only BINDSTART (probe is alive); any BIND line means the
+            // compute->CB_KEEP->writer binding is skewed, and `diff` is the exact
+            // producer/consumer offset (a batch-granular +/-32 == the suspected
+            // one-batch race).
+            {
+                auto kf = reinterpret_cast<volatile float*>(keep);
+                static bool bind_first = true;
+                if (bind_first) {
+                    bind_first = false;
+                    DPRINT << "BINDSTART t=" << tile_id << " nb=" << nb << " L=" << L
+                           << " processed=" << processed
+                           << " got0=" << static_cast<uint32_t>(kf[perm(0, 0)]) << ENDL();
+                }
+                static uint32_t bind_n = 0;
+                for (uint32_t g = 0; g < nb; g++) {
+                    const uint32_t got = static_cast<uint32_t>(kf[perm(g, 0)]);
+                    const uint32_t exp = processed + g;
+                    if (got != exp && bind_n < 80u) {
+                        bind_n++;
+                        DPRINT << "BIND t=" << tile_id << " g=" << g << " L=" << L
+                               << " exp=" << exp << " got=" << got
+                               << " diff=" << (static_cast<int>(got) - static_cast<int>(exp)) << ENDL();
+                    }
+                }
+            }
+#endif
+
 #if defined(CULL_DEBUG_DUMPBOX)
             // Geometry probe: the compute emitted, into the keep channel, the
             // per-lane loaded box origin encoded as oy*32+ox. Read it back at
@@ -168,9 +200,9 @@ void kernel_main() {
             {
                 static uint32_t m2_n = 0;
                 auto kf = reinterpret_cast<volatile float*>(keep);
-                for (uint32_t g = 0; g < nb && m2_n < 100u; g++) {
+                for (uint32_t g = 0; g < nb && m2_n < 4u; g++) {
                     m2_n++;
-                    for (uint32_t m = 0; m < NUM_MB; m++) {
+                    for (uint32_t m = 0; m < 4u; m++) {
                         DPRINT << "M2DMP t=" << tile_id << " local=" << (processed + g)
                                << " m=" << m << " m2=" << F32(kf[perm(g, m)]) << ENDL();
                     }
@@ -187,6 +219,46 @@ void kernel_main() {
                 }
                 scratch_ptr[g] = mask;
             }
+#if defined(CULL_DEBUG_VARY)
+            // MATH-FREE varying direct value-compare. The compute SFPU-stored,
+            // for the g-th gaussian of this batch, all-lanes bit(local) =
+            // (local ^ (local>>5)) & 1 with local = (writer-side) processed + g.
+            // The writer packed those 32 identical lanes into 0xFFFFFFFF/0. We
+            // recompute the SAME closed form here and compare to the packed mask.
+            // Zero VARYMM lines == the +32 is gone for varying math-free data;
+            // any VARYMM prints the exact local, expected, got, and skew offset
+            // (decoded by matching got against expected(local +/- 32)).
+            {
+                static bool vary_first = true;
+                if (vary_first) {
+                    vary_first = false;
+                    DPRINT << "VARYSTART t=" << tile_id << " L=" << L
+                           << " processed=" << processed << ENDL();
+                }
+                static uint32_t vary_mm = 0;
+                static uint32_t vary_tot = 0;
+                for (uint32_t g = 0; g < nb; g++) {
+                    const uint32_t local = processed + g;
+                    const uint32_t bit = (local ^ (local >> 5)) & 1u;
+                    const uint32_t exp = bit ? 0xFFFFFFFFu : 0u;
+                    const uint32_t got = scratch_ptr[g];
+                    if (got != exp) {
+                        vary_tot++;
+                        if (vary_mm < 60u) {
+                            vary_mm++;
+                            const uint32_t up = ((local + 32u) ^ ((local + 32u) >> 5)) & 1u;
+                            const int off = (up ? 0xFFFFFFFFu : 0u) == got ? 32
+                                          : (local >= 32u && (((local - 32u) ^ ((local - 32u) >> 5)) & 1u
+                                                ? 0xFFFFFFFFu : 0u) == got ? -32 : 0);
+                            DPRINT << "VARYMM t=" << tile_id << " local=" << local
+                                   << " exp=" << exp << " got=" << got
+                                   << " skew=" << off << ENDL();
+                        }
+                    }
+                }
+                DPRINT << "VARYTOT t=" << tile_id << " mm=" << vary_tot << ENDL();
+            }
+#endif
 #if defined(CULL_KVAL)
             // Placement test: store the GLOBAL candidate index (base+processed+g)
             // instead of the real mask. The blend reader checks it reads back

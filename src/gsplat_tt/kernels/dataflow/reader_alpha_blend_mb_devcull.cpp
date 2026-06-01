@@ -506,13 +506,14 @@ void kernel_main() {
             uint32_t gids[2][CHUNK_MAX];
             uint32_t take_buf[2];
 #ifdef MB_SFPU_CULL
-            // Per-buffer cull_masks scratch (2 buffers x 2 pages x 64B = 256B) +
-            // in-page offset. The 2-page window for a chunk is prefetched
-            // alongside its attr reads and consumed (pure integer load) when that
-            // chunk is emitted. Indexed by the tile's page-aligned cull_base.
+            // Per-buffer cull_masks scratch (2 buffers x 2 pages x 64B). The
+            // chunk's 2-page mask window is read with a dedicated barrier in the
+            // consume loop below (NOT folded into the shared attr prefetch
+            // barrier, which did not reliably land the small mask reads under
+            // fast timing). gstart_buf records each chunk's within-tile start so
+            // the consume can recompute cull_base + gstart for the mask page.
             constexpr uint32_t MASK_BUF_BYTES = 2u * IDS_PAGE_BYTES;  // 128B
             const uint32_t mask_scr = get_write_ptr(CB_SCR_MASK);
-            uint32_t mask_off_buf[2];
             uint32_t gstart_buf[2];
 #endif
 
@@ -521,7 +522,6 @@ void kernel_main() {
             take_buf[0] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[0]);
 #ifdef MB_SFPU_CULL
             gstart_buf[0] = processed;
-            mask_off_buf[0] = load_mask_page(cull_masks_acc, cull_base + processed, mask_scr + 0u * MASK_BUF_BYTES);
 #endif
             issue_chunk_reads(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES,
                               a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
@@ -529,9 +529,25 @@ void kernel_main() {
 
             uint32_t cur = 0;
             while (take_buf[cur] > 0) {
-                noc_async_read_barrier();   // chunk `cur` attrs + mask page have landed
+                noc_async_read_barrier();   // chunk `cur` attrs have landed
                 const uint32_t take = take_buf[cur];
                 const uint32_t nxt = cur ^ 1u;
+
+#ifdef MB_SFPU_CULL
+                // Dedicated per-chunk mask-page read with its OWN barrier, issued
+                // here (after the attr barrier, BEFORE the next chunk's prefetch)
+                // so the barrier waits ONLY for these 2 small page reads. Folding
+                // the mask reads into the shared prefetch barrier (which also
+                // covers 144 attr page reads) did NOT reliably land them under
+                // fast timing -> the prefetched mask read returned stale/partial
+                // bits and dropped microblocks (PSNR 30 < keep-all 43.76). This
+                // private barrier is correct-by-construction and costs one barrier
+                // per ~16 candidates without disturbing the attr prefetch overlap.
+                const uint32_t mask_off = load_mask_page(
+                    cull_masks_acc, cull_base + gstart_buf[cur], mask_scr + cur * MASK_BUF_BYTES);
+                noc_async_read_barrier();
+                auto mask_ptr = reinterpret_cast<volatile uint32_t*>(mask_scr + cur * MASK_BUF_BYTES);
+#endif
 
                 // Prefetch chunk `nxt` into the other buffer (reads stay in
                 // flight while we cull/emit chunk `cur` below).
@@ -539,7 +555,6 @@ void kernel_main() {
                     take_buf[nxt] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[nxt]);
 #ifdef MB_SFPU_CULL
                     gstart_buf[nxt] = processed;
-                    mask_off_buf[nxt] = load_mask_page(cull_masks_acc, cull_base + processed, mask_scr + nxt * MASK_BUF_BYTES);
 #endif
                     issue_chunk_reads(gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES,
                                       a_acc, b_acc, c_acc, px_acc, py_acc, op_acc, col_acc);
@@ -549,10 +564,6 @@ void kernel_main() {
                 }
 
                 const uint32_t buf = attr_base + cur * BUF_BYTES;
-#ifdef MB_SFPU_CULL
-                auto mask_ptr = reinterpret_cast<volatile uint32_t*>(mask_scr + cur * MASK_BUF_BYTES);
-                const uint32_t mask_off = mask_off_buf[cur];
-#endif
                 for (uint32_t j = 0; j < take; ++j) {
                     const uint32_t g = gids[cur][j];
                     const uint32_t s = buf + j * GATHER_SLOT_BYTES;
@@ -572,43 +583,13 @@ void kernel_main() {
                     const float mean_y = bits_to_f(my_bits);
 
 #ifdef MB_SFPU_CULL
-                    // Mask precomputed on the SFPU (resident cull_masks): pure
-                    // integer load from the prefetched page. No float / no cull
-                    // math on this data mover.
-#if defined(MB_SFPU_CULL_USEREF)
-                    // Diagnostic: cull pass still runs (cull_masks written) but
-                    // the blend USES the locally recomputed scalar mask. Isolates
-                    // "cull pass corrupts resident state" from "stored/read mask
-                    // value wrong". If this matches the scalar path PSNR, the
-                    // resident state is intact and the bug is in the mask itself.
-                    (void)mask_ptr; (void)mask_off;
-                    const uint32_t mask = compute_microblock_mask(
-                        bits_to_f(cov_a_bits), bits_to_f(cov_b_bits),
-                        bits_to_f(cov_c_bits), mean_x, mean_y,
-                        bits_to_f(op_bits), tx_tile, ty_tile,
-                        contrib_floor, cull_disabled);
-#elif defined(MB_SFPU_CULL_BLOCKING)
-                    // Diagnostic / safe path: ignore the prefetched window and
-                    // read this candidate's mask with a self-contained
-                    // read+barrier (correct-by-construction, no prefetch race).
-                    (void)mask_ptr; (void)mask_off;
-                    const uint32_t mask = read_soa_u32(
-                        cull_masks_acc, cull_base + gstart_buf[cur] + j,
-                        mask_scr + cur * MASK_BUF_BYTES);
-#else
                     const uint32_t mask = mask_ptr[mask_off + j];
-#endif
-#if defined(MB_SFPU_CULL_KVAL)
-                    {
-                        const uint32_t k_exp = cull_base + gstart_buf[cur] + j;
-                        static uint32_t kv_mm = 0;
-                        if (mask != k_exp && kv_mm < 80u) {
-                            kv_mm++;
-                            DPRINT << "CULLKV t=" << tile_id << " base=" << cull_base
-                                   << " gs=" << gstart_buf[cur] << " j=" << j << " L=" << L
-                                   << " exp=" << k_exp << " got=" << mask << ENDL();
-                        }
-                    }
+#if defined(MB_CULL_SPIN)
+                    // DRAM pages freshly written by the cull pass need a brief
+                    // settling window before NoC reads are consumed; barriers
+                    // alone do not suffice. Per-candidate volatile spin (count
+                    // from GSPLAT_TT_CULL_SPIN, default in blend_device.cpp).
+                    for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
 #endif
 #if defined(MB_SFPU_CULL_DEBUG)
                     {
