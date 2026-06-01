@@ -56,6 +56,18 @@ std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> get_buffer(
     const std::string& key);
 void clear_buffers();
 
+// Host-cached sort→blend handoff (GSPLAT_TT_SORT_BLEND_PIPE): P_kept and the
+// padded cull-mask footprint published during sort; lets blend size resident
+// buffers without a blocking D2H of sort_P_kept between stages.
+void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems);
+bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems);
+
+// When true, sort left the publish kernel in-flight; the next blend enqueue
+// on the shared CQ must not Finish until cull+blend (or an explicit drain).
+void mark_sort_publish_pending();
+bool sort_publish_pending();
+void clear_sort_publish_pending();
+
 // Detach stage MeshWorkload contexts (leak) so process exit never runs
 // ProgramImpl after MeshDevice teardown. Safe to call from tt_device_shutdown.
 void leak_stage_contexts_on_exit();

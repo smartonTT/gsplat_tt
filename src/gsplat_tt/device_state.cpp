@@ -29,6 +29,10 @@ struct State {
         std::shared_ptr<tt::tt_metal::distributed::MeshBuffer>>
         buffers;
     std::mutex mu;
+    bool sort_publish_pending = false;
+    bool sort_pipe_scalars_valid = false;
+    uint32_t sort_pipe_p_kept = 0;
+    uint32_t sort_pipe_mask_elems = 0;
 };
 
 State& state() {
@@ -115,6 +119,47 @@ void clear_buffers() {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     s.buffers.clear();
+}
+
+void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.sort_pipe_scalars_valid = true;
+    s.sort_pipe_p_kept = p_kept;
+    s.sort_pipe_mask_elems = mask_elems;
+}
+
+bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!s.sort_pipe_scalars_valid) {
+        return false;
+    }
+    if (p_kept) {
+        *p_kept = s.sort_pipe_p_kept;
+    }
+    if (mask_elems) {
+        *mask_elems = s.sort_pipe_mask_elems;
+    }
+    return true;
+}
+
+void mark_sort_publish_pending() {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.sort_publish_pending = true;
+}
+
+bool sort_publish_pending() {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    return s.sort_publish_pending;
+}
+
+void clear_sort_publish_pending() {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.sort_publish_pending = false;
 }
 
 }  // namespace device_state

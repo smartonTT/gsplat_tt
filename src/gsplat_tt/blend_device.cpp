@@ -1744,14 +1744,25 @@ static bool ensure_resident_buffers(
     DeviceContext& ctx,
     uint32_t num_tiles) {
     namespace ds = gsplat_tt::device_state;
-    auto buf_pk = ds::get_buffer("sort_P_kept");
     auto published_base = ds::get_buffer("cull_mask_base");
-    if (!buf_pk || !published_base) {
+    if (!published_base) {
         return false;
     }
-    std::vector<uint32_t> pkept(16, 0);
-    distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
-    const size_t total_elems = std::max<size_t>(16, static_cast<size_t>(pkept[1]));
+    uint32_t pipe_p = 0;
+    uint32_t pipe_mask = 0;
+    size_t total_elems = 16;
+    if (ds::get_sort_blend_pipe_scalars(&pipe_p, &pipe_mask)) {
+        total_elems = std::max<size_t>(16, static_cast<size_t>(pipe_mask));
+    } else {
+        auto buf_pk = ds::get_buffer("sort_P_kept");
+        if (!buf_pk) {
+            return false;
+        }
+        std::vector<uint32_t> pkept(16, 0);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
+        total_elems = std::max<size_t>(16, static_cast<size_t>(pkept[1]));
+        (void)pipe_p;
+    }
     const size_t masks_bytes = (total_elems / 16) * MASKS_PAGE_BYTES;
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
@@ -2173,9 +2184,11 @@ static double process_frame_resident(
         distributed::EnqueueWriteMeshBuffer(*ctx_fused.cq, ctx_fused.res_yramp, by);
         ctx_fused.res_ramp_uploaded = true;
     }
+    const bool sort_publish_piped = ds::sort_publish_pending();
     distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_fused.workload, /*blocking=*/false);
     distributed::EnqueueMeshWorkload(*ctx_blend.cq, ctx_blend.workload, /*blocking=*/false);
     distributed::Finish(*ctx_blend.cq);
+    ds::clear_sort_publish_pending();
 
     std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     distributed::EnqueueReadMeshBuffer(*ctx_blend.cq, result_bf16, ctx_blend.res_out, /*blocking=*/true);
@@ -2183,8 +2196,9 @@ static double process_frame_resident(
 
     if (timing) {
         std::fprintf(stderr,
-            "[FUSED_TILE] upload+exec+readback=%.1f ms (single Finish cull->blend)\n",
-            std::chrono::duration<double, std::milli>(t_end - t_start).count());
+            "[FUSED_TILE] upload+exec+readback=%.1f ms (single Finish%s)\n",
+            std::chrono::duration<double, std::milli>(t_end - t_start).count(),
+            sort_publish_piped ? " sort-publish+cull+blend" : " cull+blend");
     }
 
     tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);

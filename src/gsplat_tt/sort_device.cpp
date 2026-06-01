@@ -333,6 +333,38 @@ static bool resident_blend_chain_enabled() {
     return v != nullptr && v[0] == '1';
 }
 
+static bool sort_device_publish_enabled();
+
+static bool fused_tile_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
+    if (v == nullptr || v[0] == '\0') {
+        return true;
+    }
+    return v[0] != '0';
+}
+
+// Drop the sort-publish Finish() and blend's blocking sort_P_kept D2H so the
+// publish kernel chains into FUSED_TILE cull+blend with one CQ drain.
+static bool sort_blend_pipe_enabled() {
+    if (const char* v = std::getenv("GSPLAT_TT_SORT_BLEND_PIPE"); v != nullptr) {
+        if (v[0] == '0') {
+            return false;
+        }
+        if (v[0] == '1') {
+            return true;
+        }
+    }
+    return resident_blend_chain_enabled() && sort_device_publish_enabled() &&
+           fused_tile_enabled();
+}
+
+static void finish_sort_cq_if_needed(SortDeviceContext* ctx) {
+    if (device_state::sort_publish_pending()) {
+        distributed::Finish(*ctx->cq);
+        device_state::clear_sort_publish_pending();
+    }
+}
+
 // Publish LPT tile-id list + per-core (offset,count) and per-tile kept counts
 // so blend/cull never scan host tile_ranges or rebuild LPT from host vectors.
 static void publish_sort_downstream_metadata(
@@ -389,6 +421,10 @@ static void publish_sort_downstream_metadata(
     pkept_buf[0] = static_cast<uint32_t>(acc);
     pkept_buf[1] = static_cast<uint32_t>(mask_elems);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_P_kept, pkept_buf, false);
+    if (sort_blend_pipe_enabled()) {
+        device_state::set_sort_blend_pipe_scalars(
+            static_cast<uint32_t>(acc), static_cast<uint32_t>(mask_elems));
+    }
 
     if (resident_blend_chain_enabled()) {
         std::vector<uint32_t> mask_base(counts_pad, 0u);
@@ -825,7 +861,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 });
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_publish, false);
-            distributed::Finish(*ctx->cq);
+            if (sort_blend_pipe_enabled()) {
+                device_state::mark_sort_publish_pending();
+            } else {
+                distributed::Finish(*ctx->cq);
+            }
             T.publish_ms =
                 std::chrono::duration<double, std::milli>(clk::now() - t_pub0).count();
             // Resident blend reads sort_sorted_ids over NoC — skip the large ids
@@ -833,6 +873,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             const bool need_host_ids = verify || need_host_sorted_ids ||
                                        !resident_blend_chain_enabled();
             if (need_host_ids) {
+                finish_sort_cq_if_needed(ctx);
                 const uint32_t cap_sorted_elems =
                     static_cast<uint32_t>(ctx->cap_sorted_bytes / 4);
                 const auto t_d0 = clk::now();
@@ -883,6 +924,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // binning of the reconstructed resident pairs. Localizes binning bugs
         // (keys vs ids vs placement) independent of the radix sort.
         if (const char* bd = std::getenv("GSPLAT_TT_BIN_DEBUG"); bd && bd[0] == '1') {
+            finish_sort_cq_if_needed(ctx);
             std::vector<uint32_t> dkeys(P_aligned), dids(P_aligned);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, dkeys, ctx->buf_keys, true);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, dids, ctx->buf_ids, true);
@@ -1007,6 +1049,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             T.d2h_ms, T.compact_ms, T.publish_ms, T.total_ms);
 
         if (verify) {
+            finish_sort_cq_if_needed(ctx);
             // Reconstruct host pairs from the resident buffers for the CPU
             // reference comparison (gaussian-major compaction over keep[]).
             std::vector<uint32_t> gz(P_pad), tz(P_pad), kz(P_pad), dz;
@@ -1037,6 +1080,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         return result;
     } catch (const std::exception& e) {
         std::cerr << "[gsplat_tt::sort] resident-pairs path failed: " << e.what() << "\n";
+        finish_sort_cq_if_needed(ctx);
         return fail();
     }
 }
