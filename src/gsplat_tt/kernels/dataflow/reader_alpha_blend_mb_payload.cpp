@@ -183,65 +183,19 @@ void kernel_main() {
             continue;
         }
 
-        // Stream the tile's contiguous payload rows [id_start, id_end) sequentially.
-        // Double-buffered: prefetch chunk K+1 while pushing rows of chunk K.
-        uint32_t take_buf[2];
-        uint32_t processed = 0;
-
-        auto issue_chunk = [&](uint32_t buf_parity, uint32_t start_off, uint32_t take) {
-            const uint32_t dst = pay_base + buf_parity * CHUNK_BYTES;
-            const uint32_t page0 = id_start + start_off;
-            for (uint32_t j = 0; j < take; ++j) {
-                noc_async_read_tile(page0 + j, payload_acc, dst + j * ROW_BYTES);
+        // DIAG(iter19): dead-simple SERIAL stream (one row per barrier) to test
+        // whether the double-buffered chunk pipeline corrupts rows past chunk 0.
+        for (uint32_t p = 0; p < L; ++p) {
+            noc_async_read_tile(id_start + p, payload_acc, pay_base);
+            noc_async_read_barrier();
+            for (volatile int _s = 0; _s < 1024; ++_s) { }
+            auto src = reinterpret_cast<volatile uint32_t*>(pay_base);
+            cb_reserve_back(CB_MB_COEFF, 1);
+            auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+            for (uint32_t w = 0; w < ROW_WORDS; ++w) {
+                row[w] = src[w];
             }
-        };
-
-        // Prologue: issue chunk 0 into buffer 0.
-        take_buf[0] = (L < CHUNK_MAX) ? L : CHUNK_MAX;
-        issue_chunk(0, 0, take_buf[0]);
-        processed += take_buf[0];
-
-        uint32_t cur = 0;
-        while (take_buf[cur] > 0) {
-            noc_async_read_barrier();  // chunk `cur` payload rows have landed
-#if defined(MB_PAY_SPIN)
-            for (volatile int _s = 0; _s < (MB_PAY_SPIN); ++_s) { }
-#endif
-            const uint32_t take = take_buf[cur];
-            const uint32_t nxt = cur ^ 1u;
-
-            // Prefetch next chunk (reads stay in flight while we push `cur`).
-            if (processed < L) {
-                uint32_t nt = L - processed;
-                if (nt > CHUNK_MAX) nt = CHUNK_MAX;
-                take_buf[nxt] = nt;
-                issue_chunk(nxt, processed, nt);
-                processed += nt;
-            } else {
-                take_buf[nxt] = 0;
-            }
-
-            const uint32_t buf = pay_base + cur * CHUNK_BYTES;
-            for (uint32_t j = 0; j < take; ++j) {
-                auto src = reinterpret_cast<volatile uint32_t*>(buf + j * ROW_BYTES);
-#if defined(MB_PAYLOAD_DEBUG)
-                if (ti == 0 && cur == 0 && j < 2) {
-                    DPRINT << "PAYROW t=" << tile_id << " id0=" << id_start << " L=" << L
-                           << " j=" << j << " a=" << F32(*reinterpret_cast<volatile float*>(buf + j * ROW_BYTES))
-                           << " mx=" << F32(*reinterpret_cast<volatile float*>(buf + j * ROW_BYTES + 12))
-                           << " op=" << F32(*reinterpret_cast<volatile float*>(buf + j * ROW_BYTES + 24))
-                           << " cr=" << F32(*reinterpret_cast<volatile float*>(buf + j * ROW_BYTES + 28))
-                           << " mask=" << src[10] << ENDL();
-                }
-#endif
-                cb_reserve_back(CB_MB_COEFF, 1);
-                auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
-                for (uint32_t w = 0; w < ROW_WORDS; ++w) {
-                    row[w] = src[w];
-                }
-                cb_push_back(CB_MB_COEFF, 1);
-            }
-            cur = nxt;
+            cb_push_back(CB_MB_COEFF, 1);
         }
     }
 }

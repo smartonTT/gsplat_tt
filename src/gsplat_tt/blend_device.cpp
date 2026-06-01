@@ -1604,6 +1604,11 @@ static double process_frame_mb_devcull_resident(
     std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
     distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
     // Constant ramps: upload once, then reuse the resident copy every frame.
+    // DIAG(iter18): GSPLAT_TT_FORCE_RAMP=1 re-uploads every frame to test whether
+    // the payload pack pass perturbs res_xramp/res_yramp (would recover the gate).
+    if (std::getenv("GSPLAT_TT_FORCE_RAMP") != nullptr) {
+        ctx.res_ramp_uploaded = false;
+    }
     if (!ctx.res_ramp_uploaded) {
         auto xramp = make_ramp(/*is_x=*/true);
         auto yramp = make_ramp(/*is_x=*/false);
@@ -2147,7 +2152,7 @@ static double process_frame(
     DeviceContext& ctx,
     float contrib_floor,
     bool cull_disabled,
-    uint32_t /*num_tiles*/,
+    uint32_t num_tiles,
     uint32_t tiles_x,
     bool* ok) {
     namespace ds = gsplat_tt::device_state;
@@ -2220,41 +2225,110 @@ static double process_frame(
     // rows (global-index 0..N) so the pack write-order can be byte-verified
     // against the consumption layout without DPRINT backpressure. Gated by env.
     if (std::getenv("GSPLAT_TT_PAYLOAD_READBACK") != nullptr) {
+        namespace ds = gsplat_tt::device_state;
+        auto u2f = [](uint32_t b) { float f; std::memcpy(&f, &b, 4); return f; };
+        auto f2b = [](float f) { uint32_t b; std::memcpy(&b, &f, 4); return b; };
         const size_t rows_total = buf_pay->size() / mb::COEFF_ROW_BYTES_MB;
         std::vector<uint32_t> rb(rows_total * (mb::COEFF_ROW_BYTES_MB / 4), 0xCDCDCDCDu);
         distributed::EnqueueReadMeshBuffer(*ctx.cq, rb, buf_pay, /*blocking=*/true);
-        auto u2f = [](uint32_t b) { float f; std::memcpy(&f, &b, 4); return f; };
-        // Count rows that still hold the pre-fill sentinel (never written by pack)
-        // and the index of the FIRST such row -> tells us pack coverage.
-        size_t unwritten = 0;
-        size_t first_unwritten = rows_total;
-        for (size_t r = 0; r < rows_total; ++r) {
-            const uint32_t* row = rb.data() + r * 16;
-            bool sentinel = true;
-            for (int w = 0; w < 16; ++w) {
-                if (row[w] != 0xCDCDCDCDu) { sentinel = false; break; }
+
+        // DIAG(iter18): DETERMINISTIC host cross-check of EVERY packed row field
+        // against proj_m_*[gid] (gid = sort_sorted_ids[id_start+p]). The pack and
+        // the proven devcull reader derive gid identically, so a correct pack must
+        // reproduce every field byte-for-byte. Also histogram the mask popcount.
+        auto rdbuf = [&](const char* name) {
+            auto b = ds::get_buffer(name);
+            std::vector<uint32_t> v(b ? b->size() / 4 : 0, 0u);
+            if (b) distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, /*blocking=*/true);
+            return v;
+        };
+        std::vector<uint32_t> sids(buf_ids->size() / 4, 0u);
+        std::vector<uint32_t> rng(buf_rng->size() / 4, 0u);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, sids, buf_ids, /*blocking=*/true);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, rng, buf_rng, /*blocking=*/true);
+        const std::vector<uint32_t> pma = rdbuf("proj_m_a");
+        const std::vector<uint32_t> pmb = rdbuf("proj_m_b");
+        const std::vector<uint32_t> pmc = rdbuf("proj_m_c");
+        const std::vector<uint32_t> pmpx = rdbuf("proj_m_px");
+        const std::vector<uint32_t> pmpy = rdbuf("proj_m_py");
+        const std::vector<uint32_t> pmop = rdbuf("proj_m_opacity");
+        const std::vector<uint32_t> pmcol = rdbuf("proj_m_colors");
+
+        size_t checked = 0, gid_mm = 0, oob = 0;
+        // per-field mismatch counts: a,b,c,mxl,myl,op,cr,cg,cb
+        size_t fmm[9] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+        size_t first_field_mm = SIZE_MAX;
+        size_t mask_zero = 0, mask_full = 0, pop_sum = 0;
+        int dumped = 0;
+        for (uint32_t t = 0; t < num_tiles; ++t) {
+            if (static_cast<size_t>(t) * 2u + 1u >= rng.size()) break;
+            const uint32_t id_start = rng[t * 2u + 0u];
+            const uint32_t id_end = rng[t * 2u + 1u];
+            if (id_end <= id_start) continue;
+            const uint32_t L = id_end - id_start;
+            const uint32_t tx = t % tiles_x;
+            const uint32_t ty = t / tiles_x;
+            const float tx_tile = static_cast<float>(tx * 32u);
+            const float ty_tile = static_cast<float>(ty * 32u);
+            for (uint32_t p = 0; p < L; ++p) {
+                const uint32_t gidx = id_start + p;
+                if (static_cast<size_t>(gidx) >= rows_total || static_cast<size_t>(gidx) >= sids.size()) {
+                    oob++;
+                    continue;
+                }
+                const uint32_t* row = rb.data() + static_cast<size_t>(gidx) * 16;
+                const uint32_t g = sids[gidx];
+                checked++;
+                if (row[11] != g) {
+                    if (first_field_mm == SIZE_MAX) first_field_mm = gidx;
+                    gid_mm++;
+                }
+                const uint32_t e0 = g * 3u;
+                const uint32_t exp_mxl = (g < pmpx.size()) ? f2b(u2f(pmpx[g]) - tx_tile) : 0u;
+                const uint32_t exp_myl = (g < pmpy.size()) ? f2b(u2f(pmpy[g]) - ty_tile) : 0u;
+                const uint32_t exp[9] = {
+                    (g < pma.size()) ? pma[g] : 0u,
+                    (g < pmb.size()) ? pmb[g] : 0u,
+                    (g < pmc.size()) ? pmc[g] : 0u,
+                    exp_mxl, exp_myl,
+                    (g < pmop.size()) ? pmop[g] : 0u,
+                    (e0 + 0u < pmcol.size()) ? pmcol[e0 + 0u] : 0u,
+                    (e0 + 1u < pmcol.size()) ? pmcol[e0 + 1u] : 0u,
+                    (e0 + 2u < pmcol.size()) ? pmcol[e0 + 2u] : 0u,
+                };
+                // row indices for the 9 fields: a=0,b=1,c=2,mxl=3,myl=4,op=6,cr=7,cg=8,cb=9
+                const int ridx[9] = {0, 1, 2, 3, 4, 6, 7, 8, 9};
+                bool any = false;
+                for (int f = 0; f < 9; ++f) {
+                    if (row[ridx[f]] != exp[f]) {
+                        fmm[f]++;
+                        any = true;
+                    }
+                }
+                if (any && first_field_mm == SIZE_MAX) first_field_mm = gidx;
+                if (any && dumped < 8) {
+                    std::fprintf(stderr,
+                        "[PAYLOAD_XCHK] MM gidx=%u g=%u | a %.3f/%.3f b %.3f/%.3f c %.3f/%.3f "
+                        "mxl %.3f/%.3f op %.4f/%.4f cr %.4f/%.4f mask=0x%x\n",
+                        gidx, g, u2f(row[0]), u2f(exp[0]), u2f(row[1]), u2f(exp[1]),
+                        u2f(row[2]), u2f(exp[2]), u2f(row[3]), u2f(exp[3]),
+                        u2f(row[6]), u2f(exp[5]), u2f(row[7]), u2f(exp[6]), row[10]);
+                    dumped++;
+                }
+                const uint32_t mask = row[10];
+                if (mask == 0u) mask_zero++;
+                if (mask == 0xFFFFFFFFu) mask_full++;
+                pop_sum += static_cast<size_t>(__builtin_popcount(mask));
             }
-            if (sentinel) {
-                if (first_unwritten == rows_total) first_unwritten = r;
-                unwritten++;
-            }
         }
-        std::fprintf(stderr, "[PAYLOAD_RB] rows=%zu unwritten(sentinel)=%zu first_unwritten=%zu payload=0x%lx\n",
-                     rows_total, unwritten, first_unwritten, static_cast<unsigned long>(pay_addr));
-        // Dump strided samples across the WHOLE index range + the last rows.
-        const size_t stride = std::max<size_t>(1, rows_total / 24);
-        for (size_t r = 0; r < rows_total; r += stride) {
-            const uint32_t* row = rb.data() + r * 16;
-            std::fprintf(stderr,
-                "[PAYLOAD_RB] g=%zu a=%.4f mxl=%.3f myl=%.3f op=%.4f cr=%.4f mask=0x%x\n",
-                r, u2f(row[0]), u2f(row[3]), u2f(row[4]), u2f(row[6]), u2f(row[7]), row[10]);
-        }
-        for (size_t r = (rows_total > 4 ? rows_total - 4 : 0); r < rows_total; ++r) {
-            const uint32_t* row = rb.data() + r * 16;
-            std::fprintf(stderr,
-                "[PAYLOAD_RB] LAST g=%zu a=%.4f mxl=%.3f op=%.4f cr=%.4f mask=0x%x\n",
-                r, u2f(row[0]), u2f(row[3]), u2f(row[6]), u2f(row[7]), row[10]);
-        }
+        std::fprintf(stderr,
+            "[PAYLOAD_XCHK] rows_total=%zu checked=%zu gid_mm=%zu oob=%zu first_mm=%zd | "
+            "fmm a=%zu b=%zu c=%zu mxl=%zu myl=%zu op=%zu cr=%zu cg=%zu cb=%zu | "
+            "mask_zero=%zu mask_full=%zu avg_pop=%.2f\n",
+            rows_total, checked, gid_mm, oob, static_cast<ssize_t>(first_field_mm),
+            fmm[0], fmm[1], fmm[2], fmm[3], fmm[4], fmm[5], fmm[6], fmm[7], fmm[8],
+            mask_zero, mask_full,
+            checked ? static_cast<double>(pop_sum) / static_cast<double>(checked) : 0.0);
     }
     return pack_ms;
 }
