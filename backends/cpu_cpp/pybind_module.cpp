@@ -28,6 +28,13 @@
 #include "gsplat_tt/sort.h"
 #include "gsplat_tt/tile_assign.h"
 
+// amendment-003 device-profiler dump hook (GSPLAT_TT_PROFILE). Pulls in the
+// public ReadMeshDeviceProfilerResults(MeshDevice&, ...) entry point. The dump
+// is a no-op unless TT_METAL_DEVICE_PROFILER=1 enabled the profiler at device
+// init, so this include is safe in non-profiling production builds/runs.
+#include <tt-metalium/distributed.hpp>
+#include <tt-metalium/host_api.hpp>
+
 #endif
 
 namespace py = pybind11;
@@ -1093,6 +1100,36 @@ static std::size_t sort_kept_entry_count(const gsplat_cpu::SortResult& sr) {
     return n;
 }
 
+#ifdef GSPLAT_WITH_TT
+// amendment-003: env-gated device-profiler dump. gsplat deliberately never
+// calls MeshDevice::close() (see device_state.cpp), and tt-metal does not dump
+// device-profiler results at atexit, so the profiler CSV is never produced for
+// a normal run. When GSPLAT_TT_PROFILE is set we explicitly read the device
+// profiler results after a frame completes; tt-metal writes/appends the per-RISC
+// markers to $TT_METAL_HOME/generated/profiler/.logs/profile_log_device.csv.
+//
+// This is a strict no-op when GSPLAT_TT_PROFILE is unset (early return before
+// touching the device) AND when the device profiler was not enabled at init
+// (ReadMeshDeviceProfilerResults itself early-returns unless the profiler state
+// is on, i.e. TT_METAL_DEVICE_PROFILER=1). It never changes pixels/PSNR.
+static void maybe_dump_device_profiler() {
+    const char* prof = std::getenv("GSPLAT_TT_PROFILE");
+    if (prof == nullptr || prof[0] == '\0' || prof[0] == '0') {
+        return;
+    }
+    // Don't spin up the device just to dump; only dump if a render actually
+    // initialized it.
+    if (!gsplat_tt::device_state::is_initialized()) {
+        return;
+    }
+    auto dev = gsplat_tt::device_state::get_device();
+    if (!dev) {
+        return;
+    }
+    tt::tt_metal::ReadMeshDeviceProfilerResults(*dev);
+}
+#endif  // GSPLAT_WITH_TT
+
 // All-stage fused render. Orchestrates project_full_fused -> filter colors/
 // opacities by valid_mask -> tile_assign -> sort_and_bin -> cull_and_blend
 // entirely in C++. Eliminates ~4 pybind boundary crossings + ~7 numpy<->C++
@@ -1421,6 +1458,13 @@ py::tuple render_full_py(
     stats["sort_ms"] = std::chrono::duration<float, std::milli>(t_s1 - t_s0).count();
     stats["blend_ms"] = std::chrono::duration<float, std::milli>(t_b1 - t_b0).count();
     stats["total_ms"] = std::chrono::duration<float, std::milli>(clock::now() - t0).count();
+
+#ifdef GSPLAT_WITH_TT
+    // amendment-003: env-gated (GSPLAT_TT_PROFILE) device-profiler dump after
+    // the frame's device work has completed. No-op in production.
+    maybe_dump_device_profiler();
+#endif
+
     return py::make_tuple(image, stats);
 }
 
