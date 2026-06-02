@@ -106,3 +106,4 @@ backends/tt/tt-metal
 
 # tt-loop local control sentinel (never committed)
 STOP
+/tmp/
