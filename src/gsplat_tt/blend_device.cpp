@@ -1059,6 +1059,19 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             if (const char* s = std::getenv("GSPLAT_TT_BUCKET_EMIT_SPIN")) {
                 if (s[0] != '\0') reader_defines["MB_BUCKET_EMIT_SPIN"] = s;
             }
+            // A/B probe: reader stamps seq+checksum into the coeff row (row[11/12])
+            // so the compute can prove whether a fast-fed row is read STALE/TORN
+            // (HYPOTHESIS A) or delivered intact (HYPOTHESIS B).
+            if (env_on("GSPLAT_TT_BUCKET_AB_PROBE")) {
+                reader_defines["MB_BUCKET_AB_PROBE"] = "1";
+            }
+            // Principled fix for the bucket emit->blend producer/consumer L1
+            // visibility race: a `fence` orders the row stores before cb_push_back
+            // (producer) and invalidates the stale cached CB-slot line before the
+            // blend reads it (consumer). Replaces the fragile MB_BUCKET_EMIT_SPIN.
+            if (env_on("GSPLAT_TT_BUCKET_CB_FENCE")) {
+                reader_defines["MB_BUCKET_CB_FENCE"] = "1";
+            }
         }
     }
     ctx.reader = CreateKernel(
@@ -1094,6 +1107,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     }
     if (std::getenv("GSPLAT_TT_COEFF_DEBUG") != nullptr) {
         mb_defines["MB_COEFF_DEBUG"] = "1";
+    }
+    // A/B probe + CB-fence fix on the compute (consumer) side — must mirror the
+    // reader defines so the seq/checksum verify and the read-side fence compile in.
+    if (env_on("GSPLAT_TT_BUCKET_AB_PROBE")) {
+        mb_defines["MB_BUCKET_AB_PROBE"] = "1";
+    }
+    if (env_on("GSPLAT_TT_BUCKET_CB_FENCE")) {
+        mb_defines["MB_BUCKET_CB_FENCE"] = "1";
     }
     ctx.compute = CreateKernel(
         program,

@@ -93,6 +93,15 @@ inline uint32_t f_to_bits(float f) {
     return b;
 }
 
+// L1 store/visibility ordering fence. On Blackhole L1 is a small write-THROUGH
+// cache, so a producer's stores reach L1, but a `fence` is needed so a freshly
+// written CB row is coherent before cb_push_back signals the consumer (and so
+// the compiler does not reorder the row stores past the push). == the
+// invalidate_l1_cache() the runtime uses for cross-proc L1 handoff.
+[[maybe_unused]] inline void mb_cb_commit_fence() {
+    asm volatile("fence" ::: "memory");
+}
+
 #ifdef MB_RESIDENT
 // RESIDENT gather helper: read one fp32/uint32 element `elem` from a 64B-page
 // (16-elem) DRAM-interleaved SoA buffer via `acc`, returning the raw 32-bit
@@ -812,11 +821,13 @@ void kernel_main() {
 #endif
                 cb_reserve_back(CB_MB_COEFF, 1);
                 auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+                const uint32_t mxl_bits = f_to_bits(mean_x - tx_tile);
+                const uint32_t myl_bits = f_to_bits(mean_y - ty_tile);
                 row[0] = cov_a_bits;
                 row[1] = cov_b_bits;
                 row[2] = cov_c_bits;
-                row[3] = f_to_bits(mean_x - tx_tile);
-                row[4] = f_to_bits(mean_y - ty_tile);
+                row[3] = mxl_bits;
+                row[4] = myl_bits;
                 row[5] = 0u;
                 row[6] = op_bits;
                 row[7] = cr;
@@ -828,6 +839,28 @@ void kernel_main() {
                 row[13] = 0u;
                 row[14] = 0u;
                 row[15] = 0u;
+#if defined(MB_BUCKET_AB_PROBE)
+                // A/B PROBE (producer side): stamp a per-tile sequence index in
+                // row[11] and an XOR checksum of payload words 0..10 in row[12].
+                // The compute verifies both. A wrong seq => the consumer read a
+                // STALE whole row (the slot's previous occupant); a wrong checksum
+                // => a TORN row (some words fresh, some stale). Either => the bug
+                // is a producer->consumer L1 visibility race (HYPOTHESIS A). If
+                // every row verifies but PSNR stays ~42, the rows are delivered
+                // perfectly and the fault is the SFPU pipeline at full feed
+                // (HYPOTHESIS B).
+                row[11] = k;
+                row[12] = cov_a_bits ^ cov_b_bits ^ cov_c_bits ^ mxl_bits ^ myl_bits ^
+                          0u ^ op_bits ^ cr ^ cg ^ cb ^ mask;
+#endif
+#if defined(MB_BUCKET_CB_FENCE)
+                // Order all row payload stores before cb_push_back's stream-reg
+                // increment (write-through L1) so a consumer that observes the push
+                // also observes the full row. The actual fast-producer race (UNPACK
+                // recycling the slot before the slow MATH read) is fixed by the
+                // MATH->UNPACK back-pressure ack in the compute kernel.
+                mb_cb_commit_fence();
+#endif
                 cb_push_back(CB_MB_COEFF, 1);
             }
             continue;
@@ -1103,6 +1136,11 @@ void kernel_main() {
                                    << " m=" << row[10] << ENDL();
                         }
                     }
+#endif
+#if defined(MB_BUCKET_CB_FENCE)
+                    // Order payload stores before push (same rationale as the
+                    // bucket emit above); back-pressure is enforced consumer-side.
+                    mb_cb_commit_fence();
 #endif
                     cb_push_back(CB_MB_COEFF, 1);
                 }

@@ -38,7 +38,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
-#if defined(MB_DEBUG_DPRINT)
+#if defined(MB_DEBUG_DPRINT) || defined(MB_BUCKET_AB_PROBE)
 #include "api/debug/dprint.h"
 #endif
 #include "api/compute/cb_api.h"
@@ -67,6 +67,56 @@ constexpr uint32_t NUM_MB = 32;
 
 // Volatile sink so profiling variants can't dead-code-eliminate the coeff loads.
 volatile uint32_t g_prof_sink = 0;
+
+// L1 read-visibility fence. On Blackhole L1 is a small write-THROUGH cache; the
+// producer's CB-row stores reach L1, but THIS reader (the compute) may hold a
+// stale cached line for the recycled CB slot address. A `fence` invalidates it
+// so the freshly produced row is read coherently. == invalidate_l1_cache().
+[[maybe_unused]] inline void mb_cb_consume_fence() {
+    asm volatile("fence" ::: "memory");
+}
+
+#if defined(MB_BUCKET_AB_PROBE) && defined(TRISC_MATH)
+// A/B PROBE (consumer side): verify the seq index + payload checksum the reader
+// stamped into row[11]/row[12]. Runs on the MATH thread — the same thread whose
+// row[] loads feed the blend — so it observes exactly the (possibly stale) bytes
+// the blend math consumes. Per-tile counters; one summary line per dense tile.
+inline void mb_ab_probe_check(const uint32_t* row, uint32_t g, uint32_t num_g) {
+    static uint32_t _ab_t = 0;        // per-tile ordinal
+    static uint32_t _ab_seq_mm = 0;   // rows whose seq != g  (STALE whole row)
+    static uint32_t _ab_chk_mm = 0;   // rows whose checksum is wrong (TORN row)
+    static uint32_t _ab_rows = 0;
+    static uint32_t _ab_printed = 0;
+    if (g == 0u) { _ab_seq_mm = 0; _ab_chk_mm = 0; _ab_rows = 0; }
+    const uint32_t seq = row[11];
+    const uint32_t chk = row[12];
+    const uint32_t chk_ref = row[0] ^ row[1] ^ row[2] ^ row[3] ^ row[4] ^ row[5] ^
+                             row[6] ^ row[7] ^ row[8] ^ row[9] ^ row[10];
+    _ab_rows++;
+    if (seq != g) _ab_seq_mm++;
+    if (chk != chk_ref) _ab_chk_mm++;
+    // Print the ACTUAL values for the first few records of the first dense tile:
+    // is the read seq the slot's PREVIOUS occupant (off by a constant => the
+    // producer's write has not landed / consumer reads an unwritten slot) or
+    // garbage (torn)? Decides the exact mechanism + the right fix.
+    static uint32_t _ab_val_t = 0xffffffffu;
+    if (num_g > 64u && (_ab_val_t == 0xffffffffu || _ab_val_t == _ab_t) && g < 6u) {
+        _ab_val_t = _ab_t;
+        DPRINT << "ABVAL ti=" << _ab_t << " g=" << g << " seq=" << seq
+               << " chk_ok=" << (uint32_t)(chk == chk_ref)
+               << " r0=" << row[0] << " r10=" << row[10] << ENDL();
+    }
+    if (g + 1u == num_g) {
+        if (num_g > 64u && _ab_printed < 40u) {
+            _ab_printed++;
+            DPRINT << "ABCK ti=" << _ab_t << " L=" << num_g
+                   << " seqmm=" << _ab_seq_mm << " chkmm=" << _ab_chk_mm
+                   << " rows=" << _ab_rows << ENDL();
+        }
+        _ab_t++;
+    }
+}
+#endif
 
 // DST slot bases (in dst_reg ix units; tile = 32 vectors).
 constexpr uint32_t DR_R = 0 * 32;
@@ -277,6 +327,19 @@ inline void process_tile_gaussians(uint32_t num_g) {
     for (uint32_t g = 0; g < num_g; g++) {
         cb_wait_front(CB_MB_COEFF, 1);
         const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
+#if defined(MB_BUCKET_CB_FENCE)
+        // FIX (HYPOTHESIS A). The blend math reads each coeff row from L1 DIRECTLY
+        // on the MATH thread, but CB flow control (cb_wait_front/cb_pop_front) runs
+        // on UNPACK, which frees the slot the instant it has mailboxed MATH the
+        // address — without waiting for the (slow, SFPU-bound) MATH read. On the
+        // fast bucket feed the producer then recycles the slot to a LATER record
+        // before MATH reads it => torn/stale rows (proven: seqmm~=rows). Two parts:
+        //  (1) invalidate MATH's write-through L1 cache so it re-reads this slot
+        //      fresh (the slot was last cached 8 records ago, depth=8); and
+        //  (2) a bounded MATH->UNPACK back-pressure ack (below, around the row
+        //      loads) so UNPACK cannot pop/free the slot until MATH has loaded it.
+        MATH((mb_cb_consume_fence()));  // == invalidate_l1_cache() on Blackhole
+#endif
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
         // read + the full 32-way dispatch + SFPU blend. Isolates SFPU/dispatch cost.
@@ -313,7 +376,27 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #else
         (void)shown;
 #endif
+#if defined(MB_BUCKET_AB_PROBE)
+        MATH((mb_ab_probe_check(row, g, num_g)));
+#endif
+#if defined(MB_BUCKET_CB_FENCE)
+        // Pin all coeff loads into registers BEFORE the ack. They are plain
+        // (non-volatile) L1 reads only consumed by the blend below; without this
+        // the compiler could legally sink them past the ack, after which UNPACK
+        // frees the slot and the producer overwrites it — reintroducing the race.
+        asm volatile("" ::"r"(a), "r"(b), "r"(c), "r"(d), "r"(e), "r"(fc), "r"(op),
+                     "r"(cr), "r"(cg), "r"(cbv), "r"(mask) : "memory");
+        // Back-pressure ack: MATH has now loaded every word of this row into
+        // registers, so the slot may be freed. UNPACK blocks on this hardware
+        // mailbox before cb_pop_front, so it can never recycle a slot the producer
+        // would overwrite before MATH read it. Bounded (one blocking mailbox
+        // round-trip per row) — NOT a spin or a latency pad.
+        MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, g + 1u)));
+#endif
         dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+#if defined(MB_BUCKET_CB_FENCE)
+        UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
+#endif
 #endif
         cb_pop_front(CB_MB_COEFF, 1);
     }
