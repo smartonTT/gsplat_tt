@@ -82,6 +82,7 @@ inline float bits_to_f(uint32_t b) {
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("proj");  // Tracy device-timeline stage label (project scatter/count)
     const uint32_t m2x_addr   = get_arg_val<uint32_t>(0);
     const uint32_t m2y_addr   = get_arg_val<uint32_t>(1);
     const uint32_t depth_addr = get_arg_val<uint32_t>(2);

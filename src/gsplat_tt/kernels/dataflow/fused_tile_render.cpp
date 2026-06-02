@@ -121,6 +121,7 @@ inline uint32_t load_ids_chunk(
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("fused");  // Tracy device-timeline stage label (production FUSED_TILE blend+cull)
     const uint32_t a_addr        = get_arg_val<uint32_t>(0);
     const uint32_t b_addr        = get_arg_val<uint32_t>(1);
     const uint32_t c_addr        = get_arg_val<uint32_t>(2);

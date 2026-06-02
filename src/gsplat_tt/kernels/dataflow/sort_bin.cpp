@@ -49,6 +49,7 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("sort");  // Tracy device-timeline stage label (sort bin/count)
     const uint32_t gids_addr   = get_arg_val<uint32_t>(0);
     const uint32_t tids_addr   = get_arg_val<uint32_t>(1);
     const uint32_t keep_addr   = get_arg_val<uint32_t>(2);

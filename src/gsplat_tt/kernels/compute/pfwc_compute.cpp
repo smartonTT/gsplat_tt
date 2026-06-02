@@ -32,6 +32,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
+#include "tools/profiler/kernel_profiler.hpp"  // DeviceZoneScopedN (compute include-order: define before kernel_main)
 #include "api/compute/cb_api.h"
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
@@ -137,6 +138,7 @@ inline void translate_and_pack(uint32_t cb_in, uint32_t t_bits, uint32_t cb_out)
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("pfwc");  // Tracy device-timeline stage label (project pfwc compute)
     const uint32_t num_chunks = get_arg_val<uint32_t>(0);
     const uint32_t t0 = get_arg_val<uint32_t>(10);
     const uint32_t t1 = get_arg_val<uint32_t>(11);

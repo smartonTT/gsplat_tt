@@ -53,6 +53,7 @@ inline int clampi(int v, int lo, int hi) {
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("ta");  // Tracy device-timeline stage label (tile_assign bbox)
     const uint32_t px_addr    = get_arg_val<uint32_t>(0);
     const uint32_t py_addr    = get_arg_val<uint32_t>(1);
     const uint32_t rx_addr    = get_arg_val<uint32_t>(2);

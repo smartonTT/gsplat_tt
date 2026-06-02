@@ -58,6 +58,7 @@ inline int clampi(int v, int lo, int hi) {
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("ta_scat");  // Tracy device-timeline stage label (tile_assign scatter)
     const uint32_t offs_addr  = get_arg_val<uint32_t>(0);
     const uint32_t px_addr    = get_arg_val<uint32_t>(1);
     const uint32_t py_addr    = get_arg_val<uint32_t>(2);

@@ -357,6 +357,7 @@ inline uint32_t load_mask_page(const Acc& acc, uint32_t global_idx, uint32_t tak
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("blend_rd");  // Tracy device-timeline stage label (blend reader/devcull)
 #ifdef MB_RESIDENT
     // RESIDENT blend (GSPLAT_TT_RESIDENT_BLEND): attrs gathered straight from
     // the device-resident per-component SoA proj_m_* buffers by id, candidate

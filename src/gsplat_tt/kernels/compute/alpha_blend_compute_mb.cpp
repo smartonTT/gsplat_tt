@@ -38,6 +38,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
+#include "tools/profiler/kernel_profiler.hpp"  // DeviceZoneScopedN (compute include-order: define before kernel_main)
 #if defined(MB_DEBUG_DPRINT) || defined(MB_BUCKET_AB_PROBE)
 #include "api/debug/dprint.h"
 #endif
@@ -454,6 +455,7 @@ inline void debug_vecmap() {
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("blend");  // Tracy device-timeline stage label (alpha-blend compute)
 #ifdef MB_RESIDENT
     cb_wait_front(CB_CORE_TILES, 1);
     const uint32_t num_tiles =

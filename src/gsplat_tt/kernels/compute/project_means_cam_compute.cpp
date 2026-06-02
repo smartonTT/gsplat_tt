@@ -37,6 +37,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
+#include "tools/profiler/kernel_profiler.hpp"  // DeviceZoneScopedN (compute include-order: define before kernel_main)
 #include "api/compute/cb_api.h"
 #include "api/compute/tile_move_copy.h"
 #include "api/compute/pack.h"
@@ -45,6 +46,7 @@
 #include "api/compute/eltwise_unary/binop_with_scalar.h"
 
 void kernel_main() {
+    DeviceZoneScopedN("mcam");  // Tracy device-timeline stage label (project means-cam compute)
     uint32_t num_chunks = get_arg_val<uint32_t>(0);
     uint32_t r_bits[9];
     for (uint32_t k = 0; k < 9; k++) r_bits[k] = get_arg_val<uint32_t>(1 + k);

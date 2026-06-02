@@ -40,6 +40,7 @@
 #include <cstdint>
 
 #include "api/compute/common.h"
+#include "tools/profiler/kernel_profiler.hpp"  // DeviceZoneScopedN (compute include-order: define before kernel_main)
 #if defined(CULL_DEBUG_VALS)
 #include "api/debug/dprint.h"
 #endif
@@ -524,6 +525,7 @@ constexpr uint32_t CB_CORE_TILES = 7;
 #endif
 
 void kernel_main() {
+    DeviceZoneScopedN("cull");  // Tracy device-timeline stage label (microblock cull)
     uint32_t num_tiles    = get_arg_val<uint32_t>(0);
     const uint32_t floor_bits   = get_arg_val<uint32_t>(1);
     const bool cull_disabled    = get_arg_val<uint32_t>(2) != 0;
