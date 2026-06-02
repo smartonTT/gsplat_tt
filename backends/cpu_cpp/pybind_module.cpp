@@ -1272,6 +1272,7 @@ py::tuple render_full_py(
     gsplat_cpu::TileAssignResult ta;
     bool ta_done = false;
 #ifdef GSPLAT_WITH_TT
+    {  // Tracy: one ZoneScopedN per scope
     GSPLAT_HOST_ZONE("host_stage_ta");
     // tt-006: opt-in device tile_assign (GSPLAT_TT_DEVICE_TILE_ASSIGN=1).
     // Produces a layout-identical TileAssignResult (same (gid,tid) pair set
@@ -1326,6 +1327,7 @@ py::tuple render_full_py(
             &global_tile_assign_pool(),
             /*recompute_tiles_per_gaussian=*/false);
     }
+    }  // host_stage_ta
     auto t_ta1 = clock::now();
 
     // Stage 3: sort + bin.
@@ -1333,6 +1335,7 @@ py::tuple render_full_py(
     gsplat_cpu::SortResult sr;
     bool sort_done = false;
 #ifdef GSPLAT_WITH_TT
+    {
     GSPLAT_HOST_ZONE("host_stage_sort");
     // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
     // layout-identical SortResult (byte-identical sorted_gaussian_ids +
@@ -1385,6 +1388,7 @@ py::tuple render_full_py(
             tiles_y,
             &global_sort_pool());
     }
+    }  // host_stage_sort
     auto t_s1 = clock::now();
 
 #ifdef GSPLAT_WITH_TT
