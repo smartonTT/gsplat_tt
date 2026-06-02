@@ -1,5 +1,5 @@
-id=105
-sha=9f2ccb4
-ts=2026-06-01T22:00:15-0700
-desc=iter 36: project on-device exclusive scan (GSPLAT_TT_PROJ_DEVICE_SCAN, gated)
-bin=bb57894d1c4e3bed
+id=107
+sha=944ba1a
+ts=2026-06-01T22:35:50-0700
+desc=iter 37: project count->scan->scatter fusion DEFAULT-ON (proj 32.4->28.3, ms/view 173.2->169.6 @8v, 63.85dB)
+bin=19804835fbfaf16b

@@ -98,14 +98,22 @@ inline bool gather_stats_enabled() {
     return v != nullptr && v[0] == '1';
 }
 
-// GSPLAT_TT_PROJ_DEVICE_SCAN: compute the per-core compact base offsets with an
-// on-device single-core exclusive prefix-sum (gather_scan_bases.cpp) instead of
-// D2H'ing the 110 per-core counts and scanning + publishing proj_M on the host.
-// Fuses count->scan->scatter on the in-order CQ (drops one full-device Finish)
-// and shrinks the per-core-counts D2H to a 1-page M read. Default OFF.
+// GSPLAT_TT_PROJ_DEVICE_SCAN: fuse the project stage's count->scan->scatter into
+// ONE in-order CQ submission with NO inter-kernel Finish and NO mid-chain host M
+// read. An on-device single-core exclusive prefix-sum (gather_scan_bases.cpp)
+// computes the per-core compact base offsets + publishes proj_M, so the host
+// never D2H's the 110 per-core counts, never scans on the host, and never writes
+// proj_M. The outputs are pre-sized to the per-frame safe ceiling padded_n (M <=
+// N), so the scatter can be dispatched WITHOUT first reading M; the project
+// stage's only host sync is one post-chain 1-page M read (which, in the resident
+// chain, also replaces the unused cap-sized depth D2H — see
+// readback_proj_m_count_only). This collapses project's 3 Finish drains + 2 D2H
+// + host scan to a single 1-page read. DEFAULT ON (iter-37: verified net win on
+// the shared production stage — proj 32.4->28.3 ms, ms/view 173.2->169.6 @8v,
+// 63.85 dB bit-identical); disable with GSPLAT_TT_PROJ_DEVICE_SCAN=0.
 inline bool proj_device_scan_enabled() {
     const char* v = std::getenv("GSPLAT_TT_PROJ_DEVICE_SCAN");
-    return v != nullptr && v[0] == '1';
+    return !(v != nullptr && v[0] == '0');
 }
 
 inline uint32_t fp32_bits(float v) {
@@ -612,6 +620,26 @@ static gsplat_cpu::ProjectResult readback_proj_m_depth_only(
     return proj;
 }
 
+// Count-only "readback" for the FUSED device-scan + full-resident chain
+// (GSPLAT_TT_PROJ_DEVICE_SCAN): M is already known from the on-device scan's
+// proj_M (read as the single post-chain host sync), and in the host-free render
+// the host consumes NONE of the compact attr VALUES — tile_assign/sort/blend all
+// read proj_m_* resident over NoC, and a device-stage failure std::abort()s the
+// host-free path rather than falling back to the host (which is the only place
+// the host depth values would be used). So there is NOTHING to D2H here: return
+// a metadata-only ProjectResult with depths.size()==M. Bit-identical to
+// readback_proj_m_depth_only in the resident chain, minus that unused ~M*4B
+// depth D2H (one more host bridge removed from the project stage).
+static gsplat_cpu::ProjectResult readback_proj_m_count_only(
+    std::size_t M, double* readback_ms) {
+    const auto t0 = std::chrono::high_resolution_clock::now();
+    gsplat_cpu::ProjectResult proj;
+    proj.depths.assign(M, 0.0f);
+    const auto t1 = std::chrono::high_resolution_clock::now();
+    if (readback_ms) *readback_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return proj;
+}
+
 // Write a host ProjectResult (R2a) into the resident proj_m_* buffers.
 static void write_proj_m_from_host(
     GatherDeviceContext* ctx, const gsplat_cpu::ProjectResult& proj,
@@ -906,12 +934,23 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         std::size_t M = 0;
 
         if (proj_device_scan_enabled()) {
-            // ── On-device exclusive scan (GSPLAT_TT_PROJ_DEVICE_SCAN) ────────
-            // Chain count -> scan_bases -> scatter on the in-order CQ with NO
-            // inter-kernel Finish (same pattern FUSED_TILE uses across
-            // sort-publish+cull+blend). The host's only read is the 1-page M
-            // (needed to size proj_m_*); the per-core counts D2H + host scan +
-            // host proj_M write + one full-device Finish are all gone.
+            // ── STEP-4 FUSION (GSPLAT_TT_PROJ_DEVICE_SCAN) ───────────────────
+            // Enqueue count -> scan_bases -> scatter as ONE in-order CQ
+            // submission with NO inter-kernel Finish AND NO mid-chain host M
+            // read. Previously the host had to D2H M between scan and scatter
+            // just to size proj_m_* before the scatter wrote into it — a full
+            // count+scan CQ drain plus the scatter-dispatch idle bubble. Instead
+            // pre-size the outputs to the per-frame safe ceiling padded_n: the
+            // compact visible count M is always <= N <= padded_n, so the scatter
+            // (which writes only the M densely-packed [0,M) compact slots) can
+            // never overflow regardless of this frame's M, and the host no longer
+            // needs M before dispatching the scatter. The in-order CQ guarantees
+            // count's counts[] are visible to scan and scan's base[]/proj_M are
+            // visible to scatter (the same guarantee FUSED_TILE relies on across
+            // sort-publish+cull+blend). The project stage's ONLY host sync is the
+            // single post-chain 1-page M read below.
+            ensure_outputs(ctx, padded_n);
+
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/true,
                         /*bases=*/nullptr, /*last_core=*/-1, t_stride,
@@ -929,21 +968,23 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                 distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan, false);
             }
 
-            // Control-only read of M (drains count+scan); host needs M to size
-            // the proj_m_* outputs. proj_M already published on-device for the
-            // resident downstream consumers.
-            std::vector<uint32_t> mread(PAGE_ELEMS, 0);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
-            M = mread[0];
-            const uint32_t M_pad = round_up(
-                static_cast<uint32_t>(std::max<std::size_t>(M, 1)), PAGE_ELEMS);
-            ensure_outputs(ctx, M_pad);
-
-            // Scatter: each core reads its (base,is_last) from buf_core_base.
+            // Scatter immediately (no Finish): each core reads its (base,is_last)
+            // from buf_core_base over NoC — no host args, no host M needed.
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/false,
                         /*bases=*/nullptr, /*last_core=*/-1, t_stride,
-                        /*do_finish=*/true, /*device_scan=*/true);
+                        /*do_finish=*/false, /*device_scan=*/true);
+
+            // The project stage's ONLY host sync: one blocking 1-page read of the
+            // on-device M. It drains count+scan+scatter together (they ran serially
+            // on the in-order CQ) and replaces the old count-Finish + per-core
+            // counts D2H + host exclusive scan + host proj_M write + proj_M Finish
+            // + scatter Finish (and, in the resident chain below, the cap-sized
+            // depth D2H). proj_M is already published on-device for the resident
+            // downstream consumers.
+            std::vector<uint32_t> mread(PAGE_ELEMS, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
+            M = mread[0];
         } else {
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/true,
@@ -1014,12 +1055,20 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         // never read in this path.
         const bool minimal_readback =
             downstream_resident && downstream_chain_resident() && !verify;
+        // FUSED device-scan + full-resident chain: M came back from proj_M and
+        // the host needs none of the compact attr values -> skip the D2H entirely
+        // (count-only). Falls back to the existing readbacks for the non-fused,
+        // non-resident, or verify configs (which DO consume host-side proj_m_*).
+        const bool fused_count_only =
+            proj_device_scan_enabled() && minimal_readback;
         gsplat_cpu::ProjectResult proj =
-            minimal_readback
-                ? (downstream_chain_resident()
-                       ? readback_proj_m_depth_only(ctx, M, &T.readback_ms)
-                       : readback_proj_m_minimal(ctx, M, &T.readback_ms))
-                : readback_proj_m(ctx, M, &T.readback_ms);
+            fused_count_only
+                ? readback_proj_m_count_only(M, &T.readback_ms)
+                : (minimal_readback
+                       ? (downstream_chain_resident()
+                              ? readback_proj_m_depth_only(ctx, M, &T.readback_ms)
+                              : readback_proj_m_minimal(ctx, M, &T.readback_ms))
+                       : readback_proj_m(ctx, M, &T.readback_ms));
 
         if (verify) {
             const auto tv0 = std::chrono::high_resolution_clock::now();

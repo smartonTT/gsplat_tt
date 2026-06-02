@@ -848,3 +848,66 @@ change enables, then the sort bin/H2D pair; expected to recover a meaningful
 slice of the ~24 ms uninstrumented host gap + the ~45 %-idle makespan, far
 larger than any single remaining D2H. blend (~97 ms, §14 SFPU serialization)
 remains the largest single stage.
+
+### 9.4 STEP 4 — project count→scan→scatter fusion (iter-37, SHIPPED DEFAULT-ON)
+
+**Shipped (`GSPLAT_TT_PROJ_DEVICE_SCAN`, now DEFAULT ON, disable with `=0`),
+cpp#107.** Finishes the §9.3 building block into a real win by removing the two
+host barriers iter-36 had left in place.
+
+iter-36 put the exclusive scan on-device but still (a) D2H'd M between scan and
+scatter to size `proj_m_*` before the scatter wrote into it, and (b) read back
+the cap-sized `proj_m_depth` after. The scatter dispatch therefore sat in a
+device-idle bubble behind the M-read round-trip, and an unused depth D2H rode the
+critical path — so iter-36 measured ms-neutral. STEP 4 removes both:
+
+1. **No mid-chain M read.** The compact visible count M is always ≤ N, so the
+   outputs are pre-sized to the per-frame safe ceiling `padded_n` (= round_up(N)).
+   The scatter writes only the densely-packed [0,M) compact slots, so it can be
+   dispatched WITHOUT the host knowing M first. count → scan_bases → scatter are
+   enqueued back-to-back on the in-order CQ with **NO inter-kernel `Finish`** (the
+   CQ guarantees count's `counts[]` are visible to scan and scan's
+   `base[]`/`proj_M` to scatter — the FUSED_TILE guarantee).
+2. **No depth D2H.** In the full-resident host-free render the host consumes NONE
+   of the compact attr VALUES (tile_assign/sort/blend read `proj_m_*` resident
+   over NoC; a device-stage failure `std::abort()`s the host-free path, so the
+   host-sort fallback that would need host depths is never taken). So the
+   post-chain readback is a single 1-page `proj_M` read
+   (`readback_proj_m_count_only`, `depths.resize(M)` zeroed), not the cap-sized
+   depth D2H.
+
+Net: project's `count Finish + 110-count D2H + host scan + proj_M write + proj_M
+Finish + scatter Finish + depth D2H` (3 Finish + 2 D2H + host scan) collapses to
+**ONE 1-page M read**.
+
+**Measured A/B @8v (cpp#106, same binary, OFF vs ON):**
+
+| | hero_vs_ref | min_vs_ref | ms/view | proj | ta | sort | blend |
+|---|---|---|---|---|---|---|---|
+| scan OFF | 63.85 dB | 37.55 | 173.2 | **32.4** | 10.2 | 9.3 | 97.2 |
+| scan ON  | 63.85 dB | 37.85 | **169.6** | **28.3** | 10.2 | 9.3 | 97.4 |
+
+**Verdict: proj −4.1 ms (−12.7 %), ms/view −3.6 ms (−2.1 %), 63.85 dB
+bit-identical → flipped DEFAULT-ON** (default path, flag unset, re-verified @8v:
+63.85 dB / proj 28.4 / ms/view 169.8, cpp#107). The recovered time is exactly the
+mid-chain idle bubble (M-read round-trip + scatter dispatch behind it) plus the
+unused depth D2H — i.e. the host barriers, not device compute (the two ~28-32 ms
+NoC kernel passes are unchanged). Cost: `proj_m_*` + `proj_m_blendrec` are now
+grown to `padded_n` (N-scale, ~+0.5 GB DRAM) instead of M_pad, the only price of
+removing the "need M before scatter" dependency; verified no OOM on the BH P100.
+
+**Per-frame `Finish()` ledger update:** project drains **3 → 0** (count/proj_M/
+scatter Finishes gone; one 1-page control read remains, draining the fused chain
+once). Total per-frame `Finish()` **≈9 → ≈6** (project 0; tile_assign ×3:
+scan_reduce/scan_bases/K2; sort ×2: bin/H2D-meta; sort→blend ×1 fused). Busiest-
+core utilization rises with the removed bubble but the dominant idle is still the
+remaining 6 cross/intra-stage drains (tile_assign + sort) — STEP 4 continues
+there.
+
+**Next host-free lever (STEP 4 cont.):** the **sort bin↔H2D pair** (§9.2 #2): the
+450 KB per-core histogram D2H + host per-tile totals/LPT build between sort-bin
+and the radix pass (folded into bin≈8 ms) — move the per-tile totals + LPT
+on-device (or overlap the D2H/LPT build with the next program) to delete that
+drain + D2H, mirroring this project fusion. Then tile_assign's 3 scan/scatter
+Finishes. blend (~97 ms, §14 SFPU serialization) remains the largest single
+stage but is not a host-free target.
