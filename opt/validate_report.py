@@ -146,9 +146,14 @@ def main() -> int:
                         f"({PSNR_MIN}, {PSNR_MAX})"
                     )
                 timings = r.get("timings") or {}
+                # A stage may legitimately report 0.0 when it is folded into an
+                # adjacent stage by the pipeline (e.g. since the sort->blend pipe
+                # in cpp#121, blend exec runs chained inside sort and its cost is
+                # attributed to sort, so blend=0.0). Only a NEGATIVE timing is
+                # actually impossible/corrupt.
                 for k, v in timings.items():
-                    if isinstance(v, (int, float)) and not (v > 0):
-                        raise Invalid(f"ttw iter {it} stage timing {k}={v} is not positive")
+                    if isinstance(v, (int, float)) and v < 0:
+                        raise Invalid(f"ttw iter {it} stage timing {k}={v} is negative")
             else:
                 # metric-less reject row: allowed to FAIL but must carry context.
                 if not str(r.get("reason") or "").strip():
