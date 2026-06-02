@@ -161,6 +161,7 @@ def normalize_ttw_row(r: dict) -> dict:
         "_source": "ttw",
         "validator_reasoning": r.get("reason") or "",
         "buildid": r.get("buildid"),
+        "tracy": r.get("tracy") or "",
     }
 
 
@@ -1052,6 +1053,31 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
             commit = cpp_tok[1]
     build_html = f"<p class='iter-build'><code>{commit}</code></p>" if commit else ""
 
+    # Clickable Tracy trace link — a per-iteration deliverable, exactly like the
+    # hero/diff screenshots. Prefer the row's `tracy` field (repo-relative,
+    # e.g. opt/profiler/ttw-NNN/render.tracy); else auto-discover a per-iter
+    # trace. Only emit the link when the .tracy actually exists (no dead links).
+    tracy_rel = (r.get("tracy") or "").strip()
+    if not tracy_rel and iter_dir:
+        for cand in (OPT_DIR / "profiler" / iter_dir / "render.tracy",):
+            if cand.is_file():
+                tracy_rel = "opt/" + str(cand.relative_to(OPT_DIR))
+                break
+    tracy_html = ""
+    if tracy_rel:
+        abs_tracy = OPT_DIR.parent / tracy_rel
+        if abs_tracy.is_file():
+            href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
+            tracy_html = (
+                f"<p class='iter-tracy'><a href='{href}' "
+                f"title='open in Tracy profiler'>🔬 Tracy trace</a></p>"
+            )
+        else:
+            tracy_html = (
+                "<p class='iter-tracy' style='color:#c44536;font-size:11px'>"
+                f"Tracy trace missing ({tracy_rel})</p>"
+            )
+
     ts_raw = r.get("timestamp") or r.get("ts") or r.get("updated_at") or r.get("started_at") or ""
     ts_disp = format_ts_minutes(ts_raw)
     in_flight = r.get("_in_flight") is True
@@ -1090,6 +1116,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
     {caveat_html}
     {desc_html}
     {build_html}
+    {tracy_html}
   </div>
   <div class='backburner-thumbs'>{thumb_html}</div>
 </div>
@@ -1247,10 +1274,23 @@ def _legacy_table_ledger_unused(rows: list[dict]) -> str:
         row_bg = "#fafaff" if runtime == "blackhole" else ""
         ensure_hero_diff10(r.get("iter_dir", ""))
         preview = _preview_html(r.get("iter_dir", ""), runtime)
+        # Clickable Tracy trace link (a per-iteration deliverable, like the
+        # hero/diff screenshots): row `tracy` field or an auto-discovered
+        # opt/profiler/<iter_dir>/render.tracy. Only link when the file exists.
+        tracy_rel = (r.get("tracy") or "").strip()
+        if not tracy_rel and r.get("iter_dir"):
+            cand = OPT_DIR / "profiler" / r["iter_dir"] / "render.tracy"
+            if cand.is_file():
+                tracy_rel = "opt/" + str(cand.relative_to(OPT_DIR))
+        tracy_cell = ""
+        if tracy_rel and (OPT_DIR.parent / tracy_rel).is_file():
+            href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
+            tracy_cell = (f"<br><a href='{href}' title='open in Tracy profiler' "
+                          f"style='font-size:11px'>🔬 Tracy</a>")
         return (
             f"<tr style='background:{row_bg}'>"
             f"<td>{preview}</td>"
-            f"<td><a href='{link_prefix}{r['iter_dir']}/'>{r['iter_dir']}</a></td>"
+            f"<td><a href='{link_prefix}{r['iter_dir']}/'>{r['iter_dir']}</a>{tracy_cell}</td>"
             f"<td>{rt_html}</td>"
             f"<td>{verdict_html}</td>"
             f"<td><small>{r.get('action','')}</small></td>"
