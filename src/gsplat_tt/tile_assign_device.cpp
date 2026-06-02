@@ -728,10 +728,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             });
         }
         distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k1, false);
-        {
-            GSPLAT_HOST_ZONE("host_finish_ta_k1");
-            distributed::Finish(*ctx->cq);
-        }
+        // K1 -> scan chain on one in-order CQ; scan Finish drains K1 (drops k1-only lock).
         const auto t_k1_1 = clk::now();
         T.k1_ms = std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
 

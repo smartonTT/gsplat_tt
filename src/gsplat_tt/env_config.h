@@ -42,4 +42,56 @@ inline bool bucket_cb_fence_enabled() {
     return !flag_is_zero("GSPLAT_TT_BUCKET_CB_FENCE");
 }
 
+inline bool resident_blend_enabled() {
+    return flag_is_one("GSPLAT_TT_RESIDENT_BLEND");
+}
+
+inline bool sfpu_cull_enabled() {
+    return flag_is_one("GSPLAT_TT_SFPU_CULL");
+}
+
+// Overlap blend host setup with the SFPU cull device window (same in-order CQ).
+// Default ON for the ideal resident SFPU-cull path; set =0 to force a cull Finish.
+inline bool cull_pipeline_enabled() {
+    if (flag_is_zero("GSPLAT_TT_CULL_PIPELINE")) {
+        return false;
+    }
+    if (flag_is_one("GSPLAT_TT_CULL_PIPELINE")) {
+        return true;
+    }
+    return resident_blend_enabled() && sfpu_cull_enabled() && !fused_tile_enabled();
+}
+
+// Chain sort publish -> cull -> blend on one CQ drain (skip sort publish Finish +
+// sort_P_kept D2H). Default ON for resident publish + (FUSED_TILE or ideal bucket).
+inline bool sort_blend_pipe_enabled() {
+    if (flag_is_zero("GSPLAT_TT_SORT_BLEND_PIPE")) {
+        return false;
+    }
+    if (flag_is_one("GSPLAT_TT_SORT_BLEND_PIPE")) {
+        return true;
+    }
+    if (!resident_blend_enabled()) {
+        return false;
+    }
+    if (!flag_is_one("GSPLAT_TT_SORT_DEVICE_PUBLISH")) {
+        return false;
+    }
+    if (fused_tile_enabled()) {
+        return true;
+    }
+    return tile_bucket_enabled() && sfpu_cull_enabled();
+}
+
+// Blend writer fully overwrites res_out each frame — skip the ~6MB zero H2D.
+inline bool blend_skip_zero_out_enabled() {
+    if (flag_is_zero("GSPLAT_TT_BLEND_SKIP_ZERO_OUT")) {
+        return false;
+    }
+    if (flag_is_one("GSPLAT_TT_BLEND_SKIP_ZERO_OUT")) {
+        return true;
+    }
+    return resident_blend_enabled();
+}
+
 }  // namespace gsplat_tt::env_config

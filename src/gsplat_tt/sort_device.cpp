@@ -17,6 +17,7 @@
 // "sort_sorted_ids" (uint32, P) and "sort_tile_ranges" (uint32, num_tiles*2)
 // so a future device blend can consume them resident.
 
+#include "gsplat_tt/env_config.h"
 #include "gsplat_tt/sort.h"
 #include "gsplat_tt/device_state.h"
 #include "gsplat_tt/host_tracy.hpp"
@@ -546,16 +547,7 @@ static bool sort_device_publish_enabled();
 // Drop the sort-publish Finish() and blend's blocking sort_P_kept D2H so the
 // publish kernel chains into FUSED_TILE cull+blend with one CQ drain.
 static bool sort_blend_pipe_enabled() {
-    if (const char* v = std::getenv("GSPLAT_TT_SORT_BLEND_PIPE"); v != nullptr) {
-        if (v[0] == '0') {
-            return false;
-        }
-        if (v[0] == '1') {
-            return true;
-        }
-    }
-    return resident_blend_chain_enabled() && sort_device_publish_enabled() &&
-           fused_tile_enabled();
+    return gsplat_tt::env_config::sort_blend_pipe_enabled();
 }
 
 static void finish_sort_cq_if_needed(SortDeviceContext* ctx) {

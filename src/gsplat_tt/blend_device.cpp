@@ -34,6 +34,7 @@
 #include "tt-metalium/base_types.hpp"
 #include "tt-metalium/kernel_types.hpp"
 
+#include "gsplat_tt/env_config.h"
 #include "gsplat_tt/host_tracy.hpp"
 
 #include "alpha_blend_host.h"
@@ -1806,8 +1807,11 @@ static double process_frame_mb_devcull_resident(
 
     const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
     const auto t_start = std::chrono::steady_clock::now();
-    std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
+    // Writer overwrites every LPT tile in res_out; skip the per-frame zero H2D.
+    if (!gsplat_tt::env_config::blend_skip_zero_out_enabled()) {
+        std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
+    }
     // Constant ramps: upload once, then reuse the resident copy every frame.
     // DIAG(iter18): GSPLAT_TT_FORCE_RAMP=1 re-uploads every frame to test whether
     // the payload pack pass perturbs res_xramp/res_yramp (would recover the gate).
@@ -1821,19 +1825,12 @@ static double process_frame_mb_devcull_resident(
         distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_yramp, yramp);
         ctx.res_ramp_uploaded = true;
     }
-    std::chrono::steady_clock::time_point t_upload = t_start;
-    if (timing) {
-        GSPLAT_HOST_ZONE("host_finish_blend");
-        distributed::Finish(*ctx.cq);
-        t_upload = std::chrono::steady_clock::now();
-    }
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
-    std::chrono::steady_clock::time_point t_exec = t_upload;
-    if (timing) {
+    {
         GSPLAT_HOST_ZONE("host_finish_blend");
         distributed::Finish(*ctx.cq);
-        t_exec = std::chrono::steady_clock::now();
     }
+    gsplat_tt::device_state::clear_sort_publish_pending();
     std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
     const auto t_end = std::chrono::steady_clock::now();
@@ -1842,9 +1839,10 @@ static double process_frame_mb_devcull_resident(
         auto ms = [](auto a, auto b) {
             return std::chrono::duration<double, std::milli>(b - a).count();
         };
+        const auto t_exec = t_start;  // upload+exec folded under one Finish
         std::fprintf(stderr,
-            "[BLEND_SPLIT] upload=%.1f (attrs=0.0MB ids=0.0MB resident) exec=%.1f readback=%.1f total=%.1f ms\n",
-            ms(t_start, t_upload), ms(t_upload, t_exec), ms(t_exec, t_end), ms(t_start, t_end));
+            "[BLEND_SPLIT] upload+exec=%.1f readback=%.1f total=%.1f ms (resident, one Finish)\n",
+            ms(t_start, t_exec), ms(t_exec, t_end), ms(t_start, t_end));
         unsigned long pay_a = 0, pay_sz = 0;
         if (auto bp = gsplat_tt::device_state::get_buffer("blend_payload")) {
             pay_a = static_cast<unsigned long>(bp->address());
@@ -2119,7 +2117,8 @@ static double process_frame(
     bool cull_disabled,
     uint32_t num_tiles,
     uint32_t tiles_x,
-    bool* ok) {
+    bool* ok,
+    bool defer_cq_finish = false) {
     namespace ds = gsplat_tt::device_state;
     auto buf_a   = ds::get_buffer("proj_m_a");
     auto buf_b   = ds::get_buffer("proj_m_b");
@@ -2137,15 +2136,24 @@ static double process_frame(
 
     const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
 
-    auto buf_pk = ds::get_buffer("sort_P_kept");
-    if (!buf_pk) {
-        if (ok) *ok = false;
-        return 0.0;
+    uint64_t total_candidates = 0;
+    uint64_t total_mask_elems = 16;
+    uint32_t pipe_p = 0;
+    uint32_t pipe_mask = 0;
+    if (ds::get_sort_blend_pipe_scalars(&pipe_p, &pipe_mask)) {
+        total_candidates = pipe_p;
+        total_mask_elems = std::max<uint64_t>(16, pipe_mask);
+    } else {
+        auto buf_pk = ds::get_buffer("sort_P_kept");
+        if (!buf_pk) {
+            if (ok) *ok = false;
+            return 0.0;
+        }
+        std::vector<uint32_t> pkept(16, 0);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
+        total_candidates = pkept[0];
+        total_mask_elems = std::max<uint64_t>(16, pkept[1]);
     }
-    std::vector<uint32_t> pkept(16, 0);
-    distributed::EnqueueReadMeshBuffer(*ctx.cq, pkept, buf_pk, true);
-    const uint64_t total_candidates = pkept[0];
-    const uint64_t total_mask_elems = std::max<uint64_t>(16, pkept[1]);
 
     const ResidentSortLpt lpt = load_resident_sort_lpt(ctx.cq, num_cores);
     if (!lpt.ok) {
@@ -2220,17 +2228,10 @@ static double process_frame(
     }
 
     const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
-    // GSPLAT_TT_CULL_PIPELINE: do NOT block the host on the cull's own Finish.
-    // The cull and the resident blend share ONE in-order command queue
-    // (device_state::command_queue() -> dev->mesh_command_queue()), so the cull
-    // program fully executes — writing cull_masks — before the blend program is
-    // launched regardless. The Finish here was a pure HOST-side bubble: it
-    // serialized the blend's ~110-core host program/runtime-arg setup AFTER the
-    // cull's ~80 ms device execution, in a timeline that is ~87% device-idle.
-    // Skipping it lets that blend host setup overlap the cull device window.
-    // Correctness is unchanged (same CQ, in-order; the blend's first Finish /
-    // blocking readback still drains the cull before any host readback).
-    const bool pipeline = std::getenv("GSPLAT_TT_CULL_PIPELINE") != nullptr;
+    // CULL_PIPELINE: do NOT Finish between cull and blend on the shared in-order CQ.
+    // defer_cq_finish chains cull+blend into one drain (also drains sort publish).
+    const bool pipeline =
+        defer_cq_finish || gsplat_tt::env_config::cull_pipeline_enabled();
     const auto t_start = std::chrono::steady_clock::now();
     if (!ctx.res_ramp_uploaded) {
         auto bx = make_box_ramp(/*is_x=*/true);
@@ -3105,7 +3106,9 @@ double blend_mb_devcull_resident(
     // the soft-float constrained-min cull.
     double cull_ms = 0.0;
     const char* sfpu_cull_env = std::getenv("GSPLAT_TT_SFPU_CULL");
-    if (sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1') {
+    const bool sfpu_cull = sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
+    const bool chain_cull_blend = sfpu_cull && gsplat_tt::env_config::cull_pipeline_enabled();
+    if (sfpu_cull) {
         if (!g_ctx_cull) {
             g_ctx_cull = std::make_unique<DeviceContext>(::mb::cull::init_device_context());
         }
@@ -3116,7 +3119,8 @@ double blend_mb_devcull_resident(
         bool cull_ok = false;
         cull_ms = ::mb::cull::process_frame(
             *g_ctx_cull, contrib_floor, cull_disabled,
-            static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x), &cull_ok);
+            static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x), &cull_ok,
+            chain_cull_blend);
         if (!cull_ok) {
             if (device_ok) *device_ok = false;
             return 0.0;
