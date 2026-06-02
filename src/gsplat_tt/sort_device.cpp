@@ -266,6 +266,24 @@ static void build_program_publish(SortDeviceContext& ctx) {
     ctx.wl_publish.add_program(device_range, std::move(program));
 }
 
+static bool fused_tile_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
+    return v != nullptr && v[0] == '1';
+}
+
+static bool tile_bucket_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+    if (v != nullptr) {
+        return v[0] == '1';
+    }
+    if (fused_tile_enabled()) {
+        return false;
+    }
+    const char* sfpu = std::getenv("GSPLAT_TT_SFPU_CULL");
+    const char* rb = std::getenv("GSPLAT_TT_RESIDENT_BLEND");
+    return sfpu != nullptr && sfpu[0] == '1' && rb != nullptr && rb[0] == '1';
+}
+
 // R4/R5 binning program: one data-movement kernel (count + scatter modes).
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
@@ -524,24 +542,6 @@ static bool resident_blend_chain_enabled() {
 }
 
 static bool sort_device_publish_enabled();
-
-static bool fused_tile_enabled() {
-    const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
-    return v != nullptr && v[0] == '1';
-}
-
-static bool tile_bucket_enabled() {
-    const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
-    if (v != nullptr) {
-        return v[0] == '1';
-    }
-    if (fused_tile_enabled()) {
-        return false;
-    }
-    const char* sfpu = std::getenv("GSPLAT_TT_SFPU_CULL");
-    const char* rb = std::getenv("GSPLAT_TT_RESIDENT_BLEND");
-    return sfpu != nullptr && sfpu[0] == '1' && rb != nullptr && rb[0] == '1';
-}
 
 // Drop the sort-publish Finish() and blend's blocking sort_P_kept D2H so the
 // publish kernel chains into FUSED_TILE cull+blend with one CQ drain.

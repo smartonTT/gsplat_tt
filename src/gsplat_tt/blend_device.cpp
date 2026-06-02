@@ -1664,17 +1664,13 @@ static double process_frame_mb_devcull_resident(
     const bool sfpu_cull = !payload && sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
     const char* blend_aos_env = std::getenv("GSPLAT_TT_BLEND_AOS");
     const bool blend_aos = sfpu_cull && !(blend_aos_env != nullptr && blend_aos_env[0] == '0');
-    const bool tile_bucket = blend_aos && [] {
+    const bool tile_bucket = blend_aos && sfpu_cull && [] {
         const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
         if (v != nullptr) {
             return v[0] == '1';
         }
-        if (const char* ft = std::getenv("GSPLAT_TT_FUSED_TILE"); ft && ft[0] == '1') {
-            return false;
-        }
-        return sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1' &&
-               std::getenv("GSPLAT_TT_RESIDENT_BLEND") != nullptr &&
-               std::getenv("GSPLAT_TT_RESIDENT_BLEND")[0] == '1';
+        const char* ft = std::getenv("GSPLAT_TT_FUSED_TILE");
+        return !(ft != nullptr && ft[0] == '1');
     }();
     uint32_t tile_recs_addr = 0;
     uint32_t bucket_meta_addr = 0;
