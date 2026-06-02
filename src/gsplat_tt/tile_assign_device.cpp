@@ -20,6 +20,7 @@
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -367,6 +368,102 @@ static WorkSplit split_pages(uint32_t num_pages, uint32_t num_cores) {
         cursor += cnt;
     }
     return ws;
+}
+
+// GSPLAT_TT_TA_STATS: host-only diagnostic of the K2 scatter per-core work
+// distribution, computed purely from the prefix-sum offs[] (no device change,
+// no effect on the run). Reports two proxies for the contiguous page split:
+//   * pairs/core   == the WRITE work (every core writes its 16-pair pages).
+//   * gspan/core   == the gaussian boundaries crossed == set_g calls (each a
+//     binary-search + 4 NoC attr reads + AABB recompute) == the READ/COMPUTE
+//     work. The scene is spatially clustered (tiles-per-gaussian varies), so a
+//     contiguous page chunk hands a core a non-representative gspan -> makespan
+//     skew lands on gspan, not on the (uniform) pair writes.
+// Also projects the gspan skew a BLOCKED-CYCLIC (strided) split of block size
+// B would give, so the fix's headroom is visible before it ships.
+inline bool ta_stats_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_TA_STATS");
+    return v != nullptr && v[0] == '1';
+}
+
+static uint32_t ta_block_pages() {
+    const char* v = std::getenv("GSPLAT_TT_TA_BLOCK");
+    if (v == nullptr || v[0] == '\0') return 8u;  // default block size (pages)
+    const long b = std::strtol(v, nullptr, 10);
+    return (b <= 0) ? 1u : static_cast<uint32_t>(b);
+}
+
+// Largest g in [0, M-1] with offs[g] <= p (the gaussian owning pair p).
+static uint32_t owner_of(const std::vector<uint32_t>& offs, uint32_t M, uint32_t p) {
+    uint32_t lo = 0, hi = (M ? M - 1 : 0);
+    while (lo < hi) {
+        const uint32_t mid = (lo + hi + 1) >> 1;
+        if (offs[mid] <= p) lo = mid; else hi = mid - 1;
+    }
+    return lo;
+}
+
+// Sum the gaussian-boundary crossings (== set_g calls) over a contiguous page
+// range [pg_lo, pg_hi): one binary search at pg_lo*16 then linear advance to the
+// owner of the last real pair. Padding pairs (>= P) cost no advance.
+static uint32_t gspan_of_range(const std::vector<uint32_t>& offs, uint32_t M,
+                               uint32_t P, uint32_t pg_lo, uint32_t pg_hi) {
+    const uint32_t p0 = pg_lo * ELEMS_PER_PAGE;
+    uint32_t p1 = pg_hi * ELEMS_PER_PAGE;
+    if (p1 > P) p1 = P;
+    if (p1 <= p0) return 0;
+    const uint32_t g0 = owner_of(offs, M, p0);
+    const uint32_t g1 = owner_of(offs, M, p1 - 1);
+    return g1 - g0 + 1;
+}
+
+static void ta_dump_k2_stats(const std::vector<uint32_t>& offs, uint32_t M,
+                             uint32_t P, uint32_t k2_pages, uint32_t num_cores) {
+    auto skew = [](const std::vector<double>& v) {
+        double mn = 1e30, mx = 0, sum = 0;
+        for (double x : v) { mn = std::min(mn, x); mx = std::max(mx, x); sum += x; }
+        const double mean = v.empty() ? 0.0 : sum / v.size();
+        return std::array<double, 4>{mn, mx, mean, mean > 0 ? mx / mean : 0.0};
+    };
+    // Contiguous split (production K2 today).
+    const WorkSplit wc = split_pages(k2_pages, num_cores);
+    std::vector<double> c_pairs(num_cores), c_gspan(num_cores);
+    for (uint32_t c = 0; c < num_cores; c++) {
+        const uint32_t lo = wc.start[c], hi = wc.start[c] + wc.count[c];
+        uint32_t p0 = lo * ELEMS_PER_PAGE, p1 = hi * ELEMS_PER_PAGE;
+        if (p1 > P) p1 = P;
+        if (p1 < p0) p1 = p0;
+        c_pairs[c] = static_cast<double>(p1 - p0);
+        c_gspan[c] = gspan_of_range(offs, M, P, lo, hi);
+    }
+    // Blocked-cyclic (strided) split: core c owns blocks c, c+nc, c+2nc, ...
+    const uint32_t B = ta_block_pages();
+    const uint32_t num_blocks = (k2_pages + B - 1) / B;
+    std::vector<double> s_pairs(num_cores, 0), s_gspan(num_cores, 0);
+    for (uint32_t bk = 0; bk < num_blocks; bk++) {
+        const uint32_t c = bk % num_cores;
+        const uint32_t lo = bk * B;
+        uint32_t hi = lo + B;
+        if (hi > k2_pages) hi = k2_pages;
+        uint32_t p0 = lo * ELEMS_PER_PAGE, p1 = hi * ELEMS_PER_PAGE;
+        if (p1 > P) p1 = P;
+        if (p1 < p0) p1 = p0;
+        s_pairs[c] += static_cast<double>(p1 - p0);
+        s_gspan[c] += gspan_of_range(offs, M, P, lo, hi);
+    }
+    const auto cp = skew(c_pairs), cg = skew(c_gspan);
+    const auto sp = skew(s_pairs), sg = skew(s_gspan);
+    std::fprintf(stderr,
+        "[TA_STATS] M=%u P=%u k2_pages=%u cores=%u block_B=%u num_blocks=%u\n"
+        "[TA_STATS] CONTIG pairs(write): min=%.0f max=%.0f mean=%.0f max/mean=%.4f\n"
+        "[TA_STATS] CONTIG gspan(set_g): min=%.0f max=%.0f mean=%.0f max/mean=%.4f\n"
+        "[TA_STATS] STRIDED pairs(write): min=%.0f max=%.0f mean=%.0f max/mean=%.4f\n"
+        "[TA_STATS] STRIDED gspan(set_g): min=%.0f max=%.0f mean=%.0f max/mean=%.4f "
+        "(+%u binsearch/core)\n",
+        M, P, k2_pages, num_cores, B, num_blocks,
+        cp[0], cp[1], cp[2], cp[3], cg[0], cg[1], cg[2], cg[3],
+        sp[0], sp[1], sp[2], sp[3], sg[0], sg[1], sg[2], sg[3],
+        num_blocks / num_cores);
 }
 
 }  // namespace
@@ -741,6 +838,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             result.tiles_per_gaussian.assign(M, 0);
             for (uint32_t m = 0; m < Mu; m++)
                 result.tiles_per_gaussian[m] = static_cast<int64_t>(tpg[m]);
+
+            if (ta_stats_enabled() && P > 0) {
+                ta_dump_k2_stats(offs, Mu, P, round_up(P, ELEMS_PER_PAGE) / ELEMS_PER_PAGE,
+                                 num_cores);
+            }
 
             if (P == 0) {
                 if (device_ok) *device_ok = true;

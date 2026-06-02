@@ -659,7 +659,48 @@ host in loop → beat 100 ms,"** then attack pair count.
   makespan−mean): the K2 `tile_assign_scatter` has the SAME contiguous-pair
   shape and is a candidate for the same strided treatment (verify the
   (gid,tile)-pair output stays sort-correct, which it should since sort keys on
-  tile).
+  tile). **⇒ MEASURED in §8.8: the K2 scatter is ALREADY balanced — striding is
+  NOT a win there. The real tile_assign lever is the all-ones keep-mask H2D.**
+
+### 8.8 tile_assign K2 scatter rebalance — MEASURED NON-WIN (iter-34, banked)
+
+- **Confirm-first (gated `GSPLAT_TT_TA_STATS`, host-only, device cpp#100):** the
+  K2 `tile_assign_scatter` splits the **P (gid,tile)-pair pages** contiguously
+  and EQUALLY across the 110 cores (`split_pages`), so unlike project's gather
+  (which split spatially-clustered **tiles** and the per-core WRITE work ∝
+  visible-fraction → 2.12× skew), K2's per-core work is computed over the
+  ALREADY-COMPACTED, uniform pair domain. Per-core proxies on the hero frame
+  (M=1 883 905, P=3 369 033, k2_pages=210 565):
+  - **pairs/core (WRITE work): min 30 617, max 30 640, mean 30 628 → max/mean =
+    1.0004** — writes are perfectly balanced by construction (equal pages).
+  - **gspan/core (`set_g` boundary crossings = the READ/COMPUTE work: binary
+    search + 4 NoC attr reads + AABB recompute per owned Gaussian): min 15 457,
+    max 17 755, mean 17 127 → max/mean = 1.0367** — only 3.7 % skew (mild
+    regional tiles-per-gaussian variation: big-splat regions span fewer
+    Gaussians per equal-pair chunk).
+  - So the "~1.54× / ~19 ms" the aggregate temporal-cluster profiler attributed
+    to "tile_assign" is **NOT** a K2 write skew. K1 (`tile_assign_bbox`) is also
+    O(1)/Gaussian split over equal Gaussian pages (uniform), so it's balanced
+    too. The 1.54 was a cross-stage BRISC-busy aggregate (likely incl. the now
+    default-OFF per-pair cull K4), not a real per-core scatter imbalance.
+- **Why striding does NOT transfer:** a blocked-cyclic/strided split (the same
+  diagnostic projects it) only drops the gspan skew **1.037× → 1.027×** (≈0.5 ms
+  theoretical max on the ~13 ms 1-view K2) **while ADDING ~239 binary-searches
+  per core** (each strided block can't carry `cur_g` from the previous block, so
+  every block restarts with a log₂(M) offs search + a cold attr-page reload).
+  Net: a sub-noise gain bought with real added DRAM-read overhead ⇒ a wash or a
+  loss. Per the iter-32 lesson, do NOT write a scheduler for a sub-noise bound.
+  No strided K2 shipped; only the gated `GSPLAT_TT_TA_STATS` proxy is banked
+  (default OFF; runs host-side only under `TA_DEVICE_SCAN=0`, zero production
+  effect — production re-verified 63.85 dB / ms/view 183.4 / ta 21.2, cpp#101).
+- **The REAL tile_assign lever (next):** with the per-pair cull default-OFF
+  (`GSPLAT_TT_TA_NO_CULL`), the `ta_no_cull` branch uploads an **all-ones keep
+  mask** (`cap_p_elems` u32 ≈ **13.5 MB of constant 1s**) H2D **every frame** +
+  a `Finish()` — measured **k4 = 8.4 ms (1-view)** in the `TA_TIMING` breakdown.
+  That is a pure host→device bridge of constant data on the critical path (top
+  of the §priority order: ZERO host). The fix is to fill `buf_keep` with 1s ONCE
+  on (re)allocation/grow instead of per-frame (sort never overwrites keep when
+  the cull is off), deleting the per-frame H2D + stage-lock. → iter-35.
 7. **Move the dense front half to the FPU** (project means transform via
    `matmul_tiles`; det/conic/AABB/Mahalanobis via FPU eltwise; §0.5-Q2) and
    profile the 317 ms project stage (§0.5-Q7).
