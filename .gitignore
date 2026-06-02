@@ -103,3 +103,6 @@ backends/tt/tt-metal
 .DS_Store
 .idea/
 .vscode/
+
+# tt-loop local control sentinel (never committed)
+STOP
