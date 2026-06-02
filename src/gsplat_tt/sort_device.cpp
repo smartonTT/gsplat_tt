@@ -17,6 +17,7 @@
 // "sort_sorted_ids" (uint32, P) and "sort_tile_ranges" (uint32, num_tiles*2)
 // so a future device blend can consume them resident.
 
+#include "gsplat_tt/blend.h"
 #include "gsplat_tt/env_config.h"
 #include "gsplat_tt/sort.h"
 #include "gsplat_tt/device_state.h"
@@ -35,6 +36,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -150,6 +152,10 @@ struct SortDeviceContext {
     // R4/R5 device-binning program (count + scatter) for resident pairs.
     distributed::MeshWorkload wl_bin;
     KernelHandle kbin{};
+    // Post-count layout + LPT (single core, GSPLAT_TT_SORT_DEVICE_LAYOUT).
+    distributed::MeshWorkload wl_bin_layout;
+    KernelHandle kbin_layout{};
+    std::shared_ptr<distributed::MeshBuffer> buf_bin_ctrl;  // 1-page control out
     std::shared_ptr<distributed::MeshBuffer> buf_bin2d;  // per-core 2D hist/base
     std::size_t cap_bin2d_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_bin_dbg;  // core0 scatter dump
@@ -333,6 +339,35 @@ static void build_program_bin(SortDeviceContext& ctx) {
     ctx.wl_bin.add_program(device_range, std::move(program));
 }
 
+static void build_program_bin_layout(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreCoord core0{0, 0};
+    const CoreRangeSet cores(core0);
+    constexpr uint32_t scratch_u32 = 3 * 2048 + 4 * 128 + 2 * 128;
+    constexpr uint32_t scratch_bytes = scratch_u32 * 4;
+    auto cb = [&](uint32_t id, uint32_t bytes) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+    cb(0, PAGE_BYTES);
+    cb(1, scratch_bytes);
+
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 12; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.kbin_layout = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_layout.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_bin_layout.add_program(device_range, std::move(program));
+}
+
 // ROUTE C: 3-kernel bucket-cull program. reader_bucket_cull streams each LPT
 // tile's dense records into the SAME microblock_cull_compute SFPU kernel the
 // blend-side cull used; writer_bucket_cull packs the 32-bit keep mask and RMWs
@@ -415,6 +450,7 @@ static SortDeviceContext init_context() {
         CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program(ctx);
     build_program_bin(ctx);
+    build_program_bin_layout(ctx);
     build_program_publish(ctx);
     if (bucket_mask_enabled()) {
         build_program_bucket_cull(ctx);
@@ -533,6 +569,150 @@ static LptAssignment build_lpt(
             mean_load > 0 ? heaviest_tile / mean_load : 0.0);
     }
     return a;
+}
+
+struct BinLayoutResult {
+    std::vector<uint32_t> hist;  // page-aligned bases in bin2d layout
+    std::vector<int64_t> counts;
+    std::vector<int64_t> starts;
+    std::vector<uint32_t> pstart_page;
+    std::vector<uint32_t> pstart_elem;
+    std::vector<uint32_t> tile_pad;
+    std::vector<uint32_t> histrec;
+    std::vector<uint32_t> bucket_meta;
+    LptAssignment lpt;
+    uint32_t P_kept = 0;
+    uint32_t P_aligned = 0;
+    uint32_t max_pad_n = 0;
+    uint32_t status = 0;  // 0=ok, 1=BIN_LOCAL_MAX, 2=MAX_TILE_ENTRIES
+};
+
+static BinLayoutResult host_bin_layout_from_hist(
+    const std::vector<uint32_t>& hist_in,
+    uint32_t num_cores,
+    uint32_t num_tiles,
+    uint32_t stride,
+    bool tile_bucket) {
+    BinLayoutResult r;
+    r.hist = hist_in;
+    r.counts.assign(num_tiles, 0);
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        uint64_t s = 0;
+        for (uint32_t c = 0; c < num_cores; c++)
+            s += r.hist[static_cast<std::size_t>(c) * stride + t];
+        r.counts[t] = static_cast<int64_t>(s);
+    }
+    uint32_t max_core_padded = 0;
+    for (uint32_t c = 0; c < num_cores; c++) {
+        uint64_t s = 0;
+        for (uint32_t t = 0; t < num_tiles; t++) {
+            const uint64_t h = r.hist[static_cast<std::size_t>(c) * stride + t];
+            s += ((h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE) * ELEMS_PER_PAGE;
+        }
+        if (s > max_core_padded) max_core_padded = static_cast<uint32_t>(s);
+    }
+    if (max_core_padded > BIN_LOCAL_MAX) {
+        r.status = 1;
+        return r;
+    }
+    r.starts.assign(num_tiles, 0);
+    r.pstart_page.assign(num_tiles, 0);
+    r.pstart_elem.assign(num_tiles, 0);
+    r.tile_pad.assign(num_tiles, 0);
+    if (tile_bucket) {
+        r.histrec.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
+        r.bucket_meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
+    }
+    int64_t cstart = 0;
+    uint32_t apage = 0;
+    uint32_t max_pad_n = 0;
+    for (uint32_t t = 0; t < num_tiles; t++) {
+        const int64_t creal = r.counts[t];
+        r.starts[t] = cstart;
+        cstart += creal;
+        r.pstart_page[t] = apage;
+        r.pstart_elem[t] = apage * ELEMS_PER_PAGE;
+        const uint32_t tile_start_page = apage;
+        uint32_t rec_run = 0;
+        for (uint32_t c = 0; c < num_cores; c++) {
+            const std::size_t idx = static_cast<std::size_t>(c) * stride + t;
+            const uint32_t h = r.hist[idx];
+            if (tile_bucket) {
+                r.histrec[idx] = static_cast<uint32_t>(r.starts[t]) + rec_run;
+                rec_run += h;
+            }
+            r.hist[idx] = apage * ELEMS_PER_PAGE;
+            if (h > 0) apage += (h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
+        }
+        const uint32_t pad_pages = apage - tile_start_page;
+        r.tile_pad[t] = pad_pages * ELEMS_PER_PAGE;
+        if (tile_bucket) {
+            r.bucket_meta[static_cast<std::size_t>(t) * 2 + 0] =
+                static_cast<uint32_t>(r.starts[t]);
+            r.bucket_meta[static_cast<std::size_t>(t) * 2 + 1] = static_cast<uint32_t>(creal);
+        }
+        if (r.tile_pad[t] > max_pad_n) max_pad_n = r.tile_pad[t];
+    }
+    if (max_pad_n > MAX_TILE_ENTRIES) {
+        r.status = 2;
+        return r;
+    }
+    r.P_kept = static_cast<uint32_t>(cstart);
+    r.max_pad_n = max_pad_n;
+    r.P_aligned = std::max<uint32_t>(apage, 1u) * ELEMS_PER_PAGE;
+    std::vector<int64_t> pad_counts(num_tiles, 0);
+    for (uint32_t t = 0; t < num_tiles; t++)
+        pad_counts[t] = static_cast<int64_t>(r.tile_pad[t]);
+    r.lpt = build_lpt(pad_counts, num_tiles, num_cores);
+    return r;
+}
+
+static void enqueue_bin_layout_kernel(
+    SortDeviceContext* ctx,
+    uint32_t num_cores,
+    uint32_t num_tiles,
+    uint32_t stride,
+    bool tile_bucket,
+    uint32_t tile_ranges_addr) {
+    if (!ctx->buf_bin_ctrl) {
+        ctx->buf_bin_ctrl = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
+    }
+    Program& prog = ctx->wl_bin_layout.get_programs().begin()->second;
+    CoreCoord core0{0, 0};
+    SetRuntimeArgs(prog, ctx->kbin_layout, core0, {
+        static_cast<uint32_t>(ctx->buf_bin2d->address()),
+        static_cast<uint32_t>(ctx->buf_tmeta->address()),
+        static_cast<uint32_t>(ctx->buf_tile_ids->address()),
+        static_cast<uint32_t>(ctx->buf_lpt_meta->address()),
+        static_cast<uint32_t>(ctx->buf_tile_counts->address()),
+        static_cast<uint32_t>(ctx->buf_bin_ctrl->address()),
+        num_cores,
+        num_tiles,
+        stride,
+        tile_bucket && ctx->buf_bin2d_rec
+            ? static_cast<uint32_t>(ctx->buf_bin2d_rec->address())
+            : 0u,
+        tile_bucket && ctx->buf_bucket_meta
+            ? static_cast<uint32_t>(ctx->buf_bucket_meta->address())
+            : 0u,
+        tile_ranges_addr,
+    });
+    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin_layout, false);
+}
+
+static bool read_bin_layout_ctrl(
+    SortDeviceContext* ctx,
+    uint32_t& P_kept,
+    uint32_t& P_aligned,
+    uint32_t& max_pad_n,
+    uint32_t& status) {
+    std::vector<uint32_t> ctrl(ELEMS_PER_PAGE, 0);
+    distributed::EnqueueReadMeshBuffer(*ctx->cq, ctrl, ctx->buf_bin_ctrl, true);
+    P_kept = ctrl[0];
+    P_aligned = ctrl[1];
+    max_pad_n = ctrl[2];
+    status = ctrl[3];
+    return status == 0;
 }
 
 // Publish the contiguous (sorted_ids, tile_ranges) into device_state as uint32
@@ -776,14 +956,46 @@ static void verify_vs_cpu(
     }
 }
 
+static void maybe_run_sort_blend_continuation(
+    SortBlendContinuation* cont, int tiles_x, uint32_t num_tiles) {
+    if (cont == nullptr || cont->image_out == nullptr) {
+        return;
+    }
+    if (!sort_blend_pipe_enabled() || !resident_blend_chain_enabled()) {
+        return;
+    }
+    bool blend_ok = false;
+    (void)blend_mb_devcull_resident(
+        cont->mb_contrib_floor,
+        cont->cull_disabled,
+        static_cast<int>(num_tiles),
+        tiles_x,
+        cont->image_height,
+        cont->image_width,
+        cont->image_out,
+        &blend_ok);
+    cont->invoked = true;
+    if (cont->blend_ok != nullptr) {
+        *cont->blend_ok = blend_ok;
+    }
+}
+
 // ── R4/R5 resident-pairs device binning ─────────────────────────────────
 // Bins the resident full-P (gid,tid) pairs + keep mask into the page-aligned
 // per-tile (key,id) layout on-device, runs the radix kernel, compacts, and
 // publishes. Returns a SortResult identical in shape to the host path.
 static gsplat_cpu::SortResult sort_resident_pairs(
-    SortDeviceContext* ctx, uint32_t num_tiles, int tiles_x, int tiles_y,
-    std::size_t M, bool verify, bool need_host_sorted_ids,
-    gsplat_cpu::ThreadPool* pool, bool* device_ok, SortCallTimings& T) {
+    SortDeviceContext* ctx,
+    uint32_t num_tiles,
+    int tiles_x,
+    int tiles_y,
+    std::size_t M,
+    bool verify,
+    bool need_host_sorted_ids,
+    gsplat_cpu::ThreadPool* pool,
+    bool* device_ok,
+    SortCallTimings& T,
+    SortBlendContinuation* sort_blend) {
     using clk = std::chrono::high_resolution_clock;
     const auto t_total0_rp = clk::now();
     auto fail = [&]() {
@@ -852,9 +1064,61 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         uint32_t tile_recs_addr = 0u;  // real address set after P_aligned is known
         uint32_t recbase_addr = 0u;    // dense per-(core,tile) record base (set w/ buf)
 
+        // Metadata buffers (layout kernel writes these resident on device).
+        const uint32_t tmeta_pad = round_up(std::max(num_tiles * 2u, 1u), ELEMS_PER_PAGE);
+        const std::size_t tmeta_bytes = static_cast<std::size_t>(tmeta_pad) * 4;
+        if (!ctx->buf_tmeta || ctx->cap_tmeta_bytes < tmeta_bytes) {
+            ctx->buf_tmeta = make_dram(ctx->mesh_device.get(), tmeta_bytes);
+            ctx->cap_tmeta_bytes = tmeta_bytes;
+        }
+        const uint32_t tile_ids_pad = round_up(std::max(num_tiles, 1u), ELEMS_PER_PAGE);
+        const std::size_t tile_ids_bytes = static_cast<std::size_t>(tile_ids_pad) * 4;
+        if (!ctx->buf_tile_ids || ctx->cap_tile_ids_bytes < tile_ids_bytes) {
+            ctx->buf_tile_ids = make_dram(ctx->mesh_device.get(), tile_ids_bytes);
+            ctx->cap_tile_ids_bytes = tile_ids_bytes;
+        }
+        const uint32_t meta_elems = num_cores * 2;
+        const uint32_t meta_pad = round_up(std::max(meta_elems, 1u), ELEMS_PER_PAGE);
+        const std::size_t meta_bytes = static_cast<std::size_t>(meta_pad) * 4;
+        if (!ctx->buf_lpt_meta || ctx->cap_lpt_meta_bytes < meta_bytes) {
+            ctx->buf_lpt_meta = make_dram(ctx->mesh_device.get(), meta_bytes);
+            ctx->cap_lpt_meta_bytes = meta_bytes;
+        }
+        const uint32_t counts_pad = round_up(std::max(num_tiles, 1u), ELEMS_PER_PAGE);
+        const std::size_t counts_bytes = static_cast<std::size_t>(counts_pad) * 4;
+        if (!ctx->buf_tile_counts || ctx->cap_tile_counts_bytes < counts_bytes) {
+            ctx->buf_tile_counts = make_dram(ctx->mesh_device.get(), counts_bytes);
+            ctx->cap_tile_counts_bytes = counts_bytes;
+        }
+        const std::size_t ranges_bytes =
+            static_cast<std::size_t>(round_up(num_tiles * 2u, ELEMS_PER_PAGE)) * 4;
+        if (!ctx->buf_tile_ranges || ctx->cap_ranges_bytes < ranges_bytes) {
+            ctx->buf_tile_ranges = make_dram(ctx->mesh_device.get(), ranges_bytes);
+            ctx->cap_ranges_bytes = ranges_bytes;
+        }
+        if (tile_bucket) {
+            const std::size_t rec_base_bytes =
+                static_cast<std::size_t>(num_cores) * stride * 4;
+            if (!ctx->buf_bin2d_rec || ctx->cap_bin2d_rec_bytes < rec_base_bytes) {
+                ctx->buf_bin2d_rec = make_dram(ctx->mesh_device.get(), rec_base_bytes);
+                ctx->cap_bin2d_rec_bytes = rec_base_bytes;
+            }
+            recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
+            const uint32_t bm_pad = round_up(num_tiles * 2u, ELEMS_PER_PAGE);
+            const std::size_t bm_bytes = static_cast<std::size_t>(bm_pad) * 4;
+            if (!ctx->buf_bucket_meta || ctx->cap_bucket_meta_bytes < bm_bytes) {
+                ctx->buf_bucket_meta = make_dram(ctx->mesh_device.get(), bm_bytes);
+                ctx->cap_bucket_meta_bytes = bm_bytes;
+                device_state::register_buffer("sort_bucket_meta", ctx->buf_bucket_meta);
+            }
+        }
+
+        const bool device_layout = gsplat_tt::env_config::sort_device_layout_enabled();
+        const bool layout_verify = std::getenv("GSPLAT_TT_SORT_LAYOUT_VERIFY") != nullptr;
+
         // ── Pass A: per-core histogram (count) ──────────────────────────
         const auto t_bin0 = clk::now();
-        auto launch_bin = [&](uint32_t mode) {
+        auto launch_bin = [&](uint32_t mode, bool finish_cq) {
             Program& prog = ctx->wl_bin.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -867,128 +1131,305 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     ctx->buf_keys ? static_cast<uint32_t>(ctx->buf_keys->address()) : 0u,
                     ctx->buf_ids ? static_cast<uint32_t>(ctx->buf_ids->address()) : 0u,
                     ws.start[c], ws.count[c], P_full, num_tiles, stride, c, mode,
-                    dump_tile,  // arg14: tile to dump under BIN_DUMP
+                    dump_tile,
                 };
                 if (tile_bucket) {
-                    args.push_back(blendrec_addr);   // arg15
-                    args.push_back(tile_recs_addr);  // arg16 (0 for mode 0; real for mode 1)
-                    args.push_back(recbase_addr);    // arg17 (0 for mode 0; real for mode 1)
+                    args.push_back(blendrec_addr);
+                    args.push_back(tile_recs_addr);
+                    args.push_back(recbase_addr);
                 }
                 SetRuntimeArgs(prog, ctx->kbin, core, args);
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin, false);
-            if (mode == 0) {
-                GSPLAT_HOST_ZONE("host_finish_sort_bin_cnt");
-            } else {
-                GSPLAT_HOST_ZONE("host_finish_sort_bin_scat");
+            if (finish_cq) {
+                if (mode == 0) {
+                    GSPLAT_HOST_ZONE("host_finish_sort_bin_cnt");
+                } else {
+                    GSPLAT_HOST_ZONE("host_finish_sort_bin_scat");
+                }
+                distributed::Finish(*ctx->cq);
             }
-            distributed::Finish(*ctx->cq);
         };
-        launch_bin(0);
-        const auto t_cnt = clk::now();  // DIAG: count kernel (+Finish) done
+        launch_bin(0, !device_layout);
+        const auto t_cnt = clk::now();
 
-        // D2H the per-core histograms.
-        std::vector<uint32_t> hist(static_cast<std::size_t>(num_cores) * stride);
-        distributed::EnqueueReadMeshBuffer(*ctx->cq, hist, ctx->buf_bin2d, true);
-        const auto t_d2h = clk::now();  // DIAG: histogram D2H done
-
-        // Host: per-tile totals + page-aligned starts + per-core base offsets.
         std::vector<int64_t> counts(num_tiles, 0);
-        for (uint32_t t = 0; t < num_tiles; t++) {
-            uint64_t s = 0;
-            for (uint32_t c = 0; c < num_cores; c++)
-                s += hist[static_cast<std::size_t>(c) * stride + t];
-            counts[t] = static_cast<int64_t>(s);
-        }
-        // The kernel page-pads each tile's per-core L1 block (ceil(count/16)*16),
-        // so the per-core L1 counting-sort buffer is bounded by the PADDED run,
-        // not the raw kept count. If any core's padded run exceeds BIN_LOCAL_MAX,
-        // fall back to the host binning path.
-        uint32_t max_core_padded = 0;
-        for (uint32_t c = 0; c < num_cores; c++) {
-            uint64_t s = 0;
-            for (uint32_t t = 0; t < num_tiles; t++) {
-                const uint64_t h = hist[static_cast<std::size_t>(c) * stride + t];
-                s += ((h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE) * ELEMS_PER_PAGE;
-            }
-            if (s > max_core_padded) max_core_padded = static_cast<uint32_t>(s);
-        }
-        if (max_core_padded > BIN_LOCAL_MAX) {
-            std::cerr << "[gsplat_tt::sort] per-core padded run=" << max_core_padded
-                      << " > BIN_LOCAL_MAX=" << BIN_LOCAL_MAX << "; host fallback\n";
-            return fail();
-        }
-        // Page-aligned PER-CORE layout: within each tile, every contributing
-        // core gets a PAGE-ALIGNED block (ceil(count/16) pages). No two cores
-        // ever share a DRAM page, eliminating the multi-writer sub-page write
-        // race. The unused tail slots of each block are padded by the kernel
-        // with a max key (0xFFFFFFFF) that the stable radix sorts to the end of
-        // the tile; host compaction keeps only the real count.
-        //   counts[t]       : real per-tile element count (compaction + ranges)
-        //   starts[t]       : real exclusive prefix (compaction dst)
-        //   pstart_page[t]  : tile region start page (radix input)
-        //   tile_pad[t]     : padded per-tile element count (radix sorts this)
-        //   hist[c*stride+t]: page-aligned global base for core c's block (scatter)
         std::vector<int64_t> starts(num_tiles, 0);
         std::vector<uint32_t> pstart_page(num_tiles, 0);
         std::vector<uint32_t> pstart_elem(num_tiles, 0);
         std::vector<uint32_t> tile_pad(num_tiles, 0);
-        // T2: DENSE per-(core,tile) record base (no page padding — each record is
-        // its own 64B page so cores never share a page even when dense). Tile t's
-        // records occupy pages [starts[t], starts[t]+counts[t]); core c's block
-        // starts at starts[t] + (sum of kept counts of cores < c for tile t).
-        std::vector<uint32_t> histrec;
-        std::vector<uint32_t> bucket_meta;  // (start,count) per tile
-        if (tile_bucket) {
-            histrec.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
-            bucket_meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
-        }
-        int64_t cstart = 0;
-        uint32_t apage = 0;
-        uint32_t max_pad_n = 0;
-        for (uint32_t t = 0; t < num_tiles; t++) {
-            const int64_t creal = counts[t];
-            starts[t] = cstart;
-            cstart += creal;
-            pstart_page[t] = apage;
-            pstart_elem[t] = apage * ELEMS_PER_PAGE;
-            const uint32_t tile_start_page = apage;
-            uint32_t rec_run = 0;  // dense prefix over cores within this tile
-            for (uint32_t c = 0; c < num_cores; c++) {
-                const std::size_t idx = static_cast<std::size_t>(c) * stride + t;
-                const uint32_t h = hist[idx];
-                if (tile_bucket) {
-                    histrec[idx] = static_cast<uint32_t>(starts[t]) + rec_run;
-                    rec_run += h;
+        LptAssignment lpt;
+        uint32_t P_kept = 0;
+        uint32_t P_aligned = 0;
+        uint32_t max_n = 0;
+        clk::time_point t_d2h = t_cnt;
+        clk::time_point t_bin1 = t_cnt;
+
+        std::optional<BinLayoutResult> layout_verify_ref;
+        if (layout_verify) {
+            if (!device_layout) {
+                GSPLAT_HOST_ZONE("host_finish_sort_bin_cnt");
+                distributed::Finish(*ctx->cq);
+            }
+            std::vector<uint32_t> hist_ref(static_cast<std::size_t>(num_cores) * stride);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, hist_ref, ctx->buf_bin2d, true);
+            t_d2h = clk::now();
+            layout_verify_ref =
+                host_bin_layout_from_hist(hist_ref, num_cores, num_tiles, stride, tile_bucket);
+            if (layout_verify_ref->status != 0) {
+                std::cerr << "[gsplat_tt::sort] layout verify: host ref status="
+                          << layout_verify_ref->status << "\n";
+            }
+            enqueue_bin_layout_kernel(
+                ctx,
+                num_cores,
+                num_tiles,
+                stride,
+                tile_bucket,
+                static_cast<uint32_t>(ctx->buf_tile_ranges->address()));
+            GSPLAT_HOST_ZONE("host_finish_sort_bin_layout");
+            distributed::Finish(*ctx->cq);
+            if (layout_verify_ref->status == 0) {
+                const BinLayoutResult& href = *layout_verify_ref;
+                uint32_t dev_P_kept = 0, dev_P_aligned = 0, dev_max_n = 0, dev_status = 0;
+                read_bin_layout_ctrl(ctx, dev_P_kept, dev_P_aligned, dev_max_n, dev_status);
+                std::vector<uint32_t> hist_dev(hist_ref.size());
+                std::vector<uint32_t> tmeta_d(tmeta_pad, 0);
+                std::vector<uint32_t> tids_d(tile_ids_pad, 0);
+                std::vector<uint32_t> lptm(meta_pad, 0);
+                std::vector<uint32_t> cnts(counts_pad, 0);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, hist_dev, ctx->buf_bin2d, true);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, tmeta_d, ctx->buf_tmeta, true);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, tids_d, ctx->buf_tile_ids, true);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, lptm, ctx->buf_lpt_meta, true);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, cnts, ctx->buf_tile_counts, true);
+                std::size_t mism_hist = 0, mism_cnt = 0, mism_tids = 0, mism_lpt = 0, mism_tmeta = 0;
+                for (std::size_t i = 0; i < hist_dev.size(); i++) {
+                    if (hist_dev[i] != href.hist[i]) {
+                        mism_hist++;
+                        if (mism_hist == 1) {
+                            std::fprintf(stderr,
+                                "[SORT_LAYOUT_VERIFY] first hist mism i=%zu dev=%u ref=%u\n",
+                                i, hist_dev[i], href.hist[i]);
+                        }
+                    }
                 }
-                hist[idx] = apage * ELEMS_PER_PAGE;  // page-aligned base for (c,t)
-                if (h > 0) apage += (h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
+                for (uint32_t t = 0; t < num_tiles; t++) {
+                    if (cnts[t] != static_cast<uint32_t>(href.counts[t])) mism_cnt++;
+                }
+                const uint32_t nflat =
+                    static_cast<uint32_t>(href.lpt.flat_tile_ids.size());
+                for (uint32_t i = 0; i < nflat; i++) {
+                    if (tids_d[i] != href.lpt.flat_tile_ids[i]) mism_tids++;
+                }
+                for (uint32_t c = 0; c < num_cores; c++) {
+                    if (lptm[c * 2 + 0] != href.lpt.per_core_offset[c] ||
+                        lptm[c * 2 + 1] != href.lpt.per_core_count[c])
+                        mism_lpt++;
+                }
+                for (uint32_t t = 0; t < num_tiles; t++) {
+                    if (tmeta_d[t * 2 + 0] != href.pstart_page[t] ||
+                        tmeta_d[t * 2 + 1] != href.tile_pad[t])
+                        mism_tmeta++;
+                }
+                const std::size_t mism =
+                    mism_hist + mism_cnt + mism_tids + mism_lpt + mism_tmeta;
+                std::fprintf(stderr,
+                    "[SORT_LAYOUT_VERIFY] P_kept dev=%u ref=%u P_aligned dev=%u ref=%u "
+                    "status=%u hist=%zu cnt=%zu tids=%zu lpt=%zu tmeta=%zu %s\n",
+                    dev_P_kept, href.P_kept, dev_P_aligned, href.P_aligned, dev_status,
+                    mism_hist, mism_cnt, mism_tids, mism_lpt, mism_tmeta,
+                    mism == 0 ? "IDENTICAL" : "FAIL");
+                if (mism != 0 || dev_P_kept != href.P_kept || dev_P_aligned != href.P_aligned) {
+                    return fail();
+                }
             }
-            const uint32_t pad_pages = apage - tile_start_page;
-            tile_pad[t] = pad_pages * ELEMS_PER_PAGE;
-            if (creal > 0) {
+            t_bin1 = clk::now();
+        }
+
+        if (device_layout) {
+            if (!layout_verify) {
+                enqueue_bin_layout_kernel(
+                    ctx,
+                    num_cores,
+                    num_tiles,
+                    stride,
+                    tile_bucket,
+                    static_cast<uint32_t>(ctx->buf_tile_ranges->address()));
+                GSPLAT_HOST_ZONE("host_finish_sort_bin_cnt");
+                distributed::Finish(*ctx->cq);
+                t_bin1 = clk::now();
+            }
+            uint32_t layout_status = 0;
+            if (!read_bin_layout_ctrl(ctx, P_kept, P_aligned, max_n, layout_status)) {
+                std::cerr << "[gsplat_tt::sort] device layout status=" << layout_status
+                          << "; host fallback\n";
+                return fail();
+            }
+            counts.assign(num_tiles, 0);
+            std::vector<uint32_t> cnts_u(counts_pad, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, cnts_u, ctx->buf_tile_counts, true);
+            for (uint32_t t = 0; t < num_tiles; t++)
+                counts[t] = static_cast<int64_t>(cnts_u[t]);
+            std::vector<uint32_t> ranges_u(
+                static_cast<std::size_t>(ctx->cap_ranges_bytes / 4), 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, ranges_u, ctx->buf_tile_ranges, true);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                starts[t] = static_cast<int64_t>(ranges_u[t * 2 + 0]);
                 result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = starts[t];
-                result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] = starts[t] + creal;
+                result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] =
+                    static_cast<int64_t>(ranges_u[t * 2 + 1]);
             }
+            std::vector<uint32_t> tmeta_d(tmeta_pad, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, tmeta_d, ctx->buf_tmeta, true);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                pstart_page[t] = tmeta_d[t * 2 + 0];
+                tile_pad[t] = tmeta_d[t * 2 + 1];
+                pstart_elem[t] = pstart_page[t] * ELEMS_PER_PAGE;
+            }
+            const uint32_t cap_meta = static_cast<uint32_t>(ctx->cap_lpt_meta_bytes / 4);
+            std::vector<uint32_t> lptm(cap_meta, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, lptm, ctx->buf_lpt_meta, true);
+            lpt.per_core_offset.assign(num_cores, 0);
+            lpt.per_core_count.assign(num_cores, 0);
+            for (uint32_t c = 0; c < num_cores; c++) {
+                lpt.per_core_offset[c] = lptm[c * 2 + 0];
+                lpt.per_core_count[c] = lptm[c * 2 + 1];
+            }
+            const uint32_t cap_tids = static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
+            std::vector<uint32_t> tids_d(cap_tids, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, tids_d, ctx->buf_tile_ids, true);
+            uint32_t flat_n = 0;
+            for (uint32_t c = 0; c < num_cores; c++) flat_n += lpt.per_core_count[c];
+            lpt.flat_tile_ids.assign(tids_d.begin(), tids_d.begin() + flat_n);
+            device_state::register_buffer("sort_lpt_tile_ids", ctx->buf_tile_ids);
+            publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
+            T.upload_ms = 0.0;
+        } else if (layout_verify_ref) {
+            BinLayoutResult bl = std::move(*layout_verify_ref);
+            if (bl.status == 1 || bl.status == 2) {
+                return fail();
+            }
+            counts = std::move(bl.counts);
+            starts = std::move(bl.starts);
+            pstart_page = std::move(bl.pstart_page);
+            pstart_elem = std::move(bl.pstart_elem);
+            tile_pad = std::move(bl.tile_pad);
+            lpt = std::move(bl.lpt);
+            P_kept = bl.P_kept;
+            P_aligned = bl.P_aligned;
+            max_n = bl.max_pad_n;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                if (counts[t] > 0) {
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = starts[t];
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] =
+                        starts[t] + counts[t];
+                }
+            }
+            t_bin1 = clk::now();
             if (tile_bucket) {
-                bucket_meta[static_cast<std::size_t>(t) * 2 + 0] = static_cast<uint32_t>(starts[t]);
-                bucket_meta[static_cast<std::size_t>(t) * 2 + 1] = static_cast<uint32_t>(creal);
+                distributed::EnqueueWriteMeshBuffer(
+                    *ctx->cq, ctx->buf_bin2d_rec, bl.histrec, false);
+                recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
+                bl.bucket_meta.resize(
+                    static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
+                distributed::EnqueueWriteMeshBuffer(
+                    *ctx->cq, ctx->buf_bucket_meta, bl.bucket_meta, false);
             }
-            if (tile_pad[t] > max_pad_n) max_pad_n = tile_pad[t];
+            std::vector<uint32_t> tmeta(tmeta_pad, 0);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                tmeta[t * 2 + 0] = pstart_page[t];
+                tmeta[t * 2 + 1] = tile_pad[t];
+            }
+            const uint32_t cap_tile_ids_elems =
+                static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
+            std::vector<uint32_t> tile_ids_flat(cap_tile_ids_elems, 0);
+            std::copy(
+                lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
+            publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
+            const auto t_up0 = clk::now();
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, bl.hist, false);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
+            distributed::EnqueueWriteMeshBuffer(
+                *ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
+            if (!sort_stage_defer_finish()) {
+                GSPLAT_HOST_ZONE("host_finish_sort_upload");
+                distributed::Finish(*ctx->cq);
+            }
+            T.upload_ms =
+                std::chrono::duration<double, std::milli>(clk::now() - t_up0).count();
+        } else {
+            // Host bridge: D2H histogram + page layout + LPT + H2D metadata.
+            std::vector<uint32_t> hist(static_cast<std::size_t>(num_cores) * stride);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, hist, ctx->buf_bin2d, true);
+            t_d2h = clk::now();
+
+            BinLayoutResult bl =
+                host_bin_layout_from_hist(hist, num_cores, num_tiles, stride, tile_bucket);
+            if (bl.status == 1) {
+                std::cerr << "[gsplat_tt::sort] per-core padded run > BIN_LOCAL_MAX; "
+                             "host fallback\n";
+                return fail();
+            }
+            if (bl.status == 2) {
+                std::cerr << "[gsplat_tt::sort] padded tile exceeds MAX_TILE_ENTRIES; "
+                             "host fallback\n";
+                return fail();
+            }
+            counts = std::move(bl.counts);
+            starts = std::move(bl.starts);
+            pstart_page = std::move(bl.pstart_page);
+            pstart_elem = std::move(bl.pstart_elem);
+            tile_pad = std::move(bl.tile_pad);
+            lpt = std::move(bl.lpt);
+            P_kept = bl.P_kept;
+            P_aligned = bl.P_aligned;
+            max_n = bl.max_pad_n;
+            hist = std::move(bl.hist);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                if (counts[t] > 0) {
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = starts[t];
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] =
+                        starts[t] + counts[t];
+                }
+            }
+            t_bin1 = clk::now();
+
+            if (tile_bucket) {
+                distributed::EnqueueWriteMeshBuffer(
+                    *ctx->cq, ctx->buf_bin2d_rec, bl.histrec, false);
+                recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
+                bl.bucket_meta.resize(
+                    static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
+                distributed::EnqueueWriteMeshBuffer(
+                    *ctx->cq, ctx->buf_bucket_meta, bl.bucket_meta, false);
+            }
+            std::vector<uint32_t> tmeta(tmeta_pad, 0);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                tmeta[t * 2 + 0] = pstart_page[t];
+                tmeta[t * 2 + 1] = tile_pad[t];
+            }
+            const uint32_t cap_tile_ids_elems =
+                static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
+            std::vector<uint32_t> tile_ids_flat(cap_tile_ids_elems, 0);
+            std::copy(
+                lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
+            publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
+            const auto t_up0 = clk::now();
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, hist, false);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
+            distributed::EnqueueWriteMeshBuffer(
+                *ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
+            if (!sort_stage_defer_finish()) {
+                GSPLAT_HOST_ZONE("host_finish_sort_upload");
+                distributed::Finish(*ctx->cq);
+            }
+            T.upload_ms =
+                std::chrono::duration<double, std::milli>(clk::now() - t_up0).count();
         }
-        if (max_pad_n > MAX_TILE_ENTRIES) {
-            std::cerr << "[gsplat_tt::sort] padded tile n=" << max_pad_n
-                      << " exceeds MAX_TILE_ENTRIES; host fallback\n";
-            return fail();
-        }
-        const uint32_t P_kept = static_cast<uint32_t>(cstart);
-        const uint32_t total_pages = std::max<uint32_t>(apage, 1);
-        const uint32_t P_aligned = total_pages * ELEMS_PER_PAGE;
-        const uint32_t max_n = max_pad_n;
-        const auto t_bin1 = clk::now();
         T.bin_ms = std::chrono::duration<double, std::milli>(t_bin1 - t_bin0).count();
 
-        // ── Allocate aligned keys/ids/out + tmeta + tile_ids ────────────
+        // ── Allocate aligned keys/ids/out ───────────────────────────────
         const std::size_t aligned_bytes = static_cast<std::size_t>(P_aligned) * 4;
         if (!ctx->buf_keys || ctx->cap_aligned_bytes < aligned_bytes) {
             ctx->buf_keys = make_dram(ctx->mesh_device.get(), aligned_bytes);
@@ -997,7 +1438,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->cap_aligned_bytes = aligned_bytes;
         }
         if (tile_bucket) {
-            // DENSE record bucket: one 64B record per kept candidate (P_kept pages).
             const std::size_t recs_bytes =
                 static_cast<std::size_t>(std::max<uint32_t>(P_kept, 1)) * PAGE_BYTES;
             if (!ctx->buf_tile_recs || ctx->cap_tile_recs_bytes < recs_bytes) {
@@ -1006,74 +1446,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
             }
             tile_recs_addr = static_cast<uint32_t>(ctx->buf_tile_recs->address());
-            // Per-(core,tile) DENSE base for the record scatter (mirrors bin2d).
-            const std::size_t rec_base_bytes =
-                static_cast<std::size_t>(num_cores) * stride * 4;
-            if (!ctx->buf_bin2d_rec || ctx->cap_bin2d_rec_bytes < rec_base_bytes) {
-                ctx->buf_bin2d_rec = make_dram(ctx->mesh_device.get(), rec_base_bytes);
-                ctx->cap_bin2d_rec_bytes = rec_base_bytes;
-            }
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d_rec, histrec, false);
-            recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
-            // Publish per-tile (start,count) bucket meta for the L1-sort reader.
-            const uint32_t bm_pad = round_up(num_tiles * 2u, ELEMS_PER_PAGE);
-            const std::size_t bm_bytes = static_cast<std::size_t>(bm_pad) * 4;
-            if (!ctx->buf_bucket_meta || ctx->cap_bucket_meta_bytes < bm_bytes) {
-                ctx->buf_bucket_meta = make_dram(ctx->mesh_device.get(), bm_bytes);
-                ctx->cap_bucket_meta_bytes = bm_bytes;
-                device_state::register_buffer("sort_bucket_meta", ctx->buf_bucket_meta);
-            }
-            bucket_meta.resize(static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bucket_meta, bucket_meta, false);
         }
-        const uint32_t tmeta_count = num_tiles * 2;
-        const uint32_t tmeta_pad = round_up(std::max<uint32_t>(tmeta_count, 1), ELEMS_PER_PAGE);
-        const std::size_t tmeta_bytes = static_cast<std::size_t>(tmeta_pad) * 4;
-        if (!ctx->buf_tmeta || ctx->cap_tmeta_bytes < tmeta_bytes) {
-            ctx->buf_tmeta = make_dram(ctx->mesh_device.get(), tmeta_bytes);
-            ctx->cap_tmeta_bytes = tmeta_bytes;
-        }
-        std::vector<uint32_t> tmeta(tmeta_pad, 0);
-        std::vector<int64_t> pad_counts(num_tiles, 0);
-        for (uint32_t t = 0; t < num_tiles; t++) {
-            tmeta[t * 2 + 0] = pstart_page[t];
-            tmeta[t * 2 + 1] = tile_pad[t];  // radix sorts the padded region
-            pad_counts[t] = static_cast<int64_t>(tile_pad[t]);
-        }
-        LptAssignment lpt;
-        {
-            GSPLAT_HOST_ZONE("host_lpt_build");
-            lpt = build_lpt(pad_counts, num_tiles, num_cores);
-        }
-        const uint32_t tile_ids_count = static_cast<uint32_t>(lpt.flat_tile_ids.size());
-        const uint32_t tile_ids_pad = round_up(std::max<uint32_t>(tile_ids_count, 1), ELEMS_PER_PAGE);
-        const std::size_t tile_ids_bytes = static_cast<std::size_t>(tile_ids_pad) * 4;
-        if (!ctx->buf_tile_ids || ctx->cap_tile_ids_bytes < tile_ids_bytes) {
-            ctx->buf_tile_ids = make_dram(ctx->mesh_device.get(), tile_ids_bytes);
-            ctx->cap_tile_ids_bytes = tile_ids_bytes;
-        }
-        // Grow-only buffer: size the upload to capacity (whole-buffer write).
-        const uint32_t cap_tile_ids_elems =
-            static_cast<uint32_t>(ctx->cap_tile_ids_bytes / 4);
-        std::vector<uint32_t> tile_ids_flat(cap_tile_ids_elems, 0);
-        std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
-        publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
-
-        // ── Upload: base offsets (into bin2d), tmeta, tile_ids ──────────
-        const auto t_up0 = clk::now();
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, hist, false);
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
-        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
-        if (!sort_stage_defer_finish()) {
-            GSPLAT_HOST_ZONE("host_finish_sort_upload");
-            distributed::Finish(*ctx->cq);
-        }
-        const auto t_up1 = clk::now();
-        T.upload_ms = std::chrono::duration<double, std::milli>(t_up1 - t_up0).count();
 
         // ── Pass B: device scatter into aligned (key,id) layout ─────────
         const auto t_sc0 = clk::now();
-        launch_bin(1);
+        launch_bin(1, true);
         const auto t_sc1 = clk::now();
         T.bin_ms += std::chrono::duration<double, std::milli>(t_sc1 - t_sc0).count();
 
@@ -1365,11 +1742,13 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             // (core,tile) page-aligned blocks at base=hist[c*stride+t] holding
             // that core's kept pairs in gaussian-major order, tails padded with
             // max key (0xffffffff)/0. hist holds the per-(core,tile) bases.
+            std::vector<uint32_t> hist_dbg(static_cast<std::size_t>(num_cores) * stride);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, hist_dbg, ctx->buf_bin2d, true);
             std::vector<uint32_t> hkeys(P_aligned, 0xffffffffu), hids(P_aligned, 0);
             std::vector<uint32_t> bcur(num_tiles, 0);
             for (uint32_t c = 0; c < num_cores; c++) {
                 for (uint32_t t = 0; t < num_tiles; t++)
-                    bcur[t] = hist[static_cast<std::size_t>(c) * stride + t];
+                    bcur[t] = hist_dbg[static_cast<std::size_t>(c) * stride + t];
                 const uint32_t plo = ws.start[c] * ELEMS_PER_PAGE;
                 const uint32_t phi = (ws.start[c] + ws.count[c]) * ELEMS_PER_PAGE;
                 for (uint32_t p = plo; p < phi && p < P_full; p++) {
@@ -1518,6 +1897,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }
 
         if (device_ok) *device_ok = true;
+        maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
         return result;
     } catch (const std::exception& e) {
         std::cerr << "[gsplat_tt::sort] resident-pairs path failed: " << e.what() << "\n";
@@ -1550,7 +1930,8 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     gsplat_cpu::ThreadPool* pool,
     bool* device_ok,
     SortCallTimings* timings,
-    const bool need_host_sorted_ids) {
+    const bool need_host_sorted_ids,
+    SortBlendContinuation* sort_blend) {
     auto set_fail = [&]() {
         if (device_ok) *device_ok = false;
         return gsplat_cpu::SortResult{};
@@ -1590,8 +1971,17 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     }();
     if (resident_pairs && stage >= 1) {
         gsplat_cpu::SortResult rr = sort_resident_pairs(
-            ctx, num_tiles, tiles_x, tiles_y, M, verify, need_host_sorted_ids,
-            pool, device_ok, T);
+            ctx,
+            num_tiles,
+            tiles_x,
+            tiles_y,
+            M,
+            verify,
+            need_host_sorted_ids,
+            pool,
+            device_ok,
+            T,
+            sort_blend);
         return rr;
     }
 

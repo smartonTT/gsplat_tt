@@ -3080,6 +3080,31 @@ double blend_mb_devcull_from_payload(
         image_out);
 }
 
+void blend_warmup_resident_contexts() {
+    (void)gsplat_tt::device_state::get_device();
+    if (!g_ctx_mb) {
+        g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
+    }
+    if (::mb::payload_enabled()) {
+        if (!g_ctx_pack) {
+            g_ctx_pack = std::make_unique<DeviceContext>(::mb::pack::init_device_context());
+        }
+        return;
+    }
+    if (::mb::fused::enabled()) {
+        if (!g_ctx_fused) {
+            g_ctx_fused = std::make_unique<DeviceContext>(::mb::fused::init_device_context());
+        }
+        return;
+    }
+    const char* sfpu_cull_env = std::getenv("GSPLAT_TT_SFPU_CULL");
+    if (sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1') {
+        if (!g_ctx_cull) {
+            g_ctx_cull = std::make_unique<DeviceContext>(::mb::cull::init_device_context());
+        }
+    }
+}
+
 double blend_mb_devcull_resident(
     float contrib_floor,
     bool cull_disabled,

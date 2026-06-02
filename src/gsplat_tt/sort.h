@@ -43,6 +43,19 @@ namespace gsplat_tt {
 
 // Per-call sub-timing breakdown (ms). Separates the device radix kernel time
 // from the host binning / compaction / DMA bridges.
+// Optional in-sort resident blend (GSPLAT_TT_SORT_BLEND_PIPE). When set and the
+// device sort succeeds, cull+blend run before returning to render_full_py so
+// frame-1 does not pay a separate blend cold-start / host gap after sort.
+struct SortBlendContinuation {
+    float* image_out = nullptr;
+    int image_height = 0;
+    int image_width = 0;
+    float mb_contrib_floor = 0.0f;
+    bool cull_disabled = false;
+    bool* blend_ok = nullptr;
+    bool invoked = false;
+};
+
 struct SortCallTimings {
     double bin_ms = 0.0;       // host Pass1+Pass2 binning into aligned layout
     double upload_ms = 0.0;    // H2D of packed keys/ids
@@ -71,7 +84,8 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     SortCallTimings* timings = nullptr,
     // When true, D2H sort_sorted_ids into SortResult even if RESIDENT_BLEND
     // skips it (required for CPU blend_mode=0 in the same process as TT env).
-    bool need_host_sorted_ids = false);
+    bool need_host_sorted_ids = false,
+    SortBlendContinuation* sort_blend = nullptr);
 
 // Lazily initializes the device sort context (programs + CBs). Returns true
 // if the device path is operational.

@@ -14,6 +14,11 @@ inline bool flag_is_zero(const char* name) {
     return v != nullptr && v[0] == '0';
 }
 
+// One-shot JIT compile of all ideal-path device programs at scene open.
+inline bool jit_warmup_enabled() {
+    return flag_is_one("GSPLAT_TT_JIT_WARMUP");
+}
+
 // Production gather path (FUSED_TILE). Default OFF — the loop/verify ideal path is
 // TILE_BUCKET + SFPU cull_masks, not per-candidate gather.
 inline bool fused_tile_enabled() {
@@ -84,6 +89,12 @@ inline bool sort_blend_pipe_enabled() {
 }
 
 // Blend writer fully overwrites res_out each frame — skip the ~6MB zero H2D.
+// On-device bin histogram layout + LPT (replaces ~450KB D2H + host build + H2D).
+// Default OFF until GSPLAT_TT_SORT_LAYOUT_VERIFY passes bit-identical vs host.
+inline bool sort_device_layout_enabled() {
+    return flag_is_one("GSPLAT_TT_SORT_DEVICE_LAYOUT");
+}
+
 inline bool blend_skip_zero_out_enabled() {
     if (flag_is_zero("GSPLAT_TT_BLEND_SKIP_ZERO_OUT")) {
         return false;

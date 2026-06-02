@@ -80,4 +80,7 @@ void device_shutdown();
 
 bool device_ready();
 
+// Force-create resident blend/cull MeshWorkload contexts (JIT compile only).
+void blend_warmup_resident_contexts();
+
 }  // namespace gsplat_tt

@@ -113,6 +113,7 @@ if(GSPLAT_WITH_TT)
     gsplat_tt/tile_assign_device.cpp
     gsplat_tt/sort_device.cpp
     gsplat_tt/device_state.cpp
+    gsplat_tt/jit_warmup.cpp
     gsplat_tt/render_blend.cpp
     gsplat_tt/mb_payload.cpp
     gsplat_tt/gather_visible_device.cpp

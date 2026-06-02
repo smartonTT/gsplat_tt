@@ -21,8 +21,10 @@
 #ifdef GSPLAT_WITH_TT
 #include "gsplat_tt/blend.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/env_config.h"
 #include "gsplat_tt/gather_visible.h"
 #include "gsplat_tt/host_tracy.hpp"
+#include "gsplat_tt/jit_warmup.h"
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
 #include "gsplat_tt/render_blend.h"
@@ -1330,13 +1332,35 @@ py::tuple render_full_py(
     }  // host_stage_ta
     auto t_ta1 = clock::now();
 
-    // Stage 3: sort + bin.
+    py::array_t<float> image(
+        {static_cast<py::ssize_t>(image_height),
+         static_cast<py::ssize_t>(image_width),
+         static_cast<py::ssize_t>(3)});
+    std::memset(image.mutable_data(), 0,
+                static_cast<std::size_t>(image_height) *
+                    static_cast<std::size_t>(image_width) * 3 * sizeof(float));
+
+#ifdef GSPLAT_WITH_TT
+    if (blend_mode >= 1) {
+        gsplat_tt::jit_warmup_ideal_path();
+    }
+    const bool sort_blend_chain =
+        (blend_mode >= 1) && gsplat_tt::env_config::sort_blend_pipe_enabled() &&
+        gsplat_tt::env_config::resident_blend_enabled();
+#else
+    const bool sort_blend_chain = false;
+#endif
+
+    // Stage 3: sort + bin (optional in-sort resident cull+blend).
     auto t_s0 = clock::now();
     gsplat_cpu::SortResult sr;
     bool sort_done = false;
+    bool blend_done_in_sort = false;
 #ifdef GSPLAT_WITH_TT
     {
-    GSPLAT_HOST_ZONE("host_stage_sort");
+    const char* sort_zone =
+        sort_blend_chain ? "host_stage_sort_blend" : "host_stage_sort";
+    GSPLAT_HOST_ZONE(sort_zone);
     // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
     // layout-identical SortResult (byte-identical sorted_gaussian_ids +
     // tile_ranges) and publishes the contiguous outputs resident in
@@ -1350,6 +1374,16 @@ py::tuple render_full_py(
         // mb_contrib_floor / cull_disabled never reach sort_and_bin_tt).
         gsplat_tt::device_state::set_bucket_cull_params(mb_contrib_floor, cull_disabled);
         bool device_ok = false;
+        bool blend_ok = false;
+        gsplat_tt::SortBlendContinuation sort_blend{};
+        if (sort_blend_chain) {
+            sort_blend.image_out = image.mutable_data();
+            sort_blend.image_height = image_height;
+            sort_blend.image_width = image_width;
+            sort_blend.mb_contrib_floor = mb_contrib_floor;
+            sort_blend.cull_disabled = cull_disabled;
+            sort_blend.blend_ok = &blend_ok;
+        }
         gsplat_cpu::SortResult sr_dev = gsplat_tt::sort_and_bin_tt(
             ta.gaussian_ids.data(),
             ta.tile_ids.data(),
@@ -1361,10 +1395,19 @@ py::tuple render_full_py(
             &global_sort_pool(),
             &device_ok,
             /*timings=*/nullptr,
-            /*need_host_sorted_ids=*/blend_mode < 1);
+            /*need_host_sorted_ids=*/blend_mode < 1 && !sort_blend_chain,
+            sort_blend_chain ? &sort_blend : nullptr);
         if (device_ok) {
             sr = std::move(sr_dev);
             sort_done = true;
+            if (sort_blend.invoked) {
+                blend_done_in_sort = true;
+                if (!blend_ok && tt_host_free_render) {
+                    std::fprintf(stderr,
+                        "[render_full] FATAL: in-sort resident blend failed\n");
+                    std::abort();
+                }
+            }
         } else if (tt_host_free_render) {
             std::fprintf(stderr,
                 "[render_full] FATAL: device sort failed with host-free env stack\n");
@@ -1397,20 +1440,6 @@ py::tuple render_full_py(
     const std::size_t P_kept = sr.sorted_gaussian_ids.size();
 #endif
 
-    // iter-049: pre-allocate + zero the pybind output buffer and thread its
-    // data pointer through cull_and_blend. Eliminates a ~3 MB std::vector
-    // alloc+zero inside the C++ stage AND the same-sized memcpy on the way
-    // out. The kernel writes pixels (and only the kept-microblock pixels)
-    // directly into the numpy buffer; remaining pixels keep the up-front
-    // zero we just wrote.
-    py::array_t<float> image(
-        {static_cast<py::ssize_t>(image_height),
-         static_cast<py::ssize_t>(image_width),
-         static_cast<py::ssize_t>(3)});
-    std::memset(image.mutable_data(), 0,
-                static_cast<std::size_t>(image_height) *
-                    static_cast<std::size_t>(image_width) * 3 * sizeof(float));
-
     // Stage 4: cull + blend. blend_mode selects the implementation; the
     // microblock cull always runs on CPU and produces the per-(tile,
     // microblock) kept-Gaussian structure. For blend_mode != 0 the TT device
@@ -1418,7 +1447,9 @@ py::tuple render_full_py(
     auto t_b0 = clock::now();
     gsplat_cpu::CullAndBlendResult cb;
 #ifdef GSPLAT_WITH_TT
-    if (blend_mode >= 1) {
+    if (blend_done_in_sort) {
+        cb.pairs_in = static_cast<int64_t>(P_kept);
+    } else if (blend_mode >= 1) {
         GSPLAT_HOST_ZONE("host_stage_blend");
         cb = gsplat_tt::render_blend_tt(
             proj.means_2d.data(),
