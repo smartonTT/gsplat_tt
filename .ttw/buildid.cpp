@@ -1,5 +1,5 @@
-id=102
-sha=bfdd743
-ts=2026-06-01T21:32:12-0700
-desc=iter 34: tile_assign K2 scatter rebalance: MEASURED non-win (gated GSPLAT_TT_TA_STATS proves write 1.0004x / set_g 1.037x — already balanced); bank diagnosis, no striding shipped; real lever = all-ones keep-mask H2D
-bin=311cebf12b26152c
+id=104
+sha=65728fa
+ts=2026-06-01T21:36:11-0700
+desc=iter 35: tile_assign: eliminate per-frame all-ones keep-mask H2D (fill buf_keep once on grow, cache buf_keep_all_ones) — ta 21.2->10.2ms, ms/view 183.4->173.5 @8v, 63.85dB bit-identical
+bin=99fbd2daee94602b

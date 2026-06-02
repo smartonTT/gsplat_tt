@@ -113,6 +113,15 @@ struct TileAssignDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_tids;
     std::shared_ptr<distributed::MeshBuffer> buf_keep;
     std::size_t cap_p_bytes = 0;
+    // True once buf_keep holds all-1s up to its full capacity. In the
+    // GSPLAT_TT_TA_NO_CULL default path the keep mask is a constant all-ones
+    // array (the per-pair cull is off; the blend's microblock cull rejects the
+    // empty-corner pairs downstream). The all-ones fill only has to happen ONCE
+    // per (re)allocation of buf_keep — DRAM persists across frames and nothing
+    // overwrites keep when the cull is off — so we drop the ~13.5 MB/frame H2D
+    // of constant 1s + its Finish() stage-lock from every steady-state frame.
+    // Reset to false whenever buf_keep is (re)allocated or K4 overwrites it.
+    bool buf_keep_all_ones = false;
 
     // R4/R5: tiny 1-page buffer publishing the full P (pre-cull pair count) so
     // the resident-pairs sort path knows how many pairs to bin.
@@ -864,6 +873,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             ctx->buf_tids = make_dram(ctx->mesh_device.get(), p_bytes);
             ctx->buf_keep = make_dram(ctx->mesh_device.get(), p_bytes);
             ctx->cap_p_bytes = p_bytes;
+            ctx->buf_keep_all_ones = false;  // fresh DRAM: needs the all-ones fill
         }
         const uint32_t cap_p_elems = static_cast<uint32_t>(ctx->cap_p_bytes / 4);
 
@@ -948,14 +958,26 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
           if (ta_no_cull) {
             // R1: skip K3 + K4. Publish an all-ones keep so sort keeps every
             // AABB pair (P_kept == P); blend's microblock cull rejects the
-            // empty-corner pairs downstream. buf_keep is freshly-grown DRAM
-            // (uninitialized) and sort_bin treats keep==0 as a drop while a
-            // MISSING ta_pairs_keep buffer forces a host fallback — so the mask
-            // MUST be present and explicitly filled with 1s here.
+            // empty-corner pairs downstream. sort_bin treats keep==0 as a drop
+            // while a MISSING ta_pairs_keep buffer forces a host fallback — so
+            // the mask MUST be present and all-1s for [0, P).
+            //
+            // iter-35: the all-ones mask is CONSTANT, so fill buf_keep ONCE per
+            // (re)allocation instead of re-uploading ~13.5 MB of 1s every frame.
+            // DRAM persists across frames and nothing overwrites keep while the
+            // cull is off, so once buf_keep_all_ones is set the per-frame H2D +
+            // Finish() are pure dead host work on the critical path. We fill to
+            // the full buffer CAPACITY, which always covers the current P_pad
+            // (the buffer only grows), so a later smaller-P frame is still
+            // all-1s over its [0, P). Bit-identical: same bytes sort reads, just
+            // written on the alloc frame instead of every frame.
             const auto t_keep0 = clk::now();
-            std::vector<uint32_t> keep_ones(cap_p_elems, 1u);
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_keep, keep_ones, false);
-            distributed::Finish(*ctx->cq);
+            if (!ctx->buf_keep_all_ones) {
+                std::vector<uint32_t> keep_ones(cap_p_elems, 1u);
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_keep, keep_ones, false);
+                distributed::Finish(*ctx->cq);
+                ctx->buf_keep_all_ones = true;
+            }
             T.k3_compute_ms = 0.0;
             T.k3_h2d_ms = 0.0;
             T.k3_ms = 0.0;
@@ -1032,7 +1054,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             const auto t_k3_1 = clk::now();
             T.k3_ms = std::chrono::duration<double, std::milli>(t_k3_1 - t_cull0).count();
 
-            // K4: per-pair cull -> keep_mask.
+            // K4: per-pair cull -> keep_mask. K4 overwrites buf_keep with
+            // per-pair 0/1 values, so the cached "all-ones" invariant no longer
+            // holds (defensive: production is cull-off and never reaches here).
+            ctx->buf_keep_all_ones = false;
             Program& progc = ctx->wl_cull.get_programs().begin()->second;
             for (uint32_t cc = 0; cc < num_cores; cc++) {
                 CoreCoord core{cc % ctx->grid.x, cc / ctx->grid.x};

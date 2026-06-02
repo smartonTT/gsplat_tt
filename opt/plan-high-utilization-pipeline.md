@@ -693,14 +693,37 @@ host in loop → beat 100 ms,"** then attack pair count.
   No strided K2 shipped; only the gated `GSPLAT_TT_TA_STATS` proxy is banked
   (default OFF; runs host-side only under `TA_DEVICE_SCAN=0`, zero production
   effect — production re-verified 63.85 dB / ms/view 183.4 / ta 21.2, cpp#101).
-- **The REAL tile_assign lever (next):** with the per-pair cull default-OFF
-  (`GSPLAT_TT_TA_NO_CULL`), the `ta_no_cull` branch uploads an **all-ones keep
-  mask** (`cap_p_elems` u32 ≈ **13.5 MB of constant 1s**) H2D **every frame** +
-  a `Finish()` — measured **k4 = 8.4 ms (1-view)** in the `TA_TIMING` breakdown.
-  That is a pure host→device bridge of constant data on the critical path (top
-  of the §priority order: ZERO host). The fix is to fill `buf_keep` with 1s ONCE
-  on (re)allocation/grow instead of per-frame (sort never overwrites keep when
-  the cull is off), deleting the per-frame H2D + stage-lock. → iter-35.
+### 8.9 tile_assign all-ones keep-mask H2D — eliminated (iter-35, DEFAULT path, SHIPPED)
+
+- **Root cause (the real tile_assign lever §8.8 found):** with the per-pair cull
+  default-OFF (`GSPLAT_TT_TA_NO_CULL`), the `ta_no_cull` branch uploaded an
+  **all-ones keep mask** (`cap_p_elems` u32 ≈ **13.5 MB of constant 1s**) H2D
+  **every frame** + a `Finish()` — measured **k4 = 8–11 ms** in the `TA_TIMING`
+  breakdown (the largest single host bridge left in tile_assign). The mask is a
+  CONSTANT (sort treats keep==0 as a drop; with the cull off every AABB pair is
+  kept, and the blend's microblock cull rejects the empty-corner pairs), so
+  re-uploading it every frame is pure dead host work on the critical path.
+- **Fix shipped:** fill `buf_keep` with 1s **ONCE per (re)allocation/grow** and
+  cache `buf_keep_all_ones` on the device context; the per-frame H2D + `Finish()`
+  are skipped on every steady-state frame. Safe because DRAM persists across
+  frames, the buffer is grow-only (the one fill to capacity always covers a
+  later smaller-P frame's `[0, P)`), and nothing overwrites keep while the cull
+  is off (K4, the only other writer, resets the flag and only runs cull-ON).
+  Bit-identical: the same bytes sort reads, written on the alloc frame instead
+  of every frame.
+- **Result (always-on, default path; cpp#103):** `TA_TIMING` shows k4 11.3 ms on
+  the alloc frame → **0.0 ms on every subsequent frame**.
+  - 1-view: ta **35.7 → 25.0 ms**, ms/view **289.3 → 278.3** (−11.0).
+  - **8-view steady-state:** ta **21.2 → 10.2 ms** (−11.0), ms/view **183.4 →
+    173.5** (−9.9 ms, −5.4 %), hero_vs_ref **63.85 dB bit-identical**,
+    min_vs_ref 37.53 (no regression).
+- **Next lever:** tile_assign is now k1 (~10.5 ms 1v, uniform per-Gaussian AABB)
+  + k2 (~13 ms 1v, balanced scatter) + scans. k1/k2 are the residual cost — both
+  embarrassingly parallel and balanced; the remaining ms is raw per-element NoC
+  read/write + scalar compute on the BRISC data-mover, so the next lever is
+  algorithmic (fewer pairs / move the AABB+scatter math off the scalar RISC) not
+  load-balance. The dominant whole-frame cost remains **blend ~97 ms** (§14
+  cull↔blend SFPU serialization) — the highest-value target.
 7. **Move the dense front half to the FPU** (project means transform via
    `matmul_tiles`; det/conic/AABB/Mahalanobis via FPU eltwise; §0.5-Q2) and
    profile the 317 ms project stage (§0.5-Q7).
