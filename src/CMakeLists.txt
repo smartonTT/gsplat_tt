@@ -126,6 +126,8 @@ if(GSPLAT_WITH_TT)
   target_link_libraries(gsplat_tt PRIVATE gsplat_cpu)
   target_link_libraries(_gsplat_cpu PRIVATE gsplat_tt)
   target_compile_definitions(_gsplat_cpu PRIVATE GSPLAT_WITH_TT)
+  # Host Tracy zones in pybind_module.cpp (render_view / host_stage_*).
+  gsplat_link_tt_metal(_gsplat_cpu)
 endif()
 
 # Tests. include(CTest) (rather than bare enable_testing()) writes

@@ -879,6 +879,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 SetRuntimeArgs(prog, ctx->kbin, core, args);
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin, false);
+            if (mode == 0) {
+                GSPLAT_HOST_ZONE("host_finish_sort_bin_cnt");
+            } else {
+                GSPLAT_HOST_ZONE("host_finish_sort_bin_scat");
+            }
             distributed::Finish(*ctx->cq);
         };
         launch_bin(0);
@@ -1061,6 +1066,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, hist, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
+        GSPLAT_HOST_ZONE("host_finish_sort_upload");
         distributed::Finish(*ctx->cq);
         const auto t_up1 = clk::now();
         T.upload_ms = std::chrono::duration<double, std::milli>(t_up1 - t_up0).count();
@@ -1234,6 +1240,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }();
         if (!skip_radix) {
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
+            GSPLAT_HOST_ZONE("host_finish_sort_radix");
             distributed::Finish(*ctx->cq);
         }
         const auto t_k1 = clk::now();
@@ -1722,6 +1729,7 @@ gsplat_cpu::SortResult sort_and_bin_tt(
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_ids, ids, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
+        GSPLAT_HOST_ZONE("host_finish_sort_upload");
         distributed::Finish(*ctx->cq);
         const auto t_up1 = clk::now();
         T.upload_ms = std::chrono::duration<double, std::milli>(t_up1 - t_up0).count();

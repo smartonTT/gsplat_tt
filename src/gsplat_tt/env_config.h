@@ -37,4 +37,9 @@ inline bool proj_device_scan_enabled() {
     return !flag_is_zero("GSPLAT_TT_PROJ_DEVICE_SCAN");
 }
 
+// L1 bucket CB producer/consumer fence (default ON when TILE_BUCKET active).
+inline bool bucket_cb_fence_enabled() {
+    return !flag_is_zero("GSPLAT_TT_BUCKET_CB_FENCE");
+}
+
 }  // namespace gsplat_tt::env_config

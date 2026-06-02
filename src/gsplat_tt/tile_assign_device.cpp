@@ -17,6 +17,7 @@
 
 #include "gsplat_tt/tile_assign.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/host_tracy.hpp"
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
@@ -727,7 +728,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             });
         }
         distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k1, false);
-        distributed::Finish(*ctx->cq);
+        {
+            GSPLAT_HOST_ZONE("host_finish_ta_k1");
+            distributed::Finish(*ctx->cq);
+        }
         const auto t_k1_1 = clk::now();
         T.k1_ms = std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
 
@@ -762,17 +766,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 });
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan1, false);
-            distributed::Finish(*ctx->cq);
-            T.scan1_ms = std::chrono::duration<double, std::milli>(clk::now() - t_s1_0).count();
-            if (k3_pipelined) {
-                T.k3_compute_ms =
-                    std::chrono::duration<double, std::milli>(clk::now() - k3_t0).count();
-                T.k3_h2d_ms = 0.0;
-            }
-
-            // On-device exclusive scan of per-core partials -> core_base[] + P in
-            // ta_pairs_P (replaces D2H(core_total) + host prefix loop).
-            const auto t_pre0 = clk::now();
+            // scan_bases chains on scan1 output — one Finish for both (in-order CQ).
             Program& progb = ctx->wl_scan_bases.get_programs().begin()->second;
             CoreCoord core0{0, 0};
             SetRuntimeArgs(progb, ctx->ks_bases, core0, {
@@ -782,21 +776,36 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 num_cores,
             });
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan_bases, false);
-            distributed::Finish(*ctx->cq);
-            T.prefix_ms = std::chrono::duration<double, std::milli>(clk::now() - t_pre0).count();
+            {
+                GSPLAT_HOST_ZONE("host_finish_ta_scan");
+                distributed::Finish(*ctx->cq);
+            }
+            const auto t_scan_done = clk::now();
+            T.scan1_ms =
+                std::chrono::duration<double, std::milli>(t_scan_done - t_s1_0).count();
+            T.prefix_ms = 0.0;  // scan_bases merged into scan1 (one Finish)
+            if (k3_pipelined) {
+                T.k3_compute_ms =
+                    std::chrono::duration<double, std::milli>(t_scan_done - k3_t0).count();
+                T.k3_h2d_ms = 0.0;
+            }
             T.d2h_tpg_ms = 0.0;
             T.h2d_offs_ms = 0.0;
 
             // Control-only read of P (64B page); pairs already resident for sort.
             const auto t_p0 = clk::now();
             std::vector<uint32_t> pbuf(ELEMS_PER_PAGE, 0);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, ctx->buf_pairs_P, true);
+            {
+                GSPLAT_HOST_ZONE("host_ta_d2h_p");
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, ctx->buf_pairs_P, true);
+            }
             P = pbuf[0];
             T.d2h_tpg_ms =
                 std::chrono::duration<double, std::milli>(clk::now() - t_p0).count();
 
             if (P == 0) {
                 if (k3_pipelined) {
+                    GSPLAT_HOST_ZONE("host_finish_ta_drain");
                     distributed::Finish(*ctx->cq);
                 }
                 if (device_ok) *device_ok = true;
@@ -818,10 +827,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 });
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan2, false);
-            if (!k3_pipelined) {
-                distributed::Finish(*ctx->cq);
-                T.scan2_ms =
-                    std::chrono::duration<double, std::milli>(clk::now() - t_s2_0).count();
+            // When not pipelined with K3, scan2 Finish merges with K2 below.
+            if (k3_pipelined) {
+                T.scan2_ms = 0.0;  // attributed in the scan2+K2 barrier below
             }
             // result.tiles_per_gaussian intentionally left empty: render_full's
             // fast path never reads it (sort/blend don't need it).
@@ -861,7 +869,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 
             const auto t_h2doffs0 = clk::now();
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_offs, offs, false);
-            if (ta_timing) distributed::Finish(*ctx->cq);
+            if (ta_timing) {
+                GSPLAT_HOST_ZONE("host_finish_ta_h2d_offs");
+                distributed::Finish(*ctx->cq);
+            }
             T.h2d_offs_ms = std::chrono::duration<double, std::milli>(clk::now() - t_h2doffs0).count();
         }
 
@@ -900,6 +911,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2, false);
         if (k3_pipelined) {
             // scan2 + K2 share one barrier with any in-flight K3 (started before scan1).
+            GSPLAT_HOST_ZONE("host_finish_ta_k2");
             distributed::Finish(*ctx->cq);
             const auto t_barrier = clk::now();
             if (device_scan) {
@@ -912,9 +924,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     std::chrono::duration<double, std::milli>(t_barrier - k3_t0).count();
             }
         } else {
+            // scan2 + K2 on one in-order CQ — single Finish (drops scan2-only drain).
+            GSPLAT_HOST_ZONE("host_finish_ta_k2");
             distributed::Finish(*ctx->cq);
             const auto t_k2_1 = clk::now();
             T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
+            if (device_scan) {
+                T.scan2_ms =
+                    std::chrono::duration<double, std::milli>(t_k2_1 - t_s2_0).count();
+            }
         }
 
         // The per-pair Mahalanobis cull needs the per-Gaussian cov (a,b,c) and
@@ -975,6 +993,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             if (!ctx->buf_keep_all_ones) {
                 std::vector<uint32_t> keep_ones(cap_p_elems, 1u);
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_keep, keep_ones, false);
+                GSPLAT_HOST_ZONE("host_finish_ta_keep_fill");
                 distributed::Finish(*ctx->cq);
                 ctx->buf_keep_all_ones = true;
             }
@@ -991,6 +1010,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     // K3 on device: m2_thresh from resident proj_m_opacity (no host
                     // opacities[] loop, no m2thr H2D).
                     enqueue_k3_device();
+                    GSPLAT_HOST_ZONE("host_finish_ta_k3");
                     distributed::Finish(*ctx->cq);
                     T.k3_compute_ms =
                         std::chrono::duration<double, std::milli>(clk::now() - t_k3c0).count();
@@ -1047,7 +1067,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c_v, false);
                 }
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_m2thr, m2t_v, false);
-                if (ta_timing) distributed::Finish(*ctx->cq);
+                if (ta_timing) {
+                    GSPLAT_HOST_ZONE("host_finish_ta_k3_h2d");
+                    distributed::Finish(*ctx->cq);
+                }
                 T.k3_h2d_ms =
                     std::chrono::duration<double, std::milli>(clk::now() - t_k3h0).count();
             }
@@ -1076,6 +1099,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 });
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_cull, false);
+            GSPLAT_HOST_ZONE("host_finish_ta_k4");
             distributed::Finish(*ctx->cq);
             const auto t_cull1 = clk::now();
             T.k4_ms = std::chrono::duration<double, std::milli>(t_cull1 - t_k3_1).count();

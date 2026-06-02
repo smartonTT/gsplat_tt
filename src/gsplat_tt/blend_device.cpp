@@ -1127,7 +1127,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (dev_conic) {
         mb_defines["MB_DEVCONIC"] = "1";
     }
-    if (resident_reader) {
+    // Soft-float inline cull on compute — only the MB_DEVCULL gather path, NOT SFPU
+    // cull_masks (ideal TILE_BUCKET reads precomputed masks from DRAM/L1).
+    if (dev_cull) {
         mb_defines["MB_DEVCULL"] = "1";
     }
     if (resident_blend) {
