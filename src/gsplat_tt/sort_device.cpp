@@ -178,6 +178,17 @@ struct SortDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_bucket_meta;
     std::size_t cap_bucket_meta_bytes = 0;
 
+    // M0 (GSPLAT_TT_L1_RECORD): pre-sized 32B per-entry L1 record bucket.
+    // buf_l1_recs: BUCKET_FIT * num_tiles records × 32B each (pre-sized; tile t
+    //   at slot range [t*BUCKET_FIT, (t+1)*BUCKET_FIT)).
+    // buf_l1_rec_base: per-(core,tile) slot index start within buf_l1_recs —
+    //   l1_base[c][t] = t*BUCKET_FIT + sum_{c'<c} count[c'][t].
+    //   Same shape as buf_bin2d_rec but in 32B record slot units.
+    std::shared_ptr<distributed::MeshBuffer> buf_l1_recs;
+    std::size_t cap_l1_recs_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_l1_rec_base;
+    std::size_t cap_l1_rec_base_bytes = 0;
+
     std::shared_ptr<distributed::MeshBuffer> buf_tile_ids;  // LPT tile-id list
     std::size_t cap_tile_ids_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_tmeta;     // (pstart_page, n)
@@ -311,13 +322,23 @@ static void build_program_bin(SortDeviceContext& ctx) {
     cb(8, BIN_LOCAL_BYTES);   // isort (L1 counting-sort ids)
 
     const bool tile_bucket = tile_bucket_enabled();
+    const bool l1_record = l1_record_enabled();
     if (tile_bucket) {
         cb(9, 16u * PAGE_BYTES);  // rec staging ring (REC_BATCH=16 blendrec pages)
         cb(10, BIN_ROW_BYTES);    // recrow (per-(core,tile) DENSE record base)
     }
+    if (l1_record) {
+        // cb(11): per-(core,tile) L1 slot base (same shape as recrow/BIN_ROW_BYTES)
+        cb(11, BIN_ROW_BYTES);
+        // cb(12): REC_BATCH × 32B staging area for packing L1 records before write.
+        cb(12, 16u * 32u);  // 16 records × 32B = 512B
+    }
 
     std::vector<uint32_t> ct;
-    const int bin_accessors = tile_bucket ? 10 : 7;  // +blendrec, +tile_recs, +recbase
+    // Accessors: 7 base + 3 tile_bucket + 2 l1_record
+    int bin_accessors = 7;
+    if (tile_bucket) bin_accessors += 3;  // blendrec, tile_recs, recbase
+    if (l1_record)   bin_accessors += 2;  // l1_recs, l1_rec_base
     for (int i = 0; i < bin_accessors; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
     if (const char* v = std::getenv("GSPLAT_TT_BIN_NODEPTH"); v && v[0] == '1')
@@ -325,6 +346,7 @@ static void build_program_bin(SortDeviceContext& ctx) {
     if (const char* v = std::getenv("GSPLAT_TT_BIN_DUMP"); v && v[0] == '1')
         defines["BIN_DUMP"] = "1";
     if (tile_bucket) defines["BIN_EMIT_REC"] = "1";
+    if (l1_record)   defines["L1_BUCKET_REC"] = "1";
     ctx.kbin = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
@@ -580,6 +602,10 @@ struct BinLayoutResult {
     std::vector<uint32_t> tile_pad;
     std::vector<uint32_t> histrec;
     std::vector<uint32_t> bucket_meta;
+    // M0: per-(core,tile) 32B record slot base in buf_l1_recs.
+    // l1_base[c*stride+t] = t*bucket_fit + sum_{c'<c} count[c'][t].
+    // Populated when l1_record is true.
+    std::vector<uint32_t> histrec_l1;
     LptAssignment lpt;
     uint32_t P_kept = 0;
     uint32_t P_aligned = 0;
@@ -592,7 +618,9 @@ static BinLayoutResult host_bin_layout_from_hist(
     uint32_t num_cores,
     uint32_t num_tiles,
     uint32_t stride,
-    bool tile_bucket) {
+    bool tile_bucket,
+    bool l1_record = false,
+    uint32_t bucket_fit = 8192u) {
     BinLayoutResult r;
     r.hist = hist_in;
     r.counts.assign(num_tiles, 0);
@@ -623,6 +651,9 @@ static BinLayoutResult host_bin_layout_from_hist(
         r.histrec.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
         r.bucket_meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
     }
+    if (l1_record) {
+        r.histrec_l1.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
+    }
     int64_t cstart = 0;
     uint32_t apage = 0;
     uint32_t max_pad_n = 0;
@@ -639,6 +670,13 @@ static BinLayoutResult host_bin_layout_from_hist(
             const uint32_t h = r.hist[idx];
             if (tile_bucket) {
                 r.histrec[idx] = static_cast<uint32_t>(r.starts[t]) + rec_run;
+            }
+            if (l1_record) {
+                // M0: pre-sized bucket; tile t starts at slot t*bucket_fit.
+                // Per-core base = t*bucket_fit + prefix of cores before this one.
+                r.histrec_l1[idx] = t * bucket_fit + rec_run;
+            }
+            if (tile_bucket || l1_record) {
                 rec_run += h;
             }
             r.hist[idx] = apage * ELEMS_PER_PAGE;
@@ -1117,6 +1155,32 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             }
         }
 
+        // M0: l1_record buffers.
+        const bool l1_record_early = l1_record_enabled();
+        uint32_t bucket_fit = 8192u;
+        if (const char* f = std::getenv("GSPLAT_TT_BUCKET_FIT"); f && f[0] != '\0')
+            bucket_fit = static_cast<uint32_t>(std::atoi(f));
+        uint32_t l1_recs_addr = 0u;
+        uint32_t l1_base_addr = 0u;
+        if (l1_record_early) {
+            const std::size_t l1_rec_bytes =
+                static_cast<std::size_t>(num_tiles) * bucket_fit * 32u;
+            if (!ctx->buf_l1_recs || ctx->cap_l1_recs_bytes < l1_rec_bytes) {
+                ctx->buf_l1_recs = make_dram(ctx->mesh_device.get(), l1_rec_bytes);
+                ctx->cap_l1_recs_bytes = l1_rec_bytes;
+                device_state::register_buffer("sort_l1_recs", ctx->buf_l1_recs);
+            }
+            l1_recs_addr = static_cast<uint32_t>(ctx->buf_l1_recs->address());
+            const std::size_t l1_base_bytes =
+                static_cast<std::size_t>(num_cores) * stride * 4u;
+            if (!ctx->buf_l1_rec_base || ctx->cap_l1_rec_base_bytes < l1_base_bytes) {
+                ctx->buf_l1_rec_base = make_dram(ctx->mesh_device.get(), l1_base_bytes);
+                ctx->cap_l1_rec_base_bytes = l1_base_bytes;
+                device_state::register_buffer("sort_l1_rec_base", ctx->buf_l1_rec_base);
+            }
+            l1_base_addr = static_cast<uint32_t>(ctx->buf_l1_rec_base->address());
+        }
+
         const bool device_layout = gsplat_tt::env_config::sort_device_layout_enabled();
         const bool layout_verify = std::getenv("GSPLAT_TT_SORT_LAYOUT_VERIFY") != nullptr;
 
@@ -1141,6 +1205,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     args.push_back(blendrec_addr);
                     args.push_back(tile_recs_addr);
                     args.push_back(recbase_addr);
+                }
+                if (l1_record_early) {
+                    args.push_back(l1_recs_addr);
+                    args.push_back(l1_base_addr);
                 }
                 SetRuntimeArgs(prog, ctx->kbin, core, args);
             }
@@ -1340,6 +1408,13 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 distributed::EnqueueWriteMeshBuffer(
                     *ctx->cq, ctx->buf_bucket_meta, bl.bucket_meta, false);
             }
+            if (l1_record_early && !bl.histrec_l1.empty()) {
+                bl.histrec_l1.resize(
+                    static_cast<std::size_t>(ctx->cap_l1_rec_base_bytes / 4), 0u);
+                distributed::EnqueueWriteMeshBuffer(
+                    *ctx->cq, ctx->buf_l1_rec_base, bl.histrec_l1, false);
+                l1_base_addr = static_cast<uint32_t>(ctx->buf_l1_rec_base->address());
+            }
             std::vector<uint32_t> tmeta(tmeta_pad, 0);
             for (uint32_t t = 0; t < num_tiles; t++) {
                 tmeta[t * 2 + 0] = pstart_page[t];
@@ -1369,7 +1444,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             t_d2h = clk::now();
 
             BinLayoutResult bl =
-                host_bin_layout_from_hist(hist, num_cores, num_tiles, stride, tile_bucket);
+                host_bin_layout_from_hist(hist, num_cores, num_tiles, stride, tile_bucket,
+                                          l1_record_early, bucket_fit);
             if (bl.status == 1) {
                 std::cerr << "[gsplat_tt::sort] per-core padded run > BIN_LOCAL_MAX; "
                              "host fallback\n";
@@ -1407,6 +1483,13 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
                 distributed::EnqueueWriteMeshBuffer(
                     *ctx->cq, ctx->buf_bucket_meta, bl.bucket_meta, false);
+            }
+            if (l1_record_early && !bl.histrec_l1.empty()) {
+                bl.histrec_l1.resize(
+                    static_cast<std::size_t>(ctx->cap_l1_rec_base_bytes / 4), 0u);
+                distributed::EnqueueWriteMeshBuffer(
+                    *ctx->cq, ctx->buf_l1_rec_base, bl.histrec_l1, false);
+                l1_base_addr = static_cast<uint32_t>(ctx->buf_l1_rec_base->address());
             }
             std::vector<uint32_t> tmeta(tmeta_pad, 0);
             for (uint32_t t = 0; t < num_tiles; t++) {

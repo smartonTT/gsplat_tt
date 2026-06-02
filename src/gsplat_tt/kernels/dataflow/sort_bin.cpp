@@ -46,6 +46,35 @@ namespace {
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 
+// Bit-exact IEEE 754 fp32→fp16 (round-to-nearest-even, no flush-to-zero).
+// Used for packing the 32B L1 record (M0, GSPLAT_TT_L1_RECORD).
+inline uint16_t fp32_to_fp16(float x) {
+    uint32_t u;
+    __builtin_memcpy(&u, &x, 4);
+    const uint32_t sign  = (u >> 31) & 1u;
+    const uint32_t exp32 = (u >> 23) & 0xffu;
+    const uint32_t mant  = u & 0x7fffffu;
+    // NaN / Inf
+    if (exp32 == 0xff) {
+        return static_cast<uint16_t>((sign << 15) | 0x7c00u | (mant ? 0x200u : 0u));
+    }
+    int32_t e = static_cast<int32_t>(exp32) - 127 + 15;
+    if (e >= 31) {
+        return static_cast<uint16_t>((sign << 15) | 0x7c00u);  // overflow → inf
+    }
+    if (e <= 0) {
+        // Denormal or underflow: encode as denormal fp16 (or 0).
+        if (e < -10) return static_cast<uint16_t>(sign << 15);
+        const uint32_t m = (mant | 0x800000u) >> (1 - e + 13);
+        const uint32_t round = (mant | 0x800000u) >> (-e + 12) & 1u;
+        return static_cast<uint16_t>((sign << 15) | m + round);
+    }
+    // Normal.
+    const uint32_t m16 = mant >> 13;
+    const uint32_t round = (mant >> 12) & 1u;
+    return static_cast<uint16_t>((sign << 15) | (static_cast<uint32_t>(e) << 10) | m16 + round);
+}
+
 }  // namespace
 
 void kernel_main() {
@@ -77,6 +106,19 @@ void kernel_main() {
     const uint32_t tile_recs_addr= get_arg_val<uint32_t>(16);
     const uint32_t recbase_addr  = get_arg_val<uint32_t>(17);  // dense per-(core,tile) base
 #endif
+#ifdef L1_BUCKET_REC
+    // M0 (GSPLAT_TT_L1_RECORD): scatter 32B fp16-packed records into pre-sized
+    // per-tile buckets. buf_l1_recs is BUCKET_FIT*num_tiles slots × 32B each;
+    // buf_l1_rec_base provides per-(core,tile) start slot = t*BUCKET_FIT + prefix.
+    // Args follow BIN_EMIT_REC args (or after arg 14 if BIN_EMIT_REC is off).
+#ifdef BIN_EMIT_REC
+    const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(18);
+    const uint32_t l1_base_addr  = get_arg_val<uint32_t>(19);
+#else
+    const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(15);
+    const uint32_t l1_base_addr  = get_arg_val<uint32_t>(16);
+#endif
+#endif
 
     constexpr auto gids_args  = TensorAccessorArgs<0>();
     constexpr auto tids_args  = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -89,6 +131,15 @@ void kernel_main() {
     constexpr auto blendrec_args = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
     constexpr auto tile_recs_args= TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto recbase_args  = TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
+#ifdef L1_BUCKET_REC
+    constexpr auto l1_recs_args  = TensorAccessorArgs<recbase_args.next_compile_time_args_offset()>();
+    constexpr auto l1_base_args  = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
+#endif
+#else  // !BIN_EMIT_REC
+#ifdef L1_BUCKET_REC
+    constexpr auto l1_recs_args  = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
+    constexpr auto l1_base_args  = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
+#endif
 #endif
 
     const auto gids_acc  = TensorAccessor(gids_args,  gids_addr,  PAGE_BYTES);
@@ -103,6 +154,12 @@ void kernel_main() {
     const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
     const auto recbase_acc  = TensorAccessor(recbase_args,  recbase_addr,  PAGE_BYTES);
 #endif
+#ifdef L1_BUCKET_REC
+    // 32B L1 record accessors; page size = 32 (one record per slot).
+    constexpr uint32_t L1_REC_BYTES = 32u;
+    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_REC_BYTES);
+    const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
+#endif
 
     // CB layout (declared in sort_device.cpp binning program):
     //   0 gid_in (64B)  1 tid_in (64B)  2 keep_in (64B)  3 depth (64B)
@@ -116,6 +173,10 @@ void kernel_main() {
 #ifdef BIN_EMIT_REC
     constexpr uint32_t CB_REC = 9;     // 64B blendrec staging (read page g, +depth, write bucket)
     constexpr uint32_t CB_RECROW = 10; // dense per-(core,tile) record base row
+#endif
+#ifdef L1_BUCKET_REC
+    constexpr uint32_t CB_L1BASE   = 11; // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
+    constexpr uint32_t CB_L1SCRATCH = 12; // 32B staging buffer for pack → noc write
 #endif
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
@@ -174,6 +235,19 @@ void kernel_main() {
     }
     noc_async_read_barrier();
 #endif
+#ifdef L1_BUCKET_REC
+    // Load this core's L1 slot base row (per-tile slot index = t*BUCKET_FIT + prefix).
+    const uint32_t l1base_l1 = get_write_ptr(CB_L1BASE);
+    auto l1basep = reinterpret_cast<volatile uint32_t*>(l1base_l1);
+    for (uint32_t pp = 0; pp < row_pages; pp++) {
+        noc_async_read(get_noc_addr(base_page + pp, l1_base_acc),
+                       l1base_l1 + pp * PAGE_BYTES, PAGE_BYTES);
+    }
+    noc_async_read_barrier();
+    // The local slot cursor reuses curp[t]: it gets reset to 0 in the prefix loop
+    // below, then incremented in the scatter loop alongside the (key,id) write.
+    const uint32_t l1_scratch = get_write_ptr(CB_L1SCRATCH);
+#endif
 
     const uint32_t cur_l1 = get_write_ptr(CB_CUR);
     const uint32_t off_l1 = get_write_ptr(CB_OFF);
@@ -226,14 +300,61 @@ void kernel_main() {
     const uint32_t rec_l1_base = get_write_ptr(CB_REC);
     uint32_t brec_key[REC_BATCH];
     uint32_t brec_page[REC_BATCH];
+#ifdef L1_BUCKET_REC
+    uint32_t brec_l1_slot[REC_BATCH];  // abs slot index in buf_l1_recs for each batched entry
+#endif
     uint32_t nbrec = 0;
+    // L1 32B record staging (reuse a 32B aligned region immediately after rec_l1_base ring;
+    // we write it with a single noc_async_write per record during flush).
     auto flush_recs = [&]() {
         if (nbrec == 0) return;
         noc_async_read_barrier();
         for (uint32_t b = 0; b < nbrec; b++) {
             const uint32_t slot = rec_l1_base + b * PAGE_BYTES;
-            reinterpret_cast<volatile uint32_t*>(slot)[9] = brec_key[b];
+            volatile uint32_t* sp = reinterpret_cast<volatile uint32_t*>(slot);
+            sp[9] = brec_key[b];
             noc_async_write(slot, get_noc_addr(brec_page[b], tile_recs_acc), PAGE_BYTES);
+#ifdef L1_BUCKET_REC
+            // Pack 32B record from the 64B blendrec in L1 and write to buf_l1_recs.
+            // 64B layout (fp32 words):  0=cov_a 1=cov_b 2=cov_c 3=mx 4=my 5=op
+            //                           6=cr    7=cg    8=cb    9=depth_key(u32)
+            // 32B layout (M0 §7):
+            //   [0..1]  h16 cov_a,cov_b   [2..3]  h16 cov_c,mx
+            //   [4..5]  h16 my,opacity     [6..9]  u32 depth_key
+            //  [10..11] h16 r,g           [12..13] h16 b,pad
+            //  [14..15] u32 pad/flags(0)
+            // (words are 16-bit; we write as 8 × uint32 = 32B)
+            float fa = *reinterpret_cast<const volatile float*>(&sp[0]);
+            float fb = *reinterpret_cast<const volatile float*>(&sp[1]);
+            float fc = *reinterpret_cast<const volatile float*>(&sp[2]);
+            float mx = *reinterpret_cast<const volatile float*>(&sp[3]);
+            float my = *reinterpret_cast<const volatile float*>(&sp[4]);
+            float op = *reinterpret_cast<const volatile float*>(&sp[5]);
+            float cr = *reinterpret_cast<const volatile float*>(&sp[6]);
+            float cg = *reinterpret_cast<const volatile float*>(&sp[7]);
+            float cb_v = *reinterpret_cast<const volatile float*>(&sp[8]);
+            const uint32_t depth_key = brec_key[b];
+            // Pack 32B record into per-batch slot of l1_scratch (16 × 32B = 512B),
+            // then issue async write. Each batch entry has its own 32B region so
+            // they can all be in-flight simultaneously without aliasing.
+            volatile uint32_t* p32 =
+                reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
+            p32[0] = (static_cast<uint32_t>(fp32_to_fp16(fa))
+                   | (static_cast<uint32_t>(fp32_to_fp16(fb)) << 16));
+            p32[1] = (static_cast<uint32_t>(fp32_to_fp16(fc))
+                   | (static_cast<uint32_t>(fp32_to_fp16(mx)) << 16));
+            p32[2] = (static_cast<uint32_t>(fp32_to_fp16(my))
+                   | (static_cast<uint32_t>(fp32_to_fp16(op)) << 16));
+            p32[3] = depth_key;
+            p32[4] = (static_cast<uint32_t>(fp32_to_fp16(cr))
+                   | (static_cast<uint32_t>(fp32_to_fp16(cg)) << 16));
+            p32[5] = static_cast<uint32_t>(fp32_to_fp16(cb_v));
+            p32[6] = 0u;
+            p32[7] = 0u;
+            noc_async_write(l1_scratch + b * 32u,
+                            get_noc_addr(brec_l1_slot[b], l1_recs_acc),
+                            32u);
+#endif
         }
         noc_async_write_barrier();
         nbrec = 0;
@@ -285,7 +406,11 @@ void kernel_main() {
                 const uint32_t slot = rec_l1_base + nbrec * PAGE_BYTES;
                 noc_async_read(get_noc_addr(g, blendrec_acc), slot, PAGE_BYTES);
                 brec_key[nbrec] = key;
-                brec_page[nbrec] = recrowp[t] + curp[t];  // DENSE bucket page
+                brec_page[nbrec] = recrowp[t] + curp[t];  // DENSE 64B bucket page
+#ifdef L1_BUCKET_REC
+                // Absolute slot in buf_l1_recs = per-core base + local cursor.
+                brec_l1_slot[nbrec] = l1basep[t] + curp[t];
+#endif
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();
             }

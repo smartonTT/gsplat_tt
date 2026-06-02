@@ -106,6 +106,15 @@ inline bool blend_skip_zero_out_enabled() {
     return resident_blend_enabled();
 }
 
+// M0 (host-free-l1-render-plan §12): 32B per-entry record + pre-sized per-tile
+// buckets (BUCKET_FIT slots × num_tiles). Phase-1 scatters fp16 records into
+// the bucket; phase-2 reads them back into the existing in-L1 sort+blend.
+// Default OFF. Set =1 to enable the architectural crossing proof.
+// Quality gate must hold: hero_vs_ref ≥ 63.6 dB.
+inline bool l1_record_enabled() {
+    return flag_is_one("GSPLAT_TT_L1_RECORD");
+}
+
 // One-shot JIT compile of all ideal-path device programs at scene open.
 inline bool jit_warmup_enabled() {
     if (flag_is_zero("GSPLAT_TT_JIT_WARMUP")) {

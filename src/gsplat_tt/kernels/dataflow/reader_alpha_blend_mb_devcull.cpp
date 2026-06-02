@@ -388,6 +388,9 @@ void kernel_main() {
 #ifdef MB_TILE_BUCKET
     const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(20);  // resident sort_tile_recs (dense)
     const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
+#ifdef MB_L1_RECORD
+    const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(22);  // M0: pre-sized 32B record bucket
+#endif
 #endif
 #endif
 #endif
@@ -413,6 +416,9 @@ void kernel_main() {
 #ifdef MB_TILE_BUCKET
     constexpr auto tile_recs_args  = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
+#ifdef MB_L1_RECORD
+    constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
+#endif
 #endif
 #endif
 #endif
@@ -437,6 +443,34 @@ void kernel_main() {
     // SoA accessors stay bound (ABI parity) but are unused on this path.
     (void)a_acc; (void)b_acc; (void)c_acc; (void)px_acc; (void)py_acc;
     (void)op_acc; (void)col_acc;
+#ifdef MB_TILE_BUCKET
+#ifdef MB_L1_RECORD
+    // M0: 32B fp16-packed record bucket (pre-sized, BUCKET_FIT slots per tile).
+    constexpr uint32_t L1_REC_BYTES = 32u;
+    const auto l1_recs_acc = TensorAccessor(l1_recs_args, l1_recs_addr, L1_REC_BYTES);
+    // fp16 → fp32 unpack helper.
+    auto fp16_to_f32 = [](uint32_t h) -> float {
+        const uint32_t sign  = (h >> 15) & 1u;
+        const uint32_t exp   = (h >> 10) & 0x1fu;
+        const uint32_t mant  = h & 0x3ffu;
+        uint32_t u;
+        if (exp == 0) {
+            if (mant == 0) { u = sign << 31; }
+            else {
+                uint32_t e = 127 - 14;
+                uint32_t m = mant;
+                while (!(m & 0x400u)) { m <<= 1; e--; }
+                u = (sign << 31) | (e << 23) | ((m & 0x3ffu) << 13);
+            }
+        } else if (exp == 31u) {
+            u = (sign << 31) | 0x7f800000u | (mant << 13);
+        } else {
+            u = (sign << 31) | ((exp + 112u) << 23) | (mant << 13);
+        }
+        float f; __builtin_memcpy(&f, &u, 4); return f;
+    };
+#endif
+#endif
 #endif
     // Host-free LPT: read this core's (start,count) from resident sort_lpt_meta.
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
@@ -635,7 +669,21 @@ void kernel_main() {
                 while (i < L) {
                     const uint32_t end = (i + 64u < L) ? i + 64u : L;
                     for (uint32_t q = i; q < end; ++q) {
+#ifdef MB_L1_RECORD
+                        // M0: load 32B record from pre-sized per-tile bucket.
+                        // Tile t occupies slots [t*BUCKET_FIT, (t+1)*BUCKET_FIT).
+                        // Absolute slot = tile_id * MB_BUCKET_FIT + (rec_start + q).
+                        // But rec_start is the DENSE 64B start; for 32B records the
+                        // offsets are different. Use tile_id * MB_BUCKET_FIT + q
+                        // since we load exactly L=Lb records starting at slot 0 of
+                        // the core-prefix-aware per-core sections — except actually
+                        // rec_start is the tile's 64B dense start index (not the 32B
+                        // slot start). For M0, the 32B tile start = tile_id * BUCKET_FIT.
+                        noc_async_read_tile(tile_id * MB_BUCKET_FIT + q, l1_recs_acc,
+                                            buck + q * L1_REC_BYTES);
+#else
                         noc_async_read_tile(rec_start + q, tile_recs_acc, buck + q * SOA_PAGE_BYTES);
+#endif
                     }
                     noc_async_read_barrier();
                     i = end;
@@ -661,7 +709,12 @@ void kernel_main() {
             uint32_t* idxB = idxA + MB_BUCKET_FIT;
             uint32_t* cnt  = idxB + MB_BUCKET_FIT;
             auto key_of = [&](uint32_t idx) -> uint32_t {
+#ifdef MB_L1_RECORD
+                // 32B record: depth key is at word 3 (bytes 12-15).
+                return reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES)[3];
+#else
                 return reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES)[9];
+#endif
             };
             uint32_t* sorted;
 #ifdef MB_BUCKET_DBG_NOSORT
@@ -739,12 +792,40 @@ void kernel_main() {
 #endif
             for (uint32_t k = 0; k < L; ++k) {
                 const uint32_t idx = sorted[k];
+#ifdef MB_L1_RECORD
+                // M0: unpack the 32B fp16 record.
+                // 32B layout (8 × uint32):
+                //   [0]: lo16=cov_a h16, hi16=cov_b h16
+                //   [1]: lo16=cov_c h16, hi16=mx h16
+                //   [2]: lo16=my h16,    hi16=opacity h16
+                //   [3]: u32 depth_key
+                //   [4]: lo16=r h16,     hi16=g h16
+                //   [5]: lo16=b h16,     hi16=0
+                //   [6..7]: pad
+                auto recp32 = reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES);
+                const uint32_t w0 = recp32[0], w1 = recp32[1], w2 = recp32[2];
+                const uint32_t w4 = recp32[4], w5 = recp32[5];
+                float cov_a_f = fp16_to_f32(w0 & 0xffffu);
+                float cov_b_f = fp16_to_f32(w0 >> 16);
+                float cov_c_f = fp16_to_f32(w1 & 0xffffu);
+                float mx_f    = fp16_to_f32(w1 >> 16);
+                float my_f    = fp16_to_f32(w2 & 0xffffu);
+                float op_f    = fp16_to_f32(w2 >> 16);
+                float cr_f    = fp16_to_f32(w4 & 0xffffu);
+                float cg_f    = fp16_to_f32(w4 >> 16);
+                float cb_f    = fp16_to_f32(w5 & 0xffffu);
+                uint32_t cov_a_bits = f_to_bits(cov_a_f);
+                uint32_t cov_b_bits = f_to_bits(cov_b_f);
+                uint32_t cov_c_bits = f_to_bits(cov_c_f);
+                const float mean_x  = mx_f;
+                const float mean_y  = my_f;
+                uint32_t op_bits    = f_to_bits(op_f);
+                uint32_t cr = f_to_bits(cr_f);
+                uint32_t cg = f_to_bits(cg_f);
+                uint32_t cb = f_to_bits(cb_f);
+#else
                 auto recp = reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES);
 #if defined(MB_BUCKET_EMIT_SPIN)
-                // Diagnostic: per-record busy-wait in the bucket emit loop. If this
-                // recovers the gate with mask=recp[10], the Lb>64 bug is a timing/
-                // settle race the fast L1 emit exposes (the slow debug/inline paths
-                // mask it incidentally).
                 for (volatile int _es = 0; _es < (MB_BUCKET_EMIT_SPIN); ++_es) { }
 #endif
                 const uint32_t cov_a_bits = recp[0];
@@ -756,6 +837,7 @@ void kernel_main() {
                 const uint32_t cr = recp[6];
                 const uint32_t cg = recp[7];
                 const uint32_t cb = recp[8];
+#endif
 #if defined(MB_BUCKET_MASK)
                 // ROUTE C: keep mask baked into record word 10 by the sort-stage
                 // SFPU cull. Pure L1 load — spin-free, no random gather, no
