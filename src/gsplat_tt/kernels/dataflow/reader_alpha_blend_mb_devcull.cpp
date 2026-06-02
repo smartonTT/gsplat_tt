@@ -40,7 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG)
+#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG) || defined(MB_L1_REC_DUMP)
 #include "api/debug/dprint.h"
 #endif
 
@@ -445,8 +445,10 @@ void kernel_main() {
     (void)op_acc; (void)col_acc;
 #ifdef MB_TILE_BUCKET
 #ifdef MB_L1_RECORD
-    // M0: 32B fp16-packed record bucket (pre-sized, BUCKET_FIT slots per tile).
-    constexpr uint32_t L1_REC_BYTES = 32u;
+    // M0: 32B fp16-packed record in the LOW 32B of a 64B page (sub-64B DRAM
+    // paging is unreliable here — see sort_device l1_rec_bytes). One record per
+    // 64B page/bucket slot; only words [0..7] hold data.
+    constexpr uint32_t L1_REC_BYTES = 64u;
     const auto l1_recs_acc = TensorAccessor(l1_recs_args, l1_recs_addr, L1_REC_BYTES);
     // fp16 → fp32 unpack helper.
     auto fp16_to_f32 = [](uint32_t h) -> float {
@@ -793,36 +795,54 @@ void kernel_main() {
             for (uint32_t k = 0; k < L; ++k) {
                 const uint32_t idx = sorted[k];
 #ifdef MB_L1_RECORD
-                // M0: unpack the 32B fp16 record.
+                // M0: unpack the 32B record (low 32B of a 64B page). Covariance is
+                // kept as FULL fp32 — it is the precision-critical field (the blend
+                // recomputes the conic via det = a*c - b*b, which suffers fp16
+                // cancellation when a,c are large, ~10000s px^2). Mean is TILE-LOCAL
+                // fp16 (small magnitude => sub-0.1px ULP); opacity/color fp16.
                 // 32B layout (8 × uint32):
-                //   [0]: lo16=cov_a h16, hi16=cov_b h16
-                //   [1]: lo16=cov_c h16, hi16=mx h16
-                //   [2]: lo16=my h16,    hi16=opacity h16
+                // Covariance (a,b,c) and tile-local mean are fp32 — precision-
+                // critical (det = a*c-b*b cancellation; sub-px center). Opacity and
+                // color are in [0,1] (sigmoid-activated), so they use UNORM16
+                // (uniform ~1.5e-5 step) instead of fp16 (~5e-4 rel at 0.5) — ~30x
+                // tighter in the same 2 bytes, which is the op/color precision wall.
+                //   [0]: fp32 cov_a  [1]: fp32 cov_b  [2]: fp32 cov_c
                 //   [3]: u32 depth_key
-                //   [4]: lo16=r h16,     hi16=g h16
-                //   [5]: lo16=b h16,     hi16=0
-                //   [6..7]: pad
+                //   [4]: fp32 mx_local  [5]: fp32 my_local
+                //   [6]: lo16=unorm opacity, hi16=unorm r
+                //   [7]: lo16=unorm g,       hi16=unorm b
                 auto recp32 = reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES);
-                const uint32_t w0 = recp32[0], w1 = recp32[1], w2 = recp32[2];
-                const uint32_t w4 = recp32[4], w5 = recp32[5];
-                float cov_a_f = fp16_to_f32(w0 & 0xffffu);
-                float cov_b_f = fp16_to_f32(w0 >> 16);
-                float cov_c_f = fp16_to_f32(w1 & 0xffffu);
-                float mx_f    = fp16_to_f32(w1 >> 16);
-                float my_f    = fp16_to_f32(w2 & 0xffffu);
-                float op_f    = fp16_to_f32(w2 >> 16);
-                float cr_f    = fp16_to_f32(w4 & 0xffffu);
-                float cg_f    = fp16_to_f32(w4 >> 16);
-                float cb_f    = fp16_to_f32(w5 & 0xffffu);
-                uint32_t cov_a_bits = f_to_bits(cov_a_f);
-                uint32_t cov_b_bits = f_to_bits(cov_b_f);
-                uint32_t cov_c_bits = f_to_bits(cov_c_f);
-                const float mean_x  = mx_f;
-                const float mean_y  = my_f;
-                uint32_t op_bits    = f_to_bits(op_f);
-                uint32_t cr = f_to_bits(cr_f);
-                uint32_t cg = f_to_bits(cg_f);
-                uint32_t cb = f_to_bits(cb_f);
+                const uint32_t cov_a_bits = recp32[0];
+                const uint32_t cov_b_bits = recp32[1];
+                const uint32_t cov_c_bits = recp32[2];
+                const float mx_f = bits_to_f(recp32[4]);
+                const float my_f = bits_to_f(recp32[5]);
+                const uint32_t w6 = recp32[6], w7 = recp32[7];
+                constexpr float kUnormInv = 1.0f / 65535.0f;
+                const float op_f = static_cast<float>(w6 & 0xffffu) * kUnormInv;
+                const float cr_f = static_cast<float>(w6 >> 16)     * kUnormInv;
+                const float cg_f = static_cast<float>(w7 & 0xffffu) * kUnormInv;
+                const float cb_f = static_cast<float>(w7 >> 16)     * kUnormInv;
+                const uint32_t op_bits = f_to_bits(op_f);
+                // Reconstruct the absolute mean so the inline-mask path and the
+                // emitted row's mxl = (mean - tx_tile) both work unchanged.
+                const float mean_x  = mx_f + tx_tile;
+                const float mean_y  = my_f + ty_tile;
+                const uint32_t cr = f_to_bits(cr_f);
+                const uint32_t cg = f_to_bits(cg_f);
+                const uint32_t cb = f_to_bits(cb_f);
+#if defined(MB_L1_REC_DUMP)
+                static uint32_t _dmp32 = 0;
+                if (L >= 200u && L <= 8000u && k < 3u && _dmp32 < 12u) {
+                    if (k == 0u) _dmp32++;
+                    DPRINT << "L1REC t=" << tile_id << " k=" << k
+                           << " ca=" << F32(bits_to_f(cov_a_bits)) << " cb=" << F32(bits_to_f(cov_b_bits))
+                           << " cc=" << F32(bits_to_f(cov_c_bits)) << " mxl=" << F32(mx_f)
+                           << " myl=" << F32(my_f) << " op=" << F32(op_f)
+                           << " r=" << F32(cr_f) << " g=" << F32(cg_f)
+                           << " b=" << F32(cb_f) << " dk=" << recp32[3] << ENDL();
+                }
+#endif
 #else
                 auto recp = reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES);
 #if defined(MB_BUCKET_EMIT_SPIN)
@@ -837,6 +857,18 @@ void kernel_main() {
                 const uint32_t cr = recp[6];
                 const uint32_t cg = recp[7];
                 const uint32_t cb = recp[8];
+#if defined(MB_L1_REC_DUMP)
+                static uint32_t _dmp64 = 0;
+                if (L >= 200u && L <= 8000u && k < 3u && _dmp64 < 12u) {
+                    if (k == 0u) _dmp64++;
+                    DPRINT << "REF64 t=" << tile_id << " k=" << k
+                           << " ca=" << F32(bits_to_f(recp[0])) << " cb=" << F32(bits_to_f(recp[1]))
+                           << " cc=" << F32(bits_to_f(recp[2])) << " mx=" << F32(mean_x)
+                           << " my=" << F32(mean_y) << " op=" << F32(bits_to_f(recp[5]))
+                           << " r=" << F32(bits_to_f(recp[6])) << " g=" << F32(bits_to_f(recp[7]))
+                           << " b=" << F32(bits_to_f(recp[8])) << " dk=" << recp[9] << ENDL();
+                }
+#endif
 #endif
 #if defined(MB_BUCKET_MASK)
                 // ROUTE C: keep mask baked into record word 10 by the sort-stage

@@ -322,7 +322,7 @@ static void build_program_bin(SortDeviceContext& ctx) {
     cb(8, BIN_LOCAL_BYTES);   // isort (L1 counting-sort ids)
 
     const bool tile_bucket = tile_bucket_enabled();
-    const bool l1_record = l1_record_enabled();
+    const bool l1_record = gsplat_tt::env_config::l1_record_enabled();
     if (tile_bucket) {
         cb(9, 16u * PAGE_BYTES);  // rec staging ring (REC_BATCH=16 blendrec pages)
         cb(10, BIN_ROW_BYTES);    // recrow (per-(core,tile) DENSE record base)
@@ -1156,17 +1156,23 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }
 
         // M0: l1_record buffers.
-        const bool l1_record_early = l1_record_enabled();
+        const bool l1_record_early = gsplat_tt::env_config::l1_record_enabled();
         uint32_t bucket_fit = 8192u;
         if (const char* f = std::getenv("GSPLAT_TT_BUCKET_FIT"); f && f[0] != '\0')
             bucket_fit = static_cast<uint32_t>(std::atoi(f));
         uint32_t l1_recs_addr = 0u;
         uint32_t l1_base_addr = 0u;
         if (l1_record_early) {
+            // M0: the 32B fp16 record lives in the LOW 32B of a 64B DRAM page.
+            // Sub-64B DRAM paging is unreliable on this device (a 32B-paged
+            // interleaved buffer read back as garbage: depth key 0, fields zero),
+            // so we mirror the proven 64B tile_recs machinery — one record per
+            // 64B page (upper 32B unused). DRAM footprint doubles vs ideal-packed
+            // 32B; acceptable for the M0 foundation (perf comes in later milestones).
             const std::size_t l1_rec_bytes =
-                static_cast<std::size_t>(num_tiles) * bucket_fit * 32u;
+                static_cast<std::size_t>(num_tiles) * bucket_fit * 64u;
             if (!ctx->buf_l1_recs || ctx->cap_l1_recs_bytes < l1_rec_bytes) {
-                ctx->buf_l1_recs = make_dram(ctx->mesh_device.get(), l1_rec_bytes);
+                ctx->buf_l1_recs = make_dram_paged(ctx->mesh_device.get(), l1_rec_bytes, 64u);
                 ctx->cap_l1_recs_bytes = l1_rec_bytes;
                 device_state::register_buffer("sort_l1_recs", ctx->buf_l1_recs);
             }
@@ -1209,6 +1215,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 if (l1_record_early) {
                     args.push_back(l1_recs_addr);
                     args.push_back(l1_base_addr);
+                    args.push_back(bucket_fit);  // per-tile bucket slot count (clamp)
+                    args.push_back(static_cast<uint32_t>(tiles_x));  // tile-local mean
                 }
                 SetRuntimeArgs(prog, ctx->kbin, core, args);
             }

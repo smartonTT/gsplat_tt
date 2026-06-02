@@ -114,10 +114,15 @@ void kernel_main() {
 #ifdef BIN_EMIT_REC
     const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(18);
     const uint32_t l1_base_addr  = get_arg_val<uint32_t>(19);
+    const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(20);  // per-tile bucket slot count
+    const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(21);  // tiles per row (tile-local mean)
 #else
     const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(15);
     const uint32_t l1_base_addr  = get_arg_val<uint32_t>(16);
+    const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(17);  // per-tile bucket slot count
+    const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(18);  // tiles per row (tile-local mean)
 #endif
+    constexpr uint32_t L1_TILE_SIZE = 32u;  // microblock tile = 32x32 px
 #endif
 
     constexpr auto gids_args  = TensorAccessorArgs<0>();
@@ -155,9 +160,12 @@ void kernel_main() {
     const auto recbase_acc  = TensorAccessor(recbase_args,  recbase_addr,  PAGE_BYTES);
 #endif
 #ifdef L1_BUCKET_REC
-    // 32B L1 record accessors; page size = 32 (one record per slot).
-    constexpr uint32_t L1_REC_BYTES = 32u;
-    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_REC_BYTES);
+    // M0: 32B fp16 record packed into the LOW 32B of a 64B DRAM page (sub-64B
+    // paging is unreliable here — see sort_device l1_rec_bytes). Accessor page =
+    // 64B (one record per page); only 32B are written/read.
+    constexpr uint32_t L1_REC_PAGE = 64u;
+    constexpr uint32_t L1_REC_DATA = 32u;
+    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_REC_PAGE);
     const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
 #endif
 
@@ -302,6 +310,7 @@ void kernel_main() {
     uint32_t brec_page[REC_BATCH];
 #ifdef L1_BUCKET_REC
     uint32_t brec_l1_slot[REC_BATCH];  // abs slot index in buf_l1_recs for each batched entry
+    uint32_t brec_tile[REC_BATCH];     // tile id for each batched entry (tile-local mean)
 #endif
     uint32_t nbrec = 0;
     // L1 32B record staging (reuse a 32B aligned region immediately after rec_l1_base ring;
@@ -315,45 +324,61 @@ void kernel_main() {
             sp[9] = brec_key[b];
             noc_async_write(slot, get_noc_addr(brec_page[b], tile_recs_acc), PAGE_BYTES);
 #ifdef L1_BUCKET_REC
-            // Pack 32B record from the 64B blendrec in L1 and write to buf_l1_recs.
-            // 64B layout (fp32 words):  0=cov_a 1=cov_b 2=cov_c 3=mx 4=my 5=op
-            //                           6=cr    7=cg    8=cb    9=depth_key(u32)
-            // 32B layout (M0 §7):
-            //   [0..1]  h16 cov_a,cov_b   [2..3]  h16 cov_c,mx
-            //   [4..5]  h16 my,opacity     [6..9]  u32 depth_key
-            //  [10..11] h16 r,g           [12..13] h16 b,pad
-            //  [14..15] u32 pad/flags(0)
-            // (words are 16-bit; we write as 8 × uint32 = 32B)
-            float fa = *reinterpret_cast<const volatile float*>(&sp[0]);
-            float fb = *reinterpret_cast<const volatile float*>(&sp[1]);
-            float fc = *reinterpret_cast<const volatile float*>(&sp[2]);
+          // Skip the 32B scatter for overflow records (heavy tile past its bucket).
+          if (brec_l1_slot[b] != 0xFFFFFFFFu) {
+            // Pack the 32B record from the 64B blendrec in L1 and write to
+            // buf_l1_recs (low 32B of a 64B page). Covariance stays FULL fp32 —
+            // it is precision-critical (the blend recomputes the conic via
+            // det = a*c - b*b, which loses too much to fp16 when a,c are large,
+            // ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL fp16 (small => sub-
+            // 0.1px ULP); opacity/color fp16.
+            // 64B blendrec (fp32 words): 0=cov_a 1=cov_b 2=cov_c 3=mx 4=my 5=op
+            //                            6=cr    7=cg    8=cb    9=depth_key(u32)
+            // 32B layout (M0): cov (a,b,c) + tile-local mean fp32 (precision-
+            // critical); opacity/color are [0,1] => UNORM16 (~30x tighter than fp16
+            // in the same bytes; this is the op/color precision wall).
+            //   [0]=fp32 cov_a [1]=fp32 cov_b [2]=fp32 cov_c [3]=u32 depth_key
+            //   [4]=fp32 mx_local [5]=fp32 my_local
+            //   [6]=unorm16 opacity,r   [7]=unorm16 g,b
             float mx = *reinterpret_cast<const volatile float*>(&sp[3]);
             float my = *reinterpret_cast<const volatile float*>(&sp[4]);
+            // Tile-local mean: the blend reader reconstructs absolute via
+            // mean = local + tile_origin.
+            {
+                const uint32_t tt = brec_tile[b];
+                mx -= static_cast<float>((tt % l1_tiles_x) * L1_TILE_SIZE);
+                my -= static_cast<float>((tt / l1_tiles_x) * L1_TILE_SIZE);
+            }
             float op = *reinterpret_cast<const volatile float*>(&sp[5]);
             float cr = *reinterpret_cast<const volatile float*>(&sp[6]);
             float cg = *reinterpret_cast<const volatile float*>(&sp[7]);
             float cb_v = *reinterpret_cast<const volatile float*>(&sp[8]);
             const uint32_t depth_key = brec_key[b];
-            // Pack 32B record into per-batch slot of l1_scratch (16 × 32B = 512B),
-            // then issue async write. Each batch entry has its own 32B region so
-            // they can all be in-flight simultaneously without aliasing.
+            // Pack into per-batch slot of l1_scratch (16 × 32B = 512B), then issue
+            // async write. Each batch entry has its own 32B region so they can all
+            // be in-flight simultaneously without aliasing.
             volatile uint32_t* p32 =
                 reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
-            p32[0] = (static_cast<uint32_t>(fp32_to_fp16(fa))
-                   | (static_cast<uint32_t>(fp32_to_fp16(fb)) << 16));
-            p32[1] = (static_cast<uint32_t>(fp32_to_fp16(fc))
-                   | (static_cast<uint32_t>(fp32_to_fp16(mx)) << 16));
-            p32[2] = (static_cast<uint32_t>(fp32_to_fp16(my))
-                   | (static_cast<uint32_t>(fp32_to_fp16(op)) << 16));
+            uint32_t mx_bits, my_bits;
+            __builtin_memcpy(&mx_bits, &mx, 4);
+            __builtin_memcpy(&my_bits, &my, 4);
+            auto to_unorm = [](float v) -> uint32_t {
+                if (v <= 0.0f) return 0u;
+                if (v >= 1.0f) return 65535u;
+                return static_cast<uint32_t>(v * 65535.0f + 0.5f);
+            };
+            p32[0] = sp[0];  // fp32 cov_a (exact: no fp16 det cancellation)
+            p32[1] = sp[1];  // fp32 cov_b
+            p32[2] = sp[2];  // fp32 cov_c
             p32[3] = depth_key;
-            p32[4] = (static_cast<uint32_t>(fp32_to_fp16(cr))
-                   | (static_cast<uint32_t>(fp32_to_fp16(cg)) << 16));
-            p32[5] = static_cast<uint32_t>(fp32_to_fp16(cb_v));
-            p32[6] = 0u;
-            p32[7] = 0u;
+            p32[4] = mx_bits;  // fp32 tile-local mean x (sub-px center precision)
+            p32[5] = my_bits;  // fp32 tile-local mean y
+            p32[6] = (to_unorm(op) | (to_unorm(cr) << 16));
+            p32[7] = (to_unorm(cg) | (to_unorm(cb_v) << 16));
             noc_async_write(l1_scratch + b * 32u,
                             get_noc_addr(brec_l1_slot[b], l1_recs_acc),
                             32u);
+          }
 #endif
         }
         noc_async_write_barrier();
@@ -409,7 +434,20 @@ void kernel_main() {
                 brec_page[nbrec] = recrowp[t] + curp[t];  // DENSE 64B bucket page
 #ifdef L1_BUCKET_REC
                 // Absolute slot in buf_l1_recs = per-core base + local cursor.
-                brec_l1_slot[nbrec] = l1basep[t] + curp[t];
+                // Clamp to this tile's pre-sized bucket [t*FIT, (t+1)*FIT): tiles
+                // whose count exceeds FIT (e.g. max_tile_n > BUCKET_FIT) would
+                // otherwise scatter past their bucket — corrupting neighbor tiles'
+                // buckets and (for the last tiles) writing past buf_l1_recs into
+                // adjacent DRAM. The blend reader serves such heavy tiles from the
+                // dense gather fallback (Lb > MB_BUCKET_FIT), never from this bucket,
+                // so dropping the overflow records here is correct. Sentinel
+                // 0xFFFFFFFF marks "skip the 32B scatter" for this batched entry.
+                {
+                    const uint32_t l1_slot = l1basep[t] + curp[t];
+                    brec_l1_slot[nbrec] =
+                        (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot : 0xFFFFFFFFu;
+                }
+                brec_tile[nbrec] = t;  // tile-local mean reconstruction in flush
 #endif
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();

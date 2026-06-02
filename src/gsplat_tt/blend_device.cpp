@@ -953,7 +953,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
                 if (v >= 16u) fit = v;
             }
             constexpr uint32_t CB_BMASK = 11;
-            const uint32_t rec_bytes = l1_record_enabled() ? 32u : 64u;  // M0: 32B records
+            // M0: the 32B fp16 record sits in the low 32B of a 64B bucket slot
+            // (sub-64B DRAM paging is unreliable — see sort_device l1_rec_bytes),
+            // so CB_BUCKET uses 64B slots for both the 64B and 32B-record paths.
+            const uint32_t rec_bytes = 64u;
             cb_cfg(CB_BUCKET, rec_bytes, fit, DataFormat::Float32);        // fit x rec_bytes records
             cb_cfg(CB_BSORT, 4, 2u * fit + 256u, DataFormat::UInt32);     // idxA+idxB+counts
             cb_cfg(CB_BMASK, 64, (fit + 15u) / 16u + 1u, DataFormat::UInt32);  // whole-tile masks
@@ -968,7 +971,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // xramp, yramp, tile_ids, lpt_meta, payload). No SoA gather, no cull_masks.
     // +1 accessor (proj_m_blendrec, index 15) under S1 AoS.
     // M0: +1 accessor for l1_recs when l1_record is enabled (MB_L1_RECORD).
-    const bool l1_record_blend = l1_record_enabled();
+    const bool l1_record_blend = gsplat_tt::env_config::l1_record_enabled();
     const int num_reader_accessors =
         payload ? 6
                 : (resident_reader ? (sfpu_cull ? (blend_aos ? (tile_bucket ? (l1_record_blend ? 19 : 18) : 16) : 15) : 13)
@@ -1106,8 +1109,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             }
             // M0: 32B per-entry L1 record (GSPLAT_TT_L1_RECORD). Reads 32B fp16-packed
             // records from buf_l1_recs instead of 64B records from sort_tile_recs.
-            if (l1_record_enabled()) {
+            if (gsplat_tt::env_config::l1_record_enabled()) {
                 reader_defines["MB_L1_RECORD"] = "1";
+            }
+            if (env_on("GSPLAT_TT_L1_REC_DUMP")) {
+                reader_defines["MB_L1_REC_DUMP"] = "1";
             }
         }
     }
@@ -1811,7 +1817,7 @@ static double process_frame_mb_devcull_resident(
                                 if (tile_bucket) {
                                     reader_args.push_back(tile_recs_addr);    // arg 20
                                     reader_args.push_back(bucket_meta_addr);  // arg 21
-                                    if (l1_record_blend) {
+                                    if (gsplat_tt::env_config::l1_record_enabled()) {
                                         auto buf_l1r = ds::get_buffer("sort_l1_recs");
                                         if (!buf_l1r) {
                                             std::cerr << "[gsplat_tt::blend] MB_L1_RECORD=1 but "

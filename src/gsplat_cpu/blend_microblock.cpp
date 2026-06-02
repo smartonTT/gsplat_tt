@@ -4,7 +4,9 @@
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #if GSPLAT_HAS_NEON
@@ -22,6 +24,24 @@ namespace gsplat_cpu {
 namespace {
 
 constexpr int kNumMicroblocks = 32;
+
+// M0 L1_RECORD debug: one-shot reporting of out-of-range stream/pack indices in
+// the from-packs blend (diagnoses whether the device readback that builds the
+// host payload is corrupt). Capped so a flood of bad tiles doesn't spam.
+static std::atomic<int> g_l1rec_oob_reported{0};
+static inline bool l1rec_oob(const char* where, int tile_id, int m,
+                             int64_t off, int64_t cnt, int64_t idx,
+                             int64_t local_g, std::size_t stream_len,
+                             std::size_t num_entries) {
+    if (g_l1rec_oob_reported.fetch_add(1) < 16) {
+        std::fprintf(stderr,
+            "[L1REC_OOB] %s tile=%d mb=%d off=%lld cnt=%lld idx=%lld "
+            "stream_len=%zu local_g=%lld num_entries=%zu\n",
+            where, tile_id, m, (long long)off, (long long)cnt, (long long)idx,
+            stream_len, (long long)local_g, num_entries);
+    }
+    return true;
+}
 
 #if GSPLAT_HAS_NEON
 // SIMD inner loop for the canonical 4x8 microblock (mb_h=4, mb_w=8).
@@ -271,7 +291,9 @@ void blend_microblock_tile(
     const float* cov_inv_a,
     const float* cov_inv_b,
     const float* cov_inv_c,
-    float* image_out) {
+    float* image_out,
+    const std::size_t M,
+    const std::size_t stream_len) {
     const int ty = tile_id / tiles_x;
     const int tx = tile_id % tiles_x;
     const int py_tile = ty * tile_size;
@@ -350,7 +372,15 @@ void blend_microblock_tile(
             init_mb_accum_avx(a);
 
             for (int64_t idx = off; idx < off + cnt; ++idx) {
+                if (idx < 0 || static_cast<std::size_t>(idx) >= stream_len) {
+                    l1rec_oob("mbidx", tile_id, m, off, cnt, idx, -1, stream_len, M);
+                    break;
+                }
                 const int64_t g = mb_stream[static_cast<std::size_t>(idx)];
+                if (g < 0 || static_cast<std::size_t>(g) >= M) {
+                    l1rec_oob("mbg", tile_id, m, off, cnt, idx, g, stream_len, M);
+                    continue;
+                }
                 const float ci_a = cov_inv_a[static_cast<std::size_t>(g)];
                 const float ci_b = cov_inv_b[static_cast<std::size_t>(g)];
                 const float ci_c = cov_inv_c[static_cast<std::size_t>(g)];
@@ -396,7 +426,15 @@ void blend_microblock_tile(
         }
 
         for (int64_t idx = off; idx < off + cnt; ++idx) {
+            if (idx < 0 || static_cast<std::size_t>(idx) >= stream_len) {
+                l1rec_oob("mbidx-sc", tile_id, m, off, cnt, idx, -1, stream_len, M);
+                break;
+            }
             const int64_t g = mb_stream[static_cast<std::size_t>(idx)];
+            if (g < 0 || static_cast<std::size_t>(g) >= M) {
+                l1rec_oob("mbg-sc", tile_id, m, off, cnt, idx, g, stream_len, M);
+                continue;
+            }
             const float ci_a = cov_inv_a[static_cast<std::size_t>(g)];
             const float ci_b = cov_inv_b[static_cast<std::size_t>(g)];
             const float ci_c = cov_inv_c[static_cast<std::size_t>(g)];
@@ -459,7 +497,9 @@ void blend_microblock_from_packs_tile(
     const float* attribute_packs,
     const int64_t* mb_header,
     const int64_t* mb_stream_local,
-    float* image_out) {
+    float* image_out,
+    const std::size_t num_entries,
+    const std::size_t stream_len) {
     const int ty = tile_id / tiles_x;
     const int tx = tile_id % tiles_x;
     const int py_tile = ty * tile_size;
@@ -530,7 +570,15 @@ void blend_microblock_from_packs_tile(
             init_mb_accum_avx(a);
 
             for (int64_t idx = off; idx < off + cnt; ++idx) {
+                if (idx < 0 || static_cast<std::size_t>(idx) >= stream_len) {
+                    l1rec_oob("idx", tile_id, m, off, cnt, idx, -1, stream_len, num_entries);
+                    break;
+                }
                 const int64_t local_g = mb_stream_local[static_cast<std::size_t>(idx)];
+                if (local_g < 0 || static_cast<std::size_t>(local_g) >= num_entries) {
+                    l1rec_oob("local_g", tile_id, m, off, cnt, idx, local_g, stream_len, num_entries);
+                    continue;
+                }
                 const float* p = attribute_packs + static_cast<std::size_t>(local_g) * 9;
                 const float mx = p[0] + static_cast<float>(px_tile);
                 const float my = p[1] + static_cast<float>(py_tile);
@@ -568,7 +616,15 @@ void blend_microblock_from_packs_tile(
         }
 
         for (int64_t idx = off; idx < off + cnt; ++idx) {
+            if (idx < 0 || static_cast<std::size_t>(idx) >= stream_len) {
+                l1rec_oob("idx-sc", tile_id, m, off, cnt, idx, -1, stream_len, num_entries);
+                break;
+            }
             const int64_t local_g = mb_stream_local[static_cast<std::size_t>(idx)];
+            if (local_g < 0 || static_cast<std::size_t>(local_g) >= num_entries) {
+                l1rec_oob("local_g-sc", tile_id, m, off, cnt, idx, local_g, stream_len, num_entries);
+                continue;
+            }
             const float* p = attribute_packs + static_cast<std::size_t>(local_g) * 9;
             const float mx = p[0] + static_cast<float>(px_tile);
             const float my = p[1] + static_cast<float>(py_tile);
@@ -638,11 +694,16 @@ BlendResult blend_microblock(
     const int image_width,
     const int tile_size,
     ThreadPool& pool) {
-    (void)L_prime;
 
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
     const int num_tiles = tiles_x * tiles_y;
+
+    if (g_l1rec_oob_reported.load() == 0) {
+        std::fprintf(stderr,
+            "[L1REC_DBG] blend_microblock M=%zu L_prime=%zu HxW=%dx%d tiles=%d\n",
+            M, L_prime, image_height, image_width, num_tiles);
+    }
 
     BlendResult result;
     result.image.resize(static_cast<std::size_t>(image_height) *
@@ -667,7 +728,7 @@ BlendResult blend_microblock(
             blend_microblock_tile(tile_id, tiles_x, tile_size, image_height, image_width,
                                   means_2d, colors, opacities, mb_header, mb_stream,
                                   cov_inv_a.data(), cov_inv_b.data(), cov_inv_c.data(),
-                                  result.image.data());
+                                  result.image.data(), M, L_prime);
         });
     }
     pool.wait();
@@ -685,8 +746,6 @@ BlendResult blend_microblock_from_packs(
     const int image_width,
     const int tile_size,
     ThreadPool& pool) {
-    (void)num_entries;
-    (void)L_prime;
 
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
@@ -708,7 +767,9 @@ BlendResult blend_microblock_from_packs(
                 attribute_packs,
                 mb_header,
                 mb_stream_local,
-                result.image.data());
+                result.image.data(),
+                num_entries,
+                L_prime);
         });
     }
     pool.wait();
