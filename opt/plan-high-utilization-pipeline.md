@@ -730,3 +730,121 @@ host in loop → beat 100 ms,"** then attack pair count.
 8. Only then chase 1 ms via algorithmic pair/op reduction — tighter cull,
    **transmittance early-out** (needs microblock-major, §0.5-Q5), coarse-tile
    rejection, lower-precision composite (§7).
+
+---
+
+## §9 Host-in-loop ledger (measured) — iter-36
+
+**Goal:** enumerate EVERY host-in-loop point in the per-frame `render_full_py`
+hot path with a measured ms cost, to rank which bridge to kill next on the way
+to a HOST-FREE render. Measured on yyzo-bh-03 (cpp#104, sha 65728fa = post
+iter-35), bicycle hero, production flag stack (`FUSED_TILE` + all resident
+gates), `devrun.sh` verify path. Two bases:
+
+- **@8v steady-state** (the production decision metric): ms/view **173.1**,
+  `proj=32.4 ta=10.3 sort=9.4 blend=97.3`, hero_vs_ref **63.85 dB**.
+- **@1v cold** (first-view, includes one-time scene upload + cold caches):
+  ms/view **278.5**, `proj=43.6 sort=16.2 blend=192.8` (ta inflated to 25.0 by
+  `TA_TIMING`'s serialized schedule; production ta@1v ≈ 25 unperturbed too).
+
+Per-stage wall times above are host `clock` deltas around each stage call in
+`render_full_py` (`pybind_module.cpp` ~L1461). The stage sum @8v (149.4) is
+below ms/view (173.1) — the ~24 ms gap is the un-instrumented host harness
+(python/pybind marshaling, the once-per-view stats dict, residual scene-upload
+amortization). The blend stage's own `[BLEND_DEVICE] resident_blend` print
+includes the framebuffer D2H (host_build=0 → no host payload build).
+
+### 9.1 The bridges, each with measured ms (@8v steady-state unless noted)
+
+Listed in per-frame execution order. "Finish" = `distributed::Finish(cq)`, a
+full-device CQ drain that serializes host↔device (no cross-stage overlap).
+
+| # | stage | host-in-loop point | code | ms @8v | notes |
+|---|---|---|---|---|---|
+| 1 | project | **count-pass `Finish`** | `gather_visible_device.cpp:685` (launch_pass) | ~barrier | drains after the count kernel |
+| 2 | project | **D2H per-core counts** (`craw`, 110×64B ≈ 7 KB) | `:857` | <0.1 | tiny read; feeds the host scan |
+| 3 | project | **host exclusive prefix-sum** of 110 per-core counts | `:859-867` | <0.05 | 110-iter loop; trivial |
+| 4 | project | **`proj_M` write (1 page) + `Finish`** | `:898-899` | ~barrier | publishes M for downstream |
+| 5 | project | **scatter-pass `Finish`** | `:685` | ~barrier | drains after the scatter kernel |
+| — | project | (bulk `proj_m_*` D2H is SKIPPED — `minimal_readback`, downstream resident) | `:917` | 0 | only on verify/non-resident |
+| 6 | tile_assign | **K1 bbox + on-device scan_reduce `Finish`** | `tile_assign_device.cpp:765` | part of ta 10.3 | `TA_DEVICE_SCAN` on |
+| 7 | tile_assign | **scan_bases (1 core) `Finish`** | `:785` | part of ta | on-device prefix; no host scan |
+| 8 | tile_assign | **control D2H of P** (1 page) | `:793` | <0.1 | host needs P to size pair bufs |
+| 9 | tile_assign | **scan2 + K2 scatter `Finish`** | `:822 / :893/905` | part of ta | |
+| — | tile_assign | per-pair cull K3+K4 + **13.5 MB keep-mask H2D**: **ELIMINATED** | iter-35 (`ta_no_cull` + `buf_keep_all_ones`) | 0 | was k4 8.4 ms/frame |
+| 10 | sort | **bin count-pass `Finish`** | `sort_device.cpp:876` | ~part of bin 8.0 | per-core histogram |
+| 11 | sort | **D2H per-core histograms** (`hist`, 110×1024×4 ≈ 450 KB) | `:882` | part of bin | the real sort D2H |
+| 12 | sort | **host per-tile totals + LPT build + page-aligned layout** | `:885-1045` | part of bin/up 0.29 | compaction prefix + LPT |
+| 13 | sort | **H2D bin2d/tmeta/tile_ids + `Finish`** | `:1049-1052` | up≈0.29 | bin metadata upload |
+| 14 | sort | radix kernel pass (device) | — | kernel≈7.5 | not a host bridge |
+| — | sort | **residual sorted-id D2H+compact+publish**: `d2h=7.12 ms` in the NON-FUSED reference path, **= 0.00 in production FUSED** | `:882 / publish` | 0 (FUSED) | the "~23 ms" §0.5-Q0 residual is gone under FUSED_TILE |
+| 15 | sort→blend | **single fused `Finish`** for sort-publish + cull + blend | `[FUSED_TILE]` | 1 barrier | FUSED already drops the 2 inter-stage Finishes here |
+| 16 | blend | resident cull+blend (device SFPU) — `host_build=0` | `render_blend.cpp:236` | blend 97.3 | no host payload build (resident) |
+| 17 | blend | **final framebuffer D2H** (1× H×W×3 fp32 ≈ a few MB/view) | inside FUSED readback | ~1-3 | the one mandatory per-frame D2H |
+| — | all | **per-frame H2D of scene attrs**: NONE (scene uploaded once, cached by ptr+N) | `ensure_scene_uploaded` | 0 | camera/uniforms ride kernel args |
+
+### 9.2 What this says — ranked next levers
+
+1. **Per-stage `Finish` barriers are now the dominant host-in-loop structure.**
+   Counting the drains still on the per-frame path: project ×3 (count, proj_M,
+   scatter), tile_assign ×3-4 (scan_reduce, scan_bases, K2; +P read), sort ×2
+   (bin, H2D-meta), sort→blend ×1 fused. ≈ **9-10 full-device CQ drains/frame**,
+   each preventing any cross-stage overlap. The busiest core sits ~45 % idle
+   because of exactly this. **This is the STEP-4 lever (persistent kernels /
+   drop the per-stage Finish, plan §8 item #5)** and is now the highest-value
+   host-free target — bigger than any single remaining D2H.
+2. **Sort's 450 KB per-core histogram D2H + host per-tile compaction/LPT
+   (#11-13)** is the largest *data* bridge still on the critical path (folded
+   into bin≈8 ms). Moving the per-tile totals + LPT on-device (plan §8 item #2,
+   sort variant) would delete it and another Finish.
+3. **Project compaction host prefix-sum (#2-4)** is SMALL in absolute host
+   time (110-count D2H + 110-iter scan ≈ <0.15 ms) — its value is **structural**
+   (deletes one `Finish` by fusing count→scan→scatter on the in-order CQ, and
+   drops the 110-page D2H to a 1-page M read). This is STEP 3; expected
+   per-frame win is sub-ms (one drain), banked as host-free progress, not a big
+   ms mover. See §9.3.
+4. **Final framebuffer D2H (#17)** is mandatory (the frame has to leave the
+   device) and small — leave it.
+5. The **big bridges of the old §0.5-Q0 ledger are already dead:** the per-frame
+   127 MB attr re-upload (resident), the 13.5 MB keep-mask H2D (iter-35), and
+   sort's ~23 ms d2h+compact+publish (FUSED_TILE, d2h=0 in production).
+
+### 9.3 STEP 3 — project compaction on-device exclusive scan (iter-36, BANKED gated-off)
+
+**Shipped (gated `GSPLAT_TT_PROJ_DEVICE_SCAN`, DEFAULT OFF), cpp#105.** Replaces
+the host prefix-sum bridge (#2-4 above) with a single-core on-device
+`scan_bases`-style kernel (`kernels/dataflow/gather_scan_bases.cpp`): the count
+pass writes per-core quotas to `buf_counts`; the scan kernel exclusive-prefixes
+them into `buf_core_base` ([0]=base, [1]=is_last) and publishes M into `proj_M`;
+the scatter pass reads its (base, is_last) from `buf_core_base` over NoC (via the
+existing counts accessor, repointed) instead of host-computed runtime args. The
+count→scan→scatter chain stays resident on the in-order CQ with **no inter-kernel
+`Finish`** (same pattern FUSED_TILE proves across sort-publish+cull+blend); the
+host's only read is the 1-page M (needed to size `proj_m_*`), replacing the
+110-page counts D2H + the host scan + the host `proj_M` write + one full-device
+`Finish`.
+
+**Measured A/B @8v (cpp#105, same binary, OFF vs ON):**
+
+| | hero_vs_ref | ms/view | proj | ta | sort | blend |
+|---|---|---|---|---|---|---|
+| scan OFF | 63.85 dB | 173.1 | **32.4** | 10.2 | 9.3 | 97.3 |
+| scan ON | 63.85 dB | 173.2 | **32.4** | 10.2 | 9.3 | 97.3 |
+
+**Verdict: bit-identical (63.85 dB) and CORRECT, but ms-neutral → BANKED gated
+off.** proj is unchanged (32.4 → 32.4); the bridge it deletes (#2-4) was already
+sub-noise (the host scan over 110 ints ≈ µs; the one dropped `Finish` is below
+the 0.1 ms stage-timer resolution). proj's wall time is the two ~32 ms NoC
+kernel passes, which this does not touch. Per the gate-clean discipline (flip
+default-on only if it *improves* ms/view) it stays OFF — but it is a **sound,
+verified, host-free building block**: it removes the only host arithmetic from
+the project stage and is the prerequisite for fusing project's count↔scatter
+into a single CQ submission under STEP 4 (persistent kernels / drop the
+per-stage `Finish`, §8 item #5), where the dropped barrier *will* pay off once
+the surrounding barriers also go. **Next host-free lever (STEP 4): collapse the
+~9-10 per-frame `Finish` drains** — the dominant remaining host-in-loop
+structure (§9.2 #1) — starting with the project count→scan→scatter fusion this
+change enables, then the sort bin/H2D pair; expected to recover a meaningful
+slice of the ~24 ms uninstrumented host gap + the ~45 %-idle makespan, far
+larger than any single remaining D2H. blend (~97 ms, §14 SFPU serialization)
+remains the largest single stage.

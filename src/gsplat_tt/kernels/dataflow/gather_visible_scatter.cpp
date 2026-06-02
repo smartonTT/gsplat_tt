@@ -128,8 +128,13 @@ void kernel_main() {
     // tiles [t_start, t_start+t_count)); num_cores = interleaved/strided (this
     // core owns t_start, t_start+stride, t_start+2*stride, ...).
     const uint32_t t_stride = get_arg_val<uint32_t>(38);
+    // GSPLAT_TT_PROJ_DEVICE_SCAN: 1 => read (base, is_last) from counts_addr
+    // (repointed by the host at the device-scan base buffer) page core_id,
+    // instead of the host-computed `base`/`is_last` args (which are 0).
+    const uint32_t device_scan = get_arg_val<uint32_t>(39);
 #else
     const uint32_t t_stride = get_arg_val<uint32_t>(37);
+    const uint32_t device_scan = get_arg_val<uint32_t>(38);
 #endif
     (void)num_tiles;
     (void)o_M_addr;
@@ -295,7 +300,19 @@ void kernel_main() {
     }
 
     // ── scatter pass: write this core's visible elements at [base, ...) ─
-    uint32_t g = base;                  // global compact output index
+    // GSPLAT_TT_PROJ_DEVICE_SCAN: the scan kernel computed this core's base +
+    // is_last on-device into the base buffer (host repoints counts_addr at it);
+    // read them over NoC instead of from the host-computed args. Reuse the M
+    // accumulator L1 staging (l1_oM / o_Mp), unused in the scatter pass.
+    uint32_t base_eff = base;
+    uint32_t is_last_eff = is_last;
+    if (device_scan) {
+        noc_async_read(get_noc_addr(core_id, acc_counts), l1_oM, PAGE_BYTES);
+        noc_async_read_barrier();
+        base_eff = o_Mp[0];
+        is_last_eff = o_Mp[1];
+    }
+    uint32_t g = base_eff;              // global compact output index
     uint32_t cur_page = g / PAGE_ELEMS; // current output page
     uint32_t slot = g % PAGE_ELEMS;     // current slot within cur_page
     uint32_t flush_lo = slot;           // first slot this core wrote in cur_page
@@ -412,7 +429,7 @@ void kernel_main() {
     // of the last page so [M, M_pad) is well-defined, matching the single-core
     // output byte-for-byte.
     uint32_t hi = slot;
-    if (is_last && slot != 0) {
+    if (is_last_eff && slot != 0) {
         for (uint32_t s = slot; s < PAGE_ELEMS; s++) {
             o_px[s] = 0; o_py[s] = 0; o_rx[s] = 0; o_ry[s] = 0;
             o_a[s] = 0; o_b[s] = 0; o_c[s] = 0; o_dep[s] = 0; o_op[s] = 0;
