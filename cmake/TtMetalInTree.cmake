@@ -86,3 +86,30 @@ function(gsplat_link_tt_metal target)
     INSTALL_RPATH "${_tt_rpath}"
   )
 endfunction()
+
+# Tracy client only (pybind orchestration zones; no tt-metal link).
+function(gsplat_link_host_tracy target)
+  if(NOT DEFINED ENV{TT_METAL_HOME})
+    return()
+  endif()
+  set(TT_HOME "$ENV{TT_METAL_HOME}")
+  set(TT_BUILD "${TT_HOME}/build")
+  set(_tracy_so "${TT_BUILD}/lib/libtracy.so.0.10.0")
+  set(_tracy_inc "")
+  foreach(
+    _cand
+    "${TT_HOME}/tt_metal/third_party/tracy/public"
+    "${TT_HOME}/tools/tracy/public"
+    "${TT_HOME}/tools/tracy/tracy/public"
+  )
+    if(EXISTS "${_cand}/tracy/Tracy.hpp")
+      set(_tracy_inc "${_cand}")
+      break()
+    endif()
+  endforeach()
+  if(EXISTS "${_tracy_so}" AND _tracy_inc)
+    target_include_directories(${target} SYSTEM PRIVATE "${_tracy_inc}")
+    target_compile_definitions(${target} PRIVATE TRACY_ENABLE=1)
+    target_link_libraries(${target} PRIVATE "${_tracy_so}")
+  endif()
+endfunction()
