@@ -40,7 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW)
+#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG)
 #include "api/debug/dprint.h"
 #endif
 
@@ -730,6 +730,13 @@ void kernel_main() {
             for (uint32_t k = 0; k < L; ++k) {
                 const uint32_t idx = sorted[k];
                 auto recp = reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES);
+#if defined(MB_BUCKET_EMIT_SPIN)
+                // Diagnostic: per-record busy-wait in the bucket emit loop. If this
+                // recovers the gate with mask=recp[10], the Lb>64 bug is a timing/
+                // settle race the fast L1 emit exposes (the slow debug/inline paths
+                // mask it incidentally).
+                for (volatile int _es = 0; _es < (MB_BUCKET_EMIT_SPIN); ++_es) { }
+#endif
                 const uint32_t cov_a_bits = recp[0];
                 const uint32_t cov_b_bits = recp[1];
                 const uint32_t cov_c_bits = recp[2];
@@ -743,7 +750,56 @@ void kernel_main() {
                 // ROUTE C: keep mask baked into record word 10 by the sort-stage
                 // SFPU cull. Pure L1 load — spin-free, no random gather, no
                 // cull_masks DRAM buffer on this path.
+#if defined(MB_BUCKET_FORCE_INLINE)
+                // Diagnostic: bucket-cull RMW still runs (BUCKET_MASK), but the
+                // blend recomputes the mask inline from the L1 record instead of
+                // reading recp[10]. Isolates "recp[10] read is wrong" from "RMW
+                // corrupts records".
+                const uint32_t mask = compute_microblock_mask(
+                    bits_to_f(cov_a_bits), bits_to_f(cov_b_bits), bits_to_f(cov_c_bits),
+                    mean_x, mean_y, bits_to_f(op_bits), tx_tile, ty_tile,
+                    contrib_floor, cull_disabled);
+#else
                 const uint32_t mask = recp[10];
+#endif
+#if defined(MB_BUCKET_MASK_DEBUG)
+                // Compare the BAKED mask to the inline soft-float reference for
+                // THIS record. Accumulate per-tile counters and emit ONE summary
+                // line per dense tile (L>64): how many records have a wrong baked
+                // mask, and whether the divergence is a big mismatch vs SFPU noise.
+                // Also track the largest-idx mismatch to see if corruption starts
+                // beyond a record-index boundary.
+                if (L > 64u) {
+                    const uint32_t ref_mask = compute_microblock_mask(
+                        bits_to_f(cov_a_bits), bits_to_f(cov_b_bits), bits_to_f(cov_c_bits),
+                        mean_x, mean_y, bits_to_f(op_bits), tx_tile, ty_tile,
+                        contrib_floor, cull_disabled);
+                    static uint32_t _bm_mism = 0;   // records where baked != ref
+                    static uint32_t _bm_big = 0;    // mismatch in >1 microblock bit
+                    static uint32_t _bm_min_idx = 0xffffffffu;
+                    static uint32_t _bm_max_idx = 0;
+                    if (ref_mask != mask) {
+                        _bm_mism++;
+                        uint32_t x = ref_mask ^ mask;
+                        uint32_t pc = 0; while (x) { pc += (x & 1u); x >>= 1u; }
+                        if (pc > 1u) _bm_big++;
+                        if (idx < _bm_min_idx) _bm_min_idx = idx;
+                        if (idx > _bm_max_idx) _bm_max_idx = idx;
+                    }
+                    if (k + 1u == L) {  // last record of the tile -> emit summary
+                        static uint32_t _bm_tiles = 0;
+                        if (_bm_tiles < 40u) {
+                            _bm_tiles++;
+                            DPRINT << "BSUM t=" << tile_id << " L=" << L
+                                   << " mism=" << _bm_mism << " big=" << _bm_big
+                                   << " minidx=" << _bm_min_idx
+                                   << " maxidx=" << _bm_max_idx << ENDL();
+                        }
+                        _bm_mism = 0; _bm_big = 0;
+                        _bm_min_idx = 0xffffffffu; _bm_max_idx = 0;
+                    }
+                }
+#endif
 #elif defined(MB_BUCKET_DBG_INLINE)
                 // Correctness probe: compute the mask inline from the L1 record
                 // (correct for THIS record regardless of sort order).

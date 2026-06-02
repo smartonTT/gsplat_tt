@@ -1048,6 +1048,17 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             if (env_on("GSPLAT_TT_BUCKET_MASK")) {
                 reader_defines["MB_BUCKET_MASK"] = "1";
             }
+            if (env_on("GSPLAT_TT_BUCKET_MASK_DEBUG")) {
+                reader_defines["MB_BUCKET_MASK_DEBUG"] = "1";
+            }
+            // Diagnostic: keep the bucket-cull RMW running, but make the blend
+            // recompute the mask inline instead of reading the baked recp[10].
+            if (env_on("GSPLAT_TT_BUCKET_FORCE_INLINE")) {
+                reader_defines["MB_BUCKET_FORCE_INLINE"] = "1";
+            }
+            if (const char* s = std::getenv("GSPLAT_TT_BUCKET_EMIT_SPIN")) {
+                if (s[0] != '\0') reader_defines["MB_BUCKET_EMIT_SPIN"] = s;
+            }
         }
     }
     ctx.reader = CreateKernel(

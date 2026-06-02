@@ -1104,6 +1104,70 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             }
         }
 
+        // ── DEBUG (GSPLAT_TT_BUCKET_VERIFY): A/B the DENSE record bucket vs the
+        // PAGE-ALIGNED keys layout, both written by THIS scatter kernel from the
+        // same data. The keys/ids layout is the production (gather) path and is
+        // known bit-correct, so comparing the per-tile key MULTISET isolates a
+        // dense-assembly overlap/skip (the suspected Lb>64 bug) precisely.
+        if (tile_bucket && std::getenv("GSPLAT_TT_BUCKET_VERIFY")) {
+            distributed::Finish(*ctx->cq);
+            std::vector<uint32_t> recs(static_cast<std::size_t>(std::max<uint32_t>(P_kept, 1)) *
+                                       ELEMS_PER_PAGE, 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, recs, ctx->buf_tile_recs, true);
+            std::vector<uint32_t> kbuf(static_cast<std::size_t>(P_aligned), 0);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, kbuf, ctx->buf_keys, true);
+            // Rank tiles by density; probe the densest handful with count>64.
+            std::vector<uint32_t> order(num_tiles);
+            for (uint32_t t = 0; t < num_tiles; t++) order[t] = t;
+            std::sort(order.begin(), order.end(), [&](uint32_t x, uint32_t y) {
+                return counts[x] > counts[y];
+            });
+            uint32_t probed = 0, mismatched = 0;
+            for (uint32_t oi = 0; oi < num_tiles && probed < 8u; oi++) {
+                const uint32_t t = order[oi];
+                const uint32_t creal = static_cast<uint32_t>(counts[t]);
+                if (creal <= 64u) break;  // densest first; nothing past here is >64
+                probed++;
+                // Dense bucket key multiset: recs[starts[t]+i][9], i in [0,creal).
+                std::vector<uint32_t> bk(creal);
+                uint32_t zero_slots = 0;
+                for (uint32_t i = 0; i < creal; i++) {
+                    const std::size_t pg = static_cast<std::size_t>(starts[t]) + i;
+                    const uint32_t key = recs[pg * ELEMS_PER_PAGE + 9];
+                    bk[i] = key;
+                    if (recs[pg * ELEMS_PER_PAGE + 0] == 0u && key == 0u) zero_slots++;
+                }
+                // Canonical key multiset from the page-aligned keys region (drop
+                // 0xffffffff padding the kernel pre-fills into tail page slots).
+                std::vector<uint32_t> ck;
+                ck.reserve(creal);
+                const std::size_t kstart = static_cast<std::size_t>(pstart_elem[t]);
+                const std::size_t kend = kstart + tile_pad[t];
+                for (std::size_t i = kstart; i < kend && i < kbuf.size(); i++) {
+                    if (kbuf[i] != 0xffffffffu) ck.push_back(kbuf[i]);
+                }
+                std::sort(bk.begin(), bk.end());
+                std::sort(ck.begin(), ck.end());
+                const bool eq = (bk.size() == ck.size()) &&
+                                std::equal(bk.begin(), bk.end(), ck.begin());
+                if (!eq) mismatched++;
+                uint32_t first_div = 0xffffffffu;
+                const std::size_t n = std::min(bk.size(), ck.size());
+                for (std::size_t i = 0; i < n; i++) {
+                    if (bk[i] != ck[i]) { first_div = static_cast<uint32_t>(i); break; }
+                }
+                std::fprintf(stderr,
+                    "[BUCKET_VERIFY] t=%u creal=%u start=%lld bucket_keys=%zu canon_keys=%zu "
+                    "zero_slots=%u %s first_div=%d bk[0]=%08x ck[0]=%08x bk[last]=%08x ck[last]=%08x\n",
+                    t, creal, (long long)starts[t], bk.size(), ck.size(), zero_slots,
+                    eq ? "MATCH" : "MISMATCH", (int)first_div,
+                    bk.empty() ? 0 : bk.front(), ck.empty() ? 0 : ck.front(),
+                    bk.empty() ? 0 : bk.back(), ck.empty() ? 0 : ck.back());
+            }
+            std::fprintf(stderr, "[BUCKET_VERIFY] probed=%u dense(>64) tiles, mismatched=%u\n",
+                         probed, mismatched);
+        }
+
         // ── Device radix kernel (per-tile stable depth sort) ────────────
         const auto t_k0 = clk::now();
         Program& prog = ctx->workload.get_programs().begin()->second;

@@ -1,5 +1,5 @@
-id=82
-sha=470095f
-ts=2026-06-01T17:02:08-0700
-desc=iter 27: routeC sort-stage bucket cull -> baked mask recp[10]
-bin=640748ec88d211af
+id=90
+sha=67c06ad
+ts=2026-06-01T18:07:17-0700
+desc=iter28 bank: Lb>64 = producer-ahead race (knobs reverted)
+bin=10bb72e0b53e0754
