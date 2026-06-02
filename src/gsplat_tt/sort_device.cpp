@@ -482,6 +482,39 @@ static LptAssignment build_lpt(
         a.flat_tile_ids.insert(
             a.flat_tile_ids.end(), per_core[c].begin(), per_core[c].end());
     }
+
+    // GSPLAT_TT_LPT_STATS: dump the realized LPT load distribution so the
+    // tile->core balance (the SFPU cull/blend makespan driver) can be quantified
+    // without re-deriving it from the device profiler. Host-only, default OFF,
+    // no effect on the assignment. Reports the theoretical makespan-vs-mean gap
+    // (= LPT headroom) and the heaviest single tile (the LPT lower bound:
+    // makespan >= max(mean, heaviest_tile)).
+    if (std::getenv("GSPLAT_TT_LPT_STATS") != nullptr && !cost_id.empty()) {
+        uint64_t total = 0;
+        for (const auto& [cost, id] : cost_id) total += cost;
+        const uint64_t heaviest_tile = cost_id.front().first;  // sorted descending
+        std::vector<uint64_t> sorted_load = load;
+        std::sort(sorted_load.begin(), sorted_load.end());
+        const uint64_t max_load = sorted_load.back();
+        const uint64_t min_load = sorted_load.front();
+        const uint64_t med_load = sorted_load[num_cores / 2];
+        const double mean_load = static_cast<double>(total) / num_cores;
+        std::fprintf(stderr,
+            "[LPT_STATS] tiles_nonempty=%zu cores=%u total_cand=%llu "
+            "mean/core=%.0f median/core=%llu max/core=%llu min/core=%llu "
+            "heaviest_tile=%llu | makespan/mean=%.4f makespan-mean=%.0f cand "
+            "(=%.1f%% headroom) heaviest/mean=%.4f\n",
+            cost_id.size(), num_cores,
+            static_cast<unsigned long long>(total), mean_load,
+            static_cast<unsigned long long>(med_load),
+            static_cast<unsigned long long>(max_load),
+            static_cast<unsigned long long>(min_load),
+            static_cast<unsigned long long>(heaviest_tile),
+            mean_load > 0 ? max_load / mean_load : 0.0,
+            max_load - mean_load,
+            mean_load > 0 ? 100.0 * (max_load - mean_load) / mean_load : 0.0,
+            mean_load > 0 ? heaviest_tile / mean_load : 0.0);
+    }
     return a;
 }
 

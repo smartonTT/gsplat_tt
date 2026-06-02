@@ -605,7 +605,18 @@ host in loop → beat 100 ms,"** then attack pair count.
 5. **Persistent kernels / drop per-stage `Finish()`** → remove cross-stage
    bubbles and the host from the loop (§0.5-Q0).
 6. **LPT load-balancing** (decreasing-count work queue; chunk only dominant/
-   overflow tiles — §0.5-Q3) for sort + fused blend.
+   overflow tiles — §0.5-Q3) for sort + fused blend. **STATUS (iter-32, DONE for
+   cull+blend):** LPT tile→core assignment is already shipped + active on both
+   the production and L1-resident paths (`sort_device.cpp::build_lpt`, cost =
+   per-tile candidate count). Measured (gated `GSPLAT_TT_LPT_STATS`, device):
+   busiest core only **1.3 %** above mean (theoretical) / **~7 %** realized on
+   SFPU/TRISC; heaviest tile = 0.68× the per-core mean, so no monster tile bounds
+   the makespan. **No LPT win remains for cull/blend** — the dominant cost is the
+   cull↔blend SFPU serialization (§14) + total candidate count, so the lever is
+   item 8 (shrink the SFPU candidate count), NOT re-balancing. See
+   `opt/blend-data-movement-plan.md` §15. (Open: project + tile_assign DO show
+   real imbalance — ~33 ms / ~19 ms makespan−mean — but they are contiguous
+   N-chunk splits, not tile→core, and off the cull/blend critical path.)
 7. **Move the dense front half to the FPU** (project means transform via
    `matmul_tiles`; det/conic/AABB/Mahalanobis via FPU eltwise; §0.5-Q2) and
    profile the 317 ms project stage (§0.5-Q7).
