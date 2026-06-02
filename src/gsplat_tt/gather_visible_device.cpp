@@ -569,12 +569,13 @@ static bool downstream_chain_resident() {
         const char* v = std::getenv(n);
         return v != nullptr && v[0] != '0' && v[0] != '\0';
     };
+    // Ideal path: RESIDENT_BLEND + SFPU cull_masks + TILE_BUCKET (no MB_DEVCULL).
     return on("GSPLAT_TT_RESIDENT_TA_IN") &&
            on("GSPLAT_TT_DEVICE_TILE_ASSIGN") &&
            on_nonzero("GSPLAT_TT_DEVICE_SORT") &&
            on("GSPLAT_TT_RESIDENT_PAIRS") &&
            on("GSPLAT_TT_RESIDENT_BLEND") &&
-           on("GSPLAT_TT_MB_DEVCULL");
+           (on("GSPLAT_TT_MB_DEVCULL") || on("GSPLAT_TT_SFPU_CULL"));
 }
 
 // Read back ONLY the host-consumed compact attrs (opacity + depth) and assemble
