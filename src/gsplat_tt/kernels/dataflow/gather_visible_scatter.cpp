@@ -124,6 +124,12 @@ void kernel_main() {
     // per compacted gaussian == {a,b,c,px,py,op,cr,cg,cb, 0..}. Lets the blend
     // reader fetch a candidate with ONE contiguous read instead of 7-9 SoA pages.
     const uint32_t o_blendrec_addr = get_arg_val<uint32_t>(37);
+    // GSPLAT_TT_PROJ_BALANCE: tile stride. 1 = contiguous chunk (this core owns
+    // tiles [t_start, t_start+t_count)); num_cores = interleaved/strided (this
+    // core owns t_start, t_start+stride, t_start+2*stride, ...).
+    const uint32_t t_stride = get_arg_val<uint32_t>(38);
+#else
+    const uint32_t t_stride = get_arg_val<uint32_t>(37);
 #endif
     (void)num_tiles;
     (void)o_M_addr;
@@ -247,14 +253,15 @@ void kernel_main() {
     auto o_col = reinterpret_cast<volatile uint32_t*>(l1_ocol);
     auto o_Mp  = reinterpret_cast<volatile uint32_t*>(l1_oM);
 
-    const uint32_t i_lo = t_start * TILE_ELEMS;
-    uint32_t i_hi = (t_start + t_count) * TILE_ELEMS;
-    if (i_hi > N) i_hi = N;
+    // Per-element source guard: only the GLOBAL-last partial tile can hold
+    // i >= N; the tile loop itself bounds each core's tile set (contiguous or
+    // strided), so N is the only clamp the inner loop needs.
+    const uint32_t i_hi = N;
 
     // ── count_only pass: just tally this core's visible quota ───────────
     if (count_only) {
         uint32_t vcount = 0;
-        for (uint32_t t = t_start; t < t_start + t_count; t++) {
+        for (uint32_t kk = 0, t = t_start; kk < t_count; kk++, t += t_stride) {
             noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
             noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
             noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
@@ -332,7 +339,7 @@ void kernel_main() {
         noc_async_write_barrier();
     };
 
-    for (uint32_t t = t_start; t < t_start + t_count; t++) {
+    for (uint32_t kk = 0, t = t_start; kk < t_count; kk++, t += t_stride) {
         noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
         noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
         noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);

@@ -614,9 +614,52 @@ host in loop → beat 100 ms,"** then attack pair count.
    the makespan. **No LPT win remains for cull/blend** — the dominant cost is the
    cull↔blend SFPU serialization (§14) + total candidate count, so the lever is
    item 8 (shrink the SFPU candidate count), NOT re-balancing. See
-   `opt/blend-data-movement-plan.md` §15. (Open: project + tile_assign DO show
-   real imbalance — ~33 ms / ~19 ms makespan−mean — but they are contiguous
-   N-chunk splits, not tile→core, and off the cull/blend critical path.)
+   `opt/blend-data-movement-plan.md` §15. **(iter-33 UPDATE — project SOLVED, see
+   §8.7.) tile_assign rebalance is the next open lever.**
+
+### 8.7 Project (gather scatter) load rebalance — SHIPPED (iter-33, DEFAULT-ON)
+
+- **Root cause (hard per-core numbers, gated `GSPLAT_TT_GATHER_STATS`, device
+  cpp#96):** the project stage's dominant sub-cost is the `gather_visible_scatter`
+  kernel (~51.6 ms of the 58.7 ms 1-view proj stage; `means_cam`≈0.7 ms +
+  `pfwc`≈1.8 ms are uniform/cheap). The scatter pass split the **tile** range
+  contiguously across the 110 cores, and per-core WRITE work ∝ the number of
+  **visible** gaussians in that core's tile range. The scene is spatially
+  clustered (sky vs foliage), so contiguous tile ranges give a brutal
+  visible-count skew: **min/core 9 235, max/core 36 300, mean 17 126 ⇒
+  max/mean = 2.12 (112 % headroom)**. Reads are uniform; the imbalance is pure
+  write-fraction skew. (This is the real shape of the "1.56 / 33 ms" the
+  aggregate profiler attributed to "project" — it's actually 2.12× on the gather
+  scatter.)
+- **Fix shipped:** STRIDED (interleaved) tile→core assignment in the scatter
+  pass — core `c` processes tiles `c, c+110, c+220, …` instead of a contiguous
+  block (`gather_visible_device.cpp::split_strided` + `t_stride` runtime arg
+  threaded into `gather_visible_scatter.cpp`). Striding interleaves sky/foliage
+  tiles across every core, so each core sees ~the scene-average visible
+  fraction. Correctness: the compact gid space is just relabeled; all downstream
+  stages treat gid as an arbitrary label and sort by depth/tile, so the image is
+  bit-identical (hero PSNR unchanged). Zero added host work, embarrassingly
+  parallel, and strided reads did NOT hurt DRAM coalescing (gather kernel
+  DROPPED, not rose).
+- **Result (gated `GSPLAT_TT_PROJ_BALANCE`, now DEFAULT-ON, disable with `=0`):**
+  per-core skew **2.12× → 1.21×**; gather kernel **51.6 → 36.6 ms**.
+  - 1-view: proj **58.7 → 43.6 ms** (−15.1 ms), ms/view **304.3 → 289.5**
+    (−14.8 ms).
+  - **8-view steady-state (the production decision metric):** proj **37.0 →
+    32.4 ms** (−4.6 ms), ms/view **191.9 → 183.7** (−8.2 ms, −4.3 %),
+    hero_vs_ref **63.85 dB bit-identical**, min_vs_ref 36.57 → 37.53 (no
+    regression). Production re-verified with the new default (no overrides):
+    63.85 dB, proj 32.5 ms, ms/view 184.3, balance=1 firing on all 8 views.
+  - Flipped DEFAULT-ON because it's a shared production stage and a verified net
+    win at identical hero PSNR (cpp#97).
+- **Residual / next lever:** 1.21× (21 % headroom) remains because interleaving
+  isn't perfect; a work-aware/LPT split keyed on a cheap per-tile visible
+  pre-count could squeeze the last ~2-3 ms, but diminishing returns. The bigger
+  open lever is **tile_assign** (still contiguous N-chunk, ~1.54 / ~19 ms
+  makespan−mean): the K2 `tile_assign_scatter` has the SAME contiguous-pair
+  shape and is a candidate for the same strided treatment (verify the
+  (gid,tile)-pair output stays sort-correct, which it should since sort keys on
+  tile).
 7. **Move the dense front half to the FPU** (project means transform via
    `matmul_tiles`; det/conic/AABB/Mahalanobis via FPU eltwise; §0.5-Q2) and
    profile the 317 ms project stage (§0.5-Q7).

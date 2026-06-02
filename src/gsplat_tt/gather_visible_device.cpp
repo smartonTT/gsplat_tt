@@ -70,6 +70,34 @@ inline bool blend_aos_enabled() {
     return !(v != nullptr && v[0] == '0');
 }
 
+// GSPLAT_TT_PROJ_BALANCE: replace the contiguous N-tile split of the gather
+// passes (core c owns tiles [c*K, (c+1)*K)) with an INTERLEAVED/STRIDED split
+// (core c owns tiles c, c+num_cores, c+2*num_cores, ...). The gather reads are
+// whole 4096B tile pages either way (no DRAM-coalescing loss from striding —
+// each tile read is already one page), but the per-core SCATTER write work
+// scales with that core's visible-fraction. The .ply gaussian order is
+// spatially clustered, so contiguous tile chunks have very different visible
+// fractions (sky chunks ~0 writes, foliage chunks dense) -> makespan skew:
+// measured min/core 9 235, max/core 36 300, mean 17 126 = max/mean 2.12.
+// Striding hands every core a representative spatial sample -> balanced writes
+// (skew drops to ~1.21x, gather kernel 51.6->36.6 ms, proj -4.6 ms @8v) at
+// identical hero PSNR. Reordering the compact gid space is safe: downstream
+// tile_assign/sort/blend index proj_m_* by the compact id and order by depth,
+// so the absolute compaction order is an arbitrary relabel. DEFAULT ON
+// (verified net win on a shared production stage); disable with =0.
+inline bool proj_balance_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_PROJ_BALANCE");
+    return !(v != nullptr && v[0] == '0');
+}
+
+// GSPLAT_TT_GATHER_STATS: host-only dump of the per-core visible-count
+// distribution (from the count pass) — min/max/mean and makespan-proxy
+// max/mean. Zero effect on the assignment; pure diagnostic of the write skew.
+inline bool gather_stats_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_GATHER_STATS");
+    return v != nullptr && v[0] == '1';
+}
+
 inline uint32_t fp32_bits(float v) {
     uint32_t u;
     std::memcpy(&u, &v, sizeof(uint32_t));
@@ -93,6 +121,21 @@ static WorkSplit split_chunks(uint32_t num_tiles, uint32_t num_cores) {
         ws.chunk_start[c] = cursor;
         ws.num_chunks[c] = cnt;
         cursor += cnt;
+    }
+    return ws;
+}
+
+// Strided (interleaved) split: core c owns tiles {c, c+num_cores, c+2*nc, ...}.
+// chunk_start[c] = c (first tile), num_chunks[c] = how many strided tiles it
+// owns. Paired with t_stride = num_cores in the kernel loop.
+static WorkSplit split_strided(uint32_t num_tiles, uint32_t num_cores) {
+    WorkSplit ws;
+    ws.chunk_start.assign(num_cores, 0);
+    ws.num_chunks.assign(num_cores, 0);
+    for (uint32_t c = 0; c < num_cores; ++c) {
+        ws.chunk_start[c] = c;  // first strided tile (== c, harmless if c>=num_tiles: count 0)
+        ws.num_chunks[c] =
+            (c < num_tiles) ? ((num_tiles - 1 - c) / num_cores + 1) : 0U;
     }
     return ws;
 }
@@ -568,7 +611,8 @@ static void write_proj_m_from_host(
 static void launch_pass(
     GatherDeviceContext* ctx, const WorkSplit& ws, std::size_t N,
     uint32_t num_tiles, float min_opacity, int H, int W, float max_radius,
-    bool count_only, const std::vector<uint32_t>* bases, int last_core) {
+    bool count_only, const std::vector<uint32_t>* bases, int last_core,
+    uint32_t t_stride) {
     Program& program = ctx->workload.get_programs().begin()->second;
     auto bm2x = device_state::get_buffer("pfwc_m2x");
     auto bm2y = device_state::get_buffer("pfwc_m2y");
@@ -634,6 +678,7 @@ static void launch_pass(
             counts_addr,
         };
         if (aos) args.push_back(blendrec_addr);  // arg 37
+        args.push_back(t_stride);  // arg 37 (no aos) / 38 (aos): tile stride
         SetRuntimeArgs(program, ctx->kernel, core, args);
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
@@ -795,12 +840,16 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         // offsets, preserving the single-core stable compaction order.
         ensure_outputs(ctx, PAGE_ELEMS);  // ensure buf_M + placeholder bufs exist
         ensure_counts(ctx);
-        const WorkSplit ws = split_chunks(num_tiles, ctx->num_cores);
+        const bool balance = proj_balance_enabled();
+        const WorkSplit ws = balance
+            ? split_strided(num_tiles, ctx->num_cores)
+            : split_chunks(num_tiles, ctx->num_cores);
+        const uint32_t t_stride = balance ? ctx->num_cores : 1u;
 
         const auto t_k0 = std::chrono::high_resolution_clock::now();
         launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                     image_width, max_radius, /*count_only=*/true,
-                    /*bases=*/nullptr, /*last_core=*/-1);
+                    /*bases=*/nullptr, /*last_core=*/-1, t_stride);
 
         // Read per-core counts (each occupies the first uint32 of its 64B page).
         std::vector<uint32_t> craw(
@@ -815,6 +864,28 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             bases[c] = static_cast<uint32_t>(M);
             M += cnt;
             if (cnt > 0) last_core = static_cast<int>(c);
+        }
+
+        // GSPLAT_TT_GATHER_STATS: per-core visible-count skew (the scatter-pass
+        // write-work proxy). max/mean is the makespan headroom a balanced split
+        // could recover. Host-only; zero effect on the run.
+        if (gather_stats_enabled()) {
+            uint32_t cmin = 0xFFFFFFFFu, cmax = 0, nz = 0;
+            for (uint32_t c = 0; c < ctx->num_cores; ++c) {
+                const uint32_t cnt = craw[static_cast<std::size_t>(c) * PAGE_ELEMS];
+                if (cnt < cmin) cmin = cnt;
+                if (cnt > cmax) cmax = cnt;
+                if (cnt > 0) nz++;
+            }
+            const double mean =
+                ctx->num_cores ? static_cast<double>(M) / ctx->num_cores : 0.0;
+            std::fprintf(stderr,
+                "[GATHER_STATS] balance=%d cores=%u nonempty=%u M=%zu "
+                "min/core=%u max/core=%u mean/core=%.1f | max/mean=%.4f "
+                "max-mean=%.0f (=%.1f%% headroom)\n",
+                (int)proj_balance_enabled(), ctx->num_cores, nz, M, cmin, cmax,
+                mean, mean > 0 ? cmax / mean : 0.0, mean > 0 ? cmax - mean : 0.0,
+                mean > 0 ? (cmax / mean - 1.0) * 100.0 : 0.0);
         }
         const uint32_t M_pad =
             round_up(static_cast<uint32_t>(std::max<std::size_t>(M, 1)), PAGE_ELEMS);
@@ -831,7 +902,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         // Scatter pass: fill proj_m_* on-device in increasing source order.
         launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                     image_width, max_radius, /*count_only=*/false, &bases,
-                    last_core);
+                    last_core, t_stride);
         const auto t_k1 = std::chrono::high_resolution_clock::now();
         T.kernel_ms = std::chrono::duration<double, std::milli>(t_k1 - t_k0).count();
 
