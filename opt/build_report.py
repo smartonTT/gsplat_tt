@@ -137,8 +137,17 @@ def normalize_ttw_row(r: dict) -> dict:
                 break
     sum_ms = sum(per_stage.values()) * VIEWS_PER_RUN if per_stage else None
     ts = r.get("ts") or r.get("timestamp") or ""
+    iter_dir = str(r.get("iter_dir") or "").strip()
+    if not iter_dir and n is not None:
+        iter_dir = f"ttw-{int(n):03d}"
+    if not iter_dir:
+        shot = str(r.get("screenshot") or "")
+        if shot:
+            iter_dir = Path(shot).parent.name
+    if not iter_dir:
+        iter_dir = "ttw-unknown"
     return {
-        "iter_dir": f"ttw-{int(n):03d}" if n is not None else "ttw-unknown",
+        "iter_dir": iter_dir,
         "timestamp": ts,
         "verdict": verdict,
         "action": idea,
@@ -269,28 +278,54 @@ def _candidate_hero_dirs(iter_dir: str) -> list[Path]:
     return out
 
 
+def _diff_image_names() -> tuple[str, ...]:
+    return ("hero_diff10.png", "diff10x.png")
+
+
+def _pick_diff_path(base: Path) -> str:
+    rel = base.relative_to(OPT_DIR)
+    for name in _diff_image_names():
+        if (base / name).exists():
+            return f"{rel.as_posix()}/{name}"
+    return ""
+
+
 def ensure_hero_diff10(iter_dir: str) -> None:
-    """Write hero_diff10.png as 10× per-channel abs color diff vs reference,
-    in EVERY location where hero.png exists. Always regenerates so a refreshed
-    reference produces correct diffs (no stale stitch-vs-bicycle artifacts)."""
+    """Write hero_diff10.png where missing.
+
+    Skips dirs that already have hero_diff10.png (from a003_verify vs cpu_cpp_mb).
+    Otherwise prefers ref.png in the same dir, then benchmarks/reference_v2/hero.png.
+    """
     if not iter_dir:
-        return
-    ref = REF_DIR / "hero.png"
-    if not ref.exists():
         return
     import numpy as np
     from PIL import Image
 
-    ref_rgb = np.asarray(Image.open(ref).convert("RGB"), dtype=np.float64) / 255.0
+    ref_v2 = REF_DIR / "hero.png"
+    ref_v2_rgb = None
+    if ref_v2.exists():
+        ref_v2_rgb = np.asarray(Image.open(ref_v2).convert("RGB"), dtype=np.float64) / 255.0
+
     for d in _candidate_hero_dirs(iter_dir):
         hero = d / "hero.png"
         if not hero.exists():
+            continue
+        out = d / "hero_diff10.png"
+        if out.exists():
+            continue
+        ref_rgb = None
+        local_ref = d / "ref.png"
+        if local_ref.exists():
+            ref_rgb = np.asarray(Image.open(local_ref).convert("RGB"), dtype=np.float64) / 255.0
+        elif ref_v2_rgb is not None:
+            ref_rgb = ref_v2_rgb
+        if ref_rgb is None:
             continue
         cand_rgb = np.asarray(Image.open(hero).convert("RGB"), dtype=np.float64) / 255.0
         if ref_rgb.shape != cand_rgb.shape:
             continue
         amp = np.clip(np.abs(ref_rgb - cand_rgb) * 10.0, 0.0, 1.0)
-        Image.fromarray((amp * 255.0).astype(np.uint8)).save(d / "hero_diff10.png")
+        Image.fromarray((amp * 255.0).astype(np.uint8)).save(out)
 
 
 def load_metal_iters() -> list[dict]:
@@ -865,13 +900,12 @@ def _find_hero_paths(iter_dir: str, runtime: str) -> tuple[str, str] | None:
     prefix = ("metal-screenshots/" if runtime == "blackhole" else "screenshots/") + iter_dir
     sub_priority = ("tt", "cpu_cpp_mac", "cpu", "default") if runtime == "blackhole" else ("cpu_cpp_mac", "tt", "cpu", "default")
     for sub in sub_priority:
-        if (base / sub / "hero.png").exists():
-            diff = ""
-            if (base / sub / "hero_diff10.png").exists():
-                diff = f"{prefix}/{sub}/hero_diff10.png"
+        sub_base = base / sub
+        if (sub_base / "hero.png").exists():
+            diff = _pick_diff_path(sub_base)
             return (f"{prefix}/{sub}/hero.png", diff)
     if (base / "hero.png").exists():
-        diff = "" if not (base / "hero_diff10.png").exists() else f"{prefix}/hero_diff10.png"
+        diff = _pick_diff_path(base)
         return (f"{prefix}/hero.png", diff)
     return None
 
@@ -984,6 +1018,16 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         thumb_html = img_link(hero_src)
         if diff_src:
             thumb_html += img_link(diff_src)
+        else:
+            thumb_html += (
+                "<span style='color:#c44536;font-size:11px'>missing 10× diff "
+                f"(expected hero_diff10.png under {iter_dir}/)</span>"
+            )
+    elif iter_dir:
+        thumb_html = (
+            "<span style='color:#c44536;font-size:11px'>missing hero screenshot "
+            f"(run verify with --iter-dir {iter_dir})</span>"
+        )
 
     # Description: the `action` (the idea/what-was-tried) is the primary
     # human-readable line. For metal rows action is a slug + a descriptive

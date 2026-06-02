@@ -82,7 +82,8 @@ inline float bits_to_f(uint32_t b) {
 }  // namespace
 
 void kernel_main() {
-    DeviceZoneScopedN("proj");  // Tracy device-timeline stage label (project scatter/count)
+    const uint32_t count_only = get_arg_val<uint32_t>(30);
+    DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
     const uint32_t m2x_addr   = get_arg_val<uint32_t>(0);
     const uint32_t m2y_addr   = get_arg_val<uint32_t>(1);
     const uint32_t depth_addr = get_arg_val<uint32_t>(2);
@@ -113,7 +114,6 @@ void kernel_main() {
     const float img_w         = bits_to_f(get_arg_val<uint32_t>(27));
     const float img_h         = bits_to_f(get_arg_val<uint32_t>(28));
     const float max_radius    = bits_to_f(get_arg_val<uint32_t>(29));
-    const uint32_t count_only = get_arg_val<uint32_t>(30);
     const uint32_t t_start    = get_arg_val<uint32_t>(31);
     const uint32_t t_count    = get_arg_val<uint32_t>(32);
     const uint32_t base       = get_arg_val<uint32_t>(33);

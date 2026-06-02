@@ -525,7 +525,7 @@ constexpr uint32_t CB_CORE_TILES = 7;
 #endif
 
 void kernel_main() {
-    DeviceZoneScopedN("cull");  // Tracy device-timeline stage label (microblock cull)
+    DeviceZoneScopedN("cull_global_mb");
     uint32_t num_tiles    = get_arg_val<uint32_t>(0);
     const uint32_t floor_bits   = get_arg_val<uint32_t>(1);
     const bool cull_disabled    = get_arg_val<uint32_t>(2) != 0;

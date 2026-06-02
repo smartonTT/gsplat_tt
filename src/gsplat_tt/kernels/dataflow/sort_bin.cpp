@@ -49,7 +49,6 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 }  // namespace
 
 void kernel_main() {
-    DeviceZoneScopedN("sort");  // Tracy device-timeline stage label (sort bin/count)
     const uint32_t gids_addr   = get_arg_val<uint32_t>(0);
     const uint32_t tids_addr   = get_arg_val<uint32_t>(1);
     const uint32_t keep_addr   = get_arg_val<uint32_t>(2);
@@ -64,6 +63,7 @@ void kernel_main() {
     const uint32_t stride      = get_arg_val<uint32_t>(11);
     const uint32_t core_id     = get_arg_val<uint32_t>(12);
     const uint32_t mode        = get_arg_val<uint32_t>(13);
+    DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
 #ifdef BIN_DUMP
     const uint32_t dbg_addr    = get_arg_val<uint32_t>(14);
 #endif

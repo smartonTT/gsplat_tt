@@ -158,6 +158,39 @@ def main() -> int:
                     )
         checks.append("recent rows have sane PSNR/timings (or a reason when metric-less)")
 
+        # --- 6. Hero + 10× diff on every ttw ledger row ----------------------
+        shots_root = OPT_DIR / "metal-screenshots"
+        for r in ttw_rows:
+            it = r.get("iter")
+            iter_dir = str(r.get("iter_dir") or "").strip()
+            if not iter_dir and it is not None:
+                iter_dir = f"ttw-{int(it):03d}"
+            if not iter_dir:
+                shot = str(r.get("screenshot") or "")
+                if shot:
+                    iter_dir = Path(shot).parent.name
+            if not iter_dir:
+                raise Invalid(f"ttw iter {it} has no iter_dir / screenshot path")
+            base = shots_root / iter_dir
+            hero = base / "hero.png"
+            diff = base / "hero_diff10.png"
+            if not diff.exists() and (base / "diff10x.png").exists():
+                diff = base / "diff10x.png"
+            if not hero.exists():
+                raise Invalid(
+                    f"ttw iter {it} ({iter_dir}) missing hero.png — "
+                    f"re-run verify with --iter-dir {iter_dir}"
+                )
+            if not diff.exists():
+                raise Invalid(
+                    f"ttw iter {it} ({iter_dir}) missing hero_diff10.png — "
+                    f"re-run verify or python3 opt/build_report.py"
+                )
+        if ttw_rows:
+            checks.append(
+                f"every ttw row has hero.png + 10× diff ({len(ttw_rows)} rows)"
+            )
+
     except Invalid as e:
         for c in checks:
             print(f"  [PASS] {c}")

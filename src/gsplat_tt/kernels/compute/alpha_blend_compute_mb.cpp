@@ -455,7 +455,7 @@ inline void debug_vecmap() {
 }  // namespace
 
 void kernel_main() {
-    DeviceZoneScopedN("blend");  // Tracy device-timeline stage label (alpha-blend compute)
+    DeviceZoneScopedN("tile_blend_sfpu");
 #ifdef MB_RESIDENT
     cb_wait_front(CB_CORE_TILES, 1);
     const uint32_t num_tiles =

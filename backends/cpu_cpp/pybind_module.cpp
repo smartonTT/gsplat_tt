@@ -1358,9 +1358,11 @@ py::tuple render_full_py(
     bool blend_done_in_sort = false;
 #ifdef GSPLAT_WITH_TT
     {
-    const char* sort_zone =
-        sort_blend_chain ? "host_stage_sort_blend" : "host_stage_sort";
-    GSPLAT_HOST_ZONE(sort_zone);
+    if (sort_blend_chain) {
+        GSPLAT_HOST_ZONE("host_stage_sort_blend");
+    } else {
+        GSPLAT_HOST_ZONE("host_stage_sort");
+    }
     // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
     // layout-identical SortResult (byte-identical sorted_gaussian_ids +
     // tile_ranges) and publishes the contiguous outputs resident in

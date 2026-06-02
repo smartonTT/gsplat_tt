@@ -57,6 +57,16 @@ def to_u8(a: np.ndarray) -> np.ndarray:
     return (np.clip(a, 0.0, 1.0) * 255.0).astype(np.uint8)
 
 
+def write_hero_diff10(ref: np.ndarray, cand: np.ndarray, out: Path) -> None:
+    """10× per-channel abs color diff (display domain, matches report cards)."""
+    ref_f = ref.astype(np.float32)
+    cand_f = cand.astype(np.float32)
+    if ref_f.shape != cand_f.shape:
+        return
+    amp = np.clip(np.abs(ref_f - cand_f) * 10.0, 0.0, 1.0)
+    Image.fromarray((amp * 255.0).astype(np.uint8)).save(out)
+
+
 def psnr_u8(a: np.ndarray, b_u8_floats: np.ndarray) -> float:
     """PSNR against a uint8 ground-truth PNG (already loaded as float/255).
 
@@ -180,18 +190,29 @@ def main():
     shot_dir = Path("opt/metal-screenshots") / iter_dir
     shot_dir.mkdir(parents=True, exist_ok=True)
     to_save = order if args.save_all_views else [order[0]]
+    hname = order[0]
     for name in to_save:
         out_name = "hero.png" if name == "hero" else f"{name}.png"
         arr = (tt_imgs[name] * 255.0).astype(np.uint8)
         Image.fromarray(arr).save(shot_dir / out_name)
 
-    # DIAG: dump ref + 10x diff for hero, and report top 32x32-tile error blocks
-    # so payload residual corruption can be localized to tile ids.
+    # Mandatory deliverable: 10× diff vs cpu_cpp_mb ref (same domain as hero_vs_ref).
+    write_hero_diff10(ref_imgs[hname], tt_imgs[hname], shot_dir / "hero_diff10.png")
+    Image.fromarray((ref_imgs[hname] * 255.0).astype(np.uint8)).save(shot_dir / "ref.png")
+    hero_path = shot_dir / "hero.png"
+    diff_path = shot_dir / "hero_diff10.png"
+    if not hero_path.is_file() or not diff_path.is_file():
+        print(
+            f"FATAL missing screenshot deliverables under {shot_dir} "
+            f"(hero={hero_path.is_file()} diff={diff_path.is_file()})",
+            flush=True,
+        )
+        sys.exit(2)
+
+    # DIAG: optional GT diff + per-tile error blocks (payload residual localization).
     if os.environ.get("GSPLAT_TT_DIFF_DUMP"):
-        hname = order[0]
         tt = tt_imgs[hname].astype(np.float32)
         rf = ref_imgs[hname].astype(np.float32)
-        Image.fromarray((rf * 255.0).astype(np.uint8)).save(shot_dir / "ref.png")
         d = np.abs(tt - rf)
         Image.fromarray((np.clip(d * 10.0, 0, 1) * 255.0).astype(np.uint8)).save(
             shot_dir / "diff10x.png")
@@ -262,6 +283,7 @@ def main():
         "num_views": len(rows),
         "iter_dir": iter_dir,
         "screenshot": str(shot_dir / "hero.png"),
+        "screenshot_diff": str(shot_dir / "hero_diff10.png"),
         "hero_psnr_tt_vs_ref_dB": hero["psnr_tt_vs_ref_dB"],
         "hero_psnr_tt_vs_gt_dB": hero["psnr_tt_vs_gt_dB"],
         "hero_psnr_ref_vs_gt_dB": hero["psnr_ref_vs_gt_dB"],
@@ -294,7 +316,8 @@ def main():
           f"ms/view={summary['ms_per_view']:.1f} "
           f"(proj={ps['project_ms']:.1f} ta={ps['tile_assign_ms']:.1f} "
           f"sort={ps['sort_ms']:.1f} blend={ps['blend_ms']:.1f}) "
-          f"shot={summary['screenshot']}",
+          f"shot={summary['screenshot']} "
+          f"shot_diff={summary['screenshot_diff']}",
           flush=True)
 
     # TT + tt-metal: skip process-exit teardown races (ProgramImpl vs MeshDevice).

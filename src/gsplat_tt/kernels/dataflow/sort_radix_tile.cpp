@@ -50,7 +50,7 @@ constexpr uint32_t CB_META = 5;   // tmeta scratch (one page)
 }  // namespace
 
 void kernel_main() {
-    DeviceZoneScopedN("radix");  // Tracy device-timeline stage label (sort radix)
+    DeviceZoneScopedN("sort_tile_depth");
     const uint32_t keys_addr      = get_arg_val<uint32_t>(0);
     const uint32_t ids_addr       = get_arg_val<uint32_t>(1);
     const uint32_t out_addr       = get_arg_val<uint32_t>(2);

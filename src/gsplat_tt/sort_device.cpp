@@ -1077,6 +1077,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->buf_tile_ids = make_dram(ctx->mesh_device.get(), tile_ids_bytes);
             ctx->cap_tile_ids_bytes = tile_ids_bytes;
         }
+        device_state::register_buffer("sort_lpt_tile_ids", ctx->buf_tile_ids);
         const uint32_t meta_elems = num_cores * 2;
         const uint32_t meta_pad = round_up(std::max(meta_elems, 1u), ELEMS_PER_PAGE);
         const std::size_t meta_bytes = static_cast<std::size_t>(meta_pad) * 4;
@@ -1084,18 +1085,21 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->buf_lpt_meta = make_dram(ctx->mesh_device.get(), meta_bytes);
             ctx->cap_lpt_meta_bytes = meta_bytes;
         }
+        device_state::register_buffer("sort_lpt_meta", ctx->buf_lpt_meta);
         const uint32_t counts_pad = round_up(std::max(num_tiles, 1u), ELEMS_PER_PAGE);
         const std::size_t counts_bytes = static_cast<std::size_t>(counts_pad) * 4;
         if (!ctx->buf_tile_counts || ctx->cap_tile_counts_bytes < counts_bytes) {
             ctx->buf_tile_counts = make_dram(ctx->mesh_device.get(), counts_bytes);
             ctx->cap_tile_counts_bytes = counts_bytes;
         }
+        device_state::register_buffer("sort_tile_counts", ctx->buf_tile_counts);
         const std::size_t ranges_bytes =
             static_cast<std::size_t>(round_up(num_tiles * 2u, ELEMS_PER_PAGE)) * 4;
         if (!ctx->buf_tile_ranges || ctx->cap_ranges_bytes < ranges_bytes) {
             ctx->buf_tile_ranges = make_dram(ctx->mesh_device.get(), ranges_bytes);
             ctx->cap_ranges_bytes = ranges_bytes;
         }
+        device_state::register_buffer("sort_tile_ranges", ctx->buf_tile_ranges);
         if (tile_bucket) {
             const std::size_t rec_base_bytes =
                 static_cast<std::size_t>(num_cores) * stride * 4;
