@@ -1,5 +1,5 @@
-id=107
-sha=944ba1a
-ts=2026-06-01T22:35:50-0700
-desc=iter 37: project count->scan->scatter fusion DEFAULT-ON (proj 32.4->28.3, ms/view 173.2->169.6 @8v, 63.85dB)
-bin=19804835fbfaf16b
+id=108
+sha=8eb62c8
+ts=2026-06-01T22:41:31-0700
+desc=iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+bin=90f66c610cac25a2

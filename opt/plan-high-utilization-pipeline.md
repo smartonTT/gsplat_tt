@@ -904,10 +904,35 @@ core utilization rises with the removed bubble but the dominant idle is still th
 remaining 6 cross/intra-stage drains (tile_assign + sort) — STEP 4 continues
 there.
 
-**Next host-free lever (STEP 4 cont.):** the **sort bin↔H2D pair** (§9.2 #2): the
-450 KB per-core histogram D2H + host per-tile totals/LPT build between sort-bin
-and the radix pass (folded into bin≈8 ms) — move the per-tile totals + LPT
-on-device (or overlap the D2H/LPT build with the next program) to delete that
-drain + D2H, mirroring this project fusion. Then tile_assign's 3 scan/scatter
-Finishes. blend (~97 ms, §14 SFPU serialization) remains the largest single
-stage but is not a host-free target.
+**Next host-free lever (STEP 4 cont.) — sort bin↔H2D pair, MEASURED (iter-38
+diag `GSPLAT_TT_SORT_TIMING`, gated, default-off):** the old `bin≈8 ms` line
+lumped the device count kernel, the host bridge, AND the device record-scatter
+pass (`launch_bin(1)`, added into `bin_ms`). Splitting the RP path @8v (median
+over 8 views) shows the actual HOST bridge between the count pass and the radix
+kernel is only the middle slice:
+
+| sub-step | ms @8v | where |
+|---|---|---|
+| count kernel (+Finish) | ~0.5–1.5 | device |
+| hist D2H (450 KB) | ~0.26 | host bridge |
+| host build (per-tile totals + page-aligned (core,tile) layout + LPT + publish) | **~1.6** | host bridge |
+| H2D up (bin2d/tmeta/tile_ids + Finish) | ~0.29 | host bridge |
+| **host bridge total (d2h+build+up)** | **~2.0–2.35** | — |
+| record scatter pass | ~5 | device (separate program) |
+| radix kernel | ~7.5 | device |
+
+So the sort host-in-loop bridge is a **real ~2.0–2.35 ms/frame** (≈1.2 % of
+ms/view), dominated by the **~1.6 ms host_build** (the 110×~1024 page-aligned
+per-(core,tile) base double-loop + `build_lpt` greedy + `publish_sort_downstream_
+metadata`), NOT by the 450 KB D2H (0.26) or the H2D (0.29). This is the next
+on-device target: keep the per-core histogram resident and compute the
+page-aligned bases + tile_pad + starts + LPT on-device (single-core
+scan_bases-style for the sequential page-prefix; the 1024-tile LPT greedy fits a
+single core), publishing `bin2d`/`tmeta`/`tile_ids` resident — deleting the D2H,
+the host build, and the H2D `Finish` (sort drains 2 → ~1). Measured ceiling for
+the full move ≈ 2 ms. It is a LARGE, wedge-risky kernel (sequential prefix + LPT
+on Tensix) — bounded-effort note: do it as its own iteration with a SORT_TIMING
+A/B, not folded into another change. After that, tile_assign's 3 scan/scatter
+Finishes (§9.1 #6–9, ta≈10 ms) are the next host structure. blend (~97 ms, §14
+SFPU serialization) remains the largest single stage but is not a host-free
+target.

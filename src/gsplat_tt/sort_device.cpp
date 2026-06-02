@@ -876,10 +876,12 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             distributed::Finish(*ctx->cq);
         };
         launch_bin(0);
+        const auto t_cnt = clk::now();  // DIAG: count kernel (+Finish) done
 
         // D2H the per-core histograms.
         std::vector<uint32_t> hist(static_cast<std::size_t>(num_cores) * stride);
         distributed::EnqueueReadMeshBuffer(*ctx->cq, hist, ctx->buf_bin2d, true);
+        const auto t_d2h = clk::now();  // DIAG: histogram D2H done
 
         // Host: per-tile totals + page-aligned starts + per-core base offsets.
         std::vector<int64_t> counts(num_tiles, 0);
@@ -1451,6 +1453,22 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             "up=%.2f kernel=%.2f d2h=%.2f compact=%.2f publish=%.2f total=%.2fms\n",
             P_full, P_kept, num_tiles, max_n, T.bin_ms, T.upload_ms, T.kernel_ms,
             T.d2h_ms, T.compact_ms, T.publish_ms, T.total_ms);
+        if (const char* st = std::getenv("GSPLAT_TT_SORT_TIMING"); st && st[0] == '1') {
+            // STEP-4 diag: split bin into the device count kernel(+Finish), the
+            // 450KB histogram D2H, and the host per-tile/page-layout/LPT build —
+            // i.e. how much of bin is a HOST bridge (the on-device-LPT target).
+            const double count_ms =
+                std::chrono::duration<double, std::milli>(t_cnt - t_bin0).count();
+            const double histd2h_ms =
+                std::chrono::duration<double, std::milli>(t_d2h - t_cnt).count();
+            const double hostbuild_ms =
+                std::chrono::duration<double, std::milli>(t_bin1 - t_d2h).count();
+            std::fprintf(stderr,
+                "[SORT_TIMING] count_kernel=%.3f hist_d2h=%.3f host_build=%.3f "
+                "h2d_up=%.3f | host_bridge(d2h+build+up)=%.3f\n",
+                count_ms, histd2h_ms, hostbuild_ms, T.upload_ms,
+                histd2h_ms + hostbuild_ms + T.upload_ms);
+        }
 
         if (verify) {
             finish_sort_cq_if_needed(ctx);
