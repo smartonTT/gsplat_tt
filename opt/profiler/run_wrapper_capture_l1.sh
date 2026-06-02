@@ -34,11 +34,11 @@ export PYTHONPATH=/localdev/smarton/tt-metal/tools:${PYTHONPATH:-}
 
 # gsplat device-resident pipeline knobs (mirror ttw.toml [run].verify_cmd).
 export GSPLAT_TT_BLEND_MODE=2
-export GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1
+export GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1
 export GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1
 export GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1
 export GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1
-export GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_MB_TIMING=1
+export GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_MB_TIMING=1
 
 # ── L1-RESIDENT CONFIG (the cull-fold winning config, blend-data-movement-plan §13,
 #    commit 2d1f93f; lessons.md 2026-06-01) ────────────────────────────────────
@@ -59,6 +59,7 @@ export GSPLAT_TT_BUCKET_FIT=8192
 
 OUTDIR=/localdev/smarton/gstt2/opt/profiler/wrap_out_l1
 TRACY="$OUTDIR/.logs/tracy_profile_log_host.tracy"
+TRACY_IDEAL_MAC=/localdev/smarton/gstt2/opt/profiler/render-ideal-labeled.tracy
 CSV="$TT_METAL_HOME/build/tools/profiler/bin/csvexport-release"
 rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR"
@@ -83,7 +84,9 @@ echo "[tracy-wrap-l1] wrapper exited rc=$RC"
 pkill -f 'profiler/bin/capture[-]release' 2>/dev/null || true
 
 if [[ -s "$TRACY" ]]; then
+  cp -f "$TRACY" "$TRACY_IDEAL_MAC"
   echo "[tracy-wrap-l1] OK tracy: $(ls -la "$TRACY")"
+  echo "[tracy-wrap-l1] copied -> $TRACY_IDEAL_MAC (scp to Mac opt/profiler/render-ideal-labeled.tracy)"
   echo "[tracy-wrap-l1] === host-zone export via csvexport-release (CPU zones; device zones are GPU zones, see below) ==="
   "$CSV" "$TRACY" > "$OUTDIR/zones.csv" 2>"$OUTDIR/zones.err" || true
   echo "[tracy-wrap-l1] csv zone rows: $(($(wc -l < "$OUTDIR/zones.csv" 2>/dev/null) - 1))"

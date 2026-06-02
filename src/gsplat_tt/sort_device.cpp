@@ -19,6 +19,7 @@
 
 #include "gsplat_tt/sort.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/host_tracy.hpp"
 
 #include <algorithm>
 #include <bit>
@@ -284,10 +285,7 @@ static void build_program_bin(SortDeviceContext& ctx) {
     cb(7, BIN_LOCAL_BYTES);   // ksort (L1 counting-sort keys)
     cb(8, BIN_LOCAL_BYTES);   // isort (L1 counting-sort ids)
 
-    const bool tile_bucket = [] {
-        const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
-        return v && v[0] == '1';
-    }();
+    const bool tile_bucket = tile_bucket_enabled();
     if (tile_bucket) {
         cb(9, 16u * PAGE_BYTES);  // rec staging ring (REC_BATCH=16 blendrec pages)
         cb(10, BIN_ROW_BYTES);    // recrow (per-(core,tile) DENSE record base)
@@ -529,10 +527,20 @@ static bool sort_device_publish_enabled();
 
 static bool fused_tile_enabled() {
     const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
-    if (v == nullptr || v[0] == '\0') {
-        return true;
+    return v != nullptr && v[0] == '1';
+}
+
+static bool tile_bucket_enabled() {
+    const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+    if (v != nullptr) {
+        return v[0] == '1';
     }
-    return v[0] != '0';
+    if (fused_tile_enabled()) {
+        return false;
+    }
+    const char* sfpu = std::getenv("GSPLAT_TT_SFPU_CULL");
+    const char* rb = std::getenv("GSPLAT_TT_RESIDENT_BLEND");
+    return sfpu != nullptr && sfpu[0] == '1' && rb != nullptr && rb[0] == '1';
 }
 
 // Drop the sort-publish Finish() and blend's blocking sort_P_kept D2H so the
@@ -552,6 +560,7 @@ static bool sort_blend_pipe_enabled() {
 
 static void finish_sort_cq_if_needed(SortDeviceContext* ctx) {
     if (device_state::sort_publish_pending()) {
+        GSPLAT_HOST_ZONE("host_finish_sort");
         distributed::Finish(*ctx->cq);
         device_state::clear_sort_publish_pending();
     }
@@ -834,10 +843,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }
 
         // T1 (GSPLAT_TT_TILE_BUCKET): scatter full records into per-tile buckets.
-        const bool tile_bucket = [] {
-            const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
-            return v && v[0] == '1';
-        }();
+        const bool tile_bucket = tile_bucket_enabled();
         auto bbrec = tile_bucket ? device_state::get_buffer("proj_m_blendrec") : nullptr;
         if (tile_bucket && !bbrec) {
             std::cerr << "[gsplat_tt::sort] TILE_BUCKET set but proj_m_blendrec missing; "
@@ -1031,7 +1037,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             tmeta[t * 2 + 1] = tile_pad[t];  // radix sorts the padded region
             pad_counts[t] = static_cast<int64_t>(tile_pad[t]);
         }
-        const LptAssignment lpt = build_lpt(pad_counts, num_tiles, num_cores);
+        LptAssignment lpt;
+        {
+            GSPLAT_HOST_ZONE("host_lpt_build");
+            lpt = build_lpt(pad_counts, num_tiles, num_cores);
+        }
         const uint32_t tile_ids_count = static_cast<uint32_t>(lpt.flat_tile_ids.size());
         const uint32_t tile_ids_pad = round_up(std::max<uint32_t>(tile_ids_count, 1), ELEMS_PER_PAGE);
         const std::size_t tile_ids_bytes = static_cast<std::size_t>(tile_ids_pad) * 4;

@@ -55,6 +55,26 @@ function(gsplat_link_tt_metal target)
 
   target_link_libraries(${target} PUBLIC "${TT_METAL_SO}")
 
+  # Host Tracy (same 0.10 client as tt-metal ENABLE_TRACY builds).
+  set(_tracy_so "${TT_BUILD}/lib/libtracy.so.0.10.0")
+  set(_tracy_inc "")
+  foreach(
+    _cand
+    "${TT_HOME}/tt_metal/third_party/tracy/public"
+    "${TT_HOME}/tools/tracy/public"
+    "${TT_HOME}/tools/tracy/tracy/public"
+  )
+    if(EXISTS "${_cand}/tracy/Tracy.hpp")
+      set(_tracy_inc "${_cand}")
+      break()
+    endif()
+  endforeach()
+  if(EXISTS "${_tracy_so}" AND _tracy_inc)
+    target_include_directories(${target} SYSTEM PRIVATE "${_tracy_inc}")
+    target_compile_definitions(${target} PRIVATE TRACY_ENABLE=1)
+    target_link_libraries(${target} PRIVATE "${_tracy_so}")
+  endif()
+
   set(_tt_rpath
     "${TT_BUILD}/tt_metal"
     "${TT_BUILD}/tt_stl"

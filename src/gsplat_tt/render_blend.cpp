@@ -208,21 +208,13 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
                 const char* v = std::getenv(n);
                 return v != nullptr && v[0] == '1';
             };
-            const bool device_cull = env_on("GSPLAT_TT_MB_DEVCULL");
+            const bool resident_blend = env_on("GSPLAT_TT_RESIDENT_BLEND");
+            const bool device_cull = resident_blend && env_on("GSPLAT_TT_MB_DEVCULL");
             const bool device_conic = device_cull || env_on("GSPLAT_TT_MB_DEVCONIC");
 
-            // DEVCULL: the host does NO conic and NO microblock cull. It only
-            // gathers a compact per-gaussian attribute table (raw cov, image-space
-            // center, opacity, color) and emits the per-tile depth-sorted
-            // candidate id lists (== sorted_gaussian_ids per tile range). The
-            // device reader computes the conic + microblock mask on-core.
-            if (device_cull) {
-                if (!env_on("GSPLAT_TT_RESIDENT_BLEND")) {
-                    std::fprintf(stderr,
-                        "[BLEND_HOST] FATAL: MB_DEVCULL requires RESIDENT_BLEND on "
-                        "host-free render\n");
-                    std::abort();
-                }
+            // Ideal path: RESIDENT_BLEND + SFPU cull_masks (no host payload build,
+            // no soft-float MB_DEVCULL on BRISC). Legacy gather uses MB_DEVCULL.
+            if (resident_blend) {
                 // RESIDENT blend: attrs/ids/LPT all resident — host builds nothing.
                 {
                     if (std::getenv("GSPLAT_TT_BLEND_REDUNDANCY") != nullptr) {

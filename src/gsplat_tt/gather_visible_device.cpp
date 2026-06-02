@@ -18,6 +18,7 @@
 
 #include "gsplat_tt/gather_visible.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/host_tracy.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -1034,6 +1035,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                 std::vector<uint32_t> mbuf(PAGE_ELEMS, 0);
                 mbuf[0] = static_cast<uint32_t>(M);
                 distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_M, mbuf, false);
+                GSPLAT_HOST_ZONE("host_finish_proj");
                 distributed::Finish(*ctx->cq);
             }
 

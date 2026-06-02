@@ -22,6 +22,7 @@
 #include "gsplat_tt/blend.h"
 #include "gsplat_tt/device_state.h"
 #include "gsplat_tt/gather_visible.h"
+#include "gsplat_tt/host_tracy.hpp"
 #include "gsplat_tt/pfwc.h"
 #include "gsplat_tt/project.h"
 #include "gsplat_tt/render_blend.h"
@@ -1160,7 +1161,11 @@ py::tuple render_full_py(
     // (tile_assign / sort / project on device) are added the same way.
     int blend_mode = 0) {
     using clock = std::chrono::steady_clock;
+    GSPLAT_HOST_FRAME_MARK("render_view");
     auto t0 = clock::now();
+    {
+        GSPLAT_HOST_ZONE("host_view_setup");
+    }
 
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
@@ -1177,6 +1182,7 @@ py::tuple render_full_py(
     // (device unavailable / unsupported config).
     if (const char* dp = std::getenv("GSPLAT_TT_DEVICE_PROJECT");
         dp != nullptr && dp[0] == '1') {
+        GSPLAT_HOST_ZONE("host_stage_proj");
         proj = project_via_device(
             static_cast<const float*>(means_info.ptr),
             static_cast<const float*>(cov3d.request().ptr),
@@ -1266,6 +1272,7 @@ py::tuple render_full_py(
     gsplat_cpu::TileAssignResult ta;
     bool ta_done = false;
 #ifdef GSPLAT_WITH_TT
+    GSPLAT_HOST_ZONE("host_stage_ta");
     // tt-006: opt-in device tile_assign (GSPLAT_TT_DEVICE_TILE_ASSIGN=1).
     // Produces a layout-identical TileAssignResult (same (gid,tid) pair set
     // and gaussian-major order); falls back to CPU on device failure. Mirrors
@@ -1326,6 +1333,7 @@ py::tuple render_full_py(
     gsplat_cpu::SortResult sr;
     bool sort_done = false;
 #ifdef GSPLAT_WITH_TT
+    GSPLAT_HOST_ZONE("host_stage_sort");
     // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
     // layout-identical SortResult (byte-identical sorted_gaussian_ids +
     // tile_ranges) and publishes the contiguous outputs resident in
@@ -1407,6 +1415,7 @@ py::tuple render_full_py(
     gsplat_cpu::CullAndBlendResult cb;
 #ifdef GSPLAT_WITH_TT
     if (blend_mode >= 1) {
+        GSPLAT_HOST_ZONE("host_stage_blend");
         cb = gsplat_tt::render_blend_tt(
             proj.means_2d.data(),
             proj.covs_2d.data(),

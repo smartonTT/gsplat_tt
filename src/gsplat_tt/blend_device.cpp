@@ -34,6 +34,8 @@
 #include "tt-metalium/base_types.hpp"
 #include "tt-metalium/kernel_types.hpp"
 
+#include "gsplat_tt/host_tracy.hpp"
+
 #include "alpha_blend_host.h"
 #include "blend.h"
 #include "gsplat_cpu/blend_microblock.h"
@@ -845,15 +847,16 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         const char* v = std::getenv(n);
         return v != nullptr && v[0] == '1';
     };
-    const bool dev_cull = env_on("GSPLAT_TT_MB_DEVCULL");
+    const bool resident_blend = env_on("GSPLAT_TT_RESIDENT_BLEND");
+    // Soft-float inline cull on BRISC is NOT the ideal path — only when explicitly
+    // requested (FUSED_TILE gather production). Ideal path uses SFPU cull_masks.
+    const bool dev_cull = resident_blend && env_on("GSPLAT_TT_MB_DEVCULL");
     const bool dev_conic = dev_cull || env_on("GSPLAT_TT_MB_DEVCONIC");
-    // RESIDENT blend: the devcull reader gathers attrs from resident SoA
-    // proj_m_* and consumes resident sort_* instead of host-uploaded payloads.
-    const bool resident_blend = dev_cull && env_on("GSPLAT_TT_RESIDENT_BLEND");
     // SFPU CULL: the 32-bit microblock mask is precomputed on the SFPU (separate
     // cull pass) and kept resident in cull_masks; the blend reader then just
     // reads the mask (pure integer) instead of running the soft-float cull.
     const bool sfpu_cull = resident_blend && env_on("GSPLAT_TT_SFPU_CULL");
+    const bool resident_reader = resident_blend && (dev_cull || sfpu_cull);
     // S1 (GSPLAT_TT_BLEND_AOS): the blend reader fetches each candidate's attrs
     // as ONE contiguous 64B AoS record (proj_m_blendrec, emitted by the gather
     // stage) instead of 7-9 random per-component SoA pages. Layers on top of the
@@ -868,7 +871,19 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // record bucket (sort_tile_recs) — bulk-load once, STABLE depth-sort in L1,
     // emit coeff rows from L1 (NO per-candidate attr gather). Layers on the AoS
     // SFPU-cull reader; masks still read from cull_masks (same depth order).
-    const bool tile_bucket = blend_aos && env_on("GSPLAT_TT_TILE_BUCKET");
+    const bool tile_bucket = blend_aos && [] {
+        const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+        if (v != nullptr) {
+            return v[0] == '1';
+        }
+        if (const char* ft = std::getenv("GSPLAT_TT_FUSED_TILE"); ft && ft[0] == '1') {
+            return false;
+        }
+        return std::getenv("GSPLAT_TT_SFPU_CULL") != nullptr &&
+               std::getenv("GSPLAT_TT_SFPU_CULL")[0] == '1' &&
+               std::getenv("GSPLAT_TT_RESIDENT_BLEND") != nullptr &&
+               std::getenv("GSPLAT_TT_RESIDENT_BLEND")[0] == '1';
+    }();
     // GSPLAT_TT_TILE_L1 (default OFF): bulk-load each tile's whole cull_masks
     // region into L1 ONCE per tile (one barrier), read masks from L1 in the
     // candidate loop, and DROP the per-candidate MB_CULL_SPIN. The spin (~89 ms
@@ -885,7 +900,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
-    if (dev_cull) {
+    if (resident_reader) {
         constexpr uint32_t CB_SCR_IDS = 4;
         constexpr uint32_t CB_SCR_ATTR = 5;
         cb_cfg(CB_SCR_IDS, 64, 2, DataFormat::UInt32);
@@ -947,7 +962,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // xramp, yramp, tile_ids, lpt_meta, payload). No SoA gather, no cull_masks.
     // +1 accessor (proj_m_blendrec, index 15) under S1 AoS.
     const int num_reader_accessors =
-        payload ? 6 : (resident_blend ? (sfpu_cull ? (blend_aos ? (tile_bucket ? 18 : 16) : 15) : 13) : 6);
+        payload ? 6
+                : (resident_reader ? (sfpu_cull ? (blend_aos ? (tile_bucket ? 18 : 16) : 15) : 13)
+                                   : 6);
     // cull_masks is reader accessor index 13 (after a,b,c,px,py,op,col, ids,
     // ranges, xramp,yramp,tile_ids, lpt_meta). Under the L1 mask handoff it is
     // an L1-interleaved buffer; everything else stays DRAM-interleaved.
@@ -963,8 +980,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     }
     const char* reader_src =
         payload  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_payload.cpp"
-        : dev_cull ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp"
-                   : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb.cpp";
+        : resident_reader
+            ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp"
+            : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb.cpp";
     std::map<std::string, std::string> reader_defines;
     if (resident_blend) {
         reader_defines["MB_RESIDENT"] = "1";
@@ -1105,7 +1123,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (dev_conic) {
         mb_defines["MB_DEVCONIC"] = "1";
     }
-    if (dev_cull) {
+    if (resident_reader) {
         mb_defines["MB_DEVCULL"] = "1";
     }
     if (resident_blend) {
@@ -1646,8 +1664,18 @@ static double process_frame_mb_devcull_resident(
     const bool sfpu_cull = !payload && sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1';
     const char* blend_aos_env = std::getenv("GSPLAT_TT_BLEND_AOS");
     const bool blend_aos = sfpu_cull && !(blend_aos_env != nullptr && blend_aos_env[0] == '0');
-    const char* tile_bucket_env = std::getenv("GSPLAT_TT_TILE_BUCKET");
-    const bool tile_bucket = blend_aos && tile_bucket_env != nullptr && tile_bucket_env[0] == '1';
+    const bool tile_bucket = blend_aos && [] {
+        const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+        if (v != nullptr) {
+            return v[0] == '1';
+        }
+        if (const char* ft = std::getenv("GSPLAT_TT_FUSED_TILE"); ft && ft[0] == '1') {
+            return false;
+        }
+        return sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1' &&
+               std::getenv("GSPLAT_TT_RESIDENT_BLEND") != nullptr &&
+               std::getenv("GSPLAT_TT_RESIDENT_BLEND")[0] == '1';
+    }();
     uint32_t tile_recs_addr = 0;
     uint32_t bucket_meta_addr = 0;
     if (tile_bucket) {
@@ -1793,12 +1821,14 @@ static double process_frame_mb_devcull_resident(
     }
     std::chrono::steady_clock::time_point t_upload = t_start;
     if (timing) {
+        GSPLAT_HOST_ZONE("host_finish_blend");
         distributed::Finish(*ctx.cq);
         t_upload = std::chrono::steady_clock::now();
     }
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     std::chrono::steady_clock::time_point t_exec = t_upload;
     if (timing) {
+        GSPLAT_HOST_ZONE("host_finish_blend");
         distributed::Finish(*ctx.cq);
         t_exec = std::chrono::steady_clock::now();
     }
@@ -2540,15 +2570,11 @@ static bool enabled() {
         const char* e = std::getenv(n);
         return e != nullptr && e[0] == '1';
     };
-    // Hero-quality resident SFPU path only. Default ON when the production
-    // resident+SFPU stack is active; opt out with GSPLAT_TT_FUSED_TILE=0.
+    // FUSED_TILE gather path: opt-in only (GSPLAT_TT_FUSED_TILE=1). Default OFF
+    // so the ideal TILE_BUCKET + SFPU cull_masks path is not shadowed.
     const char* v = std::getenv("GSPLAT_TT_FUSED_TILE");
-    if (v != nullptr && (v[0] == '0' || (v[0] == '\0' && v[1] == '\0'))) {
+    if (v == nullptr || v[0] != '1') {
         return false;
-    }
-    if (v != nullptr && v[0] == '1') {
-        return env_on("GSPLAT_TT_MB_DEVCULL") && env_on("GSPLAT_TT_RESIDENT_BLEND") &&
-               env_on("GSPLAT_TT_SFPU_CULL");
     }
     return env_on("GSPLAT_TT_MB_DEVCULL") && env_on("GSPLAT_TT_RESIDENT_BLEND") &&
            env_on("GSPLAT_TT_SFPU_CULL");
