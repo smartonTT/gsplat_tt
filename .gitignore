@@ -42,6 +42,8 @@ compile_commands.json
 *.bak/
 *.tmp
 *.pid
+# Transient scratch (ttw hygiene: all transient output -> gitignored tmp/)
+tmp/
 
 # Test artifacts
 .pytest_cache/

@@ -1069,7 +1069,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             // visibility race: a `fence` orders the row stores before cb_push_back
             // (producer) and invalidates the stale cached CB-slot line before the
             // blend reads it (consumer). Replaces the fragile MB_BUCKET_EMIT_SPIN.
-            if (env_on("GSPLAT_TT_BUCKET_CB_FENCE")) {
+            // PROVEN NECESSARY (iter-29) for the L1-resident bucket path to hit the
+            // gate (without it the fast-producer race caps at ~42 dB), so it is
+            // DEFAULT-ON whenever the bucket path is active; opt out with
+            // GSPLAT_TT_BUCKET_CB_FENCE=0. (Never set for production's FUSED_TILE
+            // path — this whole block is inside `if (tile_bucket)`.)
+            if (const char* cf = std::getenv("GSPLAT_TT_BUCKET_CB_FENCE");
+                cf == nullptr || cf[0] != '0') {
                 reader_defines["MB_BUCKET_CB_FENCE"] = "1";
             }
         }
@@ -1113,7 +1119,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (env_on("GSPLAT_TT_BUCKET_AB_PROBE")) {
         mb_defines["MB_BUCKET_AB_PROBE"] = "1";
     }
-    if (env_on("GSPLAT_TT_BUCKET_CB_FENCE")) {
+    // Mirror the reader's DEFAULT-ON CB_FENCE for the bucket path (consumer side
+    // mailbox ack). Only when the bucket path is active; opt out with
+    // GSPLAT_TT_BUCKET_CB_FENCE=0. Production (FUSED_TILE, tile_bucket=false) is
+    // never affected.
+    if (const char* cf = std::getenv("GSPLAT_TT_BUCKET_CB_FENCE");
+        tile_bucket && (cf == nullptr || cf[0] != '0')) {
         mb_defines["MB_BUCKET_CB_FENCE"] = "1";
     }
     ctx.compute = CreateKernel(
