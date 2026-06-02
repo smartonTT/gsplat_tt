@@ -550,6 +550,12 @@ static bool sort_blend_pipe_enabled() {
     return gsplat_tt::env_config::sort_blend_pipe_enabled();
 }
 
+// Chain upload+scatter+radix(+publish) into the blend/cull CQ drain — drops the
+// per-stage Finish locks between sort kernels when publish pipes to blend.
+static bool sort_stage_defer_finish() {
+    return sort_blend_pipe_enabled();
+}
+
 static void finish_sort_cq_if_needed(SortDeviceContext* ctx) {
     if (device_state::sort_publish_pending()) {
         GSPLAT_HOST_ZONE("host_finish_sort");
@@ -1058,8 +1064,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, hist, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
-        GSPLAT_HOST_ZONE("host_finish_sort_upload");
-        distributed::Finish(*ctx->cq);
+        if (!sort_stage_defer_finish()) {
+            GSPLAT_HOST_ZONE("host_finish_sort_upload");
+            distributed::Finish(*ctx->cq);
+        }
         const auto t_up1 = clk::now();
         T.upload_ms = std::chrono::duration<double, std::milli>(t_up1 - t_up0).count();
 
@@ -1232,8 +1240,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }();
         if (!skip_radix) {
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
-            GSPLAT_HOST_ZONE("host_finish_sort_radix");
-            distributed::Finish(*ctx->cq);
+            if (!sort_stage_defer_finish()) {
+                GSPLAT_HOST_ZONE("host_finish_sort_radix");
+                distributed::Finish(*ctx->cq);
+            }
         }
         const auto t_k1 = clk::now();
         T.kernel_ms = std::chrono::duration<double, std::milli>(t_k1 - t_k0).count();

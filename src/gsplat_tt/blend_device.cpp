@@ -1603,8 +1603,7 @@ static ResidentSortLpt resident_sort_lpt_handles() {
 }
 
 // One D2H of sort_lpt_meta for kernels that still take (start,count) host args
-// (compute, writer, cull). Blend reader reads meta on-device; this shrinks the
-// hot path and will go away when those kernels are updated (plan C2+D+E fuse).
+// (pack pass only). Cull + resident blend read meta on-device.
 static ResidentSortLpt load_resident_sort_lpt(
     distributed::MeshCommandQueue* cq, uint32_t num_cores) {
     namespace ds = gsplat_tt::device_state;
@@ -1636,6 +1635,13 @@ static ResidentSortLpt load_resident_sort_lpt(
 // sort stages). NOTHING about attrs/ids is uploaded per frame — LPT tile lists
 // are reused from the sort stage (sort_lpt_*). Returns elapsed ms; sets *ok=false
 // (no work done) if any required resident buffer is absent.
+
+enum class ResidentBlendPhase {
+    Complete,
+    SetupRuntimeArgsOnly,
+    DeviceLaunchAndReadback,
+};
+
 static double process_frame_mb_devcull_resident(
     DeviceContext& ctx,
     float contrib_floor,
@@ -1645,7 +1651,8 @@ static double process_frame_mb_devcull_resident(
     uint32_t image_h,
     uint32_t image_w,
     float* image_out,
-    bool* ok) {
+    bool* ok,
+    ResidentBlendPhase phase = ResidentBlendPhase::Complete) {
     namespace ds = gsplat_tt::device_state;
     auto buf_a   = ds::get_buffer("proj_m_a");
     auto buf_b   = ds::get_buffer("proj_m_b");
@@ -1663,6 +1670,10 @@ static double process_frame_mb_devcull_resident(
     }
     if (ok) *ok = true;
 
+    uint32_t cull_masks_addr = 0;
+    const bool launch_only = (phase == ResidentBlendPhase::DeviceLaunchAndReadback);
+
+    if (!launch_only) {
     // SFPU cull: the blend reader reads the precomputed 32-bit mask from the
     // resident cull_masks buffer (registered by the cull pass) instead of
     // running the soft-float cull. Built with the matching MB_SFPU_CULL define.
@@ -1709,7 +1720,6 @@ static double process_frame_mb_devcull_resident(
         }
         payload_addr = static_cast<uint32_t>(buf_payload->address());
     }
-    uint32_t cull_masks_addr = 0;
     uint32_t cull_base_addr = 0;
     if (sfpu_cull) {
         auto buf_masks = gsplat_tt::device_state::get_buffer("cull_masks");
@@ -1766,42 +1776,58 @@ static double process_frame_mb_devcull_resident(
     const uint32_t out_addr   = static_cast<uint32_t>(ctx.res_out->address());
     uint32_t floor_bits;
     std::memcpy(&floor_bits, &contrib_floor, 4);
-    for (const auto& range : ctx.all_cores.ranges()) {
-        for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
-            for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
-                CoreCoord core{x, y};
-                std::vector<uint32_t> reader_args;
-                if (payload) {
-                    reader_args = {
-                        rng_addr, xramp_addr, yramp_addr, tile_ids_addr,
-                        lpt_meta_addr, core_index, payload_addr,
-                    };
-                } else {
-                    reader_args = {
-                        a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
-                        ids_addr, rng_addr, xramp_addr, yramp_addr,
-                        tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
-                        cull_disabled ? 1u : 0u,
-                    };
-                    if (sfpu_cull) {
-                        reader_args.push_back(cull_masks_addr);  // arg 17
-                        reader_args.push_back(cull_base_addr);   // arg 18
-                        if (blend_aos) {
-                            reader_args.push_back(blendrec_addr);  // arg 19
-                            if (tile_bucket) {
-                                reader_args.push_back(tile_recs_addr);    // arg 20
-                                reader_args.push_back(bucket_meta_addr);  // arg 21
+    {
+        GSPLAT_HOST_ZONE("host_blend_setup");
+        for (const auto& range : ctx.all_cores.ranges()) {
+            for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+                for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                    CoreCoord core{x, y};
+                    std::vector<uint32_t> reader_args;
+                    if (payload) {
+                        reader_args = {
+                            rng_addr, xramp_addr, yramp_addr, tile_ids_addr,
+                            lpt_meta_addr, core_index, payload_addr,
+                        };
+                    } else {
+                        reader_args = {
+                            a_addr, b_addr, c_addr, px_addr, py_addr, op_addr, col_addr,
+                            ids_addr, rng_addr, xramp_addr, yramp_addr,
+                            tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
+                            cull_disabled ? 1u : 0u,
+                        };
+                        if (sfpu_cull) {
+                            reader_args.push_back(cull_masks_addr);  // arg 17
+                            reader_args.push_back(cull_base_addr);   // arg 18
+                            if (blend_aos) {
+                                reader_args.push_back(blendrec_addr);  // arg 19
+                                if (tile_bucket) {
+                                    reader_args.push_back(tile_recs_addr);    // arg 20
+                                    reader_args.push_back(bucket_meta_addr);  // arg 21
+                                }
                             }
                         }
                     }
+                    SetRuntimeArgs(program, ctx.reader, core, reader_args);
+                    SetRuntimeArgs(program, ctx.compute, core, {0u});
+                    SetRuntimeArgs(program, ctx.writer, core, {
+                        out_addr, tile_ids_addr, lpt_meta_addr, core_index,
+                    });
+                    core_index++;
                 }
-                SetRuntimeArgs(program, ctx.reader, core, reader_args);
-                SetRuntimeArgs(program, ctx.compute, core, {0u});
-                SetRuntimeArgs(program, ctx.writer, core, {
-                    out_addr, tile_ids_addr, lpt_meta_addr, core_index,
-                });
-                core_index++;
             }
+        }
+    }
+
+    if (phase == ResidentBlendPhase::SetupRuntimeArgsOnly) {
+        return 0.0;
+    }
+    } else {
+        if (!ctx.res_out || !ctx.res_xramp || !ctx.res_yramp) {
+            if (ok) *ok = false;
+            return 0.0;
+        }
+        if (auto buf_masks = ds::get_buffer("cull_masks")) {
+            cull_masks_addr = static_cast<uint32_t>(buf_masks->address());
         }
     }
 
@@ -1853,7 +1879,10 @@ static double process_frame_mb_devcull_resident(
             static_cast<unsigned long>(cull_masks_addr),
             static_cast<unsigned long>(ctx.res_out->address()),
             static_cast<unsigned long>(ctx.res_out->size()),
-            static_cast<unsigned long>(tile_ids_addr),
+            static_cast<unsigned long>([] {
+                auto tid = gsplat_tt::device_state::get_buffer("sort_lpt_tile_ids");
+                return tid ? tid->address() : 0u;
+            }()),
             static_cast<unsigned long>(ctx.res_xramp->address()),
             static_cast<unsigned long>(ctx.res_yramp->address()),
             pay_a, pay_sz);
@@ -1938,11 +1967,13 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_cfg(CB_SCR_ATTR, 64, 16u * GATHER_FIELDS, DataFormat::Float32);  // 96 pages
     cb_cfg(CB_MASK_SCR, 128, 1, DataFormat::UInt32);
     cb_cfg(CB_KEEP, mb::RAMP_TILE_BYTES, 4, DataFormat::Float32);
+    constexpr uint32_t CB_CORE_TILES = 7;
+    cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
 
-    // Reader: 11 DRAM-interleaved accessors (a,b,c,px,py,op, ids, ranges,
-    // box_ox, box_oy, tile_ids).
+    // Reader: 12 DRAM-interleaved accessors (a,b,c,px,py,op, ids, ranges,
+    // box_ox, box_oy, tile_ids, sort_lpt_meta).
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 12; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     std::map<std::string, std::string> cull_reader_defines;
@@ -1967,7 +1998,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
-    std::map<std::string, std::string> cull_compute_defines;
+    std::map<std::string, std::string> cull_compute_defines = {{"CULL_LPT_CB", "1"}};
     if (std::getenv("GSPLAT_TT_CULL_KEEPALL") != nullptr) {
         cull_compute_defines["CULL_DEBUG_KEEPALL"] = "1";
     }
@@ -2004,12 +2035,13 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .defines = cull_compute_defines,
         });
 
-    // Writer: 4 accessors (cull_masks, ranges, tile_ids, cull_mask_base).
-    // cull_masks (index 0) is L1-interleaved under the L1 mask handoff so the
-    // writer's masks land in the same resident-L1 buffer the blend reader pops.
+    // Writer: 5 accessors (cull_masks, ranges, tile_ids, sort_lpt_meta,
+    // cull_mask_base). cull_masks (index 0) is L1-interleaved under the L1
+    // mask handoff so the writer's masks land in the same resident-L1 buffer
+    // the blend reader pops.
     std::vector<uint32_t> writer_ct;
     const bool l1_masks = mb::l1_masks_enabled();
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 5; i++) {
         if (l1_masks && i == 0) {
             TensorAccessorArgs::create_l1_interleaved().append_to(writer_ct);
         } else {
@@ -2134,8 +2166,6 @@ static double process_frame(
     }
     if (ok) *ok = true;
 
-    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
-
     uint64_t total_candidates = 0;
     uint64_t total_mask_elems = 16;
     uint32_t pipe_p = 0;
@@ -2155,11 +2185,15 @@ static double process_frame(
         total_mask_elems = std::max<uint64_t>(16, pkept[1]);
     }
 
-    const ResidentSortLpt lpt = load_resident_sort_lpt(ctx.cq, num_cores);
+    const ResidentSortLpt lpt = resident_sort_lpt_handles();
     if (!lpt.ok) {
         if (ok) *ok = false;
         return 0.0;
     }
+    auto meta_buf = ds::get_buffer("sort_lpt_meta");
+    const uint32_t lpt_meta_addr =
+        meta_buf ? static_cast<uint32_t>(meta_buf->address()) : 0u;
+    // Reader/compute/writer read LPT on-device (no sort_lpt_meta D2H).
 
     auto make_dram = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
@@ -2205,24 +2239,26 @@ static double process_frame(
     const uint32_t tile_ids_addr = static_cast<uint32_t>(lpt.tile_ids_buf->address());
     uint32_t floor_bits;
     std::memcpy(&floor_bits, &contrib_floor, 4);
-    for (const auto& range : ctx.all_cores.ranges()) {
-        for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
-            for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
-                CoreCoord core{x, y};
-                const uint32_t start = lpt.per_core_offset[core_index];
-                const uint32_t count = lpt.per_core_count[core_index];
-                SetRuntimeArgs(program, ctx.reader, core, {
-                    a_addr, b_addr, c_addr, px_addr, py_addr, op_addr,
-                    ids_addr, rng_addr, box_ox_addr, box_oy_addr,
-                    tile_ids_addr, start, count, tiles_x, floor_bits,
-                });
-                SetRuntimeArgs(program, ctx.compute, core, {
-                    count, floor_bits, cull_disabled ? 1u : 0u,
-                });
-                SetRuntimeArgs(program, ctx.writer, core, {
-                    masks_addr, rng_addr, tile_ids_addr, start, count, base_addr,
-                });
-                core_index++;
+    {
+        GSPLAT_HOST_ZONE("host_cull_setup");
+        for (const auto& range : ctx.all_cores.ranges()) {
+            for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+                for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                    CoreCoord core{x, y};
+                    SetRuntimeArgs(program, ctx.reader, core, {
+                        a_addr, b_addr, c_addr, px_addr, py_addr, op_addr,
+                        ids_addr, rng_addr, box_ox_addr, box_oy_addr,
+                        tile_ids_addr, lpt_meta_addr, core_index, tiles_x, floor_bits,
+                    });
+                    SetRuntimeArgs(program, ctx.compute, core, {
+                        0u, floor_bits, cull_disabled ? 1u : 0u,
+                    });
+                    SetRuntimeArgs(program, ctx.writer, core, {
+                        masks_addr, rng_addr, tile_ids_addr,
+                        lpt_meta_addr, core_index, base_addr,
+                    });
+                    core_index++;
+                }
             }
         }
     }
@@ -3116,6 +3152,21 @@ double blend_mb_devcull_resident(
             if (device_ok) *device_ok = false;
             return 0.0;
         }
+        if (chain_cull_blend) {
+            // Overlap: set all blend runtime args before enqueuing cull so the
+            // ~110-core host setup runs while the SFPU cull pass executes.
+            {
+                GSPLAT_HOST_ZONE("host_blend_setup");
+                ::mb::process_frame_mb_devcull_resident(
+                    *g_ctx_mb, contrib_floor, cull_disabled,
+                    static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
+                    static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
+                    image_out, device_ok, ::mb::ResidentBlendPhase::SetupRuntimeArgsOnly);
+            }
+            if (device_ok && !*device_ok) {
+                return 0.0;
+            }
+        }
         bool cull_ok = false;
         cull_ms = ::mb::cull::process_frame(
             *g_ctx_cull, contrib_floor, cull_disabled,
@@ -3126,11 +3177,17 @@ double blend_mb_devcull_resident(
             return 0.0;
         }
     }
-    const double blend_ms = ::mb::process_frame_mb_devcull_resident(
-        *g_ctx_mb, contrib_floor, cull_disabled,
-        static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
-        static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
-        image_out, device_ok);
+    const double blend_ms = chain_cull_blend
+        ? ::mb::process_frame_mb_devcull_resident(
+              *g_ctx_mb, contrib_floor, cull_disabled,
+              static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
+              static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
+              image_out, device_ok, ::mb::ResidentBlendPhase::DeviceLaunchAndReadback)
+        : ::mb::process_frame_mb_devcull_resident(
+              *g_ctx_mb, contrib_floor, cull_disabled,
+              static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
+              static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
+              image_out, device_ok);
     return cull_ms + blend_ms;
 }
 
