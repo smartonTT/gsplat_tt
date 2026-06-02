@@ -851,7 +851,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // Soft-float inline cull on BRISC is NOT the ideal path — only when explicitly
     // requested (FUSED_TILE gather production). Ideal path uses SFPU cull_masks.
     const bool dev_cull = resident_blend && env_on("GSPLAT_TT_MB_DEVCULL");
-    const bool dev_conic = dev_cull || env_on("GSPLAT_TT_MB_DEVCONIC");
+    // Resident reader always ships raw 2D cov in coeff rows 0..2; compute must
+    // derive the conic on SFPU (MB_DEVCONIC). Without this, SFPU-only ideal path
+    // mis-interprets raw cov as pre-folded A,B,C (~15 dB).
+    const bool dev_conic =
+        dev_cull || env_on("GSPLAT_TT_MB_DEVCONIC") || (resident_blend && env_on("GSPLAT_TT_SFPU_CULL"));
     // SFPU CULL: the 32-bit microblock mask is precomputed on the SFPU (separate
     // cull pass) and kept resident in cull_masks; the blend reader then just
     // reads the mask (pure integer) instead of running the soft-float cull.
