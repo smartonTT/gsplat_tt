@@ -16,7 +16,14 @@ inline bool flag_is_zero(const char* name) {
 
 // One-shot JIT compile of all ideal-path device programs at scene open.
 inline bool jit_warmup_enabled() {
-    return flag_is_one("GSPLAT_TT_JIT_WARMUP");
+    if (flag_is_zero("GSPLAT_TT_JIT_WARMUP")) {
+        return false;
+    }
+    if (flag_is_one("GSPLAT_TT_JIT_WARMUP")) {
+        return true;
+    }
+    // Default ON on ideal TILE_BUCKET path (endgame Phase A1).
+    return tile_bucket_enabled() && sfpu_cull_enabled() && !fused_tile_enabled();
 }
 
 // Production gather path (FUSED_TILE). Default OFF — the loop/verify ideal path is
