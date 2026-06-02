@@ -1041,6 +1041,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             if (env_on("GSPLAT_TT_BUCKET_PREFETCH_MASK")) {
                 reader_defines["MB_BUCKET_PREFETCH_MASK"] = "1";
             }
+            // ROUTE C: the sort-stage cull baked the keep mask into record word
+            // 10, so the L1 bucket path reads it directly (spin-free, no
+            // cull_masks DRAM round-trip). Disables both the per-candidate spin
+            // and the CB_BMASK bulk load on the bucket path.
+            if (env_on("GSPLAT_TT_BUCKET_MASK")) {
+                reader_defines["MB_BUCKET_MASK"] = "1";
+            }
         }
     }
     ctx.reader = CreateKernel(

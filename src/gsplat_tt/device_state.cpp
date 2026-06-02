@@ -33,6 +33,9 @@ struct State {
     bool sort_pipe_scalars_valid = false;
     uint32_t sort_pipe_p_kept = 0;
     uint32_t sort_pipe_mask_elems = 0;
+    bool bucket_cull_valid = false;
+    float bucket_cull_floor = 0.0f;
+    bool bucket_cull_disabled = false;
 };
 
 State& state() {
@@ -140,6 +143,29 @@ bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems) {
     }
     if (mask_elems) {
         *mask_elems = s.sort_pipe_mask_elems;
+    }
+    return true;
+}
+
+void set_bucket_cull_params(float contrib_floor, bool cull_disabled) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.bucket_cull_valid = true;
+    s.bucket_cull_floor = contrib_floor;
+    s.bucket_cull_disabled = cull_disabled;
+}
+
+bool get_bucket_cull_params(float* contrib_floor, bool* cull_disabled) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!s.bucket_cull_valid) {
+        return false;
+    }
+    if (contrib_floor) {
+        *contrib_floor = s.bucket_cull_floor;
+    }
+    if (cull_disabled) {
+        *cull_disabled = s.bucket_cull_disabled;
     }
     return true;
 }

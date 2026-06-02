@@ -631,7 +631,7 @@ void kernel_main() {
                     i = end;
                 }
             }
-#if defined(MB_BUCKET_PREFETCH_MASK) && !defined(MB_BUCKET_DBG_INLINE)
+#if defined(MB_BUCKET_PREFETCH_MASK) && !defined(MB_BUCKET_DBG_INLINE) && !defined(MB_BUCKET_MASK)
             // T3: ISSUE this tile's whole cull_masks bulk read NOW (before the L1
             // depth sort), so the sort's real compute hides the NoC read latency.
             // The matching barrier lands just before the emit loop — NO settle spin
@@ -690,7 +690,12 @@ void kernel_main() {
             cb_reserve_back(CB_MB_COUNTS, 1);
             reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS))[0] = L;
             cb_push_back(CB_MB_COUNTS, 1);
-#if defined(MB_BUCKET_PREFETCH_MASK) && !defined(MB_BUCKET_DBG_INLINE)
+#if defined(MB_BUCKET_MASK)
+            // ROUTE C: the per-microblock keep mask was BAKED into record word 10
+            // by the sort-stage cull (writer_bucket_cull.cpp). It is read back from
+            // the L1-resident record below — NO cull_masks DRAM round-trip, NO
+            // settle/read-completion spin (sort-stage writes read back spin-free).
+#elif defined(MB_BUCKET_PREFETCH_MASK) && !defined(MB_BUCKET_DBG_INLINE)
             // Masks were ISSUED before the sort; the sort compute hid the latency.
             // One barrier lands them now — settle spin (if any) is reduced vs the
             // non-prefetch path since the sort already provided a settle window.
@@ -734,7 +739,12 @@ void kernel_main() {
                 const uint32_t cr = recp[6];
                 const uint32_t cg = recp[7];
                 const uint32_t cb = recp[8];
-#ifdef MB_BUCKET_DBG_INLINE
+#if defined(MB_BUCKET_MASK)
+                // ROUTE C: keep mask baked into record word 10 by the sort-stage
+                // SFPU cull. Pure L1 load — spin-free, no random gather, no
+                // cull_masks DRAM buffer on this path.
+                const uint32_t mask = recp[10];
+#elif defined(MB_BUCKET_DBG_INLINE)
                 // Correctness probe: compute the mask inline from the L1 record
                 // (correct for THIS record regardless of sort order).
                 const uint32_t mask = compute_microblock_mask(

@@ -1333,6 +1333,11 @@ py::tuple render_full_py(
     // GSPLAT_TT_DEVICE_TILE_ASSIGN gates tile_assign_tt above.
     if (const char* ds = std::getenv("GSPLAT_TT_DEVICE_SORT");
         ds != nullptr && ds[0] != '0' && ds[0] != '\0') {
+        // ROUTE C: hand the microblock-cull params to the sort driver via
+        // device_state so the sort-stage bucket-cull pass can bake the
+        // spin-free keep mask into the dense record (the blend host args
+        // mb_contrib_floor / cull_disabled never reach sort_and_bin_tt).
+        gsplat_tt::device_state::set_bucket_cull_params(mb_contrib_floor, cull_disabled);
         bool device_ok = false;
         gsplat_cpu::SortResult sr_dev = gsplat_tt::sort_and_bin_tt(
             ta.gaussian_ids.data(),

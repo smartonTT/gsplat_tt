@@ -62,6 +62,13 @@ void clear_buffers();
 void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems);
 bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems);
 
+// ROUTE C (GSPLAT_TT_BUCKET_MASK): the microblock-cull contrib_floor + the
+// cull_disabled flag, published by render_full_py before the sort call so the
+// sort-stage bucket-cull pass can run the SAME SFPU mask math the blend cull
+// used (the blend host args never reach the sort driver).
+void set_bucket_cull_params(float contrib_floor, bool cull_disabled);
+bool get_bucket_cull_params(float* contrib_floor, bool* cull_disabled);
+
 // When true, sort left the publish kernel in-flight; the next blend enqueue
 // on the shared CQ must not Finish until cull+blend (or an explicit drain).
 void mark_sort_publish_pending();

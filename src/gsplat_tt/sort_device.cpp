@@ -60,6 +60,46 @@ namespace {
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t PAGE_BYTES = ELEMS_PER_PAGE * 4;  // 64
 
+// ROUTE C bucket-cull (GSPLAT_TT_BUCKET_MASK): the SFPU microblock cull runs in
+// the sort stage over the dense record bucket so the keep mask is a SORT-STAGE
+// write baked into record word 10 (read back spin-free by the L1 blend).
+constexpr uint32_t TILE_DIM = 32;
+constexpr uint32_t RAMP_TILE_BYTES = TILE_DIM * TILE_DIM * 4;  // 4096 (fp32 32x32)
+
+// Intra-vector CB-linear position for (gaussian g == SFPU vector, microblock m).
+// MUST match perm() in writer_bucket_cull.cpp / microblock_cull_compute.cpp.
+inline uint32_t cull_perm(uint32_t g, uint32_t m) {
+    const uint32_t cp = g & 1u;
+    if (m < 16u) {
+        return (2u * (g >> 1)) * 32u + cp + 2u * m;
+    }
+    return (2u * (g >> 1) + 1u) * 32u + cp + 2u * (m - 16u);
+}
+
+// Constant box-origin ramp: at CB-linear cull_perm(g,m) store microblock m's
+// tile-local box origin ((m&3)*8 for x, (m>>2)*4 for y). Identical to the
+// blend-side cull's make_box_ramp.
+static std::vector<uint32_t> make_box_ramp(bool is_x) {
+    std::vector<uint32_t> r(TILE_DIM * TILE_DIM, 0);
+    for (uint32_t g = 0; g < 32; ++g) {
+        for (uint32_t m = 0; m < 32; ++m) {
+            const uint32_t dev = cull_perm(g, m);
+            const float v = is_x ? static_cast<float>((m & 3u) * 8u)
+                                 : static_cast<float>((m >> 2) * 4u);
+            uint32_t bits;
+            std::memcpy(&bits, &v, 4);
+            r[dev] = bits;
+        }
+    }
+    return r;
+}
+
+static bool bucket_mask_enabled() {
+    const char* tb = std::getenv("GSPLAT_TT_TILE_BUCKET");
+    const char* bm = std::getenv("GSPLAT_TT_BUCKET_MASK");
+    return tb && tb[0] == '1' && bm && bm[0] == '1';
+}
+
 // L1 scratch budget per ping/pong key+id buffer. The worst hero-scene tile is
 // ~25k entries; 32768 leaves headroom. 4 CBs * 32768 * 4B = 512 KB, well under
 // Blackhole's ~1.4 MB per-core L1. If a tile exceeds this the host
@@ -92,6 +132,18 @@ struct SortDeviceContext {
     // On-device compact+publish (buf_out -> sort_sorted_ids).
     distributed::MeshWorkload wl_publish;
     KernelHandle kpublish{};
+
+    // ROUTE C bucket-cull program (reader_bucket_cull / microblock_cull_compute
+    // / writer_bucket_cull): SFPU microblock cull over the dense record bucket,
+    // baking the keep mask into record word 10 (GSPLAT_TT_BUCKET_MASK).
+    distributed::MeshWorkload wl_cull;
+    KernelHandle kc_reader{};
+    KernelHandle kc_compute{};
+    KernelHandle kc_writer{};
+    bool cull_built = false;
+    std::shared_ptr<distributed::MeshBuffer> buf_box_ox;
+    std::shared_ptr<distributed::MeshBuffer> buf_box_oy;
+    bool box_ramp_uploaded = false;
 
     // R4/R5 device-binning program (count + scatter) for resident pairs.
     distributed::MeshWorkload wl_bin;
@@ -144,6 +196,14 @@ static std::shared_ptr<distributed::MeshBuffer> make_dram(
     distributed::ReplicatedBufferConfig rc{.size = bytes};
     distributed::DeviceLocalBufferConfig lc{
         .page_size = PAGE_BYTES, .buffer_type = BufferType::DRAM};
+    return distributed::MeshBuffer::create(rc, lc, dev);
+}
+
+static std::shared_ptr<distributed::MeshBuffer> make_dram_paged(
+    distributed::MeshDevice* dev, std::size_t bytes, std::size_t page_bytes) {
+    distributed::ReplicatedBufferConfig rc{.size = bytes};
+    distributed::DeviceLocalBufferConfig lc{
+        .page_size = page_bytes, .buffer_type = BufferType::DRAM};
     return distributed::MeshBuffer::create(rc, lc, dev);
 }
 
@@ -256,6 +316,79 @@ static void build_program_bin(SortDeviceContext& ctx) {
     ctx.wl_bin.add_program(device_range, std::move(program));
 }
 
+// ROUTE C: 3-kernel bucket-cull program. reader_bucket_cull streams each LPT
+// tile's dense records into the SAME microblock_cull_compute SFPU kernel the
+// blend-side cull used; writer_bucket_cull packs the 32-bit keep mask and RMWs
+// it into record word 10. Because it is dispatched in the SORT stage, the mask
+// reads back spin-free in the downstream L1 blend (no cull_masks DRAM, no spin).
+static void build_program_bucket_cull(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+
+    auto cb_cfg = [&](uint32_t id, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+        CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
+        c.set_page_size(id, page_bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+    // CB ids must match the three kernels exactly:
+    //   reader: 0,1 (box ramps) 2 (coeff) 3 (counts) 4 (record/ids/meta scratch)
+    //   compute: 0,1,2,3,16
+    //   writer: 6 (RMW scratch) 16 (keep)
+    cb_cfg(0, RAMP_TILE_BYTES, 1, DataFormat::Float32);   // CB_BOX_OX
+    cb_cfg(1, RAMP_TILE_BYTES, 1, DataFormat::Float32);   // CB_BOX_OY
+    cb_cfg(2, PAGE_BYTES, 32, DataFormat::Float32);       // CB_CULL_COEFF (7 used)
+    cb_cfg(3, PAGE_BYTES, 2, DataFormat::UInt32);         // CB_CULL_COUNTS
+    cb_cfg(4, 16u * PAGE_BYTES, 1, DataFormat::UInt32);   // reader scratch (16 records)
+    cb_cfg(6, 32u * PAGE_BYTES, 1, DataFormat::UInt32);   // writer RMW scratch (32 records)
+    cb_cfg(16, RAMP_TILE_BYTES, 4, DataFormat::Float32);  // CB_KEEP
+
+    // Reader: 5 DRAM-interleaved accessors (tile_recs, bucket_meta, box_ox,
+    // box_oy, tile_ids).
+    std::vector<uint32_t> reader_ct;
+    for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    ctx.kc_reader = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_bucket_cull.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = reader_ct,
+        });
+
+    std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+    u2d[0] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[1] = UnpackToDestMode::UnpackToDestFp32;
+    ctx.kc_compute = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
+        cores,
+        ComputeConfig{
+            .math_fidelity = MathFidelity::HiFi3,
+            .fp32_dest_acc_en = true,
+            .dst_full_sync_en = true,
+            .unpack_to_dest_mode = u2d,
+            .math_approx_mode = false,
+        });
+
+    // Writer: 3 DRAM-interleaved accessors (tile_recs, bucket_meta, tile_ids).
+    std::vector<uint32_t> writer_ct;
+    for (int i = 0; i < 3; i++) TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    ctx.kc_writer = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_bucket_cull.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = writer_ct,
+        });
+
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_cull.add_program(device_range, std::move(program));
+    ctx.cull_built = true;
+}
+
 static SortDeviceContext init_context() {
     SortDeviceContext ctx;
     ctx.mesh_device = device_state::get_device();
@@ -266,6 +399,9 @@ static SortDeviceContext init_context() {
     build_program(ctx);
     build_program_bin(ctx);
     build_program_publish(ctx);
+    if (bucket_mask_enabled()) {
+        build_program_bucket_cull(ctx);
+    }
     return ctx;
 }
 
@@ -889,6 +1025,64 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         launch_bin(1);
         const auto t_sc1 = clk::now();
         T.bin_ms += std::chrono::duration<double, std::milli>(t_sc1 - t_sc0).count();
+
+        // ── ROUTE C: SFPU microblock cull over the dense bucket ─────────
+        // Records are now scattered (launch_bin(1) Finished) and bucket_meta /
+        // tile_ids are uploaded. Run the 3-kernel cull program over the SAME
+        // LPT tile assignment, baking each candidate's 32-bit keep mask into
+        // record word 10. This is a SORT-STAGE write -> the downstream L1 blend
+        // reads it back spin-free (GSPLAT_TT_BUCKET_MASK path). Fully overlaps
+        // no DRAM round-trip beyond the in-place record RMW.
+        if (tile_bucket && bucket_mask_enabled() && ctx->cull_built && P_kept > 0) {
+            const auto t_cl0 = clk::now();
+            if (!ctx->buf_box_ox) {
+                ctx->buf_box_ox = make_dram_paged(ctx->mesh_device.get(), RAMP_TILE_BYTES, RAMP_TILE_BYTES);
+                ctx->buf_box_oy = make_dram_paged(ctx->mesh_device.get(), RAMP_TILE_BYTES, RAMP_TILE_BYTES);
+                ctx->box_ramp_uploaded = false;
+            }
+            if (!ctx->box_ramp_uploaded) {
+                std::vector<uint32_t> bx = make_box_ramp(/*is_x=*/true);
+                std::vector<uint32_t> by = make_box_ramp(/*is_x=*/false);
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_box_ox, bx, false);
+                distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_box_oy, by, false);
+                ctx->box_ramp_uploaded = true;
+            }
+            float floor = 1.0f / 16384.0f;
+            bool cull_disabled = false;
+            device_state::get_bucket_cull_params(&floor, &cull_disabled);
+            uint32_t floor_bits;
+            std::memcpy(&floor_bits, &floor, 4);
+            const uint32_t recs_addr = tile_recs_addr;
+            const uint32_t meta_addr = static_cast<uint32_t>(ctx->buf_bucket_meta->address());
+            const uint32_t box_ox_addr = static_cast<uint32_t>(ctx->buf_box_ox->address());
+            const uint32_t box_oy_addr = static_cast<uint32_t>(ctx->buf_box_oy->address());
+            const uint32_t tids_addr = static_cast<uint32_t>(ctx->buf_tile_ids->address());
+            Program& cprog = ctx->wl_cull.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                const uint32_t start = lpt.per_core_offset[c];
+                const uint32_t count = lpt.per_core_count[c];
+                SetRuntimeArgs(cprog, ctx->kc_reader, core, {
+                    recs_addr, meta_addr, box_ox_addr, box_oy_addr,
+                    tids_addr, start, count, static_cast<uint32_t>(tiles_x), floor_bits,
+                });
+                SetRuntimeArgs(cprog, ctx->kc_compute, core, {
+                    count, floor_bits, cull_disabled ? 1u : 0u,
+                });
+                SetRuntimeArgs(cprog, ctx->kc_writer, core, {
+                    recs_addr, meta_addr, tids_addr, start, count,
+                });
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_cull, false);
+            distributed::Finish(*ctx->cq);
+            if (std::getenv("GSPLAT_TT_MB_TIMING") != nullptr) {
+                const double cms =
+                    std::chrono::duration<double, std::milli>(clk::now() - t_cl0).count();
+                std::fprintf(stderr,
+                    "[BUCKET_CULL] P_kept=%u tiles=%u floor=%.6g cull_disabled=%d exec=%.2fms\n",
+                    P_kept, num_tiles, floor, (int)cull_disabled, cms);
+            }
+        }
 
         if (tile_bucket && std::getenv("GSPLAT_TT_BUCKET_DUMP")) {
             distributed::Finish(*ctx->cq);

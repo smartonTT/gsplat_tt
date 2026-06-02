@@ -1,5 +1,5 @@
-id=77
-sha=31fcec6
-ts=2026-06-01T13:32:44-0700
-desc=T3: bulk-load whole-tile masks to L1 (1 settle/tile)
-bin=fc430f52ed7e0e2d
+id=82
+sha=470095f
+ts=2026-06-01T17:02:08-0700
+desc=iter 27: routeC sort-stage bucket cull -> baked mask recp[10]
+bin=640748ec88d211af
