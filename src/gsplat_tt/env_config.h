@@ -14,18 +14,6 @@ inline bool flag_is_zero(const char* name) {
     return v != nullptr && v[0] == '0';
 }
 
-// One-shot JIT compile of all ideal-path device programs at scene open.
-inline bool jit_warmup_enabled() {
-    if (flag_is_zero("GSPLAT_TT_JIT_WARMUP")) {
-        return false;
-    }
-    if (flag_is_one("GSPLAT_TT_JIT_WARMUP")) {
-        return true;
-    }
-    // Default ON on ideal TILE_BUCKET path (endgame Phase A1).
-    return tile_bucket_enabled() && sfpu_cull_enabled() && !fused_tile_enabled();
-}
-
 // Production gather path (FUSED_TILE). Default OFF — the loop/verify ideal path is
 // TILE_BUCKET + SFPU cull_masks, not per-candidate gather.
 inline bool fused_tile_enabled() {
@@ -110,6 +98,18 @@ inline bool blend_skip_zero_out_enabled() {
         return true;
     }
     return resident_blend_enabled();
+}
+
+// One-shot JIT compile of all ideal-path device programs at scene open.
+inline bool jit_warmup_enabled() {
+    if (flag_is_zero("GSPLAT_TT_JIT_WARMUP")) {
+        return false;
+    }
+    if (flag_is_one("GSPLAT_TT_JIT_WARMUP")) {
+        return true;
+    }
+    // Default ON on ideal TILE_BUCKET path (endgame Phase A1).
+    return tile_bucket_enabled() && sfpu_cull_enabled() && !fused_tile_enabled();
 }
 
 }  // namespace gsplat_tt::env_config
