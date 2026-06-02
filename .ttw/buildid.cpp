@@ -1,5 +1,5 @@
-id=93
-sha=53e4e13
-ts=2026-06-01T19:54:11-0700
-desc=blend iter30: fold L1-bucket cull — drop redundant BUCKET_CULL pass, read shared cull_masks; CB_FENCE default-on for bucket path
-bin=dd34548033e587b3
+id=94
+sha=2d1f93f
+ts=2026-06-01T20:25:29-0700
+desc=iter31: gated cull->blend Finish pipeline (GSPLAT_TT_CULL_PIPELINE)
+bin=44b056d2c23003c2

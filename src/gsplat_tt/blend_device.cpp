@@ -2188,6 +2188,17 @@ static double process_frame(
     }
 
     const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
+    // GSPLAT_TT_CULL_PIPELINE: do NOT block the host on the cull's own Finish.
+    // The cull and the resident blend share ONE in-order command queue
+    // (device_state::command_queue() -> dev->mesh_command_queue()), so the cull
+    // program fully executes — writing cull_masks — before the blend program is
+    // launched regardless. The Finish here was a pure HOST-side bubble: it
+    // serialized the blend's ~110-core host program/runtime-arg setup AFTER the
+    // cull's ~80 ms device execution, in a timeline that is ~87% device-idle.
+    // Skipping it lets that blend host setup overlap the cull device window.
+    // Correctness is unchanged (same CQ, in-order; the blend's first Finish /
+    // blocking readback still drains the cull before any host readback).
+    const bool pipeline = std::getenv("GSPLAT_TT_CULL_PIPELINE") != nullptr;
     const auto t_start = std::chrono::steady_clock::now();
     if (!ctx.res_ramp_uploaded) {
         auto bx = make_box_ramp(/*is_x=*/true);
@@ -2197,11 +2208,17 @@ static double process_frame(
         ctx.res_ramp_uploaded = true;
     }
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
-    distributed::Finish(*ctx.cq);
+    if (!pipeline) {
+        distributed::Finish(*ctx.cq);
+    }
     const auto t_end = std::chrono::steady_clock::now();
 
     const double cull_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
-    if (timing) {
+    if (timing && pipeline) {
+        std::fprintf(stderr, "[CULL_SPLIT] pipelined (no separate Finish; cull device "
+                     "exec folded under the blend host-setup window; candidates=%u)\n",
+                     static_cast<unsigned>(total_candidates));
+    } else if (timing) {
         std::fprintf(stderr, "[CULL_SPLIT] candidates=%u masks=%.2fMB exec=%.1f ms "
                      "masks_addr=0x%lx end=0x%lx base_addr=0x%lx\n",
                      total_candidates,
