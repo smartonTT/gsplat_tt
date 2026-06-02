@@ -69,6 +69,10 @@ bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems);
 void set_bucket_cull_params(float contrib_floor, bool cull_disabled);
 bool get_bucket_cull_params(float* contrib_floor, bool* cull_disabled);
 
+// Phase B (GSPLAT_TT_CHUNK_FUSION): tile grid for AABB in gather scatter.
+void set_chunk_fusion_tile_grid(int tiles_x, int tiles_y, int tile_size);
+bool get_chunk_fusion_tile_grid(int* tiles_x, int* tiles_y, int* tile_size);
+
 // When true, sort left the publish kernel in-flight; the next blend enqueue
 // on the shared CQ must not Finish until cull+blend (or an explicit drain).
 void mark_sort_publish_pending();

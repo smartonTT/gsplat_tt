@@ -18,6 +18,7 @@
 
 #include "gsplat_tt/gather_visible.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/env_config.h"
 #include "gsplat_tt/host_tracy.hpp"
 
 #include <algorithm>
@@ -202,6 +203,7 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_opacity;
     std::shared_ptr<distributed::MeshBuffer> buf_colors;  // AoS M*3
     std::shared_ptr<distributed::MeshBuffer> buf_blendrec; // S1: AoS blend record, 64B/gaussian
+    std::shared_ptr<distributed::MeshBuffer> buf_tpg;      // Phase B: tiles_per_gaussian (int32 SoA)
     std::shared_ptr<distributed::MeshBuffer> buf_M;       // uint32 count
     std::size_t cap_m_elems = 0;
 };
@@ -231,17 +233,24 @@ static void build_program(GatherDeviceContext& ctx) {
     cb(22, PAGE_BYTES, PAGE_BYTES);
 
     const bool aos = blend_aos_enabled();
+    const bool emit_tpg = env_config::chunk_fusion_enabled();
     if (aos) {
         // S1 record staging: 16 records x 64B = 1024B.
         cb(23, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);
     }
+    if (emit_tpg) {
+        cb(24, PAGE_BYTES, PAGE_BYTES);
+    }
 
     std::vector<uint32_t> ct;
-    const int n_acc = aos ? 25 : 24;
+    int n_acc = 24;
+    if (aos) n_acc++;
+    if (emit_tpg) n_acc++;
     for (int i = 0; i < n_acc; i++)
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
     if (aos) defines["GATHER_EMIT_BLENDREC"] = "1";
+    if (emit_tpg) defines["GATHER_EMIT_TPG"] = "1";
     ctx.kernel = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
@@ -403,6 +412,10 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
         const std::size_t rec_bytes = static_cast<std::size_t>(cap_elems) * PAGE_BYTES;
         ctx->buf_blendrec = make_dram(ctx->mesh_device.get(), rec_bytes, PAGE_BYTES);
         device_state::register_buffer("proj_m_blendrec", ctx->buf_blendrec);
+    }
+    if (env_config::chunk_fusion_enabled()) {
+        ctx->buf_tpg = make_dram(ctx->mesh_device.get(), m_bytes, PAGE_BYTES);
+        device_state::register_buffer("ta_tiles_per_gaussian", ctx->buf_tpg);
     }
     ctx->cap_m_elems = cap_elems;
     device_state::register_buffer("proj_m_px", ctx->buf_px);
@@ -715,8 +728,17 @@ static void launch_pass(
             ? static_cast<uint32_t>(ctx->buf_core_base->address())
             : static_cast<uint32_t>(ctx->buf_counts->address());
     const bool aos = blend_aos_enabled();
+    bool emit_tpg =
+        env_config::chunk_fusion_enabled() && ctx->buf_tpg && !count_only;
     const uint32_t blendrec_addr =
         (aos && ctx->buf_blendrec) ? static_cast<uint32_t>(ctx->buf_blendrec->address()) : 0u;
+    int fusion_tx = 0, fusion_ty = 0, fusion_ts = 0;
+    if (emit_tpg &&
+        !device_state::get_chunk_fusion_tile_grid(&fusion_tx, &fusion_ty, &fusion_ts)) {
+        emit_tpg = false;
+    }
+    const uint32_t tpg_addr =
+        emit_tpg ? static_cast<uint32_t>(ctx->buf_tpg->address()) : 0u;
 
     for (uint32_t c = 0; c < ctx->num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -765,6 +787,12 @@ static void launch_pass(
         if (aos) args.push_back(blendrec_addr);  // arg 37
         args.push_back(t_stride);  // arg 37 (no aos) / 38 (aos): tile stride
         args.push_back(device_scan ? 1u : 0u);  // arg 38 (no aos) / 39 (aos)
+        if (emit_tpg) {
+            args.push_back(static_cast<uint32_t>(fusion_tx));
+            args.push_back(static_cast<uint32_t>(fusion_ty));
+            args.push_back(static_cast<uint32_t>(fusion_ts));
+            args.push_back(tpg_addr);
+        }
         SetRuntimeArgs(program, ctx->kernel, core, args);
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);

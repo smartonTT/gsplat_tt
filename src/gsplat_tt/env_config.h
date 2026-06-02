@@ -37,6 +37,12 @@ inline bool proj_device_scan_enabled() {
     return !flag_is_zero("GSPLAT_TT_PROJ_DEVICE_SCAN");
 }
 
+// Phase B slice: emit tiles_per_gaussian during gather scatter (K1 fusion).
+// Default OFF until device 63.85 dB verified with GSPLAT_TT_CHUNK_FUSION=1.
+inline bool chunk_fusion_enabled() {
+    return flag_is_one("GSPLAT_TT_CHUNK_FUSION");
+}
+
 // L1 bucket CB producer/consumer fence (default ON when TILE_BUCKET active).
 inline bool bucket_cb_fence_enabled() {
     return !flag_is_zero("GSPLAT_TT_BUCKET_CB_FENCE");

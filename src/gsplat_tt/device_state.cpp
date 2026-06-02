@@ -36,6 +36,10 @@ struct State {
     bool bucket_cull_valid = false;
     float bucket_cull_floor = 0.0f;
     bool bucket_cull_disabled = false;
+    bool chunk_fusion_grid_valid = false;
+    int chunk_fusion_tiles_x = 0;
+    int chunk_fusion_tiles_y = 0;
+    int chunk_fusion_tile_size = 0;
 };
 
 State& state() {
@@ -186,6 +190,33 @@ void clear_sort_publish_pending() {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     s.sort_publish_pending = false;
+}
+
+void set_chunk_fusion_tile_grid(int tiles_x, int tiles_y, int tile_size) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.chunk_fusion_grid_valid = true;
+    s.chunk_fusion_tiles_x = tiles_x;
+    s.chunk_fusion_tiles_y = tiles_y;
+    s.chunk_fusion_tile_size = tile_size;
+}
+
+bool get_chunk_fusion_tile_grid(int* tiles_x, int* tiles_y, int* tile_size) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!s.chunk_fusion_grid_valid) {
+        return false;
+    }
+    if (tiles_x) {
+        *tiles_x = s.chunk_fusion_tiles_x;
+    }
+    if (tiles_y) {
+        *tiles_y = s.chunk_fusion_tiles_y;
+    }
+    if (tile_size) {
+        *tile_size = s.chunk_fusion_tile_size;
+    }
+    return true;
 }
 
 }  // namespace device_state

@@ -1175,6 +1175,16 @@ py::tuple render_full_py(
     const float* opacities_ptr = static_cast<const float*>(opacities.request().ptr);
     const float* colors_ptr = static_cast<const float*>(colors.request().ptr);
 
+    const int tiles_x_proj = (image_width + tile_size - 1) / tile_size;
+    const int tiles_y_proj = (image_height + tile_size - 1) / tile_size;
+#ifdef GSPLAT_WITH_TT
+    if (const char* cf = std::getenv("GSPLAT_TT_CHUNK_FUSION");
+        cf != nullptr && cf[0] == '1') {
+        gsplat_tt::device_state::set_chunk_fusion_tile_grid(
+            tiles_x_proj, tiles_y_proj, tile_size);
+    }
+#endif
+
     // Stage 1: project.
     auto t_p0 = clock::now();
     gsplat_cpu::ProjectResult proj;

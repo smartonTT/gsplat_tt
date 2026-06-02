@@ -17,6 +17,7 @@
 
 #include "gsplat_tt/tile_assign.h"
 #include "gsplat_tt/device_state.h"
+#include "gsplat_tt/env_config.h"
 #include "gsplat_tt/host_tracy.hpp"
 #include "gsplat_cpu/thread_pool.h"
 
@@ -710,27 +711,44 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             (resident_in ? res_c : ctx->buf_c)->address());
 
         // ── K1: per-Gaussian AABB -> tiles_per_gaussian ─────────────────
-        const auto t_k1_0 = clk::now();
-        const uint32_t k1_pages = M_pad / ELEMS_PER_PAGE;
-        const WorkSplit ws1 = split_pages(k1_pages, num_cores);
-        Program& prog1 = ctx->wl_k1.get_programs().begin()->second;
-        for (uint32_t c = 0; c < num_cores; c++) {
-            CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-            SetRuntimeArgs(prog1, ctx->k1, core, {
-                in_px,
-                in_py,
-                in_rx,
-                in_ry,
-                static_cast<uint32_t>(ctx->buf_tpg->address()),
-                ws1.start[c], ws1.count[c], Mu,
-                static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y),
-                static_cast<uint32_t>(tile_size),
-            });
+        // Phase B (GSPLAT_TT_CHUNK_FUSION): gather scatter already wrote tpg.
+        const bool chunk_fusion_k1 =
+            env_config::chunk_fusion_enabled() && resident_in;
+        std::shared_ptr<distributed::MeshBuffer> fused_tpg;
+        if (chunk_fusion_k1) {
+            fused_tpg = device_state::get_buffer("ta_tiles_per_gaussian");
         }
-        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k1, false);
+        const bool skip_k1 = chunk_fusion_k1 && static_cast<bool>(fused_tpg);
+        const auto t_k1_0 = clk::now();
+        if (skip_k1) {
+            ctx->buf_tpg = fused_tpg;
+        } else {
+            if (chunk_fusion_k1 && !fused_tpg) {
+                std::cerr << "[gsplat_tt::tile_assign] CHUNK_FUSION set but "
+                             "ta_tiles_per_gaussian missing; running K1\n";
+            }
+            const uint32_t k1_pages = M_pad / ELEMS_PER_PAGE;
+            const WorkSplit ws1 = split_pages(k1_pages, num_cores);
+            Program& prog1 = ctx->wl_k1.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                SetRuntimeArgs(prog1, ctx->k1, core, {
+                    in_px,
+                    in_py,
+                    in_rx,
+                    in_ry,
+                    static_cast<uint32_t>(ctx->buf_tpg->address()),
+                    ws1.start[c], ws1.count[c], Mu,
+                    static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y),
+                    static_cast<uint32_t>(tile_size),
+                });
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k1, false);
+        }
         // K1 -> scan chain on one in-order CQ; scan Finish drains K1 (drops k1-only lock).
         const auto t_k1_1 = clk::now();
-        T.k1_ms = std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
+        T.k1_ms = skip_k1 ? 0.0
+                          : std::chrono::duration<double, std::milli>(t_k1_1 - t_k1_0).count();
 
         gsplat_cpu::TileAssignResult result;
         uint32_t P = 0;
