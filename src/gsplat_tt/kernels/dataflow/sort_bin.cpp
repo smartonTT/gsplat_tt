@@ -324,8 +324,18 @@ void kernel_main() {
         for (uint32_t b = 0; b < nbrec; b++) {
             const uint32_t slot = rec_l1_base + b * PAGE_BYTES;
             volatile uint32_t* sp = reinterpret_cast<volatile uint32_t*>(slot);
+#ifndef L1_BUCKET_REC
+            // 64B DENSE record scatter (sort_tile_recs). On the M0/M1 L1_RECORD
+            // path the blend reader serves every bucket tile from the 32B
+            // buf_l1_recs below and NEVER reads sort_tile_recs (reader_alpha_blend
+            // _mb_devcull.cpp line ~687 is under #else of MB_L1_RECORD); the
+            // Lb>FIT gather fallback reads proj_m_* by gid, not tile_recs. So this
+            // 64B write (~216 MB/frame for 3.37M records) is dead DRAM traffic
+            // when L1_RECORD is active — skip it to keep phase-2 DRAM-quiet. The
+            // non-L1_RECORD tile_bucket path still needs it, hence the guard.
             sp[9] = brec_key[b];
             noc_async_write(slot, get_noc_addr(brec_page[b], tile_recs_acc), PAGE_BYTES);
+#endif
 #ifdef L1_BUCKET_REC
           // Skip the 32B scatter for overflow records (heavy tile past its bucket).
           if (brec_l1_slot[b] != 0xFFFFFFFFu) {
