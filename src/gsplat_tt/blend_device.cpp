@@ -1115,6 +1115,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             if (env_on("GSPLAT_TT_L1_REC_DUMP")) {
                 reader_defines["MB_L1_REC_DUMP"] = "1";
             }
+            // M1 bit-order proof: compare the L1 radix order vs the DRAM
+            // reference (sort_sorted_ids) on-device. Diagnostic, default OFF.
+            if (gsplat_tt::env_config::l1_record_enabled() &&
+                gsplat_tt::env_config::l1_sort_verify_enabled()) {
+                reader_defines["MB_L1_SORT_VERIFY"] = "1";
+            }
         }
     }
     ctx.reader = CreateKernel(

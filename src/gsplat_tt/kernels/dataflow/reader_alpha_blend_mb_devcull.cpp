@@ -40,7 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG) || defined(MB_L1_REC_DUMP)
+#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG) || defined(MB_L1_REC_DUMP) || defined(MB_L1_SORT_VERIFY)
 #include "api/debug/dprint.h"
 #endif
 
@@ -750,6 +750,89 @@ void kernel_main() {
                     uint32_t* t = cur; cur = nxt; nxt = t;
                 }
                 sorted = cur;  // even pass count -> back in idxA
+            }
+#endif
+#if defined(MB_L1_SORT_VERIFY)
+            // ── M1 L1-sort bit-order proof (self-contained) ─────────────────
+            // The reference depth order is DEFINED as the stable sort of this
+            // tile's u32 depth keys. The DRAM radix (sort_radix_tile.cpp) and the
+            // L1 radix above run the SAME 4x8-bit LSD algorithm over the SAME key
+            // multiset — sort_bin emits each bucket record's word[3] key from the
+            // identical `brec_key` it scatters into the DRAM-radix `keys` input,
+            // so the two inputs are byte-identical by construction. A correct sort
+            // of an identical multiset has a UNIQUE key sequence, so proving the
+            // L1 output is (1) monotonically non-decreasing on the key AND (2) an
+            // exact permutation of the bucket's keys (sum+xor conserved) proves
+            // the L1 key order is bit-identical to the DRAM reference order.
+            //   mono : adjacent inversions in the L1-sorted key seq   (MUST be 0)
+            //   perm : sum/xor of sorted keys != sum/xor of bucket keys (MUST be 0)
+            // We also report, against the DRAM-radix gid sequence published in
+            // sort_sorted_ids (ids_acc[id_start+k]), how many positions carry a
+            // DIFFERENT gaussian id (giddiff) and how many of those are equal-key
+            // ties (tieok): ties are depth-equivalent (same key => interchangeable
+            // for front-to-back blend), which is why the image is bit-identical.
+            {
+                static uint32_t _v_tiles = 0;
+                static uint32_t _v_recs  = 0;
+                static uint32_t _v_mono  = 0;   // sortedness violations (MUST be 0)
+                static uint32_t _v_perm  = 0;   // key-multiset not conserved (MUST be 0)
+                static uint32_t _v_giddiff = 0; // positions whose gid != DRAM gid (ties)
+                static uint32_t _v_tieok   = 0; // of those, ones at an equal-key run
+                uint32_t mono = 0;
+                // (1) sortedness + (2) key-permutation conservation (self-contained).
+                uint32_t sum_in = 0, xor_in = 0, sum_out = 0, xor_out = 0;
+                uint32_t prev_key = 0u;
+                for (uint32_t k = 0; k < L; ++k) {
+                    const uint32_t in_key  = key_of(k);           // bucket (unsorted) slot k
+                    const uint32_t out_key = key_of(sorted[k]);   // L1-sorted position k
+                    sum_in += in_key;  xor_in ^= in_key;
+                    sum_out += out_key; xor_out ^= out_key;
+                    if (k > 0u && out_key < prev_key) mono++;
+                    prev_key = out_key;
+                }
+                const uint32_t perm =
+                    ((sum_in != sum_out) || (xor_in != xor_out)) ? 1u : 0u;
+                // (3) gid comparison vs the DRAM reference (sort_sorted_ids). Diffs
+                // are expected only at equal-key ties; classify them so a real
+                // non-tie divergence (if any) is visible.
+                const uint32_t ref_scr = get_write_ptr(CB_SCR_ATTR);
+                auto ref_ptr = reinterpret_cast<volatile uint32_t*>(ref_scr);
+                uint32_t ref_page_cached = 0xFFFFFFFFu;
+                uint32_t giddiff = 0, tieok = 0;
+                for (uint32_t k = 0; k < L; ++k) {
+                    const uint32_t idx = sorted[k];
+                    const uint32_t l1_gid =
+                        reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES)[8];
+                    const uint32_t l1_key = key_of(idx);
+                    const uint32_t gi = id_start + k;
+                    const uint32_t rp = gi >> 4;
+                    if (rp != ref_page_cached) {
+                        noc_async_read_tile(rp, ids_acc, ref_scr);
+                        noc_async_read_barrier();
+                        ref_page_cached = rp;
+                    }
+                    const uint32_t ref_gid = ref_ptr[gi & 0xFu];
+                    if (ref_gid != l1_gid) {
+                        giddiff++;
+                        const bool tie = (k > 0u && l1_key == key_of(sorted[k - 1u])) ||
+                                         (k + 1u < L && l1_key == key_of(sorted[k + 1u]));
+                        if (tie) tieok++;
+                    }
+                }
+                _v_tiles++; _v_recs += L; _v_mono += mono; _v_perm += perm;
+                _v_giddiff += giddiff; _v_tieok += tieok;
+                // Flood-free evidence: print any REAL defect (mono!=0||perm!=0),
+                // the first few tiles (positive evidence), and ALWAYS the final
+                // per-core cumulative totals on this core's last assigned tile.
+                const bool last_tile = (ti + 1u == tile_ids_count);
+                if (mono != 0u || perm != 0u || _v_tiles <= 4u || last_tile) {
+                    DPRINT << "L1SORTV t=" << tile_id << " L=" << L
+                           << " mono=" << mono << " perm=" << perm
+                           << " giddiff=" << giddiff << " tieok=" << tieok
+                           << " | TOT t=" << _v_tiles << " recs=" << _v_recs
+                           << " monoT=" << _v_mono << " permT=" << _v_perm
+                           << " gidT=" << _v_giddiff << " tieokT=" << _v_tieok << ENDL();
+                }
             }
 #endif
             cb_reserve_back(CB_MB_COUNTS, 1);

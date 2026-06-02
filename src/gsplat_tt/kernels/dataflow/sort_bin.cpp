@@ -311,6 +311,9 @@ void kernel_main() {
 #ifdef L1_BUCKET_REC
     uint32_t brec_l1_slot[REC_BATCH];  // abs slot index in buf_l1_recs for each batched entry
     uint32_t brec_tile[REC_BATCH];     // tile id for each batched entry (tile-local mean)
+#ifdef L1_SORT_VERIFY
+    uint32_t brec_gid[REC_BATCH];      // M1 proof: gaussian id stashed in record word[8]
+#endif
 #endif
     uint32_t nbrec = 0;
     // L1 32B record staging (reuse a 32B aligned region immediately after rec_l1_base ring;
@@ -378,6 +381,18 @@ void kernel_main() {
             noc_async_write(l1_scratch + b * 32u,
                             get_noc_addr(brec_l1_slot[b], l1_recs_acc),
                             32u);
+#ifdef L1_SORT_VERIFY
+            // M1 bit-order proof: write this record's gaussian id into word[8]
+            // (byte 32) of its 64B bucket slot — the upper 32B are unused by the
+            // blend, so this perturbs no data the blend reads (words 0..7). The
+            // reader compares the L1-radix gid sequence to the DRAM reference.
+            volatile uint32_t* gscr =
+                reinterpret_cast<volatile uint32_t*>(l1_scratch + REC_BATCH * 32u);
+            gscr[b] = brec_gid[b];
+            noc_async_write(l1_scratch + REC_BATCH * 32u + b * 4u,
+                            get_noc_addr(brec_l1_slot[b], l1_recs_acc) + 32u,
+                            4u);
+#endif
           }
 #endif
         }
@@ -448,6 +463,9 @@ void kernel_main() {
                         (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot : 0xFFFFFFFFu;
                 }
                 brec_tile[nbrec] = t;  // tile-local mean reconstruction in flush
+#ifdef L1_SORT_VERIFY
+                brec_gid[nbrec] = g;   // M1 proof: gid stashed in record word[8]
+#endif
 #endif
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();

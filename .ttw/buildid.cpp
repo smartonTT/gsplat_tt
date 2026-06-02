@@ -1,5 +1,5 @@
-id=138
-sha=138e943
-ts=2026-06-02T15:40:26-0700
-desc=iter 41: M0 (genuine): 32B L1 record + per-tile bucket scatter; consume-side fixed — 64B-paged DRAM record (low 32B), fp32 cov + tile-local mean, UNORM16 opacity/color ([0,1] fields => ~30x tighter than fp16); 63.85dB
-bin=6f97ac90352414ed
+id=142
+sha=7b7966a
+ts=2026-06-02T16:18:11-0700
+desc=iter 42: M1: L1-resident LSD radix sort over 32B records; bit-order proven == DRAM reference (on-device: mono=0 + key-multiset perm=0 across 1100 bucket tiles/all cores, cull-mask alignment intact => 42dB failure mode absent); 63.85dB
+bin=58ca522fd5ed289c

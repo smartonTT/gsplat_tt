@@ -330,8 +330,9 @@ static void build_program_bin(SortDeviceContext& ctx) {
     if (l1_record) {
         // cb(11): per-(core,tile) L1 slot base (same shape as recrow/BIN_ROW_BYTES)
         cb(11, BIN_ROW_BYTES);
-        // cb(12): REC_BATCH × 32B staging area for packing L1 records before write.
-        cb(12, 16u * 32u);  // 16 records × 32B = 512B
+        // cb(12): REC_BATCH × 32B staging area for packing L1 records before write
+        // (512B), plus REC_BATCH × 4B for the optional M1 gid stash (L1_SORT_VERIFY).
+        cb(12, 16u * 32u + 16u * 4u);  // 512B staging + 64B gid scratch
     }
 
     std::vector<uint32_t> ct;
@@ -347,6 +348,10 @@ static void build_program_bin(SortDeviceContext& ctx) {
         defines["BIN_DUMP"] = "1";
     if (tile_bucket) defines["BIN_EMIT_REC"] = "1";
     if (l1_record)   defines["L1_BUCKET_REC"] = "1";
+    // M1 bit-order proof: stash the gaussian id in the bucket record's upper 32B
+    // so the blend reader can compare the L1-radix order vs the DRAM reference.
+    if (l1_record && gsplat_tt::env_config::l1_sort_verify_enabled())
+        defines["L1_SORT_VERIFY"] = "1";
     ctx.kbin = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
