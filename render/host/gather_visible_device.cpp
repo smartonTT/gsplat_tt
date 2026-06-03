@@ -8,13 +8,10 @@
 //   * uploads the scene colors (SoA r/g/b) + opacities once per scene and
 //     registers them resident (scene_col_r/g/b, scene_opacities);
 //   * allocates + registers the M-compact proj_m_* DRAM buffers;
-//   * R2a (host_gather): reads the resident pfwc_* back, runs the CPU
-//     project_finish_with_cov2d_radii + color/opacity compaction, and writes
-//     the compact result into proj_m_* via EnqueueWriteMeshBuffer;
-//   * R2b (device): runs a count pass (size M exactly) then a single-core
+//   * runs a multi-core device gather: a count pass (sizes M exactly) then a
 //     scatter kernel that fills proj_m_* on-device, reads M back, and
-//     reassembles the ProjectResult from the M-compact readback;
-//   * verify: reads proj_m_* back and asserts equality with the CPU reference.
+//     reassembles the M-compact ProjectResult. Single-path: there is no host
+//     gather and no CPU-reference verify (those were removed for render_clean).
 
 #include "gather_visible.h"
 #include "device_state.h"
@@ -85,14 +82,6 @@ inline bool blend_aos_enabled() { return true; }  // BLEND_AOS default-on
 // so the absolute compaction order is an arbitrary relabel. DEFAULT ON
 // (verified net win on a shared production stage); disable with =0.
 inline bool proj_balance_enabled() { return true; }  // PROJ_BALANCE default-on
-
-// GSPLAT_TT_GATHER_STATS: host-only dump of the per-core visible-count
-// distribution (from the count pass) — min/max/mean and makespan-proxy
-// max/mean. Zero effect on the assignment; pure diagnostic of the write skew.
-inline bool gather_stats_enabled() {
-    const char* v = std::getenv("GSPLAT_TT_GATHER_STATS");
-    return v != nullptr && v[0] == '1';
-}
 
 // GSPLAT_TT_PROJ_DEVICE_SCAN: fuse the project stage's count->scan->scatter into
 // ONE in-order CQ submission with NO inter-kernel Finish and NO mid-chain host M
@@ -194,7 +183,6 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_opacity;
     std::shared_ptr<distributed::MeshBuffer> buf_colors;  // AoS M*3
     std::shared_ptr<distributed::MeshBuffer> buf_blendrec; // S1: AoS blend record, 64B/gaussian
-    std::shared_ptr<distributed::MeshBuffer> buf_tpg;      // Phase B: tiles_per_gaussian (int32 SoA)
     std::shared_ptr<distributed::MeshBuffer> buf_M;       // uint32 count
     std::size_t cap_m_elems = 0;
 };
@@ -223,25 +211,16 @@ static void build_program(GatherDeviceContext& ctx) {
     cb(21, COLOR_ACC_BYTES, COLOR_ACC_BYTES);
     cb(22, PAGE_BYTES, PAGE_BYTES);
 
-    const bool aos = blend_aos_enabled();
-    const bool emit_tpg = env_config::chunk_fusion_enabled();
-    if (aos) {
-        // S1 record staging: 16 records x 64B = 1024B.
-        cb(23, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);
-    }
-    if (emit_tpg) {
-        cb(24, PAGE_BYTES, PAGE_BYTES);
-    }
+    // S1 AoS blend-record staging: 16 records x 64B = 1024B. The kernel always
+    // emits the AoS record (GATHER_EMIT_BLENDREC is inlined), so this CB and the
+    // matching accessor are unconditional.
+    cb(23, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);
 
     std::vector<uint32_t> ct;
-    int n_acc = 24;
-    if (aos) n_acc++;
-    if (emit_tpg) n_acc++;
+    constexpr int n_acc = 25;  // 24 base + 1 AoS blend-record accessor
     for (int i = 0; i < n_acc; i++)
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
-    if (aos) defines["GATHER_EMIT_BLENDREC"] = "1";
-    if (emit_tpg) defines["GATHER_EMIT_TPG"] = "1";
     ctx.kernel = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
@@ -398,15 +377,11 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
     ctx->buf_depth   = make_dram(ctx->mesh_device.get(), m_bytes, PAGE_BYTES);
     ctx->buf_opacity = make_dram(ctx->mesh_device.get(), m_bytes, PAGE_BYTES);
     ctx->buf_colors  = make_dram(ctx->mesh_device.get(), col_bytes, PAGE_BYTES);
-    if (blend_aos_enabled()) {
+    {
         // One 64B page per record (page index == compact gaussian id g).
         const std::size_t rec_bytes = static_cast<std::size_t>(cap_elems) * PAGE_BYTES;
         ctx->buf_blendrec = make_dram(ctx->mesh_device.get(), rec_bytes, PAGE_BYTES);
         device_state::register_buffer("proj_m_blendrec", ctx->buf_blendrec);
-    }
-    if (env_config::chunk_fusion_enabled()) {
-        ctx->buf_tpg = make_dram(ctx->mesh_device.get(), m_bytes, PAGE_BYTES);
-        device_state::register_buffer("ta_tiles_per_gaussian", ctx->buf_tpg);
     }
     ctx->cap_m_elems = cap_elems;
     device_state::register_buffer("proj_m_px", ctx->buf_px);
@@ -476,32 +451,6 @@ static bool readback_pfwc(
         radii[i * 2 + 1] = ry[i];
     }
     return true;
-}
-
-// Build a host ProjectResult from CPU project_finish + color/opacity compaction
-// using the readback pfwc data. This is the verify reference and the R2a path.
-static gsplat_cpu::ProjectResult cpu_reference(
-    const std::vector<float>& mean_2d, const std::vector<float>& depth,
-    const std::vector<float>& cov2d, const std::vector<float>& radii,
-    const float* scene_colors, const float* scene_opacities,
-    std::size_t N, int H, int W, float min_opacity, int max_radius_param,
-    gsplat_cpu::ThreadPool* pool) {
-    gsplat_cpu::ProjectResult proj = gsplat_cpu::project_finish_with_cov2d_radii(
-        mean_2d.data(), depth.data(), cov2d.data(), radii.data(),
-        scene_opacities, min_opacity, N, H, W, pool, max_radius_param);
-    const std::size_t M = proj.depths.size();
-    proj.colors.resize(M * 3);
-    proj.opacities.resize(M);
-    std::size_t out = 0;
-    for (std::size_t i = 0; i < N; ++i) {
-        if (!proj.valid_mask[i]) continue;
-        proj.colors[out * 3 + 0] = scene_colors[i * 3 + 0];
-        proj.colors[out * 3 + 1] = scene_colors[i * 3 + 1];
-        proj.colors[out * 3 + 2] = scene_colors[i * 3 + 2];
-        proj.opacities[out] = scene_opacities[i];
-        ++out;
-    }
-    return proj;
 }
 
 // Read the M-compact proj_m_* buffers back and assemble a ProjectResult.
@@ -635,47 +584,6 @@ static gsplat_cpu::ProjectResult readback_proj_m_count_only(
     return proj;
 }
 
-// Write a host ProjectResult (R2a) into the resident proj_m_* buffers.
-static void write_proj_m_from_host(
-    GatherDeviceContext* ctx, const gsplat_cpu::ProjectResult& proj,
-    std::size_t M, uint32_t /*M_pad*/) {
-    // Size the upload vectors to the buffer CAPACITY (which may exceed M_pad
-    // if a previous view grew the buffers); EnqueueWriteMeshBuffer needs the
-    // vector element count to match the buffer.
-    const uint32_t cap = static_cast<uint32_t>(ctx->cap_m_elems);
-    std::vector<float> px(cap, 0), py(cap, 0), rx(cap, 0), ry(cap, 0),
-        a(cap, 0), b(cap, 0), c(cap, 0), dep(cap, 0), op(cap, 0);
-    std::vector<float> col(static_cast<std::size_t>(cap) * 3, 0.0f);
-    for (std::size_t m = 0; m < M; ++m) {
-        px[m] = proj.means_2d[m * 2 + 0];
-        py[m] = proj.means_2d[m * 2 + 1];
-        rx[m] = proj.radii[m * 2 + 0];
-        ry[m] = proj.radii[m * 2 + 1];
-        a[m] = proj.covs_2d[m * 4 + 0];
-        b[m] = proj.covs_2d[m * 4 + 1];  // == covs_2d[m*4+2]
-        c[m] = proj.covs_2d[m * 4 + 3];
-        dep[m] = proj.depths[m];
-        op[m] = proj.opacities[m];
-        col[m * 3 + 0] = proj.colors[m * 3 + 0];
-        col[m * 3 + 1] = proj.colors[m * 3 + 1];
-        col[m * 3 + 2] = proj.colors[m * 3 + 2];
-    }
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_px, px, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_py, py, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_rx, rx, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_ry, ry, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_a, a, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_b, b, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c, c, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_depth, dep, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_opacity, op, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_colors, col, false);
-    std::vector<uint32_t> mbuf(PAGE_ELEMS, 0);
-    mbuf[0] = static_cast<uint32_t>(M);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_M, mbuf, false);
-    distributed::Finish(*ctx->cq);
-}
-
 // Launch one pass of the multi-core gather kernel. count_only=true tallies each
 // core's visible quota into buf_counts. count_only=false scatters; `bases`
 // holds each core's exclusive-prefix-sum global output offset and `last_core`
@@ -707,18 +615,8 @@ static void launch_pass(
         (device_scan && !count_only)
             ? static_cast<uint32_t>(ctx->buf_core_base->address())
             : static_cast<uint32_t>(ctx->buf_counts->address());
-    const bool aos = blend_aos_enabled();
-    bool emit_tpg =
-        env_config::chunk_fusion_enabled() && ctx->buf_tpg && !count_only;
     const uint32_t blendrec_addr =
-        (aos && ctx->buf_blendrec) ? static_cast<uint32_t>(ctx->buf_blendrec->address()) : 0u;
-    int fusion_tx = 0, fusion_ty = 0, fusion_ts = 0;
-    if (emit_tpg &&
-        !device_state::get_chunk_fusion_tile_grid(&fusion_tx, &fusion_ty, &fusion_ts)) {
-        emit_tpg = false;
-    }
-    const uint32_t tpg_addr =
-        emit_tpg ? static_cast<uint32_t>(ctx->buf_tpg->address()) : 0u;
+        ctx->buf_blendrec ? static_cast<uint32_t>(ctx->buf_blendrec->address()) : 0u;
 
     for (uint32_t c = 0; c < ctx->num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -764,69 +662,13 @@ static void launch_pass(
             c,
             counts_addr,
         };
-        if (aos) args.push_back(blendrec_addr);  // arg 37
-        args.push_back(t_stride);  // arg 37 (no aos) / 38 (aos): tile stride
-        args.push_back(device_scan ? 1u : 0u);  // arg 38 (no aos) / 39 (aos)
-        if (emit_tpg) {
-            args.push_back(static_cast<uint32_t>(fusion_tx));
-            args.push_back(static_cast<uint32_t>(fusion_ty));
-            args.push_back(static_cast<uint32_t>(fusion_ts));
-            args.push_back(tpg_addr);
-        }
+        args.push_back(blendrec_addr);             // arg 37: AoS blend-record base
+        args.push_back(t_stride);                  // arg 38: tile stride
+        args.push_back(device_scan ? 1u : 0u);     // arg 39: device-scan flag
         SetRuntimeArgs(program, ctx->kernel, core, args);
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
     if (do_finish) distributed::Finish(*ctx->cq);
-}
-
-static void run_verify(
-    const gsplat_cpu::ProjectResult& dev,
-    const std::vector<float>& mean_2d, const std::vector<float>& depth,
-    const std::vector<float>& cov2d, const std::vector<float>& radii,
-    const float* scene_colors, const float* scene_opacities,
-    std::size_t N, int H, int W, float min_opacity, int max_radius_param,
-    gsplat_cpu::ThreadPool* pool, bool host_path) {
-    const gsplat_cpu::ProjectResult cpu = cpu_reference(
-        mean_2d, depth, cov2d, radii, scene_colors, scene_opacities,
-        N, H, W, min_opacity, max_radius_param, pool);
-    const std::size_t cpu_M = cpu.depths.size();
-    const std::size_t dev_M = dev.depths.size();
-    const bool m_match = (cpu_M == dev_M);
-
-    std::size_t mism = 0;
-    std::size_t first = std::numeric_limits<std::size_t>::max();
-    float worst = 0.0f;
-    auto chk = [&](std::size_t idx, float ev, float cv) {
-        const float d = std::fabs(ev - cv);
-        if (d > 1e-3f * (1.0f + std::fabs(cv))) {
-            if (first == std::numeric_limits<std::size_t>::max()) first = idx;
-            mism++;
-        }
-        if (d > worst) worst = d;
-    };
-    if (m_match) {
-        for (std::size_t m = 0; m < cpu_M; ++m) {
-            chk(m, dev.means_2d[m * 2 + 0], cpu.means_2d[m * 2 + 0]);
-            chk(m, dev.means_2d[m * 2 + 1], cpu.means_2d[m * 2 + 1]);
-            chk(m, dev.covs_2d[m * 4 + 0], cpu.covs_2d[m * 4 + 0]);
-            chk(m, dev.covs_2d[m * 4 + 1], cpu.covs_2d[m * 4 + 1]);
-            chk(m, dev.covs_2d[m * 4 + 3], cpu.covs_2d[m * 4 + 3]);
-            chk(m, dev.depths[m], cpu.depths[m]);
-            chk(m, dev.radii[m * 2 + 0], cpu.radii[m * 2 + 0]);
-            chk(m, dev.radii[m * 2 + 1], cpu.radii[m * 2 + 1]);
-            chk(m, dev.opacities[m], cpu.opacities[m]);
-            chk(m, dev.colors[m * 3 + 0], cpu.colors[m * 3 + 0]);
-            chk(m, dev.colors[m * 3 + 1], cpu.colors[m * 3 + 1]);
-            chk(m, dev.colors[m * 3 + 2], cpu.colors[m * 3 + 2]);
-        }
-    }
-    const bool ok = m_match && mism == 0;
-    std::fprintf(stderr,
-        "[GATHER verify] path=%s dev_M=%zu cpu_M=%zu M_match=%d mismatches=%zu "
-        "first@%lld worst_abs=%.3e -> %s\n",
-        host_path ? "host" : "device", dev_M, cpu_M, (int)m_match, mism,
-        (first == std::numeric_limits<std::size_t>::max()) ? -1LL : (long long)first,
-        worst, ok ? "MATCH" : "MISMATCH");
 }
 
 }  // namespace
@@ -896,37 +738,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         ensure_scene_uploaded(ctx, scene_colors, scene_opacities, N, num_tiles,
                               &T.upload_ms, &T.cache_hit);
 
-        // ── R2a: host gather into resident buffers ──────────────────────
-        if (host_gather) {
-            const auto t_h0 = std::chrono::high_resolution_clock::now();
-            std::vector<float> mean_2d, depth, cov2d, radii;
-            if (!readback_pfwc(ctx, N, padded_n, mean_2d, depth, cov2d, radii))
-                return set_fail();
-            gsplat_cpu::ProjectResult proj = cpu_reference(
-                mean_2d, depth, cov2d, radii, scene_colors, scene_opacities,
-                N, image_height, image_width, min_opacity, max_radius_param, pool);
-            const std::size_t M = proj.depths.size();
-            const uint32_t M_pad =
-                round_up(static_cast<uint32_t>(std::max<std::size_t>(M, 1)), PAGE_ELEMS);
-            ensure_outputs(ctx, M_pad);
-            write_proj_m_from_host(ctx, proj, M, M_pad);
-            const auto t_h1 = std::chrono::high_resolution_clock::now();
-            T.host_ms = std::chrono::duration<double, std::milli>(t_h1 - t_h0).count();
-
-            if (verify) {
-                const auto tv0 = std::chrono::high_resolution_clock::now();
-                gsplat_cpu::ProjectResult dev = readback_proj_m(ctx, M, &T.readback_ms);
-                run_verify(dev, mean_2d, depth, cov2d, radii, scene_colors,
-                           scene_opacities, N, image_height, image_width,
-                           min_opacity, max_radius_param, pool, /*host_path=*/true);
-                const auto tv1 = std::chrono::high_resolution_clock::now();
-                T.verify_ms = std::chrono::duration<double, std::milli>(tv1 - tv0).count();
-            }
-            if (device_ok) *device_ok = true;
-            return proj;
-        }
-
-        // ── R2b: multi-core device gather kernel ─────────────────────────
+        // ── R2: multi-core device gather kernel ──────────────────────────
         // Pass 1 (count): each core tallies its visible quota over its tile
         // range into buf_counts[core]. Pass 2 (scatter): the host computes the
         // exclusive prefix-sum of those counts to give each core its global
@@ -1014,27 +826,6 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                 if (cnt > 0) last_core = static_cast<int>(c);
             }
 
-            // GSPLAT_TT_GATHER_STATS: per-core visible-count skew (the scatter-pass
-            // write-work proxy). max/mean is the makespan headroom a balanced split
-            // could recover. Host-only; zero effect on the run.
-            if (gather_stats_enabled()) {
-                uint32_t cmin = 0xFFFFFFFFu, cmax = 0, nz = 0;
-                for (uint32_t c = 0; c < ctx->num_cores; ++c) {
-                    const uint32_t cnt = craw[static_cast<std::size_t>(c) * PAGE_ELEMS];
-                    if (cnt < cmin) cmin = cnt;
-                    if (cnt > cmax) cmax = cnt;
-                    if (cnt > 0) nz++;
-                }
-                const double mean =
-                    ctx->num_cores ? static_cast<double>(M) / ctx->num_cores : 0.0;
-                std::fprintf(stderr,
-                    "[GATHER_STATS] balance=%d cores=%u nonempty=%u M=%zu "
-                    "min/core=%u max/core=%u mean/core=%.1f | max/mean=%.4f "
-                    "max-mean=%.0f (=%.1f%% headroom)\n",
-                    (int)proj_balance_enabled(), ctx->num_cores, nz, M, cmin, cmax,
-                    mean, mean > 0 ? cmax / mean : 0.0, mean > 0 ? cmax - mean : 0.0,
-                    mean > 0 ? (cmax / mean - 1.0) * 100.0 : 0.0);
-            }
             const uint32_t M_pad =
                 round_up(static_cast<uint32_t>(std::max<std::size_t>(M, 1)), PAGE_ELEMS);
             ensure_outputs(ctx, M_pad);
@@ -1081,17 +872,6 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                               : readback_proj_m_minimal(ctx, M, &T.readback_ms))
                        : readback_proj_m(ctx, M, &T.readback_ms));
 
-        if (verify) {
-            const auto tv0 = std::chrono::high_resolution_clock::now();
-            std::vector<float> mean_2d, depth, cov2d, radii;
-            if (readback_pfwc(ctx, N, padded_n, mean_2d, depth, cov2d, radii)) {
-                run_verify(proj, mean_2d, depth, cov2d, radii, scene_colors,
-                           scene_opacities, N, image_height, image_width,
-                           min_opacity, max_radius_param, pool, /*host_path=*/false);
-            }
-            const auto tv1 = std::chrono::high_resolution_clock::now();
-            T.verify_ms = std::chrono::duration<double, std::milli>(tv1 - tv0).count();
-        }
         if (device_ok) *device_ok = true;
         return proj;
     } catch (const std::exception& e) {

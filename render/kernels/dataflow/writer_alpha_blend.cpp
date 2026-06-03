@@ -5,9 +5,6 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(FUSE_AB)
-#include "api/debug/dprint.h"
-#endif
 
 // Alpha-blend WRITER kernel (BRISC, NoC0; see DataMovementProcessor::RISCV_0
 // in alpha_blend.cpp).
@@ -49,13 +46,8 @@ constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 void kernel_main() {
     uint32_t out_addr        = get_arg_val<uint32_t>(0);
     uint32_t tile_ids_addr   = get_arg_val<uint32_t>(1);
-#ifdef MB_RESIDENT
     const uint32_t lpt_meta_addr = get_arg_val<uint32_t>(2);
     const uint32_t core_index    = get_arg_val<uint32_t>(3);
-#else
-    uint32_t tile_ids_start  = get_arg_val<uint32_t>(2);
-    uint32_t tile_ids_count  = get_arg_val<uint32_t>(3);
-#endif
 
     constexpr uint32_t CB_COLOR_OUT = 16;
     const uint32_t tile_bytes = get_tile_size(CB_COLOR_OUT);
@@ -63,13 +55,10 @@ void kernel_main() {
 
     constexpr auto out_args      = TensorAccessorArgs<0>();
     constexpr auto tile_ids_args = TensorAccessorArgs<out_args.next_compile_time_args_offset()>();
-#ifdef MB_RESIDENT
     constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
-#endif
 
     const auto out          = TensorAccessor(out_args,      out_addr,      tile_bytes);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, tile_ids_page_bytes);
-#ifdef MB_RESIDENT
     const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, tile_ids_page_bytes);
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
     const uint32_t meta_elem0 = core_index * 2u;
@@ -88,19 +77,13 @@ void kernel_main() {
         noc_async_read_barrier();
         tile_ids_count = meta_ptr[0];
     }
-#endif
 
     if (tile_ids_count == 0) {
         return;
     }
 
-    // Read per-core tile-ID slice into L1. Use a one-page L1 scratch slot
-    // (64 bytes) that we read each page into; no other CB activity happens
-    // before we start consuming CB_COLOR_OUT, so we can safely use the
-    // CB_COLOR_OUT write pointer region as scratch (it isn't in use yet).
-#ifndef MB_RESIDENT
-    uint32_t scratch_addr = get_write_ptr(CB_COLOR_OUT);
-#endif
+    // Read per-core tile-ID slice into L1, reusing the CB_COLOR_OUT write-pointer
+    // region as a one-page (64B) scratch slot (it isn't in use yet).
     auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
 
     uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
@@ -137,17 +120,6 @@ void kernel_main() {
         // `read_ptr += tile_bytes` arithmetic below.
         cb_wait_front(CB_COLOR_OUT, 3);
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
-#ifdef FUSE_AB
-        {
-            static uint32_t _abc_n = 0;
-            if (_abc_n < 24u) { _abc_n++;
-                auto rch = reinterpret_cast<volatile uint16_t*>(read_ptr);
-                DPRINT << "ABCOL t=" << screen_tile << " L=0"
-                       << " r0=" << rch[0] << " r200=" << rch[200] << " r511=" << rch[511]
-                       << " r800=" << rch[800] << " r1000=" << rch[1000] << ENDL();
-            }
-        }
-#endif
         for (uint32_t ch = 0; ch < 3; ch++) {
             // Output buffer layout: (num_tiles, 3, 32, 32) fp32. Tile-major
             // order with R/G/B interleaved per screen tile, so the global

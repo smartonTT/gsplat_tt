@@ -18,7 +18,8 @@
 // Dropped (dead) paths: BUCKET_MASK, SORT_DEVICE_LAYOUT, MB_DEVCULL (uploaded),
 // BLEND_PAYLOAD, FUSED_TILE=1, CHUNK_FUSION, MB_BLEND_TAILSKIP,
 // MB_BLEND_EARLYOUT, L1_SORT_VERIFY, all *_DEBUG/*_DUMP, MB_TILE_MASK_L1,
-// MB_CULL_SPIN, L1_MASKS.
+// L1_MASKS. (CULL_SPIN=512 and BUCKET_FIT=8192 are baked as kernel value
+// defines, not dropped.)
 
 #pragma once
 

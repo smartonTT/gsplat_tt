@@ -97,37 +97,22 @@ void kernel_main() {
     // Hash16_CT(const char (&)[N]); a runtime ternary decays to const char* and
     // fails that template's N deduction (kernel_profiler.hpp:110) under
     // TT_METAL_DEVICE_PROFILER=1. Two static-named zones keep the per-pass labels.
-#ifdef BIN_DUMP
-    const uint32_t dbg_addr    = get_arg_val<uint32_t>(14);
-#endif
-#ifdef BIN_EMIT_REC
-    // Step T1 (GSPLAT_TT_TILE_BUCKET): scatter the FULL projected record into a
-    // per-tile contiguous bucket in arbitrary (bin/gaussian) order, so the depth
-    // sort can move into the per-tile L1 pass and NO random DRAM read is needed
-    // to build the bucket. proj_m_blendrec is 1 record (64B) per page (page==g);
-    // tile_recs mirrors the keys/ids layout: record page e ↔ keys/ids element e.
+    // TILE_BUCKET: scatter the FULL projected record into a per-tile contiguous
+    // bucket in arbitrary (bin/gaussian) order, so the depth sort can move into
+    // the per-tile L1 pass and NO random DRAM read is needed to build the bucket.
+    // proj_m_blendrec is 1 record (64B) per page (page==g); tile_recs mirrors the
+    // keys/ids layout (record page e ↔ keys/ids element e).
     const uint32_t blendrec_addr = get_arg_val<uint32_t>(15);
     const uint32_t tile_recs_addr= get_arg_val<uint32_t>(16);
     const uint32_t recbase_addr  = get_arg_val<uint32_t>(17);  // dense per-(core,tile) base
-#endif
-#ifdef L1_BUCKET_REC
-    // M0 (GSPLAT_TT_L1_RECORD): scatter 32B fp16-packed records into pre-sized
-    // per-tile buckets. buf_l1_recs is BUCKET_FIT*num_tiles slots × 32B each;
-    // buf_l1_rec_base provides per-(core,tile) start slot = t*BUCKET_FIT + prefix.
-    // Args follow BIN_EMIT_REC args (or after arg 14 if BIN_EMIT_REC is off).
-#ifdef BIN_EMIT_REC
+    // L1_RECORD: scatter 32B fp16-packed records into pre-sized per-tile buckets.
+    // buf_l1_recs is BUCKET_FIT*num_tiles slots × 32B each; buf_l1_rec_base
+    // provides per-(core,tile) start slot = t*BUCKET_FIT + prefix.
     const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(18);
     const uint32_t l1_base_addr  = get_arg_val<uint32_t>(19);
     const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(20);  // per-tile bucket slot count
     const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(21);  // tiles per row (tile-local mean)
-#else
-    const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(15);
-    const uint32_t l1_base_addr  = get_arg_val<uint32_t>(16);
-    const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(17);  // per-tile bucket slot count
-    const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(18);  // tiles per row (tile-local mean)
-#endif
     constexpr uint32_t L1_TILE_SIZE = 32u;  // microblock tile = 32x32 px
-#endif
 
     constexpr auto gids_args  = TensorAccessorArgs<0>();
     constexpr auto tids_args  = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -136,20 +121,11 @@ void kernel_main() {
     constexpr auto bin2d_args = TensorAccessorArgs<depth_args.next_compile_time_args_offset()>();
     constexpr auto keys_args  = TensorAccessorArgs<bin2d_args.next_compile_time_args_offset()>();
     constexpr auto ids_args   = TensorAccessorArgs<keys_args.next_compile_time_args_offset()>();
-#ifdef BIN_EMIT_REC
     constexpr auto blendrec_args = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
     constexpr auto tile_recs_args= TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto recbase_args  = TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
-#ifdef L1_BUCKET_REC
     constexpr auto l1_recs_args  = TensorAccessorArgs<recbase_args.next_compile_time_args_offset()>();
     constexpr auto l1_base_args  = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
-#endif
-#else  // !BIN_EMIT_REC
-#ifdef L1_BUCKET_REC
-    constexpr auto l1_recs_args  = TensorAccessorArgs<ids_args.next_compile_time_args_offset()>();
-    constexpr auto l1_base_args  = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
-#endif
-#endif
 
     const auto gids_acc  = TensorAccessor(gids_args,  gids_addr,  PAGE_BYTES);
     const auto tids_acc  = TensorAccessor(tids_args,  tids_addr,  PAGE_BYTES);
@@ -158,20 +134,20 @@ void kernel_main() {
     const auto bin2d_acc = TensorAccessor(bin2d_args, bin2d_addr, PAGE_BYTES);
     const auto keys_acc  = TensorAccessor(keys_args,  keys_addr,  PAGE_BYTES);
     const auto ids_acc   = TensorAccessor(ids_args,   ids_addr,   PAGE_BYTES);
-#ifdef BIN_EMIT_REC
     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
+    // tile_recs (dense 64B record buffer) is parsed to keep the accessor offsets
+    // aligned with the host's CT-arg order, but the blend reader serves every
+    // tile from the 32B buf_l1_recs (L1_RECORD) and never reads tile_recs, so it
+    // is intentionally unwritten here.
     const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
     const auto recbase_acc  = TensorAccessor(recbase_args,  recbase_addr,  PAGE_BYTES);
-#endif
-#ifdef L1_BUCKET_REC
+    (void)tile_recs_acc;
+    (void)recbase_acc;  // dense per-(core,tile) base — only used by the retired tile_recs scatter
     // M0: 32B fp16 record packed into the LOW 32B of a 64B DRAM page (sub-64B
     // paging is unreliable here — see sort_device l1_rec_bytes). Accessor page =
     // 64B (one record per page); only 32B are written/read.
-    constexpr uint32_t L1_REC_PAGE = 64u;
-    constexpr uint32_t L1_REC_DATA = 32u;
-    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_REC_PAGE);
+    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  64u);
     const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
-#endif
 
     // CB layout (declared in sort_device.cpp binning program):
     //   0 gid_in (64B)  1 tid_in (64B)  2 keep_in (64B)  3 depth (64B)
@@ -182,14 +158,9 @@ void kernel_main() {
     //   8 isort  (BIN_LOCAL_MAX*4: L1 counting-sort ids)
     constexpr uint32_t CB_GID = 0, CB_TID = 1, CB_KEEP = 2, CB_DEP = 3,
                        CB_ROW = 4, CB_CUR = 5, CB_OFF = 6, CB_KS = 7, CB_IS = 8;
-#ifdef BIN_EMIT_REC
     constexpr uint32_t CB_REC = 9;     // 64B blendrec staging (read page g, +depth, write bucket)
-    constexpr uint32_t CB_RECROW = 10; // dense per-(core,tile) record base row
-#endif
-#ifdef L1_BUCKET_REC
     constexpr uint32_t CB_L1BASE   = 11; // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
     constexpr uint32_t CB_L1SCRATCH = 12; // 32B staging buffer for pack → noc write
-#endif
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
     const uint32_t tid_l1  = get_write_ptr(CB_TID);
@@ -239,17 +210,6 @@ void kernel_main() {
                        row_l1 + pp * PAGE_BYTES, PAGE_BYTES);
     }
     noc_async_read_barrier();
-#ifdef BIN_EMIT_REC
-    // Load this core's DENSE record base row (same per-(core,tile) shape as bin2d).
-    const uint32_t recrow_l1 = get_write_ptr(CB_RECROW);
-    auto recrowp = reinterpret_cast<volatile uint32_t*>(recrow_l1);
-    for (uint32_t pp = 0; pp < row_pages; pp++) {
-        noc_async_read(get_noc_addr(base_page + pp, recbase_acc),
-                       recrow_l1 + pp * PAGE_BYTES, PAGE_BYTES);
-    }
-    noc_async_read_barrier();
-#endif
-#ifdef L1_BUCKET_REC
     // Load this core's L1 slot base row (per-tile slot index = t*BUCKET_FIT + prefix).
     const uint32_t l1base_l1 = get_write_ptr(CB_L1BASE);
     auto l1basep = reinterpret_cast<volatile uint32_t*>(l1base_l1);
@@ -261,7 +221,6 @@ void kernel_main() {
     // The local slot cursor reuses curp[t]: it gets reset to 0 in the prefix loop
     // below, then incremented in the scatter loop alongside the (key,id) write.
     const uint32_t l1_scratch = get_write_ptr(CB_L1SCRATCH);
-#endif
 
     const uint32_t cur_l1 = get_write_ptr(CB_CUR);
     const uint32_t off_l1 = get_write_ptr(CB_OFF);
@@ -304,7 +263,6 @@ void kernel_main() {
 
     int32_t dep_cached_page = -1;
 
-#ifdef BIN_EMIT_REC
     // T1b: ring-buffered record scatter. Instead of a synchronous read+write
     // barrier per record (which serialized the bin stage at ~+20 ms), stage up
     // to REC_BATCH records in CB_REC, issue all reads under ONE barrier, inject
@@ -313,14 +271,8 @@ void kernel_main() {
     constexpr uint32_t REC_BATCH = 16u;
     const uint32_t rec_l1_base = get_write_ptr(CB_REC);
     uint32_t brec_key[REC_BATCH];
-    uint32_t brec_page[REC_BATCH];
-#ifdef L1_BUCKET_REC
-    uint32_t brec_l1_slot[REC_BATCH];  // abs slot index in buf_l1_recs for each batched entry
+    uint32_t brec_l1_slot[REC_BATCH];  // abs slot index in buf_l1_recs for each batched entry (overflow → 0xFFFFFFFF)
     uint32_t brec_tile[REC_BATCH];     // tile id for each batched entry (tile-local mean)
-#ifdef L1_SORT_VERIFY
-    uint32_t brec_gid[REC_BATCH];      // M1 proof: gaussian id stashed in record word[8]
-#endif
-#endif
     uint32_t nbrec = 0;
     // L1 32B record staging (reuse a 32B aligned region immediately after rec_l1_base ring;
     // we write it with a single noc_async_write per record during flush).
@@ -330,19 +282,6 @@ void kernel_main() {
         for (uint32_t b = 0; b < nbrec; b++) {
             const uint32_t slot = rec_l1_base + b * PAGE_BYTES;
             volatile uint32_t* sp = reinterpret_cast<volatile uint32_t*>(slot);
-#ifndef L1_BUCKET_REC
-            // 64B DENSE record scatter (sort_tile_recs). On the M0/M1 L1_RECORD
-            // path the blend reader serves every bucket tile from the 32B
-            // buf_l1_recs below and NEVER reads sort_tile_recs (reader_alpha_blend
-            // _mb_devcull.cpp line ~687 is under #else of MB_L1_RECORD); the
-            // Lb>FIT gather fallback reads proj_m_* by gid, not tile_recs. So this
-            // 64B write (~216 MB/frame for 3.37M records) is dead DRAM traffic
-            // when L1_RECORD is active — skip it to keep phase-2 DRAM-quiet. The
-            // non-L1_RECORD tile_bucket path still needs it, hence the guard.
-            sp[9] = brec_key[b];
-            noc_async_write(slot, get_noc_addr(brec_page[b], tile_recs_acc), PAGE_BYTES);
-#endif
-#ifdef L1_BUCKET_REC
           // Skip the 32B scatter for overflow records (heavy tile past its bucket).
           if (brec_l1_slot[b] != 0xFFFFFFFFu) {
             // Pack the 32B record from the 64B blendrec in L1 and write to
@@ -397,25 +336,11 @@ void kernel_main() {
             noc_async_write(l1_scratch + b * 32u,
                             get_noc_addr(brec_l1_slot[b], l1_recs_acc),
                             32u);
-#ifdef L1_SORT_VERIFY
-            // M1 bit-order proof: write this record's gaussian id into word[8]
-            // (byte 32) of its 64B bucket slot — the upper 32B are unused by the
-            // blend, so this perturbs no data the blend reads (words 0..7). The
-            // reader compares the L1-radix gid sequence to the DRAM reference.
-            volatile uint32_t* gscr =
-                reinterpret_cast<volatile uint32_t*>(l1_scratch + REC_BATCH * 32u);
-            gscr[b] = brec_gid[b];
-            noc_async_write(l1_scratch + REC_BATCH * 32u + b * 4u,
-                            get_noc_addr(brec_l1_slot[b], l1_recs_acc) + 32u,
-                            4u);
-#endif
           }
-#endif
         }
         noc_async_write_barrier();
         nbrec = 0;
     };
-#endif
 
     // Sub-pass 2: counting-sort kept pairs into L1, grouped by tile (gaussian-
     // major within each tile). key = depth_bits[g], id = g.
@@ -430,10 +355,6 @@ void kernel_main() {
             if (keepp[j] == 0) continue;
             const uint32_t g = static_cast<uint32_t>(gidp[j]);
             const uint32_t t = static_cast<uint32_t>(tidp[j]);
-#ifdef BIN_NO_DEPTH
-            const uint32_t key = 0u;
-            (void)depp; (void)dep_l1; (void)dep_cached_page; (void)depth_acc;
-#else
             const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
             if (dpg != dep_cached_page) {
                 noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
@@ -442,9 +363,7 @@ void kernel_main() {
                 dep_cached_page = dpg;
             }
             const uint32_t key = depp[g % ELEMS_PER_PAGE];
-#endif
             const uint32_t li = offp[t] + curp[t];
-#ifdef BIN_EMIT_REC
             // Scatter the full record to its per-tile bucket page. DENSE layout:
             // tile t's records occupy pages [starts[t], starts[t]+counts[t]); this
             // core's k-th kept pair for tile t goes to recrowp[t] + curp[t]
@@ -462,8 +381,6 @@ void kernel_main() {
                 const uint32_t slot = rec_l1_base + nbrec * PAGE_BYTES;
                 noc_async_read(get_noc_addr(g, blendrec_acc), slot, PAGE_BYTES);
                 brec_key[nbrec] = key;
-                brec_page[nbrec] = recrowp[t] + curp[t];  // DENSE 64B bucket page
-#ifdef L1_BUCKET_REC
                 // Absolute slot in buf_l1_recs = per-core base + local cursor.
                 // Clamp to this tile's pre-sized bucket [t*FIT, (t+1)*FIT): tiles
                 // whose count exceeds FIT (e.g. max_tile_n > BUCKET_FIT) would
@@ -479,43 +396,15 @@ void kernel_main() {
                         (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot : 0xFFFFFFFFu;
                 }
                 brec_tile[nbrec] = t;  // tile-local mean reconstruction in flush
-#ifdef L1_SORT_VERIFY
-                brec_gid[nbrec] = g;   // M1 proof: gid stashed in record word[8]
-#endif
-#endif
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();
             }
-#endif
             curp[t] = curp[t] + 1;
             ksp[li] = key;
             isp[li] = g;
         }
     }
-#ifdef BIN_EMIT_REC
     flush_recs();  // drain the partial final batch
-#endif
-
-#ifdef BIN_DUMP
-    // Each core dumps its tile-0 summary into its own (already-consumed) bin2d
-    // base-row page (base_page). Host reads back to reconstruct the cross-core
-    // tile-0 layout: base, count, first L1 gid this core placed in tile 0.
-    {
-        const uint32_t dt = dbg_addr;  // dump_tile (passed via arg14 under BIN_DUMP)
-        auto dp = reinterpret_cast<volatile uint32_t*>(gid_l1);  // reuse gid CB as staging
-        dp[0] = rowp[dt];                          // global base for tile dt
-        dp[1] = curp[dt];                          // this core's tile-dt count
-        dp[2] = (curp[dt] > 0) ? isp[offp[dt]] : 0xffffffffu;  // first tile-dt gid in L1
-        dp[3] = core_id;
-        dp[4] = page_start;
-        dp[5] = page_count;
-        dp[6] = offp[dt];
-        dp[7] = (curp[dt] > 1) ? isp[offp[dt] + 1] : 0xffffffffu;  // 2nd tile-dt gid
-        for (uint32_t i = 8; i < ELEMS_PER_PAGE; i++) dp[i] = 0;
-        noc_async_write(gid_l1, get_noc_addr(base_page, bin2d_acc), PAGE_BYTES);
-        noc_async_write_barrier();
-    }
-#endif
 
     // Write each tile's page-aligned L1 block to DRAM as WHOLE PAGES. The block
     // base (rowp[t]) and L1 source (offp[t]) are both page-aligned, and the size

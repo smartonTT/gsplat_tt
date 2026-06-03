@@ -47,17 +47,25 @@ Notes:
 ### Baked configuration
 
 `config.h` documents the production flag set. The functional constants live in
-`env_config.h` (e.g. `tile_bucket_enabled()`/`sfpu_cull_enabled()`/
-`l1_record_enabled()` all `return true`; `fused_tile_enabled()` returns
-`false`). Inside the stage kernels the corresponding `MB_*` / `BIN_*` defines
-are set to their live values:
+`env_config.h` (e.g. `tile_bucket_enabled()`/`l1_record_enabled()`/
+`proj_device_scan_enabled()` all `return true`). The runtime env probes are
+gone; each accessor returns a fixed constant.
+
+The former on/off kernel feature macros (`MB_RESIDENT`, `MB_SFPU_CULL`,
+`MB_BLEND_AOS`, `MB_TILE_BUCKET`, `MB_BUCKET_CB_FENCE`, `MB_L1_RECORD`,
+`MB_DEVCONIC`, `CULL_LPT_CB`, `GATHER_EMIT_BLENDREC`, `BIN_EMIT_REC`,
+`L1_BUCKET_REC`) were **always defined**, so their `#ifdef` bodies are now
+**inlined directly in the kernel source** and the defines are no longer passed
+from the host. Only the two **value** defines the kernels actually read remain
+in the host `CreateKernel` maps:
 
 ```
-MB_RESIDENT MB_SFPU_CULL MB_BLEND_AOS MB_TILE_BUCKET MB_BUCKET_FIT=8192u
-MB_BUCKET_CB_FENCE MB_L1_RECORD MB_DEVCONIC   (reader/compute)
-BIN_EMIT_REC=1 L1_BUCKET_REC=1                 (sort_bin)
-GATHER_EMIT_BLENDREC=1                          (gather scatter)
+MB_CULL_SPIN=512   MB_BUCKET_FIT=8192u     (blend reader: reader_alpha_blend_mb_devcull.cpp)
 ```
+
+(`MB_BUCKET_FIT` is also a `constexpr` inside `alpha_blend_compute_mb.cpp`.)
+The only conditional-compilation left in any kernel is `#ifdef TRISC_MATH` —
+a tt-metal built-in per-RISC compute-kernel macro, not a config toggle.
 
 ---
 
@@ -85,6 +93,25 @@ render/
   run.py                    # render bicycle hero, print hero_vs_ref
   README.md
 ```
+
+**Kernels are one file per kernel — by requirement, not by style.** tt-metal
+JIT-compiles each kernel from its source path at run time (the host names the
+exact `kernels/{dataflow,compute}/<name>.cpp` in `CreateKernel`), so kernels
+cannot be merged into shared translation units.
+
+**Host is modular: one `*_device.cpp` driver per stage** (plus `render.cpp`,
+`device_state`, `jit_warmup`). Full single-file consolidation was deliberately
+*not* done: the per-stage drivers each define file-local anonymous-namespace
+helpers with the same names (`make_dram`, `soa_pool`, a `cb(...)` lambda,
+`ensure_context`, …), so collapsing them would require renames — not the pure,
+parity-safe mechanical movement this pass is limited to. The dead-code removal
+below was the priority; the stage split is kept to protect the 63.85 dB anchor.
+
+There are **no debug/alternate `#ifdef` branches** left in the host or kernels
+(the only `#ifdef` is the built-in `TRISC_MATH`), and **no CPU fallback**:
+unsupported inputs hard-fail (`set_fail()`/`throw`) instead of silently
+computing on the host. Removed alternate *algorithms* (vs. pure debug cruft)
+are archived with git refs in `opt/render-alternate-paths.md`.
 
 ---
 
@@ -134,7 +161,8 @@ Outputs (`hero_clean.png`, `hero_ref.png`, `hero_diff10.png`) land in
 ## Hacking a kernel
 
 1. Edit the kernel in `render/kernels/{dataflow,compute}/` — there are no
-   `MB_*`/`BIN_*` `#ifdef` branches to reason about; the live path is inlined.
+   `MB_*`/`BIN_*` `#ifdef` branches to reason about; the live path is inlined
+   (the only conditional is the built-in `#ifdef TRISC_MATH`).
 2. `rsync` + `cmake --build render/build-tt` (kernels are JIT-compiled at run
    time, but rebuild the module if you touched host code).
 3. Re-run `run.py` and check `hero_vs_ref` stays ~63.85 dB.

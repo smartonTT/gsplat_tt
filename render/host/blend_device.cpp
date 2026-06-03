@@ -204,15 +204,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
+    // The blend reader is single-path: all former on/off feature macros are
+    // inlined in the kernel source. Only the two VALUE macros it reads remain.
     std::map<std::string, std::string> reader_defines = {
-        {"MB_RESIDENT", "1"},
-        {"MB_SFPU_CULL", "1"},
         {"MB_CULL_SPIN", "512"},      // per-candidate mask read-completion settle
-        {"MB_BLEND_AOS", "1"},
-        {"MB_TILE_BUCKET", "1"},
-        {"MB_BUCKET_FIT", "8192u"},
-        {"MB_BUCKET_CB_FENCE", "1"},  // producer/consumer L1 visibility fence
-        {"MB_L1_RECORD", "1"},
+        {"MB_BUCKET_FIT", "8192u"},   // L1 dense-record bucket capacity (slots/tile)
     };
     ctx.reader = CreateKernel(
         program,
@@ -229,11 +225,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
 
-    std::map<std::string, std::string> mb_defines = {
-        {"MB_DEVCONIC", "1"},         // SFPU derives conic A,B,C from raw cov
-        {"MB_RESIDENT", "1"},
-        {"MB_BUCKET_CB_FENCE", "1"},  // consumer-side mirror of the reader fence
-    };
+    // The blend compute kernel is single-path: every feature macro is inlined in
+    // the kernel source (MB_BUCKET_FIT is a constexpr in-kernel), so no defines.
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
@@ -244,14 +237,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
-            .defines = mb_defines,
         });
 
     std::vector<uint32_t> writer_ct;
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
-    std::map<std::string, std::string> writer_defines = {{"MB_RESIDENT", "1"}};
     ctx.writer = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_alpha_blend.cpp",
@@ -260,7 +251,6 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
-            .defines = writer_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
@@ -638,7 +628,6 @@ static double process_frame_mb_devcull_resident(
         }
     }
 
-    const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
     const auto t_start = std::chrono::steady_clock::now();
     // Writer overwrites every LPT tile in res_out; skip the per-frame zero H2D.
     if (!gsplat_tt::env_config::blend_skip_zero_out_enabled()) {
@@ -646,11 +635,6 @@ static double process_frame_mb_devcull_resident(
         distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
     }
     // Constant ramps: upload once, then reuse the resident copy every frame.
-    // DIAG(iter18): GSPLAT_TT_FORCE_RAMP=1 re-uploads every frame to test whether
-    // the payload pack pass perturbs res_xramp/res_yramp (would recover the gate).
-    if (std::getenv("GSPLAT_TT_FORCE_RAMP") != nullptr) {
-        ctx.res_ramp_uploaded = false;
-    }
     if (!ctx.res_ramp_uploaded) {
         auto xramp = make_ramp(/*is_x=*/true);
         auto yramp = make_ramp(/*is_x=*/false);
@@ -667,33 +651,6 @@ static double process_frame_mb_devcull_resident(
     std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
     const auto t_end = std::chrono::steady_clock::now();
-
-    if (timing) {
-        auto ms = [](auto a, auto b) {
-            return std::chrono::duration<double, std::milli>(b - a).count();
-        };
-        const auto t_exec = t_start;  // upload+exec folded under one Finish
-        std::fprintf(stderr,
-            "[BLEND_SPLIT] upload+exec=%.1f readback=%.1f total=%.1f ms (resident, one Finish)\n",
-            ms(t_start, t_exec), ms(t_exec, t_end), ms(t_start, t_end));
-        unsigned long pay_a = 0, pay_sz = 0;
-        if (auto bp = gsplat_tt::device_state::get_buffer("blend_payload")) {
-            pay_a = static_cast<unsigned long>(bp->address());
-            pay_sz = static_cast<unsigned long>(bp->size());
-        }
-        std::fprintf(stderr,
-            "[BLEND_ADDR] cull_masks=0x%lx out=0x%lx(sz=0x%lx) tile_ids=0x%lx xramp=0x%lx yramp=0x%lx payload=0x%lx(sz=0x%lx)\n",
-            static_cast<unsigned long>(cull_masks_addr),
-            static_cast<unsigned long>(ctx.res_out->address()),
-            static_cast<unsigned long>(ctx.res_out->size()),
-            static_cast<unsigned long>([] {
-                auto tid = gsplat_tt::device_state::get_buffer("sort_lpt_tile_ids");
-                return tid ? tid->address() : 0u;
-            }()),
-            static_cast<unsigned long>(ctx.res_xramp->address()),
-            static_cast<unsigned long>(ctx.res_yramp->address()),
-            pay_a, pay_sz);
-    }
 
     tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
@@ -796,7 +753,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
-    std::map<std::string, std::string> cull_compute_defines = {{"CULL_LPT_CB", "1"}};
+    // Single-path cull compute kernel: CULL_LPT_CB is inlined in the source.
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
@@ -807,7 +764,6 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
-            .defines = cull_compute_defines,
         });
 
     // Writer: 5 accessors (cull_masks, ranges, tile_ids, sort_lpt_meta,
@@ -1018,7 +974,6 @@ static double process_frame(
         }
     }
 
-    const bool timing = std::getenv("GSPLAT_TT_MB_TIMING") != nullptr;
     // CULL_PIPELINE: do NOT Finish between cull and blend on the shared in-order CQ.
     // defer_cq_finish chains cull+blend into one drain (also drains sort publish).
     const bool pipeline =
@@ -1037,21 +992,7 @@ static double process_frame(
     }
     const auto t_end = std::chrono::steady_clock::now();
 
-    const double cull_ms = std::chrono::duration<double, std::milli>(t_end - t_start).count();
-    if (timing && pipeline) {
-        std::fprintf(stderr, "[CULL_SPLIT] pipelined (no separate Finish; cull device "
-                     "exec folded under the blend host-setup window; candidates=%u)\n",
-                     static_cast<unsigned>(total_candidates));
-    } else if (timing) {
-        std::fprintf(stderr, "[CULL_SPLIT] candidates=%u masks=%.2fMB exec=%.1f ms "
-                     "masks_addr=0x%lx end=0x%lx base_addr=0x%lx\n",
-                     total_candidates,
-                     static_cast<double>(masks_bytes) / (1024.0 * 1024.0), cull_ms,
-                     static_cast<unsigned long>(buf_masks_res->address()),
-                     static_cast<unsigned long>(buf_masks_res->address() + masks_bytes),
-                     static_cast<unsigned long>(buf_base_res->address()));
-    }
-    return cull_ms;
+    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
 
 }  // namespace cull

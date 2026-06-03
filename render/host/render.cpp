@@ -33,7 +33,7 @@
 #include <thread>
 #include <vector>
 
-// Device-profiler dump hook (GSPLAT_TT_PROFILE). Pulls in the public
+// Device-profiler dump hook. Pulls in the public
 // ReadMeshDeviceProfilerResults(MeshDevice&, ...) entry point. The dump is a
 // strict no-op unless TT_METAL_DEVICE_PROFILER=1 enabled the profiler at device
 // init, so these includes are safe in normal (non-profiling) builds/runs.
@@ -96,24 +96,13 @@ const std::vector<float>& cov3d_unique(const float* cov3d, std::size_t N) {
     return cache;
 }
 
-// Env-gated device-profiler dump (GSPLAT_TT_PROFILE), mirroring the production
-// render_full_py hook. render_clean deliberately never close()s the MeshDevice
-// (see device_state), and tt-metal does not dump device-profiler results at
-// atexit, so without this the per-frame device zones never reach the live Tracy
-// stream. When GSPLAT_TT_PROFILE is set we explicitly read the device profiler
-// results after a frame's device work completes; tt-metal appends the per-RISC
-// markers to the profiler CSV and (under --dump-device-data-mid-run) PUSHES the
-// zones into the live stream.
-//
-// STRICT NO-OP otherwise: returns before touching the device when the env is
-// unset, and ReadMeshDeviceProfilerResults itself early-returns unless the
-// profiler was enabled at init (TT_METAL_DEVICE_PROFILER=1). Never changes
-// pixels / PSNR — it only reads already-recorded markers.
+// Device-profiler dump hook (mirrors production render_full_py). render_clean
+// deliberately never close()s the MeshDevice (see device_state), and tt-metal does
+// not dump device-profiler results at atexit, so without this the per-frame
+// device zones never reach the live Tracy stream. ReadMeshDeviceProfilerResults
+// is a strict no-op unless the profiler was enabled at init
+// (TT_METAL_DEVICE_PROFILER=1). Never changes pixels / PSNR.
 void maybe_dump_device_profiler() {
-    const char* prof = std::getenv("GSPLAT_TT_PROFILE");
-    if (prof == nullptr || prof[0] == '\0' || prof[0] == '0') {
-        return;
-    }
     if (!gsplat_tt::device_state::is_initialized()) {
         return;
     }
@@ -278,7 +267,7 @@ py::tuple render_view(
     stats["num_entries"] = static_cast<int64_t>(P_kept);
 
     // Push this frame's device-profiler zones into the live Tracy stream (no-op
-    // unless GSPLAT_TT_PROFILE=1 + TT_METAL_DEVICE_PROFILER=1). See above.
+    // unless TT_METAL_DEVICE_PROFILER=1). See above.
     maybe_dump_device_profiler();
     return py::make_tuple(image, stats);
 }

@@ -157,3 +157,21 @@ stays ignored and belongs in `tmp/`. See lessons.md for the full story.
 `origin` = smartonTT/gsplat_tt (push target), `upstream` = Kovelja009 (optional
 fetch). If a clone has them swapped: `git remote rename origin upstream && git
 remote rename smarton origin`.
+
+## Clean renderer policy (`render/`)
+
+The readable TT renderer lives in `render/` (`render_clean`). Keep it clean through
+every optimization iteration:
+
+- **One live path only** — no debug `#ifdef`s, no alternate algorithms in-tree.
+  Removed alternates go to `opt/render-alternate-paths.md` with a git ref to recover.
+- **No CPU fallback** in the hot path — unsupported inputs hard-fail.
+- **Kernels stay one file per kernel** (tt-metal JIT path requirement); host may
+  stay one `*_device.cpp` per stage until a safe consolidation pass lands.
+- **Gate still holds:** `hero_vs_ref >= 63.6 dB` on the hero view after every change.
+
+## Subagent model (free tier)
+
+When out of paid credits, dispatch Task subagents with **`model="composer-2.5"`**
+(non-fast). **`composer-2.5-fast` is not allowed on the free tier.** Do not use
+`model="auto"` when you intend the free Composer worker.

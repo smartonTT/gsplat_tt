@@ -27,20 +27,8 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(CULL_READER_DEBUG) || defined(CULL_DEBUG_REF)
-#include "api/debug/dprint.h"
-#endif
 
 namespace {
-
-#if defined(CULL_READER_DEBUG) || defined(CULL_DEBUG_REF)
-inline float dbg_bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
-}
-#endif
-
 
 constexpr uint32_t CB_BOX_OX     = 0;
 constexpr uint32_t CB_BOX_OY     = 1;
@@ -267,38 +255,6 @@ void kernel_main() {
                     __builtin_memcpy(&thr_bits, &thrf, 4);
                     row[6] = thr_bits;
                 }
-#if defined(CULL_DEBUG_REF)
-                {
-                    const uint32_t local = processed + j;
-                    static uint32_t ref_n = 0;
-                    if (ref_n < 400u) {
-                        ref_n++;
-                        DPRINT << "CULLCOEF t=" << tile_id << " local=" << local
-                               << " a=" << F32(dbg_bits_to_f(row[0]))
-                               << " b=" << F32(dbg_bits_to_f(row[1]))
-                               << " c=" << F32(dbg_bits_to_f(row[2]))
-                               << " mx=" << F32(dbg_bits_to_f(row[3]))
-                               << " my=" << F32(dbg_bits_to_f(row[4]))
-                               << " op=" << F32(dbg_bits_to_f(row[5]))
-                               << " tx=" << (tx * TILE_SIZE) << " ty=" << (ty * TILE_SIZE) << ENDL();
-                    }
-                }
-#endif
-#if defined(CULL_READER_DEBUG)
-                {
-                    static uint32_t dbg_n = 0;
-                    if (dbg_n < 12u) {
-                        dbg_n++;
-                        DPRINT << "CULLIN t=" << tile_id << " g=" << g
-                               << " a=" << F32(dbg_bits_to_f(row[0]))
-                               << " c=" << F32(dbg_bits_to_f(row[2]))
-                               << " mx=" << F32(dbg_bits_to_f(row[3]))
-                               << " my=" << F32(dbg_bits_to_f(row[4]))
-                               << " op=" << F32(dbg_bits_to_f(row[5]))
-                               << " tx=" << (tx * TILE_SIZE) << " ty=" << (ty * TILE_SIZE) << ENDL();
-                    }
-                }
-#endif
                 cb_push_back(CB_CULL_COEFF, 1);
             }
             processed += take;

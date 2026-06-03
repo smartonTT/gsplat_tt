@@ -381,102 +381,6 @@ static WorkSplit split_pages(uint32_t num_pages, uint32_t num_cores) {
     return ws;
 }
 
-// GSPLAT_TT_TA_STATS: host-only diagnostic of the K2 scatter per-core work
-// distribution, computed purely from the prefix-sum offs[] (no device change,
-// no effect on the run). Reports two proxies for the contiguous page split:
-//   * pairs/core   == the WRITE work (every core writes its 16-pair pages).
-//   * gspan/core   == the gaussian boundaries crossed == set_g calls (each a
-//     binary-search + 4 NoC attr reads + AABB recompute) == the READ/COMPUTE
-//     work. The scene is spatially clustered (tiles-per-gaussian varies), so a
-//     contiguous page chunk hands a core a non-representative gspan -> makespan
-//     skew lands on gspan, not on the (uniform) pair writes.
-// Also projects the gspan skew a BLOCKED-CYCLIC (strided) split of block size
-// B would give, so the fix's headroom is visible before it ships.
-inline bool ta_stats_enabled() {
-    const char* v = std::getenv("GSPLAT_TT_TA_STATS");
-    return v != nullptr && v[0] == '1';
-}
-
-static uint32_t ta_block_pages() {
-    const char* v = std::getenv("GSPLAT_TT_TA_BLOCK");
-    if (v == nullptr || v[0] == '\0') return 8u;  // default block size (pages)
-    const long b = std::strtol(v, nullptr, 10);
-    return (b <= 0) ? 1u : static_cast<uint32_t>(b);
-}
-
-// Largest g in [0, M-1] with offs[g] <= p (the gaussian owning pair p).
-static uint32_t owner_of(const std::vector<uint32_t>& offs, uint32_t M, uint32_t p) {
-    uint32_t lo = 0, hi = (M ? M - 1 : 0);
-    while (lo < hi) {
-        const uint32_t mid = (lo + hi + 1) >> 1;
-        if (offs[mid] <= p) lo = mid; else hi = mid - 1;
-    }
-    return lo;
-}
-
-// Sum the gaussian-boundary crossings (== set_g calls) over a contiguous page
-// range [pg_lo, pg_hi): one binary search at pg_lo*16 then linear advance to the
-// owner of the last real pair. Padding pairs (>= P) cost no advance.
-static uint32_t gspan_of_range(const std::vector<uint32_t>& offs, uint32_t M,
-                               uint32_t P, uint32_t pg_lo, uint32_t pg_hi) {
-    const uint32_t p0 = pg_lo * ELEMS_PER_PAGE;
-    uint32_t p1 = pg_hi * ELEMS_PER_PAGE;
-    if (p1 > P) p1 = P;
-    if (p1 <= p0) return 0;
-    const uint32_t g0 = owner_of(offs, M, p0);
-    const uint32_t g1 = owner_of(offs, M, p1 - 1);
-    return g1 - g0 + 1;
-}
-
-static void ta_dump_k2_stats(const std::vector<uint32_t>& offs, uint32_t M,
-                             uint32_t P, uint32_t k2_pages, uint32_t num_cores) {
-    auto skew = [](const std::vector<double>& v) {
-        double mn = 1e30, mx = 0, sum = 0;
-        for (double x : v) { mn = std::min(mn, x); mx = std::max(mx, x); sum += x; }
-        const double mean = v.empty() ? 0.0 : sum / v.size();
-        return std::array<double, 4>{mn, mx, mean, mean > 0 ? mx / mean : 0.0};
-    };
-    // Contiguous split (production K2 today).
-    const WorkSplit wc = split_pages(k2_pages, num_cores);
-    std::vector<double> c_pairs(num_cores), c_gspan(num_cores);
-    for (uint32_t c = 0; c < num_cores; c++) {
-        const uint32_t lo = wc.start[c], hi = wc.start[c] + wc.count[c];
-        uint32_t p0 = lo * ELEMS_PER_PAGE, p1 = hi * ELEMS_PER_PAGE;
-        if (p1 > P) p1 = P;
-        if (p1 < p0) p1 = p0;
-        c_pairs[c] = static_cast<double>(p1 - p0);
-        c_gspan[c] = gspan_of_range(offs, M, P, lo, hi);
-    }
-    // Blocked-cyclic (strided) split: core c owns blocks c, c+nc, c+2nc, ...
-    const uint32_t B = ta_block_pages();
-    const uint32_t num_blocks = (k2_pages + B - 1) / B;
-    std::vector<double> s_pairs(num_cores, 0), s_gspan(num_cores, 0);
-    for (uint32_t bk = 0; bk < num_blocks; bk++) {
-        const uint32_t c = bk % num_cores;
-        const uint32_t lo = bk * B;
-        uint32_t hi = lo + B;
-        if (hi > k2_pages) hi = k2_pages;
-        uint32_t p0 = lo * ELEMS_PER_PAGE, p1 = hi * ELEMS_PER_PAGE;
-        if (p1 > P) p1 = P;
-        if (p1 < p0) p1 = p0;
-        s_pairs[c] += static_cast<double>(p1 - p0);
-        s_gspan[c] += gspan_of_range(offs, M, P, lo, hi);
-    }
-    const auto cp = skew(c_pairs), cg = skew(c_gspan);
-    const auto sp = skew(s_pairs), sg = skew(s_gspan);
-    std::fprintf(stderr,
-        "[TA_STATS] M=%u P=%u k2_pages=%u cores=%u block_B=%u num_blocks=%u\n"
-        "[TA_STATS] CONTIG pairs(write): min=%.0f max=%.0f mean=%.0f max/mean=%.4f\n"
-        "[TA_STATS] CONTIG gspan(set_g): min=%.0f max=%.0f mean=%.0f max/mean=%.4f\n"
-        "[TA_STATS] STRIDED pairs(write): min=%.0f max=%.0f mean=%.0f max/mean=%.4f\n"
-        "[TA_STATS] STRIDED gspan(set_g): min=%.0f max=%.0f mean=%.0f max/mean=%.4f "
-        "(+%u binsearch/core)\n",
-        M, P, k2_pages, num_cores, B, num_blocks,
-        cp[0], cp[1], cp[2], cp[3], cg[0], cg[1], cg[2], cg[3],
-        sp[0], sp[1], sp[2], sp[3], sg[0], sg[1], sg[2], sg[3],
-        num_blocks / num_cores);
-}
-
 }  // namespace
 
 bool tile_assign_device_ready() { return ensure_context() != nullptr; }
@@ -854,11 +758,6 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             for (uint32_t m = 0; m < Mu; m++)
                 result.tiles_per_gaussian[m] = static_cast<int64_t>(tpg[m]);
 
-            if (ta_stats_enabled() && P > 0) {
-                ta_dump_k2_stats(offs, Mu, P, round_up(P, ELEMS_PER_PAGE) / ELEMS_PER_PAGE,
-                                 num_cores);
-            }
-
             if (P == 0) {
                 if (device_ok) *device_ok = true;
                 T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
@@ -974,9 +873,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
           if (ta_no_cull) {
             // R1: skip K3 + K4. Publish an all-ones keep so sort keeps every
             // AABB pair (P_kept == P); blend's microblock cull rejects the
-            // empty-corner pairs downstream. sort_bin treats keep==0 as a drop
-            // while a MISSING ta_pairs_keep buffer forces a host fallback — so
-            // the mask MUST be present and all-1s for [0, P).
+            // empty-corner pairs downstream. sort treats keep==0 as a drop while
+            // a MISSING ta_pairs_keep buffer hard-fails the device sort — so the
+            // mask MUST be present and all-1s for [0, P).
             //
             // iter-35: the all-ones mask is CONSTANT, so fill buf_keep ONCE per
             // (re)allocation instead of re-uploading ~13.5 MB of 1s every frame.
@@ -1167,42 +1066,6 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 T.scan2_ms, T.h2d_offs_ms, T.k2_ms, T.k3_ms, T.k3_compute_ms,
                 T.k3_h2d_ms, T.k4_ms, T.publish_ms, T.compact_ms, T.d2h_ms,
                 T.total_ms);
-        }
-
-        // Optional self-check vs the matching CPU reference (AABB-only when
-        // cull disabled, full Phase-4 cull otherwise). Skipped in resident-pairs
-        // mode (host pairs intentionally absent — correctness is checked
-        // end-to-end via the sort verify / PSNR).
-        if (const char* dbg = std::getenv("GSPLAT_TT_TA_DEBUG");
-            dbg && dbg[0] == '1' && !resident_pairs_active) {
-            const gsplat_cpu::TileAssignResult cpu = gsplat_cpu::tile_assign(
-                means_2d, radii, M, image_height, image_width, tile_size,
-                covs_2d, opacities, contrib_floor,
-                /*pool=*/nullptr, /*recompute=*/false);
-            const std::size_t cpu_Pp = cpu.gaussian_ids.size();
-            const std::size_t dev_Pp = result.gaussian_ids.size();
-            bool set_match = (cpu_Pp == dev_Pp);
-            std::size_t mism = 0;
-            if (set_match) {
-                for (std::size_t p = 0; p < cpu_Pp; p++) {
-                    if (cpu.gaussian_ids[p] != result.gaussian_ids[p] ||
-                        cpu.tile_ids[p] != result.tile_ids[p]) {
-                        if (mism < 5) {
-                            std::fprintf(stderr,
-                                "[TA mismatch] p=%zu cpu(g=%lld,t=%lld) dev(g=%lld,t=%lld)\n",
-                                p, (long long)cpu.gaussian_ids[p], (long long)cpu.tile_ids[p],
-                                (long long)result.gaussian_ids[p], (long long)result.tile_ids[p]);
-                        }
-                        mism++;
-                    }
-                }
-            }
-            std::fprintf(stderr,
-                "[TA assert] cull=%d AABB_P=%u device_Pprime=%zu cpu_Pprime=%zu "
-                "count_match=%d pair_mismatches=%zu k1=%.2f k2=%.2f cull=%.2f "
-                "compact=%.2f d2h=%.2f total=%.2fms\n",
-                (int)do_cull, P, dev_Pp, cpu_Pp, (int)set_match, mism,
-                T.k1_ms, T.k2_ms, T.cull_ms, T.compact_ms, T.d2h_ms, T.total_ms);
         }
 
         if (device_ok) *device_ok = true;

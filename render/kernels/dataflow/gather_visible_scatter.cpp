@@ -130,10 +130,9 @@ void kernel_main() {
     const uint32_t is_last    = get_arg_val<uint32_t>(34);
     const uint32_t core_id    = get_arg_val<uint32_t>(35);
     const uint32_t counts_addr= get_arg_val<uint32_t>(36);
-#ifdef GATHER_EMIT_BLENDREC
-    // S1 (GSPLAT_TT_BLEND_AOS): contiguous AoS blend record buffer. One 64B page
-    // per compacted gaussian == {a,b,c,px,py,op,cr,cg,cb, 0..}. Lets the blend
-    // reader fetch a candidate with ONE contiguous read instead of 7-9 SoA pages.
+    // S1 (BLEND_AOS): contiguous AoS blend record buffer. One 64B page per
+    // compacted gaussian == {a,b,c,px,py,op,cr,cg,cb, 0..}. Lets the blend reader
+    // fetch a candidate with ONE contiguous read instead of 7-9 SoA pages.
     const uint32_t o_blendrec_addr = get_arg_val<uint32_t>(37);
     // GSPLAT_TT_PROJ_BALANCE: tile stride. 1 = contiguous chunk (this core owns
     // tiles [t_start, t_start+t_count)); num_cores = interleaved/strided (this
@@ -143,23 +142,6 @@ void kernel_main() {
     // (repointed by the host at the device-scan base buffer) page core_id,
     // instead of the host-computed `base`/`is_last` args (which are 0).
     const uint32_t device_scan = get_arg_val<uint32_t>(39);
-#else
-    const uint32_t t_stride = get_arg_val<uint32_t>(37);
-    const uint32_t device_scan = get_arg_val<uint32_t>(38);
-#endif
-#ifdef GATHER_EMIT_TPG
-#ifdef GATHER_EMIT_BLENDREC
-    const int tiles_x_f = static_cast<int>(get_arg_val<uint32_t>(40));
-    const int tiles_y_f = static_cast<int>(get_arg_val<uint32_t>(41));
-    const float tsf_f = static_cast<float>(get_arg_val<uint32_t>(42));
-    const uint32_t tpg_addr = get_arg_val<uint32_t>(43);
-#else
-    const int tiles_x_f = static_cast<int>(get_arg_val<uint32_t>(39));
-    const int tiles_y_f = static_cast<int>(get_arg_val<uint32_t>(40));
-    const float tsf_f = static_cast<float>(get_arg_val<uint32_t>(41));
-    const uint32_t tpg_addr = get_arg_val<uint32_t>(42);
-#endif
-#endif
     (void)num_tiles;
     (void)o_M_addr;
 
@@ -187,18 +169,7 @@ void kernel_main() {
     constexpr auto a_ocol  = TensorAccessorArgs<a_oop.next_compile_time_args_offset()>();
     constexpr auto a_oM    = TensorAccessorArgs<a_ocol.next_compile_time_args_offset()>();
     constexpr auto a_counts= TensorAccessorArgs<a_oM.next_compile_time_args_offset()>();
-#ifdef GATHER_EMIT_BLENDREC
     constexpr auto a_brec  = TensorAccessorArgs<a_counts.next_compile_time_args_offset()>();
-#endif
-#ifdef GATHER_EMIT_TPG
-    constexpr auto a_tpg = TensorAccessorArgs<
-#ifdef GATHER_EMIT_BLENDREC
-        a_brec.next_compile_time_args_offset()
-#else
-        a_counts.next_compile_time_args_offset()
-#endif
-        >();
-#endif
     (void)a_oM;
 
     const auto acc_m2x   = TensorAccessor(a_m2x,   m2x_addr,   TILE_BYTES);
@@ -224,12 +195,7 @@ void kernel_main() {
     const auto acc_oop   = TensorAccessor(a_oop,   o_op_addr,    PAGE_BYTES);
     const auto acc_ocol  = TensorAccessor(a_ocol,  o_colors_addr, PAGE_BYTES);
     const auto acc_counts= TensorAccessor(a_counts, counts_addr,  PAGE_BYTES);
-#ifdef GATHER_EMIT_BLENDREC
     const auto acc_brec  = TensorAccessor(a_brec,  o_blendrec_addr, PAGE_BYTES);
-#endif
-#ifdef GATHER_EMIT_TPG
-    const auto acc_tpg = TensorAccessor(a_tpg, tpg_addr, PAGE_BYTES);
-#endif
 
     constexpr uint32_t CB_M2X = 0, CB_M2Y = 1, CB_DEP = 2, CB_A = 3, CB_B = 4,
                        CB_C = 5, CB_RX = 6, CB_RY = 7, CB_CR = 8, CB_CG = 9,
@@ -237,17 +203,10 @@ void kernel_main() {
     constexpr uint32_t CB_OPX = 12, CB_OPY = 13, CB_ORX = 14, CB_ORY = 15,
                        CB_OA = 16, CB_OB = 17, CB_OC = 18, CB_ODEP = 19,
                        CB_OOP = 20, CB_OCOL = 21, CB_OM = 22;
-#ifdef GATHER_EMIT_BLENDREC
     constexpr uint32_t CB_OREC = 23;  // 16 records x 64B AoS staging
     constexpr uint32_t REC_WORDS = 16;  // 64B / 4
     const uint32_t l1_orec = get_write_ptr(CB_OREC);
     auto o_rec = reinterpret_cast<volatile uint32_t*>(l1_orec);
-#endif
-#ifdef GATHER_EMIT_TPG
-    constexpr uint32_t CB_OTPG = 24;
-    const uint32_t l1_otpg = get_write_ptr(CB_OTPG);
-    auto o_tpg = reinterpret_cast<volatile int32_t*>(l1_otpg);
-#endif
 
     const uint32_t l1_m2x = get_write_ptr(CB_M2X);
     const uint32_t l1_m2y = get_write_ptr(CB_M2Y);
@@ -372,9 +331,6 @@ void kernel_main() {
         noc_async_write(l1_oc   + off, get_noc_addr(page, acc_oc)   + off, sz);
         noc_async_write(l1_odep + off, get_noc_addr(page, acc_odep) + off, sz);
         noc_async_write(l1_oop  + off, get_noc_addr(page, acc_oop)  + off, sz);
-#ifdef GATHER_EMIT_TPG
-        noc_async_write(l1_otpg + off, get_noc_addr(page, acc_tpg) + off, sz);
-#endif
         // colors: contiguous float subrange [lo*3, hi*3) of the 48-float group,
         // split at the 16-float color-page boundaries.
         const uint32_t f0 = page * COLOR_GROUP_FLOATS + lo * 3;
@@ -390,7 +346,6 @@ void kernel_main() {
                             get_noc_addr(cpage, acc_ocol) + coff * 4, n * 4);
             f += n;
         }
-#ifdef GATHER_EMIT_BLENDREC
         // Each AoS record is its OWN full 64B page (record page index == g ==
         // page*16 + slot). Cores own disjoint, ordered g-ranges so every record
         // page is written by exactly one core (no neighbour boundary sharing).
@@ -398,7 +353,6 @@ void kernel_main() {
             noc_async_write(l1_orec + s * 64,
                             get_noc_addr(page * PAGE_ELEMS + s, acc_brec), 64);
         }
-#endif
         noc_async_write_barrier();
     };
 
@@ -448,26 +402,6 @@ void kernel_main() {
             o_col[slot * 3 + 0] = p_cr[il];
             o_col[slot * 3 + 1] = p_cg[il];
             o_col[slot * 3 + 2] = p_cb[il];
-#ifdef GATHER_EMIT_TPG
-            {
-                const float px = bits_to_f(p_m2x[il]);
-                const float py = bits_to_f(p_m2y[il]);
-                const float rxv = bits_to_f(p_rx[il]);
-                const float ryv = bits_to_f(p_ry[il]);
-                const int min_x =
-                    clampi(static_cast<int>((px - rxv) / tsf_f), 0, tiles_x_f - 1);
-                const int max_x =
-                    clampi(static_cast<int>((px + rxv) / tsf_f), 0, tiles_x_f - 1);
-                const int min_y =
-                    clampi(static_cast<int>((py - ryv) / tsf_f), 0, tiles_y_f - 1);
-                const int max_y =
-                    clampi(static_cast<int>((py + ryv) / tsf_f), 0, tiles_y_f - 1);
-                const int w = max_x - min_x + 1;
-                const int h = max_y - min_y + 1;
-                o_tpg[slot] = w * h;
-            }
-#endif
-#ifdef GATHER_EMIT_BLENDREC
             {
                 volatile uint32_t* r = o_rec + slot * REC_WORDS;
                 r[0] = p_a[il];   r[1] = p_b[il];   r[2] = p_c[il];
@@ -476,7 +410,6 @@ void kernel_main() {
                 r[9] = 0; r[10] = 0; r[11] = 0; r[12] = 0;
                 r[13] = 0; r[14] = 0; r[15] = 0;
             }
-#endif
 
             slot++;
             g++;
@@ -499,13 +432,8 @@ void kernel_main() {
             o_px[s] = 0; o_py[s] = 0; o_rx[s] = 0; o_ry[s] = 0;
             o_a[s] = 0; o_b[s] = 0; o_c[s] = 0;             o_dep[s] = 0; o_op[s] = 0;
             o_col[s * 3 + 0] = 0; o_col[s * 3 + 1] = 0; o_col[s * 3 + 2] = 0;
-#ifdef GATHER_EMIT_TPG
-            o_tpg[s] = 0;
-#endif
-#ifdef GATHER_EMIT_BLENDREC
             volatile uint32_t* r = o_rec + s * REC_WORDS;
             for (uint32_t w = 0; w < REC_WORDS; ++w) r[w] = 0;
-#endif
         }
         hi = PAGE_ELEMS;
     }
