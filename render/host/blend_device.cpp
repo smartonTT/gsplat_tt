@@ -170,7 +170,7 @@ struct L1LoadStats {
 static L1LoadStats build_l1load_stats(const SubchunkPlan& plan) {
     L1LoadStats stats;
     constexpr uint32_t kFit = render_config::kBucketFit;
-    constexpr uint64_t kRecBytes = 64u;
+    constexpr uint64_t kPageBytes = 64u;
     const uint32_t num_tiles =
         static_cast<uint32_t>(plan.meta.size() / 2u);
     for (uint32_t t = 0; t < num_tiles; ++t) {
@@ -189,10 +189,79 @@ static L1LoadStats build_l1load_stats(const SubchunkPlan& plan) {
             const uint32_t l_sub =
                 (count - sc_off > kFit) ? kFit : (count - sc_off);
             stats.subchunks_bulk += 1u;
-            stats.bytes_bulk_loaded += static_cast<uint64_t>(l_sub) * kRecBytes;
+            if (sc_off == 0u) {
+                stats.bytes_bulk_loaded +=
+                    static_cast<uint64_t>((l_sub + 1u) / 2u) * kPageBytes;
+            } else {
+                stats.bytes_bulk_loaded += static_cast<uint64_t>(l_sub) * kPageBytes;
+            }
         }
     }
     return stats;
+}
+
+// Host-side [PACK2] stats (iter 50): packed L1 record pages vs splat count.
+struct Pack2Stats {
+    uint64_t splats = 0;
+    uint64_t pages = 0;
+    uint64_t bytes_packed = 0;
+    uint64_t bytes_iter49 = 0;  // one 64B page per splat (pre-PACK2)
+};
+
+static Pack2Stats build_pack2_stats(const SubchunkPlan& plan) {
+    Pack2Stats stats;
+    constexpr uint32_t kFit = render_config::kBucketFit;
+    constexpr uint64_t kPageBytes = 64u;
+    const uint32_t num_tiles =
+        static_cast<uint32_t>(plan.meta.size() / 2u);
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        const uint32_t num_sc = plan.meta[static_cast<std::size_t>(t) * 2u + 0u];
+        const uint32_t count = plan.meta[static_cast<std::size_t>(t) * 2u + 1u];
+        if (count == 0u) {
+            continue;
+        }
+        const bool in_budget =
+            num_sc == 1u && count > 0u && count <= kFit;
+        if (in_budget) {
+            const uint64_t pages = (static_cast<uint64_t>(count) + 1u) / 2u;
+            stats.splats += count;
+            stats.pages += pages;
+            stats.bytes_packed += pages * kPageBytes;
+            stats.bytes_iter49 += static_cast<uint64_t>(count) * kPageBytes;
+            continue;
+        }
+        for (uint32_t sc = 0; sc < num_sc; ++sc) {
+            const uint32_t sc_off = sc * kFit;
+            if (sc_off >= count) {
+                continue;
+            }
+            const uint32_t l_sub =
+                (count - sc_off > kFit) ? kFit : (count - sc_off);
+            if (sc_off == 0u) {
+                const uint64_t pages = (static_cast<uint64_t>(l_sub) + 1u) / 2u;
+                stats.splats += l_sub;
+                stats.pages += pages;
+                stats.bytes_packed += pages * kPageBytes;
+                stats.bytes_iter49 += static_cast<uint64_t>(l_sub) * kPageBytes;
+            }
+        }
+    }
+    return stats;
+}
+
+static void log_pack2_stats(const Pack2Stats& stats) {
+    const uint64_t avg_pages = stats.splats > 0u
+        ? (stats.pages * 1000u) / stats.splats
+        : 0u;
+    std::fprintf(
+        stderr,
+        "[PACK2] splats=%llu pages=%llu bytes_packed=%llu bytes_iter49=%llu "
+        "avg_pages_per_1k_splats=%llu\n",
+        static_cast<unsigned long long>(stats.splats),
+        static_cast<unsigned long long>(stats.pages),
+        static_cast<unsigned long long>(stats.bytes_packed),
+        static_cast<unsigned long long>(stats.bytes_iter49),
+        static_cast<unsigned long long>(avg_pages));
 }
 
 static void log_l1load_stats(const L1LoadStats& stats) {
@@ -620,6 +689,7 @@ static double process_frame_mb_devcull_resident(
     const SubchunkPlan subchunk_plan = build_subchunk_plan(ctx.cq, num_tiles);
     log_subchunk_stats(subchunk_plan);
     log_l1load_stats(build_l1load_stats(subchunk_plan));
+    log_pack2_stats(build_pack2_stats(subchunk_plan));
     if (!upload_subchunk_meta(ctx, subchunk_plan, num_tiles)) {
         if (ok) *ok = false;
         return 0.0;

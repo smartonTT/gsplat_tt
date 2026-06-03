@@ -246,32 +246,54 @@ inline void process_tile_gaussians(uint32_t num_g) {
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
 }
 
-// Blend one subchunk whose records + masks sit in CB_BUCKET_BULK /
-// CB_BMASK_BULK (iter 49). Separate from in-budget CB_BUCKET/CB_BMASK so
+// PACK2 (iter 50): two 32B splats per 64B page in CB_BUCKET_BULK; splat g at
+// page g/2, half g&1. Tile-local mean in words [4,5]; UNORM16 op/color [6,7].
+constexpr uint32_t L1_SPLAT_BYTES = 32u;
+constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+
+inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
+    return reinterpret_cast<const uint32_t*>(
+        buck + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
+}
+
+// Blend one subchunk whose PACK2 records + masks sit in CB_BUCKET_BULK /
+// CB_BMASK_BULK (iter 49/50). Separate from in-budget CB_BUCKET/CB_BMASK so
 // bulk reserve does not deadlock against coeff-stream scratch.
 inline void process_tile_l1_blend(uint32_t num_g) {
     if (num_g == 0) {
         return;
     }
+    const uint32_t rec_pages = (num_g + 1u) >> 1;
     const uint32_t mpages = (num_g + 15u) >> 4;
-    cb_wait_front(CB_BUCKET_BULK, num_g);
+    cb_wait_front(CB_BUCKET_BULK, rec_pages);
     cb_wait_front(CB_BMASK_BULK, mpages);
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
     const uint32_t bmask_base = get_tile_address(CB_BMASK_BULK, 0);
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
     for (uint32_t g = 0; g < num_g; g++) {
-        const uint32_t* rec =
-            reinterpret_cast<const uint32_t*>(buck + g * 64u);
-        const uint32_t a = rec[0], b = rec[1], c = rec[2], d = rec[3], e = rec[4];
-        const uint32_t op = rec[5], cr = rec[6], cg = rec[7], cbv = rec[8];
+        const uint32_t* rec = l1_splat_words(buck, g);
+        const uint32_t a = rec[0], b = rec[1], c = rec[2];
+        const uint32_t d = rec[4], e = rec[5];
+        const uint32_t w6 = rec[6], w7 = rec[7];
+        constexpr float kUnormInv = 1.0f / 65535.0f;
+        auto unorm_bits = [](uint32_t u16) -> uint32_t {
+            const float f = static_cast<float>(u16) * kUnormInv;
+            uint32_t bits;
+            __builtin_memcpy(&bits, &f, 4);
+            return bits;
+        };
+        const uint32_t op = unorm_bits(w6 & 0xffffu);
+        const uint32_t cr = unorm_bits(w6 >> 16);
+        const uint32_t cg = unorm_bits(w7 & 0xffffu);
+        const uint32_t cbv = unorm_bits(w7 >> 16);
         const uint32_t mask = reinterpret_cast<const uint32_t*>(
             bmask_base + (g >> 4) * 64u)[g & 0xFu];
         MATH((mb_cb_consume_fence()));
         dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
-    cb_pop_front(CB_BUCKET_BULK, num_g);
+    cb_pop_front(CB_BUCKET_BULK, rec_pages);
     cb_pop_front(CB_BMASK_BULK, mpages);
 }
 

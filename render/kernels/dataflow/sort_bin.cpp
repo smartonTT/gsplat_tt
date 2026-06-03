@@ -105,8 +105,9 @@ void kernel_main() {
     const uint32_t blendrec_addr = get_arg_val<uint32_t>(15);
     const uint32_t tile_recs_addr= get_arg_val<uint32_t>(16);
     const uint32_t recbase_addr  = get_arg_val<uint32_t>(17);  // dense per-(core,tile) base
-    // L1_RECORD: scatter 32B fp16-packed records into pre-sized per-tile buckets.
-    // buf_l1_recs is BUCKET_FIT*num_tiles slots × 32B each; buf_l1_rec_base
+    // L1_RECORD (PACK2): scatter 32B records into pre-sized per-tile buckets.
+    // buf_l1_recs is BUCKET_FIT*num_tiles logical slots, two per 64B page;
+    // buf_l1_rec_base
     // provides per-(core,tile) start slot = t*BUCKET_FIT + prefix.
     const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(18);
     const uint32_t l1_base_addr  = get_arg_val<uint32_t>(19);
@@ -143,9 +144,8 @@ void kernel_main() {
     const auto recbase_acc  = TensorAccessor(recbase_args,  recbase_addr,  PAGE_BYTES);
     (void)tile_recs_acc;
     (void)recbase_acc;  // dense per-(core,tile) base — only used by the retired tile_recs scatter
-    // M0: 32B fp16 record packed into the LOW 32B of a 64B DRAM page (sub-64B
-    // paging is unreliable here — see sort_device l1_rec_bytes). Accessor page =
-    // 64B (one record per page); only 32B are written/read.
+    // PACK2: two 32B splats per 64B page (slot s => page s/2, half s&1 at +32*half).
+    // Accessor page = 64B; sub-64B page size is unreliable on BH.
     const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  64u);
     const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
 
@@ -285,7 +285,7 @@ void kernel_main() {
           // Skip the 32B scatter for overflow records (heavy tile past its bucket).
           if (brec_l1_slot[b] != 0xFFFFFFFFu) {
             // Pack the 32B record from the 64B blendrec in L1 and write to
-            // buf_l1_recs (low 32B of a 64B page). Covariance stays FULL fp32 —
+            // buf_l1_recs (PACK2 page = slot/2, half = slot&1). Covariance FULL fp32 —
             // it is precision-critical (the blend recomputes the conic via
             // det = a*c - b*b, which loses too much to fp16 when a,c are large,
             // ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL fp16 (small => sub-
@@ -333,9 +333,14 @@ void kernel_main() {
             p32[5] = my_bits;  // fp32 tile-local mean y
             p32[6] = (to_unorm(op) | (to_unorm(cr) << 16));
             p32[7] = (to_unorm(cg) | (to_unorm(cb_v) << 16));
-            noc_async_write(l1_scratch + b * 32u,
-                            get_noc_addr(brec_l1_slot[b], l1_recs_acc),
-                            32u);
+            {
+                const uint32_t slot = brec_l1_slot[b];
+                const uint32_t page = slot >> 1;
+                const uint32_t half_off = (slot & 1u) * 32u;
+                noc_async_write(l1_scratch + b * 32u,
+                                get_noc_addr(page, l1_recs_acc) + half_off,
+                                32u);
+            }
           }
         }
         noc_async_write_barrier();

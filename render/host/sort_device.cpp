@@ -1052,14 +1052,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         uint32_t l1_recs_addr = 0u;
         uint32_t l1_base_addr = 0u;
         if (l1_record_early) {
-            // M0: the 32B fp16 record lives in the LOW 32B of a 64B DRAM page.
-            // Sub-64B DRAM paging is unreliable on this device (a 32B-paged
-            // interleaved buffer read back as garbage: depth key 0, fields zero),
-            // so we mirror the proven 64B tile_recs machinery — one record per
-            // 64B page (upper 32B unused). DRAM footprint doubles vs ideal-packed
-            // 32B; acceptable for the M0 foundation (perf comes in later milestones).
+            // M0/iter50: two 32B splats per 64B DRAM page (PACK2). Sub-64B paging
+            // is unreliable; 64B pages hold low/high splat at +0/+32. kBucketFit
+            // logical slots => bucket_fit/2 pages per tile.
             const std::size_t l1_rec_bytes =
-                static_cast<std::size_t>(num_tiles) * bucket_fit * 64u;
+                static_cast<std::size_t>(num_tiles) * bucket_fit * 32u;
             if (!ctx->buf_l1_recs || ctx->cap_l1_recs_bytes < l1_rec_bytes) {
                 ctx->buf_l1_recs = make_dram_paged(ctx->mesh_device.get(), l1_rec_bytes, 64u);
                 ctx->cap_l1_recs_bytes = l1_rec_bytes;

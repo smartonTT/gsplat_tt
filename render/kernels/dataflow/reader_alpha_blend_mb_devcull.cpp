@@ -67,8 +67,14 @@ constexpr uint32_t MB_FLAG_EMIT = 1u;
 constexpr uint32_t MB_FLAG_CONTINUE = 2u;
 constexpr uint32_t MB_FLAG_L1_BULK = 4u;
 
+// PACK2 (iter 50): two 32B splats per 64B DRAM page; splat g => page g/2, +32*(g&1).
+constexpr uint32_t L1_SPLAT_BYTES = 32u;
+constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 
-
+inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
+    return reinterpret_cast<volatile uint32_t*>(
+        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
+}
 
 inline float bits_to_f(uint32_t b) {
     float f;
@@ -248,32 +254,8 @@ void kernel_main() {
     // SoA accessors stay bound (ABI parity) but are unused on this path.
     (void)a_acc; (void)b_acc; (void)c_acc; (void)px_acc; (void)py_acc;
     (void)op_acc; (void)col_acc;
-    // M0: 32B fp16-packed record in the LOW 32B of a 64B page (sub-64B DRAM
-    // paging is unreliable here — see sort_device l1_rec_bytes). One record per
-    // 64B page/bucket slot; only words [0..7] hold data.
-    constexpr uint32_t L1_REC_BYTES = 64u;
-    const auto l1_recs_acc = TensorAccessor(l1_recs_args, l1_recs_addr, L1_REC_BYTES);
-    // fp16 → fp32 unpack helper.
-    auto fp16_to_f32 = [](uint32_t h) -> float {
-        const uint32_t sign  = (h >> 15) & 1u;
-        const uint32_t exp   = (h >> 10) & 0x1fu;
-        const uint32_t mant  = h & 0x3ffu;
-        uint32_t u;
-        if (exp == 0) {
-            if (mant == 0) { u = sign << 31; }
-            else {
-                uint32_t e = 127 - 14;
-                uint32_t m = mant;
-                while (!(m & 0x400u)) { m <<= 1; e--; }
-                u = (sign << 31) | (e << 23) | ((m & 0x3ffu) << 13);
-            }
-        } else if (exp == 31u) {
-            u = (sign << 31) | 0x7f800000u | (mant << 13);
-        } else {
-            u = (sign << 31) | ((exp + 112u) << 23) | (mant << 13);
-        }
-        float f; __builtin_memcpy(&f, &u, 4); return f;
-    };
+    // PACK2: 64B DRAM pages hold two 32B splats (see sort_bin scatter).
+    const auto l1_recs_acc = TensorAccessor(l1_recs_args, l1_recs_addr, L1_PACK_PAGE_BYTES);
     // Host-free LPT: read this core's (start,count) from resident sort_lpt_meta.
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
     const uint32_t meta_elem0 = core_index * 2u;
@@ -441,27 +423,20 @@ void kernel_main() {
 
         if (num_subchunks == 1u && Lb > 0 && Lb <= MB_BUCKET_FIT) {
             const uint32_t L = Lb;
-            cb_reserve_back(CB_BUCKET, L);
+            const uint32_t npages = (L + 1u) >> 1;
+            cb_reserve_back(CB_BUCKET, npages);
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
-                uint32_t i = 0;
-                while (i < L) {
-                    const uint32_t end = (i + 64u < L) ? i + 64u : L;
-                    for (uint32_t q = i; q < end; ++q) {
-                        // M0: load 32B record from pre-sized per-tile bucket.
-                        // Tile t occupies slots [t*BUCKET_FIT, (t+1)*BUCKET_FIT).
-                        // Absolute slot = tile_id * MB_BUCKET_FIT + (rec_start + q).
-                        // But rec_start is the DENSE 64B start; for 32B records the
-                        // offsets are different. Use tile_id * MB_BUCKET_FIT + q
-                        // since we load exactly L=Lb records starting at slot 0 of
-                        // the core-prefix-aware per-core sections — except actually
-                        // rec_start is the tile's 64B dense start index (not the 32B
-                        // slot start). For M0, the 32B tile start = tile_id * BUCKET_FIT.
-                        noc_async_read_tile(tile_id * MB_BUCKET_FIT + q, l1_recs_acc,
-                                            buck + q * L1_REC_BYTES);
+                const uint32_t page0 = tile_id * (MB_BUCKET_FIT >> 1);
+                uint32_t pp = 0;
+                while (pp < npages) {
+                    const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+                    for (uint32_t q = pp; q < end; ++q) {
+                        noc_async_read_tile(page0 + q, l1_recs_acc,
+                                            buck + q * L1_PACK_PAGE_BYTES);
                     }
                     noc_async_read_barrier();
-                    i = end;
+                    pp = end;
                 }
             }
             const uint32_t bs = get_write_ptr(CB_BSORT);
@@ -469,8 +444,7 @@ void kernel_main() {
             uint32_t* idxB = idxA + MB_BUCKET_FIT;
             uint32_t* cnt  = idxB + MB_BUCKET_FIT;
             auto key_of = [&](uint32_t idx) -> uint32_t {
-                // 32B record: depth key is at word 3 (bytes 12-15).
-                return reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES)[3];
+                return l1_splat_words(buck, idx)[3];
             };
             uint32_t* sorted;
             if (L <= 16u) {
@@ -542,23 +516,7 @@ void kernel_main() {
             DeviceZoneScopedN("rd_bk_emit");
             for (uint32_t k = 0; k < L; ++k) {
                 const uint32_t idx = sorted[k];
-                // M0: unpack the 32B record (low 32B of a 64B page). Covariance is
-                // kept as FULL fp32 — it is the precision-critical field (the blend
-                // recomputes the conic via det = a*c - b*b, which suffers fp16
-                // cancellation when a,c are large, ~10000s px^2). Mean is TILE-LOCAL
-                // fp16 (small magnitude => sub-0.1px ULP); opacity/color fp16.
-                // 32B layout (8 × uint32):
-                // Covariance (a,b,c) and tile-local mean are fp32 — precision-
-                // critical (det = a*c-b*b cancellation; sub-px center). Opacity and
-                // color are in [0,1] (sigmoid-activated), so they use UNORM16
-                // (uniform ~1.5e-5 step) instead of fp16 (~5e-4 rel at 0.5) — ~30x
-                // tighter in the same 2 bytes, which is the op/color precision wall.
-                //   [0]: fp32 cov_a  [1]: fp32 cov_b  [2]: fp32 cov_c
-                //   [3]: u32 depth_key
-                //   [4]: fp32 mx_local  [5]: fp32 my_local
-                //   [6]: lo16=unorm opacity, hi16=unorm r
-                //   [7]: lo16=unorm g,       hi16=unorm b
-                auto recp32 = reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES);
+                auto recp32 = l1_splat_words(buck, idx);
                 const uint32_t cov_a_bits = recp32[0];
                 const uint32_t cov_b_bits = recp32[1];
                 const uint32_t cov_c_bits = recp32[2];
@@ -616,18 +574,16 @@ void kernel_main() {
         // per subchunk replaces the iter-48 per-chunk DRAM gather.
         if (L_sub > 0) {
             DeviceZoneScopedN("rd_l1_bulk");
-            const uint32_t mpages = (L_sub + 15u) >> 4;
-            cb_reserve_back(CB_BUCKET_BULK, L_sub);
-            cb_reserve_back(CB_BMASK_BULK, mpages);
-            const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
+            const uint32_t mpages_mask = (L_sub + 15u) >> 4;
+            cb_reserve_back(CB_BMASK_BULK, mpages_mask);
             const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
             auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
 
             {
                 const uint32_t mpg0 = cull_base_sc >> 4;
                 uint32_t pp = 0;
-                while (pp < mpages) {
-                    const uint32_t end = (pp + 64u < mpages) ? pp + 64u : mpages;
+                while (pp < mpages_mask) {
+                    const uint32_t end = (pp + 64u < mpages_mask) ? pp + 64u : mpages_mask;
                     for (uint32_t q = pp; q < end; ++q) {
                         noc_async_read_tile(mpg0 + q, cull_masks_acc,
                                             bmask + q * IDS_PAGE_BYTES);
@@ -638,6 +594,10 @@ void kernel_main() {
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
             }
 
+            // Overflow subchunks: gather blendrec by depth-sorted gid (PACK2 bucket
+            // is scatter/gaussian order; L1 radix + cp_l1_blend is in-budget only).
+            cb_reserve_back(CB_BUCKET_BULK, L_sub);
+            const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
                 const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
                 uint32_t gids[16];
@@ -664,9 +624,10 @@ void kernel_main() {
 
             cb_reserve_back(CB_MB_COUNTS, 1);
             {
-                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(
+                    get_write_ptr(CB_MB_COUNTS));
                 cnt_ptr[0] = L_sub;
-                cnt_ptr[1] = flags;  // no L1_BULK: coeff stream from bulk L1 scratch
+                cnt_ptr[1] = flags;
             }
             cb_push_back(CB_MB_COUNTS, 1);
 
