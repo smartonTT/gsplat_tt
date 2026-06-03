@@ -388,8 +388,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
     cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
     cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
-    cb_cfg(CB_BUCKET_BULK, rec_bytes, kBucketFit, DataFormat::Float32);
-    cb_cfg(CB_BMASK_BULK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
+    // Depth 2x: double-buffer overflow subchunks (iter 51 prefetch while blend).
+    const uint32_t bulk_rec_depth = kBucketFit;
+    const uint32_t bulk_mask_depth = 2u * ((kBucketFit + 15u) / 16u + 1u);
+    cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
+    cb_cfg(CB_BMASK_BULK, 64, bulk_mask_depth, DataFormat::UInt32);
 
     // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
     // a/b/c/px/py/opacity/colors (7) + sort_sorted_ids + sort_tile_ranges +

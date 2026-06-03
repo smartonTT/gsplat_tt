@@ -180,6 +180,33 @@ inline uint32_t load_mask_page(const Acc& acc, uint32_t global_idx, uint32_t tak
     return off;
 }
 
+inline uint32_t pack_fp32_unorm16(float v) {
+    if (v <= 0.0f) return 0u;
+    if (v >= 1.0f) return 65535u;
+    return static_cast<uint32_t>(v * 65535.0f + 0.5f);
+}
+
+// PACK2 pack from 64B proj_m_blendrec (sort_bin layout) into one 32B L1 splat.
+inline void pack_blendrec_to_l1(
+    volatile uint32_t* aos, volatile uint32_t* splat,
+    float tx_tile, float ty_tile) {
+    float mx = bits_to_f(aos[3]);
+    float my = bits_to_f(aos[4]);
+    mx -= tx_tile;
+    my -= ty_tile;
+    splat[0] = aos[0];
+    splat[1] = aos[1];
+    splat[2] = aos[2];
+    splat[3] = aos[9];
+    splat[4] = f_to_bits(mx);
+    splat[5] = f_to_bits(my);
+    const float op = bits_to_f(aos[5]);
+    const float cr = bits_to_f(aos[6]);
+    const float cg = bits_to_f(aos[7]);
+    const float cb = bits_to_f(aos[8]);
+    splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
+    splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
+}
 
 }  // namespace
 
@@ -569,16 +596,17 @@ void kernel_main() {
             continue;
         }
 
-        // Bulk L1 into CB_BUCKET_BULK/CB_BMASK_BULK (reader-private scratch;
-        // never push — compute consumes the coeff stream). One batched NOC load
-        // per subchunk replaces the iter-48 per-chunk DRAM gather.
+        // Overflow: PACK2 bulk L1 + cp_l1_blend (iter 51). Depth-sorted ids =>
+        // pack order matches cull_masks[g]. Ring depth 2x subchunk lets the reader
+        // prefetch subchunk N+1 while compute blends N (cb_push/wait_front).
         if (L_sub > 0) {
-            DeviceZoneScopedN("rd_l1_bulk");
+            const uint32_t rec_pages = (L_sub + 1u) >> 1;
             const uint32_t mpages_mask = (L_sub + 15u) >> 4;
+            const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
+
+            DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, mpages_mask);
             const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
-            auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
-
             {
                 const uint32_t mpg0 = cull_base_sc >> 4;
                 uint32_t pp = 0;
@@ -594,78 +622,40 @@ void kernel_main() {
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
             }
 
-            // Overflow subchunks: gather blendrec by depth-sorted gid (PACK2 bucket
-            // is scatter/gaussian order; L1 radix + cp_l1_blend is in-budget only).
-            cb_reserve_back(CB_BUCKET_BULK, L_sub);
+            cb_reserve_back(CB_BUCKET_BULK, rec_pages);
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
                 const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
+                const uint32_t aos_base = get_write_ptr(CB_SCR_ATTR);
                 uint32_t gids[16];
                 uint32_t processed = 0;
                 while (processed < L_sub) {
                     const uint32_t take = load_ids_chunk(
                         ids_acc, id_start_sc, processed, L_sub, ids_scr, gids);
-                    uint32_t q = 0;
-                    while (q < take) {
-                        const uint32_t batch_end =
-                            (q + 64u < take) ? q + 64u : take;
-                        for (uint32_t j = q; j < batch_end; ++j) {
-                            noc_async_read_tile(
-                                gids[j], blendrec_acc,
-                                buck + (processed + j) * ATTR_PAGE_BYTES);
-                        }
-                        noc_async_read_barrier();
-                        q = batch_end;
+                    issue_chunk_reads_aos(gids, take, aos_base, blendrec_acc);
+                    noc_async_read_barrier();
+                    for (uint32_t j = 0; j < take; ++j) {
+                        pack_blendrec_to_l1(
+                            reinterpret_cast<volatile uint32_t*>(
+                                aos_base + j * GATHER_SLOT_BYTES),
+                            l1_splat_words(buck, processed + j),
+                            tx_tile, ty_tile);
                     }
                     processed += take;
                 }
             }
             mb_cb_commit_fence();
+            cb_push_back(CB_BMASK_BULK, mpages_mask);
+            cb_push_back(CB_BUCKET_BULK, rec_pages);
 
             cb_reserve_back(CB_MB_COUNTS, 1);
             {
                 auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(
                     get_write_ptr(CB_MB_COUNTS));
                 cnt_ptr[0] = L_sub;
-                cnt_ptr[1] = flags;
+                cnt_ptr[1] = sc_flags;
             }
             cb_push_back(CB_MB_COUNTS, 1);
-
-            for (uint32_t g = 0; g < L_sub; ++g) {
-                auto recp = reinterpret_cast<volatile uint32_t*>(
-                    buck + g * ATTR_PAGE_BYTES);
-                const uint32_t cov_a_bits = recp[0];
-                const uint32_t cov_b_bits = recp[1];
-                const uint32_t cov_c_bits = recp[2];
-                const float mean_x = bits_to_f(recp[3]);
-                const float mean_y = bits_to_f(recp[4]);
-                const uint32_t op_bits = recp[5];
-                const uint32_t cr = recp[6];
-                const uint32_t cg = recp[7];
-                const uint32_t cb = recp[8];
-                const uint32_t mask = bmptr[g];
-                for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
-                cb_reserve_back(CB_MB_COEFF, 1);
-                auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
-                row[0] = cov_a_bits;
-                row[1] = cov_b_bits;
-                row[2] = cov_c_bits;
-                row[3] = f_to_bits(mean_x - tx_tile);
-                row[4] = f_to_bits(mean_y - ty_tile);
-                row[5] = 0u;
-                row[6] = op_bits;
-                row[7] = cr;
-                row[8] = cg;
-                row[9] = cb;
-                row[10] = mask;
-                row[11] = 0u;
-                row[12] = 0u;
-                row[13] = 0u;
-                row[14] = 0u;
-                row[15] = 0u;
-                mb_cb_commit_fence();
-                cb_push_back(CB_MB_COEFF, 1);
-            }
             continue;
         }
         cb_reserve_back(CB_MB_COUNTS, 1);
