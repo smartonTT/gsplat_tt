@@ -439,6 +439,7 @@ void kernel_main() {
 
         if (num_subchunks == 1u && Lb > 0 && Lb <= MB_BUCKET_FIT) {
             const uint32_t L = Lb;
+            cb_reserve_back(CB_BUCKET, L);
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
                 uint32_t i = 0;
@@ -498,22 +499,16 @@ void kernel_main() {
                 }
                 sorted = cur;  // even pass count -> back in idxA
             }
-            cb_reserve_back(CB_MB_COUNTS, 1);
-            {
-                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
-                cnt_ptr[0] = L;
-                cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
-            }
-            cb_push_back(CB_MB_COUNTS, 1);
             // Bulk-load this tile's WHOLE cull_masks region into L1 ONCE (cull_base
             // is 16-aligned -> mask[k] == L1[k]) with batched barriers + a single
             // per-tile settle, instead of a per-candidate NoC read + spin. The
             // records are already L1-resident, so the candidate loop is pure L1.
+            const uint32_t mpages = (L + 15u) >> 4;
+            cb_reserve_back(CB_BMASK, mpages);
             const uint32_t bmask = get_write_ptr(CB_BMASK);
             auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
             {
                 const uint32_t mpg0 = cull_base >> 4;
-                const uint32_t mpages = (L + 15u) >> 4;
                 uint32_t pp = 0;
                 while (pp < mpages) {
                     const uint32_t end = (pp + 64u < mpages) ? pp + 64u : mpages;
@@ -525,6 +520,17 @@ void kernel_main() {
                 }
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
             }
+            // Publish bucket/bmask before MB_COUNTS so compute can drain them
+            // after process_tile_gaussians without racing the coeff stream.
+            cb_push_back(CB_BUCKET, L);
+            cb_push_back(CB_BMASK, mpages);
+            cb_reserve_back(CB_MB_COUNTS, 1);
+            {
+                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+                cnt_ptr[0] = L;
+                cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
+            }
+            cb_push_back(CB_MB_COUNTS, 1);
             {
             // MEASUREMENT zone: the per-candidate emit loop (repack record ->
             // 64B coeff row -> CB_MB_COEFF push -> fence) for ONE in-budget tile.

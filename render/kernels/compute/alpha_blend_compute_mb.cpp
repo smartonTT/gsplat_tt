@@ -330,6 +330,15 @@ void kernel_main() {
             } else {
                 DeviceZoneScopedN("cp_inb");
                 process_tile_gaussians(num_g);
+                // In-budget reader uses CB_BUCKET/CB_BMASK as scratch then pushes
+                // after the coeff stream; drain here so bulk subchunks can reserve.
+                if (num_g > 0) {
+                    const uint32_t mpages = (num_g + 15u) >> 4;
+                    cb_wait_front(CB_BUCKET, num_g);
+                    cb_pop_front(CB_BUCKET, num_g);
+                    cb_wait_front(CB_BMASK, mpages);
+                    cb_pop_front(CB_BMASK, mpages);
+                }
             }
 
             if (emit_tile) {
