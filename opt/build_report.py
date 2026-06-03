@@ -1068,9 +1068,13 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         abs_tracy = OPT_DIR.parent / tracy_rel
         if abs_tracy.is_file():
             href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
+            tracy_cmd = f"tracy {abs_tracy}"
             tracy_html = (
                 f"<p class='iter-tracy'><a href='{href}' "
-                f"title='open in Tracy profiler'>🔬 Tracy trace</a></p>"
+                f"title='open in Tracy profiler'>🔬 Tracy trace</a> "
+                f"<code class='tracy-cmd' title='copy &amp; run to open in Tracy' "
+                f"style='font-size:11px;background:#f0f0f0;padding:1px 6px;"
+                f"border-radius:3px;user-select:all;cursor:text'>{tracy_cmd}</code></p>"
             )
         else:
             tracy_html = (
@@ -1285,8 +1289,11 @@ def _legacy_table_ledger_unused(rows: list[dict]) -> str:
         tracy_cell = ""
         if tracy_rel and (OPT_DIR.parent / tracy_rel).is_file():
             href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
+            tracy_cmd = f"tracy {OPT_DIR.parent / tracy_rel}"
             tracy_cell = (f"<br><a href='{href}' title='open in Tracy profiler' "
-                          f"style='font-size:11px'>🔬 Tracy</a>")
+                          f"style='font-size:11px'>🔬 Tracy</a>"
+                          f"<br><code title='copy &amp; run to open in Tracy' "
+                          f"style='font-size:10px;color:#555;user-select:all'>{tracy_cmd}</code>")
         return (
             f"<tr style='background:{row_bg}'>"
             f"<td>{preview}</td>"

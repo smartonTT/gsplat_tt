@@ -92,7 +92,11 @@ void kernel_main() {
     const uint32_t stride      = get_arg_val<uint32_t>(11);
     const uint32_t core_id     = get_arg_val<uint32_t>(12);
     const uint32_t mode        = get_arg_val<uint32_t>(13);
-    DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+    // The Tracy device zone is opened inside each pass below (histogram vs emit)
+    // with a COMPILE-TIME-LITERAL name. DeviceZoneScopedN hashes its argument via
+    // Hash16_CT(const char (&)[N]); a runtime ternary decays to const char* and
+    // fails that template's N deduction (kernel_profiler.hpp:110) under
+    // TT_METAL_DEVICE_PROFILER=1. Two static-named zones keep the per-pass labels.
 #ifdef BIN_DUMP
     const uint32_t dbg_addr    = get_arg_val<uint32_t>(14);
 #endif
@@ -205,6 +209,7 @@ void kernel_main() {
     const uint32_t pg_hi = page_start + page_count;
 
     if (mode == 0) {
+        DeviceZoneScopedN("sort_bin_hist");
         // ── count: per-tile histogram of kept pairs ─────────────────────
         for (uint32_t t = 0; t < num_tiles; t++) rowp[t] = 0;
         for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
@@ -226,6 +231,7 @@ void kernel_main() {
         return;
     }
 
+    DeviceZoneScopedN("sort_bucket_emit");
     // ── scatter ─────────────────────────────────────────────────────────
     // Load this core's global base row.
     for (uint32_t pp = 0; pp < row_pages; pp++) {

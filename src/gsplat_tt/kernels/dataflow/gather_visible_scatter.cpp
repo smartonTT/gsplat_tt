@@ -89,7 +89,11 @@ inline int clampi(int v, int lo, int hi) {
 
 void kernel_main() {
     const uint32_t count_only = get_arg_val<uint32_t>(30);
-    DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+    // The Tracy device zone is opened inside each pass below (count vs scatter)
+    // with a COMPILE-TIME-LITERAL name. DeviceZoneScopedN hashes its argument via
+    // Hash16_CT(const char (&)[N]); a runtime ternary decays to const char* and
+    // fails that template's N deduction (kernel_profiler.hpp:110) under
+    // TT_METAL_DEVICE_PROFILER=1. Two static-named zones keep the per-pass labels.
     const uint32_t m2x_addr   = get_arg_val<uint32_t>(0);
     const uint32_t m2y_addr   = get_arg_val<uint32_t>(1);
     const uint32_t depth_addr = get_arg_val<uint32_t>(2);
@@ -302,6 +306,7 @@ void kernel_main() {
 
     // ── count_only pass: just tally this core's visible quota ───────────
     if (count_only) {
+        DeviceZoneScopedN("proj_count");
         uint32_t vcount = 0;
         for (uint32_t kk = 0, t = t_start; kk < t_count; kk++, t += t_stride) {
             noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
@@ -336,6 +341,7 @@ void kernel_main() {
         return;
     }
 
+    DeviceZoneScopedN("proj_scatter");
     // ── scatter pass: write this core's visible elements at [base, ...) ─
     // GSPLAT_TT_PROJ_DEVICE_SCAN: the scan kernel computed this core's base +
     // is_last on-device into the base buffer (host repoints counts_addr at it);
