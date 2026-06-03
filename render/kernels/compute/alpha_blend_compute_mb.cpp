@@ -59,7 +59,14 @@ constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp (r + 0.5)
 constexpr uint32_t CB_MB_COEFF  = 2;   // one 48B coeff row per gaussian (mb-major)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock count)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
+constexpr uint32_t CB_BUCKET = 9;    // L1-resident subchunk payload (reader push / compute pop)
+constexpr uint32_t CB_BMASK  = 11;    // L1-resident subchunk cull_masks (reader push / compute pop)
 constexpr uint32_t CB_COLOR_OUT = 16;
+
+// MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
+constexpr uint32_t MB_FLAG_EMIT = 1u;
+constexpr uint32_t MB_FLAG_CONTINUE = 2u;
+constexpr uint32_t MB_FLAG_L1_BULK = 4u;
 
 // Tiles with num_g<=FIT are served L1-resident by the reader (bucket path);
 // num_g>FIT take the DRAM-gather fallback. Mirrors the host BUCKET_FIT (8192).
@@ -237,6 +244,30 @@ inline void process_tile_gaussians(uint32_t num_g) {
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
 }
 
+// Blend one subchunk whose records + masks sit in CB_BUCKET / CB_BMASK L1
+// scratch (iter 49). Reader finishes the bulk load + fence before pushing
+// MB_COUNTS; compute reads L1 directly — no per-row CB_MB_COEFF stream.
+inline void process_tile_l1_blend(uint32_t num_g) {
+    if (num_g == 0) {
+        return;
+    }
+    const uint32_t buck = get_tile_address(CB_BUCKET, 0);
+    const uint32_t bmask_base = get_tile_address(CB_BMASK, 0);
+
+    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+    for (uint32_t g = 0; g < num_g; g++) {
+        const uint32_t* rec =
+            reinterpret_cast<const uint32_t*>(buck + g * 64u);
+        const uint32_t a = rec[0], b = rec[1], c = rec[2], d = rec[3], e = rec[4];
+        const uint32_t op = rec[5], cr = rec[6], cg = rec[7], cbv = rec[8];
+        const uint32_t mask = reinterpret_cast<const uint32_t*>(
+            bmask_base + (g >> 4) * 64u)[g & 0xFu];
+        MATH((mb_cb_consume_fence()));
+        dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
+    }
+    MATH((_llk_math_eltwise_unary_sfpu_done_()));
+}
+
 }  // namespace
 
 void kernel_main() {
@@ -269,8 +300,9 @@ void kernel_main() {
                 num_g = cptr[0];
                 flags = cptr[1];
             }
-            const bool continue_blend = (flags & 2u) != 0;
-            const bool emit_tile = (flags & 1u) != 0;
+            const bool continue_blend = (flags & MB_FLAG_CONTINUE) != 0;
+            const bool emit_tile = (flags & MB_FLAG_EMIT) != 0;
+            const bool l1_bulk = (flags & MB_FLAG_L1_BULK) != 0;
 
             if (!continue_blend) {
                 tile_regs_acquire();
@@ -287,11 +319,11 @@ void kernel_main() {
                 copy_tile(CB_YRAMP, 0, 5);
             }
 
-            if (num_g <= MB_BUCKET_FIT) {
-                DeviceZoneScopedN("cp_inb");
-                process_tile_gaussians(num_g);
+            if (l1_bulk) {
+                DeviceZoneScopedN("cp_l1_blend");
+                process_tile_l1_blend(num_g);
             } else {
-                DeviceZoneScopedN("cp_ovf");
+                DeviceZoneScopedN("cp_inb");
                 process_tile_gaussians(num_g);
             }
 

@@ -1,5 +1,5 @@
-id=157
-sha=9f1d618
-ts=2026-06-03T02:23:53-0700
-desc=iter 48: iter48: post-sort subchunk table + per-subchunk cull/blend dispatch (sort unchanged)
-bin=69df429df7353d46
+id=161
+sha=7ac1ce2
+ts=2026-06-03T02:58:26-0700
+desc=iter 49: bulk L1 subchunk load + CB_BUCKET wait/pop (deadlock fix)
+bin=15defc5f5720c502

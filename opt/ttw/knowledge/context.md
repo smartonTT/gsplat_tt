@@ -181,3 +181,22 @@ every optimization iteration:
 When out of paid credits, dispatch Task subagents with **`model="composer-2.5"`**
 (non-fast). **`composer-2.5-fast` is not allowed on the free tier.** Do not use
 `model="auto"` when you intend the free Composer worker.
+
+## Supervisor poll cadence (mandatory)
+
+The **supervisor** (not workers) runs a full tt-loop **lap at least every 20
+minutes** (`ttw.toml [loop] heartbeat_s = 1200`), **and immediately on every
+worker completion or `TTLOOP_TICK`**. A lap is not optional on heartbeat-only
+turns — poll in-flight subagents every time:
+
+1. Corroborate liveness with **device-log growth**, **git/commits**, and
+   **buildid** — not transcript silence alone.
+2. **Re-verify every claimed PASS** (`done.sh` + build-delta + on-device metric).
+3. **Interrupt+redirect** (`resume` + `interrupt:true` + `run_in_background:true`)
+   when a worker is dead (~10 min no progress), stuck (verify log frozen past
+   `worry_threshold_s`), thrashing (many device runs, no kept iter), or off-mission.
+4. Before ending any turn with an open goal: **≥1 worker in flight** or device
+   verify actively running via `devrun.sh`.
+
+Never wait for the heartbeat as the primary pace — it is the failsafe that catches
+a supervisor that went idle.
