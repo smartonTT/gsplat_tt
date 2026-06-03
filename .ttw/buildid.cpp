@@ -1,5 +1,5 @@
-id=176
-sha=db9dcd0
-ts=2026-06-03T08:45:39-0700
-desc=iter49: bulk L1 load + coeff emit; CB_BUCKET scratch-only deadlock fix
-bin=fd5e7e03a5c64c53
+id=178
+sha=e6d43d4
+ts=2026-06-03T09:40:59-0700
+desc=iter51: double-buffer overflow PACK2 l1_bulk
+bin=0a5e2d9edd16b821
