@@ -219,6 +219,13 @@ def main():
     ap.add_argument("--cameras", type=Path,
                     default=REPO_ROOT / "benchmarks/cameras_v2.json")
     ap.add_argument("--iter-dir", default="render-clean")
+    ap.add_argument("--dump-views", default=None,
+                    help="if set, save every bench view's render_clean output as "
+                         "viewNN_<name>.png under tmp/<this dir> (8-bit RGB)")
+    ap.add_argument("--no-ref", action="store_true",
+                    help="skip the cpu_cpp_mb reference render + PSNR gate; time "
+                         "the 30 render_clean views only (used for a clean Tracy "
+                         "device-profiler capture). Does not change render_clean.")
     args = ap.parse_args()
 
     # Device-lock discipline: render_clean opens the TT device, so only run
@@ -242,6 +249,11 @@ def main():
     out_dir = REPO_ROOT / "tmp" / args.iter_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    dump_dir = None
+    if args.dump_views:
+        dump_dir = REPO_ROOT / "tmp" / args.dump_views
+        dump_dir.mkdir(parents=True, exist_ok=True)
+
     K = build_intrinsics(W, H, fov_deg)
     clean_backend = CleanBackend()
     clean_pipeline = Pipeline(clean_backend, tile_size=32, contrib_floor=contrib_floor)
@@ -261,13 +273,18 @@ def main():
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
     per_view_ms = []
     hero_clean = None
-    for name in order:
+    for i, name in enumerate(order):
         img, wall_ms = render_clean_view_timed(
             clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
         per_view_ms.append(wall_ms)
         if name == hero_name:
             hero_clean = img
-        print(f"[run]   view={name} {wall_ms:.1f}ms", flush=True)
+        if dump_dir is not None:
+            png = dump_dir / f"view{i:02d}_{name}.png"
+            Image.fromarray((img * 255.0).astype(np.uint8)).save(png)
+            print(f"[run]   view={name} {wall_ms:.1f}ms saved={png.name}", flush=True)
+        else:
+            print(f"[run]   view={name} {wall_ms:.1f}ms", flush=True)
 
     avg_ms = sum(per_view_ms) / len(per_view_ms)
     p50_ms = statistics.median(per_view_ms)
@@ -278,16 +295,21 @@ def main():
     # (identical oracle pixels => identical hero_vs_ref). Its device-init
     # attempts fail (device held by the clean backend) and fall back to CPU;
     # silence the C++ fd-2 TT_FATAL spam so the "clean renderer" log stays clean.
-    with silence_os_fd_output():
-        ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg,
-                          W, H, contrib_floor)
+    # Skipped under --no-ref (clean device-profiler capture: render_clean only).
+    if args.no_ref:
+        hero_vs_ref = float("nan")
+        Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
+    else:
+        with silence_os_fd_output():
+            ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg,
+                              W, H, contrib_floor)
 
-    hero_vs_ref = psnr(hero_clean, ref)
+        hero_vs_ref = psnr(hero_clean, ref)
 
-    Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
-    Image.fromarray((ref * 255.0).astype(np.uint8)).save(out_dir / "hero_ref.png")
-    diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
-    Image.fromarray((diff * 255.0).astype(np.uint8)).save(out_dir / "hero_diff10.png")
+        Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
+        Image.fromarray((ref * 255.0).astype(np.uint8)).save(out_dir / "hero_ref.png")
+        diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
+        Image.fromarray((diff * 255.0).astype(np.uint8)).save(out_dir / "hero_diff10.png")
 
     def fmt(x):
         return "inf" if x == float("inf") else f"{x:.2f}"

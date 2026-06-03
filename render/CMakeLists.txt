@@ -87,6 +87,11 @@ target_compile_definitions(render_tt PRIVATE
   "OVERRIDE_KERNEL_PREFIX=\"${CMAKE_CURRENT_SOURCE_DIR}/\"")
 gsplat_link_tt_metal(render_tt)
 target_link_libraries(render_tt PUBLIC render_gsplat_cpu)
+# Host Tracy client (same 0.10 client as production _gsplat_cpu): compiles the
+# GSPLAT_HOST_ZONE orchestration zones and makes render_clean a Tracy client so
+# `python -m tracy` can capture a device-timeline .tracy. Pure instrumentation —
+# does not change pixels/PSNR (production builds with it too).
+gsplat_link_host_tracy(render_tt)
 
 # ── pybind module ─────────────────────────────────────────────────────────────
 pybind11_add_module(render_clean MODULE host/render.cpp)
@@ -95,5 +100,6 @@ target_include_directories(render_clean PRIVATE
   ${REPO_ROOT}/src)
 target_compile_definitions(render_clean PRIVATE GSPLAT_WITH_TT)
 target_link_libraries(render_clean PRIVATE render_tt render_gsplat_cpu)
+gsplat_link_host_tracy(render_clean)
 set_target_properties(render_clean PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
