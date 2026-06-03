@@ -17,9 +17,11 @@
 
 ## Architecture anchor
 
-- Record: 32 B in 64 B page (L1_RECORD path). `kBucketFit = 8192`.
-- Overflow today: per-candidate DRAM gather in `reader_alpha_blend_mb_devcull.cpp` — delete this path for subchunked tiles once L1 path works.
-- In-budget tiles (`count <= 8192`): may stay on current L1 bucket path until unified.
+- Record today: **one** 32 B splat in the **low 32 B** of a 64 B DRAM page (upper 32 B wasted; sub-64 B pages unreliable on BH).
+- Target (iter 50): **two** 32 B splats packed per 64 B page → halves bulk-load bytes and ~doubles effective splats per L1 footprint at the same `kBucketFit` slot count.
+- `kBucketFit = 8192` (logical splat slots per tile/subchunk; with 2-pack, 8192 slots = 4096 pages).
+- Overflow path: per-subchunk bulk L1 load in `reader_alpha_blend_mb_devcull.cpp` (iter 49); delete per-row CB stream once stable.
+- In-budget tiles (`count <= 8192`): may stay on current L1 bucket path until unified with 2-pack layout.
 
 ## Iteration slices (strict order)
 
@@ -27,8 +29,9 @@
 |------|-------------|------|
 | 48 | Post-sort **subchunk table** + blend/cull **dispatch loop** over (tile, subchunk); `[SUBCHUNK]` stats; correctness first (may still use old reader internally for one subchunk) | `hero_vs_ref >= 63.6` (target 63.85) |
 | 49 | Reader **single-buffer bulk L1 load** of subchunk payload; compute consumes L1 (no per-row emit) | same + `[L1LOAD]` zone timing |
-| 50 | **Double-buffer** overlap | same + Tracy shows overlap |
-| 51 | **MB saturation early-out** (gaussian-major useless; must be **microblock-major** resident T) | same; perf may improve |
+| 50 | **2×32 B records per 64 B page** — pack/unpack in scatter (`sort_bin` / `buf_l1_recs`), bulk reader, and compute; stop using high 32 B as padding. Re-validate PSNR bit-identical to iter 49. Report `[PACK2]` bytes_loaded vs old. | `hero_vs_ref >= 63.6` (target 63.85) |
+| 51 | **Double-buffer** overlap (prefetch subchunk N+1 while cull/blend N) | same + Tracy shows overlap |
+| 52 | **MB saturation early-out** (gaussian-major useless; must be **microblock-major** resident T) | same; perf may improve |
 
 ## Anti-flounder rules (workers)
 
@@ -42,4 +45,6 @@
 
 ## Measurement
 
-Report every iter: `hero_vs_ref`, `avg_frame_ms` (30 views), subchunk count, max subchunks/tile, % candidates in overflow tiles before/after.
+Report every iter: `hero_vs_ref`, `avg_frame_ms` (30 views), subchunk count, max subchunks/tile, % candidates in overflow tiles before/after. Iter 50+: `[PACK2]` pages_per_subchunk vs splat_count.
+
+**Do not start iter 50 until iter 49 is kept** — 2-pack changes the record layout; prove the bulk-L1 path first at 63.85 dB.
