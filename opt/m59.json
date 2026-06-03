@@ -1,0 +1,38 @@
+{
+  "backend": "tt",
+  "ref_backend": "cpu_cpp_mb",
+  "blend_mode_env": "2",
+  "num_views": 1,
+  "iter_dir": "m59_devproj",
+  "screenshot": "opt/metal-screenshots/m59_devproj/hero.png",
+  "hero_psnr_tt_vs_ref_dB": 39.68208991679265,
+  "hero_psnr_tt_vs_gt_dB": 38.87528406569426,
+  "hero_psnr_ref_vs_gt_dB": 47.086415320169685,
+  "min_psnr_tt_vs_ref_dB": 39.68208991679265,
+  "min_psnr_tt_vs_gt_dB": 38.87528406569426,
+  "all_identical_vs_ref": false,
+  "sum_total_ms": 862.3994900117395,
+  "ms_per_view": 862.3994900117395,
+  "per_stage_median_ms": {
+    "project_ms": 400.11541748046875,
+    "tile_assign_ms": 84.86885833740234,
+    "sort_ms": 8.387445449829102,
+    "blend_ms": 343.7306213378906,
+    "total_ms": 862.3994900117395
+  },
+  "rows": [
+    {
+      "view": "hero",
+      "psnr_tt_vs_ref_dB": 39.68208991679265,
+      "psnr_tt_vs_gt_dB": 38.87528406569426,
+      "psnr_ref_vs_gt_dB": 47.086415320169685,
+      "timings_ms": {
+        "project": 400.11541748046875,
+        "tile_assign": 84.86885833740234,
+        "sort": 8.387445449829102,
+        "blend": 343.7306213378906,
+        "total": 862.3994900117395
+      }
+    }
+  ]
+}

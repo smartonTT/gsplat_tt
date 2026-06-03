@@ -1,0 +1,1 @@
+[ttw 2026-05-31T23:23:47-0700] loopd armed: interval=540s stop_file=/Users/smarton/dev/gstt2/STOP goal=ms_view<=1.0 (heartbeat only halts on STOP/goal)

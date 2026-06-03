@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "iter-015: bounding-box prefilter in microblock_cull. The contributing ellipse mahalanobis<=R^2 (R^2 = 2*log(g_op/mb_contrib_floor)) has tight axis-aligned half-extents x_half=R*sqrt(a), y_half=R*sqrt(c). Microblocks disjoint from this BB have clamp-closest-point alpha < threshold and must end up keep=false. Skip them instead of running per-microblock std::exp. Layer 1: 42/42 ctest. Layer 2: verify_stage microblock_cull bit-identical (mb_header max_abs_diff 0, mb_stream max_abs_diff 0, 2,046,181-element stream unchanged). Layer 3 micro-bench (same hot system, hero fixture, 30-iter p50): cull 10.67 -> 6.47 ms (1.65x), blend_microblock unchanged at 15.2 ms. 30-frame benchmark macro: 3525 -> 3139 ms (1.12x, dominated by system load noise — load avg 7.99, Cursor consuming 215% CPU). Both runs measured back-to-back under identical load. Bit-identical visual quality, faster cull stage."
+}

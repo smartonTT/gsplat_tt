@@ -1,0 +1,4 @@
+{
+  "verdict": "ACCEPT",
+  "reasoning": "iter-057: fuse filter_visible into project_full_fused's parallel gather. render_full previously ran project (which compacted geometry) then filter_visible — two parallel count+scatter passes over N=601k (one inside project gather for geometry, one for colors/opacities). Now the geometry gather also copies colors[i*3] and opacities[i] into ProjectResult.colors/opacities (M visible only). render_full uses those directly; filter_visible eliminated (saves 2 chunk passes + 2 pool.wait over 601k). PSNR identical. Result: sum_total 257 -> 251 ms (-2.3%, hero p50 8.28 ms). project sum unchanged ~68 ms (gather work merged, no duplicate scan). Best single-trial sum30 so far in this optimization run."
+}

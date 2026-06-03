@@ -1,0 +1,66 @@
+{
+  "updated_at": "2026-05-28T07:55:00+00:00",
+  "remote_host": "bh-30",
+  "local_dev_host": "mac (smarton-mac, fresh .venv-mac py3.12, build-mac/)",
+  "supervisor_loop": "stopped",
+  "phase": "unblocked-ready-for-tt-port",
+  "next_action": "Resume amendment-002 tt-000 (link tt-metal into _gsplat_cpu pybind). Cull regression is resolved: max_radius cap reinstated (default 0 = min(H,W)/2 in gsplat/rasterization.py + gsplat/pipeline.py + backends/cpu_cpp/backend.py), and benchmarks/reference_v2/ has been regenerated using cpu_cpp_mb @ contrib_floor=1/16384, validated to within 1 LSB of the absolute cull_disabled ground truth on hero (72.73 dB). cameras_v2.json contrib_floor bumped 1/255 -> 1/16384. New ref synced to bh-30.",
+  "milestones": {
+    "stage1_host": true,
+    "stage2_reader": true,
+    "stage3_compute": false,
+    "amendment_002_tt000_pybind_link": false,
+    "cpu_cpp_emulator_validated_against_numpy": true,
+    "cull_regression_resolved": true,
+    "reference_v2_regenerated_at_cf_1_16384": true,
+    "stipple_regression_test_landed": true
+  },
+  "blockers": [],
+  "validations": [
+    {
+      "id": "cpu_cpp_matches_numpy",
+      "summary": "cpu_cpp on Mac matches numpy cpu on bh-30 to <=1 PNG LSB on every view: 27/30 pixel-identical (max|d|=0.0000), 3/30 at max|d|=0.0039 (≈ float32 quantization noise), PSNRs 75.05–75.64 dB on the 3 high-content views.",
+      "evidence": "opt/metal-screenshots/rerender-post-cherrypick/cpu_cpp_mac/ vs cpu/"
+    },
+    {
+      "id": "current_render_matches_absolute_GT",
+      "summary": "After max_radius cap reinstated, current cpu_cpp_mb render of hero matches the cull_disabled absolute ground truth (alpha-blend over ALL Gaussians, no culling at all) at 81.44 dB, max|d|=1.0/255, 0.0% pixels visibly different. The old cad8f91 reference scored only 30.62 dB vs the same GT (max|d|=169/255, 92.6% pixels off) — confirming the cherrypicks (a4da48a, 2e7ad9a) fixed real over-cull bugs, the cad8f91 reference was the buggy one.",
+      "evidence": "opt/metal-screenshots/rerender-bicycle-cap-restored/hero-vs-unculled-gt/"
+    },
+    {
+      "id": "new_reference_v2_validated",
+      "summary": "Regenerated benchmarks/reference_v2/ (30 PNGs) using cpu_cpp_mb @ cf=1/16384. hero.png is bit-identical (sha256 854b3f97...) to the validated emulator render. vs absolute cull_disabled GT: 72.73 dB, max|d|=1.0/255 (= float32 quantization noise).",
+      "evidence": "benchmarks/reference_v2/ (regenerated 2026-05-28); opt/metal-screenshots/rerender-bicycle-cap-restored/hero-cf16384/"
+    },
+    {
+      "id": "tt3_test_pulled_passes_on_tt2",
+      "summary": "Pulled tests/spec/test_thin_splat_stipple.py from gsplat_tt_3 commit d218410 (319 lines, 9 tests). All 9 pass on tt_2 in 1.0s: 6 parametrized blend-equivalence cases (iso_smooth → giant_thin covariance regimes, all >= 60 dB cpu vs cpu_cpp_mb), 2 full-pipeline parity tests (single + multi thin close-zoom Gaussians, both >= 35-50 dB cpu vs cpu_cpp), 1 anti-overdraw test (<1% nonzero pixels from a single ill-conditioned splat). Confirms our manual max_radius cap fix is functionally equivalent to tt_3's d218410 commit.",
+      "evidence": "tests/spec/test_thin_splat_stipple.py; pytest run 2026-05-28T07:55"
+    }
+  ],
+  "fixes_landed": [
+    {
+      "id": "reinstate_max_radius_cap",
+      "summary": "Changed default max_radius from -1 (disabled) to 0 (auto = min(H,W)/2) in gsplat/rasterization.py:project_gaussians, gsplat/pipeline.py:Pipeline, backends/cpu_cpp/backend.py. The C++ project_full_fused contract (-1=off, 0=auto, >0=pixel cap) was already correct; only Python defaults needed flipping. Restored 30/30 views rendering meaningful content (was 25/30 black, 2/30 smudge, 3/30 blob).",
+      "evidence": "git diff gsplat/rasterization.py gsplat/pipeline.py backends/cpu_cpp/backend.py"
+    },
+    {
+      "id": "render_30frame_contrib_floor_plumbing",
+      "summary": "scripts/render_30frame.py was reading scene.contrib_floor from cameras_v2.json but never passing it to Pipeline() — silently ignored. Fixed: Pipeline(backend, tile_size=32, contrib_floor=contrib_floor).",
+      "evidence": "git diff scripts/render_30frame.py"
+    }
+  ],
+  "last_gates": {
+    "blend_rc": 0,
+    "mb_host_rc": 0,
+    "hero_psnr_dB_cpu_cpp_mac_vs_absolute_GT_unculled": 81.44,
+    "hero_psnr_dB_cad8f91_ref_vs_absolute_GT_unculled": 30.62,
+    "hero_psnr_dB_new_ref_vs_absolute_GT_unculled": 72.73,
+    "hero_psnr_dB_cpu_cpp_mac_vs_new_ref": "inf (bit-identical)",
+    "hero_psnr_dB_cpu_vs_cpu_cpp_mac_at_cf_16384": 72.18,
+    "n_views_30view_vs_new_ref_above_50dB": 30,
+    "sum_total_ms_cpu_cpp_mac_30view": 4294.4,
+    "device_kernel_ms": 216.06,
+    "mb_host_psnr_dB": 49.44267816579695
+  }
+}

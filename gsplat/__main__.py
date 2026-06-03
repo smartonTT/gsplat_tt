@@ -26,20 +26,39 @@ def main():
         ),
     )
     parser.add_argument(
+        "--render-width",
+        type=int,
+        default=1024,
+        help="Initial render width in pixels (snapped to multiples of 32). Default: 1024.",
+    )
+    parser.add_argument(
+        "--render-height",
+        type=int,
+        default=1024,
+        help="Initial render height in pixels (snapped to multiples of 32). Default: 1024.",
+    )
+    parser.add_argument(
         "--max-resolution",
         type=int,
-        default=640,
+        default=None,
         help=(
-            "Shorter render dim, in pixels (480p/720p/1080p convention). The "
-            "longer dim follows from the browser's aspect ratio; both dims are "
-            "snapped down to multiples of 32 so the kernel sees whole tiles. "
-            "Default: 640."
+            "Deprecated alias: if set, overrides --render-width and --render-height "
+            "with a square size."
+        ),
+    )
+    parser.add_argument(
+        "--force-square",
+        type=int,
+        default=None,
+        help=(
+            "If set, every frame renders at exactly NxN regardless of the "
+            "Render Res UI (must be a multiple of 32). Overrides render width/height."
         ),
     )
     parser.add_argument(
         "--verbose", "-v",
         action="store_true",
-        help="Print per-frame stage timing (render-enter / render-mid / kernel-pre / kernel-post / render).",
+        help="Print per-frame stage timing.",
     )
     args = parser.parse_args()
 
@@ -52,7 +71,10 @@ def main():
         host=args.host,
         port=args.port,
         backend=args.backend,
+        render_width=args.render_width,
+        render_height=args.render_height,
         max_resolution=args.max_resolution,
+        force_square=args.force_square,
         verbose=args.verbose,
         scene_path=args.ply_path,
     )

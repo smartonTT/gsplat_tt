@@ -1,0 +1,203 @@
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <vector>
+
+namespace gsplat_cpu {
+
+class ThreadPool;
+
+struct ProjectResult {
+    std::vector<float> means_2d;
+    std::vector<float> covs_2d;
+    std::vector<float> depths;
+    std::vector<float> radii;
+    std::vector<uint8_t> valid_mask;
+    // iter-057: compact visible-only colors/opacities gathered with geometry
+    // so render_full skips a second parallel scan over all N Gaussians.
+    std::vector<float> colors;     // M * 3
+    std::vector<float> opacities;  // M
+};
+
+struct ProjectPrepared {
+    std::size_t N{0};
+    int image_height{0};
+    int image_width{0};
+    std::vector<float> means_2d;   // N * 2
+    std::vector<float> depths;     // N
+    std::vector<float> cov_cam;    // N * 9, row-major 3x3
+    std::vector<float> jacobian;   // N * 6, row-major 2x3
+    std::vector<uint8_t> near_valid;
+};
+
+ProjectPrepared project_prepare(
+    const float* means,
+    const float* scales,
+    const float* rotations,
+    const float* extrinsics,
+    const float* intrinsics,
+    std::size_t N,
+    int image_height,
+    int image_width);
+
+// Geometry only (no per-Gaussian cov3d/cov_cam); used by project_full pybind path.
+ProjectPrepared project_prepare_geometry(
+    const float* means,
+    const float* extrinsics,
+    const float* intrinsics,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr);
+
+// Compute cov3d (= R(q) @ S^2 @ R(q).T) for N Gaussians once per scene. Caller
+// caches the (N*9, row-major 3x3) buffer across views; cov3d is view-independent.
+// Used by project_prepare_from_cov3d to amortise cov3d build over many camera
+// poses (training loop, 30-frame bench).
+void compute_cov3d_batch(
+    const float* scales,
+    const float* rotations,
+    std::size_t N,
+    float* cov3d_out);  // N * 9
+
+// Same as project_prepare but reuses a precomputed cov3d buffer (skips
+// per-Gaussian cov3d math).
+ProjectPrepared project_prepare_from_cov3d(
+    const float* means,
+    const float* cov3d,  // N * 9, row-major 3x3 (use compute_cov3d_batch to fill)
+    const float* extrinsics,
+    const float* intrinsics,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr);
+
+// Same as project_finalize but accepts a thread pool for the per-Gaussian
+// radius/cull pass.
+ProjectResult project_finalize_parallel(
+    const ProjectPrepared& prep,
+    const float* covs_2d,
+    const float* opacities,
+    float min_opacity,
+    ThreadPool* pool = nullptr);
+
+// Compute covs_2d = J @ cov_cam @ J.T + 0.3*I per Gaussian in pure fp32 C++.
+// Pure C++ avoids the python -> torch.bmm round-trip used in the previous
+// pybind path (saves ~2-3ms / frame). Matches torch's batched bmm within
+// ~5e-4 (same magnitude as the previous covs_2d diff vs numpy reference),
+// driven by fp32 accumulation order.
+//   prep      output of project_prepare_geometry / project_prepare_from_cov3d
+//   covs_2d_out output buffer, size prep.N * 4, layout [a, b, b, c] row-major
+//   pool      optional thread pool for the parallel inner loop
+void compute_covs_2d(
+    const ProjectPrepared& prep,
+    float* covs_2d_out,
+    ThreadPool* pool = nullptr);
+
+ProjectResult project_finalize(
+    const ProjectPrepared& prep,
+    const float* covs_2d, // N * 4, layout [a, b, b, c]
+    const float* opacities,
+    float min_opacity);
+
+ProjectResult project(
+    const float* means,
+    const float* scales,
+    const float* rotations,
+    const float* extrinsics,
+    const float* intrinsics,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    const float* opacities,
+    float min_opacity);
+
+// Fused per-Gaussian project pipeline (iter-022). Replaces the prior
+// 5-pool.wait() chain (geometry -> cov_cam -> cov2d -> valid/radii ->
+// gather count+scatter) with one big per-Gaussian parallel pass over
+// raw N inputs, followed by the existing parallel-filter compaction.
+//
+// In the wide pass every Gaussian computes: depths, means_2d, jacobian,
+// near_valid, cov_cam (held in registers, never materialised to memory),
+// cov_2d, validity, radii. Bit-equivalent visual output to the unfused
+// chain — the math is identical, just scheduled differently — and saves
+// 3 pool.wait() round-trips + 21.6 MB of cov_cam memory traffic per
+// frame at N=601k.
+// Fused per-Gaussian project pipeline. See implementation notes in project.cpp.
+//
+// amendment-002 tt-005: `means_cam_precomp` is an optional pre-computed
+// world→camera mean array (N*3 fp32, layout = same as `means_cam` local
+// scratch, i.e. R(extr) @ means WITHOUT translation — translation is added
+// in the per-Gaussian inner loop). When non-null, the inline matmul step
+// (project.cpp:518-535) is skipped and means_cam_precomp is used directly.
+// Default nullptr preserves existing behaviour.
+ProjectResult project_full_fused(
+    const float* means,
+    const float* cov3d,
+    const float* extrinsics,
+    const float* intrinsics,
+    const float* colors,
+    const float* opacities,
+    float min_opacity,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr,
+    int max_radius = 0,
+    float contrib_floor_k = 1.0f / 16384.0f,
+    float k_cap = 0.0f,
+    bool use_isoellipse = false,
+    const float* means_cam_precomp = nullptr);
+
+// amendment-002 tt-008a: finish pfwc from device-precomputed (mean_2d,
+// depth, cov_cam_unique). The device kernel pfwc_tt produces the heavy
+// per-Gaussian sub-results (perspective + cov_cam = ~70% of pfwc); this
+// CPU finisher consumes them and runs the cheap cov2d + radii +
+// valid_mask + gather steps. Matches the math of project_full_fused
+// exactly when given the same inputs.
+//
+//   mean_2d_precomp : (N, 2) fp32 — fx*tx/tz + cx, fy*ty/tz + cy
+//   depth_precomp   : (N,)   fp32 — tz
+//   cov_cam_precomp : (N, 6) fp32 — cc00 cc01 cc02 cc11 cc12 cc22
+//                     (symmetric R · cov3d · R^T unique entries)
+ProjectResult project_finish_with_cov_cam(
+    const float* mean_2d_precomp,
+    const float* depth_precomp,
+    const float* cov_cam_precomp,
+    const float* extrinsics,
+    const float* intrinsics,
+    const float* opacities,
+    float min_opacity,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr,
+    int max_radius = 0,
+    float contrib_floor_k = 1.0f / 16384.0f,
+    float k_cap = 0.0f,
+    bool use_isoellipse = false);
+
+// amendment-002 tt-008c: finisher for the FULL device pfwc kernel. The kernel
+// now computes mean_2d + depth + cov2d + radii on-device; this finisher only
+// does the valid_mask check + compact gather. ~5-10 ms/view for N=6.13M
+// vs ~80 ms/view for project_finish_with_cov_cam.
+//
+//   mean_2d_precomp : (N, 2)
+//   depth_precomp   : (N,)
+//   cov2d_precomp   : (N, 3) — [a, b, c]; expanded to [a, b, b, c] in output
+//   radii_precomp   : (N, 2) — [rx, ry] (already ceil'd from device)
+ProjectResult project_finish_with_cov2d_radii(
+    const float* mean_2d_precomp,
+    const float* depth_precomp,
+    const float* cov2d_precomp,
+    const float* radii_precomp,
+    const float* opacities,
+    float min_opacity,
+    std::size_t N,
+    int image_height,
+    int image_width,
+    ThreadPool* pool = nullptr,
+    int max_radius = 0);
+
+}  // namespace gsplat_cpu

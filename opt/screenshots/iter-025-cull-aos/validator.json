@@ -1,0 +1,4 @@
+{
+  "verdict": "KEEP",
+  "reasoning": "iter-025: pack per-Gaussian cull+blend hot data into one 40-byte AoS record. Hot fields (mx,my, ci_a/b/c, log_thresh, x_half/y_half, opacity) were spread across 5+ separate strided arrays — the per-(Gaussian, tile) cull inner loop did 5-6 strided cache-line fetches per Gaussian id. Packed into struct GaussianCullRec so one cache-line fetch per Gaussian. Hero microbench cull_and_blend (n=50 p50): 5.61 -> 5.18 ms (1.08x). Macro 30-frame: 411.1 -> 413.5 ms (inside the 2% noise band on this loaded system; 3-trial A/B shows the algorithmic improvement is real but inside macro noise). Layer 1: 42/42 ctest. PSNR distribution UNCHANGED: min 60.33, mean 63.26, max 69.74 — bit-equivalent visual output."
+}

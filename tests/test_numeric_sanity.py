@@ -91,7 +91,7 @@ def test_prepare_kernel_inputs_matches_cpu_alpha_blend():
 
     # Simple tile assignment: all Gaussians to all tiles
     from gsplat.rasterization import get_tile_assignments, sort_and_bin
-    radii = torch.full((N,), 10.0)
+    radii = torch.full((N, 2), 10.0)
     gaussian_ids, tile_ids, _ = get_tile_assignments(means_2d, radii, H, W, tile_size=32)
     sorted_gaussian_ids, tile_ranges = sort_and_bin(
         gaussian_ids, tile_ids, depths, (W + 31) // 32, (H + 31) // 32

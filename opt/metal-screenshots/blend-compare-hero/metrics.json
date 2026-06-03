@@ -1,0 +1,33 @@
+{
+  "fixtures": "/localdev/smarton/gstt2/tests/fixtures/hero",
+  "tt_metal_home": "/localdev/smarton/tt-metal",
+  "build_dir": "/localdev/smarton/tt-metal/build",
+  "shape": [
+    1024,
+    1024,
+    3
+  ],
+  "pairs": [
+    {
+      "label": "tt_current_vs_numpy_ref",
+      "psnr_dB": 44.81452767936011,
+      "max_abs": 0.46669107746129157,
+      "mean_abs": 0.002389508676093284,
+      "tile_structure_ratio": 20.365958236705506
+    },
+    {
+      "label": "tt_master_vs_numpy_ref",
+      "psnr_dB": 44.81452767936011,
+      "max_abs": 0.46669107746129157,
+      "mean_abs": 0.002389508676093284,
+      "tile_structure_ratio": 20.365958236705506
+    },
+    {
+      "label": "tt_current_vs_tt_master",
+      "psnr_dB": Infinity,
+      "max_abs": 0.0,
+      "mean_abs": 0.0,
+      "tile_structure_ratio": NaN
+    }
+  ]
+}

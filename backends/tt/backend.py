@@ -1,180 +1,421 @@
-"""Long-lived wrapper around the v1c alpha-blend kernel daemon.
+"""Tenstorrent backend — amendment-002 in-process port.
 
-The daemon (`metal_example_gaussian_splatting --daemon`) opens the Wormhole
-device once, JIT-compiles the three kernels, and then loops reading FRAME
-requests on stdin. This module spawns it, sends one FRAME per `blend(...)`
-call, and reads back the OK/ERR response — keeping the ~3 s init cost off
-the per-frame path so interactive use is feasible.
-
-Implements the `gsplat.backend.Backend` contract: only `blend(...)` is
-overridden — projection / tile-assignment / sort run on CPU via the
-default implementations inherited from the base class.
+tt-000: delegates entirely to cpu_cpp_mb (proves wiring + PSNR baseline).
+tt-001a+: overrides blend() with gsplat_tt device kernels via pybind when
+`has_tt_support()` is true.
+tt-005:  overrides project() with device transform_means_cam (bounded
+hotspot port) under `GSPLAT_TT_DEVICE_PROJECT=1`.
 """
 from __future__ import annotations
 
 import os
-import subprocess
-import tempfile
-import time
 
 import numpy as np
 import torch
 
-from gsplat.backend import Backend
-from gsplat.rasterization import prepare_kernel_inputs
+from backends.cpu_cpp.backend import CpuCppBackend
 
 
-class KernelBackend(Backend):
-    """Persistent IPC wrapper around the alpha-blend daemon subprocess.
+class TtBackend(CpuCppBackend):
+    """cpu_cpp_mb pipeline with TT kernels swapped in stage-by-stage.
 
-    Spawn once at viewer/script start, call `blend(...)` per frame,
-    `close()` on shutdown. The daemon's READY-then-FRAME-then-OK protocol
-    is line-oriented over stdin/stdout with .npy files for payload data;
-    non-protocol log lines on stdout are skipped.
+    Architecture (plan-amendment-002): inherit the entire cpu_cpp C++ pipeline
+    and override ONE stage at a time with a TT-Metal kernel. The Pipeline
+    fused fast-path (`render_fused`) is force-disabled here because it
+    bypasses per-stage overrides — otherwise the TT kernel would never be
+    invoked.
     """
 
-    BINARY_PATH = "backends/tt/tt-metal/build/programming_examples/metal_example_gaussian_splatting"
+    def __init__(self, **kwargs):
+        kwargs.setdefault("microblock", True)
+        kwargs.setdefault("fused", True)
+        # amendment-003: render through the fused C++ loop `render_full_tt`
+        # (no Python in the render loop). The C++ owns stage dispatch; TT
+        # device kernels are selected inside render_full_tt via blend_mode
+        # (and, later, per-stage modes). The legacy per-stage .project()/
+        # .blend() overrides remain only as opt-in diagnostics — they are not
+        # used when render_full_tt drives the frame.
+        kwargs["render_fused"] = True
+        # bh-30 hosts have 96 hardware threads but the per-tile cpu_cpp blend
+        # tops out around 48 workers (measured 2026-05-28: 96=578 ms,
+        # 48=514 ms, 24=518 ms, 12=684 ms hero render). Cap the pool unless
+        # the operator overrides via GSPLAT_TT_NUM_THREADS.
+        import os
+        os.environ.setdefault("GSPLAT_TT_NUM_THREADS", "48")
+        super().__init__(**kwargs)
+        self._tt_blend = None
+        self._tt_transform_means_cam = None
+        self._tt_transform_means_cam_no_download = None
+        self._tt_transform_pfwc = None
+        self._tt_project_finish_with_cov_cam = None
+        self._tt_project_finish_with_cov2d_radii = None
+        # tt-008b: cache the (N, 6) cov3d_unique layout the device pfwc kernel
+        # wants; cov3d is view-invariant so we only repack on cov3d-array
+        # identity change. id(cov3d_arr) is the cheap cache key.
+        self._cov3d_unique_cache_id = None
+        self._cov3d_unique_cache_arr = None
+        try:
+            from backends.cpu_cpp import _gsplat_cpu as mod
 
-    def __init__(self, verbose: bool = False):
-        self.verbose = verbose
-        env = os.environ.copy()
-        env.setdefault("TT_METAL_HOME", os.path.abspath("backends/tt/tt-metal"))
-        env.setdefault("TT_METAL_RUNTIME_ROOT", os.path.abspath("backends/tt/tt-metal"))
-        self._proc = subprocess.Popen(
-            [self.BINARY_PATH, "--daemon"],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            env=env,
-            text=True,
-            bufsize=1,
+            if mod.has_tt_support():
+                self._tt_blend = mod.blend_microblock_tt
+                if hasattr(mod, "transform_means_cam_tt"):
+                    self._tt_transform_means_cam = mod.transform_means_cam_tt
+                if hasattr(mod, "transform_means_cam_tt_no_download"):
+                    self._tt_transform_means_cam_no_download = (
+                        mod.transform_means_cam_tt_no_download
+                    )
+                if hasattr(mod, "transform_pfwc_tt"):
+                    self._tt_transform_pfwc = mod.transform_pfwc_tt
+            if hasattr(mod, "project_finish_with_cov_cam"):
+                self._tt_project_finish_with_cov_cam = mod.project_finish_with_cov_cam
+            if hasattr(mod, "project_finish_with_cov2d_radii"):
+                self._tt_project_finish_with_cov2d_radii = mod.project_finish_with_cov2d_radii
+        except (ImportError, AttributeError):
+            pass
+
+    def _cov3d_unique(self, cov3d):
+        if self._cov3d_unique_cache_id == id(cov3d):
+            return self._cov3d_unique_cache_arr
+        flat = np.ascontiguousarray(cov3d.reshape(-1, 9))
+        unique = np.ascontiguousarray(
+            np.column_stack([
+                flat[:, 0], flat[:, 1], flat[:, 2],
+                flat[:, 4], flat[:, 5], flat[:, 8],
+            ]).astype(np.float32, copy=False)
         )
-        # The daemon may emit tt-metal init log lines on stdout before the
-        # READY sentinel; skip past them with a wall-clock deadline.
-        deadline = time.perf_counter() + 60.0
-        ready = None
-        line = ""
-        while time.perf_counter() < deadline:
-            line = self._proc.stdout.readline()
-            if not line:
-                break
-            line = line.strip()
-            if line == "READY":
-                ready = line
-                break
-        if ready != "READY":
-            raise RuntimeError(f"daemon failed to start: last line {line!r}")
-        self._tmpdir = tempfile.mkdtemp(prefix="gsplat_viewer_")
+        self._cov3d_unique_cache_id = id(cov3d)
+        self._cov3d_unique_cache_arr = unique
+        return unique
 
-    # ------------------------------------------------------------------
-    # Backend API
-    # ------------------------------------------------------------------
+    def has_render_fused(self) -> bool:
+        # amendment-003: drive the frame through the fused C++ loop when the
+        # build exposes render_full_tt. Falls back to the Python per-stage
+        # pipeline only if the symbol is missing (e.g. a stale build).
+        return self._render_fused and hasattr(self._mod, "render_full_tt")
+
+    def _blend_mode(self) -> int:
+        """TT blend implementation selector for render_full_tt.
+
+        0 = CPU cull_and_blend (bit-identical to cpu_cpp_mb).
+        1 = TT device microblock blend kernel.
+        Controlled by GSPLAT_TT_BLEND_MODE so kernels toggle without rebuild.
+        """
+        try:
+            return int(os.environ.get("GSPLAT_TT_BLEND_MODE", "0"))
+        except ValueError:
+            return 0
+
+    def render_fused(
+        self,
+        gaussians,
+        extrinsics,
+        intrinsics,
+        image_height: int,
+        image_width: int,
+        contrib_floor: float | None = None,
+        k_cap: float = 3.0,
+        use_isoellipse: bool = False,
+    ):
+        """Single-pybind fused render via the C++ render_full_tt loop.
+
+        Mirrors CpuCppBackend.render_fused but routes through render_full_tt so
+        the C++ owns stage dispatch and TT kernels run in-loop (no Python
+        per-stage marshaling). Returns (image, stats_dict).
+        """
+        gnp = self._cached_gauss_np(gaussians)
+        extr_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        intr_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        cov3d = self._cached_cov3d(gnp["scales"], gnp["rotations"])
+
+        effective_contrib_floor = (
+            float(self._mb_contrib_floor) if self.contrib_floor_override is None
+            else float(self.contrib_floor_override)
+        )
+        image, stats = self._mod.render_full_tt(
+            gnp["means"],
+            cov3d,
+            gnp["opacities"],
+            gnp["colors"],
+            extr_np,
+            intr_np,
+            int(image_height),
+            int(image_width),
+            32,
+            float(self.min_opacity),
+            effective_contrib_floor,
+            float(self._mb_contrib_floor),
+            bool(self.cull_disabled),
+            float(self.transmittance_threshold),
+            int(self.max_radius),
+            float(self.k_cap),
+            bool(self.use_isoellipse),
+            self._blend_mode(),
+        )
+        return np.asarray(image), dict(stats)
+
+    def project(
+        self,
+        means,
+        scales,
+        rotations,
+        extrinsics,
+        intrinsics,
+        image_height: int,
+        image_width: int,
+        opacities=None,
+        sub_timings: dict | None = None,
+    ):
+        """Project stage with optional device transform_means_cam.
+
+        Gated by `GSPLAT_TT_DEVICE_PROJECT=1`. When enabled and device init
+        succeeds, the world→camera matrix-vec (means_cam = R @ means) is
+        computed on Tenstorrent device via `transform_means_cam_tt` and
+        passed into `project_full_with_cov3d` as a precomputed array — this
+        skips the inline host matmul in `project_full_fused` (project.cpp:
+        518-535).
+
+        When the env flag is off OR the device path fails, falls back to the
+        unmodified CPU path via super().project(). Default-off semantics
+        preserve the existing PSNR (no rendering math changes).
+        """
+        if (
+            os.environ.get("GSPLAT_TT_DEVICE_PROJECT") != "1"
+            or self._tt_transform_means_cam is None
+        ):
+            return super().project(
+                means,
+                scales,
+                rotations,
+                extrinsics,
+                intrinsics,
+                image_height,
+                image_width,
+                opacities=opacities,
+                sub_timings=sub_timings,
+            )
+
+        import time as _time
+        _t_detach0 = _time.perf_counter()
+        means_np = means.detach().cpu().numpy().astype(np.float32, copy=False)
+        scales_np = scales.detach().cpu().numpy().astype(np.float32, copy=False)
+        rotations_np = rotations.detach().cpu().numpy().astype(np.float32, copy=False)
+        extrinsics_np = extrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        intrinsics_np = intrinsics.detach().cpu().numpy().astype(np.float32, copy=False)
+        opacities_np = None
+        if opacities is not None:
+            opacities_np = opacities.detach().cpu().numpy().astype(np.float32, copy=False)
+
+        _t_marshal_in = _time.perf_counter()
+        means_np_c = np.ascontiguousarray(means_np)
+        extr_np_c = np.ascontiguousarray(extrinsics_np)
+
+        # tt-008b: when pfwc is also on-device we can skip the means_cam D2H
+        # entirely — pfwc reads them via NoC from device_state. Saves ~25 ms /
+        # view of pointless host work.
+        pfwc_device_enabled = (
+            os.environ.get("GSPLAT_TT_DEVICE_PFWC") == "1"
+            and self._tt_transform_pfwc is not None
+            and self._tt_project_finish_with_cov2d_radii is not None
+        )
+        skip_means_cam_download = (
+            pfwc_device_enabled
+            and self._tt_transform_means_cam_no_download is not None
+        )
+
+        _t_tt0 = _time.perf_counter()
+        if skip_means_cam_download:
+            _meta = self._tt_transform_means_cam_no_download(means_np_c, extr_np_c)
+            means_cam_np = None
+        else:
+            tt_ret = self._tt_transform_means_cam(means_np_c, extr_np_c)
+            if isinstance(tt_ret, tuple) and len(tt_ret) == 2:
+                means_cam_np, _meta = tt_ret
+            else:
+                means_cam_np, _meta = tt_ret, {}
+        _t_tt1 = _time.perf_counter()
+        if isinstance(_meta, dict):
+            kernel_ms = float(_meta.get("total_ms", -1.0))
+            tt_timings = _meta
+        else:
+            kernel_ms = float(_meta)
+            tt_timings = {}
+
+        if kernel_ms < 0.0:
+            # Device init failed — fall back to CPU path for this frame.
+            return super().project(
+                means,
+                scales,
+                rotations,
+                extrinsics,
+                intrinsics,
+                image_height,
+                image_width,
+                opacities=opacities,
+                sub_timings=sub_timings,
+            )
+
+        _t_cov3d0 = _time.perf_counter()
+        cov3d = self._cached_cov3d(scales_np, rotations_np)
+        _t_cov3d1 = _time.perf_counter()
+
+        # tt-008c: optional FULL device pfwc path. When GSPLAT_TT_DEVICE_PFWC=1
+        # and all the bindings are available, the device kernel computes
+        # mean_2d + depth + cov2d + radii. The host finisher only does the
+        # valid_mask check + compact gather (~5-10 ms vs ~80 ms for the
+        # tt-008a/b cov_cam path).
+        pfwc_via_device = pfwc_device_enabled
+        if pfwc_via_device:
+            cov3d_unique = self._cov3d_unique(cov3d)
+            intrinsics_3x3 = np.ascontiguousarray(intrinsics_np[:3, :3])
+            _t_pfwc_dev0 = _time.perf_counter()
+            mean_2d_dev, depth_dev, cov2d_dev, radii_dev, pfwc_timings = (
+                self._tt_transform_pfwc(
+                    cov3d_unique, extrinsics_np, intrinsics_3x3, True
+                )
+            )
+            _t_pfwc_dev1 = _time.perf_counter()
+            pfwc_dev_kernel_ms = float(pfwc_timings.get("total_ms", -1.0))
+            if pfwc_dev_kernel_ms < 0.0:
+                pfwc_via_device = False
+
+        if pfwc_via_device:
+            means_2d, covs_2d_out, depths, radii, valid_mask = (
+                self._tt_project_finish_with_cov2d_radii(
+                    mean_2d_dev,
+                    depth_dev,
+                    cov2d_dev,
+                    radii_dev,
+                    image_height,
+                    image_width,
+                    opacities_np if opacities_np is not None else None,
+                    1.0 / 255.0,
+                )
+            )
+        else:
+            means_2d, covs_2d_out, depths, radii, valid_mask = self._mod.project_full_with_cov3d(
+                means_np,
+                cov3d,
+                extrinsics_np,
+                intrinsics_np,
+                image_height,
+                image_width,
+                opacities_np if opacities_np is not None else None,
+                1.0 / 255.0,
+                means_cam_np,
+            )
+        _t_pfwc = _time.perf_counter()
+
+        if sub_timings is not None:
+            sub_timings["tt_means_cam_kernel_ms"] = float(kernel_ms)
+            for k, v in tt_timings.items():
+                sub_timings[f"tt_mc_{k}"] = v
+            sub_timings["tt_py_detach_ms"] = (_t_marshal_in - _t_detach0) * 1000.0
+            sub_timings["tt_py_marshal_ms"] = (_t_tt0 - _t_marshal_in) * 1000.0
+            sub_timings["tt_py_call_ms"] = (_t_tt1 - _t_tt0) * 1000.0
+            sub_timings["tt_py_cov3d_ms"] = (_t_cov3d1 - _t_cov3d0) * 1000.0
+            sub_timings["tt_py_pfwc_ms"] = (_t_pfwc - _t_cov3d1) * 1000.0
+            if pfwc_via_device:
+                sub_timings["tt_pfwc_kernel_ms"] = float(pfwc_dev_kernel_ms)
+                sub_timings["tt_py_pfwc_dev_call_ms"] = (_t_pfwc_dev1 - _t_pfwc_dev0) * 1000.0
+                for k, v in pfwc_timings.items():
+                    sub_timings[f"tt_pfwc_{k}"] = v
+
+        return (
+            torch.from_numpy(np.asarray(means_2d)),
+            torch.from_numpy(np.asarray(covs_2d_out)),
+            torch.from_numpy(np.asarray(depths)),
+            torch.from_numpy(np.asarray(radii)),
+            torch.from_numpy(np.asarray(valid_mask)),
+        )
 
     def blend(
         self,
-        means_2d: torch.Tensor,
-        covs_2d: torch.Tensor,
-        colors: torch.Tensor,
-        opacities: torch.Tensor,
-        sorted_gaussian_ids: torch.Tensor,
-        tile_ranges: torch.Tensor,
-        image_height: int,
-        image_width: int,
-    ) -> tuple[np.ndarray, dict[str, float]]:
-        H, W = image_height, image_width
+        means_2d,
+        covs_2d,
+        colors,
+        opacities,
+        sorted_gaussian_ids,
+        tile_ranges,
+        image_height,
+        image_width,
+    ):
+        if self._tt_blend is None:
+            return super().blend(
+                means_2d,
+                covs_2d,
+                colors,
+                opacities,
+                sorted_gaussian_ids,
+                tile_ranges,
+                image_height,
+                image_width,
+            )
+        import os
 
-        # Sub-stage A: SoA repack (kernel-friendly layout).
-        t_prep = time.perf_counter()
-        packs, offsets, px, py = prepare_kernel_inputs(
-            means_2d, covs_2d, colors, opacities,
-            sorted_gaussian_ids, tile_ranges, H, W,
+        from gsplat.rasterization import prepare_microblock_payload
+
+        # Host correctness path (default): identical blend to cpu_cpp_mb.
+        # GSPLAT_TT_DEVICE_BLEND=1 routes through blend_microblock_tt host
+        # from_packs path (~53.5 dB vs fused cull_and_blend; passes 45 dB gate).
+        # GSPLAT_TT_DEVICE_KERNEL=1 additionally selects the TT device kernel
+        # (legacy full-tile loop; PSNR ~21 dB until Stage 3 lands).
+        if os.environ.get("GSPLAT_TT_DEVICE_BLEND") != "1":
+            return super().blend(
+                means_2d,
+                covs_2d,
+                colors,
+                opacities,
+                sorted_gaussian_ids,
+                tile_ranges,
+                image_height,
+                image_width,
+            )
+
+        payload = prepare_microblock_payload(
+            means_2d,
+            covs_2d,
+            colors,
+            opacities,
+            sorted_gaussian_ids,
+            tile_ranges,
+            image_height,
+            image_width,
+            mb_contrib_floor=float(self._mb_contrib_floor),
         )
-        prep_ms = (time.perf_counter() - t_prep) * 1000.0
+        import numpy as np
 
-        # Sub-stage B: serialize SoA buffers as .npy for the daemon.
-        t_save = time.perf_counter()
-        td = self._tmpdir
-        np.save(f"{td}/packs.npy", packs)
-        np.save(f"{td}/offsets.npy", offsets.astype(np.float32))
-        np.save(f"{td}/px.npy", px)
-        np.save(f"{td}/py.npy", py)
-        save_ms = (time.perf_counter() - t_save) * 1000.0
-
-        # Sub-stage C: daemon round-trip (DRAM upload + kernel + readback).
-        t_rt = time.perf_counter()
-        line = (
-            f"FRAME {H} {W} "
-            f"{td}/packs.npy {td}/offsets.npy {td}/px.npy {td}/py.npy {td}/out.npy\n"
+        image, kernel_ms = self._tt_blend(
+            np.ascontiguousarray(payload["attribute_packs"], dtype=np.float32),
+            np.ascontiguousarray(payload["tile_offsets"], dtype=np.float32),
+            np.ascontiguousarray(payload["px_tiles"], dtype=np.float32),
+            np.ascontiguousarray(payload["py_tiles"], dtype=np.float32),
+            np.ascontiguousarray(payload["coeff_table"], dtype=np.float32),
+            np.ascontiguousarray(payload["mb_header"], dtype=np.uint32),
+            np.ascontiguousarray(payload["mb_stream_local"], dtype=np.uint32),
+            int(image_height),
+            int(image_width),
         )
-        self._proc.stdin.write(line)
-        self._proc.stdin.flush()
-
-        # The daemon may interleave non-protocol log lines on stdout; skip
-        # past any line that isn't an OK/ERR response so the FRAME→OK pairing
-        # stays robust. Bounded by a wall-clock deadline.
-        deadline = time.perf_counter() + 30.0
-        resp = ""
-        while time.perf_counter() < deadline:
-            resp = self._proc.stdout.readline()
-            if not resp:
-                raise RuntimeError("daemon closed stdout unexpectedly")
-            resp = resp.strip()
-            if resp.startswith("OK ") or resp.startswith("ERR"):
-                break
-        else:
-            raise RuntimeError("daemon timeout waiting for OK/ERR")
-        if not resp.startswith("OK "):
-            raise RuntimeError(f"daemon error: {resp!r}")
-        rt_ms = (time.perf_counter() - t_rt) * 1000.0
-
-        # Parse the daemon's reported device-side kernel time from "OK <ms>".
-        # Surface as a sub-timing so callers can separate dispatch+IO from
-        # actual on-device kernel runtime.
-        kernel_ms = None
-        try:
-            kernel_ms = float(resp.split(maxsplit=1)[1])
-        except (IndexError, ValueError):
-            pass
-
-        # Sub-stage D: load the rendered image from the daemon's .npy.
-        t_load = time.perf_counter()
-        image = np.load(f"{td}/out.npy")
-        load_ms = (time.perf_counter() - t_load) * 1000.0
-
-        # Order matches the chronological flow; device_kernel uses a dotted
-        # key so the renderer can nest it visually under its parent (it's a
-        # sub-measurement of daemon_rt, not a sibling).
-        sub_timings: dict[str, float] = {
-            "prep": prep_ms,
-            "save_npy": save_ms,
-            "daemon_rt": rt_ms,
+        stats = payload["mb_stats"]
+        pairs_in = stats["pairs_in"]
+        pairs_out = stats["pairs_out"]
+        full_replay = float(pairs_in) * 32.0
+        work_reduction_pct = (
+            0.0 if full_replay == 0.0 else 100.0 * (1.0 - float(pairs_out) / full_replay)
+        )
+        drop_pct = stats["drop_pct"]
+        sub = {
+            "microblock_drop_pct": float(drop_pct),
+            "microblock_work_reduction_pct": work_reduction_pct,
+            "device_kernel_ms": float(kernel_ms),
         }
-        if kernel_ms is not None:
-            sub_timings["daemon_rt.device_kernel"] = kernel_ms
-        sub_timings["load_npy"] = load_ms
-
-        return image, sub_timings
+        return image, sub
 
     def close(self) -> None:
-        # Don't rmtree tmpdir here — nerfview's render thread may still be
-        # mid-flight in blend(), and pulling the directory out from under it
-        # produces a confusing FileNotFoundError on Ctrl+C. /tmp is cleaned by
-        # the OS on reboot; leaving the dir is harmless.
-        #
-        # Process cleanup: try graceful QUIT first; if the daemon doesn't
-        # exit promptly, hard-kill so the Wormhole device is released.
-        # Leaving a daemon orphaned holds the device and breaks the next
-        # invocation (the tt-metal driver hangs trying to acquire it).
-        if self._proc.poll() is None:
-            try:
-                self._proc.stdin.write("QUIT\n")
-                self._proc.stdin.flush()
-            except Exception:
-                pass
-            try:
-                self._proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self._proc.kill()
-                try:
-                    self._proc.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    pass
+        try:
+            from backends.cpu_cpp import _gsplat_cpu as mod
+
+            if mod.has_tt_support() and hasattr(mod, "tt_device_shutdown"):
+                mod.tt_device_shutdown()
+        except (ImportError, AttributeError):
+            pass

@@ -13,13 +13,14 @@ required.
 from __future__ import annotations
 
 from gsplat.backend import Backend
-from backends.cpu.backend import CpuBackend
-from backends.tt.backend import KernelBackend
+from backends.cpu.backend import CpuBackend, CpuMicroblockBackend
+from backends.tt.backend import TtBackend
 
 
 REGISTRY: dict[str, type[Backend]] = {
     "cpu": CpuBackend,
-    "tt":  KernelBackend,
+    "cpu_mb": CpuMicroblockBackend,
+    "tt": TtBackend,
 }
 
 # CudaBackend is optional — register only if its module imports cleanly.
@@ -30,6 +31,19 @@ try:
     from backends.cuda.backend import CudaBackend
     REGISTRY["cuda"] = CudaBackend
 except ImportError:
+    pass
+
+try:
+    from backends.cpu_cpp.backend import CpuCppBackend
+    REGISTRY["cpu_cpp"] = CpuCppBackend
+
+    class CpuCppMbBackend(CpuCppBackend):
+        def __init__(self, **kwargs):
+            kwargs["microblock"] = True
+            super().__init__(**kwargs)
+
+    REGISTRY["cpu_cpp_mb"] = CpuCppMbBackend
+except (ImportError, ModuleNotFoundError, AssertionError):
     pass
 
 

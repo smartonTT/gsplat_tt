@@ -1,0 +1,812 @@
+#include "gsplat_cpu/cull_and_blend.h"
+
+#include "gsplat_cpu/simd_config.h"
+#include "gsplat_cpu/thread_pool.h"
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <vector>
+
+#if GSPLAT_HAS_NEON
+#include "gsplat_cpu/simd_exp.h"
+#include <arm_neon.h>
+#endif
+
+#if GSPLAT_HAS_AVX2
+#include "gsplat_cpu/simd_exp_avx2.h"
+#include <immintrin.h>
+#endif
+
+namespace gsplat_cpu {
+
+namespace {
+
+constexpr int kNumMicroblocks = 32;
+
+// Per-Gaussian packed cull record. Sized to fit a 64-byte cache line
+// so the cull inner loop touches one line per Gaussian id instead of
+// 5-6 (means_2d / log_thresh / x_half / y_half / cov_inv arrays were
+// previously each a separate strided read).
+//   mx,my            screen-space mean
+//   ci_a/b/c         cov inverse (per-microblock power coefficients)
+//   log_thresh       log(mb_contrib_floor / opacity); >= 0 = drop sentinel
+//   x_half/y_half    BB half-extents
+//   opacity          alpha multiplier (used by blend, kept here for locality)
+//   cr, cg, cb       per-Gaussian color (iter-056: fused into prelude so
+//                    blend reads one 48 B record instead of gauss_rec + colors)
+struct alignas(8) GaussianCullRec {
+    float mx, my;
+    float ci_a, ci_b, ci_c;
+    float log_thresh;
+    float x_half, y_half;
+    float opacity;
+    float cr, cg, cb;
+};
+static_assert(sizeof(GaussianCullRec) == 48, "GaussianCullRec must be 48 bytes");
+
+#if GSPLAT_HAS_NEON
+struct MbAccum {
+    alignas(16) float r[32];
+    alignas(16) float g[32];
+    alignas(16) float b[32];
+    alignas(16) float t[32];
+};
+
+inline void init_mb_accum(MbAccum& a) {
+    const float32x4_t ones = vdupq_n_f32(1.0f);
+    const float32x4_t zeros = vdupq_n_f32(0.0f);
+    for (int k = 0; k < 32; k += 4) {
+        vst1q_f32(&a.r[k], zeros);
+        vst1q_f32(&a.g[k], zeros);
+        vst1q_f32(&a.b[k], zeros);
+        vst1q_f32(&a.t[k], ones);
+    }
+}
+
+inline void apply_gaussian_neon(
+    MbAccum& acc,
+    float ci_a, float ci_b, float ci_c,
+    float mx, float my,
+    float opacity,
+    float cr, float cg, float cb,
+    int px_start, int py_start) {
+    const float A = -0.5f * ci_a;
+    const float B = -ci_b;
+    const float C = -0.5f * ci_c;
+    const float32x4_t A_v = vdupq_n_f32(A);
+    const float32x4_t op_v = vdupq_n_f32(opacity);
+    const float32x4_t alpha_cap = vdupq_n_f32(0.99f);
+    const float32x4_t zero = vdupq_n_f32(0.0f);
+    const float32x4_t pwr_lo_bound = vdupq_n_f32(-30.0f);
+    const float32x4_t cr_v = vdupq_n_f32(cr);
+    const float32x4_t cg_v = vdupq_n_f32(cg);
+    const float32x4_t cb_v = vdupq_n_f32(cb);
+
+    static const float dx_offs_lo[4] = {0.5f, 1.5f, 2.5f, 3.5f};
+    static const float dx_offs_hi[4] = {4.5f, 5.5f, 6.5f, 7.5f};
+    const float32x4_t dx_off_lo = vld1q_f32(dx_offs_lo);
+    const float32x4_t dx_off_hi = vld1q_f32(dx_offs_hi);
+
+    const float px_base = static_cast<float>(px_start) - mx;
+    const float32x4_t dx_lo = vaddq_f32(vdupq_n_f32(px_base), dx_off_lo);
+    const float32x4_t dx_hi = vaddq_f32(vdupq_n_f32(px_base), dx_off_hi);
+    const float32x4_t dx_lo_sq = vmulq_f32(dx_lo, dx_lo);
+    const float32x4_t dx_hi_sq = vmulq_f32(dx_hi, dx_hi);
+
+    // iter-039: process the 4 rows as 4 independent pipelines instead of a
+    // 4-iter loop. Each row's pwr build, range clamp, simd_exp and alpha
+    // cap+mul are entirely independent of other rows (rows act on
+    // different pixels and different acc.t/r/g/b slots). Listing them
+    // sequentially lets the OoO engine + 2-3 NEON FMA pipes interleave
+    // them. The compiler's loop unroller doesn't always achieve this
+    // depth of reordering across the cross-iter RAW chains.
+    auto row_body = [&](int i) __attribute__((always_inline)) {
+        const float py = static_cast<float>(py_start + i) + 0.5f;
+        const float dy = py - my;
+        const float y_term = C * dy * dy;
+        const float xy_coef = B * dy;
+        const float32x4_t y_term_v = vdupq_n_f32(y_term);
+        const float32x4_t xy_coef_v = vdupq_n_f32(xy_coef);
+
+        float32x4_t pwr_lo = vfmaq_f32(y_term_v, xy_coef_v, dx_lo);
+        pwr_lo = vfmaq_f32(pwr_lo, A_v, dx_lo_sq);
+        float32x4_t pwr_hi = vfmaq_f32(y_term_v, xy_coef_v, dx_hi);
+        pwr_hi = vfmaq_f32(pwr_hi, A_v, dx_hi_sq);
+
+        pwr_lo = vmaxq_f32(vminq_f32(pwr_lo, zero), pwr_lo_bound);
+        pwr_hi = vmaxq_f32(vminq_f32(pwr_hi, zero), pwr_lo_bound);
+
+        const float32x4_t gw_lo = simd_exp_f32x4_fast(pwr_lo);
+        const float32x4_t gw_hi = simd_exp_f32x4_fast(pwr_hi);
+
+        const float32x4_t alpha_lo = vminq_f32(vmulq_f32(op_v, gw_lo), alpha_cap);
+        const float32x4_t alpha_hi = vminq_f32(vmulq_f32(op_v, gw_hi), alpha_cap);
+
+        const int row = i * 8;
+        const float32x4_t t_lo = vld1q_f32(&acc.t[row]);
+        const float32x4_t t_hi = vld1q_f32(&acc.t[row + 4]);
+        const float32x4_t at_lo = vmulq_f32(alpha_lo, t_lo);
+        const float32x4_t at_hi = vmulq_f32(alpha_hi, t_hi);
+
+        float32x4_t r_lo = vld1q_f32(&acc.r[row]);
+        float32x4_t gg_lo = vld1q_f32(&acc.g[row]);
+        float32x4_t bb_lo = vld1q_f32(&acc.b[row]);
+        r_lo = vfmaq_f32(r_lo, at_lo, cr_v);
+        gg_lo = vfmaq_f32(gg_lo, at_lo, cg_v);
+        bb_lo = vfmaq_f32(bb_lo, at_lo, cb_v);
+        vst1q_f32(&acc.r[row], r_lo);
+        vst1q_f32(&acc.g[row], gg_lo);
+        vst1q_f32(&acc.b[row], bb_lo);
+
+        float32x4_t r_hi = vld1q_f32(&acc.r[row + 4]);
+        float32x4_t gg_hi = vld1q_f32(&acc.g[row + 4]);
+        float32x4_t bb_hi = vld1q_f32(&acc.b[row + 4]);
+        r_hi = vfmaq_f32(r_hi, at_hi, cr_v);
+        gg_hi = vfmaq_f32(gg_hi, at_hi, cg_v);
+        bb_hi = vfmaq_f32(bb_hi, at_hi, cb_v);
+        vst1q_f32(&acc.r[row + 4], r_hi);
+        vst1q_f32(&acc.g[row + 4], gg_hi);
+        vst1q_f32(&acc.b[row + 4], bb_hi);
+
+        vst1q_f32(&acc.t[row],     vsubq_f32(t_lo, at_lo));
+        vst1q_f32(&acc.t[row + 4], vsubq_f32(t_hi, at_hi));
+    };
+    row_body(0);
+    row_body(1);
+    row_body(2);
+    row_body(3);
+}
+
+inline float max_t_neon(const MbAccum& acc) {
+    float32x4_t m = vld1q_f32(&acc.t[0]);
+    for (int k = 4; k < 32; k += 4) {
+        m = vmaxq_f32(m, vld1q_f32(&acc.t[k]));
+    }
+    return vmaxvq_f32(m);
+}
+#endif  // GSPLAT_HAS_NEON
+
+#if GSPLAT_HAS_AVX2
+struct MbAccumAvx {
+    alignas(32) float r[32];
+    alignas(32) float g[32];
+    alignas(32) float b[32];
+    alignas(32) float t[32];
+};
+
+inline void init_mb_accum_avx(MbAccumAvx& acc) {
+    const __m128 ones = _mm_set1_ps(1.0f);
+    const __m128 zeros = _mm_setzero_ps();
+    for (int k = 0; k < 32; k += 4) {
+        _mm_store_ps(&acc.r[k], zeros);
+        _mm_store_ps(&acc.g[k], zeros);
+        _mm_store_ps(&acc.b[k], zeros);
+        _mm_store_ps(&acc.t[k], ones);
+    }
+}
+
+inline void apply_gaussian_avx2(
+    MbAccumAvx& acc,
+    float ci_a, float ci_b, float ci_c,
+    float mx, float my,
+    float opacity,
+    float cr, float cg, float cb,
+    int px_start, int py_start) {
+    const float A = -0.5f * ci_a;
+    const float B = -ci_b;
+    const float C = -0.5f * ci_c;
+    const __m128 A_v = _mm_set1_ps(A);
+    const __m128 op_v = _mm_set1_ps(opacity);
+    const __m128 alpha_cap = _mm_set1_ps(0.99f);
+    const __m128 zero = _mm_setzero_ps();
+    const __m128 pwr_lo_bound = _mm_set1_ps(-30.0f);
+    const __m128 cr_v = _mm_set1_ps(cr);
+    const __m128 cg_v = _mm_set1_ps(cg);
+    const __m128 cb_v = _mm_set1_ps(cb);
+
+    static const float dx_offs_lo[4] = {0.5f, 1.5f, 2.5f, 3.5f};
+    static const float dx_offs_hi[4] = {4.5f, 5.5f, 6.5f, 7.5f};
+    const __m128 dx_off_lo = _mm_load_ps(dx_offs_lo);
+    const __m128 dx_off_hi = _mm_load_ps(dx_offs_hi);
+
+    const float px_base = static_cast<float>(px_start) - mx;
+    const __m128 dx_lo = _mm_add_ps(_mm_set1_ps(px_base), dx_off_lo);
+    const __m128 dx_hi = _mm_add_ps(_mm_set1_ps(px_base), dx_off_hi);
+    const __m128 dx_lo_sq = _mm_mul_ps(dx_lo, dx_lo);
+    const __m128 dx_hi_sq = _mm_mul_ps(dx_hi, dx_hi);
+
+    auto row_body = [&](int i) __attribute__((always_inline)) {
+        const float py = static_cast<float>(py_start + i) + 0.5f;
+        const float dy = py - my;
+        const float y_term = C * dy * dy;
+        const float xy_coef = B * dy;
+        const __m128 y_term_v = _mm_set1_ps(y_term);
+        const __m128 xy_coef_v = _mm_set1_ps(xy_coef);
+
+        __m128 pwr_lo = _mm_fmadd_ps(xy_coef_v, dx_lo, y_term_v);
+        pwr_lo = _mm_fmadd_ps(A_v, dx_lo_sq, pwr_lo);
+        __m128 pwr_hi = _mm_fmadd_ps(xy_coef_v, dx_hi, y_term_v);
+        pwr_hi = _mm_fmadd_ps(A_v, dx_hi_sq, pwr_hi);
+
+        pwr_lo = _mm_max_ps(_mm_min_ps(pwr_lo, zero), pwr_lo_bound);
+        pwr_hi = _mm_max_ps(_mm_min_ps(pwr_hi, zero), pwr_lo_bound);
+
+        const __m128 gw_lo = simd_exp_f32x4_fast_avx2(pwr_lo);
+        const __m128 gw_hi = simd_exp_f32x4_fast_avx2(pwr_hi);
+
+        const __m128 alpha_lo = _mm_min_ps(_mm_mul_ps(op_v, gw_lo), alpha_cap);
+        const __m128 alpha_hi = _mm_min_ps(_mm_mul_ps(op_v, gw_hi), alpha_cap);
+
+        const int row = i * 8;
+        const __m128 t_lo = _mm_load_ps(&acc.t[row]);
+        const __m128 t_hi = _mm_load_ps(&acc.t[row + 4]);
+        const __m128 at_lo = _mm_mul_ps(alpha_lo, t_lo);
+        const __m128 at_hi = _mm_mul_ps(alpha_hi, t_hi);
+
+        __m128 r_lo = _mm_load_ps(&acc.r[row]);
+        __m128 gg_lo = _mm_load_ps(&acc.g[row]);
+        __m128 bb_lo = _mm_load_ps(&acc.b[row]);
+        r_lo = _mm_fmadd_ps(at_lo, cr_v, r_lo);
+        gg_lo = _mm_fmadd_ps(at_lo, cg_v, gg_lo);
+        bb_lo = _mm_fmadd_ps(at_lo, cb_v, bb_lo);
+        _mm_store_ps(&acc.r[row], r_lo);
+        _mm_store_ps(&acc.g[row], gg_lo);
+        _mm_store_ps(&acc.b[row], bb_lo);
+
+        __m128 r_hi = _mm_load_ps(&acc.r[row + 4]);
+        __m128 gg_hi = _mm_load_ps(&acc.g[row + 4]);
+        __m128 bb_hi = _mm_load_ps(&acc.b[row + 4]);
+        r_hi = _mm_fmadd_ps(at_hi, cr_v, r_hi);
+        gg_hi = _mm_fmadd_ps(at_hi, cg_v, gg_hi);
+        bb_hi = _mm_fmadd_ps(at_hi, cb_v, bb_hi);
+        _mm_store_ps(&acc.r[row + 4], r_hi);
+        _mm_store_ps(&acc.g[row + 4], gg_hi);
+        _mm_store_ps(&acc.b[row + 4], bb_hi);
+
+        _mm_store_ps(&acc.t[row], _mm_sub_ps(t_lo, at_lo));
+        _mm_store_ps(&acc.t[row + 4], _mm_sub_ps(t_hi, at_hi));
+    };
+    row_body(0);
+    row_body(1);
+    row_body(2);
+    row_body(3);
+}
+
+inline float max_t_avx2(const MbAccumAvx& acc) {
+    __m128 m = _mm_load_ps(&acc.t[0]);
+    for (int k = 4; k < 32; k += 4) {
+        m = _mm_max_ps(m, _mm_load_ps(&acc.t[k]));
+    }
+    __m128 shuf = _mm_shuffle_ps(m, m, _MM_SHUFFLE(2, 3, 0, 1));
+    m = _mm_max_ps(m, shuf);
+    shuf = _mm_shuffle_ps(m, m, _MM_SHUFFLE(1, 0, 3, 2));
+    m = _mm_max_ps(m, shuf);
+    return _mm_cvtss_f32(m);
+}
+#endif  // GSPLAT_HAS_AVX2
+
+// Per-worker scratch buffer for the cull pass. One contiguous uint32_t array
+// of size 32 * L is partitioned into 32 microblock slots; per-tile reset
+// just resets the per-microblock offsets, the heap buffer survives across
+// tiles. Eliminates ~256 * 32 std::vector heap allocations per frame.
+//
+// uint32_t (vs int64_t in iter-023) halves the per-worker working set: at
+// the stitch hero scene's max-Gaussian tile (~11k entries), 32 microblock
+// slots = 32 * 11k = 352k entries -> 1.4 MB (uint32) vs 2.8 MB (int64).
+// 1.4 MB still spills L1 (M-Pro: 192 KB) but fits L2 comfortably; the
+// sequential per-microblock read pattern in the blend loop is now twice
+// as cache-bandwidth-efficient.
+struct TileScratch {
+    std::vector<uint32_t> kept_flat;          // flat buffer, capacity grown as needed
+    std::array<int32_t, kNumMicroblocks + 1> offsets{};  // offsets[m] = start of mb m in kept_flat
+    int32_t stride{0};                       // capacity per microblock
+};
+
+// Per-tile fused cull + blend kernel.
+// In-tile per-microblock kept-id buffer never escapes the thread; mb_stream
+// global allocation is avoided entirely. The blend loop is bit-identical to
+// blend_microblock's SIMD path because the per-microblock Gaussian-id order
+// equals the depth-sorted order of mb_stream.
+void cull_and_blend_tile(
+    const int tile_id,
+    const int tiles_x,
+    const int tile_size,
+    const int image_height,
+    const int image_width,
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    const float mb_contrib_floor,
+    const GaussianCullRec* gauss_rec,
+    float* image_out,
+    int64_t* tile_dropped_count,
+    int64_t* tile_kept_count,
+    TileScratch& scratch,
+    const bool cull_disabled,
+    const float transmittance_threshold) {
+    const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
+    const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
+    if (start == end) {
+        return;
+    }
+
+    const int ty = tile_id / tiles_x;
+    const int tx = tile_id % tiles_x;
+    const float tx_tile = static_cast<float>(tx * tile_size);
+    const float ty_tile = static_cast<float>(ty * tile_size);
+    const int py_tile = ty * tile_size;
+    const int px_tile = tx * tile_size;
+    const int py_end_tile = std::min(py_tile + tile_size, image_height);
+    const int px_end_tile = std::min(px_tile + tile_size, image_width);
+
+    const int64_t L = end - start;
+
+    // Use the per-worker TileScratch buffer: one contiguous int64_t array of
+    // size 32*L, partitioned into 32 microblock slots of stride L. Counters
+    // track how many ids have been pushed into each slot. Avoids ~32 heap
+    // allocations per tile (= 8192 per frame on a 256-tile image).
+    const int32_t stride = static_cast<int32_t>(L);
+    const std::size_t needed =
+        static_cast<std::size_t>(kNumMicroblocks) * static_cast<std::size_t>(L);
+    if (scratch.kept_flat.size() < needed) scratch.kept_flat.resize(needed);
+    scratch.stride = stride;
+    for (int m = 0; m < kNumMicroblocks; ++m) {
+        scratch.offsets[static_cast<std::size_t>(m)] = m * stride;
+    }
+    // offsets[m] starts at the slot base, incremented as ids are pushed.
+    // The slot for microblock m holds ids in [m*stride, offsets[m]).
+
+    int64_t dropped = 0;
+    int64_t kept_total = 0;
+
+    for (int64_t l = 0; l < L; ++l) {
+        const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
+        const GaussianCullRec& rec = gauss_rec[static_cast<std::size_t>(g)];
+
+        const float log_thresh = rec.log_thresh;
+        // log_thresh >= 0 sentinel = "Gaussian below mb_contrib_floor".
+        // Honoured even when cull_disabled because such Gaussians have peak
+        // alpha < mb_contrib_floor everywhere → blending them is genuinely
+        // a no-op (they cannot exceed the 8-bit perceptual floor).
+        if (log_thresh >= 0.0f) {
+            ++dropped;
+            continue;
+        }
+
+        const float mean_x = rec.mx;
+        const float mean_y = rec.my;
+        const float ci_a = rec.ci_a;
+        const float ci_b = rec.ci_b;
+        const float ci_c = rec.ci_c;
+        const float x_half = rec.x_half;
+        const float y_half = rec.y_half;
+
+        const float bb_x_min = mean_x - x_half;
+        const float bb_x_max = mean_x + x_half;
+        const float bb_y_min = mean_y - y_half;
+        const float bb_y_max = mean_y + y_half;
+
+        const int mx_lo = std::max(0, static_cast<int>(std::floor((bb_x_min - tx_tile) / 8.0f)));
+        const int mx_hi = std::min(3, static_cast<int>(std::floor((bb_x_max - tx_tile) / 8.0f)));
+        const int my_lo = std::max(0, static_cast<int>(std::floor((bb_y_min - ty_tile) / 4.0f)));
+        const int my_hi = std::min(7, static_cast<int>(std::floor((bb_y_max - ty_tile) / 4.0f)));
+
+        if (mx_lo > mx_hi || my_lo > my_hi) {
+            ++dropped;
+            continue;
+        }
+
+        // Per-microblock cull: keep this (Gaussian, microblock) pair iff
+        // the true min m² over the 8×4 microblock rectangle gives a
+        // contribution ≥ mb_contrib_floor (i.e., -½·m²_min ≥ log_thresh).
+        //
+        // CORRECTNESS NOTE: the previous version used an L∞-clamp (per-axis
+        // clamp of the Gaussian center onto the microblock rectangle) to
+        // evaluate m². For tilted Gaussians the L∞-clamp m² can be much
+        // larger than the true min m² over the rectangle — the cull then
+        // drops microblocks where the Gaussian's elongated axis actually
+        // passes through with high density. Result: visible 32×32 tile
+        // artifacts at silhouettes. This version computes the true
+        // constrained-min m² over the rectangle.
+        //
+        // ci_a, ci_b, ci_c are the entries of Σ⁻¹ (= c/det, -b/det, a/det).
+        // m²(u,v) = ci_a·u² + 2·ci_b·u·v + ci_c·v².
+        const float thresh_m2 = -2.0f * log_thresh;  // m² ≤ thresh_m2 ⇔ keep
+        const float ci_a_safe = std::max(ci_a, 1e-12f);
+        const float ci_c_safe = std::max(ci_c, 1e-12f);
+
+        bool kept_any = false;
+        for (int my = my_lo; my <= my_hi; ++my) {
+            const float mb_oy = ty_tile + static_cast<float>(my * 4);
+            const float v_lo = mb_oy - mean_y;
+            const float v_hi = v_lo + 4.0f;
+            const bool y_inside = (v_lo <= 0.0f) && (0.0f <= v_hi);
+            const float v_fix = (v_lo > 0.0f) ? v_lo : v_hi;
+            for (int mx = mx_lo; mx <= mx_hi; ++mx) {
+                const float mb_ox = tx_tile + static_cast<float>(mx * 8);
+                const float u_lo = mb_ox - mean_x;
+                const float u_hi = u_lo + 8.0f;
+                const bool x_inside = (u_lo <= 0.0f) && (0.0f <= u_hi);
+
+                float m2_min;
+                if (cull_disabled) {
+                    // Keep every microblock the Gaussian's AABB overlaps.
+                    m2_min = 0.0f;
+                } else if (x_inside && y_inside) {
+                    m2_min = 0.0f;
+                } else {
+                    float m2_v = std::numeric_limits<float>::infinity();
+                    if (!x_inside) {
+                        const float u_fix = (u_lo > 0.0f) ? u_lo : u_hi;
+                        float v_star = -ci_b * u_fix / ci_c_safe;
+                        v_star = std::clamp(v_star, v_lo, v_hi);
+                        m2_v = ci_a * u_fix * u_fix
+                               + 2.0f * ci_b * u_fix * v_star
+                               + ci_c * v_star * v_star;
+                    }
+                    float m2_h = std::numeric_limits<float>::infinity();
+                    if (!y_inside) {
+                        float u_star = -ci_b * v_fix / ci_a_safe;
+                        u_star = std::clamp(u_star, u_lo, u_hi);
+                        m2_h = ci_a * u_star * u_star
+                               + 2.0f * ci_b * u_star * v_fix
+                               + ci_c * v_fix * v_fix;
+                    }
+                    m2_min = std::min(m2_v, m2_h);
+                }
+                if (m2_min <= thresh_m2) {
+                    const int mb = (my << 2) | mx;
+                    scratch.kept_flat[static_cast<std::size_t>(
+                        scratch.offsets[static_cast<std::size_t>(mb)]++)] =
+                        static_cast<uint32_t>(g);
+                    kept_any = true;
+                    ++kept_total;
+                }
+            }
+        }
+
+        if (!kept_any) {
+            ++dropped;
+        }
+    }
+
+    // Blend each microblock from the in-tile kept list.
+    for (int m = 0; m < kNumMicroblocks; ++m) {
+        const int32_t slot_base = m * stride;
+        const int32_t slot_end = scratch.offsets[static_cast<std::size_t>(m)];
+        const int32_t kn = slot_end - slot_base;
+        if (kn == 0) continue;
+        const uint32_t* kg_data = scratch.kept_flat.data() + slot_base;
+
+        const int mb_ox_i = (m & 3) * 8;
+        const int mb_oy_i = (m >> 2) * 4;
+        const int py_start = py_tile + mb_oy_i;
+        const int px_start = px_tile + mb_ox_i;
+        const int py_end = std::min(py_start + 4, py_end_tile);
+        const int px_end = std::min(px_start + 8, px_end_tile);
+        if (py_start >= py_end || px_start >= px_end) continue;
+        const int mb_h = py_end - py_start;
+        const int mb_w = px_end - px_start;
+        const int npix = mb_h * mb_w;
+
+#if GSPLAT_HAS_NEON
+        if (mb_h == 4 && mb_w == 8) {
+            MbAccum acc;
+            init_mb_accum(acc);
+            // iter-035: check max_t every 4 Gaussians instead of every 1.
+            // The per-Gaussian max_t_neon (8 loads + 7 vmaxq + 1 vmaxvq) acts
+            // as a synchronisation barrier between successive apply_gaussian
+            // calls because it reads `acc` immediately after apply writes it.
+            // Removing it lets the compiler / CPU schedule the next apply's
+            // independent setup (pwr build, exp, alpha) in parallel with
+            // the previous apply's RGB writeback. We only over-blend up to
+            // 3 already-saturated Gaussians per microblock — each costs
+            // 4 fully-attenuated FMAs and produces zero visual change since
+            // alpha * (T<1e-4) ~ 0 — vs saving the barrier-induced stall
+            // for the typical ~100+ Gaussians per saturating microblock.
+            int32_t k = 0;
+            for (; k + 4 <= kn; k += 4) {
+                for (int j = 0; j < 4; ++j) {
+                    const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
+                    const GaussianCullRec& rec = gauss_rec[gs];
+                    apply_gaussian_neon(acc,
+                        rec.ci_a, rec.ci_b, rec.ci_c,
+                        rec.mx, rec.my,
+                        rec.opacity,
+                        rec.cr, rec.cg, rec.cb,
+                        px_start, py_start);
+                }
+                if (max_t_neon(acc) < transmittance_threshold) { k = kn; break; }
+            }
+            for (; k < kn; ++k) {
+                const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
+                const GaussianCullRec& rec = gauss_rec[gs];
+                apply_gaussian_neon(acc,
+                    rec.ci_a, rec.ci_b, rec.ci_c,
+                    rec.mx, rec.my,
+                    rec.opacity,
+                    rec.cr, rec.cg, rec.cb,
+                    px_start, py_start);
+            }
+            for (int i = 0; i < 4; ++i) {
+                const int gy = py_start + i;
+                for (int j = 0; j < 8; ++j) {
+                    const int gx = px_start + j;
+                    const int out_base = (gy * image_width + gx) * 3;
+                    const int ij = i * 8 + j;
+                    image_out[out_base + 0] = acc.r[ij];
+                    image_out[out_base + 1] = acc.g[ij];
+                    image_out[out_base + 2] = acc.b[ij];
+                }
+            }
+            continue;
+        }
+#elif GSPLAT_HAS_AVX2
+        if (mb_h == 4 && mb_w == 8) {
+            MbAccumAvx acc;
+            init_mb_accum_avx(acc);
+            int32_t k = 0;
+            for (; k + 4 <= kn; k += 4) {
+                for (int j = 0; j < 4; ++j) {
+                    const std::size_t gs = static_cast<std::size_t>(kg_data[k + j]);
+                    const GaussianCullRec& rec = gauss_rec[gs];
+                    apply_gaussian_avx2(acc,
+                        rec.ci_a, rec.ci_b, rec.ci_c,
+                        rec.mx, rec.my,
+                        rec.opacity,
+                        rec.cr, rec.cg, rec.cb,
+                        px_start, py_start);
+                }
+                if (max_t_avx2(acc) < transmittance_threshold) { k = kn; break; }
+            }
+            for (; k < kn; ++k) {
+                const std::size_t gs = static_cast<std::size_t>(kg_data[k]);
+                const GaussianCullRec& rec = gauss_rec[gs];
+                apply_gaussian_avx2(acc,
+                    rec.ci_a, rec.ci_b, rec.ci_c,
+                    rec.mx, rec.my,
+                    rec.opacity,
+                    rec.cr, rec.cg, rec.cb,
+                    px_start, py_start);
+            }
+            for (int i = 0; i < 4; ++i) {
+                const int gy = py_start + i;
+                for (int j = 0; j < 8; ++j) {
+                    const int gx = px_start + j;
+                    const int out_base = (gy * image_width + gx) * 3;
+                    const int ij = i * 8 + j;
+                    image_out[out_base + 0] = acc.r[ij];
+                    image_out[out_base + 1] = acc.g[ij];
+                    image_out[out_base + 2] = acc.b[ij];
+                }
+            }
+            continue;
+        }
+#endif  // GSPLAT_HAS_NEON || GSPLAT_HAS_AVX2
+
+        // Scalar fallback for boundary microblocks.
+        float T[4 * 8];
+        float accum[4 * 8 * 3];
+        for (int k = 0; k < npix; ++k) T[k] = 1.0f;
+        for (int k = 0; k < npix * 3; ++k) accum[k] = 0.0f;
+        for (int32_t kk = 0; kk < kn; ++kk) {
+            const std::size_t gs = static_cast<std::size_t>(kg_data[kk]);
+            const GaussianCullRec& rec = gauss_rec[gs];
+            const float ci_a = rec.ci_a;
+            const float ci_b = rec.ci_b;
+            const float ci_c = rec.ci_c;
+            const float mx = rec.mx;
+            const float my = rec.my;
+            const float opacity = rec.opacity;
+            const float cr = rec.cr;
+            const float cg = rec.cg;
+            const float cb = rec.cb;
+            for (int i = 0; i < mb_h; ++i) {
+                const float py = static_cast<float>(py_start + i) + 0.5f;
+                for (int j = 0; j < mb_w; ++j) {
+                    const float px = static_cast<float>(px_start + j) + 0.5f;
+                    const float dx = px - mx;
+                    const float dy = py - my;
+                    const float power = -0.5f * (ci_a * dx * dx + 2.0f * ci_b * dx * dy + ci_c * dy * dy);
+                    const float gw = std::exp(std::min(power, 0.0f));
+                    const float alpha = std::min(opacity * gw, 0.99f);
+                    const int ij = i * mb_w + j;
+                    const float t = T[ij];
+                    const float at = alpha * t;
+                    accum[ij * 3 + 0] += at * cr;
+                    accum[ij * 3 + 1] += at * cg;
+                    accum[ij * 3 + 2] += at * cb;
+                    T[ij] = t * (1.0f - alpha);
+                }
+            }
+            float tmax = 0.0f;
+            for (int k = 0; k < npix; ++k) tmax = std::max(tmax, T[k]);
+            if (tmax < transmittance_threshold) break;
+        }
+        for (int i = 0; i < mb_h; ++i) {
+            const int gy = py_start + i;
+            for (int j = 0; j < mb_w; ++j) {
+                const int gx = px_start + j;
+                const int out_base = (gy * image_width + gx) * 3;
+                const int ij = i * mb_w + j;
+                image_out[out_base + 0] = accum[ij * 3 + 0];
+                image_out[out_base + 1] = accum[ij * 3 + 1];
+                image_out[out_base + 2] = accum[ij * 3 + 2];
+            }
+        }
+    }
+
+    *tile_dropped_count = dropped;
+    *tile_kept_count = kept_total;
+}
+
+}  // namespace
+
+CullAndBlendResult cull_and_blend(
+    const float* means_2d,
+    const float* covs_2d,
+    const float* colors,
+    const float* opacities,
+    const int64_t* sorted_gaussian_ids,
+    const int64_t* tile_ranges,
+    const std::size_t M,
+    const std::size_t P,
+    const int tiles_x,
+    const int tiles_y,
+    const int tile_size,
+    const int image_height,
+    const int image_width,
+    const float mb_contrib_floor,
+    ThreadPool& pool,
+    float* image_out_external,
+    const bool cull_disabled,
+    const float transmittance_threshold) {
+    const int num_tiles = tiles_x * tiles_y;
+
+    CullAndBlendResult result;
+    result.pairs_in = static_cast<int64_t>(P);
+    // iter-049: when the caller supplies a pre-zeroed external buffer, skip
+    // the internal std::vector alloc + 3 MB memset entirely; pixels are
+    // written directly into the caller's buffer (typically the pybind numpy
+    // image array). The internal vector path remains for legacy callers
+    // (cull_and_blend_py / tests) where the result owns its image.
+    float* image_out = nullptr;
+    if (image_out_external != nullptr) {
+        image_out = image_out_external;
+    } else {
+        result.image.assign(static_cast<std::size_t>(image_height) *
+                                static_cast<std::size_t>(image_width) * 3,
+                            0.0f);
+        image_out = result.image.data();
+    }
+
+    // Precompute per-Gaussian cull data into one AoS array, parallel.
+    // Pulls log/sqrt out of the per-tile cull inner loop AND packs every
+    // field the inner loop reads (mx,my, ci_a/b/c, log_thresh, x_half/y_half,
+    // opacity) into one 40-byte record. Cull loop now does 1 cache-line
+    // fetch per Gaussian instead of 5-6 strided fetches across separate
+    // arrays — meaningful at the 294k (Gaussian, tile) pairs scanned per
+    // hero frame.
+    std::vector<GaussianCullRec> gauss_rec(M);
+    if (M > 0) {
+        const std::size_t W = pool.size();
+        auto compute_one = [&](std::size_t i) {
+            const float a = covs_2d[i * 4 + 0];
+            const float b = covs_2d[i * 4 + 1];
+            const float c = covs_2d[i * 4 + 3];
+            const float det = std::max(a * c - b * b, 1e-6f);
+
+            GaussianCullRec& r = gauss_rec[i];
+            r.mx = means_2d[i * 2 + 0];
+            r.my = means_2d[i * 2 + 1];
+            r.ci_a = c / det;
+            r.ci_b = -b / det;
+            r.ci_c = a / det;
+            r.opacity = opacities[i];
+            r.cr = colors[i * 3 + 0];
+            r.cg = colors[i * 3 + 1];
+            r.cb = colors[i * 3 + 2];
+
+            if (r.opacity <= mb_contrib_floor) {
+                r.log_thresh = 0.0f;  // sentinel: drop in per-tile cull
+                r.x_half = 0.0f;
+                r.y_half = 0.0f;
+            } else {
+                const float lt = std::log(mb_contrib_floor / r.opacity);
+                r.log_thresh = lt;  // <= 0 for visible
+                const float rd = std::sqrt(-2.0f * lt);
+                r.x_half = rd * std::sqrt(std::max(a, 0.0f));
+                r.y_half = rd * std::sqrt(std::max(c, 0.0f));
+            }
+        };
+        // iter-051: blocked vs strided dispatch. Old `i = w; i += W` interleaved
+        // worker writes into gauss_rec — every worker touched every 10th
+        // 40-byte record, so adjacent records were owned by different cores
+        // and the cache lines bounced (false sharing on the 64-byte line that
+        // covers records [w] + [w+1] which differ by 40 bytes). Block-chunked
+        // (one contiguous slice per worker) gives each worker a private,
+        // sequential L1+prefetcher-friendly stream of writes — no cross-core
+        // line traffic, full hw prefetcher engagement on covs_2d/means_2d/
+        // opacities reads.
+        if (W > 1 && M >= 4096) {
+            const std::size_t chunk = (M + W - 1) / W;
+            for (std::size_t w = 0; w < W; ++w) {
+                pool.submit([&, w, chunk]() {
+                    const std::size_t lo = w * chunk;
+                    const std::size_t hi = std::min(lo + chunk, M);
+                    for (std::size_t i = lo; i < hi; ++i) compute_one(i);
+                });
+            }
+            pool.wait();
+        } else {
+            for (std::size_t i = 0; i < M; ++i) compute_one(i);
+        }
+    }
+
+    std::vector<int64_t> tile_dropped(static_cast<std::size_t>(num_tiles), 0);
+    std::vector<int64_t> tile_kept(static_cast<std::size_t>(num_tiles), 0);
+
+    // LPT scheduling + reduced submits: sort tile indices by descending
+    // Gaussian count, then dispatch only W tasks (one per worker). Each
+    // worker greedily pulls the next-heaviest tile from a shared atomic
+    // counter. Two wins over 256 individual submits:
+    //   - 256 mutex acquisitions on the pool's task queue collapse to W (~10).
+    //   - True LPT: workers race to grab heavy tiles first; light tail
+    //     dispatched last.
+    std::vector<int> tile_order(static_cast<std::size_t>(num_tiles));
+    for (int i = 0; i < num_tiles; ++i) tile_order[static_cast<std::size_t>(i)] = i;
+    std::sort(tile_order.begin(), tile_order.end(), [&](int a, int b) {
+        const int64_t la = tile_ranges[static_cast<std::size_t>(a) * 2 + 1] -
+                           tile_ranges[static_cast<std::size_t>(a) * 2 + 0];
+        const int64_t lb = tile_ranges[static_cast<std::size_t>(b) * 2 + 1] -
+                           tile_ranges[static_cast<std::size_t>(b) * 2 + 0];
+        return la > lb;
+    });
+
+    std::atomic<int> next_idx{0};
+    const std::size_t W = std::max<std::size_t>(1, pool.size());
+    // Per-worker scratch lives for the duration of the parallel section.
+    // Resized lazily by each tile based on that tile's Gaussian count L.
+    std::vector<TileScratch> scratches(W);
+    for (std::size_t w = 0; w < W; ++w) {
+        pool.submit([&, w]() {
+            TileScratch& sc = scratches[w];
+            for (;;) {
+                const int idx = next_idx.fetch_add(1, std::memory_order_relaxed);
+                if (idx >= num_tiles) return;
+                const int tile_id = tile_order[static_cast<std::size_t>(idx)];
+                cull_and_blend_tile(
+                    tile_id, tiles_x, tile_size, image_height, image_width,
+                    means_2d, covs_2d, colors, opacities,
+                    sorted_gaussian_ids, tile_ranges,
+                    mb_contrib_floor,
+                    gauss_rec.data(),
+                    image_out,
+                    &tile_dropped[static_cast<std::size_t>(tile_id)],
+                    &tile_kept[static_cast<std::size_t>(tile_id)],
+                    sc,
+                    cull_disabled,
+                    transmittance_threshold);
+            }
+        });
+    }
+    pool.wait();
+
+    int64_t total_dropped = 0, total_kept = 0;
+    for (int i = 0; i < num_tiles; ++i) {
+        total_dropped += tile_dropped[static_cast<std::size_t>(i)];
+        total_kept += tile_kept[static_cast<std::size_t>(i)];
+    }
+    result.pairs_dropped_all_mb = total_dropped;
+    result.pairs_kept_per_mb = total_kept;
+    return result;
+}
+
+}  // namespace gsplat_cpu

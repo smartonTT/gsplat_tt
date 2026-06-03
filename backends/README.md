@@ -102,9 +102,10 @@ kernel-launch time. The TT backend is naturally synchronous because
 
 - **`cpu/`** — pure-PyTorch reference (`gsplat.rasterization`). Slow but
   correct; used as the golden reference for kernel-correctness tests.
-- **`tt/`** — Tenstorrent Wormhole / tt-metal. Spawns a long-lived
+- **`tt/`** — Tenstorrent Blackhole / tt-metal. Spawns a long-lived
   daemon process; per-frame data goes through stdin/stdout + .npy files.
-  Vendored tt-metal SDK lives in `tt/tt-metal/`. Reports
+  Kernel sources live in `../gsplat_tt/backends/tt/tt-metal/`; on bh-30
+  `scripts/setup_bh30_metal.sh` symlinks `tt/tt-metal` there. Reports
   `blend.{prep, save_npy, daemon_rt, daemon_rt.device_kernel, load_npy}`
   sub-timings — the dotted key nests `device_kernel` under `daemon_rt` in
   the benchmark table, since it's the on-device portion of the round-trip.

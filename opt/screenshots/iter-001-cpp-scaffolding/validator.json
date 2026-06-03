@@ -1,0 +1,51 @@
+{
+  "verdict": "KEEP",
+  "visual_checks": [
+    {
+      "name": "no_tile_grid_artifacts",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "no_clipping",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "no_nan_or_inf_pixels",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "no_color_shifts",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "no_missing_splats",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "no_extra_artifacts",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "edges_preserved",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    },
+    {
+      "name": "diff10_uniform_noise",
+      "pass": true,
+      "evidence": "cpu_cpp byte-identical to cpu (delegates to numpy)"
+    }
+  ],
+  "psnr_check": {
+    "pass": true,
+    "min_psnr_dB": Infinity,
+    "threshold_dB": 60.0
+  },
+  "reasoning": "iter-001 is scaffolding: ThreadPool + pybind11 + CpuCppBackend that delegates every stage to numpy. Layer 1 (6/6 ctest), Layer 2 (py import + verify_stage all four green), Layer 3 (30/30 byte-identical PNGs vs cpu) all pass."
+}
