@@ -53,13 +53,15 @@
 //   because Dst is too small to hold all running state across the loop.
 //
 // RUNTIME ARGS
-//   0: num_tiles  -- number of screen tiles this core processes
+//   0: num_tiles       number of screen tiles this core processes
+//   1: use_mb_shadow   1 = discard Stage 2 shadow CB traffic from reader
 //
 // CB INDICES — see alpha_blend_host.h for the canonical declaration. The
 // constexprs below mirror those values (compute kernels can't include the
 // host-side namespace, so we duplicate; keep them in sync).
 void kernel_main() {
     uint32_t num_tiles = get_arg_val<uint32_t>(0);
+    uint32_t use_mb_shadow = get_arg_val<uint32_t>(1);
 
     // CB indices — must match alpha_blend_host.h verbatim. Compute kernels
     // can't `#include` host-side headers, so we duplicate the constants here.
@@ -87,6 +89,11 @@ void kernel_main() {
     constexpr uint32_t CB_SAT_MASK      = 21;  // 1.0 if T>=1e-4 else 0.0
     constexpr uint32_t CB_CONST_ZERO    = 22;  // constant 0.0 tile
     constexpr uint32_t CB_CONST_099     = 23;  // constant 0.99 tile
+    constexpr uint32_t CB_MB_COEFF_SHADOW  = 24;
+    constexpr uint32_t CB_MB_HEADER_SHADOW = 25;
+    constexpr uint32_t CB_MB_STREAM_SHADOW = 26;
+    constexpr uint32_t NUM_MICROBLOCKS = 32;
+    constexpr uint32_t MB_HEADER_PAGES = 4;
 
     // Bit-pattern fp32 constants for SFPU scalar-unary ops (mul_unary_tile,
     // sub_unary_tile, rsub_unary_tile, etc.) which take their immediate as a
@@ -221,6 +228,16 @@ void kernel_main() {
             // SFPU's vector lock-step (we can't actually skip lanes, but multiplying
             // by 0 does the same job at the same op cost). g=0 is skipped because
             // T is freshly initialized to 1 above.
+            //
+            // NOTE: empirically disabling Stage F gives bit-identical hero PSNR
+            // (47.78 dB) on the bicycle fixture, so the spoke-truncation diff
+            // versus numpy is NOT from premature saturation. The real precision
+            // limit is bf16 accumulator swamping in R/G/B state: small bright
+            // contributions (alpha · T · color ≈ 0.003) get lost when added to
+            // an accumulator already at ~0.05 (bf16 step ~0.0008). Fixing that
+            // requires either fp32 state CBs (regressed to 34 dB on Blackhole
+            // for reasons not yet understood) or holding R/G/B/T persistently
+            // in fp32 Dst across the per-Gaussian loop (kernel restructure).
             if (g > 0 && (g & 0xFu) == 0u) {
                 tile_regs_acquire();
                 copy_tile_to_dst_init_short(CB_T_STATE);
@@ -238,6 +255,10 @@ void kernel_main() {
                 cb_wait_front(CB_SAT_MASK, 1);
             }
 
+            if (use_mb_shadow) {
+                cb_wait_front(CB_MB_COEFF_SHADOW, 1);
+                cb_pop_front(CB_MB_COEFF_SHADOW, 1);
+            }
             cb_wait_front(CB_SCALARS, 1);
 
             // ----- Stage A: read this Gaussian's 9 fp32 attributes from CB_SCALARS.
@@ -390,13 +411,10 @@ void kernel_main() {
             binary_min_tile_init();
             binary_min_tile(0, 1, 0);
 
-            // weight = exp(power). Approximate-mode polynomial (~100 cycles
-            // vs ~800 for the accurate path) with built-in ClampToNegative
-            // (input clamped to ≥ -88.5 before evaluating). Accuracy ~3-4
-            // decimal digits — fine for alpha ∈ [0, 0.99]; PSNR drops ~11 dB
-            // vs accurate but still has 16 dB headroom over the 35 dB floor.
-            exp_tile_init<true>();
-            exp_tile<true>(0);
+            // weight = exp(power). Accurate SFPU exp for hero PSNR gate (approx
+            // mode costs ~11 dB per kernel design notes).
+            exp_tile_init<false>();
+            exp_tile<false>(0);
 
             // dst[0] *= opacity
             mul_unary_tile(0, opacity_bits);
