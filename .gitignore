@@ -68,7 +68,9 @@ opt/viewer-*.log
 # Heavy scene PLYs (>10MB). luigi.ply is in git from the master baseline;
 # stitch_doll.ply ships from outside the repo (live on disk at /Users/smarton/dev/gsplat_tt/scenes/)
 # and is copied into scenes/ by Phase 0 setup.
-scenes/stitch_doll.ply
+# stitch_doll.ply + luigi.ply are TRACKED via git-LFS (.gitattributes). bicycle.ply
+# is a symlink to a device-local file (/localdev) with no committable content;
+# strawberry/point_cloud are device-only too.
 scenes/strawberry.ply
 scenes/bicycle.ply
 scenes/point_cloud.ply
