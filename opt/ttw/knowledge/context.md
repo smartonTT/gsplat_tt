@@ -158,6 +158,12 @@ stays ignored and belongs in `tmp/`. See lessons.md for the full story.
 fetch). If a clone has them swapped: `git remote rename origin upstream && git
 remote rename smarton origin`.
 
+## Active sprint: L1 subchunk cull/blend
+
+Read **`opt/ttw/knowledge/l1-subchunk-sprint.md`** — post-sort subchunk payloads,
+pure-L1 cull/blend (single-buffer then double-buffer), then mb saturation EO.
+Implement only in `render/`. Loop uses `render/run.py` + `render/kernels` build-ID.
+
 ## Clean renderer policy (`render/`)
 
 The readable TT renderer lives in `render/` (`render_clean`). Keep it clean through

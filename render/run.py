@@ -324,6 +324,11 @@ def main():
           f"min_ms={min_ms:.1f} max_ms={max_ms:.1f} n_views={len(per_view_ms)} "
           f"warmup_s={warmup_s:.1f} "
           f"out={out_dir}", flush=True)
+    # tt-workflows iterate.sh parses these (hero gate + ms_view goal).
+    if hero_vs_ref == hero_vs_ref:  # not nan
+        print(f"TTW_METRIC hero_vs_ref={fmt(hero_vs_ref)}", flush=True)
+    print(f"TTW_TIMING ms_view={avg_ms:.3f}", flush=True)
+    print(f"TTW_TIMING blend={avg_ms:.3f}", flush=True)
 
     sys.stdout.flush()
     sys.stderr.flush()
