@@ -258,50 +258,59 @@ void kernel_main() {
     cb_wait_front(CB_YRAMP, 1);
 
     for (uint32_t t = 0; t < num_tiles; t++) {
-        cb_wait_front(CB_MB_COUNTS, 1);
-        // Gaussian-major: counts page slot 0 holds this tile's gaussian-row count.
-        uint32_t num_g;
-        {
-            auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
-            num_g = cptr[0];
+        bool tile_regs_held = false;
+        bool tile_done = false;
+        while (!tile_done) {
+            cb_wait_front(CB_MB_COUNTS, 1);
+            uint32_t num_g;
+            uint32_t flags = 1u;
+            {
+                auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
+                num_g = cptr[0];
+                flags = cptr[1];
+            }
+            const bool continue_blend = (flags & 2u) != 0;
+            const bool emit_tile = (flags & 1u) != 0;
+
+            if (!continue_blend) {
+                tile_regs_acquire();
+                tile_regs_held = true;
+
+                fill_tile(0, 0.0f);
+                fill_tile(1, 0.0f);
+                fill_tile(2, 0.0f);
+                fill_tile(3, 1.0f);
+
+                copy_tile_to_dst_init_short(CB_XRAMP);
+                copy_tile(CB_XRAMP, 0, 4);
+                copy_tile_to_dst_init_short(CB_YRAMP);
+                copy_tile(CB_YRAMP, 0, 5);
+            }
+
+            if (num_g <= MB_BUCKET_FIT) {
+                DeviceZoneScopedN("cp_inb");
+                process_tile_gaussians(num_g);
+            } else {
+                DeviceZoneScopedN("cp_ovf");
+                process_tile_gaussians(num_g);
+            }
+
+            if (emit_tile) {
+                tile_regs_commit();
+                tile_regs_wait();
+                cb_reserve_back(CB_COLOR_OUT, 3);
+                pack_tile(0, CB_COLOR_OUT);
+                pack_tile(1, CB_COLOR_OUT);
+                pack_tile(2, CB_COLOR_OUT);
+                cb_push_back(CB_COLOR_OUT, 3);
+                tile_regs_release();
+                tile_regs_held = false;
+                tile_done = true;
+            }
+
+            cb_pop_front(CB_MB_COUNTS, 1);
         }
-
-        tile_regs_acquire();
-
-        // Init running state: R=G=B=0, T=1 over the whole tile.
-        fill_tile(0, 0.0f);
-        fill_tile(1, 0.0f);
-        fill_tile(2, 0.0f);
-        fill_tile(3, 1.0f);
-
-        // Load tile-local coordinate ramps into DEST slots 4, 5.
-        copy_tile_to_dst_init_short(CB_XRAMP);
-        copy_tile(CB_XRAMP, 0, 4);
-        copy_tile_to_dst_init_short(CB_YRAMP);
-        copy_tile(CB_YRAMP, 0, 5);
-
-        // MEASUREMENT zones: compute SFPU-blend, one zone per tile, split by class
-        // (L1-resident bucket feed vs DRAM-gather fallback). process_tile_gaussians
-        // drains CB_MB_COEFF (cb_wait_front per row), so this captures SFPU work +
-        // any back-pressure wait on the reader emit.
-        if (num_g <= MB_BUCKET_FIT) {
-            DeviceZoneScopedN("cp_inb");
-            process_tile_gaussians(num_g);
-        } else {
-            DeviceZoneScopedN("cp_ovf");
-            process_tile_gaussians(num_g);
-        }
-
-        tile_regs_commit();
-        tile_regs_wait();
-        cb_reserve_back(CB_COLOR_OUT, 3);
-        pack_tile(0, CB_COLOR_OUT);
-        pack_tile(1, CB_COLOR_OUT);
-        pack_tile(2, CB_COLOR_OUT);
-        cb_push_back(CB_COLOR_OUT, 3);
-        tile_regs_release();
-
-        cb_pop_front(CB_MB_COUNTS, 1);
+        (void)tile_regs_held;
     }
 
     cb_pop_front(CB_XRAMP, 1);

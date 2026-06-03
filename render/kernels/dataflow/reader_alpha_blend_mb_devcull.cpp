@@ -199,6 +199,7 @@ void kernel_main() {
     const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(20);  // resident sort_tile_recs (dense)
     const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
     const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(22);  // M0: pre-sized 32B record bucket
+    const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(23);  // blend_subchunk_meta (iter 48)
 
     constexpr auto a_args        = TensorAccessorArgs<0>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -219,6 +220,7 @@ void kernel_main() {
     constexpr auto tile_recs_args  = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
     constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
+    constexpr auto subchunk_meta_args = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
 
     // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
     constexpr uint32_t SOA_PAGE_BYTES = 64;
@@ -296,6 +298,7 @@ void kernel_main() {
     // per-tile (start,count) u32 pair.
     const auto tile_recs_acc   = TensorAccessor(tile_recs_args,   tile_recs_addr,   SOA_PAGE_BYTES);
     const auto bucket_meta_acc = TensorAccessor(bucket_meta_args, bucket_meta_addr, 64);
+    const auto subchunk_meta_acc = TensorAccessor(subchunk_meta_args, subchunk_meta_addr, 64);
     // Cull math (and thus these scalars) moved to the SFPU cull pass; the mask
     // is now read precomputed. Keep the args for ABI/signature parity.
     (void)contrib_floor;
@@ -402,7 +405,33 @@ void kernel_main() {
             rec_start = bmp[off];
             Lb = bmp[off + 1u];  // dense bucket count (off even -> off+1 same page)
         }
-        if (Lb > 0 && Lb <= MB_BUCKET_FIT) {
+        // Post-sort subchunk dispatch (iter 48): fat tiles (count > MB_BUCKET_FIT)
+        // are processed as a depth-ordered sequence of subchunks; blend state
+        // carries across subchunks via MB_COUNTS flags (bit0=emit, bit1=continue).
+        uint32_t num_subchunks = 1;
+        {
+            const uint32_t e0 = tile_id * 2u;
+            const uint32_t pg = e0 >> 4;
+            const uint32_t off = e0 & 0xF;
+            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+            noc_async_read_tile(pg, subchunk_meta_acc, scr);
+            noc_async_read_barrier();
+            auto smp = reinterpret_cast<volatile uint32_t*>(scr);
+            num_subchunks = smp[off];
+            if (num_subchunks == 0u) {
+                num_subchunks = 1u;
+            }
+        }
+
+        for (uint32_t sc = 0; sc < num_subchunks; ++sc) {
+            const uint32_t sc_off = sc * MB_BUCKET_FIT;
+            const uint32_t L_sub = (sc_off >= L) ? 0u
+                : ((L - sc_off > MB_BUCKET_FIT) ? MB_BUCKET_FIT : (L - sc_off));
+            const uint32_t flags = ((sc > 0u) ? 2u : 0u) | ((sc + 1u == num_subchunks) ? 1u : 0u);
+            const uint32_t id_start_sc = id_start + sc_off;
+            const uint32_t cull_base_sc = cull_base + sc_off;
+
+        if (num_subchunks == 1u && Lb > 0 && Lb <= MB_BUCKET_FIT) {
             const uint32_t L = Lb;
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
@@ -464,7 +493,11 @@ void kernel_main() {
                 sorted = cur;  // even pass count -> back in idxA
             }
             cb_reserve_back(CB_MB_COUNTS, 1);
-            reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS))[0] = L;
+            {
+                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+                cnt_ptr[0] = L;
+                cnt_ptr[1] = 1u;  // emit tile (single in-budget subchunk)
+            }
             cb_push_back(CB_MB_COUNTS, 1);
             // Bulk-load this tile's WHOLE cull_masks region into L1 ONCE (cull_base
             // is 16-aligned -> mask[k] == L1[k]) with batched barriers + a single
@@ -564,26 +597,18 @@ void kernel_main() {
             continue;
         }
 
-        // (3) Per-tile gaussian-row count (compute reads slot 0). One row is
-        // emitted per candidate (mask==0 candidates dispatch nothing).
+        // Per-subchunk gaussian-row count (compute reads slot 0; slot 1 = flags).
         cb_reserve_back(CB_MB_COUNTS, 1);
         {
             auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
-            cnt_ptr[0] = L;
+            cnt_ptr[0] = L_sub;
+            cnt_ptr[1] = flags;
         }
         cb_push_back(CB_MB_COUNTS, 1);
 
-        // (4) Stream the candidate ids: gather attr, cull, emit coeff row.
-        // RESIDENT pipelined gather. The old path issued 9 blocking
-        // read+barrier pairs per gaussian (~9 full NoC latencies each) — the
-        // dominant blend cost. Here we batch one ids-page worth of gaussians
-        // (<=16) per chunk: issue all 9*take SoA page reads ahead of a SINGLE
-        // barrier, and double-buffer so the cull/emit of chunk K overlaps the
-        // in-flight reads of chunk K+1 (separate L1 buffer by parity). Same
-        // reads / same bytes / byte-identical emitted rows as before.
-        if (L > 0) {
-            // MEASUREMENT zone: whole reader cost for ONE OVERFLOW (Lb>FIT) tile
-            // taking the DRAM-gather streaming fallback. Axis (A): overflow class.
+        // Stream one subchunk (<= MB_BUCKET_FIT candidates): gather attr, emit coeff.
+        if (L_sub > 0) {
+            // MEASUREMENT zone: one subchunk of an overflow tile (DRAM-gather).
             DeviceZoneScopedN("rd_overflow");
             const uint32_t attr_base = get_write_ptr(CB_SCR_ATTR);
             constexpr uint32_t CHUNK_MAX = IDS_PAGE_BYTES / 4;          // 16
@@ -591,49 +616,34 @@ void kernel_main() {
             const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
             uint32_t gids[2][CHUNK_MAX];
             uint32_t take_buf[2];
-            // Per-buffer cull_masks scratch (2 buffers x 2 pages x 64B). The
-            // chunk's 2-page mask window is read with a dedicated barrier in the
-            // consume loop below (NOT folded into the shared attr prefetch
-            // barrier, which did not reliably land the small mask reads under
-            // fast timing). gstart_buf records each chunk's within-tile start so
-            // the consume can recompute cull_base + gstart for the mask page.
             uint32_t gstart_buf[2];
             constexpr uint32_t MASK_BUF_BYTES = 2u * IDS_PAGE_BYTES;  // 128B
             const uint32_t mask_scr = get_write_ptr(CB_SCR_MASK);
 
             uint32_t processed = 0;
-            // Prologue: load + issue chunk 0 into buffer 0.
-            take_buf[0] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[0]);
+            take_buf[0] = load_ids_chunk(ids_acc, id_start_sc, processed, L_sub, ids_scr, gids[0]);
             gstart_buf[0] = processed;
             issue_chunk_reads_aos(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES, blendrec_acc);
             processed += take_buf[0];
 
             uint32_t cur = 0;
             while (take_buf[cur] > 0) {
-                noc_async_read_barrier();   // chunk `cur` attrs have landed
+                noc_async_read_barrier();
                 const uint32_t take = take_buf[cur];
                 const uint32_t nxt = cur ^ 1u;
 
-                // Dedicated per-chunk mask-page read with its OWN barrier, issued
-                // here (after the attr barrier, BEFORE the next chunk's prefetch)
-                // so the barrier waits ONLY for these 2 small page reads. Folding
-                // the mask reads into the shared prefetch barrier (which also
-                // covers 144 attr page reads) did NOT reliably land them under
-                // fast timing -> the prefetched mask read returned stale/partial
-                // bits and dropped microblocks (PSNR 30 < keep-all 43.76). This
-                // private barrier is correct-by-construction and costs one barrier
-                // per ~16 candidates without disturbing the attr prefetch overlap.
                 const uint32_t mask_off = load_mask_page(
-                    cull_masks_acc, cull_base + gstart_buf[cur], take, mask_scr + cur * MASK_BUF_BYTES);
+                    cull_masks_acc, cull_base_sc + gstart_buf[cur], take,
+                    mask_scr + cur * MASK_BUF_BYTES);
                 noc_async_read_barrier();
                 auto mask_ptr = reinterpret_cast<volatile uint32_t*>(mask_scr + cur * MASK_BUF_BYTES);
 
-                // Prefetch chunk `nxt` into the other buffer (reads stay in
-                // flight while we cull/emit chunk `cur` below).
-                if (processed < L) {
-                    take_buf[nxt] = load_ids_chunk(ids_acc, id_start, processed, L, ids_scr, gids[nxt]);
+                if (processed < L_sub) {
+                    take_buf[nxt] = load_ids_chunk(
+                        ids_acc, id_start_sc, processed, L_sub, ids_scr, gids[nxt]);
                     gstart_buf[nxt] = processed;
-                    issue_chunk_reads_aos(gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES, blendrec_acc);
+                    issue_chunk_reads_aos(
+                        gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES, blendrec_acc);
                     processed += take_buf[nxt];
                 } else {
                     take_buf[nxt] = 0;
@@ -642,9 +652,6 @@ void kernel_main() {
                 const uint32_t buf = attr_base + cur * BUF_BYTES;
                 for (uint32_t j = 0; j < take; ++j) {
                     const uint32_t s = buf + j * GATHER_SLOT_BYTES;
-                    // S1: one contiguous AoS record page. Fields are dense at
-                    // offsets [0..8] of the 64B record (see proj_m_blendrec emit
-                    // in gather_visible_scatter.cpp): {a,b,c,px,py,op,cr,cg,cb}.
                     auto recp = reinterpret_cast<volatile uint32_t*>(s);
                     const uint32_t cov_a_bits = recp[0];
                     const uint32_t cov_b_bits = recp[1];
@@ -660,21 +667,17 @@ void kernel_main() {
                     const float mean_y = bits_to_f(my_bits);
 
                     const uint32_t mask = mask_ptr[mask_off + j];
-                    // DRAM pages freshly written by the cull pass need a brief
-                    // settling window before NoC reads are consumed; barriers
-                    // alone do not suffice. Per-candidate volatile spin (count
-                    // from GSPLAT_TT_CULL_SPIN, default in blend_device.cpp).
                     for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
 
                     cb_reserve_back(CB_MB_COEFF, 1);
                     auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
-                    row[0] = cov_a_bits;                         // raw cov_a
-                    row[1] = cov_b_bits;                         // raw cov_b
-                    row[2] = cov_c_bits;                         // raw cov_c
-                    row[3] = f_to_bits(mean_x - tx_tile);        // mx_local
-                    row[4] = f_to_bits(mean_y - ty_tile);        // my_local
+                    row[0] = cov_a_bits;
+                    row[1] = cov_b_bits;
+                    row[2] = cov_c_bits;
+                    row[3] = f_to_bits(mean_x - tx_tile);
+                    row[4] = f_to_bits(mean_y - ty_tile);
                     row[5] = 0u;
-                    row[6] = op_bits;                            // opacity
+                    row[6] = op_bits;
                     row[7] = cr;
                     row[8] = cg;
                     row[9] = cb;
@@ -684,13 +687,12 @@ void kernel_main() {
                     row[13] = 0u;
                     row[14] = 0u;
                     row[15] = 0u;
-                    // Order payload stores before push (same rationale as the
-                    // bucket emit above); back-pressure is enforced consumer-side.
                     mb_cb_commit_fence();
                     cb_push_back(CB_MB_COEFF, 1);
                 }
                 cur = nxt;
             }
         }
+        }  // end subchunk loop
     }
 }

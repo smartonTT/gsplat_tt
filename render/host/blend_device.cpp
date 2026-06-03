@@ -39,6 +39,7 @@
 
 #include "alpha_blend_host.h"
 #include "blend.h"
+#include "config.h"
 #include "device_state.h"
 
 using namespace tt;
@@ -99,7 +100,82 @@ struct DeviceContext {
     // write lands on a 16-element (64B) boundary.
     std::shared_ptr<distributed::MeshBuffer> res_mask_base;
     size_t res_mask_base_bytes = 0;
+
+    // Post-sort subchunk table (iter 48): per-tile (num_subchunks, count) u32
+    // pairs built on the host from sort_tile_ranges and uploaded once per frame.
+    // Device readers index blend_subchunk_meta[tile_id*2] to dispatch cull/blend
+    // in depth-ordered slices of at most kBucketFit candidates.
+    std::shared_ptr<distributed::MeshBuffer> res_subchunk_meta;
+    size_t res_subchunk_meta_bytes = 0;
 };
+
+// Host-built subchunk plan + [SUBCHUNK] stats (iter 48).
+struct SubchunkPlan {
+    std::vector<uint32_t> meta;  // num_tiles * 2: [num_subchunks, candidate_count]
+    uint32_t tiles_split = 0;
+    uint32_t total_subchunks = 0;
+    uint32_t max_subchunks_per_tile = 0;
+    uint64_t total_overflow_candidates = 0;
+};
+
+static SubchunkPlan build_subchunk_plan(
+    distributed::MeshCommandQueue* cq, uint32_t num_tiles) {
+    namespace ds = gsplat_tt::device_state;
+    SubchunkPlan plan;
+    plan.meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
+    auto buf_rng = ds::get_buffer("sort_tile_ranges");
+    if (!buf_rng || num_tiles == 0) {
+        return plan;
+    }
+    std::vector<uint32_t> ranges(static_cast<std::size_t>(num_tiles) * 2u, 0u);
+    distributed::EnqueueReadMeshBuffer(*cq, ranges, buf_rng, /*blocking=*/true);
+    constexpr uint32_t kFit = render_config::kBucketFit;
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        const uint32_t start = ranges[static_cast<std::size_t>(t) * 2u + 0u];
+        const uint32_t end = ranges[static_cast<std::size_t>(t) * 2u + 1u];
+        const uint32_t count = end - start;
+        const uint32_t num_sc =
+            count == 0u ? 1u : (count + kFit - 1u) / kFit;
+        plan.meta[static_cast<std::size_t>(t) * 2u + 0u] = num_sc;
+        plan.meta[static_cast<std::size_t>(t) * 2u + 1u] = count;
+        plan.total_subchunks += num_sc;
+        if (num_sc > 1u) {
+            plan.tiles_split += 1u;
+            plan.total_overflow_candidates += count;
+        }
+        plan.max_subchunks_per_tile =
+            std::max(plan.max_subchunks_per_tile, num_sc);
+    }
+    return plan;
+}
+
+static void log_subchunk_stats(const SubchunkPlan& plan) {
+    std::fprintf(
+        stderr,
+        "[SUBCHUNK] tiles_split=%u total_subchunks=%u max_subchunks_per_tile=%u "
+        "total_overflow_candidates=%llu\n",
+        plan.tiles_split,
+        plan.total_subchunks,
+        plan.max_subchunks_per_tile,
+        static_cast<unsigned long long>(plan.total_overflow_candidates));
+}
+
+static bool upload_subchunk_meta(
+    DeviceContext& ctx, const SubchunkPlan& plan, uint32_t num_tiles) {
+    const size_t bytes = static_cast<size_t>(num_tiles) * 2u * sizeof(uint32_t);
+    if (!ctx.res_subchunk_meta || ctx.res_subchunk_meta_bytes < bytes) {
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{
+            .page_size = 64, .buffer_type = BufferType::DRAM};
+        ctx.res_subchunk_meta =
+            distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+        ctx.res_subchunk_meta_bytes = bytes;
+        gsplat_tt::device_state::register_buffer(
+            "blend_subchunk_meta", ctx.res_subchunk_meta);
+    }
+    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_subchunk_meta, plan.meta);
+    return true;
+}
 
 // Pull the program out of the workload (it was moved in at init time) so we
 // can refresh its runtime args before each frame.
@@ -195,11 +271,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
     cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
 
-    // The resident devcull reader binds 19 DRAM-interleaved accessors: proj_m
+    // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
     // a/b/c/px/py/opacity/colors (7) + sort_sorted_ids + sort_tile_ranges +
     // xramp + yramp + tile_ids + lpt_meta (6) + cull_masks + cull_mask_base (2)
-    // + proj_m_blendrec (AoS, 1) + buf_l1_recs (L1_RECORD, 1) + 2 bucket buffers.
-    constexpr int num_reader_accessors = 19;
+    // + proj_m_blendrec (AoS, 1) + buf_l1_recs (L1_RECORD, 1) + 2 bucket buffers
+    // + blend_subchunk_meta (iter 48 post-sort subchunk table).
+    constexpr int num_reader_accessors = 20;
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -486,6 +563,18 @@ static double process_frame_mb_devcull_resident(
     const bool launch_only = (phase == ResidentBlendPhase::DeviceLaunchAndReadback);
 
     if (!launch_only) {
+    // Post-sort subchunk table: host reads sort_tile_ranges, splits fat tiles
+    // (count > kBucketFit) into depth-ordered subchunks, uploads metadata for
+    // the blend reader dispatch loop (iter 48).
+    const SubchunkPlan subchunk_plan = build_subchunk_plan(ctx.cq, num_tiles);
+    log_subchunk_stats(subchunk_plan);
+    if (!upload_subchunk_meta(ctx, subchunk_plan, num_tiles)) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+    const uint32_t subchunk_meta_addr =
+        static_cast<uint32_t>(ctx.res_subchunk_meta->address());
+
     // SFPU cull: the blend reader reads the precomputed 32-bit mask from the
     // resident cull_masks buffer (registered by the cull pass) instead of
     // running the soft-float cull. Built with the matching MB_SFPU_CULL define.
@@ -590,20 +679,16 @@ static double process_frame_mb_devcull_resident(
                                 if (tile_bucket) {
                                     reader_args.push_back(tile_recs_addr);    // arg 20
                                     reader_args.push_back(bucket_meta_addr);  // arg 21
-                                    if (gsplat_tt::env_config::l1_record_enabled()) {
-                                        auto buf_l1r = ds::get_buffer("sort_l1_recs");
-                                        if (!buf_l1r) {
-                                            std::cerr << "[gsplat_tt::blend] MB_L1_RECORD=1 but "
-                                                         "sort_l1_recs missing; skipping arg\n";
-                                        }
-                                        reader_args.push_back(
-                                            buf_l1r ? static_cast<uint32_t>(buf_l1r->address())
-                                                    : 0u);  // arg 22
-                                    }
+                                    auto buf_l1r = ds::get_buffer("sort_l1_recs");
+                                    reader_args.push_back(
+                                        (gsplat_tt::env_config::l1_record_enabled() && buf_l1r)
+                                            ? static_cast<uint32_t>(buf_l1r->address())
+                                            : 0u);  // arg 22
                                 }
                             }
                         }
                     }
+                    reader_args.push_back(subchunk_meta_addr);  // arg 23 (iter 48)
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
                     SetRuntimeArgs(program, ctx.compute, core, {0u});
                     SetRuntimeArgs(program, ctx.writer, core, {
