@@ -285,7 +285,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
-    cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
+    // Depth must cover max subchunks per tile (overflow tiles can be >>2);
+    // reader bulk path can push counts faster than compute pops.
+    cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
 
     // Resident devcull reader scratch CBs.
@@ -305,19 +307,20 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     cb_cfg(CB_SCR_MASK, 256, 1, DataFormat::UInt32);
     cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
 
-    // L1-resident dense record bucket (CB_BUCKET) + sort scratch (CB_BSORT:
-    // in_idx[FIT] + out_idx[FIT] + counts[256]) + whole-tile masks (CB_BMASK).
-    // FIT = 8192 candidates (512 KB bucket + ~66 KB scratch); tiles above FIT
-    // fall back to the per-candidate gather path. The 32B fp16 record sits in
-    // the low 32B of a 64B slot (sub-64B DRAM paging is unreliable), so the
-    // bucket uses 64B slots for both the 64B and 32B-record paths.
+    // CB_BUCKET/CB_BMASK: in-budget sort+emit scratch (push deferred until after
+    // coeff stream). CB_BUCKET_BULK/CB_BMASK_BULK: overflow bulk L1 (iter 49) —
+    // separate rings so reader bulk reserve does not block on in-budget scratch.
     constexpr uint32_t CB_BUCKET = 9;
     constexpr uint32_t CB_BSORT  = 10;
     constexpr uint32_t CB_BMASK  = 11;
+    constexpr uint32_t CB_BUCKET_BULK = 12;
+    constexpr uint32_t CB_BMASK_BULK  = 13;
     constexpr uint32_t rec_bytes = 64u;
     cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
     cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
     cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
+    cb_cfg(CB_BUCKET_BULK, rec_bytes, kBucketFit, DataFormat::Float32);
+    cb_cfg(CB_BMASK_BULK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
 
     // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
     // a/b/c/px/py/opacity/colors (7) + sort_sorted_ids + sort_tile_ranges +

@@ -56,9 +56,11 @@ constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
 constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
 constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
-constexpr uint32_t CB_BUCKET = 9;      // L1-resident dense record bucket for this tile
+constexpr uint32_t CB_BUCKET = 9;      // in-budget: L1 bucket + radix sort scratch (coeff stream)
 constexpr uint32_t CB_BSORT  = 10;     // L1 sort scratch: in_idx[FIT] + out_idx[FIT] + counts[256]
-constexpr uint32_t CB_BMASK  = 11;     // L1-resident whole-tile cull_masks (bulk-loaded once/tile)
+constexpr uint32_t CB_BMASK  = 11;     // in-budget: whole-tile cull_masks (paired with CB_BUCKET)
+constexpr uint32_t CB_BUCKET_BULK = 12; // overflow subchunk: bulk L1 records (no coeff stream)
+constexpr uint32_t CB_BMASK_BULK  = 13; // overflow subchunk: bulk L1 cull_masks
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -520,10 +522,10 @@ void kernel_main() {
                 }
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
             }
-            // Publish bucket/bmask before MB_COUNTS so compute can drain them
-            // after process_tile_gaussians without racing the coeff stream.
-            cb_push_back(CB_BUCKET, L);
-            cb_push_back(CB_BMASK, mpages);
+            // CB_BUCKET/CB_BMASK are reader-private L1 scratch only (reserve +
+            // get_write_ptr, never push/pop). Pushing them wedged the ring when
+            // in-budget tiles shared CB_BUCKET with overflow bulk (db9dcd0) or
+            // when back-to-back in-budget tiles ran ahead of compute drain.
             cb_reserve_back(CB_MB_COUNTS, 1);
             {
                 auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
@@ -609,25 +611,18 @@ void kernel_main() {
             continue;
         }
 
-        // Per-subchunk gaussian-row count (compute reads slot 0; slot 1 = flags).
-        cb_reserve_back(CB_MB_COUNTS, 1);
-        {
-            auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
-            cnt_ptr[0] = L_sub;
-            cnt_ptr[1] = flags | MB_FLAG_L1_BULK;
-        }
-
-        // Bulk L1 load one subchunk (<= MB_BUCKET_FIT candidates): batched NOC
-        // reads into CB_BUCKET + CB_BMASK scratch; compute blends directly from L1.
+        // Bulk L1 into CB_BUCKET_BULK/CB_BMASK_BULK (reader-private scratch;
+        // never push — compute consumes the coeff stream). One batched NOC load
+        // per subchunk replaces the iter-48 per-chunk DRAM gather.
         if (L_sub > 0) {
             DeviceZoneScopedN("rd_l1_bulk");
             const uint32_t mpages = (L_sub + 15u) >> 4;
-            cb_reserve_back(CB_BUCKET, L_sub);
-            cb_reserve_back(CB_BMASK, mpages);
-            const uint32_t buck = get_write_ptr(CB_BUCKET);
-            const uint32_t bmask = get_write_ptr(CB_BMASK);
+            cb_reserve_back(CB_BUCKET_BULK, L_sub);
+            cb_reserve_back(CB_BMASK_BULK, mpages);
+            const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
+            const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
+            auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
 
-            // Bulk-load this subchunk's cull_masks region (batched barriers).
             {
                 const uint32_t mpg0 = cull_base_sc >> 4;
                 uint32_t pp = 0;
@@ -643,8 +638,6 @@ void kernel_main() {
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
             }
 
-            // Bulk-load blendrec records for all candidates (batched NOC, one
-            // barrier per <=64 reads — no per-row CB_MB_COEFF push).
             {
                 const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
                 uint32_t gids[16];
@@ -662,20 +655,63 @@ void kernel_main() {
                                 buck + (processed + j) * ATTR_PAGE_BYTES);
                         }
                         noc_async_read_barrier();
-                        for (uint32_t j = q; j < batch_end; ++j) {
-                            auto recp = reinterpret_cast<volatile uint32_t*>(
-                                buck + (processed + j) * ATTR_PAGE_BYTES);
-                            recp[3] = f_to_bits(bits_to_f(recp[3]) - tx_tile);
-                            recp[4] = f_to_bits(bits_to_f(recp[4]) - ty_tile);
-                        }
                         q = batch_end;
                     }
                     processed += take;
                 }
             }
             mb_cb_commit_fence();
-            cb_push_back(CB_BUCKET, L_sub);
-            cb_push_back(CB_BMASK, mpages);
+
+            cb_reserve_back(CB_MB_COUNTS, 1);
+            {
+                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+                cnt_ptr[0] = L_sub;
+                cnt_ptr[1] = flags;  // no L1_BULK: coeff stream from bulk L1 scratch
+            }
+            cb_push_back(CB_MB_COUNTS, 1);
+
+            for (uint32_t g = 0; g < L_sub; ++g) {
+                auto recp = reinterpret_cast<volatile uint32_t*>(
+                    buck + g * ATTR_PAGE_BYTES);
+                const uint32_t cov_a_bits = recp[0];
+                const uint32_t cov_b_bits = recp[1];
+                const uint32_t cov_c_bits = recp[2];
+                const float mean_x = bits_to_f(recp[3]);
+                const float mean_y = bits_to_f(recp[4]);
+                const uint32_t op_bits = recp[5];
+                const uint32_t cr = recp[6];
+                const uint32_t cg = recp[7];
+                const uint32_t cb = recp[8];
+                const uint32_t mask = bmptr[g];
+                for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
+                cb_reserve_back(CB_MB_COEFF, 1);
+                auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
+                row[0] = cov_a_bits;
+                row[1] = cov_b_bits;
+                row[2] = cov_c_bits;
+                row[3] = f_to_bits(mean_x - tx_tile);
+                row[4] = f_to_bits(mean_y - ty_tile);
+                row[5] = 0u;
+                row[6] = op_bits;
+                row[7] = cr;
+                row[8] = cg;
+                row[9] = cb;
+                row[10] = mask;
+                row[11] = 0u;
+                row[12] = 0u;
+                row[13] = 0u;
+                row[14] = 0u;
+                row[15] = 0u;
+                mb_cb_commit_fence();
+                cb_push_back(CB_MB_COEFF, 1);
+            }
+            continue;
+        }
+        cb_reserve_back(CB_MB_COUNTS, 1);
+        {
+            auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+            cnt_ptr[0] = L_sub;
+            cnt_ptr[1] = flags;
         }
         cb_push_back(CB_MB_COUNTS, 1);
         }  // end subchunk loop

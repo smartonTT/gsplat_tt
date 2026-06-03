@@ -59,8 +59,10 @@ constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp (r + 0.5)
 constexpr uint32_t CB_MB_COEFF  = 2;   // one 48B coeff row per gaussian (mb-major)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock count)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
-constexpr uint32_t CB_BUCKET = 9;    // L1-resident subchunk payload (reader push / compute pop)
-constexpr uint32_t CB_BMASK  = 11;    // L1-resident subchunk cull_masks (reader push / compute pop)
+constexpr uint32_t CB_BUCKET = 9;    // in-budget scratch (drain after coeff stream)
+constexpr uint32_t CB_BMASK  = 11;   // in-budget scratch (paired with CB_BUCKET)
+constexpr uint32_t CB_BUCKET_BULK = 12; // overflow subchunk L1 records
+constexpr uint32_t CB_BMASK_BULK  = 13; // overflow subchunk L1 cull_masks
 constexpr uint32_t CB_COLOR_OUT = 16;
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
@@ -244,18 +246,18 @@ inline void process_tile_gaussians(uint32_t num_g) {
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
 }
 
-// Blend one subchunk whose records + masks sit in CB_BUCKET / CB_BMASK L1
-// scratch (iter 49). Reader finishes the bulk load + fence before pushing
-// MB_COUNTS; compute reads L1 directly — no per-row CB_MB_COEFF stream.
+// Blend one subchunk whose records + masks sit in CB_BUCKET_BULK /
+// CB_BMASK_BULK (iter 49). Separate from in-budget CB_BUCKET/CB_BMASK so
+// bulk reserve does not deadlock against coeff-stream scratch.
 inline void process_tile_l1_blend(uint32_t num_g) {
     if (num_g == 0) {
         return;
     }
     const uint32_t mpages = (num_g + 15u) >> 4;
-    cb_wait_front(CB_BUCKET, num_g);
-    cb_wait_front(CB_BMASK, mpages);
-    const uint32_t buck = get_tile_address(CB_BUCKET, 0);
-    const uint32_t bmask_base = get_tile_address(CB_BMASK, 0);
+    cb_wait_front(CB_BUCKET_BULK, num_g);
+    cb_wait_front(CB_BMASK_BULK, mpages);
+    const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
+    const uint32_t bmask_base = get_tile_address(CB_BMASK_BULK, 0);
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
     for (uint32_t g = 0; g < num_g; g++) {
@@ -269,8 +271,8 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
-    cb_pop_front(CB_BUCKET, num_g);
-    cb_pop_front(CB_BMASK, mpages);
+    cb_pop_front(CB_BUCKET_BULK, num_g);
+    cb_pop_front(CB_BMASK_BULK, mpages);
 }
 
 }  // namespace
@@ -330,15 +332,6 @@ void kernel_main() {
             } else {
                 DeviceZoneScopedN("cp_inb");
                 process_tile_gaussians(num_g);
-                // In-budget reader uses CB_BUCKET/CB_BMASK as scratch then pushes
-                // after the coeff stream; drain here so bulk subchunks can reserve.
-                if (num_g > 0) {
-                    const uint32_t mpages = (num_g + 15u) >> 4;
-                    cb_wait_front(CB_BUCKET, num_g);
-                    cb_pop_front(CB_BUCKET, num_g);
-                    cb_wait_front(CB_BMASK, mpages);
-                    cb_pop_front(CB_BMASK, mpages);
-                }
             }
 
             if (emit_tile) {
