@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -117,6 +118,14 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
         colors, opacities, N, image_height, image_width, min_opacity, max_radius,
         /*host_gather=*/false, /*verify=*/false, &worker_pool(), &gather_ok,
         /*timings=*/nullptr, /*downstream_resident=*/true);
+    // SINGLE-PATH TT: the clean renderer has no CPU fallback. If the device
+    // gather (or its upstream means_cam / pfwc) did not complete on-device,
+    // hard-fail instead of silently returning an empty/host result.
+    if (!gather_ok) {
+        throw std::runtime_error(
+            "render_clean: device projection/gather failed; the clean renderer "
+            "is single-path TT and has no CPU fallback");
+    }
     return proj;
 }
 
@@ -180,6 +189,11 @@ py::tuple render_view(
         /*means_2d=*/nullptr, /*radii=*/nullptr, M, image_height, image_width,
         tile_size, /*covs_2d=*/nullptr, /*opacities=*/nullptr, contrib_floor,
         &ta_ok);
+    if (!ta_ok) {
+        throw std::runtime_error(
+            "render_clean: device tile_assign failed; single-path TT, no CPU "
+            "fallback");
+    }
 
     // Hand the microblock-cull params to the sort driver via device_state so the
     // fused SFPU cull pass can bake the keep mask into the dense record (these
@@ -204,6 +218,18 @@ py::tuple render_view(
         ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
         ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(), &sort_ok,
         /*timings=*/nullptr, /*need_host_sorted_ids=*/false, &sort_blend);
+    // The sort driver runs the SFPU cull + microblock blend as its on-device
+    // continuation. Both must have run on-device; hard-fail otherwise (the CPU
+    // sort fallback / any host blend are not a valid result for render_clean).
+    if (!sort_ok) {
+        throw std::runtime_error(
+            "render_clean: device sort failed; single-path TT, no CPU fallback");
+    }
+    if (!blend_ok) {
+        throw std::runtime_error(
+            "render_clean: device cull/blend failed; single-path TT, no CPU "
+            "fallback");
+    }
 
     std::size_t P_kept = 0;
     for (std::size_t t = 0; 2 * t + 1 < sr.tile_ranges.size(); ++t) {

@@ -18,9 +18,11 @@ Artifacts are written under tmp/render-clean/ (gitignored scratch).
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import math
 import os
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -144,18 +146,71 @@ def psnr(a, b):
     return -10.0 * math.log10(mse)
 
 
-def render_hero(backend, gauss, view, fov_deg, W, H, contrib_floor):
-    pipeline = Pipeline(backend, tile_size=32, contrib_floor=contrib_floor)
-    c2w = np.asarray(view["c2w"], dtype=np.float32)
-    extr = c2w_to_w2c(torch.from_numpy(c2w))
-    K = build_intrinsics(W, H, fov_deg)
-    # Warmup (JIT compile + caches), then the timed render.
-    _ = pipeline.render(gauss, extr, K, H, W)
-    res = pipeline.render(gauss, extr, K, H, W)
+@contextlib.contextmanager
+def silence_os_fd_output():
+    """Redirect OS-level stdout+stderr (fd 1/2) to /dev/null for the block.
+
+    The cpu_cpp_mb reference is rendered in-process while CleanBackend still
+    holds the TT device, so the reference's gsplat_tt device-init attempts
+    fail and fall back to CPU — that CPU fallback is exactly the oracle that
+    yields the 63.85 dB measurement. tt-metal logs those init failures
+    (TT_FATAL / context_id / "device init failed") to fd 2 directly from C++,
+    so a Python-level redirect (contextlib.redirect_stderr) cannot catch them;
+    we dup2 /dev/null over the real fds for the duration of the reference
+    render only. No computation changes — only the noisy log is suppressed.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    saved_out = os.dup(1)
+    saved_err = os.dup(2)
+    try:
+        os.dup2(devnull_fd, 1)
+        os.dup2(devnull_fd, 2)
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(saved_out, 1)
+        os.dup2(saved_err, 2)
+        os.close(devnull_fd)
+        os.close(saved_out)
+        os.close(saved_err)
+
+
+def _to_image(res):
     img = res.image
     if hasattr(img, "numpy"):
         img = img.numpy()
     return np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0)
+
+
+def render_hero(backend, gauss, view, fov_deg, W, H, contrib_floor):
+    """Render a single view through `backend` (used for the CPU reference)."""
+    pipeline = Pipeline(backend, tile_size=32, contrib_floor=contrib_floor)
+    c2w = np.asarray(view["c2w"], dtype=np.float32)
+    extr = c2w_to_w2c(torch.from_numpy(c2w))
+    K = build_intrinsics(W, H, fov_deg)
+    # Warmup (JIT compile + caches), then the render we keep.
+    _ = pipeline.render(gauss, extr, K, H, W)
+    return _to_image(pipeline.render(gauss, extr, K, H, W))
+
+
+def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
+    """Render one view through render_clean; return (image, wall_ms).
+
+    The timed window wraps the whole `pipeline.render` call. render_clean is
+    single-path TT (host orchestrates, device computes) and the heavy host prep
+    (cov3d repack, gaussian np cast) is cached on the backend after warmup, so
+    this wall time is a faithful per-frame number dominated by the device
+    render + the thin per-view host orchestration. The PURE device makespan is
+    measured separately under Tracy (TASK 3); the two should agree within noise.
+    """
+    extr = c2w_to_w2c(torch.from_numpy(np.asarray(c2w, dtype=np.float32)))
+    t = time.perf_counter()
+    res = pipeline.render(gauss, extr, K, H, W)
+    wall_ms = (time.perf_counter() - t) * 1000.0
+    return _to_image(res), wall_ms
 
 
 def main():
@@ -179,34 +234,73 @@ def main():
     fov_deg = float(cam["fov_deg"])
     W, H = cam["image_size"]
     contrib_floor = cam.get("contrib_floor", 1.0 / 255.0)
-    hero_name = cam["order"][0]
+    order = cam["order"]            # the 30-view bench set (order[0] == hero)
+    hero_name = order[0]
     hero_view = cam["views"][hero_name]
     gauss = load_ply(str(Path(cam["ply"])))
 
     out_dir = REPO_ROOT / "tmp" / args.iter_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"[run] rendering hero='{hero_name}' {W}x{H} scene={args.scene}", flush=True)
-    t0 = time.time()
-    clean = render_hero(CleanBackend(), gauss, hero_view, fov_deg, W, H, contrib_floor)
-    t1 = time.time()
-    ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg, W, H,
-                      contrib_floor)
-    t2 = time.time()
+    K = build_intrinsics(W, H, fov_deg)
+    clean_backend = CleanBackend()
+    clean_pipeline = Pipeline(clean_backend, tile_size=32, contrib_floor=contrib_floor)
 
-    hero_vs_ref = psnr(clean, ref)
+    # --- Warmup (EXCLUDED from timing): JIT-compile every device program +
+    # warm the backend host caches (cov3d repack, gaussian np cast). One hero
+    # render is enough to compile the resident chain and populate the caches
+    # that are reused by all 30 views.
+    print(f"[run] warmup (hero='{hero_name}', {W}x{H}, scene={args.scene})",
+          flush=True)
+    t_warm = time.perf_counter()
+    _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+    warmup_s = time.perf_counter() - t_warm
 
-    Image.fromarray((clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
+    # --- Timed loop over ALL 30 bench views (pure render_clean device path;
+    # the CPU reference is NOT rendered here — only for the hero PSNR gate).
+    print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
+    per_view_ms = []
+    hero_clean = None
+    for name in order:
+        img, wall_ms = render_clean_view_timed(
+            clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
+        per_view_ms.append(wall_ms)
+        if name == hero_name:
+            hero_clean = img
+        print(f"[run]   view={name} {wall_ms:.1f}ms", flush=True)
+
+    avg_ms = sum(per_view_ms) / len(per_view_ms)
+    p50_ms = statistics.median(per_view_ms)
+    min_ms = min(per_view_ms)
+    max_ms = max(per_view_ms)
+
+    # --- Hero PSNR gate ONLY: render the cpu_cpp_mb reference in-process
+    # (identical oracle pixels => identical hero_vs_ref). Its device-init
+    # attempts fail (device held by the clean backend) and fall back to CPU;
+    # silence the C++ fd-2 TT_FATAL spam so the "clean renderer" log stays clean.
+    with silence_os_fd_output():
+        ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg,
+                          W, H, contrib_floor)
+
+    hero_vs_ref = psnr(hero_clean, ref)
+
+    Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
     Image.fromarray((ref * 255.0).astype(np.uint8)).save(out_dir / "hero_ref.png")
-    diff = np.clip(np.abs(clean - ref) * 10.0, 0.0, 1.0)
+    diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
     Image.fromarray((diff * 255.0).astype(np.uint8)).save(out_dir / "hero_diff10.png")
 
     def fmt(x):
         return "inf" if x == float("inf") else f"{x:.2f}"
 
+    # Headline metrics: hero_vs_ref (dB, the 63.85 gate on the hero view) and
+    # avg_frame_ms (the canonical frame-time = mean render_clean wall time over
+    # all 30 bench views, warmup excluded). warmup_s is reported only as
+    # context (it includes JIT + cache fill) and is NOT the frame-time metric.
     print(f"SUMMARY scene={args.scene} hero='{hero_name}' "
           f"hero_vs_ref={fmt(hero_vs_ref)}dB "
-          f"clean_render_s={t1 - t0:.1f} ref_render_s={t2 - t1:.1f} "
+          f"avg_frame_ms={avg_ms:.1f} p50_ms={p50_ms:.1f} "
+          f"min_ms={min_ms:.1f} max_ms={max_ms:.1f} n_views={len(per_view_ms)} "
+          f"warmup_s={warmup_s:.1f} "
           f"out={out_dir}", flush=True)
 
     sys.stdout.flush()
