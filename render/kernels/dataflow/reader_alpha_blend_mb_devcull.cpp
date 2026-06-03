@@ -60,6 +60,11 @@ constexpr uint32_t CB_BUCKET = 9;      // L1-resident dense record bucket for th
 constexpr uint32_t CB_BSORT  = 10;     // L1 sort scratch: in_idx[FIT] + out_idx[FIT] + counts[256]
 constexpr uint32_t CB_BMASK  = 11;     // L1-resident whole-tile cull_masks (bulk-loaded once/tile)
 
+// MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
+constexpr uint32_t MB_FLAG_EMIT = 1u;
+constexpr uint32_t MB_FLAG_CONTINUE = 2u;
+constexpr uint32_t MB_FLAG_L1_BULK = 4u;
+
 
 
 
@@ -427,7 +432,8 @@ void kernel_main() {
             const uint32_t sc_off = sc * MB_BUCKET_FIT;
             const uint32_t L_sub = (sc_off >= L) ? 0u
                 : ((L - sc_off > MB_BUCKET_FIT) ? MB_BUCKET_FIT : (L - sc_off));
-            const uint32_t flags = ((sc > 0u) ? 2u : 0u) | ((sc + 1u == num_subchunks) ? 1u : 0u);
+            const uint32_t flags = ((sc > 0u) ? MB_FLAG_CONTINUE : 0u)
+                | ((sc + 1u == num_subchunks) ? MB_FLAG_EMIT : 0u);
             const uint32_t id_start_sc = id_start + sc_off;
             const uint32_t cull_base_sc = cull_base + sc_off;
 
@@ -496,7 +502,7 @@ void kernel_main() {
             {
                 auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
                 cnt_ptr[0] = L;
-                cnt_ptr[1] = 1u;  // emit tile (single in-budget subchunk)
+                cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
             }
             cb_push_back(CB_MB_COUNTS, 1);
             // Bulk-load this tile's WHOLE cull_masks region into L1 ONCE (cull_base
@@ -602,97 +608,70 @@ void kernel_main() {
         {
             auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
             cnt_ptr[0] = L_sub;
-            cnt_ptr[1] = flags;
+            cnt_ptr[1] = flags | MB_FLAG_L1_BULK;
+        }
+
+        // Bulk L1 load one subchunk (<= MB_BUCKET_FIT candidates): batched NOC
+        // reads into CB_BUCKET + CB_BMASK scratch; compute blends directly from L1.
+        if (L_sub > 0) {
+            DeviceZoneScopedN("rd_l1_bulk");
+            const uint32_t mpages = (L_sub + 15u) >> 4;
+            cb_reserve_back(CB_BUCKET, L_sub);
+            cb_reserve_back(CB_BMASK, mpages);
+            const uint32_t buck = get_write_ptr(CB_BUCKET);
+            const uint32_t bmask = get_write_ptr(CB_BMASK);
+
+            // Bulk-load this subchunk's cull_masks region (batched barriers).
+            {
+                const uint32_t mpg0 = cull_base_sc >> 4;
+                uint32_t pp = 0;
+                while (pp < mpages) {
+                    const uint32_t end = (pp + 64u < mpages) ? pp + 64u : mpages;
+                    for (uint32_t q = pp; q < end; ++q) {
+                        noc_async_read_tile(mpg0 + q, cull_masks_acc,
+                                            bmask + q * IDS_PAGE_BYTES);
+                    }
+                    noc_async_read_barrier();
+                    pp = end;
+                }
+                for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
+            }
+
+            // Bulk-load blendrec records for all candidates (batched NOC, one
+            // barrier per <=64 reads — no per-row CB_MB_COEFF push).
+            {
+                const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
+                uint32_t gids[16];
+                uint32_t processed = 0;
+                while (processed < L_sub) {
+                    const uint32_t take = load_ids_chunk(
+                        ids_acc, id_start_sc, processed, L_sub, ids_scr, gids);
+                    uint32_t q = 0;
+                    while (q < take) {
+                        const uint32_t batch_end =
+                            (q + 64u < take) ? q + 64u : take;
+                        for (uint32_t j = q; j < batch_end; ++j) {
+                            noc_async_read_tile(
+                                gids[j], blendrec_acc,
+                                buck + (processed + j) * ATTR_PAGE_BYTES);
+                        }
+                        noc_async_read_barrier();
+                        for (uint32_t j = q; j < batch_end; ++j) {
+                            auto recp = reinterpret_cast<volatile uint32_t*>(
+                                buck + (processed + j) * ATTR_PAGE_BYTES);
+                            recp[3] = f_to_bits(bits_to_f(recp[3]) - tx_tile);
+                            recp[4] = f_to_bits(bits_to_f(recp[4]) - ty_tile);
+                        }
+                        q = batch_end;
+                    }
+                    processed += take;
+                }
+            }
+            mb_cb_commit_fence();
+            cb_push_back(CB_BUCKET, L_sub);
+            cb_push_back(CB_BMASK, mpages);
         }
         cb_push_back(CB_MB_COUNTS, 1);
-
-        // Stream one subchunk (<= MB_BUCKET_FIT candidates): gather attr, emit coeff.
-        if (L_sub > 0) {
-            // MEASUREMENT zone: one subchunk of an overflow tile (DRAM-gather).
-            DeviceZoneScopedN("rd_overflow");
-            const uint32_t attr_base = get_write_ptr(CB_SCR_ATTR);
-            constexpr uint32_t CHUNK_MAX = IDS_PAGE_BYTES / 4;          // 16
-            constexpr uint32_t BUF_BYTES = CHUNK_MAX * GATHER_SLOT_BYTES;
-            const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
-            uint32_t gids[2][CHUNK_MAX];
-            uint32_t take_buf[2];
-            uint32_t gstart_buf[2];
-            constexpr uint32_t MASK_BUF_BYTES = 2u * IDS_PAGE_BYTES;  // 128B
-            const uint32_t mask_scr = get_write_ptr(CB_SCR_MASK);
-
-            uint32_t processed = 0;
-            take_buf[0] = load_ids_chunk(ids_acc, id_start_sc, processed, L_sub, ids_scr, gids[0]);
-            gstart_buf[0] = processed;
-            issue_chunk_reads_aos(gids[0], take_buf[0], attr_base + 0u * BUF_BYTES, blendrec_acc);
-            processed += take_buf[0];
-
-            uint32_t cur = 0;
-            while (take_buf[cur] > 0) {
-                noc_async_read_barrier();
-                const uint32_t take = take_buf[cur];
-                const uint32_t nxt = cur ^ 1u;
-
-                const uint32_t mask_off = load_mask_page(
-                    cull_masks_acc, cull_base_sc + gstart_buf[cur], take,
-                    mask_scr + cur * MASK_BUF_BYTES);
-                noc_async_read_barrier();
-                auto mask_ptr = reinterpret_cast<volatile uint32_t*>(mask_scr + cur * MASK_BUF_BYTES);
-
-                if (processed < L_sub) {
-                    take_buf[nxt] = load_ids_chunk(
-                        ids_acc, id_start_sc, processed, L_sub, ids_scr, gids[nxt]);
-                    gstart_buf[nxt] = processed;
-                    issue_chunk_reads_aos(
-                        gids[nxt], take_buf[nxt], attr_base + nxt * BUF_BYTES, blendrec_acc);
-                    processed += take_buf[nxt];
-                } else {
-                    take_buf[nxt] = 0;
-                }
-
-                const uint32_t buf = attr_base + cur * BUF_BYTES;
-                for (uint32_t j = 0; j < take; ++j) {
-                    const uint32_t s = buf + j * GATHER_SLOT_BYTES;
-                    auto recp = reinterpret_cast<volatile uint32_t*>(s);
-                    const uint32_t cov_a_bits = recp[0];
-                    const uint32_t cov_b_bits = recp[1];
-                    const uint32_t cov_c_bits = recp[2];
-                    const uint32_t mx_bits    = recp[3];
-                    const uint32_t my_bits    = recp[4];
-                    const uint32_t op_bits    = recp[5];
-                    const uint32_t cr = recp[6];
-                    const uint32_t cg = recp[7];
-                    const uint32_t cb = recp[8];
-
-                    const float mean_x = bits_to_f(mx_bits);
-                    const float mean_y = bits_to_f(my_bits);
-
-                    const uint32_t mask = mask_ptr[mask_off + j];
-                    for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
-
-                    cb_reserve_back(CB_MB_COEFF, 1);
-                    auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
-                    row[0] = cov_a_bits;
-                    row[1] = cov_b_bits;
-                    row[2] = cov_c_bits;
-                    row[3] = f_to_bits(mean_x - tx_tile);
-                    row[4] = f_to_bits(mean_y - ty_tile);
-                    row[5] = 0u;
-                    row[6] = op_bits;
-                    row[7] = cr;
-                    row[8] = cg;
-                    row[9] = cb;
-                    row[10] = mask;
-                    row[11] = 0u;
-                    row[12] = 0u;
-                    row[13] = 0u;
-                    row[14] = 0u;
-                    row[15] = 0u;
-                    mb_cb_commit_fence();
-                    cb_push_back(CB_MB_COEFF, 1);
-                }
-                cur = nxt;
-            }
-        }
         }  // end subchunk loop
     }
 }

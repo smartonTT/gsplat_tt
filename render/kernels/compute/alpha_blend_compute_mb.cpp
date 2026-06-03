@@ -251,6 +251,9 @@ inline void process_tile_l1_blend(uint32_t num_g) {
     if (num_g == 0) {
         return;
     }
+    const uint32_t mpages = (num_g + 15u) >> 4;
+    cb_wait_front(CB_BUCKET, num_g);
+    cb_wait_front(CB_BMASK, mpages);
     const uint32_t buck = get_tile_address(CB_BUCKET, 0);
     const uint32_t bmask_base = get_tile_address(CB_BMASK, 0);
 
@@ -266,6 +269,8 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
+    cb_pop_front(CB_BUCKET, num_g);
+    cb_pop_front(CB_BMASK, mpages);
 }
 
 }  // namespace

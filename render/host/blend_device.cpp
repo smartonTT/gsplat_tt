@@ -160,6 +160,54 @@ static void log_subchunk_stats(const SubchunkPlan& plan) {
         static_cast<unsigned long long>(plan.total_overflow_candidates));
 }
 
+// Host-side [L1LOAD] stats (iter 49): bulk subchunk payloads the reader loads
+// into L1 (overflow tiles only; in-budget bucket tiles stay on the iter-48 path).
+struct L1LoadStats {
+    uint64_t bytes_bulk_loaded = 0;
+    uint32_t subchunks_bulk = 0;
+};
+
+static L1LoadStats build_l1load_stats(const SubchunkPlan& plan) {
+    L1LoadStats stats;
+    constexpr uint32_t kFit = render_config::kBucketFit;
+    constexpr uint64_t kRecBytes = 64u;
+    const uint32_t num_tiles =
+        static_cast<uint32_t>(plan.meta.size() / 2u);
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        const uint32_t num_sc = plan.meta[static_cast<std::size_t>(t) * 2u + 0u];
+        const uint32_t count = plan.meta[static_cast<std::size_t>(t) * 2u + 1u];
+        const bool in_budget =
+            num_sc == 1u && count > 0u && count <= kFit;
+        if (in_budget) {
+            continue;
+        }
+        for (uint32_t sc = 0; sc < num_sc; ++sc) {
+            const uint32_t sc_off = sc * kFit;
+            if (sc_off >= count) {
+                continue;
+            }
+            const uint32_t l_sub =
+                (count - sc_off > kFit) ? kFit : (count - sc_off);
+            stats.subchunks_bulk += 1u;
+            stats.bytes_bulk_loaded += static_cast<uint64_t>(l_sub) * kRecBytes;
+        }
+    }
+    return stats;
+}
+
+static void log_l1load_stats(const L1LoadStats& stats) {
+    const uint64_t avg = stats.subchunks_bulk > 0u
+        ? stats.bytes_bulk_loaded / stats.subchunks_bulk
+        : 0u;
+    std::fprintf(
+        stderr,
+        "[L1LOAD] bytes_bulk_loaded=%llu subchunks_bulk=%u "
+        "avg_bytes_per_subchunk=%llu\n",
+        static_cast<unsigned long long>(stats.bytes_bulk_loaded),
+        stats.subchunks_bulk,
+        static_cast<unsigned long long>(avg));
+}
+
 static bool upload_subchunk_meta(
     DeviceContext& ctx, const SubchunkPlan& plan, uint32_t num_tiles) {
     const size_t bytes = static_cast<size_t>(num_tiles) * 2u * sizeof(uint32_t);
@@ -568,6 +616,7 @@ static double process_frame_mb_devcull_resident(
     // the blend reader dispatch loop (iter 48).
     const SubchunkPlan subchunk_plan = build_subchunk_plan(ctx.cq, num_tiles);
     log_subchunk_stats(subchunk_plan);
+    log_l1load_stats(build_l1load_stats(subchunk_plan));
     if (!upload_subchunk_meta(ctx, subchunk_plan, num_tiles)) {
         if (ok) *ok = false;
         return 0.0;
