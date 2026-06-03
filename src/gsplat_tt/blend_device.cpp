@@ -3167,7 +3167,11 @@ double blend_mb_devcull_resident(
     int image_height,
     int image_width,
     float* image_out,
-    bool* device_ok) {
+    bool* device_ok,
+    double* cull_ms_out,
+    double* blend_ms_out) {
+    if (cull_ms_out) *cull_ms_out = 0.0;
+    if (blend_ms_out) *blend_ms_out = 0.0;
     if (!g_ctx_mb) {
         (void)gsplat_tt::device_state::get_device();
         g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
@@ -3198,6 +3202,8 @@ double blend_mb_devcull_resident(
             static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
             static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
             image_out, device_ok);
+        if (cull_ms_out) *cull_ms_out = pack_ms;
+        if (blend_ms_out) *blend_ms_out = blend_ms;
         return pack_ms + blend_ms;
     }
     if (::mb::fused::enabled()) {
@@ -3267,6 +3273,8 @@ double blend_mb_devcull_resident(
               static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
               static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
               image_out, device_ok);
+    if (cull_ms_out) *cull_ms_out = cull_ms;
+    if (blend_ms_out) *blend_ms_out = blend_ms;
     return cull_ms + blend_ms;
 }
 

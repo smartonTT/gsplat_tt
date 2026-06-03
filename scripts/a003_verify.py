@@ -82,7 +82,7 @@ def psnr_u8(a: np.ndarray, b_u8_floats: np.ndarray) -> float:
     return psnr(a_u8, b_u8_floats)
 
 
-STAGE_KEYS = ("project", "tile_assign", "sort", "blend", "total")
+STAGE_KEYS = ("project", "tile_assign", "sort", "cull", "blend", "total")
 
 
 _DEVICE_BACKENDS = {"tt"}
@@ -315,7 +315,8 @@ def main():
           f"min_vs_gt={fmt(summary['min_psnr_tt_vs_gt_dB'])}dB "
           f"ms/view={summary['ms_per_view']:.1f} "
           f"(proj={ps['project_ms']:.1f} ta={ps['tile_assign_ms']:.1f} "
-          f"sort={ps['sort_ms']:.1f} blend={ps['blend_ms']:.1f}) "
+          f"sort={ps['sort_ms']:.1f} cull={ps['cull_ms']:.1f} "
+          f"blend={ps['blend_ms']:.1f}) "
           f"shot={summary['screenshot']} "
           f"shot_diff={summary['screenshot_diff']}",
           flush=True)

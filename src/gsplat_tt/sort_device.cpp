@@ -1008,6 +1008,7 @@ static void maybe_run_sort_blend_continuation(
         return;
     }
     bool blend_ok = false;
+    double cull_ms = 0.0, blend_ms = 0.0;
     (void)blend_mb_devcull_resident(
         cont->mb_contrib_floor,
         cont->cull_disabled,
@@ -1016,7 +1017,11 @@ static void maybe_run_sort_blend_continuation(
         cont->image_height,
         cont->image_width,
         cont->image_out,
-        &blend_ok);
+        &blend_ok,
+        &cull_ms,
+        &blend_ms);
+    cont->cull_ms = cull_ms;
+    cont->blend_ms = blend_ms;
     cont->invoked = true;
     if (cont->blend_ok != nullptr) {
         *cont->blend_ok = blend_ok;

@@ -1243,6 +1243,7 @@ py::tuple render_full_py(
         stats["project_ms"] = std::chrono::duration<float, std::milli>(t_p1 - t_p0).count();
         stats["tile_assign_ms"] = 0.0f;
         stats["sort_ms"] = 0.0f;
+        stats["cull_ms"] = 0.0f;
         stats["blend_ms"] = 0.0f;
         stats["total_ms"] = std::chrono::duration<float, std::milli>(clock::now() - t0).count();
         return py::make_tuple(image_zero, stats);
@@ -1366,6 +1367,11 @@ py::tuple render_full_py(
     gsplat_cpu::SortResult sr;
     bool sort_done = false;
     bool blend_done_in_sort = false;
+    // De-lumped device-stage timings captured from the in-sort cull+blend
+    // continuation. The sort host-timer (t_s0..t_s1) otherwise lumps the
+    // sort+cull+blend device window; these let render report them separately.
+    double cont_cull_ms = 0.0;
+    double cont_blend_ms = 0.0;
 #ifdef GSPLAT_WITH_TT
     {
     if (sort_blend_chain) {
@@ -1414,6 +1420,8 @@ py::tuple render_full_py(
             sort_done = true;
             if (sort_blend.invoked) {
                 blend_done_in_sort = true;
+                cont_cull_ms = sort_blend.cull_ms;
+                cont_blend_ms = sort_blend.blend_ms;
                 if (!blend_ok && tt_host_free_render) {
                     std::fprintf(stderr,
                         "[render_full] FATAL: in-sort resident blend failed\n");
@@ -1516,8 +1524,27 @@ py::tuple render_full_py(
     stats["pairs_kept_per_mb"] = cb.pairs_kept_per_mb;
     stats["project_ms"] = std::chrono::duration<float, std::milli>(t_p1 - t_p0).count();
     stats["tile_assign_ms"] = std::chrono::duration<float, std::milli>(t_ta1 - t_ta0).count();
-    stats["sort_ms"] = std::chrono::duration<float, std::milli>(t_s1 - t_s0).count();
-    stats["blend_ms"] = std::chrono::duration<float, std::milli>(t_b1 - t_b0).count();
+    // De-lump the sort host-timer. On the host-free path the cull+blend run
+    // inside the sort_and_bin_tt continuation, so t_s0..t_s1 lumps
+    // sort(bin+radix+publish)+cull+blend. Subtract the continuation's measured
+    // cull/blend device ms so SORT reports only the true sort cost, and CULL /
+    // BLEND each get their own field. Sum is preserved (== old lumped sort).
+    const float sort_total_ms =
+        std::chrono::duration<float, std::milli>(t_s1 - t_s0).count();
+    float sort_ms_v, cull_ms_v, blend_ms_v;
+    if (blend_done_in_sort) {
+        cull_ms_v = static_cast<float>(cont_cull_ms);
+        blend_ms_v = static_cast<float>(cont_blend_ms);
+        sort_ms_v = sort_total_ms - cull_ms_v - blend_ms_v;
+        if (sort_ms_v < 0.0f) sort_ms_v = 0.0f;
+    } else {
+        cull_ms_v = 0.0f;
+        blend_ms_v = std::chrono::duration<float, std::milli>(t_b1 - t_b0).count();
+        sort_ms_v = sort_total_ms;
+    }
+    stats["sort_ms"] = sort_ms_v;
+    stats["cull_ms"] = cull_ms_v;
+    stats["blend_ms"] = blend_ms_v;
     stats["total_ms"] = std::chrono::duration<float, std::milli>(clock::now() - t0).count();
 
 #ifdef GSPLAT_WITH_TT

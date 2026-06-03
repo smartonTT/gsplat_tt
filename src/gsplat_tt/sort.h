@@ -54,6 +54,11 @@ struct SortBlendContinuation {
     bool cull_disabled = false;
     bool* blend_ok = nullptr;
     bool invoked = false;
+    // De-lumped device-stage timings (ms), filled by the continuation so
+    // render_full_py can report SORT / CULL / BLEND separately instead of
+    // lumping cull+blend under the sort host-timer. Measurement-only.
+    double cull_ms = 0.0;
+    double blend_ms = 0.0;
 };
 
 struct SortCallTimings {

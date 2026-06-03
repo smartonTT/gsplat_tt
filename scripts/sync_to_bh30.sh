@@ -41,4 +41,12 @@ rsync -av \
   "$REPO_ROOT/opt/metal-iters.jsonl" \
   "$REMOTE:$DST/opt/" 2>/dev/null || true
 
+# gsplat/pipeline.py: imported by scripts/a003_verify.py at render time (the
+# render_fused timings dict that surfaces per-stage proj/ta/sort/cull/blend ms).
+# NOT covered by the src/ rsync above, so push it explicitly or the device runs
+# a stale pipeline that drops the de-lumped cull stage.
+rsync -av \
+  "$REPO_ROOT/gsplat/pipeline.py" \
+  "$REMOTE:$DST/gsplat/"
+
 echo "[sync_to_bh30] ok" >&2

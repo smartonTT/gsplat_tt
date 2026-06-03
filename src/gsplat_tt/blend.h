@@ -66,6 +66,10 @@ double blend_mb_devcull_from_payload(
 // missing, so the caller can fall back to the uploaded devcull path.
 // LPT + per-tile counts come from resident sort_* buffers (no host tile_ranges
 // scan). Writes the final hero image into image_out (pre-zeroed, H*W*3).
+// cull_ms_out / blend_ms_out (optional): when non-null, receive the de-lumped
+// SFPU cull-pass ms and blend-pass ms separately (the return value is their
+// sum). Used by the sort-blend continuation so render_full_py can report SORT,
+// CULL and BLEND as distinct stages. Measurement-only; no effect on the image.
 double blend_mb_devcull_resident(
     float contrib_floor,
     bool cull_disabled,
@@ -74,7 +78,9 @@ double blend_mb_devcull_resident(
     int image_height,
     int image_width,
     float* image_out,
-    bool* device_ok);
+    bool* device_ok,
+    double* cull_ms_out = nullptr,
+    double* blend_ms_out = nullptr);
 
 void device_shutdown();
 

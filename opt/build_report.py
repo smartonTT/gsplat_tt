@@ -37,8 +37,8 @@ SCREENSHOTS_DIR = OPT_DIR / "screenshots"
 VIEWS_PER_RUN = 30  # 30-view bicycle bench; iter sums always cover all 30 views
 TARGET_MS_PER_FRAME = 1.0  # 1 ms per frame on bh-30 — the final goal
 TARGET_SUM_MS = TARGET_MS_PER_FRAME * VIEWS_PER_RUN  # legacy helper (= 30 ms)
-STAGE_KEYS = ("project_ms", "tile_assign_ms", "sort_ms", "blend_ms")
-STAGE_TIMING_KEYS = ("project", "tile_assign", "sort", "blend")
+STAGE_KEYS = ("project_ms", "tile_assign_ms", "sort_ms", "cull_ms", "blend_ms")
+STAGE_TIMING_KEYS = ("project", "tile_assign", "sort", "cull", "blend")
 REF_DIR = OPT_DIR.parent / "benchmarks" / "reference_v2"
 
 
@@ -121,6 +121,7 @@ def normalize_ttw_row(r: dict) -> dict:
         "ta": "tile_assign_ms",
         "tile_assign": "tile_assign_ms",
         "sort": "sort_ms",
+        "cull": "cull_ms",
         "blend": "blend_ms",
     }
     per_stage: dict[str, float] = {}
@@ -172,6 +173,7 @@ def normalize_in_flight_row(row: dict) -> dict:
         "proj": "project_ms",
         "ta": "tile_assign_ms",
         "sort": "sort_ms",
+        "cull": "cull_ms",
         "blend": "blend_ms",
     }
     per_stage: dict[str, float] = {}
