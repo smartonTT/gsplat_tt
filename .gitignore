@@ -48,17 +48,16 @@ tmp/
 # Test artifacts
 .pytest_cache/
 
-# Per-iter renders (large PNG blobs). Everything inside opt/screenshots/<iter>/ is
-# regeneratable from iters.jsonl + the source code, and we keep the canonical
-# references in benchmarks/reference_v2/ instead. Track only the iter folders'
-# JSON metadata + log so we have an audit trail.
-opt/screenshots/*/*.png
+# REPORT assets are TRACKED (committed, via git-LFS for the binaries) so the
+# report's links stay valid forever — see .gitattributes (*.png/*.tracy/*.ply in
+# LFS). Only genuine JUNK is ignored here (regenerable derivatives + logs +
+# scratch), which belongs in the gitignored tmp/. DO NOT re-add a blanket opt/
+# ignore (it lived in .git/info/exclude and broke the report links).
 opt/screenshots/*/timing.jsonl
 opt/screenshots/*/run.log
 opt/screenshots/*/build.log
 opt/screenshots/*/test.log
 opt/screenshots/*/.validator_prompt.md
-opt/REPORT.html
 opt/viewer-*.pid
 opt/viewer-*.log
 
@@ -69,7 +68,9 @@ opt/viewer-*.log
 # Heavy scene PLYs (>10MB). luigi.ply is in git from the master baseline;
 # stitch_doll.ply ships from outside the repo (live on disk at /Users/smarton/dev/gsplat_tt/scenes/)
 # and is copied into scenes/ by Phase 0 setup.
-scenes/stitch_doll.ply
+# stitch_doll.ply + luigi.ply are TRACKED via git-LFS (.gitattributes). bicycle.ply
+# is a symlink to a device-local file (/localdev) with no committable content;
+# strawberry/point_cloud are device-only too.
 scenes/strawberry.ply
 scenes/bicycle.ply
 scenes/point_cloud.ply
@@ -90,7 +91,10 @@ opt/backfill-*.log
 opt/logs/
 opt/cull_tune.jsonl
 opt/cull_tune_summary.json
-opt/metal-screenshots/**/*.png
+# PNGs are TRACKED via git-LFS (.gitattributes) — they are the report's hero/
+# diff/ref images and must stay valid. Only the regenerable .npy arrays + OS
+# cruft are junk. Stale pre-ttw experiment dirs (metal-iter-*/amendment-*) are
+# left ignored (not linked by the live report); move them to tmp/ if tidying.
 opt/metal-screenshots/**/*.npy
 opt/metal-screenshots/**/.DS_Store
 opt/metal-screenshots/metal-iter-*/
@@ -106,3 +110,36 @@ backends/tt/tt-metal
 
 # tt-loop local control sentinel (never committed)
 STOP
+/tmp/
+
+# ──────────────────────────────────────────────────────────────────────────
+# opt/ POLICY (authoritative, last-match-wins): the report + its linked assets
+# are TRACKED so the report stays valid forever (binaries via git-LFS, see
+# .gitattributes). Everything else under opt/ is junk/scratch and stays ignored
+# (belongs in the gitignored tmp/). Ignore all of opt/, then re-include exactly
+# the report deliverables. NOTE: re-including a file inside an ignored dir
+# requires un-ignoring each parent dir first, hence the dir-then-file layering.
+opt/*
+!opt/REPORT.html
+!opt/build_report.py
+!opt/*.md
+# ledger + report mirror
+!opt/ttw/
+opt/ttw/*
+!opt/ttw/iters.jsonl
+!opt/ttw/REPORT.html
+# project knowledge pack (gsplat-specific context/lessons/quirks the loop reads)
+!opt/ttw/knowledge/
+!opt/ttw/knowledge/**
+# per-iter Tracy traces the report links (ttw-* only; LFS)
+!opt/profiler/
+opt/profiler/*
+!opt/profiler/ttw-*/
+opt/profiler/ttw-*/*
+!opt/profiler/ttw-*/render.tracy
+# per-iter hero/diff/ref renders the report links (ttw-* only; LFS)
+!opt/metal-screenshots/
+opt/metal-screenshots/*
+!opt/metal-screenshots/ttw-*/
+opt/metal-screenshots/ttw-*/*
+!opt/metal-screenshots/ttw-*/*.png

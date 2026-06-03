@@ -37,8 +37,8 @@ SCREENSHOTS_DIR = OPT_DIR / "screenshots"
 VIEWS_PER_RUN = 30  # 30-view bicycle bench; iter sums always cover all 30 views
 TARGET_MS_PER_FRAME = 1.0  # 1 ms per frame on bh-30 — the final goal
 TARGET_SUM_MS = TARGET_MS_PER_FRAME * VIEWS_PER_RUN  # legacy helper (= 30 ms)
-STAGE_KEYS = ("project_ms", "tile_assign_ms", "sort_ms", "blend_ms")
-STAGE_TIMING_KEYS = ("project", "tile_assign", "sort", "blend")
+STAGE_KEYS = ("project_ms", "tile_assign_ms", "sort_ms", "cull_ms", "blend_ms")
+STAGE_TIMING_KEYS = ("project", "tile_assign", "sort", "cull", "blend")
 REF_DIR = OPT_DIR.parent / "benchmarks" / "reference_v2"
 
 
@@ -121,6 +121,7 @@ def normalize_ttw_row(r: dict) -> dict:
         "ta": "tile_assign_ms",
         "tile_assign": "tile_assign_ms",
         "sort": "sort_ms",
+        "cull": "cull_ms",
         "blend": "blend_ms",
     }
     per_stage: dict[str, float] = {}
@@ -161,6 +162,7 @@ def normalize_ttw_row(r: dict) -> dict:
         "_source": "ttw",
         "validator_reasoning": r.get("reason") or "",
         "buildid": r.get("buildid"),
+        "tracy": r.get("tracy") or "",
     }
 
 
@@ -171,6 +173,7 @@ def normalize_in_flight_row(row: dict) -> dict:
         "proj": "project_ms",
         "ta": "tile_assign_ms",
         "sort": "sort_ms",
+        "cull": "cull_ms",
         "blend": "blend_ms",
     }
     per_stage: dict[str, float] = {}
@@ -1052,6 +1055,35 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
             commit = cpp_tok[1]
     build_html = f"<p class='iter-build'><code>{commit}</code></p>" if commit else ""
 
+    # Clickable Tracy trace link — a per-iteration deliverable, exactly like the
+    # hero/diff screenshots. Prefer the row's `tracy` field (repo-relative,
+    # e.g. opt/profiler/ttw-NNN/render.tracy); else auto-discover a per-iter
+    # trace. Only emit the link when the .tracy actually exists (no dead links).
+    tracy_rel = (r.get("tracy") or "").strip()
+    if not tracy_rel and iter_dir:
+        for cand in (OPT_DIR / "profiler" / iter_dir / "render.tracy",):
+            if cand.is_file():
+                tracy_rel = "opt/" + str(cand.relative_to(OPT_DIR))
+                break
+    tracy_html = ""
+    if tracy_rel:
+        abs_tracy = OPT_DIR.parent / tracy_rel
+        if abs_tracy.is_file():
+            href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
+            tracy_cmd = f"tracy {abs_tracy}"
+            tracy_html = (
+                f"<p class='iter-tracy'><a href='{href}' "
+                f"title='open in Tracy profiler'>🔬 Tracy trace</a> "
+                f"<code class='tracy-cmd' title='copy &amp; run to open in Tracy' "
+                f"style='font-size:11px;background:#f0f0f0;padding:1px 6px;"
+                f"border-radius:3px;user-select:all;cursor:text'>{tracy_cmd}</code></p>"
+            )
+        else:
+            tracy_html = (
+                "<p class='iter-tracy' style='color:#c44536;font-size:11px'>"
+                f"Tracy trace missing ({tracy_rel})</p>"
+            )
+
     ts_raw = r.get("timestamp") or r.get("ts") or r.get("updated_at") or r.get("started_at") or ""
     ts_disp = format_ts_minutes(ts_raw)
     in_flight = r.get("_in_flight") is True
@@ -1090,6 +1122,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
     {caveat_html}
     {desc_html}
     {build_html}
+    {tracy_html}
   </div>
   <div class='backburner-thumbs'>{thumb_html}</div>
 </div>
@@ -1247,10 +1280,26 @@ def _legacy_table_ledger_unused(rows: list[dict]) -> str:
         row_bg = "#fafaff" if runtime == "blackhole" else ""
         ensure_hero_diff10(r.get("iter_dir", ""))
         preview = _preview_html(r.get("iter_dir", ""), runtime)
+        # Clickable Tracy trace link (a per-iteration deliverable, like the
+        # hero/diff screenshots): row `tracy` field or an auto-discovered
+        # opt/profiler/<iter_dir>/render.tracy. Only link when the file exists.
+        tracy_rel = (r.get("tracy") or "").strip()
+        if not tracy_rel and r.get("iter_dir"):
+            cand = OPT_DIR / "profiler" / r["iter_dir"] / "render.tracy"
+            if cand.is_file():
+                tracy_rel = "opt/" + str(cand.relative_to(OPT_DIR))
+        tracy_cell = ""
+        if tracy_rel and (OPT_DIR.parent / tracy_rel).is_file():
+            href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
+            tracy_cmd = f"tracy {OPT_DIR.parent / tracy_rel}"
+            tracy_cell = (f"<br><a href='{href}' title='open in Tracy profiler' "
+                          f"style='font-size:11px'>🔬 Tracy</a>"
+                          f"<br><code title='copy &amp; run to open in Tracy' "
+                          f"style='font-size:10px;color:#555;user-select:all'>{tracy_cmd}</code>")
         return (
             f"<tr style='background:{row_bg}'>"
             f"<td>{preview}</td>"
-            f"<td><a href='{link_prefix}{r['iter_dir']}/'>{r['iter_dir']}</a></td>"
+            f"<td><a href='{link_prefix}{r['iter_dir']}/'>{r['iter_dir']}</a>{tracy_cell}</td>"
             f"<td>{rt_html}</td>"
             f"<td>{verdict_html}</td>"
             f"<td><small>{r.get('action','')}</small></td>"

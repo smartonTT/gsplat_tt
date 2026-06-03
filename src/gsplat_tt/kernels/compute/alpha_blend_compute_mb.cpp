@@ -64,6 +64,48 @@ constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock cou
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
 constexpr uint32_t CB_COLOR_OUT = 16;
 
+#if defined(MB_BLEND_TAILSKIP)
+// M2 §6 reader-side tile-saturation tail-skip handshake (shared L1 with the
+// reader; see CB_HS in blend_device.cpp + the protocol in
+// reader_alpha_blend_mb_devcull.cpp). MB_BLEND_TAILSKIP implies MB_BLEND_EARLYOUT.
+constexpr uint32_t CB_HS       = 17;
+constexpr uint32_t HS_DONE_REQ = 0;  // compute -> reader (epoch e on saturation)
+// EPOCH/PUSHED/REND are PING-PONGED by tile parity (the reader may be one tile
+// ahead): per-parity triplet base = 1 + (parity*3). Must match the reader.
+inline uint32_t hs_base(uint32_t parity) { return 1u + parity * 3u; }
+constexpr uint32_t HS_EPOCH    = 0;  // offset within a parity triplet
+constexpr uint32_t HS_PUSHED   = 1;
+constexpr uint32_t HS_REND     = 2;
+#endif
+
+#if defined(MB_BLEND_EARLYOUT)
+// M2 §6 transmittance early-out (gated). For a DENSE tile we cannot break the
+// gaussian loop on "all pixels saturated" purely on the SFPU — sfpi has a lane
+// reduce but no cheap scalar extract, and the DST-persistent R/G/B/T cannot be
+// inspected mid-bracket. So we process the tile in BLOCKS: each block runs the
+// existing gaussian-major SFPU blend, then SPILLS R/G/B/T to fp32 L1 CBs. The
+// spilled T tile is plain L1 memory, so ALL three TRISC threads read it and
+// compute the SAME global max(T) -> a UNIFORM scalar break (front-to-back, once
+// every pixel has T < eps the remaining splats add < eps everywhere, so the
+// image is unchanged within the gate and we skip the deep tail). Small/medium
+// tiles (num_g <= MB_EO_BLK) keep the original single-bracket path (no spill).
+constexpr uint32_t CB_FB_R = 12;   // fp32 R accumulator spill
+constexpr uint32_t CB_FB_G = 13;   // fp32 G accumulator spill
+constexpr uint32_t CB_FB_B = 14;   // fp32 B accumulator spill
+constexpr uint32_t CB_FB_T = 15;   // fp32 T (transmittance) spill — scanned for max
+#ifndef MB_EO_BLK
+#define MB_EO_BLK 768u
+#endif
+constexpr float MB_EO_EPS = 1e-4f;  // matches the CPU reference (max_t < 0.0001f)
+#endif
+
+// MEASUREMENT: per-tile-class blend split. Tiles with num_g<=FIT are served
+// L1-resident by the reader (bucket path); num_g>FIT take the DRAM-gather
+// fallback. Mirrors GSPLAT_TT_BUCKET_FIT (default 8192).
+#ifndef MB_BUCKET_FIT
+#define MB_BUCKET_FIT 8192u
+#endif
+
 constexpr uint32_t NUM_MB = 32;
 
 // Volatile sink so profiling variants can't dead-code-eliminate the coeff loads.
@@ -316,7 +358,15 @@ inline void dispatch_blend_guarded(
 // Stream all of a tile's gaussian-major rows. Each row's 10 coeffs + mask word
 // are read ONCE (not once per microblock), then dispatched to the masked
 // microblocks. One start_/done_ for the whole tile (proven safe by VECMAP).
-inline void process_tile_gaussians(uint32_t num_g) {
+//
+// mb_keep (default all-ones): per-microblock ACTIVE mask. Bit M clear => that
+// 4x8 microblock has already saturated (all 32 px T < eps), so this gaussian's
+// contribution to it is dropped (the §6 per-microblock transmittance early-out).
+// With mb_keep == 0xFFFFFFFF this is a no-op AND => bit-identical to the
+// un-gated path. The coeff row is still consumed (CB flow) even when fully
+// masked off; only the SFPU exp/blend dispatch is skipped — and the blend is
+// SFPU-bound, so skipping the saturated-microblock dispatch is the real lever.
+inline void process_tile_gaussians(uint32_t num_g, uint32_t mb_keep = 0xFFFFFFFFu) {
     if (num_g == 0) {
         return;
     }
@@ -344,7 +394,7 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #if defined(MB_DEBUG_PROF_NOREAD)
         // Profiling: skip the 10 coeff L1 loads (use constants) but keep the mask
         // read + the full 32-way dispatch + SFPU blend. Isolates SFPU/dispatch cost.
-        const uint32_t mask = row[10];
+        const uint32_t mask = row[10] & mb_keep;
         const uint32_t a = 0xBDCCCCCDu, b = 0u, c = 0xBDCCCCCDu, d = 0x40800000u, e = 0x40000000u;
         const uint32_t fc = 0u, op = 0x3F000000u, cr = 0x3F000000u, cg = 0x3F000000u, cbv = 0x3F000000u;
         dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
@@ -358,7 +408,9 @@ inline void process_tile_gaussians(uint32_t num_g) {
 #else
         const uint32_t a = row[0], b = row[1], c = row[2], d = row[3], e = row[4];
         const uint32_t fc = row[5], op = row[6], cr = row[7], cg = row[8], cbv = row[9];
-        uint32_t mask = row[10];
+        // Per-microblock early-out: drop this gaussian's contribution to any
+        // microblock that has already saturated (mb_keep bit clear).
+        uint32_t mask = row[10] & mb_keep;
 #if defined(MB_COEFF_DEBUG)
         {
             static uint32_t dbg_cmp = 0;
@@ -476,6 +528,14 @@ void kernel_main() {
     cb_wait_front(CB_XRAMP, 1);
     cb_wait_front(CB_YRAMP, 1);
 
+#if defined(MB_BLEND_TAILSKIP)
+    // Fixed L1 handshake base (CB_HS is never push/pop'd; for an unused CB the
+    // rd_ptr == its configured base, i.e. the SAME L1 byte address the reader
+    // gets via get_write_ptr(CB_HS)). get_tile_address mailbox-broadcasts the
+    // UNPACK value so all three compute threads see the identical address.
+    volatile uint32_t* hs = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_HS, 0));
+#endif
+
     for (uint32_t t = 0; t < num_tiles; t++) {
         cb_wait_front(CB_MB_COUNTS, 1);
         // Gaussian-major: counts page slot 0 holds this tile's gaussian-row count.
@@ -497,6 +557,147 @@ void kernel_main() {
                       << " xr8=" << F32(xr[8]) << " xr32=" << F32(xr[32])
                       << " yr0=" << F32(yr[0]) << " yr32=" << F32(yr[32]) << ENDL()));
             }
+        }
+#endif
+
+#if defined(MB_BLEND_EARLYOUT)
+        // ---- DENSE-TILE transmittance early-out (block spill/reload) ----------
+        if (num_g > MB_EO_BLK) {
+            uint32_t processed = 0;
+            bool first = true;
+            bool broke = false;
+            // Per-microblock ACTIVE mask: bit M set => microblock M still has at
+            // least one pixel with T >= eps. Cleared as each 4x8 microblock
+            // saturates, so subsequent gaussians skip it (§6 per-microblock
+            // transmittance early-out). When it reaches 0 the whole tile is done.
+            uint32_t keep_mask = 0xFFFFFFFFu;
+            while (processed < num_g && !broke) {
+                uint32_t blk = num_g - processed;
+                if (blk > MB_EO_BLK) blk = MB_EO_BLK;
+
+                tile_regs_acquire();
+                if (first) {
+                    fill_tile(0, 0.0f);
+                    fill_tile(1, 0.0f);
+                    fill_tile(2, 0.0f);
+                    fill_tile(3, 1.0f);
+                } else {
+                    // Reload R/G/B/T accumulators from the fp32 spill CBs.
+                    copy_tile_to_dst_init_short(CB_FB_R); copy_tile(CB_FB_R, 0, 0);
+                    copy_tile_to_dst_init_short(CB_FB_G); copy_tile(CB_FB_G, 0, 1);
+                    copy_tile_to_dst_init_short(CB_FB_B); copy_tile(CB_FB_B, 0, 2);
+                    copy_tile_to_dst_init_short(CB_FB_T); copy_tile(CB_FB_T, 0, 3);
+                    cb_pop_front(CB_FB_R, 1); cb_pop_front(CB_FB_G, 1);
+                    cb_pop_front(CB_FB_B, 1); cb_pop_front(CB_FB_T, 1);
+                }
+                copy_tile_to_dst_init_short(CB_XRAMP); copy_tile(CB_XRAMP, 0, 4);
+                copy_tile_to_dst_init_short(CB_YRAMP); copy_tile(CB_YRAMP, 0, 5);
+
+                // Blend `blk` rows into the still-ACTIVE microblocks only.
+                process_tile_gaussians(blk, keep_mask);
+
+                tile_regs_commit();
+                tile_regs_wait();
+                // Spill accumulators to fp32 CBs (so they survive tile_regs_release
+                // and so T becomes plain L1 memory we can scan per-microblock).
+                pack_reconfig_data_format(CB_FB_R);
+                cb_reserve_back(CB_FB_R, 1); pack_tile(0, CB_FB_R); cb_push_back(CB_FB_R, 1);
+                cb_reserve_back(CB_FB_G, 1); pack_tile(1, CB_FB_G); cb_push_back(CB_FB_G, 1);
+                cb_reserve_back(CB_FB_B, 1); pack_tile(2, CB_FB_B); cb_push_back(CB_FB_B, 1);
+                cb_reserve_back(CB_FB_T, 1); pack_tile(3, CB_FB_T); cb_push_back(CB_FB_T, 1);
+                tile_regs_release();
+
+                processed += blk;
+                first = false;
+
+                if (processed < num_g) {
+                    // PER-MICROBLOCK max(T). The spilled T tile is in DEVICE
+                    // raster order; device position p=(r*32+c) is owned by SFPU
+                    // vector / microblock V = (r & ~1) | (c & 1) (the fixed ramp
+                    // permutation mb_perm_img_of_dev: V = 2*(r/2) + (c&1)). Reduce
+                    // T over each microblock's 32 pixels and clear its keep bit
+                    // once they ALL fall below eps. Identical on every TRISC
+                    // thread (same L1 bytes) => a uniform per-microblock decision.
+                    cb_wait_front(CB_FB_T, 1);
+                    mb_cb_consume_fence();
+                    volatile float* tp =
+                        reinterpret_cast<volatile float*>(get_tile_address(CB_FB_T, 0));
+                    float mbmax[NUM_MB];
+                    for (uint32_t m = 0; m < NUM_MB; m++) mbmax[m] = 0.0f;
+                    for (uint32_t p = 0; p < 1024u; p++) {
+                        const uint32_t r = p >> 5;
+                        const uint32_t c = p & 31u;
+                        const uint32_t V = (r & ~1u) | (c & 1u);
+                        const float v = tp[p];
+                        if (v > mbmax[V]) mbmax[V] = v;
+                    }
+                    uint32_t done = 0u;
+                    for (uint32_t m = 0; m < NUM_MB; m++) {
+                        if (mbmax[m] < MB_EO_EPS) done |= (1u << m);
+                    }
+                    keep_mask = ~done;
+                    if (keep_mask == 0u) {
+                        broke = true;
+                        cb_pop_front(CB_FB_T, 1);  // R/G/B stay front for final pack
+                    }
+                }
+            }
+            // Drain any coeff rows the reader pushed past the break point.
+#if defined(MB_BLEND_TAILSKIP)
+            if (broke) {
+                // Reader-side tail-skip: tell the reader to STOP emitting this
+                // tile's (depth-sorted, far) tail, then drain exactly the rows it
+                // actually pushed. Deadlock-free: only cb_wait_front when a row is
+                // KNOWN pushed (processed < PUSHED); otherwise spin on REND. The
+                // reader can only block on a full CB (=> PUSHED > processed => we
+                // pop and unblock it), so it always reaches its break + sets REND.
+                const uint32_t e = t + 1u;
+                const uint32_t hb = hs_base(t & 1u);
+                hs[HS_DONE_REQ] = e;
+                mb_cb_consume_fence();
+                for (;;) {
+                    mb_cb_consume_fence();
+                    const uint32_t rend   = hs[hb + HS_REND];
+                    const uint32_t ep     = hs[hb + HS_EPOCH];
+                    const uint32_t pushed = (ep == e) ? hs[hb + HS_PUSHED] : 0u;
+                    if (processed < pushed) {
+                        cb_wait_front(CB_MB_COEFF, 1);
+                        cb_pop_front(CB_MB_COEFF, 1);
+                        processed++;
+                        continue;
+                    }
+                    if (rend == e) break;  // reader done this tile + we caught up
+                }
+            } else {
+                for (; processed < num_g; processed++) {
+                    cb_wait_front(CB_MB_COEFF, 1);
+                    cb_pop_front(CB_MB_COEFF, 1);
+                }
+            }
+#else
+            for (; processed < num_g; processed++) {
+                cb_wait_front(CB_MB_COEFF, 1);
+                cb_pop_front(CB_MB_COEFF, 1);
+            }
+#endif
+            // Final: reload R/G/B and pack bf16 color out for the writer.
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_FB_R); copy_tile(CB_FB_R, 0, 0);
+            copy_tile_to_dst_init_short(CB_FB_G); copy_tile(CB_FB_G, 0, 1);
+            copy_tile_to_dst_init_short(CB_FB_B); copy_tile(CB_FB_B, 0, 2);
+            tile_regs_commit();
+            tile_regs_wait();
+            pack_reconfig_data_format(CB_COLOR_OUT);
+            cb_reserve_back(CB_COLOR_OUT, 3);
+            pack_tile(0, CB_COLOR_OUT);
+            pack_tile(1, CB_COLOR_OUT);
+            pack_tile(2, CB_COLOR_OUT);
+            cb_push_back(CB_COLOR_OUT, 3);
+            tile_regs_release();
+            cb_pop_front(CB_FB_R, 1); cb_pop_front(CB_FB_G, 1); cb_pop_front(CB_FB_B, 1);
+            if (!broke) cb_pop_front(CB_FB_T, 1);
+            cb_pop_front(CB_MB_COUNTS, 1);
+            continue;
         }
 #endif
 
@@ -528,7 +729,18 @@ void kernel_main() {
             cb_pop_front(CB_MB_COEFF, 1);
         }
 #else
-        process_tile_gaussians(num_g);
+        // MEASUREMENT zones (axis B): compute SFPU-blend, one zone per tile, split
+        // by class. process_tile_gaussians drains CB_MB_COEFF (cb_wait_front per
+        // row), so this captures SFPU work + any back-pressure wait on the reader
+        // emit. One zone per tile (cp_inb XOR cp_ovf) keeps the marker count
+        // bounded; durations are summed in post-processing.
+        if (num_g <= MB_BUCKET_FIT) {
+            DeviceZoneScopedN("cp_inb");
+            process_tile_gaussians(num_g);
+        } else {
+            DeviceZoneScopedN("cp_ovf");
+            process_tile_gaussians(num_g);
+        }
 #endif
 
         tile_regs_commit();

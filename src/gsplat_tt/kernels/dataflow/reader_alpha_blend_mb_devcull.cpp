@@ -40,7 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG)
+#if defined(MB_SFPU_CULL_DEBUG) || defined(FUSE_AB_ROW) || defined(MB_BUCKET_MASK_DEBUG) || defined(MB_L1_REC_DUMP) || defined(MB_L1_SORT_VERIFY)
 #include "api/debug/dprint.h"
 #endif
 
@@ -72,6 +72,42 @@ constexpr uint32_t CB_BMASK  = 11;     // L1-resident whole-tile cull_masks (bul
 #endif
 
 constexpr float kInf = 1e30f;
+
+#if defined(MB_BLEND_TAILSKIP)
+// M2 §6 reader-side tile-saturation tail-skip handshake (shared L1 region with
+// alpha_blend_compute_mb.cpp; see CB_HS in blend_device.cpp). 4 u32 words:
+//   [0] DONE_REQ : compute -> reader. Set to epoch e==tile-iteration+1 when the
+//                  WHOLE tile is saturated (every microblock's T < eps); the
+//                  reader then BREAKs the emit loop for that tile.
+//   [1] EPOCH    : reader -> compute. The epoch PUSHED currently refers to.
+//   [2] PUSHED   : reader -> compute. # CB_MB_COEFF rows pushed so far this tile.
+//   [3] REND     : reader -> compute. Set to e when the reader finished a tile.
+// The reader and compute iterate this core's tiles in the SAME order (one
+// CB_MB_COUNTS push/wait per tile), so the epoch (ti+1) matches on both sides.
+// Deadlock-free: the reader only blocks on cb_reserve_back when the CB is FULL,
+// which means PUSHED > (compute's processed) so the compute pops and unblocks
+// it; the compute only cb_wait_fronts when processed < PUSHED (row guaranteed
+// pushed) and otherwise spins on REND — it never waits on a row never coming.
+// The reader can run up to ONE tile ahead of the compute (CB_MB_COUNTS depth=2),
+// so tile t and t+1 must NOT share EPOCH/PUSHED/REND words or the reader would
+// clobber tile t's handshake (which the compute is still draining) when it
+// resets them for t+1. We PING-PONG those by tile parity (ti&1): tile t uses
+// slots[t&1]; t+2 reuses t's slots only AFTER the compute has finished t (the
+// CB_MB_COUNTS depth-2 bound guarantees the reader cannot reach t+2 first).
+// DONE_REQ is a single epoch-tagged word (compute writes a strictly increasing
+// e==tile+1; the reader only matches its CURRENT tile's e, so a stale e is
+// ignored — no ping-pong needed).
+constexpr uint32_t CB_HS       = 17;
+constexpr uint32_t HS_DONE_REQ = 0;   // compute -> reader (epoch e on saturation)
+// Per-parity triplet base = 1 + (parity*3): [+0]=EPOCH [+1]=PUSHED [+2]=REND.
+inline uint32_t hs_base(uint32_t parity) { return 1u + parity * 3u; }
+constexpr uint32_t HS_EPOCH    = 0;   // offset within a parity triplet
+constexpr uint32_t HS_PUSHED   = 1;
+constexpr uint32_t HS_REND     = 2;
+#ifndef MB_EO_BLK
+#define MB_EO_BLK 768u
+#endif
+#endif
 
 inline int ifloor(float v) {
     int i = static_cast<int>(v);
@@ -388,6 +424,9 @@ void kernel_main() {
 #ifdef MB_TILE_BUCKET
     const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(20);  // resident sort_tile_recs (dense)
     const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
+#ifdef MB_L1_RECORD
+    const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(22);  // M0: pre-sized 32B record bucket
+#endif
 #endif
 #endif
 #endif
@@ -413,6 +452,9 @@ void kernel_main() {
 #ifdef MB_TILE_BUCKET
     constexpr auto tile_recs_args  = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
+#ifdef MB_L1_RECORD
+    constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
+#endif
 #endif
 #endif
 #endif
@@ -437,6 +479,36 @@ void kernel_main() {
     // SoA accessors stay bound (ABI parity) but are unused on this path.
     (void)a_acc; (void)b_acc; (void)c_acc; (void)px_acc; (void)py_acc;
     (void)op_acc; (void)col_acc;
+#ifdef MB_TILE_BUCKET
+#ifdef MB_L1_RECORD
+    // M0: 32B fp16-packed record in the LOW 32B of a 64B page (sub-64B DRAM
+    // paging is unreliable here — see sort_device l1_rec_bytes). One record per
+    // 64B page/bucket slot; only words [0..7] hold data.
+    constexpr uint32_t L1_REC_BYTES = 64u;
+    const auto l1_recs_acc = TensorAccessor(l1_recs_args, l1_recs_addr, L1_REC_BYTES);
+    // fp16 → fp32 unpack helper.
+    auto fp16_to_f32 = [](uint32_t h) -> float {
+        const uint32_t sign  = (h >> 15) & 1u;
+        const uint32_t exp   = (h >> 10) & 0x1fu;
+        const uint32_t mant  = h & 0x3ffu;
+        uint32_t u;
+        if (exp == 0) {
+            if (mant == 0) { u = sign << 31; }
+            else {
+                uint32_t e = 127 - 14;
+                uint32_t m = mant;
+                while (!(m & 0x400u)) { m <<= 1; e--; }
+                u = (sign << 31) | (e << 23) | ((m & 0x3ffu) << 13);
+            }
+        } else if (exp == 31u) {
+            u = (sign << 31) | 0x7f800000u | (mant << 13);
+        } else {
+            u = (sign << 31) | ((exp + 112u) << 23) | (mant << 13);
+        }
+        float f; __builtin_memcpy(&f, &u, 4); return f;
+    };
+#endif
+#endif
 #endif
     // Host-free LPT: read this core's (start,count) from resident sort_lpt_meta.
     constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
@@ -551,12 +623,32 @@ void kernel_main() {
     cb_push_back(CB_XRAMP, 1);
     cb_push_back(CB_YRAMP, 1);
 
+#if defined(MB_BLEND_TAILSKIP)
+    // Fixed L1 handshake base (CB_HS is never push/pop'd). Zero all words before
+    // the tile loop so the first tile's epoch checks are not fooled by garbage.
+    volatile uint32_t* hs = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_HS));
+    for (uint32_t _i = 0; _i < 7u; ++_i) hs[_i] = 0u;  // DONE_REQ + 2 parity triplets
+    mb_cb_commit_fence();
+#endif
+
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
         const float ty_tile = static_cast<float>(ty * TILE_SIZE);
+#if defined(MB_BLEND_TAILSKIP)
+        // Begin this tile's epoch: publish EPOCH=e with PUSHED=0 BEFORE any
+        // CB_MB_COUNTS / coeff push, so once compute observes EPOCH==e the PUSHED
+        // it reads belongs to THIS tile. (DONE_REQ self-disambiguates by epoch:
+        // compute only ever writes the current tile's e, which the reader matches.)
+        const uint32_t hs_e = ti + 1u;
+        const uint32_t hs_b = hs_base(ti & 1u);
+        hs[hs_b + HS_PUSHED] = 0u;
+        mb_cb_commit_fence();
+        hs[hs_b + HS_EPOCH] = hs_e;
+        mb_cb_commit_fence();
+#endif
 
         // (1) Per-tile candidate id range [id_start, id_end).
         uint32_t id_start, id_end;
@@ -635,7 +727,21 @@ void kernel_main() {
                 while (i < L) {
                     const uint32_t end = (i + 64u < L) ? i + 64u : L;
                     for (uint32_t q = i; q < end; ++q) {
+#ifdef MB_L1_RECORD
+                        // M0: load 32B record from pre-sized per-tile bucket.
+                        // Tile t occupies slots [t*BUCKET_FIT, (t+1)*BUCKET_FIT).
+                        // Absolute slot = tile_id * MB_BUCKET_FIT + (rec_start + q).
+                        // But rec_start is the DENSE 64B start; for 32B records the
+                        // offsets are different. Use tile_id * MB_BUCKET_FIT + q
+                        // since we load exactly L=Lb records starting at slot 0 of
+                        // the core-prefix-aware per-core sections — except actually
+                        // rec_start is the tile's 64B dense start index (not the 32B
+                        // slot start). For M0, the 32B tile start = tile_id * BUCKET_FIT.
+                        noc_async_read_tile(tile_id * MB_BUCKET_FIT + q, l1_recs_acc,
+                                            buck + q * L1_REC_BYTES);
+#else
                         noc_async_read_tile(rec_start + q, tile_recs_acc, buck + q * SOA_PAGE_BYTES);
+#endif
                     }
                     noc_async_read_barrier();
                     i = end;
@@ -661,7 +767,12 @@ void kernel_main() {
             uint32_t* idxB = idxA + MB_BUCKET_FIT;
             uint32_t* cnt  = idxB + MB_BUCKET_FIT;
             auto key_of = [&](uint32_t idx) -> uint32_t {
+#ifdef MB_L1_RECORD
+                // 32B record: depth key is at word 3 (bytes 12-15).
+                return reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES)[3];
+#else
                 return reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES)[9];
+#endif
             };
             uint32_t* sorted;
 #ifdef MB_BUCKET_DBG_NOSORT
@@ -695,6 +806,89 @@ void kernel_main() {
                     uint32_t* t = cur; cur = nxt; nxt = t;
                 }
                 sorted = cur;  // even pass count -> back in idxA
+            }
+#endif
+#if defined(MB_L1_SORT_VERIFY)
+            // ── M1 L1-sort bit-order proof (self-contained) ─────────────────
+            // The reference depth order is DEFINED as the stable sort of this
+            // tile's u32 depth keys. The DRAM radix (sort_radix_tile.cpp) and the
+            // L1 radix above run the SAME 4x8-bit LSD algorithm over the SAME key
+            // multiset — sort_bin emits each bucket record's word[3] key from the
+            // identical `brec_key` it scatters into the DRAM-radix `keys` input,
+            // so the two inputs are byte-identical by construction. A correct sort
+            // of an identical multiset has a UNIQUE key sequence, so proving the
+            // L1 output is (1) monotonically non-decreasing on the key AND (2) an
+            // exact permutation of the bucket's keys (sum+xor conserved) proves
+            // the L1 key order is bit-identical to the DRAM reference order.
+            //   mono : adjacent inversions in the L1-sorted key seq   (MUST be 0)
+            //   perm : sum/xor of sorted keys != sum/xor of bucket keys (MUST be 0)
+            // We also report, against the DRAM-radix gid sequence published in
+            // sort_sorted_ids (ids_acc[id_start+k]), how many positions carry a
+            // DIFFERENT gaussian id (giddiff) and how many of those are equal-key
+            // ties (tieok): ties are depth-equivalent (same key => interchangeable
+            // for front-to-back blend), which is why the image is bit-identical.
+            {
+                static uint32_t _v_tiles = 0;
+                static uint32_t _v_recs  = 0;
+                static uint32_t _v_mono  = 0;   // sortedness violations (MUST be 0)
+                static uint32_t _v_perm  = 0;   // key-multiset not conserved (MUST be 0)
+                static uint32_t _v_giddiff = 0; // positions whose gid != DRAM gid (ties)
+                static uint32_t _v_tieok   = 0; // of those, ones at an equal-key run
+                uint32_t mono = 0;
+                // (1) sortedness + (2) key-permutation conservation (self-contained).
+                uint32_t sum_in = 0, xor_in = 0, sum_out = 0, xor_out = 0;
+                uint32_t prev_key = 0u;
+                for (uint32_t k = 0; k < L; ++k) {
+                    const uint32_t in_key  = key_of(k);           // bucket (unsorted) slot k
+                    const uint32_t out_key = key_of(sorted[k]);   // L1-sorted position k
+                    sum_in += in_key;  xor_in ^= in_key;
+                    sum_out += out_key; xor_out ^= out_key;
+                    if (k > 0u && out_key < prev_key) mono++;
+                    prev_key = out_key;
+                }
+                const uint32_t perm =
+                    ((sum_in != sum_out) || (xor_in != xor_out)) ? 1u : 0u;
+                // (3) gid comparison vs the DRAM reference (sort_sorted_ids). Diffs
+                // are expected only at equal-key ties; classify them so a real
+                // non-tie divergence (if any) is visible.
+                const uint32_t ref_scr = get_write_ptr(CB_SCR_ATTR);
+                auto ref_ptr = reinterpret_cast<volatile uint32_t*>(ref_scr);
+                uint32_t ref_page_cached = 0xFFFFFFFFu;
+                uint32_t giddiff = 0, tieok = 0;
+                for (uint32_t k = 0; k < L; ++k) {
+                    const uint32_t idx = sorted[k];
+                    const uint32_t l1_gid =
+                        reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES)[8];
+                    const uint32_t l1_key = key_of(idx);
+                    const uint32_t gi = id_start + k;
+                    const uint32_t rp = gi >> 4;
+                    if (rp != ref_page_cached) {
+                        noc_async_read_tile(rp, ids_acc, ref_scr);
+                        noc_async_read_barrier();
+                        ref_page_cached = rp;
+                    }
+                    const uint32_t ref_gid = ref_ptr[gi & 0xFu];
+                    if (ref_gid != l1_gid) {
+                        giddiff++;
+                        const bool tie = (k > 0u && l1_key == key_of(sorted[k - 1u])) ||
+                                         (k + 1u < L && l1_key == key_of(sorted[k + 1u]));
+                        if (tie) tieok++;
+                    }
+                }
+                _v_tiles++; _v_recs += L; _v_mono += mono; _v_perm += perm;
+                _v_giddiff += giddiff; _v_tieok += tieok;
+                // Flood-free evidence: print any REAL defect (mono!=0||perm!=0),
+                // the first few tiles (positive evidence), and ALWAYS the final
+                // per-core cumulative totals on this core's last assigned tile.
+                const bool last_tile = (ti + 1u == tile_ids_count);
+                if (mono != 0u || perm != 0u || _v_tiles <= 4u || last_tile) {
+                    DPRINT << "L1SORTV t=" << tile_id << " L=" << L
+                           << " mono=" << mono << " perm=" << perm
+                           << " giddiff=" << giddiff << " tieok=" << tieok
+                           << " | TOT t=" << _v_tiles << " recs=" << _v_recs
+                           << " monoT=" << _v_mono << " permT=" << _v_perm
+                           << " gidT=" << _v_giddiff << " tieokT=" << _v_tieok << ENDL();
+                }
             }
 #endif
             cb_reserve_back(CB_MB_COUNTS, 1);
@@ -737,14 +931,77 @@ void kernel_main() {
 #endif
             }
 #endif
+            {
+            // MEASUREMENT zone: the per-candidate emit loop (repack record ->
+            // 64B coeff row -> CB_MB_COEFF push -> fence) for ONE in-budget tile.
+            // Axis (B): reader-emit cost. One zone per in-budget tile (exclusive
+            // with rd_overflow), so per-core marker count stays bounded; durations
+            // are summed in post-processing across the 30-view Tracy CSV.
+            DeviceZoneScopedN("rd_bk_emit");
             for (uint32_t k = 0; k < L; ++k) {
+#if defined(MB_BLEND_TAILSKIP)
+                // Dense tile only: if the compute saturated the WHOLE tile, stop
+                // emitting the depth-sorted (near->far) tail — every remaining
+                // (farther) candidate contributes exactly zero. PUSHED already
+                // reflects the rows pushed (k), so the compute drains exactly k.
+                if (L > MB_EO_BLK) {
+                    mb_cb_commit_fence();
+                    if (hs[HS_DONE_REQ] == hs_e) break;
+                }
+#endif
                 const uint32_t idx = sorted[k];
+#ifdef MB_L1_RECORD
+                // M0: unpack the 32B record (low 32B of a 64B page). Covariance is
+                // kept as FULL fp32 — it is the precision-critical field (the blend
+                // recomputes the conic via det = a*c - b*b, which suffers fp16
+                // cancellation when a,c are large, ~10000s px^2). Mean is TILE-LOCAL
+                // fp16 (small magnitude => sub-0.1px ULP); opacity/color fp16.
+                // 32B layout (8 × uint32):
+                // Covariance (a,b,c) and tile-local mean are fp32 — precision-
+                // critical (det = a*c-b*b cancellation; sub-px center). Opacity and
+                // color are in [0,1] (sigmoid-activated), so they use UNORM16
+                // (uniform ~1.5e-5 step) instead of fp16 (~5e-4 rel at 0.5) — ~30x
+                // tighter in the same 2 bytes, which is the op/color precision wall.
+                //   [0]: fp32 cov_a  [1]: fp32 cov_b  [2]: fp32 cov_c
+                //   [3]: u32 depth_key
+                //   [4]: fp32 mx_local  [5]: fp32 my_local
+                //   [6]: lo16=unorm opacity, hi16=unorm r
+                //   [7]: lo16=unorm g,       hi16=unorm b
+                auto recp32 = reinterpret_cast<volatile uint32_t*>(buck + idx * L1_REC_BYTES);
+                const uint32_t cov_a_bits = recp32[0];
+                const uint32_t cov_b_bits = recp32[1];
+                const uint32_t cov_c_bits = recp32[2];
+                const float mx_f = bits_to_f(recp32[4]);
+                const float my_f = bits_to_f(recp32[5]);
+                const uint32_t w6 = recp32[6], w7 = recp32[7];
+                constexpr float kUnormInv = 1.0f / 65535.0f;
+                const float op_f = static_cast<float>(w6 & 0xffffu) * kUnormInv;
+                const float cr_f = static_cast<float>(w6 >> 16)     * kUnormInv;
+                const float cg_f = static_cast<float>(w7 & 0xffffu) * kUnormInv;
+                const float cb_f = static_cast<float>(w7 >> 16)     * kUnormInv;
+                const uint32_t op_bits = f_to_bits(op_f);
+                // Reconstruct the absolute mean so the inline-mask path and the
+                // emitted row's mxl = (mean - tx_tile) both work unchanged.
+                const float mean_x  = mx_f + tx_tile;
+                const float mean_y  = my_f + ty_tile;
+                const uint32_t cr = f_to_bits(cr_f);
+                const uint32_t cg = f_to_bits(cg_f);
+                const uint32_t cb = f_to_bits(cb_f);
+#if defined(MB_L1_REC_DUMP)
+                static uint32_t _dmp32 = 0;
+                if (L >= 200u && L <= 8000u && k < 3u && _dmp32 < 12u) {
+                    if (k == 0u) _dmp32++;
+                    DPRINT << "L1REC t=" << tile_id << " k=" << k
+                           << " ca=" << F32(bits_to_f(cov_a_bits)) << " cb=" << F32(bits_to_f(cov_b_bits))
+                           << " cc=" << F32(bits_to_f(cov_c_bits)) << " mxl=" << F32(mx_f)
+                           << " myl=" << F32(my_f) << " op=" << F32(op_f)
+                           << " r=" << F32(cr_f) << " g=" << F32(cg_f)
+                           << " b=" << F32(cb_f) << " dk=" << recp32[3] << ENDL();
+                }
+#endif
+#else
                 auto recp = reinterpret_cast<volatile uint32_t*>(buck + idx * SOA_PAGE_BYTES);
 #if defined(MB_BUCKET_EMIT_SPIN)
-                // Diagnostic: per-record busy-wait in the bucket emit loop. If this
-                // recovers the gate with mask=recp[10], the Lb>64 bug is a timing/
-                // settle race the fast L1 emit exposes (the slow debug/inline paths
-                // mask it incidentally).
                 for (volatile int _es = 0; _es < (MB_BUCKET_EMIT_SPIN); ++_es) { }
 #endif
                 const uint32_t cov_a_bits = recp[0];
@@ -756,6 +1013,19 @@ void kernel_main() {
                 const uint32_t cr = recp[6];
                 const uint32_t cg = recp[7];
                 const uint32_t cb = recp[8];
+#if defined(MB_L1_REC_DUMP)
+                static uint32_t _dmp64 = 0;
+                if (L >= 200u && L <= 8000u && k < 3u && _dmp64 < 12u) {
+                    if (k == 0u) _dmp64++;
+                    DPRINT << "REF64 t=" << tile_id << " k=" << k
+                           << " ca=" << F32(bits_to_f(recp[0])) << " cb=" << F32(bits_to_f(recp[1]))
+                           << " cc=" << F32(bits_to_f(recp[2])) << " mx=" << F32(mean_x)
+                           << " my=" << F32(mean_y) << " op=" << F32(bits_to_f(recp[5]))
+                           << " r=" << F32(bits_to_f(recp[6])) << " g=" << F32(bits_to_f(recp[7]))
+                           << " b=" << F32(bits_to_f(recp[8])) << " dk=" << recp[9] << ENDL();
+                }
+#endif
+#endif
 #if defined(MB_BUCKET_MASK)
                 // ROUTE C: keep mask baked into record word 10 by the sort-stage
                 // SFPU cull. Pure L1 load — spin-free, no random gather, no
@@ -863,7 +1133,22 @@ void kernel_main() {
                 mb_cb_commit_fence();
 #endif
                 cb_push_back(CB_MB_COEFF, 1);
+#if defined(MB_BLEND_TAILSKIP)
+                // Publish the running pushed count AFTER the push is visible, so
+                // the compute drain pops only rows that truly exist (no blind
+                // cb_wait_front on a row that will never arrive).
+                if (L > MB_EO_BLK) {
+                    hs[hs_b + HS_PUSHED] = k + 1u;
+                    mb_cb_commit_fence();
+                }
+#endif
             }
+            }  // end rd_bk_emit zone
+#if defined(MB_BLEND_TAILSKIP)
+            mb_cb_commit_fence();
+            hs[hs_b + HS_REND] = hs_e;  // reader finished this tile (full or early break)
+            mb_cb_commit_fence();
+#endif
             continue;
         }
 #endif
@@ -938,9 +1223,21 @@ void kernel_main() {
         // in-flight reads of chunk K+1 (separate L1 buffer by parity). Same
         // reads / same bytes / byte-identical emitted rows as before.
         if (L > 0) {
+            // MEASUREMENT zone: whole reader cost for ONE OVERFLOW (Lb>FIT) tile
+            // taking the DRAM-gather streaming fallback. Axis (A): overflow class.
+            DeviceZoneScopedN("rd_overflow");
             const uint32_t attr_base = get_write_ptr(CB_SCR_ATTR);
             constexpr uint32_t CHUNK_MAX = IDS_PAGE_BYTES / 4;          // 16
             constexpr uint32_t BUF_BYTES = CHUNK_MAX * GATHER_SLOT_BYTES;
+#if defined(MB_BLEND_TAILSKIP)
+            // Tail-skip on the gather FALLBACK path (overflow tiles L>FIT, which
+            // are the densest tiles and saturate first). Same handshake as the
+            // bucket path: PUSHED is published per push so the compute can drain;
+            // DONE_REQ breaks the emit. The deeper FIT-overflow tiles are where
+            // the skip pays the most.
+            uint32_t hs_emitted = 0;
+            bool hs_broke = false;
+#endif
             const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
             uint32_t gids[2][CHUNK_MAX];
             uint32_t take_buf[2];
@@ -1017,6 +1314,12 @@ void kernel_main() {
 
                 const uint32_t buf = attr_base + cur * BUF_BYTES;
                 for (uint32_t j = 0; j < take; ++j) {
+#if defined(MB_BLEND_TAILSKIP)
+                    if (L > MB_EO_BLK) {
+                        mb_cb_commit_fence();
+                        if (hs[HS_DONE_REQ] == hs_e) { hs_broke = true; break; }
+                    }
+#endif
                     const uint32_t g = gids[cur][j];
                     const uint32_t s = buf + j * GATHER_SLOT_BYTES;
 #ifdef MB_BLEND_AOS
@@ -1144,7 +1447,17 @@ void kernel_main() {
                     mb_cb_commit_fence();
 #endif
                     cb_push_back(CB_MB_COEFF, 1);
+#if defined(MB_BLEND_TAILSKIP)
+                    if (L > MB_EO_BLK) {
+                        hs_emitted++;
+                        hs[hs_b + HS_PUSHED] = hs_emitted;
+                        mb_cb_commit_fence();
+                    }
+#endif
                 }
+#if defined(MB_BLEND_TAILSKIP)
+                if (hs_broke) break;  // exit the chunk while-loop on early break
+#endif
                 cur = nxt;
             }
         }
@@ -1213,6 +1526,13 @@ void kernel_main() {
             }
             processed += take;
         }
+#endif
+#if defined(MB_BLEND_TAILSKIP)
+        // Tile finished on the fallback / non-bucket path (or an empty tile):
+        // signal the compute drain that no more rows will arrive for this epoch.
+        mb_cb_commit_fence();
+        hs[hs_b + HS_REND] = hs_e;
+        mb_cb_commit_fence();
 #endif
     }
 }

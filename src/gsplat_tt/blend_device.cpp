@@ -783,6 +783,12 @@ constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp
 constexpr uint32_t CB_MB_COEFF  = 2;   // 48B coeff row per gaussian (mb-major)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 128B = 32 uint32 per tile
 constexpr uint32_t CB_OUT       = 16;  // 3 bf16 color tiles per screen tile
+// M2 §6 reader-side tile-saturation tail-skip (GSPLAT_TT_BLEND_TAILSKIP): a tiny
+// per-core L1 handshake region shared by the reader (data mover) and the compute
+// (TRISC). Never push/pop — both kernels address its fixed base via get_write_ptr.
+// 4 u32 words: [0]=DONE_REQ (compute->reader), [1]=EPOCH, [2]=PUSHED, [3]=REND
+// (reader->compute). See the protocol in reader_alpha_blend_mb_devcull.cpp.
+constexpr uint32_t CB_HS        = 17;
 
 constexpr uint32_t COUNTS_PAGE_BYTES = 128;
 // 10 real fp32 lanes (A,B,C,mx,my,f,op,r,g,b) padded to a 64B DRAM-aligned page.
@@ -899,12 +905,33 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // of gathering attrs + reading cull_masks. Takes precedence over sfpu_cull
     // for reader selection (the mask rides the payload row).
     const bool payload = resident_blend && payload_enabled();
+    // M2 §6 reader-side tile-saturation tail-skip (GSPLAT_TT_BLEND_TAILSKIP):
+    // once the compute's per-microblock early-out shows the WHOLE tile saturated
+    // it raises a cross-kernel "tile_done" over CB_HS; the reader then BREAKS the
+    // emit loop (skips the depth-sorted dense tail) and the compute drains exactly
+    // what the reader pushed. Requires the early-out (the saturation signal) and
+    // the bucket path (where the reader emits per-record). Implies BLEND_EARLYOUT.
+    const bool tailskip = tile_bucket && env_on("GSPLAT_TT_BLEND_TAILSKIP");
+    const bool earlyout = resident_blend && (env_on("GSPLAT_TT_BLEND_EARLYOUT") || tailskip);
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    // M2 §6 transmittance early-out (gated): fp32 R/G/B/T accumulator spill CBs
+    // (12..15) for the dense-tile block-spill loop in alpha_blend_compute_mb.
+    if (earlyout) {
+        cb_cfg(12, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+        cb_cfg(13, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+        cb_cfg(14, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+        cb_cfg(15, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+    }
+    // Tiny shared L1 handshake region for the tail-skip (never push/pop; both the
+    // reader and compute address its fixed base via get_write_ptr(CB_HS)).
+    if (tailskip) {
+        cb_cfg(CB_HS, 64, 1, DataFormat::UInt32);
+    }
     if (resident_reader) {
         constexpr uint32_t CB_SCR_IDS = 4;
         constexpr uint32_t CB_SCR_ATTR = 5;
@@ -953,7 +980,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
                 if (v >= 16u) fit = v;
             }
             constexpr uint32_t CB_BMASK = 11;
-            cb_cfg(CB_BUCKET, 64, fit, DataFormat::Float32);              // fit x 64B records
+            // M0: the 32B fp16 record sits in the low 32B of a 64B bucket slot
+            // (sub-64B DRAM paging is unreliable — see sort_device l1_rec_bytes),
+            // so CB_BUCKET uses 64B slots for both the 64B and 32B-record paths.
+            const uint32_t rec_bytes = 64u;
+            cb_cfg(CB_BUCKET, rec_bytes, fit, DataFormat::Float32);        // fit x rec_bytes records
             cb_cfg(CB_BSORT, 4, 2u * fit + 256u, DataFormat::UInt32);     // idxA+idxB+counts
             cb_cfg(CB_BMASK, 64, (fit + 15u) / 16u + 1u, DataFormat::UInt32);  // whole-tile masks
         }
@@ -966,9 +997,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // Stage C2 sequential payload reader: 6 DRAM-interleaved accessors (ranges,
     // xramp, yramp, tile_ids, lpt_meta, payload). No SoA gather, no cull_masks.
     // +1 accessor (proj_m_blendrec, index 15) under S1 AoS.
+    // M0: +1 accessor for l1_recs when l1_record is enabled (MB_L1_RECORD).
+    const bool l1_record_blend = gsplat_tt::env_config::l1_record_enabled();
     const int num_reader_accessors =
         payload ? 6
-                : (resident_reader ? (sfpu_cull ? (blend_aos ? (tile_bucket ? 18 : 16) : 15) : 13)
+                : (resident_reader ? (sfpu_cull ? (blend_aos ? (tile_bucket ? (l1_record_blend ? 19 : 18) : 16) : 15) : 13)
                                    : 6);
     // cull_masks is reader accessor index 13 (after a,b,c,px,py,op,col, ids,
     // ranges, xramp,yramp,tile_ids, lpt_meta). Under the L1 mask handoff it is
@@ -1101,6 +1134,31 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
                 cf == nullptr || cf[0] != '0') {
                 reader_defines["MB_BUCKET_CB_FENCE"] = "1";
             }
+            // M0: 32B per-entry L1 record (GSPLAT_TT_L1_RECORD). Reads 32B fp16-packed
+            // records from buf_l1_recs instead of 64B records from sort_tile_recs.
+            if (gsplat_tt::env_config::l1_record_enabled()) {
+                reader_defines["MB_L1_RECORD"] = "1";
+            }
+            // M2 §6 reader-side tile-saturation tail-skip: the reader checks the
+            // compute's DONE_REQ between records and BREAKs the emit loop for a
+            // saturated tile (skips the dense tail). Needs the same MB_EO_BLK
+            // dense-tile threshold the compute early-out uses.
+            if (tailskip) {
+                reader_defines["MB_BLEND_TAILSKIP"] = "1";
+                if (const char* blk = std::getenv("GSPLAT_TT_BLEND_EO_BLK");
+                    blk != nullptr && blk[0] != '\0') {
+                    reader_defines["MB_EO_BLK"] = std::string(blk) + "u";
+                }
+            }
+            if (env_on("GSPLAT_TT_L1_REC_DUMP")) {
+                reader_defines["MB_L1_REC_DUMP"] = "1";
+            }
+            // M1 bit-order proof: compare the L1 radix order vs the DRAM
+            // reference (sort_sorted_ids) on-device. Diagnostic, default OFF.
+            if (gsplat_tt::env_config::l1_record_enabled() &&
+                gsplat_tt::env_config::l1_sort_verify_enabled()) {
+                reader_defines["MB_L1_SORT_VERIFY"] = "1";
+            }
         }
     }
     ctx.reader = CreateKernel(
@@ -1117,6 +1175,15 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
+    // M2 §6 transmittance early-out (gated): the dense-tile path spills/reloads
+    // fp32 R/G/B/T through CBs 12..15, so they must unpack to DEST as fp32.
+    const bool blend_earlyout = earlyout;
+    if (blend_earlyout) {
+        u2d[12] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[13] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[14] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[15] = UnpackToDestMode::UnpackToDestFp32;
+    }
 
     std::map<std::string, std::string> mb_defines;
     if (const char* dbg = std::getenv("GSPLAT_TT_MB_DEBUG")) {
@@ -1151,6 +1218,19 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (const char* cf = std::getenv("GSPLAT_TT_BUCKET_CB_FENCE");
         tile_bucket && (cf == nullptr || cf[0] != '0')) {
         mb_defines["MB_BUCKET_CB_FENCE"] = "1";
+    }
+    if (blend_earlyout) {
+        mb_defines["MB_BLEND_EARLYOUT"] = "1";
+        if (const char* blk = std::getenv("GSPLAT_TT_BLEND_EO_BLK");
+            blk != nullptr && blk[0] != '\0') {
+            mb_defines["MB_EO_BLK"] = std::string(blk) + "u";
+        }
+    }
+    // M2 §6 reader-side tile-saturation tail-skip (consumer side): on whole-tile
+    // saturation the compute raises DONE_REQ and drains exactly what the reader
+    // pushed via the CB_HS handshake. Implies the early-out (set above).
+    if (tailskip) {
+        mb_defines["MB_BLEND_TAILSKIP"] = "1";
     }
     ctx.compute = CreateKernel(
         program,
@@ -1803,6 +1883,16 @@ static double process_frame_mb_devcull_resident(
                                 if (tile_bucket) {
                                     reader_args.push_back(tile_recs_addr);    // arg 20
                                     reader_args.push_back(bucket_meta_addr);  // arg 21
+                                    if (gsplat_tt::env_config::l1_record_enabled()) {
+                                        auto buf_l1r = ds::get_buffer("sort_l1_recs");
+                                        if (!buf_l1r) {
+                                            std::cerr << "[gsplat_tt::blend] MB_L1_RECORD=1 but "
+                                                         "sort_l1_recs missing; skipping arg\n";
+                                        }
+                                        reader_args.push_back(
+                                            buf_l1r ? static_cast<uint32_t>(buf_l1r->address())
+                                                    : 0u);  // arg 22
+                                    }
                                 }
                             }
                         }
@@ -3113,7 +3203,11 @@ double blend_mb_devcull_resident(
     int image_height,
     int image_width,
     float* image_out,
-    bool* device_ok) {
+    bool* device_ok,
+    double* cull_ms_out,
+    double* blend_ms_out) {
+    if (cull_ms_out) *cull_ms_out = 0.0;
+    if (blend_ms_out) *blend_ms_out = 0.0;
     if (!g_ctx_mb) {
         (void)gsplat_tt::device_state::get_device();
         g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
@@ -3144,6 +3238,8 @@ double blend_mb_devcull_resident(
             static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
             static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
             image_out, device_ok);
+        if (cull_ms_out) *cull_ms_out = pack_ms;
+        if (blend_ms_out) *blend_ms_out = blend_ms;
         return pack_ms + blend_ms;
     }
     if (::mb::fused::enabled()) {
@@ -3213,6 +3309,8 @@ double blend_mb_devcull_resident(
               static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
               static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
               image_out, device_ok);
+    if (cull_ms_out) *cull_ms_out = cull_ms;
+    if (blend_ms_out) *blend_ms_out = blend_ms;
     return cull_ms + blend_ms;
 }
 

@@ -1,5 +1,5 @@
-id=121
-sha=0c72479
-ts=2026-06-02T01:38:41-0700
-desc=rebuild Tracy zone kernels
-bin=d193d161f0d6fd76
+id=157
+sha=9f1d618
+ts=2026-06-03T02:23:53-0700
+desc=iter 48: iter48: post-sort subchunk table + per-subchunk cull/blend dispatch (sort unchanged)
+bin=69df429df7353d46

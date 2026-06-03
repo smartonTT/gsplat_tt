@@ -8,6 +8,8 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <vector>
 
@@ -330,11 +332,23 @@ void cull_and_blend_tile(
     int64_t* tile_kept_count,
     TileScratch& scratch,
     const bool cull_disabled,
-    const float transmittance_threshold) {
+    const float transmittance_threshold,
+    const std::size_t M_total,
+    const std::size_t P_total) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
     if (start == end) {
         return;
+    }
+    if (std::getenv("GSPLAT_TT_CAB_DBG")) {
+        static std::atomic<int> reported{0};
+        const bool range_bad =
+            start < 0 || end < start || static_cast<std::size_t>(end) > P_total;
+        if (range_bad && reported.fetch_add(1) == 0) {
+            std::fprintf(stderr,
+                "[CAB_OOB] RANGE tile=%d start=%lld end=%lld P=%zu M=%zu\n",
+                tile_id, (long long)start, (long long)end, P_total, M_total);
+        }
     }
 
     const int ty = tile_id / tiles_x;
@@ -366,8 +380,20 @@ void cull_and_blend_tile(
     int64_t dropped = 0;
     int64_t kept_total = 0;
 
+    const bool cab_dbg = std::getenv("GSPLAT_TT_CAB_DBG") != nullptr;
     for (int64_t l = 0; l < L; ++l) {
         const int64_t g = sorted_gaussian_ids[static_cast<std::size_t>(start + l)];
+        if (cab_dbg && (g < 0 || static_cast<std::size_t>(g) >= M_total)) {
+            static std::atomic<int> greported{0};
+            if (greported.fetch_add(1) == 0) {
+                std::fprintf(stderr,
+                    "[CAB_OOB] GID tile=%d l=%lld start=%lld end=%lld g=%lld "
+                    "M=%zu P=%zu\n",
+                    tile_id, (long long)l, (long long)start, (long long)end,
+                    (long long)g, M_total, P_total);
+            }
+            continue;
+        }
         const GaussianCullRec& rec = gauss_rec[static_cast<std::size_t>(g)];
 
         const float log_thresh = rec.log_thresh;
@@ -793,7 +819,9 @@ CullAndBlendResult cull_and_blend(
                     &tile_kept[static_cast<std::size_t>(tile_id)],
                     sc,
                     cull_disabled,
-                    transmittance_threshold);
+                    transmittance_threshold,
+                    M,
+                    P);
             }
         });
     }

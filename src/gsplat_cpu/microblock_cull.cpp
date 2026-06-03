@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <vector>
 
@@ -14,6 +16,10 @@ namespace gsplat_cpu {
 namespace {
 
 constexpr int kNumMicroblocks = 32;
+
+// M0 L1_RECORD debug: one-shot reporting of corrupt device-sort output
+// (tile_ranges / sorted_gaussian_ids) consumed by the host microblock cull.
+static std::atomic<int> g_cull_oob_reported{0};
 
 struct TileCullLocal {
     int64_t tile_pairs_dropped{0};
@@ -31,10 +37,20 @@ void cull_tile(
     const int64_t* sorted_gaussian_ids,
     const int64_t* tile_ranges,
     const float mb_contrib_floor,
+    const std::size_t P,
+    const std::size_t M,
     TileCullLocal& out) {
     const int64_t start = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 0];
     const int64_t end = tile_ranges[static_cast<std::size_t>(tile_id) * 2 + 1];
     if (start == end) {
+        return;
+    }
+    if (start < 0 || end < start || static_cast<std::size_t>(end) > P) {
+        if (g_cull_oob_reported.fetch_add(1) < 16) {
+            std::fprintf(stderr,
+                "[CULL_OOB] range tile=%d start=%lld end=%lld P=%zu\n",
+                tile_id, (long long)start, (long long)end, P);
+        }
         return;
     }
 
@@ -46,8 +62,18 @@ void cull_tile(
     const int64_t L = end - start;
     std::vector<int64_t> tile_g_ids(static_cast<std::size_t>(L));
     for (int64_t i = 0; i < L; ++i) {
-        tile_g_ids[static_cast<std::size_t>(i)] =
-            sorted_gaussian_ids[static_cast<std::size_t>(start + i)];
+        const int64_t gid = sorted_gaussian_ids[static_cast<std::size_t>(start + i)];
+        if (gid < 0 || static_cast<std::size_t>(gid) >= M) {
+            if (g_cull_oob_reported.fetch_add(1) < 16) {
+                std::fprintf(stderr,
+                    "[CULL_OOB] gid tile=%d start=%lld end=%lld i=%lld gid=%lld M=%zu\n",
+                    tile_id, (long long)start, (long long)end, (long long)i,
+                    (long long)gid, M);
+            }
+            tile_g_ids[static_cast<std::size_t>(i)] = 0;  // clamp so the cull can finish
+            continue;
+        }
+        tile_g_ids[static_cast<std::size_t>(i)] = gid;
     }
 
     std::vector<bool> keep_any(static_cast<std::size_t>(L), false);
@@ -189,7 +215,6 @@ MicroblockCullResult microblock_cull(
     const int tile_size,
     const float mb_contrib_floor,
     ThreadPool& pool) {
-    (void)M;
 
     const int num_tiles = tiles_x * tiles_y;
     const float floor = mb_contrib_floor;
@@ -203,7 +228,8 @@ MicroblockCullResult microblock_cull(
     for (int tile_id = 0; tile_id < num_tiles; ++tile_id) {
         pool.submit([&, tile_id]() {
             cull_tile(tile_id, tiles_x, tile_size, means_2d, covs_2d, opacities,
-                      sorted_gaussian_ids, tile_ranges, floor, tile_locals[static_cast<std::size_t>(tile_id)]);
+                      sorted_gaussian_ids, tile_ranges, floor, P, M,
+                      tile_locals[static_cast<std::size_t>(tile_id)]);
         });
     }
     pool.wait();

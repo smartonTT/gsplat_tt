@@ -106,6 +106,27 @@ inline bool blend_skip_zero_out_enabled() {
     return resident_blend_enabled();
 }
 
+// M0 (host-free-l1-render-plan §12): 32B per-entry record + pre-sized per-tile
+// buckets (BUCKET_FIT slots × num_tiles). Phase-1 scatters fp16 records into
+// the bucket; phase-2 reads them back into the existing in-L1 sort+blend.
+// Default OFF. Set =1 to enable the architectural crossing proof.
+// Quality gate must hold: hero_vs_ref ≥ 63.6 dB.
+inline bool l1_record_enabled() {
+    return flag_is_one("GSPLAT_TT_L1_RECORD");
+}
+
+// M1 (host-free-l1-render-plan §12): bit-order proof for the L1-resident LSD
+// radix sort over the 32B per-tile bucket records. When enabled, the sort_bin
+// kernel stashes each scattered record's gaussian id into the (otherwise
+// unused) upper 32B of its 64B bucket slot, and the blend reader compares the
+// L1-radix permutation's gid sequence against the DRAM-radix reference
+// (sort_sorted_ids[id_start+k]) element-wise — proving the L1 order is
+// bit-identical to the reference (ties included), not just PSNR-equivalent.
+// Diagnostic only: default OFF, no effect on the production/ideal path.
+inline bool l1_sort_verify_enabled() {
+    return flag_is_one("GSPLAT_TT_L1_SORT_VERIFY");
+}
+
 // One-shot JIT compile of all ideal-path device programs at scene open.
 inline bool jit_warmup_enabled() {
     if (flag_is_zero("GSPLAT_TT_JIT_WARMUP")) {
