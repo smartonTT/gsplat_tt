@@ -1,5 +1,5 @@
-id=172
-sha=c0eab4f
-ts=2026-06-03T04:17:00-0700
-desc=iter 49: MB_COUNTS after bucket publish
-bin=6b177beb0c303d84
+id=176
+sha=db9dcd0
+ts=2026-06-03T08:45:39-0700
+desc=iter49: bulk L1 load + coeff emit; CB_BUCKET scratch-only deadlock fix
+bin=fd5e7e03a5c64c53
