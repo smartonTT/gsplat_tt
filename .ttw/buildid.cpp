@@ -1,5 +1,5 @@
-id=152
-sha=bb52a1d
-ts=2026-06-02T19:04:51-0700
-desc=iter 46: Part A: M2 §6 per-microblock transmittance early-out — replace iter-44's tile-level break with a true per-microblock done-mask (spilled-T scan groups px by SFPU vector V=(r&~1)|(c&1); clear keep-bit M when all 32 px of mb M have T<eps; subsequent gaussians AND ~done into their coverage mask). PROVEN CORRECT: 63.85-63.86 dB across EO_BLK 64..768. Gated-off (GSPLAT_TT_BLEND_EARLYOUT): perf-neutral because the resident blend is READER-GATHER-bound, not SFPU-compute-bound (smaller blocks monotonically worse: 768->184.6 256->186.8 128->188.7 64->193.5ms) — the compute early-out skips SFPU math but the reader still gathers every candidate. Next lever: reader-side tile-saturation tail-skip.
-bin=12bb207ef9ce5a5e
+id=156
+sha=f18c3c3
+ts=2026-06-02T20:03:39-0700
+desc=iter 47: MEASURE-FIRST blend breakdown (device per-tile-class zones rd_bk_emit/rd_overflow/cp_inb/cp_ovf + host TILE_HISTO). Hero: in-budget 914 tiles/2.01M cand (59.8%), overflow 110 tiles/1.36M cand (40.2%), max_tile_n=25699>FIT. Blend makespan ~93ms (reader~=compute co-equal) + separate cull ~80ms = lumped host blend 182.5. In-budget CO-LIMITED: reader-emit 824 ~= compute-SFPU 844 (load+sort only ~286). Busiest cores are OVERFLOW-gather-dominated (top core overflow 449 vs emit 181, 30v totals). Tailskip scaffold gated-off (deadlock-free 63.85 but blend 185.8>182.5, not a win). Measurement-only, PSNR 63.85 bit-identical.
+bin=325ef2bf2c6a5942

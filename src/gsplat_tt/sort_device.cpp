@@ -696,6 +696,34 @@ static BinLayoutResult host_bin_layout_from_hist(
         }
         if (r.tile_pad[t] > max_pad_n) max_pad_n = r.tile_pad[t];
     }
+    // MEASUREMENT (gated GSPLAT_TT_TILE_HISTO): per-tile-class breakdown of the
+    // blend's candidate mass. In-budget tiles (0<count<=bucket_fit) are served
+    // L1-resident from CB_BUCKET; overflow tiles (count>bucket_fit) take the
+    // DRAM-gather fallback. This quantifies axis (A): how much of the blend work
+    // is in-budget vs overflow, by tile COUNT and by CANDIDATE mass.
+    if (l1_record && std::getenv("GSPLAT_TT_TILE_HISTO") != nullptr) {
+        uint64_t n_empty = 0, n_inb = 0, n_ovf = 0;
+        uint64_t cand_inb = 0, cand_ovf = 0;
+        int64_t maxc = 0;
+        for (uint32_t t = 0; t < num_tiles; t++) {
+            const int64_t c = r.counts[t];
+            if (c > maxc) maxc = c;
+            if (c == 0) { n_empty++; }
+            else if (static_cast<uint32_t>(c) <= bucket_fit) { n_inb++; cand_inb += static_cast<uint64_t>(c); }
+            else { n_ovf++; cand_ovf += static_cast<uint64_t>(c); }
+        }
+        const uint64_t cand_tot = cand_inb + cand_ovf;
+        std::fprintf(stderr,
+            "[TILE_HISTO] fit=%u num_tiles=%u empty=%llu inbudget=%llu(cand=%llu,%.1f%%) "
+            "overflow=%llu(cand=%llu,%.1f%%) max_tile_n=%lld\n",
+            bucket_fit, num_tiles,
+            (unsigned long long)n_empty,
+            (unsigned long long)n_inb, (unsigned long long)cand_inb,
+            cand_tot ? 100.0 * (double)cand_inb / (double)cand_tot : 0.0,
+            (unsigned long long)n_ovf, (unsigned long long)cand_ovf,
+            cand_tot ? 100.0 * (double)cand_ovf / (double)cand_tot : 0.0,
+            (long long)maxc);
+    }
     if (max_pad_n > MAX_TILE_ENTRIES) {
         r.status = 2;
         return r;

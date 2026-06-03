@@ -73,6 +73,42 @@ constexpr uint32_t CB_BMASK  = 11;     // L1-resident whole-tile cull_masks (bul
 
 constexpr float kInf = 1e30f;
 
+#if defined(MB_BLEND_TAILSKIP)
+// M2 §6 reader-side tile-saturation tail-skip handshake (shared L1 region with
+// alpha_blend_compute_mb.cpp; see CB_HS in blend_device.cpp). 4 u32 words:
+//   [0] DONE_REQ : compute -> reader. Set to epoch e==tile-iteration+1 when the
+//                  WHOLE tile is saturated (every microblock's T < eps); the
+//                  reader then BREAKs the emit loop for that tile.
+//   [1] EPOCH    : reader -> compute. The epoch PUSHED currently refers to.
+//   [2] PUSHED   : reader -> compute. # CB_MB_COEFF rows pushed so far this tile.
+//   [3] REND     : reader -> compute. Set to e when the reader finished a tile.
+// The reader and compute iterate this core's tiles in the SAME order (one
+// CB_MB_COUNTS push/wait per tile), so the epoch (ti+1) matches on both sides.
+// Deadlock-free: the reader only blocks on cb_reserve_back when the CB is FULL,
+// which means PUSHED > (compute's processed) so the compute pops and unblocks
+// it; the compute only cb_wait_fronts when processed < PUSHED (row guaranteed
+// pushed) and otherwise spins on REND — it never waits on a row never coming.
+// The reader can run up to ONE tile ahead of the compute (CB_MB_COUNTS depth=2),
+// so tile t and t+1 must NOT share EPOCH/PUSHED/REND words or the reader would
+// clobber tile t's handshake (which the compute is still draining) when it
+// resets them for t+1. We PING-PONG those by tile parity (ti&1): tile t uses
+// slots[t&1]; t+2 reuses t's slots only AFTER the compute has finished t (the
+// CB_MB_COUNTS depth-2 bound guarantees the reader cannot reach t+2 first).
+// DONE_REQ is a single epoch-tagged word (compute writes a strictly increasing
+// e==tile+1; the reader only matches its CURRENT tile's e, so a stale e is
+// ignored — no ping-pong needed).
+constexpr uint32_t CB_HS       = 17;
+constexpr uint32_t HS_DONE_REQ = 0;   // compute -> reader (epoch e on saturation)
+// Per-parity triplet base = 1 + (parity*3): [+0]=EPOCH [+1]=PUSHED [+2]=REND.
+inline uint32_t hs_base(uint32_t parity) { return 1u + parity * 3u; }
+constexpr uint32_t HS_EPOCH    = 0;   // offset within a parity triplet
+constexpr uint32_t HS_PUSHED   = 1;
+constexpr uint32_t HS_REND     = 2;
+#ifndef MB_EO_BLK
+#define MB_EO_BLK 768u
+#endif
+#endif
+
 inline int ifloor(float v) {
     int i = static_cast<int>(v);
     if (static_cast<float>(i) > v) {
@@ -587,12 +623,32 @@ void kernel_main() {
     cb_push_back(CB_XRAMP, 1);
     cb_push_back(CB_YRAMP, 1);
 
+#if defined(MB_BLEND_TAILSKIP)
+    // Fixed L1 handshake base (CB_HS is never push/pop'd). Zero all words before
+    // the tile loop so the first tile's epoch checks are not fooled by garbage.
+    volatile uint32_t* hs = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_HS));
+    for (uint32_t _i = 0; _i < 7u; ++_i) hs[_i] = 0u;  // DONE_REQ + 2 parity triplets
+    mb_cb_commit_fence();
+#endif
+
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
         const float ty_tile = static_cast<float>(ty * TILE_SIZE);
+#if defined(MB_BLEND_TAILSKIP)
+        // Begin this tile's epoch: publish EPOCH=e with PUSHED=0 BEFORE any
+        // CB_MB_COUNTS / coeff push, so once compute observes EPOCH==e the PUSHED
+        // it reads belongs to THIS tile. (DONE_REQ self-disambiguates by epoch:
+        // compute only ever writes the current tile's e, which the reader matches.)
+        const uint32_t hs_e = ti + 1u;
+        const uint32_t hs_b = hs_base(ti & 1u);
+        hs[hs_b + HS_PUSHED] = 0u;
+        mb_cb_commit_fence();
+        hs[hs_b + HS_EPOCH] = hs_e;
+        mb_cb_commit_fence();
+#endif
 
         // (1) Per-tile candidate id range [id_start, id_end).
         uint32_t id_start, id_end;
@@ -875,7 +931,24 @@ void kernel_main() {
 #endif
             }
 #endif
+            {
+            // MEASUREMENT zone: the per-candidate emit loop (repack record ->
+            // 64B coeff row -> CB_MB_COEFF push -> fence) for ONE in-budget tile.
+            // Axis (B): reader-emit cost. One zone per in-budget tile (exclusive
+            // with rd_overflow), so per-core marker count stays bounded; durations
+            // are summed in post-processing across the 30-view Tracy CSV.
+            DeviceZoneScopedN("rd_bk_emit");
             for (uint32_t k = 0; k < L; ++k) {
+#if defined(MB_BLEND_TAILSKIP)
+                // Dense tile only: if the compute saturated the WHOLE tile, stop
+                // emitting the depth-sorted (near->far) tail — every remaining
+                // (farther) candidate contributes exactly zero. PUSHED already
+                // reflects the rows pushed (k), so the compute drains exactly k.
+                if (L > MB_EO_BLK) {
+                    mb_cb_commit_fence();
+                    if (hs[HS_DONE_REQ] == hs_e) break;
+                }
+#endif
                 const uint32_t idx = sorted[k];
 #ifdef MB_L1_RECORD
                 // M0: unpack the 32B record (low 32B of a 64B page). Covariance is
@@ -1060,7 +1133,22 @@ void kernel_main() {
                 mb_cb_commit_fence();
 #endif
                 cb_push_back(CB_MB_COEFF, 1);
+#if defined(MB_BLEND_TAILSKIP)
+                // Publish the running pushed count AFTER the push is visible, so
+                // the compute drain pops only rows that truly exist (no blind
+                // cb_wait_front on a row that will never arrive).
+                if (L > MB_EO_BLK) {
+                    hs[hs_b + HS_PUSHED] = k + 1u;
+                    mb_cb_commit_fence();
+                }
+#endif
             }
+            }  // end rd_bk_emit zone
+#if defined(MB_BLEND_TAILSKIP)
+            mb_cb_commit_fence();
+            hs[hs_b + HS_REND] = hs_e;  // reader finished this tile (full or early break)
+            mb_cb_commit_fence();
+#endif
             continue;
         }
 #endif
@@ -1135,9 +1223,21 @@ void kernel_main() {
         // in-flight reads of chunk K+1 (separate L1 buffer by parity). Same
         // reads / same bytes / byte-identical emitted rows as before.
         if (L > 0) {
+            // MEASUREMENT zone: whole reader cost for ONE OVERFLOW (Lb>FIT) tile
+            // taking the DRAM-gather streaming fallback. Axis (A): overflow class.
+            DeviceZoneScopedN("rd_overflow");
             const uint32_t attr_base = get_write_ptr(CB_SCR_ATTR);
             constexpr uint32_t CHUNK_MAX = IDS_PAGE_BYTES / 4;          // 16
             constexpr uint32_t BUF_BYTES = CHUNK_MAX * GATHER_SLOT_BYTES;
+#if defined(MB_BLEND_TAILSKIP)
+            // Tail-skip on the gather FALLBACK path (overflow tiles L>FIT, which
+            // are the densest tiles and saturate first). Same handshake as the
+            // bucket path: PUSHED is published per push so the compute can drain;
+            // DONE_REQ breaks the emit. The deeper FIT-overflow tiles are where
+            // the skip pays the most.
+            uint32_t hs_emitted = 0;
+            bool hs_broke = false;
+#endif
             const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
             uint32_t gids[2][CHUNK_MAX];
             uint32_t take_buf[2];
@@ -1214,6 +1314,12 @@ void kernel_main() {
 
                 const uint32_t buf = attr_base + cur * BUF_BYTES;
                 for (uint32_t j = 0; j < take; ++j) {
+#if defined(MB_BLEND_TAILSKIP)
+                    if (L > MB_EO_BLK) {
+                        mb_cb_commit_fence();
+                        if (hs[HS_DONE_REQ] == hs_e) { hs_broke = true; break; }
+                    }
+#endif
                     const uint32_t g = gids[cur][j];
                     const uint32_t s = buf + j * GATHER_SLOT_BYTES;
 #ifdef MB_BLEND_AOS
@@ -1341,7 +1447,17 @@ void kernel_main() {
                     mb_cb_commit_fence();
 #endif
                     cb_push_back(CB_MB_COEFF, 1);
+#if defined(MB_BLEND_TAILSKIP)
+                    if (L > MB_EO_BLK) {
+                        hs_emitted++;
+                        hs[hs_b + HS_PUSHED] = hs_emitted;
+                        mb_cb_commit_fence();
+                    }
+#endif
                 }
+#if defined(MB_BLEND_TAILSKIP)
+                if (hs_broke) break;  // exit the chunk while-loop on early break
+#endif
                 cur = nxt;
             }
         }
@@ -1410,6 +1526,13 @@ void kernel_main() {
             }
             processed += take;
         }
+#endif
+#if defined(MB_BLEND_TAILSKIP)
+        // Tile finished on the fallback / non-bucket path (or an empty tile):
+        // signal the compute drain that no more rows will arrive for this epoch.
+        mb_cb_commit_fence();
+        hs[hs_b + HS_REND] = hs_e;
+        mb_cb_commit_fence();
 #endif
     }
 }
