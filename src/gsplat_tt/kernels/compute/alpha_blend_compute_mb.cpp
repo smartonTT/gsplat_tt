@@ -64,6 +64,27 @@ constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock cou
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
 constexpr uint32_t CB_COLOR_OUT = 16;
 
+#if defined(MB_BLEND_EARLYOUT)
+// M2 §6 transmittance early-out (gated). For a DENSE tile we cannot break the
+// gaussian loop on "all pixels saturated" purely on the SFPU — sfpi has a lane
+// reduce but no cheap scalar extract, and the DST-persistent R/G/B/T cannot be
+// inspected mid-bracket. So we process the tile in BLOCKS: each block runs the
+// existing gaussian-major SFPU blend, then SPILLS R/G/B/T to fp32 L1 CBs. The
+// spilled T tile is plain L1 memory, so ALL three TRISC threads read it and
+// compute the SAME global max(T) -> a UNIFORM scalar break (front-to-back, once
+// every pixel has T < eps the remaining splats add < eps everywhere, so the
+// image is unchanged within the gate and we skip the deep tail). Small/medium
+// tiles (num_g <= MB_EO_BLK) keep the original single-bracket path (no spill).
+constexpr uint32_t CB_FB_R = 12;   // fp32 R accumulator spill
+constexpr uint32_t CB_FB_G = 13;   // fp32 G accumulator spill
+constexpr uint32_t CB_FB_B = 14;   // fp32 B accumulator spill
+constexpr uint32_t CB_FB_T = 15;   // fp32 T (transmittance) spill — scanned for max
+#ifndef MB_EO_BLK
+#define MB_EO_BLK 768u
+#endif
+constexpr float MB_EO_EPS = 1e-4f;  // matches the CPU reference (max_t < 0.0001f)
+#endif
+
 constexpr uint32_t NUM_MB = 32;
 
 // Volatile sink so profiling variants can't dead-code-eliminate the coeff loads.
@@ -497,6 +518,94 @@ void kernel_main() {
                       << " xr8=" << F32(xr[8]) << " xr32=" << F32(xr[32])
                       << " yr0=" << F32(yr[0]) << " yr32=" << F32(yr[32]) << ENDL()));
             }
+        }
+#endif
+
+#if defined(MB_BLEND_EARLYOUT)
+        // ---- DENSE-TILE transmittance early-out (block spill/reload) ----------
+        if (num_g > MB_EO_BLK) {
+            uint32_t processed = 0;
+            bool first = true;
+            bool broke = false;
+            while (processed < num_g && !broke) {
+                uint32_t blk = num_g - processed;
+                if (blk > MB_EO_BLK) blk = MB_EO_BLK;
+
+                tile_regs_acquire();
+                if (first) {
+                    fill_tile(0, 0.0f);
+                    fill_tile(1, 0.0f);
+                    fill_tile(2, 0.0f);
+                    fill_tile(3, 1.0f);
+                } else {
+                    // Reload R/G/B/T accumulators from the fp32 spill CBs.
+                    copy_tile_to_dst_init_short(CB_FB_R); copy_tile(CB_FB_R, 0, 0);
+                    copy_tile_to_dst_init_short(CB_FB_G); copy_tile(CB_FB_G, 0, 1);
+                    copy_tile_to_dst_init_short(CB_FB_B); copy_tile(CB_FB_B, 0, 2);
+                    copy_tile_to_dst_init_short(CB_FB_T); copy_tile(CB_FB_T, 0, 3);
+                    cb_pop_front(CB_FB_R, 1); cb_pop_front(CB_FB_G, 1);
+                    cb_pop_front(CB_FB_B, 1); cb_pop_front(CB_FB_T, 1);
+                }
+                copy_tile_to_dst_init_short(CB_XRAMP); copy_tile(CB_XRAMP, 0, 4);
+                copy_tile_to_dst_init_short(CB_YRAMP); copy_tile(CB_YRAMP, 0, 5);
+
+                process_tile_gaussians(blk);  // SFPU blend of `blk` rows
+
+                tile_regs_commit();
+                tile_regs_wait();
+                // Spill accumulators to fp32 CBs (so they survive tile_regs_release
+                // and so T becomes plain L1 memory we can scan).
+                pack_reconfig_data_format(CB_FB_R);
+                cb_reserve_back(CB_FB_R, 1); pack_tile(0, CB_FB_R); cb_push_back(CB_FB_R, 1);
+                cb_reserve_back(CB_FB_G, 1); pack_tile(1, CB_FB_G); cb_push_back(CB_FB_G, 1);
+                cb_reserve_back(CB_FB_B, 1); pack_tile(2, CB_FB_B); cb_push_back(CB_FB_B, 1);
+                cb_reserve_back(CB_FB_T, 1); pack_tile(3, CB_FB_T); cb_push_back(CB_FB_T, 1);
+                tile_regs_release();
+
+                processed += blk;
+                first = false;
+
+                if (processed < num_g) {
+                    // Global max(T) over the whole 32x32 tile, computed on EVERY
+                    // TRISC thread from the same L1 bytes => a uniform break.
+                    cb_wait_front(CB_FB_T, 1);
+                    mb_cb_consume_fence();
+                    volatile float* tp =
+                        reinterpret_cast<volatile float*>(get_tile_address(CB_FB_T, 0));
+                    float maxT = 0.0f;
+                    for (uint32_t i = 0; i < 1024u; i++) {
+                        float v = tp[i];
+                        if (v > maxT) maxT = v;
+                    }
+                    if (maxT < MB_EO_EPS) {
+                        broke = true;
+                        cb_pop_front(CB_FB_T, 1);  // R/G/B stay front for final pack
+                    }
+                }
+            }
+            // Drain any coeff rows the reader pushed past the break point.
+            for (; processed < num_g; processed++) {
+                cb_wait_front(CB_MB_COEFF, 1);
+                cb_pop_front(CB_MB_COEFF, 1);
+            }
+            // Final: reload R/G/B and pack bf16 color out for the writer.
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_FB_R); copy_tile(CB_FB_R, 0, 0);
+            copy_tile_to_dst_init_short(CB_FB_G); copy_tile(CB_FB_G, 0, 1);
+            copy_tile_to_dst_init_short(CB_FB_B); copy_tile(CB_FB_B, 0, 2);
+            tile_regs_commit();
+            tile_regs_wait();
+            pack_reconfig_data_format(CB_COLOR_OUT);
+            cb_reserve_back(CB_COLOR_OUT, 3);
+            pack_tile(0, CB_COLOR_OUT);
+            pack_tile(1, CB_COLOR_OUT);
+            pack_tile(2, CB_COLOR_OUT);
+            cb_push_back(CB_COLOR_OUT, 3);
+            tile_regs_release();
+            cb_pop_front(CB_FB_R, 1); cb_pop_front(CB_FB_G, 1); cb_pop_front(CB_FB_B, 1);
+            if (!broke) cb_pop_front(CB_FB_T, 1);
+            cb_pop_front(CB_MB_COUNTS, 1);
+            continue;
         }
 #endif
 

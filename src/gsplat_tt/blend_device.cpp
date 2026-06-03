@@ -905,6 +905,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 2, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    // M2 §6 transmittance early-out (gated): fp32 R/G/B/T accumulator spill CBs
+    // (12..15) for the dense-tile block-spill loop in alpha_blend_compute_mb.
+    if (resident_blend && env_on("GSPLAT_TT_BLEND_EARLYOUT")) {
+        cb_cfg(12, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+        cb_cfg(13, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+        cb_cfg(14, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+        cb_cfg(15, RAMP_TILE_BYTES, 2, DataFormat::Float32);
+    }
     if (resident_reader) {
         constexpr uint32_t CB_SCR_IDS = 4;
         constexpr uint32_t CB_SCR_ATTR = 5;
@@ -1137,6 +1145,15 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
+    // M2 §6 transmittance early-out (gated): the dense-tile path spills/reloads
+    // fp32 R/G/B/T through CBs 12..15, so they must unpack to DEST as fp32.
+    const bool blend_earlyout = resident_blend && env_on("GSPLAT_TT_BLEND_EARLYOUT");
+    if (blend_earlyout) {
+        u2d[12] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[13] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[14] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[15] = UnpackToDestMode::UnpackToDestFp32;
+    }
 
     std::map<std::string, std::string> mb_defines;
     if (const char* dbg = std::getenv("GSPLAT_TT_MB_DEBUG")) {
@@ -1171,6 +1188,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (const char* cf = std::getenv("GSPLAT_TT_BUCKET_CB_FENCE");
         tile_bucket && (cf == nullptr || cf[0] != '0')) {
         mb_defines["MB_BUCKET_CB_FENCE"] = "1";
+    }
+    if (blend_earlyout) {
+        mb_defines["MB_BLEND_EARLYOUT"] = "1";
+        if (const char* blk = std::getenv("GSPLAT_TT_BLEND_EO_BLK");
+            blk != nullptr && blk[0] != '\0') {
+            mb_defines["MB_EO_BLK"] = std::string(blk) + "u";
+        }
     }
     ctx.compute = CreateKernel(
         program,
