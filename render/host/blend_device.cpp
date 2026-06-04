@@ -715,6 +715,10 @@ static double process_frame_mb_devcull_resident(
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
 
+namespace cull {
+std::vector<uint32_t> make_box_ramp(bool is_x);
+}
+
 // ===========================================================================
 // SFPU microblock-cull pass (GSPLAT_TT_SFPU_CULL).
 //
