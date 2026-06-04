@@ -1,5 +1,5 @@
-id=227
-sha=c1bd8f9
-ts=2026-06-04T05:33:17-0700
-desc=iter 68: RDSUP DPRINT env hook (measurement only)
+id=228
+sha=53ac306
+ts=2026-06-04T05:49:03-0700
+desc=iter 70: tile_mb_mask: hoist box copy per tile + skip SFPU on all-pre-culled batch; writer branchless mask pack
 bin=d3754d74d3a307b3
