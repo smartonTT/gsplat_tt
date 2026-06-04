@@ -15,9 +15,8 @@
 //   4. emits the SAME 16-word row the standard mb compute kernel consumes:
 //        [cov_a, cov_b, cov_c, mx_local, my_local, 0, opacity, cr, cg, cb,
 //         mask, 0,0,0,0,0]
-// Iter 72 PRECONIC: reader emits A,B,C in coeff row[0..2]; compute blends without
-// per-microblock DEVCONIC. Optional MB_FUSE_TILE_L1_CULL runs SFPU cull on the
-// first l1_bulk subchunk before blend tile_regs init.
+// The compute kernel (MB_DEVCONIC) recomputes A,B,C from the raw cov on the
+// SFPU and dispatches the blend to the masked microblocks exactly as today.
 //
 // This moves the host conic + microblock cull onto the device and removes the
 // ~200MB/frame coeff-row upload (we ship M*64B attrs + P*4B ids instead).
@@ -41,7 +40,6 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
-#include "common/mb_cov_preconic.hpp"
 
 #if defined(MB_RD_ROW_SUPPRESS_DPRINT)
 #include "api/debug/dprint.h"
@@ -76,10 +74,6 @@ constexpr uint32_t CB_BSORT  = 10;     // L1 sort scratch: in_idx[FIT] + out_idx
 constexpr uint32_t CB_BMASK  = 11;     // in-budget: whole-tile cull_masks (paired with CB_BUCKET)
 constexpr uint32_t CB_BUCKET_BULK = 12; // overflow subchunk: bulk L1 records (no coeff stream)
 constexpr uint32_t CB_BMASK_BULK  = 13; // overflow subchunk: bulk L1 cull_masks
-#if defined(MB_FUSE_TILE_L1_CULL)
-constexpr uint32_t CB_BOX_OX_FUSE = 14;
-constexpr uint32_t CB_BOX_OY_FUSE = 15;
-#endif
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -259,10 +253,6 @@ void kernel_main() {
     const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
     const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(22);  // M0: pre-sized 32B record bucket
     const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(23);  // blend_subchunk_meta (iter 48)
-#if defined(MB_FUSE_TILE_L1_CULL)
-    const uint32_t box_ox_addr     = get_arg_val<uint32_t>(24);
-    const uint32_t box_oy_addr     = get_arg_val<uint32_t>(25);
-#endif
 
     constexpr auto a_args        = TensorAccessorArgs<0>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -284,10 +274,6 @@ void kernel_main() {
     constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
     constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
     constexpr auto subchunk_meta_args = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
-#if defined(MB_FUSE_TILE_L1_CULL)
-    constexpr auto box_ox_args = TensorAccessorArgs<subchunk_meta_args.next_compile_time_args_offset()>();
-    constexpr auto box_oy_args = TensorAccessorArgs<box_ox_args.next_compile_time_args_offset()>();
-#endif
 
     // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
     constexpr uint32_t SOA_PAGE_BYTES = 64;
@@ -342,10 +328,6 @@ void kernel_main() {
     const auto tile_recs_acc   = TensorAccessor(tile_recs_args,   tile_recs_addr,   SOA_PAGE_BYTES);
     const auto bucket_meta_acc = TensorAccessor(bucket_meta_args, bucket_meta_addr, 64);
     const auto subchunk_meta_acc = TensorAccessor(subchunk_meta_args, subchunk_meta_addr, 64);
-#if defined(MB_FUSE_TILE_L1_CULL)
-    const auto box_ox_acc = TensorAccessor(box_ox_args, box_ox_addr, RAMP_TILE_BYTES);
-    const auto box_oy_acc = TensorAccessor(box_oy_args, box_oy_addr, RAMP_TILE_BYTES);
-#endif
     // Cull math moved to SFPU; mask is precomputed. contrib_floor still gates
     // reader-side row suppress (thr<0 sentinel == op<=floor).
     (void)cull_disabled;
@@ -392,15 +374,6 @@ void kernel_main() {
     cb_push_back(CB_XRAMP, 1);
     cb_push_back(CB_YRAMP, 1);
 
-#if defined(MB_FUSE_TILE_L1_CULL)
-    cb_reserve_back(CB_BOX_OX_FUSE, 1);
-    noc_async_read_tile(0, box_ox_acc, get_write_ptr(CB_BOX_OX_FUSE));
-    cb_reserve_back(CB_BOX_OY_FUSE, 1);
-    noc_async_read_tile(0, box_oy_acc, get_write_ptr(CB_BOX_OY_FUSE));
-    noc_async_read_barrier();
-    cb_push_back(CB_BOX_OX_FUSE, 1);
-    cb_push_back(CB_BOX_OY_FUSE, 1);
-#endif
 
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
@@ -612,8 +585,6 @@ void kernel_main() {
                 const uint32_t cov_a_bits = recp32[0];
                 const uint32_t cov_b_bits = recp32[1];
                 const uint32_t cov_c_bits = recp32[2];
-                uint32_t a_bits, b_bits, c_bits;
-                mb_cov_preconic::cov_bits_to_abc(cov_a_bits, cov_b_bits, cov_c_bits, a_bits, b_bits, c_bits);
                 const float mx_f = bits_to_f(recp32[4]);
                 const float my_f = bits_to_f(recp32[5]);
                 const uint32_t w6 = recp32[6], w7 = recp32[7];
@@ -638,9 +609,9 @@ void kernel_main() {
                 auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
                 const uint32_t mxl_bits = f_to_bits(mean_x - tx_tile);
                 const uint32_t myl_bits = f_to_bits(mean_y - ty_tile);
-                row[0] = a_bits;
-                row[1] = b_bits;
-                row[2] = c_bits;
+                row[0] = cov_a_bits;
+                row[1] = cov_b_bits;
+                row[2] = cov_c_bits;
                 row[3] = mxl_bits;
                 row[4] = myl_bits;
                 row[5] = 0u;
@@ -677,16 +648,11 @@ void kernel_main() {
             const uint32_t rec_pages = (L_sub + 1u) >> 1;
             const uint32_t mpages_mask = (L_sub + 15u) >> 4;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
-#if defined(MB_FUSE_TILE_L1_CULL)
-            const bool skip_dram_masks = (flags & MB_FLAG_CONTINUE) == 0u;
-#else
-            const bool skip_dram_masks = false;
-#endif
 
             DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, mpages_mask);
             const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
-            if (!skip_dram_masks) {
+            {
                 const uint32_t mpg0 = cull_base_sc >> 4;
                 uint32_t pp = 0;
                 while (pp < mpages_mask) {
@@ -701,13 +667,6 @@ void kernel_main() {
 #ifndef MB_TILE_L1_MASKS
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
 #endif
-            } else {
-                for (uint32_t q = 0; q < mpages_mask; ++q) {
-                    auto pg = reinterpret_cast<volatile uint32_t*>(bmask + q * IDS_PAGE_BYTES);
-                    for (uint32_t w = 0; w < IDS_PAGE_BYTES / 4u; ++w) {
-                        pg[w] = 0u;
-                    }
-                }
             }
 
             cb_reserve_back(CB_BUCKET_BULK, rec_pages);
@@ -742,8 +701,6 @@ void kernel_main() {
                     get_write_ptr(CB_MB_COUNTS));
                 cnt_ptr[0] = L_sub;
                 cnt_ptr[1] = sc_flags;
-                cnt_ptr[2] = tx * TILE_SIZE;
-                cnt_ptr[3] = ty * TILE_SIZE;
             }
             cb_push_back(CB_MB_COUNTS, 1);
             continue;
@@ -753,8 +710,6 @@ void kernel_main() {
             auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
             cnt_ptr[0] = L_sub;
             cnt_ptr[1] = flags;
-            cnt_ptr[2] = tx * TILE_SIZE;
-            cnt_ptr[3] = ty * TILE_SIZE;
         }
         cb_push_back(CB_MB_COUNTS, 1);
         }  // end subchunk loop

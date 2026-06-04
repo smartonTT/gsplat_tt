@@ -44,7 +44,6 @@
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/fill.h"
-#include "common/mb_cov_preconic.hpp"
 
 #ifdef TRISC_MATH
 #include "sfpi.h"
@@ -122,10 +121,19 @@ inline void blend_one_gaussian_math(
     vFloat x = dst_reg[DR_X + IX];
     vFloat y = dst_reg[DR_Y + IX];
 
-    // PRECONIC (iter 72): a_bits/b_bits/c_bits are A,B,C from reader emit / per-g convert.
-    vFloat A = ckernel::sfpu::Converter::as_float(a_bits);
-    vFloat B = ckernel::sfpu::Converter::as_float(b_bits);
-    vFloat C = ckernel::sfpu::Converter::as_float(c_bits);
+    // DEVCONIC: a_bits/b_bits/c_bits carry raw cov {cov_a,cov_b,cov_c}; derive A,B,C on SFPU.
+    vFloat cov_a = ckernel::sfpu::Converter::as_float(a_bits);
+    vFloat cov_b = ckernel::sfpu::Converter::as_float(b_bits);
+    vFloat cov_c = ckernel::sfpu::Converter::as_float(c_bits);
+    vFloat det = cov_a * cov_c - cov_b * cov_b;
+    vFloat det_floor = 1e-6f;
+    vec_min_max(det_floor, det);
+    vFloat inv = approx_recip(det);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    vFloat A = vFloat(-0.5f) * (cov_c * inv);
+    vFloat B = cov_b * inv;
+    vFloat C = vFloat(-0.5f) * (cov_a * inv);
     vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
     vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
     vFloat dx = x - mx;
@@ -230,93 +238,6 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
         buck + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
 }
 
-#if defined(MB_FUSE_TILE_L1_CULL)
-#include "tile_l1_cull_sfpu.hpp"
-
-constexpr uint32_t CB_BOX_OX_FUSE = 14;
-constexpr uint32_t CB_BOX_OY_FUSE = 15;
-constexpr uint32_t CB_FUSE_KEEP   = 8;
-constexpr uint32_t DR_KEEP_FUSE   = tile_l1_cull_sfpu::DR_KEEP;
-
-inline uint32_t fuse_perm(uint32_t g, uint32_t m) {
-    return tile_l1_cull_sfpu::perm(g, m);
-}
-
-// SFPU tile-local cull on L1 PACK2 records; pack 32-bit masks into CB_BMASK_BULK.
-// Runs before blend tile_regs init (DEST 0-4 unused by R,G,B,T,X,Y).
-inline void fuse_l1_cull_subchunk(
-    uint32_t num_g, uint32_t buck, uint32_t bmask_base,
-    uint32_t tx_pix, uint32_t ty_pix, float contrib_floor, bool cull_disabled) {
-    if (num_g == 0u) {
-        return;
-    }
-    const uint32_t txf_bits = mb_cov_preconic::f_to_bits(static_cast<float>(tx_pix));
-    const uint32_t tyf_bits = mb_cov_preconic::f_to_bits(static_cast<float>(ty_pix));
-
-    cb_wait_front(CB_BOX_OX_FUSE, 1);
-    cb_wait_front(CB_BOX_OY_FUSE, 1);
-
-    uint32_t processed = 0;
-    while (processed < num_g) {
-        uint32_t nb = num_g - processed;
-        if (nb > tile_l1_cull_sfpu::BATCH) {
-            nb = tile_l1_cull_sfpu::BATCH;
-        }
-
-        uint32_t a[tile_l1_cull_sfpu::BATCH], b[tile_l1_cull_sfpu::BATCH],
-                 c[tile_l1_cull_sfpu::BATCH], mx[tile_l1_cull_sfpu::BATCH],
-                 my[tile_l1_cull_sfpu::BATCH], thr[tile_l1_cull_sfpu::BATCH];
-        for (uint32_t i = 0; i < nb; i++) {
-            const uint32_t* rec = l1_splat_words(buck, processed + i);
-            a[i] = rec[0];
-            b[i] = rec[1];
-            c[i] = rec[2];
-            mx[i] = rec[4];
-            my[i] = rec[5];
-            thr[i] = tile_l1_cull_sfpu::thr_bits_from_l1(rec, contrib_floor);
-        }
-
-        tile_regs_acquire();
-        fill_tile(DR_KEEP_FUSE / 32, 0.0f);
-        copy_tile_to_dst_init_short(CB_BOX_OX_FUSE);
-        copy_tile(CB_BOX_OX_FUSE, 0, tile_l1_cull_sfpu::DR_BOX_OX / 32);
-        copy_tile_to_dst_init_short(CB_BOX_OY_FUSE);
-        copy_tile(CB_BOX_OY_FUSE, 0, tile_l1_cull_sfpu::DR_BOX_OY / 32);
-
-        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-        tile_l1_cull_sfpu::cull_dispatch(
-            DR_KEEP_FUSE, nb, processed, a, b, c, mx, my, thr, txf_bits, tyf_bits,
-            cull_disabled);
-        MATH((_llk_math_eltwise_unary_sfpu_done_()));
-
-        tile_regs_commit();
-        tile_regs_wait();
-        cb_reserve_back(CB_FUSE_KEEP, 1);
-        pack_tile(DR_KEEP_FUSE / 32, CB_FUSE_KEEP);
-        cb_push_back(CB_FUSE_KEEP, 1);
-        tile_regs_release();
-
-        cb_wait_front(CB_FUSE_KEEP, 1);
-        const volatile uint32_t* keep =
-            reinterpret_cast<const volatile uint32_t*>(get_tile_address(CB_FUSE_KEEP, 0));
-        for (uint32_t g = 0; g < nb; g++) {
-            uint32_t mask = 0u;
-            for (uint32_t m = 0; m < tile_l1_cull_sfpu::NUM_MB; m++) {
-                if (keep[fuse_perm(g, m)] != 0u) {
-                    mask |= (1u << m);
-                }
-            }
-            const uint32_t gid = processed + g;
-            reinterpret_cast<volatile uint32_t*>(
-                bmask_base + (gid >> 4) * 64u)[gid & 0xFu] = mask;
-        }
-        cb_pop_front(CB_FUSE_KEEP, 1);
-
-        processed += nb;
-    }
-}
-#endif  // MB_FUSE_TILE_L1_CULL
-
 // Blend one subchunk whose PACK2 records + masks sit in CB_BUCKET_BULK /
 // CB_BMASK_BULK (iter 49/50). Separate from in-budget CB_BUCKET/CB_BMASK so
 // bulk reserve does not deadlock against coeff-stream scratch.
@@ -334,8 +255,7 @@ inline void process_tile_l1_blend(uint32_t num_g) {
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
     for (uint32_t g = 0; g < num_g; g++) {
         const uint32_t* rec = l1_splat_words(buck, g);
-        uint32_t a, b, c;
-        mb_cov_preconic::cov_bits_to_abc(rec[0], rec[1], rec[2], a, b, c);
+        const uint32_t a = rec[0], b = rec[1], c = rec[2];
         const uint32_t d = rec[4], e = rec[5];
         const uint32_t w6 = rec[6], w7 = rec[7];
         constexpr float kUnormInv = 1.0f / 65535.0f;
@@ -360,15 +280,28 @@ inline void process_tile_l1_blend(uint32_t num_g) {
     cb_pop_front(CB_BMASK_BULK, mpages);
 }
 
+#if defined(MB_FUSE_TILE_L1_CULL)
+#include "tile_l1_cull_sfpu.hpp"
+
+// Minimal fuse compile hook (iter 71): pulls tile_l1_cull SFPU into the blend
+// compute TU for LRA margin measurement; not called on the default path.
+inline void fuse_l1_cull_compile_hook(
+    uint32_t keep_base, uint32_t nb, uint32_t pos_base,
+    const uint32_t* a, const uint32_t* b, const uint32_t* c,
+    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
+    uint32_t txf_bits, uint32_t tyf_bits) {
+    if (nb == 0u) {
+        return;
+    }
+    tile_l1_cull_sfpu::cull_dispatch(
+        keep_base, nb, pos_base, a, b, c, mx, my, thr, txf_bits, tyf_bits, false);
+}
+#endif
+
 }  // namespace
 
 void kernel_main() {
     DeviceZoneScopedN("tile_blend_sfpu");
-    const uint32_t contrib_floor_bits = get_arg_val<uint32_t>(0);
-    const bool cull_disabled = get_arg_val<uint32_t>(1) != 0;
-    float contrib_floor;
-    __builtin_memcpy(&contrib_floor, &contrib_floor_bits, 4);
-
     cb_wait_front(CB_CORE_TILES, 1);
     const uint32_t num_tiles =
         reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CORE_TILES, 0))[0];
@@ -385,11 +318,6 @@ void kernel_main() {
     cb_wait_front(CB_XRAMP, 1);
     cb_wait_front(CB_YRAMP, 1);
 
-#if defined(MB_FUSE_TILE_L1_CULL)
-    cb_wait_front(CB_BOX_OX_FUSE, 1);
-    cb_wait_front(CB_BOX_OY_FUSE, 1);
-#endif
-
     for (uint32_t t = 0; t < num_tiles; t++) {
         bool tile_regs_held = false;
         bool tile_done = false;
@@ -397,33 +325,14 @@ void kernel_main() {
             cb_wait_front(CB_MB_COUNTS, 1);
             uint32_t num_g;
             uint32_t flags = 1u;
-            uint32_t tx_pix = 0u;
-            uint32_t ty_pix = 0u;
             {
                 auto cptr = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0));
                 num_g = cptr[0];
                 flags = cptr[1];
-                tx_pix = cptr[2];
-                ty_pix = cptr[3];
             }
             const bool continue_blend = (flags & MB_FLAG_CONTINUE) != 0;
             const bool emit_tile = (flags & MB_FLAG_EMIT) != 0;
             const bool l1_bulk = (flags & MB_FLAG_L1_BULK) != 0;
-#if defined(MB_FUSE_TILE_L1_CULL)
-            const bool do_fuse_cull = l1_bulk && !continue_blend;
-#else
-            const bool do_fuse_cull = false;
-#endif
-
-            if (l1_bulk && do_fuse_cull) {
-                cb_wait_front(CB_BUCKET_BULK, (num_g + 1u) >> 1);
-                cb_wait_front(CB_BMASK_BULK, (num_g + 15u) >> 4);
-                const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
-                const uint32_t bmask_base = get_tile_address(CB_BMASK_BULK, 0);
-                fuse_l1_cull_subchunk(
-                    num_g, buck, bmask_base, tx_pix, ty_pix, contrib_floor, cull_disabled);
-                // fuse path consumed bulk CB fronts; blend will re-wait.
-            }
 
             if (!continue_blend) {
                 tile_regs_acquire();

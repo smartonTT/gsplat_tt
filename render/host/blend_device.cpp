@@ -83,10 +83,6 @@ struct DeviceContext {
     // xramp/yramp are constant; upload once. out/tile_ids grow on demand.
     std::shared_ptr<distributed::MeshBuffer> res_xramp;
     std::shared_ptr<distributed::MeshBuffer> res_yramp;
-    // MB_FUSE_TILE_L1_CULL: box-origin ramps (distinct from permuted pixel xramp/yramp).
-    std::shared_ptr<distributed::MeshBuffer> res_box_ox;
-    std::shared_ptr<distributed::MeshBuffer> res_box_oy;
-    bool res_box_uploaded = false;
     std::shared_ptr<distributed::MeshBuffer> res_out;
     std::shared_ptr<distributed::MeshBuffer> res_tile_ids;
     uint32_t res_out_tiles = 0;
@@ -163,9 +159,6 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // above FIT fall back to the per-candidate DRAM gather, still on-device);
     // the compute derives the conic on the SFPU.
     constexpr uint32_t kBucketFit = 8192u;
-    const bool fuse_tile_l1_cull =
-        (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL"),
-         fuse != nullptr && fuse[0] == '1');
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
@@ -209,22 +202,18 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     const uint32_t bulk_mask_depth = 2u * ((kBucketFit + 15u) / 16u + 1u);
     cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
     cb_cfg(CB_BMASK_BULK, 64, bulk_mask_depth, DataFormat::UInt32);
-    if (fuse_tile_l1_cull) {
-        cb_cfg(8, mb::RAMP_TILE_BYTES, 2, DataFormat::Float32);   // CB_FUSE_KEEP pack scratch
-        cb_cfg(14, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);  // box ox
-        cb_cfg(15, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);  // box oy
-    }
 
-    // The resident devcull reader binds 20 (+2 fuse box) DRAM-interleaved accessors.
-    const int num_reader_accessors = fuse_tile_l1_cull ? 22 : 20;
+    // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
+    // a/b/c/px/py/opacity/colors (7) + sort_sorted_ids + sort_tile_ranges +
+    // xramp + yramp + tile_ids + lpt_meta (6) + cull_masks + cull_mask_base (2)
+    // + proj_m_blendrec (AoS, 1) + buf_l1_recs (L1_RECORD, 1) + 2 bucket buffers
+    // + blend_subchunk_meta (iter 48 post-sort subchunk table).
+    constexpr int num_reader_accessors = 20;
     std::map<std::string, std::string> reader_defines = {
         {"MB_BUCKET_FIT", "8192u"},
         {"MB_TILE_L1_MASKS", "1"},
         {"MB_CULL_SPIN", "512"},
     };
-    if (fuse_tile_l1_cull) {
-        reader_defines["MB_FUSE_TILE_L1_CULL"] = "1";
-    }
     // Measurement-only: RDSUP hit counters in reader_alpha_blend_mb_devcull (iter 68).
     if (const char* rds = std::getenv("MB_RD_ROW_SUPPRESS_DPRINT");
         rds != nullptr && rds[0] == '1') {
@@ -248,13 +237,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
-    if (fuse_tile_l1_cull) {
-        u2d[14] = UnpackToDestMode::UnpackToDestFp32;
-        u2d[15] = UnpackToDestMode::UnpackToDestFp32;
-    }
 
+    // Optional compile probe: MB_FUSE_TILE_L1_CULL=1 pulls fuse SFPU into the
+    // blend compute TU for LRA margin measurement (iter 71); default OFF.
     std::map<std::string, std::string> compute_defines;
-    if (fuse_tile_l1_cull) {
+    if (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL");
+        fuse != nullptr && fuse[0] == '1') {
         compute_defines["MB_FUSE_TILE_L1_CULL"] = "1";
     }
     ctx.compute = CreateKernel(
@@ -640,31 +628,8 @@ static double process_frame_mb_devcull_resident(
                         }
                     }
                     reader_args.push_back(subchunk_meta_addr);  // arg 23 (iter 48)
-                    const bool fuse_tile_l1_cull =
-                        (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL"),
-                         fuse != nullptr && fuse[0] == '1');
-                    if (fuse_tile_l1_cull) {
-                        if (!ctx.res_box_ox) {
-                            ctx.res_box_ox = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
-                            ctx.res_box_oy = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
-                            ctx.res_box_uploaded = false;
-                        }
-                        if (!ctx.res_box_uploaded) {
-                            auto bx = cull::make_box_ramp(/*is_x=*/true);
-                            auto by = cull::make_box_ramp(/*is_x=*/false);
-                            distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_box_ox, bx);
-                            distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_box_oy, by);
-                            ctx.res_box_uploaded = true;
-                        }
-                        reader_args.push_back(
-                            static_cast<uint32_t>(ctx.res_box_ox->address()));  // arg 24
-                        reader_args.push_back(
-                            static_cast<uint32_t>(ctx.res_box_oy->address()));  // arg 25
-                    }
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
-                    SetRuntimeArgs(program, ctx.compute, core, {
-                        floor_bits, cull_disabled ? 1u : 0u,
-                    });
+                    SetRuntimeArgs(program, ctx.compute, core, {0u});
                     SetRuntimeArgs(program, ctx.writer, core, {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                     });
@@ -713,10 +678,6 @@ static double process_frame_mb_devcull_resident(
 
     tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
-}
-
-namespace cull {
-std::vector<uint32_t> make_box_ramp(bool is_x);
 }
 
 // ===========================================================================
@@ -1302,7 +1263,6 @@ double blend_mb_devcull_resident(
     double cull_ms = 0.0;
     const bool sfpu_cull = true;
     const bool chain_cull_blend = sfpu_cull && gsplat_tt::env_config::cull_pipeline_enabled();
-    // Standalone tile_l1_cull still required for subchunk>0 DRAM masks until full fuse+stash.
     if (sfpu_cull) {
         if (!g_ctx_cull) {
             g_ctx_cull = std::make_unique<DeviceContext>(::mb::tile_l1_cull::init_device_context());
