@@ -1,5 +1,5 @@
-id=3
-sha=5129b5e
-ts=2026-06-04T06:42:36-0700
-desc=iter 74: mat: sc0 overflow tiles use l1 bulk not blendrec
-bin=bc902a49a43a8a11
+id=6
+sha=b6397f7
+ts=2026-06-04T06:54:34-0700
+desc=iter 76: mat: sc>=1 REC_BATCH=32 ring-pack batched writes cached sorted-id page
+bin=ab1ed9b14884cb7b

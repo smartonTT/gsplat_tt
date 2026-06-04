@@ -346,7 +346,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     };
     page_cb(0, PAGE_BYTES);
     page_cb(1, PAGE_BYTES);
-    page_cb(2, 16u * PAGE_BYTES);
+    page_cb(2, 32u * PAGE_BYTES);  // REC_BATCH=32 blendrec gather ring (iter 76)
     page_cb(3, 32u);
     page_cb(4, bucket_fit * 64u);
     page_cb(5, (2u * bucket_fit + 256u) * 4u);

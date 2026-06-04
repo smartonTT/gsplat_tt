@@ -19,7 +19,9 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t TILE_SIZE = 32u;
-constexpr uint32_t REC_BATCH = 16u;
+// iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
+constexpr uint32_t REC_BATCH = 32u;
+constexpr uint32_t PACK_OFF = 32u;  // pack PACK2 into 2nd half of each 64B staging slot
 
 constexpr uint32_t CB_SCR = 0;
 constexpr uint32_t CB_IDS = 1;
@@ -245,67 +247,20 @@ void kernel_main() {
                 continue;
             }
 
+            // sc>=1: batched blendrec gather (iter 76: REC_BATCH=32, per-slot PACK2,
+            // one write barrier per batch; reuse sorted-id page across splats).
             const uint32_t id_start_sc = id_start + sc_off;
             uint32_t processed = 0;
             uint32_t nbrec = 0;
             uint32_t brec_out_g[REC_BATCH];
-            while (processed < L_sub) {
-                const uint32_t global_idx = id_start_sc + processed;
-                const uint32_t id_page = global_idx >> 4;
-                const uint32_t id_ip = global_idx & 0xF;
-                noc_async_read(get_noc_addr(id_page, sorted_acc), ids_scr, PAGE_BYTES);
-                noc_async_read_barrier();
-                uint32_t take = ELEMS_PER_PAGE - id_ip;
-                if (take > L_sub - processed) take = L_sub - processed;
-                for (uint32_t j = 0; j < take; ++j) {
-                    const uint32_t gid = idsp[id_ip + j];
-                    const uint32_t slot = rec_l1 + nbrec * PAGE_BYTES;
-                    noc_async_read(get_noc_addr(gid, blendrec_acc), slot, PAGE_BYTES);
-                    brec_out_g[nbrec] = processed + j;
-                    nbrec++;
-                    if (nbrec == REC_BATCH) {
-                        noc_async_read_barrier();
-                        for (uint32_t b = 0; b < nbrec; ++b) {
-                            const uint32_t out_g = brec_out_g[b];
-                            const uint32_t out_page = tile_payload_cursor + (out_g >> 1);
-                            const uint32_t half_off = (out_g & 1u) * L1_SPLAT_BYTES;
-                            auto aos = reinterpret_cast<volatile uint32_t*>(
-                                rec_l1 + b * PAGE_BYTES);
-                            auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
-                            float mx = bits_to_f(aos[3]);
-                            float my = bits_to_f(aos[4]);
-                            mx -= tx_tile;
-                            my -= ty_tile;
-                            splat[0] = aos[0];
-                            splat[1] = aos[1];
-                            splat[2] = aos[2];
-                            splat[3] = aos[9];
-                            splat[4] = f_to_bits(mx);
-                            splat[5] = f_to_bits(my);
-                            const float op = bits_to_f(aos[5]);
-                            const float cr = bits_to_f(aos[6]);
-                            const float cg = bits_to_f(aos[7]);
-                            const float cb = bits_to_f(aos[8]);
-                            splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
-                            splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
-                            noc_async_write(
-                                pack_l1,
-                                get_noc_addr(out_page, payload_acc) + half_off,
-                                L1_SPLAT_BYTES);
-                        }
-                        nbrec = 0;
-                    }
-                }
-                processed += take;
-            }
-            if (nbrec > 0) {
+            int32_t sorted_id_page_cached = -1;
+            auto flush_brec_batch = [&]() {
+                if (nbrec == 0) return;
                 noc_async_read_barrier();
                 for (uint32_t b = 0; b < nbrec; ++b) {
-                    const uint32_t out_g = brec_out_g[b];
-                    const uint32_t out_page = tile_payload_cursor + (out_g >> 1);
-                    const uint32_t half_off = (out_g & 1u) * L1_SPLAT_BYTES;
-                    auto aos = reinterpret_cast<volatile uint32_t*>(rec_l1 + b * PAGE_BYTES);
-                    auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
+                    const uint32_t slot = rec_l1 + b * PAGE_BYTES;
+                    auto aos = reinterpret_cast<volatile uint32_t*>(slot);
+                    auto splat = reinterpret_cast<volatile uint32_t*>(slot + PACK_OFF);
                     float mx = bits_to_f(aos[3]);
                     float my = bits_to_f(aos[4]);
                     mx -= tx_tile;
@@ -322,13 +277,39 @@ void kernel_main() {
                     const float cb = bits_to_f(aos[8]);
                     splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
                     splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
+                    const uint32_t out_g = brec_out_g[b];
+                    const uint32_t out_page = tile_payload_cursor + (out_g >> 1);
+                    const uint32_t half_off = (out_g & 1u) * L1_SPLAT_BYTES;
                     noc_async_write(
-                        pack_l1,
+                        slot + PACK_OFF,
                         get_noc_addr(out_page, payload_acc) + half_off,
                         L1_SPLAT_BYTES);
                 }
+                noc_async_write_barrier();
+                nbrec = 0;
+            };
+            while (processed < L_sub) {
+                const uint32_t global_idx = id_start_sc + processed;
+                const uint32_t id_page = global_idx >> 4;
+                const uint32_t id_ip = global_idx & 0xF;
+                if (static_cast<int32_t>(id_page) != sorted_id_page_cached) {
+                    noc_async_read(get_noc_addr(id_page, sorted_acc), ids_scr, PAGE_BYTES);
+                    noc_async_read_barrier();
+                    sorted_id_page_cached = static_cast<int32_t>(id_page);
+                }
+                uint32_t take = ELEMS_PER_PAGE - id_ip;
+                if (take > L_sub - processed) take = L_sub - processed;
+                for (uint32_t j = 0; j < take; ++j) {
+                    const uint32_t gid = idsp[id_ip + j];
+                    const uint32_t slot = rec_l1 + nbrec * PAGE_BYTES;
+                    noc_async_read(get_noc_addr(gid, blendrec_acc), slot, PAGE_BYTES);
+                    brec_out_g[nbrec] = processed + j;
+                    nbrec++;
+                    if (nbrec == REC_BATCH) flush_brec_batch();
+                }
+                processed += take;
             }
-            noc_async_write_barrier();
+            flush_brec_batch();
             tile_payload_cursor += (L_sub + 1u) >> 1;
         }
     }
