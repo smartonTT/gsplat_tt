@@ -540,15 +540,38 @@ void kernel_main() {
             // get_write_ptr, never push/pop). Pushing them wedged the ring when
             // in-budget tiles shared CB_BUCKET with overflow bulk (db9dcd0) or
             // when back-to-back in-budget tiles ran ahead of compute drain.
-            // Iter 79: single-pass emit (coeff stream then count). Requires
-            // CB_MB_COEFF depth 128 on host (blend_device.cpp kMbCoeffDepth);
-            // compute blocks on CB_MB_COUNTS until count lands, so depth must
-            // cover max emit_n per in-budget tile or the ring deadlocks.
             uint32_t emit_n = 0;
 #if defined(MB_RD_ROW_SUPPRESS_DPRINT)
             uint32_t suppress_mask0 = 0;
             uint32_t suppress_op = 0;
 #endif
+            for (uint32_t k = 0; k < L; ++k) {
+                const uint32_t mask = bmptr[k];
+                auto recp32 = l1_splat_words(buck, sorted[k]);
+                constexpr float kUnormInv = 1.0f / 65535.0f;
+                const float op_f =
+                    static_cast<float>(recp32[6] & 0xffffu) * kUnormInv;
+                if (rd_row_suppress(mask, op_f, contrib_floor)) {
+#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
+                    if (mask == 0u) {
+                        ++suppress_mask0;
+                    } else {
+                        ++suppress_op;
+                    }
+#endif
+                    continue;
+                }
+                ++emit_n;
+            }
+            // Count before coeff stream: CB_MB_COEFF depth is 8; compute must
+            // drain while the reader emits (see blend_device.cpp cb_cfg).
+            cb_reserve_back(CB_MB_COUNTS, 1);
+            {
+                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+                cnt_ptr[0] = emit_n;
+                cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
+            }
+            cb_push_back(CB_MB_COUNTS, 1);
             {
             // MEASUREMENT zone: the per-candidate emit loop (repack record ->
             // 64B coeff row -> CB_MB_COEFF push -> fence) for ONE in-budget tile.
@@ -573,16 +596,8 @@ void kernel_main() {
                 const uint32_t op_bits = f_to_bits(op_f);
                 const uint32_t mask = bmptr[k];  // 16-aligned cull_base -> mask[k]==L1[k]
                 if (rd_row_suppress(mask, op_f, contrib_floor)) {
-#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
-                    if (mask == 0u) {
-                        ++suppress_mask0;
-                    } else {
-                        ++suppress_op;
-                    }
-#endif
                     continue;
                 }
-                ++emit_n;
                 // Reconstruct the absolute mean so the inline-mask path and the
                 // emitted row's mxl = (mean - tx_tile) both work unchanged.
                 const float mean_x  = mx_f + tx_tile;
@@ -623,13 +638,6 @@ void kernel_main() {
                    << " m0=" << suppress_mask0 << " op=" << suppress_op << ENDL();
 #endif
             }  // end rd_bk_emit zone
-            cb_reserve_back(CB_MB_COUNTS, 1);
-            {
-                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
-                cnt_ptr[0] = emit_n;
-                cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
-            }
-            cb_push_back(CB_MB_COUNTS, 1);
             continue;
         }
 
