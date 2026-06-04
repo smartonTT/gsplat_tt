@@ -68,6 +68,7 @@ struct SortCallTimings {
     double d2h_ms = 0.0;       // device->host readback of sorted ids
     double compact_ms = 0.0;   // host Pass4 aligned->contiguous compaction
     double publish_ms = 0.0;   // H2D of the resident contiguous outputs
+    double materialize_ms = 0.0;  // post-radix PACK2 subchunk materialize (step A)
     double total_ms = 0.0;     // wall clock of the whole call
     int stage = -1;            // which staged path ran (0 = S0, 1 = S1)
 };
