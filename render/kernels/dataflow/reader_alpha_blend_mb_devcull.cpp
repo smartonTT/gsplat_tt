@@ -252,7 +252,9 @@ void kernel_main() {
     const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(20);  // resident sort_tile_recs (dense)
     const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
     const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(22);  // M0: pre-sized 32B record bucket
-    const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(23);  // blend_subchunk_meta (iter 48)
+    const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(23);  // blend_subchunk_meta [dir_base,num_sc]
+    const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(24);
+    const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(25);
 
     constexpr auto a_args        = TensorAccessorArgs<0>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -274,6 +276,10 @@ void kernel_main() {
     constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
     constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
     constexpr auto subchunk_meta_args = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
+    constexpr auto subchunk_payload_args =
+        TensorAccessorArgs<subchunk_meta_args.next_compile_time_args_offset()>();
+    constexpr auto subchunk_dir_args =
+        TensorAccessorArgs<subchunk_payload_args.next_compile_time_args_offset()>();
 
     // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
     constexpr uint32_t SOA_PAGE_BYTES = 64;
@@ -328,6 +334,9 @@ void kernel_main() {
     const auto tile_recs_acc   = TensorAccessor(tile_recs_args,   tile_recs_addr,   SOA_PAGE_BYTES);
     const auto bucket_meta_acc = TensorAccessor(bucket_meta_args, bucket_meta_addr, 64);
     const auto subchunk_meta_acc = TensorAccessor(subchunk_meta_args, subchunk_meta_addr, 64);
+    const auto subchunk_payload_acc =
+        TensorAccessor(subchunk_payload_args, subchunk_payload_addr, L1_PACK_PAGE_BYTES);
+    const auto subchunk_dir_acc = TensorAccessor(subchunk_dir_args, subchunk_dir_addr, 64);
     // Cull math moved to SFPU; mask is precomputed. contrib_floor still gates
     // reader-side row suppress (thr<0 sentinel == op<=floor).
     (void)cull_disabled;
@@ -436,6 +445,7 @@ void kernel_main() {
         // Post-sort subchunk dispatch (iter 48): fat tiles (count > MB_BUCKET_FIT)
         // are processed as a depth-ordered sequence of subchunks; blend state
         // carries across subchunks via MB_COUNTS flags (bit0=emit, bit1=continue).
+        uint32_t dir_base = 0;
         uint32_t num_subchunks = 1;
         {
             const uint32_t e0 = tile_id * 2u;
@@ -445,7 +455,8 @@ void kernel_main() {
             noc_async_read_tile(pg, subchunk_meta_acc, scr);
             noc_async_read_barrier();
             auto smp = reinterpret_cast<volatile uint32_t*>(scr);
-            num_subchunks = smp[off];
+            dir_base = smp[off];
+            num_subchunks = smp[off + 1u];
             if (num_subchunks == 0u) {
                 num_subchunks = 1u;
             }
@@ -453,10 +464,20 @@ void kernel_main() {
 
         for (uint32_t sc = 0; sc < num_subchunks; ++sc) {
             const uint32_t sc_off = sc * MB_BUCKET_FIT;
-            const uint32_t L_sub = (sc_off >= L) ? 0u
+            uint32_t L_sub = (sc_off >= L) ? 0u
                 : ((L - sc_off > MB_BUCKET_FIT) ? MB_BUCKET_FIT : (L - sc_off));
-            const uint32_t flags = ((sc > 0u) ? MB_FLAG_CONTINUE : 0u)
+            uint32_t flags = ((sc > 0u) ? MB_FLAG_CONTINUE : 0u)
                 | ((sc + 1u == num_subchunks) ? MB_FLAG_EMIT : 0u);
+            uint32_t payload_page = 0;
+            if (num_subchunks > 1u) {
+                const uint32_t de = (dir_base + sc) * 4u;
+                const uint32_t dpg = de >> 4;
+                const uint32_t dof = de & 0xF;
+                const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+                noc_async_read_tile(dpg, subchunk_dir_acc, scr);
+                noc_async_read_barrier();
+                payload_page = reinterpret_cast<volatile uint32_t*>(scr)[dof];
+            }
             const uint32_t id_start_sc = id_start + sc_off;
             const uint32_t cull_base_sc = cull_base + sc_off;
 
@@ -641,13 +662,14 @@ void kernel_main() {
             continue;
         }
 
-        // Overflow: PACK2 bulk L1 + cp_l1_blend (iter 51). Depth-sorted ids =>
-        // pack order matches cull_masks[g]. Ring depth 2x subchunk lets the reader
-        // prefetch subchunk N+1 while compute blends N (cb_push/wait_front).
+        // Overflow: PACK2 bulk L1 + cp_l1_blend (iter 51). Step C1 payload path
+        // gated behind num_subchunks>1 once dir/mat ordering verified on device.
         if (L_sub > 0) {
             const uint32_t rec_pages = (L_sub + 1u) >> 1;
             const uint32_t mpages_mask = (L_sub + 15u) >> 4;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
+            // C1b: reverted — payload DMA ~24dB until overflow sc0 mat uses sorted_ids order.
+            const bool use_payload = false;
 
             DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, mpages_mask);
@@ -671,7 +693,20 @@ void kernel_main() {
 
             cb_reserve_back(CB_BUCKET_BULK, rec_pages);
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
-            {
+            if (use_payload) {
+                const uint32_t page0 = payload_page;
+                uint32_t pp = 0;
+                while (pp < rec_pages) {
+                    const uint32_t end = (pp + 64u < rec_pages) ? pp + 64u : rec_pages;
+                    for (uint32_t q = pp; q < end; ++q) {
+                        noc_async_read_tile(
+                            page0 + q, subchunk_payload_acc,
+                            buck + q * L1_PACK_PAGE_BYTES);
+                    }
+                    noc_async_read_barrier();
+                    pp = end;
+                }
+            } else {
                 const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
                 const uint32_t aos_base = get_write_ptr(CB_SCR_ATTR);
                 uint32_t gids[16];

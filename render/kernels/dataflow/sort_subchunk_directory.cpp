@@ -75,8 +75,9 @@ void kernel_main() {
             const uint32_t off = e0 & 0xF;
             noc_async_read(get_noc_addr(pg, blend_meta_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
-            scrp[off] = num_sc;
-            scrp[off + 1u] = count;
+            // blend_subchunk_meta per tile: [dir_base, num_subchunks] (host layout).
+            scrp[off] = dir_cursor;
+            scrp[off + 1u] = num_sc;
             noc_async_write(scr, get_noc_addr(pg, blend_meta_acc), PAGE_BYTES);
             noc_async_write_barrier();
         }

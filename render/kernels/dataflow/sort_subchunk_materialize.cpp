@@ -62,27 +62,30 @@ void kernel_main() {
     const uint32_t blendrec_addr  = get_arg_val<uint32_t>(2);
     const uint32_t l1_recs_addr   = get_arg_val<uint32_t>(3);
     const uint32_t payload_addr   = get_arg_val<uint32_t>(4);
-    const uint32_t payload_prefix_addr = get_arg_val<uint32_t>(5);
-    const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(6);
-    const uint32_t tile_ids_start = get_arg_val<uint32_t>(7);
-    const uint32_t tile_ids_count = get_arg_val<uint32_t>(8);
-    const uint32_t tiles_x        = get_arg_val<uint32_t>(9);
-    const uint32_t bucket_fit     = get_arg_val<uint32_t>(10);
+    const uint32_t blend_meta_addr = get_arg_val<uint32_t>(5);
+    const uint32_t dir_addr       = get_arg_val<uint32_t>(6);
+    const uint32_t tile_ids_addr  = get_arg_val<uint32_t>(7);
+    const uint32_t tile_ids_start = get_arg_val<uint32_t>(8);
+    const uint32_t tile_ids_count = get_arg_val<uint32_t>(9);
+    const uint32_t tiles_x        = get_arg_val<uint32_t>(10);
+    const uint32_t bucket_fit     = get_arg_val<uint32_t>(11);
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
     constexpr auto blendrec_args = TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
     constexpr auto l1_recs_args = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto payload_args = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
-    constexpr auto prefix_args = TensorAccessorArgs<payload_args.next_compile_time_args_offset()>();
-    constexpr auto tile_ids_args = TensorAccessorArgs<prefix_args.next_compile_time_args_offset()>();
+    constexpr auto blend_meta_args = TensorAccessorArgs<payload_args.next_compile_time_args_offset()>();
+    constexpr auto dir_args = TensorAccessorArgs<blend_meta_args.next_compile_time_args_offset()>();
+    constexpr auto tile_ids_args = TensorAccessorArgs<dir_args.next_compile_time_args_offset()>();
 
     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
     const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_PACK_PAGE_BYTES);
     const auto payload_acc  = TensorAccessor(payload_args,  payload_addr,  L1_PACK_PAGE_BYTES);
-    const auto prefix_acc   = TensorAccessor(prefix_args,   payload_prefix_addr,PAGE_BYTES);
+    const auto blend_meta_acc = TensorAccessor(blend_meta_args, blend_meta_addr, PAGE_BYTES);
+    const auto dir_acc      = TensorAccessor(dir_args,      dir_addr,      PAGE_BYTES);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, PAGE_BYTES);
 
     if (tile_ids_count == 0) {
@@ -148,16 +151,16 @@ void kernel_main() {
         const uint32_t num_sc =
             (count + bucket_fit - 1u) / bucket_fit;
 
-        uint32_t payload_page_base = 0;
+        uint32_t dir_base = 0;
         {
-            const uint32_t pg = tile_id >> 4;
-            const uint32_t off = tile_id & 0xF;
-            noc_async_read(get_noc_addr(pg, prefix_acc), scr, PAGE_BYTES);
+            const uint32_t e0 = tile_id * 2u;
+            const uint32_t pg = e0 >> 4;
+            const uint32_t off = e0 & 0xF;
+            noc_async_read(get_noc_addr(pg, blend_meta_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
-            payload_page_base = scrp[off];
+            dir_base = scrp[off];
         }
 
-        uint32_t tile_payload_cursor = payload_page_base;
         for (uint32_t sc = 0; sc < num_sc; ++sc) {
             const uint32_t sc_off = sc * bucket_fit;
             const uint32_t L_sub = (sc_off >= count) ? 0u
@@ -165,6 +168,17 @@ void kernel_main() {
 
             if (L_sub == 0u) {
                 continue;
+            }
+
+            // C1b: page index must match sort_subchunk_dir (same field blend reader DMAs).
+            uint32_t sc_page = 0;
+            {
+                const uint32_t e0 = (dir_base + sc) * 4u;
+                const uint32_t pg = e0 >> 4;
+                const uint32_t off = e0 & 0xF;
+                noc_async_read(get_noc_addr(pg, dir_acc), scr, PAGE_BYTES);
+                noc_async_read_barrier();
+                sc_page = scrp[off];
             }
 
             // First subchunk splats live in buf_l1_recs (iter 74: was blendrec-only
@@ -233,7 +247,7 @@ void kernel_main() {
                 }
                 for (uint32_t k = 0; k < L; ++k) {
                     const uint32_t idx = sorted[k];
-                    const uint32_t out_page = tile_payload_cursor + (k >> 1);
+                    const uint32_t out_page = sc_page + (k >> 1);
                     const uint32_t half_off = (k & 1u) * L1_SPLAT_BYTES;
                     const uint32_t src_page = (idx >> 1);
                     const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
@@ -243,7 +257,6 @@ void kernel_main() {
                         L1_SPLAT_BYTES);
                 }
                 noc_async_write_barrier();
-                tile_payload_cursor += (L_sub + 1u) >> 1;
                 continue;
             }
 
@@ -278,7 +291,7 @@ void kernel_main() {
                     splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
                     splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
                     const uint32_t out_g = brec_out_g[b];
-                    const uint32_t out_page = tile_payload_cursor + (out_g >> 1);
+                    const uint32_t out_page = sc_page + (out_g >> 1);
                     const uint32_t half_off = (out_g & 1u) * L1_SPLAT_BYTES;
                     noc_async_write(
                         slot + PACK_OFF,
@@ -310,7 +323,6 @@ void kernel_main() {
                 processed += take;
             }
             flush_brec_batch();
-            tile_payload_cursor += (L_sub + 1u) >> 1;
         }
     }
 }

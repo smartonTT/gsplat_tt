@@ -207,8 +207,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // a/b/c/px/py/opacity/colors (7) + sort_sorted_ids + sort_tile_ranges +
     // xramp + yramp + tile_ids + lpt_meta (6) + cull_masks + cull_mask_base (2)
     // + proj_m_blendrec (AoS, 1) + buf_l1_recs (L1_RECORD, 1) + 2 bucket buffers
-    // + blend_subchunk_meta (iter 48 post-sort subchunk table).
-    constexpr int num_reader_accessors = 20;
+    // + blend_subchunk_meta + sort_subchunk_payload/dir (step C1 overflow reader).
+    constexpr int num_reader_accessors = 22;
     std::map<std::string, std::string> reader_defines = {
         {"MB_BUCKET_FIT", "8192u"},
         {"MB_TILE_L1_MASKS", "1"},
@@ -507,12 +507,18 @@ static double process_frame_mb_devcull_resident(
     if (!launch_only) {
     // Post-sort subchunk meta: device-written at sort publish (iter 55 / step B).
     auto buf_sc_meta = ds::get_buffer("blend_subchunk_meta");
-    if (!buf_sc_meta) {
+    auto buf_sc_payload = ds::get_buffer("sort_subchunk_payload");
+    auto buf_sc_dir = ds::get_buffer("sort_subchunk_dir");
+    if (!buf_sc_meta || !buf_sc_payload || !buf_sc_dir) {
         if (ok) *ok = false;
         return 0.0;
     }
     const uint32_t subchunk_meta_addr =
         static_cast<uint32_t>(buf_sc_meta->address());
+    const uint32_t subchunk_payload_addr =
+        static_cast<uint32_t>(buf_sc_payload->address());
+    const uint32_t subchunk_dir_addr =
+        static_cast<uint32_t>(buf_sc_dir->address());
 
     // SFPU cull: the blend reader reads the precomputed 32-bit mask from the
     // resident cull_masks buffer (registered by the cull pass) instead of
@@ -627,7 +633,9 @@ static double process_frame_mb_devcull_resident(
                             }
                         }
                     }
-                    reader_args.push_back(subchunk_meta_addr);  // arg 23 (iter 48)
+                    reader_args.push_back(subchunk_meta_addr);       // arg 23
+                    reader_args.push_back(subchunk_payload_addr);   // arg 24 (C1)
+                    reader_args.push_back(subchunk_dir_addr);       // arg 25 (C1)
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
                     SetRuntimeArgs(program, ctx.compute, core, {0u});
                     SetRuntimeArgs(program, ctx.writer, core, {

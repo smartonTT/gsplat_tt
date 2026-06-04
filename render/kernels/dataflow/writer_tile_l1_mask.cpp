@@ -126,7 +126,7 @@ void kernel_main() {
             const uint32_t off = e0 & 0xF;
             noc_async_read_tile(pg, subchunk_meta_acc, scratch_addr);
             noc_async_read_barrier();
-            num_subchunks = scratch_ptr[off];
+            num_subchunks = scratch_ptr[off + 1u];
             if (num_subchunks == 0u) num_subchunks = 1u;
         }
 

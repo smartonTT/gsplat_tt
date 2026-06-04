@@ -352,7 +352,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     page_cb(5, (2u * bucket_fit + 256u) * 4u);
 
     std::vector<uint32_t> ct;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 9; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     }
     ctx.ksubchunk = CreateKernel(
@@ -473,7 +473,8 @@ static bool launch_subchunk_materialize(
     auto bl1 = device_state::get_buffer("sort_l1_recs");
     auto bsids = device_state::get_buffer("sort_sorted_ids");
     auto brng = device_state::get_buffer("sort_tile_ranges");
-    if (!bbrec || !bl1 || !bsids || !brng) {
+    if (!bbrec || !bl1 || !bsids || !brng || !ctx->buf_blend_subchunk_meta ||
+        !ctx->buf_subchunk_dir) {
         return false;
     }
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
@@ -485,7 +486,8 @@ static bool launch_subchunk_materialize(
             static_cast<uint32_t>(bbrec->address()),
             static_cast<uint32_t>(bl1->address()),
             static_cast<uint32_t>(ctx->buf_subchunk_payload->address()),
-            static_cast<uint32_t>(ctx->buf_subchunk_prefix->address()),
+            static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
+            static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
             static_cast<uint32_t>(ctx->buf_tile_ids->address()),
             lpt.per_core_offset[c],
             lpt.per_core_count[c],
@@ -1802,6 +1804,12 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::cerr << "[gsplat_tt::sort] subchunk directory launch failed\n";
                 return fail();
             }
+            if (sort_blend_pipe_enabled()) {
+                // C1: materialize reads prefix/dir written by directory — drain dir
+                // before enqueueing mat on the piped CQ (not between mat and blend).
+                GSPLAT_HOST_ZONE("host_finish_sort_subchunk_dir");
+                distributed::Finish(*ctx->cq);
+            }
             {
                 uint32_t max_lpt_tiles = 0;
                 for (uint32_t c = 0; c < num_cores; c++) {
@@ -1892,7 +1900,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             P_full, P_kept, num_tiles, max_n, T.bin_ms, T.upload_ms, T.kernel_ms,
             T.d2h_ms, T.compact_ms, T.publish_ms, T.materialize_ms, T.total_ms);
         if (device_ok) *device_ok = true;
-        maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
+        // Step C1: materialize before blend on the piped CQ (no Finish here).
         if (subchunk_materialize && sort_blend_pipe_enabled()) {
             const auto t_mat0 = clk::now();
             if (!launch_subchunk_materialize(
@@ -1901,13 +1909,13 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
                 return fail();
             }
-            GSPLAT_HOST_ZONE("host_finish_sort_materialize");
-            distributed::Finish(*ctx->cq);
             T.materialize_ms =
                 std::chrono::duration<double, std::milli>(clk::now() - t_mat0).count();
             std::fprintf(
-                stderr, "[SUBCHUNK] materialize_ms=%.2f\n", T.materialize_ms);
+                stderr, "[SUBCHUNK] materialize_ms=%.2f (piped pre-blend)\n",
+                T.materialize_ms);
         }
+        maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
         return result;
     } catch (const std::exception& e) {
         std::cerr << "[gsplat_tt::sort] resident-pairs path failed: " << e.what() << "\n";

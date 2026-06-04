@@ -246,7 +246,8 @@ void kernel_main() {
         const uint32_t scr = get_write_ptr(CB_SCR_IDS);
         noc_async_read_tile((tile_id * 2u) >> 4, subchunk_meta_acc, scr);
         noc_async_read_barrier();
-        uint32_t nsc = reinterpret_cast<volatile uint32_t*>(scr)[(tile_id * 2u) & 0xF];
+        const uint32_t meta_off = (tile_id * 2u) & 0xF;
+        uint32_t nsc = reinterpret_cast<volatile uint32_t*>(scr)[meta_off + 1u];
         if (nsc == 0u) nsc = 1u;
         num_work += nsc;
     }
@@ -303,7 +304,7 @@ void kernel_main() {
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
             noc_async_read_tile(pg, subchunk_meta_acc, scr);
             noc_async_read_barrier();
-            num_subchunks = reinterpret_cast<volatile uint32_t*>(scr)[off];
+            num_subchunks = reinterpret_cast<volatile uint32_t*>(scr)[off + 1u];
             if (num_subchunks == 0u) num_subchunks = 1u;
         }
 
