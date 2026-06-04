@@ -214,6 +214,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         {"MB_TILE_L1_MASKS", "1"},
         {"MB_CULL_SPIN", "512"},
     };
+    // Measurement-only: RDSUP hit counters in reader_alpha_blend_mb_devcull (iter 68).
+    if (const char* rds = std::getenv("MB_RD_ROW_SUPPRESS_DPRINT");
+        rds != nullptr && rds[0] == '1') {
+        reader_defines["MB_RD_ROW_SUPPRESS_DPRINT"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
