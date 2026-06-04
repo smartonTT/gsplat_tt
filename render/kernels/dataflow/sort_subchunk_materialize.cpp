@@ -4,8 +4,9 @@
 //
 // Post-radix subchunk materialize (iter 54 / step A): depth-sorted PACK2 payloads.
 // In-budget tiles (count <= bucket_fit): bulk-copy buf_l1_recs + L1 radix
-// permute (no per-splat blendrec gather). Overflow tiles: batched blendrec
-// gather into depth-ordered PACK2 slabs.
+// permute (no per-splat blendrec gather). Overflow tiles: sc==0 uses the same
+// L1 bulk path (first bucket_fit splats are resident in buf_l1_recs); sc>=1
+// uses batched blendrec gather into depth-ordered PACK2 slabs.
 
 #include <cstdint>
 
@@ -139,8 +140,11 @@ void kernel_main() {
             }
         }
         const uint32_t count = (id_end > id_start) ? (id_end - id_start) : 0u;
+        if (count == 0u) {
+            continue;
+        }
         const uint32_t num_sc =
-            count == 0u ? 1u : (count + bucket_fit - 1u) / bucket_fit;
+            (count + bucket_fit - 1u) / bucket_fit;
 
         uint32_t payload_page_base = 0;
         {
@@ -151,73 +155,6 @@ void kernel_main() {
             payload_page_base = scrp[off];
         }
 
-        if (count > 0u && count <= bucket_fit && num_sc == 1u) {
-            const uint32_t L = count;
-            const uint32_t npages = (L + 1u) >> 1;
-            const uint32_t buck = get_write_ptr(CB_BUCKET);
-            {
-                const uint32_t page0 = tile_id * (bucket_fit >> 1);
-                uint32_t pp = 0;
-                while (pp < npages) {
-                    const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(page0 + q, l1_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
-            }
-            const uint32_t bs = get_write_ptr(CB_BSORT);
-            uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-            uint32_t* idxB = idxA + bucket_fit;
-            uint32_t* cnt  = idxB + bucket_fit;
-            auto key_of = [&](uint32_t idx) -> uint32_t {
-                return l1_splat_words(buck, idx)[3];
-            };
-            uint32_t* sorted;
-            if (L <= 16u) {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                for (uint32_t i = 1; i < L; ++i) {
-                    const uint32_t tmp = idxA[i];
-                    const uint32_t ki = key_of(tmp);
-                    uint32_t j = i;
-                    while (j > 0 && key_of(idxA[j - 1]) > ki) { idxA[j] = idxA[j - 1]; --j; }
-                    idxA[j] = tmp;
-                }
-                sorted = idxA;
-            } else {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                uint32_t* cur = idxA;
-                uint32_t* nxt = idxB;
-                for (uint32_t byte = 0; byte < 4u; ++byte) {
-                    const uint32_t shift = byte * 8u;
-                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
-                    for (uint32_t i = 0; i < L; ++i) cnt[(key_of(cur[i]) >> shift) & 0xFFu]++;
-                    uint32_t sum = 0;
-                    for (uint32_t c = 0; c < 256u; ++c) { const uint32_t t = cnt[c]; cnt[c] = sum; sum += t; }
-                    for (uint32_t i = 0; i < L; ++i) {
-                        const uint32_t b = (key_of(cur[i]) >> shift) & 0xFFu;
-                        nxt[cnt[b]++] = cur[i];
-                    }
-                    uint32_t* t = cur; cur = nxt; nxt = t;
-                }
-                sorted = cur;
-            }
-            for (uint32_t k = 0; k < L; ++k) {
-                const uint32_t idx = sorted[k];
-                const uint32_t out_page = payload_page_base + (k >> 1);
-                const uint32_t half_off = (k & 1u) * L1_SPLAT_BYTES;
-                const uint32_t src_page = (idx >> 1);
-                const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                noc_async_write(
-                    buck + src_page * L1_PACK_PAGE_BYTES + src_half,
-                    get_noc_addr(out_page, payload_acc) + half_off,
-                    L1_SPLAT_BYTES);
-            }
-            noc_async_write_barrier();
-            continue;
-        }
-
         uint32_t tile_payload_cursor = payload_page_base;
         for (uint32_t sc = 0; sc < num_sc; ++sc) {
             const uint32_t sc_off = sc * bucket_fit;
@@ -225,6 +162,86 @@ void kernel_main() {
                 : ((count - sc_off > bucket_fit) ? bucket_fit : (count - sc_off));
 
             if (L_sub == 0u) {
+                continue;
+            }
+
+            // First subchunk splats live in buf_l1_recs (iter 74: was blendrec-only
+            // for all overflow tiles).
+            if (sc == 0u && L_sub <= bucket_fit) {
+                const uint32_t L = L_sub;
+                const uint32_t npages = (L + 1u) >> 1;
+                const uint32_t buck = get_write_ptr(CB_BUCKET);
+                {
+                    const uint32_t page0 = tile_id * (bucket_fit >> 1);
+                    uint32_t pp = 0;
+                    while (pp < npages) {
+                        const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+                        for (uint32_t q = pp; q < end; ++q) {
+                            noc_async_read_tile(
+                                page0 + q, l1_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
+                        }
+                        noc_async_read_barrier();
+                        pp = end;
+                    }
+                }
+                const uint32_t bs = get_write_ptr(CB_BSORT);
+                uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
+                uint32_t* idxB = idxA + bucket_fit;
+                uint32_t* cnt  = idxB + bucket_fit;
+                uint32_t* sorted;
+                if (L <= 16u) {
+                    for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
+                    for (uint32_t i = 1; i < L; ++i) {
+                        const uint32_t tmp = idxA[i];
+                        const uint32_t ki = l1_splat_words(buck, tmp)[3];
+                        uint32_t j = i;
+                        while (j > 0 && l1_splat_words(buck, idxA[j - 1])[3] > ki) {
+                            idxA[j] = idxA[j - 1];
+                            --j;
+                        }
+                        idxA[j] = tmp;
+                    }
+                    sorted = idxA;
+                } else {
+                    for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
+                    uint32_t* cur = idxA;
+                    uint32_t* nxt = idxB;
+                    for (uint32_t byte = 0; byte < 4u; ++byte) {
+                        const uint32_t shift = byte * 8u;
+                        for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
+                        for (uint32_t i = 0; i < L; ++i) {
+                            cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
+                        }
+                        uint32_t sum = 0;
+                        for (uint32_t c = 0; c < 256u; ++c) {
+                            const uint32_t t = cnt[c];
+                            cnt[c] = sum;
+                            sum += t;
+                        }
+                        for (uint32_t i = 0; i < L; ++i) {
+                            const uint32_t b =
+                                (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
+                            nxt[cnt[b]++] = cur[i];
+                        }
+                        uint32_t* t = cur;
+                        cur = nxt;
+                        nxt = t;
+                    }
+                    sorted = cur;
+                }
+                for (uint32_t k = 0; k < L; ++k) {
+                    const uint32_t idx = sorted[k];
+                    const uint32_t out_page = tile_payload_cursor + (k >> 1);
+                    const uint32_t half_off = (k & 1u) * L1_SPLAT_BYTES;
+                    const uint32_t src_page = (idx >> 1);
+                    const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
+                    noc_async_write(
+                        buck + src_page * L1_PACK_PAGE_BYTES + src_half,
+                        get_noc_addr(out_page, payload_acc) + half_off,
+                        L1_SPLAT_BYTES);
+                }
+                noc_async_write_barrier();
+                tile_payload_cursor += (L_sub + 1u) >> 1;
                 continue;
             }
 
