@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #122 sha=e2a6ee4 bin=d193d161f0d6fd76 iter 40: M0: 32B L1 record + pre-sized per-tile bucket scatter w/ atomic cursors (GSPLAT_TT_L1_RECORD), reads back into existing sort+blend; ideal path 63.85dB held
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=tracy  timeout=1200s  worry=600s  ts=2026-06-02T11:58:46-0700
+cmd: bash opt/profiler/run_capture_ttw040.sh
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#122 bin=d193d161f0d6fd76 matches the built+stamped artifact
+bash: opt/profiler/run_capture_ttw040.sh: No such file or directory

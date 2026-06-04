@@ -1,0 +1,12 @@
+================ BUILD ID ================
+  cpp : #52 sha=4de5b93 bin=2dbef1f16302f41c iter18 diag: full-field payload xchk
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=diag  timeout=1200s  worry=600s  ts=2026-06-01T10:10:05-0700
+cmd: set -e; echo '### (A) PRODUCTION sfpu_cull+fused'; export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | grep -E '^SUMMARY'; echo '### (B) devcull RISC inline mask (SFPU_CULL=0, fused off)'; export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=0 GSPLAT_TT_FUSED_TILE=0; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | grep -E '^SUMMARY'
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#52 bin=2dbef1f16302f41c matches the built+stamped artifact
+### (A) PRODUCTION sfpu_cull+fused
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=391.2 (proj=54.5 ta=128.7 sort=15.9 blend=190.8) shot=opt/metal-screenshots/loop-ttw/hero.png
+### (B) devcull RISC inline mask (SFPU_CULL=0, fused off)
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=622.4 (proj=54.4 ta=128.6 sort=17.2 blend=421.3) shot=opt/metal-screenshots/loop-ttw/hero.png

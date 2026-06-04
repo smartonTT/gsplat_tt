@@ -1,0 +1,8 @@
+================ BUILD ID ================
+  cpp : #4 sha=7e5bced iter 4: Fix segfault P_kept cull gate
+  data: # sha= 
+=========================================
+host=bh-30  tag=build-hostzero  timeout=1200s  worry=600s  ts=2026-05-31T20:48:57-0700
+cmd: cmake --build build-tt -j 16
+-----------------------------------------
+ninja: no work to do.

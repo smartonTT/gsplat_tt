@@ -1,0 +1,34 @@
+================ BUILD ID ================
+  cpp : #132 sha=138e943 bin=b57301a57bbebb21 M0 dbg: broaden record dump
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=diag-dump-both  timeout=1200s  worry=600s  ts=2026-06-02T15:23:39-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_L1_REC_DUMP=1 TT_METAL_DPRINT_CORES=all; source .venv/bin/activate 2>/dev/null; echo '##### RUN32 (L1_RECORD=1) #####'; GSPLAT_TT_L1_RECORD=1 .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir ttw-diag --out opt/ttw/last.json 2>&1 | grep -E 'L1REC|REF64' | head -12; echo '##### RUN64 (L1_RECORD=0) #####'; GSPLAT_TT_L1_RECORD=0 .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir ttw-diag --out opt/ttw/last.json 2>&1 | grep -E 'L1REC|REF64' | head -12
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#132 bin=b57301a57bbebb21 matches the built+stamped artifact
+##### RUN32 (L1_RECORD=1) #####
+0:10-4:NC: L1REC t=647 k=0 ca=0 cb=1.875 cc=675 mxl=2.88281 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-6:NC: L1REC t=465 k=0 ca=24384 cb=1.62988 cc=238.125 mxl=2.17383 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-0:NC: L1REC t=332 k=0 ca=200.25 cb=1.72949 cc=-5904 mxl=2.47461 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-1:NC: L1REC t=551 k=0 ca=5.96046e-08 cb=0 cc=4.76837e-07 mxl=0 myl=5.96046e-08 op=0 r=5.96046e-08 g=0 b=5.96046e-08 dk=0
+0:10-2:NC: L1REC t=370 k=0 ca=657 cb=1.72266 cc=-0.20874 mxl=2.35547 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-3:NC: L1REC t=502 k=0 ca=-11328 cb=1.75098 cc=-2.78516 mxl=2.08984 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-4:NC: L1REC t=647 k=1 ca=0.00125027 cb=1.84863 cc=-2.76172 mxl=2.86523 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-6:NC: L1REC t=465 k=1 ca=146 cb=1.42383 cc=105.25 mxl=2.20898 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:9-7:NC: L1REC t=395 k=0 ca=-13.2344 cb=1.61328 cc=-29488 mxl=2.26953 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:9-9:NC: L1REC t=557 k=0 ca=-0.00012207 cb=0 cc=1644 mxl=0 myl=0.000617981 op=5.96046e-08 r=4.05312e-06 g=0 b=0 dk=0
+0:10-0:NC: L1REC t=332 k=1 ca=0.203369 cb=1.86426 cc=-0.0301514 mxl=2.25781 myl=0 op=0 r=0 g=0 b=0 dk=0
+0:10-1:NC: L1REC t=551 k=1 ca=0 cb=0 cc=0.000146627 mxl=0 myl=-nan op=1.78814e-07 r=-nan g=-nan b=3.35574e-05 dk=0
+##### RUN64 (L1_RECORD=0) #####
+0:9-7:NC: REF64 t=395 k=0 ca=5716.37 cb=1288.66 cc=1806.52 mx=610.911 my=461.7 op=0.0204072 r=0.407118 g=0.471516 b=0.307543 dk=1078300612
+0:9-8:NC: REF64 t=425 k=0 ca=22955.4 cb=13921.9 cc=9643.61 mx=-150.583 my=545.708 op=0.0358713 r=0.962464 g=0.968279 b=0.536309 dk=1076044828
+0:9-9:NC: REF64 t=557 k=0 ca=12508.5 cb=-1447.99 cc=367.94 mx=322.4 my=510.908 op=0.0227544 r=0.694497 g=0.721158 b=0.294485 dk=1066730526
+0:10-0:NC: REF64 t=332 k=0 ca=5716.37 cb=1288.66 cc=1806.52 mx=610.911 my=461.7 op=0.0204072 r=0.407118 g=0.471516 b=0.307543 dk=1078300612
+0:10-1:NC: REF64 t=551 k=0 ca=12508.5 cb=-1447.99 cc=367.94 mx=322.4 my=510.908 op=0.0227544 r=0.694497 g=0.721158 b=0.294485 dk=1066730526
+0:10-2:NC: REF64 t=370 k=0 ca=13499.4 cb=-10654.2 cc=9712.99 mx=782.227 my=273.529 op=0.0212084 r=0.252263 g=0.331343 b=0.251391 dk=1074212486
+0:10-3:NC: REF64 t=502 k=0 ca=13499.4 cb=-10654.2 cc=9712.99 mx=782.227 my=273.529 op=0.0212084 r=0.252263 g=0.331343 b=0.251391 dk=1074212486
+0:10-4:NC: REF64 t=647 k=0 ca=21365.5 cb=-3966.93 cc=4066.68 mx=54.6123 my=799.237 op=0.0293077 r=0.91499 g=0.977409 b=0.253212 dk=1074763097
+0:10-6:NC: REF64 t=465 k=0 ca=12508.5 cb=-1447.99 cc=367.94 mx=322.4 my=510.908 op=0.0227544 r=0.694497 g=0.721158 b=0.294485 dk=1066730526
+0:9-7:NC: REF64 t=395 k=1 ca=10288.5 cb=-1832.58 cc=16484.8 mx=482.983 my=286.387 op=0.0173527 r=1 g=1 b=0.776891 dk=1081054173
+0:9-8:NC: REF64 t=425 k=1 ca=18558.4 cb=-385.923 cc=6333.02 mx=-72.014 my=440.458 op=0.042175 r=0.156624 g=0.22728 b=0.125481 dk=1080425673
+0:9-9:NC: REF64 t=557 k=1 ca=13499.4 cb=-10654.2 cc=9712.99 mx=782.227 my=273.529 op=0.0212084 r=0.252263 g=0.331343 b=0.251391 dk=1074212486

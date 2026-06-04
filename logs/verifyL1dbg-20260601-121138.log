@@ -1,0 +1,592 @@
+================ BUILD ID ================
+  cpp : #66 sha=06c02f9 bin=d8d6744118737f87 stepA debug: L1 vs DRAM mask compare
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=verifyL1dbg  timeout=1200s  worry=600s  ts=2026-06-01T12:11:39-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TT_METAL_DPRINT_CORES=all GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_TILE_L1=1 GSPLAT_TT_TILE_L1_SETTLE=0 GSPLAT_TT_SFPU_CULL_DEBUG=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_verify.log; echo '=== L1MM/L1SUM ==='; grep -E 'L1MM|L1SUM' /tmp/ttw_verify.log | head -60; echo '=== SUMMARY ==='; grep '^SUMMARY' /tmp/ttw_verify.log | tail -1
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#66 bin=d8d6744118737f87 matches the built+stamped artifact
+2026-06-01 19:11:41.472 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 19:11:41.472 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 19:11:41.473 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-01 19:11:41.473 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 19:11:41.473 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-01 19:11:41.473 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 19:11:41.473 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-01 19:11:41.473 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-01 19:11:41.473 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 19:11:41.473 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 19:11:41.474 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-01 19:11:41.474 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 19:11:41.474 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-01 19:11:41.474 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 19:11:41.474 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-01 19:11:41.474 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-01 19:11:41.474 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-01 19:11:41.513 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 19:11:41.513 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-01 19:11:41.513 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-01 19:11:41.513 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-01 19:11:41.513 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-01 19:11:41.515 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-01 19:11:41.516 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-01 19:11:41.516 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-01 19:11:41.995 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-01 19:11:41.995 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-01 19:11:41.995 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 19:11:41.995 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 19:11:41.995 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-01 19:11:41.995 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 19:11:41.995 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-01 19:11:41.995 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 19:11:41.996 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-01 19:11:41.996 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-01 19:11:41.996 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 19:11:41.996 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 19:11:41.996 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-01 19:11:41.996 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 19:11:41.996 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 19:11:41.996 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-01 19:11:41.996 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-01 19:11:41.996 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-01 19:11:41.996 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-01 19:11:41.996 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-01 19:11:41.996 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-01 19:11:42.008 | warning  |           Metal | DPRINT is deprecated and will be removed in a future release. Please migrate to DEVICE_PRINT by:
+  1. Replace #include "api/debug/dprint.h" with #include "api/debug/device_print.h" in your kernels
+  2. Replace DPRINT << ... << ENDL() with DEVICE_PRINT("...\n", args)
+  3. Set TT_METAL_DEVICE_PRINT=1 to enable the new DEVICE_PRINT system
+For more information, see the DEVICE_PRINT documentation. (metal_context.cpp:249)
+2026-06-01 19:11:42.082 | info     |           Metal | DPRINT enabled on device 0, all worker cores. (dprint_server.cpp:855)
+2026-06-01 19:11:42.083 | info     |           Metal | DPRINT Server attached device 0 (dprint_server.cpp:950)
+2026-06-01 19:11:44.406 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_61903_3669502855_0' (shm_resource_tracker.cpp:265)
+2026-06-01 19:11:44.406 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_61903' (shm_resource_tracker.cpp:275)
+2026-06-01 19:11:44.406 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+0:11-0:BR: prefetcher_11: start
+0:11-1:BR: dispatch_11: start
+0:11-1:NC: dispatch_s : start
+0:11-9:BR: REALTIME BRISC: kernel started
+0:11-9:BR: REALTIME: sync_request detected!
+0:11-9:BR: REALTIME: entering sync
+0:11-9:BR: REALTIME: sync got host_time=258984711
+0:11-9:BR: REALTIME: sync pushed count=1
+0:11-9:BR: REALTIME: sync got host_time=283468844
+0:11-9:BR: REALTIME: sync pushed count=2
+0:11-9:BR: REALTIME: sync got host_time=307958429
+0:11-9:BR: REALTIME: sync pushed count=3
+0:11-9:BR: REALTIME: sync got host_time=332437721
+0:11-9:BR: REALTIME: sync pushed count=4
+0:11-9:BR: REALTIME: sync got host_time=356906109
+0:11-9:BR: REALTIME: sync pushed count=5
+0:11-9:BR: REALTIME: sync got host_time=381375343
+0:11-9:BR: REALTIME: sync pushed count=6
+0:11-9:BR: REALTIME: sync got host_time=405851580
+0:11-9:BR: REALTIME: sync pushed count=7
+0:11-9:BR: REALTIME: sync got host_time=430328005
+0:11-9:BR: REALTIME: sync pushed count=8
+0:11-9:BR: REALTIME: sync got host_time=454804806
+0:11-9:BR: REALTIME: sync pushed count=9
+0:11-9:BR: REALTIME: sync got host_time=479282218
+0:11-9:BR: REALTIME: sync pushed count=10
+0:11-9:BR: REALTIME: sync got host_time=503751593
+0:11-9:BR: REALTIME: sync pushed count=11
+0:11-9:BR: REALTIME: sync got host_time=528219652
+0:11-9:BR: REALTIME: sync pushed count=12
+0:11-9:BR: REALTIME: sync got host_time=552689121
+0:11-9:BR: REALTIME: sync pushed count=13
+0:11-9:BR: REALTIME: sync got host_time=577158590
+0:11-9:BR: REALTIME: sync pushed count=14
+0:11-9:BR: REALTIME: sync got host_time=601634639
+0:11-9:BR: REALTIME: sync pushed count=15
+0:11-9:BR: REALTIME: sync got host_time=626118067
+0:11-9:BR: REALTIME: sync pushed count=16
+0:11-9:BR: REALTIME: sync got host_time=650594915
+0:11-9:BR: REALTIME: sync pushed count=17
+0:11-9:BR: REALTIME: sync got host_time=675064149
+0:11-9:BR: REALTIME: sync pushed count=18
+0:11-9:BR: REALTIME: sync got host_time=699532819
+0:11-9:BR: REALTIME: sync pushed count=19
+0:11-9:BR: REALTIME: sync got host_time=724007458
+0:11-9:BR: REALTIME: sync pushed count=20
+0:11-9:BR: REALTIME: sync got host_time=748482849
+0:11-9:BR: REALTIME: sync pushed count=21
+0:11-9:BR: REALTIME: sync got host_time=772957676
+0:11-9:BR: REALTIME: sync pushed count=22
+0:11-9:BR: REALTIME: sync got host_time=797432409
+0:11-9:BR: REALTIME: sync pushed count=23
+0:11-9:BR: REALTIME: sync got host_time=821900327
+0:11-9:BR: REALTIME: sync pushed count=24
+0:11-9:BR: REALTIME: sync got host_time=846383050
+0:11-9:BR: REALTIME: sync pushed count=25
+0:11-9:BR: REALTIME: sync got host_time=870857877
+0:11-9:BR: REALTIME: sync pushed count=26
+0:11-9:BR: REALTIME: sync got host_time=895339942
+0:11-9:BR: REALTIME: sync pushed count=27
+0:11-9:BR: REALTIME: sync got host_time=919821067
+0:11-9:BR: REALTIME: sync pushed count=28
+0:11-9:BR: REALTIME: sync got host_time=944299278
+0:11-9:BR: REALTIME: sync pushed count=29
+0:11-9:BR: REALTIME: sync got host_time=968764235
+0:11-9:BR: REALTIME: sync pushed count=30
+0:11-9:BR: REALTIME: sync got host_time=993232059
+0:11-9:BR: REALTIME: sync pushed count=31
+0:11-9:BR: REALTIME: sync got host_time=1017700588
+0:11-9:BR: REALTIME: sync pushed count=32
+0:11-9:BR: REALTIME: sync got host_time=1042176261
+0:11-9:BR: REALTIME: sync pushed count=33
+0:11-9:BR: REALTIME: sync got host_time=1066652263
+0:11-9:BR: REALTIME: sync pushed count=34
+0:11-9:BR: REALTIME: sync got host_time=1091127466
+0:11-9:BR: REALTIME: sync pushed count=35
+0:11-9:BR: REALTIME: sync got host_time=1115602998
+0:11-9:BR: REALTIME: sync pushed count=36
+0:11-9:BR: REALTIME: sync got host_time=1140070775
+0:11-9:BR: REALTIME: sync pushed count=37
+0:11-9:BR: REALTIME: sync got host_time=1164538552
+0:11-9:BR: REALTIME: sync pushed count=38
+0:11-9:BR: REALTIME: sync got host_time=1189009384
+0:11-9:BR: REALTIME: sync pushed count=39
+0:11-9:BR: REALTIME: sync got host_time=1213479276
+0:11-9:BR: REALTIME: sync pushed count=40
+0:11-9:BR: REALTIME: sync got host_time=1237718727
+0:11-9:BR: REALTIME: sync pushed count=41
+0:11-9:BR: REALTIME: sync got host_time=1262193225
+0:11-9:BR: REALTIME: sync pushed count=42
+0:11-9:BR: REALTIME: sync got host_time=1286675196
+0:11-9:BR: REALTIME: sync pushed count=43
+0:11-9:BR: REALTIME: sync got host_time=1311151997
+0:11-9:BR: REALTIME: sync pushed count=44
+0:11-9:BR: REALTIME: sync got host_time=1335621654
+0:11-9:BR: REALTIME: sync pushed count=45
+0:11-9:BR: REALTIME: sync got host_time=1360090324
+0:11-9:BR: REALTIME: sync pushed count=46
+0:11-9:BR: REALTIME: sync got host_time=1384558994
+0:11-9:BR: REALTIME: sync pushed count=47
+0:11-9:BR: REALTIME: sync got host_time=1409029215
+0:11-9:BR: REALTIME: sync pushed count=48
+0:11-9:BR: REALTIME: sync got host_time=1433497180
+0:11-9:BR: REALTIME: sync pushed count=49
+0:11-9:BR: REALTIME: sync got host_time=1457965239
+0:11-9:BR: REALTIME: sync pushed count=50
+0:11-9:BR: REALTIME: sync got host_time=1482433909
+0:11-9:BR: REALTIME: sync pushed count=51
+0:11-9:BR: REALTIME: sync got host_time=1506908031
+0:11-9:BR: REALTIME: sync pushed count=52
+0:11-9:BR: REALTIME: sync got host_time=1531389203
+0:11-9:BR: REALTIME: sync pushed count=53
+0:11-9:BR: REALTIME: sync got host_time=1555864218
+0:11-9:BR: REALTIME: sync pushed count=54
+0:11-9:BR: REALTIME: sync got host_time=1580338340
+0:11-9:BR: REALTIME: sync pushed count=55
+0:11-9:BR: REALTIME: sync got host_time=1604819747
+0:11-9:BR: REALTIME: sync pushed count=56
+0:11-9:BR: REALTIME: sync got host_time=1629300637
+0:11-9:BR: REALTIME: sync pushed count=57
+0:11-9:BR: REALTIME: sync got host_time=1653782655
+0:11-9:BR: REALTIME: sync pushed count=58
+0:11-9:BR: REALTIME: sync got host_time=1678257811
+0:11-9:BR: REALTIME: sync pushed count=59
+0:11-9:BR: REALTIME: sync got host_time=1702731698
+0:11-9:BR: REALTIME: sync pushed count=60
+0:11-9:BR: REALTIME: sync got host_time=1727213434
+0:11-9:BR: REALTIME: sync pushed count=61
+0:11-9:BR: REALTIME: sync got host_time=1751695499
+0:11-9:BR: REALTIME: sync pushed count=62
+0:11-9:BR: REALTIME: sync got host_time=1776176483
+0:11-9:BR: REALTIME: sync pushed count=63
+0:11-9:BR: REALTIME: sync got host_time=1800652062
+0:11-9:BR: REALTIME: sync pushed count=64
+0:11-9:BR: REALTIME: sync got host_time=1825120779
+0:11-9:BR: REALTIME: sync pushed count=65
+0:11-9:BR: REALTIME: sync got host_time=1849588509
+0:11-9:BR: REALTIME: sync pushed count=66
+0:11-9:BR: REALTIME: sync got host_time=1874071937
+0:11-9:BR: REALTIME: sync pushed count=67
+0:11-9:BR: REALTIME: sync got host_time=1898546247
+0:11-9:BR: REALTIME: sync pushed count=68
+0:11-9:BR: REALTIME: sync got host_time=1923032025
+0:11-9:BR: REALTIME: sync pushed count=69
+0:11-9:BR: REALTIME: sync got host_time=1947536039
+0:11-9:BR: REALTIME: sync pushed count=70
+0:11-9:BR: REALTIME: sync got host_time=1972062519
+0:11-9:BR: REALTIME: sync pushed count=71
+0:11-9:BR: REALTIME: sync got host_time=1996548203
+0:11-9:BR: REALTIME: sync pushed count=72
+0:11-9:BR: REALTIME: sync got host_time=2021020022
+0:11-9:BR: REALTIME: sync pushed count=73
+0:11-9:BR: REALTIME: sync got host_time=2045492264
+0:11-9:BR: REALTIME: sync pushed count=74
+0:11-9:BR: REALTIME: sync got host_time=2069962344
+0:11-9:BR: REALTIME: sync pushed count=75
+0:11-9:BR: REALTIME: sync got host_time=2094451788
+0:11-9:BR: REALTIME: sync pushed count=76
+0:11-9:BR: REALTIME: sync got host_time=2118924547
+0:11-9:BR: REALTIME: sync pushed count=77
+0:11-9:BR: REALTIME: sync got host_time=2143395285
+0:11-9:BR: REALTIME: sync pushed count=78
+0:11-9:BR: REALTIME: sync got host_time=2167864801
+0:11-9:BR: REALTIME: sync pushed count=79
+0:11-9:BR: REALTIME: sync got host_time=2192336902
+0:11-9:BR: REALTIME: sync pushed count=80
+0:11-9:BR: REALTIME: sync got host_time=2216815113
+0:11-9:BR: REALTIME: sync pushed count=81
+0:11-9:BR: REALTIME: sync got host_time=2241311090
+0:11-9:BR: REALTIME: sync pushed count=82
+0:11-9:BR: REALTIME: sync got host_time=2265778491
+0:11-9:BR: REALTIME: sync pushed count=83
+0:11-9:BR: REALTIME: sync got host_time=2290250827
+0:11-9:BR: REALTIME: sync pushed count=84
+0:11-9:BR: REALTIME: sync got host_time=2314723022
+0:11-9:BR: REALTIME: sync pushed count=85
+0:11-9:BR: REALTIME: sync got host_time=2339190611
+0:11-9:BR: REALTIME: sync pushed count=86
+0:11-9:BR: REALTIME: sync got host_time=2363661161
+0:11-9:BR: REALTIME: sync pushed count=87
+0:11-9:BR: REALTIME: sync got host_time=2388132886
+0:11-9:BR: REALTIME: sync pushed count=88
+0:11-9:BR: REALTIME: sync got host_time=2412602261
+0:11-9:BR: REALTIME: sync pushed count=89
+0:11-9:BR: REALTIME: sync got host_time=2437072200
+0:11-9:BR: REALTIME: sync pushed count=90
+0:11-9:BR: REALTIME: sync got host_time=2461541951
+0:11-9:BR: REALTIME: sync pushed count=91
+0:11-9:BR: REALTIME: sync got host_time=2486010715
+0:11-9:BR: REALTIME: sync pushed count=92
+0:11-9:BR: REALTIME: sync got host_time=2510479714
+0:11-9:BR: REALTIME: sync pushed count=93
+0:11-9:BR: REALTIME: sync got host_time=2534968688
+0:11-9:BR: REALTIME: sync pushed count=94
+0:11-9:BR: REALTIME: sync got host_time=2559439097
+0:11-9:BR: REALTIME: sync pushed count=95
+0:11-9:BR: REALTIME: sync got host_time=2583906733
+0:11-9:BR: REALTIME: sync pushed count=96
+0:11-9:BR: REALTIME: sync got host_time=2608376672
+0:11-9:BR: REALTIME: sync pushed count=97
+0:11-9:BR: REALTIME: sync got host_time=2632846000
+0:11-9:BR: REALTIME: sync pushed count=98
+0:11-9:BR: REALTIME: sync got host_time=2657316503
+0:11-9:BR: REALTIME: sync pushed count=99
+0:11-9:BR: REALTIME: sync got host_time=2681787147
+0:11-9:BR: REALTIME: sync pushed count=100
+2026-06-01 19:11:44.989 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=20993889975433 cycles (realtime_profiler_manager.cpp:1082)
+0:11-9:BR: REALTIME: sync got host_time=2706258167
+0:11-9:BR: REALTIME: sync pushed count=101
+0:11-9:BR: REALTIME: exiting sync, total=101
+0:11-9:BR: REALTIME: sync_request detected!
+0:11-9:BR: REALTIME: entering sync
+0:11-9:BR: REALTIME: sync got host_time=1549556828
+0:11-9:BR: REALTIME: sync pushed count=1
+0:11-9:BR: REALTIME: exiting sync, total=1
+0:11-9:BR: REALTIME: sync_request detected!
+0:11-9:BR: REALTIME: entering sync
+0:11-9:BR: REALTIME: sync got host_time=2997122510
+0:11-9:BR: REALTIME: sync pushed count=1
+0:11-9:BR: REALTIME: exiting sync, total=1
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=10.41 up=0.30 kernel=9.24 d2h=0.00 compact=0.00 publish=1.55 total=21.70ms
+0:0-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+[FUSED_TILE] upload+exec+readback=7694.0 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=7697.6 ms (host_build=0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=7.90 up=0.29 kernel=7.44 d2h=0.00 compact=0.00 publish=0.03 total=15.80ms
+0:0-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:9-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:10-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:7-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:8-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+[FUSED_TILE] upload+exec+readback=106.5 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=109.7 ms (host_build=0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=8.07 up=0.29 kernel=7.45 d2h=7.12 compact=0.00 publish=0.03 total=26.45ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=8.08 up=0.30 kernel=7.48 d2h=7.13 compact=0.00 publish=0.05 total=26.61ms
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=37.04dB hero_vs_ref=37.55dB min_vs_ref=37.55dB min_vs_gt=37.04dB ms/view=221.3 (proj=58.5 ta=36.9 sort=15.8 blend=109.8) shot=opt/metal-screenshots/loop-ttw/hero.png
+=== L1MM/L1SUM ===
+0:0-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:0-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:1-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:2-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:3-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:4-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-1:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-2:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-3:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-4:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-5:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-6:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-7:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-8:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:5-9:NC: L1SUM core dn=3000 mm=0 ok=3000
+0:6-0:NC: L1SUM core dn=3000 mm=0 ok=3000
+=== SUMMARY ===
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=37.04dB hero_vs_ref=37.55dB min_vs_ref=37.55dB min_vs_gt=37.04dB ms/view=221.3 (proj=58.5 ta=36.9 sort=15.8 blend=109.8) shot=opt/metal-screenshots/loop-ttw/hero.png

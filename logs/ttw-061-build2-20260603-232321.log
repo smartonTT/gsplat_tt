@@ -1,0 +1,25 @@
+================ BUILD ID ================
+  cpp : #206 sha=iter61 bin=pending iter61 fuse tile_l1_cull into blend reader/compute
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=ttw-061-build2  timeout=1200s  worry=600s  ts=2026-06-03T23:23:21-0700
+cmd: bash -c cd /localdev/smarton/gstt2 && test -f render/build-tt/build.ninja || cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release; cmake --build render/build-tt -j 16 2>&1
+-----------------------------------------
+-- The CXX compiler identification is GNU 12.3.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found Python: /localdev/smarton/gstt2/render/../.venv/bin/python (found suitable version "3.10.12", minimum required is "3.8") found components: Interpreter Development.Module Development.Embed
+-- Performing Test HAS_FLTO_AUTO
+-- Performing Test HAS_FLTO_AUTO - Success
+-- Found pybind11: /localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/pybind11/include (found version "3.0.4")
+-- Configuring incomplete, errors occurred!
+CMake Error at /localdev/smarton/gstt2/cmake/TtMetalInTree.cmake:4 (message):
+  GSPLAT_WITH_TT requires TT_METAL_HOME
+Call Stack (most recent call first):
+  CMakeLists.txt:88 (gsplat_link_tt_metal)
+
+
+ninja: error: loading 'build.ninja': No such file or directory

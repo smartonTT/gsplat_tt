@@ -1,0 +1,240 @@
+================ BUILD ID ================
+  cpp : #176 sha=db9dcd0 bin=fd5e7e03a5c64c53 iter49: bulk L1 load + coeff emit; CB_BUCKET scratch-only deadlock fix
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=verify-iter49-fix3  timeout=1200s  worry=600s  ts=2026-06-03T08:45:44-0700
+cmd: bash -lc export TTW_ITER_DIR=ttw-049; cd /localdev/smarton/gstt2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate 2>/dev/null; cmake --build render/build-tt -j 16; python3 render/run.py --iter-dir ttw-049 2>&1 | tee /tmp/ttw_verify_fix3.log; grep -q "^SUMMARY" /tmp/ttw_verify_fix3.log || { echo "[verify] no SUMMARY"; exit 6; }; grep -q "^TTW_METRIC hero_vs_ref=" /tmp/ttw_verify_fix3.log || { echo "[verify] no TTW_METRIC"; exit 6; }; grep "^TTW_METRIC" /tmp/ttw_verify_fix3.log | tail -1; grep "^TTW_TIMING" /tmp/ttw_verify_fix3.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#176 bin=fd5e7e03a5c64c53 matches the built+stamped artifact
+declare -x CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x HOME="/home/smarton"
+declare -x IRD_ARCH_NAME="blackhole"
+declare -x IRD_CLUSTER="tt_yyz"
+declare -x IRD_HARVESTED_MACHINE="false"
+declare -x IRD_NUM_PCIE_CHIPS="1"
+declare -x IRD_RESET_DONGLE="false"
+declare -x IRD_VERSION="1.12.106"
+declare -x LANG="C.UTF-8"
+declare -x LOGNAME="smarton"
+declare -x MOTD_SHOWN="pam"
+declare -x NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+declare -x OLDPWD="/home/smarton"
+declare -x PATH="/home/smarton/.local/bin:/home/smarton/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+declare -x PIP_CERT="/etc/ssl/certs/ca-certificates.crt"
+declare -x PWD="/localdev/smarton/gstt2"
+declare -x P_USER_DBD_PORT="51483"
+declare -x P_USER_SSH_PORT="46483"
+declare -x REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x SHELL="/bin/bash"
+declare -x SHLVL="2"
+declare -x SLURM_GRES_IDS="0"
+declare -x SSH_AUTH_SOCK="/tmp/ssh-XXXX4ANfZB/agent.728"
+declare -x SSH_CLIENT="10.250.20.198 36188 22"
+declare -x SSH_CONNECTION="10.250.20.198 36188 172.17.0.2 22"
+declare -x SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+declare -x TTW_DEVRUN="1"
+declare -x TTW_ITER_DIR="ttw-049"
+declare -x USER="smarton"
+declare -x USER_SSH_PASSWD="cvlG/Xet6voGb2ifvN/Irs/3fXQHgbaS"
+ninja: no work to do.
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-06-03 15:45:46.667 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 15:45:46.667 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 15:45:46.667 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 15:45:46.667 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 15:45:46.667 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 15:45:46.668 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 15:45:46.668 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-03 15:45:46.668 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-03 15:45:46.668 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 15:45:46.668 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 15:45:46.668 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 15:45:46.668 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 15:45:46.668 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 15:45:46.668 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 15:45:46.668 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-03 15:45:46.668 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-03 15:45:46.668 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-03 15:45:46.707 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 15:45:46.707 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-03 15:45:46.707 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-03 15:45:46.707 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-03 15:45:46.707 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-03 15:45:46.710 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-03 15:45:46.711 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-03 15:45:46.711 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-03 15:45:47.206 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-03 15:45:47.206 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-03 15:45:47.206 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 15:45:47.206 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 15:45:47.206 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 15:45:47.206 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 15:45:47.206 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 15:45:47.206 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 15:45:47.207 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-03 15:45:47.207 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-03 15:45:47.207 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 15:45:47.207 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 15:45:47.207 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-03 15:45:47.207 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 15:45:47.207 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 15:45:47.207 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-03 15:45:47.207 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-03 15:45:47.207 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-03 15:45:47.207 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-03 15:45:47.207 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-03 15:45:47.207 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-03 15:45:47.233 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-03 15:45:47.520 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_2226_3690201338_0' (shm_resource_tracker.cpp:265)
+2026-06-03 15:45:47.520 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_2226_3690201338_1' (shm_resource_tracker.cpp:265)
+2026-06-03 15:45:47.520 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_2226' (shm_resource_tracker.cpp:275)
+2026-06-03 15:45:47.520 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-03 15:45:48.105 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=264022927234 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 1454.2 ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=43.73 up=0.02 kernel=1.88 d2h=0.00 compact=0.00 publish=1.64 total=47.38ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=86743040 subchunks_bulk=234 avg_bytes_per_subchunk=370696
+[run] timing 30 views (warmup excluded)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=42.12 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.03 total=42.25ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=86743040 subchunks_bulk=234 avg_bytes_per_subchunk=370696
+[run]   view=hero 293.8ms
+[SORT] stage=RP P=3535561 P_kept=3535561 num_tiles=1024 max_tile_n=26272 bin=44.04 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.03 total=44.19ms
+[SUBCHUNK] tiles_split=118 total_subchunks=1159 max_subchunks_per_tile=4 total_overflow_candidates=1471263
+[L1LOAD] bytes_bulk_loaded=94160832 subchunks_bulk=253 avg_bytes_per_subchunk=372177
+[run]   view=orbit_01 309.7ms
+[SORT] stage=RP P=3603555 P_kept=3603555 num_tiles=1024 max_tile_n=25152 bin=44.67 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.03 total=44.82ms
+[SUBCHUNK] tiles_split=124 total_subchunks=1173 max_subchunks_per_tile=3 total_overflow_candidates=1568092
+[L1LOAD] bytes_bulk_loaded=100357888 subchunks_bulk=273 avg_bytes_per_subchunk=367611
+[run]   view=orbit_02 308.2ms
+[SORT] stage=RP P=3622630 P_kept=3622630 num_tiles=1024 max_tile_n=24416 bin=45.04 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.04 total=45.22ms
+[SUBCHUNK] tiles_split=117 total_subchunks=1167 max_subchunks_per_tile=3 total_overflow_candidates=1556214
+[L1LOAD] bytes_bulk_loaded=99597696 subchunks_bulk=260 avg_bytes_per_subchunk=383068
+[run]   view=orbit_03 309.0ms
+[SORT] stage=RP P=3620780 P_kept=3620780 num_tiles=1024 max_tile_n=25200 bin=44.81 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=44.93ms
+[SUBCHUNK] tiles_split=119 total_subchunks=1171 max_subchunks_per_tile=3 total_overflow_candidates=1588722
+[L1LOAD] bytes_bulk_loaded=101678208 subchunks_bulk=266 avg_bytes_per_subchunk=382248
+[run]   view=orbit_04 303.6ms
+[SORT] stage=RP P=3622797 P_kept=3622797 num_tiles=1024 max_tile_n=23552 bin=44.89 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.03 total=45.03ms
+[SUBCHUNK] tiles_split=126 total_subchunks=1178 max_subchunks_per_tile=3 total_overflow_candidates=1618586
+[L1LOAD] bytes_bulk_loaded=103589504 subchunks_bulk=280 avg_bytes_per_subchunk=369962
+[run]   view=orbit_05 307.0ms
+[SORT] stage=RP P=3607134 P_kept=3607134 num_tiles=1024 max_tile_n=25040 bin=44.75 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=44.88ms
+[SUBCHUNK] tiles_split=124 total_subchunks=1170 max_subchunks_per_tile=3 total_overflow_candidates=1564583
+[L1LOAD] bytes_bulk_loaded=100133312 subchunks_bulk=270 avg_bytes_per_subchunk=370864
+[run]   view=orbit_06 302.8ms
+[SORT] stage=RP P=3548136 P_kept=3548136 num_tiles=1024 max_tile_n=26816 bin=44.05 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=44.20ms
+[SUBCHUNK] tiles_split=119 total_subchunks=1159 max_subchunks_per_tile=4 total_overflow_candidates=1478539
+[L1LOAD] bytes_bulk_loaded=94626496 subchunks_bulk=254 avg_bytes_per_subchunk=372545
+[run]   view=orbit_07 303.2ms
+[SORT] stage=RP P=3455005 P_kept=3455005 num_tiles=1024 max_tile_n=25024 bin=42.99 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.09ms
+[SUBCHUNK] tiles_split=105 total_subchunks=1139 max_subchunks_per_tile=3 total_overflow_candidates=1316689
+[L1LOAD] bytes_bulk_loaded=84268096 subchunks_bulk=220 avg_bytes_per_subchunk=383036
+[run]   view=orbit_08 292.3ms
+[SORT] stage=RP P=3397687 P_kept=3397687 num_tiles=1024 max_tile_n=22176 bin=42.35 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.45ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1144 max_subchunks_per_tile=3 total_overflow_candidates=1295808
+[L1LOAD] bytes_bulk_loaded=82931712 subchunks_bulk=227 avg_bytes_per_subchunk=365337
+[run]   view=orbit_09 282.7ms
+[SORT] stage=RP P=3353492 P_kept=3353492 num_tiles=1024 max_tile_n=23776 bin=41.86 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=41.97ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1137 max_subchunks_per_tile=3 total_overflow_candidates=1228551
+[L1LOAD] bytes_bulk_loaded=78627264 subchunks_bulk=214 avg_bytes_per_subchunk=367417
+[run]   view=orbit_10 284.2ms
+[SORT] stage=RP P=3324622 P_kept=3324622 num_tiles=1024 max_tile_n=25360 bin=41.66 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=41.77ms
+[SUBCHUNK] tiles_split=103 total_subchunks=1137 max_subchunks_per_tile=3 total_overflow_candidates=1235511
+[L1LOAD] bytes_bulk_loaded=79072704 subchunks_bulk=216 avg_bytes_per_subchunk=366077
+[run]   view=orbit_11 287.6ms
+[SORT] stage=RP P=3321611 P_kept=3321611 num_tiles=1024 max_tile_n=26064 bin=41.50 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=41.62ms
+[SUBCHUNK] tiles_split=99 total_subchunks=1134 max_subchunks_per_tile=4 total_overflow_candidates=1201230
+[L1LOAD] bytes_bulk_loaded=76878720 subchunks_bulk=209 avg_bytes_per_subchunk=367840
+[run]   view=orbit_12 290.7ms
+[SORT] stage=RP P=3343983 P_kept=3343983 num_tiles=1024 max_tile_n=24656 bin=41.62 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=41.74ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1137 max_subchunks_per_tile=3 total_overflow_candidates=1232709
+[L1LOAD] bytes_bulk_loaded=78893376 subchunks_bulk=214 avg_bytes_per_subchunk=368660
+[run]   view=orbit_13 285.5ms
+[SORT] stage=RP P=3391321 P_kept=3391321 num_tiles=1024 max_tile_n=21424 bin=42.21 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.32ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1135 max_subchunks_per_tile=3 total_overflow_candidates=1262410
+[L1LOAD] bytes_bulk_loaded=80794240 subchunks_bulk=212 avg_bytes_per_subchunk=381104
+[run]   view=orbit_14 279.7ms
+[SORT] stage=RP P=3430950 P_kept=3430950 num_tiles=1024 max_tile_n=24560 bin=42.64 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.76ms
+[SUBCHUNK] tiles_split=114 total_subchunks=1147 max_subchunks_per_tile=3 total_overflow_candidates=1388413
+[L1LOAD] bytes_bulk_loaded=88858432 subchunks_bulk=237 avg_bytes_per_subchunk=374930
+[run]   view=orbit_15 290.2ms
+[SORT] stage=RP P=3463828 P_kept=3463828 num_tiles=1024 max_tile_n=26432 bin=43.04 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.14ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1149 max_subchunks_per_tile=4 total_overflow_candidates=1390306
+[L1LOAD] bytes_bulk_loaded=88979584 subchunks_bulk=235 avg_bytes_per_subchunk=378636
+[run]   view=orbit_16 295.6ms
+[SORT] stage=RP P=3517324 P_kept=3517324 num_tiles=1024 max_tile_n=24976 bin=43.64 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.75ms
+[SUBCHUNK] tiles_split=116 total_subchunks=1166 max_subchunks_per_tile=3 total_overflow_candidates=1480989
+[L1LOAD] bytes_bulk_loaded=94783296 subchunks_bulk=258 avg_bytes_per_subchunk=367377
+[run]   view=orbit_17 296.6ms
+[SORT] stage=RP P=3506904 P_kept=3506904 num_tiles=1024 max_tile_n=23680 bin=43.47 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.58ms
+[SUBCHUNK] tiles_split=108 total_subchunks=1159 max_subchunks_per_tile=3 total_overflow_candidates=1429548
+[L1LOAD] bytes_bulk_loaded=91491072 subchunks_bulk=243 avg_bytes_per_subchunk=376506
+[run]   view=orbit_18 292.1ms
+[SORT] stage=RP P=3480657 P_kept=3480657 num_tiles=1024 max_tile_n=23840 bin=43.47 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=43.62ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1158 max_subchunks_per_tile=3 total_overflow_candidates=1424474
+[L1LOAD] bytes_bulk_loaded=91166336 subchunks_bulk=241 avg_bytes_per_subchunk=378283
+[run]   view=orbit_19 293.0ms
+[SORT] stage=RP P=3442938 P_kept=3442938 num_tiles=1024 max_tile_n=24672 bin=42.81 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=42.95ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1162 max_subchunks_per_tile=3 total_overflow_candidates=1423304
+[L1LOAD] bytes_bulk_loaded=91091456 subchunks_bulk=248 avg_bytes_per_subchunk=367304
+[run]   view=orbit_20 292.0ms
+[SORT] stage=RP P=3379780 P_kept=3379780 num_tiles=1024 max_tile_n=25680 bin=42.09 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=42.20ms
+[SUBCHUNK] tiles_split=113 total_subchunks=1150 max_subchunks_per_tile=4 total_overflow_candidates=1413691
+[L1LOAD] bytes_bulk_loaded=90476224 subchunks_bulk=239 avg_bytes_per_subchunk=378561
+[run]   view=orbit_21 291.3ms
+[SORT] stage=RP P=3263772 P_kept=3263772 num_tiles=1024 max_tile_n=23024 bin=40.86 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.03 total=41.00ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1142 max_subchunks_per_tile=3 total_overflow_candidates=1311939
+[L1LOAD] bytes_bulk_loaded=83964096 subchunks_bulk=225 avg_bytes_per_subchunk=373173
+[run]   view=orbit_22 278.2ms
+[SORT] stage=RP P=3203445 P_kept=3203445 num_tiles=1024 max_tile_n=19856 bin=40.06 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.16ms
+[SUBCHUNK] tiles_split=102 total_subchunks=1134 max_subchunks_per_tile=3 total_overflow_candidates=1254136
+[L1LOAD] bytes_bulk_loaded=80264704 subchunks_bulk=212 avg_bytes_per_subchunk=378607
+[run]   view=orbit_23 263.8ms
+[SORT] stage=RP P=3149820 P_kept=3149820 num_tiles=1024 max_tile_n=23424 bin=38.83 up=0.02 kernel=0.01 d2h=0.00 compact=0.00 publish=0.02 total=38.93ms
+[SUBCHUNK] tiles_split=97 total_subchunks=1128 max_subchunks_per_tile=3 total_overflow_candidates=1187471
+[L1LOAD] bytes_bulk_loaded=75998144 subchunks_bulk=201 avg_bytes_per_subchunk=378100
+[run]   view=orbit_24 271.2ms
+[SORT] stage=RP P=3110972 P_kept=3110972 num_tiles=1024 max_tile_n=24304 bin=38.41 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=38.55ms
+[SUBCHUNK] tiles_split=96 total_subchunks=1130 max_subchunks_per_tile=3 total_overflow_candidates=1164939
+[L1LOAD] bytes_bulk_loaded=74556096 subchunks_bulk=202 avg_bytes_per_subchunk=369089
+[run]   view=orbit_25 272.7ms
+[SORT] stage=RP P=3120361 P_kept=3120361 num_tiles=1024 max_tile_n=24416 bin=38.57 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=38.72ms
+[SUBCHUNK] tiles_split=94 total_subchunks=1128 max_subchunks_per_tile=3 total_overflow_candidates=1149866
+[L1LOAD] bytes_bulk_loaded=73591424 subchunks_bulk=198 avg_bytes_per_subchunk=371673
+[run]   view=orbit_26 274.1ms
+[SORT] stage=RP P=3161893 P_kept=3161893 num_tiles=1024 max_tile_n=25296 bin=39.30 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=39.46ms
+[SUBCHUNK] tiles_split=93 total_subchunks=1128 max_subchunks_per_tile=3 total_overflow_candidates=1145738
+[L1LOAD] bytes_bulk_loaded=73327232 subchunks_bulk=197 avg_bytes_per_subchunk=372219
+[run]   view=orbit_27 278.5ms
+[SORT] stage=RP P=3237659 P_kept=3237659 num_tiles=1024 max_tile_n=25056 bin=40.99 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=41.15ms
+[SUBCHUNK] tiles_split=98 total_subchunks=1129 max_subchunks_per_tile=3 total_overflow_candidates=1207349
+[L1LOAD] bytes_bulk_loaded=77270336 subchunks_bulk=203 avg_bytes_per_subchunk=380642
+[run]   view=orbit_28 281.8ms
+[SORT] stage=RP P=3333322 P_kept=3333322 num_tiles=1024 max_tile_n=22880 bin=41.53 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=41.64ms
+[SUBCHUNK] tiles_split=98 total_subchunks=1130 max_subchunks_per_tile=3 total_overflow_candidates=1231555
+[L1LOAD] bytes_bulk_loaded=78819520 subchunks_bulk=204 avg_bytes_per_subchunk=386370
+[run]   view=orbit_29 282.1ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=63.85dB avg_frame_ms=289.8 p50_ms=291.0 min_ms=263.8 max_ms=309.7 n_views=30 warmup_s=2.8 out=/localdev/smarton/gstt2/tmp/ttw-049
+TTW_METRIC hero_vs_ref=63.85
+TTW_TIMING ms_view=289.781
+TTW_TIMING blend=289.781
+TTW_METRIC hero_vs_ref=63.85
+TTW_TIMING ms_view=289.781
+TTW_TIMING blend=289.781

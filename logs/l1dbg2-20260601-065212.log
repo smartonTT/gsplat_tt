@@ -1,0 +1,10 @@
+================ BUILD ID ================
+  cpp : #21 sha=e204f63 bin=5db4fa156a71efd4 iter 15: two-program L1 mask handoff: cull_masks in resident L1 (not DRAM) + Finish between cull/blend, removes per-candidate MB_CULL_SPIN
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=l1dbg2  timeout=400s  worry=600s  ts=2026-06-01T06:52:12-0700
+cmd: cd /localdev/smarton/gstt2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL_DEBUG=1 GSPLAT_TT_CULL_SPIN=0; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-l1dbg2 --out /tmp/l1dbg2.json 2>&1 | grep -E "^SUMMARY|FUSED_TILE"
+-----------------------------------------
+[FUSED_TILE] upload+exec+readback=1353.8 ms (single Finish sort-publish+cull+blend)
+[FUSED_TILE] upload+exec+readback=498.9 ms (single Finish sort-publish+cull+blend)
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=701.6 (proj=54.6 ta=128.7 sort=16.2 blend=501.9) shot=opt/metal-screenshots/loop-l1dbg2/hero.png

@@ -1,0 +1,340 @@
+================ BUILD ID ================
+  cpp : #8 sha=b3b6231 fix: dedicated per-chunk barrier for SFPU mask read
+  data: # sha= 
+=========================================
+host=bh-30  tag=sfpu  timeout=2400s  worry=600s  ts=2026-05-31T17:18:45-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 30 --iter-dir loop-gate30 --out opt/ttw/gate30.json
+-----------------------------------------
+2026-06-01 00:18:48.371 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 00:18:48.371 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 00:18:48.372 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-06-01 00:18:48.372 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 00:18:48.373 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-06-01 00:18:48.373 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 00:18:48.374 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-01 00:18:48.374 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-01 00:18:48.374 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 00:18:48.374 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 00:18:48.375 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-06-01 00:18:48.375 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 00:18:48.376 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-06-01 00:18:48.376 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 00:18:48.376 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-06-01 00:18:48.376 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-01 00:18:48.376 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-01 00:18:48.446 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 00:18:48.446 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-06-01 00:18:48.446 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-01 00:18:48.446 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-01 00:18:48.446 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-01 00:18:48.447 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-01 00:18:48.449 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xfffffffec0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-01 00:18:48.449 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-01 00:18:48.762 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-01 00:18:48.762 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-01 00:18:48.763 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 00:18:48.763 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 00:18:48.763 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-06-01 00:18:48.763 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 00:18:48.764 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-06-01 00:18:48.764 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 00:18:48.766 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-06-01 00:18:48.766 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-01 00:18:48.766 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 00:18:48.766 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 00:18:48.766 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-01 00:18:48.766 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 00:18:48.766 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 00:18:48.766 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-06-01 00:18:48.766 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-06-01 00:18:48.766 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-06-01 00:18:48.766 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-01 00:18:48.766 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-06-01 00:18:48.766 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-06-01 00:18:48.862 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_459926_2766426574_0' (shm_resource_tracker.cpp:265)
+2026-06-01 00:18:48.862 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_459926' (shm_resource_tracker.cpp:275)
+2026-06-01 00:18:49.447 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349999 GHz, device_time_at_sync=69024172716350 cycles (realtime_profiler_manager.cpp:1075)
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=12.13 up=0.31 kernel=9.93 d2h=13.70 compact=0.00 publish=4.05 total=57.91ms
+[CULL_ALLOC] masks_realloc=1 res_masks=0x6498100 +12883072 end=0x70e1580 | res_mask_base=0x66213c0 +4096 | res_out_exists=0 out=0x0 tiles=0
+[CULL_SPLIT] candidates=3213120 masks=12.29MB exec=81.4 ms masks_addr=0x6498100 end=0x70e1580 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=1 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=154.3 readback=1.4 total=156.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=253.1 (host attr/id build=0, upload=0) total=253.1 ms
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=8.07 up=0.30 kernel=7.15 d2h=10.71 compact=0.00 publish=1.26 total=44.73ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +12883072 end=0x70e1580 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=3213120 masks=12.29MB exec=71.4 ms masks_addr=0x6498100 end=0x70e1580 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.4 (attrs=0.0MB ids=0.0MB resident) exec=147.9 readback=1.4 total=150.7 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=236.7 (host attr/id build=0, upload=0) total=236.7 ms
+[SORT] stage=RP P=2774729 P_kept=2611438 num_tiles=1024 max_tile_n=24176 bin=7.03 up=0.29 kernel=6.18 d2h=6.75 compact=0.00 publish=1.20 total=25.70ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +10476544 end=0x6e95d00 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=2611438 masks=9.99MB exec=58.0 ms masks_addr=0x6498100 end=0x6e95d00 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=120.2 readback=1.5 total=122.6 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=194.2 (host attr/id build=0, upload=0) total=194.2 ms
+[SORT] stage=RP P=3235251 P_kept=3044420 num_tiles=1024 max_tile_n=22144 bin=7.82 up=0.31 kernel=6.90 d2h=6.81 compact=0.00 publish=1.26 total=32.79ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +12208448 end=0x703ca40 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=3044420 masks=11.64MB exec=67.6 ms masks_addr=0x6498100 end=0x703ca40 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.4 (attrs=0.0MB ids=0.0MB resident) exec=140.0 readback=1.5 total=142.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=224.7 (host attr/id build=0, upload=0) total=224.7 ms
+[SORT] stage=RP P=1753355 P_kept=1637292 num_tiles=1024 max_tile_n=20928 bin=5.19 up=0.29 kernel=4.48 d2h=7.29 compact=0.00 publish=0.89 total=20.37ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +6579968 end=0x6ade800 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=1637292 masks=6.28MB exec=49.2 ms masks_addr=0x6498100 end=0x6ade800 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=102.0 readback=1.4 total=104.4 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=161.2 (host attr/id build=0, upload=0) total=161.2 ms
+[SORT] stage=RP P=934247 P_kept=867521 num_tiles=1024 max_tile_n=5136 bin=4.02 up=0.31 kernel=3.24 d2h=6.88 compact=0.00 publish=0.48 total=16.63ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +3500544 end=0x67eeb00 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=867521 masks=3.34MB exec=19.3 ms masks_addr=0x6498100 end=0x67eeb00 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=40.0 readback=1.6 total=42.7 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=69.6 (host attr/id build=0, upload=0) total=69.6 ms
+[SORT] stage=RP P=1124461 P_kept=1056654 num_tiles=1024 max_tile_n=6256 bin=4.14 up=0.29 kernel=3.45 d2h=6.89 compact=0.00 publish=0.53 total=17.03ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +4257024 end=0x68a7600 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=1056654 masks=4.06MB exec=23.6 ms masks_addr=0x6498100 end=0x68a7600 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=48.9 readback=1.4 total=51.3 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=86.3 (host attr/id build=0, upload=0) total=86.3 ms
+[SORT] stage=RP P=835298 P_kept=781922 num_tiles=1024 max_tile_n=5312 bin=3.55 up=0.29 kernel=2.97 d2h=6.76 compact=0.00 publish=0.38 total=15.36ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +3157632 end=0x679af80 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=781922 masks=3.01MB exec=17.4 ms masks_addr=0x6498100 end=0x679af80 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=36.1 readback=1.4 total=38.4 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=66.7 (host attr/id build=0, upload=0) total=66.7 ms
+[SORT] stage=RP P=1067596 P_kept=1004359 num_tiles=1024 max_tile_n=4816 bin=3.92 up=0.29 kernel=3.32 d2h=6.91 compact=0.00 publish=0.44 total=16.54ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +4048576 end=0x68747c0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=1004359 masks=3.86MB exec=22.4 ms masks_addr=0x6498100 end=0x68747c0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=46.4 readback=4.0 total=51.4 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=87.4 (host attr/id build=0, upload=0) total=87.4 ms
+[SORT] stage=RP P=1024763 P_kept=962008 num_tiles=1024 max_tile_n=4576 bin=4.31 up=0.31 kernel=3.47 d2h=6.83 compact=0.00 publish=0.51 total=17.00ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +3878976 end=0x684b140 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=962008 masks=3.70MB exec=21.6 ms masks_addr=0x6498100 end=0x684b140 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.1 (attrs=0.0MB ids=0.0MB resident) exec=44.7 readback=1.4 total=47.2 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=83.8 (host attr/id build=0, upload=0) total=83.8 ms
+[SORT] stage=RP P=779787 P_kept=724640 num_tiles=1024 max_tile_n=3328 bin=3.51 up=0.29 kernel=3.04 d2h=6.78 compact=0.00 publish=0.34 total=15.38ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2929984 end=0x6763640 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=724640 masks=2.79MB exec=16.3 ms masks_addr=0x6498100 end=0x6763640 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=33.7 readback=1.3 total=35.9 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=63.6 (host attr/id build=0, upload=0) total=63.6 ms
+[SORT] stage=RP P=402318 P_kept=360276 num_tiles=1024 max_tile_n=2592 bin=2.77 up=0.29 kernel=2.29 d2h=6.97 compact=0.00 publish=0.21 total=13.21ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +1472576 end=0x65ff940 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=360276 masks=1.40MB exec=8.1 ms masks_addr=0x6498100 end=0x65ff940 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=16.8 readback=1.3 total=19.1 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=41.4 (host attr/id build=0, upload=0) total=41.4 ms
+[SORT] stage=RP P=638458 P_kept=582104 num_tiles=1024 max_tile_n=3264 bin=3.24 up=0.29 kernel=2.78 d2h=7.01 compact=0.00 publish=0.30 total=14.55ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2358592 end=0x66d7e40 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=582104 masks=2.25MB exec=13.1 ms masks_addr=0x6498100 end=0x66d7e40 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=27.1 readback=1.3 total=29.3 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=55.7 (host attr/id build=0, upload=0) total=55.7 ms
+[SORT] stage=RP P=486800 P_kept=434755 num_tiles=1024 max_tile_n=3760 bin=3.06 up=0.31 kernel=2.56 d2h=7.20 compact=0.00 publish=0.32 total=14.51ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +1769152 end=0x6647fc0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=434755 masks=1.69MB exec=9.8 ms masks_addr=0x6498100 end=0x6647fc0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=20.3 readback=1.5 total=22.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=46.0 (host attr/id build=0, upload=0) total=46.0 ms
+[SORT] stage=RP P=602411 P_kept=544891 num_tiles=1024 max_tile_n=4304 bin=3.25 up=0.29 kernel=2.74 d2h=7.03 compact=0.00 publish=0.29 total=14.50ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2210496 end=0x66b3bc0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=544891 masks=2.11MB exec=12.2 ms masks_addr=0x6498100 end=0x66b3bc0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=25.3 readback=1.4 total=27.6 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=54.3 (host attr/id build=0, upload=0) total=54.3 ms
+[SORT] stage=RP P=629297 P_kept=570421 num_tiles=1024 max_tile_n=4784 bin=3.23 up=0.29 kernel=2.77 d2h=6.99 compact=0.00 publish=0.30 total=14.53ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2311936 end=0x66cc800 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=570421 masks=2.20MB exec=12.8 ms masks_addr=0x6498100 end=0x66cc800 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=26.5 readback=1.4 total=28.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=55.9 (host attr/id build=0, upload=0) total=55.9 ms
+[SORT] stage=RP P=574474 P_kept=518758 num_tiles=1024 max_tile_n=4640 bin=3.10 up=0.29 kernel=2.67 d2h=6.97 compact=0.00 publish=0.28 total=14.18ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2105536 end=0x669a1c0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=518758 masks=2.01MB exec=11.6 ms masks_addr=0x6498100 end=0x669a1c0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=24.1 readback=1.4 total=26.4 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=51.3 (host attr/id build=0, upload=0) total=51.3 ms
+[SORT] stage=RP P=508814 P_kept=455635 num_tiles=1024 max_tile_n=4352 bin=2.97 up=0.29 kernel=2.57 d2h=6.92 compact=0.00 publish=0.28 total=13.84ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +1854400 end=0x665ccc0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=455635 masks=1.77MB exec=10.2 ms masks_addr=0x6498100 end=0x665ccc0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=21.1 readback=1.4 total=23.4 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=47.3 (host attr/id build=0, upload=0) total=47.3 ms
+[SORT] stage=RP P=414994 P_kept=365695 num_tiles=1024 max_tile_n=3520 bin=2.87 up=0.29 kernel=2.40 d2h=6.96 compact=0.00 publish=0.22 total=13.45ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +1492288 end=0x6604640 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=365695 masks=1.42MB exec=8.2 ms masks_addr=0x6498100 end=0x6604640 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=17.0 readback=1.4 total=19.3 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=42.2 (host attr/id build=0, upload=0) total=42.2 ms
+[SORT] stage=RP P=245802 P_kept=202039 num_tiles=1024 max_tile_n=2624 bin=2.50 up=0.29 kernel=2.06 d2h=6.98 compact=0.00 publish=0.18 total=12.58ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +839296 end=0x6564f80 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=202039 masks=0.80MB exec=4.6 ms masks_addr=0x6498100 end=0x6564f80 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=9.6 readback=1.3 total=11.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=30.8 (host attr/id build=0, upload=0) total=30.8 ms
+[SORT] stage=RP P=162380 P_kept=121062 num_tiles=1024 max_tile_n=1664 bin=2.44 up=0.29 kernel=1.87 d2h=6.98 compact=0.00 publish=0.12 total=12.13ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +515456 end=0x6515e80 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=121062 masks=0.49MB exec=2.9 ms masks_addr=0x6498100 end=0x6515e80 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=5.8 readback=1.3 total=8.1 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=24.6 (host attr/id build=0, upload=0) total=24.6 ms
+[SORT] stage=RP P=588050 P_kept=531265 num_tiles=1024 max_tile_n=4800 bin=3.16 up=0.29 kernel=2.69 d2h=6.97 compact=0.00 publish=0.34 total=14.35ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2155840 end=0x66a6640 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=531265 masks=2.06MB exec=11.9 ms masks_addr=0x6498100 end=0x66a6640 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=24.6 readback=1.4 total=27.0 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=52.6 (host attr/id build=0, upload=0) total=52.6 ms
+[SORT] stage=RP P=854460 P_kept=787093 num_tiles=1024 max_tile_n=5072 bin=3.54 up=0.29 kernel=3.17 d2h=6.96 compact=0.00 publish=0.37 total=15.51ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +3179392 end=0x67a0480 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=787093 masks=3.03MB exec=17.7 ms masks_addr=0x6498100 end=0x67a0480 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=36.5 readback=1.4 total=38.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=70.9 (host attr/id build=0, upload=0) total=70.9 ms
+[SORT] stage=RP P=840033 P_kept=772462 num_tiles=1024 max_tile_n=4560 bin=3.60 up=0.29 kernel=3.14 d2h=6.88 compact=0.00 publish=0.38 total=15.52ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +3121152 end=0x6792100 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=772462 masks=2.98MB exec=17.3 ms masks_addr=0x6498100 end=0x6792100 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=35.9 readback=1.4 total=38.2 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=69.7 (host attr/id build=0, upload=0) total=69.7 ms
+[SORT] stage=RP P=1077452 P_kept=1004258 num_tiles=1024 max_tile_n=5232 bin=3.96 up=0.29 kernel=3.48 d2h=6.93 compact=0.00 publish=0.46 total=16.62ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +4047360 end=0x6874300 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=1004258 masks=3.86MB exec=22.4 ms masks_addr=0x6498100 end=0x6874300 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=46.5 readback=4.5 total=52.0 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=87.9 (host attr/id build=0, upload=0) total=87.9 ms
+[SORT] stage=RP P=1175882 P_kept=1106757 num_tiles=1024 max_tile_n=5248 bin=4.23 up=0.29 kernel=3.57 d2h=6.82 compact=0.00 publish=0.53 total=17.48ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +4457920 end=0x68d86c0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=1106757 masks=4.25MB exec=24.7 ms masks_addr=0x6498100 end=0x68d86c0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=51.2 readback=1.5 total=53.7 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=93.2 (host attr/id build=0, upload=0) total=93.2 ms
+[SORT] stage=RP P=662931 P_kept=606620 num_tiles=1024 max_tile_n=4928 bin=3.29 up=0.29 kernel=2.84 d2h=6.76 compact=0.00 publish=0.32 total=14.59ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2457408 end=0x66f0040 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=606620 masks=2.34MB exec=13.6 ms masks_addr=0x6498100 end=0x66f0040 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=28.2 readback=1.4 total=30.5 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=55.7 (host attr/id build=0, upload=0) total=55.7 ms
+[SORT] stage=RP P=1298085 P_kept=1211183 num_tiles=1024 max_tile_n=18048 bin=4.23 up=0.29 kernel=3.90 d2h=6.93 compact=0.00 publish=0.73 total=22.78ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +4875264 end=0x693e500 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=1211183 masks=4.65MB exec=41.8 ms masks_addr=0x6498100 end=0x693e500 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=86.8 readback=1.4 total=89.1 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=145.2 (host attr/id build=0, upload=0) total=145.2 ms
+[SORT] stage=RP P=262468 P_kept=239689 num_tiles=1024 max_tile_n=4400 bin=2.72 up=0.29 kernel=1.57 d2h=6.74 compact=0.00 publish=0.22 total=12.21ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +988608 end=0x65896c0 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=239689 masks=0.94MB exec=8.4 ms masks_addr=0x6498100 end=0x65896c0 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=17.4 readback=1.3 total=19.7 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=36.9 (host attr/id build=0, upload=0) total=36.9 ms
+[SORT] stage=RP P=107247 P_kept=72110 num_tiles=1024 max_tile_n=1440 bin=2.37 up=0.29 kernel=1.46 d2h=6.94 compact=0.00 publish=0.11 total=11.53ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +318592 end=0x64e5d80 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=72110 masks=0.30MB exec=1.8 ms masks_addr=0x6498100 end=0x64e5d80 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=3.6 readback=1.3 total=5.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=21.1 (host attr/id build=0, upload=0) total=21.1 ms
+[SORT] stage=RP P=742945 P_kept=677949 num_tiles=1024 max_tile_n=4672 bin=3.71 up=0.31 kernel=3.03 d2h=7.02 compact=0.00 publish=0.41 total=15.97ms
+[CULL_ALLOC] masks_realloc=0 res_masks=0x6498100 +2741824 end=0x6735740 | res_mask_base=0x66213c0 +4096 | res_out_exists=1 out=0x66257c0 tiles=1024
+[CULL_SPLIT] candidates=677949 masks=2.61MB exec=15.3 ms masks_addr=0x6498100 end=0x6735740 base_addr=0x66213c0
+[BLEND_ALLOC] out_realloc=0 res_out=0x66257c0 +6291456 end=0x6c257c0 | res_masks=0x6498100 +12883072 end=0x70e1580 | xramp=0x66237c0 yramp=0x66247c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=31.6 readback=1.5 total=34.0 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=64.0 (host attr/id build=0, upload=0) total=64.0 ms
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=7.90 up=0.29 kernel=7.14 d2h=6.74 compact=0.00 publish=1.26 total=27.79ms
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=7.93 up=0.29 kernel=7.14 d2h=6.75 compact=0.00 publish=1.26 total=27.69ms
+[SORT] stage=RP P=2774729 P_kept=2611438 num_tiles=1024 max_tile_n=24176 bin=6.97 up=0.31 kernel=6.24 d2h=6.87 compact=0.00 publish=1.12 total=25.11ms
+[SORT] stage=RP P=3235251 P_kept=3044420 num_tiles=1024 max_tile_n=22144 bin=7.75 up=0.29 kernel=6.86 d2h=6.75 compact=0.00 publish=1.18 total=26.99ms
+[SORT] stage=RP P=1753355 P_kept=1637292 num_tiles=1024 max_tile_n=20928 bin=5.15 up=0.29 kernel=4.49 d2h=6.77 compact=0.00 publish=0.86 total=19.78ms
+[SORT] stage=RP P=934247 P_kept=867521 num_tiles=1024 max_tile_n=5136 bin=3.71 up=0.29 kernel=3.19 d2h=6.74 compact=0.00 publish=0.40 total=15.63ms
+[SORT] stage=RP P=1124461 P_kept=1056654 num_tiles=1024 max_tile_n=6256 bin=4.15 up=0.29 kernel=3.42 d2h=6.67 compact=0.00 publish=0.47 total=16.50ms
+[SORT] stage=RP P=835298 P_kept=781922 num_tiles=1024 max_tile_n=5312 bin=3.64 up=0.29 kernel=2.98 d2h=6.69 compact=0.00 publish=0.38 total=15.18ms
+[SORT] stage=RP P=1067596 P_kept=1004359 num_tiles=1024 max_tile_n=4816 bin=4.05 up=0.29 kernel=3.33 d2h=6.76 compact=0.00 publish=0.45 total=16.33ms
+[SORT] stage=RP P=1024763 P_kept=962008 num_tiles=1024 max_tile_n=4576 bin=3.86 up=0.29 kernel=3.44 d2h=6.75 compact=0.00 publish=0.44 total=16.18ms
+[SORT] stage=RP P=779787 P_kept=724640 num_tiles=1024 max_tile_n=3328 bin=3.52 up=0.29 kernel=3.05 d2h=6.74 compact=0.00 publish=0.35 total=15.11ms
+[SORT] stage=RP P=402318 P_kept=360276 num_tiles=1024 max_tile_n=2592 bin=2.87 up=0.29 kernel=2.29 d2h=6.74 compact=0.00 publish=0.22 total=13.18ms
+[SORT] stage=RP P=638458 P_kept=582104 num_tiles=1024 max_tile_n=3264 bin=3.29 up=0.29 kernel=2.79 d2h=6.75 compact=0.00 publish=0.30 total=14.38ms
+[SORT] stage=RP P=486800 P_kept=434755 num_tiles=1024 max_tile_n=3760 bin=2.94 up=0.29 kernel=2.52 d2h=6.74 compact=0.00 publish=0.26 total=13.55ms
+[SORT] stage=RP P=602411 P_kept=544891 num_tiles=1024 max_tile_n=4304 bin=3.29 up=0.31 kernel=2.75 d2h=6.75 compact=0.00 publish=0.30 total=14.34ms
+[SORT] stage=RP P=629297 P_kept=570421 num_tiles=1024 max_tile_n=4784 bin=3.35 up=0.29 kernel=2.79 d2h=6.75 compact=0.00 publish=0.30 total=14.46ms
+[SORT] stage=RP P=574474 P_kept=518758 num_tiles=1024 max_tile_n=4640 bin=3.13 up=0.29 kernel=2.67 d2h=6.75 compact=0.00 publish=0.29 total=14.03ms
+[SORT] stage=RP P=508814 P_kept=455635 num_tiles=1024 max_tile_n=4352 bin=3.00 up=0.29 kernel=2.57 d2h=6.77 compact=0.00 publish=0.29 total=13.75ms
+[SORT] stage=RP P=414994 P_kept=365695 num_tiles=1024 max_tile_n=3520 bin=2.85 up=0.30 kernel=2.40 d2h=6.78 compact=0.00 publish=0.24 total=13.30ms
+[SORT] stage=RP P=245802 P_kept=202039 num_tiles=1024 max_tile_n=2624 bin=2.50 up=0.29 kernel=2.07 d2h=6.73 compact=0.00 publish=0.19 total=12.44ms
+[SORT] stage=RP P=162380 P_kept=121062 num_tiles=1024 max_tile_n=1664 bin=2.52 up=0.29 kernel=1.88 d2h=6.76 compact=0.00 publish=0.12 total=12.09ms
+[SORT] stage=RP P=588050 P_kept=531265 num_tiles=1024 max_tile_n=4800 bin=3.18 up=0.29 kernel=2.68 d2h=6.72 compact=0.00 publish=0.31 total=14.11ms
+[SORT] stage=RP P=854460 P_kept=787093 num_tiles=1024 max_tile_n=5072 bin=3.62 up=0.29 kernel=3.17 d2h=6.75 compact=0.00 publish=0.38 total=15.42ms
+[SORT] stage=RP P=840033 P_kept=772462 num_tiles=1024 max_tile_n=4560 bin=3.60 up=0.29 kernel=3.14 d2h=6.76 compact=0.00 publish=0.38 total=15.42ms
+[SORT] stage=RP P=1077452 P_kept=1004258 num_tiles=1024 max_tile_n=5232 bin=4.04 up=0.29 kernel=3.48 d2h=6.77 compact=0.00 publish=0.46 total=16.48ms
+[SORT] stage=RP P=1175882 P_kept=1106757 num_tiles=1024 max_tile_n=5248 bin=4.28 up=0.29 kernel=3.52 d2h=6.79 compact=0.00 publish=0.47 total=16.99ms
+[SORT] stage=RP P=662931 P_kept=606620 num_tiles=1024 max_tile_n=4928 bin=3.34 up=0.29 kernel=2.84 d2h=6.76 compact=0.00 publish=0.34 total=14.57ms
+[SORT] stage=RP P=1298085 P_kept=1211183 num_tiles=1024 max_tile_n=18048 bin=4.27 up=0.29 kernel=3.90 d2h=6.72 compact=0.00 publish=0.73 total=17.67ms
+[SORT] stage=RP P=262468 P_kept=239689 num_tiles=1024 max_tile_n=4400 bin=2.65 up=0.29 kernel=1.57 d2h=6.79 compact=0.00 publish=0.23 total=12.11ms
+[SORT] stage=RP P=107247 P_kept=72110 num_tiles=1024 max_tile_n=1440 bin=2.48 up=0.29 kernel=1.47 d2h=6.73 compact=0.00 publish=0.11 total=11.50ms
+[SORT] stage=RP P=742945 P_kept=677949 num_tiles=1024 max_tile_n=4672 bin=3.47 up=0.30 kernel=2.99 d2h=6.74 compact=0.00 publish=0.33 total=14.90ms
+SUMMARY backend=tt blend_mode=2 views=30 hero_vs_gt=46.78dB hero_vs_ref=63.64dB min_vs_ref=55.77dB min_vs_gt=41.19dB ms/view=170.0 (proj=31.9 ta=29.6 sort=15.4 blend=65.4) shot=opt/metal-screenshots/loop-gate30/hero.png
+[bh-30-special-smarton-for-reservation-75776:460691] *** Process received signal ***
+[bh-30-special-smarton-for-reservation-75776:460691] Signal: Segmentation fault (11)
+[bh-30-special-smarton-for-reservation-75776:460691] Signal code: Address not mapped (1)
+[bh-30-special-smarton-for-reservation-75776:460691] Failing at address: 0x5a8109174
+[bh-30-special-smarton-for-reservation-75776:460691] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7b6f45991520]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail9_Map_baseIjSt4pairIKjNSt6chrono10time_pointINS3_3_V212steady_clockENS3_8durationIlSt5ratioILl1ELl1000000000EEEEEEESaISC_ENS_10_Select1stESt8equal_toIjESt4hashIjENS_18_Mod_range_hashingENS_20_Default_ranged_hashENS_20_Prime_rehash_policyENS_17_Hashtable_traitsILb0ELb0ELb1EEELb1EEixEOj+0x48)[0x7b6eea952488]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x9c)[0x7b6eea941f9c]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xc0)[0x7b6eea9fb5c0]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD1Ev+0x1a)[0x7b6eeaa067fa]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x5dfc26)[0x7b6eea7dfc26]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xa8)[0x7b6eead17168]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD1Ev+0x15)[0x7b6eead175e5]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 8] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xbcbd1)[0x7b6eebaf0bd1]
+[bh-30-special-smarton-for-reservation-75776:460691] [ 9] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7b6f45994495]
+[bh-30-special-smarton-for-reservation-75776:460691] [10] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7b6f45994610]
+[bh-30-special-smarton-for-reservation-75776:460691] [11] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x7b6f45978d97]
+[bh-30-special-smarton-for-reservation-75776:460691] [12] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7b6f45978e40]
+[bh-30-special-smarton-for-reservation-75776:460691] [13] .venv/bin/python3(_start+0x25)[0x5a80c63b3b45]
+[bh-30-special-smarton-for-reservation-75776:460691] *** End of error message ***

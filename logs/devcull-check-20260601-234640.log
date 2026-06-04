@@ -1,0 +1,8 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=devcull-check  timeout=600s  worry=600s  ts=2026-06-01T23:46:40-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 && source .venv/bin/activate && .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-dc --out opt/loop-dc.json 2>&1 | grep "^SUMMARY"
+-----------------------------------------
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=269.3 (proj=39.3 ta=24.9 sort=26.2 blend=178.6) shot=opt/metal-screenshots/loop-dc/hero.png

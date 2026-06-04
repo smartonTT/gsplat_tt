@@ -1,0 +1,94 @@
+================ BUILD ID ================
+  cpp : #186 sha=3076bac bin=159667ddd858b39c iter52: subchunk-end mb keep mask EO
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=ttw-052  timeout=1200s  worry=600s  ts=2026-06-03T10:35:23-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate; python3 render/run.py --iter-dir ttw-052 2>&1 | tee /tmp/ttw052.log; grep -E '^SUMMARY|^TTW_METRIC|^TTW_TIMING' /tmp/ttw052.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#186 bin=159667ddd858b39c matches the built+stamped artifact
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-06-03 17:35:25.112 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 17:35:25.112 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 17:35:25.112 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 17:35:25.112 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 17:35:25.113 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 17:35:25.113 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 17:35:25.113 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-03 17:35:25.113 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-03 17:35:25.113 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 17:35:25.113 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 17:35:25.113 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 17:35:25.113 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 17:35:25.113 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 17:35:25.113 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 17:35:25.114 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-03 17:35:25.114 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-03 17:35:25.114 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-03 17:35:25.152 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 17:35:25.153 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-03 17:35:25.153 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-03 17:35:25.153 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-03 17:35:25.153 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-03 17:35:25.154 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-03 17:35:25.155 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-03 17:35:25.155 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-03 17:35:25.662 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-03 17:35:25.662 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-03 17:35:25.662 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 17:35:25.662 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 17:35:25.662 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 17:35:25.662 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 17:35:25.663 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 17:35:25.663 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 17:35:25.663 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-03 17:35:25.663 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-03 17:35:25.663 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 17:35:25.663 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 17:35:25.663 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-03 17:35:25.663 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 17:35:25.663 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 17:35:25.663 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-03 17:35:25.663 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-03 17:35:25.663 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-03 17:35:25.663 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-03 17:35:25.663 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-03 17:35:25.663 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-03 17:35:25.684 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-03 17:35:25.879 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_3268_2253695783_0' (shm_resource_tracker.cpp:265)
+2026-06-03 17:35:25.879 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_3268' (shm_resource_tracker.cpp:275)
+2026-06-03 17:35:25.879 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-03 17:35:26.462 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349986 GHz, device_time_at_sync=302862935692 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 1365.7 ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=43.62 up=0.02 kernel=1.91 d2h=0.00 compact=0.00 publish=1.43 total=47.07ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=57907200 subchunks_bulk=234 avg_bytes_per_subchunk=247466
+[PACK2] splats=2914793 pages=1457623 bytes_packed=93287872 bytes_iter49=186546752 avg_pages_per_1k_splats=500
+===== ttw diagnose host=yyzo-bh-03 @ 2026-06-03T10:45:39-0700 =====
+--- device status (read-only) ---
+tt-smi not found
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 17:45:39 up 14 min,  0 users,  load average: 2.05, 2.36, 1.64
+--- device processes ---
+--- JIT cache size ---
+116M	/localdev/smarton/.cache/tt-metal-cache
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.

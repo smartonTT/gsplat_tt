@@ -1,0 +1,177 @@
+================ BUILD ID ================
+  cpp : #114 sha=01ff918 bin=59d109789bbdb4e9 sort device bin layout kernel
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=build-tt2  timeout=900s  worry=600s  ts=2026-06-02T01:00:50-0700
+cmd: bash -c cd /localdev/smarton/gstt2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal && GSPLAT_WITH_TT=ON GSPLAT_SIMD_AVX2=ON BUILD_DIR=build-tt bash scripts/build_cpu_cpp.sh 2>&1
+-----------------------------------------
+fixed: /localdev/smarton/tt-metal/build/tt_metal/third_party/umd/umdTargets.cmake -> device/CMakeFiles/Export/a66ff87e1dd248bcbf3c902600a65777/umdTargets.cmake
+fixed: /localdev/smarton/tt-metal/build/_deps/tt-logger-build/cmake/tt-logger-targets.cmake -> ../CMakeFiles/Export/deaccb5626f933bc02728d438d6dcc90/tt-logger-targets.cmake
+fixed: /localdev/smarton/tt-metal/build/tt_metal/lib/libtt_metal.so -> ../libtt_metal.so
+fixed: /localdev/smarton/tt-metal/build/tt_metal/lib/libtt_stl.so -> ../../tt_stl/libtt_stl.so
+fixed: /localdev/smarton/tt-metal/build/tt_metal/lib/libtracy.so.0.10.0 -> ../../lib/libtracy.so.0.10.0
+fixed: /localdev/smarton/tt-metal/build/tt_metal/include/tt-metalium -> ../../../tt_metal/api/tt-metalium
+fixed: /localdev/smarton/tt-metal/build/tt_metal/include/tt_stl -> ../../../tt_stl/tt_stl
+fixed: /localdev/smarton/tt-metal/build/tt_metal/include/hostdevcommon -> ../../../tt_metal/hostdevcommon/api/hostdevcommon
+tt-metal cmake exports ok under /localdev/smarton/tt-metal/build
+-- Found pybind11: /localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/pybind11/include (found version "3.0.4")
+CMake Warning (dev) at /usr/local/share/cmake-4.0/Modules/FetchContent.cmake:1953 (message):
+  Calling FetchContent_Populate(cnpy) is deprecated, call
+  FetchContent_MakeAvailable(cnpy) instead.  Policy CMP0169 can be set to OLD
+  to allow FetchContent_Populate(cnpy) to be called directly for now, but the
+  ability to call it with declared details will be removed completely in a
+  future version.
+Call Stack (most recent call first):
+  /localdev/smarton/gstt2/tests/CMakeLists.txt:11 (FetchContent_Populate)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Found ZLIB: /usr/lib/x86_64-linux-gnu/libz.so (found version "1.2.11")
+-- Configuring done (0.6s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2/build-tt
+[1/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/thread_pool.cpp.o
+[2/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/blend.cpp.o
+[3/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/microblock_cull.cpp.o
+[4/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/sort.cpp.o
+[5/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/tile_assign.cpp.o
+[6/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/blend_microblock.cpp.o
+[7/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/cull_and_blend.cpp.o
+/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp: In function ‘void gsplat_cpu::{anonymous}::cull_and_blend_tile(int, int, int, int, int, const float*, const float*, const float*, const float*, const int64_t*, const int64_t*, float, const gsplat_cpu::{anonymous}::GaussianCullRec*, float*, int64_t*, int64_t*, gsplat_cpu::{anonymous}::TileScratch&, bool, float)’:
+/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp:320:18: warning: unused parameter ‘means_2d’ [-Wunused-parameter]
+  320 |     const float* means_2d,
+      |     ~~~~~~~~~~~~~^~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp:321:18: warning: unused parameter ‘covs_2d’ [-Wunused-parameter]
+  321 |     const float* covs_2d,
+      |     ~~~~~~~~~~~~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp:322:18: warning: unused parameter ‘colors’ [-Wunused-parameter]
+  322 |     const float* colors,
+      |     ~~~~~~~~~~~~~^~~~~~
+/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp:323:18: warning: unused parameter ‘opacities’ [-Wunused-parameter]
+  323 |     const float* opacities,
+      |     ~~~~~~~~~~~~~^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp:326:17: warning: unused parameter ‘mb_contrib_floor’ [-Wunused-parameter]
+  326 |     const float mb_contrib_floor,
+      |     ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
+[8/140] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/project.cpp.o
+/localdev/smarton/gstt2/src/gsplat_cpu/project.cpp: In function ‘gsplat_cpu::ProjectResult gsplat_cpu::project_full_fused(const float*, const float*, const float*, const float*, const float*, const float*, float, std::size_t, int, int, gsplat_cpu::ThreadPool*, int, float, float, bool, const float*)’:
+/localdev/smarton/gstt2/src/gsplat_cpu/project.cpp:506:17: warning: variable ‘r_t’ set but not used [-Wunused-but-set-variable]
+  506 |     const Mat3f r_t = mat3_transpose(r_mat);
+      |                 ^~~
+[9/140] Linking CXX static library libgsplat_cpu.a
+[10/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/jit_warmup.cpp.o
+[11/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_enum_values_registry.cpp.o
+[12/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/catch_chronometer.cpp.o
+[13/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/render_blend.cpp.o
+[14/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_benchmark_function.cpp.o
+[15/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_analyse.cpp.o
+[16/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_run_for_at_least.cpp.o
+[17/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/generators/catch_generator_exception.cpp.o
+[18/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/mb_payload.cpp.o
+[19/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/generators/catch_generators.cpp.o
+[20/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/benchmark/detail/catch_stats.cpp.o
+[21/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/generators/catch_generators_random.cpp.o
+[22/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_automake.cpp.o
+[23/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_common_base.cpp.o
+[24/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_compact.cpp.o
+[25/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_event_listener.cpp.o
+[26/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_console.cpp.o
+[27/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_cumulative_base.cpp.o
+[28/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_helpers.cpp.o
+[29/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_registrars.cpp.o
+[30/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_json.cpp.o
+[31/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/device_state.cpp.o
+[32/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_multi.cpp.o
+[33/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_streaming_base.cpp.o
+[34/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_junit.cpp.o
+[35/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_sonarqube.cpp.o
+[36/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_capture.cpp.o
+[37/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_tap.cpp.o
+[38/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_teamcity.cpp.o
+[39/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_config.cpp.o
+[40/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_generatortracker.cpp.o
+[41/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/reporters/catch_reporter_xml.cpp.o
+[42/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_exception.cpp.o
+[43/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_testcase.cpp.o
+[44/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_registry_hub.cpp.o
+[45/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_reporter_factory.cpp.o
+[46/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/interfaces/catch_interfaces_reporter.cpp.o
+[47/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_assertion_result.cpp.o
+[48/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_get_random_seed.cpp.o
+[49/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_approx.cpp.o
+[50/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_config.cpp.o
+[51/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_message.cpp.o
+[52/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_registry_hub.cpp.o
+[53/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/pfwc_device.cpp.o
+[54/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_tag_alias_autoregistrar.cpp.o
+[55/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/project_device.cpp.o
+[56/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_totals.cpp.o
+[57/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_timer.cpp.o
+[58/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_translate_exception.cpp.o
+[59/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_version.cpp.o
+[60/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_test_case_info.cpp.o
+[61/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_test_spec.cpp.o
+[62/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_assertion_handler.cpp.o
+[63/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/tile_assign_device.cpp.o
+[64/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_tostring.cpp.o
+[65/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_context.cpp.o
+[66/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_case_insensitive_comparisons.cpp.o
+[67/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_console_colour.cpp.o
+[68/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_debugger.cpp.o
+[69/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/catch_session.cpp.o
+[70/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_errno_guard.cpp.o
+[71/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_decomposer.cpp.o
+[72/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_debug_console.cpp.o
+[73/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_getenv.cpp.o
+[74/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_enforce.cpp.o
+[75/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_floating_point_helpers.cpp.o
+[76/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_exception_translator_registry.cpp.o
+[77/140] Building CXX object CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o
+FAILED: CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o 
+/usr/bin/c++ -DGSPLAT_WITH_TT -DTRACY_ENABLE=1 -D_gsplat_cpu_EXPORTS -I/localdev/smarton/gstt2/src -isystem /localdev/smarton/tt-metal/tt_metal/third_party/tracy/public -isystem /usr/include/python3.10 -isystem /localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/pybind11/include -isystem /localdev/smarton/tt-metal/tt_metal/api -isystem /localdev/smarton/tt-metal/build/tt_metal/api -isystem /localdev/smarton/tt-metal/tt_stl -isystem /localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -isystem /localdev/smarton/tt-metal/tt_metal/hw/inc/hostdev -isystem /localdev/smarton/tt-metal/tt_metal/third_party/umd/device/api -isystem /localdev/smarton/tt-metal/tt_metal/jit_build -isystem /localdev/smarton/tt-metal/build/tt_metal/jit_build -isystem /localdev/smarton/tt-metal/.cpmcache/benchmark/17a125dc196d0eea81711f65879e8410dd54303f/include -isystem /localdev/smarton/tt-metal/.cpmcache/cxxopts/dda70ad5c1afdb5368541192bace55dbcd7872e3/include -isystem /localdev/smarton/tt-metal/.cpmcache/enchantum/2fb7ab238e36c101b9848892ddb6382276b65837/enchantum/include -isystem /localdev/smarton/tt-metal/.cpmcache/flatbuffers/2c4062bffa52fa4157b1b4deeae73395df475fda/include -isystem /localdev/smarton/tt-metal/.cpmcache/fmt/69912fb6b71fcb1f7e5deca191a2bb4748c4e7b6/include -isystem /localdev/smarton/tt-metal/.cpmcache/libuv/2b05484ccff8fdf26b363fb50e4830b774d7eb53/include -isystem /localdev/smarton/tt-metal/.cpmcache/nanobind/8be24e8fbbe8c9cee0b8c553c21d090a5ede3d79/include -isystem /localdev/smarton/tt-metal/.cpmcache/nanomsg/28cc32d5bdb6a858fe53b3ccf7e923957e53eada/include -isystem /localdev/smarton/tt-metal/.cpmcache/nlohmann_json/798e0374658476027d9723eeb67a262d0f3c8308/include -isystem /localdev/smarton/tt-metal/.cpmcache/range-v3/0_12_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/reflect/f93e77475670eaeacf332927dfe8b50e3f3812e0 -isystem /localdev/smarton/tt-metal/.cpmcache/spdlog/b1c2586bb5c35a7929362e87f62433eb68206873/include -isystem /localdev/smarton/tt-metal/.cpmcache/tt-logger/d2339ce68562cae34cd95f3fece7fd94eb0529b7/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtensor-blas/0_22_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtensor/0_26_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtl/0_8_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/yaml-cpp/0_8_0_upstream_patched/include -O3 -DNDEBUG -std=c++20 -fPIC -fvisibility=hidden -Wall -Wextra -Wpedantic -fno-omit-frame-pointer -O3 -march=native -DNDEBUG -DGSPLAT_SIMD_AVX2 -mavx2 -mfma -flto=auto -fno-fat-lto-objects -MD -MT CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o -MF CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o.d -o CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o -c /localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp
+In file included from /localdev/smarton/gstt2/src/gsplat_tt/host_tracy.hpp:8,
+                 from /localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:26:
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp: In function ‘pybind11::tuple {anonymous}::render_full_py(pybind11::array_t<float, 17>, pybind11::array_t<float, 17>, pybind11::array_t<float, 17>, pybind11::array_t<float, 17>, pybind11::array_t<float, 17>, pybind11::array_t<float, 17>, int, int, int, float, float, float, bool, float, int, float, bool, int)’:
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:1363:22: error: the value of ‘sort_zone’ is not usable in a constant expression
+ 1363 |     GSPLAT_HOST_ZONE(sort_zone);
+      |                      ^~~~~~~~~
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:1363:5: note: in expansion of macro ‘GSPLAT_HOST_ZONE’
+ 1363 |     GSPLAT_HOST_ZONE(sort_zone);
+      |     ^~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:1361:17: note: ‘sort_zone’ was not declared ‘constexpr’
+ 1361 |     const char* sort_zone =
+      |                 ^~~~~~~~~
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp: At global scope:
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:830:17: warning: ‘{anonymous}::VisibleFiltered {anonymous}::filter_visible(const float*, const float*, const uint8_t*, std::size_t, std::size_t, gsplat_cpu::ThreadPool&)’ defined but not used [-Wunused-function]
+  830 | VisibleFiltered filter_visible(
+      |                 ^~~~~~~~~~~~~~
+[78/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_leak_detector.cpp.o
+[79/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o
+[80/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_jsonwriter.cpp.o
+[81/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_lazy_expr.cpp.o
+[82/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_istream.cpp.o
+[83/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_clara.cpp.o
+[84/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_fatal_condition_handler.cpp.o
+[85/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: In function ‘double mb::cull::process_frame(DeviceContext&, float, bool, uint32_t, uint32_t, bool*, bool)’:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:2291:56: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 3 has type ‘uint64_t’ {aka ‘long unsigned int’} [-Wformat=]
+ 2291 |         std::fprintf(stderr, "[CULL_SPLIT] candidates=%u masks=%.2fMB exec=%.1f ms "
+      |                                                       ~^
+      |                                                        |
+      |                                                        unsigned int
+      |                                                       %lu
+ 2292 |                      "masks_addr=0x%lx end=0x%lx base_addr=0x%lx\n",
+ 2293 |                      total_candidates,
+      |                      ~~~~~~~~~~~~~~~~                   
+      |                      |
+      |                      uint64_t {aka long unsigned int}
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:112:13: warning: ‘void save_npy_f32(const string&, const std::vector<float>&, const std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  112 | static void save_npy_f32(const std::string& path, const std::vector<float>& data, const std::vector<size_t>& shape) {
+      |             ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:103:30: warning: ‘std::vector<unsigned int> load_npy_u32(const string&, std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  103 | static std::vector<uint32_t> load_npy_u32(const std::string& path, std::vector<size_t>& shape) {
+      |                              ^~~~~~~~~~~~
+[86/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_list.cpp.o
+[87/140] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_commandline.cpp.o
+[88/140] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/gather_visible_device.cpp.o
+ninja: build stopped: subcommand failed.

@@ -18,11 +18,11 @@ Artifacts are written under tmp/render-clean/ (gitignored scratch).
 from __future__ import annotations
 
 import argparse
-import contextlib
 import importlib.util
 import math
 import os
 import statistics
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -62,6 +62,11 @@ _REF_VERIFY_ENV = {
 for _k, _v in _REF_VERIFY_ENV.items():
     os.environ.setdefault(_k, _v)
 
+_CACHE_RENDER = os.environ.get(
+    "TT_METAL_CACHE_RENDER",
+    "/localdev/smarton/.cache/tt-metal-cache-render",
+)
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -78,7 +83,6 @@ from gsplat.utils import c2w_to_w2c  # noqa: E402
 
 
 def _load_render_clean():
-    """Import the compiled render_clean module from render/."""
     here = Path(__file__).resolve().parent
     for so in sorted(here.glob("render_clean*.so")):
         spec = importlib.util.spec_from_file_location("render_clean", so)
@@ -86,14 +90,10 @@ def _load_render_clean():
         spec.loader.exec_module(mod)
         return mod
     raise ImportError(
-        f"render_clean*.so not found in {here}; build it first:\n"
-        "  cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release\n"
-        "  cmake --build render/build-tt -j 16")
+        f"render_clean*.so not found in {here}; build render/build-tt first")
 
 
 class CleanBackend(CpuCppBackend):
-    """cpu_cpp prep + the clean TT device render_view (render_clean module)."""
-
     def __init__(self, **kwargs):
         kwargs.setdefault("microblock", True)
         kwargs.setdefault("fused", True)
@@ -146,38 +146,6 @@ def psnr(a, b):
     return -10.0 * math.log10(mse)
 
 
-@contextlib.contextmanager
-def silence_os_fd_output():
-    """Redirect OS-level stdout+stderr (fd 1/2) to /dev/null for the block.
-
-    The cpu_cpp_mb reference is rendered in-process while CleanBackend still
-    holds the TT device, so the reference's gsplat_tt device-init attempts
-    fail and fall back to CPU — that CPU fallback is exactly the oracle that
-    yields the 63.85 dB measurement. tt-metal logs those init failures
-    (TT_FATAL / context_id / "device init failed") to fd 2 directly from C++,
-    so a Python-level redirect (contextlib.redirect_stderr) cannot catch them;
-    we dup2 /dev/null over the real fds for the duration of the reference
-    render only. No computation changes — only the noisy log is suppressed.
-    """
-    sys.stdout.flush()
-    sys.stderr.flush()
-    devnull_fd = os.open(os.devnull, os.O_WRONLY)
-    saved_out = os.dup(1)
-    saved_err = os.dup(2)
-    try:
-        os.dup2(devnull_fd, 1)
-        os.dup2(devnull_fd, 2)
-        yield
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        os.dup2(saved_out, 1)
-        os.dup2(saved_err, 2)
-        os.close(devnull_fd)
-        os.close(saved_out)
-        os.close(saved_err)
-
-
 def _to_image(res):
     img = res.image
     if hasattr(img, "numpy"):
@@ -196,16 +164,32 @@ def render_hero(backend, gauss, view, fov_deg, W, H, contrib_floor):
     return _to_image(pipeline.render(gauss, extr, K, H, W))
 
 
-def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
-    """Render one view through render_clean; return (image, wall_ms).
+def _spawn_ref_hero(out_npy: Path, scene: str, cameras: Path, iter_dir: str) -> None:
+    """Render cpu_cpp_mb hero reference in a child process (exclusive device).
 
-    The timed window wraps the whole `pipeline.render` call. render_clean is
-    single-path TT (host orchestrates, device computes) and the heavy host prep
-    (cov3d repack, gaussian np cast) is cached on the backend after warmup, so
-    this wall time is a faithful per-frame number dominated by the device
-    render + the thin per-view host orchestration. The PURE device makespan is
-    measured separately under Tracy (TASK 3); the two should agree within noise.
+    render_clean and cpu_cpp_mb each embed gsplat_tt in a different .so; running
+    the reference in-process after render_clean has opened the device yields a
+    saturated-white ref (~3 dB) on some hosts. Subprocess ref then exit avoids
+    dual MetalContext corruption.
     """
+    env = os.environ.copy()
+    env.setdefault("TTW_ALLOW_DIRECT", "1")
+    env.pop("TT_METAL_CACHE_RENDER", None)
+    cmd = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--ref-only",
+        str(out_npy),
+        "--scene", scene,
+        "--cameras", str(cameras),
+        "--iter-dir", iter_dir,
+    ]
+    print(f"[run] spawning cpu_cpp_mb reference subprocess -> {out_npy.name}",
+          flush=True)
+    subprocess.run(cmd, env=env, check=True)
+
+
+def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
     extr = c2w_to_w2c(torch.from_numpy(np.asarray(c2w, dtype=np.float32)))
     t = time.perf_counter()
     res = pipeline.render(gauss, extr, K, H, W)
@@ -219,13 +203,13 @@ def main():
     ap.add_argument("--cameras", type=Path,
                     default=REPO_ROOT / "benchmarks/cameras_v2.json")
     ap.add_argument("--iter-dir", default="render-clean")
-    ap.add_argument("--dump-views", default=None,
-                    help="if set, save every bench view's render_clean output as "
-                         "viewNN_<name>.png under tmp/<this dir> (8-bit RGB)")
+    ap.add_argument("--dump-views", default=None)
     ap.add_argument("--no-ref", action="store_true",
                     help="skip the cpu_cpp_mb reference render + PSNR gate; time "
                          "the 30 render_clean views only (used for a clean Tracy "
                          "device-profiler capture). Does not change render_clean.")
+    ap.add_argument("--ref-only", nargs=1, metavar="OUT_NPY",
+                    help=argparse.SUPPRESS)
     args = ap.parse_args()
 
     # Device-lock discipline: render_clean opens the TT device, so only run
@@ -241,7 +225,7 @@ def main():
     fov_deg = float(cam["fov_deg"])
     W, H = cam["image_size"]
     contrib_floor = cam.get("contrib_floor", 1.0 / 255.0)
-    order = cam["order"]            # the 30-view bench set (order[0] == hero)
+    order = cam["order"]
     hero_name = order[0]
     hero_view = cam["views"][hero_name]
     gauss = load_ply(str(Path(cam["ply"])))
@@ -255,21 +239,33 @@ def main():
         dump_dir.mkdir(parents=True, exist_ok=True)
 
     K = build_intrinsics(W, H, fov_deg)
+
+    if args.ref_only is not None:
+        out_npy = Path(args.ref_only[0])
+        ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg,
+                          W, H, contrib_floor)
+        out_npy.parent.mkdir(parents=True, exist_ok=True)
+        np.save(out_npy, ref.astype(np.float32))
+        print(f"[run] ref-only wrote {out_npy} mean={ref.mean():.4f}", flush=True)
+        os._exit(0)
+
+    ref = None
+    ref_npy = out_dir / "hero_ref.npy"
+    if not args.no_ref:
+        _spawn_ref_hero(ref_npy, args.scene, args.cameras, args.iter_dir)
+        ref = np.load(ref_npy)
+
+    # render_clean JIT cache must not share prod kernels.
+    os.environ["TT_METAL_CACHE"] = _CACHE_RENDER
     clean_backend = CleanBackend()
     clean_pipeline = Pipeline(clean_backend, tile_size=32, contrib_floor=contrib_floor)
 
-    # --- Warmup (EXCLUDED from timing): JIT-compile every device program +
-    # warm the backend host caches (cov3d repack, gaussian np cast). One hero
-    # render is enough to compile the resident chain and populate the caches
-    # that are reused by all 30 views.
     print(f"[run] warmup (hero='{hero_name}', {W}x{H}, scene={args.scene})",
           flush=True)
     t_warm = time.perf_counter()
     _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
     warmup_s = time.perf_counter() - t_warm
 
-    # --- Timed loop over ALL 30 bench views (pure render_clean device path;
-    # the CPU reference is NOT rendered here — only for the hero PSNR gate).
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
     per_view_ms = []
     hero_clean = None
@@ -291,21 +287,16 @@ def main():
     min_ms = min(per_view_ms)
     max_ms = max(per_view_ms)
 
-    # --- Hero PSNR gate ONLY: render the cpu_cpp_mb reference in-process
-    # (identical oracle pixels => identical hero_vs_ref). Its device-init
-    # attempts fail (device held by the clean backend) and fall back to CPU;
-    # silence the C++ fd-2 TT_FATAL spam so the "clean renderer" log stays clean.
-    # Skipped under --no-ref (clean device-profiler capture: render_clean only).
     if args.no_ref:
         hero_vs_ref = float("nan")
         Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
     else:
-        with silence_os_fd_output():
-            ref = render_hero(get_backend("cpu_cpp_mb"), gauss, hero_view, fov_deg,
-                              W, H, contrib_floor)
-
         hero_vs_ref = psnr(hero_clean, ref)
-
+        ref_mean = float(ref.mean())
+        if ref_mean > 0.95 or ref_mean < 0.05:
+            print(f"[run] FATAL: reference mean={ref_mean:.4f} looks invalid "
+                  f"(expected ~0.33); aborting gate", file=sys.stderr, flush=True)
+            sys.exit(4)
         Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
         Image.fromarray((ref * 255.0).astype(np.uint8)).save(out_dir / "hero_ref.png")
         diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
@@ -314,18 +305,13 @@ def main():
     def fmt(x):
         return "inf" if x == float("inf") else f"{x:.2f}"
 
-    # Headline metrics: hero_vs_ref (dB, the 63.85 gate on the hero view) and
-    # avg_frame_ms (the canonical frame-time = mean render_clean wall time over
-    # all 30 bench views, warmup excluded). warmup_s is reported only as
-    # context (it includes JIT + cache fill) and is NOT the frame-time metric.
     print(f"SUMMARY scene={args.scene} hero='{hero_name}' "
           f"hero_vs_ref={fmt(hero_vs_ref)}dB "
           f"avg_frame_ms={avg_ms:.1f} p50_ms={p50_ms:.1f} "
           f"min_ms={min_ms:.1f} max_ms={max_ms:.1f} n_views={len(per_view_ms)} "
           f"warmup_s={warmup_s:.1f} "
           f"out={out_dir}", flush=True)
-    # tt-workflows iterate.sh parses these (hero gate + ms_view goal).
-    if hero_vs_ref == hero_vs_ref:  # not nan
+    if hero_vs_ref == hero_vs_ref:
         print(f"TTW_METRIC hero_vs_ref={fmt(hero_vs_ref)}", flush=True)
     print(f"TTW_TIMING ms_view={avg_ms:.3f}", flush=True)
     print(f"TTW_TIMING blend={avg_ms:.3f}", flush=True)

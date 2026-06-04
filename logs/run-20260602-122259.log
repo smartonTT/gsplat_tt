@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #123 sha=138e943 bin=d193d161f0d6fd76 iter 41: M1: in-L1 LSD radix sort over 32B record depth key per tile bucket; bit-order == reference; 63.85dB held
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T12:22:59-0700
+cmd: bash /localdev/smarton/gstt2/tt-workflows/scripts/build.sh cpp
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#123 bin=d193d161f0d6fd76 matches the built+stamped artifact
+bash: /localdev/smarton/gstt2/tt-workflows/scripts/build.sh: No such file or directory

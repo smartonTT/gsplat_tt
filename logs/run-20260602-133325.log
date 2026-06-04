@@ -1,0 +1,14 @@
+================ BUILD ID ================
+  cpp : #127 sha=b703f70 bin=23afc6773579cf78 
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:33:25-0700
+cmd: cmake --build /localdev/smarton/gstt2/build-tt -j 16 2>&1 | grep -iE "error:|error " | head -20
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#127 bin=23afc6773579cf78 matches the built+stamped artifact
+/localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp:325:28: error: ‘l1_record_enabled’ was not declared in this scope; did you mean ‘gsplat_tt::env_config::l1_record_enabled’?
+/localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp:1159:38: error: ‘l1_record_enabled’ was not declared in this scope; did you mean ‘gsplat_tt::env_config::l1_record_enabled’?
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:956:40: error: ‘l1_record_enabled’ was not declared in this scope; did you mean ‘gsplat_tt::env_config::l1_record_enabled’?
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:971:34: error: ‘l1_record_enabled’ was not declared in this scope; did you mean ‘gsplat_tt::env_config::l1_record_enabled’?
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1114:22: error: ‘l1_sort_enabled’ was not declared in this scope; did you mean ‘gsplat_tt::env_config::l1_sort_enabled’?
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1822:41: error: ‘l1_record_blend’ was not declared in this scope

@@ -1,0 +1,22 @@
+================ BUILD ID ================
+  cpp : #127 sha=b703f70 bin=23afc6773579cf78 
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:36:27-0700
+cmd: cd /localdev/smarton/gstt2/src/gsplat_tt && \
+perl -i -pe "s/(?<!::)\bl1_record_enabled\(\)/gsplat_tt::env_config::l1_record_enabled()/g; s/(?<!::)\bl1_sort_enabled\(\)/gsplat_tt::env_config::l1_sort_enabled()/g" blend_device.cpp sort_device.cpp && \
+echo "=== verify sort 325 ==="; sed -n "325p" sort_device.cpp; \
+echo "=== verify sort 1159 ==="; sed -n "1159p" sort_device.cpp; \
+echo "=== verify blend 956 971 ==="; sed -n "956p;971p" blend_device.cpp; \
+echo "=== verify blend 1114 ==="; sed -n "1114p" blend_device.cpp
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#127 bin=23afc6773579cf78 matches the built+stamped artifact
+=== verify sort 325 ===
+    const bool l1_record = gsplat_tt::env_config::l1_record_enabled();
+=== verify sort 1159 ===
+        const bool l1_record_early = gsplat_tt::env_config::l1_record_enabled();
+=== verify blend 956 971 ===
+            const uint32_t rec_bytes = gsplat_tt::env_config::l1_record_enabled() ? 32u : 64u;  // M0: 32B records
+    const bool l1_record_blend = gsplat_tt::env_config::l1_record_enabled();
+=== verify blend 1114 ===
+                if (!gsplat_tt::env_config::l1_sort_enabled()) {

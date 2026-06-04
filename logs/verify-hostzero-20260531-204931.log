@@ -1,0 +1,37 @@
+================ BUILD ID ================
+  cpp : #4 sha=7e5bced iter 4: Fix segfault P_kept cull gate
+  data: # sha= 
+=========================================
+host=bh-30  tag=verify-hostzero  timeout=1200s  worry=600s  ts=2026-05-31T20:49:31-0700
+cmd: bash -lc export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 && source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_verify.log; grep "^SUMMARY" /tmp/ttw_verify.log | tail -1
+-----------------------------------------
+declare -x CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x HOME="/home/smarton"
+declare -x IRD_ARCH_NAME="blackhole"
+declare -x IRD_CLUSTER="tt_aus"
+declare -x IRD_HARVESTED_MACHINE="false"
+declare -x IRD_NUM_PCIE_CHIPS="1"
+declare -x IRD_RESET_DONGLE="false"
+declare -x IRD_VERSION="1.12.105"
+declare -x LANG="C.UTF-8"
+declare -x LOGNAME="smarton"
+declare -x MAIL="/var/mail/smarton"
+declare -x NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+declare -x OLDPWD="/home/smarton"
+declare -x PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
+declare -x PIP_CERT="/etc/ssl/certs/ca-certificates.crt"
+declare -x PWD="/localdev/smarton/gstt2"
+declare -x P_USER_DBD_PORT="51483"
+declare -x P_USER_SSH_PORT="46483"
+declare -x REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x SHELL="/bin/bash"
+declare -x SHLVL="2"
+declare -x SLURM_GRES_IDS="3"
+declare -x SSH_AUTH_SOCK="/tmp/ssh-XXXXAsQCG5/agent.464499"
+declare -x SSH_CLIENT="10.250.20.198 54170 22"
+declare -x SSH_CONNECTION="10.250.20.198 54170 172.17.0.5 22"
+declare -x SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+declare -x USER="smarton"
+declare -x USER_SSH_PASSWD="91ebi+jXMibUaWmrpefNbfyYSGsHO3mG"
+SUMMARY backend=tt blend_mode=0 views=1 hero_vs_gt=82.36dB hero_vs_ref=infdB min_vs_ref=infdB min_vs_gt=82.36dB ms/view=487.7 (proj=234.9 ta=83.5 sort=8.6 blend=138.5) shot=opt/metal-screenshots/loop-ttw/hero.png
+SUMMARY backend=tt blend_mode=0 views=1 hero_vs_gt=82.36dB hero_vs_ref=infdB min_vs_ref=infdB min_vs_gt=82.36dB ms/view=487.7 (proj=234.9 ta=83.5 sort=8.6 blend=138.5) shot=opt/metal-screenshots/loop-ttw/hero.png

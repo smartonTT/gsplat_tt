@@ -1,0 +1,49 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=ideal-build  timeout=600s  worry=600s  ts=2026-06-01T23:36:24-0700
+cmd: bash -lc export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal; cd /localdev/smarton/gstt2 && cmake --build build-tt -j 16
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#108 bin=90f66c610cac25a2 matches the built+stamped artifact
+declare -x CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x HOME="/home/smarton"
+declare -x IRD_ARCH_NAME="blackhole"
+declare -x IRD_CLUSTER="tt_yyz"
+declare -x IRD_HARVESTED_MACHINE="false"
+declare -x IRD_NUM_PCIE_CHIPS="1"
+declare -x IRD_RESET_DONGLE="false"
+declare -x IRD_VERSION="1.12.106"
+declare -x LANG="C.UTF-8"
+declare -x LOGNAME="smarton"
+declare -x MOTD_SHOWN="pam"
+declare -x NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+declare -x OLDPWD="/home/smarton"
+declare -x PATH="/home/smarton/.local/bin:/home/smarton/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+declare -x PIP_CERT="/etc/ssl/certs/ca-certificates.crt"
+declare -x PWD="/localdev/smarton/gstt2"
+declare -x P_USER_DBD_PORT="51483"
+declare -x P_USER_SSH_PORT="46483"
+declare -x REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x SHELL="/bin/bash"
+declare -x SHLVL="2"
+declare -x SLURM_GRES_IDS="0"
+declare -x SSH_AUTH_SOCK="/tmp/ssh-XXXX6Ih9mH/agent.99714"
+declare -x SSH_CLIENT="10.250.20.198 54610 22"
+declare -x SSH_CONNECTION="10.250.20.198 54610 172.17.0.4 22"
+declare -x SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+declare -x TTW_DEVRUN="1"
+declare -x USER="smarton"
+declare -x USER_SSH_PASSWD="iXskB5cN6q4GcMZtn6ybnSRRwA0K+6Yc"
+[0/1] Re-running CMake...
+-- Found pybind11: /localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/pybind11/include (found version "3.0.4")
+-- Configuring incomplete, errors occurred!
+FAILED: build.ninja /localdev/smarton/gstt2/build-tt/cmake_install.cmake /localdev/smarton/gstt2/build-tt/_deps/catch2-build/cmake_install.cmake /localdev/smarton/gstt2/build-tt/_deps/catch2-build/src/cmake_install.cmake /localdev/smarton/gstt2/build-tt/tests/cmake_install.cmake /localdev/smarton/gstt2/build-tt/CTestTestfile.cmake /localdev/smarton/gstt2/build-tt/tests/CTestTestfile.cmake 
+/usr/local/bin/cmake --regenerate-during-build -S/localdev/smarton/gstt2/src -B/localdev/smarton/gstt2/build-tt
+CMake Error at /localdev/smarton/gstt2/cmake/TtMetalInTree.cmake:4 (message):
+  GSPLAT_WITH_TT requires TT_METAL_HOME
+Call Stack (most recent call first):
+  CMakeLists.txt:125 (gsplat_link_tt_metal)
+
+
+ninja: error: rebuilding 'build.ninja': subcommand failed

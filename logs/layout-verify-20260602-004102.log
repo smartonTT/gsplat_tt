@@ -1,0 +1,280 @@
+================ BUILD ID ================
+  cpp : #114 sha=01ff918 bin=59d109789bbdb4e9 sort device bin layout kernel
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=layout-verify  timeout=1200s  worry=600s  ts=2026-06-02T00:41:02-0700
+cmd: bash tmp/run_layout_verify.sh
+-----------------------------------------
+2026-06-02 07:41:04.169 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 07:41:04.169 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 07:41:04.169 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 07:41:04.169 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:41:04.169 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 07:41:04.169 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 07:41:04.170 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 07:41:04.170 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 07:41:04.170 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 07:41:04.170 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 07:41:04.170 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 07:41:04.170 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:41:04.170 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 07:41:04.170 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 07:41:04.170 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 07:41:04.170 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 07:41:04.170 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 07:41:04.209 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:41:04.209 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 07:41:04.209 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 07:41:04.209 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 07:41:04.209 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 07:41:04.212 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 07:41:04.212 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 07:41:04.213 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 07:41:04.710 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 07:41:04.710 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 07:41:04.710 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 07:41:04.710 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 07:41:04.711 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 07:41:04.711 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:41:04.711 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 07:41:04.711 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 07:41:04.711 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 07:41:04.711 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 07:41:04.711 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:41:04.711 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:41:04.711 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 07:41:04.711 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:41:04.711 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:41:04.711 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 07:41:04.711 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 07:41:04.711 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 07:41:04.711 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 07:41:04.711 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 07:41:04.711 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 07:41:04.736 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-02 07:41:05.022 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_133032_2748364881_0' (shm_resource_tracker.cpp:265)
+2026-06-02 07:41:05.022 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_133032' (shm_resource_tracker.cpp:275)
+2026-06-02 07:41:05.022 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 07:41:05.607 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=43863214024802 cycles (realtime_profiler_manager.cpp:1082)
+2026-06-02 07:41:06.352 | error    |    BuildKernels | ncrisc compile failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache431005707817566179/kernels/sort_bin_layout/3673565037201548668/ncrisc/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O2 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh -fno-tree-loop-distribute-patterns -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow -c -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache431005707817566179/kernels/sort_bin_layout/3673565037201548668/ncrisc/ncrisck.14484809213495574860.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc -MF /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache431005707817566179/kernels/sort_bin_layout/3673565037201548668/ncrisc/ncrisck.14484809213495574860.d -DIS_NOT_POW2_NUM_DRAM_BANKS=1 -DIS_NOT_POW2_NUM_L1_BANKS=1 -DNUM_DRAM_BANKS=7 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROCESSOR_INDEX=1 -DCOMPILE_FOR_NCRISC -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD -DNOC_INDEX='1' -DNOC_MODE='0' -DKERNEL_COMPILE_TIME_ARGS=2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0  (build.cpp:58)
+2026-06-02 07:41:06.352 | critical |          Always | TT_THROW: ncrisc build failed. Log: In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:22:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:34:5: error: missing template argument list after 'TensorAccessor'; template placeholder not permitted in parameter
+   34 |     const TensorAccessor& acc,
+      |     ^~~~~
+      |          <>
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:26,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/tensor/tensor_accessor.h:58:8: note: 'template<class DSpecT> struct TensorAccessor' declared here
+   58 | struct TensorAccessor {
+      |        ^~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'uint32_t {anonymous}::read_u32_at(...)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:39:39: error: 'acc' was not declared in this scope
+   39 |     noc_async_read(get_noc_addr(page, acc), l1, PAGE_BYTES);
+      |                                       ^~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:47:5: error: missing template argument list after 'TensorAccessor'; template placeholder not permitted in parameter
+   47 |     const TensorAccessor& acc,
+      |     ^~~~~
+      |          <>
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/tensor/tensor_accessor.h:58:8: note: 'template<class DSpecT> struct TensorAccessor' declared here
+   58 | struct TensorAccessor {
+      |        ^~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'void {anonymous}::write_u32_at(...)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:52:39: error: 'acc' was not declared in this scope
+   52 |     noc_async_read(get_noc_addr(page, acc), l1, PAGE_BYTES);
+      |                                       ^~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:288:42: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  288 |     noc_async_write(page_l1, get_noc_addr(0, ctrl_acc), PAGE_BYTES);
+      |                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+ (assert.hpp:104)
+2026-06-02 07:41:06.353 | critical |          Always | TT_THROW: Failed to generate binaries for sort_bin_layout TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+ncrisc build failed. Log: In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:22:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:34:5: error: missing template argument list after 'TensorAccessor'; template placeholder not permitted in parameter
+   34 |     const TensorAccessor& acc,
+      |     ^~~~~
+      |          <>
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:26,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/tensor/tensor_accessor.h:58:8: note: 'template<class DSpecT> struct TensorAccessor' declared here
+   58 | struct TensorAccessor {
+      |        ^~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'uint32_t {anonymous}::read_u32_at(...)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:39:39: error: 'acc' was not declared in this scope
+   39 |     noc_async_read(get_noc_addr(page, acc), l1, PAGE_BYTES);
+      |                                       ^~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:47:5: error: missing template argument list after 'TensorAccessor'; template placeholder not permitted in parameter
+   47 |     const TensorAccessor& acc,
+      |     ^~~~~
+      |          <>
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/tensor/tensor_accessor.h:58:8: note: 'template<class DSpecT> struct TensorAccessor' declared here
+   58 | struct TensorAccessor {
+      |        ^~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'void {anonymous}::write_u32_at(...)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:52:39: error: 'acc' was not declared in this scope
+   52 |     noc_async_read(get_noc_addr(page, acc), l1, PAGE_BYTES);
+      |                                       ^~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:288:42: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  288 |     noc_async_write(page_l1, get_noc_addr(0, ctrl_acc), PAGE_BYTES);
+      |                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7fd4bd18c8c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7fd4bd4b29fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fd4bd4cdc18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fd4bd4cdb9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fd4bd19519f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fd59286aee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fd4bd194ff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fd4bd4cd9ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fd4bd32e0c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fd4bd32cbd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fd4bd32c0b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fd5900a1253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fd592865ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fd5928f78d0]
+ (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for sort_bin_layout TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+ncrisc build failed. Log: In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:22:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:34:5: error: missing template argument list after 'TensorAccessor'; template placeholder not permitted in parameter
+   34 |     const TensorAccessor& acc,
+      |     ^~~~~
+      |          <>
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:26,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/tensor/tensor_accessor.h:58:8: note: 'template<class DSpecT> struct TensorAccessor' declared here
+   58 | struct TensorAccessor {
+      |        ^~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'uint32_t {anonymous}::read_u32_at(...)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:39:39: error: 'acc' was not declared in this scope
+   39 |     noc_async_read(get_noc_addr(page, acc), l1, PAGE_BYTES);
+      |                                       ^~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:47:5: error: missing template argument list after 'TensorAccessor'; template placeholder not permitted in parameter
+   47 |     const TensorAccessor& acc,
+      |     ^~~~~
+      |          <>
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/tensor/tensor_accessor.h:58:8: note: 'template<class DSpecT> struct TensorAccessor' declared here
+   58 | struct TensorAccessor {
+      |        ^~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'void {anonymous}::write_u32_at(...)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:52:39: error: 'acc' was not declared in this scope
+   52 |     noc_async_read(get_noc_addr(page, acc), l1, PAGE_BYTES);
+      |                                       ^~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin_layout.cpp:288:42: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  288 |     noc_async_write(page_l1, get_noc_addr(0, ctrl_acc), PAGE_BYTES);
+      |                              ~~~~~~~~~~~~^~~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7fd4bd18c8c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7fd4bd4b29fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fd4bd4cdc18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fd4bd4cdb9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fd4bd19519f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fd59286aee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fd4bd194ff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fd4bd4cd9ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fd4bd32e0c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fd4bd32cbd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fd4bd32c0b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fd5900a1253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fd592865ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fd5928f78d0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x886ba8) [0x7fd4bd342ba8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x85876b) [0x7fd4bd31476b]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8582c2) [0x7fd4bd3142c2]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fd4bd4cdc18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fd4bd4cdb9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fd4bd19519f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fd59286aee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fd4bd194ff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fd4bd4cd9ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fd4bd32e0c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fd4bd32cbd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fd4bd32c0b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fd5900a1253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fd592865ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fd5928f78d0]
+
+[render_full] FATAL: device sort failed with host-free env stack
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] *** Process received signal ***
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] Signal: Aborted (6)
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] Signal code:  (-6)
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7fd592813520]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 1] /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x7fd5928679fc]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 2] /lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x7fd592813476]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 3] /lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x7fd5927f97f3]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 4] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x4df62)[0x7fd4bde9ef62]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 5] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x5c081)[0x7fd4bdead081]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 6] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x3bb98)[0x7fd4bde8cb98]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 7] python3(+0x17e96f)[0x55f45aa3696f]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 8] python3(_PyEval_EvalFrameDefault+0x56cb)[0x55f45aa32bdb]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [ 9] python3(_PyFunction_Vectorcall+0x7c)[0x55f45aa4368c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [10] python3(_PyEval_EvalFrameDefault+0x807)[0x55f45aa2dd17]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [11] python3(_PyFunction_Vectorcall+0x7c)[0x55f45aa4368c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [12] python3(_PyEval_EvalFrameDefault+0x807)[0x55f45aa2dd17]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [13] python3(_PyFunction_Vectorcall+0x7c)[0x55f45aa4368c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [14] python3(_PyEval_EvalFrameDefault+0x6c0)[0x55f45aa2dbd0]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [15] python3(_PyFunction_Vectorcall+0x7c)[0x55f45aa4368c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [16] python3(_PyEval_EvalFrameDefault+0x6c0)[0x55f45aa2dbd0]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [17] python3(+0x259d36)[0x55f45ab11d36]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [18] python3(PyEval_EvalCode+0x86)[0x55f45ab11c06]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [19] python3(+0x280678)[0x55f45ab38678]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [20] python3(+0x27accf)[0x55f45ab32ccf]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [21] python3(+0x280415)[0x55f45ab38415]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [22] python3(_PyRun_SimpleFileObject+0x1a8)[0x55f45ab37958]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [23] python3(_PyRun_AnyFileObject+0x47)[0x55f45ab37637]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [24] python3(Py_RunMain+0x2be)[0x55f45ab2bbfe]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [25] python3(Py_BytesMain+0x2d)[0x55f45ab05c4d]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [26] /lib/x86_64-linux-gnu/libc.so.6(+0x29d90)[0x7fd5927fad90]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [27] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7fd5927fae40]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] [28] python3(_start+0x25)[0x55f45ab05b45]
+[yyzo-bh-03-special-smarton-for-reservation-73929:136384] *** End of error message ***
+tmp/run_layout_verify.sh: line 32: 136384 Aborted                 (core dumped) python3 scripts/a003_verify.py --views "${VIEWS:-1}" --iter-dir "${ITER_DIR:-layout-verify}" --out "${OUT:-opt/ttw/layout-verify.json}" 2>&1

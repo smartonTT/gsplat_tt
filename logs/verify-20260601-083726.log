@@ -1,0 +1,335 @@
+================ BUILD ID ================
+  cpp : #28 sha=b0c9877 bin=54d22862a7289d66 iter 17: compute-side num_g + ramp probe (payload)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=verify  timeout=1200s  worry=600s  ts=2026-06-01T08:37:26-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_BLEND_PAYLOAD=1 GSPLAT_TT_COEFF_DEBUG=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_verify.log; grep '^SUMMARY' /tmp/ttw_verify.log | tail -1 > /tmp/ttw_sum.txt; grep -oE 'hero_vs_ref=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_METRIC /'; grep -oE '(proj|ta|sort|blend)=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_TIMING /'
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#28 bin=54d22862a7289d66 matches the built+stamped artifact
+2026-06-01 15:37:28.506 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 15:37:28.506 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 15:37:28.506 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-01 15:37:28.506 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 15:37:28.507 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-01 15:37:28.507 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 15:37:28.507 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-01 15:37:28.507 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-01 15:37:28.507 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 15:37:28.507 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 15:37:28.507 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-01 15:37:28.507 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 15:37:28.507 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-01 15:37:28.507 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 15:37:28.507 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-01 15:37:28.508 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-01 15:37:28.508 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-01 15:37:28.546 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 15:37:28.547 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-01 15:37:28.547 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-01 15:37:28.547 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-01 15:37:28.547 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-01 15:37:28.551 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-01 15:37:28.551 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-01 15:37:28.551 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-01 15:37:29.063 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-01 15:37:29.063 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-01 15:37:29.063 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-01 15:37:29.063 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-01 15:37:29.063 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-01 15:37:29.063 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-01 15:37:29.064 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-01 15:37:29.064 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-01 15:37:29.064 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-01 15:37:29.064 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-01 15:37:29.064 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 15:37:29.064 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 15:37:29.064 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-01 15:37:29.064 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 15:37:29.064 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-01 15:37:29.064 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-01 15:37:29.064 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-01 15:37:29.064 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-01 15:37:29.064 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-01 15:37:29.064 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-01 15:37:29.064 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-01 15:37:29.090 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-01 15:37:29.364 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_10767_6948388_0' (shm_resource_tracker.cpp:265)
+2026-06-01 15:37:29.364 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_10767' (shm_resource_tracker.cpp:275)
+2026-06-01 15:37:29.364 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-01 15:37:29.952 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=3639828216568 cycles (realtime_profiler_manager.cpp:1082)
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=10.13 up=0.29 kernel=8.64 d2h=0.00 compact=0.00 publish=1.69 total=20.92ms
+[PACK_SPLIT] exec=427.9 ms payload=0x7250180
+2026-06-01 15:37:31.521 | error    |    BuildKernels | trisc1 compile failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache431005707817566179/kernels/alpha_blend_compute_mb/12163801559920270899/trisc1/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O3 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh-tensix -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/runtime/sfpi/include -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api/llk_sfpu -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute -c -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache431005707817566179/kernels/alpha_blend_compute_mb/12163801559920270899/trisc1/trisck.11038434854028268739.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc -MF /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache431005707817566179/kernels/alpha_blend_compute_mb/12163801559920270899/trisc1/trisck.11038434854028268739.d -DIS_NOT_POW2_NUM_DRAM_BANKS=1 -DIS_NOT_POW2_NUM_L1_BANKS=1 -DNUM_DRAM_BANKS=7 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROCESSOR_INDEX=3 -DUCK_CHLKC_MATH -DCOMPILE_FOR_TRISC=1 -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD  (build.cpp:58)
+2026-06-01 15:37:31.521 | critical |          Always | TT_THROW: trisc1 build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common.h:7,
+                 from /localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:40,
+                 from ../chlkc_math.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void {anonymous}::process_tile_gaussians(uint32_t)':
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected primary-expression before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:23: note: in expansion of macro 'DPRINT'
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                       ^~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected ')' before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:23: note: in expansion of macro 'DPRINT'
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                       ^~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:22: note: to match this '('
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                      ^
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected primary-expression before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:23: note: in expansion of macro 'DPRINT'
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                       ^~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected ')' before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:23: note: in expansion of macro 'DPRINT'
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                       ^~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:22: note: to match this '('
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                      ^
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+ (assert.hpp:104)
+2026-06-01 15:37:31.582 | critical |          Always | TT_THROW: Failed to generate binaries for alpha_blend_compute_mb TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc1 build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common.h:7,
+                 from /localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:40,
+                 from ../chlkc_math.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void {anonymous}::process_tile_gaussians(uint32_t)':
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected primary-expression before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:23: note: in expansion of macro 'DPRINT'
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                       ^~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected ')' before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:23: note: in expansion of macro 'DPRINT'
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                       ^~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:22: note: to match this '('
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                      ^
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected primary-expression before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:23: note: in expansion of macro 'DPRINT'
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                       ^~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected ')' before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:23: note: in expansion of macro 'DPRINT'
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                       ^~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:22: note: to match this '('
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                      ^
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7f693578c8c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7f6935ab29fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7f6935acdc18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7f6935acdb9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f693579519f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f6a0adaeee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f6935794ff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7f6935acd9ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f693592e0c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f693592cbd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f693592c0b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f6a085e5253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f6a0ada9ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f6a0ae3b8d0]
+ (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 255, in <module>
+    main()
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 131, in main
+    tt_imgs, tt_timings = render_all(
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 85, in render_all
+    _ = pipeline.render(gauss, extr0, K, H, W)
+  File "/localdev/smarton/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2/backends/tt/backend.py", line 135, in render_fused
+    image, stats = self._mod.render_full_tt(
+RuntimeError: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for alpha_blend_compute_mb TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc1 build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common.h:7,
+                 from /localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:40,
+                 from ../chlkc_math.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void {anonymous}::process_tile_gaussians(uint32_t)':
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected primary-expression before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:23: note: in expansion of macro 'DPRINT'
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                       ^~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected ')' before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:23: note: in expansion of macro 'DPRINT'
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                       ^~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:303:22: note: to match this '('
+  303 |                 MATH((DPRINT << "CMPROW g=" << g << " a=" << F32(*reinterpret_cast<const float*>(&row[0]))
+      |                      ^
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected primary-expression before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:23: note: in expansion of macro 'DPRINT'
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                       ^~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/debug/dprint.h:45:5: error: expected ')' before 'if'
+   45 |     if (0)     \
+      |     ^~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:23: note: in expansion of macro 'DPRINT'
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                       ^~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/alpha_blend_compute_mb.cpp:410:22: note: to match this '('
+  410 |                 MATH((DPRINT << "TILEDBG t=" << t << " num_g=" << num_g
+      |                      ^
+/localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:17:17: note: in definition of macro 'MATH'
+   17 | #define MATH(x) x
+      |                 ^
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7f693578c8c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7f6935ab29fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7f6935acdc18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7f6935acdb9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f693579519f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f6a0adaeee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f6935794ff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7f6935acd9ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f693592e0c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f693592cbd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f693592c0b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f6a085e5253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f6a0ada9ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f6a0ae3b8d0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x886ba8) [0x7f6935942ba8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x85876b) [0x7f693591476b]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8582c2) [0x7f69359142c2]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7f6935acdc18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7f6935acdb9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f693579519f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f6a0adaeee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f6935794ff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7f6935acd9ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f693592e0c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f693592cbd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f693592c0b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f6a085e5253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f6a0ada9ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f6a0ae3b8d0]
+
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] *** Process received signal ***
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] Signal: Segmentation fault (11)
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] Signal code: Address not mapped (1)
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] Failing at address: 0x55e2dd59d29f
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f6a0ad57520]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x94)[0x7f69358323a4]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xe4)[0x7f69358da754]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD2Ev+0x16)[0x7f69358d9ba6]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x61ca0f)[0x7f69356d8a0f]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail16_Hashtable_allocISaINS_10_Hash_nodeISt4pairIKN2tt8tt_metal11distributed19MeshCoordinateRangeENS4_7ProgramEELb0EEEEE18_M_deallocate_nodeEPSA_+0x15)[0x7f6935ba5115]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xbe)[0x7f6935b945ae]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD2Ev+0x1a)[0x7f6935b9719a]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 8] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xc64f1)[0x7f693652d4f1]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [ 9] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7f6a0ad5a495]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [10] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7f6a0ad5a610]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [11] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x7f6a0ad3ed97]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [12] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7f6a0ad3ee40]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] [13] .venv/bin/python3(_start+0x25)[0x55e762fd4b45]
+[yyzo-bh-03-special-smarton-for-reservation-73687:11345] *** End of error message ***

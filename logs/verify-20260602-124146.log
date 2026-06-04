@@ -1,0 +1,90 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=verify  timeout=1200s  worry=600s  ts=2026-06-02T12:49:50-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_L1_RECORD=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir ${TTW_ITER_DIR:?TTW_ITER_DIR unset} --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_verify.log; grep '^SUMMARY' /tmp/ttw_verify.log | tail -1 > /tmp/ttw_sum.txt; grep -q 'shot=opt/metal-screenshots/' /tmp/ttw_sum.txt || { echo '[verify] SCREENSHOT_MISSING in SUMMARY'; exit 6; }; grep -q 'shot_diff=opt/metal-screenshots/' /tmp/ttw_sum.txt || { echo '[verify] SCREENSHOT_DIFF_MISSING in SUMMARY'; exit 6; }; grep -oE 'hero_vs_ref=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_METRIC /'; grep -oE '(proj|ta|sort|blend)=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_TIMING /'
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+2026-06-02 19:49:52.744 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 19:49:52.744 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 19:49:52.744 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 19:49:52.744 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 19:49:52.745 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 19:49:52.745 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 19:49:52.745 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 19:49:52.745 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 19:49:52.745 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 19:49:52.745 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 19:49:52.745 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 19:49:52.745 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 19:49:52.745 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 19:49:52.745 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 19:49:52.745 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 19:49:52.745 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 19:49:52.745 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 19:49:52.791 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 19:49:52.791 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 19:49:52.792 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 19:49:52.792 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 19:49:52.792 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 19:49:52.793 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 19:49:52.794 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 19:49:52.794 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 19:49:53.295 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 19:49:53.295 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 19:49:53.296 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 19:49:53.296 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 19:49:53.296 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 19:49:53.296 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 19:49:53.296 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 19:49:53.296 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 19:49:53.296 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 19:49:53.296 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 19:49:53.296 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 19:49:53.296 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 19:49:53.296 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 19:49:53.296 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 19:49:53.296 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 19:49:53.296 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 19:49:53.296 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 19:49:53.296 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 19:49:53.296 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 19:49:53.296 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 19:49:53.296 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 19:49:53.324 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-02 19:49:53.521 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_271102_3516004453_0' (shm_resource_tracker.cpp:265)
+2026-06-02 19:49:53.521 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_271102' (shm_resource_tracker.cpp:275)
+2026-06-02 19:49:53.521 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 19:49:54.107 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349990 GHz, device_time_at_sync=102895859154651 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 0.5 ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=22.24 up=0.02 kernel=2.19 d2h=0.00 compact=0.00 publish=1.51 total=26.08ms
+[CULL_SPLIT] pipelined (no separate Finish; cull device exec folded under the blend host-setup window; candidates=3369033)
+[BLEND_SPLIT] upload+exec=0.0 readback=173.8 total=173.8 ms (resident, one Finish)
+[BLEND_ADDR] cull_masks=0x1060ee00 out=0x107e7ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0x107e5ec0 yramp=0x107e6ec0 payload=0x0(sz=0x0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=20.55 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.03 total=20.70ms
+[CULL_SPLIT] pipelined (no separate Finish; cull device exec folded under the blend host-setup window; candidates=3369033)
+[BLEND_SPLIT] upload+exec=0.0 readback=182.7 total=182.7 ms (resident, one Finish)
+[BLEND_ADDR] cull_masks=0x1060ee00 out=0x107e7ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0x107e5ec0 yramp=0x107e6ec0 payload=0x0(sz=0x0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=20.55 up=0.02 kernel=0.03 d2h=7.14 compact=0.00 publish=0.03 total=39.03ms
+[yyzo-bh-03-special-smarton-for-reservation-73929:275401] *** Process received signal ***
+[yyzo-bh-03-special-smarton-for-reservation-73929:275401] Signal: Segmentation fault (11)
+[yyzo-bh-03-special-smarton-for-reservation-73929:275401] Signal code: Address not mapped (1)
+[yyzo-bh-03-special-smarton-for-reservation-73929:275401] Failing at address: 0x56316db5af34
+[verify] SCREENSHOT_MISSING in SUMMARY

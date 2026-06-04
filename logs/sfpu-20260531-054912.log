@@ -1,0 +1,235 @@
+================ BUILD ID ================
+  cpp : #1 sha=7eed227 iter 0: baseline
+  data: # sha= 
+=========================================
+host=bh-30  tag=sfpu  timeout=1200s  worry=600s  ts=2026-05-31T05:55:09-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-sfpu-noinline --out opt/ttw/sfpu-noinline.json
+-----------------------------------------
+2026-05-31 12:55:12.353 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 12:55:12.353 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 12:55:12.354 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 12:55:12.354 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 12:55:12.355 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 12:55:12.355 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 12:55:12.356 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-05-31 12:55:12.356 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-05-31 12:55:12.356 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 12:55:12.356 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 12:55:12.357 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 12:55:12.357 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 12:55:12.357 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 12:55:12.358 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 12:55:12.358 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-05-31 12:55:12.358 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-05-31 12:55:12.358 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-05-31 12:55:12.428 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 12:55:12.428 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-05-31 12:55:12.428 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-05-31 12:55:12.428 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-05-31 12:55:12.428 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-05-31 12:55:12.429 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-05-31 12:55:12.430 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xfffffffec0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-05-31 12:55:12.431 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-05-31 12:55:12.744 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-05-31 12:55:12.744 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-05-31 12:55:12.744 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 12:55:12.744 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 12:55:12.745 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 12:55:12.745 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 12:55:12.746 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 12:55:12.746 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 12:55:12.747 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-05-31 12:55:12.747 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-05-31 12:55:12.747 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 12:55:12.747 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 12:55:12.747 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-05-31 12:55:12.747 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 12:55:12.747 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 12:55:12.747 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-05-31 12:55:12.747 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-05-31 12:55:12.747 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-05-31 12:55:12.747 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-05-31 12:55:12.747 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-05-31 12:55:12.747 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-05-31 12:55:12.843 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_418687_3183570270_0' (shm_resource_tracker.cpp:265)
+2026-05-31 12:55:12.843 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_418687' (shm_resource_tracker.cpp:275)
+2026-05-31 12:55:13.432 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349961 GHz, device_time_at_sync=13652969691579 cycles (realtime_profiler_manager.cpp:1075)
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=11.37 up=0.31 kernel=9.72 d2h=13.37 compact=0.00 publish=4.12 total=56.34ms
+2026-05-31 12:55:15.878 | error    |    BuildKernels | trisc1 link failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O3 -Wl,--just-symbols=/localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/firmware/trisc1/trisc1_weakened.elf -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -Wl,-z,max-page-size=16 -Wl,-z,common-page-size=16 -nostartfiles -mcpu=tt-bh-tensix -T/localdev/smarton/tt-metal/runtime/hw/toolchain/blackhole/kernel_trisc1.ld -Wl,--emit-relocs /localdev/smarton/tt-metal/runtime/hw/lib/blackhole/substitutes.o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisck.14946822957705526139.o -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisc1.14946822957705526139.elf (build.cpp:58)
+2026-05-31 12:55:15.878 | critical |          Always | TT_THROW: trisc1 build failed. Log: during RTL pass: reload
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp: In function 'cull_one':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:223:1: internal compiler error: maximum number of generated reload insns per insn achieved (90)
+  223 | }
+      | ^
+0x2465793 diagnostic_context::diagnostic_impl(rich_location*, diagnostic_metadata const*, diagnostic_option_id, char const*, __va_list_tag (*) [1], diagnostic_t)
+	???:0
+0x2476d06 internal_error(char const*, ...)
+	???:0
+0x82bab0 lra_constraints(bool)
+	???:0
+0x8136c2 lra(_IO_FILE*, int)
+	???:0
+0x7cc76f (anonymous namespace)::pass_reload::execute(function*)
+	???:0
+gcc (tenstorrent/sfpi:7.49.0[610]) 15.1.0
+/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/../../libexec/gcc/riscv-tt-elf/15.1.0/lto1 -quiet -dumpbase /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisc1.14946822957705526139.elf.ltrans0.ltrans -mcpu=tt-bh -mtune=rvtt-b1 -misa-spec=2.2 -mcpu=tt-bh-tensix -mtune=rvtt-b1 -mabi=ilp32 -misa-spec=2.2 -march=rv32im_zmmul_zaamo_zba_zbb_xtttensixbh -march=rv32im_zmmul_zaamo_zba_zbb_xtttensixbh -g -g -O3 -O3 -fno-openmp -fno-openacc -fno-pie -fcf-protection=none -ffast-math -fno-exceptions -fltrans /tmp/cc2V3LXM.ltrans0.o -o /tmp/ccOT8IvK.s
+Please submit a full bug report, with preprocessed source (by using -freport-bug).
+Please include the complete backtrace with any bug report.
+See <https://github.com/tenstorrent/sfpi> for instructions.
+make: *** [/tmp/ccEQ44nf.mk:2: /tmp/cc2V3LXM.ltrans0.ltrans.o] Error 1
+lto-wrapper: fatal error: make returned 2 exit status
+compilation terminated.
+/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/riscv-tt-elf/15.1.0/../../../../riscv-tt-elf/bin/ld: error: lto-wrapper failed
+collect2: error: ld returned 1 exit status
+ (assert.hpp:104)
+2026-05-31 12:55:15.880 | error    |    BuildKernels | Failed to rename temporary file /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisc1.14946822957705526139.elf to target file /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisc1.elf: No such file or directory (jit_build_utils.cpp:202)
+2026-05-31 12:55:15.880 | critical |          Always | TT_THROW: Failed to generate binaries for microblock_cull_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc1 build failed. Log: during RTL pass: reload
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp: In function 'cull_one':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:223:1: internal compiler error: maximum number of generated reload insns per insn achieved (90)
+  223 | }
+      | ^
+0x2465793 diagnostic_context::diagnostic_impl(rich_location*, diagnostic_metadata const*, diagnostic_option_id, char const*, __va_list_tag (*) [1], diagnostic_t)
+	???:0
+0x2476d06 internal_error(char const*, ...)
+	???:0
+0x82bab0 lra_constraints(bool)
+	???:0
+0x8136c2 lra(_IO_FILE*, int)
+	???:0
+0x7cc76f (anonymous namespace)::pass_reload::execute(function*)
+	???:0
+gcc (tenstorrent/sfpi:7.49.0[610]) 15.1.0
+/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/../../libexec/gcc/riscv-tt-elf/15.1.0/lto1 -quiet -dumpbase /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisc1.14946822957705526139.elf.ltrans0.ltrans -mcpu=tt-bh -mtune=rvtt-b1 -misa-spec=2.2 -mcpu=tt-bh-tensix -mtune=rvtt-b1 -mabi=ilp32 -misa-spec=2.2 -march=rv32im_zmmul_zaamo_zba_zbb_xtttensixbh -march=rv32im_zmmul_zaamo_zba_zbb_xtttensixbh -g -g -O3 -O3 -fno-openmp -fno-openacc -fno-pie -fcf-protection=none -ffast-math -fno-exceptions -fltrans /tmp/cc2V3LXM.ltrans0.o -o /tmp/ccOT8IvK.s
+Please submit a full bug report, with preprocessed source (by using -freport-bug).
+Please include the complete backtrace with any bug report.
+See <https://github.com/tenstorrent/sfpi> for instructions.
+make: *** [/tmp/ccEQ44nf.mk:2: /tmp/cc2V3LXM.ltrans0.ltrans.o] Error 1
+lto-wrapper: fatal error: make returned 2 exit status
+compilation terminated.
+/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/riscv-tt-elf/15.1.0/../../../../riscv-tt-elf/bin/ld: error: lto-wrapper failed
+collect2: error: ld returned 1 exit status
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa30997) [0x76aa16630997]
+ --- tt::tt_metal::JitBuildState::link(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) const
+ --- tt::tt_metal::JitBuildState::build(tt::tt_metal::JitBuildSettings const*, std::span<tt::tt_metal::JitBuildState const* const, 18446744073709551615ul>) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x76aa1663f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x76aa162a2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x76aa7135aee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x76aa1664169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x76aa16466640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x76aa16465242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x76aa16465885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x76aa6e8b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x76aa71355ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x76aa713e78d0]
+ (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 238, in <module>
+    main()
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 130, in main
+    tt_imgs, tt_timings = render_all(
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 84, in render_all
+    _ = pipeline.render(gauss, extr0, K, H, W)
+  File "/localdev/smarton/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2/backends/tt/backend.py", line 135, in render_fused
+    image, stats = self._mod.render_full_tt(
+RuntimeError: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for microblock_cull_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc1 build failed. Log: during RTL pass: reload
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp: In function 'cull_one':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:223:1: internal compiler error: maximum number of generated reload insns per insn achieved (90)
+  223 | }
+      | ^
+0x2465793 diagnostic_context::diagnostic_impl(rich_location*, diagnostic_metadata const*, diagnostic_option_id, char const*, __va_list_tag (*) [1], diagnostic_t)
+	???:0
+0x2476d06 internal_error(char const*, ...)
+	???:0
+0x82bab0 lra_constraints(bool)
+	???:0
+0x8136c2 lra(_IO_FILE*, int)
+	???:0
+0x7cc76f (anonymous namespace)::pass_reload::execute(function*)
+	???:0
+gcc (tenstorrent/sfpi:7.49.0[610]) 15.1.0
+/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/../../libexec/gcc/riscv-tt-elf/15.1.0/lto1 -quiet -dumpbase /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisc1.14946822957705526139.elf.ltrans0.ltrans -mcpu=tt-bh -mtune=rvtt-b1 -misa-spec=2.2 -mcpu=tt-bh-tensix -mtune=rvtt-b1 -mabi=ilp32 -misa-spec=2.2 -march=rv32im_zmmul_zaamo_zba_zbb_xtttensixbh -march=rv32im_zmmul_zaamo_zba_zbb_xtttensixbh -g -g -O3 -O3 -fno-openmp -fno-openacc -fno-pie -fcf-protection=none -ffast-math -fno-exceptions -fltrans /tmp/cc2V3LXM.ltrans0.o -o /tmp/ccOT8IvK.s
+Please submit a full bug report, with preprocessed source (by using -freport-bug).
+Please include the complete backtrace with any bug report.
+See <https://github.com/tenstorrent/sfpi> for instructions.
+make: *** [/tmp/ccEQ44nf.mk:2: /tmp/cc2V3LXM.ltrans0.ltrans.o] Error 1
+lto-wrapper: fatal error: make returned 2 exit status
+compilation terminated.
+/localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/riscv-tt-elf/15.1.0/../../../../riscv-tt-elf/bin/ld: error: lto-wrapper failed
+collect2: error: ld returned 1 exit status
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa30997) [0x76aa16630997]
+ --- tt::tt_metal::JitBuildState::link(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&) const
+ --- tt::tt_metal::JitBuildState::build(tt::tt_metal::JitBuildSettings const*, std::span<tt::tt_metal::JitBuildState const* const, 18446744073709551615ul>) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x76aa1663f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x76aa162a2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x76aa7135aee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x76aa1664169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x76aa16466640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x76aa16465242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x76aa16465885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x76aa6e8b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x76aa71355ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x76aa713e78d0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x84fdc3) [0x76aa1644fdc3]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x848ed3) [0x76aa16448ed3]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x76aa1663f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x76aa162a2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x76aa7135aee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x76aa1664169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x76aa16466640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x76aa16465242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x76aa16465885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x76aa6e8b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x76aa71355ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x76aa713e78d0]
+
+[bh-30-special-smarton-for-reservation-75776:419377] *** Process received signal ***
+[bh-30-special-smarton-for-reservation-75776:419377] Signal: Segmentation fault (11)
+[bh-30-special-smarton-for-reservation-75776:419377] Signal code: Address not mapped (1)
+[bh-30-special-smarton-for-reservation-75776:419377] Failing at address: 0x578e8be2d586
+[bh-30-special-smarton-for-reservation-75776:419377] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x76aa71303520]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail9_Map_baseIjSt4pairIKjNSt6chrono10time_pointINS3_3_V212steady_clockENS3_8durationIlSt5ratioILl1ELl1000000000EEEEEEESaISC_ENS_10_Select1stESt8equal_toIjESt4hashIjENS_18_Mod_range_hashingENS_20_Default_ranged_hashENS_20_Prime_rehash_policyENS_17_Hashtable_traitsILb0ELb0ELb1EEELb1EEixEOj+0x48)[0x76aa16352488]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x9c)[0x76aa16341f9c]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xc0)[0x76aa163fb5c0]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD1Ev+0x1a)[0x76aa164067fa]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x5dfc26)[0x76aa161dfc26]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xa8)[0x76aa16717168]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD1Ev+0x15)[0x76aa167175e5]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 8] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xbf731)[0x76aa173f1731]
+[bh-30-special-smarton-for-reservation-75776:419377] [ 9] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x76aa71306495]
+[bh-30-special-smarton-for-reservation-75776:419377] [10] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x76aa71306610]
+[bh-30-special-smarton-for-reservation-75776:419377] [11] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x76aa712ead97]
+[bh-30-special-smarton-for-reservation-75776:419377] [12] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x76aa712eae40]
+[bh-30-special-smarton-for-reservation-75776:419377] [13] .venv/bin/python3(_start+0x25)[0x578bc6ab5b45]
+[bh-30-special-smarton-for-reservation-75776:419377] *** End of error message ***

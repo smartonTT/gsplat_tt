@@ -1,0 +1,31 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=build  timeout=1200s  worry=600s  ts=2026-06-02T00:03:46-0700
+cmd: bash -lc cd /localdev/smarton/gstt2 && cmake --build build-tt -j 16
+-----------------------------------------
+[1/5] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/tile_assign_device.cpp.o
+[2/5] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o
+[3/5] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: In function ‘double mb::cull::process_frame(DeviceContext&, float, bool, uint32_t, uint32_t, bool*, bool)’:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:2255:56: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 3 has type ‘uint64_t’ {aka ‘long unsigned int’} [-Wformat=]
+ 2255 |         std::fprintf(stderr, "[CULL_SPLIT] candidates=%u masks=%.2fMB exec=%.1f ms "
+      |                                                       ~^
+      |                                                        |
+      |                                                        unsigned int
+      |                                                       %lu
+ 2256 |                      "masks_addr=0x%lx end=0x%lx base_addr=0x%lx\n",
+ 2257 |                      total_candidates,
+      |                      ~~~~~~~~~~~~~~~~                   
+      |                      |
+      |                      uint64_t {aka long unsigned int}
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:112:13: warning: ‘void save_npy_f32(const string&, const std::vector<float>&, const std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  112 | static void save_npy_f32(const std::string& path, const std::vector<float>& data, const std::vector<size_t>& shape) {
+      |             ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:103:30: warning: ‘std::vector<unsigned int> load_npy_u32(const string&, std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  103 | static std::vector<uint32_t> load_npy_u32(const std::string& path, std::vector<size_t>& shape) {
+      |                              ^~~~~~~~~~~~
+[4/5] Linking CXX static library libgsplat_tt.a
+[5/5] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so

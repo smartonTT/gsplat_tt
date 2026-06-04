@@ -15,6 +15,11 @@ rsync -av --delete \
 
 rsync -av "$REPO_ROOT/cmake/" "$REMOTE:$DST/cmake/"
 
+# render/: clean renderer (run.py gate, render_clean.so, JIT kernels).
+rsync -av --delete \
+  --exclude 'build-tt/' --exclude '__pycache__/' --exclude '*.pyc' \
+  "$REPO_ROOT/render/" "$REMOTE:$DST/render/"
+
 rsync -av \
   "$REPO_ROOT/backends/cpu_cpp/pybind_module.cpp" \
   "$REMOTE:$DST/backends/cpu_cpp/"
@@ -48,5 +53,13 @@ rsync -av \
 rsync -av \
   "$REPO_ROOT/gsplat/pipeline.py" \
   "$REMOTE:$DST/gsplat/"
+
+rsync -av \
+  "$REPO_ROOT/benchmarks/anchor/" \
+  "$REMOTE:$DST/benchmarks/anchor/" 2>/dev/null || true
+
+rsync -av \
+  "$REPO_ROOT/ttw.toml" \
+  "$REMOTE:$DST/"
 
 echo "[sync_to_bh30] ok" >&2

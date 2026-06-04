@@ -1,0 +1,943 @@
+================ BUILD ID ================
+  cpp : #1 sha=7eed227 iter 0: baseline
+  data: # sha= 
+=========================================
+host=bh-30  tag=sfpu  timeout=1500s  worry=600s  ts=2026-05-31T13:45:57-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TT_METAL_DPRINT_CORES=0,0 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_CULL_SELFCHECK=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-sfpu-selfcheck --out opt/ttw/sfpu-selfcheck.json
+-----------------------------------------
+2026-05-31 20:45:59.942 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:45:59.942 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:45:59.943 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:45:59.943 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:45:59.944 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:45:59.944 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:45:59.945 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-05-31 20:45:59.945 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-05-31 20:45:59.945 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:45:59.945 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:45:59.946 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:45:59.946 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:45:59.947 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:45:59.947 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:45:59.947 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-05-31 20:45:59.947 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-05-31 20:45:59.947 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-05-31 20:46:00.017 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:46:00.017 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-05-31 20:46:00.017 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-05-31 20:46:00.017 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-05-31 20:46:00.017 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-05-31 20:46:00.019 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-05-31 20:46:00.020 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xfffffffec0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-05-31 20:46:00.021 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-05-31 20:46:00.333 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-05-31 20:46:00.333 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-05-31 20:46:00.333 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:46:00.333 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:46:00.334 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:46:00.334 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:46:00.335 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:46:00.335 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:46:00.336 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-05-31 20:46:00.336 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-05-31 20:46:00.336 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:46:00.336 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:46:00.336 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-05-31 20:46:00.336 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:46:00.336 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:46:00.336 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-05-31 20:46:00.336 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-05-31 20:46:00.336 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-05-31 20:46:00.336 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-05-31 20:46:00.336 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-05-31 20:46:00.336 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-05-31 20:46:00.340 | warning  |           Metal | DPRINT is deprecated and will be removed in a future release. Please migrate to DEVICE_PRINT by:
+  1. Replace #include "api/debug/dprint.h" with #include "api/debug/device_print.h" in your kernels
+  2. Replace DPRINT << ... << ENDL() with DEVICE_PRINT("...\n", args)
+  3. Set TT_METAL_DEVICE_PRINT=1 to enable the new DEVICE_PRINT system
+For more information, see the DEVICE_PRINT documentation. (metal_context.cpp:241)
+2026-05-31 20:46:00.351 | info     |           Metal | DPRINT enabled on device 0, worker core 0-0 (virtual 1-2). (dprint_server.cpp:904)
+2026-05-31 20:46:00.351 | info     |           Metal | DPRINT Server attached device 0 (dprint_server.cpp:950)
+2026-05-31 20:46:00.438 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_432577_482284392_0' (shm_resource_tracker.cpp:265)
+2026-05-31 20:46:00.439 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_432577' (shm_resource_tracker.cpp:275)
+2026-05-31 20:46:01.023 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349998 GHz, device_time_at_sync=51786973425809 cycles (realtime_profiler_manager.cpp:1075)
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=11.28 up=0.31 kernel=9.75 d2h=13.15 compact=0.00 publish=3.73 total=55.28ms
+0:0-0:NC: CULLCOEF t=584 local=0 a=21365.5 b=-3966.93 c=4066.68 mx=54.6123 my=799.237 op=0.0293077 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=1 a=18558.4 b=-385.923 c=6333.02 mx=-72.014 my=440.458 op=0.042175 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=2 a=10288.5 b=-1832.58 c=16484.8 mx=482.983 my=286.387 op=0.0173527 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=3 a=8178.16 b=-2075.66 c=9273.11 mx=226.549 my=316.729 op=0.0253501 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=4 a=25.2701 b=85.5626 c=293.492 mx=301.241 my=636.776 op=0.0591639 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=5 a=24.5386 b=81.7365 c=275.93 mx=301.613 my=635.973 op=0.0983127 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=6 a=15.9831 b=86.1496 c=473.553 mx=299.983 my=637.618 op=0.0130878 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=7 a=42.5393 b=45.4512 c=49.2075 mx=306.989 my=629.81 op=0.0144245 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=8 a=56.9884 b=55.3445 c=54.3325 mx=306.859 my=629.704 op=0.0122921 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=9 a=53.4215 b=57.1961 c=61.8834 mx=306.25 my=629.084 op=0.0106533 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=10 a=1931.5 b=712.928 c=298.876 mx=404.104 my=639.291 op=0.0221074 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=11 a=7.67639 b=-14.3226 c=28.11 mx=296.216 my=582.77 op=0.0205435 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=12 a=0.55453 b=-2.00932 c=16.3633 mx=267.324 my=598.207 op=0.0146268 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=13 a=2.03402 b=-0.885966 c=0.797108 mx=290.909 my=584.127 op=0.0619252 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=14 a=0.566276 b=-0.879997 c=7.20038 mx=279.297 my=588.918 op=0.0428084 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=15 a=0.483648 b=0.230833 c=1.26986 mx=284.769 my=604.208 op=0.138379 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=16 a=2.19726 b=-1.67171 c=1.77414 mx=286.067 my=601.985 op=0.0718955 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=17 a=1.91221 b=-3.71786 c=10.1748 mx=292.001 my=576.868 op=0.0633819 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=18 a=0.458813 b=-0.688698 c=3.29195 mx=287.138 my=604.312 op=0.0499792 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=19 a=0.340116 b=0.0989585 c=0.686052 mx=282.246 my=594.042 op=0.113604 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=20 a=0.415366 b=-0.475726 c=2.30459 mx=281.357 my=611.448 op=0.0465482 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=21 a=0.322265 b=0.026034 c=0.364928 mx=282.94 my=609.483 op=0.00394502 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=22 a=0.463288 b=-0.732104 c=3.81777 mx=267.639 my=605.203 op=0.0792981 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=23 a=1.80726 b=1.03475 c=1.43284 mx=288.302 my=602.41 op=0.0536702 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=24 a=3.19582 b=12.8605 c=57.8529 mx=284.893 my=588.103 op=0.0627862 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=25 a=7.979 b=-8.57498 c=9.87656 mx=287.484 my=570.433 op=0.0305913 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=26 a=26.2048 b=-50.9807 c=100.63 mx=288.113 my=548.588 op=0.0117329 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=27 a=2.11994 b=-2.63241 c=4.18621 mx=290.427 my=578.225 op=0.0807753 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=28 a=22.6697 b=-45.137 c=91.3763 mx=286.193 my=551.229 op=0.058207 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=29 a=25.8333 b=-52.7137 c=109.128 mx=286.803 my=551.151 op=0.0102497 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=30 a=0.879735 b=-0.597022 c=0.918831 mx=289.757 my=584.854 op=0.164527 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=31 a=25.7066 b=-49.6571 c=97.3549 mx=287.037 my=550.781 op=0.0106453 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=0 m=0 m2=11.8203
+0:0-0:BR: M2DMP t=584 local=0 m=1 m2=11.8192
+0:0-0:BR: M2DMP t=584 local=0 m=2 m2=11.8199
+0:0-0:NC: CULLCOEF t=584 local=32 a=32.7676 b=-67.7374 c=141.621 mx=286.787 my=551.017 op=0.0120022 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=0 m=3 m2=11.8268
+0:0-0:BR: M2DMP t=584 local=1 m=0 m2=9.00186
+0:0-0:BR: M2DMP t=584 local=1 m=1 m2=9.2956
+0:0-0:NC: CULLCOEF t=584 local=33 a=34.2519 b=-71.3255 c=150.139 mx=286.731 my=551.07 op=0.0130902 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=1 m=2 m2=9.59624
+0:0-0:BR: M2DMP t=584 local=1 m=3 m2=9.90379
+0:0-0:BR: M2DMP t=584 local=2 m=0 m2=8.54768
+0:0-0:NC: CULLCOEF t=584 local=34 a=22.4219 b=-47.897 c=104.004 mx=286.823 my=551.131 op=0.00804689 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=35 a=28.7867 b=-60.0738 c=126.986 mx=286.736 my=551.187 op=0.0117437 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=2 m=1 m2=8.25768
+0:0-0:BR: M2DMP t=584 local=2 m=2 m2=7.98037
+0:0-0:BR: M2DMP t=584 local=2 m=3 m2=7.71575
+0:0-0:NC: CULLCOEF t=584 local=36 a=37.1456 b=-67.1264 c=122.593 mx=286.797 my=551.101 op=0.00892001 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=3 m=0 m2=8.24132
+0:0-0:BR: M2DMP t=584 local=3 m=1 m2=8.43108
+0:0-0:BR: M2DMP t=584 local=3 m=2 m2=8.63744
+0:0-0:NC: CULLCOEF t=584 local=37 a=30.777 b=-62.5802 c=128.799 mx=286.804 my=551.118 op=0.0100516 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=3 m=3 m2=8.86039
+0:0-0:NC: CULLCOEF t=584 local=38 a=26.958 b=-52.9756 c=105.574 mx=286.909 my=551.027 op=0.00988765 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=39 a=23.4711 b=-46.7186 c=94.496 mx=286.799 my=551.133 op=0.0102171 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=40 a=33.7865 b=-69.7555 c=145.607 mx=286.772 my=551.165 op=0.0114616 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=41 a=30.0974 b=-61.4559 c=127.05 mx=286.738 my=551.208 op=0.0110363 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=42 a=35.8933 b=-72.8285 c=149.317 mx=286.755 my=551.2 op=0.0116199 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=43 a=31.561 b=-63.4714 c=129.17 mx=286.858 my=551.068 op=0.0100983 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=44 a=32.2897 b=-66.1126 c=136.934 mx=286.789 my=551.157 op=0.0107201 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=45 a=31.9269 b=-67.2297 c=143.211 mx=286.714 my=551.23 op=0.012295 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=46 a=32.2575 b=-65.5576 c=134.785 mx=286.746 my=551.204 op=0.0104337 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=47 a=27.0146 b=-53.0238 c=105.543 mx=286.909 my=550.979 op=0.00850594 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=48 a=22.1314 b=-40.53 c=75.5438 mx=286.864 my=551.097 op=0.0104279 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=49 a=30.7024 b=-55.2886 c=100.846 mx=286.848 my=551.056 op=0.00773154 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=50 a=30.8596 b=-62.159 c=126.733 mx=286.779 my=551.17 op=0.010507 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=51 a=30.3382 b=-61.4863 c=126.159 mx=286.76 my=551.186 op=0.0101701 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=52 a=25.9457 b=-51.9703 c=105.617 mx=286.708 my=551.253 op=0.0101086 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=53 a=30.6447 b=-62.6124 c=129.493 mx=286.693 my=551.278 op=0.00948368 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=54 a=32.4343 b=-63.6055 c=126.199 mx=286.901 my=551.011 op=0.00795834 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=55 a=31.2973 b=-60.2046 c=117.233 mx=286.965 my=550.912 op=0.00885666 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=56 a=26.8352 b=-56.3556 c=119.989 mx=286.717 my=551.217 op=0.0103857 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=57 a=27.1826 b=-52.7264 c=103.715 mx=286.934 my=550.968 op=0.00897773 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=58 a=33.8745 b=-67.7481 c=137.005 mx=286.754 my=551.28 op=0.00933785 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=59 a=34.6283 b=-69.5525 c=141.22 mx=286.812 my=551.21 op=0.0089698 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=60 a=3.77548 b=-8.81012 c=22.8015 mx=279.36 my=566.446 op=0.0612462 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=61 a=7.73542 b=-22.2119 c=67.5079 mx=278.675 my=587.859 op=0.0827468 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=62 a=26.3976 b=-54.5895 c=114.487 mx=286.422 my=551.771 op=0.011481 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=63 a=0.34632 b=0.0972371 c=0.506327 mx=287.747 my=599.204 op=0.0938796 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=64 a=0.666311 b=0.475573 c=1.53153 mx=284.784 my=604.553 op=0.0646256 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=65 a=44.6878 b=-8.89438 c=6.65737 mx=298.678 my=612.299 op=0.142646 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=66 a=0.661181 b=-0.909099 c=4.19631 mx=276.036 my=608.022 op=0.0274035 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=67 a=0.562392 b=0.361085 c=0.810195 mx=289.346 my=605.924 op=0.104742 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=68 a=0.575086 b=-0.987761 c=3.84752 mx=276.941 my=613.015 op=0.0472553 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=69 a=0.734417 b=0.477435 c=0.827925 mx=283.86 my=610.887 op=0.060843 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=70 a=1.51818 b=-6.61841 c=36.2591 mx=271.326 my=594.604 op=0.0179071 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=71 a=7.73946 b=-11.9808 c=19.5955 mx=296.924 my=588.662 op=0.0310573 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=72 a=19.3374 b=-42.162 c=93.6755 mx=286.801 my=549.317 op=0.0290883 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=73 a=1.40382 b=-4.00105 c=15.1683 mx=276.321 my=584.208 op=0.0376489 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=74 a=0.348986 b=-0.248104 c=1.55666 mx=284.902 my=611.308 op=0.0735053 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=75 a=0.441327 b=-0.201425 c=0.864867 mx=285.583 my=608.893 op=0.0787941 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=76 a=0.572442 b=-1.12255 c=5.07757 mx=267.761 my=598.793 op=0.0624688 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=77 a=8.87037 b=-22.0212 c=56.8823 mx=283.601 my=566.788 op=0.0191012 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=78 a=1.43188 b=0.137579 c=0.7581 mx=290.338 my=602.9 op=0.058837 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=79 a=0.452805 b=0.131933 c=0.414964 mx=279.897 my=599.509 op=0.0284206 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=80 a=4.01747 b=1.55373 c=0.949529 mx=288.978 my=610.42 op=0.0166199 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=81 a=3.54247 b=1.38148 c=0.888777 mx=288.849 my=610.364 op=0.0190138 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=82 a=0.396607 b=0.258887 c=0.994455 mx=283.494 my=609.814 op=0.0448433 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=83 a=0.433849 b=-0.207516 c=0.623584 mx=274.272 my=610.283 op=0.017419 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=84 a=3.93244 b=1.57911 c=0.986542 mx=288.822 my=610.37 op=0.0177172 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=85 a=4.12073 b=1.60285 c=0.973004 mx=288.803 my=610.357 op=0.0162818 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=86 a=0.478472 b=0.123152 c=0.471493 mx=272.674 my=601.145 op=0.0205949 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=87 a=0.302574 b=0.016154 c=0.404072 mx=282.283 my=599.644 op=0.032448 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=88 a=0.316528 b=0.00487606 c=0.30688 mx=276.626 my=604.961 op=0.0214026 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=89 a=0.463818 b=0.114541 c=0.550239 mx=281.736 my=603.017 op=0.117376 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=90 a=4.93957 b=-0.691902 c=0.418083 mx=292.546 my=600.654 op=0.0493317 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=91 a=16.1103 b=-15.2441 c=14.9983 mx=279.284 my=565.875 op=0.0175734 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=92 a=4.43062 b=1.57698 c=0.902225 mx=287.785 my=608.076 op=0.137291 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=93 a=11.4901 b=-20.6161 c=38.4339 mx=285.943 my=571.792 op=0.0583448 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=94 a=14.3816 b=-31.5553 c=71.0117 mx=280.718 my=564.511 op=0.0136707 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=95 a=11.0674 b=-26.5113 c=65.5757 mx=279.811 my=565.556 op=0.0535305 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=96 a=25.2663 b=-55.8623 c=125.292 mx=280.201 my=565.466 op=0.0100334 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=97 a=21.5262 b=-47.2474 c=105.468 mx=280.192 my=565.506 op=0.0110082 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=98 a=23.457 b=-51.03 c=112.753 mx=280.161 my=565.6 op=0.0110459 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=99 a=20.8044 b=-45.7336 c=102.306 mx=280.218 my=565.535 op=0.0113449 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=100 a=24.0135 b=-52.6311 c=117.112 mx=280.122 my=565.643 op=0.0111272 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=101 a=25.4388 b=-55.8214 c=124.253 mx=280.152 my=565.614 op=0.00976998 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=102 a=23.6251 b=-52.2565 c=117.373 mx=280.141 my=565.622 op=0.0108248 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=103 a=21.1723 b=-47.045 c=106.337 mx=280.121 my=565.639 op=0.0117013 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=104 a=28.3625 b=-62.5212 c=139.593 mx=280.151 my=565.606 op=0.00946777 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=105 a=9.10783 b=-19.6971 c=44.3488 mx=280.083 my=565.728 op=0.675955 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=106 a=14.7581 b=-32.5191 c=73.4417 mx=280.227 my=565.551 op=0.0163838 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=107 a=43.754 b=-95.5523 c=210.413 mx=280.084 my=565.738 op=0.0103853 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=108 a=19.2741 b=-41.5559 c=91.3132 mx=280.274 my=565.545 op=0.00764583 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=109 a=34.7177 b=-75.1403 c=164.345 mx=280.055 my=565.66 op=0.0103986 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=110 a=46.1311 b=-99.7034 c=217.2 mx=280.153 my=565.691 op=0.00916955 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=111 a=39.5277 b=-86.7615 c=192.194 mx=280.119 my=565.659 op=0.00836849 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=112 a=34.9066 b=-77.8384 c=175.377 mx=279.999 my=565.766 op=0.0121876 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=113 a=39.6561 b=-86.2283 c=189.224 mx=280.193 my=565.634 op=0.00796794 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=114 a=45.7635 b=-99.479 c=217.97 mx=280.132 my=565.687 op=0.00825016 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=115 a=34.7177 b=-77.6332 c=175.411 mx=280.026 my=565.759 op=0.0101265 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=116 a=35.4023 b=-78.0764 c=173.962 mx=280.09 my=565.705 op=0.00853335 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=117 a=35.4908 b=-76.8994 c=168.341 mx=280.119 my=565.733 op=0.00894278 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=118 a=32.1604 b=-68.6245 c=148.111 mx=280.174 my=565.775 op=0.0105003 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=119 a=25.8167 b=-57.886 c=131.617 mx=280.099 my=565.741 op=0.00959897 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=120 a=8.3885 b=-18.2771 c=41.5997 mx=280.073 my=565.842 op=0.0084472 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=121 a=24.9011 b=-55.1911 c=124.118 mx=279.982 my=565.916 op=0.00986556 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=122 a=15.0038 b=-31.3178 c=67.0041 mx=281 my=564.452 op=0.289792 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=123 a=1.94877 b=1.30515 c=1.33496 mx=285.232 my=611.377 op=0.0094795 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=124 a=34.3304 b=-74.8895 c=165.107 mx=280.249 my=565.616 op=0.00911021 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=125 a=3.88289 b=-1.49191 c=1.05286 mx=272.578 my=606.572 op=0.0233099 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=126 a=0.627333 b=-1.02547 c=21.9674 mx=287.082 my=602.42 op=0.105174 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=127 a=36.1253 b=-78.4049 c=171.892 mx=279.818 my=566.18 op=0.00957511 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=128 a=17.3598 b=-35.7473 c=75.2053 mx=280.315 my=565.64 op=0.0170085 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=129 a=0.57212 b=-0.0822152 c=0.888066 mx=284.258 my=609.035 op=0.166776 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=130 a=3.19768 b=-7.33569 c=18.8709 mx=273.282 my=578.852 op=0.0109554 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=131 a=0.308471 b=0.0659848 c=0.815548 mx=285.224 my=609.67 op=0.148581 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=132 a=0.593318 b=0.209187 c=0.45726 mx=276.537 my=598.527 op=0.0449501 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=133 a=0.392592 b=-0.0602696 c=0.342875 mx=268.168 my=583.583 op=0.0727882 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=134 a=0.858712 b=-1.14031 c=2.62751 mx=274.292 my=576.153 op=0.0883155 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=135 a=19.9651 b=-10.9035 c=6.34626 mx=287.225 my=609.089 op=0.0149421 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=136 a=2.24518 b=0.877205 c=0.695901 mx=287.908 my=610.084 op=0.0299065 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=137 a=0.332867 b=-0.95475 c=28.8584 mx=275.492 my=597.721 op=0.0175336 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=138 a=0.420311 b=0.177988 c=0.580309 mx=284.559 my=600.241 op=0.1631 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=139 a=4.4434 b=-6.18322 c=11.6638 mx=278.563 my=613.448 op=0.0525864 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=140 a=0.301193 b=-0.0309542 c=1.10854 mx=284.436 my=606.166 op=0.144168 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=141 a=0.369218 b=0.303164 c=1.62801 mx=285.863 my=611.683 op=0.0276999 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=142 a=0.654842 b=0.0827867 c=0.320339 mx=286.528 my=609.426 op=0.108562 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=143 a=0.305828 b=0.1973 c=7.08945 mx=288.788 my=585.052 op=0.0480861 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=144 a=0.309427 b=0.000733302 c=0.526253 mx=282.688 my=610.579 op=0.113105 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=145 a=0.410359 b=0.584355 c=3.39451 mx=287.032 my=609.133 op=0.0159892 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=146 a=13.4067 b=-12.7136 c=12.7204 mx=288.055 my=585.284 op=0.0414156 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=147 a=0.771239 b=-0.230192 c=0.65473 mx=284.425 my=608.529 op=0.0896135 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=148 a=1.62181 b=0.606429 c=0.578636 mx=291.229 my=597.939 op=0.0997453 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=149 a=6.70487 b=-13.6828 c=46.8317 mx=294.692 my=579.731 op=0.0204459 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=150 a=0.558517 b=0.401878 c=0.931522 mx=285.332 my=610.901 op=0.103536 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=151 a=0.309986 b=0.0365274 c=0.436687 mx=283.379 my=608.098 op=0.117096 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=152 a=0.698771 b=-1.28853 c=4.46357 mx=277.14 my=579.065 op=0.0691273 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=153 a=1.33603 b=-1.05611 c=1.41249 mx=286.908 my=586.473 op=0.0528159 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=154 a=0.382085 b=-0.151208 c=0.59279 mx=282.518 my=603.279 op=0.163601 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=155 a=0.715182 b=-0.33521 c=0.659273 mx=289.988 my=597.738 op=0.0505632 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=156 a=4.40994 b=4.18946 c=4.57198 mx=284.179 my=610.161 op=0.013551 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=157 a=0.494498 b=0.182205 c=0.473551 mx=284.066 my=608.31 op=0.0218791 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=158 a=0.470459 b=0.0556793 c=1.80368 mx=284.687 my=581.035 op=0.0527856 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=159 a=13.6754 b=-30.4259 c=69.5117 mx=279.448 my=564.878 op=0.0141949 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=160 a=1.88316 b=-3.83827 c=9.60563 mx=277.703 my=575.384 op=0.0310971 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=161 a=0.721396 b=-0.347816 c=0.749719 mx=290.43 my=608.076 op=0.0482819 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=162 a=0.840408 b=-1.06635 c=2.41932 mx=281.01 my=600.635 op=0.0740886 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=163 a=1.19555 b=-0.570802 c=0.66411 mx=284.526 my=609.094 op=0.190332 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=164 a=0.608721 b=-0.112372 c=0.344409 mx=284.478 my=608.795 op=0.00788558 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=165 a=0.441281 b=0.174117 c=1.36624 mx=284.929 my=602.119 op=0.124064 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=166 a=4.64936 b=-9.53906 c=21.2217 mx=279.265 my=564.933 op=0.0148191 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=167 a=0.480974 b=-0.120809 c=1.07312 mx=282.757 my=578.227 op=0.100384 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=168 a=0.55332 b=0.443938 c=1.29211 mx=284.712 my=609.918 op=0.340977 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=169 a=1.72765 b=-3.54474 c=9.10279 mx=276.691 my=595.465 op=0.0771298 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=170 a=1.00848 b=-0.05031 c=0.361354 mx=267.175 my=606.208 op=0.0841132 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=171 a=5.82836 b=-11.3106 c=23.4405 mx=268.23 my=589.132 op=0.00850227 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=172 a=2.83131 b=-9.07046 c=32.8023 mx=272.704 my=574.568 op=0.0301353 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=173 a=0.315149 b=-0.0155556 c=0.334718 mx=285.253 my=608.389 op=0.0304756 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=174 a=0.304783 b=0.0425614 c=0.690066 mx=285.904 my=610.814 op=0.190035 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=175 a=0.454183 b=0.14575 c=0.441308 mx=286.645 my=607.903 op=0.0889228 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=176 a=21.2618 b=-35.5369 c=60.5497 mx=272.571 my=592.189 op=0.0338424 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=177 a=36.245 b=47.3931 c=63.0945 mx=270.567 my=627.693 op=0.010898 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=178 a=0.663943 b=-0.897785 c=2.51468 mx=276.84 my=577.429 op=0.0160985 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=179 a=0.539559 b=0.271131 c=0.606955 mx=287.009 my=609.466 op=0.23928 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=180 a=0.474376 b=-0.0726605 c=0.330425 mx=280.208 my=576.795 op=0.0805493 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=181 a=2.17141 b=-4.99667 c=13.6411 mx=276.006 my=582.4 op=0.00854826 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=182 a=0.331363 b=-0.261683 c=2.48344 mx=276.466 my=576.592 op=0.013571 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=183 a=0.354903 b=0.015829 c=0.305143 mx=285.73 my=608.27 op=0.134911 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=184 a=0.52977 b=-0.981067 c=5.38771 mx=275.698 my=607.037 op=0.0218981 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=185 a=0.485726 b=0.0496498 c=0.313682 mx=279.92 my=609.288 op=0.102756 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=186 a=1.58568 b=-1.36689 c=1.8104 mx=285.261 my=608.264 op=0.0414342 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=187 a=0.345229 b=-0.0577565 c=0.374689 mx=284.456 my=608.178 op=0.233934 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=188 a=0.822089 b=-0.564133 c=0.909579 mx=275.8 my=576.275 op=0.029252 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=189 a=0.80659 b=0.0477644 c=0.312292 mx=287.727 my=608.181 op=0.0907471 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=190 a=0.300735 b=-0.000116107 c=0.300842 mx=285.415 my=607.688 op=0.0274908 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=191 a=1.76967 b=-2.82131 c=5.71603 mx=276.724 my=577.098 op=0.00650609 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=192 a=0.306801 b=-0.0322771 c=0.484073 mx=285.335 my=610.157 op=0.187607 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=193 a=0.302608 b=0.00316932 c=0.306735 mx=285.932 my=609.088 op=0.177239 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=194 a=4.73314 b=-9.65753 c=21.3388 mx=275.052 my=575.913 op=0.294351 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=195 a=0.331896 b=-0.0212205 c=0.314941 mx=285.431 my=607.813 op=0.032108 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=196 a=6.5675 b=-13.9503 c=31.351 mx=275.105 my=575.867 op=0.0426879 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=197 a=1.41717 b=-0.105176 c=6.51619 mx=290.009 my=579.517 op=0.0589681 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=198 a=8.00708 b=-17.5508 c=40.2671 mx=275.877 my=575.279 op=0.0100164 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=199 a=5.68168 b=-11.4664 c=24.7308 mx=275.524 my=575.739 op=0.024126 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=200 a=5.49035 b=3.77202 c=3.07207 mx=270.768 my=613.661 op=0.0767934 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=201 a=6.96051 b=-14.9429 c=33.8244 mx=275.226 my=575.913 op=0.0205618 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=202 a=6.17916 b=-12.739 c=27.903 mx=275.672 my=575.485 op=0.0071108 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=203 a=0.300598 b=0.00408721 c=0.339783 mx=286.021 my=609.01 op=0.0585346 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=204 a=5.6783 b=-12.2085 c=28.0127 mx=275.186 my=576.002 op=0.0247862 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=205 a=0.360782 b=0.377399 c=2.77997 mx=284.343 my=611.558 op=0.066099 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=206 a=0.849672 b=2.08084 c=8.17747 mx=285.319 my=609.453 op=0.0241034 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=207 a=1.66796 b=-3.68973 c=10.2522 mx=275.668 my=575.71 op=0.01508 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=208 a=8.83015 b=-18.7473 c=41.5024 mx=275.691 my=575.573 op=0.0083684 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=209 a=8.74455 b=-18.5231 c=40.9306 mx=275.728 my=575.517 op=0.0105413 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=210 a=6.40956 b=-13.769 c=31.331 mx=275.182 my=576.006 op=0.0176059 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=211 a=9.60529 b=-19.0822 c=39.4315 mx=275.508 my=575.793 op=0.00734207 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=212 a=5.95125 b=-11.5233 c=23.797 mx=275.478 my=575.79 op=0.00797918 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=213 a=0.326044 b=-0.0599033 c=0.482013 mx=280.888 my=606.167 op=0.212785 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=214 a=0.423794 b=0.978058 c=8.04918 mx=260.783 my=586.203 op=0.00904784 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=215 a=11.7652 b=-24.2215 c=51.4704 mx=275.441 my=575.988 op=0.00676576 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=216 a=6.92056 b=-14.4616 c=31.8892 mx=275.549 my=575.904 op=0.00843767 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=217 a=15.688 b=-31.4773 c=64.6889 mx=275.387 my=576.035 op=0.00773031 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=218 a=3.46515 b=-7.7005 c=19.0346 mx=275.444 my=576.399 op=0.0240804 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=219 a=7.98629 b=-16.217 c=34.5154 mx=275.445 my=575.96 op=0.0074453 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=220 a=12.1756 b=-25.148 c=53.554 mx=275.415 my=576.047 op=0.00703205 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=221 a=7.91345 b=-15.7149 c=32.737 mx=275.316 my=575.973 op=0.0149323 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=222 a=13.4254 b=-27.6221 c=58.43 mx=275.385 my=576.071 op=0.00652255 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=223 a=8.241 b=-17.1019 c=37.1308 mx=275.484 my=575.948 op=0.00830045 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=224 a=11.0336 b=-22.525 c=47.5698 mx=275.374 my=576.053 op=0.00679006 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=225 a=14.1115 b=-28.9981 c=61.1834 mx=275.452 my=576.004 op=0.00727465 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=226 a=7.47536 b=-15.165 c=32.3508 mx=275.456 my=575.977 op=0.00756331 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=227 a=8.48803 b=-17.7797 c=38.9073 mx=275.518 my=575.924 op=0.00804915 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=228 a=9.129 b=-19.0793 c=41.53 mx=275.534 my=575.928 op=0.00778416 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=229 a=5.68289 b=-11.0761 c=23.0908 mx=275.438 my=575.962 op=0.00856257 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=230 a=0.456805 b=-0.00671094 c=0.300394 mx=285.319 my=608.73 op=0.0135356 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=231 a=9.33103 b=-19.4006 c=41.9768 mx=275.347 my=576.179 op=0.00704204 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=232 a=5.70333 b=-11.3243 c=24.0336 mx=275.456 my=575.993 op=0.00853312 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=233 a=9.96156 b=-20.4577 c=43.6179 mx=275.443 my=576.137 op=0.00835197 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=234 a=10.0377 b=-21.1025 c=46.0314 mx=275.434 my=576.078 op=0.00748604 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=235 a=9.14939 b=-19.0547 c=41.3289 mx=275.401 my=576.176 op=0.00818962 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=236 a=14.1109 b=-28.4648 c=58.981 mx=271.36 my=591.394 op=0.025324 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=237 a=9.10358 b=-18.3692 c=38.6286 mx=275.406 my=576.079 op=0.00819985 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=238 a=8.47551 b=-17.4006 c=37.3353 mx=275.426 my=576.195 op=0.00988441 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=239 a=0.412004 b=-0.283646 c=1.0322 mx=283.635 my=609.778 op=0.213779 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=240 a=8.10192 b=-16.1041 c=33.5408 mx=275.357 my=575.975 op=0.0135414 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=241 a=5.84881 b=-12.5494 c=28.6821 mx=275.393 my=576.356 op=0.025181 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=242 a=0.374911 b=-0.0432675 c=0.327622 mx=285.692 my=607.545 op=0.0610771 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=243 a=8.98621 b=-18.2964 c=38.8392 mx=275.427 my=576.15 op=0.00798883 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=244 a=5.70652 b=-11.8205 c=26.1435 mx=275.164 my=576.247 op=0.0147821 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=245 a=0.329184 b=0.0270138 c=0.50813 mx=284.893 my=607.982 op=0.911793 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=246 a=0.305502 b=-0.00984905 c=0.333676 mx=285.059 my=608.377 op=0.0130148 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=247 a=0.392475 b=0.222626 c=0.883005 mx=284.634 my=607.807 op=0.0116885 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=248 a=0.392744 b=0.224802 c=0.871969 mx=284.646 my=607.806 op=0.0126686 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=249 a=0.416126 b=0.223509 c=0.876496 mx=284.674 my=607.846 op=0.0110328 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=250 a=0.300746 b=0.00322865 c=0.34191 mx=284.241 my=609.012 op=0.0509197 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=251 a=0.520542 b=-0.386519 c=0.977529 mx=284.45 my=608.622 op=0.0404727 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=252 a=0.353866 b=0.212068 c=1.24451 mx=284.729 my=607.571 op=0.0172103 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=253 a=0.300305 b=0.000862093 c=0.327194 mx=284.203 my=609.019 op=0.0756289 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=254 a=0.302197 b=0.0106789 c=0.358923 mx=286.161 my=607.334 op=0.0651154 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=255 a=1.07984 b=-1.85707 c=4.72237 mx=283.849 my=599.349 op=0.0350836 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=256 a=287.021 b=110.383 c=46.3882 mx=281.067 my=624.296 op=0.1058 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=257 a=0.304083 b=-0.0146815 c=0.353155 mx=284.711 my=607.016 op=0.170233 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=258 a=0.318964 b=-0.0560471 c=0.46704 mx=285.052 my=608.169 op=0.00879902 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=259 a=0.505132 b=-0.86847 c=3.97779 mx=288.839 my=589.279 op=0.0325187 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=260 a=0.314201 b=-0.0134519 c=0.351035 mx=284.69 my=607.514 op=0.0511753 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=261 a=0.316111 b=-0.0473706 c=0.458556 mx=284.88 my=607.229 op=0.0551026 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=262 a=0.315375 b=0.0213712 c=0.353385 mx=288.729 my=606.126 op=0.00392284 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=263 a=1.4228 b=-5.03695 c=22.8991 mx=291.616 my=596.468 op=0.0228053 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=264 a=0.303298 b=0.0175092 c=0.430314 mx=284.458 my=607.421 op=0.0142871 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=265 a=1.39611 b=-2.0179 c=4.01486 mx=285.55 my=597.944 op=0.0103794 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=266 a=0.389205 b=9.07756e-05 c=0.300101 mx=286.956 my=607.416 op=0.0149276 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=267 a=0.320702 b=0.045458 c=0.430261 mx=284.481 my=607.434 op=0.0133996 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=268 a=0.311192 b=-0.00831403 c=0.487265 mx=284.85 my=607.152 op=0.0444636 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=269 a=0.364188 b=0.0794039 c=0.41856 mx=284.785 my=607.509 op=0.00395545 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=270 a=11.8423 b=-17.9485 c=28.2102 mx=288.301 my=563.699 op=0.036087 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=271 a=0.301077 b=-0.0130011 c=0.491633 mx=284.935 my=607.894 op=0.0257696 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=272 a=1.13211 b=-2.39511 c=7.19593 mx=286.966 my=592.628 op=0.0173949 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=273 a=0.535883 b=0.178687 c=0.436303 mx=284.754 my=607.518 op=0.011747 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=274 a=15.3913 b=10.515 c=7.63048 mx=270.655 my=614.789 op=0.0400036 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=275 a=0.535339 b=0.196839 c=0.465619 mx=284.802 my=607.505 op=0.00813823 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=276 a=31.8629 b=-70.2811 c=156.795 mx=274.649 my=579.204 op=0.297493 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=277 a=0.357743 b=0.0923211 c=0.449165 mx=282.391 my=607.331 op=0.159494 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=278 a=0.302142 b=0.0158317 c=0.419058 mx=284.86 my=608.004 op=0.179839 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=279 a=0.365805 b=-0.0504315 c=0.338942 mx=285.103 my=607.761 op=0.0244751 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=280 a=0.303334 b=0.0743179 c=1.98706 mx=274.839 my=611.654 op=0.163713 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=281 a=0.534169 b=0.214166 c=0.965117 mx=289.319 my=591.017 op=0.0917301 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=282 a=0.318491 b=0.0516013 c=0.552996 mx=284.718 my=607.133 op=0.0669685 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=283 a=0.349655 b=-0.109027 c=0.540599 mx=284.699 my=607.924 op=0.0400065 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=284 a=2.35711 b=-3.9503 c=7.88588 mx=274.905 my=574.998 op=0.00392805 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=285 a=0.30854 b=0.0388722 c=0.477308 mx=284.848 my=607.772 op=0.0386057 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=286 a=0.334662 b=-0.0887254 c=0.527579 mx=284.699 my=607.912 op=0.0460852 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=287 a=0.313383 b=-0.0108934 c=0.309114 mx=285.788 my=607.006 op=0.00972536 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=288 a=0.305297 b=0.0325463 c=0.503476 mx=284.864 my=607.809 op=0.0324615 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=289 a=0.352232 b=-0.116003 c=0.557885 mx=284.7 my=607.908 op=0.0330849 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=290 a=0.304832 b=-0.0288422 c=0.47398 mx=284.74 my=607.86 op=0.186689 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=291 a=0.304711 b=0.0288038 c=0.480476 mx=284.853 my=607.809 op=0.0393048 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=292 a=4.67663 b=3.74524 c=3.50552 mx=273.671 my=607.254 op=0.0196355 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=293 a=1.75567 b=-3.63438 c=9.374 mx=277.387 my=608.382 op=0.149419 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=294 a=0.312008 b=0.0543361 c=0.547083 mx=284.809 my=607.688 op=0.0383553 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=295 a=0.3101 b=0.0452213 c=0.506545 mx=284.848 my=607.806 op=0.0382831 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=296 a=0.335363 b=0.0485782 c=0.366755 mx=284.361 my=607.954 op=0.283057 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=297 a=0.316248 b=-0.130615 c=1.35574 mx=284.584 my=606.734 op=0.070412 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=298 a=0.329 b=0.097176 c=0.673478 mx=284.799 my=607.594 op=0.0250791 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=299 a=0.347034 b=0.106912 c=0.547432 mx=282.985 my=585.952 op=0.0447847 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=300 a=0.646155 b=-0.327615 c=0.61011 mx=286.309 my=608.133 op=0.0195215 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=301 a=1.6433 b=-2.56276 c=5.19061 mx=277.645 my=603.897 op=0.0321235 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=302 a=0.4755 b=-0.100678 c=0.845908 mx=281.459 my=609.285 op=0.0757681 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=303 a=0.346418 b=0.127022 c=0.648035 mx=287.03 my=604.644 op=0.058832 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=304 a=0.332624 b=-0.106764 c=0.682547 mx=287.639 my=609.135 op=0.0246913 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=305 a=0.328303 b=0.256832 c=2.66766 mx=286.556 my=596.975 op=0.244869 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=306 a=0.329037 b=0.0174661 c=0.313133 mx=284.901 my=607.636 op=0.0478953 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=307 a=0.398213 b=0.0886748 c=0.380077 mx=284.218 my=607.962 op=0.0453454 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=308 a=0.473371 b=0.429285 c=1.36332 mx=284.863 my=607.552 op=0.00917615 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=309 a=0.389671 b=-0.248249 c=0.987824 mx=279.13 my=609.238 op=0.0253906 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=310 a=0.3776 b=0.216935 c=0.906595 mx=284.818 my=607.53 op=0.0228181 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=311 a=0.324542 b=-0.248468 c=2.81738 mx=284.444 my=588.682 op=0.0135939 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=312 a=3.81984 b=-8.12825 c=19.0704 mx=278.266 my=607.334 op=0.0472133 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=313 a=0.329671 b=-0.0668103 c=0.450445 mx=277.437 my=610.148 op=0.107563 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=314 a=0.335115 b=0.048861 c=0.368048 mx=284.827 my=607.588 op=0.0611503 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=315 a=0.852268 b=-2.26383 c=12.6989 mx=280.041 my=584.233 op=0.0297295 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=316 a=1.42201 b=-3.52391 c=11.3682 mx=280.762 my=598.314 op=0.0412521 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=317 a=0.333838 b=0.107783 c=0.643733 mx=284.877 my=607.595 op=0.0321699 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=318 a=5.80013 b=-11.1128 c=22.753 mx=278.516 my=607.583 op=0.0113275 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=319 a=5.43109 b=-11.0157 c=23.9493 mx=278.578 my=607.709 op=0.0214303 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=320 a=2.98454 b=-4.75968 c=8.73893 mx=292.662 my=567.227 op=0.0209673 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=321 a=5.95853 b=-11.7657 c=24.7641 mx=278.677 my=608.045 op=0.0287329 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=322 a=2.01608 b=-3.56128 c=7.69059 mx=278.407 my=607.438 op=0.0168181 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=323 a=2.89871 b=-5.64116 c=12.5456 mx=278.421 my=607.547 op=0.347414 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=324 a=6.3164 b=-13.0972 c=28.8113 mx=278.795 my=608.465 op=0.245386 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=325 a=0.621651 b=-0.696292 c=1.80733 mx=277.901 my=609.032 op=0.0465034 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=326 a=1.27635 b=-2.05344 c=4.6188 mx=278.013 my=608.65 op=0.01604 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=327 a=0.69284 b=-0.806954 c=1.95774 mx=277.984 my=609.056 op=0.0350485 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=328 a=0.740761 b=-0.916555 c=2.20609 mx=277.99 my=609.022 op=0.0295657 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=329 a=2.2391 b=-4.08703 c=8.91428 mx=278.448 my=607.589 op=0.0127288 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=330 a=0.354828 b=-0.0929504 c=0.470026 mx=288.145 my=602.846 op=0.0795002 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=331 a=1.67605 b=-3.31616 c=8.2917 mx=278.394 my=607.905 op=0.0110777 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=332 a=1.86625 b=-3.56523 c=8.41587 mx=281.128 my=599.53 op=0.113276 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=333 a=1.90415 b=-3.80825 c=9.34083 mx=278.436 my=607.803 op=0.0103583 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=334 a=2.32675 b=-4.15816 c=8.8311 mx=278.631 my=607.15 op=0.0183818 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=335 a=1.59246 b=-3.09795 c=7.72567 mx=278.417 my=607.973 op=0.0103412 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=336 a=0.681579 b=-0.776251 c=1.87925 mx=277.968 my=609.05 op=0.0324854 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=337 a=1.52617 b=-1.87562 c=3.16909 mx=277.668 my=609.707 op=0.0234658 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=338 a=5.55289 b=-12.2699 c=28.9608 mx=278.316 my=607.892 op=0.0167944 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=339 a=2.19336 b=-3.89506 c=8.31303 mx=278.579 my=607.401 op=0.0158505 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=340 a=1.83967 b=-3.89397 c=10.1484 mx=278.423 my=607.855 op=0.00921727 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=341 a=0.307833 b=-0.148854 c=3.13312 mx=279.129 my=591.201 op=0.108894 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=342 a=0.380754 b=0.283391 c=1.29531 mx=284.852 my=607.488 op=0.0196222 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=343 a=1.46514 b=-2.84792 c=7.26113 mx=278.193 my=608.365 op=0.0100976 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=344 a=7.38553 b=-11.6174 c=19.3495 mx=280.33 my=578.631 op=0.0689018 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=345 a=1.77485 b=-3.45734 c=8.40475 mx=278.319 my=608.108 op=0.00976333 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=346 a=0.825434 b=-1.31536 c=3.59294 mx=278.106 my=608.638 op=0.0229157 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=347 a=0.30198 b=0.000294668 c=0.300883 mx=284.849 my=606.567 op=0.0518499 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=348 a=2.30929 b=-4.75768 c=11.5655 mx=278.549 my=607.621 op=0.00839749 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=349 a=2.03881 b=-4.345 c=11.1575 mx=278.432 my=607.875 op=0.00862728 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=350 a=2.35411 b=-4.87821 c=11.8851 mx=278.528 my=607.639 op=0.0085965 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=351 a=0.305748 b=0.0492447 c=0.732166 mx=285.428 my=607.825 op=0.975375 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=352 a=2.27699 b=-4.74988 c=11.712 mx=278.52 my=607.627 op=0.0083268 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=353 a=0.323989 b=-0.0211638 c=0.318721 mx=284.194 my=608.798 op=0.0130997 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=354 a=2.44366 b=-5.07365 c=12.3084 mx=278.598 my=607.524 op=0.00875236 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=355 a=3.04862 b=-6.13796 c=14.0067 mx=278.69 my=607.337 op=0.0102645 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=356 a=0.437933 b=-0.294394 c=0.928411 mx=277.672 my=609.688 op=0.0427462 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=357 a=2.60114 b=-5.33942 c=12.6893 mx=278.463 my=607.763 op=0.00939507 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=358 a=2.63272 b=-5.66879 c=14.0759 mx=278.614 my=607.625 op=0.00899633 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=359 a=2.53747 b=-5.35833 c=13.1322 mx=278.563 my=607.642 op=0.00810616 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=360 a=2.52311 b=-5.37151 c=13.2788 mx=278.504 my=607.706 op=0.00824355 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=361 a=2.85973 b=-5.77887 c=13.3465 mx=278.304 my=608.08 op=0.00911397 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=362 a=0.463227 b=-0.350408 c=1.05228 mx=277.713 my=609.629 op=0.0374466 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=363 a=0.644189 b=-0.785363 c=2.09217 mx=277.951 my=609.142 op=0.0187352 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=364 a=0.386039 b=-0.167073 c=0.624435 mx=277.609 my=609.931 op=0.056435 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=365 a=53.404 b=33.7339 c=21.7295 mx=273.751 my=614.623 op=0.0139332 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=366 a=0.34878 b=-0.0939168 c=0.480821 mx=277.557 my=610.031 op=0.079097 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=367 a=4.00198 b=-8.82922 c=21.3577 mx=278.781 my=607.248 op=0.00832856 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=368 a=2.79795 b=-5.77341 c=13.644 mx=279.113 my=606.612 op=0.0389915 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=369 a=0.348953 b=-0.0904998 c=0.467312 mx=277.571 my=610.044 op=0.0751718 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=370 a=1.34317 b=-2.12093 c=4.61229 mx=278.525 my=608.169 op=0.0195966 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=371 a=3.40636 b=-7.12645 c=16.6491 mx=278.916 my=607.085 op=0.0247562 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=372 a=1.9936 b=-4.06204 c=10.0428 mx=279.123 my=606.512 op=0.0530824 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=373 a=0.302956 b=0.0439685 c=0.954368 mx=279.389 my=578.113 op=0.32135 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=374 a=1.22848 b=-2.06584 c=4.89656 mx=278.618 my=607.557 op=0.0368137 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=375 a=0.563235 b=-0.662059 c=1.96519 mx=277.861 my=609.298 op=0.0296595 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=376 a=0.320797 b=-0.185881 c=2.24 mx=289.96 my=588.365 op=0.0755493 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=377 a=0.324993 b=-0.105908 c=0.764109 mx=286.731 my=584.943 op=0.0736496 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=378 a=1.38045 b=-2.54893 c=6.3133 mx=278.589 my=607.718 op=0.0243772 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=379 a=3.35971 b=-12.0004 c=47.4866 mx=288.463 my=591.504 op=0.0511649 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=380 a=0.817917 b=-1.22089 c=3.17803 mx=278.41 my=608.173 op=0.0627583 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=381 a=0.582792 b=-0.322176 c=0.667068 mx=280.682 my=608.845 op=0.0470012 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=382 a=0.901416 b=-1.42517 c=3.6772 mx=278.553 my=607.894 op=0.0527635 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=383 a=0.302338 b=0.0011551 c=0.300694 mx=284.46 my=607.728 op=0.0185663 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=384 a=0.441222 b=0.493792 c=2.02677 mx=284.828 my=607.103 op=0.0136033 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=385 a=9.11456 b=-19.0243 c=41.3598 mx=283.018 my=598.09 op=0.0439793 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=386 a=0.48469 b=0.774199 c=3.54545 mx=284.667 my=606.799 op=0.0129822 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=387 a=0.505149 b=0.775352 c=3.23049 mx=284.67 my=606.804 op=0.0111105 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=388 a=7.67781 b=-17.0926 c=39.9055 mx=282.601 my=597.51 op=0.0863271 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=389 a=0.593533 b=-0.593483 c=1.49994 mx=284.16 my=599.425 op=0.0236317 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=390 a=0.739784 b=1.40824 c=4.80961 mx=284.739 my=606.846 op=0.0166599 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=391 a=0.375873 b=0.271103 c=1.26871 mx=284.742 my=607.078 op=0.97691 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=392 a=0.313718 b=-0.00860784 c=0.305473 mx=284.673 my=606.339 op=0.224404 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=393 a=10.3385 b=-24.3497 c=59.3675 mx=282.455 my=598.584 op=0.0410388 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=394 a=9.07275 b=-18.959 c=41.2725 mx=283.314 my=597.375 op=0.0752139 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=395 a=6.48642 b=-14.7876 c=35.6473 mx=282.877 my=597.643 op=0.303538 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=396 a=10.0798 b=-23.2733 c=55.6844 mx=282.883 my=597.681 op=0.0463553 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=397 a=10.5675 b=-24.5259 c=58.885 mx=282.793 my=597.847 op=0.0427893 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=398 a=10.6803 b=-25.0878 c=60.9337 mx=282.903 my=597.824 op=0.0304297 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=399 a=11.3593 b=-26.016 c=61.5003 mx=282.904 my=597.686 op=0.0457226 tx=256 ty=576
+[CULL_SPLIT] candidates=3213120 masks=12.29MB exec=4874.9 ms masks_addr=0x6498100 end=0x70e1580 base_addr=0x66213c0
+[BLEND_SPLIT] upload=1.0 (attrs=0.0MB ids=0.0MB resident) exec=142.7 readback=1.4 total=145.1 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=5035.5 (host attr/id build=0, upload=0) total=5035.5 ms
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=8.44 up=0.31 kernel=7.15 d2h=10.65 compact=0.00 publish=1.29 total=45.25ms
+0:0-0:NC: CULLCOEF t=584 local=0 a=21365.5 b=-3966.93 c=4066.68 mx=54.6123 my=799.237 op=0.0293077 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=1 a=18558.4 b=-385.923 c=6333.02 mx=-72.014 my=440.458 op=0.042175 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=2 a=10288.5 b=-1832.58 c=16484.8 mx=482.983 my=286.387 op=0.0173527 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=3 a=8178.16 b=-2075.66 c=9273.11 mx=226.549 my=316.729 op=0.0253501 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=4 a=25.2701 b=85.5626 c=293.492 mx=301.241 my=636.776 op=0.0591639 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=5 a=24.5386 b=81.7365 c=275.93 mx=301.613 my=635.973 op=0.0983127 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=6 a=15.9831 b=86.1496 c=473.553 mx=299.983 my=637.618 op=0.0130878 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=7 a=42.5393 b=45.4512 c=49.2075 mx=306.989 my=629.81 op=0.0144245 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=8 a=56.9884 b=55.3445 c=54.3325 mx=306.859 my=629.704 op=0.0122921 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=9 a=53.4215 b=57.1961 c=61.8834 mx=306.25 my=629.084 op=0.0106533 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=10 a=1931.5 b=712.928 c=298.876 mx=404.104 my=639.291 op=0.0221074 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=11 a=7.67639 b=-14.3226 c=28.11 mx=296.216 my=582.77 op=0.0205435 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=12 a=0.55453 b=-2.00932 c=16.3633 mx=267.324 my=598.207 op=0.0146268 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=13 a=2.03402 b=-0.885966 c=0.797108 mx=290.909 my=584.127 op=0.0619252 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=14 a=0.566276 b=-0.879997 c=7.20038 mx=279.297 my=588.918 op=0.0428084 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=15 a=0.483648 b=0.230833 c=1.26986 mx=284.769 my=604.208 op=0.138379 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=16 a=2.19726 b=-1.67171 c=1.77414 mx=286.067 my=601.985 op=0.0718955 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=17 a=1.91221 b=-3.71786 c=10.1748 mx=292.001 my=576.868 op=0.0633819 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=18 a=0.458813 b=-0.688698 c=3.29195 mx=287.138 my=604.312 op=0.0499792 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=19 a=0.340116 b=0.0989585 c=0.686052 mx=282.246 my=594.042 op=0.113604 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=20 a=0.415366 b=-0.475726 c=2.30459 mx=281.357 my=611.448 op=0.0465482 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=21 a=0.322265 b=0.026034 c=0.364928 mx=282.94 my=609.483 op=0.00394502 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=22 a=0.463288 b=-0.732104 c=3.81777 mx=267.639 my=605.203 op=0.0792981 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=23 a=1.80726 b=1.03475 c=1.43284 mx=288.302 my=602.41 op=0.0536702 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=24 a=3.19582 b=12.8605 c=57.8529 mx=284.893 my=588.103 op=0.0627862 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=25 a=7.979 b=-8.57498 c=9.87656 mx=287.484 my=570.433 op=0.0305913 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=26 a=26.2048 b=-50.9807 c=100.63 mx=288.113 my=548.588 op=0.0117329 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=27 a=2.11994 b=-2.63241 c=4.18621 mx=290.427 my=578.225 op=0.0807753 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=28 a=22.6697 b=-45.137 c=91.3763 mx=286.193 my=551.229 op=0.058207 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=29 a=25.8333 b=-52.7137 c=109.128 mx=286.803 my=551.151 op=0.0102497 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=30 a=0.879735 b=-0.597022 c=0.918831 mx=289.757 my=584.854 op=0.164527 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=31 a=25.7066 b=-49.6571 c=97.3549 mx=287.037 my=550.781 op=0.0106453 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=0 m=0 m2=11.8203
+0:0-0:BR: M2DMP t=584 local=0 m=1 m2=11.8192
+0:0-0:NC: CULLCOEF t=584 local=32 a=32.7676 b=-67.7374 c=141.621 mx=286.787 my=551.017 op=0.0120022 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=0 m=2 m2=11.8199
+0:0-0:BR: M2DMP t=584 local=0 m=3 m2=11.8268
+0:0-0:BR: M2DMP t=584 local=1 m=0 m2=9.00186
+0:0-0:NC: CULLCOEF t=584 local=33 a=34.2519 b=-71.3255 c=150.139 mx=286.731 my=551.07 op=0.0130902 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=1 m=1 m2=9.2956
+0:0-0:BR: M2DMP t=584 local=1 m=2 m2=9.59624
+0:0-0:BR: M2DMP t=584 local=1 m=3 m2=9.90379
+0:0-0:NC: CULLCOEF t=584 local=34 a=22.4219 b=-47.897 c=104.004 mx=286.823 my=551.131 op=0.00804689 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=35 a=28.7867 b=-60.0738 c=126.986 mx=286.736 my=551.187 op=0.0117437 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=2 m=0 m2=8.54768
+0:0-0:BR: M2DMP t=584 local=2 m=1 m2=8.25768
+0:0-0:BR: M2DMP t=584 local=2 m=2 m2=7.98037
+0:0-0:NC: CULLCOEF t=584 local=36 a=37.1456 b=-67.1264 c=122.593 mx=286.797 my=551.101 op=0.00892001 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=2 m=3 m2=7.71575
+0:0-0:BR: M2DMP t=584 local=3 m=0 m2=8.24132
+0:0-0:BR: M2DMP t=584 local=3 m=1 m2=8.43108
+0:0-0:NC: CULLCOEF t=584 local=37 a=30.777 b=-62.5802 c=128.799 mx=286.804 my=551.118 op=0.0100516 tx=256 ty=576
+0:0-0:BR: M2DMP t=584 local=3 m=2 m2=8.63744
+0:0-0:BR: M2DMP t=584 local=3 m=3 m2=8.86039
+0:0-0:NC: CULLCOEF t=584 local=38 a=26.958 b=-52.9756 c=105.574 mx=286.909 my=551.027 op=0.00988765 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=39 a=23.4711 b=-46.7186 c=94.496 mx=286.799 my=551.133 op=0.0102171 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=40 a=33.7865 b=-69.7555 c=145.607 mx=286.772 my=551.165 op=0.0114616 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=41 a=30.0974 b=-61.4559 c=127.05 mx=286.738 my=551.208 op=0.0110363 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=42 a=35.8933 b=-72.8285 c=149.317 mx=286.755 my=551.2 op=0.0116199 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=43 a=31.561 b=-63.4714 c=129.17 mx=286.858 my=551.068 op=0.0100983 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=44 a=32.2897 b=-66.1126 c=136.934 mx=286.789 my=551.157 op=0.0107201 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=45 a=31.9269 b=-67.2297 c=143.211 mx=286.714 my=551.23 op=0.012295 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=46 a=32.2575 b=-65.5576 c=134.785 mx=286.746 my=551.204 op=0.0104337 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=47 a=27.0146 b=-53.0238 c=105.543 mx=286.909 my=550.979 op=0.00850594 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=48 a=22.1314 b=-40.53 c=75.5438 mx=286.864 my=551.097 op=0.0104279 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=49 a=30.7024 b=-55.2886 c=100.846 mx=286.848 my=551.056 op=0.00773154 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=50 a=30.8596 b=-62.159 c=126.733 mx=286.779 my=551.17 op=0.010507 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=51 a=30.3382 b=-61.4863 c=126.159 mx=286.76 my=551.186 op=0.0101701 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=52 a=25.9457 b=-51.9703 c=105.617 mx=286.708 my=551.253 op=0.0101086 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=53 a=30.6447 b=-62.6124 c=129.493 mx=286.693 my=551.278 op=0.00948368 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=54 a=32.4343 b=-63.6055 c=126.199 mx=286.901 my=551.011 op=0.00795834 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=55 a=31.2973 b=-60.2046 c=117.233 mx=286.965 my=550.912 op=0.00885666 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=56 a=26.8352 b=-56.3556 c=119.989 mx=286.717 my=551.217 op=0.0103857 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=57 a=27.1826 b=-52.7264 c=103.715 mx=286.934 my=550.968 op=0.00897773 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=58 a=33.8745 b=-67.7481 c=137.005 mx=286.754 my=551.28 op=0.00933785 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=59 a=34.6283 b=-69.5525 c=141.22 mx=286.812 my=551.21 op=0.0089698 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=60 a=3.77548 b=-8.81012 c=22.8015 mx=279.36 my=566.446 op=0.0612462 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=61 a=7.73542 b=-22.2119 c=67.5079 mx=278.675 my=587.859 op=0.0827468 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=62 a=26.3976 b=-54.5895 c=114.487 mx=286.422 my=551.771 op=0.011481 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=63 a=0.34632 b=0.0972371 c=0.506327 mx=287.747 my=599.204 op=0.0938796 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=64 a=0.666311 b=0.475573 c=1.53153 mx=284.784 my=604.553 op=0.0646256 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=65 a=44.6878 b=-8.89438 c=6.65737 mx=298.678 my=612.299 op=0.142646 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=66 a=0.661181 b=-0.909099 c=4.19631 mx=276.036 my=608.022 op=0.0274035 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=67 a=0.562392 b=0.361085 c=0.810195 mx=289.346 my=605.924 op=0.104742 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=68 a=0.575086 b=-0.987761 c=3.84752 mx=276.941 my=613.015 op=0.0472553 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=69 a=0.734417 b=0.477435 c=0.827925 mx=283.86 my=610.887 op=0.060843 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=70 a=1.51818 b=-6.61841 c=36.2591 mx=271.326 my=594.604 op=0.0179071 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=71 a=7.73946 b=-11.9808 c=19.5955 mx=296.924 my=588.662 op=0.0310573 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=72 a=19.3374 b=-42.162 c=93.6755 mx=286.801 my=549.317 op=0.0290883 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=73 a=1.40382 b=-4.00105 c=15.1683 mx=276.321 my=584.208 op=0.0376489 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=74 a=0.348986 b=-0.248104 c=1.55666 mx=284.902 my=611.308 op=0.0735053 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=75 a=0.441327 b=-0.201425 c=0.864867 mx=285.583 my=608.893 op=0.0787941 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=76 a=0.572442 b=-1.12255 c=5.07757 mx=267.761 my=598.793 op=0.0624688 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=77 a=8.87037 b=-22.0212 c=56.8823 mx=283.601 my=566.788 op=0.0191012 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=78 a=1.43188 b=0.137579 c=0.7581 mx=290.338 my=602.9 op=0.058837 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=79 a=0.452805 b=0.131933 c=0.414964 mx=279.897 my=599.509 op=0.0284206 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=80 a=4.01747 b=1.55373 c=0.949529 mx=288.978 my=610.42 op=0.0166199 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=81 a=3.54247 b=1.38148 c=0.888777 mx=288.849 my=610.364 op=0.0190138 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=82 a=0.396607 b=0.258887 c=0.994455 mx=283.494 my=609.814 op=0.0448433 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=83 a=0.433849 b=-0.207516 c=0.623584 mx=274.272 my=610.283 op=0.017419 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=84 a=3.93244 b=1.57911 c=0.986542 mx=288.822 my=610.37 op=0.0177172 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=85 a=4.12073 b=1.60285 c=0.973004 mx=288.803 my=610.357 op=0.0162818 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=86 a=0.478472 b=0.123152 c=0.471493 mx=272.674 my=601.145 op=0.0205949 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=87 a=0.302574 b=0.016154 c=0.404072 mx=282.283 my=599.644 op=0.032448 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=88 a=0.316528 b=0.00487606 c=0.30688 mx=276.626 my=604.961 op=0.0214026 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=89 a=0.463818 b=0.114541 c=0.550239 mx=281.736 my=603.017 op=0.117376 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=90 a=4.93957 b=-0.691902 c=0.418083 mx=292.546 my=600.654 op=0.0493317 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=91 a=16.1103 b=-15.2441 c=14.9983 mx=279.284 my=565.875 op=0.0175734 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=92 a=4.43062 b=1.57698 c=0.902225 mx=287.785 my=608.076 op=0.137291 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=93 a=11.4901 b=-20.6161 c=38.4339 mx=285.943 my=571.792 op=0.0583448 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=94 a=14.3816 b=-31.5553 c=71.0117 mx=280.718 my=564.511 op=0.0136707 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=95 a=11.0674 b=-26.5113 c=65.5757 mx=279.811 my=565.556 op=0.0535305 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=96 a=25.2663 b=-55.8623 c=125.292 mx=280.201 my=565.466 op=0.0100334 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=97 a=21.5262 b=-47.2474 c=105.468 mx=280.192 my=565.506 op=0.0110082 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=98 a=23.457 b=-51.03 c=112.753 mx=280.161 my=565.6 op=0.0110459 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=99 a=20.8044 b=-45.7336 c=102.306 mx=280.218 my=565.535 op=0.0113449 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=100 a=24.0135 b=-52.6311 c=117.112 mx=280.122 my=565.643 op=0.0111272 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=101 a=25.4388 b=-55.8214 c=124.253 mx=280.152 my=565.614 op=0.00976998 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=102 a=23.6251 b=-52.2565 c=117.373 mx=280.141 my=565.622 op=0.0108248 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=103 a=21.1723 b=-47.045 c=106.337 mx=280.121 my=565.639 op=0.0117013 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=104 a=28.3625 b=-62.5212 c=139.593 mx=280.151 my=565.606 op=0.00946777 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=105 a=9.10783 b=-19.6971 c=44.3488 mx=280.083 my=565.728 op=0.675955 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=106 a=14.7581 b=-32.5191 c=73.4417 mx=280.227 my=565.551 op=0.0163838 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=107 a=43.754 b=-95.5523 c=210.413 mx=280.084 my=565.738 op=0.0103853 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=108 a=19.2741 b=-41.5559 c=91.3132 mx=280.274 my=565.545 op=0.00764583 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=109 a=34.7177 b=-75.1403 c=164.345 mx=280.055 my=565.66 op=0.0103986 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=110 a=46.1311 b=-99.7034 c=217.2 mx=280.153 my=565.691 op=0.00916955 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=111 a=39.5277 b=-86.7615 c=192.194 mx=280.119 my=565.659 op=0.00836849 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=112 a=34.9066 b=-77.8384 c=175.377 mx=279.999 my=565.766 op=0.0121876 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=113 a=39.6561 b=-86.2283 c=189.224 mx=280.193 my=565.634 op=0.00796794 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=114 a=45.7635 b=-99.479 c=217.97 mx=280.132 my=565.687 op=0.00825016 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=115 a=34.7177 b=-77.6332 c=175.411 mx=280.026 my=565.759 op=0.0101265 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=116 a=35.4023 b=-78.0764 c=173.962 mx=280.09 my=565.705 op=0.00853335 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=117 a=35.4908 b=-76.8994 c=168.341 mx=280.119 my=565.733 op=0.00894278 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=118 a=32.1604 b=-68.6245 c=148.111 mx=280.174 my=565.775 op=0.0105003 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=119 a=25.8167 b=-57.886 c=131.617 mx=280.099 my=565.741 op=0.00959897 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=120 a=8.3885 b=-18.2771 c=41.5997 mx=280.073 my=565.842 op=0.0084472 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=121 a=24.9011 b=-55.1911 c=124.118 mx=279.982 my=565.916 op=0.00986556 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=122 a=15.0038 b=-31.3178 c=67.0041 mx=281 my=564.452 op=0.289792 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=123 a=1.94877 b=1.30515 c=1.33496 mx=285.232 my=611.377 op=0.0094795 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=124 a=34.3304 b=-74.8895 c=165.107 mx=280.249 my=565.616 op=0.00911021 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=125 a=3.88289 b=-1.49191 c=1.05286 mx=272.578 my=606.572 op=0.0233099 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=126 a=0.627333 b=-1.02547 c=21.9674 mx=287.082 my=602.42 op=0.105174 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=127 a=36.1253 b=-78.4049 c=171.892 mx=279.818 my=566.18 op=0.00957511 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=128 a=17.3598 b=-35.7473 c=75.2053 mx=280.315 my=565.64 op=0.0170085 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=129 a=0.57212 b=-0.0822152 c=0.888066 mx=284.258 my=609.035 op=0.166776 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=130 a=3.19768 b=-7.33569 c=18.8709 mx=273.282 my=578.852 op=0.0109554 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=131 a=0.308471 b=0.0659848 c=0.815548 mx=285.224 my=609.67 op=0.148581 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=132 a=0.593318 b=0.209187 c=0.45726 mx=276.537 my=598.527 op=0.0449501 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=133 a=0.392592 b=-0.0602696 c=0.342875 mx=268.168 my=583.583 op=0.0727882 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=134 a=0.858712 b=-1.14031 c=2.62751 mx=274.292 my=576.153 op=0.0883155 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=135 a=19.9651 b=-10.9035 c=6.34626 mx=287.225 my=609.089 op=0.0149421 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=136 a=2.24518 b=0.877205 c=0.695901 mx=287.908 my=610.084 op=0.0299065 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=137 a=0.332867 b=-0.95475 c=28.8584 mx=275.492 my=597.721 op=0.0175336 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=138 a=0.420311 b=0.177988 c=0.580309 mx=284.559 my=600.241 op=0.1631 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=139 a=4.4434 b=-6.18322 c=11.6638 mx=278.563 my=613.448 op=0.0525864 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=140 a=0.301193 b=-0.0309542 c=1.10854 mx=284.436 my=606.166 op=0.144168 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=141 a=0.369218 b=0.303164 c=1.62801 mx=285.863 my=611.683 op=0.0276999 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=142 a=0.654842 b=0.0827867 c=0.320339 mx=286.528 my=609.426 op=0.108562 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=143 a=0.305828 b=0.1973 c=7.08945 mx=288.788 my=585.052 op=0.0480861 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=144 a=0.309427 b=0.000733302 c=0.526253 mx=282.688 my=610.579 op=0.113105 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=145 a=0.410359 b=0.584355 c=3.39451 mx=287.032 my=609.133 op=0.0159892 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=146 a=13.4067 b=-12.7136 c=12.7204 mx=288.055 my=585.284 op=0.0414156 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=147 a=0.771239 b=-0.230192 c=0.65473 mx=284.425 my=608.529 op=0.0896135 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=148 a=1.62181 b=0.606429 c=0.578636 mx=291.229 my=597.939 op=0.0997453 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=149 a=6.70487 b=-13.6828 c=46.8317 mx=294.692 my=579.731 op=0.0204459 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=150 a=0.558517 b=0.401878 c=0.931522 mx=285.332 my=610.901 op=0.103536 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=151 a=0.309986 b=0.0365274 c=0.436687 mx=283.379 my=608.098 op=0.117096 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=152 a=0.698771 b=-1.28853 c=4.46357 mx=277.14 my=579.065 op=0.0691273 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=153 a=1.33603 b=-1.05611 c=1.41249 mx=286.908 my=586.473 op=0.0528159 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=154 a=0.382085 b=-0.151208 c=0.59279 mx=282.518 my=603.279 op=0.163601 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=155 a=0.715182 b=-0.33521 c=0.659273 mx=289.988 my=597.738 op=0.0505632 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=156 a=4.40994 b=4.18946 c=4.57198 mx=284.179 my=610.161 op=0.013551 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=157 a=0.494498 b=0.182205 c=0.473551 mx=284.066 my=608.31 op=0.0218791 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=158 a=0.470459 b=0.0556793 c=1.80368 mx=284.687 my=581.035 op=0.0527856 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=159 a=13.6754 b=-30.4259 c=69.5117 mx=279.448 my=564.878 op=0.0141949 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=160 a=1.88316 b=-3.83827 c=9.60563 mx=277.703 my=575.384 op=0.0310971 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=161 a=0.721396 b=-0.347816 c=0.749719 mx=290.43 my=608.076 op=0.0482819 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=162 a=0.840408 b=-1.06635 c=2.41932 mx=281.01 my=600.635 op=0.0740886 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=163 a=1.19555 b=-0.570802 c=0.66411 mx=284.526 my=609.094 op=0.190332 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=164 a=0.608721 b=-0.112372 c=0.344409 mx=284.478 my=608.795 op=0.00788558 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=165 a=0.441281 b=0.174117 c=1.36624 mx=284.929 my=602.119 op=0.124064 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=166 a=4.64936 b=-9.53906 c=21.2217 mx=279.265 my=564.933 op=0.0148191 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=167 a=0.480974 b=-0.120809 c=1.07312 mx=282.757 my=578.227 op=0.100384 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=168 a=0.55332 b=0.443938 c=1.29211 mx=284.712 my=609.918 op=0.340977 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=169 a=1.72765 b=-3.54474 c=9.10279 mx=276.691 my=595.465 op=0.0771298 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=170 a=1.00848 b=-0.05031 c=0.361354 mx=267.175 my=606.208 op=0.0841132 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=171 a=5.82836 b=-11.3106 c=23.4405 mx=268.23 my=589.132 op=0.00850227 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=172 a=2.83131 b=-9.07046 c=32.8023 mx=272.704 my=574.568 op=0.0301353 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=173 a=0.315149 b=-0.0155556 c=0.334718 mx=285.253 my=608.389 op=0.0304756 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=174 a=0.304783 b=0.0425614 c=0.690066 mx=285.904 my=610.814 op=0.190035 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=175 a=0.454183 b=0.14575 c=0.441308 mx=286.645 my=607.903 op=0.0889228 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=176 a=21.2618 b=-35.5369 c=60.5497 mx=272.571 my=592.189 op=0.0338424 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=177 a=36.245 b=47.3931 c=63.0945 mx=270.567 my=627.693 op=0.010898 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=178 a=0.663943 b=-0.897785 c=2.51468 mx=276.84 my=577.429 op=0.0160985 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=179 a=0.539559 b=0.271131 c=0.606955 mx=287.009 my=609.466 op=0.23928 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=180 a=0.474376 b=-0.0726605 c=0.330425 mx=280.208 my=576.795 op=0.0805493 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=181 a=2.17141 b=-4.99667 c=13.6411 mx=276.006 my=582.4 op=0.00854826 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=182 a=0.331363 b=-0.261683 c=2.48344 mx=276.466 my=576.592 op=0.013571 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=183 a=0.354903 b=0.015829 c=0.305143 mx=285.73 my=608.27 op=0.134911 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=184 a=0.52977 b=-0.981067 c=5.38771 mx=275.698 my=607.037 op=0.0218981 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=185 a=0.485726 b=0.0496498 c=0.313682 mx=279.92 my=609.288 op=0.102756 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=186 a=1.58568 b=-1.36689 c=1.8104 mx=285.261 my=608.264 op=0.0414342 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=187 a=0.345229 b=-0.0577565 c=0.374689 mx=284.456 my=608.178 op=0.233934 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=188 a=0.822089 b=-0.564133 c=0.909579 mx=275.8 my=576.275 op=0.029252 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=189 a=0.80659 b=0.0477644 c=0.312292 mx=287.727 my=608.181 op=0.0907471 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=190 a=0.300735 b=-0.000116107 c=0.300842 mx=285.415 my=607.688 op=0.0274908 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=191 a=1.76967 b=-2.82131 c=5.71603 mx=276.724 my=577.098 op=0.00650609 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=192 a=0.306801 b=-0.0322771 c=0.484073 mx=285.335 my=610.157 op=0.187607 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=193 a=0.302608 b=0.00316932 c=0.306735 mx=285.932 my=609.088 op=0.177239 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=194 a=4.73314 b=-9.65753 c=21.3388 mx=275.052 my=575.913 op=0.294351 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=195 a=0.331896 b=-0.0212205 c=0.314941 mx=285.431 my=607.813 op=0.032108 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=196 a=6.5675 b=-13.9503 c=31.351 mx=275.105 my=575.867 op=0.0426879 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=197 a=1.41717 b=-0.105176 c=6.51619 mx=290.009 my=579.517 op=0.0589681 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=198 a=8.00708 b=-17.5508 c=40.2671 mx=275.877 my=575.279 op=0.0100164 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=199 a=5.68168 b=-11.4664 c=24.7308 mx=275.524 my=575.739 op=0.024126 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=200 a=5.49035 b=3.77202 c=3.07207 mx=270.768 my=613.661 op=0.0767934 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=201 a=6.96051 b=-14.9429 c=33.8244 mx=275.226 my=575.913 op=0.0205618 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=202 a=6.17916 b=-12.739 c=27.903 mx=275.672 my=575.485 op=0.0071108 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=203 a=0.300598 b=0.00408721 c=0.339783 mx=286.021 my=609.01 op=0.0585346 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=204 a=5.6783 b=-12.2085 c=28.0127 mx=275.186 my=576.002 op=0.0247862 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=205 a=0.360782 b=0.377399 c=2.77997 mx=284.343 my=611.558 op=0.066099 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=206 a=0.849672 b=2.08084 c=8.17747 mx=285.319 my=609.453 op=0.0241034 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=207 a=1.66796 b=-3.68973 c=10.2522 mx=275.668 my=575.71 op=0.01508 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=208 a=8.83015 b=-18.7473 c=41.5024 mx=275.691 my=575.573 op=0.0083684 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=209 a=8.74455 b=-18.5231 c=40.9306 mx=275.728 my=575.517 op=0.0105413 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=210 a=6.40956 b=-13.769 c=31.331 mx=275.182 my=576.006 op=0.0176059 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=211 a=9.60529 b=-19.0822 c=39.4315 mx=275.508 my=575.793 op=0.00734207 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=212 a=5.95125 b=-11.5233 c=23.797 mx=275.478 my=575.79 op=0.00797918 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=213 a=0.326044 b=-0.0599033 c=0.482013 mx=280.888 my=606.167 op=0.212785 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=214 a=0.423794 b=0.978058 c=8.04918 mx=260.783 my=586.203 op=0.00904784 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=215 a=11.7652 b=-24.2215 c=51.4704 mx=275.441 my=575.988 op=0.00676576 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=216 a=6.92056 b=-14.4616 c=31.8892 mx=275.549 my=575.904 op=0.00843767 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=217 a=15.688 b=-31.4773 c=64.6889 mx=275.387 my=576.035 op=0.00773031 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=218 a=3.46515 b=-7.7005 c=19.0346 mx=275.444 my=576.399 op=0.0240804 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=219 a=7.98629 b=-16.217 c=34.5154 mx=275.445 my=575.96 op=0.0074453 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=220 a=12.1756 b=-25.148 c=53.554 mx=275.415 my=576.047 op=0.00703205 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=221 a=7.91345 b=-15.7149 c=32.737 mx=275.316 my=575.973 op=0.0149323 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=222 a=13.4254 b=-27.6221 c=58.43 mx=275.385 my=576.071 op=0.00652255 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=223 a=8.241 b=-17.1019 c=37.1308 mx=275.484 my=575.948 op=0.00830045 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=224 a=11.0336 b=-22.525 c=47.5698 mx=275.374 my=576.053 op=0.00679006 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=225 a=14.1115 b=-28.9981 c=61.1834 mx=275.452 my=576.004 op=0.00727465 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=226 a=7.47536 b=-15.165 c=32.3508 mx=275.456 my=575.977 op=0.00756331 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=227 a=8.48803 b=-17.7797 c=38.9073 mx=275.518 my=575.924 op=0.00804915 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=228 a=9.129 b=-19.0793 c=41.53 mx=275.534 my=575.928 op=0.00778416 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=229 a=5.68289 b=-11.0761 c=23.0908 mx=275.438 my=575.962 op=0.00856257 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=230 a=0.456805 b=-0.00671094 c=0.300394 mx=285.319 my=608.73 op=0.0135356 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=231 a=9.33103 b=-19.4006 c=41.9768 mx=275.347 my=576.179 op=0.00704204 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=232 a=5.70333 b=-11.3243 c=24.0336 mx=275.456 my=575.993 op=0.00853312 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=233 a=9.96156 b=-20.4577 c=43.6179 mx=275.443 my=576.137 op=0.00835197 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=234 a=10.0377 b=-21.1025 c=46.0314 mx=275.434 my=576.078 op=0.00748604 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=235 a=9.14939 b=-19.0547 c=41.3289 mx=275.401 my=576.176 op=0.00818962 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=236 a=14.1109 b=-28.4648 c=58.981 mx=271.36 my=591.394 op=0.025324 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=237 a=9.10358 b=-18.3692 c=38.6286 mx=275.406 my=576.079 op=0.00819985 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=238 a=8.47551 b=-17.4006 c=37.3353 mx=275.426 my=576.195 op=0.00988441 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=239 a=0.412004 b=-0.283646 c=1.0322 mx=283.635 my=609.778 op=0.213779 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=240 a=8.10192 b=-16.1041 c=33.5408 mx=275.357 my=575.975 op=0.0135414 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=241 a=5.84881 b=-12.5494 c=28.6821 mx=275.393 my=576.356 op=0.025181 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=242 a=0.374911 b=-0.0432675 c=0.327622 mx=285.692 my=607.545 op=0.0610771 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=243 a=8.98621 b=-18.2964 c=38.8392 mx=275.427 my=576.15 op=0.00798883 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=244 a=5.70652 b=-11.8205 c=26.1435 mx=275.164 my=576.247 op=0.0147821 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=245 a=0.329184 b=0.0270138 c=0.50813 mx=284.893 my=607.982 op=0.911793 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=246 a=0.305502 b=-0.00984905 c=0.333676 mx=285.059 my=608.377 op=0.0130148 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=247 a=0.392475 b=0.222626 c=0.883005 mx=284.634 my=607.807 op=0.0116885 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=248 a=0.392744 b=0.224802 c=0.871969 mx=284.646 my=607.806 op=0.0126686 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=249 a=0.416126 b=0.223509 c=0.876496 mx=284.674 my=607.846 op=0.0110328 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=250 a=0.300746 b=0.00322865 c=0.34191 mx=284.241 my=609.012 op=0.0509197 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=251 a=0.520542 b=-0.386519 c=0.977529 mx=284.45 my=608.622 op=0.0404727 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=252 a=0.353866 b=0.212068 c=1.24451 mx=284.729 my=607.571 op=0.0172103 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=253 a=0.300305 b=0.000862093 c=0.327194 mx=284.203 my=609.019 op=0.0756289 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=254 a=0.302197 b=0.0106789 c=0.358923 mx=286.161 my=607.334 op=0.0651154 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=255 a=1.07984 b=-1.85707 c=4.72237 mx=283.849 my=599.349 op=0.0350836 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=256 a=287.021 b=110.383 c=46.3882 mx=281.067 my=624.296 op=0.1058 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=257 a=0.304083 b=-0.0146815 c=0.353155 mx=284.711 my=607.016 op=0.170233 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=258 a=0.318964 b=-0.0560471 c=0.46704 mx=285.052 my=608.169 op=0.00879902 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=259 a=0.505132 b=-0.86847 c=3.97779 mx=288.839 my=589.279 op=0.0325187 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=260 a=0.314201 b=-0.0134519 c=0.351035 mx=284.69 my=607.514 op=0.0511753 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=261 a=0.316111 b=-0.0473706 c=0.458556 mx=284.88 my=607.229 op=0.0551026 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=262 a=0.315375 b=0.0213712 c=0.353385 mx=288.729 my=606.126 op=0.00392284 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=263 a=1.4228 b=-5.03695 c=22.8991 mx=291.616 my=596.468 op=0.0228053 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=264 a=0.303298 b=0.0175092 c=0.430314 mx=284.458 my=607.421 op=0.0142871 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=265 a=1.39611 b=-2.0179 c=4.01486 mx=285.55 my=597.944 op=0.0103794 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=266 a=0.389205 b=9.07756e-05 c=0.300101 mx=286.956 my=607.416 op=0.0149276 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=267 a=0.320702 b=0.045458 c=0.430261 mx=284.481 my=607.434 op=0.0133996 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=268 a=0.311192 b=-0.00831403 c=0.487265 mx=284.85 my=607.152 op=0.0444636 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=269 a=0.364188 b=0.0794039 c=0.41856 mx=284.785 my=607.509 op=0.00395545 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=270 a=11.8423 b=-17.9485 c=28.2102 mx=288.301 my=563.699 op=0.036087 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=271 a=0.301077 b=-0.0130011 c=0.491633 mx=284.935 my=607.894 op=0.0257696 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=272 a=1.13211 b=-2.39511 c=7.19593 mx=286.966 my=592.628 op=0.0173949 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=273 a=0.535883 b=0.178687 c=0.436303 mx=284.754 my=607.518 op=0.011747 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=274 a=15.3913 b=10.515 c=7.63048 mx=270.655 my=614.789 op=0.0400036 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=275 a=0.535339 b=0.196839 c=0.465619 mx=284.802 my=607.505 op=0.00813823 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=276 a=31.8629 b=-70.2811 c=156.795 mx=274.649 my=579.204 op=0.297493 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=277 a=0.357743 b=0.0923211 c=0.449165 mx=282.391 my=607.331 op=0.159494 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=278 a=0.302142 b=0.0158317 c=0.419058 mx=284.86 my=608.004 op=0.179839 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=279 a=0.365805 b=-0.0504315 c=0.338942 mx=285.103 my=607.761 op=0.0244751 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=280 a=0.303334 b=0.0743179 c=1.98706 mx=274.839 my=611.654 op=0.163713 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=281 a=0.534169 b=0.214166 c=0.965117 mx=289.319 my=591.017 op=0.0917301 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=282 a=0.318491 b=0.0516013 c=0.552996 mx=284.718 my=607.133 op=0.0669685 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=283 a=0.349655 b=-0.109027 c=0.540599 mx=284.699 my=607.924 op=0.0400065 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=284 a=2.35711 b=-3.9503 c=7.88588 mx=274.905 my=574.998 op=0.00392805 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=285 a=0.30854 b=0.0388722 c=0.477308 mx=284.848 my=607.772 op=0.0386057 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=286 a=0.334662 b=-0.0887254 c=0.527579 mx=284.699 my=607.912 op=0.0460852 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=287 a=0.313383 b=-0.0108934 c=0.309114 mx=285.788 my=607.006 op=0.00972536 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=288 a=0.305297 b=0.0325463 c=0.503476 mx=284.864 my=607.809 op=0.0324615 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=289 a=0.352232 b=-0.116003 c=0.557885 mx=284.7 my=607.908 op=0.0330849 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=290 a=0.304832 b=-0.0288422 c=0.47398 mx=284.74 my=607.86 op=0.186689 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=291 a=0.304711 b=0.0288038 c=0.480476 mx=284.853 my=607.809 op=0.0393048 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=292 a=4.67663 b=3.74524 c=3.50552 mx=273.671 my=607.254 op=0.0196355 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=293 a=1.75567 b=-3.63438 c=9.374 mx=277.387 my=608.382 op=0.149419 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=294 a=0.312008 b=0.0543361 c=0.547083 mx=284.809 my=607.688 op=0.0383553 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=295 a=0.3101 b=0.0452213 c=0.506545 mx=284.848 my=607.806 op=0.0382831 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=296 a=0.335363 b=0.0485782 c=0.366755 mx=284.361 my=607.954 op=0.283057 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=297 a=0.316248 b=-0.130615 c=1.35574 mx=284.584 my=606.734 op=0.070412 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=298 a=0.329 b=0.097176 c=0.673478 mx=284.799 my=607.594 op=0.0250791 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=299 a=0.347034 b=0.106912 c=0.547432 mx=282.985 my=585.952 op=0.0447847 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=300 a=0.646155 b=-0.327615 c=0.61011 mx=286.309 my=608.133 op=0.0195215 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=301 a=1.6433 b=-2.56276 c=5.19061 mx=277.645 my=603.897 op=0.0321235 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=302 a=0.4755 b=-0.100678 c=0.845908 mx=281.459 my=609.285 op=0.0757681 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=303 a=0.346418 b=0.127022 c=0.648035 mx=287.03 my=604.644 op=0.058832 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=304 a=0.332624 b=-0.106764 c=0.682547 mx=287.639 my=609.135 op=0.0246913 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=305 a=0.328303 b=0.256832 c=2.66766 mx=286.556 my=596.975 op=0.244869 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=306 a=0.329037 b=0.0174661 c=0.313133 mx=284.901 my=607.636 op=0.0478953 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=307 a=0.398213 b=0.0886748 c=0.380077 mx=284.218 my=607.962 op=0.0453454 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=308 a=0.473371 b=0.429285 c=1.36332 mx=284.863 my=607.552 op=0.00917615 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=309 a=0.389671 b=-0.248249 c=0.987824 mx=279.13 my=609.238 op=0.0253906 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=310 a=0.3776 b=0.216935 c=0.906595 mx=284.818 my=607.53 op=0.0228181 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=311 a=0.324542 b=-0.248468 c=2.81738 mx=284.444 my=588.682 op=0.0135939 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=312 a=3.81984 b=-8.12825 c=19.0704 mx=278.266 my=607.334 op=0.0472133 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=313 a=0.329671 b=-0.0668103 c=0.450445 mx=277.437 my=610.148 op=0.107563 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=314 a=0.335115 b=0.048861 c=0.368048 mx=284.827 my=607.588 op=0.0611503 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=315 a=0.852268 b=-2.26383 c=12.6989 mx=280.041 my=584.233 op=0.0297295 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=316 a=1.42201 b=-3.52391 c=11.3682 mx=280.762 my=598.314 op=0.0412521 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=317 a=0.333838 b=0.107783 c=0.643733 mx=284.877 my=607.595 op=0.0321699 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=318 a=5.80013 b=-11.1128 c=22.753 mx=278.516 my=607.583 op=0.0113275 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=319 a=5.43109 b=-11.0157 c=23.9493 mx=278.578 my=607.709 op=0.0214303 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=320 a=2.98454 b=-4.75968 c=8.73893 mx=292.662 my=567.227 op=0.0209673 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=321 a=5.95853 b=-11.7657 c=24.7641 mx=278.677 my=608.045 op=0.0287329 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=322 a=2.01608 b=-3.56128 c=7.69059 mx=278.407 my=607.438 op=0.0168181 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=323 a=2.89871 b=-5.64116 c=12.5456 mx=278.421 my=607.547 op=0.347414 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=324 a=6.3164 b=-13.0972 c=28.8113 mx=278.795 my=608.465 op=0.245386 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=325 a=0.621651 b=-0.696292 c=1.80733 mx=277.901 my=609.032 op=0.0465034 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=326 a=1.27635 b=-2.05344 c=4.6188 mx=278.013 my=608.65 op=0.01604 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=327 a=0.69284 b=-0.806954 c=1.95774 mx=277.984 my=609.056 op=0.0350485 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=328 a=0.740761 b=-0.916555 c=2.20609 mx=277.99 my=609.022 op=0.0295657 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=329 a=2.2391 b=-4.08703 c=8.91428 mx=278.448 my=607.589 op=0.0127288 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=330 a=0.354828 b=-0.0929504 c=0.470026 mx=288.145 my=602.846 op=0.0795002 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=331 a=1.67605 b=-3.31616 c=8.2917 mx=278.394 my=607.905 op=0.0110777 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=332 a=1.86625 b=-3.56523 c=8.41587 mx=281.128 my=599.53 op=0.113276 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=333 a=1.90415 b=-3.80825 c=9.34083 mx=278.436 my=607.803 op=0.0103583 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=334 a=2.32675 b=-4.15816 c=8.8311 mx=278.631 my=607.15 op=0.0183818 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=335 a=1.59246 b=-3.09795 c=7.72567 mx=278.417 my=607.973 op=0.0103412 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=336 a=0.681579 b=-0.776251 c=1.87925 mx=277.968 my=609.05 op=0.0324854 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=337 a=1.52617 b=-1.87562 c=3.16909 mx=277.668 my=609.707 op=0.0234658 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=338 a=5.55289 b=-12.2699 c=28.9608 mx=278.316 my=607.892 op=0.0167944 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=339 a=2.19336 b=-3.89506 c=8.31303 mx=278.579 my=607.401 op=0.0158505 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=340 a=1.83967 b=-3.89397 c=10.1484 mx=278.423 my=607.855 op=0.00921727 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=341 a=0.307833 b=-0.148854 c=3.13312 mx=279.129 my=591.201 op=0.108894 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=342 a=0.380754 b=0.283391 c=1.29531 mx=284.852 my=607.488 op=0.0196222 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=343 a=1.46514 b=-2.84792 c=7.26113 mx=278.193 my=608.365 op=0.0100976 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=344 a=7.38553 b=-11.6174 c=19.3495 mx=280.33 my=578.631 op=0.0689018 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=345 a=1.77485 b=-3.45734 c=8.40475 mx=278.319 my=608.108 op=0.00976333 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=346 a=0.825434 b=-1.31536 c=3.59294 mx=278.106 my=608.638 op=0.0229157 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=347 a=0.30198 b=0.000294668 c=0.300883 mx=284.849 my=606.567 op=0.0518499 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=348 a=2.30929 b=-4.75768 c=11.5655 mx=278.549 my=607.621 op=0.00839749 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=349 a=2.03881 b=-4.345 c=11.1575 mx=278.432 my=607.875 op=0.00862728 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=350 a=2.35411 b=-4.87821 c=11.8851 mx=278.528 my=607.639 op=0.0085965 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=351 a=0.305748 b=0.0492447 c=0.732166 mx=285.428 my=607.825 op=0.975375 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=352 a=2.27699 b=-4.74988 c=11.712 mx=278.52 my=607.627 op=0.0083268 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=353 a=0.323989 b=-0.0211638 c=0.318721 mx=284.194 my=608.798 op=0.0130997 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=354 a=2.44366 b=-5.07365 c=12.3084 mx=278.598 my=607.524 op=0.00875236 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=355 a=3.04862 b=-6.13796 c=14.0067 mx=278.69 my=607.337 op=0.0102645 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=356 a=0.437933 b=-0.294394 c=0.928411 mx=277.672 my=609.688 op=0.0427462 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=357 a=2.60114 b=-5.33942 c=12.6893 mx=278.463 my=607.763 op=0.00939507 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=358 a=2.63272 b=-5.66879 c=14.0759 mx=278.614 my=607.625 op=0.00899633 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=359 a=2.53747 b=-5.35833 c=13.1322 mx=278.563 my=607.642 op=0.00810616 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=360 a=2.52311 b=-5.37151 c=13.2788 mx=278.504 my=607.706 op=0.00824355 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=361 a=2.85973 b=-5.77887 c=13.3465 mx=278.304 my=608.08 op=0.00911397 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=362 a=0.463227 b=-0.350408 c=1.05228 mx=277.713 my=609.629 op=0.0374466 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=363 a=0.644189 b=-0.785363 c=2.09217 mx=277.951 my=609.142 op=0.0187352 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=364 a=0.386039 b=-0.167073 c=0.624435 mx=277.609 my=609.931 op=0.056435 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=365 a=53.404 b=33.7339 c=21.7295 mx=273.751 my=614.623 op=0.0139332 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=366 a=0.34878 b=-0.0939168 c=0.480821 mx=277.557 my=610.031 op=0.079097 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=367 a=4.00198 b=-8.82922 c=21.3577 mx=278.781 my=607.248 op=0.00832856 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=368 a=2.79795 b=-5.77341 c=13.644 mx=279.113 my=606.612 op=0.0389915 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=369 a=0.348953 b=-0.0904998 c=0.467312 mx=277.571 my=610.044 op=0.0751718 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=370 a=1.34317 b=-2.12093 c=4.61229 mx=278.525 my=608.169 op=0.0195966 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=371 a=3.40636 b=-7.12645 c=16.6491 mx=278.916 my=607.085 op=0.0247562 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=372 a=1.9936 b=-4.06204 c=10.0428 mx=279.123 my=606.512 op=0.0530824 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=373 a=0.302956 b=0.0439685 c=0.954368 mx=279.389 my=578.113 op=0.32135 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=374 a=1.22848 b=-2.06584 c=4.89656 mx=278.618 my=607.557 op=0.0368137 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=375 a=0.563235 b=-0.662059 c=1.96519 mx=277.861 my=609.298 op=0.0296595 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=376 a=0.320797 b=-0.185881 c=2.24 mx=289.96 my=588.365 op=0.0755493 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=377 a=0.324993 b=-0.105908 c=0.764109 mx=286.731 my=584.943 op=0.0736496 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=378 a=1.38045 b=-2.54893 c=6.3133 mx=278.589 my=607.718 op=0.0243772 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=379 a=3.35971 b=-12.0004 c=47.4866 mx=288.463 my=591.504 op=0.0511649 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=380 a=0.817917 b=-1.22089 c=3.17803 mx=278.41 my=608.173 op=0.0627583 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=381 a=0.582792 b=-0.322176 c=0.667068 mx=280.682 my=608.845 op=0.0470012 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=382 a=0.901416 b=-1.42517 c=3.6772 mx=278.553 my=607.894 op=0.0527635 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=383 a=0.302338 b=0.0011551 c=0.300694 mx=284.46 my=607.728 op=0.0185663 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=384 a=0.441222 b=0.493792 c=2.02677 mx=284.828 my=607.103 op=0.0136033 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=385 a=9.11456 b=-19.0243 c=41.3598 mx=283.018 my=598.09 op=0.0439793 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=386 a=0.48469 b=0.774199 c=3.54545 mx=284.667 my=606.799 op=0.0129822 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=387 a=0.505149 b=0.775352 c=3.23049 mx=284.67 my=606.804 op=0.0111105 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=388 a=7.67781 b=-17.0926 c=39.9055 mx=282.601 my=597.51 op=0.0863271 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=389 a=0.593533 b=-0.593483 c=1.49994 mx=284.16 my=599.425 op=0.0236317 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=390 a=0.739784 b=1.40824 c=4.80961 mx=284.739 my=606.846 op=0.0166599 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=391 a=0.375873 b=0.271103 c=1.26871 mx=284.742 my=607.078 op=0.97691 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=392 a=0.313718 b=-0.00860784 c=0.305473 mx=284.673 my=606.339 op=0.224404 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=393 a=10.3385 b=-24.3497 c=59.3675 mx=282.455 my=598.584 op=0.0410388 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=394 a=9.07275 b=-18.959 c=41.2725 mx=283.314 my=597.375 op=0.0752139 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=395 a=6.48642 b=-14.7876 c=35.6473 mx=282.877 my=597.643 op=0.303538 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=396 a=10.0798 b=-23.2733 c=55.6844 mx=282.883 my=597.681 op=0.0463553 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=397 a=10.5675 b=-24.5259 c=58.885 mx=282.793 my=597.847 op=0.0427893 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=398 a=10.6803 b=-25.0878 c=60.9337 mx=282.903 my=597.824 op=0.0304297 tx=256 ty=576
+0:0-0:NC: CULLCOEF t=584 local=399 a=11.3593 b=-26.016 c=61.5003 mx=282.904 my=597.686 op=0.0457226 tx=256 ty=576
+[CULL_SPLIT] candidates=3213120 masks=12.29MB exec=91.4 ms masks_addr=0x6498100 end=0x70e1580 base_addr=0x66213c0
+[BLEND_SPLIT] upload=0.9 (attrs=0.0MB ids=0.0MB resident) exec=136.5 readback=1.5 total=138.8 ms
+[BLEND_ADDR] cull_masks=0x6498100 out=0x66257c0 end=0x6c257c0 tile_ids=0x66e57c0 xramp=0x66237c0
+[BLEND_HOST] resident_blend device=244.1 (host attr/id build=0, upload=0) total=244.1 ms
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=7.94 up=0.29 kernel=7.14 d2h=6.73 compact=0.00 publish=1.27 total=27.51ms
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=8.40 up=0.31 kernel=7.21 d2h=6.80 compact=0.00 publish=1.33 total=28.31ms
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=35.92dB hero_vs_ref=36.29dB min_vs_ref=36.29dB min_vs_gt=35.92dB ms/view=450.6 (proj=60.6 ta=98.1 sort=45.3 blend=245.5) shot=opt/metal-screenshots/loop-sfpu-selfcheck/hero.png
+[bh-30-special-smarton-for-reservation-75776:433222] *** Process received signal ***
+[bh-30-special-smarton-for-reservation-75776:433222] Signal: Segmentation fault (11)
+[bh-30-special-smarton-for-reservation-75776:433222] Signal code: Address not mapped (1)
+[bh-30-special-smarton-for-reservation-75776:433222] Failing at address: 0x57dda4de0fb2
+[bh-30-special-smarton-for-reservation-75776:433222] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x74fd34447520]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail9_Map_baseIjSt4pairIKjNSt6chrono10time_pointINS3_3_V212steady_clockENS3_8durationIlSt5ratioILl1ELl1000000000EEEEEEESaISC_ENS_10_Select1stESt8equal_toIjESt4hashIjENS_18_Mod_range_hashingENS_20_Default_ranged_hashENS_20_Prime_rehash_policyENS_17_Hashtable_traitsILb0ELb0ELb1EEELb1EEixEOj+0x48)[0x74fcd9552488]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x9c)[0x74fcd9541f9c]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xc0)[0x74fcd95fb5c0]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD1Ev+0x1a)[0x74fcd96067fa]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x5dfc26)[0x74fcd93dfc26]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xa8)[0x74fcd9917168]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD1Ev+0x15)[0x74fcd99175e5]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 8] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xbfc31)[0x74fcda5f0c31]
+[bh-30-special-smarton-for-reservation-75776:433222] [ 9] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x74fd3444a495]
+[bh-30-special-smarton-for-reservation-75776:433222] [10] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x74fd3444a610]
+[bh-30-special-smarton-for-reservation-75776:433222] [11] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x74fd3442ed97]
+[bh-30-special-smarton-for-reservation-75776:433222] [12] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x74fd3442ee40]
+[bh-30-special-smarton-for-reservation-75776:433222] [13] .venv/bin/python3(_start+0x25)[0x57d8bea54b45]
+[bh-30-special-smarton-for-reservation-75776:433222] *** End of error message ***

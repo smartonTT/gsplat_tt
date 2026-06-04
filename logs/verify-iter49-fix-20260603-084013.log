@@ -1,0 +1,11 @@
+================ BUILD ID ================
+  cpp : #174 sha=db9dcd0 bin=8d8b09e8e35f28b8 iter49: CB_BUCKET_BULK/BMASK_BULK split; MB_COUNTS depth 64
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=verify-iter49-fix  timeout=1200s  worry=600s  ts=2026-06-03T08:40:13-0700
+cmd: TTW_ITER_DIR=ttw-049 bash -lc export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TTW_ITER_DIR=ttw-049; cd /localdev/smarton/gstt2 && source .venv/bin/activate 2>/dev/null; /Users/smarton/dev/tt-workflows/scripts/buildid.sh stamp cpp "iter49: CB_BUCKET scratch-only + CB_BUCKET_BULK bulk L1 (deadlock fix)"; cmake --build render/build-tt -j 16; python3 render/run.py --iter-dir ttw-049 2>&1 | tee /tmp/ttw_verify_fix.log; grep -q "^SUMMARY" /tmp/ttw_verify_fix.log || { echo "[verify] no SUMMARY"; exit 6; }; grep "^TTW_METRIC" /tmp/ttw_verify_fix.log | tail -1; grep "^TTW_TIMING" /tmp/ttw_verify_fix.log
+-----------------------------------------
+BUILD-ID VERIFY FAIL: live artifact bin=21be0032e602298e != stamped cpp#174 bin=8d8b09e8e35f28b8
+  -> the binary that would run is NOT the one last built/stamped
+  -> (stale, un-synced from this host, or overwritten). Rebuild with: build.sh cpp
+[ttw] ABORT: build-ID verification failed (rc=3) — refusing to run on an unverified binary. Rebuild, or pass --no-verify to override.

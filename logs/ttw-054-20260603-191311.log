@@ -1,0 +1,174 @@
+================ BUILD ID ================
+  cpp : #183 sha=c168a45 bin=ec39eb0b29e17646 iter54 attempt3: mat after blend, MAX_TILE_IDS=1024
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=ttw-054  timeout=1200s  worry=600s  ts=2026-06-03T19:13:11-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate 2>/dev/null; test -f render/build-tt/build.ninja || (cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release); cmake --build render/build-tt -j 16; python3 render/run.py --iter-dir ${TTW_ITER_DIR:?TTW_ITER_DIR unset} 2>&1 | tee /tmp/ttw_verify.log; grep -q '^SUMMARY' /tmp/ttw_verify.log || { echo '[verify] no SUMMARY'; exit 6; }; grep -q '^TTW_METRIC hero_vs_ref=' /tmp/ttw_verify.log || { echo '[verify] no TTW_METRIC'; exit 6; }; mkdir -p opt/metal-screenshots/${TTW_ITER_DIR}; cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png 2>/dev/null || cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png; test -f opt/metal-screenshots/${TTW_ITER_DIR}/hero.png || { echo '[verify] hero screenshot missing'; exit 6; }; cp -f tmp/${TTW_ITER_DIR}/hero_diff10.png opt/metal-screenshots/${TTW_ITER_DIR}/hero_diff10.png 2>/dev/null || true; grep '^TTW_METRIC' /tmp/ttw_verify.log | tail -1; grep '^TTW_TIMING' /tmp/ttw_verify.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#183 bin=ec39eb0b29e17646 matches the built+stamped artifact
+ninja: no work to do.
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-06-04 02:13:15.933 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 02:13:15.934 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 02:13:15.935 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 02:13:15.935 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:13:15.937 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 02:13:15.939 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 02:13:15.940 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-04 02:13:15.940 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-04 02:13:15.940 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 02:13:15.940 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 02:13:15.940 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 02:13:15.940 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:13:15.940 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 02:13:15.940 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 02:13:15.940 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-04 02:13:15.941 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-04 02:13:15.941 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-04 02:13:15.980 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:13:15.981 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-04 02:13:15.981 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-04 02:13:15.981 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-04 02:13:15.981 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-04 02:13:15.989 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-04 02:13:15.989 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-04 02:13:16.043 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-04 02:13:16.555 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-04 02:13:16.555 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-04 02:13:16.556 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 02:13:16.556 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 02:13:16.557 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 02:13:16.557 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:13:16.557 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 02:13:16.557 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 02:13:16.559 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-04 02:13:16.570 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-04 02:13:16.570 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:13:16.570 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:13:16.570 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-04 02:13:16.570 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:13:16.570 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:13:16.570 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-04 02:13:16.570 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-04 02:13:16.570 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-04 02:13:16.570 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-04 02:13:16.570 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-04 02:13:16.570 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-04 02:13:16.658 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-04 02:13:17.044 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-04 02:13:17.647 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349977 GHz, device_time_at_sync=98563468147 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 1743.3 ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 payload_pages=1684771
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=61.18 up=0.02 kernel=21.45 d2h=0.00 compact=0.00 publish=16.58 mat=0.00 total=99.33ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=57907200 subchunks_bulk=234 avg_bytes_per_subchunk=247466
+[PACK2] splats=2914793 pages=1457623 bytes_packed=93287872 bytes_iter49=186546752 avg_pages_per_1k_splats=500
+[run] timing 30 views (warmup excluded)
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 payload_pages=1684771
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=42.19 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.04 mat=0.00 total=42.33ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=57907200 subchunks_bulk=234 avg_bytes_per_subchunk=247466
+[PACK2] splats=2914793 pages=1457623 bytes_packed=93287872 bytes_iter49=186546752 avg_pages_per_1k_splats=500
+[run]   view=hero 269.1ms
+[SUBCHUNK] tiles_split=118 total_subchunks=1159 max_subchunks_per_tile=4 payload_pages=1768042
+2026-06-04 02:13:21.402 | critical |          Always | TT_FATAL: For valid non-interleaved buffers page size 64 must equal buffer size 18544. For interleaved-buffers, buffer size should be divisible by the page size (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/buffers/buffer.cpp:81: size % page_size == 0
+info:
+For valid non-interleaved buffers page size 64 must equal buffer size 18544. For interleaved-buffers, buffer size should be divisible by the page size
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x617178) [0x7f74f5dac178]
+ --- tt::tt_metal::Buffer::Buffer(tt::tt_metal::IDevice*, unsigned long, unsigned long, tt::tt_metal::BufferType, tt::tt_metal::BufferShardingArgs const&, std::optional<bool>, std::optional<ttsl::StrongType<unsigned char, tt::tt_metal::SubDeviceIdTag> >, bool, tt::tt_metal::Buffer::Private)
+ --- tt::tt_metal::Buffer::create(tt::tt_metal::IDevice*, unsigned long, unsigned long, tt::tt_metal::BufferType, tt::tt_metal::BufferShardingArgs const&, std::optional<bool>, std::optional<ttsl::StrongType<unsigned char, tt::tt_metal::SubDeviceIdTag> >)
+ --- tt::tt_metal::distributed::MeshBuffer::create(std::variant<tt::tt_metal::distributed::ReplicatedBufferConfig, tt::tt_metal::distributed::ShardedBufferConfig> const&, tt::tt_metal::distributed::DeviceLocalBufferConfig const&, tt::tt_metal::distributed::MeshDevice*, std::optional<unsigned long>)
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x913f8) [0x7f74ecedb3f8]
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x9708a) [0x7f74ecee108a]
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x9b4c9) [0x7f74ecee54c9]
+ --- gsplat_tt::sort_and_bin_tt(long const*, long const*, float const*, unsigned long, unsigned long, int, int, gsplat_cpu::ThreadPool*, bool*, gsplat_tt::SortCallTimings*, bool, gsplat_tt::SortBlendContinuation*)
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x37720) [0x7f74ece81720]
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x3f9f1) [0x7f74ece899f1]
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x31f2a) [0x7f74ece7bf2a]
+ --- python3(+0x17e96f) [0x55f17656b96f]
+ --- python3(_PyEval_EvalFrameDefault+0x56cb) [0x55f176567bdb]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f17657868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55f176562d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f17657868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55f176562d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f17657868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55f176562bd0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f17657868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55f176562bd0]
+ --- python3(+0x259d36) [0x55f176646d36]
+ --- python3(PyEval_EvalCode+0x86) [0x55f176646c06]
+ --- python3(+0x280678) [0x55f17666d678]
+ --- python3(+0x27accf) [0x55f176667ccf]
+ --- python3(+0x280415) [0x55f17666d415]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55f17666c958]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55f17666c637]
+ --- python3(Py_RunMain+0x2be) [0x55f176660bfe]
+ --- python3(Py_BytesMain+0x2d) [0x55f17663ac4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f7634370d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f7634370e40]
+ --- python3(_start+0x25) [0x55f17663ab45]
+
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/render/run.py", line 339, in <module>
+    main()
+  File "/localdev/smarton/gstt2/render/run.py", line 277, in main
+    img, wall_ms = render_clean_view_timed(
+  File "/localdev/smarton/gstt2/render/run.py", line 211, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2/render/run.py", line 117, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: render_clean: device sort failed; single-path TT, no CPU fallback
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] *** Process received signal ***
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] Signal: Segmentation fault (11)
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] Signal code: Address not mapped (1)
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] Failing at address: 0x58
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f7634389520]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x97)[0x7f74f5f0b3a7]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xe4)[0x7f74f5fb3754]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD2Ev+0x16)[0x7f74f5fb2ba6]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x61ca0f)[0x7f74f5db1a0f]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail16_Hashtable_allocISaINS_10_Hash_nodeISt4pairIKN2tt8tt_metal11distributed19MeshCoordinateRangeENS4_7ProgramEELb0EEEEE18_M_deallocate_nodeEPSA_+0x15)[0x7f74f627e115]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xbe)[0x7f74f626d5ae]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD2Ev+0x1a)[0x7f74f627019a]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 8] /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x92f83)[0x7f74ecedcf83]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [ 9] /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x9327e)[0x7f74ecedd27e]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [10] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x7f763438c495]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [11] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x7f763438c610]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [12] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x7f7634370d97]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [13] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7f7634370e40]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] [14] python3(_start+0x25)[0x55f17663ab45]
+[yyzo-bh-03-special-smarton-for-reservation-75201:02298] *** End of error message ***
+===== ttw diagnose host=yyzo-bh-03 @ 2026-06-03T19:23:28-0700 =====
+--- device status (read-only) ---
+tt-smi not found
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 02:23:28 up 12 min,  0 users,  load average: 38.00, 33.14, 18.39
+--- device processes ---
+--- JIT cache size ---
+275M	/localdev/smarton/.cache/tt-metal-cache
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.
+[verify] no SUMMARY

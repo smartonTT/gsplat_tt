@@ -1,0 +1,10 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:14:04-0700
+cmd: cd /localdev/smarton/gstt2 && git log --oneline -8
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+fatal: not a git repository (or any parent up to mount point /)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).

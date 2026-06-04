@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #142 sha=7b7966a bin=58ca522fd5ed289c iter 42: M1: L1-resident LSD radix sort over 32B records; bit-order proven == DRAM reference (on-device: mono=0 + key-multiset perm=0 across 1100 bucket tiles/all cores, cull-mask alignment intact => 42dB failure mode absent); 63.85dB
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=baseline  timeout=1200s  worry=600s  ts=2026-06-02T16:29:09-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_L1_RECORD=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir ${TTW_ITER_DIR} --out opt/ttw/last.json 2>&1 | grep -E '^SUMMARY|hero_vs_ref|TTW_|proj=|sort=|blend=|Error|error|FATAL'
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#142 bin=58ca522fd5ed289c matches the built+stamped artifact
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=304.9 (proj=39.3 ta=24.9 sort=232.2 blend=0.0) shot=opt/metal-screenshots/ttw-baseline/hero.png shot_diff=opt/metal-screenshots/ttw-baseline/hero_diff10.png

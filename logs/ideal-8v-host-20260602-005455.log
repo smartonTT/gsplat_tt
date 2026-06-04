@@ -1,0 +1,8 @@
+================ BUILD ID ================
+  cpp : #114 sha=01ff918 bin=59d109789bbdb4e9 sort device bin layout kernel
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=ideal-8v-host  timeout=3600s  worry=600s  ts=2026-06-02T00:54:55-0700
+cmd: bash tmp/run_ideal_8v.sh
+-----------------------------------------
+tmp/run_ideal_8v.sh: line 30: .venv/bin/activate: No such file or directory

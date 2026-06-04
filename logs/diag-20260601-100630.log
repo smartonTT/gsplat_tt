@@ -1,0 +1,12 @@
+================ BUILD ID ================
+  cpp : #52 sha=4de5b93 bin=2dbef1f16302f41c iter18 diag: full-field payload xchk
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=diag  timeout=1200s  worry=600s  ts=2026-06-01T10:06:30-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_BLEND_PAYLOAD=1 GSPLAT_TT_PAYLOAD_READBACK=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_diag.log >/dev/null; echo '=== XCHK ==='; grep -E 'PAYLOAD_XCHK|^SUMMARY' /tmp/ttw_diag.log | tail -20
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#52 bin=2dbef1f16302f41c matches the built+stamped artifact
+=== XCHK ===
+[PAYLOAD_XCHK] rows_total=3220768 checked=3213120 gid_mm=0 oob=0 first_mm=-1 | fmm a=0 b=0 c=0 mxl=0 myl=0 op=0 cr=0 cg=0 cb=0 | mask_zero=0 mask_full=21360 avg_pop=4.64
+[PAYLOAD_XCHK] rows_total=3220768 checked=3213120 gid_mm=0 oob=0 first_mm=-1 | fmm a=0 b=0 c=0 mxl=0 myl=0 op=0 cr=0 cg=0 cb=0 | mask_zero=0 mask_full=21360 avg_pop=4.64
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=40.80dB hero_vs_ref=42.10dB min_vs_ref=42.10dB min_vs_gt=40.80dB ms/view=1021.5 (proj=54.5 ta=128.7 sort=15.9 blend=822.0) shot=opt/metal-screenshots/loop-ttw/hero.png

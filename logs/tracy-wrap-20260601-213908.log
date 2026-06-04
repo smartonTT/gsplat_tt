@@ -1,0 +1,38 @@
+================ BUILD ID ================
+  cpp : #104 sha=65728fa bin=99fbd2daee94602b iter 35: tile_assign: eliminate per-frame all-ones keep-mask H2D (fill buf_keep once on grow, cache buf_keep_all_ones) — ta 21.2->10.2ms, ms/view 183.4->173.5 @8v, 63.85dB bit-identical
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=tracy-wrap  timeout=1800s  worry=600s  ts=2026-06-01T21:39:08-0700
+cmd: bash opt/profiler/run_wrapper_capture.sh
+-----------------------------------------
+[tracy-wrap] CMD: python3 -m tracy -r -p -v -o /localdev/smarton/gstt2/opt/profiler/wrap_out -- python3 scripts/a003_verify.py --backend tt --views 1 --out opt/profiler/tracy-wrap-run.json
+2026-06-02 04:39:09.179 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out
+2026-06-02 04:39:09.180 | INFO     | __main__:main:336 - Using port 8086
+2026-06-02 04:39:09.180 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-06-02 04:39:09.198 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2/opt/profiler/wrap_out/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+2026-06-02 04:39:09.201 | INFO     | __main__:main:400 - Test process started
+Connecting to 127.0.0.1:8086...2026-06-02 04:39:09.582 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/localdev/smarton/tt-metal/tools/tracy/__main__.py", line 441, in <module>
+    main()
+  File "/localdev/smarton/tt-metal/tools/tracy/__main__.py", line 356, in main
+    with io.open_code(progname) as fp:
+FileNotFoundError: [Errno 2] No such file or directory: 'python3'
+2026-06-02 04:39:24.634 | ERROR    | __main__:main:429 - No profiling data could be captured. Please make sure you are on a Tracy-enabled build (default).
+[tracy-wrap] wrapper exited rc=1
+[tracy-wrap] FAIL: /localdev/smarton/gstt2/opt/profiler/wrap_out/.logs/tracy_profile_log_host.tracy missing/empty; listing /localdev/smarton/gstt2/opt/profiler/wrap_out:
+/localdev/smarton/gstt2/opt/profiler/wrap_out:
+total 12
+drwxrwxr-x 3 smarton smarton 4096 Jun  2 04:39 .
+drwxrwxr-x 3 smarton smarton 4096 Jun  2 04:39 ..
+drwxrwxr-x 2 smarton smarton 4096 Jun  2 04:39 .logs
+
+/localdev/smarton/gstt2/opt/profiler/wrap_out/.logs:
+total 8
+drwxrwxr-x 2 smarton smarton 4096 Jun  2 04:39 .
+drwxrwxr-x 3 smarton smarton 4096 Jun  2 04:39 ..
+[tracy-wrap] DONE rc=1 tracy=/localdev/smarton/gstt2/opt/profiler/wrap_out/.logs/tracy_profile_log_host.tracy

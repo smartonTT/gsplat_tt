@@ -1,0 +1,38 @@
+================ BUILD ID ================
+  cpp : #105 sha=9f2ccb4 bin=bb57894d1c4e3bed iter 36: project on-device exclusive scan (GSPLAT_TT_PROJ_DEVICE_SCAN, gated)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=scan_ab  timeout=1200s  worry=600s  ts=2026-06-01T22:00:41-0700
+cmd: ENV="TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1"; source .venv/bin/activate 2>/dev/null; echo "##### RUN A: PROJ_DEVICE_SCAN OFF (baseline) #####"; env $ENV .venv/bin/python3 scripts/a003_verify.py --views 8 --iter-dir loop-ttw --out opt/ttw/last_off.json 2>&1 | grep -E "^SUMMARY|GATHER_STATS|\[SORT\]" | tail -14; echo "##### RUN B: PROJ_DEVICE_SCAN ON #####"; env $ENV GSPLAT_TT_PROJ_DEVICE_SCAN=1 .venv/bin/python3 scripts/a003_verify.py --views 8 --iter-dir loop-ttw --out opt/ttw/last_on.json 2>&1 | grep -E "^SUMMARY|\[SORT\]" | tail -14
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#105 bin=bb57894d1c4e3bed matches the built+stamped artifact
+##### RUN A: PROJ_DEVICE_SCAN OFF (baseline) #####
+[SORT] stage=RP P=934247 P_kept=934247 num_tiles=1024 max_tile_n=5248 bin=3.82 up=0.29 kernel=3.38 d2h=0.00 compact=0.00 publish=0.03 total=7.65ms
+[SORT] stage=RP P=1124461 P_kept=1124461 num_tiles=1024 max_tile_n=6544 bin=4.10 up=0.29 kernel=3.60 d2h=0.00 compact=0.00 publish=0.03 total=8.15ms
+[SORT] stage=RP P=835298 P_kept=835298 num_tiles=1024 max_tile_n=5536 bin=3.72 up=0.29 kernel=3.17 d2h=0.00 compact=0.00 publish=0.03 total=7.34ms
+[SORT] stage=RP P=1067596 P_kept=1067596 num_tiles=1024 max_tile_n=5104 bin=4.14 up=0.30 kernel=3.49 d2h=0.00 compact=0.00 publish=0.05 total=8.12ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.16 up=0.30 kernel=7.54 d2h=7.14 compact=0.00 publish=0.05 total=26.72ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.11 up=0.29 kernel=7.51 d2h=7.16 compact=0.00 publish=0.02 total=26.63ms
+[SORT] stage=RP P=2774729 P_kept=2774729 num_tiles=1024 max_tile_n=25136 bin=7.14 up=0.29 kernel=6.56 d2h=7.13 compact=0.00 publish=0.02 total=24.07ms
+[SORT] stage=RP P=3235251 P_kept=3235251 num_tiles=1024 max_tile_n=22592 bin=8.05 up=0.30 kernel=7.28 d2h=7.13 compact=0.00 publish=0.04 total=25.93ms
+[SORT] stage=RP P=1753355 P_kept=1753355 num_tiles=1024 max_tile_n=21360 bin=5.40 up=0.30 kernel=4.73 d2h=7.13 compact=0.00 publish=0.03 total=19.40ms
+[SORT] stage=RP P=934247 P_kept=934247 num_tiles=1024 max_tile_n=5248 bin=4.11 up=0.30 kernel=3.40 d2h=7.14 compact=0.00 publish=0.05 total=16.09ms
+[SORT] stage=RP P=1124461 P_kept=1124461 num_tiles=1024 max_tile_n=6544 bin=4.39 up=0.30 kernel=3.61 d2h=7.13 compact=0.00 publish=0.03 total=16.61ms
+[SORT] stage=RP P=835298 P_kept=835298 num_tiles=1024 max_tile_n=5536 bin=3.78 up=0.29 kernel=3.17 d2h=7.13 compact=0.00 publish=0.03 total=15.40ms
+[SORT] stage=RP P=1067596 P_kept=1067596 num_tiles=1024 max_tile_n=5104 bin=4.26 up=0.29 kernel=3.46 d2h=7.13 compact=0.00 publish=0.02 total=16.34ms
+SUMMARY backend=tt blend_mode=2 views=8 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=38.50dB min_vs_gt=38.07dB ms/view=173.1 (proj=32.4 ta=10.2 sort=9.3 blend=97.3) shot=opt/metal-screenshots/loop-ttw/hero.png
+##### RUN B: PROJ_DEVICE_SCAN ON #####
+[SORT] stage=RP P=934247 P_kept=934247 num_tiles=1024 max_tile_n=5248 bin=3.76 up=0.29 kernel=3.37 d2h=0.00 compact=0.00 publish=0.02 total=7.59ms
+[SORT] stage=RP P=1124461 P_kept=1124461 num_tiles=1024 max_tile_n=6544 bin=4.08 up=0.29 kernel=3.59 d2h=0.00 compact=0.00 publish=0.03 total=8.13ms
+[SORT] stage=RP P=835298 P_kept=835298 num_tiles=1024 max_tile_n=5536 bin=3.58 up=0.29 kernel=3.17 d2h=0.00 compact=0.00 publish=0.02 total=7.20ms
+[SORT] stage=RP P=1067596 P_kept=1067596 num_tiles=1024 max_tile_n=5104 bin=4.06 up=0.29 kernel=3.47 d2h=0.00 compact=0.00 publish=0.02 total=7.97ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.10 up=0.29 kernel=7.52 d2h=7.11 compact=0.00 publish=0.03 total=26.65ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.15 up=0.29 kernel=7.51 d2h=7.12 compact=0.00 publish=0.02 total=26.56ms
+[SORT] stage=RP P=2774729 P_kept=2774729 num_tiles=1024 max_tile_n=25136 bin=7.14 up=0.29 kernel=6.56 d2h=7.12 compact=0.00 publish=0.02 total=24.07ms
+[SORT] stage=RP P=3235251 P_kept=3235251 num_tiles=1024 max_tile_n=22592 bin=7.94 up=0.29 kernel=7.25 d2h=7.16 compact=0.00 publish=0.02 total=26.00ms
+[SORT] stage=RP P=1753355 P_kept=1753355 num_tiles=1024 max_tile_n=21360 bin=5.24 up=0.30 kernel=4.72 d2h=7.13 compact=0.00 publish=0.03 total=19.39ms
+[SORT] stage=RP P=934247 P_kept=934247 num_tiles=1024 max_tile_n=5248 bin=3.88 up=0.30 kernel=3.40 d2h=7.14 compact=0.00 publish=0.05 total=15.81ms
+[SORT] stage=RP P=1124461 P_kept=1124461 num_tiles=1024 max_tile_n=6544 bin=4.33 up=0.29 kernel=3.59 d2h=7.12 compact=0.00 publish=0.02 total=16.48ms
+[SORT] stage=RP P=835298 P_kept=835298 num_tiles=1024 max_tile_n=5536 bin=3.73 up=0.30 kernel=3.19 d2h=7.14 compact=0.00 publish=0.04 total=15.41ms
+[SORT] stage=RP P=1067596 P_kept=1067596 num_tiles=1024 max_tile_n=5104 bin=4.29 up=0.30 kernel=3.48 d2h=7.14 compact=0.00 publish=0.05 total=16.43ms
+SUMMARY backend=tt blend_mode=2 views=8 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=37.86dB min_vs_gt=37.37dB ms/view=173.2 (proj=32.4 ta=10.2 sort=9.3 blend=97.3) shot=opt/metal-screenshots/loop-ttw/hero.png

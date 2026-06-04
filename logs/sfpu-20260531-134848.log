@@ -1,0 +1,131 @@
+================ BUILD ID ================
+  cpp : #1 sha=7eed227 iter 0: baseline
+  data: # sha= 
+=========================================
+host=bh-30  tag=sfpu  timeout=1500s  worry=600s  ts=2026-05-31T13:48:48-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TT_METAL_DPRINT_CORES=0,0 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_CULL_EMIT_M2=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-sfpu-thrdump --out opt/ttw/sfpu-thrdump.json
+-----------------------------------------
+2026-05-31 20:48:51.509 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:48:51.509 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:48:51.510 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:48:51.510 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:48:51.510 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:48:51.511 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:48:51.512 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-05-31 20:48:51.512 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-05-31 20:48:51.512 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:48:51.512 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:48:51.513 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:48:51.513 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:48:51.513 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:48:51.514 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:48:51.514 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-05-31 20:48:51.514 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-05-31 20:48:51.514 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-05-31 20:48:51.584 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:48:51.584 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-05-31 20:48:51.584 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-05-31 20:48:51.584 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-05-31 20:48:51.584 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-05-31 20:48:51.585 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-05-31 20:48:51.586 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xfffffffec0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-05-31 20:48:51.587 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-05-31 20:48:51.900 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-05-31 20:48:51.900 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-05-31 20:48:51.900 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:48:51.900 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:48:51.901 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:48:51.901 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:48:51.902 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:48:51.902 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:48:51.903 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-05-31 20:48:51.904 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-05-31 20:48:51.904 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:48:51.904 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:48:51.904 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-05-31 20:48:51.904 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:48:51.904 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:48:51.904 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-05-31 20:48:51.904 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-05-31 20:48:51.904 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-05-31 20:48:51.904 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-05-31 20:48:51.904 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-05-31 20:48:51.904 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-05-31 20:48:51.908 | warning  |           Metal | DPRINT is deprecated and will be removed in a future release. Please migrate to DEVICE_PRINT by:
+  1. Replace #include "api/debug/dprint.h" with #include "api/debug/device_print.h" in your kernels
+  2. Replace DPRINT << ... << ENDL() with DEVICE_PRINT("...\n", args)
+  3. Set TT_METAL_DEVICE_PRINT=1 to enable the new DEVICE_PRINT system
+For more information, see the DEVICE_PRINT documentation. (metal_context.cpp:241)
+2026-05-31 20:48:51.920 | info     |           Metal | DPRINT enabled on device 0, worker core 0-0 (virtual 1-2). (dprint_server.cpp:904)
+2026-05-31 20:48:51.920 | info     |           Metal | DPRINT Server attached device 0 (dprint_server.cpp:950)
+2026-05-31 20:48:52.007 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_433222_1242376943_0' (shm_resource_tracker.cpp:265)
+2026-05-31 20:48:52.007 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_433222' (shm_resource_tracker.cpp:275)
+2026-05-31 20:48:52.592 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349861 GHz, device_time_at_sync=52018590218105 cycles (realtime_profiler_manager.cpp:1075)
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=10.80 up=0.31 kernel=9.87 d2h=13.43 compact=0.00 publish=3.98 total=56.22ms
+2026-05-31 20:48:58.148 | critical |          Always | TT_THROW: /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache14647595611920423071/kernels/microblock_cull_compute/15538336840999713030//trisc0/trisc0.elf: segment[1] [0xffb00820,+0x7ac) overflows region:1 limit of 0x720 bytes, reduce the size of thread_local variables (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 238, in <module>
+    main()
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 130, in main
+    tt_imgs, tt_timings = render_all(
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 84, in render_all
+    _ = pipeline.render(gauss, extr0, K, H, W)
+  File "/localdev/smarton/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2/backends/tt/backend.py", line 135, in render_fused
+    image, stats = self._mod.render_full_tt(
+RuntimeError: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/llrt/tt_elffile.cpp:393: tt::exception
+info:
+/localdev/smarton/.cache/tt-metal-cache/tt-metal-cache14647595611920423071/kernels/microblock_cull_compute/15538336840999713030//trisc0/trisc0.elf: segment[1] [0xffb00820,+0x7ac) overflows region:1 limit of 0x720 bytes, reduce the size of thread_local variables
+backtrace:
+ --- ll_api::ElfFile::Impl::TrimSegments(std::span<unsigned int const, 18446744073709551615ul>)
+ --- ll_api::memory::memory(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, ll_api::memory::Loading)
+ --- tt::llrt::get_risc_binary(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, ll_api::memory::Loading, std::function<void (ll_api::memory&)> const&)
+ --- tt::tt_metal::ComputeKernel::read_binaries(tt::tt_metal::IDevice*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x848f1d) [0x7076fbe48f1d]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x7076fc03f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x7076fbca2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x707756ddaee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x7076fc04169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x7076fbe66640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x7076fbe65242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x7076fbe65885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7077544b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x707756dd5ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x707756e678d0]
+
+[bh-30-special-smarton-for-reservation-75776:433905] *** Process received signal ***
+[bh-30-special-smarton-for-reservation-75776:433905] Signal: Segmentation fault (11)
+[bh-30-special-smarton-for-reservation-75776:433905] Signal code: Address not mapped (1)
+[bh-30-special-smarton-for-reservation-75776:433905] Failing at address: 0x650d87c27
+[bh-30-special-smarton-for-reservation-75776:433905] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x707756d83520]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail9_Map_baseIjSt4pairIKjNSt6chrono10time_pointINS3_3_V212steady_clockENS3_8durationIlSt5ratioILl1ELl1000000000EEEEEEESaISC_ENS_10_Select1stESt8equal_toIjESt4hashIjENS_18_Mod_range_hashingENS_20_Default_ranged_hashENS_20_Prime_rehash_policyENS_17_Hashtable_traitsILb0ELb0ELb1EEELb1EEixEOj+0x48)[0x7076fbd52488]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x9c)[0x7076fbd41f9c]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xc0)[0x7076fbdfb5c0]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD1Ev+0x1a)[0x7076fbe067fa]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x5dfc26)[0x7076fbbdfc26]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xa8)[0x7076fc117168]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD1Ev+0x15)[0x7076fc1175e5]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 8] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xbfc31)[0x7076fcef0c31]
+[bh-30-special-smarton-for-reservation-75776:433905] [ 9] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x707756d86495]
+[bh-30-special-smarton-for-reservation-75776:433905] [10] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x707756d86610]
+[bh-30-special-smarton-for-reservation-75776:433905] [11] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x707756d6ad97]
+[bh-30-special-smarton-for-reservation-75776:433905] [12] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x707756d6ae40]
+[bh-30-special-smarton-for-reservation-75776:433905] [13] .venv/bin/python3(_start+0x25)[0x650d628b0b45]
+[bh-30-special-smarton-for-reservation-75776:433905] *** End of error message ***

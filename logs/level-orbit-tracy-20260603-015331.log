@@ -1,0 +1,42 @@
+================ BUILD ID ================
+  cpp : #156 sha=f18c3c3 bin=325ef2bf2c6a5942 iter 47: MEASURE-FIRST blend breakdown (device per-tile-class zones rd_bk_emit/rd_overflow/cp_inb/cp_ovf + host TILE_HISTO). Hero: in-budget 914 tiles/2.01M cand (59.8%), overflow 110 tiles/1.36M cand (40.2%), max_tile_n=25699>FIT. Blend makespan ~93ms (reader~=compute co-equal) + separate cull ~80ms = lumped host blend 182.5. In-budget CO-LIMITED: reader-emit 824 ~= compute-SFPU 844 (load+sort only ~286). Busiest cores are OVERFLOW-gather-dominated (top core overflow 449 vs emit 181, 30v totals). Tailskip scaffold gated-off (deadlock-free 63.85 but blend 185.8>182.5, not a win). Measurement-only, PSNR 63.85 bit-identical.
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=level-orbit-tracy  timeout=1200s  worry=600s  ts=2026-06-03T01:53:31-0700
+cmd: cd /localdev/smarton/gstt2 && bash render/profiler/capture_tracy_clean.sh && mkdir -p opt/profiler/level-orbit && cp -f opt/profiler/render-clean/render.tracy opt/profiler/level-orbit/render.tracy && ls -la opt/profiler/level-orbit/render.tracy
+-----------------------------------------
+[capture_clean] render_clean FULL 30-view capture -> /localdev/smarton/gstt2/opt/profiler/render-clean/render.tracy
+[capture_clean] CMD: python3 -m tracy -r -p -v --dump-device-data-mid-run -o /localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean render/profiler/_render_clean_inner.sh
+2026-06-03 08:53:32.707 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean
+2026-06-03 08:53:32.708 | INFO     | __main__:main:336 - Using port 8086
+2026-06-03 08:53:32.708 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-06-03 08:53:32.714 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+Connecting to 127.0.0.1:8086...2026-06-03 08:53:32.719 | INFO     | __main__:main:400 - Test process started
+2026-06-03 08:53:33.296 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean
+/bin/sh: 1: render/profiler/_render_clean_inner.sh: Permission denied
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/localdev/smarton/tt-metal/tools/tracy/__main__.py", line 441, in <module>
+    main()
+  File "/localdev/smarton/tt-metal/tools/tracy/__main__.py", line 369, in main
+    subprocess.run(" ".join(args), shell=True, check=True)
+  File "/usr/lib/python3.10/subprocess.py", line 526, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command 'render/profiler/_render_clean_inner.sh' returned non-zero exit status 126.
+2026-06-03 08:53:48.385 | ERROR    | __main__:main:429 - No profiling data could be captured. Please make sure you are on a Tracy-enabled build (default).
+[capture_clean] wrapper exited rc=1
+[capture_clean] FAIL: /localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean/.logs/tracy_profile_log_host.tracy missing/empty; listing /localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean:
+/localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean:
+total 12
+drwxrwxr-x  3 smarton smarton 4096 Jun  3 08:53 .
+drwxrwxr-x 17 smarton smarton 4096 Jun  3 08:53 ..
+drwxrwxr-x  2 smarton smarton 4096 Jun  3 08:53 .logs
+
+/localdev/smarton/gstt2/opt/profiler/wrap_out_render-clean/.logs:
+total 8
+drwxrwxr-x 2 smarton smarton 4096 Jun  3 08:53 .
+drwxrwxr-x 3 smarton smarton 4096 Jun  3 08:53 ..
+[capture_clean] DONE rc=1 tracy=/localdev/smarton/gstt2/opt/profiler/render-clean/render.tracy

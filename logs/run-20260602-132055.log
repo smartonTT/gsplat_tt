@@ -1,0 +1,8 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:20:55-0700
+cmd: find /localdev/smarton/gstt2 -name "buildid*" 2>/dev/null | head -5
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact

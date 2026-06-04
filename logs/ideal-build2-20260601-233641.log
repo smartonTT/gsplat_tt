@@ -1,0 +1,82 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=ideal-build2  timeout=600s  worry=600s  ts=2026-06-01T23:36:41-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal && cmake --build build-tt -j 16
+-----------------------------------------
+[0/1] Re-running CMake...
+-- Found pybind11: /localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/pybind11/include (found version "3.0.4")
+CMake Warning (dev) at /usr/local/share/cmake-4.0/Modules/FetchContent.cmake:1953 (message):
+  Calling FetchContent_Populate(cnpy) is deprecated, call
+  FetchContent_MakeAvailable(cnpy) instead.  Policy CMP0169 can be set to OLD
+  to allow FetchContent_Populate(cnpy) to be called directly for now, but the
+  ability to call it with declared details will be removed completely in a
+  future version.
+Call Stack (most recent call first):
+  /localdev/smarton/gstt2/tests/CMakeLists.txt:11 (FetchContent_Populate)
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Configuring done (0.4s)
+-- Generating done (0.0s)
+-- Build files have been written to: /localdev/smarton/gstt2/build-tt
+[1/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/render_blend.cpp.o
+[2/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/mb_payload.cpp.o
+[3/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/device_state.cpp.o
+[4/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o
+FAILED: CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o 
+/usr/bin/c++ -DFMT_HEADER_ONLY=1 -DGSPLAT_WITH_TT -DNTEST -DOVERRIDE_KERNEL_PREFIX=\"/localdev/smarton/gstt2/src/gsplat_tt/\" -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DTRACY_ENABLE=1 -DTT_ENABLE_LIGHT_METAL_TRACE=1 -I/localdev/smarton/gstt2/src -isystem /localdev/smarton/tt-metal/tt_metal/api -isystem /localdev/smarton/tt-metal/build/tt_metal/api -isystem /localdev/smarton/tt-metal/tt_stl -isystem /localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -isystem /localdev/smarton/tt-metal/tt_metal/hw/inc/hostdev -isystem /localdev/smarton/tt-metal/tt_metal/third_party/umd/device/api -isystem /localdev/smarton/tt-metal/tt_metal/jit_build -isystem /localdev/smarton/tt-metal/build/tt_metal/jit_build -isystem /localdev/smarton/tt-metal/.cpmcache/benchmark/17a125dc196d0eea81711f65879e8410dd54303f/include -isystem /localdev/smarton/tt-metal/.cpmcache/cxxopts/dda70ad5c1afdb5368541192bace55dbcd7872e3/include -isystem /localdev/smarton/tt-metal/.cpmcache/enchantum/2fb7ab238e36c101b9848892ddb6382276b65837/enchantum/include -isystem /localdev/smarton/tt-metal/.cpmcache/flatbuffers/2c4062bffa52fa4157b1b4deeae73395df475fda/include -isystem /localdev/smarton/tt-metal/.cpmcache/fmt/69912fb6b71fcb1f7e5deca191a2bb4748c4e7b6/include -isystem /localdev/smarton/tt-metal/.cpmcache/libuv/2b05484ccff8fdf26b363fb50e4830b774d7eb53/include -isystem /localdev/smarton/tt-metal/.cpmcache/nanobind/8be24e8fbbe8c9cee0b8c553c21d090a5ede3d79/include -isystem /localdev/smarton/tt-metal/.cpmcache/nanomsg/28cc32d5bdb6a858fe53b3ccf7e923957e53eada/include -isystem /localdev/smarton/tt-metal/.cpmcache/nlohmann_json/798e0374658476027d9723eeb67a262d0f3c8308/include -isystem /localdev/smarton/tt-metal/.cpmcache/range-v3/0_12_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/reflect/f93e77475670eaeacf332927dfe8b50e3f3812e0 -isystem /localdev/smarton/tt-metal/.cpmcache/spdlog/b1c2586bb5c35a7929362e87f62433eb68206873/include -isystem /localdev/smarton/tt-metal/.cpmcache/tt-logger/d2339ce68562cae34cd95f3fece7fd94eb0529b7/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtensor-blas/0_22_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtensor/0_26_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtl/0_8_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/yaml-cpp/0_8_0_upstream_patched/include -isystem /localdev/smarton/tt-metal/tt_metal/third_party/tracy/public -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Wpedantic -fno-omit-frame-pointer -O3 -march=native -DNDEBUG -Wno-int-to-pointer-cast -Wno-deprecated-declarations -Wno-unused-parameter -Wno-missing-field-initializers -MD -MT CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o -MF CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o.d -o CMakeFiles/gsplat_tt.dir/gsplat_tt/sort_device.cpp.o -c /localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp
+/localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp: In function ‘void gsplat_tt::{anonymous}::build_program_bin(gsplat_tt::{anonymous}::SortDeviceContext&)’:
+/localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp:288:30: error: ‘tile_bucket_enabled’ was not declared in this scope
+  288 |     const bool tile_bucket = tile_bucket_enabled();
+      |                              ^~~~~~~~~~~~~~~~~~~
+[5/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o
+FAILED: CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o 
+/usr/bin/c++ -DFMT_HEADER_ONLY=1 -DGSPLAT_WITH_TT -DNTEST -DOVERRIDE_KERNEL_PREFIX=\"/localdev/smarton/gstt2/src/gsplat_tt/\" -DSPDLOG_COMPILED_LIB -DSPDLOG_FMT_EXTERNAL -DTRACY_ENABLE=1 -DTT_ENABLE_LIGHT_METAL_TRACE=1 -I/localdev/smarton/gstt2/src -isystem /localdev/smarton/tt-metal/tt_metal/api -isystem /localdev/smarton/tt-metal/build/tt_metal/api -isystem /localdev/smarton/tt-metal/tt_stl -isystem /localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -isystem /localdev/smarton/tt-metal/tt_metal/hw/inc/hostdev -isystem /localdev/smarton/tt-metal/tt_metal/third_party/umd/device/api -isystem /localdev/smarton/tt-metal/tt_metal/jit_build -isystem /localdev/smarton/tt-metal/build/tt_metal/jit_build -isystem /localdev/smarton/tt-metal/.cpmcache/benchmark/17a125dc196d0eea81711f65879e8410dd54303f/include -isystem /localdev/smarton/tt-metal/.cpmcache/cxxopts/dda70ad5c1afdb5368541192bace55dbcd7872e3/include -isystem /localdev/smarton/tt-metal/.cpmcache/enchantum/2fb7ab238e36c101b9848892ddb6382276b65837/enchantum/include -isystem /localdev/smarton/tt-metal/.cpmcache/flatbuffers/2c4062bffa52fa4157b1b4deeae73395df475fda/include -isystem /localdev/smarton/tt-metal/.cpmcache/fmt/69912fb6b71fcb1f7e5deca191a2bb4748c4e7b6/include -isystem /localdev/smarton/tt-metal/.cpmcache/libuv/2b05484ccff8fdf26b363fb50e4830b774d7eb53/include -isystem /localdev/smarton/tt-metal/.cpmcache/nanobind/8be24e8fbbe8c9cee0b8c553c21d090a5ede3d79/include -isystem /localdev/smarton/tt-metal/.cpmcache/nanomsg/28cc32d5bdb6a858fe53b3ccf7e923957e53eada/include -isystem /localdev/smarton/tt-metal/.cpmcache/nlohmann_json/798e0374658476027d9723eeb67a262d0f3c8308/include -isystem /localdev/smarton/tt-metal/.cpmcache/range-v3/0_12_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/reflect/f93e77475670eaeacf332927dfe8b50e3f3812e0 -isystem /localdev/smarton/tt-metal/.cpmcache/spdlog/b1c2586bb5c35a7929362e87f62433eb68206873/include -isystem /localdev/smarton/tt-metal/.cpmcache/tt-logger/d2339ce68562cae34cd95f3fece7fd94eb0529b7/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtensor-blas/0_22_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtensor/0_26_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/xtl/0_8_0_patched/include -isystem /localdev/smarton/tt-metal/.cpmcache/yaml-cpp/0_8_0_upstream_patched/include -isystem /localdev/smarton/tt-metal/tt_metal/third_party/tracy/public -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Wpedantic -fno-omit-frame-pointer -O3 -march=native -DNDEBUG -Wno-int-to-pointer-cast -Wno-deprecated-declarations -Wno-unused-parameter -Wno-missing-field-initializers -MD -MT CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o -MF CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o.d -o CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o -c /localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1675:16: error: ‘sfpu_cull_env’ is not captured
+ 1675 |         return sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1' &&
+      |                ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1667:44: note: the lambda has no capture-default
+ 1667 |     const bool tile_bucket = blend_aos && [] {
+      |                                            ^
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1663:17: note: ‘const char* sfpu_cull_env’ declared here
+ 1663 |     const char* sfpu_cull_env = std::getenv("GSPLAT_TT_SFPU_CULL");
+      |                 ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1675:44: error: ‘sfpu_cull_env’ is not captured
+ 1675 |         return sfpu_cull_env != nullptr && sfpu_cull_env[0] == '1' &&
+      |                                            ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1667:44: note: the lambda has no capture-default
+ 1667 |     const bool tile_bucket = blend_aos && [] {
+      |                                            ^
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:1663:17: note: ‘const char* sfpu_cull_env’ declared here
+ 1663 |     const char* sfpu_cull_env = std::getenv("GSPLAT_TT_SFPU_CULL");
+      |                 ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: In function ‘double mb::cull::process_frame(DeviceContext&, float, bool, uint32_t, uint32_t, bool*)’:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:2252:56: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 3 has type ‘long unsigned int’ [-Wformat=]
+ 2252 |         std::fprintf(stderr, "[CULL_SPLIT] candidates=%u masks=%.2fMB exec=%.1f ms "
+      |                                                       ~^
+      |                                                        |
+      |                                                        unsigned int
+      |                                                       %lu
+ 2253 |                      "masks_addr=0x%lx end=0x%lx base_addr=0x%lx\n",
+ 2254 |                      total_candidates,
+      |                      ~~~~~~~~~~~~~~~~                   
+      |                      |
+      |                      long unsigned int
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:111:13: warning: ‘void save_npy_f32(const string&, const std::vector<float>&, const std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  111 | static void save_npy_f32(const std::string& path, const std::vector<float>& data, const std::vector<size_t>& shape) {
+      |             ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:102:30: warning: ‘std::vector<unsigned int> load_npy_u32(const string&, std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  102 | static std::vector<uint32_t> load_npy_u32(const std::string& path, std::vector<size_t>& shape) {
+      |                              ^~~~~~~~~~~~
+[6/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/tile_assign_device.cpp.o
+[7/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/pfwc_device.cpp.o
+[8/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/gather_visible_device.cpp.o
+[9/12] Building CXX object CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:828:17: warning: ‘{anonymous}::VisibleFiltered {anonymous}::filter_visible(const float*, const float*, const uint8_t*, std::size_t, std::size_t, gsplat_cpu::ThreadPool&)’ defined but not used [-Wunused-function]
+  828 | VisibleFiltered filter_visible(
+      |                 ^~~~~~~~~~~~~~
+[10/12] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/project_device.cpp.o
+ninja: build stopped: subcommand failed.

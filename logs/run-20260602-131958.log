@@ -1,0 +1,11 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:19:58-0700
+cmd: head -3 /tmp/ttw_fix.log 2>/dev/null
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+2026-06-02 01:44:53.073 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 01:44:53.073 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 01:44:53.073 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)

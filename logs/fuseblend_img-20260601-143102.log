@@ -1,0 +1,10 @@
+================ BUILD ID ================
+  cpp : #77 sha=31fcec6 bin=fc430f52ed7e0e2d T3: bulk-load whole-tile masks to L1 (1 settle/tile)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=fuseblend_img  timeout=600s  worry=600s  ts=2026-06-01T14:31:02-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_FUSE_BLEND=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last_fuse.json 2>&1 | grep -E "^SUMMARY"; cp opt/metal-screenshots/loop-ttw/hero.png /tmp/hero_fuse.png && echo COPIED
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#77 bin=fc430f52ed7e0e2d matches the built+stamped artifact
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=29.98dB hero_vs_ref=30.07dB min_vs_ref=30.07dB min_vs_gt=29.98dB ms/view=228.0 (proj=58.6 ta=37.0 sort=16.1 blend=116.1) shot=opt/metal-screenshots/loop-ttw/hero.png
+COPIED

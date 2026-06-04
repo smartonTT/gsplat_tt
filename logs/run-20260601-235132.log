@@ -1,0 +1,37 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-01T23:51:32-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal && cd /localdev/smarton/gstt2 && source .venv/bin/activate && export GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_MB_DEVCULL=0 && python3 scripts/a003_verify.py --backend tt --views 8 --out /tmp/ideal_verify.json 2>&1 | tail -30
+-----------------------------------------
+ --- tt::tt_metal::distributed::MeshWorkload::MeshWorkload()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xed28c) [0x7fd0e239b28c]
+ --- gsplat_tt::tile_assign_tt(float const*, float const*, unsigned long, int, int, int, float const*, float const*, float, bool*, gsplat_tt::TileAssignCallTimings*)
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x52b91) [0x7fd0e2300b91]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6c131) [0x7fd0e231a131]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x3f380) [0x7fd0e22ed380]
+ --- python3(+0x17e96f) [0x55ae7a52496f]
+ --- python3(_PyEval_EvalFrameDefault+0x56cb) [0x55ae7a520bdb]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55ae7a53168c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55ae7a51bd17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55ae7a53168c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55ae7a51bd17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55ae7a53168c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55ae7a51bbd0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55ae7a53168c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55ae7a51bbd0]
+ --- python3(+0x259d36) [0x55ae7a5ffd36]
+ --- python3(PyEval_EvalCode+0x86) [0x55ae7a5ffc06]
+ --- python3(+0x280678) [0x55ae7a626678]
+ --- python3(+0x27accf) [0x55ae7a620ccf]
+ --- python3(+0x280415) [0x55ae7a626415]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55ae7a625958]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55ae7a625637]
+ --- python3(Py_RunMain+0x2be) [0x55ae7a619bfe]
+ --- python3(Py_BytesMain+0x2d) [0x55ae7a5f3c4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7fd1b6ea0d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7fd1b6ea0e40]
+ --- python3(_start+0x25) [0x55ae7a5f3b45]
+
+[render_full] FATAL: device tile_assign failed with host-free env stack

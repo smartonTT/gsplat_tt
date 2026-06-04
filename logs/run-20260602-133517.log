@@ -1,0 +1,34 @@
+================ BUILD ID ================
+  cpp : #127 sha=b703f70 bin=23afc6773579cf78 
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:35:17-0700
+cmd: echo "=== sort 325 ==="; sed -n "325p" /localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp; echo "=== sort 1159 ==="; sed -n "1159p" /localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp; echo "=== blend 956,971 ==="; sed -n "956p;971p" /localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp; echo "=== blend 1113-1116 ==="; sed -n "1113,1116p" /localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp; echo "=== blend 1700-1710 ==="; sed -n "1700,1710p" /localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp; echo "=== blend 1822 ==="; sed -n "1822p" /localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#127 bin=23afc6773579cf78 matches the built+stamped artifact
+=== sort 325 ===
+    const bool l1_record = l1_record_enabled();
+=== sort 1159 ===
+        const bool l1_record_early = l1_record_enabled();
+=== blend 956,971 ===
+            const uint32_t rec_bytes = l1_record_enabled() ? 32u : 64u;  // M0: 32B records
+    const bool l1_record_blend = l1_record_enabled();
+=== blend 1113-1116 ===
+                reader_defines["MB_L1_RECORD"] = "1";
+                if (!l1_sort_enabled()) {
+                    // A/B: disable in-L1 sort; blend in bucket insertion order to
+                    // verify PSNR drops (proving bit-order matters).
+=== blend 1700-1710 ===
+    const bool blend_aos = sfpu_cull && !(blend_aos_env != nullptr && blend_aos_env[0] == '0');
+    const bool tile_bucket = blend_aos && sfpu_cull && [] {
+        const char* v = std::getenv("GSPLAT_TT_TILE_BUCKET");
+        if (v != nullptr) {
+            return v[0] == '1';
+        }
+        const char* ft = std::getenv("GSPLAT_TT_FUSED_TILE");
+        return !(ft != nullptr && ft[0] == '1');
+    }();
+    uint32_t tile_recs_addr = 0;
+    uint32_t bucket_meta_addr = 0;
+=== blend 1822 ===
+                                    if (l1_record_blend) {

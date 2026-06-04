@@ -1,0 +1,13 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:24:09-0700
+cmd: grep "_mod" /localdev/smarton/gstt2/backends/tt/backend.py | head -5
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+        # device kernels are selected inside render_full_tt via blend_mode
+        return self._render_fused and hasattr(self._mod, "render_full_tt")
+    def _blend_mode(self) -> int:
+        image, stats = self._mod.render_full_tt(
+            self._blend_mode(),

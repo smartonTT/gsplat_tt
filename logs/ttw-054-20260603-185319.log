@@ -1,0 +1,152 @@
+================ BUILD ID ================
+  cpp : #182 sha=c168a45 bin=c2ab58a6ece6ff41 iter54 attempt2: blend restored + mat after pipe
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=ttw-054  timeout=1200s  worry=600s  ts=2026-06-03T18:53:19-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate 2>/dev/null; test -f render/build-tt/build.ninja || (cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release); cmake --build render/build-tt -j 16; python3 render/run.py --iter-dir ${TTW_ITER_DIR:?TTW_ITER_DIR unset} 2>&1 | tee /tmp/ttw_verify.log; grep -q '^SUMMARY' /tmp/ttw_verify.log || { echo '[verify] no SUMMARY'; exit 6; }; grep -q '^TTW_METRIC hero_vs_ref=' /tmp/ttw_verify.log || { echo '[verify] no TTW_METRIC'; exit 6; }; mkdir -p opt/metal-screenshots/${TTW_ITER_DIR}; cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png 2>/dev/null || cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png; test -f opt/metal-screenshots/${TTW_ITER_DIR}/hero.png || { echo '[verify] hero screenshot missing'; exit 6; }; cp -f tmp/${TTW_ITER_DIR}/hero_diff10.png opt/metal-screenshots/${TTW_ITER_DIR}/hero_diff10.png 2>/dev/null || true; grep '^TTW_METRIC' /tmp/ttw_verify.log | tail -1; grep '^TTW_TIMING' /tmp/ttw_verify.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#182 bin=c2ab58a6ece6ff41 matches the built+stamped artifact
+===== ttw diagnose host=yyzo-bh-03 @ 2026-06-03T19:03:36-0700 =====
+--- device status (read-only) ---
+tt-smi not found
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 02:03:36 up 36 min,  0 users,  load average: 3.03, 2.56, 2.10
+--- device processes ---
+--- JIT cache size ---
+273M	/localdev/smarton/.cache/tt-metal-cache
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.
+ninja: no work to do.
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-06-04 02:09:11.476 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 02:09:11.476 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 02:09:11.476 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 02:09:11.476 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:09:11.477 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 02:09:11.477 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 02:09:11.477 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-04 02:09:11.477 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-04 02:09:11.477 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 02:09:11.477 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 02:09:11.477 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 02:09:11.477 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:09:11.477 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 02:09:11.477 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 02:09:11.477 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-04 02:09:11.477 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-04 02:09:11.477 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-04 02:09:11.516 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:09:11.517 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-04 02:09:11.517 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-04 02:09:11.517 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-04 02:09:11.517 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-04 02:09:11.519 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-04 02:09:11.520 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-04 02:09:11.520 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-04 02:09:12.005 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-04 02:09:12.005 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-04 02:09:12.005 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 02:09:12.005 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 02:09:12.005 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 02:09:12.005 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 02:09:12.005 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 02:09:12.005 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 02:09:12.005 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-04 02:09:12.006 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-04 02:09:12.006 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:09:12.006 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:09:12.006 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-04 02:09:12.006 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:09:12.006 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-04 02:09:12.006 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-04 02:09:12.006 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-04 02:09:12.006 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-04 02:09:12.006 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-04 02:09:12.006 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-04 02:09:12.006 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-04 02:09:12.031 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-04 02:09:22.043 | error    |           Metal | Timeout detected (metal_context.cpp:737)
+2026-06-04 02:09:22.043 | info     |           Metal | Serializing Inspector RPC data (metal_context.cpp:740)
+2026-06-04 02:09:22.045 | critical |          Always | TT_THROW: Device 0: Timeout (10000 ms) waiting for physical cores to finish: 3-10. (assert.hpp:104)
+2026-06-04 02:09:22.048 | critical |          Always | TT_THROW: Device 0 init: failed to initialize FW! Try resetting the board. (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/render/run.py", line 339, in <module>
+    main()
+  File "/localdev/smarton/gstt2/render/run.py", line 268, in main
+    _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+  File "/localdev/smarton/gstt2/render/run.py", line 211, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2/render/run.py", line 117, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/device/firmware/risc_firmware_initializer.cpp:1267: tt::exception
+info:
+Device 0 init: failed to initialize FW! Try resetting the board.
+backtrace:
+ --- void tt::assert::detail::tt_throw_impl<fmt::v11::fstring<int const&>, int>(char const*, int, char const*, char const*, fmt::v11::fstring<int const&> const&, int const&)
+ --- tt::tt_metal::RiscFirmwareInitializer::initialize_and_launch_firmware(int)
+ --- tt::tt_metal::RiscFirmwareInitializer::run_launch_phase(std::set<int, std::less<int>, std::allocator<int> > const&)
+ --- tt::tt_metal::MetalContext::initialize(tt::tt_metal::DispatchCoreConfig const&, unsigned char, std::vector<unsigned int, std::allocator<unsigned int> > const&, unsigned long, bool)
+ --- tt::tt_metal::MetalContext::initialize_device_manager(std::vector<int, std::allocator<int> > const&, unsigned char, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long, bool, bool)
+ --- tt::tt_metal::experimental::CreateDevices(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned char, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::vector<unsigned int, std::allocator<unsigned int> > const&, unsigned long, bool, bool)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::ScopedDevices::ScopedDevices(std::vector<tt::tt_metal::distributed::MaybeRemote<int>, std::allocator<tt::tt_metal::distributed::MaybeRemote<int> > > const&, std::vector<tt::tt_metal::distributed::MaybeRemote<int>, std::allocator<tt::tt_metal::distributed::MaybeRemote<int> > > const&, unsigned long, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0xab5f1) [0x7f38bf8f55f1]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f3a06cf3ee8]
+ --- gsplat_tt::jit_warmup_ideal_path()
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x372c3) [0x7f38bf8812c3]
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x3f9e1) [0x7f38bf8899e1]
+ --- /localdev/smarton/gstt2/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x31f1a) [0x7f38bf87bf1a]
+ --- python3(+0x17e96f) [0x55f0740f096f]
+ --- python3(_PyEval_EvalFrameDefault+0x56cb) [0x55f0740ecbdb]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f0740fd68c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55f0740e7d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f0740fd68c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55f0740e7d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f0740fd68c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55f0740e7bd0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55f0740fd68c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55f0740e7bd0]
+ --- python3(+0x259d36) [0x55f0741cbd36]
+ --- python3(PyEval_EvalCode+0x86) [0x55f0741cbc06]
+ --- python3(+0x280678) [0x55f0741f2678]
+ --- python3(+0x27accf) [0x55f0741ecccf]
+ --- python3(+0x280415) [0x55f0741f2415]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55f0741f1958]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55f0741f1637]
+ --- python3(Py_RunMain+0x2be) [0x55f0741e5bfe]
+ --- python3(Py_BytesMain+0x2d) [0x55f0741bfc4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f3a06c83d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f3a06c83e40]
+ --- python3(_start+0x25) [0x55f0741bfb45]
+
+2026-06-04 02:09:22.155 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-06-04 02:09:22.155 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-06-04 02:09:22.236 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-06-04 02:09:22.236 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-06-04 02:09:22.236 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)
+2026-06-04 02:09:22.236 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+[verify] no SUMMARY

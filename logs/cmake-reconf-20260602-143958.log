@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #128 sha=138e943 bin=e64fdd3e90336b37 M0 CULL_OOB diag
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=cmake-reconf  timeout=1200s  worry=600s  ts=2026-06-02T14:39:58-0700
+cmd: cd /localdev/smarton/gstt2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_ARCH_NAME=blackhole && cmake -S src -B build-tt -DCMAKE_BUILD_TYPE=RelWithDebInfo >/tmp/reconf.log 2>&1; echo reconf_rc=$?; cmake --build build-tt -j 16 2>&1 | grep -E 'Linking CXX shared|error:|FAILED|ninja: build stopped'
+-----------------------------------------
+reconf_rc=0
+[140/140] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so

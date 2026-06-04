@@ -1,0 +1,12 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=ideal-bisect  timeout=600s  worry=600s  ts=2026-06-01T23:40:32-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=0 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_MB_TIMING=1 && source .venv/bin/activate && .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-bisect --out opt/loop-bisect.json 2>&1 | grep -E "^SUMMARY|CULL_SPLIT|BLEND_SPLIT"
+-----------------------------------------
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=93.7 ms masks_addr=0xc3fcac0 end=0xd0ddf40 base_addr=0xc2252c0
+[BLEND_SPLIT] upload=0.5 (attrs=0.0MB ids=0.0MB resident) exec=1879.2 readback=0.7 total=1880.4 ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=80.3 ms masks_addr=0xc3fcac0 end=0xd0ddf40 base_addr=0xc2252c0
+[BLEND_SPLIT] upload=0.5 (attrs=0.0MB ids=0.0MB resident) exec=108.5 readback=0.6 total=109.7 ms
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=14.98dB hero_vs_ref=14.99dB min_vs_ref=14.99dB min_vs_gt=14.98dB ms/view=541.7 (proj=294.2 ta=25.0 sort=17.1 blend=193.4) shot=opt/metal-screenshots/loop-bisect/hero.png

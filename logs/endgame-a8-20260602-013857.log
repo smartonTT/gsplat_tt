@@ -1,0 +1,22 @@
+================ BUILD ID ================
+  cpp : #121 sha=0c72479 bin=d193d161f0d6fd76 rebuild Tracy zone kernels
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=endgame-a8  timeout=1800s  worry=600s  ts=2026-06-02T01:38:57-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate; .venv/bin/python3 scripts/a003_verify.py --views 8 --iter-dir ttw-endgame-a8 --out opt/ttw/endgame-a8.json 2>&1 | tee /tmp/endgame_a8.log; grep -E "^SUMMARY|JIT_WARMUP|host_stage" /tmp/endgame_a8.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#121 bin=d193d161f0d6fd76 matches the built+stamped artifact
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 331, in <module>
+    main()
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 175, in main
+    gauss = load_ply(str(Path(cam["ply"])))
+  File "/localdev/smarton/gstt2/gsplat/loading_gaussians.py", line 44, in load_ply
+    ply = PlyData.read(path)
+  File "/localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/plyfile.py", line 172, in read
+    elt._read(data_stream, data.text, data.byte_order, mmap,
+  File "/localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/plyfile.py", line 522, in _read
+    self._read_mmap(stream, byte_order, mmap_mode,
+  File "/localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/plyfile.py", line 584, in _read_mmap
+    raise PlyElementParseError("early end-of-file", self,
+plyfile.PlyElementParseError: element 'vertex': row 221574: early end-of-file

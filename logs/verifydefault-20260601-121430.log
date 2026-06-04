@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #67 sha=06c02f9 bin=d8d6744118737f87 stepA gated-off + spin root-cause diagnosis
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=verifydefault  timeout=1200s  worry=600s  ts=2026-06-01T12:14:30-0700
+cmd: 
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#67 bin=d8d6744118737f87 matches the built+stamped artifact
+bash: -c: line 2: syntax error: unexpected end of file

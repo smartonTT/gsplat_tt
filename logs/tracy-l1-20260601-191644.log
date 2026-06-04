@@ -1,0 +1,108 @@
+================ BUILD ID ================
+  cpp : #92 sha=53e4e13 bin=151d79e9ef8fcec4 L1 profile deliverables: ensure 53e4e13 built
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=tracy-l1  timeout=900s  worry=600s  ts=2026-06-01T19:16:45-0700
+cmd: bash opt/profiler/run_capture_l1.sh
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#92 bin=151d79e9ef8fcec4 matches the built+stamped artifact
+[tracy-l1] capture-release -> /localdev/smarton/gstt2/opt/profiler/render-l1.tracy (connecting to 127.0.0.1:8086, retrying until render client is up)
+Connecting to 127.0.0.1:8086...[tracy-l1] capture-release pid=58244 alive (waiting for client)
+[tracy-l1] launching render: scripts/a003_verify.py --backend tt --views 1 (L1-resident bucket + CB_FENCE)
+2026-06-02 02:16:49.556 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:16:49.556 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:16:49.556 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:16:49.556 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:16:49.556 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:16:49.556 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:16:49.557 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 02:16:49.557 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 02:16:49.557 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:16:49.557 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:16:49.557 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:16:49.557 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:16:49.557 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:16:49.557 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:16:49.557 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 02:16:49.557 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 02:16:49.557 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 02:16:49.596 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:16:49.596 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 02:16:49.596 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 02:16:49.596 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 02:16:49.596 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 02:16:49.598 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 02:16:49.599 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 02:16:49.599 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 02:16:50.094 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 02:16:50.094 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 02:16:50.094 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:16:50.094 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:16:50.094 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:16:50.094 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:16:50.094 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:16:50.095 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:16:50.095 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 02:16:50.095 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 02:16:50.095 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:16:50.095 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:16:50.095 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 02:16:50.095 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:16:50.095 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:16:50.095 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 02:16:50.095 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 02:16:50.095 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 02:16:50.095 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 02:16:50.095 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 02:16:50.095 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 02:16:50.209 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-06-02 02:16:50.353 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_57574_3319747240_0' (shm_resource_tracker.cpp:265)
+2026-06-02 02:16:50.353 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_57574' (shm_resource_tracker.cpp:275)
+2026-06-02 02:16:50.353 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 02:16:50.941 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349979 GHz, device_time_at_sync=17599783014026 cycles (realtime_profiler_manager.cpp:1082)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=7453.62ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=699.94 up=0.45 kernel=13.15 d2h=0.00 compact=0.00 publish=6.21 total=8173.57ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=2486.7 ms masks_addr=0xa08ee00 end=0xad70280 base_addr=0x9eb5600
+[BLEND_SPLIT] upload=0.5 (attrs=0.0MB ids=0.0MB resident) exec=1890.9 readback=1.9 total=1893.2 ms
+[BLEND_ADDR] cull_masks=0xa08ee00 out=0xa269ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xa267ec0 yramp=0xa268ec0 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=4383.7 ms (host_build=0)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.54ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.13 up=0.42 kernel=7.45 d2h=0.00 compact=0.00 publish=1.29 total=99.00ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=79.8 ms masks_addr=0xa08ee00 end=0xad70280 base_addr=0x9eb5600
+[BLEND_SPLIT] upload=1.7 (attrs=0.0MB ids=0.0MB resident) exec=92.8 readback=2.2 total=96.7 ms
+[BLEND_ADDR] cull_masks=0xa08ee00 out=0xa269ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xa267ec0 yramp=0xa268ec0 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=179.6 ms (host_build=0)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.53ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.20 up=0.42 kernel=7.45 d2h=7.12 compact=0.00 publish=1.29 total=108.39ms
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.73ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.27 up=0.43 kernel=7.47 d2h=7.15 compact=0.00 publish=1.31 total=108.73ms
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=383.0 (proj=58.9 ta=35.3 sort=99.0 blend=179.8) shot=opt/metal-screenshots/prof-l1-tracy/hero.png
+
+Queue delay: 12 ns
+Timer resolution: 0 ns
+
+Frames: 2
+Time span: 16.16 s
+Zones: 74,223
+Elapsed time: 15.91 s
+Saving trace...[tracy-l1] render exited rc=0; waiting for capture-release to finalize /localdev/smarton/gstt2/opt/profiler/render-l1.tracy
+ done!
+Trace size 554.14 KB (21.26% ratio)
+[tracy-l1] OK: -rw-rw-r-- 1 smarton smarton 567609 Jun  2 02:17 /localdev/smarton/gstt2/opt/profiler/render-l1.tracy
+[tracy-l1] DONE render_rc=0

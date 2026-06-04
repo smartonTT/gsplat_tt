@@ -1,0 +1,29 @@
+================ BUILD ID ================
+  cpp : #123 sha=138e943 bin=7fdb149b1b75e407 rebaseline post false-M1 reset: kernel-inclusive fingerprint
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=build  timeout=1200s  worry=600s  ts=2026-06-02T14:08:40-0700
+cmd: cmake --build build-tt -j 16
+-----------------------------------------
+[1/3] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/blend_device.cpp.o
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: In function ‘double mb::cull::process_frame(DeviceContext&, float, bool, uint32_t, uint32_t, bool*, bool)’:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:2309:56: warning: format ‘%u’ expects argument of type ‘unsigned int’, but argument 3 has type ‘uint64_t’ {aka ‘long unsigned int’} [-Wformat=]
+ 2309 |         std::fprintf(stderr, "[CULL_SPLIT] candidates=%u masks=%.2fMB exec=%.1f ms "
+      |                                                       ~^
+      |                                                        |
+      |                                                        unsigned int
+      |                                                       %lu
+ 2310 |                      "masks_addr=0x%lx end=0x%lx base_addr=0x%lx\n",
+ 2311 |                      total_candidates,
+      |                      ~~~~~~~~~~~~~~~~                   
+      |                      |
+      |                      uint64_t {aka long unsigned int}
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp: At global scope:
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:112:13: warning: ‘void save_npy_f32(const string&, const std::vector<float>&, const std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  112 | static void save_npy_f32(const std::string& path, const std::vector<float>& data, const std::vector<size_t>& shape) {
+      |             ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/blend_device.cpp:103:30: warning: ‘std::vector<unsigned int> load_npy_u32(const string&, std::vector<long unsigned int>&)’ defined but not used [-Wunused-function]
+  103 | static std::vector<uint32_t> load_npy_u32(const std::string& path, std::vector<size_t>& shape) {
+      |                              ^~~~~~~~~~~~
+[2/3] Linking CXX static library libgsplat_tt.a
+[3/3] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so

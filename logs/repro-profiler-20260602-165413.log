@@ -1,0 +1,1550 @@
+================ BUILD ID ================
+  cpp : #144 sha=fc12738 bin=3ccfa6b62ec6ce68 iter 43: M2(bin): drop dead 64B tile_recs dense scatter on L1_RECORD path (~216MB/frame dead DRAM writes removed; blend reads only 32B buf_l1_recs, fallback gathers proj_m_*); bin 43->41ms, sort 52.8->50.8, ms/view 304.9->297.3; 63.85dB bit-identical
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=repro-profiler  timeout=600s  worry=600s  ts=2026-06-02T16:54:13-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_L1_RECORD=1 GSPLAT_TT_MB_TIMING=1 TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1; source .venv/bin/activate 2>/dev/null; python3 scripts/a003_verify.py --backend tt --views 1 --out /tmp/repro_profiler.json 2>&1 | tee /tmp/repro_profiler.log; echo "=====GREP====="; grep -n -E "kernel_profiler|template|deduction|could not|Failed to compile|FATAL|gather_visible_scatter|sort_bin" /tmp/repro_profiler.log | head -80
+-----------------------------------------
+2026-06-02 23:54:15.495 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 23:54:15.495 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 23:54:15.495 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 23:54:15.495 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 23:54:15.495 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 23:54:15.495 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 23:54:15.495 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 23:54:15.495 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 23:54:15.495 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 23:54:15.495 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 23:54:15.496 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 23:54:15.496 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 23:54:15.496 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 23:54:15.496 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 23:54:15.496 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 23:54:15.496 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 23:54:15.496 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 23:54:15.536 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 23:54:15.536 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 23:54:15.536 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 23:54:15.536 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 23:54:15.536 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 23:54:15.538 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 23:54:15.539 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 23:54:15.539 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 23:54:16.042 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 23:54:16.042 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 23:54:16.042 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 23:54:16.042 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 23:54:16.042 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 23:54:16.042 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 23:54:16.043 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 23:54:16.043 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 23:54:16.043 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 23:54:16.043 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 23:54:16.043 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 23:54:16.043 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 23:54:16.043 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 23:54:16.043 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 23:54:16.043 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 23:54:16.043 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 23:54:16.043 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 23:54:16.043 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 23:54:16.043 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 23:54:16.043 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 23:54:16.043 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 23:54:16.156 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-06-02 23:54:16.299 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_328541_1927581849_0' (shm_resource_tracker.cpp:265)
+2026-06-02 23:54:16.299 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_328541' (shm_resource_tracker.cpp:275)
+2026-06-02 23:54:16.299 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 23:54:16.886 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349983 GHz, device_time_at_sync=122690333327404 cycles (realtime_profiler_manager.cpp:1082)
+2026-06-02 23:54:17.556 | error    |    BuildKernels | brisc compile failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/gather_visible_scatter/5369792897523863095/brisc/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O2 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh -fno-tree-loop-distribute-patterns -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow -c -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/gather_visible_scatter/5369792897523863095/brisc/brisck.11954376252337024317.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc -MF /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/gather_visible_scatter/5369792897523863095/brisc/brisck.11954376252337024317.d -DIS_NOT_POW2_NUM_DRAM_BANKS=1 -DIS_NOT_POW2_NUM_L1_BANKS=1 -DNUM_DRAM_BANKS=7 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROFILE_KERNEL=1 -DPROFILER_FULL_HOST_BUFFER_SIZE_PER_RISC=48000 -DPROCESSOR_INDEX=0 -DCOMPILE_FOR_BRISC -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD -DGATHER_EMIT_BLENDREC='1' -DNOC_INDEX='0' -DNOC_MODE='0' -DKERNEL_COMPILE_TIME_ARGS=2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0  (build.cpp:58)
+2026-06-02 23:54:17.556 | critical |          Always | TT_THROW: brisc build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:27,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+   35 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name))); \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+  395 |     SrcLocNameToHash("PROFILER-NOC-QUICK-PUSH");
+      |     ^~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+  652 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+  110 | constexpr uint32_t Hash16_CT(const char (&s)[N]) {
+      |                    ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:21:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:307:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  307 |             noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:308:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  308 |             noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:309:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  309 |             noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:310:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  310 |             noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:311:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  311 |             noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:312:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  312 |             noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:334:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  334 |         noc_async_write(l1_oM, get_noc_addr(core_id, acc_counts), 4);
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:347:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  347 |         noc_async_read(get_noc_addr(core_id, acc_counts), l1_oM, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:360:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  360 |         noc_async_write(l1_opx  + off, get_noc_addr(page, acc_opx)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:361:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  361 |         noc_async_write(l1_opy  + off, get_noc_addr(page, acc_opy)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:362:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  362 |         noc_async_write(l1_orx  + off, get_noc_addr(page, acc_orx)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:363:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  363 |         noc_async_write(l1_ory  + off, get_noc_addr(page, acc_ory)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:364:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  364 |         noc_async_write(l1_oa   + off, get_noc_addr(page, acc_oa)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:365:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  365 |         noc_async_write(l1_ob   + off, get_noc_addr(page, acc_ob)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:366:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  366 |         noc_async_write(l1_oc   + off, get_noc_addr(page, acc_oc)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:367:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  367 |         noc_async_write(l1_odep + off, get_noc_addr(page, acc_odep) + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:368:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  368 |         noc_async_write(l1_oop  + off, get_noc_addr(page, acc_oop)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:384:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  384 |                             get_noc_addr(cpage, acc_ocol) + coff * 4, n * 4);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:393:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  393 |                             get_noc_addr(page * PAGE_ELEMS + s, acc_brec), 64);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:400:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  400 |         noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:401:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  401 |         noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:402:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  402 |         noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:403:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  403 |         noc_async_read(get_noc_addr(t, acc_a),     l1_a,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:404:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  404 |         noc_async_read(get_noc_addr(t, acc_b),     l1_b,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:405:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  405 |         noc_async_read(get_noc_addr(t, acc_c),     l1_c,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:406:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  406 |         noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:407:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  407 |         noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:408:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  408 |         noc_async_read(get_noc_addr(t, acc_cr),    l1_cr,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:409:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  409 |         noc_async_read(get_noc_addr(t, acc_cg),    l1_cg,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:410:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  410 |         noc_async_read(get_noc_addr(t, acc_cb),    l1_cb,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:411:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  411 |         noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc: In function 'uint32_t _start()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: BRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc,77,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+  702 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:77:9: note: in expansion of macro 'DeviceZoneScopedMainChildN'
+   77 |         DeviceZoneScopedMainChildN("BRISC-KERNEL");
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+ (assert.hpp:104)
+2026-06-02 23:54:17.557 | critical |          Always | TT_THROW: Failed to generate binaries for gather_visible_scatter TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+brisc build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:27,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+   35 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name))); \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+  395 |     SrcLocNameToHash("PROFILER-NOC-QUICK-PUSH");
+      |     ^~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+  652 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+  110 | constexpr uint32_t Hash16_CT(const char (&s)[N]) {
+      |                    ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:21:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:307:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  307 |             noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:308:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  308 |             noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:309:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  309 |             noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:310:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  310 |             noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:311:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  311 |             noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:312:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  312 |             noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:334:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  334 |         noc_async_write(l1_oM, get_noc_addr(core_id, acc_counts), 4);
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:347:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  347 |         noc_async_read(get_noc_addr(core_id, acc_counts), l1_oM, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:360:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  360 |         noc_async_write(l1_opx  + off, get_noc_addr(page, acc_opx)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:361:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  361 |         noc_async_write(l1_opy  + off, get_noc_addr(page, acc_opy)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:362:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  362 |         noc_async_write(l1_orx  + off, get_noc_addr(page, acc_orx)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:363:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  363 |         noc_async_write(l1_ory  + off, get_noc_addr(page, acc_ory)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:364:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  364 |         noc_async_write(l1_oa   + off, get_noc_addr(page, acc_oa)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:365:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  365 |         noc_async_write(l1_ob   + off, get_noc_addr(page, acc_ob)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:366:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  366 |         noc_async_write(l1_oc   + off, get_noc_addr(page, acc_oc)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:367:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  367 |         noc_async_write(l1_odep + off, get_noc_addr(page, acc_odep) + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:368:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  368 |         noc_async_write(l1_oop  + off, get_noc_addr(page, acc_oop)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:384:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  384 |                             get_noc_addr(cpage, acc_ocol) + coff * 4, n * 4);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:393:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  393 |                             get_noc_addr(page * PAGE_ELEMS + s, acc_brec), 64);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:400:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  400 |         noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:401:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  401 |         noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:402:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  402 |         noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:403:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  403 |         noc_async_read(get_noc_addr(t, acc_a),     l1_a,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:404:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  404 |         noc_async_read(get_noc_addr(t, acc_b),     l1_b,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:405:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  405 |         noc_async_read(get_noc_addr(t, acc_c),     l1_c,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:406:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  406 |         noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:407:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  407 |         noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:408:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  408 |         noc_async_read(get_noc_addr(t, acc_cr),    l1_cr,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:409:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  409 |         noc_async_read(get_noc_addr(t, acc_cg),    l1_cg,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:410:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  410 |         noc_async_read(get_noc_addr(t, acc_cb),    l1_cb,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:411:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  411 |         noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc: In function 'uint32_t _start()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: BRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc,77,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+  702 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:77:9: note: in expansion of macro 'DeviceZoneScopedMainChildN'
+   77 |         DeviceZoneScopedMainChildN("BRISC-KERNEL");
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7fddcd4668c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7fddcd78c9fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fddcd7a7c18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fddcd7a7b9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fddcd46f19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fdf0b8b5ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fddcd46eff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fddcd7a79ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fddcd6080c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fddcd606bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fddcd6060b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fdf090ec253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fdf0b8b0ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fdf0b9428d0]
+ (assert.hpp:104)
+[gsplat_tt::gather] call failed: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for gather_visible_scatter TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+brisc build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:27,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+   35 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name))); \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+  395 |     SrcLocNameToHash("PROFILER-NOC-QUICK-PUSH");
+      |     ^~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+  652 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+  110 | constexpr uint32_t Hash16_CT(const char (&s)[N]) {
+      |                    ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+   92 |     DeviceZoneScopedN(count_only ? "proj_count" : "proj_scatter");
+      |     ^~~~~~~~~~~~~~~~~
+In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:21:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:307:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  307 |             noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:308:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  308 |             noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:309:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  309 |             noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:310:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  310 |             noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:311:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  311 |             noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:312:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  312 |             noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:334:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  334 |         noc_async_write(l1_oM, get_noc_addr(core_id, acc_counts), 4);
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:347:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  347 |         noc_async_read(get_noc_addr(core_id, acc_counts), l1_oM, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:360:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  360 |         noc_async_write(l1_opx  + off, get_noc_addr(page, acc_opx)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:361:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  361 |         noc_async_write(l1_opy  + off, get_noc_addr(page, acc_opy)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:362:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  362 |         noc_async_write(l1_orx  + off, get_noc_addr(page, acc_orx)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:363:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  363 |         noc_async_write(l1_ory  + off, get_noc_addr(page, acc_ory)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:364:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  364 |         noc_async_write(l1_oa   + off, get_noc_addr(page, acc_oa)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:365:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  365 |         noc_async_write(l1_ob   + off, get_noc_addr(page, acc_ob)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:366:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  366 |         noc_async_write(l1_oc   + off, get_noc_addr(page, acc_oc)   + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:367:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  367 |         noc_async_write(l1_odep + off, get_noc_addr(page, acc_odep) + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:368:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  368 |         noc_async_write(l1_oop  + off, get_noc_addr(page, acc_oop)  + off, sz);
+      |                                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:384:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  384 |                             get_noc_addr(cpage, acc_ocol) + coff * 4, n * 4);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:393:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  393 |                             get_noc_addr(page * PAGE_ELEMS + s, acc_brec), 64);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:400:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  400 |         noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:401:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  401 |         noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:402:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  402 |         noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:403:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  403 |         noc_async_read(get_noc_addr(t, acc_a),     l1_a,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:404:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  404 |         noc_async_read(get_noc_addr(t, acc_b),     l1_b,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:405:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  405 |         noc_async_read(get_noc_addr(t, acc_c),     l1_c,   TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:406:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  406 |         noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:407:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  407 |         noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:408:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  408 |         noc_async_read(get_noc_addr(t, acc_cr),    l1_cr,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:409:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  409 |         noc_async_read(get_noc_addr(t, acc_cg),    l1_cg,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:410:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  410 |         noc_async_read(get_noc_addr(t, acc_cb),    l1_cb,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:411:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  411 |         noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc: In function 'uint32_t _start()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: BRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc,77,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+  702 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc:77:9: note: in expansion of macro 'DeviceZoneScopedMainChildN'
+   77 |         DeviceZoneScopedMainChildN("BRISC-KERNEL");
+      |         ^~~~~~~~~~~~~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7fddcd4668c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7fddcd78c9fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fddcd7a7c18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fddcd7a7b9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fddcd46f19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fdf0b8b5ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fddcd46eff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fddcd7a79ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fddcd6080c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fddcd606bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fddcd6060b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fdf090ec253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fdf0b8b0ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fdf0b9428d0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x886ba8) [0x7fddcd61cba8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x85876b) [0x7fddcd5ee76b]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8582c2) [0x7fddcd5ee2c2]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fddcd7a7c18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fddcd7a7b9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fddcd46f19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fdf0b8b5ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fddcd46eff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fddcd7a79ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fddcd6080c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fddcd606bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fddcd6060b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fdf090ec253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fdf0b8b0ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fdf0b9428d0]
+
+[JIT_WARMUP] ideal-path contexts compiled in 0.6 ms
+2026-06-02 23:54:18.252 | error    |    BuildKernels | ncrisc compile failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/sort_bin/13865267996756566666/ncrisc/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O2 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh -fno-tree-loop-distribute-patterns -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow -c -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/sort_bin/13865267996756566666/ncrisc/ncrisck.11954376252337024317.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc -MF /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/sort_bin/13865267996756566666/ncrisc/ncrisck.11954376252337024317.d -DIS_NOT_POW2_NUM_DRAM_BANKS=1 -DIS_NOT_POW2_NUM_L1_BANKS=1 -DNUM_DRAM_BANKS=7 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROFILE_KERNEL=1 -DPROFILER_FULL_HOST_BUFFER_SIZE_PER_RISC=48000 -DPROCESSOR_INDEX=1 -DCOMPILE_FOR_NCRISC -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD -DBIN_EMIT_REC='1' -DL1_BUCKET_REC='1' -DNOC_INDEX='1' -DNOC_MODE='0' -DKERNEL_COMPILE_TIME_ARGS=2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0  (build.cpp:58)
+2026-06-02 23:54:18.252 | critical |          Always | TT_THROW: ncrisc build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:27,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+   35 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name))); \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+  395 |     SrcLocNameToHash("PROFILER-NOC-QUICK-PUSH");
+      |     ^~~~~~~~~~~~~~~~
+In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:22:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'uint16_t {anonymous}::fp32_to_fp16(float)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:70:55: warning: suggest parentheses around arithmetic in operand of '|' [-Wparentheses]
+   70 |         return static_cast<uint16_t>((sign << 15) | m + round);
+      |                                                     ~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:75:88: warning: suggest parentheses around arithmetic in operand of '|' [-Wparentheses]
+   75 |     return static_cast<uint16_t>((sign << 15) | (static_cast<uint32_t>(e) << 10) | m16 + round);
+      |                                                                                    ~~~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+  652 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+  110 | constexpr uint32_t Hash16_CT(const char (&s)[N]) {
+      |                    ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:211:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  211 |             noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:212:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  212 |             noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:223:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  223 |                             get_noc_addr(base_page + pp, bin2d_acc), PAGE_BYTES);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:232:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  232 |         noc_async_read(get_noc_addr(base_page + pp, bin2d_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:241:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  241 |         noc_async_read(get_noc_addr(base_page + pp, recbase_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:251:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  251 |         noc_async_read(get_noc_addr(base_page + pp, l1_base_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:268:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  268 |         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:269:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  269 |         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:392:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  392 |                             get_noc_addr(brec_l1_slot[b], l1_recs_acc),
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:417:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  417 |         noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:418:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  418 |         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:419:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  419 |         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:433:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  433 |                 noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:457:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  457 |                 noc_async_read(get_noc_addr(g, blendrec_acc), slot, PAGE_BYTES);
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:529:55: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  529 |             noc_async_write(ks_l1 + soff, get_noc_addr(base_pg + pp, keys_acc), PAGE_BYTES);
+      |                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:530:55: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  530 |             noc_async_write(is_l1 + soff, get_noc_addr(base_pg + pp, ids_acc),  PAGE_BYTES);
+      |                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc: In function 'uint32_t _start()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: NCRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc,69,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+  702 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:69:5: note: in expansion of macro 'DeviceZoneScopedMainChildN'
+   69 |     DeviceZoneScopedMainChildN("NCRISC-KERNEL");
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+ (assert.hpp:104)
+2026-06-02 23:54:18.253 | critical |          Always | TT_THROW: Failed to generate binaries for sort_bin TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+ncrisc build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:27,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+   35 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name))); \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+  395 |     SrcLocNameToHash("PROFILER-NOC-QUICK-PUSH");
+      |     ^~~~~~~~~~~~~~~~
+In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:22:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'uint16_t {anonymous}::fp32_to_fp16(float)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:70:55: warning: suggest parentheses around arithmetic in operand of '|' [-Wparentheses]
+   70 |         return static_cast<uint16_t>((sign << 15) | m + round);
+      |                                                     ~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:75:88: warning: suggest parentheses around arithmetic in operand of '|' [-Wparentheses]
+   75 |     return static_cast<uint16_t>((sign << 15) | (static_cast<uint32_t>(e) << 10) | m16 + round);
+      |                                                                                    ~~~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+  652 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+  110 | constexpr uint32_t Hash16_CT(const char (&s)[N]) {
+      |                    ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:211:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  211 |             noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:212:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  212 |             noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:223:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  223 |                             get_noc_addr(base_page + pp, bin2d_acc), PAGE_BYTES);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:232:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  232 |         noc_async_read(get_noc_addr(base_page + pp, bin2d_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:241:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  241 |         noc_async_read(get_noc_addr(base_page + pp, recbase_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:251:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  251 |         noc_async_read(get_noc_addr(base_page + pp, l1_base_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:268:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  268 |         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:269:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  269 |         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:392:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  392 |                             get_noc_addr(brec_l1_slot[b], l1_recs_acc),
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:417:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  417 |         noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:418:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  418 |         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:419:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  419 |         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:433:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  433 |                 noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:457:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  457 |                 noc_async_read(get_noc_addr(g, blendrec_acc), slot, PAGE_BYTES);
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:529:55: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  529 |             noc_async_write(ks_l1 + soff, get_noc_addr(base_pg + pp, keys_acc), PAGE_BYTES);
+      |                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:530:55: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  530 |             noc_async_write(is_l1 + soff, get_noc_addr(base_pg + pp, ids_acc),  PAGE_BYTES);
+      |                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc: In function 'uint32_t _start()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: NCRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc,69,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+  702 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:69:5: note: in expansion of macro 'DeviceZoneScopedMainChildN'
+   69 |     DeviceZoneScopedMainChildN("NCRISC-KERNEL");
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7fddcd4668c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7fddcd78c9fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fddcd7a7c18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fddcd7a7b9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fddcd46f19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fdf0b8b5ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fddcd46eff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fddcd7a79ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fddcd6080c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fddcd606bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fddcd6060b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fdf090ec253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fdf0b8b0ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fdf0b9428d0]
+ (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for sort_bin TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+ncrisc build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:27,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/internal/firmware_common.h:24,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:17:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+   35 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name))); \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+  395 |     SrcLocNameToHash("PROFILER-NOC-QUICK-PUSH");
+      |     ^~~~~~~~~~~~~~~~
+In file included from ../kernel_includes.hpp:1,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:22:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'uint16_t {anonymous}::fp32_to_fp16(float)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:70:55: warning: suggest parentheses around arithmetic in operand of '|' [-Wparentheses]
+   70 |         return static_cast<uint16_t>((sign << 15) | m + round);
+      |                                                     ~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:75:88: warning: suggest parentheses around arithmetic in operand of '|' [-Wparentheses]
+   75 |     return static_cast<uint16_t>((sign << 15) | (static_cast<uint32_t>(e) << 10) | m16 + round);
+      |                                                                                    ~~~~^~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'void kernel_main()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+  652 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+  110 | constexpr uint32_t Hash16_CT(const char (&s)[N]) {
+      |                    ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+      |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:95:5: note: in expansion of macro 'DeviceZoneScopedN'
+   95 |     DeviceZoneScopedN(mode == 0 ? "sort_bin_hist" : "sort_bucket_emit");
+      |     ^~~~~~~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:211:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  211 |             noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+In file included from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/dataflow/dataflow_api.h:18:
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:212:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  212 |             noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                            ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:223:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  223 |                             get_noc_addr(base_page + pp, bin2d_acc), PAGE_BYTES);
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:232:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  232 |         noc_async_read(get_noc_addr(base_page + pp, bin2d_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:241:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  241 |         noc_async_read(get_noc_addr(base_page + pp, recbase_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:251:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  251 |         noc_async_read(get_noc_addr(base_page + pp, l1_base_acc),
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:268:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  268 |         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:269:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  269 |         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In lambda function:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:392:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  392 |                             get_noc_addr(brec_l1_slot[b], l1_recs_acc),
+      |                             ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp: In function 'void kernel_main()':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:417:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  417 |         noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:418:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  418 |         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:419:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  419 |         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+      |                        ~~~~~~~~~~~~^~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:433:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  433 |                 noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:457:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  457 |                 noc_async_read(get_noc_addr(g, blendrec_acc), slot, PAGE_BYTES);
+      |                                ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:529:55: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  529 |             noc_async_write(ks_l1 + soff, get_noc_addr(base_pg + pp, keys_acc), PAGE_BYTES);
+      |                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/sort_bin.cpp:530:55: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+  530 |             noc_async_write(is_l1 + soff, get_noc_addr(base_pg + pp, ids_acc),  PAGE_BYTES);
+      |                                           ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/dataflow/dataflow_api_addrgen.h:455:1: note: declared here
+  455 | get_noc_addr(const uint32_t id, const InterleavedAddrGen<DRAM>& addrgen, uint32_t offset = 0, uint8_t noc = noc_index) {
+      | ^~~~~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc: In function 'uint32_t _start()':
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: NCRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc,69,KERNEL_PROFILER'
+   25 | #define DO_PRAGMA(x) _Pragma(#x)
+      |                      ^~~~~~~
+/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+  702 |     DO_PRAGMA(message(PROFILER_MSG_NAME(name)));                               \
+      |     ^~~~~~~~~
+/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/ncrisck.cc:69:5: note: in expansion of macro 'DeviceZoneScopedMainChildN'
+   69 |     DeviceZoneScopedMainChildN("NCRISC-KERNEL");
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d08c8) [0x7fddcd4668c8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9f69fc) [0x7fddcd78c9fc]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fddcd7a7c18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fddcd7a7b9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fddcd46f19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fdf0b8b5ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fddcd46eff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fddcd7a79ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fddcd6080c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fddcd606bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fddcd6060b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fdf090ec253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fdf0b8b0ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fdf0b9428d0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x886ba8) [0x7fddcd61cba8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x85876b) [0x7fddcd5ee76b]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8582c2) [0x7fddcd5ee2c2]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11c18) [0x7fddcd7a7c18]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa11b9e) [0x7fddcd7a7b9e]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7fddcd46f19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7fdf0b8b5ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7fddcd46eff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa119ee) [0x7fddcd7a79ee]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7fddcd6080c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7fddcd606bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7fddcd6060b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7fdf090ec253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7fdf0b8b0ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7fdf0b9428d0]
+
+[render_full] FATAL: device sort failed with host-free env stack
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] *** Process received signal ***
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] Signal: Aborted (6)
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] Signal code:  (-6)
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7fdf0b85e520]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 1] /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x7fdf0b8b29fc]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 2] /lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x7fdf0b85e476]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 3] /lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x7fdf0b8447f3]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 4] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x2de5a)[0x7fddce0fbe5a]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 5] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x43c42)[0x7fddce111c42]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 6] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6d3eb)[0x7fddce13b3eb]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 7] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x69771)[0x7fddce137771]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 8] python3(+0x17e96f)[0x564447a2496f]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [ 9] python3(_PyEval_EvalFrameDefault+0x56cb)[0x564447a20bdb]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [10] python3(_PyFunction_Vectorcall+0x7c)[0x564447a3168c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [11] python3(_PyEval_EvalFrameDefault+0x807)[0x564447a1bd17]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [12] python3(_PyFunction_Vectorcall+0x7c)[0x564447a3168c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [13] python3(_PyEval_EvalFrameDefault+0x807)[0x564447a1bd17]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [14] python3(_PyFunction_Vectorcall+0x7c)[0x564447a3168c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [15] python3(_PyEval_EvalFrameDefault+0x6c0)[0x564447a1bbd0]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [16] python3(_PyFunction_Vectorcall+0x7c)[0x564447a3168c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [17] python3(_PyEval_EvalFrameDefault+0x6c0)[0x564447a1bbd0]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [18] python3(+0x259d36)[0x564447affd36]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [19] python3(PyEval_EvalCode+0x86)[0x564447affc06]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [20] python3(+0x280678)[0x564447b26678]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [21] python3(+0x27accf)[0x564447b20ccf]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [22] python3(+0x280415)[0x564447b26415]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [23] python3(_PyRun_SimpleFileObject+0x1a8)[0x564447b25958]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [24] python3(_PyRun_AnyFileObject+0x47)[0x564447b25637]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [25] python3(Py_RunMain+0x2be)[0x564447b19bfe]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [26] python3(Py_BytesMain+0x2d)[0x564447af3c4d]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [27] /lib/x86_64-linux-gnu/libc.so.6(+0x29d90)[0x7fdf0b845d90]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [28] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x7fdf0b845e40]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] [29] python3(_start+0x25)[0x564447af3b45]
+[yyzo-bh-03-special-smarton-for-reservation-73929:330899] *** End of error message ***
+=====GREP=====
+68:2026-06-02 23:54:17.556 | error    |    BuildKernels | brisc compile failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/gather_visible_scatter/5369792897523863095/brisc/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O2 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh -fno-tree-loop-distribute-patterns -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow -c -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/gather_visible_scatter/5369792897523863095/brisc/brisck.11954376252337024317.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc -MF /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache8964624325370633101/kernels/gather_visible_scatter/5369792897523863095/brisc/brisck.11954376252337024317.d -DIS_NOT_POW2_NUM_DRAM_BANKS=1 -DIS_NOT_POW2_NUM_L1_BANKS=1 -DNUM_DRAM_BANKS=7 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROFILE_KERNEL=1 -DPROFILER_FULL_HOST_BUFFER_SIZE_PER_RISC=48000 -DPROCESSOR_INDEX=0 -DCOMPILE_FOR_BRISC -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD -DGATHER_EMIT_BLENDREC='1' -DNOC_INDEX='0' -DNOC_MODE='0' -DKERNEL_COMPILE_TIME_ARGS=2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0,2,0  (build.cpp:58)
+72:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+73:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+76:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+79:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+82:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+83:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+86:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+89:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+92:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+93:  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+95:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+98:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+99:  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+101:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+104:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+107:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+108:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+109:  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+111:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+116:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:307:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+123:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:308:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+129:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:309:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+135:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:310:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+141:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:311:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+147:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:312:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+153:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:334:44: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+159:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:347:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+165:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In lambda function:
+166:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:360:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+172:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:361:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+178:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:362:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+184:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:363:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+190:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:364:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+196:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:365:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+202:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:366:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+208:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:367:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+214:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:368:52: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+220:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:384:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+226:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:393:41: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+232:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+233:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:400:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+239:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:401:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+245:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:402:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+251:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:403:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+257:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:404:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+263:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:405:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+269:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:406:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+275:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:407:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+281:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:408:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+287:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:409:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+293:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:410:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+299:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:411:36: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+306:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: BRISC-KERNEL,/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/brisck.cc,77,KERNEL_PROFILER'
+309:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:702:5: note: in expansion of macro 'DO_PRAGMA'
+317:2026-06-02 23:54:17.557 | critical |          Always | TT_THROW: Failed to generate binaries for gather_visible_scatter TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+322:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp: In function 'void kernel_profiler::quick_push()':
+323:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: note: '#pragma message: PROFILER-NOC-QUICK-PUSH,/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp,395,KERNEL_PROFILER'
+326:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:35:5: note: in expansion of macro 'DO_PRAGMA'
+329:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:395:5: note: in expansion of macro 'SrcLocNameToHash'
+332:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp: In function 'void kernel_main()':
+333:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:25:22: error: expected a string after '#pragma message' [-Werror=pragmas]
+336:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:652:5: note: in expansion of macro 'DO_PRAGMA'
+339:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+342:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: error: no matching function for call to 'Hash16_CT(const char*)'
+343:  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+345:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+348:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note: there is 1 candidate
+349:  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+351:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+354:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: candidate 1: 'template<unsigned int N> constexpr uint32_t kernel_profiler::Hash16_CT(const char (&)[N])'
+357:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:110:20: note: template argument deduction/substitution failed:
+358:/localdev/smarton/tt-metal/tt_metal/tools/profiler/kernel_profiler.hpp:653:53: note:   mismatched types 'const char [N]' and 'const char*'
+359:  653 |     auto constexpr hash = kernel_profiler::Hash16_CT(PROFILER_MSG_NAME(name)); \
+361:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:92:5: note: in expansion of macro 'DeviceZoneScopedN'
+366:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:307:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+373:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:308:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+379:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:309:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+385:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:310:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]
+391:/localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/gather_visible_scatter.cpp:311:40: warning: 'uint64_t get_noc_addr(uint32_t, const InterleavedAddrGen<DRAM>&, uint32_t, uint8_t) [with bool DRAM = true; uint64_t = long long unsigned int; uint32_t = long unsigned int; uint8_t = unsigned char]' is deprecated: Use <typename AddrGen> get_noc_addr instead. [-Wdeprecated-declarations]

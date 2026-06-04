@@ -1,0 +1,179 @@
+================ BUILD ID ================
+  cpp : #113 sha=01ff918 bin=bb3198d8e0e3c98e 01ff918 ideal-path tracy re-capture
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=tracy-ideal-l1  timeout=1800s  worry=600s  ts=2026-06-02T00:25:47-0700
+cmd: bash opt/profiler/run_wrapper_capture_l1.sh
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#113 bin=bb3198d8e0e3c98e matches the built+stamped artifact
+[tracy-wrap-l1] L1-RESIDENT flags: FUSED_TILE=unset TILE_BUCKET=1 BUCKET_FIT=8192 SFPU_CULL=1 BLEND_AOS=default-on BUCKET_MASK=unset
+[tracy-wrap-l1] CMD: python3 -m tracy -r -p -v --dump-device-data-mid-run -o /localdev/smarton/gstt2/opt/profiler/wrap_out_l1 opt/profiler/_render_inner.sh
+Connecting to 127.0.0.1:8086...2026-06-02 07:25:48.821 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out_l1
+2026-06-02 07:25:48.822 | INFO     | __main__:main:336 - Using port 8086
+2026-06-02 07:25:48.822 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-06-02 07:25:48.824 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+2026-06-02 07:25:48.827 | INFO     | __main__:main:400 - Test process started
+2026-06-02 07:25:49.207 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out_l1
+[render-inner] python3 scripts/a003_verify.py --backend tt --views 1 (MID_RUN_DUMP=1 DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TRACY_PORT=8086)
+2026-06-02 07:25:50.749 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 07:25:50.749 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 07:25:50.749 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 07:25:50.749 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:25:50.750 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 07:25:50.750 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 07:25:50.750 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 07:25:50.750 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 07:25:50.750 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 07:25:50.750 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 07:25:50.750 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 07:25:50.750 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:25:50.750 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 07:25:50.750 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 07:25:50.750 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 07:25:50.751 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 07:25:50.751 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 07:25:50.790 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:25:50.790 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 07:25:50.790 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 07:25:50.790 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 07:25:50.790 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 07:25:50.792 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 07:25:50.792 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 07:25:50.793 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 07:25:51.270 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 07:25:51.270 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 07:25:51.270 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 07:25:51.270 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 07:25:51.270 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 07:25:51.270 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 07:25:51.270 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 07:25:51.270 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 07:25:51.271 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 07:25:51.271 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 07:25:51.271 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:25:51.271 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:25:51.271 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 07:25:51.271 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:25:51.271 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 07:25:51.271 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 07:25:51.271 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 07:25:51.271 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 07:25:51.271 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 07:25:51.271 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 07:25:51.271 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 07:25:51.367 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-06-02 07:25:51.508 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_132183_1432624637_0' (shm_resource_tracker.cpp:265)
+2026-06-02 07:25:51.508 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_132183' (shm_resource_tracker.cpp:275)
+2026-06-02 07:25:51.508 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 07:25:52.094 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349984 GHz, device_time_at_sync=42629986245311 cycles (realtime_profiler_manager.cpp:1082)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=19.68 up=0.02 kernel=2.76 d2h=0.00 compact=0.00 publish=2.98 total=25.68ms
+[CULL_SPLIT] pipelined (no separate Finish; cull device exec folded under the blend host-setup window; candidates=3369033)
+[BLEND_SPLIT] upload+exec=0.0 readback=175.4 total=175.4 ms (resident, one Finish)
+[BLEND_ADDR] cull_masks=0xe16cdc0 out=0xe345e80(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xe343e80 yramp=0xe344e80 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=194.3 ms (host_build=0)
+2026-06-02 07:25:52.993 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=477214927ns, avg=477214927.0ns, max=477214927ns (profiler_analysis.cpp:652)
+2026-06-02 07:25:52.993 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[477214900..477215900), underflow(<477214900ns)=0, overflow(>=477215900ns)=0) (profiler_analysis.cpp:695)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477214900 ..    477215000) |########################################|        1 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215000 ..    477215100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215100 ..    477215200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215200 ..    477215300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215300 ..    477215400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215400 ..    477215500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215500 ..    477215600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215600 ..    477215700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215700 ..    477215800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:52.993 | info     |           Metal |   [   477215800 ..    477215900) |                                        |        0 (profiler_analysis.cpp:700)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=17.67 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=17.90ms
+[CULL_SPLIT] pipelined (no separate Finish; cull device exec folded under the blend host-setup window; candidates=3369033)
+[BLEND_SPLIT] upload+exec=0.0 readback=183.3 total=183.3 ms (resident, one Finish)
+[BLEND_ADDR] cull_masks=0xe16cdc0 out=0xe345e80(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xe343e80 yramp=0xe344e80 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=186.2 ms (host_build=0)
+2026-06-02 07:25:53.279 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=264578456ns, avg=264578456.0ns, max=264578456ns (profiler_analysis.cpp:652)
+2026-06-02 07:25:53.279 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[264578400..264579400), underflow(<264578400ns)=0, overflow(>=264579400ns)=0) (profiler_analysis.cpp:695)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264578400 ..    264578500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264578500 ..    264578600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264578600 ..    264578700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264578700 ..    264578800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264578800 ..    264578900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264578900 ..    264579000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264579000 ..    264579100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264579100 ..    264579200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264579200 ..    264579300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.279 | info     |           Metal |   [   264579300 ..    264579400) |                                        |        0 (profiler_analysis.cpp:700)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=17.28 up=0.02 kernel=0.02 d2h=7.12 compact=0.00 publish=0.02 total=35.45ms
+2026-06-02 07:25:53.804 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=338762587ns, avg=338762587.0ns, max=338762587ns (profiler_analysis.cpp:652)
+2026-06-02 07:25:53.804 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[338762500..338763500), underflow(<338762500ns)=0, overflow(>=338763500ns)=0) (profiler_analysis.cpp:695)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338762500 ..    338762600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338762600 ..    338762700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338762700 ..    338762800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338762800 ..    338762900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338762900 ..    338763000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338763000 ..    338763100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338763100 ..    338763200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338763200 ..    338763300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338763300 ..    338763400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:53.804 | info     |           Metal |   [   338763400 ..    338763500) |                                        |        0 (profiler_analysis.cpp:700)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=17.63 up=0.02 kernel=0.02 d2h=7.16 compact=0.00 publish=0.02 total=35.89ms
+2026-06-02 07:25:54.287 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=339233539ns, avg=339233539.0ns, max=339233539ns (profiler_analysis.cpp:652)
+2026-06-02 07:25:54.287 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[339233500..339234500), underflow(<339233500ns)=0, overflow(>=339234500ns)=0) (profiler_analysis.cpp:695)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339233500 ..    339233600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339233600 ..    339233700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339233700 ..    339233800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339233800 ..    339233900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339233900 ..    339234000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339234000 ..    339234100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339234100 ..    339234200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339234200 ..    339234300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339234300 ..    339234400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-06-02 07:25:54.287 | info     |           Metal |   [   339234400 ..    339234500) |                                        |        0 (profiler_analysis.cpp:700)
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=286.1 (proj=39.2 ta=25.1 sort=17.9 blend=186.3) shot=opt/metal-screenshots/a003-verify-20260602T072554Z/hero.png
+[render-inner] a003_verify rc=0
+
+Queue delay: 13 ns
+Timer resolution: 0 ns
+
+Frames: 2
+Time span: 4.5 s
+Zones: 102,687
+Elapsed time: 4 s
+Saving trace... done!
+Trace size 1540.21 KB (27.80% ratio)
+2026-06-02 07:25:54.848 | INFO     | tracy:generate_report:154 - Host side ops time report generated at /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_ops_times.csv
+2026-06-02 07:25:54.856 | INFO     | tracy:generate_report:165 - Host side ops data report generated at /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_ops_data.csv
+2026-06-02 07:25:54.856 | INFO     | tracy.process_ops_logs:import_tracy_op_logs:255 - Importing ops logs
+/localdev/smarton/tt-metal/tools/tracy/process_ops_logs.py:360: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
+  df = pd.read_csv(tracyOpTimesLog)
+2026-06-02 07:25:54.987 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1014 - Copying runtime artifacts
+2026-06-02 07:25:54.996 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1020 - Getting device only ops data
+2026-06-02 07:25:55.206 | INFO     | tracy.process_device_log:core_to_device_timeseries:416 - Importing Data For Device Number : 0
+2026-06-02 07:25:55.585 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1032 - Generating device op report ...
+2026-06-02 07:25:55.628 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1210 - Device only OPs csv generated at: /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/reports/2026_06_02_07_25_54/ops_perf_results_2026_06_02_07_25_54.csv
+2026-06-02 07:25:55.629 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1219 - Device only per core op to op times csv generated at: /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/reports/2026_06_02_07_25_54/per_core_op_to_op_times_2026_06_02_07_25_54.csv
+[tracy-wrap-l1] wrapper exited rc=0
+[tracy-wrap-l1] OK tracy: -rw-rw-r-- 1 smarton smarton 1577523 Jun  2 07:25 /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_profile_log_host.tracy
+[tracy-wrap-l1] copied -> /localdev/smarton/gstt2/opt/profiler/render-ideal-labeled.tracy (scp to Mac opt/profiler/render-ideal-labeled.tracy)
+[tracy-wrap-l1] === host-zone export via csvexport-release (CPU zones; device zones are GPU zones, see below) ===
+[tracy-wrap-l1] csv zone rows: 105
+[tracy-wrap-l1] === DEVICE GPU-context probe (TracyTTContext names embedded in the .tracy) ===
+[tracy-wrap-l1] device GPU-context (per-core timeline track) count: 0
+[tracy-wrap-l1] sample device context names:
+[tracy-wrap-l1] device RISC zone-name strings present:
+[tracy-wrap-l1] === per-RISC device markers in profile_log_device.csv (data count) ===
+[tracy-wrap-l1] profile_log_device.csv data rows: 65601
+[tracy-wrap-l1] DONE rc=0 tracy=/localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_profile_log_host.tracy

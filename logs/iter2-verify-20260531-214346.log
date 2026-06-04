@@ -1,0 +1,10 @@
+================ BUILD ID ================
+  cpp : #5 sha=7e5bced iter 5: Fix segfault: D2H sorted ids when blend_mode=0 ref path
+  data: # sha= 
+=========================================
+host=bh-30  tag=iter2-verify  timeout=1200s  worry=600s  ts=2026-05-31T21:43:55-0700
+cmd: bash -c cd /localdev/smarton/gstt2 && cmake --build build-tt -j 16 2>&1 | tail -2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_CULL_SPIN=896 && source .venv/bin/activate && .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-iter2 --out /tmp/i2.json 2>&1 | grep -E "SUMMARY|EXIT"; echo EXIT=$?
+-----------------------------------------
+[9/10] Linking CXX static library libgsplat_tt.a
+[10/10] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so
+EXIT=1

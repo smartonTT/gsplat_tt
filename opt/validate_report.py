@@ -163,9 +163,15 @@ def main() -> int:
                     )
         checks.append("recent rows have sane PSNR/timings (or a reason when metric-less)")
 
-        # --- 6. Hero + 10× diff on every ttw ledger row ----------------------
+        # --- 6. Hero + 10× diff on every KEPT ttw ledger row ----------------
+        # Blocked/reject rows are diagnostic only — no verify gate, no shots.
         shots_root = OPT_DIR / "metal-screenshots"
-        for r in ttw_rows:
+        kept_rows = [
+            r
+            for r in ttw_rows
+            if str(r.get("decision") or "").lower() not in ("blocked", "reject")
+        ]
+        for r in kept_rows:
             it = r.get("iter")
             iter_dir = str(r.get("iter_dir") or "").strip()
             if not iter_dir and it is not None:
@@ -191,9 +197,9 @@ def main() -> int:
                     f"ttw iter {it} ({iter_dir}) missing hero_diff10.png — "
                     f"re-run verify or python3 opt/build_report.py"
                 )
-        if ttw_rows:
+        if kept_rows:
             checks.append(
-                f"every ttw row has hero.png + 10× diff ({len(ttw_rows)} rows)"
+                f"every kept ttw row has hero.png + 10× diff ({len(kept_rows)} rows)"
             )
 
     except Invalid as e:

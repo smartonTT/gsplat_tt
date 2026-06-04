@@ -1,0 +1,109 @@
+================ BUILD ID ================
+  cpp : #114 sha=01ff918 bin=59d109789bbdb4e9 sort device bin layout kernel
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=build-tt3  timeout=900s  worry=600s  ts=2026-06-02T01:01:26-0700
+cmd: bash -c cd /localdev/smarton/gstt2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal && cmake --build build-tt -j 16 2>&1
+-----------------------------------------
+[1/53] Linking CXX static library libgsplat_tt.a
+[2/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_random_number_generator.cpp.o
+[3/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_polyfills.cpp.o
+[4/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_singletons.cpp.o
+[5/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_startup_exception_registry.cpp.o
+[6/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_parse_numbers.cpp.o
+[7/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_message_info.cpp.o
+[8/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_source_line_info.cpp.o
+[9/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_output_redirect.cpp.o
+[10/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_stdstreams.cpp.o
+[11/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_section.cpp.o
+[12/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_random_seed_generation.cpp.o
+[13/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_reusable_string_stream.cpp.o
+[14/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_failure_exception.cpp.o
+[15/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_uncaught_exceptions.cpp.o
+[16/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_info_hasher.cpp.o
+[17/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_string_manip.cpp.o
+[18/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_reporter_spec_parser.cpp.o
+[19/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_stringref.cpp.o
+[20/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_tag_alias_registry.cpp.o
+[21/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_reporter_registry.cpp.o
+[22/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_registry.cpp.o
+[23/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers.cpp.o
+[24/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_spec_parser.cpp.o
+[25/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_wildcard_pattern.cpp.o
+[26/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_registry_impl.cpp.o
+[27/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_predicate.cpp.o
+[28/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_exception.cpp.o
+[29/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_container_properties.cpp.o
+[30/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_xmlwriter.cpp.o
+[31/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_run_context.cpp.o
+[32/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_test_case_tracker.cpp.o
+[33/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/internal/catch_textflow.cpp.o
+[34/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_templated.cpp.o
+[35/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/internal/catch_matchers_impl.cpp.o
+[36/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_quantifiers.cpp.o
+[37/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_floating_point.cpp.o
+[38/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2WithMain.dir/catch2/internal/catch_main.cpp.o
+[39/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_sort.cpp.o
+[40/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_tile_assign.cpp.o
+[41/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_thread_pool.cpp.o
+[42/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_blend.cpp.o
+/localdev/smarton/gstt2/tests/unit/test_blend.cpp: In function ‘float {anonymous}::pixel_at(const std::vector<float>&, int, int, int, int, int)’:
+/localdev/smarton/gstt2/tests/unit/test_blend.cpp:20:53: warning: unused parameter ‘H’ [-Wunused-parameter]
+   20 | float pixel_at(const std::vector<float>& image, int H, int W, int y, int x, int c) {
+      |                                                 ~~~~^
+[43/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_project.cpp.o
+[44/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_microblock_cull.cpp.o
+[45/53] Building CXX object tests/CMakeFiles/gsplat_cpu_tests.dir/unit/test_blend_microblock.cpp.o
+/localdev/smarton/gstt2/tests/unit/test_blend_microblock.cpp: In function ‘float {anonymous}::pixel_at(const std::vector<float>&, int, int, int, int, int)’:
+/localdev/smarton/gstt2/tests/unit/test_blend_microblock.cpp:26:53: warning: unused parameter ‘H’ [-Wunused-parameter]
+   26 | float pixel_at(const std::vector<float>& image, int H, int W, int y, int x, int c) {
+      |                                                 ~~~~^
+/localdev/smarton/gstt2/tests/unit/test_blend_microblock.cpp: At global scope:
+/localdev/smarton/gstt2/tests/unit/test_blend_microblock.cpp:38:5: warning: ‘int {anonymous}::header_count(const std::vector<long int>&, int, int)’ defined but not used [-Wunused-function]
+   38 | int header_count(const std::vector<int64_t>& header, int tile_id, int m) {
+      |     ^~~~~~~~~~~~
+/localdev/smarton/gstt2/tests/unit/test_blend_microblock.cpp:33:5: warning: ‘int {anonymous}::header_offset(const std::vector<long int>&, int, int)’ defined but not used [-Wunused-function]
+   33 | int header_offset(const std::vector<int64_t>& header, int tile_id, int m) {
+      |     ^~~~~~~~~~~~~
+[46/53] Building CXX object _deps/catch2-build/src/CMakeFiles/Catch2.dir/catch2/matchers/catch_matchers_string.cpp.o
+[47/53] Linking CXX static library _deps/catch2-build/src/libCatch2.a
+[48/53] Linking CXX static library _deps/catch2-build/src/libCatch2Main.a
+[49/53] Building CXX object tests/CMakeFiles/cnpy.dir/__/_deps/cnpy-src/cnpy.cpp.o
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp: In function ‘void cnpy::parse_npy_header(unsigned char*, size_t&, std::vector<long unsigned int>&, bool&)’:
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:64:13: warning: unused variable ‘major_version’ [-Wunused-variable]
+   64 |     uint8_t major_version = *reinterpret_cast<uint8_t*>(buffer+6);
+      |             ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:65:13: warning: unused variable ‘minor_version’ [-Wunused-variable]
+   65 |     uint8_t minor_version = *reinterpret_cast<uint8_t*>(buffer+7);
+      |             ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:93:10: warning: unused variable ‘littleEndian’ [-Wunused-variable]
+   93 |     bool littleEndian = (header[loc1] == '<' || header[loc1] == '|' ? true : false);
+      |          ^~~~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp: In function ‘void cnpy::parse_npy_header(FILE*, size_t&, std::vector<long unsigned int>&, bool&)’:
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:144:10: warning: unused variable ‘littleEndian’ [-Wunused-variable]
+  144 |     bool littleEndian = (header[loc1] == '<' || header[loc1] == '|' ? true : false);
+      |          ^~~~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp: In function ‘void cnpy::parse_zip_footer(FILE*, uint16_t&, size_t&, size_t&)’:
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:163:14: warning: variable ‘disk_no’ set but not used [-Wunused-but-set-variable]
+  163 |     uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
+      |              ^~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:163:23: warning: variable ‘disk_start’ set but not used [-Wunused-but-set-variable]
+  163 |     uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
+      |                       ^~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:163:35: warning: variable ‘nrecs_on_disk’ set but not used [-Wunused-but-set-variable]
+  163 |     uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
+      |                                   ^~~~~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:163:50: warning: variable ‘comment_len’ set but not used [-Wunused-but-set-variable]
+  163 |     uint16_t disk_no, disk_start, nrecs_on_disk, comment_len;
+      |                                                  ^~~~~~~~~~~
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp: In function ‘cnpy::NpyArray load_the_npz_array(FILE*, uint32_t, uint32_t)’:
+/localdev/smarton/gstt2/build-tt/_deps/cnpy-src/cnpy.cpp:199:9: warning: variable ‘err’ set but not used [-Wunused-but-set-variable]
+  199 |     int err;
+      |         ^~~
+[50/53] Linking CXX static library tests/libcnpy.a
+[51/53] Linking CXX executable tests/gsplat_cpu_tests
+[52/53] Building CXX object CMakeFiles/_gsplat_cpu.dir/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp.o
+/localdev/smarton/gstt2/backends/cpu_cpp/pybind_module.cpp:830:17: warning: ‘{anonymous}::VisibleFiltered {anonymous}::filter_visible(const float*, const float*, const uint8_t*, std::size_t, std::size_t, gsplat_cpu::ThreadPool&)’ defined but not used [-Wunused-function]
+  830 | VisibleFiltered filter_visible(
+      |                 ^~~~~~~~~~~~~~
+[53/53] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so

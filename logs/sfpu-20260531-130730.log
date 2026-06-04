@@ -1,0 +1,268 @@
+================ BUILD ID ================
+  cpp : #1 sha=7eed227 iter 0: baseline
+  data: # sha= 
+=========================================
+host=bh-30  tag=sfpu  timeout=1200s  worry=600s  ts=2026-05-31T13:07:30-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_SFPU_CULL=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-sfpu-bbox --out opt/ttw/sfpu-bbox.json
+-----------------------------------------
+2026-05-31 20:07:32.950 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:07:32.950 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:07:32.951 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:07:32.951 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:07:32.952 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:07:32.952 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:07:32.953 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-05-31 20:07:32.953 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-05-31 20:07:32.953 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:07:32.953 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:07:32.954 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:07:32.954 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:07:32.955 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:07:32.955 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:07:32.955 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-05-31 20:07:32.955 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-05-31 20:07:32.955 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-05-31 20:07:33.026 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:07:33.026 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[3] and remote chip ids {} (cluster.cpp:153)
+2026-05-31 20:07:33.026 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-05-31 20:07:33.026 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-05-31 20:07:33.026 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-05-31 20:07:33.027 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-05-31 20:07:33.028 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xfffffffec0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-05-31 20:07:33.029 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-05-31 20:07:33.347 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-05-31 20:07:33.347 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-05-31 20:07:33.348 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-05-31 20:07:33.348 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-05-31 20:07:33.349 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-05-31 20:07:33.349 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-05-31 20:07:33.349 | info     |             UMD | Established firmware bundle version: 19.5.0 (topology_discovery.cpp:544)
+2026-05-31 20:07:33.350 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-05-31 20:07:33.350 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0xa1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-05-31 20:07:33.350 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-05-31 20:07:33.350 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:07:33.350 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:07:33.350 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-05-31 20:07:33.350 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:07:33.350 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-05-31 20:07:33.350 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-05-31 20:07:33.350 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-05-31 20:07:33.350 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-05-31 20:07:33.350 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-05-31 20:07:33.350 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-05-31 20:07:33.350 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-05-31 20:07:33.447 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_426437_4082050371_0' (shm_resource_tracker.cpp:265)
+2026-05-31 20:07:33.447 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_426437' (shm_resource_tracker.cpp:275)
+2026-05-31 20:07:34.032 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349992 GHz, device_time_at_sync=48672558097189 cycles (realtime_profiler_manager.cpp:1075)
+[SORT] stage=RP P=3369033 P_kept=3213120 num_tiles=1024 max_tile_n=25872 bin=11.52 up=0.31 kernel=9.48 d2h=13.24 compact=0.00 publish=3.62 total=55.63ms
+2026-05-31 20:07:35.281 | error    |    BuildKernels | trisc1 compile failure -- cmd: cd /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O3 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh-tensix -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/runtime/sfpi/include -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api/llk_sfpu -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute -c -o /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisck.2159146856550765359.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc -MF /localdev/smarton/.cache/tt-metal-cache/tt-metal-cache12024140084721722581/kernels/microblock_cull_compute/7742357289099547984/trisc1/trisck.2159146856550765359.d -DIS_NOT_POW2_NUM_L1_BANKS=1 -DLOG_BASE_2_OF_NUM_DRAM_BANKS=3 -DNUM_DRAM_BANKS=8 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROCESSOR_INDEX=3 -DUCK_CHLKC_MATH -DCOMPILE_FOR_TRISC=1 -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD  (build.cpp:58)
+2026-05-31 20:07:35.281 | critical |          Always | TT_THROW: trisc1 build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc/ckernel_sfpu.h:12,
+                 from /localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc/cmath_common.h:12,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api/llk_math_common_api.h:10,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common.h:7,
+                 from /localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:42,
+                 from ../chlkc_math.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp: In function 'void {anonymous}::cull_bbox(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:283:46: error: ambiguous overload for 'operator&' (operand types are 'sfpi::impl_::vCond' and 'sfpi::impl_::vCond') [-Wtemplate-body]
+  283 |     v_if((dcx * dcx <= vFloat(9.0f) * cov_a) & (dcy * dcy <= vFloat(9.0f) * cov_c)) {
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     |                                     |
+      |                     sfpi::impl_::vCond                    sfpi::impl_::vCond
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:516:28: note: in definition of macro 'v_if'
+  516 |   __cc.push ().if_().cond (x);                  \
+      |                            ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:283:46: note: there are 12 candidates
+  283 |     v_if((dcx * dcx <= vFloat(9.0f) * cov_a) & (dcy * dcy <= vFloat(9.0f) * cov_c)) {
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:516:28: note: in definition of macro 'v_if'
+  516 |   __cc.push ().if_().cond (x);                  \
+      |                            ^
+In file included from /localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:576:
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:423:6: note: candidate 1: 'sfpi::vInt sfpi::operator&(vInt, vInt)'
+  423 | auto sfpi::operator& (vInt a, vInt b)-> vInt { return a.int_and (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:482:6: note: candidate 2: 'sfpi::vUInt sfpi::operator&(vUInt, vUInt)'
+  482 | auto sfpi::operator& (vUInt a, vUInt b)-> vUInt { return a.int_and (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:483:6: note: candidate 3: 'sfpi::vUInt sfpi::operator&(vUInt, vInt)'
+  483 | auto sfpi::operator& (vUInt a, vInt b)-> vUInt { return a & vUInt (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:484:6: note: candidate 4: 'sfpi::vUInt sfpi::operator&(vInt, vUInt)'
+  484 | auto sfpi::operator& (vInt a, vUInt b)-> vUInt { return vUInt (a) & b; }
+      |      ^~~~
+ (assert.hpp:104)
+2026-05-31 20:07:35.419 | critical |          Always | TT_THROW: Failed to generate binaries for microblock_cull_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc1 build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc/ckernel_sfpu.h:12,
+                 from /localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc/cmath_common.h:12,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api/llk_math_common_api.h:10,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common.h:7,
+                 from /localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:42,
+                 from ../chlkc_math.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp: In function 'void {anonymous}::cull_bbox(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:283:46: error: ambiguous overload for 'operator&' (operand types are 'sfpi::impl_::vCond' and 'sfpi::impl_::vCond') [-Wtemplate-body]
+  283 |     v_if((dcx * dcx <= vFloat(9.0f) * cov_a) & (dcy * dcy <= vFloat(9.0f) * cov_c)) {
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     |                                     |
+      |                     sfpi::impl_::vCond                    sfpi::impl_::vCond
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:516:28: note: in definition of macro 'v_if'
+  516 |   __cc.push ().if_().cond (x);                  \
+      |                            ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:283:46: note: there are 12 candidates
+  283 |     v_if((dcx * dcx <= vFloat(9.0f) * cov_a) & (dcy * dcy <= vFloat(9.0f) * cov_c)) {
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:516:28: note: in definition of macro 'v_if'
+  516 |   __cc.push ().if_().cond (x);                  \
+      |                            ^
+In file included from /localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:576:
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:423:6: note: candidate 1: 'sfpi::vInt sfpi::operator&(vInt, vInt)'
+  423 | auto sfpi::operator& (vInt a, vInt b)-> vInt { return a.int_and (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:482:6: note: candidate 2: 'sfpi::vUInt sfpi::operator&(vUInt, vUInt)'
+  482 | auto sfpi::operator& (vUInt a, vUInt b)-> vUInt { return a.int_and (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:483:6: note: candidate 3: 'sfpi::vUInt sfpi::operator&(vUInt, vInt)'
+  483 | auto sfpi::operator& (vUInt a, vInt b)-> vUInt { return a & vUInt (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:484:6: note: candidate 4: 'sfpi::vUInt sfpi::operator&(vInt, vUInt)'
+  484 | auto sfpi::operator& (vInt a, vUInt b)-> vUInt { return vUInt (a) & b; }
+      |      ^~~~
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa30997) [0x71a067830997]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x71a06783f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x71a0674a2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x71a0c249cee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x71a06784169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x71a067666640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x71a067665242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x71a067665885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x71a0bfab0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x71a0c2497ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x71a0c25298d0]
+ (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 238, in <module>
+    main()
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 130, in main
+    tt_imgs, tt_timings = render_all(
+  File "/localdev/smarton/gstt2/scripts/a003_verify.py", line 84, in render_all
+    _ = pipeline.render(gauss, extr0, K, H, W)
+  File "/localdev/smarton/gstt2/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2/backends/tt/backend.py", line 135, in render_fused
+    image, stats = self._mod.render_full_tt(
+RuntimeError: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for microblock_cull_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc1 build failed. Log: In file included from /localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc/ckernel_sfpu.h:12,
+                 from /localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc/cmath_common.h:12,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api/llk_math_common_api.h:10,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common_globals.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/inc/api/compute/common.h:7,
+                 from /localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:42,
+                 from ../chlkc_math.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:16,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp: In function 'void {anonymous}::cull_bbox(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t)':
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:283:46: error: ambiguous overload for 'operator&' (operand types are 'sfpi::impl_::vCond' and 'sfpi::impl_::vCond') [-Wtemplate-body]
+  283 |     v_if((dcx * dcx <= vFloat(9.0f) * cov_a) & (dcy * dcy <= vFloat(9.0f) * cov_c)) {
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                     |                                     |
+      |                     sfpi::impl_::vCond                    sfpi::impl_::vCond
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:516:28: note: in definition of macro 'v_if'
+  516 |   __cc.push ().if_().cond (x);                  \
+      |                            ^
+/localdev/smarton/gstt2/src/gsplat_tt/kernels/compute/microblock_cull_compute.cpp:283:46: note: there are 12 candidates
+  283 |     v_if((dcx * dcx <= vFloat(9.0f) * cov_a) & (dcy * dcy <= vFloat(9.0f) * cov_c)) {
+      |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:516:28: note: in definition of macro 'v_if'
+  516 |   __cc.push ().if_().cond (x);                  \
+      |                            ^
+In file included from /localdev/smarton/tt-metal/runtime/sfpi/include/sfpi.h:576:
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:423:6: note: candidate 1: 'sfpi::vInt sfpi::operator&(vInt, vInt)'
+  423 | auto sfpi::operator& (vInt a, vInt b)-> vInt { return a.int_and (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:482:6: note: candidate 2: 'sfpi::vUInt sfpi::operator&(vUInt, vUInt)'
+  482 | auto sfpi::operator& (vUInt a, vUInt b)-> vUInt { return a.int_and (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:483:6: note: candidate 3: 'sfpi::vUInt sfpi::operator&(vUInt, vInt)'
+  483 | auto sfpi::operator& (vUInt a, vInt b)-> vUInt { return a & vUInt (b); }
+      |      ^~~~
+/localdev/smarton/tt-metal/runtime/sfpi/include/sfpi_funcs.h:484:6: note: candidate 4: 'sfpi::vUInt sfpi::operator&(vInt, vUInt)'
+  484 | auto sfpi::operator& (vInt a, vUInt b)-> vUInt { return vUInt (a) & b; }
+      |      ^~~~
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa30997) [0x71a067830997]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x71a06783f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x71a0674a2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x71a0c249cee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x71a06784169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x71a067666640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x71a067665242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x71a067665885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x71a0bfab0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x71a0c2497ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x71a0c25298d0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x84fdc3) [0x71a06764fdc3]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x848ed3) [0x71a067648ed3]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3f8a5) [0x71a06783f8a5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a2c0d) [0x71a0674a2c0d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x71a0c249cee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa4169a) [0x71a06784169a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866640) [0x71a067666640]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865242) [0x71a067665242]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865885) [0x71a067665885]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x71a0bfab0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x71a0c2497ac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x71a0c25298d0]
+
+[bh-30-special-smarton-for-reservation-75776:427129] *** Process received signal ***
+[bh-30-special-smarton-for-reservation-75776:427129] Signal: Segmentation fault (11)
+[bh-30-special-smarton-for-reservation-75776:427129] Signal code: Address not mapped (1)
+[bh-30-special-smarton-for-reservation-75776:427129] Failing at address: 0x63c2b5c18
+[bh-30-special-smarton-for-reservation-75776:427129] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x71a0c2445520]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 1] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZNSt8__detail9_Map_baseIjSt4pairIKjNSt6chrono10time_pointINS3_3_V212steady_clockENS3_8durationIlSt5ratioILl1ELl1000000000EEEEEEESaISC_ENS_10_Select1stESt8equal_toIjESt4hashIjENS_18_Mod_range_hashingENS_20_Default_ranged_hashENS_20_Prime_rehash_policyENS_17_Hashtable_traitsILb0ELb0ELb1EEELb1EEixEOj+0x48)[0x71a067552488]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 2] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal25SharedMemoryStatsProvider21update_from_allocatorEPKNS0_6DeviceEi+0x9c)[0x71a067541f9c]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 3] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl27deallocate_circular_buffersEv+0xc0)[0x71a0675fb5c0]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 4] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImplD1Ev+0x1a)[0x71a0676067fa]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 5] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x5dfc26)[0x71a0673dfc26]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 6] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed16MeshWorkloadImplD2Ev+0xa8)[0x71a067917168]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 7] /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt8tt_metal11distributed12MeshWorkloadD1Ev+0x15)[0x71a0679175e5]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 8] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xbfbc1)[0x71a0685f0bc1]
+[bh-30-special-smarton-for-reservation-75776:427129] [ 9] /lib/x86_64-linux-gnu/libc.so.6(+0x45495)[0x71a0c2448495]
+[bh-30-special-smarton-for-reservation-75776:427129] [10] /lib/x86_64-linux-gnu/libc.so.6(on_exit+0x0)[0x71a0c2448610]
+[bh-30-special-smarton-for-reservation-75776:427129] [11] /lib/x86_64-linux-gnu/libc.so.6(+0x29d97)[0x71a0c242cd97]
+[bh-30-special-smarton-for-reservation-75776:427129] [12] /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80)[0x71a0c242ce40]
+[bh-30-special-smarton-for-reservation-75776:427129] [13] .venv/bin/python3(_start+0x25)[0x63c297831b45]
+[bh-30-special-smarton-for-reservation-75776:427129] *** End of error message ***

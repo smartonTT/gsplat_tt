@@ -1,0 +1,7 @@
+================ BUILD ID ================
+  cpp : #10 sha=ffdd218 iter 10: blend reader: mask-first filter skips zero-mask attr gathers
+  data: # sha= 
+=========================================
+host=bh-30  tag=recover-hung  timeout=1200s  worry=600s  ts=2026-06-01T00:26:03-0700
+cmd: pkill -f 'a003_verify.py' 2>/dev/null || true; pkill -f 'python3 scripts/a003' 2>/dev/null || true; sleep 2; ps -eo pid,etime,cmd | grep -E 'a003_verify|python3 scripts' | grep -v grep || echo 'no hung verify'
+-----------------------------------------

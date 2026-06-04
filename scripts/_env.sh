@@ -32,5 +32,5 @@ export ITER_DIR_PARENT="$OPT_DIR/screenshots"
 export REF_DIR="$REPO_ROOT/benchmarks/reference_v2"
 # Default IRD box for metal port (override: REMOTE_HOST=bh-30 ...)
 # Failed over bh-30 -> yyzo-bh-03 (2026-06-01: bh-30 ARC-wedged, reboot co-tenant-blocked).
-export METAL_REMOTE_HOST="${METAL_REMOTE_HOST:-yyzo-bh-03}"
+export METAL_REMOTE_HOST="${METAL_REMOTE_HOST:-yyzo-bh-07}"
 export REMOTE_HOST="${REMOTE_HOST:-$METAL_REMOTE_HOST}"

@@ -1,0 +1,177 @@
+================ BUILD ID ================
+  cpp : #104 sha=65728fa bin=99fbd2daee94602b iter 35: tile_assign: eliminate per-frame all-ones keep-mask H2D (fill buf_keep once on grow, cache buf_keep_all_ones) — ta 21.2->10.2ms, ms/view 183.4->173.5 @8v, 63.85dB bit-identical
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=verify  timeout=1200s  worry=600s  ts=2026-06-01T21:36:17-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_verify.log; grep '^SUMMARY' /tmp/ttw_verify.log | tail -1 > /tmp/ttw_sum.txt; grep -oE 'hero_vs_ref=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_METRIC /'; grep -oE '(proj|ta|sort|blend)=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_TIMING /'
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#104 bin=99fbd2daee94602b matches the built+stamped artifact
+2026-06-02 04:36:20.013 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 04:36:20.013 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 04:36:20.013 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 04:36:20.013 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 04:36:20.014 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 04:36:20.014 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 04:36:20.014 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 04:36:20.014 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 04:36:20.014 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 04:36:20.014 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 04:36:20.014 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 04:36:20.014 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 04:36:20.014 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 04:36:20.014 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 04:36:20.014 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 04:36:20.014 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 04:36:20.014 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 04:36:20.054 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 04:36:20.054 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 04:36:20.054 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 04:36:20.054 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 04:36:20.054 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 04:36:20.055 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 04:36:20.056 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 04:36:20.056 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 04:36:20.530 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 04:36:20.530 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 04:36:20.530 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 04:36:20.530 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 04:36:20.530 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 04:36:20.530 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 04:36:20.530 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 04:36:20.530 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 04:36:20.531 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 04:36:20.531 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 04:36:20.531 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 04:36:20.531 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 04:36:20.531 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 04:36:20.531 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 04:36:20.531 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 04:36:20.531 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 04:36:20.531 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 04:36:20.531 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 04:36:20.531 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 04:36:20.531 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 04:36:20.531 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 04:36:20.540 | critical |          Always | TT_THROW: Failed to open output file: /localdev/smarton/tt-metal/generated/fabric/physical_chip_mesh_coordinate_mapping_1_of_1.yaml (assert.hpp:104)
+2026-06-02 04:36:20.541 | warning  |          Fabric | Failed to export physical chip mesh coordinate mapping: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/fabric/fabric_host_utils.cpp:163: tt::exception
+info:
+Failed to open output file: /localdev/smarton/tt-metal/generated/fabric/physical_chip_mesh_coordinate_mapping_1_of_1.yaml
+backtrace:
+ --- void tt::assert::detail::tt_throw_impl<fmt::v11::fstring<unsigned char const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&>, unsigned char, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(char const*, int, char const*, char const*, fmt::v11::fstring<unsigned char const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&> const&, unsigned char const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+ --- tt::tt_fabric::serialize_mesh_coordinates_to_file(tt::tt_fabric::TopologyMapper const&, std::filesystem::__cxx11::path const&)
+ --- tt::tt_fabric::ControlPlane::init_control_plane_auto_discovery()
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt9tt_fabric12ControlPlaneC2ERKNS_7ClusterERKNS_4llrt14RunTimeOptionsERKNS_8tt_metal3HalERKNS9_11distributed9multihost18DistributedContextENS0_12FabricConfigENS0_21FabricReliabilityModeENS0_18FabricTensixConfigENS0_13FabricUDMModeENS0_18FabricRouterConfigENS0_17FabricManagerModeE+0x36c) [0x7f007103af1c]
+ --- tt::tt_metal::MetalEnvImpl::construct_control_plane()
+ --- tt::tt_metal::MetalEnvImpl::initialize_control_plane_impl()
+ --- tt::tt_metal::MetalContext::get_control_plane()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xda407) [0x7f007158c407]
+ --- gsplat_tt::project_device_ready()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x54298) [0x7f0071506298]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6bd21) [0x7f007151dd21]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x3ef70) [0x7f00714f0f70]
+ --- .venv/bin/python3(+0x17e96f) [0x563c7264a96f]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x56cb) [0x563c72646bdb]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x563c72641d17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x563c72641d17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x563c72641bd0]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x563c72641bd0]
+ --- .venv/bin/python3(+0x259d36) [0x563c72725d36]
+ --- .venv/bin/python3(PyEval_EvalCode+0x86) [0x563c72725c06]
+ --- .venv/bin/python3(+0x280678) [0x563c7274c678]
+ --- .venv/bin/python3(+0x27accf) [0x563c72746ccf]
+ --- .venv/bin/python3(+0x280415) [0x563c7274c415]
+ --- .venv/bin/python3(_PyRun_SimpleFileObject+0x1a8) [0x563c7274b958]
+ --- .venv/bin/python3(_PyRun_AnyFileObject+0x47) [0x563c7274b637]
+ --- .venv/bin/python3(Py_RunMain+0x2be) [0x563c7273fbfe]
+ --- .venv/bin/python3(Py_BytesMain+0x2d) [0x563c72719c4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f014606ed90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f014606ee40]
+ --- .venv/bin/python3(_start+0x25) [0x563c72719b45]
+ (control_plane.cpp:639)
+2026-06-02 04:36:20.553 | critical |          Always | TT_THROW: Failed to open output file: /localdev/smarton/tt-metal/generated/fabric/asic_to_fabric_node_mapping_rank_1_of_1.yaml (assert.hpp:104)
+2026-06-02 04:36:20.554 | warning  |          Fabric | Failed to export ASIC to Fabric node ID mapping: TT_THROW @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/fabric/fabric_host_utils.cpp:241: tt::exception
+info:
+Failed to open output file: /localdev/smarton/tt-metal/generated/fabric/asic_to_fabric_node_mapping_rank_1_of_1.yaml
+backtrace:
+ --- void tt::assert::detail::tt_throw_impl<fmt::v11::fstring<unsigned char const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&>, unsigned char, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >(char const*, int, char const*, char const*, fmt::v11::fstring<unsigned char const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&> const&, unsigned char const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+ --- tt::tt_fabric::serialize_asic_to_fabric_node_mapping_to_file(tt::tt_fabric::TopologyMapper const&, std::filesystem::__cxx11::path const&)
+ --- tt::tt_fabric::ControlPlane::init_control_plane_auto_discovery()
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(_ZN2tt9tt_fabric12ControlPlaneC2ERKNS_7ClusterERKNS_4llrt14RunTimeOptionsERKNS_8tt_metal3HalERKNS9_11distributed9multihost18DistributedContextENS0_12FabricConfigENS0_21FabricReliabilityModeENS0_18FabricTensixConfigENS0_13FabricUDMModeENS0_18FabricRouterConfigENS0_17FabricManagerModeE+0x36c) [0x7f007103af1c]
+ --- tt::tt_metal::MetalEnvImpl::construct_control_plane()
+ --- tt::tt_metal::MetalEnvImpl::initialize_control_plane_impl()
+ --- tt::tt_metal::MetalContext::get_control_plane()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xda407) [0x7f007158c407]
+ --- gsplat_tt::project_device_ready()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x54298) [0x7f0071506298]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6bd21) [0x7f007151dd21]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x3ef70) [0x7f00714f0f70]
+ --- .venv/bin/python3(+0x17e96f) [0x563c7264a96f]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x56cb) [0x563c72646bdb]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x563c72641d17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x563c72641d17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x563c72641bd0]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x563c7265768c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x563c72641bd0]
+ --- .venv/bin/python3(+0x259d36) [0x563c72725d36]
+ --- .venv/bin/python3(PyEval_EvalCode+0x86) [0x563c72725c06]
+ --- .venv/bin/python3(+0x280678) [0x563c7274c678]
+ --- .venv/bin/python3(+0x27accf) [0x563c72746ccf]
+ --- .venv/bin/python3(+0x280415) [0x563c7274c415]
+ --- .venv/bin/python3(_PyRun_SimpleFileObject+0x1a8) [0x563c7274b958]
+ --- .venv/bin/python3(_PyRun_AnyFileObject+0x47) [0x563c7274b637]
+ --- .venv/bin/python3(Py_RunMain+0x2be) [0x563c7273fbfe]
+ --- .venv/bin/python3(Py_BytesMain+0x2d) [0x563c72719c4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f014606ed90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f014606ee40]
+ --- .venv/bin/python3(_start+0x25) [0x563c72719b45]
+ (control_plane.cpp:648)
+2026-06-02 04:36:20.575 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-02 04:36:20.846 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_90208_1216740190_0' (shm_resource_tracker.cpp:265)
+2026-06-02 04:36:20.846 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_90208' (shm_resource_tracker.cpp:275)
+2026-06-02 04:36:20.846 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 04:36:21.431 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349982 GHz, device_time_at_sync=28899790609537 cycles (realtime_profiler_manager.cpp:1082)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=10.65 up=0.30 kernel=9.58 d2h=0.00 compact=0.00 publish=1.73 total=22.47ms
+[FUSED_TILE] upload+exec+readback=202.9 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=206.5 ms (host_build=0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.43 up=0.30 kernel=7.55 d2h=0.00 compact=0.00 publish=0.05 total=16.52ms
+[FUSED_TILE] upload+exec+readback=189.2 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=192.3 ms (host_build=0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.32 up=0.30 kernel=7.53 d2h=7.14 compact=0.00 publish=0.04 total=26.86ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=8.28 up=0.29 kernel=7.52 d2h=7.13 compact=0.00 publish=0.03 total=26.79ms
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=278.8 (proj=43.6 ta=25.0 sort=16.5 blend=192.5) shot=opt/metal-screenshots/loop-ttw/hero.png
+TTW_METRIC hero_vs_ref=63.85
+TTW_TIMING proj=43.6
+TTW_TIMING ta=25.0
+TTW_TIMING sort=16.5
+TTW_TIMING blend=192.5

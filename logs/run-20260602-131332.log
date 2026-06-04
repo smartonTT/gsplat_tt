@@ -1,0 +1,24 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:13:32-0700
+cmd: sed -n "415,430p" /localdev/smarton/gstt2/src/gsplat_tt/kernels/dataflow/reader_alpha_blend_mb_devcull.cpp
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+    constexpr auto blendrec_args   = TensorAccessorArgs<cull_base_args.next_compile_time_args_offset()>();
+#ifdef MB_TILE_BUCKET
+    constexpr auto tile_recs_args  = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
+    constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
+#ifdef MB_L1_RECORD
+    constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
+#endif
+#endif
+#endif
+#endif
+
+    // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
+    constexpr uint32_t SOA_PAGE_BYTES = 64;
+    const auto a_acc        = TensorAccessor(a_args,        a_addr,        SOA_PAGE_BYTES);
+    const auto b_acc        = TensorAccessor(b_args,        b_addr,        SOA_PAGE_BYTES);
+    const auto c_acc        = TensorAccessor(c_args,        c_addr,        SOA_PAGE_BYTES);

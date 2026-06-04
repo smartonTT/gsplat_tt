@@ -9,6 +9,75 @@ back those generic rules. Newest on top; each entry keeps its date.
 
 ---
 
+## 2026-06-03 iter-59 try 2 — mat on CQ1 + publish/dir Finish on CQ0 still hangs
+
+- **Change (`ttw-059` try 2):** `MeshDevice::create_unit_mesh(..., num_command_queues=2)`;
+  pipe path = publish+dir on CQ0 → **`Finish(CQ0)`** (drain publish+dir only) →
+  `launch_subchunk_materialize` + **`Finish(CQ1)`** → `maybe_run_sort_blend_continuation`
+  (cull+blend on CQ0, single blend `Finish`). Iter-55 reader unchanged.
+- **Repro (1-view smoke, post-unwedge):** warmup prints `[SUBCHUNK] materialize_ms=712.22`
+  then **host hang** (no timed views, no SUMMARY) — same stall class as try 1 (post-mat,
+  blend `Finish`), not an early-Finish-on-shared-CQ-only failure.
+- **Status:** try 2 blocked; **reverted `render/host/{device_state,sort_device}.cpp` to
+  5624b96**. Step C mat-before-blend exhausted (try 1 + try 2); defer C2 / keep iter-55
+  mat-after-blend anchor until separate debug. No commit.
+
+## 2026-06-03 iter-59 — mat-before-blend enqueue-only still hangs (try 1)
+
+- **Change (`ttw-059` try 1):** pipe path = `mark_sort_publish_pending()` →
+  `launch_subchunk_materialize` (**enqueue only, no `Finish`**) →
+  `maybe_run_sort_blend_continuation`; removed post-blend mat+Finish block. Logs
+  `[SUBCHUNK] materialize_enqueued_ms=…`. iter-55 reader + anchor directory kernel
+  (`5624b96` layout) unchanged.
+- **Repro (post-`recover.sh --unwedge`, clean `render/build-tt`):** warmup prints
+  `[SUBCHUNK] materialize_enqueued_ms` + `[SORT]`, then **host hang** in blend
+  `Finish` (no `[run] timing`, no SUMMARY) — same stall as iter-58 try 2, not the
+  early-Finish mismatch.
+- **Env gotcha:** device had **fixed** directory kernel `[dir_base, num_sc]` while
+  iter-55 reader reads `num_subchunks` from meta `[off]` — yields ~34.9 dB false
+  fail without hanging; revert directory kernel to anchor before quality gates.
+- **SIGKILL wedged device:** killing a hung run wedges ARC; must `recover.sh
+  --unwedge` before further tries (anchor mat-after also hung post-SIGKILL).
+- **Status:** try 1 blocked; **reverted `sort_device.cpp` to 5624b96**. Tries 2–3
+  TBD (parent loop). No commit.
+
+## 2026-06-03 REPORT in-flight banner stale (supervisor must clear)
+
+- **`opt/current-iter.json` drives the yellow "NOW / in flight" card**, not
+  `iters.jsonl`. Leaving it on iter 57 after 57–59 blocked made `REPORT.html`
+  lie while the ledger showed 60 keep. On every blocked/keep: `build_report.py
+  --clear-in-flight` then full regen; on dispatch: `--set-in-flight` with the new
+  iter. See `tt-loop` skill § "Report + in-flight state".
+
+## 2026-06-03 iter-58 — mat-before-blend CQ hang (bisected)
+
+- **Repro (try 1, `ttw-058`):** reorder only — `launch_subchunk_materialize` + `Finish()`
+  **before** `maybe_run_sort_blend_continuation`, iter-55 reader unchanged. Post-JIT warmup
+  hang on first frame; **no `[SUBCHUNK]`** (stuck before/during mat `Finish`, same as iter 56/57).
+- **Root cause:** `sort_blend_pipe` uses one shared `command_queue()`; `mark_sort_publish_pending()`
+  means publish+dir must **not** be drained until blend’s `Finish` (see
+  `finish_sort_cq_if_needed` / `clear_sort_publish_pending` in `blend_device.cpp`). An
+  **intermediate `Finish` after materialize** drains publish+dir+mat while
+  `sort_publish_pending` is still true, then blend enqueues cull on an empty/mismatched CQ →
+  **host hang** (not a reader bug).
+- **Required ordering for step C:** enqueue **publish → directory → materialize → cull → blend**
+  with **one** `Finish` at blend readback (iter-55 safe order: mat **after** blend Finish).
+  Do **not** call `Finish` between mat and blend when the pipe flag is on.
+- **Try 2 (deferred finish):** mat enqueued before blend, no early `Finish` — process died
+  ~12s post-JIT (exit 255); device then wedged (baseline 5624b96 also hung after SIGKILL).
+  **Recover device** before more tries (`recover.sh`).
+- **Anchor:** **5624b96** (iter 55). No commit until gate on fixed ordering.
+
+## 2026-06-03 step C blocked — split C1/C2; fix dir meta layout
+
+- **Unified payload reader (iter 56) → 10.18 dB** (tile-grid corruption), not a small drift.
+  Required mat-before-blend; materialize was never exercised at blend until C. Device
+  `blend_subchunk_meta` writer used `[num_sc, count]` while reader expected
+  `[dir_base, num_sc]` — fix directory kernel before re-unifying paths.
+- **Split:** C1 overflow-only payload reader (keep in-budget `rd_bk_emit`); C2 in-budget
+  after C1 passes. mat-before-blend + iter-55 reader alone **hung** >25 min — debug
+  separately. Revert anchor: **5624b96** (iter 55).
+
 ## 2026-06-03 unified subchunk plan — one step per iter; 3 tries then split
 
 - **Ship plan steps A→B→C→D→E as separate kept iterations, not one mega-diff.** The

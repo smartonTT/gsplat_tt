@@ -1,0 +1,18 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:24:31-0700
+cmd: grep "import\|_mod = " /localdev/smarton/gstt2/backends/tt/backend.py | head -10
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+from __future__ import annotations
+import os
+import numpy as np
+import torch
+from backends.cpu_cpp.backend import CpuCppBackend
+        import os
+            from backends.cpu_cpp import _gsplat_cpu as mod
+        import time as _time
+        import os
+        from gsplat.rasterization import prepare_microblock_payload

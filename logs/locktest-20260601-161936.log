@@ -1,0 +1,10 @@
+================ BUILD ID ================
+  cpp : #81 sha=b920669 bin=7fecf429b846167e amendment-003 GSPLAT_TT_PROFILE device-profiler dump hook
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=locktest  timeout=60s  worry=600s  ts=2026-06-01T16:19:36-0700
+cmd: echo MARKER_TTW_DEVRUN=$TTW_DEVRUN && hostname && echo lockfile_exists=$(ls -la /localdev/smarton/.ttw-device.lock 2>/dev/null || echo no)
+-----------------------------------------
+MARKER_TTW_DEVRUN=1
+yyzo-bh-03-special-smarton-for-reservation-73929
+lockfile_exists=-rw-rw-r-- 1 smarton smarton 0 Jun 1 23:19 /localdev/smarton/.ttw-device.lock

@@ -1,0 +1,119 @@
+================ BUILD ID ================
+  cpp : #145 sha=1776c0a bin=0238ddd423242a41 fix(profiler): static-literal DeviceZoneScopedN names in gather_visible_scatter+sort_bin (runtime ternary broke profiler JIT build)
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=viewer-tt  timeout=86400s  worry=600s  ts=2026-06-02T17:18:52-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; export GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_L1_RECORD=1; source .venv/bin/activate; exec python3 -m gsplat scenes/bicycle.ply --backend tt --port 8080 --host 0.0.0.0 --force-square 1024
+-----------------------------------------
+Loading Gaussians from scenes/bicycle.ply...
+Loaded 6,131,954 Gaussians
+╭────── viser (listening *:8080) ───────╮
+│             ╷                         │
+│   HTTP      │ http://localhost:8080   │
+│   Websocket │ ws://localhost:8080     │
+│             ╵                         │
+╰───────────────────────────────────────╯
+Viewer running at http://localhost:8080 (backend=tt, force_square=1024x1024)
+2026-06-03 00:29:05.805 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 00:29:05.805 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 00:29:05.805 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 00:29:05.805 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 00:29:05.806 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 00:29:05.806 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 00:29:05.806 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-03 00:29:05.806 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-03 00:29:05.806 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 00:29:05.806 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 00:29:05.806 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 00:29:05.806 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 00:29:05.806 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 00:29:05.806 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 00:29:05.806 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-03 00:29:05.806 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-03 00:29:05.806 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-03 00:29:05.845 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 00:29:05.845 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-03 00:29:05.845 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-03 00:29:05.845 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-03 00:29:05.845 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-03 00:29:05.847 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-03 00:29:05.847 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-03 00:29:05.848 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-03 00:29:06.338 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-03 00:29:06.338 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-03 00:29:06.338 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 00:29:06.338 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 00:29:06.338 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 00:29:06.338 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 00:29:06.339 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 00:29:06.339 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 00:29:06.339 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-03 00:29:06.339 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-03 00:29:06.339 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 00:29:06.339 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 00:29:06.339 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-03 00:29:06.339 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 00:29:06.339 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 00:29:06.339 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-03 00:29:06.339 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-03 00:29:06.339 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-03 00:29:06.339 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-03 00:29:06.339 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-03 00:29:06.339 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-03 00:29:06.361 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-03 00:29:06.562 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_333742_2265954652_0' (shm_resource_tracker.cpp:265)
+2026-06-03 00:29:06.562 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_333742' (shm_resource_tracker.cpp:275)
+2026-06-03 00:29:06.562 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-03 00:29:07.144 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=125512142799609 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 0.5 ms
+[gsplat_tt::sort] padded tile exceeds MAX_TILE_ENTRIES; host fallback
+[render_full] FATAL: device sort failed with host-free env stack
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] *** Process received signal ***
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] Signal: Aborted (6)
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] Signal code:  (-6)
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 0] /lib/x86_64-linux-gnu/libc.so.6(+0x42520)[0x7f24ce9f1520]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 1] /lib/x86_64-linux-gnu/libc.so.6(pthread_kill+0x12c)[0x7f24cea459fc]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 2] /lib/x86_64-linux-gnu/libc.so.6(raise+0x16)[0x7f24ce9f1476]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 3] /lib/x86_64-linux-gnu/libc.so.6(abort+0xd3)[0x7f24ce9d77f3]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 4] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x2de5a)[0x7f236dbe7e5a]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 5] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x43c42)[0x7f236dbfdc42]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 6] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6d3eb)[0x7f236dc273eb]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 7] /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x69771)[0x7f236dc23771]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 8] python3(+0x17e96f)[0x55ca922eb96f]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [ 9] python3(+0x22c3d4)[0x55ca923993d4]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [10] python3(_PyEval_EvalFrameDefault+0x6dd3)[0x55ca922e92e3]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [11] python3(_PyFunction_Vectorcall+0x7c)[0x55ca922f868c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [12] python3(+0x22c362)[0x55ca92399362]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [13] python3(_PyEval_EvalFrameDefault+0x680c)[0x55ca922e8d1c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [14] python3(_PyFunction_Vectorcall+0x7c)[0x55ca922f868c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [15] python3(+0x22c362)[0x55ca92399362]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [16] python3(_PyEval_EvalFrameDefault+0x680c)[0x55ca922e8d1c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [17] python3(+0x1986f1)[0x55ca923056f1]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [18] python3(+0x22c362)[0x55ca92399362]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [19] python3(_PyEval_EvalFrameDefault+0x6dd3)[0x55ca922e92e3]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [20] python3(_PyFunction_Vectorcall+0x7c)[0x55ca922f868c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [21] python3(_PyEval_EvalFrameDefault+0x807)[0x55ca922e2d17]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [22] python3(_PyFunction_Vectorcall+0x7c)[0x55ca922f868c]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [23] python3(_PyEval_EvalFrameDefault+0x807)[0x55ca922e2d17]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [24] python3(+0x198951)[0x55ca92305951]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [25] python3(+0x2ad22a)[0x55ca9241a22a]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [26] python3(+0x2a2a58)[0x55ca9240fa58]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [27] /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3)[0x7f24cea43ac3]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] [28] /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0)[0x7f24cead58d0]
+[yyzo-bh-03-special-smarton-for-reservation-73929:336859] *** End of error message ***

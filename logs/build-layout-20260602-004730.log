@@ -1,0 +1,8 @@
+================ BUILD ID ================
+  cpp : #114 sha=01ff918 bin=59d109789bbdb4e9 sort device bin layout kernel
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=build-layout  timeout=300s  worry=600s  ts=2026-06-02T00:47:30-0700
+cmd: cmake --build build-tt -j 16
+-----------------------------------------
+ninja: no work to do.

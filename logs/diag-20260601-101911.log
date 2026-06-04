@@ -1,0 +1,31 @@
+================ BUILD ID ================
+  cpp : #53 sha=4de5b93 bin=f47c6138740b5493 iter18 diag: force-ramp toggle
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=diag  timeout=1200s  worry=600s  ts=2026-06-01T10:19:11-0700
+cmd: echo '### PAYLOAD diff dump'; export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_MB_TIMING=1 GSPLAT_TT_DIFF_DUMP=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_BLEND_PAYLOAD=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir pay-diff --out opt/ttw/last.json 2>&1 | grep -E 'DIFFDUMP|^SUMMARY' | head -26; cp opt/metal-screenshots/pay-diff/diff10x.png /tmp/pay_diff10x.png 2>/dev/null; cp opt/metal-screenshots/pay-diff/hero.png /tmp/pay_hero.png 2>/dev/null
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#53 bin=f47c6138740b5493 matches the built+stamped artifact
+### PAYLOAD diff dump
+DIFFDUMP hero=hero HxW=1024x1024 tiles_x=32 tiles_y=32 global_mae=0.00437
+DIFFDUMP_TILE tile_id=534 tx=22 ty=16 px=(704,512) mae=0.02558
+DIFFDUMP_TILE tile_id=397 tx=13 ty=12 px=(416,384) mae=0.02138
+DIFFDUMP_TILE tile_id=327 tx=7 ty=10 px=(224,320) mae=0.02031
+DIFFDUMP_TILE tile_id=326 tx=6 ty=10 px=(192,320) mae=0.02004
+DIFFDUMP_TILE tile_id=328 tx=8 ty=10 px=(256,320) mae=0.01997
+DIFFDUMP_TILE tile_id=358 tx=6 ty=11 px=(192,352) mae=0.01822
+DIFFDUMP_TILE tile_id=329 tx=9 ty=10 px=(288,320) mae=0.01773
+DIFFDUMP_TILE tile_id=296 tx=8 ty=9 px=(256,288) mae=0.01715
+DIFFDUMP_TILE tile_id=543 tx=31 ty=16 px=(992,512) mae=0.01710
+DIFFDUMP_TILE tile_id=886 tx=22 ty=27 px=(704,864) mae=0.01691
+DIFFDUMP_TILE tile_id=173 tx=13 ty=5 px=(416,160) mae=0.01681
+DIFFDUMP_TILE tile_id=976 tx=16 ty=30 px=(512,960) mae=0.01675
+DIFFDUMP_TILE tile_id=294 tx=6 ty=9 px=(192,288) mae=0.01669
+DIFFDUMP_TILE tile_id=359 tx=7 ty=11 px=(224,352) mae=0.01647
+DIFFDUMP_TILE tile_id=295 tx=7 ty=9 px=(224,288) mae=0.01586
+DIFFDUMP_TILE tile_id=325 tx=5 ty=10 px=(160,320) mae=0.01581
+DIFFDUMP_TILE tile_id=360 tx=8 ty=11 px=(256,352) mae=0.01562
+DIFFDUMP_TILE tile_id=357 tx=5 ty=11 px=(160,352) mae=0.01532
+DIFFDUMP_TILE tile_id=201 tx=9 ty=6 px=(288,192) mae=0.01528
+DIFFDUMP_TILE tile_id=302 tx=14 ty=9 px=(448,288) mae=0.01528
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=40.80dB hero_vs_ref=42.10dB min_vs_ref=42.10dB min_vs_gt=40.80dB ms/view=658.2 (proj=54.3 ta=128.6 sort=15.8 blend=458.3) shot=opt/metal-screenshots/pay-diff/hero.png

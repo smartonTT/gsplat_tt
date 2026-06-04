@@ -1,0 +1,17 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=120s  worry=600s  ts=2026-06-02T13:26:18-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_L1_RECORD=1 GSPLAT_TT_MB_TIMING=1; cd /localdev/smarton/gstt2 && source .venv/bin/activate 2>/dev/null && python3 -X faulthandler scripts/a003_verify.py --views 1 --iter-dir debug-ref-cpu --ref-backend cpu_cpp_mb_nosort --out /tmp/debug-bt2.json 2>&1 | grep -E "SORT|BLEND|SUMMARY|hero|Segmentation|Error|d2h" | head -20
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+2026-06-02 20:26:21.493 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_281696_128445634_0' (shm_resource_tracker.cpp:265)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=23.79 up=0.02 kernel=1.55 d2h=0.00 compact=0.00 publish=1.49 total=26.96ms
+[BLEND_SPLIT] upload+exec=0.0 readback=175.0 total=175.0 ms (resident, one Finish)
+[BLEND_ADDR] cull_masks=0x1060ee00 out=0x107e7ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0x107e5ec0 yramp=0x107e6ec0 payload=0x0(sz=0x0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=20.64 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=20.77ms
+[BLEND_SPLIT] upload+exec=0.0 readback=183.8 total=183.8 ms (resident, one Finish)
+[BLEND_ADDR] cull_masks=0x1060ee00 out=0x107e7ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0x107e5ec0 yramp=0x107e6ec0 payload=0x0(sz=0x0)
+    raise KeyError(f"unknown backend {name!r}; available: {avail}") from None
+KeyError: "unknown backend 'cpu_cpp_mb_nosort'; available: cpu, cpu_cpp, cpu_cpp_mb, cpu_mb, cuda, tt"

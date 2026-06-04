@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #109 sha=1a309e6 bin=7a0ea01878191805 ideal path: sort_blend_pipe+cull_pipeline defaults, fewer Finish
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=verify-notiming  timeout=1200s  worry=600s  ts=2026-06-02T00:12:31-0700
+cmd: bash -lc cd /localdev/smarton/gstt2 && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0; source .venv/bin/activate; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | grep "^SUMMARY"
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#109 bin=7a0ea01878191805 matches the built+stamped artifact
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=268.3 (proj=39.3 ta=24.9 sort=24.3 blend=178.7) shot=opt/metal-screenshots/loop-ttw/hero.png

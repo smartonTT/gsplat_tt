@@ -1,0 +1,10 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-01T23:53:28-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal && cd /localdev/smarton/gstt2 && source .venv/bin/activate && cmake --build build-tt -j8 2>&1 | tail -8
+-----------------------------------------
+[1/3] Building CXX object CMakeFiles/gsplat_tt.dir/gsplat_tt/tile_assign_device.cpp.o
+[2/3] Linking CXX static library libgsplat_tt.a
+[3/3] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so

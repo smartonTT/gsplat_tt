@@ -1,0 +1,13 @@
+================ BUILD ID ================
+  cpp : #60 sha=365eb15 bin=540444e9f3d7f390 iter21: fix fused blend reader arg19 blendrec
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=base60  timeout=1200s  worry=600s  ts=2026-06-01T11:21:41-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | grep -E 'BLEND_DEVICE|FUSED_TILE|SUMMARY' | tail -10
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#60 bin=540444e9f3d7f390 matches the built+stamped artifact
+[FUSED_TILE] upload+exec+readback=873.2 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=876.6 ms (host_build=0)
+[FUSED_TILE] upload+exec+readback=195.2 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=198.3 ms (host_build=0)
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=306.3 (proj=54.5 ta=36.9 sort=16.2 blend=198.5) shot=opt/metal-screenshots/loop-ttw/hero.png

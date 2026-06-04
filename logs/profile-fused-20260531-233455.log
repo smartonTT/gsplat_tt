@@ -1,0 +1,150 @@
+================ BUILD ID ================
+  cpp : #8 sha=da09320 iter 8: sort→blend pipe: defer publish Finish, skip pkept D2H
+  data: # sha= 
+=========================================
+host=bh-30  tag=profile-fused  timeout=1200s  worry=600s  ts=2026-05-31T23:34:55-0700
+cmd: cd /localdev/smarton/gstt2 && source .venv/bin/activate && export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1 GSPLAT_TT_MB_TIMING=1 && .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/profile-fused.json 2>&1
+-----------------------------------------
+2026-06-01 06:34:58.641 | critical |           Metal | Failed to determine TT-Metal root directory. Root directory must be set via one of the following methods:
+1. Automatically determined when using a package install
+2. Set TT_METAL_RUNTIME_ROOT environment variable to the path containing tt_metal/
+3. Call RunTimeOptions::set_root_dir() API before creating RunTimeOptions
+4. Run from the root of the repository
+Current working directory: /localdev/smarton/gstt2 (rtoptions.cpp:318)
+2026-06-01 06:34:58.641 | critical |          Always | TT_FATAL: Root Directory is not set. (assert.hpp:104)
+[gsplat_tt::project] device init failed: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/llrt/rtoptions.cpp:330: !this->root_dir.empty()
+info:
+Root Directory is not set.
+backtrace:
+ --- tt::llrt::RunTimeOptions::RunTimeOptions()
+ --- tt::tt_metal::MetalEnvImpl::initialize_base_objects()
+ --- tt::tt_metal::MetalEnvImpl::MetalEnvImpl(tt::tt_metal::MetalEnvDescriptor)
+ --- tt::tt_metal::MetalEnv::MetalEnv(tt::tt_metal::MetalEnvDescriptor)
+ --- tt::tt_metal::MetalContext::create_default_instance_implicit_locked()
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::distributed::MeshWorkloadImpl::MeshWorkloadImpl()
+ --- tt::tt_metal::distributed::MeshWorkload::MeshWorkload()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xba20e) [0x7255089e520e]
+ --- gsplat_tt::project_device_ready()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x4e008) [0x725508979008]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x59781) [0x725508984781]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x395d5) [0x7255089645d5]
+ --- .venv/bin/python3(+0x17e96f) [0x60eb419c696f]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x56cb) [0x60eb419c2bdb]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x60eb419bdd17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x60eb419bdd17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x60eb419bdbd0]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x60eb419bdbd0]
+ --- .venv/bin/python3(+0x259d36) [0x60eb41aa1d36]
+ --- .venv/bin/python3(PyEval_EvalCode+0x86) [0x60eb41aa1c06]
+ --- .venv/bin/python3(+0x280678) [0x60eb41ac8678]
+ --- .venv/bin/python3(+0x27accf) [0x60eb41ac2ccf]
+ --- .venv/bin/python3(+0x280415) [0x60eb41ac8415]
+ --- .venv/bin/python3(_PyRun_SimpleFileObject+0x1a8) [0x60eb41ac7958]
+ --- .venv/bin/python3(_PyRun_AnyFileObject+0x47) [0x60eb41ac7637]
+ --- .venv/bin/python3(Py_RunMain+0x2be) [0x60eb41abbbfe]
+ --- .venv/bin/python3(Py_BytesMain+0x2d) [0x60eb41a95c4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7255627c6d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7255627c6e40]
+ --- .venv/bin/python3(_start+0x25) [0x60eb41a95b45]
+
+2026-06-01 06:34:58.642 | critical |           Metal | Failed to determine TT-Metal root directory. Root directory must be set via one of the following methods:
+1. Automatically determined when using a package install
+2. Set TT_METAL_RUNTIME_ROOT environment variable to the path containing tt_metal/
+3. Call RunTimeOptions::set_root_dir() API before creating RunTimeOptions
+4. Run from the root of the repository
+Current working directory: /localdev/smarton/gstt2 (rtoptions.cpp:318)
+2026-06-01 06:34:58.642 | critical |          Always | TT_FATAL: Root Directory is not set. (assert.hpp:104)
+[gsplat_tt::project] device init failed: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/llrt/rtoptions.cpp:330: !this->root_dir.empty()
+info:
+Root Directory is not set.
+backtrace:
+ --- tt::llrt::RunTimeOptions::RunTimeOptions()
+ --- tt::tt_metal::MetalEnvImpl::initialize_base_objects()
+ --- tt::tt_metal::MetalEnvImpl::MetalEnvImpl(tt::tt_metal::MetalEnvDescriptor)
+ --- tt::tt_metal::MetalEnv::MetalEnv(tt::tt_metal::MetalEnvDescriptor)
+ --- tt::tt_metal::MetalContext::create_default_instance_implicit_locked()
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::distributed::MeshWorkloadImpl::MeshWorkloadImpl()
+ --- tt::tt_metal::distributed::MeshWorkload::MeshWorkload()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xba20e) [0x7255089e520e]
+ --- gsplat_tt::transform_means_cam_tt(float const*, float const*, unsigned long, float*, gsplat_tt::ProjectCallTimings*)
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x4e089) [0x725508979089]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x59781) [0x725508984781]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x395d5) [0x7255089645d5]
+ --- .venv/bin/python3(+0x17e96f) [0x60eb419c696f]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x56cb) [0x60eb419c2bdb]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x60eb419bdd17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x60eb419bdd17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x60eb419bdbd0]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x60eb419bdbd0]
+ --- .venv/bin/python3(+0x259d36) [0x60eb41aa1d36]
+ --- .venv/bin/python3(PyEval_EvalCode+0x86) [0x60eb41aa1c06]
+ --- .venv/bin/python3(+0x280678) [0x60eb41ac8678]
+ --- .venv/bin/python3(+0x27accf) [0x60eb41ac2ccf]
+ --- .venv/bin/python3(+0x280415) [0x60eb41ac8415]
+ --- .venv/bin/python3(_PyRun_SimpleFileObject+0x1a8) [0x60eb41ac7958]
+ --- .venv/bin/python3(_PyRun_AnyFileObject+0x47) [0x60eb41ac7637]
+ --- .venv/bin/python3(Py_RunMain+0x2be) [0x60eb41abbbfe]
+ --- .venv/bin/python3(Py_BytesMain+0x2d) [0x60eb41a95c4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7255627c6d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7255627c6e40]
+ --- .venv/bin/python3(_start+0x25) [0x60eb41a95b45]
+
+2026-06-01 06:34:58.946 | critical |           Metal | Failed to determine TT-Metal root directory. Root directory must be set via one of the following methods:
+1. Automatically determined when using a package install
+2. Set TT_METAL_RUNTIME_ROOT environment variable to the path containing tt_metal/
+3. Call RunTimeOptions::set_root_dir() API before creating RunTimeOptions
+4. Run from the root of the repository
+Current working directory: /localdev/smarton/gstt2 (rtoptions.cpp:318)
+2026-06-01 06:34:58.946 | critical |          Always | TT_FATAL: Root Directory is not set. (assert.hpp:104)
+[gsplat_tt::tile_assign] device init failed: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/llrt/rtoptions.cpp:330: !this->root_dir.empty()
+info:
+Root Directory is not set.
+backtrace:
+ --- tt::llrt::RunTimeOptions::RunTimeOptions()
+ --- tt::tt_metal::MetalEnvImpl::initialize_base_objects()
+ --- tt::tt_metal::MetalEnvImpl::MetalEnvImpl(tt::tt_metal::MetalEnvDescriptor)
+ --- tt::tt_metal::MetalEnv::MetalEnv(tt::tt_metal::MetalEnvDescriptor)
+ --- tt::tt_metal::MetalContext::create_default_instance_implicit_locked()
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::distributed::MeshWorkloadImpl::MeshWorkloadImpl()
+ --- tt::tt_metal::distributed::MeshWorkload::MeshWorkload()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xcc58c) [0x7255089f758c]
+ --- gsplat_tt::tile_assign_tt(float const*, float const*, unsigned long, int, int, int, float const*, float const*, float, bool*, gsplat_tt::TileAssignCallTimings*)
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x4c60f) [0x72550897760f]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x59781) [0x725508984781]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x395d5) [0x7255089645d5]
+ --- .venv/bin/python3(+0x17e96f) [0x60eb419c696f]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x56cb) [0x60eb419c2bdb]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x60eb419bdd17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x807) [0x60eb419bdd17]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x60eb419bdbd0]
+ --- .venv/bin/python3(_PyFunction_Vectorcall+0x7c) [0x60eb419d368c]
+ --- .venv/bin/python3(_PyEval_EvalFrameDefault+0x6c0) [0x60eb419bdbd0]
+ --- .venv/bin/python3(+0x259d36) [0x60eb41aa1d36]
+ --- .venv/bin/python3(PyEval_EvalCode+0x86) [0x60eb41aa1c06]
+ --- .venv/bin/python3(+0x280678) [0x60eb41ac8678]
+ --- .venv/bin/python3(+0x27accf) [0x60eb41ac2ccf]
+ --- .venv/bin/python3(+0x280415) [0x60eb41ac8415]
+ --- .venv/bin/python3(_PyRun_SimpleFileObject+0x1a8) [0x60eb41ac7958]
+ --- .venv/bin/python3(_PyRun_AnyFileObject+0x47) [0x60eb41ac7637]
+ --- .venv/bin/python3(Py_RunMain+0x2be) [0x60eb41abbbfe]
+ --- .venv/bin/python3(Py_BytesMain+0x2d) [0x60eb41a95c4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7255627c6d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7255627c6e40]
+ --- .venv/bin/python3(_start+0x25) [0x60eb41a95b45]
+
+[render_full] FATAL: device tile_assign failed with host-free env stack
+bash: line 1: 489554 Aborted                 (core dumped) .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/profile-fused.json 2>&1

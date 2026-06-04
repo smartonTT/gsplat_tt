@@ -1,0 +1,9 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=sync-build  timeout=1200s  worry=600s  ts=2026-06-02T00:03:17-0700
+cmd: bash -lc cd /localdev/smarton/gstt2 && git pull origin smarton/tt-loop && cmake --build build-tt -j 16 && /localdev/smarton/tt-workflows/scripts/buildid.sh stamp cpp
+-----------------------------------------
+fatal: not a git repository (or any parent up to mount point /)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).

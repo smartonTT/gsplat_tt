@@ -1,0 +1,34 @@
+================ BUILD ID ================
+  cpp : #196 sha=5624b96 bin=5a3c5bc104d25035 iter57 C1 fix dup mat
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=verify  timeout=1200s  worry=600s  ts=2026-06-03T21:45:51-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate 2>/dev/null; test -f render/build-tt/build.ninja || (cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release); cmake --build render/build-tt -j 16; python3 render/run.py --iter-dir ${TTW_ITER_DIR:?TTW_ITER_DIR unset} 2>&1 | tee /tmp/ttw_verify.log; grep -q '^SUMMARY' /tmp/ttw_verify.log || { echo '[verify] no SUMMARY'; exit 6; }; grep -q '^TTW_METRIC hero_vs_ref=' /tmp/ttw_verify.log || { echo '[verify] no TTW_METRIC'; exit 6; }; mkdir -p opt/metal-screenshots/${TTW_ITER_DIR}; cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png 2>/dev/null || cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png; test -f opt/metal-screenshots/${TTW_ITER_DIR}/hero.png || { echo '[verify] hero screenshot missing'; exit 6; }; cp -f tmp/${TTW_ITER_DIR}/hero_diff10.png opt/metal-screenshots/${TTW_ITER_DIR}/hero_diff10.png 2>/dev/null || true; grep '^TTW_METRIC' /tmp/ttw_verify.log | tail -1; grep '^TTW_TIMING' /tmp/ttw_verify.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#196 bin=5a3c5bc104d25035 matches the built+stamped artifact
+ninja: no work to do.
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-06-04 04:45:53.455 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 04:45:53.455 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 04:45:53.455 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 04:45:53.455 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 04:45:53.455 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 04:45:53.456 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 04:45:53.456 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-04 04:45:53.456 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-04 04:45:53.456 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-04 04:45:53.456 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-04 04:45:53.456 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-04 04:45:53.456 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 04:45:53.456 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-04 04:45:53.456 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-04 04:45:53.456 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-04 04:45:53.456 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-04 04:45:53.456 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-04 04:45:53.496 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-04 04:45:53.496 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-04 04:45:53.496 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-04 04:45:53.496 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-04 04:45:53.496 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-04 04:45:53.498 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-04 04:45:54.498 | warning  |             UMD | Waiting for lock 'CHIP_IN_USE_0_PCIe' which is currently held by thread TID: 31949, PID: 31949 (robust_mutex.cpp:454)

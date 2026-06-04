@@ -1,0 +1,44 @@
+================ BUILD ID ================
+  cpp : #206 sha=iter61 bin=pending iter61 fuse tile_l1_cull into blend reader/compute
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=ttw-061-build3  timeout=1200s  worry=600s  ts=2026-06-03T23:23:30-0700
+cmd: bash -c export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; cd /localdev/smarton/gstt2 && source .venv/bin/activate; test -f render/build-tt/build.ninja || cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release; cmake --build render/build-tt -j 16 2>&1
+-----------------------------------------
+declare -x CURL_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x HOME="/home/smarton"
+declare -x IRD_ARCH_NAME="blackhole"
+declare -x IRD_CLUSTER="tt_yyz"
+declare -x IRD_HARVESTED_MACHINE="false"
+declare -x IRD_NUM_PCIE_CHIPS="1"
+declare -x IRD_RESET_DONGLE="false"
+declare -x IRD_VERSION="1.12.106"
+declare -x LOGNAME="smarton"
+declare -x MAIL="/var/mail/smarton"
+declare -x NODE_EXTRA_CA_CERTS="/etc/ssl/certs/ca-certificates.crt"
+declare -x OLDPWD="/home/smarton"
+declare -x PATH="/home/smarton/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games"
+declare -x PIP_CERT="/etc/ssl/certs/ca-certificates.crt"
+declare -x PWD="/localdev/smarton/gstt2"
+declare -x P_USER_DBD_PORT="51483"
+declare -x P_USER_SSH_PORT="46483"
+declare -x REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-certificates.crt"
+declare -x SHELL="/bin/bash"
+declare -x SHLVL="2"
+declare -x SLURM_GRES_IDS="0"
+declare -x SSH_CLIENT="10.250.20.198 55082 22"
+declare -x SSH_CONNECTION="10.250.20.198 55082 172.17.0.2 22"
+declare -x SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+declare -x TTW_DEVRUN="1"
+declare -x USER="smarton"
+declare -x USER_SSH_PASSWD="HB8/DwdzaN0Ap5b8XMfaVCFeJoV7mrp3"
+declare -x _="/usr/bin/bash"
+-- Found pybind11: /localdev/smarton/gstt2/.venv/lib/python3.10/site-packages/pybind11/include (found version "3.0.4")
+-- Configuring incomplete, errors occurred!
+ninja: error: loading 'build.ninja': No such file or directory
+CMake Error at /localdev/smarton/gstt2/cmake/TtMetalInTree.cmake:4 (message):
+  GSPLAT_WITH_TT requires TT_METAL_HOME
+Call Stack (most recent call first):
+  CMakeLists.txt:88 (gsplat_link_tt_metal)
+
+

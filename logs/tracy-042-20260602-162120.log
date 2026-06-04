@@ -1,0 +1,43 @@
+================ BUILD ID ================
+  cpp : #142 sha=7b7966a bin=58ca522fd5ed289c iter 42: M1: L1-resident LSD radix sort over 32B records; bit-order proven == DRAM reference (on-device: mono=0 + key-multiset perm=0 across 1100 bucket tiles/all cores, cull-mask alignment intact => 42dB failure mode absent); 63.85dB
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=tracy-042  timeout=900s  worry=600s  ts=2026-06-02T16:21:20-0700
+cmd: bash opt/profiler/run_wrapper_capture_l1.sh
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#142 bin=58ca522fd5ed289c matches the built+stamped artifact
+[tracy-wrap-l1] L1-RESIDENT flags: FUSED_TILE=unset TILE_BUCKET=1 BUCKET_FIT=8192 SFPU_CULL=1 BLEND_AOS=default-on BUCKET_MASK=unset
+[tracy-wrap-l1] CMD: python3 -m tracy -r -p -v --dump-device-data-mid-run -o /localdev/smarton/gstt2/opt/profiler/wrap_out_l1 opt/profiler/_render_inner.sh
+2026-06-02 23:21:21.947 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out_l1
+2026-06-02 23:21:21.948 | INFO     | __main__:main:336 - Using port 8086
+2026-06-02 23:21:21.948 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-06-02 23:21:21.953 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+Connecting to 127.0.0.1:8086...2026-06-02 23:21:21.956 | INFO     | __main__:main:400 - Test process started
+2026-06-02 23:21:22.322 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2/opt/profiler/wrap_out_l1
+/bin/sh: 1: opt/profiler/_render_inner.sh: Permission denied
+Traceback (most recent call last):
+  File "/usr/lib/python3.10/runpy.py", line 196, in _run_module_as_main
+    return _run_code(code, main_globals, None,
+  File "/usr/lib/python3.10/runpy.py", line 86, in _run_code
+    exec(code, run_globals)
+  File "/localdev/smarton/tt-metal/tools/tracy/__main__.py", line 441, in <module>
+    main()
+  File "/localdev/smarton/tt-metal/tools/tracy/__main__.py", line 369, in main
+    subprocess.run(" ".join(args), shell=True, check=True)
+  File "/usr/lib/python3.10/subprocess.py", line 526, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command 'opt/profiler/_render_inner.sh' returned non-zero exit status 126.
+2026-06-02 23:21:37.376 | ERROR    | __main__:main:429 - No profiling data could be captured. Please make sure you are on a Tracy-enabled build (default).
+[tracy-wrap-l1] wrapper exited rc=1
+[tracy-wrap-l1] FAIL: /localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_profile_log_host.tracy missing/empty; listing /localdev/smarton/gstt2/opt/profiler/wrap_out_l1:
+/localdev/smarton/gstt2/opt/profiler/wrap_out_l1:
+total 12
+drwxrwxr-x 3 smarton smarton 4096 Jun  2 23:21 .
+drwxrwxr-x 5 smarton smarton 4096 Jun  2 23:21 ..
+drwxrwxr-x 2 smarton smarton 4096 Jun  2 23:21 .logs
+
+/localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs:
+total 8
+drwxrwxr-x 2 smarton smarton 4096 Jun  2 23:21 .
+drwxrwxr-x 3 smarton smarton 4096 Jun  2 23:21 ..
+[tracy-wrap-l1] DONE rc=1 tracy=/localdev/smarton/gstt2/opt/profiler/wrap_out_l1/.logs/tracy_profile_log_host.tracy

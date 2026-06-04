@@ -1,0 +1,58 @@
+================ BUILD ID ================
+  cpp : #84 sha=8944006 bin=50b094d355f74c49 iter28 probe: baked mask vs inline
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=bsum  timeout=900s  worry=600s  ts=2026-06-01T17:38:30-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TT_METAL_DPRINT_CORES=all GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_MASK=1 GSPLAT_TT_BUCKET_MASK_DEBUG=1 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | grep -E 'BSUM|SUMMARY' | head -50
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#84 bin=50b094d355f74c49 matches the built+stamped artifact
+0:5-3:NC: BSUM t=346 L=5834 mism=0 big=0 minidx=4294967295 maxidx=0
+0:7-0:NC: BSUM t=314 L=6308 mism=0 big=0 minidx=4294967295 maxidx=0
+0:3-0:NC: BSUM t=345 L=5585 mism=0 big=0 minidx=4294967295 maxidx=0
+0:6-4:NC: BSUM t=651 L=6176 mism=0 big=0 minidx=4294967295 maxidx=0
+0:7-3:NC: BSUM t=377 L=6382 mism=0 big=0 minidx=4294967295 maxidx=0
+0:8-5:NC: BSUM t=602 L=7020 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-4:NC: BSUM t=86 L=4279 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-5:NC: BSUM t=85 L=4441 mism=0 big=0 minidx=4294967295 maxidx=0
+0:4-0:NC: BSUM t=645 L=5671 mism=0 big=0 minidx=4294967295 maxidx=0
+0:7-7:NC: BSUM t=646 L=6501 mism=0 big=0 minidx=4294967295 maxidx=0
+0:4-1:NC: BSUM t=657 L=5687 mism=0 big=0 minidx=4294967295 maxidx=0
+0:4-2:NC: BSUM t=379 L=5639 mism=0 big=0 minidx=4294967295 maxidx=0
+0:5-5:NC: BSUM t=335 L=5918 mism=0 big=0 minidx=4294967295 maxidx=0
+0:6-1:NC: BSUM t=474 L=6053 mism=0 big=0 minidx=4294967295 maxidx=0
+0:4-3:NC: BSUM t=334 L=5740 mism=0 big=0 minidx=4294967295 maxidx=0
+0:4-8:NC: BSUM t=366 L=5830 mism=0 big=0 minidx=4294967295 maxidx=0
+0:6-9:NC: BSUM t=367 L=6337 mism=0 big=0 minidx=4294967295 maxidx=0
+0:7-8:NC: BSUM t=603 L=6613 mism=0 big=0 minidx=4294967295 maxidx=0
+0:3-5:NC: BSUM t=573 L=5567 mism=0 big=0 minidx=4294967295 maxidx=0
+0:3-6:NC: BSUM t=333 L=5571 mism=0 big=0 minidx=4294967295 maxidx=0
+0:6-3:NC: BSUM t=442 L=6081 mism=0 big=0 minidx=4294967295 maxidx=0
+0:8-9:NC: BSUM t=650 L=7057 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-7:NC: BSUM t=694 L=4397 mism=0 big=0 minidx=4294967295 maxidx=0
+0:5-7:NC: BSUM t=568 L=5947 mism=0 big=0 minidx=4294967295 maxidx=0
+0:6-0:NC: BSUM t=369 L=6113 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-2:NC: BSUM t=574 L=3778 mism=0 big=0 minidx=4294967295 maxidx=0
+0:1-7:NC: BSUM t=652 L=5285 mism=0 big=0 minidx=4294967295 maxidx=0
+0:9-2:NC: BSUM t=300 L=7104 mism=0 big=0 minidx=4294967295 maxidx=0
+0:1-5:NC: BSUM t=550 L=5093 mism=0 big=0 minidx=4294967295 maxidx=0
+0:4-5:NC: BSUM t=702 L=5859 mism=0 big=0 minidx=4294967295 maxidx=0
+0:5-4:NC: BSUM t=440 L=5916 mism=0 big=0 minidx=4294967295 maxidx=0
+0:8-0:NC: BSUM t=394 L=6698 mism=0 big=0 minidx=4294967295 maxidx=0
+0:10-2:NC: BSUM t=557 L=7616 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-6:NC: BSUM t=721 L=4508 mism=0 big=0 minidx=4294967295 maxidx=0
+0:1-6:NC: BSUM t=252 L=5239 mism=0 big=0 minidx=4294967295 maxidx=0
+0:2-2:NC: BSUM t=368 L=5435 mism=0 big=0 minidx=4294967295 maxidx=0
+0:2-5:NC: BSUM t=643 L=5398 mism=0 big=0 minidx=4294967295 maxidx=0
+0:3-2:NC: BSUM t=315 L=5604 mism=0 big=0 minidx=4294967295 maxidx=0
+0:5-2:NC: BSUM t=703 L=5861 mism=0 big=0 minidx=4294967295 maxidx=0
+0:5-8:NC: BSUM t=660 L=6084 mism=0 big=0 minidx=4294967295 maxidx=0
+0:9-0:NC: BSUM t=378 L=7187 mism=0 big=0 minidx=4294967295 maxidx=0
+0:1-1:NC: BSUM t=475 L=5113 mism=0 big=0 minidx=4294967295 maxidx=0
+0:1-3:NC: BSUM t=571 L=5208 mism=0 big=0 minidx=4294967295 maxidx=0
+0:3-1:NC: BSUM t=307 L=5510 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-3:NC: BSUM t=518 L=4163 mism=0 big=0 minidx=4294967295 maxidx=0
+0:3-3:NC: BSUM t=408 L=5565 mism=0 big=0 minidx=4294967295 maxidx=0
+0:8-7:NC: BSUM t=441 L=6963 mism=0 big=0 minidx=4294967295 maxidx=0
+0:9-4:NC: BSUM t=299 L=7408 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-1:NC: BSUM t=677 L=3037 mism=0 big=0 minidx=4294967295 maxidx=0
+0:0-8:NC: BSUM t=644 L=5070 mism=0 big=0 minidx=4294967295 maxidx=0

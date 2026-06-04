@@ -1,0 +1,327 @@
+================ BUILD ID ================
+  cpp : #156 sha=f18c3c3 bin=325ef2bf2c6a5942 iter 47: MEASURE-FIRST blend breakdown (device per-tile-class zones rd_bk_emit/rd_overflow/cp_inb/cp_ovf + host TILE_HISTO). Hero: in-budget 914 tiles/2.01M cand (59.8%), overflow 110 tiles/1.36M cand (40.2%), max_tile_n=25699>FIT. Blend makespan ~93ms (reader~=compute co-equal) + separate cull ~80ms = lumped host blend 182.5. In-budget CO-LIMITED: reader-emit 824 ~= compute-SFPU 844 (load+sort only ~286). Busiest cores are OVERFLOW-gather-dominated (top core overflow 449 vs emit 181, 30v totals). Tailskip scaffold gated-off (deadlock-free 63.85 but blend 185.8>182.5, not a win). Measurement-only, PSNR 63.85 bit-identical.
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=render-clean  timeout=1200s  worry=600s  ts=2026-06-02T20:50:31-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate 2>/dev/null; python3 render/run.py --iter-dir render-clean
+-----------------------------------------
+[run] rendering hero='hero' 1024x1024 scene=bicycle
+2026-06-03 03:50:32.962 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 03:50:32.962 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 03:50:32.962 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 03:50:32.962 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 03:50:32.962 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 03:50:32.962 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 03:50:32.963 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-03 03:50:32.963 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-03 03:50:32.963 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 03:50:32.963 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 03:50:32.963 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 03:50:32.963 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 03:50:32.963 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 03:50:32.963 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 03:50:32.963 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-03 03:50:32.963 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-03 03:50:32.963 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-03 03:50:33.003 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 03:50:33.003 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-03 03:50:33.003 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-03 03:50:33.003 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-03 03:50:33.003 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-03 03:50:33.006 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-03 03:50:33.007 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-03 03:50:33.007 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-03 03:50:33.482 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-03 03:50:33.482 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-03 03:50:33.482 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 03:50:33.482 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 03:50:33.482 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 03:50:33.482 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 03:50:33.483 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 03:50:33.483 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 03:50:33.483 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-03 03:50:33.483 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-03 03:50:33.483 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 03:50:33.483 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 03:50:33.483 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-03 03:50:33.483 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 03:50:33.483 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 03:50:33.483 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-03 03:50:33.483 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-03 03:50:33.483 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-03 03:50:33.483 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-03 03:50:33.483 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-03 03:50:33.483 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-03 03:50:33.509 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-03 03:50:33.812 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_371792_1356689543_0' (shm_resource_tracker.cpp:265)
+2026-06-03 03:50:33.812 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_371792' (shm_resource_tracker.cpp:275)
+2026-06-03 03:50:33.812 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-03 03:50:34.401 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=141829706150941 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 1457.5 ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=713.79 up=0.02 kernel=555.79 d2h=0.00 compact=0.00 publish=537.80 total=1807.51ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=42.61 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=42.76ms
+2026-06-03 03:50:57.080 | critical |          Always | TT_FATAL: No MetalContext instance for context_id 7. Create one via create_instance(). (assert.hpp:104)
+2026-06-03 03:50:57.082 | critical |          Always | TT_FATAL: context_id 1463132763 is out of range (max 32). (assert.hpp:104)
+2026-06-03 03:50:57.083 | warning  |           Metal | Exception during device close in ScopedDevices destructor: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:77: context_id.get() < MAX_CONTEXT_COUNT
+info:
+context_id 1463132763 is out of range (max 32).
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x75c868) [0x7f77902f1868]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::HWCommandQueue::terminate()
+ --- tt::tt_metal::DispatchKernelInitializer::teardown(std::unordered_set<tt::tt_metal::InitializerKey, std::hash<tt::tt_metal::InitializerKey>, std::equal_to<tt::tt_metal::InitializerKey>, std::allocator<tt::tt_metal::InitializerKey> >&)
+ --- tt::tt_metal::DeviceManager::close_devices(std::vector<tt::tt_metal::IDevice*, std::allocator<tt::tt_metal::IDevice*> > const&, bool)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::ScopedDevices::~ScopedDevices()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::~MeshDeviceImpl()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::~MeshDeviceImpl()
+ --- tt::tt_metal::distributed::MeshDevice::~MeshDevice()
+ --- tt::tt_metal::distributed::MeshDevice::~MeshDevice()
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x61ca0f) [0x7f77901b1a0f]
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xc0bc7) [0x7f7790f8dbc7]
+ --- gsplat_tt::project_device_ready()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x2fb55) [0x7f7790efcb55]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x43e72) [0x7f7790f10e72]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6d61b) [0x7f7790f3a61b]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x699a1) [0x7f7790f369a1]
+ --- python3(+0x17e96f) [0x55734d7ab96f]
+ --- python3(_PyEval_EvalFrameDefault+0x56cb) [0x55734d7a7bdb]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55734d7a2d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55734d7a2d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55734d7a2bd0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55734d7a2bd0]
+ --- python3(+0x259d36) [0x55734d886d36]
+ --- python3(PyEval_EvalCode+0x86) [0x55734d886c06]
+ --- python3(+0x280678) [0x55734d8ad678]
+ --- python3(+0x27accf) [0x55734d8a7ccf]
+ --- python3(+0x280415) [0x55734d8ad415]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55734d8ac958]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55734d8ac637]
+ --- python3(Py_RunMain+0x2be) [0x55734d8a0bfe]
+ --- python3(Py_BytesMain+0x2d) [0x55734d87ac4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f78ce762d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f78ce762e40]
+ --- python3(_start+0x25) [0x55734d87ab45]
+. The device may be in an unrecoverable state and require a reset. (mesh_device.cpp:208)
+[gsplat_tt::project] device init failed: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:393: context_id == DEFAULT_CONTEXT_ID
+info:
+No MetalContext instance for context_id 7. Create one via create_instance().
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9acab0) [0x7f7790541ab0]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::program_dispatch::set_num_worker_sems_on_dispatch(tt::tt_metal::IDevice*, tt::tt_metal::SystemMemoryManager&, unsigned char, unsigned int)
+ --- tt::tt_metal::HWCommandQueue::set_go_signal_noc_data_and_dispatch_sems(unsigned int, std::vector<unsigned int, ttsl::aligned_allocator<unsigned int, 16ul> > const&)
+ --- tt::tt_metal::Device::init_command_queue_device_with_topology(tt::tt_metal::DispatchTopology*)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995c94) [0x7f779052ac94]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995b83) [0x7f779052ab83]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f779026e19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f78ce7d2ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f779026dff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9959de) [0x7f779052a9de]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f77904070c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f7790405bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f77904050b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f78cc016253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f78ce7cdac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f78ce85f8d0]
+
+2026-06-03 03:50:57.116 | critical |          Always | TT_FATAL: No MetalContext instance for context_id 2. Create one via create_instance(). (assert.hpp:104)
+2026-06-03 03:50:57.116 | critical |          Always | TT_FATAL: context_id 219180027 is out of range (max 32). (assert.hpp:104)
+2026-06-03 03:50:57.118 | warning  |           Metal | Exception during device close in ScopedDevices destructor: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:77: context_id.get() < MAX_CONTEXT_COUNT
+info:
+context_id 219180027 is out of range (max 32).
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x75c868) [0x7f77902f1868]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::HWCommandQueue::terminate()
+ --- tt::tt_metal::DispatchKernelInitializer::teardown(std::unordered_set<tt::tt_metal::InitializerKey, std::hash<tt::tt_metal::InitializerKey>, std::equal_to<tt::tt_metal::InitializerKey>, std::allocator<tt::tt_metal::InitializerKey> >&)
+ --- tt::tt_metal::DeviceManager::close_devices(std::vector<tt::tt_metal::IDevice*, std::allocator<tt::tt_metal::IDevice*> > const&, bool)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::ScopedDevices::~ScopedDevices()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::~MeshDeviceImpl()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::~MeshDeviceImpl()
+ --- tt::tt_metal::distributed::MeshDevice::~MeshDevice()
+ --- tt::tt_metal::distributed::MeshDevice::~MeshDevice()
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x61ca0f) [0x7f77901b1a0f]
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xc0bc7) [0x7f7790f8dbc7]
+ --- gsplat_tt::transform_means_cam_tt(float const*, float const*, unsigned long, float*, gsplat_tt::ProjectCallTimings*)
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x2fbd6) [0x7f7790efcbd6]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x43e72) [0x7f7790f10e72]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6d61b) [0x7f7790f3a61b]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x699a1) [0x7f7790f369a1]
+ --- python3(+0x17e96f) [0x55734d7ab96f]
+ --- python3(_PyEval_EvalFrameDefault+0x56cb) [0x55734d7a7bdb]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55734d7a2d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55734d7a2d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55734d7a2bd0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55734d7a2bd0]
+ --- python3(+0x259d36) [0x55734d886d36]
+ --- python3(PyEval_EvalCode+0x86) [0x55734d886c06]
+ --- python3(+0x280678) [0x55734d8ad678]
+ --- python3(+0x27accf) [0x55734d8a7ccf]
+ --- python3(+0x280415) [0x55734d8ad415]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55734d8ac958]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55734d8ac637]
+ --- python3(Py_RunMain+0x2be) [0x55734d8a0bfe]
+ --- python3(Py_BytesMain+0x2d) [0x55734d87ac4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f78ce762d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f78ce762e40]
+ --- python3(_start+0x25) [0x55734d87ab45]
+. The device may be in an unrecoverable state and require a reset. (mesh_device.cpp:208)
+[gsplat_tt::project] device init failed: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:393: context_id == DEFAULT_CONTEXT_ID
+info:
+No MetalContext instance for context_id 2. Create one via create_instance().
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9acab0) [0x7f7790541ab0]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::program_dispatch::set_num_worker_sems_on_dispatch(tt::tt_metal::IDevice*, tt::tt_metal::SystemMemoryManager&, unsigned char, unsigned int)
+ --- tt::tt_metal::HWCommandQueue::set_go_signal_noc_data_and_dispatch_sems(unsigned int, std::vector<unsigned int, ttsl::aligned_allocator<unsigned int, 16ul> > const&)
+ --- tt::tt_metal::Device::init_command_queue_device_with_topology(tt::tt_metal::DispatchTopology*)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995c94) [0x7f779052ac94]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995b83) [0x7f779052ab83]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f779026e19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f78ce7d2ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f779026dff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9959de) [0x7f779052a9de]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f77904070c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f7790405bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f77904050b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f78cc016253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f78ce7cdac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f78ce85f8d0]
+
+2026-06-03 03:50:57.267 | critical |          Always | TT_FATAL: context_id -1865872192 is invalid. (assert.hpp:104)
+2026-06-03 03:50:57.268 | critical |          Always | TT_FATAL: context_id -1865872192 is invalid. (assert.hpp:104)
+2026-06-03 03:50:57.269 | warning  |           Metal | Exception during device close in ScopedDevices destructor: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:72: context_id.get() >= 0
+info:
+context_id -1865872192 is invalid.
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9acab0) [0x7f7790541ab0]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::HWCommandQueue::terminate()
+ --- tt::tt_metal::DispatchKernelInitializer::teardown(std::unordered_set<tt::tt_metal::InitializerKey, std::hash<tt::tt_metal::InitializerKey>, std::equal_to<tt::tt_metal::InitializerKey>, std::allocator<tt::tt_metal::InitializerKey> >&)
+ --- tt::tt_metal::DeviceManager::close_devices(std::vector<tt::tt_metal::IDevice*, std::allocator<tt::tt_metal::IDevice*> > const&, bool)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::ScopedDevices::~ScopedDevices()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::~MeshDeviceImpl()
+ --- tt::tt_metal::distributed::MeshDeviceImpl::~MeshDeviceImpl()
+ --- tt::tt_metal::distributed::MeshDevice::~MeshDevice()
+ --- tt::tt_metal::distributed::MeshDevice::~MeshDevice()
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x61ca0f) [0x7f77901b1a0f]
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0xcfbe2) [0x7f7790f9cbe2]
+ --- gsplat_tt::tile_assign_tt(float const*, float const*, unsigned long, int, int, int, float const*, float const*, float, bool*, gsplat_tt::TileAssignCallTimings*)
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x2e07d) [0x7f7790efb07d]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x43e72) [0x7f7790f10e72]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x6d61b) [0x7f7790f3a61b]
+ --- /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so(+0x699a1) [0x7f7790f369a1]
+ --- python3(+0x17e96f) [0x55734d7ab96f]
+ --- python3(_PyEval_EvalFrameDefault+0x56cb) [0x55734d7a7bdb]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55734d7a2d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55734d7a2d17]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55734d7a2bd0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55734d7b868c]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55734d7a2bd0]
+ --- python3(+0x259d36) [0x55734d886d36]
+ --- python3(PyEval_EvalCode+0x86) [0x55734d886c06]
+ --- python3(+0x280678) [0x55734d8ad678]
+ --- python3(+0x27accf) [0x55734d8a7ccf]
+ --- python3(+0x280415) [0x55734d8ad415]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55734d8ac958]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55734d8ac637]
+ --- python3(Py_RunMain+0x2be) [0x55734d8a0bfe]
+ --- python3(Py_BytesMain+0x2d) [0x55734d87ac4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7f78ce762d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7f78ce762e40]
+ --- python3(_start+0x25) [0x55734d87ab45]
+. The device may be in an unrecoverable state and require a reset. (mesh_device.cpp:208)
+[gsplat_tt::tile_assign] device init failed: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:72: context_id.get() >= 0
+info:
+context_id -1865872192 is invalid.
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9acab0) [0x7f7790541ab0]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::program_dispatch::set_num_worker_sems_on_dispatch(tt::tt_metal::IDevice*, tt::tt_metal::SystemMemoryManager&, unsigned char, unsigned int)
+ --- tt::tt_metal::HWCommandQueue::set_go_signal_noc_data_and_dispatch_sems(unsigned int, std::vector<unsigned int, ttsl::aligned_allocator<unsigned int, 16ul> > const&)
+ --- tt::tt_metal::Device::init_command_queue_device_with_topology(tt::tt_metal::DispatchTopology*)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995c94) [0x7f779052ac94]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995b83) [0x7f779052ab83]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f779026e19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f78ce7d2ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f779026dff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9959de) [0x7f779052a9de]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f77904070c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f7790405bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f77904050b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f78cc016253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f78ce7cdac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f78ce85f8d0]
+
+2026-06-03 03:50:57.347 | critical |          Always | TT_FATAL: context_id -1865872192 is invalid. (assert.hpp:104)
+[gsplat_tt::sort] device init failed: TT_FATAL @ /proj_sw/user_dev/smarton/tt-metal/tt_metal/impl/context/metal_context.cpp:72: context_id.get() >= 0
+info:
+context_id -1865872192 is invalid.
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9acab0) [0x7f7790541ab0]
+ --- tt::tt_metal::MetalContext::instance(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::SystemMemoryManager::issue_queue_reserve(unsigned int, unsigned char)
+ --- tt::tt_metal::program_dispatch::set_num_worker_sems_on_dispatch(tt::tt_metal::IDevice*, tt::tt_metal::SystemMemoryManager&, unsigned char, unsigned int)
+ --- tt::tt_metal::HWCommandQueue::set_go_signal_noc_data_and_dispatch_sems(unsigned int, std::vector<unsigned int, ttsl::aligned_allocator<unsigned int, 16ul> > const&)
+ --- tt::tt_metal::Device::init_command_queue_device_with_topology(tt::tt_metal::DispatchTopology*)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995c94) [0x7f779052ac94]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x995b83) [0x7f779052ab83]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d919f) [0x7f779026e19f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ee8) [0x7f78ce7d2ee8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6d8ff9) [0x7f779026dff9]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x9959de) [0x7f779052a9de]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8720c5) [0x7f77904070c5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x870bd0) [0x7f7790405bd0]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8700b8) [0x7f77904050b8]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x7f78cc016253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94ac3) [0x7f78ce7cdac3]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268d0) [0x7f78ce85f8d0]
+
+2026-06-03 03:50:57.490 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=44.21 up=0.02 kernel=1.54 d2h=7.12 compact=0.00 publish=1.49 total=64.00ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=63.85dB clean_render_s=24.3 ref_render_s=1.2 out=/localdev/smarton/gstt2/tmp/render-clean

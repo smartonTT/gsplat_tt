@@ -1,0 +1,319 @@
+================ BUILD ID ================
+  cpp : #92 sha=53e4e13 bin=151d79e9ef8fcec4 L1 profile deliverables: ensure 53e4e13 built
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=l1-shots  timeout=1200s  worry=600s  ts=2026-06-01T19:14:00-0700
+cmd: bash opt/profiler/run_deliverables_shots.sh
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#92 bin=151d79e9ef8fcec4 matches the built+stamped artifact
+2026-06-02 02:14:02.775 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:02.775 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:02.775 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:02.775 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:02.776 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:02.776 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:02.776 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 02:14:02.776 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 02:14:02.776 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:02.776 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:02.776 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:02.776 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:02.776 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:02.776 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:02.777 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 02:14:02.777 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 02:14:02.777 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 02:14:02.816 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:02.816 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 02:14:02.816 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 02:14:02.816 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 02:14:02.816 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 02:14:02.818 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 02:14:02.818 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 02:14:02.819 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 02:14:03.294 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 02:14:03.294 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 02:14:03.294 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:03.294 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:03.294 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:03.294 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:03.294 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:03.294 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:03.294 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 02:14:03.294 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 02:14:03.294 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:03.294 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:03.294 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 02:14:03.294 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:03.294 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:03.294 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 02:14:03.294 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 02:14:03.294 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 02:14:03.294 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 02:14:03.294 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 02:14:03.294 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 02:14:03.327 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-02 02:14:03.546 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_54466_2964033725_0' (shm_resource_tracker.cpp:265)
+2026-06-02 02:14:03.546 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_54466' (shm_resource_tracker.cpp:275)
+2026-06-02 02:14:03.546 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 02:14:04.131 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349986 GHz, device_time_at_sync=17374592143412 cycles (realtime_profiler_manager.cpp:1082)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=9.58 up=0.29 kernel=9.05 d2h=0.00 compact=0.00 publish=1.46 total=20.55ms
+[FUSED_TILE] upload+exec+readback=201.7 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=205.0 ms (host_build=0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=8.28 up=0.30 kernel=7.49 d2h=0.00 compact=0.00 publish=0.05 total=16.27ms
+[FUSED_TILE] upload+exec+readback=190.0 ms (single Finish sort-publish+cull+blend)
+[BLEND_DEVICE] resident_blend=192.9 ms (host_build=0)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=7.93 up=0.29 kernel=7.45 d2h=7.11 compact=0.00 publish=0.02 total=26.32ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=7.93 up=0.29 kernel=7.45 d2h=7.12 compact=0.00 publish=0.02 total=26.21ms
+DIFFDUMP hero=hero HxW=1024x1024 tiles_x=32 tiles_y=32 global_mae=0.00046
+DIFFDUMP_TILE tile_id=144 tx=16 ty=4 px=(512,128) mae=0.00132
+DIFFDUMP_TILE tile_id=147 tx=19 ty=4 px=(608,128) mae=0.00131
+DIFFDUMP_TILE tile_id=112 tx=16 ty=3 px=(512,96) mae=0.00131
+DIFFDUMP_TILE tile_id=82 tx=18 ty=2 px=(576,64) mae=0.00129
+DIFFDUMP_TILE tile_id=115 tx=19 ty=3 px=(608,96) mae=0.00128
+DIFFDUMP_TILE tile_id=177 tx=17 ty=5 px=(544,160) mae=0.00126
+DIFFDUMP_TILE tile_id=148 tx=20 ty=4 px=(640,128) mae=0.00122
+DIFFDUMP_TILE tile_id=178 tx=18 ty=5 px=(576,160) mae=0.00121
+DIFFDUMP_TILE tile_id=149 tx=21 ty=4 px=(672,128) mae=0.00120
+DIFFDUMP_TILE tile_id=145 tx=17 ty=4 px=(544,128) mae=0.00120
+DIFFDUMP_TILE tile_id=179 tx=19 ty=5 px=(608,160) mae=0.00120
+DIFFDUMP_TILE tile_id=146 tx=18 ty=4 px=(576,128) mae=0.00119
+DIFFDUMP_TILE tile_id=150 tx=22 ty=4 px=(704,128) mae=0.00118
+DIFFDUMP_TILE tile_id=180 tx=20 ty=5 px=(640,160) mae=0.00118
+DIFFDUMP_TILE tile_id=113 tx=17 ty=3 px=(544,96) mae=0.00118
+DIFFDUMP_TILE tile_id=111 tx=15 ty=3 px=(480,96) mae=0.00118
+DIFFDUMP_TILE tile_id=80 tx=16 ty=2 px=(512,64) mae=0.00118
+DIFFDUMP_TILE tile_id=183 tx=23 ty=5 px=(736,160) mae=0.00116
+DIFFDUMP_TILE tile_id=75 tx=11 ty=2 px=(352,64) mae=0.00115
+DIFFDUMP_TILE tile_id=107 tx=11 ty=3 px=(352,96) mae=0.00115
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=305.2 (proj=58.6 ta=36.9 sort=16.3 blend=193.1) shot=opt/metal-screenshots/prof-prod-60db/hero.png
+[shots] A production done rc=0
+2026-06-02 02:14:08.031 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:08.031 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:08.032 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:08.032 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:08.032 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:08.032 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:08.032 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 02:14:08.032 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 02:14:08.032 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:08.032 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:08.033 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:08.033 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:08.033 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:08.033 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:08.033 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 02:14:08.033 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 02:14:08.033 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 02:14:08.073 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:08.073 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 02:14:08.073 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 02:14:08.073 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 02:14:08.073 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 02:14:08.074 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 02:14:08.075 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 02:14:08.075 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 02:14:08.554 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 02:14:08.554 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 02:14:08.554 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:08.554 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:08.554 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:08.554 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:08.554 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:08.554 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:08.554 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 02:14:08.555 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 02:14:08.555 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:08.555 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:08.555 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 02:14:08.555 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:08.555 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:08.555 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 02:14:08.555 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 02:14:08.555 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 02:14:08.555 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 02:14:08.555 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 02:14:08.555 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 02:14:08.568 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-02 02:14:08.772 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_57271_1285247412_0' (shm_resource_tracker.cpp:265)
+2026-06-02 02:14:08.772 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_57271' (shm_resource_tracker.cpp:275)
+2026-06-02 02:14:08.772 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 02:14:09.355 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=17381647674112 cycles (realtime_profiler_manager.cpp:1082)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=86.12ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=18.89 up=0.45 kernel=9.05 d2h=0.00 compact=0.00 publish=2.82 total=117.54ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=90.6 ms masks_addr=0xa08ee00 end=0xad70280 base_addr=0x9eb5600
+[BLEND_SPLIT] upload=0.5 (attrs=0.0MB ids=0.0MB resident) exec=877.3 readback=0.6 total=878.4 ms
+[BLEND_ADDR] cull_masks=0xa08ee00 out=0xa269ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xa267ec0 yramp=0xa268ec0 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=972.4 ms (host_build=0)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.92ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.09 up=0.45 kernel=7.45 d2h=0.00 compact=0.00 publish=1.30 total=99.36ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=80.2 ms masks_addr=0xa08ee00 end=0xad70280 base_addr=0x9eb5600
+[BLEND_SPLIT] upload=0.4 (attrs=0.0MB ids=0.0MB resident) exec=92.8 readback=0.6 total=93.8 ms
+[BLEND_ADDR] cull_masks=0xa08ee00 out=0xa269ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xa267ec0 yramp=0xa268ec0 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=176.8 ms (host_build=0)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.91ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.28 up=0.42 kernel=7.45 d2h=7.12 compact=0.00 publish=1.29 total=108.81ms
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.94ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.19 up=0.44 kernel=7.45 d2h=7.11 compact=0.00 publish=1.30 total=108.68ms
+DIFFDUMP hero=hero HxW=1024x1024 tiles_x=32 tiles_y=32 global_mae=0.00046
+DIFFDUMP_TILE tile_id=144 tx=16 ty=4 px=(512,128) mae=0.00132
+DIFFDUMP_TILE tile_id=147 tx=19 ty=4 px=(608,128) mae=0.00131
+DIFFDUMP_TILE tile_id=112 tx=16 ty=3 px=(512,96) mae=0.00131
+DIFFDUMP_TILE tile_id=82 tx=18 ty=2 px=(576,64) mae=0.00129
+DIFFDUMP_TILE tile_id=115 tx=19 ty=3 px=(608,96) mae=0.00128
+DIFFDUMP_TILE tile_id=177 tx=17 ty=5 px=(544,160) mae=0.00126
+DIFFDUMP_TILE tile_id=148 tx=20 ty=4 px=(640,128) mae=0.00122
+DIFFDUMP_TILE tile_id=178 tx=18 ty=5 px=(576,160) mae=0.00121
+DIFFDUMP_TILE tile_id=149 tx=21 ty=4 px=(672,128) mae=0.00120
+DIFFDUMP_TILE tile_id=145 tx=17 ty=4 px=(544,128) mae=0.00120
+DIFFDUMP_TILE tile_id=179 tx=19 ty=5 px=(608,160) mae=0.00120
+DIFFDUMP_TILE tile_id=146 tx=18 ty=4 px=(576,128) mae=0.00119
+DIFFDUMP_TILE tile_id=150 tx=22 ty=4 px=(704,128) mae=0.00118
+DIFFDUMP_TILE tile_id=180 tx=20 ty=5 px=(640,160) mae=0.00118
+DIFFDUMP_TILE tile_id=113 tx=17 ty=3 px=(544,96) mae=0.00118
+DIFFDUMP_TILE tile_id=111 tx=15 ty=3 px=(480,96) mae=0.00118
+DIFFDUMP_TILE tile_id=80 tx=16 ty=2 px=(512,64) mae=0.00118
+DIFFDUMP_TILE tile_id=183 tx=23 ty=5 px=(736,160) mae=0.00116
+DIFFDUMP_TILE tile_id=75 tx=11 ty=2 px=(352,64) mae=0.00115
+DIFFDUMP_TILE tile_id=107 tx=11 ty=3 px=(352,96) mae=0.00115
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=369.1 (proj=58.5 ta=34.0 sort=99.4 blend=177.0) shot=opt/metal-screenshots/prof-l1-fixed-6385/hero.png
+[shots] B l1-fixed done rc=0
+2026-06-02 02:14:14.273 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:14.273 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:14.273 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:14.273 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:14.274 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:14.274 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:14.274 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-02 02:14:14.274 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-02 02:14:14.274 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:14.274 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:14.274 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:14.274 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:14.274 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:14.274 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:14.274 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-02 02:14:14.274 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-02 02:14:14.274 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-02 02:14:14.313 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:14.313 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-02 02:14:14.313 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-02 02:14:14.313 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-02 02:14:14.313 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-02 02:14:14.315 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-02 02:14:14.315 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-02 02:14:14.316 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-02 02:14:14.806 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-02 02:14:14.806 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-02 02:14:14.806 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-02 02:14:14.806 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-02 02:14:14.806 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-02 02:14:14.806 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-02 02:14:14.806 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-02 02:14:14.806 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-02 02:14:14.806 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-02 02:14:14.807 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-02 02:14:14.807 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:14.807 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:14.807 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-02 02:14:14.807 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:14.807 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-02 02:14:14.807 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-02 02:14:14.807 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-02 02:14:14.807 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-02 02:14:14.807 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-02 02:14:14.807 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-02 02:14:14.807 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-02 02:14:14.820 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-02 02:14:15.007 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_57413_2112482301_0' (shm_resource_tracker.cpp:265)
+2026-06-02 02:14:15.007 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_57413' (shm_resource_tracker.cpp:275)
+2026-06-02 02:14:15.007 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-02 02:14:15.590 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349981 GHz, device_time_at_sync=17390064757379 cycles (realtime_profiler_manager.cpp:1082)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=86.38ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=18.43 up=0.45 kernel=9.42 d2h=0.00 compact=0.00 publish=3.10 total=117.99ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=90.2 ms masks_addr=0xa08ee00 end=0xad70280 base_addr=0x9eb5600
+[BLEND_SPLIT] upload=0.5 (attrs=0.0MB ids=0.0MB resident) exec=1822.1 readback=1.7 total=1824.3 ms
+[BLEND_ADDR] cull_masks=0xa08ee00 out=0xa269ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xa267ec0 yramp=0xa268ec0 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=1918.1 ms (host_build=0)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.95ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=15.84 up=0.45 kernel=7.45 d2h=0.00 compact=0.00 publish=1.30 total=99.13ms
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=80.2 ms masks_addr=0xa08ee00 end=0xad70280 base_addr=0x9eb5600
+[BLEND_SPLIT] upload=0.4 (attrs=0.0MB ids=0.0MB resident) exec=92.5 readback=1.9 total=94.8 ms
+[BLEND_ADDR] cull_masks=0xa08ee00 out=0xa269ec0(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xa267ec0 yramp=0xa268ec0 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=178.0 ms (host_build=0)
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.56ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.04 up=0.42 kernel=7.45 d2h=7.12 compact=0.00 publish=1.30 total=108.30ms
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.95ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.08 up=0.42 kernel=7.46 d2h=7.12 compact=0.00 publish=1.30 total=108.61ms
+DIFFDUMP hero=hero HxW=1024x1024 tiles_x=32 tiles_y=32 global_mae=0.00406
+DIFFDUMP_TILE tile_id=1001 tx=9 ty=31 px=(288,992) mae=0.02972
+DIFFDUMP_TILE tile_id=826 tx=26 ty=25 px=(832,800) mae=0.02906
+DIFFDUMP_TILE tile_id=672 tx=0 ty=21 px=(0,672) mae=0.02788
+DIFFDUMP_TILE tile_id=995 tx=3 ty=31 px=(96,992) mae=0.02195
+DIFFDUMP_TILE tile_id=60 tx=28 ty=1 px=(896,32) mae=0.02168
+DIFFDUMP_TILE tile_id=327 tx=7 ty=10 px=(224,320) mae=0.02160
+DIFFDUMP_TILE tile_id=996 tx=4 ty=31 px=(128,992) mae=0.02111
+DIFFDUMP_TILE tile_id=326 tx=6 ty=10 px=(192,320) mae=0.02080
+DIFFDUMP_TILE tile_id=328 tx=8 ty=10 px=(256,320) mae=0.02003
+DIFFDUMP_TILE tile_id=329 tx=9 ty=10 px=(288,320) mae=0.01909
+DIFFDUMP_TILE tile_id=325 tx=5 ty=10 px=(160,320) mae=0.01873
+DIFFDUMP_TILE tile_id=358 tx=6 ty=11 px=(192,352) mae=0.01855
+DIFFDUMP_TILE tile_id=295 tx=7 ty=9 px=(224,288) mae=0.01826
+DIFFDUMP_TILE tile_id=296 tx=8 ty=9 px=(256,288) mae=0.01681
+DIFFDUMP_TILE tile_id=294 tx=6 ty=9 px=(192,288) mae=0.01637
+DIFFDUMP_TILE tile_id=359 tx=7 ty=11 px=(224,352) mae=0.01627
+DIFFDUMP_TILE tile_id=772 tx=4 ty=24 px=(128,768) mae=0.01597
+DIFFDUMP_TILE tile_id=976 tx=16 ty=30 px=(512,960) mae=0.01576
+DIFFDUMP_TILE tile_id=360 tx=8 ty=11 px=(256,352) mae=0.01561
+DIFFDUMP_TILE tile_id=390 tx=6 ty=12 px=(192,384) mae=0.01536
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=41.53dB hero_vs_ref=43.10dB min_vs_ref=43.10dB min_vs_gt=41.53dB ms/view=371.8 (proj=58.5 ta=35.8 sort=99.1 blend=178.2) shot=opt/metal-screenshots/prof-l1-buggy-42db/hero.png
+[shots] C l1-buggy done rc=0
+[shots] ALL DONE

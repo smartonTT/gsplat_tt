@@ -1,0 +1,11 @@
+================ BUILD ID ================
+  cpp : #15 sha=ffdd218 bin=8e9d81daf27b65a9 iter 11: fused blend: drop redundant res_out zero H2D upload
+  data: # sha= 
+=========================================
+host=bh-30  tag=verify  timeout=1200s  worry=600s  ts=2026-06-01T02:35:36-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | tee /tmp/ttw_verify.log; grep '^SUMMARY' /tmp/ttw_verify.log | tail -1 > /tmp/ttw_sum.txt; grep -oE 'hero_vs_ref=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_METRIC /'; grep -oE '(proj|ta|sort|blend)=[0-9.]+' /tmp/ttw_sum.txt | sed 's/^/TTW_TIMING /'
+-----------------------------------------
+BUILD-ID VERIFY FAIL: live artifact bin=854cc671c99442d1 != stamped cpp#15 bin=8e9d81daf27b65a9
+  -> the binary that would run is NOT the one last built/stamped
+  -> (stale, un-synced from this host, or overwritten). Rebuild with: build.sh cpp
+[ttw] ABORT: build-ID verification failed (rc=3) — refusing to run on an unverified binary. Rebuild, or pass --no-verify to override.

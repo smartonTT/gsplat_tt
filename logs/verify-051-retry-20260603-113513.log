@@ -1,0 +1,238 @@
+================ BUILD ID ================
+  cpp : #179 sha=c168a45 bin=0a5e2d9edd16b821 iter51 re-verify + tracy @ e6d43d4
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=verify-051-retry  timeout=1200s  worry=600s  ts=2026-06-03T11:35:13-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; source .venv/bin/activate 2>/dev/null; test -f render/build-tt/build.ninja || (cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release); cmake --build render/build-tt -j 16; python3 render/run.py --iter-dir ${TTW_ITER_DIR:?TTW_ITER_DIR unset} 2>&1 | tee /tmp/ttw_verify.log; grep -q '^SUMMARY' /tmp/ttw_verify.log || { echo '[verify] no SUMMARY'; exit 6; }; grep -q '^TTW_METRIC hero_vs_ref=' /tmp/ttw_verify.log || { echo '[verify] no TTW_METRIC'; exit 6; }; mkdir -p opt/metal-screenshots/${TTW_ITER_DIR}; cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png 2>/dev/null || cp -f tmp/${TTW_ITER_DIR}/hero_clean.png opt/metal-screenshots/${TTW_ITER_DIR}/hero.png; test -f opt/metal-screenshots/${TTW_ITER_DIR}/hero.png || { echo '[verify] hero screenshot missing'; exit 6; }; cp -f tmp/${TTW_ITER_DIR}/hero_diff10.png opt/metal-screenshots/${TTW_ITER_DIR}/hero_diff10.png 2>/dev/null || true; grep '^TTW_METRIC' /tmp/ttw_verify.log | tail -1; grep '^TTW_TIMING' /tmp/ttw_verify.log
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#179 bin=0a5e2d9edd16b821 matches the built+stamped artifact
+ninja: no work to do.
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-06-03 18:35:18.052 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 18:35:18.053 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 18:35:18.055 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 18:35:18.055 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 18:35:18.057 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 18:35:18.059 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 18:35:18.059 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-06-03 18:35:18.059 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-06-03 18:35:18.059 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 18:35:18.059 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 18:35:18.060 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 18:35:18.060 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 18:35:18.060 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 18:35:18.060 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 18:35:18.060 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:270)
+2026-06-03 18:35:18.060 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-06-03 18:35:18.060 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-06-03 18:35:18.099 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 18:35:18.101 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:159)
+2026-06-03 18:35:18.101 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-06-03 18:35:18.101 | info     |             UMD | KMD version: 2.4.1 (cluster.cpp:136)
+2026-06-03 18:35:18.101 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-06-03 18:35:18.109 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-06-03 18:35:18.109 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-06-03 18:35:18.195 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-06-03 18:35:18.710 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-06-03 18:35:18.710 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-06-03 18:35:18.712 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-06-03 18:35:18.712 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-06-03 18:35:18.712 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:143)
+2026-06-03 18:35:18.712 | warning  |             UMD | KMD version 2.4.1 does not support power state management. (pci_device.cpp:1067)
+2026-06-03 18:35:18.712 | info     |             UMD | Established firmware bundle version: 18.12.1 (topology_discovery.cpp:544)
+2026-06-03 18:35:18.712 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-06-03 18:35:18.714 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:62)
+2026-06-03 18:35:18.725 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-06-03 18:35:18.725 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 18:35:18.725 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 18:35:18.725 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-06-03 18:35:18.725 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 18:35:18.725 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-06-03 18:35:18.725 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1469)
+2026-06-03 18:35:18.725 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1510)
+2026-06-03 18:35:18.725 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1539)
+2026-06-03 18:35:18.725 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-06-03 18:35:18.725 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1554)
+2026-06-03 18:35:18.725 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1686)
+2026-06-03 18:35:18.821 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/431005707817566179/ (build_env_manager.cpp:260)
+2026-06-03 18:35:19.252 | info     |           Metal | ShmResourceTracker: removed orphaned shm '/tt_device_7490744194894819707_memory' (shm_resource_tracker.cpp:282)
+2026-06-03 18:35:19.848 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349989 GHz, device_time_at_sync=131921341476 cycles (realtime_profiler_manager.cpp:1082)
+[JIT_WARMUP] ideal-path contexts compiled in 1826.4 ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=45.88 up=0.02 kernel=2.89 d2h=0.00 compact=0.00 publish=2.86 total=51.74ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=57907200 subchunks_bulk=234 avg_bytes_per_subchunk=247466
+[PACK2] splats=2914793 pages=1457623 bytes_packed=93287872 bytes_iter49=186546752 avg_pages_per_1k_splats=500
+[run] timing 30 views (warmup excluded)
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=42.22 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=42.37ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 total_overflow_candidates=1355360
+[L1LOAD] bytes_bulk_loaded=57907200 subchunks_bulk=234 avg_bytes_per_subchunk=247466
+[PACK2] splats=2914793 pages=1457623 bytes_packed=93287872 bytes_iter49=186546752 avg_pages_per_1k_splats=500
+[run]   view=hero 241.5ms
+[SORT] stage=RP P=3535561 P_kept=3535561 num_tiles=1024 max_tile_n=26272 bin=44.34 up=0.02 kernel=0.05 d2h=0.00 compact=0.00 publish=0.04 total=44.51ms
+[SUBCHUNK] tiles_split=118 total_subchunks=1159 max_subchunks_per_tile=4 total_overflow_candidates=1471263
+[L1LOAD] bytes_bulk_loaded=63227840 subchunks_bulk=253 avg_bytes_per_subchunk=249912
+[PACK2] splats=3030954 pages=1515708 bytes_packed=97005312 bytes_iter49=193981056 avg_pages_per_1k_splats=500
+[run]   view=orbit_01 258.2ms
+[SORT] stage=RP P=3603555 P_kept=3603555 num_tiles=1024 max_tile_n=25152 bin=44.96 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.04 total=45.14ms
+[SUBCHUNK] tiles_split=124 total_subchunks=1173 max_subchunks_per_tile=3 total_overflow_candidates=1568092
+[L1LOAD] bytes_bulk_loaded=67852032 subchunks_bulk=273 avg_bytes_per_subchunk=248542
+[PACK2] splats=3051271 pages=1525861 bytes_packed=97655104 bytes_iter49=195281344 avg_pages_per_1k_splats=500
+[run]   view=orbit_02 260.6ms
+[SORT] stage=RP P=3622630 P_kept=3622630 num_tiles=1024 max_tile_n=24416 bin=45.35 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.03 total=45.50ms
+[SUBCHUNK] tiles_split=117 total_subchunks=1167 max_subchunks_per_tile=3 total_overflow_candidates=1556214
+[L1LOAD] bytes_bulk_loaded=68926848 subchunks_bulk=260 avg_bytes_per_subchunk=265103
+[PACK2] splats=3024880 pages=1512682 bytes_packed=96811648 bytes_iter49=193592320 avg_pages_per_1k_splats=500
+[run]   view=orbit_03 261.0ms
+[SORT] stage=RP P=3620780 P_kept=3620780 num_tiles=1024 max_tile_n=25200 bin=45.18 up=0.02 kernel=0.04 d2h=0.00 compact=0.00 publish=0.03 total=45.35ms
+[SUBCHUNK] tiles_split=119 total_subchunks=1171 max_subchunks_per_tile=3 total_overflow_candidates=1588722
+[L1LOAD] bytes_bulk_loaded=70483072 subchunks_bulk=266 avg_bytes_per_subchunk=264973
+[PACK2] splats=3006906 pages=1503678 bytes_packed=96235392 bytes_iter49=192441984 avg_pages_per_1k_splats=500
+[run]   view=orbit_04 253.5ms
+[SORT] stage=RP P=3622797 P_kept=3622797 num_tiles=1024 max_tile_n=23552 bin=45.14 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=45.26ms
+[SUBCHUNK] tiles_split=126 total_subchunks=1178 max_subchunks_per_tile=3 total_overflow_candidates=1618586
+[L1LOAD] bytes_bulk_loaded=70559360 subchunks_bulk=280 avg_bytes_per_subchunk=251997
+[PACK2] splats=3036403 pages=1518422 bytes_packed=97179008 bytes_iter49=194329792 avg_pages_per_1k_splats=500
+[run]   view=orbit_05 261.5ms
+[SORT] stage=RP P=3607134 P_kept=3607134 num_tiles=1024 max_tile_n=25040 bin=45.34 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=45.45ms
+[SUBCHUNK] tiles_split=124 total_subchunks=1170 max_subchunks_per_tile=3 total_overflow_candidates=1564583
+[L1LOAD] bytes_bulk_loaded=67627456 subchunks_bulk=270 avg_bytes_per_subchunk=250472
+[PACK2] splats=3058359 pages=1529390 bytes_packed=97880960 bytes_iter49=195734976 avg_pages_per_1k_splats=500
+[run]   view=orbit_06 253.5ms
+[SORT] stage=RP P=3548136 P_kept=3548136 num_tiles=1024 max_tile_n=26816 bin=44.21 up=0.02 kernel=0.01 d2h=0.00 compact=0.00 publish=0.02 total=44.31ms
+[SUBCHUNK] tiles_split=119 total_subchunks=1159 max_subchunks_per_tile=4 total_overflow_candidates=1478539
+[L1LOAD] bytes_bulk_loaded=63431360 subchunks_bulk=254 avg_bytes_per_subchunk=249729
+[PACK2] splats=3044445 pages=1522451 bytes_packed=97436864 bytes_iter49=194844480 avg_pages_per_1k_splats=500
+[run]   view=orbit_07 249.4ms
+[SORT] stage=RP P=3455005 P_kept=3455005 num_tiles=1024 max_tile_n=25024 bin=43.20 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.30ms
+[SUBCHUNK] tiles_split=105 total_subchunks=1139 max_subchunks_per_tile=3 total_overflow_candidates=1316689
+[L1LOAD] bytes_bulk_loaded=56742976 subchunks_bulk=220 avg_bytes_per_subchunk=257922
+[PACK2] splats=2998476 pages=1499473 bytes_packed=95966272 bytes_iter49=191902464 avg_pages_per_1k_splats=500
+[run]   view=orbit_08 243.9ms
+[SORT] stage=RP P=3397687 P_kept=3397687 num_tiles=1024 max_tile_n=22176 bin=42.80 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.91ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1144 max_subchunks_per_tile=3 total_overflow_candidates=1295808
+[L1LOAD] bytes_bulk_loaded=54882304 subchunks_bulk=227 avg_bytes_per_subchunk=241772
+[PACK2] splats=2978423 pages=1489440 bytes_packed=95324160 bytes_iter49=190619072 avg_pages_per_1k_splats=500
+[run]   view=orbit_09 240.6ms
+[SORT] stage=RP P=3353492 P_kept=3353492 num_tiles=1024 max_tile_n=23776 bin=42.10 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.21ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1137 max_subchunks_per_tile=3 total_overflow_candidates=1228551
+[L1LOAD] bytes_bulk_loaded=52150720 subchunks_bulk=214 avg_bytes_per_subchunk=243694
+[PACK2] splats=2952333 pages=1476402 bytes_packed=94489728 bytes_iter49=188949312 avg_pages_per_1k_splats=500
+[run]   view=orbit_10 237.3ms
+[SORT] stage=RP P=3324622 P_kept=3324622 num_tiles=1024 max_tile_n=25360 bin=41.72 up=0.02 kernel=0.01 d2h=0.00 compact=0.00 publish=0.02 total=41.82ms
+[SUBCHUNK] tiles_split=103 total_subchunks=1137 max_subchunks_per_tile=3 total_overflow_candidates=1235511
+[L1LOAD] bytes_bulk_loaded=52071872 subchunks_bulk=216 avg_bytes_per_subchunk=241073
+[PACK2] splats=2932887 pages=1466672 bytes_packed=93867008 bytes_iter49=187704768 avg_pages_per_1k_splats=500
+[run]   view=orbit_11 237.0ms
+[SORT] stage=RP P=3321611 P_kept=3321611 num_tiles=1024 max_tile_n=26064 bin=41.72 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=41.83ms
+[SUBCHUNK] tiles_split=99 total_subchunks=1134 max_subchunks_per_tile=4 total_overflow_candidates=1201230
+[L1LOAD] bytes_bulk_loaded=50926464 subchunks_bulk=209 avg_bytes_per_subchunk=243667
+[PACK2] splats=2931389 pages=1465924 bytes_packed=93819136 bytes_iter49=187608896 avg_pages_per_1k_splats=500
+[run]   view=orbit_12 238.6ms
+[SORT] stage=RP P=3343983 P_kept=3343983 num_tiles=1024 max_tile_n=24656 bin=41.90 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.00ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1137 max_subchunks_per_tile=3 total_overflow_candidates=1232709
+[L1LOAD] bytes_bulk_loaded=52416832 subchunks_bulk=214 avg_bytes_per_subchunk=244938
+[PACK2] splats=2938666 pages=1469572 bytes_packed=94052608 bytes_iter49=188074624 avg_pages_per_1k_splats=500
+[run]   view=orbit_13 236.0ms
+[SORT] stage=RP P=3391321 P_kept=3391321 num_tiles=1024 max_tile_n=21424 bin=42.44 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.55ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1135 max_subchunks_per_tile=3 total_overflow_candidates=1262410
+[L1LOAD] bytes_bulk_loaded=54317696 subchunks_bulk=212 avg_bytes_per_subchunk=256215
+[PACK2] splats=2956303 pages=1478379 bytes_packed=94616256 bytes_iter49=189203392 avg_pages_per_1k_splats=500
+[run]   view=orbit_14 239.5ms
+[SORT] stage=RP P=3430950 P_kept=3430950 num_tiles=1024 max_tile_n=24560 bin=42.90 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.01ms
+[SUBCHUNK] tiles_split=114 total_subchunks=1147 max_subchunks_per_tile=3 total_overflow_candidates=1388413
+[L1LOAD] bytes_bulk_loaded=58974016 subchunks_bulk=237 avg_bytes_per_subchunk=248835
+[PACK2] splats=2976425 pages=1488434 bytes_packed=95259776 bytes_iter49=190491200 avg_pages_per_1k_splats=500
+[run]   view=orbit_15 242.5ms
+[SORT] stage=RP P=3463828 P_kept=3463828 num_tiles=1024 max_tile_n=26432 bin=43.31 up=0.02 kernel=0.01 d2h=0.00 compact=0.00 publish=0.02 total=43.41ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1149 max_subchunks_per_tile=4 total_overflow_candidates=1390306
+[L1LOAD] bytes_bulk_loaded=60143744 subchunks_bulk=235 avg_bytes_per_subchunk=255930
+[PACK2] splats=2974642 pages=1487548 bytes_packed=95203072 bytes_iter49=190377088 avg_pages_per_1k_splats=500
+[run]   view=orbit_16 243.2ms
+[SORT] stage=RP P=3517324 P_kept=3517324 num_tiles=1024 max_tile_n=24976 bin=43.86 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=43.97ms
+[SUBCHUNK] tiles_split=116 total_subchunks=1166 max_subchunks_per_tile=3 total_overflow_candidates=1480989
+[L1LOAD] bytes_bulk_loaded=64374592 subchunks_bulk=258 avg_bytes_per_subchunk=249513
+[PACK2] splats=2986607 pages=1493535 bytes_packed=95586240 bytes_iter49=191142848 avg_pages_per_1k_splats=500
+[run]   view=orbit_17 247.1ms
+[SORT] stage=RP P=3506904 P_kept=3506904 num_tiles=1024 max_tile_n=23680 bin=43.71 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=43.83ms
+[SUBCHUNK] tiles_split=108 total_subchunks=1159 max_subchunks_per_tile=3 total_overflow_candidates=1429548
+[L1LOAD] bytes_bulk_loaded=63179520 subchunks_bulk=243 avg_bytes_per_subchunk=259998
+[PACK2] splats=2962092 pages=1481275 bytes_packed=94801600 bytes_iter49=189573888 avg_pages_per_1k_splats=500
+[run]   view=orbit_18 244.6ms
+[SORT] stage=RP P=3480657 P_kept=3480657 num_tiles=1024 max_tile_n=23840 bin=43.39 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=43.51ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1158 max_subchunks_per_tile=3 total_overflow_candidates=1424474
+[L1LOAD] bytes_bulk_loaded=63116928 subchunks_bulk=241 avg_bytes_per_subchunk=261895
+[PACK2] splats=2932727 pages=1466584 bytes_packed=93861376 bytes_iter49=187694528 avg_pages_per_1k_splats=500
+[run]   view=orbit_19 244.0ms
+[SORT] stage=RP P=3442938 P_kept=3442938 num_tiles=1024 max_tile_n=24672 bin=42.98 up=0.02 kernel=0.01 d2h=0.00 compact=0.00 publish=0.02 total=43.08ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1162 max_subchunks_per_tile=3 total_overflow_candidates=1423304
+[L1LOAD] bytes_bulk_loaded=62255616 subchunks_bulk=248 avg_bytes_per_subchunk=251030
+[PACK2] splats=2920754 pages=1460595 bytes_packed=93478080 bytes_iter49=186928256 avg_pages_per_1k_splats=500
+[run]   view=orbit_20 242.6ms
+[SORT] stage=RP P=3379780 P_kept=3379780 num_tiles=1024 max_tile_n=25680 bin=42.30 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=42.41ms
+[SUBCHUNK] tiles_split=113 total_subchunks=1150 max_subchunks_per_tile=4 total_overflow_candidates=1413691
+[L1LOAD] bytes_bulk_loaded=60853952 subchunks_bulk=239 avg_bytes_per_subchunk=254619
+[PACK2] splats=2891785 pages=1446124 bytes_packed=92551936 bytes_iter49=185074240 avg_pages_per_1k_splats=500
+[run]   view=orbit_21 240.4ms
+[SORT] stage=RP P=3263772 P_kept=3263772 num_tiles=1024 max_tile_n=23024 bin=41.03 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=41.13ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1142 max_subchunks_per_tile=3 total_overflow_candidates=1311939
+[L1LOAD] bytes_bulk_loaded=55914688 subchunks_bulk=225 avg_bytes_per_subchunk=248509
+[PACK2] splats=2828377 pages=1414418 bytes_packed=90522752 bytes_iter49=181016128 avg_pages_per_1k_splats=500
+[run]   view=orbit_22 233.6ms
+[SORT] stage=RP P=3203445 P_kept=3203445 num_tiles=1024 max_tile_n=19856 bin=40.24 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.35ms
+[SUBCHUNK] tiles_split=102 total_subchunks=1134 max_subchunks_per_tile=3 total_overflow_candidates=1254136
+[L1LOAD] bytes_bulk_loaded=53526016 subchunks_bulk=212 avg_bytes_per_subchunk=252481
+[PACK2] splats=2784893 pages=1392666 bytes_packed=89130624 bytes_iter49=178233152 avg_pages_per_1k_splats=500
+[run]   view=orbit_23 228.3ms
+[SORT] stage=RP P=3149820 P_kept=3149820 num_tiles=1024 max_tile_n=23424 bin=40.33 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.45ms
+[SUBCHUNK] tiles_split=97 total_subchunks=1128 max_subchunks_per_tile=3 total_overflow_candidates=1187471
+[L1LOAD] bytes_bulk_loaded=50570176 subchunks_bulk=201 avg_bytes_per_subchunk=251592
+[PACK2] splats=2756973 pages=1378719 bytes_packed=88238016 bytes_iter49=176446272 avg_pages_per_1k_splats=500
+[run]   view=orbit_24 227.2ms
+[SORT] stage=RP P=3110972 P_kept=3110972 num_tiles=1024 max_tile_n=24304 bin=39.93 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.04ms
+[SUBCHUNK] tiles_split=96 total_subchunks=1130 max_subchunks_per_tile=3 total_overflow_candidates=1164939
+[L1LOAD] bytes_bulk_loaded=49390272 subchunks_bulk=202 avg_bytes_per_subchunk=244506
+[PACK2] splats=2732465 pages=1366470 bytes_packed=87454080 bytes_iter49=174877760 avg_pages_per_1k_splats=500
+[run]   view=orbit_25 226.9ms
+[SORT] stage=RP P=3120361 P_kept=3120361 num_tiles=1024 max_tile_n=24416 bin=40.02 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.13ms
+[SUBCHUNK] tiles_split=94 total_subchunks=1128 max_subchunks_per_tile=3 total_overflow_candidates=1149866
+[L1LOAD] bytes_bulk_loaded=48949888 subchunks_bulk=198 avg_bytes_per_subchunk=247221
+[PACK2] splats=2740543 pages=1370508 bytes_packed=87712512 bytes_iter49=175394752 avg_pages_per_1k_splats=500
+[run]   view=orbit_26 227.6ms
+[SORT] stage=RP P=3161893 P_kept=3161893 num_tiles=1024 max_tile_n=25296 bin=40.50 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.61ms
+[SUBCHUNK] tiles_split=93 total_subchunks=1128 max_subchunks_per_tile=3 total_overflow_candidates=1145738
+[L1LOAD] bytes_bulk_loaded=48947840 subchunks_bulk=197 avg_bytes_per_subchunk=248466
+[PACK2] splats=2778011 pages=1389234 bytes_packed=88910976 bytes_iter49=177792704 avg_pages_per_1k_splats=500
+[run]   view=orbit_27 229.6ms
+[SORT] stage=RP P=3237659 P_kept=3237659 num_tiles=1024 max_tile_n=25056 bin=40.74 up=0.02 kernel=0.02 d2h=0.00 compact=0.00 publish=0.02 total=40.85ms
+[SUBCHUNK] tiles_split=98 total_subchunks=1129 max_subchunks_per_tile=3 total_overflow_candidates=1207349
+[L1LOAD] bytes_bulk_loaded=51580224 subchunks_bulk=203 avg_bytes_per_subchunk=254089
+[PACK2] splats=2833126 pages=1416791 bytes_packed=90674624 bytes_iter49=181320064 avg_pages_per_1k_splats=500
+[run]   view=orbit_28 231.0ms
+[SORT] stage=RP P=3333322 P_kept=3333322 num_tiles=1024 max_tile_n=22880 bin=41.76 up=0.02 kernel=0.03 d2h=0.00 compact=0.00 publish=0.02 total=41.88ms
+[SUBCHUNK] tiles_split=98 total_subchunks=1130 max_subchunks_per_tile=3 total_overflow_candidates=1231555
+[L1LOAD] bytes_bulk_loaded=53129408 subchunks_bulk=204 avg_bytes_per_subchunk=260438
+[PACK2] splats=2904583 pages=1452524 bytes_packed=92961536 bytes_iter49=185893312 avg_pages_per_1k_splats=500
+[run]   view=orbit_29 238.0ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=63.84dB avg_frame_ms=242.0 p50_ms=241.0 min_ms=226.9 max_ms=261.5 n_views=30 warmup_s=9.9 out=/localdev/smarton/gstt2/tmp/ttw-051-tracy
+TTW_METRIC hero_vs_ref=63.84
+TTW_TIMING ms_view=241.962
+TTW_TIMING blend=241.962
+TTW_METRIC hero_vs_ref=63.84
+TTW_TIMING ms_view=241.962
+TTW_TIMING blend=241.962

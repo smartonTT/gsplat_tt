@@ -1,0 +1,16 @@
+================ BUILD ID ================
+  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
+  data: # sha= 
+=========================================
+host=yyzo-bh-03  tag=split-devcull  timeout=600s  worry=600s  ts=2026-06-01T23:41:18-0700
+cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_MB_TIMING=1 && source .venv/bin/activate && .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-sdc --out opt/loop-sdc.json 2>&1 | grep -E "^SUMMARY|CULL|BLEND"
+-----------------------------------------
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=92.8 ms masks_addr=0xe16cdc0 end=0xee4e240 base_addr=0xdf955c0
+[BLEND_SPLIT] upload=1.6 (attrs=0.0MB ids=0.0MB resident) exec=1861.6 readback=2.0 total=1865.2 ms
+[BLEND_ADDR] cull_masks=0xe16cdc0 out=0xe347e80(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xe345e80 yramp=0xe346e80 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=1961.6 ms (host_build=0)
+[CULL_SPLIT] candidates=3369033 masks=12.88MB exec=80.3 ms masks_addr=0xe16cdc0 end=0xee4e240 base_addr=0xdf955c0
+[BLEND_SPLIT] upload=1.8 (attrs=0.0MB ids=0.0MB resident) exec=93.0 readback=2.0 total=96.8 ms
+[BLEND_ADDR] cull_masks=0xe16cdc0 out=0xe347e80(sz=0x600000) tile_ids=0x54d3ec0 xramp=0xe345e80 yramp=0xe346e80 payload=0x0(sz=0x0)
+[BLEND_DEVICE] resident_blend=180.1 ms (host_build=0)
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=46.78dB hero_vs_ref=63.85dB min_vs_ref=63.85dB min_vs_gt=46.78dB ms/view=270.9 (proj=39.3 ta=24.9 sort=26.2 blend=180.3) shot=opt/metal-screenshots/loop-sdc/hero.png

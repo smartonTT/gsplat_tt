@@ -1,0 +1,15 @@
+================ BUILD ID ================
+  cpp : #126 sha=b703f70 bin=2c241eb3d360fde2 M1: fix namespace qualification in sort_device.cpp
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:19:28-0700
+cmd: tail -5 /tmp/ttw_fix.log 2>/dev/null; echo "---"; ls -la /tmp/tt_metal_lock* 2>/dev/null || echo "no lock files"
+-----------------------------------------
+BUILD-ID VERIFY OK: cpp#126 bin=2c241eb3d360fde2 matches the built+stamped artifact
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.88ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.13 up=0.42 kernel=7.45 d2h=7.12 compact=0.00 publish=1.30 total=108.54ms
+[BUCKET_CULL] P_kept=3369033 tiles=1024 floor=6.10352e-05 cull_disabled=0 exec=73.96ms
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26544 bin=16.06 up=0.42 kernel=7.48 d2h=7.14 compact=0.00 publish=1.32 total=108.70ms
+SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=42.57dB hero_vs_ref=44.68dB min_vs_ref=44.68dB min_vs_gt=42.57dB ms/view=4080.0 (proj=58.7 ta=35.8 sort=99.4 blend=3885.8) shot=opt/metal-screenshots/loop-ttw/hero.png
+---
+no lock files

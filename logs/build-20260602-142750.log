@@ -1,0 +1,11 @@
+================ BUILD ID ================
+  cpp : #125 sha=138e943 bin=0eb430353f1793e9 M0 genuine: 32B L1 record + per-tile bucket clamp fix
+  data: #1 sha=b703f70 sync tracy-041 capture script
+=========================================
+host=yyzo-bh-03  tag=build  timeout=1200s  worry=600s  ts=2026-06-02T14:27:50-0700
+cmd: cmake --build build-tt -j 16
+-----------------------------------------
+[1/4] Building CXX object CMakeFiles/gsplat_cpu.dir/gsplat_cpu/blend_microblock.cpp.o
+[2/4] Linking CXX static library libgsplat_cpu.a
+[3/4] Linking CXX executable tests/gsplat_cpu_tests
+[4/4] Linking CXX shared module /localdev/smarton/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-310-x86_64-linux-gnu.so
