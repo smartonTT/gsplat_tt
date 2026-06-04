@@ -209,16 +209,15 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // + proj_m_blendrec (AoS, 1) + buf_l1_recs (L1_RECORD, 1) + 2 bucket buffers
     // + blend_subchunk_meta (iter 48 post-sort subchunk table).
     constexpr int num_reader_accessors = 20;
+    std::map<std::string, std::string> reader_defines = {
+        {"MB_BUCKET_FIT", "8192u"},
+        {"MB_TILE_L1_MASKS", "1"},
+        {"MB_CULL_SPIN", "512"},
+    };
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
-    // The blend reader is single-path: all former on/off feature macros are
-    // inlined in the kernel source. Only the two VALUE macros it reads remain.
-    std::map<std::string, std::string> reader_defines = {
-        {"MB_CULL_SPIN", "512"},      // per-candidate mask read-completion settle
-        {"MB_BUCKET_FIT", "8192u"},   // L1 dense-record bucket capacity (slots/tile)
-    };
     ctx.reader = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp",
@@ -691,6 +690,7 @@ constexpr uint32_t CB_SCR_IDS    = 4;   // reader-private ids/ranges scratch
 constexpr uint32_t CB_SCR_ATTR   = 5;   // reader-private gather scratch
 constexpr uint32_t CB_MASK_SCR   = 6;   // writer-private mask packing scratch
 constexpr uint32_t CB_KEEP       = 16;  // compute -> writer keep tiles
+constexpr uint32_t CB_CORE_TILES = 7;   // tile/subchunk work count handoff
 
 constexpr uint32_t COEFF_ROW_BYTES = 64;
 constexpr uint32_t COUNTS_PAGE_BYTES = 64;
@@ -712,7 +712,7 @@ inline uint32_t perm(uint32_t g, uint32_t m) {
 // the compute kernel's copy_tile->math->pack_tile round-trip (CB-linear-
 // identity), the keep flag for (vector g, microblock m) lands back at the same
 // position, which the writer reads to assemble the 32-bit mask.
-static std::vector<uint32_t> make_box_ramp(bool is_x) {
+std::vector<uint32_t> make_box_ramp(bool is_x) {
     std::vector<uint32_t> r(TILE_H * TILE_W, 0);
     for (uint32_t g = 0; g < 32; ++g) {
         for (uint32_t m = 0; m < 32; ++m) {
@@ -844,10 +844,7 @@ static bool ensure_resident_buffers(
         (void)pipe_p;
     }
     const size_t masks_bytes = (total_elems / 16) * MASKS_PAGE_BYTES;
-    // Production cull_masks live in DRAM (the L1-mask handoff experiment is
-    // dropped; see the iter-15 finding that the per-candidate settle is a read-
-    // completion window, not a DRAM write-settle artifact). Same 64B/16-elem
-    // page layout and per-tile page-aligned base either way.
+    // Tile-local cull writes masks to DRAM (L1 mesh buffer clashed with cull CBs).
     const BufferType masks_bt = BufferType::DRAM;
     auto make_masks_buf = [&](size_t bytes, size_t page_bytes) {
         distributed::ReplicatedBufferConfig rc{.size = bytes};
@@ -1011,6 +1008,208 @@ static double process_frame(
 
 }  // namespace cull
 
+// ===========================================================================
+// Tile-local L1 cull (iter 60 / step D): per-subchunk SFPU mask on loaded
+// PACK2 records in L1. Replaces the global cull_global_mb pass.
+// ===========================================================================
+namespace tile_l1_cull {
+
+static void build_program_and_workload(DeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    constexpr uint32_t kBucketFit = render_config::kBucketFit;
+
+    auto cb_cfg = [&](uint32_t id, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+        CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
+        c.set_page_size(id, page_bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+
+    cb_cfg(cull::CB_BOX_OX, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
+    cb_cfg(cull::CB_BOX_OY, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
+    cb_cfg(cull::CB_CULL_COEFF, cull::COEFF_ROW_BYTES, 32, DataFormat::Float32);
+    cb_cfg(cull::CB_CULL_COUNTS, cull::COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
+    cb_cfg(cull::CB_SCR_IDS, 64, 2, DataFormat::UInt32);
+    cb_cfg(cull::CB_SCR_ATTR, 64, 2u * 16u, DataFormat::Float32);
+    cb_cfg(cull::CB_MASK_SCR, 128, 1, DataFormat::UInt32);
+    cb_cfg(cull::CB_KEEP, mb::RAMP_TILE_BYTES, 4, DataFormat::Float32);
+    cb_cfg(cull::CB_CORE_TILES, 64, 1, DataFormat::UInt32);
+    constexpr uint32_t CB_BUCKET = 8;
+    constexpr uint32_t CB_BSORT  = 9;
+    cb_cfg(CB_BUCKET, 64, kBucketFit, DataFormat::Float32);
+    cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
+
+    std::vector<uint32_t> reader_ct;
+    for (int i = 0; i < 11; i++) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+    }
+    ctx.reader = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_tile_l1_cull.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = reader_ct,
+            .defines = {{"MB_BUCKET_FIT", "8192u"}},
+        });
+
+    std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+    u2d[cull::CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[cull::CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
+    ctx.compute = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
+        cores,
+        ComputeConfig{
+            .math_fidelity = MathFidelity::HiFi3,
+            .fp32_dest_acc_en = true,
+            .dst_full_sync_en = true,
+            .unpack_to_dest_mode = u2d,
+            .math_approx_mode = false,
+            .defines = {{"TILE_L1_CULL", "1"}},
+        });
+
+    std::vector<uint32_t> writer_ct;
+    TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    for (int i = 0; i < 5; i++) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    }
+    ctx.writer = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_tile_l1_mask.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = writer_ct,
+            .defines = {{"MB_BUCKET_FIT", "8192u"}},
+        });
+
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.workload.add_program(device_range, std::move(program));
+}
+
+static DeviceContext init_device_context() {
+    DeviceContext ctx;
+    ctx.mesh_device = gsplat_tt::device_state::get_device();
+    ctx.cq = gsplat_tt::device_state::command_queue();
+    ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
+    tile_l1_cull::build_program_and_workload(ctx);
+    return ctx;
+}
+
+static double process_frame(
+    DeviceContext& ctx,
+    float contrib_floor,
+    bool cull_disabled,
+    uint32_t num_tiles,
+    uint32_t tiles_x,
+    bool* ok,
+    bool defer_cq_finish = false) {
+    namespace ds = gsplat_tt::device_state;
+    auto buf_ids = ds::get_buffer("sort_sorted_ids");
+    auto buf_rng = ds::get_buffer("sort_tile_ranges");
+    auto buf_l1r = ds::get_buffer("sort_l1_recs");
+    auto buf_brec = ds::get_buffer("proj_m_blendrec");
+    auto buf_bm   = ds::get_buffer("sort_bucket_meta");
+    auto buf_sc   = ds::get_buffer("blend_subchunk_meta");
+    if (!buf_ids || !buf_rng || !buf_l1r || !buf_brec || !buf_bm || !buf_sc) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+    if (ok) *ok = true;
+
+    const ResidentSortLpt lpt = resident_sort_lpt_handles();
+    if (!lpt.ok) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+    auto meta_buf = ds::get_buffer("sort_lpt_meta");
+    const uint32_t lpt_meta_addr =
+        meta_buf ? static_cast<uint32_t>(meta_buf->address()) : 0u;
+
+    auto buf_masks_res = ds::get_buffer("cull_masks");
+    auto buf_base_res  = ds::get_buffer("cull_mask_base");
+    if (!buf_masks_res || !buf_base_res) {
+        if (ok) *ok = false;
+        return 0.0;
+    }
+
+    if (!ctx.res_xramp) {
+        auto make_dram = [&](size_t bytes, size_t page_bytes) {
+            distributed::ReplicatedBufferConfig rc{.size = bytes};
+            distributed::DeviceLocalBufferConfig lc{
+                .page_size = page_bytes, .buffer_type = BufferType::DRAM};
+            return distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+        };
+        ctx.res_xramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
+        ctx.res_yramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
+        ctx.res_ramp_uploaded = false;
+    }
+
+    Program& program = get_program_for_workload(ctx);
+    uint32_t core_index = 0;
+    const uint32_t l1_recs_addr   = static_cast<uint32_t>(buf_l1r->address());
+    const uint32_t ids_addr       = static_cast<uint32_t>(buf_ids->address());
+    const uint32_t rng_addr       = static_cast<uint32_t>(buf_rng->address());
+    const uint32_t blendrec_addr  = static_cast<uint32_t>(buf_brec->address());
+    const uint32_t bucket_meta_addr = static_cast<uint32_t>(buf_bm->address());
+    const uint32_t subchunk_meta_addr = static_cast<uint32_t>(buf_sc->address());
+    const uint32_t cull_base_addr = static_cast<uint32_t>(buf_base_res->address());
+    const uint32_t box_ox_addr    = static_cast<uint32_t>(ctx.res_xramp->address());
+    const uint32_t box_oy_addr    = static_cast<uint32_t>(ctx.res_yramp->address());
+    const uint32_t masks_addr     = static_cast<uint32_t>(buf_masks_res->address());
+    const uint32_t tile_ids_addr  = static_cast<uint32_t>(lpt.tile_ids_buf->address());
+    uint32_t floor_bits;
+    std::memcpy(&floor_bits, &contrib_floor, 4);
+    {
+        GSPLAT_HOST_ZONE("host_tile_l1_cull_setup");
+        for (const auto& range : ctx.all_cores.ranges()) {
+            for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+                for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                    CoreCoord core{x, y};
+                    SetRuntimeArgs(program, ctx.reader, core, {
+                        l1_recs_addr, ids_addr, rng_addr, blendrec_addr,
+                        bucket_meta_addr, subchunk_meta_addr, cull_base_addr,
+                        box_ox_addr, box_oy_addr, tile_ids_addr, lpt_meta_addr,
+                        core_index, tiles_x, floor_bits,
+                    });
+                    SetRuntimeArgs(program, ctx.compute, core, {
+                        0u, floor_bits, cull_disabled ? 1u : 0u,
+                    });
+                    SetRuntimeArgs(program, ctx.writer, core, {
+                        masks_addr, rng_addr, subchunk_meta_addr, cull_base_addr,
+                        tile_ids_addr, lpt_meta_addr, core_index,
+                    });
+                    core_index++;
+                }
+            }
+        }
+    }
+
+    const bool pipeline =
+        defer_cq_finish || gsplat_tt::env_config::cull_pipeline_enabled();
+    const auto t_start = std::chrono::steady_clock::now();
+    if (!ctx.res_ramp_uploaded) {
+        auto bx = cull::make_box_ramp(/*is_x=*/true);
+        auto by = cull::make_box_ramp(/*is_x=*/false);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_xramp, bx);
+        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_yramp, by);
+        ctx.res_ramp_uploaded = true;
+    }
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    if (!pipeline) {
+        distributed::Finish(*ctx.cq);
+    }
+    const auto t_end = std::chrono::steady_clock::now();
+    (void)num_tiles;
+    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
+}
+
+}  // namespace tile_l1_cull
+
 }  // namespace mb
 
 namespace gsplat_tt {
@@ -1027,7 +1226,7 @@ void blend_warmup_resident_contexts() {
     }
     // SFPU_CULL=1 (production): always create the SFPU cull context.
     if (!g_ctx_cull) {
-        g_ctx_cull = std::make_unique<DeviceContext>(::mb::cull::init_device_context());
+        g_ctx_cull = std::make_unique<DeviceContext>(::mb::tile_l1_cull::init_device_context());
     }
 }
 
@@ -1049,24 +1248,19 @@ double blend_mb_devcull_resident(
         g_ctx_mb = std::make_unique<DeviceContext>(::mb::init_device_context_mb());
     }
 
-    // SFPU microblock-cull pass (GSPLAT_TT_SFPU_CULL): precompute the 32-bit
-    // masks on the SFPU into the resident cull_masks buffer BEFORE the blend.
-    // The blend reader then reads the mask (pure integer) instead of running
-    // the soft-float constrained-min cull.
+    // Tile-local L1 cull (step D): SFPU masks on loaded subchunks into L1 buffer.
     double cull_ms = 0.0;
-    const bool sfpu_cull = true;  // SFPU_CULL=1 (production)
+    const bool sfpu_cull = true;
     const bool chain_cull_blend = sfpu_cull && gsplat_tt::env_config::cull_pipeline_enabled();
     if (sfpu_cull) {
         if (!g_ctx_cull) {
-            g_ctx_cull = std::make_unique<DeviceContext>(::mb::cull::init_device_context());
+            g_ctx_cull = std::make_unique<DeviceContext>(::mb::tile_l1_cull::init_device_context());
         }
         if (!::mb::cull::ensure_resident_buffers(*g_ctx_mb, static_cast<uint32_t>(num_tiles))) {
             if (device_ok) *device_ok = false;
             return 0.0;
         }
         if (chain_cull_blend) {
-            // Overlap: set all blend runtime args before enqueuing cull so the
-            // ~110-core host setup runs while the SFPU cull pass executes.
             {
                 GSPLAT_HOST_ZONE("host_blend_setup");
                 ::mb::process_frame_mb_devcull_resident(
@@ -1080,7 +1274,7 @@ double blend_mb_devcull_resident(
             }
         }
         bool cull_ok = false;
-        cull_ms = ::mb::cull::process_frame(
+        cull_ms = ::mb::tile_l1_cull::process_frame(
             *g_ctx_cull, contrib_floor, cull_disabled,
             static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x), &cull_ok,
             chain_cull_blend);

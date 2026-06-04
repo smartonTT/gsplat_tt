@@ -503,9 +503,8 @@ void kernel_main() {
                 sorted = cur;  // even pass count -> back in idxA
             }
             // Bulk-load this tile's WHOLE cull_masks region into L1 ONCE (cull_base
-            // is 16-aligned -> mask[k] == L1[k]) with batched barriers + a single
-            // per-tile settle, instead of a per-candidate NoC read + spin. The
-            // records are already L1-resident, so the candidate loop is pure L1.
+            // is 16-aligned -> mask[k] == L1[k]) with batched barriers. Tile-local
+            // L1 cull (step D) fills the L1-interleaved buffer — no read spin.
             const uint32_t mpages = (L + 15u) >> 4;
             cb_reserve_back(CB_BMASK, mpages);
             const uint32_t bmask = get_write_ptr(CB_BMASK);
@@ -521,7 +520,9 @@ void kernel_main() {
                     noc_async_read_barrier();
                     pp = end;
                 }
+#ifndef MB_TILE_L1_MASKS
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
+#endif
             }
             // CB_BUCKET/CB_BMASK are reader-private L1 scratch only (reserve +
             // get_write_ptr, never push/pop). Pushing them wedged the ring when
@@ -619,7 +620,9 @@ void kernel_main() {
                     noc_async_read_barrier();
                     pp = end;
                 }
+#ifndef MB_TILE_L1_MASKS
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
+#endif
             }
 
             cb_reserve_back(CB_BUCKET_BULK, rec_pages);

@@ -258,7 +258,11 @@ inline uint32_t f_to_u32(float f) {
 constexpr uint32_t CB_CORE_TILES = 7;
 
 void kernel_main() {
+#ifdef TILE_L1_CULL
+    DeviceZoneScopedN("tile_mb_mask");
+#else
     DeviceZoneScopedN("cull_global_mb");
+#endif
     uint32_t num_tiles    = get_arg_val<uint32_t>(0);
     const uint32_t floor_bits   = get_arg_val<uint32_t>(1);
     const bool cull_disabled    = get_arg_val<uint32_t>(2) != 0;
