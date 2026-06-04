@@ -240,25 +240,14 @@ void kernel_main() {
         }
     }
 
-    // iter 77: cache per-tile subchunk count + dense bucket count from one
-    // pipelined meta read (subchunk + bucket share page index tile_id*2>>4).
-    uint32_t tile_nsc[MAX_TILE_IDS_PER_CORE];
-    uint32_t tile_Lb[MAX_TILE_IDS_PER_CORE];
     uint32_t num_work = 0;
     for (uint32_t ti = 0; ti < tile_ids_count; ++ti) {
         const uint32_t tile_id = tile_ids[ti];
-        const uint32_t e0 = tile_id * 2u;
-        const uint32_t pg = e0 >> 4;
-        const uint32_t off = e0 & 0xF;
         const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-        const uint32_t scr2 = get_write_ptr(CB_SCR_ATTR);
-        noc_async_read_tile(pg, subchunk_meta_acc, scr);
-        noc_async_read_tile(pg, bucket_meta_acc, scr2);
+        noc_async_read_tile((tile_id * 2u) >> 4, subchunk_meta_acc, scr);
         noc_async_read_barrier();
-        uint32_t nsc = reinterpret_cast<volatile uint32_t*>(scr)[off];
+        uint32_t nsc = reinterpret_cast<volatile uint32_t*>(scr)[(tile_id * 2u) & 0xF];
         if (nsc == 0u) nsc = 1u;
-        tile_nsc[ti] = nsc;
-        tile_Lb[ti] = reinterpret_cast<volatile uint32_t*>(scr2)[off + 1u];
         num_work += nsc;
     }
 
@@ -294,8 +283,29 @@ void kernel_main() {
         const uint32_t L = id_end - id_start;
         const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
 
-        const uint32_t Lb = tile_Lb[ti];
-        uint32_t num_subchunks = tile_nsc[ti];
+        uint32_t Lb = 0;
+        {
+            const uint32_t e0 = tile_id * 2u;
+            const uint32_t pg = e0 >> 4;
+            const uint32_t off = e0 & 0xF;
+            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+            noc_async_read_tile(pg, bucket_meta_acc, scr);
+            noc_async_read_barrier();
+            auto bmp = reinterpret_cast<volatile uint32_t*>(scr);
+            Lb = bmp[off + 1u];
+        }
+
+        uint32_t num_subchunks = 1;
+        {
+            const uint32_t e0 = tile_id * 2u;
+            const uint32_t pg = e0 >> 4;
+            const uint32_t off = e0 & 0xF;
+            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+            noc_async_read_tile(pg, subchunk_meta_acc, scr);
+            noc_async_read_barrier();
+            num_subchunks = reinterpret_cast<volatile uint32_t*>(scr)[off];
+            if (num_subchunks == 0u) num_subchunks = 1u;
+        }
 
         for (uint32_t sc = 0; sc < num_subchunks; ++sc) {
             const uint32_t sc_off = sc * MB_BUCKET_FIT;
