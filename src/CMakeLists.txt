@@ -120,6 +120,7 @@ if(GSPLAT_WITH_TT)
     ${RENDER_HOST}/jit_warmup.cpp
     ${RENDER_HOST}/gather_visible_device.cpp
     gsplat_tt/render_blend.cpp
+    gsplat_tt/blend_legacy_stubs.cpp
     gsplat_tt/mb_payload.cpp
     gsplat_tt/blend_host.cpp
   )
