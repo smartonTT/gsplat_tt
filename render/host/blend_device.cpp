@@ -101,198 +101,7 @@ struct DeviceContext {
     std::shared_ptr<distributed::MeshBuffer> res_mask_base;
     size_t res_mask_base_bytes = 0;
 
-    // Post-sort subchunk table (iter 48): per-tile (num_subchunks, count) u32
-    // pairs built on the host from sort_tile_ranges and uploaded once per frame.
-    // Device readers index blend_subchunk_meta[tile_id*2] to dispatch cull/blend
-    // in depth-ordered slices of at most kBucketFit candidates.
-    std::shared_ptr<distributed::MeshBuffer> res_subchunk_meta;
-    size_t res_subchunk_meta_bytes = 0;
 };
-
-// Host-built subchunk plan + [SUBCHUNK] stats (iter 48).
-struct SubchunkPlan {
-    std::vector<uint32_t> meta;  // num_tiles * 2: [num_subchunks, candidate_count]
-    uint32_t tiles_split = 0;
-    uint32_t total_subchunks = 0;
-    uint32_t max_subchunks_per_tile = 0;
-    uint64_t total_overflow_candidates = 0;
-};
-
-static SubchunkPlan build_subchunk_plan(
-    distributed::MeshCommandQueue* cq, uint32_t num_tiles) {
-    namespace ds = gsplat_tt::device_state;
-    SubchunkPlan plan;
-    plan.meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
-    auto buf_rng = ds::get_buffer("sort_tile_ranges");
-    if (!buf_rng || num_tiles == 0) {
-        return plan;
-    }
-    std::vector<uint32_t> ranges(static_cast<std::size_t>(num_tiles) * 2u, 0u);
-    distributed::EnqueueReadMeshBuffer(*cq, ranges, buf_rng, /*blocking=*/true);
-    constexpr uint32_t kFit = render_config::kBucketFit;
-    for (uint32_t t = 0; t < num_tiles; ++t) {
-        const uint32_t start = ranges[static_cast<std::size_t>(t) * 2u + 0u];
-        const uint32_t end = ranges[static_cast<std::size_t>(t) * 2u + 1u];
-        const uint32_t count = end - start;
-        const uint32_t num_sc =
-            count == 0u ? 1u : (count + kFit - 1u) / kFit;
-        plan.meta[static_cast<std::size_t>(t) * 2u + 0u] = num_sc;
-        plan.meta[static_cast<std::size_t>(t) * 2u + 1u] = count;
-        plan.total_subchunks += num_sc;
-        if (num_sc > 1u) {
-            plan.tiles_split += 1u;
-            plan.total_overflow_candidates += count;
-        }
-        plan.max_subchunks_per_tile =
-            std::max(plan.max_subchunks_per_tile, num_sc);
-    }
-    return plan;
-}
-
-static void log_subchunk_stats(const SubchunkPlan& plan) {
-    std::fprintf(
-        stderr,
-        "[SUBCHUNK] tiles_split=%u total_subchunks=%u max_subchunks_per_tile=%u "
-        "total_overflow_candidates=%llu\n",
-        plan.tiles_split,
-        plan.total_subchunks,
-        plan.max_subchunks_per_tile,
-        static_cast<unsigned long long>(plan.total_overflow_candidates));
-}
-
-// Host-side [L1LOAD] stats (iter 49): bulk subchunk payloads the reader loads
-// into L1 (overflow tiles only; in-budget bucket tiles stay on the iter-48 path).
-struct L1LoadStats {
-    uint64_t bytes_bulk_loaded = 0;
-    uint32_t subchunks_bulk = 0;
-};
-
-static L1LoadStats build_l1load_stats(const SubchunkPlan& plan) {
-    L1LoadStats stats;
-    constexpr uint32_t kFit = render_config::kBucketFit;
-    constexpr uint64_t kPageBytes = 64u;
-    const uint32_t num_tiles =
-        static_cast<uint32_t>(plan.meta.size() / 2u);
-    for (uint32_t t = 0; t < num_tiles; ++t) {
-        const uint32_t num_sc = plan.meta[static_cast<std::size_t>(t) * 2u + 0u];
-        const uint32_t count = plan.meta[static_cast<std::size_t>(t) * 2u + 1u];
-        const bool in_budget =
-            num_sc == 1u && count > 0u && count <= kFit;
-        if (in_budget) {
-            continue;
-        }
-        for (uint32_t sc = 0; sc < num_sc; ++sc) {
-            const uint32_t sc_off = sc * kFit;
-            if (sc_off >= count) {
-                continue;
-            }
-            const uint32_t l_sub =
-                (count - sc_off > kFit) ? kFit : (count - sc_off);
-            stats.subchunks_bulk += 1u;
-            if (sc_off == 0u) {
-                stats.bytes_bulk_loaded +=
-                    static_cast<uint64_t>((l_sub + 1u) / 2u) * kPageBytes;
-            } else {
-                stats.bytes_bulk_loaded += static_cast<uint64_t>(l_sub) * kPageBytes;
-            }
-        }
-    }
-    return stats;
-}
-
-// Host-side [PACK2] stats (iter 50): packed L1 record pages vs splat count.
-struct Pack2Stats {
-    uint64_t splats = 0;
-    uint64_t pages = 0;
-    uint64_t bytes_packed = 0;
-    uint64_t bytes_iter49 = 0;  // one 64B page per splat (pre-PACK2)
-};
-
-static Pack2Stats build_pack2_stats(const SubchunkPlan& plan) {
-    Pack2Stats stats;
-    constexpr uint32_t kFit = render_config::kBucketFit;
-    constexpr uint64_t kPageBytes = 64u;
-    const uint32_t num_tiles =
-        static_cast<uint32_t>(plan.meta.size() / 2u);
-    for (uint32_t t = 0; t < num_tiles; ++t) {
-        const uint32_t num_sc = plan.meta[static_cast<std::size_t>(t) * 2u + 0u];
-        const uint32_t count = plan.meta[static_cast<std::size_t>(t) * 2u + 1u];
-        if (count == 0u) {
-            continue;
-        }
-        const bool in_budget =
-            num_sc == 1u && count > 0u && count <= kFit;
-        if (in_budget) {
-            const uint64_t pages = (static_cast<uint64_t>(count) + 1u) / 2u;
-            stats.splats += count;
-            stats.pages += pages;
-            stats.bytes_packed += pages * kPageBytes;
-            stats.bytes_iter49 += static_cast<uint64_t>(count) * kPageBytes;
-            continue;
-        }
-        for (uint32_t sc = 0; sc < num_sc; ++sc) {
-            const uint32_t sc_off = sc * kFit;
-            if (sc_off >= count) {
-                continue;
-            }
-            const uint32_t l_sub =
-                (count - sc_off > kFit) ? kFit : (count - sc_off);
-            if (sc_off == 0u) {
-                const uint64_t pages = (static_cast<uint64_t>(l_sub) + 1u) / 2u;
-                stats.splats += l_sub;
-                stats.pages += pages;
-                stats.bytes_packed += pages * kPageBytes;
-                stats.bytes_iter49 += static_cast<uint64_t>(l_sub) * kPageBytes;
-            }
-        }
-    }
-    return stats;
-}
-
-static void log_pack2_stats(const Pack2Stats& stats) {
-    const uint64_t avg_pages = stats.splats > 0u
-        ? (stats.pages * 1000u) / stats.splats
-        : 0u;
-    std::fprintf(
-        stderr,
-        "[PACK2] splats=%llu pages=%llu bytes_packed=%llu bytes_iter49=%llu "
-        "avg_pages_per_1k_splats=%llu\n",
-        static_cast<unsigned long long>(stats.splats),
-        static_cast<unsigned long long>(stats.pages),
-        static_cast<unsigned long long>(stats.bytes_packed),
-        static_cast<unsigned long long>(stats.bytes_iter49),
-        static_cast<unsigned long long>(avg_pages));
-}
-
-static void log_l1load_stats(const L1LoadStats& stats) {
-    const uint64_t avg = stats.subchunks_bulk > 0u
-        ? stats.bytes_bulk_loaded / stats.subchunks_bulk
-        : 0u;
-    std::fprintf(
-        stderr,
-        "[L1LOAD] bytes_bulk_loaded=%llu subchunks_bulk=%u "
-        "avg_bytes_per_subchunk=%llu\n",
-        static_cast<unsigned long long>(stats.bytes_bulk_loaded),
-        stats.subchunks_bulk,
-        static_cast<unsigned long long>(avg));
-}
-
-static bool upload_subchunk_meta(
-    DeviceContext& ctx, const SubchunkPlan& plan, uint32_t num_tiles) {
-    const size_t bytes = static_cast<size_t>(num_tiles) * 2u * sizeof(uint32_t);
-    if (!ctx.res_subchunk_meta || ctx.res_subchunk_meta_bytes < bytes) {
-        distributed::ReplicatedBufferConfig rc{.size = bytes};
-        distributed::DeviceLocalBufferConfig lc{
-            .page_size = 64, .buffer_type = BufferType::DRAM};
-        ctx.res_subchunk_meta =
-            distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
-        ctx.res_subchunk_meta_bytes = bytes;
-        gsplat_tt::device_state::register_buffer(
-            "blend_subchunk_meta", ctx.res_subchunk_meta);
-    }
-    distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_subchunk_meta, plan.meta);
-    return true;
-}
 
 // Pull the program out of the workload (it was moved in at init time) so we
 // can refresh its runtime args before each frame.
@@ -686,19 +495,14 @@ static double process_frame_mb_devcull_resident(
     const bool launch_only = (phase == ResidentBlendPhase::DeviceLaunchAndReadback);
 
     if (!launch_only) {
-    // Post-sort subchunk table: host reads sort_tile_ranges, splits fat tiles
-    // (count > kBucketFit) into depth-ordered subchunks, uploads metadata for
-    // the blend reader dispatch loop (iter 48).
-    const SubchunkPlan subchunk_plan = build_subchunk_plan(ctx.cq, num_tiles);
-    log_subchunk_stats(subchunk_plan);
-    log_l1load_stats(build_l1load_stats(subchunk_plan));
-    log_pack2_stats(build_pack2_stats(subchunk_plan));
-    if (!upload_subchunk_meta(ctx, subchunk_plan, num_tiles)) {
+    // Post-sort subchunk meta: device-written at sort publish (iter 55 / step B).
+    auto buf_sc_meta = ds::get_buffer("blend_subchunk_meta");
+    if (!buf_sc_meta) {
         if (ok) *ok = false;
         return 0.0;
     }
     const uint32_t subchunk_meta_addr =
-        static_cast<uint32_t>(ctx.res_subchunk_meta->address());
+        static_cast<uint32_t>(buf_sc_meta->address());
 
     // SFPU cull: the blend reader reads the precomputed 32-bit mask from the
     // resident cull_masks buffer (registered by the cull pass) instead of

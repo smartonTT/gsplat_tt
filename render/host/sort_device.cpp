@@ -206,15 +206,17 @@ struct SortDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_cull_mask_base;  // per-tile page-aligned mask offset
     std::size_t cap_cull_mask_base_bytes = 0;
 
-    // Iter 53: post-radix PACK2 subchunk payloads + device-resident directory.
+    // Iter 53+: post-radix PACK2 subchunk payloads + device-resident directory.
     distributed::MeshWorkload wl_subchunk;
     KernelHandle ksubchunk{};
+    distributed::MeshWorkload wl_subchunk_dir;
+    KernelHandle ksubchunk_dir{};
+    std::shared_ptr<distributed::MeshBuffer> buf_blend_subchunk_meta;
+    std::size_t cap_blend_subchunk_meta_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_payload;
     std::size_t cap_subchunk_payload_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_dir;
     std::size_t cap_subchunk_dir_bytes = 0;
-    std::shared_ptr<distributed::MeshBuffer> buf_subchunk_tile;
-    std::size_t cap_subchunk_tile_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_prefix;
     std::size_t cap_subchunk_prefix_bytes = 0;
 };
@@ -366,7 +368,54 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     ctx.wl_subchunk.add_program(device_range, std::move(program));
 }
 
-// Host metadata + DRAM alloc for step-A materialize (blend still iter-51 path).
+// Iter 55 / step B: device writes blend meta + dir + prefix at sort publish.
+static void build_program_subchunk_directory(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRange core0({0, 0}, {0, 0});
+    CircularBufferConfig c(PAGE_BYTES, {{0, DataFormat::UInt32}});
+    c.set_page_size(0, PAGE_BYTES);
+    CreateCircularBuffer(program, core0, c);
+
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 4; i++) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    }
+    ctx.ksubchunk_dir = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_subchunk_directory.cpp",
+        core0,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_subchunk_dir.add_program(device_range, std::move(program));
+}
+
+static bool launch_subchunk_directory(
+    SortDeviceContext* ctx,
+    uint32_t num_tiles,
+    uint32_t bucket_fit) {
+    auto brng = device_state::get_buffer("sort_tile_ranges");
+    if (!brng || !ctx->buf_blend_subchunk_meta || !ctx->buf_subchunk_dir ||
+        !ctx->buf_subchunk_prefix) {
+        return false;
+    }
+    Program& prog = ctx->wl_subchunk_dir.get_programs().begin()->second;
+    SetRuntimeArgs(prog, ctx->ksubchunk_dir, CoreCoord{0, 0}, {
+        static_cast<uint32_t>(brng->address()),
+        static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
+        static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
+        static_cast<uint32_t>(ctx->buf_subchunk_prefix->address()),
+        num_tiles,
+        bucket_fit,
+    });
+    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk_dir, false);
+    return true;
+}
+
+// Host layout sizing + DRAM alloc; device fills meta/dir/prefix at publish.
 static bool prepare_subchunk_buffers(
     SortDeviceContext* ctx,
     const SubchunkLayout& layout,
@@ -387,13 +436,6 @@ static bool prepare_subchunk_buffers(
         ctx->cap_subchunk_dir_bytes = dir_bytes;
         device_state::register_buffer("sort_subchunk_dir", ctx->buf_subchunk_dir);
     }
-    const std::size_t tile_bytes = round_up(
-        static_cast<std::size_t>(round_up(num_tiles, ELEMS_PER_PAGE)) * 4u, PAGE_BYTES);
-    if (!ctx->buf_subchunk_tile || ctx->cap_subchunk_tile_bytes < tile_bytes) {
-        ctx->buf_subchunk_tile = make_dram(ctx->mesh_device.get(), tile_bytes);
-        ctx->cap_subchunk_tile_bytes = tile_bytes;
-        device_state::register_buffer("sort_subchunk_tile", ctx->buf_subchunk_tile);
-    }
     const std::size_t prefix_bytes = round_up(
         static_cast<std::size_t>(round_up(num_tiles, ELEMS_PER_PAGE)) * 4u, PAGE_BYTES);
     if (!ctx->buf_subchunk_prefix ||
@@ -402,21 +444,16 @@ static bool prepare_subchunk_buffers(
         ctx->cap_subchunk_prefix_bytes = prefix_bytes;
         device_state::register_buffer("sort_subchunk_prefix", ctx->buf_subchunk_prefix);
     }
-
-    std::vector<uint32_t> tile_u(layout.tile_meta.size(), 0u);
-    std::copy(layout.tile_meta.begin(), layout.tile_meta.end(), tile_u.begin());
-    std::vector<uint32_t> prefix_u(
-        static_cast<std::size_t>(ctx->cap_subchunk_prefix_bytes / 4), 0u);
-    for (uint32_t t = 0; t < num_tiles; ++t) {
-        prefix_u[t] = layout.prefix[t];
+    const std::size_t blend_meta_bytes = round_up(
+        static_cast<std::size_t>(round_up(num_tiles, ELEMS_PER_PAGE)) * 8u, PAGE_BYTES);
+    if (!ctx->buf_blend_subchunk_meta ||
+        ctx->cap_blend_subchunk_meta_bytes < blend_meta_bytes) {
+        ctx->buf_blend_subchunk_meta =
+            make_dram(ctx->mesh_device.get(), blend_meta_bytes);
+        ctx->cap_blend_subchunk_meta_bytes = blend_meta_bytes;
+        device_state::register_buffer(
+            "blend_subchunk_meta", ctx->buf_blend_subchunk_meta);
     }
-    std::vector<uint32_t> dir_u(
-        static_cast<std::size_t>(ctx->cap_subchunk_dir_bytes / 4), 0u);
-    std::copy(layout.dir.begin(), layout.dir.end(), dir_u.begin());
-
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_subchunk_tile, tile_u, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_subchunk_prefix, prefix_u, false);
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_subchunk_dir, dir_u, false);
     return true;
 }
 
@@ -661,6 +698,7 @@ static SortDeviceContext init_context() {
     build_program_bin_layout(ctx);
     build_program_publish(ctx);
     build_program_subchunk(ctx);
+    build_program_subchunk_directory(ctx);
     if (bucket_mask_enabled()) {
         build_program_bucket_cull(ctx);
     }
@@ -1755,6 +1793,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_publish, false);
             sc_layout = build_subchunk_layout(counts, num_tiles, bucket_fit);
             log_subchunk_layout_stats(sc_layout);
+            if (!prepare_subchunk_buffers(ctx, sc_layout, num_tiles)) {
+                std::cerr << "[gsplat_tt::sort] subchunk buffer setup failed\n";
+                return fail();
+            }
+            if (!launch_subchunk_directory(ctx, num_tiles, bucket_fit)) {
+                std::cerr << "[gsplat_tt::sort] subchunk directory launch failed\n";
+                return fail();
+            }
             {
                 uint32_t max_lpt_tiles = 0;
                 for (uint32_t c = 0; c < num_cores; c++) {
@@ -1765,10 +1811,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                               << max_lpt_tiles << " > materialize MAX_TILE_IDS=1024\n";
                     return fail();
                 }
-            }
-            if (!prepare_subchunk_buffers(ctx, sc_layout, num_tiles)) {
-                std::cerr << "[gsplat_tt::sort] subchunk materialize setup failed\n";
-                return fail();
             }
             subchunk_materialize = true;
             T.publish_ms =

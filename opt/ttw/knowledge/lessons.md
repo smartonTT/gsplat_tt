@@ -9,6 +9,17 @@ back those generic rules. Newest on top; each entry keeps its date.
 
 ---
 
+## 2026-06-03 unified subchunk plan — one step per iter; 3 tries then split
+
+- **Ship plan steps A→B→C→D→E as separate kept iterations, not one mega-diff.** The
+  in-flight iter-53 monolith (materialize + directory + unified reader, D still
+  open) is hard to bisect; prefer splitting on failure. User: *"If it can't be
+  fixed or near fixed in three tries, then split it."*
+- **Three tries per step:** repro → fix → re-verify on device; if still broken
+  after three attempts, split into a smaller step or revert — do not loop
+  indefinitely on the same combined changeset. See
+  `~/.cursor/plans/unified_l1_chunk_pipeline_9cc07f6a.plan.md`.
+
 ## 2026-06-02 timing metric (gsplat specifics)
 
 - **The gsplat timing metric is the AVERAGE FRAME TIME over ALL 30 bench views
