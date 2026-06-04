@@ -669,7 +669,9 @@ void kernel_main() {
             const uint32_t mpages_mask = (L_sub + 15u) >> 4;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
             // C1: overflow subchunks DMA prebuilt PACK2 (iter 85: mat pack overlap fix).
-            const bool use_payload = (num_subchunks > 1u);
+            // iter 86: payload DMA correct at 63.63 dB but ~+1.6% slower than gather;
+            // keep iter-85 mat PACK2 fix; default gather until C2 proves >=2% win.
+            const bool use_payload = false;  // was (num_subchunks > 1u)
 
             DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, mpages_mask);
