@@ -1,5 +1,5 @@
-id=17
-sha=474c29e
-ts=2026-06-04T08:20:34-0700
-desc=iter 82: C1b revert: use_payload off, mat dir pages
-bin=9621391fd9d1e9af
+id=20
+sha=e02aed9
+ts=2026-06-04T08:26:31-0700
+desc=iter 83: C1b: mat sc0 sorted_ids, use_payload off gate check
+bin=ff7e2433fe5af4f1

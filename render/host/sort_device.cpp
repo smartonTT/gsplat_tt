@@ -458,7 +458,7 @@ static bool prepare_subchunk_buffers(
 }
 
 // Device post-radix PACK2 materialize (enqueue only; caller Finish()).
-// Kernel: sc==0 subchunks use buf_l1_recs bulk path; sc>=1 uses blendrec gather.
+// Kernel: in-budget sc==0 uses buf_l1_recs bulk; overflow sc==0/sc>=1 use sorted_ids gather.
 static bool launch_subchunk_materialize(
     SortDeviceContext* ctx,
     const SubchunkLayout& layout,
@@ -1900,7 +1900,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             P_full, P_kept, num_tiles, max_n, T.bin_ms, T.upload_ms, T.kernel_ms,
             T.d2h_ms, T.compact_ms, T.publish_ms, T.materialize_ms, T.total_ms);
         if (device_ok) *device_ok = true;
-        // Step C1: materialize before blend on the piped CQ (no Finish here).
+        // Step C1: materialize before blend on the piped CQ (no Finish here —
+        // sort_publish_pending: one drain at blend readback; iter-58/83).
         if (subchunk_materialize && sort_blend_pipe_enabled()) {
             const auto t_mat0 = clk::now();
             if (!launch_subchunk_materialize(

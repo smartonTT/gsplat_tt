@@ -668,7 +668,7 @@ void kernel_main() {
             const uint32_t rec_pages = (L_sub + 1u) >> 1;
             const uint32_t mpages_mask = (L_sub + 15u) >> 4;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
-            // C1b: reverted — payload DMA ~24dB until overflow sc0 mat uses sorted_ids order.
+            // C1b: use_payload off — mat sorted_ids sc0 still ~18dB (iter 83 reject).
             const bool use_payload = false;
 
             DeviceZoneScopedN("rd_l1_bulk");

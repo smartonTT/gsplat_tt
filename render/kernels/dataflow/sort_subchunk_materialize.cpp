@@ -4,9 +4,9 @@
 //
 // Post-radix subchunk materialize (iter 54 / step A): depth-sorted PACK2 payloads.
 // In-budget tiles (count <= bucket_fit): bulk-copy buf_l1_recs + L1 radix
-// permute (no per-splat blendrec gather). Overflow tiles: sc==0 uses the same
-// L1 bulk path (first bucket_fit splats are resident in buf_l1_recs); sc>=1
-// uses batched blendrec gather into depth-ordered PACK2 slabs.
+// permute (no per-splat blendrec gather). Overflow tiles: sc==0 uses
+// sort_sorted_ids-order blendrec gather (masks follow radix ids, not L1 slots);
+// sc>=1 uses the same batched blendrec gather into depth-ordered PACK2 slabs.
 
 #include <cstdint>
 
@@ -181,9 +181,9 @@ void kernel_main() {
                 sc_page = scrp[off];
             }
 
-            // First subchunk splats live in buf_l1_recs (iter 74: was blendrec-only
-            // for all overflow tiles).
-            if (sc == 0u && L_sub <= bucket_fit) {
+            // In-budget sc==0: buf_l1_recs bulk + L1 depth permute. Overflow sc==0
+            // falls through to sorted_ids gather (iter 83: L1 slot order != masks).
+            if (sc == 0u && L_sub <= bucket_fit && count <= bucket_fit) {
                 const uint32_t L = L_sub;
                 const uint32_t npages = (L + 1u) >> 1;
                 const uint32_t buck = get_write_ptr(CB_BUCKET);
