@@ -226,7 +226,7 @@ inline void process_tile_gaussians(uint32_t num_g) {
         MATH((mb_cb_consume_fence()));  // == invalidate_l1_cache() on Blackhole
         const uint32_t a = row[0], b = row[1], c = row[2], d = row[3], e = row[4];
         const uint32_t fc = row[5], op = row[6], cr = row[7], cg = row[8], cbv = row[9];
-        uint32_t mask = row[10];
+        const uint32_t mask = row[10];
         // Pin all coeff loads into registers BEFORE the ack. They are plain
         // (non-volatile) L1 reads only consumed by the blend below; without this
         // the compiler could legally sink them past the ack, after which UNPACK
@@ -239,7 +239,9 @@ inline void process_tile_gaussians(uint32_t num_g) {
         // would overwrite before MATH read it. Bounded (one blocking mailbox
         // round-trip per row) — NOT a spin or a latency pad.
         MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, g + 1u)));
-        dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+        if (mask != 0u) {
+            dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+        }
         UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
         cb_pop_front(CB_MB_COEFF, 1);
     }
@@ -290,7 +292,9 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         const uint32_t mask = reinterpret_cast<const uint32_t*>(
             bmask_base + (g >> 4) * 64u)[g & 0xFu];
         MATH((mb_cb_consume_fence()));
-        dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
+        if (mask != 0u) {
+            dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
+        }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
     cb_pop_front(CB_BUCKET_BULK, rec_pages);

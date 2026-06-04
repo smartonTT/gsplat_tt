@@ -190,6 +190,9 @@ __attribute__((noinline, noipa)) void cull_combine(
 }
 #endif  // TRISC_MATH
 
+// Reader precomputes thr = -1 for op<=floor; negative float => culled everywhere.
+inline bool thr_pre_culled(uint32_t thr_bits) { return (thr_bits & 0x80000000u) != 0; }
+
 // PHASED compile-time-unrolled dispatch over the 32 gaussian vectors of a batch.
 // Phase 1 runs ALL cull_face_x (-> DR_QV), phase 2 ALL cull_face_y (-> DR_QH),
 // phase 3 ALL cull_combine (reads DR_QV/DR_QH -> DR_KEEP). Phasing is what fixes
@@ -200,12 +203,13 @@ __attribute__((noinline, noipa)) void cull_combine(
 template <uint32_t V>
 inline void cull_phase_fx(
     uint32_t nb, const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, uint32_t txf_bits, uint32_t tyf_bits) {
+    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
+    uint32_t txf_bits, uint32_t tyf_bits) {
     if constexpr (V < BATCH) {
-        if (V < nb) {
+        if (V < nb && !thr_pre_culled(thr[V])) {
             MATH((cull_face_x<V>(a[V], b[V], c[V], mx[V], my[V], txf_bits, tyf_bits)));
         }
-        cull_phase_fx<V + 1>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+        cull_phase_fx<V + 1>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
     }
 }
 
@@ -213,12 +217,13 @@ inline void cull_phase_fx(
 template <uint32_t V>
 inline void cull_phase_fy(
     uint32_t nb, const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, uint32_t txf_bits, uint32_t tyf_bits) {
+    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
+    uint32_t txf_bits, uint32_t tyf_bits) {
     if constexpr (V < BATCH) {
-        if (V < nb) {
+        if (V < nb && !thr_pre_culled(thr[V])) {
             MATH((cull_face_y<V>(a[V], b[V], c[V], mx[V], my[V], txf_bits, tyf_bits)));
         }
-        cull_phase_fy<V + 1>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+        cull_phase_fy<V + 1>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
     }
 }
 
@@ -229,7 +234,7 @@ inline void cull_phase_combine(
     const uint32_t* a, const uint32_t* b, const uint32_t* c, const uint32_t* thr,
     bool cull_disabled) {
     if constexpr (V < BATCH) {
-        if (V < nb) {
+        if (V < nb && !thr_pre_culled(thr[V])) {
             MATH((cull_combine<V>(keep_base, a[V], b[V], c[V], thr[V], cull_disabled, pos_base)));
         }
         cull_phase_combine<V + 1>(keep_base, nb, pos_base, a, b, c, thr, cull_disabled);
@@ -242,8 +247,8 @@ inline void cull_dispatch(
     const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
     uint32_t txf_bits, uint32_t tyf_bits,
     bool cull_disabled) {
-    cull_phase_fx<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
-    cull_phase_fy<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+    cull_phase_fx<0>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
+    cull_phase_fy<0>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
     cull_phase_combine<0>(keep_base, nb, pos_base, a, b, c, thr, cull_disabled);
 }
 
