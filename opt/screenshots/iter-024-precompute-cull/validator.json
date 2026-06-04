@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "iter-024: precompute per-Gaussian log_thresh, x_half, y_half once per frame in the parallel prelude alongside cov_inv. Visible Gaussian count M ~234k; each was previously redoing log + 3 sqrt per (Gaussian, tile) pair, averaging ~1.25 tiles per Gaussian, so ~25% redundant log/sqrt. log_thresh >= 0 doubles as the 'opacity below floor' sentinel. Layer 1: 42/42 ctest. Layer 3 macro 30-frame: 411.1 -> 415.1 ms — inside the 2% noise band on this loaded system; A/B comparison across 3 alternating trials shows iter-024 at ~399 ms vs iter-023 at ~402 ms, plus tighter per-frame max envelope (13.84-14.14 vs 14.5-14.7). Setup for the upcoming NEON-vectorisation of the per-microblock Mahalanobis-vs-threshold compare (which now reads pre-precomputed log_thresh directly instead of computing it inline). PSNR distribution UNCHANGED: min 60.33, mean 63.26, max 69.74. Bit-equivalent visual output."
-}

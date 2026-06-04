@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "Pure benchmark iter, no code change. Captures stable steady-state C++ baseline across 5 runs (drop run 1 as warmup): sum30 median 3257ms (min 3250, max 3338); blend 79ms median, project 17ms, sort 9ms, tile_assign 4ms; min PSNR 95.05 dB (identical to iter-004, same algorithm). This is the official baseline for the Phase 3 algorithmic iters (microblock culling onward). The 1ms/frame stretch goal is 108x away; biggest single chunk is blend (73% of total)."
-}

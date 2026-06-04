@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "iter-037: re-introduce simd_exp_f32x4_fast (degree-4 Maclaurin) for the blend hot path, retrying iter-032's idea now that iter-035 removed the per-Gaussian max_t RAW barrier. Hypothesis: with N=4 batching the exp polynomial chain (5-6 dependent FMAs) is now on the critical path between successive applies; shortening it to 4 dependent FMAs (~3 cycles latency saved per exp, 8 exps per (g, mb), 65k pairs) shaves ~5 microseconds per worker. Result: macro sum_total_ms median 327 ms over 5 trials (vs iter-035 333 ms median over 5 trials) = ~1.8% improvement, consistent across the distribution. PSNR min 60.34 / mean 63.26 — same as iter-035 (5e-5 polynomial error well below the 60 dB North Star). Cumulative since iter-014 quiet baseline (1138 ms): 3.48x. The degree-5 simd_exp_f32x4 is retained for non-blend callers (still bit-tighter)."
-}

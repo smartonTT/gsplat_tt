@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/smarton/dev/gstt2/build-neon/_deps/cnpy-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "iter-046: skip the ~230k serial bincount over post-cull gaussian_ids when no downstream consumer reads tiles_per_gaussian. Added a `recompute_tiles_per_gaussian` flag (default true for the standalone tile_assign pybind binding, so verify_stage's bit-identity check still passes) and threaded `false` through render_full_py's call site — pipeline.py discards the field with `_` and the C++ render_full never reads it. PSNR mean 63.26 dB (bit-identical to iter-044). tile_assign stage p50: 1.88 -> 1.77 ms (~6% stage speedup); sum: 57.6 -> 52.7 ms. Macro sum_total_ms: 5 trials = {311.0, 311.0, 306.2, 307.5, 307.0}, median 307.5; iter-044 median 308.2. ~0.7 ms sustained overall speedup (within noise band but combined with a clear stage-level signal). Standalone tile_assign verify_stage: pass. KEEP — pure dead-work elimination."
-}

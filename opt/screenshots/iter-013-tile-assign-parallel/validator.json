@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "iter-013: parallel per-pair Mahalanobis cull in tile_assign. The pass walks P~2.7M (gaussian_id, tile_id) pairs computing per-pair `opacities[g] * exp(-0.5 * mahalanobis_at_tile_center)` and dropping those below contrib_floor — embarrassingly parallel reads. Switched to a two-step pattern: striped parallel keep_mask write across the ThreadPool (each worker handles indices [w, w+W, ...)) followed by serial in-order compaction. Preserves bit-identical output ordering with the single-threaded path because compaction walks p=0..P-1 sequentially. Layer 1: 42/42 ctest. Layer 2: all five verify_stage gates pass (tile_assign max-abs-diff 0). Layer 3: PSNR distribution UNCHANGED — min 60.34 dB, mean 62.94 dB, max 69.73 dB. Sum 1196.8 ms vs 1256.9 (iter-012) = 1.050x speedup. Per-frame median tile_assign drops from ~4.18 ms (iter-012) to ~2.38 ms (1.76x). Cumulative since iter-009: 1644 -> 1197 ms = 1.37x."
-}

@@ -1,0 +1,3 @@
+/proj_sw/user_dev/smarton/gstt2/build/_deps/catch2-subbuild/CMakeFiles/catch2-populate.dir
+/proj_sw/user_dev/smarton/gstt2/build/_deps/catch2-subbuild/CMakeFiles/edit_cache.dir
+/proj_sw/user_dev/smarton/gstt2/build/_deps/catch2-subbuild/CMakeFiles/rebuild_cache.dir

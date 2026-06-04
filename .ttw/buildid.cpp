@@ -1,5 +1,5 @@
-id=232
-sha=49452e2
-ts=2026-06-04T06:03:56-0700
-desc=iter 71: revert iter70 + trim cp_inb zones/l1_bulk fence (noinline conic reverted)
-bin=1c9522cbcc848062
+id=2
+sha=ed6443f
+ts=2026-06-04T06:37:07-0700
+desc=iter 73: revert iter-72 restore iter-71
+bin=bc902a49a43a8a11

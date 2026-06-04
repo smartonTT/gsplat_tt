@@ -1,8 +1,0 @@
-{
-  "verdict": "REVERT",
-  "action": "backburner",
-  "high_promotion_priority": false,
-  "sum_total_ms": 339.2298719845712,
-  "prev_best_sum_ms": 328.10054006404243,
-  "commit_sha": null
-}

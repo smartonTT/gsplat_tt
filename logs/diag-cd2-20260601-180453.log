@@ -1,9 +1,0 @@
-================ BUILD ID ================
-  cpp : #89 sha=67c06ad bin=4f5047761e77d75b diag: CB_MB_COEFF depth knob (lockstep test)
-  data: # sha= 
-=========================================
-host=yyzo-bh-03  tag=diag-cd2  timeout=1200s  worry=600s  ts=2026-06-01T18:04:54-0700
-cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_MB_DEVCULL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_MASK=1 GSPLAT_TT_MB_COEFF_DEPTH=2 GSPLAT_TT_MB_TIMING=1; source .venv/bin/activate 2>/dev/null; .venv/bin/python3 scripts/a003_verify.py --views 1 --iter-dir loop-ttw --out opt/ttw/last.json 2>&1 | grep -E '^SUMMARY' | tail -1
------------------------------------------
-BUILD-ID VERIFY OK: cpp#89 bin=4f5047761e77d75b matches the built+stamped artifact
-SUMMARY backend=tt blend_mode=2 views=1 hero_vs_gt=33.69dB hero_vs_ref=33.90dB min_vs_ref=33.90dB min_vs_gt=33.69dB ms/view=372.8 (proj=58.6 ta=35.8 sort=99.6 blend=178.6) shot=opt/metal-screenshots/loop-ttw/hero.png

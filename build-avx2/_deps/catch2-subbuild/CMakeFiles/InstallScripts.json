@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/localdev/smarton/gstt2/build-avx2/_deps/catch2-subbuild/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

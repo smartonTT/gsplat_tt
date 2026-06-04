@@ -1,8 +1,0 @@
-================ BUILD ID ================
-  cpp : #8 sha=da09320 iter 8: sort→blend pipe: defer publish Finish, skip pkept D2H
-  data: # sha= 
-=========================================
-host=bh-30  tag=build-check  timeout=1200s  worry=600s  ts=2026-05-31T23:34:25-0700
-cmd: cd /localdev/smarton/gstt2 && git rev-parse HEAD && cmake --build build-tt -j 16 --target gsplat_tt_cpu_cpp
------------------------------------------
-fatal: not a git repository: /Users/smarton/dev/gsplat_tt/.git/worktrees/gstt2

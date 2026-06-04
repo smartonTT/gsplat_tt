@@ -1,9 +1,0 @@
-================ BUILD ID ================
-  cpp : #138 sha=138e943 bin=6f97ac90352414ed iter 41: M0 (genuine): 32B L1 record + per-tile bucket scatter; consume-side fixed — 64B-paged DRAM record (low 32B), fp32 cov + tile-local mean, UNORM16 opacity/color ([0,1] fields => ~30x tighter than fp16); 63.85dB
-  data: #1 sha=b703f70 sync tracy-041 capture script
-=========================================
-host=yyzo-bh-03  tag=tracy-041  timeout=1200s  worry=600s  ts=2026-06-02T15:42:06-0700
-cmd: bash opt/profiler/run_capture_ttw041.sh
------------------------------------------
-BUILD-ID VERIFY OK: cpp#138 bin=6f97ac90352414ed matches the built+stamped artifact
-bash: opt/profiler/run_capture_ttw041.sh: No such file or directory

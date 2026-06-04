@@ -1,8 +1,0 @@
-================ BUILD ID ================
-  cpp : #205 sha=5624b96 bin=9b194864dbec80ed iter60 try2 DRAM masks fix L1 clash
-  data: #1 sha=b703f70 sync tracy-041 capture script
-=========================================
-host=yyzo-bh-03  tag=tracy-060  timeout=1800s  worry=600s  ts=2026-06-03T23:11:15-0700
-cmd: bash -lc cd /localdev/smarton/gstt2 && cmake --build render/build-tt -j 16 && /localdev/smarton/tt-workflows/scripts/buildid.sh stamp cpp && bash render/profiler/capture_tracy_clean.sh
------------------------------------------
-Error: /localdev/smarton/gstt2/render/build-tt is not a directory

@@ -1,9 +1,0 @@
-================ BUILD ID ================
-  cpp : #80 sha=da28d34 bin=30f360e055715744 ABCOL color dump probe
-  data: # sha= 
-=========================================
-host=yyzo-bh-03  tag=sanity  timeout=200s  worry=600s  ts=2026-06-01T15:29:42-0700
-cmd: 
------------------------------------------
-BUILD-ID VERIFY OK: cpp#80 bin=30f360e055715744 matches the built+stamped artifact
-bash: -c: line 2: syntax error: unexpected end of file

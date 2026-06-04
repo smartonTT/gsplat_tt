@@ -1,9 +1,0 @@
-================ BUILD ID ================
-  cpp : #142 sha=7b7966a bin=58ca522fd5ed289c iter 42: M1: L1-resident LSD radix sort over 32B records; bit-order proven == DRAM reference (on-device: mono=0 + key-multiset perm=0 across 1100 bucket tiles/all cores, cull-mask alignment intact => 42dB failure mode absent); 63.85dB
-  data: #1 sha=b703f70 sync tracy-041 capture script
-=========================================
-host=yyzo-bh-03  tag=tracy-042  timeout=900s  worry=600s  ts=2026-06-02T16:19:16-0700
-cmd: bash opt/profiler/run_wrapper_capture_l1.sh
------------------------------------------
-BUILD-ID VERIFY OK: cpp#142 bin=58ca522fd5ed289c matches the built+stamped artifact
-bash: opt/profiler/run_wrapper_capture_l1.sh: No such file or directory

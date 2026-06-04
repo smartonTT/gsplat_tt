@@ -1,4 +1,0 @@
-{
-  "verdict": "REVERT",
-  "reasoning": "iter-036: extend iter-035's batch size from 4 to 8 Gaussians per max_t sample. Result: slight regression (sum_total 332.9 -> 336.5; blend p50 4.97 -> 5.22). With N=8 the worst-case over-blend per saturating microblock grows from 3 to 7 already-saturated Gaussians; each extra apply is ~250 cycles of SIMD work that produces zero visible contribution but still pays the gauss_rec random fetch. Beyond N=4 the over-blend cost exceeds the saved barrier overhead on stitch_doll's microblock saturation distribution. PSNR unchanged. N=4 (iter-035) remains the sweet spot. Reverted."
-}

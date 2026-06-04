@@ -1,7 +1,0 @@
-================ BUILD ID ================
-  cpp : #128 sha=138e943 bin=e64fdd3e90336b37 M0 CULL_OOB diag
-  data: #1 sha=b703f70 sync tracy-041 capture script
-=========================================
-host=yyzo-bh-03  tag=cmake-reconf  timeout=1200s  worry=600s  ts=2026-06-02T14:39:12-0700
-cmd: cd /localdev/smarton/gstt2 && cmake -S . -B build-tt -DCMAKE_BUILD_TYPE=RelWithDebInfo >/tmp/reconf.log 2>&1 && cmake --build build-tt -j 16 2>&1 | tail -3
------------------------------------------

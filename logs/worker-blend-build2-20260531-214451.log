@@ -1,8 +1,0 @@
-================ BUILD ID ================
-  cpp : #5 sha=7e5bced iter 5: Fix segfault: D2H sorted ids when blend_mode=0 ref path
-  data: # sha= 
-=========================================
-host=bh-30  tag=worker-blend-build2  timeout=1200s  worry=600s  ts=2026-05-31T21:44:51-0700
-cmd: bash -c cd /localdev/smarton/gstt2 && cmake --build build-tt -j 16 2>&1
------------------------------------------
-ninja: no work to do.

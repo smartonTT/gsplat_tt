@@ -1,9 +1,0 @@
-================ BUILD ID ================
-  cpp : #10 sha=ffdd218 iter 10: blend reader: mask-first filter skips zero-mask attr gathers
-  data: # sha= 
-=========================================
-host=bh-30  tag=ping  timeout=1200s  worry=600s  ts=2026-06-01T00:26:18-0700
-cmd: echo ok && uptime
------------------------------------------
-ok
- 07:26:18 up 4 days,  3:37,  0 users,  load average: 4.96, 4.98, 4.92

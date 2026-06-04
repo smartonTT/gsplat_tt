@@ -1,0 +1,44 @@
+blend_microblock: edge tile writes only in-bounds region 30 0.00625169
+project_full: single Gaussian hand-computed cov2d 30 0.00554977
+tile_assign: empty input returns empty arrays 30 0.00500832
+quat_to_rotation_matrix: identity and 90-degree axes 30 0.00832057
+ThreadPool: hardware_concurrency default 30 0.0129261
+microblock_cull: single tile center Gaussian small sigma keeps one microblock 30 0.00833994
+microblock_cull: tilted Gaussian crossing tile diagonal is NOT dropped 30 0.00593976
+microblock_cull: depth order preserved within microblock 30 0.011345
+project: single Gaussian hand-computed radii 30 0.0131724
+ThreadPool: every task runs exactly once 30 0.00652784
+sort: tile_ranges for three populated tiles 30 0.00504217
+tile_assign: Mahalanobis cull drops low-contribution pair 30 0.00728223
+project: hero fixture cov2d matches numpy 30 0.00669602
+blend_microblock: hero fixture round-trip PSNR 30 2.58849
+project: near-plane cull 30 0.00697563
+sort: same tile_id orders by depth not gaussian_id 30 0.00798125
+build_jacobian matches analytic formula 30 0.00504831
+blend: empty tile stays zero 30 0.00523556
+blend: edge tile writes only in-bounds region 30 0.00793036
+ThreadPool: parallel_for n=0 is a no-op 30 0.00760061
+microblock_cull: hero fixture round-trip 31 0.572209
+opacity_aware_k matches numpy formula 30 0.00493213
+project_full: hero fixture cov2d matches numpy 0 0
+blend: transmittance early termination with stacked opaque Gaussians 30 0.00631944
+ThreadPool: parallel_for n=1 still runs the task 30 0.00926486
+microblock_cull: empty tile header stays zero 30 0.00824293
+tile_assign: Gaussian straddling four tiles gets four pairs 30 0.00704621
+sort: empty tiles keep zero ranges 30 0.00769674
+blend_microblock: empty tile stays zero 30 0.0101348
+sort: same tile sorted by depth front-to-back 30 0.00732371
+blend_microblock: single tile single Gaussian at center 30 0.00940742
+project: hero fixture Gaussian 4102 30 0.00686257
+tile_assign: single Gaussian at tile center gets one tile 30 0.0108507
+sort: empty input returns empty sorted ids and zero ranges 30 0.00608551
+tile_assign: tiles_per_gaussian sum equals pair count 30 0.00577737
+blend_microblock: per-microblock early termination with stacked opaque Gaussians 30 0.0076224
+blend_microblock: two Gaussians front-to-back second dominates center 30 0.00698256
+ThreadPool: destructor joins cleanly without leaks 30 0.0320318
+ThreadPool: tasks see distinct work units 30 0.020766
+microblock_cull: single tile center Gaussian large sigma keeps many microblocks 30 0.00903931
+project: 3-Gaussian synthetic smoke 30 0.00421148
+blend: single tile single Gaussian red at center 30 0.0063097
+blend: two Gaussians front-to-back second dominates center 30 0.00305119
+---

@@ -1,4 +1,0 @@
-{
-  "verdict": "REVERT",
-  "reasoning": "iter-034: SW prefetch (PLDL2KEEP, dist=4) the next gauss_rec entry in the per-tile cull loop. Hypothesis: each cull iteration random-fetches gauss_rec[g] (~30-40 cycle L2/L3 latency); the kg ids are sequential in sorted_gaussian_ids so we always know the next 4 g's worth ahead. Result: REGRESSION. sum_total 341.2 -> 350.2 ms. Blend same (5.30 -> 5.30 ms p50). Project slightly worse (likely noise, shared pool warm-up variance). PSNR bit-identical. Likely cause: Apple Silicon hardware prefetcher is already doing this well for the cull's index-list-driven access pattern; explicit __builtin_prefetch contends for L1 fill bandwidth without adding usable parallelism. Same finding as iter-011's earlier prefetch attempt. Reverting. Tells me memory latency on cull is NOT the bottleneck on this microarchitecture - the 5.3 ms blend stage is bound elsewhere (likely SIMD throughput + RAW chains in the blend inner loop)."
-}

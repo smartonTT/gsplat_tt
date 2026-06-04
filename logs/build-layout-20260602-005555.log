@@ -1,8 +1,0 @@
-================ BUILD ID ================
-  cpp : #114 sha=01ff918 bin=59d109789bbdb4e9 sort device bin layout kernel
-  data: # sha= 
-=========================================
-host=yyzo-bh-03  tag=build-layout  timeout=300s  worry=600s  ts=2026-06-02T00:55:55-0700
-cmd: cmake --build build-tt -j 16
------------------------------------------
-Error: /localdev/smarton/gstt2/build-tt is not a directory

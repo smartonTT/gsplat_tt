@@ -1,7 +1,0 @@
-================ BUILD ID ================
-  cpp : #145 sha=1776c0a bin=0238ddd423242a41 fix(profiler): static-literal DeviceZoneScopedN names in gather_visible_scatter+sort_bin (runtime ternary broke profiler JIT build)
-  data: #1 sha=b703f70 sync tracy-041 capture script
-=========================================
-host=yyzo-bh-03  tag=viewer-tt  timeout=86400s  worry=600s  ts=2026-06-02T17:16:50-0700
-cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100; export GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_L1_RECORD=1; source .venv/bin/activate; pkill -f "python3 -m gsplat" 2>/dev/null; sleep 1; exec python3 -m gsplat scenes/bicycle.ply --backend tt --port 8080 --host 0.0.0.0 --force-square 1024
------------------------------------------

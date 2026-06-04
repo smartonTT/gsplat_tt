@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "C++ port of alpha_blend_microblock. 30-view PSNR identical to iter-006/007 numpy reference (min 60.34, mean 63.26 dB) — bit-identical math through the microblock-major inner loop. ctest 40/40, all five verify_stage runners green. Sum_total_ms drops from 3257 (iter-005 per-tile C++ baseline) to 1706 (1.91x speedup), driven entirely by the blend stage going from 79ms to 26ms median. Blend is no longer the dominant single cost (24% of frame, vs 73% in baseline). Remaining attack surface: project (17ms, Python torch.bmm overhead), sort (9ms, std::sort), inter-stage Python overhead. iter-010+ will target these."
-}

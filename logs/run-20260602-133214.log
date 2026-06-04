@@ -1,9 +1,0 @@
-================ BUILD ID ================
-  cpp : #127 sha=b703f70 bin=23afc6773579cf78 
-  data: #1 sha=b703f70 sync tracy-041 capture script
-=========================================
-host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-02T13:32:14-0700
-cmd: grep -c "SORT D2H VALIDATE" /localdev/smarton/gstt2/src/gsplat_tt/sort_device.cpp
------------------------------------------
-BUILD-ID VERIFY OK: cpp#127 bin=23afc6773579cf78 matches the built+stamped artifact
-0

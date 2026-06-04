@@ -1,0 +1,21 @@
+# ninja log v7
+0	23	1780138435186159773	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-mkdir	e948cd6df7ea9bb9
+0	23	1780138435186159773	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-mkdir	e948cd6df7ea9bb9
+23	3369	1780138438531254384	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-download	3665b245e5fd883f
+23	3369	1780138438531254384	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-download	3665b245e5fd883f
+3369	3450	1780138438532048168	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-update	283491bd9caa1faf
+3369	3450	1780138438532048168	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-update	283491bd9caa1faf
+3450	3480	1780138438642475595	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-patch	9829fff6e294a2f4
+3450	3480	1780138438642475595	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-patch	9829fff6e294a2f4
+3480	3509	1780138438672032058	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-configure	ac38cf9789a122ec
+3480	3509	1780138438672032058	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-configure	ac38cf9789a122ec
+3509	3545	1780138438707337506	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-build	6f9c3ec0ffd3f946
+3509	3545	1780138438707337506	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-build	6f9c3ec0ffd3f946
+3545	3576	1780138438738625285	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-install	72f82aacb87cf2db
+3545	3576	1780138438738625285	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-install	72f82aacb87cf2db
+3576	3601	1780138438763514585	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-test	5ae716bdad292723
+3576	3601	1780138438763514585	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-test	5ae716bdad292723
+3601	3632	1780138438794746948	CMakeFiles/catch2-populate-complete	d0552b33e8e0dd14
+3601	3632	1780138438794746948	catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-done	d0552b33e8e0dd14
+3601	3632	1780138438794746948	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/CMakeFiles/catch2-populate-complete	d0552b33e8e0dd14
+3601	3632	1780138438794746948	/Users/smarton/dev/gstt2/build-c2/_deps/catch2-subbuild/catch2-populate-prefix/src/catch2-populate-stamp/catch2-populate-done	d0552b33e8e0dd14

@@ -1,7 +1,0 @@
-================ BUILD ID ================
-  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
-  data: # sha= 
-=========================================
-host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-01T23:53:53-0700
-cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal && cd /localdev/smarton/gstt2 && source .venv/bin/activate && export GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_MB_DEVCULL=0 && python3 scripts/a003_verify.py --backend tt --views 8 --out /tmp/ideal_verify.json 2>&1 | grep -E "hero_vs_ref|min_vs_ref|ms/view|dB|STAGE|FAIL|PASS"
------------------------------------------

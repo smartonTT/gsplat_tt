@@ -1,8 +1,0 @@
-================ BUILD ID ================
-  cpp : #108 sha=8eb62c8 bin=90f66c610cac25a2 iter 38 diag: GSPLAT_TT_SORT_TIMING split of bin into count-kernel/D2H/host-build (gated, default off)
-  data: # sha= 
-=========================================
-host=yyzo-bh-03  tag=run  timeout=1200s  worry=600s  ts=2026-06-01T23:52:18-0700
-cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal && cd /localdev/smarton/gstt2 && source .venv/bin/activate && cmake --build build-tt -j8 2>&1 | rg -n "error:|FAILED"
------------------------------------------
-/bin/bash: line 1: rg: command not found

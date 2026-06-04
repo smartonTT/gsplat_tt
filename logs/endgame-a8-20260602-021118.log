@@ -1,8 +1,0 @@
-================ BUILD ID ================
-  cpp : #121 sha=0c72479 bin=d193d161f0d6fd76 rebuild Tracy zone kernels
-  data: # sha= 
-=========================================
-host=yyzo-bh-03  tag=endgame-a8  timeout=1800s  worry=600s  ts=2026-06-02T02:11:18-0700
-cmd: export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal TT_METAL_CACHE=/localdev/smarton/.cache/tt-metal-cache TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 GSPLAT_TT_JIT_WARMUP=1 GSPLAT_TT_BLEND_MODE=2 GSPLAT_TT_MB_KERNEL=1 GSPLAT_TT_DEVICE_PROJECT=1 GSPLAT_TT_RESIDENT_PROJECT=1 GSPLAT_TT_RESIDENT_GATHER=1 GSPLAT_TT_DEVICE_TILE_ASSIGN=1 GSPLAT_TT_RESIDENT_TA_IN=1 GSPLAT_TT_DEVICE_SORT=1 GSPLAT_TT_RESIDENT_PAIRS=1 GSPLAT_TT_RESIDENT_BLEND=1 GSPLAT_TT_SORT_DEVICE_PUBLISH=1 GSPLAT_TT_TA_DEVICE_SCAN=1 GSPLAT_TT_PROJ_DEVICE_SCAN=1 GSPLAT_TT_SFPU_CULL=1 GSPLAT_TT_TILE_BUCKET=1 GSPLAT_TT_BUCKET_FIT=8192 GSPLAT_TT_FUSED_TILE=0 GSPLAT_TT_MB_TIMING=1
------------------------------------------
-BUILD-ID VERIFY OK: cpp#121 bin=d193d161f0d6fd76 matches the built+stamped artifact
