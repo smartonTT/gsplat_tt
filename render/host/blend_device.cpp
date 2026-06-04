@@ -159,10 +159,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // above FIT fall back to the per-candidate DRAM gather, still on-device);
     // the compute derives the conic on the SFPU.
     constexpr uint32_t kBucketFit = 8192u;
+    // Iter 79: deeper coeff ring so in-budget reader can single-pass emit
+    // (coeff rows then count) without iter-78 depth-8 CB deadlock vs compute
+    // blocked on CB_MB_COUNTS. Count-first two-pass remains safe at depth 8.
+    constexpr uint32_t kMbCoeffDepth = 128u;
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
-    cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
+    cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, kMbCoeffDepth, DataFormat::Float32);
     // Depth must cover max subchunks per tile (overflow tiles can be >>2);
     // reader bulk path can push counts faster than compute pops.
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
