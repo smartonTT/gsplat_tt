@@ -41,7 +41,20 @@
 
 #include "api/dataflow/dataflow_api.h"
 
+#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
+#include "api/debug/dprint.h"
+#endif
+
 namespace {
+
+// Iter 67: skip in-budget coeff push when SFPU cull already zeroed coverage or
+// opacity is at/below contrib_floor (thr<0 sentinel on the cull path).
+inline bool rd_row_suppress(uint32_t mask, float op_f, float contrib_floor) {
+    if (mask == 0u) {
+        return true;
+    }
+    return op_f <= contrib_floor;
+}
 
 constexpr uint32_t ATTR_PAGE_BYTES = 64;   // 16 fp32, 9 used
 constexpr uint32_t IDS_PAGE_BYTES = 64;    // 16 uint32 ids per page
@@ -315,9 +328,8 @@ void kernel_main() {
     const auto tile_recs_acc   = TensorAccessor(tile_recs_args,   tile_recs_addr,   SOA_PAGE_BYTES);
     const auto bucket_meta_acc = TensorAccessor(bucket_meta_args, bucket_meta_addr, 64);
     const auto subchunk_meta_acc = TensorAccessor(subchunk_meta_args, subchunk_meta_addr, 64);
-    // Cull math (and thus these scalars) moved to the SFPU cull pass; the mask
-    // is now read precomputed. Keep the args for ABI/signature parity.
-    (void)contrib_floor;
+    // Cull math moved to SFPU; mask is precomputed. contrib_floor still gates
+    // reader-side row suppress (thr<0 sentinel == op<=floor).
     (void)cull_disabled;
 
     if (tile_ids_count == 0) {
@@ -528,10 +540,35 @@ void kernel_main() {
             // get_write_ptr, never push/pop). Pushing them wedged the ring when
             // in-budget tiles shared CB_BUCKET with overflow bulk (db9dcd0) or
             // when back-to-back in-budget tiles ran ahead of compute drain.
+            uint32_t emit_n = 0;
+#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
+            uint32_t suppress_mask0 = 0;
+            uint32_t suppress_op = 0;
+#endif
+            for (uint32_t k = 0; k < L; ++k) {
+                const uint32_t mask = bmptr[k];
+                auto recp32 = l1_splat_words(buck, sorted[k]);
+                constexpr float kUnormInv = 1.0f / 65535.0f;
+                const float op_f =
+                    static_cast<float>(recp32[6] & 0xffffu) * kUnormInv;
+                if (rd_row_suppress(mask, op_f, contrib_floor)) {
+#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
+                    if (mask == 0u) {
+                        ++suppress_mask0;
+                    } else {
+                        ++suppress_op;
+                    }
+#endif
+                    continue;
+                }
+                ++emit_n;
+            }
+            // Count before coeff stream: CB_MB_COEFF depth is 8; compute must
+            // drain while the reader emits (see blend_device.cpp cb_cfg).
             cb_reserve_back(CB_MB_COUNTS, 1);
             {
                 auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
-                cnt_ptr[0] = L;
+                cnt_ptr[0] = emit_n;
                 cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
             }
             cb_push_back(CB_MB_COUNTS, 1);
@@ -557,6 +594,10 @@ void kernel_main() {
                 const float cg_f = static_cast<float>(w7 & 0xffffu) * kUnormInv;
                 const float cb_f = static_cast<float>(w7 >> 16)     * kUnormInv;
                 const uint32_t op_bits = f_to_bits(op_f);
+                const uint32_t mask = bmptr[k];  // 16-aligned cull_base -> mask[k]==L1[k]
+                if (rd_row_suppress(mask, op_f, contrib_floor)) {
+                    continue;
+                }
                 // Reconstruct the absolute mean so the inline-mask path and the
                 // emitted row's mxl = (mean - tx_tile) both work unchanged.
                 const float mean_x  = mx_f + tx_tile;
@@ -564,7 +605,6 @@ void kernel_main() {
                 const uint32_t cr = f_to_bits(cr_f);
                 const uint32_t cg = f_to_bits(cg_f);
                 const uint32_t cb = f_to_bits(cb_f);
-                const uint32_t mask = bmptr[k];  // 16-aligned cull_base -> mask[k]==L1[k]
                 cb_reserve_back(CB_MB_COEFF, 1);
                 auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
                 const uint32_t mxl_bits = f_to_bits(mean_x - tx_tile);
@@ -593,6 +633,10 @@ void kernel_main() {
                 mb_cb_commit_fence();
                 cb_push_back(CB_MB_COEFF, 1);
             }
+#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
+            DPRINT << "RDSUP t=" << tile_id << " L=" << L << " emit=" << emit_n
+                   << " m0=" << suppress_mask0 << " op=" << suppress_op << ENDL();
+#endif
             }  // end rd_bk_emit zone
             continue;
         }
