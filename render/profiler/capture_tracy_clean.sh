@@ -34,6 +34,7 @@ export TT_METAL_DEVICE_PROFILER=1
 export GSPLAT_TT_PROFILE=1
 
 REPO=/localdev/smarton/gstt2
+cd "$REPO" || { echo "[capture_clean] FATAL: cannot cd $REPO" >&2; exit 1; }
 OUTDIR="$REPO/opt/profiler/wrap_out_render-clean"
 TRACY="$OUTDIR/.logs/tracy_profile_log_host.tracy"
 DLOG="$OUTDIR/.logs/profile_log_device.csv"
@@ -41,11 +42,17 @@ DST="$REPO/opt/profiler/render-clean/render.tracy"
 rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR" "$(dirname "$DST")"
 
-source .venv/bin/activate 2>/dev/null || true
+if [[ ! -f "$REPO/.venv/bin/activate" ]]; then
+  echo "[capture_clean] FATAL: missing $REPO/.venv (loguru/tracy need venv)" >&2
+  exit 1
+fi
+# shellcheck source=/dev/null
+source "$REPO/.venv/bin/activate"
 
 echo "[capture_clean] render_clean FULL 30-view capture -> $DST"
-echo "[capture_clean] CMD: python3 -m tracy -r -p -v --dump-device-data-mid-run -o $OUTDIR render/profiler/_render_clean_inner.sh"
-python3 -m tracy -r -p -v --dump-device-data-mid-run -o "$OUTDIR" render/profiler/_render_clean_inner.sh
+PY="$REPO/.venv/bin/python3"
+echo "[capture_clean] CMD: $PY -m tracy -r -p -v --dump-device-data-mid-run -o $OUTDIR render/profiler/_render_clean_inner.sh"
+"$PY" -m tracy -r -p -v --dump-device-data-mid-run -o "$OUTDIR" render/profiler/_render_clean_inner.sh
 RC=$?
 echo "[capture_clean] wrapper exited rc=$RC"
 
