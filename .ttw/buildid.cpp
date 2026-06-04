@@ -1,5 +1,5 @@
-id=178
-sha=e6d43d4
-ts=2026-06-03T09:40:59-0700
-desc=iter51: double-buffer overflow PACK2 l1_bulk
-bin=0a5e2d9edd16b821
+id=185
+sha=067ba8e
+ts=2026-06-03T19:24:56-0700
+desc=iter54 keep stamp post-commit
+bin=ec39eb0b29e17646
