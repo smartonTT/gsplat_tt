@@ -1,5 +1,5 @@
-id=6
-sha=b6397f7
-ts=2026-06-04T06:54:34-0700
-desc=iter 76: mat: sc>=1 REC_BATCH=32 ring-pack batched writes cached sorted-id page
+id=7
+sha=273a56b
+ts=2026-06-04T06:57:55-0700
+desc=iter 77: cull_rd: cache tile meta, pipelined subchunk+bucket read
 bin=ab1ed9b14884cb7b
