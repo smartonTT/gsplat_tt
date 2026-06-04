@@ -1,5 +1,5 @@
-id=219
-sha=8833462
-ts=2026-06-04T04:14:10-0700
-desc=iter 62: cleanup gate: restore 63.85 PSNR after render/ dead-path removal
+id=221
+sha=47cb05d
+ts=2026-06-04T04:18:28-0700
+desc=iter 63: verify L1 steps A+B: materialize + device subchunk dir
 bin=793507cbb5f51704
