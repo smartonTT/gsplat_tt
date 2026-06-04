@@ -28,22 +28,12 @@ constexpr uint32_t CHUNK_MAX = 16;
 constexpr uint32_t MB_BUCKET_FIT = 8192u;
 #endif
 
-// Pack 32 microblock keep flags (CB-linear layout) into one gaussian mask.
-inline uint32_t mask_from_keep(const volatile uint32_t* keep, uint32_t g) {
-    const uint32_t base0 = (2u * (g >> 1)) * 32u + (g & 1u);
-    const uint32_t base1 = base0 + 32u;
-    uint32_t mask = 0u;
-    for (uint32_t m = 0; m < 16u; ++m) {
-        if (keep[base0 + 2u * m] != 0u) {
-            mask |= (1u << m);
-        }
+inline uint32_t perm(uint32_t g, uint32_t m) {
+    const uint32_t cp = g & 1u;
+    if (m < 16u) {
+        return (2u * (g >> 1)) * 32u + cp + 2u * m;
     }
-    for (uint32_t m = 16u; m < NUM_MB; ++m) {
-        if (keep[base1 + 2u * (m - 16u)] != 0u) {
-            mask |= (1u << m);
-        }
-    }
-    return mask;
+    return (2u * (g >> 1) + 1u) * 32u + cp + 2u * (m - 16u);
 }
 
 template <typename Acc>
@@ -158,7 +148,13 @@ void kernel_main() {
                 auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
 
                 for (uint32_t g = 0; g < nb; g++) {
-                    scratch_ptr[g] = mask_from_keep(keep, g);
+                    uint32_t mask = 0u;
+                    for (uint32_t m = 0; m < NUM_MB; m++) {
+                        if (keep[perm(g, m)] != 0u) {
+                            mask |= (1u << m);
+                        }
+                    }
+                    scratch_ptr[g] = mask;
                 }
                 const uint32_t base_k = base + processed;
                 uint32_t nb_pad = (nb + (MASKS_PER_PAGE - 1u)) & ~(MASKS_PER_PAGE - 1u);

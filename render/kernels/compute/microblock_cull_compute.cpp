@@ -193,15 +193,6 @@ __attribute__((noinline, noipa)) void cull_combine(
 // Reader precomputes thr = -1 for op<=floor; negative float => culled everywhere.
 inline bool thr_pre_culled(uint32_t thr_bits) { return (thr_bits & 0x80000000u) != 0; }
 
-inline bool batch_all_pre_culled(uint32_t nb, const uint32_t* thr) {
-    for (uint32_t i = 0; i < nb; ++i) {
-        if (!thr_pre_culled(thr[i])) {
-            return false;
-        }
-    }
-    return true;
-}
-
 // PHASED compile-time-unrolled dispatch over the 32 gaussian vectors of a batch.
 // Phase 1 runs ALL cull_face_x (-> DR_QV), phase 2 ALL cull_face_y (-> DR_QH),
 // phase 3 ALL cull_combine (reads DR_QV/DR_QH -> DR_KEEP). Phasing is what fixes
@@ -337,25 +328,20 @@ void kernel_main() {
                 cb_pop_front(CB_CULL_COEFF, 1);
             }
 
-            const bool all_pc = batch_all_pre_culled(nb, thr);
-
             tile_regs_acquire();
-            // Seed DR_KEEP to 0 (default-cull). Box-origin ramps are tile-constant:
-            // copy once per tile (first batch only), not every 32-gaussian batch.
+            // Seed DR_KEEP to 0 (default-cull), copy the resident box-origin
+            // ramps into DEST, then run the full Mahalanobis cull dispatch
+            // (phased face_x -> face_y -> combine) which writes the per-microblock
+            // keep flag (1.0/0.0) into DR_KEEP for every gaussian of the batch.
             fill_tile(DR_KEEP / 32, 0.0f);
-            if (processed == 0) {
-                copy_tile_to_dst_init_short(CB_BOX_OX);
-                copy_tile(CB_BOX_OX, 0, DR_BOX_OX / 32);
-                copy_tile_to_dst_init_short(CB_BOX_OY);
-                copy_tile(CB_BOX_OY, 0, DR_BOX_OY / 32);
-            }
+            copy_tile_to_dst_init_short(CB_BOX_OX);
+            copy_tile(CB_BOX_OX, 0, DR_BOX_OX / 32);
+            copy_tile_to_dst_init_short(CB_BOX_OY);
+            copy_tile(CB_BOX_OY, 0, DR_BOX_OY / 32);
 
-            if (!all_pc) {
-                MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-                cull_dispatch(
-                    DR_KEEP, nb, processed, a, b, c, mx, my, thr, txf_bits, tyf_bits, cull_disabled);
-                MATH((_llk_math_eltwise_unary_sfpu_done_()));
-            }
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            cull_dispatch(DR_KEEP, nb, processed, a, b, c, mx, my, thr, txf_bits, tyf_bits, cull_disabled);
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
 
             tile_regs_commit();
             tile_regs_wait();

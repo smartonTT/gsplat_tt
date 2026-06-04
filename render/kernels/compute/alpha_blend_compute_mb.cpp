@@ -121,33 +121,13 @@ inline void blend_one_gaussian_math(
     vFloat x = dst_reg[DR_X + IX];
     vFloat y = dst_reg[DR_Y + IX];
 
-    // Conic (centered) form: power = A dx^2 + B dx dy + C dy^2, dx=x-mx, dy=y-my.
-    // (a_bits=A, b_bits=B, c_bits=C; d_bits=mx, e_bits=my; f_bits unused.)
-    // Centered form avoids the catastrophic fp32 cancellation of the expanded
-    // A x^2+...+F polynomial: near the gaussian center dx,dy are small, so all
-    // terms stay small and `power` is computed accurately exactly where it
-    // matters. The expanded form's ~1e8 terms cancelling to ~1 destroyed SFPU
-    // precision and made the weight degenerate to binary noise.
-    // Materialize each runtime scalar into a named vFloat BEFORE use — this is
-    // the pattern the production SFPU activation functions (elu/celu/selu) use.
-    // Using Converter::as_float(...) inline inside a larger expression makes
-    // sfpi emit a non-uniform per-lane load (the value is not broadcast to all
-    // 32 lanes), which is harmless for the gentle center subtraction but, once
-    // multiplied by dx^2 (up to ~1e3), explodes into per-lane noise.
-    //
-    // DEVCONIC: a_bits/b_bits/c_bits carry the RAW 2D covariance {cov_a,cov_b,
-    // cov_c}. Reproduce the host conic math bit-for-bit on the SFPU:
-    //   det  = max(cov_a*cov_c - cov_b*cov_b, 1e-6)
-    //   ci_a = cov_c/det, ci_b = -cov_b/det, ci_c = cov_a/det
-    //   A = -0.5 ci_a, B = -ci_b (= cov_b/det), C = -0.5 ci_c
-    // Reciprocal: 7-bit seed (approx_recip) + 2 Newton-Raphson iters (~24-bit),
-    // using literal 2.0 so we do NOT depend on the programmed vConstFloatPrgm0.
+    // DEVCONIC: a_bits/b_bits/c_bits carry raw cov {cov_a,cov_b,cov_c}; derive A,B,C on SFPU.
     vFloat cov_a = ckernel::sfpu::Converter::as_float(a_bits);
     vFloat cov_b = ckernel::sfpu::Converter::as_float(b_bits);
     vFloat cov_c = ckernel::sfpu::Converter::as_float(c_bits);
     vFloat det = cov_a * cov_c - cov_b * cov_b;
     vFloat det_floor = 1e-6f;
-    vec_min_max(det_floor, det);  // det = max(det, 1e-6)
+    vec_min_max(det_floor, det);
     vFloat inv = approx_recip(det);
     inv = inv * (vFloat(2.0f) - det * inv);
     inv = inv * (vFloat(2.0f) - det * inv);
@@ -291,7 +271,6 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         const uint32_t cbv = unorm_bits(w7 >> 16);
         const uint32_t mask = reinterpret_cast<const uint32_t*>(
             bmask_base + (g >> 4) * 64u)[g & 0xFu];
-        MATH((mb_cb_consume_fence()));
         if (mask != 0u) {
             dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
         }
@@ -300,6 +279,24 @@ inline void process_tile_l1_blend(uint32_t num_g) {
     cb_pop_front(CB_BUCKET_BULK, rec_pages);
     cb_pop_front(CB_BMASK_BULK, mpages);
 }
+
+#if defined(MB_FUSE_TILE_L1_CULL)
+#include "tile_l1_cull_sfpu.hpp"
+
+// Minimal fuse compile hook (iter 71): pulls tile_l1_cull SFPU into the blend
+// compute TU for LRA margin measurement; not called on the default path.
+inline void fuse_l1_cull_compile_hook(
+    uint32_t keep_base, uint32_t nb, uint32_t pos_base,
+    const uint32_t* a, const uint32_t* b, const uint32_t* c,
+    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
+    uint32_t txf_bits, uint32_t tyf_bits) {
+    if (nb == 0u) {
+        return;
+    }
+    tile_l1_cull_sfpu::cull_dispatch(
+        keep_base, nb, pos_base, a, b, c, mx, my, thr, txf_bits, tyf_bits, false);
+}
+#endif
 
 }  // namespace
 
@@ -353,10 +350,8 @@ void kernel_main() {
             }
 
             if (l1_bulk) {
-                DeviceZoneScopedN("cp_l1_blend");
                 process_tile_l1_blend(num_g);
             } else {
-                DeviceZoneScopedN("cp_inb");
                 process_tile_gaussians(num_g);
             }
 

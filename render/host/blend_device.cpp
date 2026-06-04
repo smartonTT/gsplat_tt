@@ -238,8 +238,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
 
-    // The blend compute kernel is single-path: every feature macro is inlined in
-    // the kernel source (MB_BUCKET_FIT is a constexpr in-kernel), so no defines.
+    // Optional compile probe: MB_FUSE_TILE_L1_CULL=1 pulls fuse SFPU into the
+    // blend compute TU for LRA margin measurement (iter 71); default OFF.
+    std::map<std::string, std::string> compute_defines;
+    if (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL");
+        fuse != nullptr && fuse[0] == '1') {
+        compute_defines["MB_FUSE_TILE_L1_CULL"] = "1";
+    }
     ctx.compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
@@ -250,6 +255,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
+            .defines = compute_defines,
         });
 
     std::vector<uint32_t> writer_ct;

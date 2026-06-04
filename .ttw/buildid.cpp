@@ -1,5 +1,5 @@
-id=228
-sha=53ac306
-ts=2026-06-04T05:49:03-0700
-desc=iter 70: tile_mb_mask: hoist box copy per tile + skip SFPU on all-pre-culled batch; writer branchless mask pack
-bin=d3754d74d3a307b3
+id=232
+sha=49452e2
+ts=2026-06-04T06:03:56-0700
+desc=iter 71: revert iter70 + trim cp_inb zones/l1_bulk fence (noinline conic reverted)
+bin=1c9522cbcc848062
