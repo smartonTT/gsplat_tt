@@ -41,7 +41,7 @@
 
 #include "api/dataflow/dataflow_api.h"
 
-#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
+#if defined(MB_RD_ROW_SUPPRESS_DPRINT) || defined(MB_C1_PAYLOAD_DEBUG)
 #include "api/debug/dprint.h"
 #endif
 
@@ -668,8 +668,8 @@ void kernel_main() {
             const uint32_t rec_pages = (L_sub + 1u) >> 1;
             const uint32_t mpages_mask = (L_sub + 15u) >> 4;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
-            // C1b: use_payload off — mat sorted_ids sc0 still ~18dB (iter 83 reject).
-            const bool use_payload = false;
+            // C1: overflow subchunks DMA prebuilt PACK2 (iter 85: mat pack overlap fix).
+            const bool use_payload = (num_subchunks > 1u);
 
             DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, mpages_mask);
@@ -690,6 +690,90 @@ void kernel_main() {
                 for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
 #endif
             }
+
+#if defined(MB_C1_PAYLOAD_DEBUG)
+            // iter 84: compare DRAM payload vs blendrec gather (first 16 PACK2 words).
+            {
+                static uint32_t c1dbg_tiles = 0;
+                if (num_subchunks > 1u && L_sub > 0u && c1dbg_tiles < 3u) {
+                    uint32_t dir_pg = 0;
+                    uint32_t dir_l = 0;
+                    uint32_t dir_fl = 0;
+                    {
+                        const uint32_t de = (dir_base + sc) * 4u;
+                        const uint32_t dpg = de >> 4;
+                        const uint32_t dof = de & 0xF;
+                        const uint32_t dscr = get_write_ptr(CB_SCR_IDS);
+                        noc_async_read_tile(dpg, subchunk_dir_acc, dscr);
+                        noc_async_read_barrier();
+                        auto dp = reinterpret_cast<volatile uint32_t*>(dscr);
+                        dir_pg = dp[dof];
+                        dir_l = dp[dof + 1u];
+                        dir_fl = dp[dof + 2u];
+                    }
+                    const uint32_t cmp_splats =
+                        (L_sub < 2u) ? L_sub : 2u;  // 16 words = 2 splats
+                    const uint32_t cmp_words = cmp_splats * 8u;
+                    const uint32_t pay_scr = get_write_ptr(CB_SCR_ATTR);
+                    const uint32_t aos_scr = pay_scr + L1_PACK_PAGE_BYTES;
+                    uint32_t pay_w[16];
+                    uint32_t gat_w[16];
+                    for (uint32_t w = 0; w < cmp_words; ++w) {
+                        pay_w[w] = 0u;
+                        gat_w[w] = 0u;
+                    }
+                    {
+                        const uint32_t pp0 = payload_page;
+                        noc_async_read_tile(pp0, subchunk_payload_acc, pay_scr);
+                        noc_async_read_barrier();
+                        auto pp = reinterpret_cast<volatile uint32_t*>(pay_scr);
+                        for (uint32_t w = 0; w < cmp_words; ++w) {
+                            pay_w[w] = pp[w];
+                        }
+                    }
+                    uint32_t gids[2];
+                    const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
+                    const uint32_t take0 = load_ids_chunk(
+                        ids_acc, id_start_sc, 0, cmp_splats, ids_scr, gids);
+                    issue_chunk_reads_aos(gids, take0, aos_scr, blendrec_acc);
+                    noc_async_read_barrier();
+                    for (uint32_t j = 0; j < take0; ++j) {
+                        volatile uint32_t splat[8];
+                        pack_blendrec_to_l1(
+                            reinterpret_cast<volatile uint32_t*>(
+                                aos_scr + j * GATHER_SLOT_BYTES),
+                            splat, tx_tile, ty_tile);
+                        for (uint32_t w = 0; w < 8u; ++w) {
+                            gat_w[j * 8u + w] = splat[w];
+                        }
+                    }
+                    uint32_t mism = 0;
+                    uint32_t fk = 0xFFFFFFFFu;
+                    uint32_t fw = 0xFFFFFFFFu;
+                    for (uint32_t w = 0; w < cmp_words; ++w) {
+                        if (pay_w[w] != gat_w[w]) {
+                            ++mism;
+                            if (fk == 0xFFFFFFFFu) {
+                                fk = w >> 3;
+                                fw = w & 7u;
+                            }
+                        }
+                    }
+                    DPRINT << "C1DBG t=" << tile_id << " sc=" << sc << " L=" << L_sub
+                           << " pay_pg=" << payload_page << " dir_pg=" << dir_pg
+                           << " dir_L=" << dir_l << " dir_fl=" << dir_fl
+                           << " pg_eq=" << (payload_page == dir_pg)
+                           << " mism=" << mism << " fk=" << fk << " fw=" << fw
+                           << ENDL();
+                    if (mism > 0u) {
+                        DPRINT << "C1DBG pay0=" << pay_w[0] << " gat0=" << gat_w[0]
+                               << " pay7=" << pay_w[7] << " gat7=" << gat_w[7]
+                               << ENDL();
+                    }
+                    ++c1dbg_tiles;
+                }
+            }
+#endif
 
             cb_reserve_back(CB_BUCKET_BULK, rec_pages);
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);

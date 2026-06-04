@@ -21,7 +21,6 @@ constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t TILE_SIZE = 32u;
 // iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
 constexpr uint32_t REC_BATCH = 32u;
-constexpr uint32_t PACK_OFF = 32u;  // pack PACK2 into 2nd half of each 64B staging slot
 
 constexpr uint32_t CB_SCR = 0;
 constexpr uint32_t CB_IDS = 1;
@@ -273,7 +272,9 @@ void kernel_main() {
                 for (uint32_t b = 0; b < nbrec; ++b) {
                     const uint32_t slot = rec_l1 + b * PAGE_BYTES;
                     auto aos = reinterpret_cast<volatile uint32_t*>(slot);
-                    auto splat = reinterpret_cast<volatile uint32_t*>(slot + PACK_OFF);
+                    // Pack into CB_PACK (not slot+32): blendrec aos[8]/aos[9] live in
+                    // the upper 32B of the 64B page and overlap PACK2 splat[0..1].
+                    auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
                     float mx = bits_to_f(aos[3]);
                     float my = bits_to_f(aos[4]);
                     mx -= tx_tile;
@@ -294,7 +295,7 @@ void kernel_main() {
                     const uint32_t out_page = sc_page + (out_g >> 1);
                     const uint32_t half_off = (out_g & 1u) * L1_SPLAT_BYTES;
                     noc_async_write(
-                        slot + PACK_OFF,
+                        pack_l1,
                         get_noc_addr(out_page, payload_acc) + half_off,
                         L1_SPLAT_BYTES);
                 }

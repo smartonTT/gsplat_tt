@@ -219,6 +219,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         rds != nullptr && rds[0] == '1') {
         reader_defines["MB_RD_ROW_SUPPRESS_DPRINT"] = "1";
     }
+    if (const char* c1d = std::getenv("MB_C1_PAYLOAD_DEBUG");
+        c1d != nullptr && c1d[0] == '1') {
+        reader_defines["MB_C1_PAYLOAD_DEBUG"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
