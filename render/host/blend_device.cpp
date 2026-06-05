@@ -962,15 +962,9 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_cfg(cull::CB_BOX_OX, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
     cb_cfg(cull::CB_BOX_OY, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
     cb_cfg(cull::CB_CULL_COEFF, cull::COEFF_ROW_BYTES, 32, DataFormat::Float32);
-    // M5 (iter 104): the cull reader's double-buffer pipeline pushes ALL of a
-    // core's per-subchunk counts up front (depth >= MAX_WORK so it can't
-    // deadlock against the deferred row emit) and stores the per-non-empty slab
-    // descriptors (4 u32 arrays of MAX_WORK) in CB_SCR_ATTR's L1 region.
-    constexpr uint32_t kCullMaxWork = 2048u;  // == MAX_WORK in reader_tile_l1_cull.cpp
-    cb_cfg(cull::CB_CULL_COUNTS, cull::COUNTS_PAGE_BYTES, kCullMaxWork, DataFormat::UInt32);
+    cb_cfg(cull::CB_CULL_COUNTS, cull::COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(cull::CB_SCR_IDS, 64, 2, DataFormat::UInt32);
-    // 4 parallel u32 arrays of MAX_WORK == 16 KB == 256 * 64B pages.
-    cb_cfg(cull::CB_SCR_ATTR, 64, (4u * kCullMaxWork * 4u) / 64u, DataFormat::Float32);
+    cb_cfg(cull::CB_SCR_ATTR, 64, 2u * 16u, DataFormat::Float32);
     // M3 writer: word3 mask write-back is an aligned per-batch 64B page RMW, so
     // CB_MASK_SCR holds a full BATCH (32 records == 16 pages == 1024B).
     cb_cfg(cull::CB_MASK_SCR, 64, 16, DataFormat::UInt32);
