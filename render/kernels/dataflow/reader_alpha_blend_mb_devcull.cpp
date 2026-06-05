@@ -72,8 +72,7 @@ constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to co
 constexpr uint32_t CB_BUCKET = 9;      // in-budget: L1 bucket + radix sort scratch (coeff stream)
 constexpr uint32_t CB_BSORT  = 10;     // L1 sort scratch: in_idx[FIT] + out_idx[FIT] + counts[256]
 constexpr uint32_t CB_BMASK  = 11;     // in-budget: whole-tile cull_masks (paired with CB_BUCKET)
-constexpr uint32_t CB_BUCKET_BULK = 12; // overflow subchunk: bulk L1 records (no coeff stream)
-constexpr uint32_t CB_BMASK_BULK  = 13; // overflow subchunk: bulk L1 cull_masks
+constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk: bulk L1 slab records (mask in word3)
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -89,7 +88,6 @@ constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 // reservation corrupts the tail. Reserve/push a fixed slot per tile so every
 // tile is slot-aligned (CBs sized as 2 slots) — no ring straddle.
 constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;          // 4096
-constexpr uint32_t BULK_MASK_SLOT = ((MB_BUCKET_FIT + 15u) >> 4) + 1u; // 513
 
 inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
     return reinterpret_cast<volatile uint32_t*>(
@@ -253,15 +251,14 @@ void kernel_main() {
     const uint32_t tiles_x        = get_arg_val<uint32_t>(14);
     const float contrib_floor     = bits_to_f(get_arg_val<uint32_t>(15));
     const bool cull_disabled      = get_arg_val<uint32_t>(16) != 0;
-    const uint32_t cull_masks_addr = get_arg_val<uint32_t>(17);  // resident cull_masks
-    const uint32_t cull_base_addr  = get_arg_val<uint32_t>(18);  // per-tile page-aligned mask base
-    const uint32_t blendrec_addr   = get_arg_val<uint32_t>(19);  // resident proj_m_blendrec (AoS)
-    const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(20);  // resident sort_tile_recs (dense)
-    const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(21);  // resident sort_bucket_meta (start,count)
-    const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(22);  // M0: pre-sized 32B record bucket
-    const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(23);  // blend_subchunk_meta [dir_base,num_sc]
-    const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(24);
-    const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(25);
+    // M3: cull_masks / cull_mask_base are gone — the mask travels in slab word3.
+    const uint32_t blendrec_addr   = get_arg_val<uint32_t>(17);  // resident proj_m_blendrec (AoS)
+    const uint32_t tile_recs_addr  = get_arg_val<uint32_t>(18);  // resident sort_tile_recs (dense)
+    const uint32_t bucket_meta_addr= get_arg_val<uint32_t>(19);  // resident sort_bucket_meta (start,count)
+    const uint32_t l1_recs_addr    = get_arg_val<uint32_t>(20);  // M0: pre-sized 32B record bucket
+    const uint32_t subchunk_meta_addr = get_arg_val<uint32_t>(21);  // blend_subchunk_meta [dir_base,num_sc]
+    const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(22);
+    const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(23);
 
     constexpr auto a_args        = TensorAccessorArgs<0>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
@@ -276,9 +273,7 @@ void kernel_main() {
     constexpr auto yramp_args    = TensorAccessorArgs<xramp_args.next_compile_time_args_offset()>();
     constexpr auto tile_ids_args = TensorAccessorArgs<yramp_args.next_compile_time_args_offset()>();
     constexpr auto lpt_meta_args  = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
-    constexpr auto cull_masks_args = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
-    constexpr auto cull_base_args  = TensorAccessorArgs<cull_masks_args.next_compile_time_args_offset()>();
-    constexpr auto blendrec_args   = TensorAccessorArgs<cull_base_args.next_compile_time_args_offset()>();
+    constexpr auto blendrec_args   = TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
     constexpr auto tile_recs_args  = TensorAccessorArgs<blendrec_args.next_compile_time_args_offset()>();
     constexpr auto bucket_meta_args= TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
     constexpr auto l1_recs_args    = TensorAccessorArgs<bucket_meta_args.next_compile_time_args_offset()>();
@@ -331,8 +326,6 @@ void kernel_main() {
     cb_reserve_back(CB_CORE_TILES, 1);
     reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = tile_ids_count;
     cb_push_back(CB_CORE_TILES, 1);
-    const auto cull_masks_acc = TensorAccessor(cull_masks_args, cull_masks_addr, IDS_PAGE_BYTES);
-    const auto cull_base_acc  = TensorAccessor(cull_base_args,  cull_base_addr,  64);
     // proj_m_blendrec: one 64B AoS record page per gaussian (page index == g).
     const auto blendrec_acc   = TensorAccessor(blendrec_args,   blendrec_addr,   SOA_PAGE_BYTES);
     // sort_tile_recs: DENSE per-tile bucket, one 64B record per kept candidate
@@ -423,12 +416,6 @@ void kernel_main() {
             }
         }
         const uint32_t L = id_end - id_start;
-        // Per-tile PAGE-ALIGNED base of this tile's masks in cull_masks (the cull
-        // writer uses the same base). cull_masks is NOT indexed by the dense sort
-        // range (those id_start values are not 16-aligned, and unaligned NoC->DRAM
-        // writes get shifted), so the mask for tile-local candidate p is at
-        // cull_masks[cull_base + p].
-        const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
         // T2/T3: serve this tile from its DENSE L1-resident record bucket — NO
         // per-candidate attr gather. Load the whole bucket once (bulk, batched
         // barriers), STABLE depth-sort the candidates IN L1 (index permutation,
@@ -487,43 +474,18 @@ void kernel_main() {
                 noc_async_read_barrier();
                 payload_page = reinterpret_cast<volatile uint32_t*>(scr)[dof];
             }
-            const uint32_t id_start_sc = id_start + sc_off;
-            const uint32_t cull_base_sc = cull_base + sc_off;
 
-        // Overflow: PACK2 bulk L1 + cp_l1_blend (iter 51). Step C1 payload path
-        // gated behind num_subchunks>1 once dir/mat ordering verified on device.
+        // M1: ALL tiles (single + fat) consume the materialized depth-sorted
+        // PACK2 slab from L1. M3: the slab record's word3 now carries the cull
+        // mask (written by the cull writer), so there is NO separate cull_masks
+        // bulk load — the blend compute reads the mask from rec[3].
         if (L_sub > 0) {
             const uint32_t rec_pages = (L_sub + 1u) >> 1;
-            const uint32_t mpages_mask = (L_sub + 15u) >> 4;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
-            // C1: overflow subchunks DMA prebuilt PACK2 (iter 85: mat pack overlap fix).
-            // iter 86: payload DMA correct at 63.63 dB but ~+1.6% slower than gather;
-            // keep iter-85 mat PACK2 fix; default gather until C2 proves >=2% win.
-            // M1: ALL tiles (single + fat) consume the materialized depth-sorted
-            // PACK2 slab from L1 instead of re-gathering per record. Safe now that
-            // the bulk compute path has the MATH->UNPACK back-pressure ack (the
-            // fast payload DMA otherwise raced slot-recycle vs MATH reads) and the
-            // bulk CBs are slot-aligned (no ring straddle on variable single tiles).
+            // Safe now that the bulk compute path has the MATH->UNPACK back-pressure
+            // ack (the fast payload DMA otherwise raced slot-recycle vs MATH reads)
+            // and the bulk CB is slot-aligned (no ring straddle on variable tiles).
             DeviceZoneScopedN("rd_l1_bulk");
-            cb_reserve_back(CB_BMASK_BULK, BULK_MASK_SLOT);
-            const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
-            {
-                const uint32_t mpg0 = cull_base_sc >> 4;
-                uint32_t pp = 0;
-                while (pp < mpages_mask) {
-                    const uint32_t end = (pp + 64u < mpages_mask) ? pp + 64u : mpages_mask;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(mpg0 + q, cull_masks_acc,
-                                            bmask + q * IDS_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
-#ifndef MB_TILE_L1_MASKS
-                for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
-#endif
-            }
-
             cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
@@ -541,7 +503,6 @@ void kernel_main() {
                 }
             }
             mb_cb_commit_fence();
-            cb_push_back(CB_BMASK_BULK, BULK_MASK_SLOT);
             cb_push_back(CB_BUCKET_BULK, BULK_REC_SLOT);
 
             cb_reserve_back(CB_MB_COUNTS, 1);

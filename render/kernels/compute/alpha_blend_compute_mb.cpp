@@ -61,8 +61,7 @@ constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock cou
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
 constexpr uint32_t CB_BUCKET = 9;    // in-budget scratch (drain after coeff stream)
 constexpr uint32_t CB_BMASK  = 11;   // in-budget scratch (paired with CB_BUCKET)
-constexpr uint32_t CB_BUCKET_BULK = 12; // overflow subchunk L1 records
-constexpr uint32_t CB_BMASK_BULK  = 13; // overflow subchunk L1 cull_masks
+constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk L1 records (slab carries mask in word3)
 constexpr uint32_t CB_COLOR_OUT = 16;
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
@@ -187,16 +186,15 @@ inline void dispatch_blend_guarded(
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 
-// M1b: FIXED-SIZE bulk CB slots. CB_BUCKET_BULK / CB_BMASK_BULK are circular and
-// accessed with LINEAR pointer arithmetic (buck + q*page) over a whole tile's
-// multi-page span. A reservation that wraps the ring corrupts the tail (linear
-// reads run past the physical end). Fat full subchunks are exactly
-// BULK_REC_SLOT pages so they never straddle; variable single-subchunk tiles do.
-// Reserve/wait/pop a FIXED slot per tile so every tile is slot-aligned (the CBs
-// are sized as exactly 2 slots in blend_device.cpp) — no ring straddle. Actual
-// num_g records/masks live at the slot head; the rest of the slot is unread.
+// M1b: FIXED-SIZE bulk CB slots. CB_BUCKET_BULK is circular and accessed with
+// LINEAR pointer arithmetic (buck + q*page) over a whole tile's multi-page span.
+// A reservation that wraps the ring corrupts the tail (linear reads run past the
+// physical end). Fat full subchunks are exactly BULK_REC_SLOT pages so they
+// never straddle; variable single-subchunk tiles do. Reserve/wait/pop a FIXED
+// slot per tile so every tile is slot-aligned (the CB is sized as exactly 2
+// slots in blend_device.cpp) — no ring straddle. Actual num_g records live at
+// the slot head; the rest of the slot is unread.
 constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;          // 4096
-constexpr uint32_t BULK_MASK_SLOT = ((MB_BUCKET_FIT + 15u) >> 4) + 1u; // 513
 
 inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
     return reinterpret_cast<const uint32_t*>(
@@ -211,9 +209,7 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         return;
     }
     cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
-    cb_wait_front(CB_BMASK_BULK, BULK_MASK_SLOT);
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
-    const uint32_t bmask_base = get_tile_address(CB_BMASK_BULK, 0);
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
     for (uint32_t g = 0; g < num_g; g++) {
@@ -232,23 +228,24 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         const uint32_t cr = unorm_bits(w6 >> 16);
         const uint32_t cg = unorm_bits(w7 & 0xffffu);
         const uint32_t cbv = unorm_bits(w7 >> 16);
-        const uint32_t mask = reinterpret_cast<const uint32_t*>(
-            bmask_base + (g >> 4) * 64u)[g & 0xFu];
+        // M3: the cull writer stored the 32-bit microblock mask into word3 of the
+        // slab record (the dead depth key). Read it straight from rec[3] — no
+        // separate CB_BMASK_BULK / DRAM cull_masks round-trip.
+        const uint32_t mask = rec[3];
         if (mask != 0u) {
             dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
     // MATH->UNPACK back-pressure ack (mirrors process_tile_gaussians): UNPACK runs
-    // cb_pop_front and would otherwise free these CB_BUCKET_BULK/CB_BMASK_BULK slots
-    // the instant it mailboxed MATH the address — letting a FAST producer (the bulk
-    // payload DMA) recycle the slots to the next subchunk before MATH finished
-    // reading => torn records on a few tiles (non-deterministic ~35 dB). The slow
-    // gather producer hid this. Block UNPACK on MATH completion before the pop.
+    // cb_pop_front and would otherwise free this CB_BUCKET_BULK slot the instant it
+    // mailboxed MATH the address — letting a FAST producer (the bulk payload DMA)
+    // recycle the slot to the next subchunk before MATH finished reading => torn
+    // records on a few tiles (non-deterministic ~35 dB). The slow gather producer
+    // hid this. Block UNPACK on MATH completion before the pop.
     MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, num_g + 1u)));
     UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
     cb_pop_front(CB_BUCKET_BULK, BULK_REC_SLOT);
-    cb_pop_front(CB_BMASK_BULK, BULK_MASK_SLOT);
 }
 
 #if defined(MB_FUSE_TILE_L1_CULL)

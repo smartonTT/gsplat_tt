@@ -1,5 +1,5 @@
-id=57
-sha=2cd4f63
-ts=2026-06-04T23:32:37-0700
-desc=iter 101: M2: cull bulk-loads depth-sorted PACK2 slab from L1 (dir_base+sc -> payload_page) and emits cull coeff rows in slab order; deletes l1_recs reload + L1 re-sort (in-budget) and blendrec gather (overflow). Writer still writes DRAM cull_masks; order stays cull_masks[base+k]==slab record k==depth-rank k.
-bin=8b3be97f9dfaafb2
+id=58
+sha=63249dc
+ts=2026-06-04T23:52:42-0700
+desc=iter 102: M3: move 32-bit microblock mask into slab word3 (dead depth key); cull writer does aligned per-batch 64B page RMW of sort_subchunk_payload word3 (strided 4B misaligned both NoC ends -> 21.85dB, page RMW -> anchor); blend reads mask from rec[3]; deleted DRAM cull_masks buffer, ensure_resident_buffers, CB_BMASK_BULK + the blend reader's cull_masks/cull_mask_base args/accessors and bulk mask load
+bin=df835eea49ff1991
