@@ -1,0 +1,203 @@
+{
+  "label": "x86",
+  "simd_backend": "avx2",
+  "has_tt_support": false,
+  "scene": "bicycle",
+  "size": [
+    1024,
+    1024
+  ],
+  "fov_deg": 50.0,
+  "contrib_floor": 6.103515625e-05,
+  "n_views": 30,
+  "n_timed": 29,
+  "warmup_view": "hero",
+  "avg_frame_ms": 148.99001976250318,
+  "p50_ms": 133.36985907517374,
+  "min_ms": 104.79862592183053,
+  "max_ms": 308.6291200015694,
+  "hero_vs_ref_db": 52.901790767213996,
+  "hero_png": "/localdev/smarton/gstt2-cpucmp/opt-out/x86_hero.png",
+  "per_view": [
+    {
+      "view": "hero",
+      "idx": 0,
+      "ms": 649.1861378308386,
+      "warmup": true
+    },
+    {
+      "view": "orbit_141",
+      "idx": 1,
+      "ms": 280.703203054145,
+      "warmup": false
+    },
+    {
+      "view": "orbit_111",
+      "idx": 2,
+      "ms": 308.6291200015694,
+      "warmup": false
+    },
+    {
+      "view": "orbit_081",
+      "idx": 3,
+      "ms": 229.59734802134335,
+      "warmup": false
+    },
+    {
+      "view": "orbit_051",
+      "idx": 4,
+      "ms": 134.73013904877007,
+      "warmup": false
+    },
+    {
+      "view": "chal_behind",
+      "idx": 5,
+      "ms": 170.57349695824087,
+      "warmup": false
+    },
+    {
+      "view": "orbit_021",
+      "idx": 6,
+      "ms": 142.1791820321232,
+      "warmup": false
+    },
+    {
+      "view": "orbit_351",
+      "idx": 7,
+      "ms": 137.21415889449418,
+      "warmup": false
+    },
+    {
+      "view": "orbit_321",
+      "idx": 8,
+      "ms": 160.7637309934944,
+      "warmup": false
+    },
+    {
+      "view": "orbit_291",
+      "idx": 9,
+      "ms": 138.46661988645792,
+      "warmup": false
+    },
+    {
+      "view": "chal_quarter",
+      "idx": 10,
+      "ms": 116.71710503287613,
+      "warmup": false
+    },
+    {
+      "view": "orbit_261",
+      "idx": 11,
+      "ms": 125.72266696952283,
+      "warmup": false
+    },
+    {
+      "view": "adj_4",
+      "idx": 12,
+      "ms": 128.27594694681466,
+      "warmup": false
+    },
+    {
+      "view": "adj_3",
+      "idx": 13,
+      "ms": 127.5324928574264,
+      "warmup": false
+    },
+    {
+      "view": "orbit_231",
+      "idx": 14,
+      "ms": 127.43780412711203,
+      "warmup": false
+    },
+    {
+      "view": "adj_1",
+      "idx": 15,
+      "ms": 121.97614507749677,
+      "warmup": false
+    },
+    {
+      "view": "adj_5",
+      "idx": 16,
+      "ms": 132.93897197581828,
+      "warmup": false
+    },
+    {
+      "view": "elev_p10",
+      "idx": 17,
+      "ms": 122.08348396234214,
+      "warmup": false
+    },
+    {
+      "view": "elev_p20",
+      "idx": 18,
+      "ms": 111.90143204294145,
+      "warmup": false
+    },
+    {
+      "view": "elev_p30",
+      "idx": 19,
+      "ms": 110.68974109366536,
+      "warmup": false
+    },
+    {
+      "view": "chal_close",
+      "idx": 20,
+      "ms": 129.8935350496322,
+      "warmup": false
+    },
+    {
+      "view": "elev_n10",
+      "idx": 21,
+      "ms": 133.36985907517374,
+      "warmup": false
+    },
+    {
+      "view": "adj_2",
+      "idx": 22,
+      "ms": 147.64130022376776,
+      "warmup": false
+    },
+    {
+      "view": "elev_n20",
+      "idx": 23,
+      "ms": 150.77037713490427,
+      "warmup": false
+    },
+    {
+      "view": "elev_n30",
+      "idx": 24,
+      "ms": 167.41619096137583,
+      "warmup": false
+    },
+    {
+      "view": "orbit_201",
+      "idx": 25,
+      "ms": 131.26784493215382,
+      "warmup": false
+    },
+    {
+      "view": "orbit_171",
+      "idx": 26,
+      "ms": 171.77725885994732,
+      "warmup": false
+    },
+    {
+      "view": "chal_bottom",
+      "idx": 27,
+      "ms": 118.62242105416954,
+      "warmup": false
+    },
+    {
+      "view": "chal_top",
+      "idx": 28,
+      "ms": 104.79862592183053,
+      "warmup": false
+    },
+    {
+      "view": "chal_far",
+      "idx": 29,
+      "ms": 137.0203709229827,
+      "warmup": false
+    }
+  ]
+}

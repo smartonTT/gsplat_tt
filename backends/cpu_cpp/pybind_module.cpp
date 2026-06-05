@@ -18,6 +18,12 @@
 #include "gsplat_cpu/thread_pool.h"
 #include "gsplat_cpu/tile_assign.h"
 
+// Tracy host-zone macros. host_tracy.hpp self-guards on TRACY_ENABLE and
+// expands to no-ops when Tracy is absent, so it is safe — and required, since
+// GSPLAT_HOST_ZONE / GSPLAT_HOST_FRAME_MARK are used unconditionally in
+// render_full_py — to include it in CPU-only (GSPLAT_WITH_TT=OFF) builds.
+#include "gsplat_tt/host_tracy.hpp"
+
 #ifdef GSPLAT_WITH_TT
 #include "gsplat_tt/blend.h"
 #include "gsplat_tt/device_state.h"
@@ -1284,9 +1290,9 @@ py::tuple render_full_py(
     auto t_ta0 = clock::now();
     gsplat_cpu::TileAssignResult ta;
     bool ta_done = false;
-#ifdef GSPLAT_WITH_TT
     {  // Tracy: one ZoneScopedN per scope
     GSPLAT_HOST_ZONE("host_stage_ta");
+#ifdef GSPLAT_WITH_TT
     // tt-006: opt-in device tile_assign (GSPLAT_TT_DEVICE_TILE_ASSIGN=1).
     // Produces a layout-identical TileAssignResult (same (gid,tid) pair set
     // and gaussian-major order); falls back to CPU on device failure. Mirrors
@@ -1372,13 +1378,13 @@ py::tuple render_full_py(
     // sort+cull+blend device window; these let render report them separately.
     double cont_cull_ms = 0.0;
     double cont_blend_ms = 0.0;
-#ifdef GSPLAT_WITH_TT
     {
     if (sort_blend_chain) {
         GSPLAT_HOST_ZONE("host_stage_sort_blend");
     } else {
         GSPLAT_HOST_ZONE("host_stage_sort");
     }
+#ifdef GSPLAT_WITH_TT
     // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
     // layout-identical SortResult (byte-identical sorted_gaussian_ids +
     // tile_ranges) and publishes the contiguous outputs resident in
