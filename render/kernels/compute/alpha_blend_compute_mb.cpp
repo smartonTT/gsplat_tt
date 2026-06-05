@@ -182,52 +182,6 @@ inline void dispatch_blend_guarded(
     }
 }
 
-// Stream all of a tile's gaussian-major rows. Each row's 10 coeffs + mask word
-// are read ONCE (not once per microblock), then dispatched to the masked
-// microblocks. One start_/done_ for the whole tile (proven safe by VECMAP).
-inline void process_tile_gaussians(uint32_t num_g) {
-    if (num_g == 0) {
-        return;
-    }
-    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-    for (uint32_t g = 0; g < num_g; g++) {
-        cb_wait_front(CB_MB_COEFF, 1);
-        const uint32_t* row = reinterpret_cast<const uint32_t*>(get_tile_address(CB_MB_COEFF, 0));
-        // BUCKET_CB_FENCE. The blend math reads each coeff row from L1 DIRECTLY on
-        // the MATH thread, but CB flow control (cb_wait_front/cb_pop_front) runs on
-        // UNPACK, which frees the slot the instant it has mailboxed MATH the
-        // address — without waiting for the (slow, SFPU-bound) MATH read. On the
-        // fast bucket feed the producer then recycles the slot to a LATER record
-        // before MATH reads it => torn/stale rows. Two parts:
-        //  (1) invalidate MATH's write-through L1 cache so it re-reads this slot
-        //      fresh (the slot was last cached 8 records ago, depth=8); and
-        //  (2) a bounded MATH->UNPACK back-pressure ack (below, around the row
-        //      loads) so UNPACK cannot pop/free the slot until MATH has loaded it.
-        MATH((mb_cb_consume_fence()));  // == invalidate_l1_cache() on Blackhole
-        const uint32_t a = row[0], b = row[1], c = row[2], d = row[3], e = row[4];
-        const uint32_t fc = row[5], op = row[6], cr = row[7], cg = row[8], cbv = row[9];
-        const uint32_t mask = row[10];
-        // Pin all coeff loads into registers BEFORE the ack. They are plain
-        // (non-volatile) L1 reads only consumed by the blend below; without this
-        // the compiler could legally sink them past the ack, after which UNPACK
-        // frees the slot and the producer overwrites it — reintroducing the race.
-        asm volatile("" ::"r"(a), "r"(b), "r"(c), "r"(d), "r"(e), "r"(fc), "r"(op),
-                     "r"(cr), "r"(cg), "r"(cbv), "r"(mask) : "memory");
-        // Back-pressure ack: MATH has now loaded every word of this row into
-        // registers, so the slot may be freed. UNPACK blocks on this hardware
-        // mailbox before cb_pop_front, so it can never recycle a slot the producer
-        // would overwrite before MATH read it. Bounded (one blocking mailbox
-        // round-trip per row) — NOT a spin or a latency pad.
-        MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, g + 1u)));
-        if (mask != 0u) {
-            dispatch_blend_guarded<0>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
-        }
-        UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
-        cb_pop_front(CB_MB_COEFF, 1);
-    }
-    MATH((_llk_math_eltwise_unary_sfpu_done_()));
-}
-
 // PACK2 (iter 50): two 32B splats per 64B page in CB_BUCKET_BULK; splat g at
 // page g/2, half g&1. Tile-local mean in words [4,5]; UNORM16 op/color [6,7].
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
@@ -366,11 +320,10 @@ void kernel_main() {
                 copy_tile(CB_YRAMP, 0, 5);
             }
 
-            if (l1_bulk) {
-                process_tile_l1_blend(num_g);
-            } else {
-                process_tile_gaussians(num_g);
-            }
+            // M1: ALL tiles (single + fat) consume the materialized L1 slab.
+            // Empty tiles (num_g==0) early-return inside process_tile_l1_blend.
+            (void)l1_bulk;
+            process_tile_l1_blend(num_g);
 
             if (emit_tile) {
                 tile_regs_commit();

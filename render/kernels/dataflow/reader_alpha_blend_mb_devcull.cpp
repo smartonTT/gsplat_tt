@@ -490,191 +490,6 @@ void kernel_main() {
             const uint32_t id_start_sc = id_start + sc_off;
             const uint32_t cull_base_sc = cull_base + sc_off;
 
-        // M1b: route single-subchunk tiles through the payload/slab path below
-        // (disabled in-budget coeff path). Set MB_M1B_INBUDGET to restore.
-#if defined(MB_M1B_INBUDGET)
-        if (num_subchunks == 1u && Lb > 0 && Lb <= MB_BUCKET_FIT) {
-            const uint32_t L = Lb;
-            const uint32_t npages = (L + 1u) >> 1;
-            cb_reserve_back(CB_BUCKET, npages);
-            const uint32_t buck = get_write_ptr(CB_BUCKET);
-            {
-                const uint32_t page0 = tile_id * (MB_BUCKET_FIT >> 1);
-                uint32_t pp = 0;
-                while (pp < npages) {
-                    const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(page0 + q, l1_recs_acc,
-                                            buck + q * L1_PACK_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
-            }
-            const uint32_t bs = get_write_ptr(CB_BSORT);
-            uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-            uint32_t* idxB = idxA + MB_BUCKET_FIT;
-            uint32_t* cnt  = idxB + MB_BUCKET_FIT;
-            auto key_of = [&](uint32_t idx) -> uint32_t {
-                return l1_splat_words(buck, idx)[3];
-            };
-            uint32_t* sorted;
-            if (L <= 16u) {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                for (uint32_t i = 1; i < L; ++i) {
-                    const uint32_t tmp = idxA[i];
-                    const uint32_t ki = key_of(tmp);
-                    uint32_t j = i;
-                    while (j > 0 && key_of(idxA[j - 1]) > ki) { idxA[j] = idxA[j - 1]; --j; }
-                    idxA[j] = tmp;
-                }
-                sorted = idxA;
-            } else {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                uint32_t* cur = idxA;
-                uint32_t* nxt = idxB;
-                for (uint32_t byte = 0; byte < 4u; ++byte) {
-                    const uint32_t shift = byte * 8u;
-                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
-                    for (uint32_t i = 0; i < L; ++i) cnt[(key_of(cur[i]) >> shift) & 0xFFu]++;
-                    uint32_t sum = 0;
-                    for (uint32_t c = 0; c < 256u; ++c) { const uint32_t t = cnt[c]; cnt[c] = sum; sum += t; }
-                    for (uint32_t i = 0; i < L; ++i) {
-                        const uint32_t b = (key_of(cur[i]) >> shift) & 0xFFu;
-                        nxt[cnt[b]++] = cur[i];
-                    }
-                    uint32_t* t = cur; cur = nxt; nxt = t;
-                }
-                sorted = cur;  // even pass count -> back in idxA
-            }
-            // Bulk-load this tile's WHOLE cull_masks region into L1 ONCE (cull_base
-            // is 16-aligned -> mask[k] == L1[k]) with batched barriers. Tile-local
-            // L1 cull (step D) fills the L1-interleaved buffer — no read spin.
-            const uint32_t mpages = (L + 15u) >> 4;
-            cb_reserve_back(CB_BMASK, mpages);
-            const uint32_t bmask = get_write_ptr(CB_BMASK);
-            auto bmptr = reinterpret_cast<volatile uint32_t*>(bmask);
-            {
-                const uint32_t mpg0 = cull_base >> 4;
-                uint32_t pp = 0;
-                while (pp < mpages) {
-                    const uint32_t end = (pp + 64u < mpages) ? pp + 64u : mpages;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(mpg0 + q, cull_masks_acc, bmask + q * IDS_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
-#ifndef MB_TILE_L1_MASKS
-                for (volatile int _s = 0; _s < (MB_CULL_SPIN); ++_s) { }
-#endif
-            }
-            // CB_BUCKET/CB_BMASK are reader-private L1 scratch only (reserve +
-            // get_write_ptr, never push/pop). Pushing them wedged the ring when
-            // in-budget tiles shared CB_BUCKET with overflow bulk (db9dcd0) or
-            // when back-to-back in-budget tiles ran ahead of compute drain.
-            uint32_t emit_n = 0;
-#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
-            uint32_t suppress_mask0 = 0;
-            uint32_t suppress_op = 0;
-#endif
-            for (uint32_t k = 0; k < L; ++k) {
-                const uint32_t mask = bmptr[k];
-                auto recp32 = l1_splat_words(buck, sorted[k]);
-                constexpr float kUnormInv = 1.0f / 65535.0f;
-                const float op_f =
-                    static_cast<float>(recp32[6] & 0xffffu) * kUnormInv;
-                if (rd_row_suppress(mask, op_f, contrib_floor)) {
-#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
-                    if (mask == 0u) {
-                        ++suppress_mask0;
-                    } else {
-                        ++suppress_op;
-                    }
-#endif
-                    continue;
-                }
-                ++emit_n;
-            }
-            // Count before coeff stream: CB_MB_COEFF depth is 8; compute must
-            // drain while the reader emits (see blend_device.cpp cb_cfg).
-            cb_reserve_back(CB_MB_COUNTS, 1);
-            {
-                auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
-                cnt_ptr[0] = emit_n;
-                cnt_ptr[1] = MB_FLAG_EMIT;  // emit tile (single in-budget subchunk)
-            }
-            cb_push_back(CB_MB_COUNTS, 1);
-            {
-            // MEASUREMENT zone: the per-candidate emit loop (repack record ->
-            // 64B coeff row -> CB_MB_COEFF push -> fence) for ONE in-budget tile.
-            // Axis (B): reader-emit cost. One zone per in-budget tile (exclusive
-            // with rd_overflow), so per-core marker count stays bounded; durations
-            // are summed in post-processing across the 30-view Tracy CSV.
-            DeviceZoneScopedN("rd_bk_emit");
-            for (uint32_t k = 0; k < L; ++k) {
-                const uint32_t idx = sorted[k];
-                auto recp32 = l1_splat_words(buck, idx);
-                const uint32_t cov_a_bits = recp32[0];
-                const uint32_t cov_b_bits = recp32[1];
-                const uint32_t cov_c_bits = recp32[2];
-                const float mx_f = bits_to_f(recp32[4]);
-                const float my_f = bits_to_f(recp32[5]);
-                const uint32_t w6 = recp32[6], w7 = recp32[7];
-                constexpr float kUnormInv = 1.0f / 65535.0f;
-                const float op_f = static_cast<float>(w6 & 0xffffu) * kUnormInv;
-                const float cr_f = static_cast<float>(w6 >> 16)     * kUnormInv;
-                const float cg_f = static_cast<float>(w7 & 0xffffu) * kUnormInv;
-                const float cb_f = static_cast<float>(w7 >> 16)     * kUnormInv;
-                const uint32_t op_bits = f_to_bits(op_f);
-                const uint32_t mask = bmptr[k];  // 16-aligned cull_base -> mask[k]==L1[k]
-                if (rd_row_suppress(mask, op_f, contrib_floor)) {
-                    continue;
-                }
-                // Reconstruct the absolute mean so the inline-mask path and the
-                // emitted row's mxl = (mean - tx_tile) both work unchanged.
-                const float mean_x  = mx_f + tx_tile;
-                const float mean_y  = my_f + ty_tile;
-                const uint32_t cr = f_to_bits(cr_f);
-                const uint32_t cg = f_to_bits(cg_f);
-                const uint32_t cb = f_to_bits(cb_f);
-                cb_reserve_back(CB_MB_COEFF, 1);
-                auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COEFF));
-                const uint32_t mxl_bits = f_to_bits(mean_x - tx_tile);
-                const uint32_t myl_bits = f_to_bits(mean_y - ty_tile);
-                row[0] = cov_a_bits;
-                row[1] = cov_b_bits;
-                row[2] = cov_c_bits;
-                row[3] = mxl_bits;
-                row[4] = myl_bits;
-                row[5] = 0u;
-                row[6] = op_bits;
-                row[7] = cr;
-                row[8] = cg;
-                row[9] = cb;
-                row[10] = mask;
-                row[11] = 0u;
-                row[12] = 0u;
-                row[13] = 0u;
-                row[14] = 0u;
-                row[15] = 0u;
-                // Order all row payload stores before cb_push_back's stream-reg
-                // increment (write-through L1) so a consumer that observes the push
-                // also observes the full row. The actual fast-producer race (UNPACK
-                // recycling the slot before the slow MATH read) is fixed by the
-                // MATH->UNPACK back-pressure ack in the compute kernel.
-                mb_cb_commit_fence();
-                cb_push_back(CB_MB_COEFF, 1);
-            }
-#if defined(MB_RD_ROW_SUPPRESS_DPRINT)
-            DPRINT << "RDSUP t=" << tile_id << " L=" << L << " emit=" << emit_n
-                   << " m0=" << suppress_mask0 << " op=" << suppress_op << ENDL();
-#endif
-            }  // end rd_bk_emit zone
-            continue;
-        }
-#endif  // MB_M1B_INBUDGET
-
         // Overflow: PACK2 bulk L1 + cp_l1_blend (iter 51). Step C1 payload path
         // gated behind num_subchunks>1 once dir/mat ordering verified on device.
         if (L_sub > 0) {
@@ -684,15 +499,11 @@ void kernel_main() {
             // C1: overflow subchunks DMA prebuilt PACK2 (iter 85: mat pack overlap fix).
             // iter 86: payload DMA correct at 63.63 dB but ~+1.6% slower than gather;
             // keep iter-85 mat PACK2 fix; default gather until C2 proves >=2% win.
-            // M1: overflow (fat) tiles consume the materialized depth-sorted PACK2
-            // slab from L1 instead of re-gathering per record. Safe now that the
-            // bulk compute path has the MATH->UNPACK back-pressure ack (the fast
-            // payload DMA otherwise raced slot-recycle vs MATH reads). Single-
-            // subchunk tiles stay on the proven coeff path (separate deterministic
-            // bulk defect tracked, data proven correct).
-            // M1b: ALL tiles (single + fat) consume the materialized slab.
-            const bool use_payload = true;
-
+            // M1: ALL tiles (single + fat) consume the materialized depth-sorted
+            // PACK2 slab from L1 instead of re-gathering per record. Safe now that
+            // the bulk compute path has the MATH->UNPACK back-pressure ack (the
+            // fast payload DMA otherwise raced slot-recycle vs MATH reads) and the
+            // bulk CBs are slot-aligned (no ring straddle on variable single tiles).
             DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, BULK_MASK_SLOT);
             const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
@@ -713,93 +524,9 @@ void kernel_main() {
 #endif
             }
 
-#if defined(MB_C1_PAYLOAD_DEBUG)
-            // iter 84: compare DRAM payload vs blendrec gather (first 16 PACK2 words).
-            {
-                static uint32_t c1dbg_tiles = 0;
-                if (num_subchunks > 1u && L_sub > 0u && c1dbg_tiles < 3u) {
-                    uint32_t dir_pg = 0;
-                    uint32_t dir_l = 0;
-                    uint32_t dir_fl = 0;
-                    {
-                        const uint32_t de = (dir_base + sc) * 4u;
-                        const uint32_t dpg = de >> 4;
-                        const uint32_t dof = de & 0xF;
-                        const uint32_t dscr = get_write_ptr(CB_SCR_IDS);
-                        noc_async_read_tile(dpg, subchunk_dir_acc, dscr);
-                        noc_async_read_barrier();
-                        auto dp = reinterpret_cast<volatile uint32_t*>(dscr);
-                        dir_pg = dp[dof];
-                        dir_l = dp[dof + 1u];
-                        dir_fl = dp[dof + 2u];
-                    }
-                    const uint32_t cmp_splats =
-                        (L_sub < 2u) ? L_sub : 2u;  // 16 words = 2 splats
-                    const uint32_t cmp_words = cmp_splats * 8u;
-                    const uint32_t pay_scr = get_write_ptr(CB_SCR_ATTR);
-                    const uint32_t aos_scr = pay_scr + L1_PACK_PAGE_BYTES;
-                    uint32_t pay_w[16];
-                    uint32_t gat_w[16];
-                    for (uint32_t w = 0; w < cmp_words; ++w) {
-                        pay_w[w] = 0u;
-                        gat_w[w] = 0u;
-                    }
-                    {
-                        const uint32_t pp0 = payload_page;
-                        noc_async_read_tile(pp0, subchunk_payload_acc, pay_scr);
-                        noc_async_read_barrier();
-                        auto pp = reinterpret_cast<volatile uint32_t*>(pay_scr);
-                        for (uint32_t w = 0; w < cmp_words; ++w) {
-                            pay_w[w] = pp[w];
-                        }
-                    }
-                    uint32_t gids[2];
-                    const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
-                    const uint32_t take0 = load_ids_chunk(
-                        ids_acc, id_start_sc, 0, cmp_splats, ids_scr, gids);
-                    issue_chunk_reads_aos(gids, take0, aos_scr, blendrec_acc);
-                    noc_async_read_barrier();
-                    for (uint32_t j = 0; j < take0; ++j) {
-                        volatile uint32_t splat[8];
-                        pack_blendrec_to_l1(
-                            reinterpret_cast<volatile uint32_t*>(
-                                aos_scr + j * GATHER_SLOT_BYTES),
-                            splat, tx_tile, ty_tile);
-                        for (uint32_t w = 0; w < 8u; ++w) {
-                            gat_w[j * 8u + w] = splat[w];
-                        }
-                    }
-                    uint32_t mism = 0;
-                    uint32_t fk = 0xFFFFFFFFu;
-                    uint32_t fw = 0xFFFFFFFFu;
-                    for (uint32_t w = 0; w < cmp_words; ++w) {
-                        if (pay_w[w] != gat_w[w]) {
-                            ++mism;
-                            if (fk == 0xFFFFFFFFu) {
-                                fk = w >> 3;
-                                fw = w & 7u;
-                            }
-                        }
-                    }
-                    DPRINT << "C1DBG t=" << tile_id << " sc=" << sc << " L=" << L_sub
-                           << " pay_pg=" << payload_page << " dir_pg=" << dir_pg
-                           << " dir_L=" << dir_l << " dir_fl=" << dir_fl
-                           << " pg_eq=" << (payload_page == dir_pg)
-                           << " mism=" << mism << " fk=" << fk << " fw=" << fw
-                           << ENDL();
-                    if (mism > 0u) {
-                        DPRINT << "C1DBG pay0=" << pay_w[0] << " gat0=" << gat_w[0]
-                               << " pay7=" << pay_w[7] << " gat7=" << gat_w[7]
-                               << ENDL();
-                    }
-                    ++c1dbg_tiles;
-                }
-            }
-#endif
-
             cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
-            if (use_payload) {
+            {
                 const uint32_t page0 = payload_page;
                 uint32_t pp = 0;
                 while (pp < rec_pages) {
@@ -811,25 +538,6 @@ void kernel_main() {
                     }
                     noc_async_read_barrier();
                     pp = end;
-                }
-            } else {
-                const uint32_t ids_scr = get_write_ptr(CB_SCR_IDS);
-                const uint32_t aos_base = get_write_ptr(CB_SCR_ATTR);
-                uint32_t gids[16];
-                uint32_t processed = 0;
-                while (processed < L_sub) {
-                    const uint32_t take = load_ids_chunk(
-                        ids_acc, id_start_sc, processed, L_sub, ids_scr, gids);
-                    issue_chunk_reads_aos(gids, take, aos_base, blendrec_acc);
-                    noc_async_read_barrier();
-                    for (uint32_t j = 0; j < take; ++j) {
-                        pack_blendrec_to_l1(
-                            reinterpret_cast<volatile uint32_t*>(
-                                aos_base + j * GATHER_SLOT_BYTES),
-                            l1_splat_words(buck, processed + j),
-                            tx_tile, ty_tile);
-                    }
-                    processed += take;
                 }
             }
             mb_cb_commit_fence();

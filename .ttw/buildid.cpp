@@ -1,5 +1,5 @@
-id=54
-sha=f062b76
-ts=2026-06-04T23:16:14-0700
-desc=iter 99: M1b: route ALL tiles (single + fat) through process_tile_l1_blend consuming the L1 PACK2 slab; fix bulk-CB ring-straddle by slot-aligning CB_BUCKET_BULK/CB_BMASK_BULK reservations (fixed BULK_REC_SLOT/MASK_SLOT) so variable-size single tiles never wrap+corrupt the tail
-bin=c96b919665793ec2
+id=55
+sha=240d991
+ts=2026-06-04T23:23:42-0700
+desc=iter 100: M1c: delete dead in-budget blend path now that all tiles consume the L1 slab — remove the in-budget bucket+radix sort + rd_bk_emit coeff producer (reader), the !use_payload per-splat blendrec gather fallback (reader), and process_tile_gaussians + the CB_MB_COEFF consumer (compute); blend is now a single process_tile_l1_blend path
+bin=320484631e980b08
