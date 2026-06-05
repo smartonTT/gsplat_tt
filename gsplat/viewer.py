@@ -146,10 +146,10 @@ def _load_scene_preset(
 ) -> tuple[np.ndarray, float] | None:
     """Return (hero c2w, fov_deg) for a fixed iconic view.
 
-    Prefer an exact PLY-name match, but fall back to the sole/first entry with
-    a hero view. The dataset PLY is often loaded as ``point_cloud.ply`` which
-    does not match the catalog's ``bicycle.ply``; without the fallback the
-    viewer silently drops to the generic orbit default instead of the hero.
+    Prefer an exact PLY-name match (e.g. ``bicycle.ply`` matches the catalog
+    entry), but fall back to the sole/first entry with a hero view so a scene
+    loaded under a different filename still gets the hero instead of the
+    generic orbit default.
     """
     if not scene_path:
         return None

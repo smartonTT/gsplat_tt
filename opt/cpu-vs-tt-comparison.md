@@ -8,7 +8,7 @@ supervisor.
 - **Backend:** `cpu_cpp` (`backends/cpu_cpp/_gsplat_cpu`, gsplat
   `Pipeline.render`), built **CPU-only** with `-DGSPLAT_WITH_TT=OFF` so it does
   not require tt-metal or the device. It renders entirely on the host CPU.
-- **Scene:** `scenes/point_cloud.ply` (the bicycle point cloud, 6,131,954
+- **Scene:** `scenes/bicycle.ply` (the bicycle point cloud, 6,131,954
   Gaussians), force-square **1024×1024**, fov 50°, `contrib_floor = 6.104e-05`.
 - **Camera / bench:** the 30 views in `benchmarks/cameras_v2.json` (scene
   `bicycle`), in the file's `order` (hero first). Intrinsics via
