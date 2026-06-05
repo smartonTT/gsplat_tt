@@ -84,6 +84,13 @@ constexpr uint32_t MB_FLAG_L1_BULK = 4u;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 
+// M1b: FIXED-SIZE bulk CB slots (mirror alpha_blend_compute_mb.cpp). The bulk
+// CBs are circular + accessed linearly over a whole tile span; a wrapping
+// reservation corrupts the tail. Reserve/push a fixed slot per tile so every
+// tile is slot-aligned (CBs sized as 2 slots) — no ring straddle.
+constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;          // 4096
+constexpr uint32_t BULK_MASK_SLOT = ((MB_BUCKET_FIT + 15u) >> 4) + 1u; // 513
+
 inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
     return reinterpret_cast<volatile uint32_t*>(
         buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
@@ -468,8 +475,10 @@ void kernel_main() {
                 : ((L - sc_off > MB_BUCKET_FIT) ? MB_BUCKET_FIT : (L - sc_off));
             uint32_t flags = ((sc > 0u) ? MB_FLAG_CONTINUE : 0u)
                 | ((sc + 1u == num_subchunks) ? MB_FLAG_EMIT : 0u);
+            // M1b: read payload_page for ALL subchunks (single-subchunk too) so
+            // every tile can consume the materialized slab via process_tile_l1_blend.
             uint32_t payload_page = 0;
-            if (num_subchunks > 1u) {
+            {
                 const uint32_t de = (dir_base + sc) * 4u;
                 const uint32_t dpg = de >> 4;
                 const uint32_t dof = de & 0xF;
@@ -481,6 +490,9 @@ void kernel_main() {
             const uint32_t id_start_sc = id_start + sc_off;
             const uint32_t cull_base_sc = cull_base + sc_off;
 
+        // M1b: route single-subchunk tiles through the payload/slab path below
+        // (disabled in-budget coeff path). Set MB_M1B_INBUDGET to restore.
+#if defined(MB_M1B_INBUDGET)
         if (num_subchunks == 1u && Lb > 0 && Lb <= MB_BUCKET_FIT) {
             const uint32_t L = Lb;
             const uint32_t npages = (L + 1u) >> 1;
@@ -661,6 +673,7 @@ void kernel_main() {
             }  // end rd_bk_emit zone
             continue;
         }
+#endif  // MB_M1B_INBUDGET
 
         // Overflow: PACK2 bulk L1 + cp_l1_blend (iter 51). Step C1 payload path
         // gated behind num_subchunks>1 once dir/mat ordering verified on device.
@@ -677,10 +690,11 @@ void kernel_main() {
             // payload DMA otherwise raced slot-recycle vs MATH reads). Single-
             // subchunk tiles stay on the proven coeff path (separate deterministic
             // bulk defect tracked, data proven correct).
-            const bool use_payload = (num_subchunks > 1u);
+            // M1b: ALL tiles (single + fat) consume the materialized slab.
+            const bool use_payload = true;
 
             DeviceZoneScopedN("rd_l1_bulk");
-            cb_reserve_back(CB_BMASK_BULK, mpages_mask);
+            cb_reserve_back(CB_BMASK_BULK, BULK_MASK_SLOT);
             const uint32_t bmask = get_write_ptr(CB_BMASK_BULK);
             {
                 const uint32_t mpg0 = cull_base_sc >> 4;
@@ -783,7 +797,7 @@ void kernel_main() {
             }
 #endif
 
-            cb_reserve_back(CB_BUCKET_BULK, rec_pages);
+            cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             if (use_payload) {
                 const uint32_t page0 = payload_page;
@@ -819,8 +833,8 @@ void kernel_main() {
                 }
             }
             mb_cb_commit_fence();
-            cb_push_back(CB_BMASK_BULK, mpages_mask);
-            cb_push_back(CB_BUCKET_BULK, rec_pages);
+            cb_push_back(CB_BMASK_BULK, BULK_MASK_SLOT);
+            cb_push_back(CB_BUCKET_BULK, BULK_REC_SLOT);
 
             cb_reserve_back(CB_MB_COUNTS, 1);
             {

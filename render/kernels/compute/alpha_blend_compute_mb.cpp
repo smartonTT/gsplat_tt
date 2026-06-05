@@ -233,6 +233,17 @@ inline void process_tile_gaussians(uint32_t num_g) {
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 
+// M1b: FIXED-SIZE bulk CB slots. CB_BUCKET_BULK / CB_BMASK_BULK are circular and
+// accessed with LINEAR pointer arithmetic (buck + q*page) over a whole tile's
+// multi-page span. A reservation that wraps the ring corrupts the tail (linear
+// reads run past the physical end). Fat full subchunks are exactly
+// BULK_REC_SLOT pages so they never straddle; variable single-subchunk tiles do.
+// Reserve/wait/pop a FIXED slot per tile so every tile is slot-aligned (the CBs
+// are sized as exactly 2 slots in blend_device.cpp) — no ring straddle. Actual
+// num_g records/masks live at the slot head; the rest of the slot is unread.
+constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;          // 4096
+constexpr uint32_t BULK_MASK_SLOT = ((MB_BUCKET_FIT + 15u) >> 4) + 1u; // 513
+
 inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
     return reinterpret_cast<const uint32_t*>(
         buck + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
@@ -245,10 +256,8 @@ inline void process_tile_l1_blend(uint32_t num_g) {
     if (num_g == 0) {
         return;
     }
-    const uint32_t rec_pages = (num_g + 1u) >> 1;
-    const uint32_t mpages = (num_g + 15u) >> 4;
-    cb_wait_front(CB_BUCKET_BULK, rec_pages);
-    cb_wait_front(CB_BMASK_BULK, mpages);
+    cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+    cb_wait_front(CB_BMASK_BULK, BULK_MASK_SLOT);
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
     const uint32_t bmask_base = get_tile_address(CB_BMASK_BULK, 0);
 
@@ -284,8 +293,8 @@ inline void process_tile_l1_blend(uint32_t num_g) {
     // gather producer hid this. Block UNPACK on MATH completion before the pop.
     MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, num_g + 1u)));
     UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
-    cb_pop_front(CB_BUCKET_BULK, rec_pages);
-    cb_pop_front(CB_BMASK_BULK, mpages);
+    cb_pop_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+    cb_pop_front(CB_BMASK_BULK, BULK_MASK_SLOT);
 }
 
 #if defined(MB_FUSE_TILE_L1_CULL)
