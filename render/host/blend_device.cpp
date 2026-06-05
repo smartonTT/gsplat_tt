@@ -966,7 +966,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // core's per-subchunk counts up front (depth >= MAX_WORK so it can't
     // deadlock against the deferred row emit) and stores the per-non-empty slab
     // descriptors (4 u32 arrays of MAX_WORK) in CB_SCR_ATTR's L1 region.
-    constexpr uint32_t kCullMaxWork = 1024u;  // == MAX_WORK in reader_tile_l1_cull.cpp
+    constexpr uint32_t kCullMaxWork = 2048u;  // == MAX_WORK in reader_tile_l1_cull.cpp
     cb_cfg(cull::CB_CULL_COUNTS, cull::COUNTS_PAGE_BYTES, kCullMaxWork, DataFormat::UInt32);
     cb_cfg(cull::CB_SCR_IDS, 64, 2, DataFormat::UInt32);
     // 4 parallel u32 arrays of MAX_WORK == 16 KB == 256 * 64B pages.

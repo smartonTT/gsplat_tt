@@ -54,7 +54,7 @@ constexpr uint32_t GATHER_SLOT_BYTES = 64u;
 // pages (slot-aligned, never ring-straddles; preserves the M1b invariant).
 // MAX_WORK bounds the pre-pass arrays (CB_SCR_ATTR) + CB_CULL_COUNTS depth; if a
 // core's work count exceeds it we fall back to the proven synchronous loop.
-constexpr uint32_t MAX_WORK = 1024u;
+constexpr uint32_t MAX_WORK = 2048u;  // >= per-core 256 tiles * <=8 subchunks
 constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;  // pages per slot
 
 inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
@@ -246,10 +246,10 @@ void kernel_main() {
     // Pre-pass: push ALL counts in order + record non-empty descriptors.
     // Pipeline: 2-slot ping-pong over CB_BUCKET; slab(N+1) reads are issued
     // INTERLEAVED with the compute-throttled emit(N) so the slab DMA overlaps
-    // the cull SFPU instead of running in front of it. Only the proven path
-    // (work count <= MAX_WORK) uses this; larger cores fall through.
+    // the cull SFPU instead of running in front of it. MAX_WORK bounds the
+    // pre-pass arrays (per-core <=256 tiles * <=8 subchunks <= 2048).
     // ==================================================================
-    if (num_work <= MAX_WORK) {
+    {
         const uint32_t WBASE = get_write_ptr(CB_SCR_ATTR);
         volatile uint32_t* w_pp = reinterpret_cast<volatile uint32_t*>(WBASE);
         volatile uint32_t* w_ls = reinterpret_cast<volatile uint32_t*>(WBASE + 1u * MAX_WORK * 4u);
@@ -382,113 +382,6 @@ void kernel_main() {
                                         dstn + issued * L1_PACK_PAGE_BYTES);
                     ++issued;
                 }
-            }
-        }
-        return;
-    }
-
-    for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
-        const uint32_t tile_id = tile_ids[ti];
-        const uint32_t tx = tile_id % tiles_x;
-        const uint32_t ty = tile_id / tiles_x;
-        const float tx_tile = static_cast<float>(tx * TILE_SIZE);
-        const float ty_tile = static_cast<float>(ty * TILE_SIZE);
-
-        uint32_t id_start, id_end;
-        {
-            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-            const uint32_t elem0 = tile_id * 2u;
-            const uint32_t page = elem0 >> 4;
-            const uint32_t off = elem0 & 0xF;
-            auto rng_ptr = reinterpret_cast<volatile uint32_t*>(scr);
-            noc_async_read_tile(page, ranges_acc, scr);
-            noc_async_read_barrier();
-            id_start = rng_ptr[off];
-            if (off + 1u < 16u) {
-                id_end = rng_ptr[off + 1u];
-            } else {
-                noc_async_read_tile(page + 1u, ranges_acc, scr);
-                noc_async_read_barrier();
-                id_end = rng_ptr[0];
-            }
-        }
-        const uint32_t L = id_end - id_start;
-        const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
-
-        // blend_subchunk_meta: per-tile (dir_base, num_sc) pair. dir_base indexes
-        // sort_subchunk_dir; mirror the blend reader exactly so the cull slab load
-        // hits the SAME payload pages.
-        uint32_t dir_base = 0;
-        uint32_t num_subchunks = 1;
-        {
-            const uint32_t e0 = tile_id * 2u;
-            const uint32_t pg = e0 >> 4;
-            const uint32_t off = e0 & 0xF;
-            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-            noc_async_read_tile(pg, subchunk_meta_acc, scr);
-            noc_async_read_barrier();
-            auto smp = reinterpret_cast<volatile uint32_t*>(scr);
-            dir_base = smp[off];
-            num_subchunks = smp[off + 1u];
-            if (num_subchunks == 0u) num_subchunks = 1u;
-        }
-
-        for (uint32_t sc = 0; sc < num_subchunks; ++sc) {
-            const uint32_t sc_off = sc * MB_BUCKET_FIT;
-            const uint32_t L_sub = (sc_off >= L) ? 0u
-                : ((L - sc_off > MB_BUCKET_FIT) ? MB_BUCKET_FIT : (L - sc_off));
-            const uint32_t cull_base_sc = cull_base + sc_off;
-
-            cb_reserve_back(CB_CULL_COUNTS, 1);
-            {
-                auto cnt = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CULL_COUNTS));
-                cnt[0] = L_sub;
-                cnt[1] = tx * TILE_SIZE;
-                cnt[2] = ty * TILE_SIZE;
-                cnt[3] = cull_base_sc;
-            }
-            cb_push_back(CB_CULL_COUNTS, 1);
-
-            if (L_sub == 0) {
-                continue;
-            }
-
-            // M2: read the dir entry (dir_base+sc -> payload_page) and bulk-DMA the
-            // already-depth-sorted PACK2 slab into CB_BUCKET (reader-private scratch:
-            // reserved, never pushed, so the write pointer never advances -> linear
-            // base+q*page addressing can NOT ring-straddle). Then emit cull rows in
-            // slab order: depth-rank k == slab record k, keeping cull_masks[base+k]
-            // aligned with the blend reader.
-            uint32_t payload_page = 0;
-            {
-                const uint32_t de = (dir_base + sc) * 4u;
-                const uint32_t dpg = de >> 4;
-                const uint32_t dof = de & 0xF;
-                const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-                noc_async_read_tile(dpg, subchunk_dir_acc, scr);
-                noc_async_read_barrier();
-                payload_page = reinterpret_cast<volatile uint32_t*>(scr)[dof];
-            }
-
-            const uint32_t rec_pages = (L_sub + 1u) >> 1;
-            cb_reserve_back(CB_BUCKET, rec_pages);
-            const uint32_t buck = get_write_ptr(CB_BUCKET);
-            {
-                const uint32_t page0 = payload_page;
-                uint32_t pp = 0;
-                while (pp < rec_pages) {
-                    const uint32_t end = (pp + 64u < rec_pages) ? pp + 64u : rec_pages;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(page0 + q, subchunk_payload_acc,
-                                            buck + q * L1_PACK_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
-            }
-            for (uint32_t k = 0; k < L_sub; ++k) {
-                emit_cull_row_from_l1_splat(
-                    l1_splat_words(buck, k), tx_tile, ty_tile, contrib_floor);
             }
         }
     }
