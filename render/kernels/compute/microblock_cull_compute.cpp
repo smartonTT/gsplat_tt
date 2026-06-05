@@ -33,7 +33,11 @@
 //   det  = max(cov_a*cov_c - cov_b*cov_b, 1e-6)
 //   ci_a=cov_c/det, ci_b=-cov_b/det, ci_c=cov_a/det
 //   constrained-min Mahalanobis^2 of the microblock box vs the gaussian center
-//   keep = (opacity * exp(-0.5 * m2_min) >= contrib_floor)   (exp avoids log)
+//   keep = (opacity * exp(-0.5 * m2_min) >= contrib_floor), rearranged divide-
+//   free as keep = (qmin <= det*thr) with thr = 2*ln(op/floor). iter 108: thr is
+//   computed HERE on the SFPU (hardware log, _calculate_log_body_no_init_) from
+//   the raw opacity the reader streams -- the per-pair soft-float __builtin_logf
+//   (~74 ms) is removed from the NCRISC cull reader.
 // keep (1.0/0.0) is written to dst_reg[KEEP][V]; the unused upper vectors of a
 // short final batch are zero-filled and ignored by the writer.
 
@@ -71,6 +75,7 @@ constexpr uint32_t DR_BOX_OY = 1 * 32;
 constexpr uint32_t DR_KEEP   = 2 * 32;
 constexpr uint32_t DR_QV     = 3 * 32;  // x-face UN-normalized Qraw (== det*m2_v)
 constexpr uint32_t DR_QH     = 4 * 32;  // y-face UN-normalized Qraw (== det*m2_h)
+constexpr uint32_t DR_THR    = 5 * 32;  // iter 108: per-gaussian thr = 2*ln(op/floor) (SFPU log)
 
 #ifdef TRISC_MATH
 // EXACT box-constrained min Mahalanobis^2 (mirrors the soft-float reference
@@ -154,16 +159,35 @@ __attribute__((noinline, noipa)) void cull_face_y(
                          cov_a * (v_c * v_c);
 }
 
-// combine: m2 = min(DR_QV, DR_QH) / det; keep = opacity*exp(-0.5*m2) >= floor.
-// Uses the SELF-CONTAINED 21-bit exp (the primitive the production blend kernel
-// rides to 63.85 dB) rather than `_calculate_log_body_no_init_` (which assumes
-// an SFPU log LUT init this kernel never performs). Runs ONLY after every
-// face_x/face_y of the batch has committed its DEST store (phased dispatch).
+// iter 108: per-gaussian Mahalanobis threshold thr = -2*ln(floor/op) computed
+// ON THE SFPU (hardware log), replacing the NCRISC reader's per-pair soft-float
+// __builtin_logf (~74 ms). thr depends ONLY on opacity, so one broadcast log per
+// gaussian suffices. op and inv_floor are uniform => ratio/log are uniform across
+// the 32 lanes; thr is stored broadcast into DR_THR[V] for cull_combine.
+//   thr = 2*ln(op/floor). For op<=floor: ratio<=1 -> ln<=0 -> thr<=0, which makes
+//   the keep test (qmin<=det*thr, qmin>=0, det>0) FALSE => culled (the old <0
+//   sentinel drops out naturally, no special-case needed).
+// _calculate_log_body_no_init_ uses literal cheby coeffs (no vConstFloatPrgm LUT
+// init), so it is safe inside this kernel's custom SFPU dispatch.
+template <uint32_t V>
+__attribute__((noinline, noipa)) void cull_thr(uint32_t op_bits, uint32_t inv_floor_bits) {
+    using namespace sfpi;
+    namespace cs = ckernel::sfpu;
+    vFloat op = cs::Converter::as_float(op_bits);
+    vFloat inv_floor = cs::Converter::as_float(inv_floor_bits);
+    vFloat ratio = op * inv_floor;
+    vFloat logv = cs::_calculate_log_body_no_init_(ratio);
+    dst_reg[DR_THR + V] = logv + logv;  // 2*ln(op/floor)
+}
+
+// combine: m2 = min(DR_QV, DR_QH) / det; keep iff qmin <= det*thr (divide-free).
+// thr is read from DR_THR[V] (committed a full phase earlier by cull_thr). Runs
+// ONLY after every face_x/face_y/thr of the batch has committed its DEST store
+// (phased dispatch -> no DEST read-after-write hazard).
 template <uint32_t V>
 __attribute__((noinline, noipa)) void cull_combine(
     uint32_t keep_base, uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
-    uint32_t thr_bits, bool cull_disabled,
-    uint32_t pos_base) {
+    bool cull_disabled, uint32_t pos_base) {
     using namespace sfpi;
     (void)pos_base;
     namespace cs = ckernel::sfpu;
@@ -175,14 +199,7 @@ __attribute__((noinline, noipa)) void cull_combine(
     vFloat cov_c = cs::Converter::as_float(c_bits);
     vFloat det = cov_a * cov_c - cov_b * cov_b;
     { vFloat det_floor = 1e-6f; vec_min_max(det_floor, det); }  // det = max(det, 1e-6)
-    // DIVIDE-FREE, TRANSCENDENTAL-FREE threshold (mirrors tile_assign_cull.cpp,
-    // the bit-faithful kept-pair cull): keep iff m2 = qmin/det <= thr, i.e.
-    // qmin <= det*thr, with thr = -2*log(floor/op) precomputed per-gaussian on
-    // the RISC (the soft-float reference's exact thresh_m2). The <0 sentinel for
-    // op<=floor drops naturally: qmin>=0 is never <= det*thr<0. No approx_recip,
-    // no bf16 SFPU exp -> removes the quantization that flipped borderline
-    // microblocks and produced the ~28 dB over-cull.
-    vFloat thr = cs::Converter::as_float(thr_bits);
+    vFloat thr = dst_reg[DR_THR + V];
     vFloat scaled = det * thr;
     vFloat keepv = 0.0f;
     v_if(qmin <= scaled) { keepv = vFloat(1.0f); } v_endif;
@@ -190,26 +207,38 @@ __attribute__((noinline, noipa)) void cull_combine(
 }
 #endif  // TRISC_MATH
 
-// Reader precomputes thr = -1 for op<=floor; negative float => culled everywhere.
-inline bool thr_pre_culled(uint32_t thr_bits) { return (thr_bits & 0x80000000u) != 0; }
-
 // PHASED compile-time-unrolled dispatch over the 32 gaussian vectors of a batch.
-// Phase 1 runs ALL cull_face_x (-> DR_QV), phase 2 ALL cull_face_y (-> DR_QH),
-// phase 3 ALL cull_combine (reads DR_QV/DR_QH -> DR_KEEP). Phasing is what fixes
-// the DEST read-after-write hazard: by the time combine<V> loads DR_QV[V] the
-// face_x<V> store happened a full phase (>=nb SFPU insns) earlier and is
-// committed. Compile-time V offsets keep dst_reg addresses immediate.
+// Phase 0 runs ALL cull_thr (-> DR_THR), phase 1 ALL cull_face_x (-> DR_QV),
+// phase 2 ALL cull_face_y (-> DR_QH), phase 3 ALL cull_combine (reads
+// DR_QV/DR_QH/DR_THR -> DR_KEEP). Phasing is what fixes the DEST read-after-write
+// hazard: by the time combine<V> loads DR_*[V] the matching store happened a full
+// phase (>=nb SFPU insns) earlier and is committed. Compile-time V offsets keep
+// dst_reg addresses immediate. iter 108: the per-pair soft-float pre-cull skip is
+// gone -- the SFPU log/combine culls op<=floor naturally (thr<=0 => keep=0), so
+// every in-batch gaussian runs all phases (consistent DEST writes/reads).
+// Phase 0: ALL thr (each writes DR_THR[V]).
+template <uint32_t V>
+inline void cull_phase_thr(
+    uint32_t nb, const uint32_t* op, uint32_t inv_floor_bits) {
+    if constexpr (V < BATCH) {
+        if (V < nb) {
+            MATH((cull_thr<V>(op[V], inv_floor_bits)));
+        }
+        cull_phase_thr<V + 1>(nb, op, inv_floor_bits);
+    }
+}
+
 // Phase 1: ALL x-faces (each writes DR_QV[V]).
 template <uint32_t V>
 inline void cull_phase_fx(
     uint32_t nb, const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
+    const uint32_t* mx, const uint32_t* my,
     uint32_t txf_bits, uint32_t tyf_bits) {
     if constexpr (V < BATCH) {
-        if (V < nb && !thr_pre_culled(thr[V])) {
+        if (V < nb) {
             MATH((cull_face_x<V>(a[V], b[V], c[V], mx[V], my[V], txf_bits, tyf_bits)));
         }
-        cull_phase_fx<V + 1>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
+        cull_phase_fx<V + 1>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
     }
 }
 
@@ -217,39 +246,40 @@ inline void cull_phase_fx(
 template <uint32_t V>
 inline void cull_phase_fy(
     uint32_t nb, const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
+    const uint32_t* mx, const uint32_t* my,
     uint32_t txf_bits, uint32_t tyf_bits) {
     if constexpr (V < BATCH) {
-        if (V < nb && !thr_pre_culled(thr[V])) {
+        if (V < nb) {
             MATH((cull_face_y<V>(a[V], b[V], c[V], mx[V], my[V], txf_bits, tyf_bits)));
         }
-        cull_phase_fy<V + 1>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
+        cull_phase_fy<V + 1>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
     }
 }
 
-// Phase 3: ALL combines (each reads DR_QV[V]/DR_QH[V] -> DR_KEEP[V]).
+// Phase 3: ALL combines (each reads DR_QV[V]/DR_QH[V]/DR_THR[V] -> DR_KEEP[V]).
 template <uint32_t V>
 inline void cull_phase_combine(
     uint32_t keep_base, uint32_t nb, uint32_t pos_base,
-    const uint32_t* a, const uint32_t* b, const uint32_t* c, const uint32_t* thr,
+    const uint32_t* a, const uint32_t* b, const uint32_t* c,
     bool cull_disabled) {
     if constexpr (V < BATCH) {
-        if (V < nb && !thr_pre_culled(thr[V])) {
-            MATH((cull_combine<V>(keep_base, a[V], b[V], c[V], thr[V], cull_disabled, pos_base)));
+        if (V < nb) {
+            MATH((cull_combine<V>(keep_base, a[V], b[V], c[V], cull_disabled, pos_base)));
         }
-        cull_phase_combine<V + 1>(keep_base, nb, pos_base, a, b, c, thr, cull_disabled);
+        cull_phase_combine<V + 1>(keep_base, nb, pos_base, a, b, c, cull_disabled);
     }
 }
 
 inline void cull_dispatch(
     uint32_t keep_base, uint32_t nb, uint32_t pos_base,
     const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
-    uint32_t txf_bits, uint32_t tyf_bits,
+    const uint32_t* mx, const uint32_t* my, const uint32_t* op,
+    uint32_t inv_floor_bits, uint32_t txf_bits, uint32_t tyf_bits,
     bool cull_disabled) {
-    cull_phase_fx<0>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
-    cull_phase_fy<0>(nb, a, b, c, mx, my, thr, txf_bits, tyf_bits);
-    cull_phase_combine<0>(keep_base, nb, pos_base, a, b, c, thr, cull_disabled);
+    cull_phase_thr<0>(nb, op, inv_floor_bits);
+    cull_phase_fx<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+    cull_phase_fy<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+    cull_phase_combine<0>(keep_base, nb, pos_base, a, b, c, cull_disabled);
 }
 
 inline uint32_t f_to_u32(float f) {
@@ -271,6 +301,14 @@ void kernel_main() {
     uint32_t num_tiles    = get_arg_val<uint32_t>(0);
     const uint32_t floor_bits   = get_arg_val<uint32_t>(1);
     const bool cull_disabled    = get_arg_val<uint32_t>(2) != 0;
+    // iter 108: thr = -2*ln(floor/op) = 2*ln(op/floor) computed on the SFPU.
+    // Precompute inv_floor = 1/floor once per core (single soft-float reciprocal,
+    // NOT per-pair) so the per-gaussian SFPU log multiplies by a broadcast scalar.
+    float floor_f;
+    __builtin_memcpy(&floor_f, &floor_bits, 4);
+    const float inv_floor_f = (floor_f > 0.0f) ? (1.0f / floor_f) : 0.0f;
+    uint32_t inv_floor_bits;
+    __builtin_memcpy(&inv_floor_bits, &inv_floor_f, 4);
 
     if (num_tiles == 0) {
         cb_wait_front(CB_CORE_TILES, 1);
@@ -309,13 +347,12 @@ void kernel_main() {
             uint32_t nb = L - processed;
             if (nb > BATCH) nb = BATCH;
 
-            // Pull this batch's coeff rows into L1-local arrays. row[6] is the
-            // per-gaussian Mahalanobis threshold thr = -2*log(floor/op) (the
-            // reference's exact thresh_m2, <0 sentinel for op<=floor) precomputed
-            // by the reader on the data mover -- the compute TRISC's own logf
-            // returns garbage, so the transcendental is kept off this core. The
-            // SFPU keep test is the divide-free `qmin <= det*thr`.
-            uint32_t a[BATCH], b[BATCH], c[BATCH], mx[BATCH], my[BATCH], thr[BATCH];
+            // Pull this batch's coeff rows into L1-local arrays. iter 108: row[6]
+            // (the old reader-precomputed thr) is dead; the reader now streams the
+            // raw opacity float in row[5] and the SFPU derives thr = 2*ln(op/floor)
+            // via the hardware log (cull_thr -> DR_THR). The keep test stays the
+            // divide-free `qmin <= det*thr`.
+            uint32_t a[BATCH], b[BATCH], c[BATCH], mx[BATCH], my[BATCH], op[BATCH];
             for (uint32_t i = 0; i < nb; i++) {
                 cb_wait_front(CB_CULL_COEFF, 1);
                 auto row = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CULL_COEFF, 0));
@@ -324,7 +361,7 @@ void kernel_main() {
                 c[i]  = row[2];
                 mx[i] = row[3];
                 my[i] = row[4];
-                thr[i] = row[6];
+                op[i] = row[5];
                 cb_pop_front(CB_CULL_COEFF, 1);
             }
 
@@ -340,7 +377,8 @@ void kernel_main() {
             copy_tile(CB_BOX_OY, 0, DR_BOX_OY / 32);
 
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-            cull_dispatch(DR_KEEP, nb, processed, a, b, c, mx, my, thr, txf_bits, tyf_bits, cull_disabled);
+            cull_dispatch(DR_KEEP, nb, processed, a, b, c, mx, my, op,
+                          inv_floor_bits, txf_bits, tyf_bits, cull_disabled);
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
 
             tile_regs_commit();
@@ -355,5 +393,4 @@ void kernel_main() {
 
         cb_pop_front(CB_CULL_COUNTS, 1);
     }
-    (void)floor_bits;
 }

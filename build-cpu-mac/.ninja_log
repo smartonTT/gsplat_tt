@@ -1,0 +1,12 @@
+# ninja log v7
+3	1376	1780689881979985431	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/microblock_cull.cpp.o	ec2dda34c3da0f0e
+1	1378	1780689881978782172	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/thread_pool.cpp.o	db1ac9fa4b0c11b9
+2	1378	1780689881979818180	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/blend.cpp.o	ec74c1ef9a659eb2
+2	1390	1780689881979441594	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/tile_assign.cpp.o	68a7c0b8153aa16c
+2	1417	1780689881979652387	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/sort.cpp.o	de16c57395ebe570
+3	1541	1780689881980148932	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/blend_microblock.cpp.o	9862270d8f3ba521
+3	1598	1780689881980307558	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/cull_and_blend.cpp.o	24ab11d5bf7f25f4
+2	2218	1780689881979156092	CMakeFiles/gsplat_cpu.dir/gsplat_cpu/project.cpp.o	859554d5fa335f51
+2219	2489	1780689884196764425	libgsplat_cpu.a	aaa8e679d11ef8d4
+30	2736	1780690091156182616	CMakeFiles/_gsplat_cpu.dir/Users/smarton/dev/gstt2/backends/cpu_cpp/pybind_module.cpp.o	fe524b6b7a0a055a
+2737	3823	1780690093862587587	/Users/smarton/dev/gstt2/backends/cpu_cpp/_gsplat_cpu.cpython-312-darwin.so	f9a5998f1bcb57b3

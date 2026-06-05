@@ -67,8 +67,14 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
     return reinterpret_cast<volatile uint32_t*>(scratch_addr)[off];
 }
 
+// iter 108: the per-pair soft-float __builtin_logf (Mahalanobis threshold thr)
+// is GONE from this NCRISC reader. thr depends only on opacity, so it is now
+// derived on the SFPU inside microblock_cull_compute (hardware log, init-free
+// _calculate_log_body_no_init_), one vector op per gaussian in the cull batch.
+// The reader just streams the raw opacity float (row[5]); thr (row[6]) is unused.
 inline void emit_cull_row_from_l1_splat(
     volatile uint32_t* recp32, float tx_tile, float ty_tile, float contrib_floor) {
+    (void)contrib_floor;
     cb_reserve_back(CB_CULL_COEFF, 1);
     auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CULL_COEFF));
     row[0] = recp32[0];
@@ -82,13 +88,7 @@ inline void emit_cull_row_from_l1_splat(
     const uint32_t w6 = recp32[6];
     const float opf = static_cast<float>(w6 & 0xffffu) * kUnormInv;
     row[5] = f_to_bits(opf);
-    float thrf;
-    if (opf <= contrib_floor) {
-        thrf = -1.0f;
-    } else {
-        thrf = -2.0f * __builtin_logf(contrib_floor / opf);
-    }
-    row[6] = f_to_bits(thrf);
+    row[6] = 0u;  // thr now computed on the SFPU at cull-compute time
     cb_push_back(CB_CULL_COEFF, 1);
 }
 

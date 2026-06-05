@@ -1,0 +1,5 @@
+if(EXISTS "/Users/smarton/dev/gstt2/build-cpu-mac/tests/gsplat_cpu_tests-b12d07c_tests.cmake")
+  include("/Users/smarton/dev/gstt2/build-cpu-mac/tests/gsplat_cpu_tests-b12d07c_tests.cmake")
+else()
+  add_test(gsplat_cpu_tests_NOT_BUILT-b12d07c gsplat_cpu_tests_NOT_BUILT-b12d07c)
+endif()
