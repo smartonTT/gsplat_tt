@@ -207,6 +207,44 @@ def main() -> int:
                 f"({len(shot_required)} rows)"
             )
 
+        # --- 7. Tracy on the NEWEST kept ttw row (forward enforcement) --------
+        # done.sh never gated Tracy, so it was silently skipped (0/66 keeps had a
+        # working trace). We cannot retroactively reconstruct traces for builds
+        # that no longer exist, so we hard-gate only the NEWEST keep (each new
+        # keep becomes newest -> capture is mandatory going forward) and emit a
+        # non-fatal WARNING for the historical keeps that still lack one.
+        profiler_root = OPT_DIR / "profiler"
+
+        def _has_trace(r: dict) -> bool:
+            tr = str(r.get("tracy") or "").strip()
+            if tr and (OPT_DIR.parent / tr).is_file():
+                return True
+            idir = str(r.get("iter_dir") or "").strip()
+            if not idir and isinstance(r.get("iter"), int):
+                idir = f"ttw-{int(r['iter']):03d}"
+            return bool(idir) and (profiler_root / idir / "render.tracy").is_file()
+
+        if kept_rows:
+            newest_keep = max(kept_rows, key=lambda r: str(r.get("ts", "")))
+            if not _has_trace(newest_keep):
+                idir = newest_keep.get("iter_dir") or f"ttw-{int(newest_keep.get('iter', -1)):03d}"
+                raise Invalid(
+                    f"newest kept iter {newest_keep.get('iter')} ({idir}) has NO Tracy "
+                    f"trace — capture it: bash opt/profiler/capture_tracy.sh {idir} "
+                    f"(set jsonl 'tracy' or place opt/profiler/{idir}/render.tracy). "
+                    f"Tracy is a required keep deliverable (tt-loop checklist)."
+                )
+            missing = [r.get("iter") for r in kept_rows if not _has_trace(r)]
+            if missing:
+                print(
+                    f"  [WARN] {len(missing)}/{len(kept_rows)} kept rows still lack a "
+                    f"Tracy trace (historical, builds gone — unrecoverable): {missing}"
+                )
+            checks.append(
+                f"newest kept iter {newest_keep.get('iter')} has a Tracy trace "
+                f"(forward-enforced)"
+            )
+
     except Invalid as e:
         for c in checks:
             print(f"  [PASS] {c}")

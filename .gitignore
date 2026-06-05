@@ -1,2 +1,5 @@
 /tmp/
 /.ttw/
+
+# Tracy device CSVs are huge (~97MB each) — keep the .tracy, never the csv
+opt/profiler/**/profile_log_device.csv

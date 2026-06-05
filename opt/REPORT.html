@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-06-05 01:02 PDT · 74 metal + 101 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-06-05 02:35 PDT · 74 metal + 101 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -51,7 +51,7 @@
     
     <p class='idea-desc'>M5: REVERT cull double-buffer prefetch (iters 104-105) to baseline. Tracy proof: tile_l1_cull_rd (NCRISC reader) 27.46ms == tile_mb_mask (TRISC SFPU) 27.47ms -> cull stage already ALU/SFPU-co-limited and fully overlapped; reader is busy-bound (issues every slab read + emits every coeff row + per-gaussian logf), not stall-bound, so double-buffer cannot lower it. Same for blend (reader 12.33 <= SFPU 13.08). Restores 98.4ms baseline.</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>a0e5989</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-106/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-106/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-106/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-106/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-106/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-106/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -454,7 +454,7 @@
     
     <p class='idea-desc'>mat: sc0 overflow tiles use l1 bulk not blendrec</p><p class='reason'>63.63 >= 63.6; ms_view -2.0%; materialize_ms ~21/view</p>
     <p class='iter-build'><code>b6397f7</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-074-tracy/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-074-tracy/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-074/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-074/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-074/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-074/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -493,7 +493,7 @@
     
     <p class='idea-desc'>tile_mb_mask: hoist box copy per tile + skip SFPU on all-pre-culled batch; writer branchless mask pack</p><p class='reason'>63.63>=63.6 but ms_view -0.06% (<2%); tile_mb_mask/tile_l1_cull_rd Tracy bar not met; try1 stale bin=d3754d74</p>
     <p class='iter-build'><code>49452e2</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-070/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-070)</span></div>
 </div>
@@ -779,7 +779,7 @@
     
     <p class='idea-desc'>MEASURE-FIRST blend breakdown (device per-tile-class zones rd_bk_emit/rd_overflow/cp_inb/cp_ovf + host TILE_HISTO). Hero: in-budget 914 tiles/2.01M cand (59.8%), overflow 110 tiles/1.36M cand (40.2%), max_tile_n=25699>FIT. Blend makespan ~93ms (reader~=compute co-equal) + separate cull ~80ms = lumped host blend 182.5. In-budget CO-LIMITED: reader-emit 824 ~= compute-SFPU 844 (load+sort only ~286). Busiest cores are OVERFLOW-gather-dominated (top core overflow 449 vs emit 181, 30v totals). Tailskip scaffold gated-off (deadlock-free 63.85 but blend 185.8>182.5, not a win). Measurement-only, PSNR 63.85 bit-identical.</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>f18c3c3</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-047/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-047)</span></div>
 </div>
@@ -792,7 +792,7 @@
     
     <p class='idea-desc'>Part A: M2 §6 per-microblock transmittance early-out — replace iter-44's tile-level break with a true per-microblock done-mask (spilled-T scan groups px by SFPU vector V=(r&~1)|(c&1); clear keep-bit M when all 32 px of mb M have T<eps; subsequent gaussians AND ~done into their coverage mask). PROVEN CORRECT: 63.85-63.86 dB across EO_BLK 64..768. Gated-off (GSPLAT_TT_BLEND_EARLYOUT): perf-neutral because the resident blend is READER-GATHER-bound, not SFPU-compute-bound (smaller blocks monotonically worse: 768->184.6 256->186.8 128->188.7 64->193.5ms) — the compute early-out skips SFPU math but the reader still gathers every candidate. Next lever: reader-side tile-saturation tail-skip.</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>bb52a1d</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-046/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-046)</span></div>
 </div>
@@ -805,7 +805,7 @@
     
     <p class='idea-desc'>Part B: de-lump device timers — report SORT/CULL/BLEND ms separately (cull+blend were lumped under the sort host-timer). Continuation now plumbs cull_ms/blend_ms out; measurement-only, PSNR bit-identical.</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>099fe42</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-045/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-045)</span></div>
 </div>
@@ -818,7 +818,7 @@
     
     <p class='idea-desc'>M2 §6 transmittance early-out: gated dense-tile block spill/reload (T->fp32 L1 CBs, uniform max-T break). Correct (EO-probe PSNR 63.85=baseline, bit-stable); default-off (GSPLAT_TT_BLEND_EARLYOUT). Foundation for microblock-major early-out.</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>b85fbf9</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-044/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-044)</span></div>
 </div>
@@ -831,7 +831,7 @@
     
     <p class='idea-desc'>M2(bin): drop dead 64B tile_recs dense scatter on L1_RECORD path (~216MB/frame dead DRAM writes removed; blend reads only 32B buf_l1_recs, fallback gathers proj_m_*); bin 43->41ms, sort 52.8->50.8, ms/view 304.9->297.3; 63.85dB bit-identical</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>fc12738</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-043/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-043)</span></div>
 </div>
@@ -844,7 +844,7 @@
     
     <p class='idea-desc'>M1: L1-resident LSD radix sort over 32B records; bit-order proven == DRAM reference (on-device: mono=0 + key-multiset perm=0 across 1100 bucket tiles/all cores, cull-mask alignment intact => 42dB failure mode absent); 63.85dB</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>7b7966a</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-042/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-042)</span></div>
 </div>
@@ -857,7 +857,7 @@
     
     <p class='idea-desc'>M0 (genuine): 32B L1 record + per-tile bucket scatter; consume-side fixed — 64B-paged DRAM record (low 32B), fp32 cov + tile-local mean, UNORM16 opacity/color ([0,1] fields => ~30x tighter than fp16); 63.85dB</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>138e943</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-041/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-041)</span></div>
 </div>
@@ -870,7 +870,7 @@
     
     <p class='idea-desc'>M0: 32B L1 record + pre-sized per-tile bucket scatter w/ atomic cursors (GSPLAT_TT_L1_RECORD), reads back into existing sort+blend; ideal path 63.85dB held</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>e2a6ee4</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-040/render.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-040)</span></div>
 </div>
@@ -883,7 +883,7 @@
     
     <p class='idea-desc'>Phase A endgame verify (cpp#121 0c72479): JIT warmup A1/A2 + sort->blend pipe + Tracy renames on ideal TILE_BUCKET path; 63.85dB held. Fixed per-iter screenshot logging over SSH (devrun forwards TTW_ITER_DIR; verify_cmd iter-dir unquoted; iterate parses shot= from SUMMARY not devrun banner). bicycle.ply re-synced full on device (was truncated to 53MB)</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>0c72479</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/render-ideal-labeled.tracy)</p>
+    
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-039)</span></div>
 </div>
