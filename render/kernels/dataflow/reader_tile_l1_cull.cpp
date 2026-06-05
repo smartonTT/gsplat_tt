@@ -41,22 +41,13 @@ constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t GATHER_SLOT_BYTES = 64u;
 
-inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
-    return reinterpret_cast<volatile uint32_t*>(
-        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
-}
-
-inline float bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
-}
-
-inline uint32_t f_to_bits(float f) {
-    uint32_t b;
-    __builtin_memcpy(&b, &f, 4);
-    return b;
-}
+// iter 109: FIXED-SIZE bulk CB slot (mirror the blend reader/compute bulk hand-
+// off). CB_BUCKET is circular + accessed with LINEAR pointer arithmetic over a
+// whole subchunk's multi-page span, so a wrapping reservation would corrupt the
+// tail. A full subchunk is exactly BULK_REC_SLOT pages; the CB is sized as 2
+// slots (depth == MB_BUCKET_FIT) so the reader can prefetch subchunk N+1 while
+// the cull compute drains subchunk N — no ring straddle.
+constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;
 
 template <typename Acc>
 inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_addr) {
@@ -67,29 +58,12 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
     return reinterpret_cast<volatile uint32_t*>(scratch_addr)[off];
 }
 
-// iter 108: the per-pair soft-float __builtin_logf (Mahalanobis threshold thr)
-// is GONE from this NCRISC reader. thr depends only on opacity, so it is now
-// derived on the SFPU inside microblock_cull_compute (hardware log, init-free
-// _calculate_log_body_no_init_), one vector op per gaussian in the cull batch.
-// The reader just streams the raw opacity float (row[5]); thr (row[6]) is unused.
-inline void emit_cull_row_from_l1_splat(
-    volatile uint32_t* recp32, float tx_tile, float ty_tile, float contrib_floor) {
-    (void)contrib_floor;
-    cb_reserve_back(CB_CULL_COEFF, 1);
-    auto row = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CULL_COEFF));
-    row[0] = recp32[0];
-    row[1] = recp32[1];
-    row[2] = recp32[2];
-    const float mx_local = bits_to_f(recp32[4]);
-    const float my_local = bits_to_f(recp32[5]);
-    row[3] = f_to_bits(mx_local + tx_tile);
-    row[4] = f_to_bits(my_local + ty_tile);
-    constexpr float kUnormInv = 1.0f / 65535.0f;
-    const uint32_t w6 = recp32[6];
-    const float opf = static_cast<float>(w6 & 0xffffu) * kUnormInv;
-    row[5] = f_to_bits(opf);
-    row[6] = 0u;  // thr now computed on the SFPU at cull-compute time
-    cb_push_back(CB_CULL_COEFF, 1);
+// L1 store/visibility fence: a producer's stores reach the write-through L1 but
+// a `fence` is needed so the freshly DMA'd slab is coherent before cb_push_back
+// signals the consumer (and so the compiler does not reorder the bulk reads past
+// the push). == invalidate_l1_cache() the runtime uses for cross-proc handoff.
+inline void mb_cb_commit_fence() {
+    asm volatile("fence" ::: "memory");
 }
 
 }  // namespace
@@ -149,6 +123,10 @@ void kernel_main() {
     // M2: l1_recs / ids / blendrec / bucket_meta are dead on the cull hot path
     // (the slab is the depth-sorted source of truth). Bindings kept for ABI
     // parity; cleaned up in M4.
+    // iter 109: the reader no longer derives the per-record cull row (op/center);
+    // the cull compute reads the raw slab record and derives them. contrib_floor
+    // is unused on the reader now (the SFPU thr uses the compute's floor arg).
+    (void)contrib_floor;
     (void)l1_recs_acc;
     (void)ids_acc;
     (void)blendrec_acc;
@@ -229,8 +207,6 @@ void kernel_main() {
         const uint32_t tile_id = tile_ids[ti];
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
-        const float tx_tile = static_cast<float>(tx * TILE_SIZE);
-        const float ty_tile = static_cast<float>(ty * TILE_SIZE);
 
         uint32_t id_start, id_end;
         {
@@ -291,12 +267,13 @@ void kernel_main() {
                 continue;
             }
 
-            // M2: read the dir entry (dir_base+sc -> payload_page) and bulk-DMA the
-            // already-depth-sorted PACK2 slab into CB_BUCKET (reader-private scratch:
-            // reserved, never pushed, so the write pointer never advances -> linear
-            // base+q*page addressing can NOT ring-straddle). Then emit cull rows in
-            // slab order: depth-rank k == slab record k, keeping cull_masks[base+k]
-            // aligned with the blend reader.
+            // iter 109: read the dir entry (dir_base+sc -> payload_page) and
+            // bulk-DMA the already-depth-sorted PACK2 slab into CB_BUCKET, then
+            // HAND THE WHOLE SLOT to the cull compute in ONE push (mirrors the
+            // blend reader's CB_BUCKET_BULK hand-off). The compute reads each
+            // record straight from this L1 slab — no per-record CB_CULL_COEFF
+            // stream (which cost ~3.37M handshakes / ~40 ms vs blend's bulk load).
+            // Depth-rank k == slab record k stays aligned with the blend reader.
             uint32_t payload_page = 0;
             {
                 const uint32_t de = (dir_base + sc) * 4u;
@@ -309,7 +286,7 @@ void kernel_main() {
             }
 
             const uint32_t rec_pages = (L_sub + 1u) >> 1;
-            cb_reserve_back(CB_BUCKET, rec_pages);
+            cb_reserve_back(CB_BUCKET, BULK_REC_SLOT);
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
                 const uint32_t page0 = payload_page;
@@ -324,10 +301,8 @@ void kernel_main() {
                     pp = end;
                 }
             }
-            for (uint32_t k = 0; k < L_sub; ++k) {
-                emit_cull_row_from_l1_splat(
-                    l1_splat_words(buck, k), tx_tile, ty_tile, contrib_floor);
-            }
+            mb_cb_commit_fence();
+            cb_push_back(CB_BUCKET, BULK_REC_SLOT);
         }
     }
 }

@@ -63,11 +63,39 @@ namespace {
 
 constexpr uint32_t CB_BOX_OX     = 0;   // fp32 tile: per-lane microblock box x-origin
 constexpr uint32_t CB_BOX_OY     = 1;   // fp32 tile: per-lane microblock box y-origin
-constexpr uint32_t CB_CULL_COEFF = 2;   // 64B row per gaussian: cov_a,cov_b,cov_c,mx,my,op
+constexpr uint32_t CB_CULL_COEFF = 2;   // (iter 109: retired — records read from CB_BUCKET)
 constexpr uint32_t CB_CULL_COUNTS= 3;   // per-tile [L, tx_pix, ty_pix]
+constexpr uint32_t CB_BUCKET     = 8;   // iter 109: bulk depth-sorted PACK2 slab (mirrors blend)
 constexpr uint32_t CB_KEEP       = 16;  // fp32 keep tile (one per 32-gaussian batch)
 
 constexpr uint32_t BATCH  = 32;  // gaussians per keep-tile (one per SFPU vector)
+
+// iter 109: PACK2 slab geometry + fixed bulk slot (mirror reader_tile_l1_cull /
+// alpha_blend_compute_mb). Two 32B splats per 64B page: record g -> page g/2,
+// half g&1. The reader pushes ONE BULK_REC_SLOT slot per subchunk; the compute
+// reads every record straight from this L1 slab (no per-record CB stream).
+constexpr uint32_t L1_SPLAT_BYTES     = 32u;
+constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+constexpr uint32_t MB_BUCKET_FIT      = 8192u;
+constexpr uint32_t BULK_REC_SLOT      = (MB_BUCKET_FIT + 1u) >> 1;  // 4096
+
+inline float bits_to_f(uint32_t b) {
+    float f;
+    __builtin_memcpy(&f, &b, 4);
+    return f;
+}
+
+inline const uint32_t* l1_splat_words(uint32_t buck, uint32_t g) {
+    return reinterpret_cast<const uint32_t*>(
+        buck + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
+}
+
+// L1 read-visibility fence: invalidate any stale cached line for the recycled
+// bulk-CB slot so the freshly DMA'd slab records read coherently. ==
+// invalidate_l1_cache(); mirrors alpha_blend_compute_mb::mb_cb_consume_fence.
+inline void mb_cb_consume_fence() {
+    asm volatile("fence" ::: "memory");
+}
 
 // DEST slot bases (dst_reg ix units; a tile == 32 vectors).
 constexpr uint32_t DR_BOX_OX = 0 * 32;
@@ -342,27 +370,40 @@ void kernel_main() {
         const uint32_t txf_bits = f_to_u32(static_cast<float>(tx_pix));
         const uint32_t tyf_bits = f_to_u32(static_cast<float>(ty_pix));
 
+        // iter 109: the reader hands the whole depth-sorted PACK2 slab for this
+        // subchunk via CB_BUCKET in ONE bulk push (mirrors the blend reader). The
+        // compute reads each record straight from L1 here — deriving the SAME
+        // values the old per-record CB_CULL_COEFF stream carried — instead of
+        // ~3.37M per-record CB handshakes (the ~40 ms cull-vs-blend load delta).
+        if (L == 0) {
+            cb_pop_front(CB_CULL_COUNTS, 1);
+            continue;
+        }
+        cb_wait_front(CB_BUCKET, BULK_REC_SLOT);
+        const uint32_t buck = get_tile_address(CB_BUCKET, 0);
+        mb_cb_consume_fence();
+        const float tx_tile_f = bits_to_f(txf_bits);
+        const float ty_tile_f = bits_to_f(tyf_bits);
+        constexpr float kUnormInv = 1.0f / 65535.0f;
+
         uint32_t processed = 0;
         while (processed < L) {
             uint32_t nb = L - processed;
             if (nb > BATCH) nb = BATCH;
 
-            // Pull this batch's coeff rows into L1-local arrays. iter 108: row[6]
-            // (the old reader-precomputed thr) is dead; the reader now streams the
-            // raw opacity float in row[5] and the SFPU derives thr = 2*ln(op/floor)
-            // via the hardware log (cull_thr -> DR_THR). The keep test stays the
-            // divide-free `qmin <= det*thr`.
+            // Reproduce emit_cull_row_from_l1_splat exactly (bit-identical cull):
+            // a,b,c = raw cov words; center = tile-local mean (rec[4],rec[5]) +
+            // tile origin (the SFPU subtracts it back via txf/tyf); op = UNORM16
+            // (rec[6]&0xffff)/65535. row[6] thr is computed on the SFPU (cull_thr).
             uint32_t a[BATCH], b[BATCH], c[BATCH], mx[BATCH], my[BATCH], op[BATCH];
             for (uint32_t i = 0; i < nb; i++) {
-                cb_wait_front(CB_CULL_COEFF, 1);
-                auto row = reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CULL_COEFF, 0));
-                a[i]  = row[0];
-                b[i]  = row[1];
-                c[i]  = row[2];
-                mx[i] = row[3];
-                my[i] = row[4];
-                op[i] = row[5];
-                cb_pop_front(CB_CULL_COEFF, 1);
+                const uint32_t* rec = l1_splat_words(buck, processed + i);
+                a[i]  = rec[0];
+                b[i]  = rec[1];
+                c[i]  = rec[2];
+                mx[i] = f_to_u32(bits_to_f(rec[4]) + tx_tile_f);
+                my[i] = f_to_u32(bits_to_f(rec[5]) + ty_tile_f);
+                op[i] = f_to_u32(static_cast<float>(rec[6] & 0xffffu) * kUnormInv);
             }
 
             tile_regs_acquire();
@@ -390,6 +431,15 @@ void kernel_main() {
 
             processed += nb;
         }
+
+        // MATH->UNPACK back-pressure ack (mirrors alpha_blend_compute_mb): UNPACK
+        // would otherwise cb_pop_front this CB_BUCKET slot the instant it ran the
+        // batch loop (its MATH() reads are no-ops), letting the FAST reader DMA
+        // recycle the slot to the next subchunk before the MATH thread finished
+        // reading every record => torn records. Block UNPACK on MATH completion.
+        MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, L + 1u)));
+        UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
+        cb_pop_front(CB_BUCKET, BULK_REC_SLOT);
 
         cb_pop_front(CB_CULL_COUNTS, 1);
     }
