@@ -41,6 +41,22 @@ constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t GATHER_SLOT_BYTES = 64u;
 
+// M5 (iter 104): double-buffer prefetch. The cull reader is the SOLE driver of
+// both the slab DMA and the coeff-row emit; on one RISC those serialize (DMA(N)
+// runs with compute idle, then the emit(N) spins on CB_CULL_COEFF backpressure
+// with the NoC idle == DMA+SFPU). We hide the slab DMA behind the SFPU by (a) a
+// metadata PRE-PASS (so the hot loop issues NO metadata reads whose global
+// barrier would prematurely drain the in-flight slab DMA) that records every
+// non-empty subchunk's {payload_page, L_sub, tx, ty} and pushes ALL counts in
+// order, then (b) a 2-slot ping-pong over CB_BUCKET that interleaves the
+// slab(N+1) read-issues INTO the compute-throttled emit(N) loop so the NoC is
+// busy exactly when the reader would otherwise spin. CB_BUCKET is 2*BULK_REC
+// pages (slot-aligned, never ring-straddles; preserves the M1b invariant).
+// MAX_WORK bounds the pre-pass arrays (CB_SCR_ATTR) + CB_CULL_COUNTS depth; if a
+// core's work count exceeds it we fall back to the proven synchronous loop.
+constexpr uint32_t MAX_WORK = 1024u;
+constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;  // pages per slot
+
 inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
     return reinterpret_cast<volatile uint32_t*>(
         buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
@@ -224,6 +240,152 @@ void kernel_main() {
     cb_reserve_back(CB_CORE_TILES, 1);
     reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = num_work;
     cb_push_back(CB_CORE_TILES, 1);
+
+    // ==================================================================
+    // M5: software-pipelined (double-buffered) slab load.
+    // Pre-pass: push ALL counts in order + record non-empty descriptors.
+    // Pipeline: 2-slot ping-pong over CB_BUCKET; slab(N+1) reads are issued
+    // INTERLEAVED with the compute-throttled emit(N) so the slab DMA overlaps
+    // the cull SFPU instead of running in front of it. Only the proven path
+    // (work count <= MAX_WORK) uses this; larger cores fall through.
+    // ==================================================================
+    if (num_work <= MAX_WORK) {
+        const uint32_t WBASE = get_write_ptr(CB_SCR_ATTR);
+        volatile uint32_t* w_pp = reinterpret_cast<volatile uint32_t*>(WBASE);
+        volatile uint32_t* w_ls = reinterpret_cast<volatile uint32_t*>(WBASE + 1u * MAX_WORK * 4u);
+        volatile uint32_t* w_tx = reinterpret_cast<volatile uint32_t*>(WBASE + 2u * MAX_WORK * 4u);
+        volatile uint32_t* w_ty = reinterpret_cast<volatile uint32_t*>(WBASE + 3u * MAX_WORK * 4u);
+
+        // ---- metadata pre-pass: small NoC reads (each self-barriered, no slab
+        //      DMA in flight) so the pipeline below has ZERO metadata barriers. ----
+        uint32_t m = 0;  // non-empty work items recorded
+        for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
+            const uint32_t tile_id = tile_ids[ti];
+            const uint32_t tx = tile_id % tiles_x;
+            const uint32_t ty = tile_id / tiles_x;
+            const float tx_tile = static_cast<float>(tx * TILE_SIZE);
+            const float ty_tile = static_cast<float>(ty * TILE_SIZE);
+
+            uint32_t id_start, id_end;
+            {
+                const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+                const uint32_t elem0 = tile_id * 2u;
+                const uint32_t page = elem0 >> 4;
+                const uint32_t off = elem0 & 0xF;
+                auto rng_ptr = reinterpret_cast<volatile uint32_t*>(scr);
+                noc_async_read_tile(page, ranges_acc, scr);
+                noc_async_read_barrier();
+                id_start = rng_ptr[off];
+                if (off + 1u < 16u) {
+                    id_end = rng_ptr[off + 1u];
+                } else {
+                    noc_async_read_tile(page + 1u, ranges_acc, scr);
+                    noc_async_read_barrier();
+                    id_end = rng_ptr[0];
+                }
+            }
+            const uint32_t L = id_end - id_start;
+            const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
+
+            uint32_t dir_base = 0;
+            uint32_t num_subchunks = 1;
+            {
+                const uint32_t e0 = tile_id * 2u;
+                const uint32_t pg = e0 >> 4;
+                const uint32_t off = e0 & 0xF;
+                const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+                noc_async_read_tile(pg, subchunk_meta_acc, scr);
+                noc_async_read_barrier();
+                auto smp = reinterpret_cast<volatile uint32_t*>(scr);
+                dir_base = smp[off];
+                num_subchunks = smp[off + 1u];
+                if (num_subchunks == 0u) num_subchunks = 1u;
+            }
+
+            for (uint32_t sc = 0; sc < num_subchunks; ++sc) {
+                const uint32_t sc_off = sc * MB_BUCKET_FIT;
+                const uint32_t L_sub = (sc_off >= L) ? 0u
+                    : ((L - sc_off > MB_BUCKET_FIT) ? MB_BUCKET_FIT : (L - sc_off));
+                const uint32_t cull_base_sc = cull_base + sc_off;
+
+                cb_reserve_back(CB_CULL_COUNTS, 1);
+                {
+                    auto cnt = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CULL_COUNTS));
+                    cnt[0] = L_sub;
+                    cnt[1] = tx * TILE_SIZE;
+                    cnt[2] = ty * TILE_SIZE;
+                    cnt[3] = cull_base_sc;
+                }
+                cb_push_back(CB_CULL_COUNTS, 1);
+
+                if (L_sub == 0) continue;
+
+                uint32_t payload_page = 0;
+                {
+                    const uint32_t de = (dir_base + sc) * 4u;
+                    const uint32_t dpg = de >> 4;
+                    const uint32_t dof = de & 0xF;
+                    const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+                    noc_async_read_tile(dpg, subchunk_dir_acc, scr);
+                    noc_async_read_barrier();
+                    payload_page = reinterpret_cast<volatile uint32_t*>(scr)[dof];
+                }
+                w_pp[m] = payload_page;
+                w_ls[m] = L_sub;
+                w_tx[m] = f_to_bits(tx_tile);
+                w_ty[m] = f_to_bits(ty_tile);
+                ++m;
+            }
+        }
+
+        // ---- double-buffered slab pipeline over the m non-empty items ----
+        const uint32_t buck0 = get_write_ptr(CB_BUCKET);
+        const uint32_t SLOT_BYTES = BULK_REC_SLOT * L1_PACK_PAGE_BYTES;
+        if (m > 0) {
+            // Prefetch slab(0) into slot 0 (this first DMA is unavoidably exposed).
+            {
+                const uint32_t rp = (w_ls[0] + 1u) >> 1;
+                const uint32_t pg0 = w_pp[0];
+                for (uint32_t q = 0; q < rp; ++q) {
+                    noc_async_read_tile(pg0 + q, subchunk_payload_acc, buck0 + q * L1_PACK_PAGE_BYTES);
+                }
+            }
+            for (uint32_t e = 0; e < m; ++e) {
+                noc_async_read_barrier();  // slab(e) ready (only outstanding read)
+                const uint32_t srcp = buck0 + (e & 1u) * SLOT_BYTES;
+                const uint32_t Lp = w_ls[e];
+                const float txp = bits_to_f(w_tx[e]);
+                const float typ = bits_to_f(w_ty[e]);
+
+                const bool has_next = (e + 1u < m);
+                const uint32_t rpn = has_next ? ((w_ls[e + 1u] + 1u) >> 1) : 0u;
+                const uint32_t pg0n = has_next ? w_pp[e + 1u] : 0u;
+                const uint32_t dstn = buck0 + ((e + 1u) & 1u) * SLOT_BYTES;
+
+                // Emit slab(e)'s coeff rows while issuing slab(e+1)'s reads
+                // EVENLY spread across the emit (target = rpn*(k+1)/Lp). The emit
+                // spins on CB_CULL_COEFF backpressure at the compute's SFPU pace,
+                // so spacing the slab(e+1) reads across it keeps the NoC busy in
+                // exactly that otherwise-idle window -> DMA hides behind SFPU.
+                uint32_t issued = 0;
+                for (uint32_t k = 0; k < Lp; ++k) {
+                    const uint32_t target = (rpn * (k + 1u)) / Lp;
+                    while (issued < target) {
+                        noc_async_read_tile(pg0n + issued, subchunk_payload_acc,
+                                            dstn + issued * L1_PACK_PAGE_BYTES);
+                        ++issued;
+                    }
+                    emit_cull_row_from_l1_splat(l1_splat_words(srcp, k), txp, typ, contrib_floor);
+                }
+                while (issued < rpn) {
+                    noc_async_read_tile(pg0n + issued, subchunk_payload_acc,
+                                        dstn + issued * L1_PACK_PAGE_BYTES);
+                    ++issued;
+                }
+            }
+        }
+        return;
+    }
 
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
