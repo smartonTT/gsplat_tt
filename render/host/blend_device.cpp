@@ -115,6 +115,7 @@ namespace mb {
 
 constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp
 constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp
+constexpr uint32_t CB_T_RB      = 2;   // iter 107: mid-accumulation T readback (bf16, 1 tile)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 128B = 32 uint32 per tile
 constexpr uint32_t CB_OUT       = 16;  // 3 bf16 color tiles per screen tile
 
@@ -157,6 +158,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // reader bulk path can push counts faster than compute pops.
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    // iter 107: scratch CB the compute packs the running T slot into for the
+    // mid-accumulation transmittance readback (bf16, same fmt as CB_OUT so the
+    // packer needs no reconfig). Never pushed/popped — pure read-back scratch.
+    cb_cfg(CB_T_RB, TILE_BYTES_BF16, 2, DataFormat::Float16_b);
 
     // Resident devcull reader scratch CBs.
     constexpr uint32_t CB_SCR_IDS = 4;
@@ -225,6 +230,20 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     if (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL");
         fuse != nullptr && fuse[0] == '1') {
         compute_defines["MB_FUSE_TILE_L1_CULL"] = "1";
+    }
+    // iter 107: transmittance saturation early-out knobs (runtime via env, no
+    // .so rebuild to sweep — they are kernel compile-defines resolved per python
+    // process at program-build time). BLEND_T_EPS = drop a microblock once its
+    // max T < eps; BLEND_T_PERIOD = readback cadence in gaussians (0 => OFF).
+    {
+        auto env_or = [](const char* key, const char* def) -> std::string {
+            const char* v = std::getenv(key);
+            return (v != nullptr && v[0] != '\0') ? std::string(v) : std::string(def);
+        };
+        // eps default 1/256; period default 512 (period 64 is overhead-dominated
+        // / net slower — 512 is the measured green+faster operating point).
+        compute_defines["BLEND_T_EPS"] = env_or("BLEND_T_EPS", "0.00390625f");
+        compute_defines["BLEND_T_PERIOD"] = env_or("BLEND_T_PERIOD", "512u");
     }
     ctx.compute = CreateKernel(
         program,

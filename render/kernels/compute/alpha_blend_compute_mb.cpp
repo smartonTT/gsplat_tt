@@ -60,6 +60,7 @@ constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock cou
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
 constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk L1 records (slab carries mask in word3)
 constexpr uint32_t CB_COLOR_OUT = 16;
+constexpr uint32_t CB_T_RB = 2;        // iter 107: mid-accumulation T readback (bf16, 1 tile)
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -198,10 +199,102 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
         buck + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
 }
 
+// ---- Blend transmittance saturation early-out (iter 107) -------------------
+// Per microblock, stop blending once its MAX transmittance T drops below eps
+// (front-to-back). T is read back to the scalar MATH thread via the STANDARD
+// emit handshake (tile_regs_commit/wait + pack_tile of the T slot) but the dest
+// is released WITHOUT zeroing it — open-coded TTI_STALLWAIT(STALL_MATH,PACK) +
+// _llk_packer_set_math_semaphore_(), dropping the TTI_ZEROACC(CLR_ALL) the
+// normal tile_regs_release performs — so the R/G/B/T accumulator survives the
+// readback. The live mask gates ONLY the MATH blend dispatch (it is MATH-only
+// state), so the three TRISC threads never diverge on control flow. Two runtime
+// knobs (compile-defines fed from env; sweeping needs NO .so rebuild):
+// BLEND_T_EPS and BLEND_T_PERIOD (period 0 => feature OFF / clean baseline).
+#ifndef BLEND_T_EPS
+#define BLEND_T_EPS 0.00390625f
+#endif
+#ifndef BLEND_T_PERIOD
+// Default 512: period 64 is overhead-dominated (net SLOWER); 512 is the measured
+// green+faster operating point (the readback handshake+scan cost amortizes while
+// deep tiles still catch saturation early). Override via env BLEND_T_PERIOD.
+#define BLEND_T_PERIOD 512u
+#endif
+constexpr float kBlendTEps = (BLEND_T_EPS);
+constexpr uint32_t kBlendTPeriod = (BLEND_T_PERIOD);
+
+#ifdef TRISC_PACK
+// Non-zeroing dest release: wait for the pack to drain and hand the dest back to
+// MATH, but do NOT TTI_ZEROACC — preserve the running R/G/B/T accumulator.
+inline void non_zeroing_pack_release() {
+    TTI_STALLWAIT(ckernel::p_stall::STALL_MATH, ckernel::p_stall::PACK);
+    _llk_packer_set_math_semaphore_();
+}
+#endif
+
+// MATH-only: reduce per-microblock MAX T from the packed bf16 T tile in L1 and
+// rebuild the live-microblock mask (bit m set <=> microblock m still has a pixel
+// with T >= eps). T decreases monotonically, so a cleared bit stays cleared.
+inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
+    mb_cb_consume_fence();
+    const volatile uint32_t* w = reinterpret_cast<const volatile uint32_t*>(t_rb_addr);
+    float mbmax[NUM_MB];
+    for (uint32_t m = 0; m < NUM_MB; ++m) {
+        mbmax[m] = 0.0f;
+    }
+    // The packed bf16 tile is 1024 values in ROW-MAJOR device-raster order (this
+    // kernel's pack/unpack is set up so device raster index == memory index; cf.
+    // make_ramp + mb_perm in blend_device.cpp), two bf16 per uint32 word (low
+    // half = even index). Memory index t = r*32 + c -> microblock vector
+    // V = 2*(r/2)+(c&1) (identity to the mask bit / dispatch vector).
+    for (uint32_t t = 0; t < 1024u; ++t) {
+        const uint32_t word = w[t >> 1];
+        const uint32_t half = (t & 1u) ? (word >> 16) : (word & 0xffffu);
+        const uint32_t fb = half << 16;
+        float tf;
+        __builtin_memcpy(&tf, &fb, 4);
+        const uint32_t r = t >> 5;       // t = r*32 + c (row-major)
+        const uint32_t c = t & 31u;
+        const uint32_t V = (r & ~1u) | (c & 1u);
+        if (tf > mbmax[V]) {
+            mbmax[V] = tf;
+        }
+    }
+    uint32_t live = 0u;
+    for (uint32_t m = 0; m < NUM_MB; ++m) {
+        if (mbmax[m] >= kBlendTEps) {
+            live |= (1u << m);
+        }
+    }
+    live_mb_mask = live;
+}
+
+// Mid-accumulation T readback. ALL threads call this; each performs its thread
+// part. Uses the STANDARD CB producer/consumer flow (reserve/pack/push then
+// wait_front/read/pop) so the framework guarantees the read address matches
+// where the packer wrote (pack and read pointer conventions differ otherwise).
+// cb_push_back resets the sequential pack counter, so each readback packs tile 0
+// of a fresh slot. Only the NON-zeroing release differs from a normal emit.
+inline void blend_t_readback(uint32_t& live_mb_mask) {
+    MATH((_llk_math_eltwise_unary_sfpu_done_()));    // drain SFPU writes into dest
+    tile_regs_commit();                               // MATH: dest section done (no zero)
+    tile_regs_wait();                                 // PACK: wait for math done
+    cb_reserve_back(CB_T_RB, 1);                       // PACK: reserve scratch slot
+    pack_tile(3, CB_T_RB);                             // PACK: pack T (dest tile 3) -> slot tile 0
+    cb_push_back(CB_T_RB, 1);                          // PACK: publish to UNPACK/MATH
+    PACK((non_zeroing_pack_release()));               // release WITHOUT zeroing the acc
+    tile_regs_acquire();                              // MATH: re-acquire dest (acc intact)
+    cb_wait_front(CB_T_RB, 1);                         // UNPACK: wait for the packed T
+    const uint32_t t_rb_addr = get_tile_address(CB_T_RB, 0);  // all threads (mailbox sync)
+    MATH((blend_t_reduce(live_mb_mask, t_rb_addr)));  // MATH-only: rebuild live mask
+    cb_pop_front(CB_T_RB, 1);                          // UNPACK: free the scratch slot
+    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));   // resume the SFPU section
+}
+
 // Blend one subchunk whose PACK2 records + masks sit in CB_BUCKET_BULK /
 // CB_BMASK_BULK (iter 49/50). Separate from in-budget CB_BUCKET/CB_BMASK so
 // bulk reserve does not deadlock against coeff-stream scratch.
-inline void process_tile_l1_blend(uint32_t num_g) {
+inline void process_tile_l1_blend(
+    uint32_t num_g, uint32_t& live_mb_mask, uint32_t& g_seen) {
     if (num_g == 0) {
         return;
     }
@@ -210,6 +303,12 @@ inline void process_tile_l1_blend(uint32_t num_g) {
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
     for (uint32_t g = 0; g < num_g; g++) {
+        // Periodic transmittance readback (per-tile gaussian count, across
+        // subchunks). period 0 => disabled (compiles out to the baseline path).
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+            blend_t_readback(live_mb_mask);
+        }
+        ++g_seen;
         const uint32_t* rec = l1_splat_words(buck, g);
         const uint32_t a = rec[0], b = rec[1], c = rec[2];
         const uint32_t d = rec[4], e = rec[5];
@@ -228,7 +327,9 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         // M3: the cull writer stored the 32-bit microblock mask into word3 of the
         // slab record (the dead depth key). Read it straight from rec[3] — no
         // separate CB_BMASK_BULK / DRAM cull_masks round-trip.
-        const uint32_t mask = rec[3];
+        // Mask out microblocks whose transmittance already saturated (MATH-only:
+        // live_mb_mask stays all-ones on UNPACK/PACK, whose dispatch is a no-op).
+        const uint32_t mask = rec[3] & live_mb_mask;
         if (mask != 0u) {
             dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
         }
@@ -286,6 +387,9 @@ void kernel_main() {
     for (uint32_t t = 0; t < num_tiles; t++) {
         bool tile_regs_held = false;
         bool tile_done = false;
+        // Per-tile early-out state (persists across this tile's subchunks).
+        uint32_t live_mb_mask = 0xFFFFFFFFu;
+        uint32_t g_seen = 0u;
         while (!tile_done) {
             cb_wait_front(CB_MB_COUNTS, 1);
             uint32_t num_g;
@@ -317,7 +421,7 @@ void kernel_main() {
             // M1: ALL tiles (single + fat) consume the materialized L1 slab.
             // Empty tiles (num_g==0) early-return inside process_tile_l1_blend.
             (void)l1_bulk;
-            process_tile_l1_blend(num_g);
+            process_tile_l1_blend(num_g, live_mb_mask, g_seen);
 
             if (emit_tile) {
                 tile_regs_commit();
