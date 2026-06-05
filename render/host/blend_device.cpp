@@ -1062,8 +1062,10 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_cfg(CB_BUCKET, 64, kBucketFit, DataFormat::Float32);
     cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
 
+    // M2: +2 accessors for the depth-sorted slab (sort_subchunk_payload) and its
+    // per-subchunk dir (sort_subchunk_dir) so cull bulk-loads the slab from L1.
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 11; i++) {
+    for (int i = 0; i < 13; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     ctx.reader = CreateKernel(
@@ -1138,7 +1140,10 @@ static double process_frame(
     auto buf_brec = ds::get_buffer("proj_m_blendrec");
     auto buf_bm   = ds::get_buffer("sort_bucket_meta");
     auto buf_sc   = ds::get_buffer("blend_subchunk_meta");
-    if (!buf_ids || !buf_rng || !buf_l1r || !buf_brec || !buf_bm || !buf_sc) {
+    auto buf_sc_payload = ds::get_buffer("sort_subchunk_payload");
+    auto buf_sc_dir = ds::get_buffer("sort_subchunk_dir");
+    if (!buf_ids || !buf_rng || !buf_l1r || !buf_brec || !buf_bm || !buf_sc ||
+        !buf_sc_payload || !buf_sc_dir) {
         if (ok) *ok = false;
         return 0.0;
     }
@@ -1180,6 +1185,8 @@ static double process_frame(
     const uint32_t blendrec_addr  = static_cast<uint32_t>(buf_brec->address());
     const uint32_t bucket_meta_addr = static_cast<uint32_t>(buf_bm->address());
     const uint32_t subchunk_meta_addr = static_cast<uint32_t>(buf_sc->address());
+    const uint32_t subchunk_payload_addr = static_cast<uint32_t>(buf_sc_payload->address());
+    const uint32_t subchunk_dir_addr = static_cast<uint32_t>(buf_sc_dir->address());
     const uint32_t cull_base_addr = static_cast<uint32_t>(buf_base_res->address());
     const uint32_t box_ox_addr    = static_cast<uint32_t>(ctx.res_xramp->address());
     const uint32_t box_oy_addr    = static_cast<uint32_t>(ctx.res_yramp->address());
@@ -1198,6 +1205,7 @@ static double process_frame(
                         bucket_meta_addr, subchunk_meta_addr, cull_base_addr,
                         box_ox_addr, box_oy_addr, tile_ids_addr, lpt_meta_addr,
                         core_index, tiles_x, floor_bits,
+                        subchunk_payload_addr, subchunk_dir_addr,
                     });
                     SetRuntimeArgs(program, ctx.compute, core, {
                         0u, floor_bits, cull_disabled ? 1u : 0u,

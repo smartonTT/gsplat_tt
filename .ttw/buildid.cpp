@@ -1,5 +1,5 @@
-id=55
-sha=240d991
-ts=2026-06-04T23:23:42-0700
-desc=iter 100: M1c: delete dead in-budget blend path now that all tiles consume the L1 slab — remove the in-budget bucket+radix sort + rd_bk_emit coeff producer (reader), the !use_payload per-splat blendrec gather fallback (reader), and process_tile_gaussians + the CB_MB_COEFF consumer (compute); blend is now a single process_tile_l1_blend path
-bin=320484631e980b08
+id=57
+sha=2cd4f63
+ts=2026-06-04T23:32:37-0700
+desc=iter 101: M2: cull bulk-loads depth-sorted PACK2 slab from L1 (dir_base+sc -> payload_page) and emits cull coeff rows in slab order; deletes l1_recs reload + L1 re-sort (in-budget) and blendrec gather (overflow). Writer still writes DRAM cull_masks; order stays cull_masks[base+k]==slab record k==depth-rank k.
+bin=8b3be97f9dfaafb2
