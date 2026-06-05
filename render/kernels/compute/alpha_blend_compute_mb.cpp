@@ -222,6 +222,13 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 constexpr float kBlendTEps = (BLEND_T_EPS);
 constexpr uint32_t kBlendTPeriod = (BLEND_T_PERIOD);
 
+// Runtime override of the saturation epsilon (driven by the viewer's
+// "Transmittance threshold" slider via compute runtime-arg 0). Defaults to the
+// compile-time kBlendTEps; a runtime-arg of 0 bits keeps that default, so every
+// caller that does not forward a threshold reproduces the iter-107 baseline
+// exactly. Each TRISC thread holds its own copy; set once in kernel_main.
+static float g_blend_t_eps = kBlendTEps;
+
 #ifdef TRISC_PACK
 // Non-zeroing dest release: wait for the pack to drain and hand the dest back to
 // MATH, but do NOT TTI_ZEROACC — preserve the running R/G/B/T accumulator.
@@ -261,7 +268,7 @@ inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
     }
     uint32_t live = 0u;
     for (uint32_t m = 0; m < NUM_MB; ++m) {
-        if (mbmax[m] >= kBlendTEps) {
+        if (mbmax[m] >= g_blend_t_eps) {
             live |= (1u << m);
         }
     }
@@ -368,6 +375,14 @@ inline void fuse_l1_cull_compile_hook(
 
 void kernel_main() {
     DeviceZoneScopedN("tile_blend_sfpu");
+    // Runtime-arg 0: saturation epsilon bits (viewer slider). 0 => keep the
+    // compile-time default (kBlendTEps) so non-forwarding callers are unchanged.
+    {
+        const uint32_t eps_bits = get_arg_val<uint32_t>(0);
+        if (eps_bits != 0u) {
+            __builtin_memcpy(&g_blend_t_eps, &eps_bits, 4);
+        }
+    }
     cb_wait_front(CB_CORE_TILES, 1);
     const uint32_t num_tiles =
         reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CORE_TILES, 0))[0];

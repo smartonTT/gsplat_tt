@@ -80,7 +80,11 @@ double blend_mb_devcull_resident(
     float* image_out,
     bool* device_ok,
     double* cull_ms_out = nullptr,
-    double* blend_ms_out = nullptr);
+    double* blend_ms_out = nullptr,
+    // Saturation epsilon forwarded to the blend compute kernel (viewer
+    // "Transmittance threshold" slider). 0 => kernel keeps its compile-time
+    // default (iter-107 baseline).
+    float transmittance_threshold = 0.0f);
 
 void device_shutdown();
 

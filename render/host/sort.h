@@ -51,6 +51,11 @@ struct SortBlendContinuation {
     int image_height = 0;
     int image_width = 0;
     float mb_contrib_floor = 0.0f;
+    // Saturation epsilon forwarded to the blend compute kernel (viewer
+    // "Transmittance threshold" slider). 0 => kernel keeps its compile-time
+    // default (iter-107 baseline). NOTE: this struct is ODR-shared with
+    // src/gsplat_tt/sort.h — keep the two layouts byte-identical.
+    float transmittance_threshold = 0.0f;
     bool cull_disabled = false;
     bool* blend_ok = nullptr;
     bool invoked = false;

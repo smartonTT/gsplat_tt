@@ -1142,7 +1142,8 @@ static void maybe_run_sort_blend_continuation(
         cont->image_out,
         &blend_ok,
         &cull_ms,
-        &blend_ms);
+        &blend_ms,
+        cont->transmittance_threshold);
     cont->cull_ms = cull_ms;
     cont->blend_ms = blend_ms;
     cont->invoked = true;

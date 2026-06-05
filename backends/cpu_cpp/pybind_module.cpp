@@ -1399,6 +1399,7 @@ py::tuple render_full_py(
             sort_blend.image_height = image_height;
             sort_blend.image_width = image_width;
             sort_blend.mb_contrib_floor = mb_contrib_floor;
+            sort_blend.transmittance_threshold = transmittance_threshold;
             sort_blend.cull_disabled = cull_disabled;
             sort_blend.blend_ok = &blend_ok;
         }

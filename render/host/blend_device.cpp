@@ -483,7 +483,15 @@ static double process_frame_mb_devcull_resident(
     uint32_t image_w,
     float* image_out,
     bool* ok,
+    float transmittance_threshold = 0.0f,
     ResidentBlendPhase phase = ResidentBlendPhase::Complete) {
+    // Saturation epsilon bits forwarded to the blend compute kernel as runtime
+    // arg 0 (viewer "Transmittance threshold" slider). 0 bits => the kernel keeps
+    // its compile-time default, so callers passing 0 reproduce iter-107 exactly.
+    uint32_t blend_eps_bits = 0u;
+    if (transmittance_threshold > 0.0f) {
+        std::memcpy(&blend_eps_bits, &transmittance_threshold, sizeof(float));
+    }
     namespace ds = gsplat_tt::device_state;
     auto buf_a   = ds::get_buffer("proj_m_a");
     auto buf_b   = ds::get_buffer("proj_m_b");
@@ -624,7 +632,7 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(subchunk_payload_addr);   // arg 22
                     reader_args.push_back(subchunk_dir_addr);       // arg 23
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
-                    SetRuntimeArgs(program, ctx.compute, core, {0u});
+                    SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits});
                     SetRuntimeArgs(program, ctx.writer, core, {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                     });
@@ -1203,7 +1211,8 @@ double blend_mb_devcull_resident(
     float* image_out,
     bool* device_ok,
     double* cull_ms_out,
-    double* blend_ms_out) {
+    double* blend_ms_out,
+    float transmittance_threshold) {
     if (cull_ms_out) *cull_ms_out = 0.0;
     if (blend_ms_out) *blend_ms_out = 0.0;
     if (!g_ctx_mb) {
@@ -1227,7 +1236,8 @@ double blend_mb_devcull_resident(
                     *g_ctx_mb, contrib_floor, cull_disabled,
                     static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
                     static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
-                    image_out, device_ok, ::mb::ResidentBlendPhase::SetupRuntimeArgsOnly);
+                    image_out, device_ok, transmittance_threshold,
+                    ::mb::ResidentBlendPhase::SetupRuntimeArgsOnly);
             }
             if (device_ok && !*device_ok) {
                 return 0.0;
@@ -1248,12 +1258,13 @@ double blend_mb_devcull_resident(
               *g_ctx_mb, contrib_floor, cull_disabled,
               static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
               static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
-              image_out, device_ok, ::mb::ResidentBlendPhase::DeviceLaunchAndReadback)
+              image_out, device_ok, transmittance_threshold,
+              ::mb::ResidentBlendPhase::DeviceLaunchAndReadback)
         : ::mb::process_frame_mb_devcull_resident(
               *g_ctx_mb, contrib_floor, cull_disabled,
               static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
               static_cast<uint32_t>(image_height), static_cast<uint32_t>(image_width),
-              image_out, device_ok);
+              image_out, device_ok, transmittance_threshold);
     if (cull_ms_out) *cull_ms_out = cull_ms;
     if (blend_ms_out) *blend_ms_out = blend_ms;
     return cull_ms + blend_ms;
