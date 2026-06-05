@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 
 #include <pybind11/numpy.h>
@@ -1432,12 +1433,19 @@ py::tuple render_full_py(
                 if (!blend_ok && tt_host_free_render) {
                     std::fprintf(stderr,
                         "[render_full] FATAL: in-sort resident blend failed\n");
+                    if (std::getenv("GSPLAT_TT_SOFTFAIL"))
+                        throw std::runtime_error(
+                            "[render_full] in-sort resident blend failed (softfail)");
                     std::abort();
                 }
             }
         } else if (tt_host_free_render) {
             std::fprintf(stderr,
                 "[render_full] FATAL: device sort failed with host-free env stack\n");
+            if (std::getenv("GSPLAT_TT_SOFTFAIL"))
+                throw std::runtime_error(
+                    "[render_full] device sort failed: a tile exceeds the device "
+                    "sort capacity at this view (softfail; move the camera back)");
             std::abort();
         }
     }
@@ -1446,6 +1454,9 @@ py::tuple render_full_py(
         if (tt_host_free_render) {
             std::fprintf(stderr,
                 "[render_full] FATAL: GSPLAT_TT_DEVICE_SORT not set on host-free path\n");
+            if (std::getenv("GSPLAT_TT_SOFTFAIL"))
+                throw std::runtime_error(
+                    "[render_full] GSPLAT_TT_DEVICE_SORT not set on host-free path (softfail)");
             std::abort();
         }
         sr = gsplat_cpu::sort_and_bin(
