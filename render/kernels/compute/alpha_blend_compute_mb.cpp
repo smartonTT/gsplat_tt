@@ -276,6 +276,14 @@ inline void process_tile_l1_blend(uint32_t num_g) {
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
+    // MATH->UNPACK back-pressure ack (mirrors process_tile_gaussians): UNPACK runs
+    // cb_pop_front and would otherwise free these CB_BUCKET_BULK/CB_BMASK_BULK slots
+    // the instant it mailboxed MATH the address — letting a FAST producer (the bulk
+    // payload DMA) recycle the slots to the next subchunk before MATH finished
+    // reading => torn records on a few tiles (non-deterministic ~35 dB). The slow
+    // gather producer hid this. Block UNPACK on MATH completion before the pop.
+    MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, num_g + 1u)));
+    UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
     cb_pop_front(CB_BUCKET_BULK, rec_pages);
     cb_pop_front(CB_BMASK_BULK, mpages);
 }

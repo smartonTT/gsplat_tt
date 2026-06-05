@@ -671,7 +671,13 @@ void kernel_main() {
             // C1: overflow subchunks DMA prebuilt PACK2 (iter 85: mat pack overlap fix).
             // iter 86: payload DMA correct at 63.63 dB but ~+1.6% slower than gather;
             // keep iter-85 mat PACK2 fix; default gather until C2 proves >=2% win.
-            const bool use_payload = false;  // was (num_subchunks > 1u)
+            // M1: overflow (fat) tiles consume the materialized depth-sorted PACK2
+            // slab from L1 instead of re-gathering per record. Safe now that the
+            // bulk compute path has the MATH->UNPACK back-pressure ack (the fast
+            // payload DMA otherwise raced slot-recycle vs MATH reads). Single-
+            // subchunk tiles stay on the proven coeff path (separate deterministic
+            // bulk defect tracked, data proven correct).
+            const bool use_payload = (num_subchunks > 1u);
 
             DeviceZoneScopedN("rd_l1_bulk");
             cb_reserve_back(CB_BMASK_BULK, mpages_mask);
