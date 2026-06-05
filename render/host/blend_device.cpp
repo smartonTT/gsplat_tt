@@ -115,7 +115,6 @@ namespace mb {
 
 constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp
 constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp
-constexpr uint32_t CB_MB_COEFF  = 2;   // 48B coeff row per gaussian (mb-major)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 128B = 32 uint32 per tile
 constexpr uint32_t CB_OUT       = 16;  // 3 bf16 color tiles per screen tile
 
@@ -143,7 +142,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
 
     // Baked production blend-kernel configuration (the GSPLAT_TT verify flags,
     // resolved to constants): RESIDENT_BLEND + SFPU_CULL + TILE_BUCKET +
-    // BLEND_AOS + DEVCONIC + L1_RECORD, BUCKET_FIT=8192, MB_CULL_SPIN=512,
+    // BLEND_AOS + DEVCONIC + L1_RECORD, BUCKET_FIT=8192,
     // MB_BUCKET_CB_FENCE on. No soft-float MB_DEVCULL, no payload pack pass, no
     // L1-mask handoff, no transmittance early-out / tail-skip. The reader reads
     // the SFPU-precomputed keep mask, fetches each candidate as one 64B AoS
@@ -154,7 +153,6 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
 
     cb_cfg(CB_XRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(CB_YRAMP, RAMP_TILE_BYTES, 2, DataFormat::Float32);
-    cb_cfg(CB_MB_COEFF, COEFF_ROW_BYTES_MB, 8, DataFormat::Float32);
     // Depth must cover max subchunks per tile (overflow tiles can be >>2);
     // reader bulk path can push counts faster than compute pops.
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
@@ -181,12 +179,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // coeff stream). CB_BUCKET_BULK/CB_BMASK_BULK: overflow bulk L1 (iter 49) —
     // separate rings so reader bulk reserve does not block on in-budget scratch.
     constexpr uint32_t CB_BUCKET = 9;
-    constexpr uint32_t CB_BSORT  = 10;
     constexpr uint32_t CB_BMASK  = 11;
     constexpr uint32_t CB_BUCKET_BULK = 12;
     constexpr uint32_t rec_bytes = 64u;
     cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
-    cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
     cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
     // Depth 2x: double-buffer subchunks (iter 51 prefetch while blend). M3: the
     // mask travels in slab word3, so there is no separate CB_BMASK_BULK.
@@ -203,17 +199,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     std::map<std::string, std::string> reader_defines = {
         {"MB_BUCKET_FIT", "8192u"},
         {"MB_TILE_L1_MASKS", "1"},
-        {"MB_CULL_SPIN", "512"},
     };
-    // Measurement-only: RDSUP hit counters in reader_alpha_blend_mb_devcull (iter 68).
-    if (const char* rds = std::getenv("MB_RD_ROW_SUPPRESS_DPRINT");
-        rds != nullptr && rds[0] == '1') {
-        reader_defines["MB_RD_ROW_SUPPRESS_DPRINT"] = "1";
-    }
-    if (const char* c1d = std::getenv("MB_C1_PAYLOAD_DEBUG");
-        c1d != nullptr && c1d[0] == '1') {
-        reader_defines["MB_C1_PAYLOAD_DEBUG"] = "1";
-    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -985,9 +971,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
     cb_cfg(cull::CB_KEEP, mb::RAMP_TILE_BYTES, 4, DataFormat::Float32);
     cb_cfg(cull::CB_CORE_TILES, 64, 1, DataFormat::UInt32);
     constexpr uint32_t CB_BUCKET = 8;
-    constexpr uint32_t CB_BSORT  = 9;
     cb_cfg(CB_BUCKET, 64, kBucketFit, DataFormat::Float32);
-    cb_cfg(CB_BSORT, 4, 2u * kBucketFit + 256u, DataFormat::UInt32);
 
     // M2: +2 accessors for the depth-sorted slab (sort_subchunk_payload) and its
     // per-subchunk dir (sort_subchunk_dir) so cull bulk-loads the slab from L1.

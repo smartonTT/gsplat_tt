@@ -56,11 +56,8 @@ namespace {
 
 constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp (c + 0.5)
 constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp (r + 0.5)
-constexpr uint32_t CB_MB_COEFF  = 2;   // one 48B coeff row per gaussian (mb-major)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock count)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
-constexpr uint32_t CB_BUCKET = 9;    // in-budget scratch (drain after coeff stream)
-constexpr uint32_t CB_BMASK  = 11;   // in-budget scratch (paired with CB_BUCKET)
 constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk L1 records (slab carries mask in word3)
 constexpr uint32_t CB_COLOR_OUT = 16;
 

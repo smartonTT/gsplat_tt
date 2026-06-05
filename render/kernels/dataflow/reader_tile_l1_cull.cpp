@@ -30,7 +30,6 @@ constexpr uint32_t CB_SCR_IDS    = 4;
 constexpr uint32_t CB_SCR_ATTR   = 5;
 constexpr uint32_t CB_CORE_TILES = 7;
 constexpr uint32_t CB_BUCKET     = 8;
-constexpr uint32_t CB_BSORT      = 9;
 
 constexpr uint32_t SOA_PAGE_BYTES = 64;
 constexpr uint32_t IDS_PAGE_BYTES = 64;

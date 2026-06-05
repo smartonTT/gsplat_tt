@@ -41,20 +41,7 @@
 
 #include "api/dataflow/dataflow_api.h"
 
-#if defined(MB_RD_ROW_SUPPRESS_DPRINT) || defined(MB_C1_PAYLOAD_DEBUG)
-#include "api/debug/dprint.h"
-#endif
-
 namespace {
-
-// Iter 67: skip in-budget coeff push when SFPU cull already zeroed coverage or
-// opacity is at/below contrib_floor (thr<0 sentinel on the cull path).
-inline bool rd_row_suppress(uint32_t mask, float op_f, float contrib_floor) {
-    if (mask == 0u) {
-        return true;
-    }
-    return op_f <= contrib_floor;
-}
 
 constexpr uint32_t ATTR_PAGE_BYTES = 64;   // 16 fp32, 9 used
 constexpr uint32_t IDS_PAGE_BYTES = 64;    // 16 uint32 ids per page
@@ -63,15 +50,11 @@ constexpr uint32_t TILE_SIZE = 32;
 
 constexpr uint32_t CB_XRAMP     = 0;
 constexpr uint32_t CB_YRAMP     = 1;
-constexpr uint32_t CB_MB_COEFF  = 2;
 constexpr uint32_t CB_MB_COUNTS = 3;
 constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
 constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
 constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
-constexpr uint32_t CB_BUCKET = 9;      // in-budget: L1 bucket + radix sort scratch (coeff stream)
-constexpr uint32_t CB_BSORT  = 10;     // L1 sort scratch: in_idx[FIT] + out_idx[FIT] + counts[256]
-constexpr uint32_t CB_BMASK  = 11;     // in-budget: whole-tile cull_masks (paired with CB_BUCKET)
 constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk: bulk L1 slab records (mask in word3)
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
@@ -89,21 +72,10 @@ constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 // tile is slot-aligned (CBs sized as 2 slots) — no ring straddle.
 constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;          // 4096
 
-inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
-    return reinterpret_cast<volatile uint32_t*>(
-        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
-}
-
 inline float bits_to_f(uint32_t b) {
     float f;
     __builtin_memcpy(&f, &b, 4);
     return f;
-}
-
-inline uint32_t f_to_bits(float f) {
-    uint32_t b;
-    __builtin_memcpy(&b, &f, 4);
-    return b;
 }
 
 // L1 store/visibility ordering fence. On Blackhole L1 is a small write-THROUGH
@@ -113,117 +85,6 @@ inline uint32_t f_to_bits(float f) {
 // invalidate_l1_cache() the runtime uses for cross-proc L1 handoff.
 inline void mb_cb_commit_fence() {
     asm volatile("fence" ::: "memory");
-}
-
-// RESIDENT gather helper: read one fp32/uint32 element `elem` from a 64B-page
-// (16-elem) DRAM-interleaved SoA buffer via `acc`, returning the raw 32-bit
-// word. Used to gather each visible gaussian's attributes straight out of the
-// resident proj_m_* / sort_* buffers (no host-built+uploaded attr table). The
-// whole 64B page is fetched and the requested lane extracted.
-template <typename Acc>
-inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_addr) {
-    const uint32_t page = elem >> 4;     // / 16
-    const uint32_t off = elem & 0xF;     // % 16
-    noc_async_read_tile(page, acc, scratch_addr);
-    noc_async_read_barrier();
-    return reinterpret_cast<volatile uint32_t*>(scratch_addr)[off];
-}
-
-// Pipelined gather: number of 64B page slots per gaussian (a,b,c,px,py,op +
-// 3 AoS color pages). Same nine reads as the per-gaussian read_soa_u32 path,
-// but issued back-to-back into distinct L1 slots so ONE barrier covers the
-// whole chunk instead of paying full NoC latency per field.
-//
-// S1 (GSPLAT_TT_BLEND_AOS / MB_BLEND_AOS): the projection/gather stage emits a
-// single contiguous Array-of-Structs record per gaussian (proj_m_blendrec,
-// {a,b,c,px,py,op,cr,cg,cb} padded to one 64B page). Each candidate then needs
-// exactly ONE contiguous 64B NoC read instead of the 7-9 random SoA pages —
-// txns 7-9 -> 1 and over-fetch 16x -> ~1.8x, with byte-identical fields.
-constexpr uint32_t GATHER_FIELDS = 1;        // one packed AoS record page / gaussian
-constexpr uint32_t GATHER_SLOT_BYTES = GATHER_FIELDS * 64u;   // 64B (AoS) or 576B (SoA) / gaussian
-
-// AoS gather: issue ONE contiguous 64B record read per gaussian (page == g) into
-// the chunk buffer. Reads left in flight; caller barriers once before consuming.
-template <typename REC>
-inline void issue_chunk_reads_aos(
-    const uint32_t* gids, uint32_t take, uint32_t buf_addr, const REC& rec_acc) {
-    for (uint32_t j = 0; j < take; ++j) {
-        noc_async_read_tile(gids[j], rec_acc, buf_addr + j * GATHER_SLOT_BYTES);
-    }
-}
-
-
-// Load one ids page worth of candidate ids ([<=16]) for the current tile into
-// `out`, returning the count. Self-contained read+barrier (cheap: one page).
-template <typename IDS>
-inline uint32_t load_ids_chunk(
-    const IDS& ids_acc, uint32_t id_start, uint32_t processed, uint32_t L,
-    uint32_t scratch_addr, uint32_t* out) {
-    constexpr uint32_t ids_per_page = IDS_PAGE_BYTES / 4;  // 16
-    const uint32_t global_idx = id_start + processed;
-    const uint32_t page_idx = global_idx / ids_per_page;
-    const uint32_t in_page  = global_idx % ids_per_page;
-    auto ids_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
-    noc_async_read_tile(page_idx, ids_acc, scratch_addr);
-    noc_async_read_barrier();
-    uint32_t take = ids_per_page - in_page;
-    if (take > L - processed) take = L - processed;
-    for (uint32_t i = 0; i < take; ++i) out[i] = ids_ptr[in_page + i];
-    return take;
-}
-
-// SFPU-cull path: the 32-bit microblock mask is precomputed on the SFPU and
-// kept resident in cull_masks, indexed identically to sort_sorted_ids (global
-// candidate index == id_start + position). Each ids chunk (<=16, page-aligned
-// by load_ids_chunk) maps to exactly one 64B/16-elem cull_masks page, so we
-// prefetch that page alongside the chunk's attr reads (covered by the same
-// barrier) and read the masks back with a pure integer load -> NO float and NO
-// constrained-min on this data mover. Returns the in-page offset of the chunk.
-template <typename Acc>
-inline uint32_t load_mask_page(const Acc& acc, uint32_t global_idx, uint32_t take, uint32_t scratch_addr) {
-    // global_idx == cull_base (16-aligned) + chunk-start position. A chunk holds
-    // `take` (<=16) candidates starting at in-page offset off=(global_idx&0xF).
-    // The consumer reads mask_ptr[off + j] for j in [0,take), so it only touches
-    // a SECOND 64B/16-elem page when off+take > 16 (the chunk straddles a page
-    // boundary). Issue page pg unconditionally and pg+1 ONLY on a straddle: the
-    // first chunk of every tile (off==0) and all chunks of 16-aligned tiles never
-    // straddle, so this drops one redundant random DRAM read on those chunks.
-    // Byte-identical to the prior 2-page load for the bytes the consumer reads.
-    const uint32_t off = global_idx & 0xF;
-    const uint32_t pg = global_idx >> 4;
-    noc_async_read_tile(pg, acc, scratch_addr);
-    if (off + take > 16u) {
-        noc_async_read_tile(pg + 1u, acc, scratch_addr + IDS_PAGE_BYTES);
-    }
-    return off;
-}
-
-inline uint32_t pack_fp32_unorm16(float v) {
-    if (v <= 0.0f) return 0u;
-    if (v >= 1.0f) return 65535u;
-    return static_cast<uint32_t>(v * 65535.0f + 0.5f);
-}
-
-// PACK2 pack from 64B proj_m_blendrec (sort_bin layout) into one 32B L1 splat.
-inline void pack_blendrec_to_l1(
-    volatile uint32_t* aos, volatile uint32_t* splat,
-    float tx_tile, float ty_tile) {
-    float mx = bits_to_f(aos[3]);
-    float my = bits_to_f(aos[4]);
-    mx -= tx_tile;
-    my -= ty_tile;
-    splat[0] = aos[0];
-    splat[1] = aos[1];
-    splat[2] = aos[2];
-    splat[3] = aos[9];
-    splat[4] = f_to_bits(mx);
-    splat[5] = f_to_bits(my);
-    const float op = bits_to_f(aos[5]);
-    const float cr = bits_to_f(aos[6]);
-    const float cg = bits_to_f(aos[7]);
-    const float cb = bits_to_f(aos[8]);
-    splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
-    splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
 }
 
 }  // namespace
@@ -416,26 +277,6 @@ void kernel_main() {
             }
         }
         const uint32_t L = id_end - id_start;
-        // T2/T3: serve this tile from its DENSE L1-resident record bucket — NO
-        // per-candidate attr gather. Load the whole bucket once (bulk, batched
-        // barriers), STABLE depth-sort the candidates IN L1 (index permutation,
-        // records stay put), and emit coeff rows reading records from L1. The
-        // stable LSD radix reproduces the DRAM radix order, so cull_masks (still
-        // depth-sorted in DRAM, indexed cull_base+k) stays aligned. Tiles whose
-        // record set exceeds MB_BUCKET_FIT*64B of L1 fall through to the gather.
-        uint32_t rec_start = 0;
-        uint32_t Lb = 0;
-        {
-            const uint32_t e0 = tile_id * 2u;
-            const uint32_t pg = e0 >> 4;
-            const uint32_t off = e0 & 0xF;
-            const uint32_t scr = get_write_ptr(CB_SCR_IDS);
-            noc_async_read_tile(pg, bucket_meta_acc, scr);
-            noc_async_read_barrier();
-            auto bmp = reinterpret_cast<volatile uint32_t*>(scr);
-            rec_start = bmp[off];
-            Lb = bmp[off + 1u];  // dense bucket count (off even -> off+1 same page)
-        }
         // Post-sort subchunk dispatch (iter 48): fat tiles (count > MB_BUCKET_FIT)
         // are processed as a depth-ordered sequence of subchunks; blend state
         // carries across subchunks via MB_COUNTS flags (bit0=emit, bit1=continue).
