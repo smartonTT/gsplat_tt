@@ -3,3 +3,9 @@
 
 # Tracy device CSVs are huge (~97MB each) — keep the .tracy, never the csv
 opt/profiler/**/profile_log_device.csv
+scenes/
+gsplat/__pycache__/
+STOP
+benchmarks/*.bak-*
+opt/ttw/*.bak-*
+*.bak-prepin-*
