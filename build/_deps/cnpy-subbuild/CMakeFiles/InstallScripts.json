@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/proj_sw/user_dev/smarton/gstt2/build/_deps/cnpy-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

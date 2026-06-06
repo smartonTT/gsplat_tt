@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/Users/smarton/dev/gstt2/build-tt-local/_deps/catch2-subbuild/cmake_install.cmake"
-	],
-	"Parallel" : false
-}

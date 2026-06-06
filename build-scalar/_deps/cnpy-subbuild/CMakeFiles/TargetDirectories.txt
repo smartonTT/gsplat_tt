@@ -1,3 +1,0 @@
-/localdev/smarton/gstt2/build-scalar/_deps/cnpy-subbuild/CMakeFiles/cnpy-populate.dir
-/localdev/smarton/gstt2/build-scalar/_deps/cnpy-subbuild/CMakeFiles/edit_cache.dir
-/localdev/smarton/gstt2/build-scalar/_deps/cnpy-subbuild/CMakeFiles/rebuild_cache.dir

@@ -1,3 +1,0 @@
-/Users/smarton/dev/gstt2/build-neon/_deps/cnpy-subbuild/CMakeFiles/cnpy-populate.dir
-/Users/smarton/dev/gstt2/build-neon/_deps/cnpy-subbuild/CMakeFiles/edit_cache.dir
-/Users/smarton/dev/gstt2/build-neon/_deps/cnpy-subbuild/CMakeFiles/rebuild_cache.dir

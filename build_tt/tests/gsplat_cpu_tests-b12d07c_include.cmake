@@ -1,5 +1,0 @@
-if(EXISTS "/localdev/smarton/gstt2/build_tt/tests/gsplat_cpu_tests-b12d07c_tests.cmake")
-  include("/localdev/smarton/gstt2/build_tt/tests/gsplat_cpu_tests-b12d07c_tests.cmake")
-else()
-  add_test(gsplat_cpu_tests_NOT_BUILT-b12d07c gsplat_cpu_tests_NOT_BUILT-b12d07c)
-endif()

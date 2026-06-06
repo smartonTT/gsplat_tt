@@ -9,3 +9,6 @@ STOP
 benchmarks/*.bak-*
 opt/ttw/*.bak-*
 *.bak-prepin-*
+build/
+build-*/
+build_*/
