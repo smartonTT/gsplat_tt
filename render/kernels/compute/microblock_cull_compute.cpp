@@ -30,14 +30,20 @@
 // 32-bit mask with pure integer compares -> no float on any data mover.
 //
 // Per (gaussian, microblock) lane math mirrors compute_microblock_mask:
-//   det  = max(cov_a*cov_c - cov_b*cov_b, 1e-6)
-//   ci_a=cov_c/det, ci_b=-cov_b/det, ci_c=cov_a/det
-//   constrained-min Mahalanobis^2 of the microblock box vs the gaussian center
-//   keep = (opacity * exp(-0.5 * m2_min) >= contrib_floor), rearranged divide-
-//   free as keep = (qmin <= det*thr) with thr = 2*ln(op/floor). iter 108: thr is
-//   computed HERE on the SFPU (hardware log, _calculate_log_body_no_init_) from
-//   the raw opacity the reader streams -- the per-pair soft-float __builtin_logf
-//   (~74 ms) is removed from the NCRISC cull reader.
+//   A1 (iter 111): the record words now carry the PRE-FOLDED conic {A,B,C}
+//   (hoisted into pfwc), so the precision matrix is recovered with two cheap
+//   scalar multiplies — ci_a = -2A (= cov_c/det), ci_b = -B (= -cov_b/det),
+//   ci_c = -2C (= cov_a/det) — instead of a per-face determinant + reciprocal
+//   that re-derived conic from raw cov. The keep-test now runs DIRECTLY in
+//   conic/precision space (no det recompute, no det*thr scaling):
+//   constrained-min Mahalanobis^2 m2_min = min over the box of
+//     m2(u,v) = ci_a*u^2 + 2*ci_b*u*v + ci_c*v^2,
+//   keep = (m2_min <= thr) with thr = 2*ln(op/floor). iter 108: thr is computed
+//   HERE on the SFPU (hardware log, _calculate_log_body_no_init_) from the raw
+//   opacity the reader streams -- the per-pair soft-float __builtin_logf
+//   (~74 ms) is removed from the NCRISC cull reader. The only per-face recip
+//   that remains is the edge-projection optimum (1/ci_c for the x-face, 1/ci_a
+//   for the y-face) -- intrinsic to the constrained min, not a conic re-derive.
 // keep (1.0/0.0) is written to dst_reg[KEEP][V]; the unused upper vectors of a
 // short final batch are zero-filled and ignored by the writer.
 
@@ -135,56 +141,60 @@ constexpr uint32_t DR_THR    = 5 * 32;  // iter 108: per-gaussian thr = 2*ln(op/
 // (an inline Converter::as_float(...) inside a bigger expr emits a NON-uniform
 // per-lane load instead of a broadcast -> per-lane garbage).
 
-// x-face candidate: Qv = cov_c*u_c^2 - 2*cov_b*u_c*v* + cov_a*v*^2, where
-// u_c=clamp(0,[u_lo,u_hi]) and v*=clamp(cov_b*u_c/cov_a,[v_lo,v_hi]). -> DR_QV.
+// x-face candidate (conic): m2_v = ci_a*u_c^2 + 2*ci_b*u_c*v* + ci_c*v*^2, where
+// u_c=clamp(0,[u_lo,u_hi]) and v*=clamp(-ci_b*u_c/ci_c,[v_lo,v_hi]). -> DR_QV.
+// a_bits/b_bits/c_bits carry the conic {A,B,C}: ci_a=-2A, ci_b=-B, ci_c=-2C.
 template <uint32_t V>
 __attribute__((noinline, noipa)) void cull_face_x(
     uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
     uint32_t mx_bits, uint32_t my_bits, uint32_t txf_bits, uint32_t tyf_bits) {
     using namespace sfpi;
     namespace cs = ckernel::sfpu;
-    vFloat cov_a = cs::Converter::as_float(a_bits);
-    vFloat cov_b = cs::Converter::as_float(b_bits);
-    vFloat cov_c = cs::Converter::as_float(c_bits);
+    vFloat ci_a = vFloat(-2.0f) * cs::Converter::as_float(a_bits);  // = cov_c/det
+    vFloat ci_b = vFloat(-1.0f) * cs::Converter::as_float(b_bits);  // = -cov_b/det
+    vFloat ci_c = vFloat(-2.0f) * cs::Converter::as_float(c_bits);  // = cov_a/det
     vFloat mlx = cs::Converter::as_float(mx_bits) - cs::Converter::as_float(txf_bits);
     vFloat mly = cs::Converter::as_float(my_bits) - cs::Converter::as_float(tyf_bits);
     vFloat u_c = vFloat(dst_reg[DR_BOX_OX + V]) - mlx;
     { vFloat uh = u_c + vFloat(8.0f); vFloat z = 0.0f; vec_min_max(z, u_c); vec_min_max(u_c, uh); }
     vFloat v_lo = vFloat(dst_reg[DR_BOX_OY + V]) - mly;
     vFloat v_hi = v_lo + vFloat(4.0f);
-    vFloat ra = approx_recip(cov_a);
-    ra = ra * (vFloat(2.0f) - cov_a * ra);
-    ra = ra * (vFloat(2.0f) - cov_a * ra);
-    vFloat vs = (cov_b * u_c) * ra;
+    // v* = -ci_b*u_c/ci_c minimizes m2 along the fixed-u edge; clamp to the box.
+    vFloat rc = approx_recip(ci_c);
+    rc = rc * (vFloat(2.0f) - ci_c * rc);
+    rc = rc * (vFloat(2.0f) - ci_c * rc);
+    vFloat vs = (vFloat(-1.0f) * ci_b * u_c) * rc;
     vec_min_max(v_lo, vs); vec_min_max(vs, v_hi);  // vs = clamp(vs, [v_lo, v_hi])
-    dst_reg[DR_QV + V] = cov_c * (u_c * u_c) + (vFloat(-2.0f) * cov_b) * (u_c * vs) +
-                         cov_a * (vs * vs);
+    dst_reg[DR_QV + V] = ci_a * (u_c * u_c) + (vFloat(2.0f) * ci_b) * (u_c * vs) +
+                         ci_c * (vs * vs);
 }
 
-// y-face candidate: Qh = cov_c*u*^2 - 2*cov_b*u**v_c + cov_a*v_c^2, where
-// v_c=clamp(0,[v_lo,v_hi]) and u*=clamp(cov_b*v_c/cov_c,[u_lo,u_hi]). -> DR_QH.
+// y-face candidate (conic): m2_h = ci_a*u*^2 + 2*ci_b*u**v_c + ci_c*v_c^2, where
+// v_c=clamp(0,[v_lo,v_hi]) and u*=clamp(-ci_b*v_c/ci_a,[u_lo,u_hi]). -> DR_QH.
+// a_bits/b_bits/c_bits carry the conic {A,B,C}: ci_a=-2A, ci_b=-B, ci_c=-2C.
 template <uint32_t V>
 __attribute__((noinline, noipa)) void cull_face_y(
     uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
     uint32_t mx_bits, uint32_t my_bits, uint32_t txf_bits, uint32_t tyf_bits) {
     using namespace sfpi;
     namespace cs = ckernel::sfpu;
-    vFloat cov_a = cs::Converter::as_float(a_bits);
-    vFloat cov_b = cs::Converter::as_float(b_bits);
-    vFloat cov_c = cs::Converter::as_float(c_bits);
+    vFloat ci_a = vFloat(-2.0f) * cs::Converter::as_float(a_bits);  // = cov_c/det
+    vFloat ci_b = vFloat(-1.0f) * cs::Converter::as_float(b_bits);  // = -cov_b/det
+    vFloat ci_c = vFloat(-2.0f) * cs::Converter::as_float(c_bits);  // = cov_a/det
     vFloat mlx = cs::Converter::as_float(mx_bits) - cs::Converter::as_float(txf_bits);
     vFloat mly = cs::Converter::as_float(my_bits) - cs::Converter::as_float(tyf_bits);
     vFloat v_c = vFloat(dst_reg[DR_BOX_OY + V]) - mly;
     { vFloat vh = v_c + vFloat(4.0f); vFloat z = 0.0f; vec_min_max(z, v_c); vec_min_max(v_c, vh); }
     vFloat u_lo = vFloat(dst_reg[DR_BOX_OX + V]) - mlx;
     vFloat u_hi = u_lo + vFloat(8.0f);
-    vFloat rc = approx_recip(cov_c);
-    rc = rc * (vFloat(2.0f) - cov_c * rc);
-    rc = rc * (vFloat(2.0f) - cov_c * rc);
-    vFloat us = (cov_b * v_c) * rc;
+    // u* = -ci_b*v_c/ci_a minimizes m2 along the fixed-v edge; clamp to the box.
+    vFloat ra = approx_recip(ci_a);
+    ra = ra * (vFloat(2.0f) - ci_a * ra);
+    ra = ra * (vFloat(2.0f) - ci_a * ra);
+    vFloat us = (vFloat(-1.0f) * ci_b * v_c) * ra;
     vec_min_max(u_lo, us); vec_min_max(us, u_hi);  // us = clamp(us, [u_lo, u_hi])
-    dst_reg[DR_QH + V] = cov_c * (us * us) + (vFloat(-2.0f) * cov_b) * (us * v_c) +
-                         cov_a * (v_c * v_c);
+    dst_reg[DR_QH + V] = ci_a * (us * us) + (vFloat(2.0f) * ci_b) * (us * v_c) +
+                         ci_c * (v_c * v_c);
 }
 
 // iter 108: per-gaussian Mahalanobis threshold thr = -2*ln(floor/op) computed
@@ -208,29 +218,22 @@ __attribute__((noinline, noipa)) void cull_thr(uint32_t op_bits, uint32_t inv_fl
     dst_reg[DR_THR + V] = logv + logv;  // 2*ln(op/floor)
 }
 
-// combine: m2 = min(DR_QV, DR_QH) / det; keep iff qmin <= det*thr (divide-free).
-// thr is read from DR_THR[V] (committed a full phase earlier by cull_thr). Runs
-// ONLY after every face_x/face_y/thr of the batch has committed its DEST store
-// (phased dispatch -> no DEST read-after-write hazard).
+// combine (conic): m2_min = min(DR_QV, DR_QH); keep iff m2_min <= thr. A1: the
+// faces now write m2 DIRECTLY (conic space), so there is NO determinant recompute
+// and NO det*thr scaling here — just a min + a compare. thr is read from
+// DR_THR[V] (committed a full phase earlier by cull_thr). Runs ONLY after every
+// face_x/face_y/thr of the batch has committed its DEST store (phased dispatch ->
+// no DEST read-after-write hazard).
 template <uint32_t V>
 __attribute__((noinline, noipa)) void cull_combine(
-    uint32_t keep_base, uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
-    bool cull_disabled, uint32_t pos_base) {
+    uint32_t keep_base, bool cull_disabled) {
     using namespace sfpi;
-    (void)pos_base;
-    namespace cs = ckernel::sfpu;
     vFloat qmin = dst_reg[DR_QV + V];
-    { vFloat qh = dst_reg[DR_QH + V]; vec_min_max(qmin, qh); }  // qmin = min(Qv, Qh) == det*m2_min
+    { vFloat qh = dst_reg[DR_QH + V]; vec_min_max(qmin, qh); }  // qmin = min(m2_v, m2_h)
     if (cull_disabled) { qmin = vFloat(0.0f); }  // m2 := 0 -> kept iff thr >= 0
-    vFloat cov_a = cs::Converter::as_float(a_bits);
-    vFloat cov_b = cs::Converter::as_float(b_bits);
-    vFloat cov_c = cs::Converter::as_float(c_bits);
-    vFloat det = cov_a * cov_c - cov_b * cov_b;
-    { vFloat det_floor = 1e-6f; vec_min_max(det_floor, det); }  // det = max(det, 1e-6)
     vFloat thr = dst_reg[DR_THR + V];
-    vFloat scaled = det * thr;
     vFloat keepv = 0.0f;
-    v_if(qmin <= scaled) { keepv = vFloat(1.0f); } v_endif;
+    v_if(qmin <= thr) { keepv = vFloat(1.0f); } v_endif;
     dst_reg[keep_base + V] = keepv;
 }
 #endif  // TRISC_MATH
@@ -285,16 +288,15 @@ inline void cull_phase_fy(
 }
 
 // Phase 3: ALL combines (each reads DR_QV[V]/DR_QH[V]/DR_THR[V] -> DR_KEEP[V]).
+// A1: combine is conic-space (m2 direct), so it no longer needs a/b/c.
 template <uint32_t V>
 inline void cull_phase_combine(
-    uint32_t keep_base, uint32_t nb, uint32_t pos_base,
-    const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    bool cull_disabled) {
+    uint32_t keep_base, uint32_t nb, bool cull_disabled) {
     if constexpr (V < BATCH) {
         if (V < nb) {
-            MATH((cull_combine<V>(keep_base, a[V], b[V], c[V], cull_disabled, pos_base)));
+            MATH((cull_combine<V>(keep_base, cull_disabled)));
         }
-        cull_phase_combine<V + 1>(keep_base, nb, pos_base, a, b, c, cull_disabled);
+        cull_phase_combine<V + 1>(keep_base, nb, cull_disabled);
     }
 }
 
@@ -304,10 +306,11 @@ inline void cull_dispatch(
     const uint32_t* mx, const uint32_t* my, const uint32_t* op,
     uint32_t inv_floor_bits, uint32_t txf_bits, uint32_t tyf_bits,
     bool cull_disabled) {
+    (void)pos_base;
     cull_phase_thr<0>(nb, op, inv_floor_bits);
     cull_phase_fx<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
     cull_phase_fy<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
-    cull_phase_combine<0>(keep_base, nb, pos_base, a, b, c, cull_disabled);
+    cull_phase_combine<0>(keep_base, nb, cull_disabled);
 }
 
 inline uint32_t f_to_u32(float f) {
@@ -391,10 +394,11 @@ void kernel_main() {
             uint32_t nb = L - processed;
             if (nb > BATCH) nb = BATCH;
 
-            // Reproduce emit_cull_row_from_l1_splat exactly (bit-identical cull):
-            // a,b,c = raw cov words; center = tile-local mean (rec[4],rec[5]) +
-            // tile origin (the SFPU subtracts it back via txf/tyf); op = UNORM16
-            // (rec[6]&0xffff)/65535. row[6] thr is computed on the SFPU (cull_thr).
+            // Reproduce emit_cull_row_from_l1_splat (A1: rec[0..2] now carry the
+            // pre-folded conic {A,B,C} instead of raw cov; the faces recover the
+            // precision matrix as ci=-2A,-B,-2C). center = tile-local mean
+            // (rec[4],rec[5]) + tile origin (the SFPU subtracts it back via
+            // txf/tyf); op = UNORM16 (rec[6]&0xffff)/65535. thr is SFPU (cull_thr).
             uint32_t a[BATCH], b[BATCH], c[BATCH], mx[BATCH], my[BATCH], op[BATCH];
             for (uint32_t i = 0; i < nb; i++) {
                 const uint32_t* rec = l1_splat_words(buck, processed + i);

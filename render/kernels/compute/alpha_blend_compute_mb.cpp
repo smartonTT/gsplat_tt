@@ -118,19 +118,13 @@ inline void blend_one_gaussian_math(
     vFloat x = dst_reg[DR_X + IX];
     vFloat y = dst_reg[DR_Y + IX];
 
-    // DEVCONIC: a_bits/b_bits/c_bits carry raw cov {cov_a,cov_b,cov_c}; derive A,B,C on SFPU.
-    vFloat cov_a = ckernel::sfpu::Converter::as_float(a_bits);
-    vFloat cov_b = ckernel::sfpu::Converter::as_float(b_bits);
-    vFloat cov_c = ckernel::sfpu::Converter::as_float(c_bits);
-    vFloat det = cov_a * cov_c - cov_b * cov_b;
-    vFloat det_floor = 1e-6f;
-    vec_min_max(det_floor, det);
-    vFloat inv = approx_recip(det);
-    inv = inv * (vFloat(2.0f) - det * inv);
-    inv = inv * (vFloat(2.0f) - det * inv);
-    vFloat A = vFloat(-0.5f) * (cov_c * inv);
-    vFloat B = cov_b * inv;
-    vFloat C = vFloat(-0.5f) * (cov_a * inv);
+    // A1 (iter 111): a_bits/b_bits/c_bits now carry the PRE-FOLDED conic
+    // {A,B,C}, hoisted once-per-gaussian into pfwc_compute.cpp (bit-identical to
+    // the det/recip/-0.5-fold that USED to run here for every (gaussian ×
+    // microblock) pair). The redundant SFPU recompute is gone — read straight.
+    vFloat A = ckernel::sfpu::Converter::as_float(a_bits);
+    vFloat B = ckernel::sfpu::Converter::as_float(b_bits);
+    vFloat C = ckernel::sfpu::Converter::as_float(c_bits);
     vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
     vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
     vFloat dx = x - mx;

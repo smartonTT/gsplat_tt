@@ -86,6 +86,10 @@ constexpr uint32_t CB_TMP_CC02   = 23;
 constexpr uint32_t CB_TMP_CC11   = 24;
 constexpr uint32_t CB_TMP_CC12   = 25;
 constexpr uint32_t CB_TMP_CC22   = 26;
+// A1 (iter 111): per-gaussian conic scratch (a,b,c stashed before the conic fold).
+constexpr uint32_t CB_TMP_A      = 27;
+constexpr uint32_t CB_TMP_B      = 28;
+constexpr uint32_t CB_TMP_C      = 29;
 
 struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
@@ -221,6 +225,8 @@ static void build_program(PfwcDeviceContext& ctx) {
     cb_fp32(CB_TMP_INV_TZ, 2);
     cb_fp32(CB_TMP_CC00, 2);   cb_fp32(CB_TMP_CC01, 2);   cb_fp32(CB_TMP_CC02, 2);
     cb_fp32(CB_TMP_CC11, 2);   cb_fp32(CB_TMP_CC12, 2);   cb_fp32(CB_TMP_CC22, 2);
+    // 3 conic scratch CBs (A1): cov2d a,b,c stashed, then folded to A,B,C.
+    cb_fp32(CB_TMP_A, 2);      cb_fp32(CB_TMP_B, 2);      cb_fp32(CB_TMP_C, 2);
 
     // Reader: 9 input streams (unchanged layout).
     std::vector<uint32_t> reader_ct;
@@ -245,7 +251,8 @@ static void build_program(PfwcDeviceContext& ctx) {
                         CB_C11, CB_C12, CB_C22,
                         CB_TMP_TX, CB_TMP_TY, CB_TMP_TZ, CB_TMP_INV_TZ,
                         CB_TMP_CC00, CB_TMP_CC01, CB_TMP_CC02,
-                        CB_TMP_CC11, CB_TMP_CC12, CB_TMP_CC22}) {
+                        CB_TMP_CC11, CB_TMP_CC12, CB_TMP_CC22,
+                        CB_TMP_A, CB_TMP_B, CB_TMP_C}) {
         u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
     }
 

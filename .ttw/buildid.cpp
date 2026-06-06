@@ -1,5 +1,5 @@
-id=78
-sha=708168f
-ts=2026-06-06T10:34:51-0700
-desc=iter 110: A2: coalesce per-subchunk slab load into one large/contiguous NoC transfer (was ~4096 64B interleaved page reads/subchunk; transaction-issue-bound)
-bin=6286bdd97c80f8b9
+id=80
+sha=04c8992
+ts=2026-06-06T12:05:24-0700
+desc=iter 111: A1: hoist conic (cov->A,B,C) into pfwc; delete per-microblock det/recip/A/B/C recompute in blend; rewrite cull in conic space; invert conic->cov at the cpu_cpp_mb device->host readback boundary so the reference's CPU cull/blend stay raw-cov. Attacks SFPU wall (tile_blend_sfpu ~291k ms).
+bin=665234a6034eca2b

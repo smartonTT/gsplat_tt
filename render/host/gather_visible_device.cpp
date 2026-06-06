@@ -412,6 +412,27 @@ static float effective_max_radius(int max_radius_param, int H, int W) {
     return static_cast<float>(std::min(H, W) / 2);
 }
 
+// A1 (iter-111): pfwc now stores the PRE-FOLDED conic {A,B,C} in the three
+// covariance words of the per-Gaussian record (A=-0.5*cov_c*inv, B=cov_b*inv,
+// C=-0.5*cov_a*inv, inv ~= 1/det). The device blend/cull consume that conic
+// directly. The host-side CPU consumers (project_finish, tile_assign per-pair
+// Mahalanobis cull, cull_and_blend) still expect the RAW 2D covariance {a,b,c}
+// and re-derive the conic themselves. So when those words are read back to the
+// host (the cpu_cpp_mb CPU-blend reference path; the device resident-blend path
+// never reads cov2d back), invert the fold so proj.covs_2d keeps its raw-cov
+// contract and every downstream CPU stage is unchanged.
+//   Sigma^-1 = [[-2A,-B],[-B,-2C]];  det(Sigma^-1) = 4AC - B^2
+//   Sigma = adj(Sigma^-1)/det(Sigma^-1):  a=-2C/den, b=B/den, c=-2A/den.
+// den = inv^2 * det > 0 always (pfwc floors det at 1e-6), so the divide is safe.
+static inline void conic_to_cov2d(
+    float A, float B, float C, float& a, float& b, float& c) {
+    const float den = 4.0f * A * C - B * B;
+    const float inv = 1.0f / den;
+    a = -2.0f * C * inv;
+    b = B * inv;
+    c = -2.0f * A * inv;
+}
+
 // Read the resident pfwc_* SoA buffers (padded_n) back to host AoS arrays.
 static bool readback_pfwc(
     GatherDeviceContext* ctx, std::size_t N, uint32_t padded_n,
@@ -444,9 +465,10 @@ static bool readback_pfwc(
         mean_2d[i * 2 + 0] = m2x[i];
         mean_2d[i * 2 + 1] = m2y[i];
         depth[i] = dep[i];
-        cov2d[i * 3 + 0] = a[i];
-        cov2d[i * 3 + 1] = b[i];
-        cov2d[i * 3 + 2] = c[i];
+        // pfwc stores conic {A,B,C} here; recover raw cov {a,b,c} for the host
+        // finisher / CPU cull+blend (see conic_to_cov2d).
+        conic_to_cov2d(a[i], b[i], c[i],
+                       cov2d[i * 3 + 0], cov2d[i * 3 + 1], cov2d[i * 3 + 2]);
         radii[i * 2 + 0] = rx[i];
         radii[i * 2 + 1] = ry[i];
     }
@@ -484,11 +506,14 @@ static gsplat_cpu::ProjectResult readback_proj_m(
     for (std::size_t m = 0; m < M; ++m) {
         proj.means_2d[m * 2 + 0] = px[m];
         proj.means_2d[m * 2 + 1] = py[m];
-        // expand a,b,c -> [a, b, b, c] to match the unchanged downstream layout.
-        proj.covs_2d[m * 4 + 0] = a[m];
-        proj.covs_2d[m * 4 + 1] = b[m];
-        proj.covs_2d[m * 4 + 2] = b[m];
-        proj.covs_2d[m * 4 + 3] = c[m];
+        // pfwc stores conic {A,B,C} in the cov words; recover raw {a,b,c} and
+        // expand to [a, b, b, c] to match the unchanged downstream layout.
+        float ca, cb, cc;
+        conic_to_cov2d(a[m], b[m], c[m], ca, cb, cc);
+        proj.covs_2d[m * 4 + 0] = ca;
+        proj.covs_2d[m * 4 + 1] = cb;
+        proj.covs_2d[m * 4 + 2] = cb;
+        proj.covs_2d[m * 4 + 3] = cc;
         proj.depths[m] = dep[m];
         proj.radii[m * 2 + 0] = rx[m];
         proj.radii[m * 2 + 1] = ry[m];
