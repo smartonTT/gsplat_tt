@@ -36,18 +36,21 @@ spin tuning are NOT progress.
 
 - **Metric:** `hero_vs_ref` — PSNR (dB) of the rendered HERO view vs the saved
   reference image.
-- **Threshold (keep-gate):** `hero_vs_ref >= 63.6 dB` (`ttw.toml [gate]
-  metric_threshold = 63.6`, `metric_lower = 0`).
+- **Threshold (keep-gate):** `hero_vs_ref >= 60 dB` (`ttw.toml [gate]
+  metric_threshold = 60`, `metric_lower = 0`). **Lowered from 63.6 to 60 per user
+  directive (2026-06-06):** perf wins that cost a fraction of a dB (e.g. the
+  conic-hoist, previously 63.39) must NOT be auto-reverted by the gate.
 - **Anchor:** the known-good ideal path scores **63.85 dB**; a correct,
   bit-identical change re-verifies at exactly 63.85. Treat a drop below 63.85 as
-  a regression to explain, and below 63.6 as a hard keep-gate failure.
+  a regression to UNDERSTAND/explain, but only below **60** is it a hard keep-gate
+  failure.
 - The HERO view is for the **screenshot + the PSNR/quality gate ONLY** — never
   quote hero render time as the frame time (see timing metric).
 
 **Stage-2 regression policy:** perf regressions ARE acceptable when an iteration
 moves the architecture toward the plan (on-device record format, buckets,
 persistent kernels, phase barriers) — later milestones offset the cost. The ONLY
-hard keep-gate is the quality gate (`hero_vs_ref >= 63.6`). Do NOT reject a
+hard keep-gate is the quality gate (`hero_vs_ref >= 60`). Do NOT reject a
 milestone for being slower; reject only if it breaks quality or is
 architecturally unsound. `stuck_after` is relaxed (8) so a temporary perf
 plateau/regression does not thrash into `tt-debug` — use supervisor judgment.
@@ -174,7 +177,7 @@ every optimization iteration:
 - **No CPU fallback** in the hot path — unsupported inputs hard-fail.
 - **Kernels stay one file per kernel** (tt-metal JIT path requirement); host may
   stay one `*_device.cpp` per stage until a safe consolidation pass lands.
-- **Gate still holds:** `hero_vs_ref >= 63.6 dB` on the hero view after every change.
+- **Gate still holds:** `hero_vs_ref >= 60 dB` on the hero view after every change.
 
 ## Subagent model (free tier)
 
