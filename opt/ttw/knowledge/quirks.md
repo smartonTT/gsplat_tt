@@ -88,6 +88,26 @@ The render hot path is host-free only when these are gone:
 - `tile_assign` K2 scatter splits the already-compacted uniform pair domain ⇒
   already balanced (1.0004× write); a strided split is a wash/loss.
 
+## STALE REFERENCE .so trap (false PSNR failure)
+
+The `hero_vs_ref` gate compares `render_clean` (device, `render/build-tt`) against
+the `cpu_cpp_mb` reference, which is a SEPARATE pybind `.so`
+(`backends/cpu_cpp/_gsplat_cpu.cpython-*.so`) built by the **`_gsplat_cpu` target
+in `build-avx2-tt`**. That reference embeds the SAME `render/host/sort_device.cpp`
++ `render/kernels` slab-layout/record code. `verify_cmd` historically rebuilt ONLY
+`render/build-tt`, so any change to the slab layout or record FORMAT (page size,
+word semantics) left the reference `.so` STALE → it laid out / read the slab with
+the OLD format while the device used the NEW one → corrupted reference image →
+**false low PSNR** (iter-110 A2 saw 16.09 dB; the device render was correct the
+whole time). Symptom: blocky artifacts confined to dense fat-tile/background
+regions in the *diff*, with the device hero looking fine.
+- **Fix (shipped):** `verify_cmd` now also runs
+  `cmake --build build-avx2-tt --target _gsplat_cpu -j 16` before `run.py`.
+- **Any record-format / slab-layout change must rebuild the reference** (and, if
+  the reference's CPU compute reads those record words, update `src/gsplat_cpu/*`
+  to match). A sudden ~16 dB with a clean-looking device hero = suspect a stale
+  reference FIRST, before chasing a kernel addressing bug.
+
 ## Profiler / Tracy (gsplat)
 
 - gsplat NEVER closes the device, so a plain Tracy `capture-release` gets only
