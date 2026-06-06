@@ -40,6 +40,13 @@ constexpr uint32_t CHUNK_MAX = 16;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t GATHER_SLOT_BYTES = 64u;
+// iter 110 (A2): the depth-sorted slab uses a LARGE DRAM interleave page so the
+// per-subchunk bulk load is ceil(L/SLAB_RECS_PER_PAGE) big NoC transfers (was
+// ~4096 per-64B-page reads). The slab is a contiguous array of 32B records, so
+// each big page maps to a contiguous L1 span and record k still lands at
+// buck + k*32 (depth-rank alignment with the blend reader is preserved).
+constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 
 // iter 109: FIXED-SIZE bulk CB slot (mirror the blend reader/compute bulk hand-
 // off). CB_BUCKET is circular + accessed with LINEAR pointer arithmetic over a
@@ -117,7 +124,7 @@ void kernel_main() {
     const auto tids_acc      = TensorAccessor(tids_args, tile_ids_addr, IDS_PAGE_BYTES);
     const auto lpt_meta_acc  = TensorAccessor(lpt_meta_args, lpt_meta_addr, SOA_PAGE_BYTES);
     const auto subchunk_payload_acc =
-        TensorAccessor(subchunk_payload_args, subchunk_payload_addr, L1_PACK_PAGE_BYTES);
+        TensorAccessor(subchunk_payload_args, subchunk_payload_addr, SLAB_PAGE_BYTES);
     const auto subchunk_dir_acc =
         TensorAccessor(subchunk_dir_args, subchunk_dir_addr, SOA_PAGE_BYTES);
     // M2: l1_recs / ids / blendrec / bucket_meta are dead on the cull hot path
@@ -285,7 +292,8 @@ void kernel_main() {
                 payload_page = reinterpret_cast<volatile uint32_t*>(scr)[dof];
             }
 
-            const uint32_t rec_pages = (L_sub + 1u) >> 1;
+            const uint32_t rec_pages =
+                (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             cb_reserve_back(CB_BUCKET, BULK_REC_SLOT);
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
@@ -295,7 +303,7 @@ void kernel_main() {
                     const uint32_t end = (pp + 64u < rec_pages) ? pp + 64u : rec_pages;
                     for (uint32_t q = pp; q < end; ++q) {
                         noc_async_read_tile(page0 + q, subchunk_payload_acc,
-                                            buck + q * L1_PACK_PAGE_BYTES);
+                                            buck + q * SLAB_PAGE_BYTES);
                     }
                     noc_async_read_barrier();
                     pp = end;

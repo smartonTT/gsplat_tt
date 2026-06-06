@@ -1,5 +1,5 @@
-id=75
-sha=5a290f8
-ts=2026-06-05T13:44:09-0700
-desc=iter 109: cull bulk L1 slab hand-off (mirror blend reader): delete per-record CB_CULL_COEFF stream, compute reads records straight from bulk CB_BUCKET slab
-bin=68350c1d541f9678
+id=78
+sha=708168f
+ts=2026-06-06T10:34:51-0700
+desc=iter 110: A2: coalesce per-subchunk slab load into one large/contiguous NoC transfer (was ~4096 64B interleaved page reads/subchunk; transaction-issue-bound)
+bin=6286bdd97c80f8b9

@@ -15,6 +15,12 @@ namespace {
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 
+// iter 110 (A2): payload_page is expressed in LARGE slab pages (must match the
+// host SubchunkLayout sizing and both readers/materialize/mask-writer). The slab
+// is a contiguous array of 32B records; SLAB_RECS_PER_PAGE records per page.
+constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / 32u;  // 64
+
 constexpr uint32_t CB_SCR = 0;
 
 }  // namespace
@@ -112,7 +118,7 @@ void kernel_main() {
             noc_async_write_barrier();
 
             if (l_sub > 0u) {
-                page_cursor += (l_sub + 1u) >> 1;
+                page_cursor += (l_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             }
             dir_cursor += 1u;
         }

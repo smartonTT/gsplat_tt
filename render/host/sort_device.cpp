@@ -65,6 +65,15 @@ namespace {
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t PAGE_BYTES = ELEMS_PER_PAGE * 4;  // 64
 
+// iter 110 (A2): the depth-sorted PACK2 slab (sort_subchunk_payload) uses a
+// LARGE DRAM interleave page so each subchunk loads in ceil(L/64) big NoC
+// transfers instead of ~4096 per-64B-page reads. The in-record layout is
+// UNCHANGED — the slab is still a contiguous array of 32B records (record g at
+// byte g*32); only the DRAM interleave granularity grows. SLAB_RECS_PER_PAGE
+// = SLAB_PAGE_BYTES / 32. Subchunk bases are page-aligned in these units.
+constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / 32u;  // 64
+
 // ROUTE C bucket-cull (GSPLAT_TT_BUCKET_MASK): the SFPU microblock cull runs in
 // the sort stage over the dense record bucket so the keep mask is a SORT-STAGE
 // write baked into record word 10 (read back spin-free by the L1 blend).
@@ -315,7 +324,8 @@ static SubchunkLayout build_subchunk_layout(
             layout.dir.push_back(flags);
             layout.dir.push_back(0u);
             if (l_sub > 0u) {
-                page_cursor += (static_cast<uint64_t>(l_sub) + 1u) >> 1;
+                page_cursor += (static_cast<uint64_t>(l_sub) + SLAB_RECS_PER_PAGE - 1u) /
+                               SLAB_RECS_PER_PAGE;
             }
             dir_cursor += 1u;
         }
@@ -421,11 +431,11 @@ static bool prepare_subchunk_buffers(
     const SubchunkLayout& layout,
     uint32_t num_tiles) {
     const std::size_t payload_bytes =
-        std::max<std::size_t>(64, layout.total_payload_pages * 64u);
+        std::max<std::size_t>(SLAB_PAGE_BYTES, layout.total_payload_pages * SLAB_PAGE_BYTES);
     if (!ctx->buf_subchunk_payload ||
         ctx->cap_subchunk_payload_bytes < payload_bytes) {
         ctx->buf_subchunk_payload =
-            make_dram_paged(ctx->mesh_device.get(), payload_bytes, 64u);
+            make_dram_paged(ctx->mesh_device.get(), payload_bytes, SLAB_PAGE_BYTES);
         ctx->cap_subchunk_payload_bytes = payload_bytes;
         device_state::register_buffer("sort_subchunk_payload", ctx->buf_subchunk_payload);
     }

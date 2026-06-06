@@ -18,6 +18,14 @@ constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+// iter 110 (A2): the depth-sorted slab is materialized into a DRAM buffer with a
+// LARGE interleave page (SLAB_PAGE_BYTES) so the cull/blend readers coalesce the
+// per-subchunk load into ceil(L/SLAB_RECS_PER_PAGE) big transfers. The slab is
+// still a contiguous array of 32B records: subchunk-local record g lives at
+// page (sc_page + g/SLAB_RECS_PER_PAGE), byte (g % SLAB_RECS_PER_PAGE)*32. The
+// source L1 bucket layout (PACK2, 2 recs / 64B) is unchanged.
+constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 constexpr uint32_t TILE_SIZE = 32u;
 // iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
 constexpr uint32_t REC_BATCH = 32u;
@@ -82,7 +90,7 @@ void kernel_main() {
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
     const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_PACK_PAGE_BYTES);
-    const auto payload_acc  = TensorAccessor(payload_args,  payload_addr,  L1_PACK_PAGE_BYTES);
+    const auto payload_acc  = TensorAccessor(payload_args,  payload_addr,  SLAB_PAGE_BYTES);
     const auto blend_meta_acc = TensorAccessor(blend_meta_args, blend_meta_addr, PAGE_BYTES);
     const auto dir_acc      = TensorAccessor(dir_args,      dir_addr,      PAGE_BYTES);
     const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, PAGE_BYTES);
@@ -246,13 +254,13 @@ void kernel_main() {
                 }
                 for (uint32_t k = 0; k < L; ++k) {
                     const uint32_t idx = sorted[k];
-                    const uint32_t out_page = sc_page + (k >> 1);
-                    const uint32_t half_off = (k & 1u) * L1_SPLAT_BYTES;
+                    const uint32_t out_page = sc_page + (k / SLAB_RECS_PER_PAGE);
+                    const uint32_t out_off = (k % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;
                     const uint32_t src_page = (idx >> 1);
                     const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
                     noc_async_write(
                         buck + src_page * L1_PACK_PAGE_BYTES + src_half,
-                        get_noc_addr(out_page, payload_acc) + half_off,
+                        get_noc_addr(out_page, payload_acc) + out_off,
                         L1_SPLAT_BYTES);
                 }
                 noc_async_write_barrier();
@@ -292,11 +300,11 @@ void kernel_main() {
                     splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
                     splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
                     const uint32_t out_g = brec_out_g[b];
-                    const uint32_t out_page = sc_page + (out_g >> 1);
-                    const uint32_t half_off = (out_g & 1u) * L1_SPLAT_BYTES;
+                    const uint32_t out_page = sc_page + (out_g / SLAB_RECS_PER_PAGE);
+                    const uint32_t out_off = (out_g % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;
                     noc_async_write(
                         pack_l1,
-                        get_noc_addr(out_page, payload_acc) + half_off,
+                        get_noc_addr(out_page, payload_acc) + out_off,
                         L1_SPLAT_BYTES);
                 }
                 noc_async_write_barrier();

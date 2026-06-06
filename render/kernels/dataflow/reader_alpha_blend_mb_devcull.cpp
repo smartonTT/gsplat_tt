@@ -62,9 +62,16 @@ constexpr uint32_t MB_FLAG_EMIT = 1u;
 constexpr uint32_t MB_FLAG_CONTINUE = 2u;
 constexpr uint32_t MB_FLAG_L1_BULK = 4u;
 
-// PACK2 (iter 50): two 32B splats per 64B DRAM page; splat g => page g/2, +32*(g&1).
+// PACK2 (iter 50): two 32B splats per 64B record stride; splat g => byte g*32.
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+// iter 110 (A2): the depth-sorted slab now uses a LARGE DRAM interleave page so
+// the per-subchunk bulk load is ceil(L/SLAB_RECS_PER_PAGE) big NoC transfers
+// (was ~4096 per-64B-page reads). The slab is a contiguous array of 32B records,
+// so each big page maps to a contiguous L1 span and record g still lands at
+// buck + g*32 (compute's l1_splat_words is UNCHANGED).
+constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 
 // M1b: FIXED-SIZE bulk CB slots (mirror alpha_blend_compute_mb.cpp). The bulk
 // CBs are circular + accessed linearly over a whole tile span; a wrapping
@@ -196,7 +203,7 @@ void kernel_main() {
     const auto bucket_meta_acc = TensorAccessor(bucket_meta_args, bucket_meta_addr, 64);
     const auto subchunk_meta_acc = TensorAccessor(subchunk_meta_args, subchunk_meta_addr, 64);
     const auto subchunk_payload_acc =
-        TensorAccessor(subchunk_payload_args, subchunk_payload_addr, L1_PACK_PAGE_BYTES);
+        TensorAccessor(subchunk_payload_args, subchunk_payload_addr, SLAB_PAGE_BYTES);
     const auto subchunk_dir_acc = TensorAccessor(subchunk_dir_args, subchunk_dir_addr, 64);
     // Cull math moved to SFPU; mask is precomputed. contrib_floor still gates
     // reader-side row suppress (thr<0 sentinel == op<=floor).
@@ -321,7 +328,8 @@ void kernel_main() {
         // mask (written by the cull writer), so there is NO separate cull_masks
         // bulk load — the blend compute reads the mask from rec[3].
         if (L_sub > 0) {
-            const uint32_t rec_pages = (L_sub + 1u) >> 1;
+            const uint32_t rec_pages =
+                (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
             // Safe now that the bulk compute path has the MATH->UNPACK back-pressure
             // ack (the fast payload DMA otherwise raced slot-recycle vs MATH reads)
@@ -337,7 +345,7 @@ void kernel_main() {
                     for (uint32_t q = pp; q < end; ++q) {
                         noc_async_read_tile(
                             page0 + q, subchunk_payload_acc,
-                            buck + q * L1_PACK_PAGE_BYTES);
+                            buck + q * SLAB_PAGE_BYTES);
                     }
                     noc_async_read_barrier();
                     pp = end;

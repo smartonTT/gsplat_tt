@@ -44,6 +44,14 @@ constexpr uint32_t MB_BUCKET_FIT = 8192u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t PAGE_U32 = 16u;     // 64B page = 16 u32
 constexpr uint32_t HALF_U32 = 8u;      // 32B splat = 8 u32
+// iter 110 (A2): the slab now uses a LARGE DRAM interleave page (SLAB_PAGE_BYTES)
+// shared with the cull/blend readers and materialize. The mask write-back keeps
+// its ALIGNED 64B-sub-page RMW (scratch stays 1 BATCH == 16 sub-pages == 1024B);
+// only the DRAM address math changes: a 64B sub-page at subchunk-local index s
+// lives in slab page (payload_page + s/SLAB_SUBPAGES_PER_PAGE), byte
+// (s % SLAB_SUBPAGES_PER_PAGE)*64. payload_page is in SLAB_PAGE_BYTES units.
+constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+constexpr uint32_t SLAB_SUBPAGES_PER_PAGE = SLAB_PAGE_BYTES / L1_PACK_PAGE_BYTES;  // 32
 
 inline uint32_t word3_u32_index(uint32_t g) {
     return (g >> 1) * PAGE_U32 + (g & 1u) * HALF_U32 + 3u;
@@ -82,7 +90,7 @@ void kernel_main() {
     constexpr auto tids_args   = TensorAccessorArgs<subchunk_dir_args.next_compile_time_args_offset()>();
     constexpr auto lpt_meta_args = TensorAccessorArgs<tids_args.next_compile_time_args_offset()>();
 
-    const auto payload_acc = TensorAccessor(payload_args, payload_addr, L1_PACK_PAGE_BYTES);
+    const auto payload_acc = TensorAccessor(payload_args, payload_addr, SLAB_PAGE_BYTES);
     const auto ranges_acc = TensorAccessor(ranges_args, ranges_addr, SOA_PAGE_BYTES);
     const auto subchunk_meta_acc = TensorAccessor(subchunk_meta_args, subchunk_meta_addr, SOA_PAGE_BYTES);
     const auto subchunk_dir_acc = TensorAccessor(subchunk_dir_args, subchunk_dir_addr, SOA_PAGE_BYTES);
@@ -182,14 +190,20 @@ void kernel_main() {
                 cb_wait_front(CB_KEEP, 1);
                 auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
 
-                // processed is a multiple of BATCH (==16 pages), so this batch's
-                // records start on a 64B page boundary. RMW the npg pages spanning
-                // [processed, processed+nb): read -> patch word3 -> write back.
-                const uint32_t page0 = payload_page + (processed >> 1);
+                // processed is a multiple of BATCH (==16 sub-pages), so this batch's
+                // records start on a 64B sub-page boundary. RMW the npg 64B sub-pages
+                // spanning [processed, processed+nb): read -> patch word3 -> write
+                // back. Each 64B sub-page is addressed inside the LARGE slab page via
+                // get_noc_addr(page2048) + sub-page offset (still 64B-aligned writes).
+                const uint32_t sub0 = processed >> 1;  // subchunk-local 64B sub-page
                 const uint32_t npg = (nb + 1u) >> 1;
                 for (uint32_t pp = 0; pp < npg; ++pp) {
-                    noc_async_read_tile(page0 + pp, payload_acc,
-                                        scratch_addr + pp * L1_PACK_PAGE_BYTES);
+                    const uint32_t s = sub0 + pp;
+                    const uint64_t noc = get_noc_addr(
+                        payload_page + (s / SLAB_SUBPAGES_PER_PAGE), payload_acc) +
+                        (s % SLAB_SUBPAGES_PER_PAGE) * L1_PACK_PAGE_BYTES;
+                    noc_async_read(noc, scratch_addr + pp * L1_PACK_PAGE_BYTES,
+                                   L1_PACK_PAGE_BYTES);
                 }
                 noc_async_read_barrier();
 
@@ -204,8 +218,11 @@ void kernel_main() {
                 }
 
                 for (uint32_t pp = 0; pp < npg; ++pp) {
-                    noc_async_write(scratch_addr + pp * L1_PACK_PAGE_BYTES,
-                                    get_noc_addr(page0 + pp, payload_acc),
+                    const uint32_t s = sub0 + pp;
+                    const uint64_t noc = get_noc_addr(
+                        payload_page + (s / SLAB_SUBPAGES_PER_PAGE), payload_acc) +
+                        (s % SLAB_SUBPAGES_PER_PAGE) * L1_PACK_PAGE_BYTES;
+                    noc_async_write(scratch_addr + pp * L1_PACK_PAGE_BYTES, noc,
                                     L1_PACK_PAGE_BYTES);
                 }
                 noc_async_write_barrier();
