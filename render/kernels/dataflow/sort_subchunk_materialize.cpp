@@ -4,9 +4,13 @@
 //
 // Post-radix subchunk materialize (iter 54 / step A): depth-sorted PACK2 payloads.
 // In-budget tiles (count <= bucket_fit): bulk-copy buf_l1_recs + L1 radix
-// permute (no per-splat blendrec gather). Overflow tiles: sc==0 uses
-// sort_sorted_ids-order blendrec gather (masks follow radix ids, not L1 slots);
-// sc>=1 uses the same batched blendrec gather into depth-ordered PACK2 slabs.
+// permute (no per-splat blendrec gather). iter 113 (sort Stage 1): the depth
+// permutation is applied L1->L1 into a contiguous slab scratch (CB_SLAB) and
+// the depth-sorted slab is emitted in coalesced SLAB_PAGE_BYTES page writes —
+// NO per-record 32B DRAM scatter (the old emit posted one noc_async_write per
+// record). Overflow tiles: sc==0 uses sort_sorted_ids-order blendrec gather
+// (masks follow radix ids, not L1 slots); sc>=1 uses the same batched blendrec
+// gather into depth-ordered PACK2 slabs (unchanged fallback).
 
 #include <cstdint>
 
@@ -36,6 +40,10 @@ constexpr uint32_t CB_REC = 2;
 constexpr uint32_t CB_PACK = 3;
 constexpr uint32_t CB_BUCKET = 4;
 constexpr uint32_t CB_BSORT = 5;
+// iter 113 (sort Stage 1): contiguous L1 scratch the depth permutation lands in
+// (record k at byte k*32) so the depth-sorted slab is written to DRAM in
+// coalesced SLAB_PAGE_BYTES pages instead of bucket_fit per-record 32B writes.
+constexpr uint32_t CB_SLAB = 6;
 
 inline float bits_to_f(uint32_t b) {
     float f;
@@ -252,16 +260,31 @@ void kernel_main() {
                     }
                     sorted = cur;
                 }
+                // Stage 1: apply the radix permutation L1->L1 into a contiguous
+                // slab scratch (output order), then emit the depth-sorted slab in
+                // coalesced SLAB_PAGE_BYTES page writes (no per-record DRAM scatter).
+                const uint32_t slab = get_write_ptr(CB_SLAB);
                 for (uint32_t k = 0; k < L; ++k) {
                     const uint32_t idx = sorted[k];
-                    const uint32_t out_page = sc_page + (k / SLAB_RECS_PER_PAGE);
-                    const uint32_t out_off = (k % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;
                     const uint32_t src_page = (idx >> 1);
                     const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
+                    auto src = reinterpret_cast<volatile uint32_t*>(
+                        buck + src_page * L1_PACK_PAGE_BYTES + src_half);
+                    auto dst = reinterpret_cast<volatile uint32_t*>(
+                        slab + k * L1_SPLAT_BYTES);
+                    dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
+                    dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+                }
+                const uint32_t out_pages =
+                    (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+                for (uint32_t p = 0; p < out_pages; ++p) {
+                    const uint32_t recs = (p + 1u < out_pages)
+                        ? SLAB_RECS_PER_PAGE
+                        : (L - p * SLAB_RECS_PER_PAGE);
                     noc_async_write(
-                        buck + src_page * L1_PACK_PAGE_BYTES + src_half,
-                        get_noc_addr(out_page, payload_acc) + out_off,
-                        L1_SPLAT_BYTES);
+                        slab + p * SLAB_PAGE_BYTES,
+                        get_noc_addr(sc_page + p, payload_acc),
+                        recs * L1_SPLAT_BYTES);
                 }
                 noc_async_write_barrier();
                 continue;

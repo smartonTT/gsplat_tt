@@ -360,6 +360,10 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     page_cb(3, 32u);
     page_cb(4, bucket_fit * 64u);
     page_cb(5, (2u * bucket_fit + 256u) * 4u);
+    // iter 113 (sort Stage 1): CB_SLAB — contiguous L1 scratch the in-budget
+    // depth permutation lands in (bucket_fit * 32B records) so the slab is
+    // emitted in coalesced SLAB_PAGE_BYTES writes, not per-record DRAM scatter.
+    page_cb(6, bucket_fit * 32u);
 
     std::vector<uint32_t> ct;
     for (int i = 0; i < 9; i++) {
