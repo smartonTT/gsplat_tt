@@ -441,6 +441,18 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
     const bool host_free = env_config::host_free_mp_enabled();
     uint32_t n_ceil = M_pad;       // M-domain page-split ceiling (elems, page-aligned)
     uint32_t mctrl_addr = 0;       // resident proj_M base (0 => kernels use host M arg)
+    // S5.3 host-free P-domain: static pair ceiling. When host_free we over-
+    // provision the pair buffers + K2 work-split to this fixed, view-independent
+    // count and DELETE the mid-frame host P-read — scan_bases clamps the
+    // published P to this ceiling (so kernels can never index past the buffers)
+    // and K2/sort read the clamped P from the resident ta_pairs_P ctrl page. 0
+    // disables the clamp (legacy host-read path). pair_ceiling() carries ~27%
+    // margin over the measured 30-view pre-cull P max (3.70M); an overflow is a
+    // post-frame hard-fail (sort throws on the overflow flag), never silent.
+    const uint32_t p_max = host_free ? env_config::pair_ceiling() : 0u;
+    const uint32_t p_max_pad = host_free
+        ? round_up(std::max<uint32_t>(p_max, ELEMS_PER_PAGE), ELEMS_PER_PAGE)
+        : 0u;
 
     // ── R3: resident tile_assign inputs (GSPLAT_TT_RESIDENT_TA_IN=1) ──────
     // When on, K1/K2/K4 read the M-compact proj_m_* buffers the gather stage
@@ -704,6 +716,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 static_cast<uint32_t>(ctx->buf_core_base->address()),
                 static_cast<uint32_t>(ctx->buf_pairs_P->address()),
                 num_cores,
+                p_max,  // arg 4: static pair ceiling (0 => no clamp), S5.3
             });
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan_bases, false);
             {
@@ -722,25 +735,33 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             T.d2h_tpg_ms = 0.0;
             T.h2d_offs_ms = 0.0;
 
-            // Control-only read of P (64B page); pairs already resident for sort.
-            const auto t_p0 = clk::now();
-            std::vector<uint32_t> pbuf(ELEMS_PER_PAGE, 0);
-            {
-                GSPLAT_HOST_ZONE("host_ta_d2h_p");
-                distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, ctx->buf_pairs_P, true);
-            }
-            P = pbuf[0];
-            T.d2h_tpg_ms =
-                std::chrono::duration<double, std::milli>(clk::now() - t_p0).count();
-
-            if (P == 0) {
-                if (k3_pipelined) {
-                    GSPLAT_HOST_ZONE("host_finish_ta_drain");
-                    distributed::Finish(*ctx->cq);
+            // S5.3 host-free: DELETE the mid-frame control-read of P. The pair
+            // buffers + K2 work-split are over-provisioned to the static p_max
+            // ceiling and K2 reads the (clamped) P from the resident ta_pairs_P
+            // ctrl page, so the host never needs P here. The P==0 early-exit is
+            // also dropped: K2 self-skips (p_start >= P) and sort early-exits on
+            // a published P of 0, so a zero-visibility frame is a device no-op.
+            if (!host_free) {
+                // Control-only read of P (64B page); pairs already resident for sort.
+                const auto t_p0 = clk::now();
+                std::vector<uint32_t> pbuf(ELEMS_PER_PAGE, 0);
+                {
+                    GSPLAT_HOST_ZONE("host_ta_d2h_p");
+                    distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, ctx->buf_pairs_P, true);
                 }
-                if (device_ok) *device_ok = true;
-                T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
-                return result;
+                P = pbuf[0];
+                T.d2h_tpg_ms =
+                    std::chrono::duration<double, std::milli>(clk::now() - t_p0).count();
+
+                if (P == 0) {
+                    if (k3_pipelined) {
+                        GSPLAT_HOST_ZONE("host_finish_ta_drain");
+                        distributed::Finish(*ctx->cq);
+                    }
+                    if (device_ok) *device_ok = true;
+                    T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
+                    return result;
+                }
             }
 
             // Phase 2: per-core exclusive prefix-add seeded by core_base -> offs.
@@ -803,7 +824,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         }
 
         // ── Allocate / grow pair buffers ────────────────────────────────
-        const uint32_t P_pad = round_up(P, ELEMS_PER_PAGE);
+        // S5.3 host-free: size to the static p_max ceiling (view-independent) so
+        // the allocation is fixed and the host needs no per-frame P. Legacy path
+        // grows to the dynamic P_pad read back above.
+        const uint32_t P_pad = host_free ? p_max_pad : round_up(P, ELEMS_PER_PAGE);
         const std::size_t p_bytes = static_cast<std::size_t>(P_pad) * 4;
         if (!ctx->buf_gids || ctx->cap_p_bytes < p_bytes) {
             ctx->buf_gids = make_dram(ctx->mesh_device.get(), p_bytes);
@@ -829,9 +853,13 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 in_ry,
                 static_cast<uint32_t>(ctx->buf_gids->address()),
                 static_cast<uint32_t>(ctx->buf_tids->address()),
-                ws2.start[c], ws2.count[c], P, Mu,
+                ws2.start[c], ws2.count[c],
+                host_free ? 0u : P,  // arg 9: host P (host_free => read resident)
+                Mu,
                 static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y),
                 static_cast<uint32_t>(tile_size),
+                // arg 14: resident ta_pairs_P ctrl page (0 => use host P), S5.3
+                host_free ? static_cast<uint32_t>(ctx->buf_pairs_P->address()) : 0u,
             });
         }
         distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2, false);

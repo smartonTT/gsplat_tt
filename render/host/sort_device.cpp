@@ -1240,6 +1240,23 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
         const uint32_t P_full = pbuf[0];
         const uint32_t P_pad = pbuf[1];
+        // S5.3 host-free overflow guard: tile_assign's scan_bases CLAMPS the
+        // published P (pbuf[0]) to the static pair ceiling so neither it nor K2
+        // ever indexes past the p_max-sized pair buffers (no silent memory
+        // corruption). pbuf[2]=overflow / pbuf[3]=P_true surface a too-small
+        // ceiling here — the one place that would read OOB — as a hard fail
+        // (render_clean is single-path TT, no fallback). This reuses the P read
+        // already on this path, so it adds no new mid-frame drain.
+        const uint32_t p_overflow = pbuf[2];
+        const uint32_t P_true = pbuf[3];
+        if (p_overflow != 0) {
+            std::cerr << "[gsplat_tt::sort] PAIR-CEILING OVERFLOW: pre-cull P_true="
+                      << P_true << " exceeds the static pair_ceiling()=" << P_full
+                      << " — pairs were clamped (output would be corrupt). Raise "
+                         "env_config::pair_ceiling() above " << P_true
+                      << " and rebuild. Hard fail (single-path TT, no fallback).\n";
+            return fail();
+        }
         if (P_full == 0) {
             publish_resident(ctx, result.sorted_gaussian_ids, result.tile_ranges, &T.publish_ms);
             if (device_ok) *device_ok = true;
