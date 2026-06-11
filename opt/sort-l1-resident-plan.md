@@ -360,10 +360,32 @@ audit, in dependency order:
    D2H is the one allowed host op.
 
 **Ordered execution (lowest-risk first, each its own gate):**
-- **S5.1 (next worker):** flip `sort_device_layout_enabled()=true`, validate the
-  device bin-layout path is bit-identical (hero md5 `e3fefb11…`). Isolatable,
-  the path exists, removes the largest non-gather host blocker. **Start here.**
-- **S5.2:** device/static LPT writing resident `tile→core` (5a-ii / 5b).
+- **S5.1 — DONE (iter 121, commit `0a8cd86`).** Flipped
+  `sort_device_layout_enabled()=true`. The path's kernel
+  `render/kernels/dataflow/sort_bin_layout.cpp` was **MISSING** (host referenced
+  it; JIT failed) — that's why the flag was off. Recovered it (git `61f61ad`),
+  rewrote as an efficient single-core bulk-row pass (`read_pages`/`write_pages`,
+  2 streaming passes over core rows) **with on-device LPT** (`build_lpt`
+  algorithm, balance unchanged), and added the missing `l1_rec_base` write
+  (arg13 `l1_base_addr`, arg12 `bucket_fit`) so the live L1_RECORD scatter base
+  is populated on-device. **VERIFY (`layout_verify=true`, 30 views): device ==
+  `host_bin_layout_from_hist` BIT-EXACT, `dev_status==0`, zero mismatches across
+  hist/counts/tids/lpt_meta/tmeta incl. heavy/overflow + l1_record tiles.**
+  **Removed host work:** hist D2H read, **host-LPT (now fully on-device — NOT
+  deferred to S5.2)**, and all **6 H2D re-uploads**
+  (`bin2d/tmeta/tile_ids/bucket_meta/l1_rec_base/...`); host now reads only a
+  tiny ctrl page + already-resident buffers. **Pixels bit-identical** (hero md5
+  `e3fefb11…`, 63.95 dB). **Perf: ms_view 195.5 → 215.0 (+19.5, +10%)** — the
+  +23 ms is the new single-core layout kernel (BRISC-FW 179.7→202.5,
+  NCRISC-KERNEL 144.5→167.6; all named sort zones unchanged). Single-core serial
+  layout is slower than the fast host CPU **in isolation**; the host-dispatch /
+  6×H2D win only materializes once Metal Trace hides the per-program launch
+  overhead. **KEPT** anyway: bit-identical + it's the load-bearing prerequisite
+  that lets the sort stage be captured into a trace (host can no longer compute
+  size/branch mid-frame here).
+- **S5.2:** host-LPT is already on-device (done in S5.1); remaining work is to
+  **parallelize the device layout across cores** to kill the single-core +23 ms
+  (or fold it under Metal Trace) — and the static `tile→core` map fallback (5b).
 - **S5.3:** over-provision tile_assign + gather to static ceilings; kernels read
   `M`/`P` resident + guard work-splits → delete the M/P-read drains (5b-i/ii).
 - **S5.4:** static/device subchunk alloc (5c) → no host `build_subchunk_layout`.
