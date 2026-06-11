@@ -235,6 +235,10 @@ struct SortDeviceContext {
     std::size_t cap_subchunk_dir_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_prefix;
     std::size_t cap_subchunk_prefix_bytes = 0;
+    // iter 130: per-core materialize WORK-ITEM list (flat u32: tile_id, sc, ...)
+    // — subchunk-granular, gather-cost-weighted balance (see build_mat_worklist).
+    std::shared_ptr<distributed::MeshBuffer> buf_mat_work;
+    std::size_t cap_mat_work_bytes = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -478,16 +482,81 @@ static bool prepare_subchunk_buffers(
     return true;
 }
 
+// iter 130: materialize work-item assignment — balance at (tile, subchunk)
+// granularity. iter-130 MEASURED the dominant materialize cost as the OVERFLOW
+// gather (24.6 ms/view busiest-core vs the in-budget permute's 1.7 ms), and the
+// shared per-tile count-LPT overloads cores owning big overflow tiles (max 27.1
+// vs the 17.0 ms balanced floor). Each (tile, sc) item is independent and writes
+// byte-identical output regardless of which core runs it (in-budget reads
+// buf_l1_recs by tile / writes payload by (tile,sc); gather reads sorted_ids +
+// blendrec by global id / writes payload by (tile,sc)). So greedily LPT-balance
+// all items, weighting gather subchunks GATHER_WEIGHT x their record count.
+struct MatWorkAssignment {
+    std::vector<uint32_t> flat;             // 2 u32 / item: {tile_id, sc}
+    std::vector<uint32_t> per_core_offset;  // in ITEMS
+    std::vector<uint32_t> per_core_count;   // in ITEMS
+    uint32_t max_items_per_core = 0;
+};
+
+static MatWorkAssignment build_mat_worklist(
+    const std::vector<int64_t>& counts,
+    uint32_t num_tiles,
+    uint32_t num_cores,
+    uint32_t bucket_fit) {
+    constexpr uint64_t GATHER_WEIGHT = 8;  // gather ~8-10x an in-budget record
+    struct Item { uint32_t tile; uint32_t sc; uint64_t cost; };
+    std::vector<Item> items;
+    items.reserve(static_cast<std::size_t>(num_tiles) + 256u);
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        const uint32_t cnt = static_cast<uint32_t>(counts[t]);
+        if (cnt == 0u) continue;
+        const uint32_t num_sc = (cnt + bucket_fit - 1u) / bucket_fit;
+        const bool inbudget = (cnt <= bucket_fit);
+        for (uint32_t sc = 0; sc < num_sc; ++sc) {
+            const uint32_t sc_off = sc * bucket_fit;
+            const uint32_t l_sub = (sc_off >= cnt) ? 0u
+                : ((cnt - sc_off > bucket_fit) ? bucket_fit : (cnt - sc_off));
+            if (l_sub == 0u) continue;
+            const uint64_t w = (inbudget && sc == 0u)
+                ? static_cast<uint64_t>(l_sub)
+                : static_cast<uint64_t>(l_sub) * GATHER_WEIGHT;
+            items.push_back({t, sc, w});
+        }
+    }
+    std::sort(items.begin(), items.end(),
+              [](const Item& a, const Item& b) { return a.cost > b.cost; });
+    std::vector<std::vector<std::pair<uint32_t, uint32_t>>> per_core(num_cores);
+    std::vector<uint64_t> load(num_cores, 0);
+    for (const auto& it : items) {
+        const auto m = std::min_element(load.begin(), load.end());
+        const uint32_t c = static_cast<uint32_t>(std::distance(load.begin(), m));
+        per_core[c].emplace_back(it.tile, it.sc);
+        load[c] += it.cost;
+    }
+    MatWorkAssignment a;
+    a.per_core_offset.assign(num_cores, 0);
+    a.per_core_count.assign(num_cores, 0);
+    for (uint32_t c = 0; c < num_cores; ++c) {
+        a.per_core_offset[c] = static_cast<uint32_t>(a.flat.size() / 2u);
+        a.per_core_count[c] = static_cast<uint32_t>(per_core[c].size());
+        a.max_items_per_core = std::max(a.max_items_per_core, a.per_core_count[c]);
+        for (const auto& pr : per_core[c]) {
+            a.flat.push_back(pr.first);
+            a.flat.push_back(pr.second);
+        }
+    }
+    return a;
+}
+
 // Device post-radix PACK2 materialize (enqueue only; caller Finish()).
 // Kernel: in-budget sc==0 uses buf_l1_recs bulk; overflow sc==0/sc>=1 use sorted_ids gather.
 static bool launch_subchunk_materialize(
     SortDeviceContext* ctx,
-    const SubchunkLayout& layout,
-    const LptAssignment& lpt,
+    const MatWorkAssignment& work,
     uint32_t num_cores,
     uint32_t tiles_x,
     uint32_t bucket_fit) {
-    if (layout.total_payload_pages == 0) {
+    if (work.flat.empty()) {
         return true;
     }
     auto bbrec = device_state::get_buffer("proj_m_blendrec");
@@ -498,6 +567,19 @@ static bool launch_subchunk_materialize(
         !ctx->buf_subchunk_dir) {
         return false;
     }
+    // Grow-only work buffer; EnqueueWriteMeshBuffer writes the WHOLE buffer, so
+    // the host vector is padded to capacity (mirrors buf_sorted_ids).
+    const std::size_t work_bytes =
+        round_up(std::max<std::size_t>(work.flat.size() * 4u, PAGE_BYTES), PAGE_BYTES);
+    if (!ctx->buf_mat_work || ctx->cap_mat_work_bytes < work_bytes) {
+        ctx->buf_mat_work = make_dram(ctx->mesh_device.get(), work_bytes);
+        ctx->cap_mat_work_bytes = work_bytes;
+    }
+    const uint32_t cap_elems = static_cast<uint32_t>(ctx->cap_mat_work_bytes / 4);
+    std::vector<uint32_t> wbuf(cap_elems, 0);
+    for (std::size_t i = 0; i < work.flat.size(); ++i) wbuf[i] = work.flat[i];
+    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mat_work, wbuf, false);
+
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -509,9 +591,9 @@ static bool launch_subchunk_materialize(
             static_cast<uint32_t>(ctx->buf_subchunk_payload->address()),
             static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
             static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
-            static_cast<uint32_t>(ctx->buf_tile_ids->address()),
-            lpt.per_core_offset[c],
-            lpt.per_core_count[c],
+            static_cast<uint32_t>(ctx->buf_mat_work->address()),
+            work.per_core_offset[c],
+            work.per_core_count[c],
             tiles_x,
             bucket_fit,
         });
@@ -1933,6 +2015,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         const bool dev_publish = sort_device_publish_enabled();
         std::vector<uint32_t> out_aligned;  // only populated for host-id readback / BIN_DEBUG
         SubchunkLayout sc_layout{};
+        MatWorkAssignment mat_work;  // iter 130: subchunk-balanced materialize work
         bool subchunk_materialize = false;
 
         if (dev_publish) {
@@ -1972,6 +2055,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_publish, false);
             sc_layout = build_subchunk_layout(counts, num_tiles, bucket_fit);
             log_subchunk_layout_stats(sc_layout);
+            mat_work = build_mat_worklist(counts, num_tiles, num_cores, bucket_fit);
             if (!prepare_subchunk_buffers(ctx, sc_layout, num_tiles)) {
                 std::cerr << "[gsplat_tt::sort] subchunk buffer setup failed\n";
                 return fail();
@@ -1986,16 +2070,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 GSPLAT_HOST_ZONE("host_finish_sort_subchunk_dir");
                 distributed::Finish(*ctx->cq);
             }
-            {
-                uint32_t max_lpt_tiles = 0;
-                for (uint32_t c = 0; c < num_cores; c++) {
-                    max_lpt_tiles = std::max(max_lpt_tiles, lpt.per_core_count[c]);
-                }
-                if (max_lpt_tiles > 1024u) {
-                    std::cerr << "[gsplat_tt::sort] LPT per-core tile count "
-                              << max_lpt_tiles << " > materialize MAX_TILE_IDS=1024\n";
-                    return fail();
-                }
+            if (mat_work.max_items_per_core > 1024u) {
+                std::cerr << "[gsplat_tt::sort] materialize work items/core "
+                          << mat_work.max_items_per_core << " > MAX_WORK=1024\n";
+                return fail();
             }
             subchunk_materialize = true;
             T.publish_ms =
@@ -2005,7 +2083,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             } else {
                 const auto t_mat0 = clk::now();
                 if (!launch_subchunk_materialize(
-                        ctx, sc_layout, lpt, num_cores,
+                        ctx, mat_work, num_cores,
                         static_cast<uint32_t>(tiles_x), bucket_fit)) {
                     std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
                     return fail();
@@ -2081,7 +2159,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         if (subchunk_materialize && sort_blend_pipe_enabled()) {
             const auto t_mat0 = clk::now();
             if (!launch_subchunk_materialize(
-                    ctx, sc_layout, lpt, num_cores,
+                    ctx, mat_work, num_cores,
                     static_cast<uint32_t>(tiles_x), bucket_fit)) {
                 std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
                 return fail();
