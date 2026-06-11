@@ -383,9 +383,36 @@ audit, in dependency order:
   overhead. **KEPT** anyway: bit-identical + it's the load-bearing prerequisite
   that lets the sort stage be captured into a trace (host can no longer compute
   size/branch mid-frame here).
-- **S5.2:** host-LPT is already on-device (done in S5.1); remaining work is to
-  **parallelize the device layout across cores** to kill the single-core +23 ms
-  (or fold it under Metal Trace) — and the static `tile→core` map fallback (5b).
+- **S5.2 — PARTIAL (iter 122, commit on `smarton/stage2-hostfree-l1`).** Made the
+  single-core layout kernel (`sort_bin_layout.cpp`) cheap, bit-exact:
+  1. **L1-cache the per-core histogram** (`num_cores×row_span` u32 ≈ 450 KB on
+     hero, CB_HCACHE = 512 KB) so Pass 1 streams DRAM once and Pass 2 reads the
+     cache — **one DRAM read pass instead of two** (falls back to a 2nd DRAM read
+     if `num_cores*row_span > HCACHE_CAP`).
+  2. **LSD radix sort** (4× 8-bit passes on the composite key `(cost<<16)|tid`,
+     `cost=tile_pad ≤ 32768 < 2^16`, `tid < 2^16`) replaces the **O(n²)≈524k-iter
+     selection sort** for the LPT order. The key is a strict total order on
+     `(cost, tile_id)`, so the radix order is **bit-identical** to the old
+     comparator. Greedy first-min-load assignment kept sequential/unchanged.
+  - **VERIFY (`layout_verify=true`, 30 views + warmup): device == host BIT-EXACT,
+    `status=0`, zero mismatches** across hist/counts/tids/lpt_meta/tmeta (incl.
+    heavy/overflow tiles). **Pixels bit-identical** (hero md5 `e3fefb11…`, 63.95 dB).
+  - **Perf: ms_view 215.0 → 205.0 (−10.0, recovers ~half the +23 ms regression).**
+    Per-view makespan (`analyze_zones.py`, ttw-122): **BRISC-FW 202.5 → 192.3
+    (−10.2)**, **NCRISC-KERNEL 167.6 → 157.4 (−10.2)**; all named sort zones
+    unchanged (`sort_bucket_emit` 39.7, `sort_subchunk_mat` 26.1, …) — the win is
+    entirely the (unnamed, single-core) layout kernel, now **≈+13 ms vs the
+    iter-116 195.5 baseline** (was +23). **KEPT** (bit-identical + clear win).
+  - **Residual ≈+13 ms** = Pass 2's per-`(core,tile)` `bin2d`+`l1_rec_base`
+    bulk **DRAM writes** (num_cores×row_pages 64B-page writes) + Pass 1's single
+    read pass, all on **one core**. The L1 cache removed the 2nd read pass and the
+    radix removed the scalar sort; the irreducible remaining cost is the serial
+    write traffic. **To close it: lever #4 — partition the count/emit across cores
+    with a two-phase parallel prefix-sum** (per-core-block local sums → exclusive
+    scan of block totals → local offsets; needs semaphore sync, keep bit-exact via
+    the verify harness), **or** fold it under Metal Trace (the +13 ms single-core
+    cost is hidden once BRISC-FW replays the recorded dispatch). Also the static
+    `tile→core` map fallback (5b) remains open.
 - **S5.3:** over-provision tile_assign + gather to static ceilings; kernels read
   `M`/`P` resident + guard work-splits → delete the M/P-read drains (5b-i/ii).
 - **S5.4:** static/device subchunk alloc (5c) → no host `build_subchunk_layout`.

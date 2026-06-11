@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-06-11 05:20 PDT · 74 metal + 117 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-06-11 05:25 PDT · 74 metal + 117 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -51,7 +51,7 @@
     
     <p class='idea-desc'>S5.2: cheap on-device sort bin-layout — L1-cache the per-core histogram (one DRAM read pass instead of two) + LSD radix LPT sort replacing O(n^2) selection (bit-exact, identical (cost,tile_id) order); recovers ~half the iter-121 +23ms single-core regression (215.0->205 ms/view), pixels bit-identical (hero md5 e3fefb11, 63.95dB)</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>1d99fbd</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-122/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-122/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-122/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-122/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-122/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-122/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
