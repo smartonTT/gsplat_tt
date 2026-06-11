@@ -387,6 +387,45 @@ levers that move the 92 ms are **fewer programs (true fusion)** and **faster
 kernels** — not trace. (Trace may still be worth it later as an ergonomics/
 determinism tool once program count is already low, but it is not the perf endgame.)
 
+### Stage 5 — DISABLED (iter-127): trace refuted ⇒ the prerequisites are pure regression
+
+> **DECISION (iter 127, commit on `smarton/stage2-hostfree-l1`): S5.1–S5.5 are
+> DISABLED (gated off, code KEPT).** Every Stage-5 sub-landing (S5.1 on-device bin
+> layout, S5.2 cheap layout, S5.3 host-free M/P over-provisioning, S5.4 parallel
+> Pass-2 emit, S5.5 — none of the persistent-kernel work landed) was justified
+> **SOLELY** as a Metal Trace prerequisite. iter-126 **MEASURED** the trace endgame
+> to be a no-go (replay removes < 0.5 ms; the ~92 ms `BRISC-FW − BRISC-KERNEL` is
+> on-device firmware + NCRISC dataflow that the trace replays **unchanged**). With
+> the trace refuted, the prerequisites are no longer prerequisites — they are pure
+> single-core / over-provision **regression**:
+> - `sort_device_layout_enabled()` (S5.1/S5.2/S5.4): the on-device layout runs
+>   **single-core** (the parallel Pass-2 emit only recovered ~1.5 ms of the +23 ms);
+>   in isolation it is slower than the fast host `host_bin_layout_from_hist` +
+>   `build_lpt`. **+~23 ms** vs the host path (NCRISC-KERNEL `144.5 → 189.9`).
+> - `host_free_mp_enabled()` (S5.3): over-provisioning the M-domain
+>   (`tile_assign` K1) and P-domain (K2 + pair buffers) to the **static ceilings**
+>   (`pair_ceiling = 4,718,592`, `n_ceil`) does worst-case no-op work **every
+>   frame** regardless of the real M/P — **+~31 ms** (`ta_gauss_aabb 9.7 → 35.0`,
+>   `ta_bucket_scatter 12.2 → 18.4`). It is only "frame-neutral" once a trace would
+>   amortize the launches it deletes — which iter-126 proved never happens.
+>
+> **iter-127 flips BOTH flags `false`** → reverts to the host bin-layout +
+> real-M/P-read `tile_assign` (the pre-iter-121 working path). Bit-identical
+> (hero md5 `e3fefb116d860f99d92bba1ef51d820c`, 63.95 dB). ms_view recovered
+> `236.7 (iter-125 ledger) / ~205–211 (steady)` → **195.6 avg, min 163.7**;
+> per-view makespan **BRISC-FW `224.7 → 179.1`, NCRISC-KERNEL `189.9 → 144.4`** —
+> exactly the iter-116 best-known baseline. Full regression recovery.
+>
+> **The S5.x code is KEPT, gated off** (`sort_bin_layout.cpp`, `sort_bin_emit.cpp`,
+> the `host_free_mp` over-provision branches). It is NOT dead: it may matter for a
+> future **fusion** lever (the real way to attack the 92 ms BRISC-FW is fewer
+> programs — e.g. fusing the bin layout INTO the bin-count or sort kernel so it
+> adds no separate launch, at which point on-device residency is free). Re-enable
+> only behind a measured fusion that makes residency a net win. **Do NOT re-flip
+> these on as a standalone "host-free" step — that is the regression iter-127 just
+> recovered.** The ordered prerequisite plan below is retained for that future
+> fusion attempt; treat S5.1–S5.6 as "available but parked", not "next".
+
 ### Stage 5 — concrete ordered host-free plan (what blocks the single trace TODAY)
 A trace records a FIXED `EnqueueProgram` sequence with fixed runtime args + buffer
 addresses; it cannot host-compute a size/branch mid-frame. So every **blocking host
