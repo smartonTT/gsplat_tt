@@ -36,6 +36,51 @@ Harness: `/localdev/smarton/prof_ablation.sh` (edit kernel → capture → save 
 → restore from pristine backup; never `git checkout` the device tree — its kernels
 are an uncommitted rsync of Mac HEAD `dc6b38c`).
 
+## Evidence (Track-2 PHASING ablation, ttw render_clean, 30 views, 2026-06-11)
+
+Measured the iter-112 phased kernel (HEAD `aba575c`) against a bit-identical
+UNPHASED reconstruction (full per-microblock `power→exp→alpha→RGBT` chain
+back-to-back; same instructions, same `DR_SCR` spill, only the SFPU issue ORDER
+differs → isolates Track 1's ILP effect). Harness
+`opt/prof/prof_ablation_phasing.sh` (on device `/localdev/smarton/prof_ablation_phasing.sh`),
+same capture method as the baseline ablation; device `yyzo-bh-07`.
+
+| config        | tile_blend_sfpu ms/view | hero md5 (bit-identity) |
+|---------------|-------------------------|-------------------------|
+| **phased** (HEAD, Track 1) | **45.58** | `e3fefb11…` |
+| **unphased** (pre-Track-1) | **34.11** | `e3fefb11…` (≡ phased) |
+| noexp-on-phased            | 47.10 | `2f786db3…` (exp removed) |
+| nomath (reader floor)      | 0.63  | — |
+| noread (sfpu floor, stale) | 61.01 | — |
+
+**Verdict: Track 1 phasing REGRESSED blend by +11.47 ms/view (+33.6%).** phased
+45.58 vs unphased 34.11, with **bit-identical pixels** (phased.md5 == unphased.md5,
+so the measurement is valid). The frame-time drift corroborates: unphased 30-view
+avg = 220.1 ms vs phased 231.5 ms (~11 ms, matching the blend-zone delta), and the
+unphased 34.11 ≈ the original 2026-06-08 baseline 30.5 (the old baseline WAS the
+unphased kernel; the small residual is sort-path drift from iters 113–114).
+
+**Why it hurt — fan-out limited (K≈1).** Phasing only pays off when a gaussian
+covers ≥2 live microblocks (K≥2) so independent per-microblock ops can fill the
+SFPU pipeline. With K≈1 there is no cross-microblock ILP to expose, and phasing
+just adds **4× the mask-scan traversal** (four 32-deep `blend_phase_*` recursions
+per gaussian = 128 branch checks vs the unphased single 32-deep walk = 32) on top
+of the identical `DR_SCR` spills — pure overhead, zero payoff. **exp is NOT the
+lever**: noexp-on-phased (47.10) is within noise of phased (45.58), i.e. removing
+the SFPU exp saves ~0 ms — blend is still **dependency-stall-bound on the per-pair
+chain**, exactly as the original ablation concluded.
+
+**Recommendation:**
+1. **REVERT Track 1** (iter 112) — it is a pure ~11.5 ms/view regression with no
+   upside on this workload. Restores blend to ~34 ms/view, recovering the frame
+   drift (211→~200 ms/view).
+2. **Track 3 fan-out histogram FIRST** to confirm K≈1 quantitatively before any
+   further ILP work. If confirmed, the microblock axis is dead for ILP — the
+   parallel axis MUST be **batch B gaussians** (Track 3's microblock-major alpha
+   batching: compute B independent `alpha`s phased, then the short serial T/color
+   recurrence) for a fixed ILP width independent of fan-out. Do NOT pursue a
+   cheaper exp (proven a no-op here).
+
 ## Why this is an ILP problem, and the divergence question
 
 Concern: "how can microblocks run in parallel if they need different numbers of
@@ -64,7 +109,10 @@ Current state:
 
 ## Tracks
 
-### Track 1 — Phase the blend dispatch (PRIMARY)
+### Track 1 — Phase the blend dispatch (PRIMARY) — DONE (iter 112), REGRESSED, REVERT
+**Track-2 measured it: phased 45.58 vs unphased 34.11 ms/view (+33.6% SLOWER),
+bit-identical. Fan-out K≈1 ⇒ no ILP to expose; phasing is pure 4×-mask-scan +
+spill overhead. REVERT it. See the Track-2 Evidence section above.**
 Restructure `process_tile_l1_blend` / `dispatch_blend_guarded` in
 `render/kernels/compute/alpha_blend_compute_mb.cpp` so each gaussian's K covered
 microblocks are processed in phases instead of full-chain-at-a-time:
@@ -82,11 +130,13 @@ microblocks are processed in phases instead of full-chain-at-a-time:
 - Risk: DEST read-after-write hazards (cull hit this; the phasing IS the fix).
   Keep PSNR ≥ 60 dB gate.
 
-### Track 2 — Validate with the ablation harness
-Add a `phased` config to `prof_ablation.sh`; re-run the 4-capture flow; compare
-`tile_blend_sfpu` makespan. Then run NOEXP-on-phased: if phasing converts blend
-to throughput-bound, a cheaper exp finally matters (chain Track via A4).
-Evidence-gated, same method as the baseline ablation.
+### Track 2 — Validate with the ablation harness — DONE (iter 115, 2026-06-11)
+Added `opt/prof/prof_ablation_phasing.sh` (phased / unphased / noexp-on-phased /
+nomath / noread); ran the 30-view capture flow on `yyzo-bh-07`. **Result: phasing
+REGRESSED blend +33.6% (45.58→34.11 unphased), bit-identical; exp removal saves
+~0 (noexp 47.10 ≈ phased 45.58) ⇒ still stall-bound, NOT throughput-bound; a
+cheaper exp does NOT matter. → REVERT Track 1; do Track 3's fan-out histogram
+next.** See the Track-2 Evidence section above.
 
 ### Track 3 — Raise effective fan-out (amplifies Track 1)
 Phasing only helps when a gaussian covers ≥2 live microblocks.
