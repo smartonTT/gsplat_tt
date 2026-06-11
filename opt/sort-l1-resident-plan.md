@@ -415,6 +415,25 @@ audit, in dependency order:
     `tile→core` map fallback (5b) remains open.
 - **S5.3:** over-provision tile_assign + gather to static ceilings; kernels read
   `M`/`P` resident + guard work-splits → delete the M/P-read drains (5b-i/ii).
+  - **GROUNDWORK LANDED (iter-123, KEEP, behind `host_free_mp_enabled()` default
+    true):** tile_assign now reads the visible-count `M` from the **resident
+    `proj_M` control page** via a runtime `InterleavedAddrGen<true>` ctrl-page read
+    (bbox K1 + scan_reduce + scan_add), and over-provisions the M-domain
+    offsets/scan buffers + K1 page-split to a **static page-aligned ceiling
+    `n_ceil`** (= `proj_m_px` capacity) instead of the host-read `M`. Reversible
+    via the flag. **Bit-identical** (hero md5 `e3fefb11…`, 63.95 dB, 30 views),
+    **frame-neutral** at the steady floor (`min_ms 204.0`; the verify avg 232.9 is
+    thermal from back-to-back runs). This lands the proven **resident-read +
+    static-ceiling pattern** the three read-deletions depend on, but **does NOT yet
+    delete any host blocking read.**
+  - **PENDING read-deletions (the three mid-frame host blocking-read drains):**
+    1. `tile_assign` `P`-read (`tile_assign_device.cpp:~702`) — size pair buffers +
+       K2/cull work-split to the static `P_max = pair_ceiling()` (4,718,592),
+       K2/K4 read `P` from the resident ctrl page + guard work-splits.
+    2. `sort` `P`-read (`sort_device.cpp:~1240`) — redundant; frees once #1 lands.
+    3. `gather` `M`-read (`gather_visible_device.cpp:~833`) — contract change
+       (size `depths` to capacity, `M==0` → device no-op, read `M` post-frame for
+       stats).
 - **S5.4:** static/device subchunk alloc (5c) → no host `build_subchunk_layout`.
 - **S5.5:** persistent per-core kernels looping the resident assignment (variable
   per-view iteration is device data → one trace replays for any view).

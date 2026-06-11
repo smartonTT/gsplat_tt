@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-06-11 06:31 PDT · 74 metal + 118 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-06-11 06:34 PDT · 74 metal + 118 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -51,7 +51,7 @@
     
     <p class='idea-desc'>S5.3 M-domain GROUNDWORK (gated prerequisite, behind host_free_mp_enabled): tile_assign now reads the visible-count M from the resident proj_M control page via a runtime InterleavedAddrGen<true> (bbox K1 + scan_reduce + scan_add) and over-provisions the M-domain offsets/scan buffers + K1 page-split to a static page-aligned ceiling n_ceil (= proj_m_px capacity) instead of the host-read M. Reversible (host_free_mp_enabled() default true). Frame-neutral at the steady-state floor (~204-205 ms/view; the higher verify avg is thermal from back-to-back runs). Bit-identical (hero md5 e3fefb11, 63.95 dB across 30 views). NOTE: the three mid-frame host blocking read-deletions (tile_assign P-read, sort P-read, gather M-read) are NOT removed yet — this lands only the resident-read + static-ceiling pattern they depend on.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>f1a8eab</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-123/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-123/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-123/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-123/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-123/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-123/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
