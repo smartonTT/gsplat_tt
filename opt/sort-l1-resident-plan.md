@@ -284,6 +284,95 @@ Make the whole frame one Metal trace replayed per view (see "End-state" above).
 - Win: ~50+ programs/`Finish` per frame → ~0 host dispatch.
 - Risk: high (biggest restructure); depends on Stages 1–4 being device-resident.
 
+> **iter-120 DIAGNOSTIC — host-dispatch CHARACTERIZED; redundant-`Finish` removal
+> proven FRAME-NEUTRAL; concrete Stage-5 blocker list below.**
+>
+> **Phase-1 host-wall breakdown** (`GSPLAT_TT_HOST_PROFILE=1` chrono in
+> `render_view`, avg of 30 timed views; the Python `ms_view`/`avg_frame_ms` IS this
+> host wall because every stage drains the one shared in-order CQ via `Finish` /
+> blocking read, so per-stage wall = dispatch + device makespan + readback):
+>
+> | stage | ms/view | share | host syncs (steady state) |
+> |-------|---------|-------|---------------------------|
+> | **project** | **37.5** | 19% | means_cam `Finish`, pfwc `Finish`, gather **M-read** |
+> | — means_cam | 0.72 | <1% | 1 enq + 1 Finish (resident bubble) |
+> | — pfwc | 1.91 | 1% | 1 enq + 1 Finish (resident bubble) |
+> | — gather | 34.9 | 18% | 3 enq (count/scan/scatter) + 1 blocking **M-read** |
+> | **tile_assign** | **23.8** | 12% | scan `Finish`, **P-read**, K2 `Finish` |
+> | **sort+cull+blend** | **133.8** | **69%** | **P-read(re)**, bin-cnt `Finish`, **hist-read**+host-LPT+6×H2D, bin-scat `Finish`, routeC-cull `Finish`, radix `Finish`, subchunk-dir `Finish`, blend drain + image D2H |
+> | post (tile_ranges loop) | 0.002 | 0% | — |
+> | **TOTAL** | **195.1** | | ~**18** `EnqueueMeshWorkload`, ~**13** CQ drains/view |
+>
+> Maps to the iter-116 device zones (BRISC-FW 179.7 ≈ frame, BRISC-KERNEL 87.1 ⇒
+> 92 ms BRISC non-kernel): the 92 ms is **on-device BRISC-FW per-program
+> launch/barrier firmware overhead**, spread across the ~18 programs — and it lives
+> mostly in **sort+cull+blend (69 % of the host wall, the most programs)**, NOT in
+> project's two tiny resident `Finish` bubbles (0.72 + 1.91 ms).
+>
+> **Phase-2 experiment (REVERTED, frame-neutral).** Removed the 5 clearly-redundant
+> `Finish` barriers — means_cam (resident), pfwc (resident), tile_assign scan
+> (redundant with the very next blocking P-read), tile_assign K2 (bubble; sort's
+> P-read drains), sort bin-count (redundant with the next blocking hist-read). All
+> are provably safe on the single in-order CQ (resident NoC handoff; a following
+> blocking read re-imposes ordering). **Measured 195.1 → 196.1 ms/view (frame-
+> neutral, +0.9 = noise):** the per-stage wall just SHIFTS — `ta` 23.8→13.3,
+> `gather` 34.9→37.3, `sort` 133.8→145.3. **Root cause:** with negligible host
+> compute, a removed `Finish` is immediately re-imposed by the next blocking read
+> (M/P/hist), and the on-device per-program launch overhead is unchanged. **So
+> host-side `Finish` removal CANNOT move this frame** — reverted to pristine
+> (hero md5 `e3fefb11…`, 63.95 dB, ms_view 195.0). The only levers that touch the
+> 92 ms are: (a) **fewer programs** (true fusion), or (b) **Metal Trace** that
+> pre-records the ~18-program dispatch so BRISC-FW replays it without re-launching.
+
+### Stage 5 — concrete ordered host-free plan (what blocks the single trace TODAY)
+A trace records a FIXED `EnqueueProgram` sequence with fixed runtime args + buffer
+addresses; it cannot host-compute a size/branch mid-frame. So every **blocking host
+read that sizes or gates the next dispatch** is a trace blocker. From the iter-120
+audit, in dependency order:
+
+1. **gather `M`-read** (`gather_visible_device.cpp:833`). Host reads the visible
+   count `M` to size tile_assign + return `depths(M)` + early-out `M==0`.
+   → **5b-i:** over-provision tile_assign to the `padded_n` ceiling (`N` rounded);
+   its kernels already guard `g0>=M` and read `proj_M` resident — drop the host `M`
+   dependency. `M==0` becomes a device no-op (guards already exist).
+2. **tile_assign `P`-read** (`tile_assign_device.cpp:702`). Host reads pair count
+   `P` to size `buf_gids/tids/keep` (`P_pad`) + the K2/cull work-split.
+   → **5b-ii:** alloc pair buffers to a static `P_max` ceiling (worst-case
+   Σ tiles_per_gaussian; measure a safe bound), have K2/K4 read `P` from resident
+   `buf_pairs_P` and guard their work-splits. Drop the host `P` dependency.
+3. **sort `P`-read** (`sort_device.cpp:1217`) — a **redundant re-read** of the same
+   `ta_pairs_P`. → free once #2 lands (size from the static ceiling; read `P`
+   on-device for the kernel guards).
+4. **sort `hist`-read + host LPT + 6×H2D** (`sort_device.cpp:1595` →
+   `host_bin_layout_from_hist` → re-upload `bin2d/tmeta/tile_ids/bucket_meta/`
+   `l1_rec_base`). This is the **single biggest mid-frame host blocker** (host
+   compute in the critical path). → **5a (DO THIS FIRST):** the on-device layout
+   path **already exists** — `env_config::sort_device_layout_enabled()` (currently
+   `return false`) computes the page layout on-device and reads only a tiny ctrl
+   page (`read_bin_layout_ctrl`). Flip it on and validate bit-identical. Then
+   **5a-ii** port LPT balance into that kernel (per-view; reuse the `build_lpt`
+   algorithm — do not re-tune its 1.013) writing resident `lpt_meta/tile_ids/`
+   `tile_ranges`, **or** accept the static tile→core map fallback. Removes the
+   hist-read + host LPT + the 6 H2D writes.
+5. **host `build_subchunk_layout`** (from `counts`) + `prepare_subchunk_buffers`.
+   → device-side or **static padded** subchunk directory/alloc (`O4`).
+6. **final `tile_ranges` read** (post): stats-only — drop it; the per-view image
+   D2H is the one allowed host op.
+
+**Ordered execution (lowest-risk first, each its own gate):**
+- **S5.1 (next worker):** flip `sort_device_layout_enabled()=true`, validate the
+  device bin-layout path is bit-identical (hero md5 `e3fefb11…`). Isolatable,
+  the path exists, removes the largest non-gather host blocker. **Start here.**
+- **S5.2:** device/static LPT writing resident `tile→core` (5a-ii / 5b).
+- **S5.3:** over-provision tile_assign + gather to static ceilings; kernels read
+  `M`/`P` resident + guard work-splits → delete the M/P-read drains (5b-i/ii).
+- **S5.4:** static/device subchunk alloc (5c) → no host `build_subchunk_layout`.
+- **S5.5:** persistent per-core kernels looping the resident assignment (variable
+  per-view iteration is device data → one trace replays for any view).
+- **S5.6:** `BeginTraceCapture` the frame; per view = `EnqueueWriteBuffer(camera)`
+  + `ReplayTrace` + one image D2H. This is the step that finally removes the 92 ms
+  BRISC-FW per-program launch overhead (the only thing that can).
+
 ## Sequencing & honest expectation
 - Stage 1 is a safe, standalone win (delete the second DRAM scatter, `materialize`).
 - Stages 2–3 are where the strategic value is, but they only **pay** once the
