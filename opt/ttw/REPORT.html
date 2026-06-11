@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-06-11 11:18 PDT · 74 metal + 126 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-06-11 11:19 PDT · 74 metal + 126 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -51,7 +51,7 @@
     
     <p class='idea-desc'>Stage-2b: pre-pack op/color UNORM16 into the 32B blend record at BIRTH (gather_visible_scatter) so sort_bin pack_invariants and the depth-sorted materialize overflow gather COPY the two packed words instead of re-deriving 4 fp32->UNORM16 conversions (per-gaussian / per-overflow-record). Phase-1 fresh 30-view ranking (ttw-131): BRISC-FW 165.86, NCRISC-KERNEL 131.42; top reducible NCRISC zones sort_bucket_emit 30.58, sort_subchunk_mat 19.62 (overflow re-read/re-pack), readers ~98% backpressure. Ablation MEASURED the gather re-pack at frame -7.1 (skip-pack) vs read -4.5 (skip-read). Bit-identical hero md5 e3fefb116d860f99d92bba1ef51d820c, 63.95dB. NCRISC-KERNEL 131.42->113.80 (-17.6), BRISC-FW 165.86->162.12 (-3.74); sort_bucket_emit 30.58->18.83, sort_subchunk_mat 19.62->13.74; tradeoff proj_scatter 20.83->35.40 (+14.6, pack relocated to BRISC producer). ms_view 181.6->178.9 avg / 147.0->143.8 min.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>faebfa0</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-131/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-131/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-131/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-131/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-131/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-131/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
