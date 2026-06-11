@@ -1,5 +1,5 @@
-id=83
-sha=7f71e2c
-ts=2026-06-11T02:02:44-0700
-desc=iter 114: Sort Stage 2: blendrec[g] read once per gaussian in the bucket fill (kills the random per-pair re-read); sort reads its tile bucket coalesced (materialize in-place L1 permute, iter 113)
-bin=51cd210056487289
+id=84
+sha=97c3031
+ts=2026-06-11T02:28:53-0700
+desc=iter 116: Revert Track 1 (iter-112) blend phasing — measured pure regression (+11.5 ms/view, bit-identical pixels per iter-115 ablation); restore the per-microblock full-chain (power->exp->alpha->RGBT) blend dispatch
+bin=3a2363748913a4e2

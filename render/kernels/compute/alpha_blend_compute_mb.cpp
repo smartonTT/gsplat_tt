@@ -105,150 +105,72 @@ constexpr uint32_t DR_Y = 5 * 32;
 // in place the mapping host-m -> vector is the IDENTITY (dispatch_blend_guarded
 // blends microblock bit M directly into vector M).
 
-// DST scratch slot for the phased dispatch (slots 0..5 hold R/G/B/T/X/Y; with
-// dst_full_sync_en 8 fp32 tiles are available, so slot 6 is free). One gaussian's
-// per-microblock intermediate (power -> weight -> alpha, rewritten in place) lives
-// here between phases.
-constexpr uint32_t DR_SCR = 6 * 32;
-
 #ifdef TRISC_MATH
-// PHASED blend (iter 112): the per-gaussian power->exp->alpha->RGBT chain is a
-// serial SFPU dependency chain. Splitting it into four phases, each run across
-// ALL K microblocks the gaussian covers before the next phase, exposes K-way
-// instruction-level parallelism — independent chains fill the SFPU pipeline
-// instead of stalling on op latency (mirrors the cull kernel's phased dispatch).
-// Intermediates spill to DR_SCR between phases; a microblock's store in one
-// phase is separated from its dependent load in the next by the other covered
-// microblocks (the phasing IS the DEST read-after-write hazard fix — cull §). The
-// front-to-back T/color recurrence stays in gaussian order (phase D runs once per
-// gaussian, after that gaussian's alpha is finalized), so the blend is bit-for-bit
-// the same math, only the divergence-free per-microblock work is reordered.
-// Each phase body is its own noinline,noipa MATH() invocation (immediate
-// SFPLOAD/SFPSTORE addresses; keeps each body within the SFPU LRA budget).
-
-// Phase A: power = min(A*dx^2 + B*dx*dy + C*dy^2, 0) -> DR_SCR.
+// One gaussian's contribution to a single microblock's 32-lane vector.
+// IX is the dst_reg vector index (compile-time so SFPLOAD/SFPSTORE addresses
+// are immediates). Coeff bits are runtime fp32 reinterpreted as uint32.
 template <uint32_t IX>
-__attribute__((noinline, noipa)) void blend_power_math(
+inline void blend_one_gaussian_math(
     uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
-    uint32_t d_bits, uint32_t e_bits) {
+    uint32_t d_bits, uint32_t e_bits, uint32_t f_bits,
+    uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
     using namespace sfpi;
-    namespace cs = ckernel::sfpu;
-    // A1 (iter 111): a/b/c carry the PRE-FOLDED conic {A,B,C} (hoisted into
-    // pfwc_compute.cpp); d/e carry the tile-local mean. Read straight.
-    vFloat A = cs::Converter::as_float(a_bits);
-    vFloat B = cs::Converter::as_float(b_bits);
-    vFloat C = cs::Converter::as_float(c_bits);
-    vFloat mx = cs::Converter::as_float(d_bits);
-    vFloat my = cs::Converter::as_float(e_bits);
-    vFloat dx = vFloat(dst_reg[DR_X + IX]) - mx;
-    vFloat dy = vFloat(dst_reg[DR_Y + IX]) - my;
+    vFloat x = dst_reg[DR_X + IX];
+    vFloat y = dst_reg[DR_Y + IX];
+
+    // A1 (iter 111): a_bits/b_bits/c_bits now carry the PRE-FOLDED conic
+    // {A,B,C}, hoisted once-per-gaussian into pfwc_compute.cpp (bit-identical to
+    // the det/recip/-0.5-fold that USED to run here for every (gaussian ×
+    // microblock) pair). The redundant SFPU recompute is gone — read straight.
+    vFloat A = ckernel::sfpu::Converter::as_float(a_bits);
+    vFloat B = ckernel::sfpu::Converter::as_float(b_bits);
+    vFloat C = ckernel::sfpu::Converter::as_float(c_bits);
+    vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
+    vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
+    vFloat dx = x - mx;
+    vFloat dy = y - my;
     vFloat power = A * (dx * dx);                                                    // A dx^2
     power = power + B * (dx * dy);                                                   // + B dx dy
     power = power + C * (dy * dy);                                                   // + C dy^2
+    (void)f_bits;
+
+    // weight = exp(min(power, 0))
     vFloat zero = 0.0f;
     vec_min_max(power, zero);  // power = min(power, 0)
-    dst_reg[DR_SCR + IX] = power;
-}
+    vFloat weight = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(power);
 
-// Phase B: weight = exp(power), in place in DR_SCR.
-template <uint32_t IX>
-__attribute__((noinline, noipa)) void blend_exp_math() {
-    using namespace sfpi;
-    namespace cs = ckernel::sfpu;
-    vFloat power = dst_reg[DR_SCR + IX];
-    dst_reg[DR_SCR + IX] = cs::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(power);
-}
-
-// Phase C: alpha = min(opacity * weight, 0.99), in place in DR_SCR.
-template <uint32_t IX>
-__attribute__((noinline, noipa)) void blend_alpha_math(uint32_t op_bits) {
-    using namespace sfpi;
-    namespace cs = ckernel::sfpu;
-    vFloat alpha = cs::Converter::as_float(op_bits) * vFloat(dst_reg[DR_SCR + IX]);
+    // alpha = min(opacity * weight, 0.99)
+    vFloat alpha = ckernel::sfpu::Converter::as_float(op_bits) * weight;
     vFloat clamp = 0.99f;
     vec_min_max(alpha, clamp);  // alpha = min(alpha, 0.99)
-    dst_reg[DR_SCR + IX] = alpha;
-}
 
-// Phase D: at = alpha*T; R/G/B += at*c; T *= (1 - alpha). Independent across
-// microblocks (separate accumulators) so it pipelines; per microblock the
-// recurrence stays in gaussian (depth) order because phase D runs once per
-// gaussian after its alpha is finalized.
-template <uint32_t IX>
-__attribute__((noinline, noipa)) void blend_rgbt_math(
-    uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
-    using namespace sfpi;
-    namespace cs = ckernel::sfpu;
-    vFloat alpha = dst_reg[DR_SCR + IX];
     vFloat t = dst_reg[DR_T + IX];
     vFloat at = alpha * t;
-    dst_reg[DR_R + IX] = vFloat(dst_reg[DR_R + IX]) + at * cs::Converter::as_float(cr_bits);
-    dst_reg[DR_G + IX] = vFloat(dst_reg[DR_G + IX]) + at * cs::Converter::as_float(cg_bits);
-    dst_reg[DR_B + IX] = vFloat(dst_reg[DR_B + IX]) + at * cs::Converter::as_float(cb_bits);
+
+    dst_reg[DR_R + IX] = vFloat(dst_reg[DR_R + IX]) + at * ckernel::sfpu::Converter::as_float(cr_bits);
+    dst_reg[DR_G + IX] = vFloat(dst_reg[DR_G + IX]) + at * ckernel::sfpu::Converter::as_float(cg_bits);
+    dst_reg[DR_B + IX] = vFloat(dst_reg[DR_B + IX]) + at * ckernel::sfpu::Converter::as_float(cb_bits);
+
     vFloat one_minus = vFloat(1.0f) - alpha;
     dst_reg[DR_T + IX] = t * one_minus;
 }
 
 #endif
 
-// PHASED dispatch over a gaussian's covered microblocks. Each phase template
-// recurses over all 32 microblock vectors (compile-time M for immediate dst_reg
-// addresses) and runs its MATH() body only where the mask bit is set, so the
-// SFPU sees K back-to-back independent ops per phase. Identity permutation:
-// mask bit m -> vector m. The math bodies are MATH-only; UNPACK/PACK no-op.
-
-template <uint32_t M>
-inline void blend_phase_power(
-    uint32_t mask, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e) {
-    if constexpr (M < NUM_MB) {
-        if (mask & (1u << M)) {
-            MATH((blend_power_math<M>(a, b, c, d, e)));
-        }
-        blend_phase_power<M + 1>(mask, a, b, c, d, e);
-    }
-}
-
-template <uint32_t M>
-inline void blend_phase_exp(uint32_t mask) {
-    if constexpr (M < NUM_MB) {
-        if (mask & (1u << M)) {
-            MATH((blend_exp_math<M>()));
-        }
-        blend_phase_exp<M + 1>(mask);
-    }
-}
-
-template <uint32_t M>
-inline void blend_phase_alpha(uint32_t mask, uint32_t op) {
-    if constexpr (M < NUM_MB) {
-        if (mask & (1u << M)) {
-            MATH((blend_alpha_math<M>(op)));
-        }
-        blend_phase_alpha<M + 1>(mask, op);
-    }
-}
-
-template <uint32_t M>
-inline void blend_phase_rgbt(uint32_t mask, uint32_t cr, uint32_t cg, uint32_t cbv) {
-    if constexpr (M < NUM_MB) {
-        if (mask & (1u << M)) {
-            MATH((blend_rgbt_math<M>(cr, cg, cbv)));
-        }
-        blend_phase_rgbt<M + 1>(mask, cr, cg, cbv);
-    }
-}
-
 // Dispatch one gaussian (coeffs in GPRs) to every microblock its mask selects,
-// phased so each SFPU op runs across all covered microblocks before the next
-// dependent op (ILP; the phasing also fixes the DEST read-after-write hazard).
+// each blend as its OWN MATH() invocation (mirrors the working mb-major kernel:
+// one blend_one_gaussian_math per MATH call). Compile-time unrolled; the runtime
+// mask test skips untouched microblocks. Identity permutation: bit m -> vector m.
+template <uint32_t M>
 inline void dispatch_blend_guarded(
     uint32_t mask, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e,
     uint32_t fc, uint32_t op, uint32_t cr, uint32_t cg, uint32_t cbv) {
-    (void)fc;
-    blend_phase_power<0>(mask, a, b, c, d, e);
-    blend_phase_exp<0>(mask);
-    blend_phase_alpha<0>(mask, op);
-    blend_phase_rgbt<0>(mask, cr, cg, cbv);
+    if constexpr (M < NUM_MB) {
+        if (mask & (1u << M)) {
+            MATH((blend_one_gaussian_math<M>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+        }
+        dispatch_blend_guarded<M + 1>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+    }
 }
 
 // PACK2 (iter 50): two 32B splats per 64B page in CB_BUCKET_BULK; splat g at
@@ -410,7 +332,7 @@ inline void process_tile_l1_blend(
         // live_mb_mask stays all-ones on UNPACK/PACK, whose dispatch is a no-op).
         const uint32_t mask = rec[3] & live_mb_mask;
         if (mask != 0u) {
-            dispatch_blend_guarded(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
+            dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
