@@ -413,6 +413,42 @@ audit, in dependency order:
     the verify harness), **or** fold it under Metal Trace (the +13 ms single-core
     cost is hidden once BRISC-FW replays the recorded dispatch). Also the static
     `tile→core` map fallback (5b) remains open.
+- **S5.4 — PARTIAL (iter-125, commit `78228e0`).** Lever #4, first increment:
+  parallelize **Pass 2** (the dominant ~14k per-`(core,tile)` `bin2d`+`l1_rec_base`
+  base writes) across **16 emit cores** (new kernel
+  `render/kernels/dataflow/sort_bin_emit.cpp` + workload `wl_bin_layout_emit`).
+  Design (NO semaphores — the codebase has none; used the proven CQ program-order
+  pattern instead):
+  1. The coordinator (`sort_bin_layout.cpp`) keeps Pass 1 (count) + tile-major
+     prefix + all resident metadata + LPT, but **replaces the Pass-2 write loop with
+     a checkpoint publish**: for each of W=16 workers (covering a contiguous
+     source-core range via the same `base/rem` split the host uses) it snapshots the
+     running `page_acc` (pages) + `rec_acc` (real counts) at the worker's FIRST
+     source-core into a small DRAM ckpt buffer (`buf_layout_ckpt`, W×2×row_span u32),
+     then advances the prefix over that range. The advance loop is the OLD Pass-2
+     accumulation (`ceil_pages(0)==0` so the unconditional add matches the `if h>0`).
+  2. The emit kernel (CQ-ordered right after the coordinator → sees its ckpt writes
+     and the still-intact histogram in `bin2d`) has each worker seed `page_acc`/
+     `rec_acc` from its checkpoint and **replay the exact Pass-2 inner loop** over
+     its disjoint source-core rows (read hist row → emit `bin2d` base + `l1_rec_base`
+     → write back). Disjoint per-`(core)` DRAM regions ⇒ contention-free, no locks.
+  - **VERIFY (`layout_verify=true`, 30 views + warmup): 33/33 `IDENTICAL`,
+    `status=0`, zero mismatches** across hist/counts/tids/lpt_meta/tmeta (incl.
+    heavy/overflow). **Pixels bit-identical** (hero md5 unchanged, **63.95 dB**).
+  - **Perf (matched-thermal A/B, back-to-back, steady-state MIN):** `min_ms`
+    **213.0 → 211.5 (−1.5)**; thermally-matched Tracy makespan **BRISC-FW
+    226.2 → 224.7 (−1.6)**, **NCRISC-KERNEL 191.4 → 189.9 (−1.6)**, **TRISC-KERNEL
+    51.9 unchanged** (off-path untouched). 30-view Tracy `opt/profiler/ttw-125/`
+    (725k device-zone rows). **KEPT** (bit-identical + a real, if small, win).
+  - **Why only ~1.5 ms of the ~6 ms Pass-2 share lands:** the second program's
+    per-launch BRISC-FW overhead (~2.2 ms measured) + the serial checkpoint publish
+    (W×2×row_pages ≈ 2k page writes, ~1.3 ms) eat most of it; and **Pass 1's single
+    serial count read (~4–5 ms) is still on the coordinator** (untouched). **Bigger
+    win remaining:** (a) parallelize Pass 1 too via the partials/combine 3-phase (or
+    a single-program semaphore version — needs the cross-core NoC-coord handshake,
+    no codebase precedent), and (b) **Metal Trace makes the extra launch ~free** so
+    the full Pass-2 parallelism (~6 ms) materializes — i.e. this change is worth
+    MORE under the trace endgame than the current +1.5 ms shows.
 - **S5.3:** over-provision tile_assign + gather to static ceilings; kernels read
   `M`/`P` resident + guard work-splits → delete the M/P-read drains (5b-i/ii).
   - **GROUNDWORK LANDED (iter-123, KEEP, behind `host_free_mp_enabled()` default
