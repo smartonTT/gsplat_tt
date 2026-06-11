@@ -426,12 +426,24 @@ audit, in dependency order:
     thermal from back-to-back runs). This lands the proven **resident-read +
     static-ceiling pattern** the three read-deletions depend on, but **does NOT yet
     delete any host blocking read.**
-  - **PENDING read-deletions (the three mid-frame host blocking-read drains):**
-    1. `tile_assign` `P`-read (`tile_assign_device.cpp:~702`) — size pair buffers +
-       K2/cull work-split to the static `P_max = pair_ceiling()` (4,718,592),
-       K2/K4 read `P` from the resident ctrl page + guard work-splits.
-    2. `sort` `P`-read (`sort_device.cpp:~1240`) — redundant; frees once #1 lands.
-    3. `gather` `M`-read (`gather_visible_device.cpp:~833`) — contract change
+  - **P-domain deletion IMPLEMENTED + verified, KEEP DEFERRED (iter-124 WIP, branch
+    `wip/s5.3-p-read-iter124` @ `dc7f4b5`, NOT on this branch):** deletes the
+    tile_assign `P`-read by over-provisioning the pair buffers + K2 work-split to the
+    static `P_max = pair_ceiling()` (4,718,592); K2 reads the clamped `P` from the
+    resident `ta_pairs_P` ctrl page via `InterleavedAddrGen<true>`; `scan_bases` clamps
+    the published `P` and publishes an overflow flag + true `P`; `sort_device`
+    hard-fails on overflow (single-path TT, no fallback). All behind
+    `host_free_mp_enabled()`. **Verified bit-identical on bh-07 pre-wedge** (devrun
+    `--no-ref`, 30 views: hero md5 `e3fefb11…`; max P 3,700,450 < ceiling 4,718,592, no
+    overflow; frame-neutral, min ms_view 213.0 thermally inflated). **The keep ceremony
+    (30-view Tracy + on-device bit-identity gate) did NOT run:** bh-07 (the warm-tree
+    device) wedged and IRD now sticky-assigns the cold `yyzo-bh-26` (empty `/localdev`,
+    `--machine yyzo-bh-07` ignored across 4 reserve attempts) — bh-07 shows `idle/free`
+    but is not allocatable (post-wedge quarantine). Re-verify + run the full keep flow
+    once bh-07 is allocatable, then land on this branch as iter-124.
+  - **STILL PENDING read-deletions (mid-frame host blocking-read drains):**
+    1. `sort` `P`-read (`sort_device.cpp:~1240`) — redundant; frees once iter-124 lands.
+    2. `gather` `M`-read (`gather_visible_device.cpp:~833`) — contract change
        (size `depths` to capacity, `M==0` → device no-op, read `M` post-frame for
        stats).
 - **S5.4:** static/device subchunk alloc (5c) → no host `build_subchunk_layout`.
