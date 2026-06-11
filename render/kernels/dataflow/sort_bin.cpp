@@ -329,17 +329,12 @@ void kernel_main() {
         inv_depth = depth_key;
         inv_mx = *reinterpret_cast<const volatile float*>(&cachep[3]);
         inv_my = *reinterpret_cast<const volatile float*>(&cachep[4]);
-        float op = *reinterpret_cast<const volatile float*>(&cachep[5]);
-        float cr = *reinterpret_cast<const volatile float*>(&cachep[6]);
-        float cg = *reinterpret_cast<const volatile float*>(&cachep[7]);
-        float cb_v = *reinterpret_cast<const volatile float*>(&cachep[8]);
-        auto to_unorm = [](float v) -> uint32_t {
-            if (v <= 0.0f) return 0u;
-            if (v >= 1.0f) return 65535u;
-            return static_cast<uint32_t>(v * 65535.0f + 0.5f);
-        };
-        inv_opr = (to_unorm(op) | (to_unorm(cr) << 16));
-        inv_cgb = (to_unorm(cg) | (to_unorm(cb_v) << 16));
+        // Stage-2b (iter 131): op/color UNORM16 words are PRE-PACKED once at
+        // birth in gather_visible_scatter (cachep[5]=op|cr, cachep[6]=cg|cb), so
+        // pack_invariants only COPIES them — no fp32->UNORM16 conversion here.
+        // Bit-identical (same pack formula, computed once per gaussian at birth).
+        inv_opr = cachep[5];
+        inv_cgb = cachep[6];
     };
     auto pack_rec = [&](uint32_t b, uint32_t tt) {
         // Tile-local mean: the blend reader reconstructs absolute via

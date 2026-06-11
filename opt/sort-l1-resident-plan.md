@@ -366,6 +366,74 @@ the only DRAM read.**
 >   coalesced, NO `blendrec` re-read / UNORM re-pack) would cut the SUM and drop the
 >   floor well below 17 ms. Balance only spreads the work; Stage-2b deletes it.
 
+> **iter-131 — FRESH FULL-FRAME RANKING (Phase 1) + Stage-2b pre-pack op/color at birth (Phase 2, KEEP, bit-identical, frame win).**
+>
+> **Phase 1 — fresh 30-view Tracy at HEAD (iter 130, `ttw-131`), `analyze_zones.py`,
+> per-view busiest-core makespan. Frame critical path BRISC-FW 165.86 ms/view;
+> NCRISC-KERNEL (data mover) 131.42; TRISC-KERNEL (SFPU, OFF-PATH) 51.89.** Named
+> device zones ranked by pv_makespan:
+>
+> | # | zone | pv_ms | RISC | role / note |
+> |---|------|-------|------|-------------|
+> | 1 | sort_bucket_emit | 30.58 | NCRISC | sort in-budget bucket scatter (store-bound per iter-129) |
+> | 2 | tile_blend_sfpu | 28.80 | TRISC | blend SFPU compute — **OFF-PATH** (TRISC short pole) |
+> | 3 | tile_blend_load | 28.06 | NCRISC | blend DRAM slab reader — ~98% backpressure (waits on SFPU) |
+> | 4 | rd_l1_bulk | 27.89 | NCRISC | bulk-L1 read helper (35k pairs; shared by blend/cull/mat) — backpressure |
+> | 5 | tile_mb_mask | 22.39 | TRISC | cull mask compute — **OFF-PATH** |
+> | 6 | tile_l1_cull_rd | 21.99 | NCRISC | cull DRAM slab reader — backpressure |
+> | 7 | proj_scatter | 20.83 | BRISC | gather/project compaction + SoA + blendrec write |
+> | 8 | sort_subchunk_mat | 19.62 | NCRISC | materialize: overflow gather + in-budget permute |
+> | 9 | proj_count | 14.97 | BRISC | project visible count |
+> | 10 | ta_bucket_scatter | 12.24 | NCRISC | tile_assign K2 pair scatter |
+> | 11 | ta_gauss_aabb | 9.70 | NCRISC | tile_assign K1 bbox |
+> | 12 | sort_tile_depth | 7.15 | NCRISC | DRAM radix |
+> | — | pfwc 1.92 / sort_bin_hist 1.41 / sort_subchunk_dir 2.41 / mcam 0.67 | | | |
+>
+> **Top-3 reducible levers (NCRISC dataflow drives BRISC-FW; iter-128/130 proved the
+> propagation):** (1) **sort_bucket_emit 30.58** — residual is the per-pair 32B-record
+> L1 store traffic (pack hoisted iter-128, div/mod refuted iter-129); structural-only.
+> (2) **sort_subchunk_mat 19.62** — dominated by the OVERFLOW gather: per-record random
+> `blendrec[gid]` read + fp32→UNORM16 re-pack (the iter-129/130 theme). (3) the
+> **blend/cull readers cluster** (tile_blend_load 28 + tile_l1_cull_rd 22 + rd_l1_bulk 28)
+> — ~98% backpressure, gated by the SFPU/CB pipeline, NOT raw read traffic (needs the
+> parked blend phasing plan, not a reader micro-opt). The off-path TRISC zones
+> (tile_blend_sfpu 28.8, tile_mb_mask 22.4) cannot move the frame (TRISC 51.9 short pole).
+>
+> **Phase 2 — measure-first ablation of the materialize overflow gather (`ttw-131sp`/
+> `ttw-131sr`, kernel #if knobs, NOT bit-identical, reverted):**
+> - **skip the per-record fp32→UNORM16 pack + tile-mean subtract:** sort_subchunk_mat
+>   19.62→14.32, **BRISC-FW 165.86→158.76 (−7.1)**, NCRISC-KERNEL −7.4. The pack is the
+>   dominant gather cost.
+> - **skip the random `blendrec[gid]` 64B read:** sort_subchunk_mat 19.62→16.78,
+>   **BRISC-FW −4.5**, NCRISC −4.8. Real but smaller than the pack.
+>
+> **Fix (bit-identical):** the op/color UNORM16 words are functions of the GAUSSIAN
+> only and were re-derived by BOTH consumers — `sort_bin` `pack_invariants` (once per
+> gaussian) AND the depth-sorted `materialize` overflow gather (once per overflow
+> record, un-hoistable since the ids are depth-sorted). Move the pack to BIRTH:
+> `gather_visible_scatter` now writes `blendrec` words `r[5]=unorm(op)|(unorm(cr)<<16)`,
+> `r[6]=unorm(cg)|(unorm(cb)<<16)` (formerly fp32 op,cr,cg,cb in r[5..8]); the two
+> consumers just COPY r[5],r[6]. Same UNORM formula, same fp32 inputs ⇒ byte-identical
+> record bytes. (`blendrec` op/color words 5–8 are read ONLY by these two — the cull
+> reader voids `blendrec`, the blend reader declares but never reads it; verified.)
+> Stays 64B/gaussian — no host alloc, no read-width change.
+> - **Measured (clean verify, 30 views): hero md5 `e3fefb116d860f99d92bba1ef51d820c`
+>   BIT-IDENTICAL, 63.95 dB; ms_view 181.6→178.9 avg (−2.7), min 147.0→143.8 (−3.2).**
+>   Tracy (`ttw-131`): **NCRISC-KERNEL 131.42→113.80 (−17.6)**, **BRISC-FW (frame
+>   critical path) 165.86→162.12 (−3.74)**; `sort_bucket_emit` 30.58→18.83 (−11.7),
+>   `sort_subchunk_mat` 19.62→13.74 (−5.9). The duplicated pack is DELETED (now computed
+>   once at birth, not in bucket_emit AND materialize). **KEPT.**
+> - **TRADEOFF (documented):** the pack RELOCATED to the producer grows `proj_scatter`
+>   20.83→35.40 (+14.6, BRISC) and BRISC-KERNEL 86.6→100.5 — and BRISC-FW is the long
+>   pole, so only the NET de-duplication (~materialize's −5.9) reaches the frame (−3.7).
+>   The pack is fundamentally ~12–15 ms of scalar UNORM work wherever it runs; we
+>   removed the *duplicate*, not the work. **Better follow-up (iter 132+):** keep the
+>   pack on NCRISC (it has 48 ms headroom now: 113.8 vs BRISC 162) by having
+>   `bucket_emit`'s once-per-gaussian `pack_invariants` publish the 2 packed words to a
+>   small resident gaussian-major array that `materialize` reads — deletes materialize's
+>   re-pack WITHOUT loading the BRISC long pole. (Needs a tiny buffer + arg plumbing; the
+>   gather-side pre-pack shipped here is the lower-risk first increment.)
+
 ### Stage 3 — Per-core L1 sort, emit blend's PACK2 layout into L1
 Each sort core reads ITS tile's bucket into L1 and radix-sorts **(key, index)**
 (8B ping-pong — small scratch). Then the **emit pass writes the depth-sorted 32B

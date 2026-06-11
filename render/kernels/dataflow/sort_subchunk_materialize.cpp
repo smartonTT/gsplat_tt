@@ -69,12 +69,6 @@ inline uint32_t f_to_bits(float f) {
     return b;
 }
 
-inline uint32_t pack_fp32_unorm16(float v) {
-    if (v <= 0.0f) return 0u;
-    if (v >= 1.0f) return 65535u;
-    return static_cast<uint32_t>(v * 65535.0f + 0.5f);
-}
-
 inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
     return reinterpret_cast<volatile uint32_t*>(
         buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
@@ -335,12 +329,15 @@ void kernel_main() {
                 splat[3] = aos[9];
                 splat[4] = f_to_bits(mx);
                 splat[5] = f_to_bits(my);
-                const float op = bits_to_f(aos[5]);
-                const float cr = bits_to_f(aos[6]);
-                const float cg = bits_to_f(aos[7]);
-                const float cb = bits_to_f(aos[8]);
-                splat[6] = pack_fp32_unorm16(op) | (pack_fp32_unorm16(cr) << 16);
-                splat[7] = pack_fp32_unorm16(cg) | (pack_fp32_unorm16(cb) << 16);
+                // Stage-2b (iter 131): op/color UNORM16 are PRE-PACKED once at
+                // birth in gather_visible_scatter (aos[5]=op|cr, aos[6]=cg|cb),
+                // so the depth-sorted overflow gather only COPIES the two packed
+                // words instead of re-deriving 4 fp32->UNORM16 conversions per
+                // record. Bit-identical (same pack formula, computed once). iter-131
+                // ablation MEASURED this re-pack at ~5.3 ms/view busiest-core
+                // (frame BRISC-FW -7.1) — the dominant overflow-gather cost.
+                splat[6] = aos[5];
+                splat[7] = aos[6];
                 const uint32_t out_g = brec_out_g[b];
                 const uint32_t out_page = sc_page + (out_g / SLAB_RECS_PER_PAGE);
                 const uint32_t out_off = (out_g % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;

@@ -79,6 +79,18 @@ inline float bits_to_f(uint32_t b) {
     return f;
 }
 
+// Stage-2b (iter 131): the 32B blend record's op/color words are PRE-PACKED to
+// UNORM16 here, once at birth, so the depth-sorted overflow gather in
+// sort_subchunk_materialize (and the per-gaussian pack_invariants in sort_bin)
+// only COPY the two packed words instead of re-deriving 4 fp32->UNORM16
+// conversions per record. This formula is BYTE-IDENTICAL to the to_unorm /
+// pack_fp32_unorm16 used by those consumers (same inputs, same rounding).
+inline uint32_t pack_fp32_unorm16(float v) {
+    if (v <= 0.0f) return 0u;
+    if (v >= 1.0f) return 65535u;
+    return static_cast<uint32_t>(v * 65535.0f + 0.5f);
+}
+
 inline int clampi(int v, int lo, int hi) {
     if (v < lo) v = lo;
     if (v > hi) v = hi;
@@ -405,8 +417,16 @@ void kernel_main() {
             {
                 volatile uint32_t* r = o_rec + slot * REC_WORDS;
                 r[0] = p_a[il];   r[1] = p_b[il];   r[2] = p_c[il];
-                r[3] = p_m2x[il]; r[4] = p_m2y[il]; r[5] = p_op[il];
-                r[6] = p_cr[il];  r[7] = p_cg[il];  r[8] = p_cb[il];
+                r[3] = p_m2x[il]; r[4] = p_m2y[il];
+                // Stage-2b (iter 131): pre-pack op/color UNORM16 at birth.
+                // r[5] = op | (cr<<16), r[6] = cg | (cb<<16) — the exact words
+                // the consumers (sort_bin pack_invariants / materialize gather)
+                // formerly re-derived per gaussian / per overflow record.
+                r[5] = pack_fp32_unorm16(bits_to_f(p_op[il])) |
+                       (pack_fp32_unorm16(bits_to_f(p_cr[il])) << 16);
+                r[6] = pack_fp32_unorm16(bits_to_f(p_cg[il])) |
+                       (pack_fp32_unorm16(bits_to_f(p_cb[il])) << 16);
+                r[7] = 0; r[8] = 0;
                 r[9] = 0; r[10] = 0; r[11] = 0; r[12] = 0;
                 r[13] = 0; r[14] = 0; r[15] = 0;
             }
