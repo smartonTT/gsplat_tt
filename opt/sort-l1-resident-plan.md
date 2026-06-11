@@ -16,15 +16,36 @@ The measured numbers (lessons.md, dated 2026-06):
 - Of that, the literal radix is **~7.5 ms + publish ~1.3 ms ≈ 9 ms**; the other
   ~17 ms is histogram + the gaussian→tile bucket scatter + subchunk directory +
   materialize.
-- Frame total ≈ **192 ms/view** (`iter 111`). The dominant cost is **cull + blend
-  SFPU (~80 + ~95 = ~175 ms) run serially on the shared SFPU cores** — fusion is
-  blocked by the iter-26 DEST hazard.
+- Frame total ≈ **192 ms/view** (`iter 111`).
 
-So: **sort is not the frame killer.** The user's architectural critique is still
-correct (sort *is* all DRAM shuffling on the data movers, and it does *not* honor
-the L1-resident / tile-per-core ideal), but the prize for fixing it is **not the
-26 ms** — it is enabling a **DRAM-free sort → cull → blend handoff** that lets the
-SFPU stages drop their DRAM readers and (eventually) fuse.
+### Stage 0 MEASURED — authoritative makespan breakdown (iter 116, 195.5 ms/view, `analyze_zones.py`, 30 views)
+The earlier "cull+blend SFPU ~175 ms is the killer" claim was **WRONG — the same
+aggregate-sum trap.** Per-view makespan (busiest-core proxy) from
+`opt/profiler/ttw-116/profile_log_device.csv`:
+
+| RISC role | per-view makespan | reading |
+|-----------|-------------------|---------|
+| **BRISC-FW** (data mover, long pole) | **179.7 ms** | ≈ frame critical path |
+| BRISC-KERNEL | 87.1 ms | → **~92 ms/view is BRISC non-kernel = host dispatch/launch/barrier serialization** |
+| **NCRISC-KERNEL** (data mover) | **144.5 ms** | genuinely busy doing dataflow |
+| **TRISC-KERNEL** (ALL SFPU compute) | **52.4 ms** | **NOT the bottleneck** |
+
+Dominant named zones (per-view makespan): `sort_bucket_emit` 39.7 (NCRISC),
+`tile_blend_load` 28.5, `rd_l1_bulk` 28.3, `sort_subchunk_mat` 26.1,
+`tile_l1_cull_rd` 22.0 (NCRISC reads); `proj_scatter` 20.8, `proj_count` 15.0
+(BRISC); `tile_blend_sfpu` 29.3, `tile_mb_mask` 22.4 (TRISC, off-path).
+
+**Conclusion: the frame is DATAFLOW + HOST-DISPATCH bound, not compute-bound.**
+Blend/cull SFPU micro-opt cannot move the frame (TRISC is the short pole). The
+levers, in value order: (1) the ~92 ms BRISC host-dispatch overhead → host-free
+trace (Stage 5); (2) NCRISC dataflow `sort_bucket_emit`+`sort_subchunk_mat`+readers
+and BRISC `proj_scatter`+`proj_count` → Stages 2b/3 (fuse project, L1 handoff,
+collapse materialize). This VALIDATES the sort plan's strategic direction and makes
+it the primary lever, not a prerequisite-only side quest.
+
+So: the prize for fixing sort is **not the 26 ms** — it is enabling a **DRAM-free
+sort → cull → blend handoff** AND collapsing the BRISC `proj_scatter`/host-dispatch
+that actually dominate the frame.
 
 ## Why it's DRAM shuffling on the data movers (root cause)
 
