@@ -317,6 +317,55 @@ the only DRAM read.**
 >   bytes are gaussian-invariant and re-stored K times today). That is a structural
 >   change, not a per-pair micro-op. The div/mod is settled: it is free.
 
+> **iter-130 — `sort_subchunk_mat` DIAGNOSED then OPTIMIZED via subchunk load-balance (KEEP, bit-identical, frame win).**
+> Instrumented the materialize kernel with phase sub-zones (`mat_read`/`mat_sort`/
+> `mat_perm`/`mat_write`/`mat_gather`), captured a 30-view Tracy, ran
+> `analyze_zones.py`. **The assumed target was REFUTED.** The Sort-Stage-1 (iter-113)
+> in-place L1 permute that everyone (incl. this task's framing) assumed was the cost
+> is NEGLIGIBLE; the cost is the OVERFLOW gather that Stage 1 never touched.
+> Per-view-makespan attribution of `sort_subchunk_mat` = 27.1 ms (instrumented):
+> - **`mat_gather` 24.6 ms (91 % of the busiest core)** — the overflow path: random
+>   `blendrec[gid]` re-read + scalar fp32→UNORM16 pack (the SAME pack iter-128 found
+>   = 71 % of `bucket_emit`) + 32B scatter, for the tiles whose `count > BUCKET_FIT`.
+> - `mat_sort` 6.3, `mat_perm` (the L1->L1 permute) **1.7**, `mat_read` (bulk DRAM)
+>   0.55, `mat_write` (coalesced slab DRAM) 0.02. **The in-place permute is 1.7 ms —
+>   not the cost.**
+> - **Load imbalance (root cause):** the shared per-tile count-LPT (built from
+>   `pad_counts`, also used by sort/cull/blend) balances TOTAL records/core, but an
+>   overflow record costs ~10x an in-budget record in materialize, so cores owning the
+>   big overflow tiles are overloaded. Per-core `mat_total`: **max 27.1, p50 17.0,
+>   min 10.8; balanced floor (sum/110) = 17.0 ms.** The heaviest single tile (~26.5k
+>   recs, ~3-4 subchunks) pins ONE core at ~24.6 ms of gather; a tile-reassignment
+>   can't help (one tile can't be split) — only subchunk-granular splitting can.
+>
+> **Fix (bit-identical):** the unit of work is now a **(tile, subchunk) item**, not a
+> tile. Each item is independent and writes byte-identical output regardless of core
+> (in-budget permute reads `buf_l1_recs` by tile / writes payload by (tile,sc); gather
+> reads `sort_sorted_ids`+`blendrec` by global id / writes payload by (tile,sc)). The
+> host (`build_mat_worklist`) enumerates every (tile, sc) with `L_sub>0`, weights
+> gather subchunks `GATHER_WEIGHT=8 x records` vs in-budget `1 x records`, and
+> greedy-LPT-balances ALL items across the 110 cores into a per-core work-list buffer
+> (`buf_mat_work`, flat {tile_id, sc} pairs). The kernel iterates its work-item slice
+> (packed `(tile<<8)|sc`), re-deriving per-item metadata (ranges/blend_meta/dir) — the
+> in-budget vs gather branch is unchanged per item. (`sort_subchunk_materialize.cpp`
+> + `sort_device.cpp launch_subchunk_materialize`; the phase sub-zones were stripped
+> for the committed kernel.)
+> - **Measured (clean verify, 30 views): hero md5 `e3fefb116d860f99d92bba1ef51d820c`
+>   BIT-IDENTICAL, 63.95 dB; ms_view 187.0->181.6 avg (-5.4), min 156.6->147.0 (-9.6).**
+>   Tracy (`ttw-130`, clean): **`sort_subchunk_mat` 26.22->19.62 (-6.6, -25 %)**,
+>   **NCRISC-KERNEL 134.28->131.42 (-2.9)**, **BRISC-FW (frame critical path)
+>   169.02->165.87 (-3.2)**; all other zones unchanged (`sort_bucket_emit` 30.58,
+>   `tile_blend_*`, TRISC 51.9 off-path). Materialize IS on the frame critical path
+>   (the NCRISC/BRISC-FW win propagated to the steady min). **KEPT.**
+> - **Residual:** `sort_subchunk_mat` lands at 19.6 ms vs the 17.0 ms balanced floor —
+>   the gap is the per-item metadata re-reads + the GATHER_WEIGHT=8 model not being
+>   perfectly tuned + chunky subchunk granularity. Tunable, but the bigger lever is
+>   STRUCTURAL: the gather SUM itself (1237 ms/view across cores) is redundant
+>   re-gather+re-pack of overflow records — the parked **Stage-2b** (keep overflow
+>   records pre-packed in the per-(core,tile) bucket so materialize reads them
+>   coalesced, NO `blendrec` re-read / UNORM re-pack) would cut the SUM and drop the
+>   floor well below 17 ms. Balance only spreads the work; Stage-2b deletes it.
+
 ### Stage 3 — Per-core L1 sort, emit blend's PACK2 layout into L1
 Each sort core reads ITS tile's bucket into L1 and radix-sorts **(key, index)**
 (8B ping-pong — small scratch). Then the **emit pass writes the depth-sorted 32B

@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-06-11 10:38 PDT · 74 metal + 125 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-06-11 10:40 PDT · 74 metal + 125 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -51,7 +51,7 @@
     
     <p class='idea-desc'>sort_subchunk_mat subchunk-balanced (load balance). Phase-1 DIAGNOSED via 30-view Tracy phase sub-zones (analyze_zones): the dominant materialize cost is NOT the iter-113 in-place L1 permute (mat_perm 1.7ms/mat_read 0.55/mat_sort 6.3/mat_write 0.02 busiest-core) but the OVERFLOW gather (mat_gather 24.6ms) - random blendrec re-read + scalar UNORM pack + 32B scatter for overflow tiles, untouched by Stage 1. The shared per-tile count-LPT overloads cores owning big overflow tiles (mat_total max 27.1 vs 17.0ms balanced floor; busiest core 91% gather). FIX bit-identical: each (tile,sc) is an independent work item with core-independent output, so balance ALL items across cores via gather-cost-weighted greedy-LPT (kernel now iterates a work-item list; host build_mat_worklist). hero md5 e3fefb11 bit-identical, 63.95dB; ms_view min 156.6->147.1.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>0b49e4b</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-130/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-130/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-130/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-130/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-130/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-130/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
