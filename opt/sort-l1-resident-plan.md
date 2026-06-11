@@ -282,6 +282,41 @@ the only DRAM read.**
 >   a lookup; or move the whole pack into the (future) TA-side fill so the record is
 >   born once per (gaussian) not per pair. Either is bit-identical.
 
+> **iter-129 — per-pair div/mod attacked, MEASURED, REFUTED & REVERTED (decision=blocked).**
+> Killed the per-pair tile-coord integer div/mod in `be_main`'s `pack_rec`
+> (`tile_x = tt % grid_w`, `tile_y = tt / grid_w`). `grid_w = l1_tiles_x = 32` for
+> the hero/bench config (1024x1024 image / 32 px tiles), a **power of two**, so the
+> `%`/`/` collapse to `tt & 31` / `tt >> 5` — **provably bit-identical** integer
+> results, **zero extra storage** (cheapest of the two task options; the per-tile
+> origin LUT was unnecessary). Non-pow2 grids keep the original div/mod via a
+> loop-invariant branch.
+> - **Measured (clean verify + 30-view Tracy, ttw-129): BIT-IDENTICAL** (hero md5
+>   `e3fefb116d860f99d92bba1ef51d820c`, **63.95 dB**) but **FRAME-NEUTRAL** —
+>   `sort_bucket_emit` **30.57 -> 30.58** (+0.009, noise), NCRISC-KERNEL 134.23 ->
+>   134.28, BRISC-FW (frame critical path) 168.96 -> 169.02, ms_view 187.4 -> 187.0
+>   avg / 156.6 -> 157.1 min. **The NCRISC software integer divide is NOT the
+>   `be_main` residual hotspot** — replacing it with the cheapest possible integer
+>   ops (mask/shift) gained nothing, i.e. the divide is overlapped/hidden by the
+>   dominant per-pair L1 store traffic (memory-bound, not ALU-bound). iter-128's
+>   guess that the residual was "the integer div/mod" is **refuted**.
+> - **Confirming ablation (null the 8 per-pair 32B-record L1 stores `p32[0..7]`;
+>   NOT bit-identical, measurement-only):** `sort_bucket_emit` **30.58 -> 13.03
+>   (-17.5 ms, -57 %)**, NCRISC-KERNEL -16.7, BRISC-FW -15.7. **The residual
+>   `be_main` cost IS the per-pair 32B-record L1 store traffic** (8 x u32 stores x
+>   ~21.7k pairs/core staged into `l1_scratch`), not the tile-coord decode and not
+>   the float mean subtracts. (Consistent with iter-128: the 32B *DRAM scatter* was
+>   only 1.6 ms — it's the *L1 staging stores*, not the NoC writes.)
+> - **REVERTED to pristine HEAD** (the shift/mask added a per-pair branch + setup for
+>   zero frame gain -> frame-neutral dead complexity; fails the "bit-identical but
+>   frame-neutral -> REVERT" gate). Device tree re-synced to HEAD (kernel md5
+>   `2e0c4c7...`, bin `2737d886...`). Tracy: `opt/profiler/ttw-129/`.
+> - **Re-scoped lever (do NOT re-attempt the div/mod):** the only way to move
+>   `be_main` is to **reduce the per-pair 32B record store traffic** — make the
+>   record **born once per gaussian, not once per pair** (the Stage-2b TA-side fill:
+>   each gaussian's pairs differ only in the tile-local mean, words 4,5; the other 24
+>   bytes are gaussian-invariant and re-stored K times today). That is a structural
+>   change, not a per-pair micro-op. The div/mod is settled: it is free.
+
 ### Stage 3 — Per-core L1 sort, emit blend's PACK2 layout into L1
 Each sort core reads ITS tile's bucket into L1 and radix-sorts **(key, index)**
 (8B ping-pong — small scratch). Then the **emit pass writes the depth-sorted 32B
