@@ -1,7 +1,17 @@
 # Blend + Cull speedup plan (SFPU dependency-stall)
 
-Status: PLANNED (not yet executed). Owner: supervisor. Evidence: on-device
+Status: PARKED behind fusion. Owner: supervisor. Evidence: on-device
 ablation captured 2026-06-08 (see "Evidence" below).
+
+> **READ FIRST — frame priority as of iter 132:** the frame is **BRISC-FW /
+> host-dispatch bound (~161.7 ms)**; **TRISC (all SFPU) is ~52 ms, OFF the critical
+> path**. Blend SFPU micro-opt therefore **cannot move the frame** until program
+> fusion + a transmittance-early-out blend flip the bottleneck onto SFPU. The
+> prioritized roadmap, the 1 ms north-star answer, parked levers, and the
+> refuted-premises ledger (incl. "cull+blend SFPU ~175 ms is the killer" — REFUTED
+> iter 116, RE-TEST if the blend algorithm changes) live at the top of
+> **`opt/sort-l1-resident-plan.md`**. This blend plan stays valid as the design for
+> roadmap step #3 (blend reader-cluster / phasing rework), to execute AFTER fusion.
 
 ## TL;DR
 

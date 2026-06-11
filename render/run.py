@@ -6,7 +6,10 @@ reference, and prints:
 
     SUMMARY hero_vs_ref=<dB>
 
-The gate is hero_vs_ref >= 63.6 dB (production hits ~63.85 dB).
+The gate metric (NEW REF iter-132) is hero_vs_ref = 8-bit PSNR vs the committed
+golden frame tests/fixtures/hero/hero_golden_8bit.png. Bit-identical 8-bit output
+reports 100.0 dB; the loop gate is hero_vs_ref >= 50 dB (see ttw.toml). The CPU
+reference is still rendered as a secondary float diagnostic (hero_vs_cpu).
 
 Run it through tt-workflows devrun so the per-host device lock is held:
 
@@ -144,6 +147,25 @@ def psnr(a, b):
     if mse <= 0.0:
         return float("inf")
     return -10.0 * math.log10(mse)
+
+
+def _to_u8(img01):
+    """Quantize a [0,1] float image to uint8 with floor — matches the saved PNG."""
+    return (np.clip(np.asarray(img01, dtype=np.float32), 0.0, 1.0) * 255.0).astype(np.uint8)
+
+
+def psnr8(img01, ref01):
+    """8-bit PSNR: quantize BOTH operands to uint8 (the displayed/clamped output)
+    then compare. This is the user-directed gate metric (NEW REF iter-132): it
+    measures drift in the actual 8-bit pixels we ship, not float-level noise.
+    Bit-identical 8-bit output -> capped 100.0 dB (finite, so the loop gate parses
+    it as a number instead of 'inf')."""
+    a = _to_u8(img01).astype(np.float64)
+    b = _to_u8(ref01).astype(np.float64)
+    mse = float(np.mean((a - b) ** 2)) / (255.0 ** 2)
+    if mse <= 0.0:
+        return 100.0
+    return min(100.0, -10.0 * math.log10(mse))
 
 
 def _to_image(res):
@@ -287,26 +309,49 @@ def main():
     min_ms = min(per_view_ms)
     max_ms = max(per_view_ms)
 
-    if args.no_ref:
-        hero_vs_ref = float("nan")
-        Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
-    else:
-        hero_vs_ref = psnr(hero_clean, ref)
+    # NEW REF (iter-132): the gate metric is 8-bit PSNR vs a committed golden
+    # frame, not float PSNR vs the freshly-rendered CPU reference. The CPU
+    # reference is still rendered (when available) as a SECONDARY ground-truth
+    # diagnostic (hero_vs_cpu) so we don't lose the float-level correctness anchor.
+    GOLDEN_REF = REPO_ROOT / "tests" / "fixtures" / "hero" / "hero_golden_8bit.png"
+
+    # Secondary diagnostic: float PSNR vs the freshly-rendered CPU reference.
+    hero_vs_cpu = float("nan")
+    if not args.no_ref and ref is not None:
+        hero_vs_cpu = psnr(hero_clean, ref)
         ref_mean = float(ref.mean())
         if ref_mean > 0.95 or ref_mean < 0.05:
             print(f"[run] FATAL: reference mean={ref_mean:.4f} looks invalid "
                   f"(expected ~0.33); aborting gate", file=sys.stderr, flush=True)
             sys.exit(4)
-        Image.fromarray((hero_clean * 255.0).astype(np.uint8)).save(out_dir / "hero_clean.png")
-        Image.fromarray((ref * 255.0).astype(np.uint8)).save(out_dir / "hero_ref.png")
-        diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
-        Image.fromarray((diff * 255.0).astype(np.uint8)).save(out_dir / "hero_diff10.png")
+
+    Image.fromarray(_to_u8(hero_clean)).save(out_dir / "hero_clean.png")
+
+    # PRIMARY gated metric: 8-bit PSNR vs the committed golden reference.
+    hero_vs_ref = float("nan")
+    if GOLDEN_REF.exists():
+        golden8 = np.asarray(Image.open(GOLDEN_REF).convert("RGB"), dtype=np.uint8)
+        hero_vs_ref = psnr8(hero_clean, golden8.astype(np.float32) / 255.0)
+        d = np.clip(np.abs(_to_u8(hero_clean).astype(np.int16)
+                           - golden8.astype(np.int16)) * 10, 0, 255).astype(np.uint8)
+        Image.fromarray(d).save(out_dir / "hero_diff10.png")
+    elif not args.no_ref and ref is not None:
+        # Golden missing -> fall back to legacy float-vs-CPU behavior.
+        hero_vs_ref = hero_vs_cpu
+
+    # CPU reference artifacts (ground-truth visibility, regardless of golden).
+    if not args.no_ref and ref is not None:
+        Image.fromarray(_to_u8(ref)).save(out_dir / "hero_ref.png")
+        cpu_diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
+        cpu_diff_name = "hero_diff10_cpu.png" if GOLDEN_REF.exists() else "hero_diff10.png"
+        Image.fromarray((cpu_diff * 255.0).astype(np.uint8)).save(out_dir / cpu_diff_name)
 
     def fmt(x):
         return "inf" if x == float("inf") else f"{x:.2f}"
 
     print(f"SUMMARY scene={args.scene} hero='{hero_name}' "
-          f"hero_vs_ref={fmt(hero_vs_ref)}dB "
+          f"hero_vs_ref={fmt(hero_vs_ref)}dB(8bit-vs-golden) "
+          f"hero_vs_cpu={fmt(hero_vs_cpu)}dB(float-vs-cpu) "
           f"avg_frame_ms={avg_ms:.1f} p50_ms={p50_ms:.1f} "
           f"min_ms={min_ms:.1f} max_ms={max_ms:.1f} n_views={len(per_view_ms)} "
           f"warmup_s={warmup_s:.1f} "

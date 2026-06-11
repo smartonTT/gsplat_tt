@@ -34,18 +34,35 @@ spin tuning are NOT progress.
 
 ## Quality gate (the project's gate metric + threshold)
 
-- **Metric:** `hero_vs_ref` — PSNR (dB) of the rendered HERO view vs the saved
-  reference image.
+**NEW REF (iter-132, 2026-06-11):** the gate metric was rebaselined per user
+directive. It is now **8-bit PSNR vs a committed golden frame**, not float PSNR
+vs a freshly-rendered CPU reference.
+
+- **Metric:** `hero_vs_ref` — 8-bit PSNR (dB) of the rendered HERO view vs the
+  committed golden `tests/fixtures/hero/hero_golden_8bit.png` (golden md5
+  `e3fefb116d860f99d92bba1ef51d820c`, frozen from the iter-132 hero). BOTH operands
+  are quantized to uint8 (floor, matching the shipped PNG) before comparison, so the
+  metric measures drift in the **actual 8-bit pixels we ship**, not float-level
+  noise. A **bit-identical 8-bit render reports a capped 100.00 dB** (finite, so the
+  loop parses it as a number, not `inf`).
+- **Why rebaselined:** the old float-vs-CPU metric capped at ~63.95 dB even when the
+  8-bit output was effectively identical (max float pixel diff ~1.4/255; only ~0.1%
+  of pixels differed by >=1/255, none by >=2.5/255). That float-level CPU/TT
+  divergence is not a quality defect, so it should not consume the gate's headroom.
+- **Secondary diagnostic:** `hero_vs_cpu` — the legacy float PSNR vs the CPU
+  reference is STILL rendered and reported (ground-truth correctness anchor, ~63.95
+  dB on a good render). It is NOT the keep-gate; it exists so float-level drift stays
+  visible. Re-test it periodically (premises go stale).
 - **Threshold (keep-gate):** `hero_vs_ref >= 50 dB` (`ttw.toml [gate]
-  metric_threshold = 50`, `metric_lower = 0`). **Lowered from 60 to 50 per user
-  directive (2026-06-11):** a step that moves the architecture toward the design
-  MUST be kept even if it is **slightly slower OR lands at slightly lower PSNR**, as
-  long as PSNR stays **above 50**. Do not auto-reject design-advancing progress on
-  a fraction-of-a-dB wobble or a small timing regression.
-- **Anchor:** the known-good ideal path scores **63.85 dB**; a correct,
-  bit-identical change re-verifies at exactly 63.85. Treat a drop below 63.85 as
-  a regression to UNDERSTAND/explain, but only below **50** is it a hard keep-gate
-  failure (that floor catches genuinely broken renders — historically 13-16 dB).
+  metric_threshold = 50`, `metric_lower = 0`). A step that moves the architecture
+  toward the design MUST be kept even if it is **slightly slower**, as long as the
+  8-bit gate stays **above 50**. The 50 floor catches genuinely broken renders
+  (historically 13-16 dB; an all-white frame scores ~3 dB).
+- **Anchor:** a correct, bit-identical change re-verifies at **100.00 dB** vs the
+  golden. Any value < 100 means the 8-bit output drifted from the golden — UNDERSTAND
+  it; below **50** is a hard keep-gate failure. If a future iteration legitimately
+  changes output (not bit-identical) and is accepted, refreeze the golden and add a
+  new `NEW REF` divider row to the ledger.
 - The HERO view is for the **screenshot + the PSNR/quality gate ONLY** — never
   quote hero render time as the frame time (see timing metric).
 

@@ -3,6 +3,106 @@
 Status: PLANNED (not yet executed). Owner: supervisor.
 Companion to `opt/blend-cull-speedup-plan.md`.
 
+---
+
+## ════════════ REBASELINE + ROADMAP (iter 132, 2026-06-11) ════════════
+
+### NEW REF
+- **Golden** = iter-132 hero, md5 `e3fefb116d860f99d92bba1ef51d820c`, committed at
+  `tests/fixtures/hero/hero_golden_8bit.png`. Gate metric `hero_vs_ref` is now
+  **8-bit PSNR vs this golden** (bit-identical = 100.00 dB; gate >= 50). Legacy
+  float-vs-CPU PSNR retained as the secondary `hero_vs_cpu` diagnostic (~63.95 dB).
+  Ledger has a `NEW REF` divider row. Refreeze + add a new divider whenever an
+  accepted iteration legitimately changes output.
+
+### Where the frame stands (measured, iter 132)
+Frame **177.1 avg / 142.3 min ms/view**. Critical path = **BRISC-FW ~161.7 ms**
+(data mover + per-program launch firmware). NCRISC-KERNEL ~127 ms (dataflow, some
+slack). TRISC (all SFPU) ~52 ms — **off the critical path**. Iters 128-132 ground
+NCRISC zones down (`sort_bucket_emit`, `sort_subchunk_mat`, op/color pre-pack) but
+the wins keep landing on a RISC that has slack, so **BRISC-FW barely moves**. We are
+out of cheap NCRISC micro-opts that move the frame.
+
+### Prioritized roadmap — what I want to do next (in order)
+1. **PROGRAM FUSION (top lever).** BRISC-FW carries ~90 ms of per-program launch
+   firmware across ~dozen device programs. Cheap NCRISC reshuffles can't touch it;
+   only **fewer, fused programs** can. Fuse adjacent same-grid stages
+   (project→gather→tile_assign, then sort→cull→blend) into persistent kernels with
+   on-device phase barriers instead of host-relaunched programs. This is the only
+   evidenced path to a step-change, and it's the same direction the host-free plan
+   already wants. Measure launch-count vs BRISC-FW first to size the prize.
+2. **NCRISC dataflow + DRAM-free handoff.** Keep collapsing the sort→cull→blend
+   data path so it stays L1-resident (no DRAM scatter/gather round-trip): subchunk
+   directory + materialize folded into the sort emit, payload read once. Banks the
+   NCRISC slack into real frame time *once fusion frees the BRISC long pole*.
+3. **Blend/cull reader cluster (`~78 ms`, SFPU-backpressure).** Needs the blend
+   phasing rework (Track 1 failed once — high risk). Only worth it after (1)/(2)
+   shift the bottleneck onto SFPU. Parked until then.
+
+### "1 ms north star — where would you have to leave to?" (user question)
+The current design **cannot reach ~1 ms** without leaving these constraints:
+- **Per-frame host dispatch must go to zero.** ~90 ms today is on-device firmware
+  launching ~dozen programs every frame. 1 ms needs a **single persistent
+  super-kernel** (or Metal Trace replay *if* the launch cost were host-side — it
+  is NOT here, measured iter 126, so persistent kernels are the route), i.e. the
+  full host-free-l1 design end state, not incremental fusion.
+- **DRAM must leave the per-frame loop entirely.** All inter-stage handoff
+  L1-resident; DRAM touched only for the initial gaussian load + one final D2H.
+- **SFPU must become the bottleneck, then be saturated.** At 1 ms the ~52 ms of
+  SFPU compute itself is 50× too slow — needs microblock-major blend + transmittance
+  early-out (skip saturated tiles) and full SFPU occupancy, i.e. a different blend
+  algorithm, not the current gaussian-major no-early-out one.
+- Bluntly: ~1 ms is a **different renderer** (persistent L1 super-kernel + early-out
+  blend), not this host-driven multi-program pipeline tuned harder. Treat 1 ms as
+  the destination of the host-free-l1 rewrite, and **~40-60 ms as the realistic
+  near-term floor** for the current architecture once fusion lands.
+
+### Parked levers — user requests kept for LATER evaluation (NOT abandoned)
+- `emit-record-layout`: cut `sort_bucket_emit` L1 store volume via record-layout
+  change / once-per-gaussian fill. Not bit-identical → needs golden refreeze. Higher
+  risk; revisit after fusion.
+- `blend-reader-cluster`: blend/cull reader cluster rework (see roadmap #3).
+- **Publish-only-for-overflow** op/color words (the iter-132 next-lever): skip the
+  per-gaussian publish for in-budget tiles so NCRISC doesn't re-absorb the BRISC win.
+- Metal-Trace / host-free-trace family: REFUTED as a perf lever for THIS workload
+  (see refuted ledger) — keep only as documentation of why persistent kernels (not
+  trace) are the host-dispatch fix.
+
+### What WON'T be done anytime soon (so you can verify I'm not dropping levers)
+- **Metal Trace capture/replay** (Stage 5.4-5.6): measured <0.5 ms payoff here
+  (firmware is on-device, not host dispatch). Shelved unless re-tested proves
+  otherwise.
+- **Blend SFPU micro-optimization as a frame lever:** TRISC is off the critical
+  path; won't move the frame until fusion/early-out flips the bottleneck. (Track 1b
+  ILP already kept but frame-masked.)
+- **Any record-layout / output-changing change** until after fusion lands (would
+  force a golden refreeze mid-flight and muddy the rebaseline).
+
+### Refuted-premises ledger (RE-TEST periodically — premises go stale)
+Per user: do NOT treat these as settled forever. Each is tagged with the conditions
+under which it was refuted; re-test when HW/thermal/code state changes materially.
+- **"Metal Trace removes the ~92 ms host dispatch"** — REFUTED iter 126 (the 92 ms
+  is on-device firmware + NCRISC dataflow, not host-side `Finish`). Conditions: this
+  BH board, cpp#~126, this program count. RE-TEST if program count drops a lot.
+- **"`sort_bucket_emit` cost is scattered DRAM writes"** — REFUTED iter 128 (real
+  cost was redundant per-pair packing of gaussian-invariant fields; only ~1.6 ms was
+  scatter). RE-TEST after record-layout change.
+- **"`be_main` cost is per-pair div/mod arithmetic"** — REFUTED iter 129 (residual
+  is per-pair 32B L1 store traffic, ~17.5 ms structural floor). RE-TEST after layout
+  change.
+- **"`sort_subchunk_mat` cost is the L1 permute"** — REFUTED iter 130 (real cost was
+  overflow gather re-read/re-pack + load imbalance; LPT-balanced it). RE-TEST if
+  overflow rate changes.
+- **"Stage-2b: `proj_scatter` cost is `blendrec` writes"** — REFUTED iter 119
+  (`proj_scatter` is required SoA writes; `blendrec` only ~2 ms). RE-TEST after SoA
+  layout change.
+- **"cull+blend SFPU ~175 ms is the killer"** — REFUTED iter 116 (aggregate-sum
+  trap; TRISC makespan is ~52 ms, off-path). RE-TEST if blend algorithm changes.
+- **"K ≈ 1 (one microblock per tile)"** — REFUTED (fan-out histogram showed
+  meaningful K>1). RE-TEST per scene/view set.
+
+---
+
 ## Correction up front (read this first)
 
 My earlier "sort ≈ 70 ms, with `bucket_emit` 34 ms + `materialize` 25 ms" was
