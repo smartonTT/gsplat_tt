@@ -612,6 +612,13 @@ static void build_program_bin_layout(SortDeviceContext& ctx) {
     constexpr uint32_t scratch_bytes = (5u * KMAX_TILES + 5u * KMAX_CORES) * 4u;
     constexpr uint32_t row_bytes = KMAX_TILES * 4u;       // one core row (hist/bin2d/l1base)
     constexpr uint32_t out_bytes = 2u * KMAX_TILES * 4u;  // per-tile staging (tmeta/ranges/...)
+    // S5.2 histogram cache: hold the whole per-core histogram in L1 so the layout
+    // kernel streams DRAM once (Pass 1) and the base-emit pass reads from L1. Cap
+    // = 128*1024 u32 = 512 KB (fits hero's 110*1024 ≈ 450 KB); the kernel falls
+    // back to a 2nd DRAM read pass if num_cores*row_span exceeds this. MUST match
+    // the kernel's HCACHE_CAP constant in sort_bin_layout.cpp.
+    constexpr uint32_t KHCACHE_CAP = 128u * 1024u;
+    constexpr uint32_t hcache_bytes = KHCACHE_CAP * 4u;
     auto cb = [&](uint32_t id, uint32_t bytes) {
         CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
         c.set_page_size(id, bytes);
@@ -619,10 +626,11 @@ static void build_program_bin_layout(SortDeviceContext& ctx) {
     };
     cb(0, PAGE_BYTES);      // CB_CTRL
     cb(1, scratch_bytes);   // CB_SCRATCH
-    cb(2, row_bytes);       // CB_ROW
+    cb(2, row_bytes);       // CB_ROW (fallback row buffer)
     cb(3, row_bytes);       // CB_BIN
     cb(4, row_bytes);       // CB_L1B
     cb(5, out_bytes);       // CB_OUT
+    cb(6, hcache_bytes);    // CB_HCACHE (full per-core histogram cache)
 
     std::vector<uint32_t> ct;
     for (int i = 0; i < 12; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);

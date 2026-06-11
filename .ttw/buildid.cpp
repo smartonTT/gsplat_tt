@@ -1,5 +1,5 @@
-id=89
-sha=56d8f42
-ts=2026-06-11T04:57:06-0700
-desc=iter 121: S5.1: enable on-device sort bin-layout (sort_device_layout_enabled=true). Recovered the missing sort_bin_layout.cpp kernel (host referenced it but it was absent from render/kernels/ — the real reason the flag was off), rewrote it as an efficient single-core bulk-row pass, and extended it to populate l1_rec_base (the L1_RECORD scatter's per-(core,tile) bucket base) which the legacy kernel lacked. Removes host hist-read + host-LPT + 6 H2D re-uploads; host now reads only resident result buffers + a tiny ctrl page.
-bin=241ea500aa9bdc9d
+id=90
+sha=1d99fbd
+ts=2026-06-11T05:19:42-0700
+desc=iter 122: S5.2: cheap on-device sort bin-layout — L1-cache the per-core histogram (one DRAM read pass instead of two) + LSD radix LPT sort replacing O(n^2) selection (bit-exact, identical (cost,tile_id) order); recovers ~half the iter-121 +23ms single-core regression (215.0->205 ms/view), pixels bit-identical (hero md5 e3fefb11, 63.95dB)
+bin=283a78dc20c153d6

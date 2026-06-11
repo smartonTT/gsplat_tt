@@ -10,10 +10,24 @@
 //
 // Mirrors host_bin_layout_from_hist + build_lpt in render/host/sort_device.cpp
 // bit-for-bit. The histogram is read/written in whole 64B pages per core row
-// (NOT one element per page) so the single-core pass stays cheap; the full
-// histogram is never resident — each core row is streamed twice (count prefix,
-// then base emit). recbase/bin2d_rec is the retired tile_recs path and is left
-// unwritten (the live L1_RECORD scatter consumes l1_rec_base, populated here).
+// (NOT one element per page) so the single-core pass stays cheap.
+//
+// S5.2 perf (recover the iter-121 +23 ms single-core regression, bit-exact):
+//   1. The full per-core histogram (num_cores × row_span u32 ≈ 450 KB on hero)
+//      is cached in an L1 CB (CB_HCACHE) on the SINGLE count pass, so the base-
+//      emit pass (Pass 2) reads it from L1 instead of re-streaming DRAM — one
+//      DRAM read pass instead of two. (Falls back to re-reading DRAM if the
+//      histogram does not fit the cache CB.)
+//   2. LPT's descending (cost, tile_id) order is produced by an LSD radix sort
+//      on the composite 32-bit key (cost<<16)|tid instead of the O(n²) selection
+//      sort. The key is a strict total order on (cost, tile_id) (tile_ids are
+//      unique, cost=tile_pad ≤ MAX_TILE_ENTRIES=32768 < 2^16, tid < 2^16) so the
+//      radix order is BIT-IDENTICAL to the selection-sort order. The greedy
+//      first-min-load assignment stays sequential/unchanged (its result depends
+//      on prior loads — parallelizing it would risk a different tie-break).
+//
+// recbase/bin2d_rec is the retired tile_recs path and is left unwritten (the
+// live L1_RECORD scatter consumes l1_rec_base, populated here).
 //
 // RUNTIME ARGS
 //   0: bin2d_addr  1: tmeta_addr  2: tile_ids_addr  3: lpt_meta_addr
@@ -107,10 +121,15 @@ void kernel_main() {
 
     constexpr uint32_t CB_CTRL = 0;     // 64B ctrl staging
     constexpr uint32_t CB_SCRATCH = 1;  // 5*MAX_TILES + 5*MAX_CORES u32
-    constexpr uint32_t CB_ROW = 2;      // one core's hist row (MAX_TILES u32)
+    constexpr uint32_t CB_ROW = 2;      // one core's hist row (MAX_TILES u32) — fallback only
     constexpr uint32_t CB_BIN = 3;      // one core's bin2d base row out (MAX_TILES u32)
     constexpr uint32_t CB_L1B = 4;      // one core's l1_rec_base row out (MAX_TILES u32)
     constexpr uint32_t CB_OUT = 5;      // per-tile staging (2*MAX_TILES u32)
+    constexpr uint32_t CB_HCACHE = 6;   // full per-core histogram cache (HCACHE_CAP u32)
+
+    // Capacity of the histogram cache CB; MUST match build_program_bin_layout's
+    // cb(6, HCACHE_CAP*4) in render/host/sort_device.cpp. 128*1024 = 512 KB.
+    constexpr uint32_t HCACHE_CAP = 128u * 1024u;
 
     const uint32_t ctrl_l1 = get_write_ptr(CB_CTRL);
     const uint32_t scratch_l1 = get_write_ptr(CB_SCRATCH);
@@ -118,9 +137,9 @@ void kernel_main() {
     const uint32_t bin_l1 = get_write_ptr(CB_BIN);
     const uint32_t l1b_l1 = get_write_ptr(CB_L1B);
     const uint32_t out_l1 = get_write_ptr(CB_OUT);
+    const uint32_t hcache_l1 = get_write_ptr(CB_HCACHE);
 
     auto* ctrl = reinterpret_cast<volatile uint32_t*>(ctrl_l1);
-    auto* rowp = reinterpret_cast<volatile uint32_t*>(row_l1);
     auto* binp = reinterpret_cast<volatile uint32_t*>(bin_l1);
     auto* l1bp = reinterpret_cast<volatile uint32_t*>(l1b_l1);
     auto* outp = reinterpret_cast<volatile uint32_t*>(out_l1);
@@ -136,19 +155,28 @@ void kernel_main() {
     const uint32_t row_pages = ceil_pages(num_tiles);
     const uint32_t row_span = row_pages * ELEMS_PER_PAGE;  // padded tiles in a row buffer
 
+    // Cache the whole per-core histogram in L1 when it fits CB_HCACHE: Pass 1
+    // streams DRAM once into the cache, Pass 2 reads the cache (no 2nd DRAM read
+    // pass). Each core's row occupies [c*row_span, (c+1)*row_span) in the cache.
+    const bool cached =
+        (static_cast<uint64_t>(num_cores) * row_span) <= HCACHE_CAP;
+
     for (uint32_t t = 0; t < num_tiles; t++) {
         counts[t] = 0;
         page_acc[t] = 0;  // accumulate tile_pad_pages here in pass 1
     }
 
-    // ── Pass 1: stream each core row; per-tile count + padded-page sum, and the
-    //    per-core padded total (BIN_LOCAL_MAX guard). ────────────────────────
+    // ── Pass 1: stream each core row (caching it in L1 when it fits); per-tile
+    //    count + padded-page sum, and the per-core padded total (BIN_LOCAL_MAX
+    //    guard). ───────────────────────────────────────────────────────────
     uint32_t max_core_padded = 0;
     for (uint32_t c = 0; c < num_cores; c++) {
-        read_pages(c * pages_per_core, row_pages, bin2d_acc, row_l1);
+        const uint32_t rl1 = cached ? (hcache_l1 + c * row_span * 4u) : row_l1;
+        read_pages(c * pages_per_core, row_pages, bin2d_acc, rl1);
+        auto* rp = reinterpret_cast<volatile uint32_t*>(rl1);
         uint32_t core_padded = 0;
         for (uint32_t t = 0; t < num_tiles; t++) {
-            const uint32_t h = rowp[t];
+            const uint32_t h = rp[t];
             counts[t] += h;
             const uint32_t cp = ceil_pages(h);
             page_acc[t] += cp;
@@ -221,13 +249,21 @@ void kernel_main() {
             write_pages(0, ceil_pages(num_tiles * 2u), bucket_acc, out_l1);
         }
 
-        // ── Pass 2: stream each core row again; emit bin2d base + l1_rec_base
-        //    rows (whole-page bulk writes). page_acc/rec_acc carry the running
-        //    per-(core,tile) prefix exactly as the host c-inner loop. ─────────
+        // ── Pass 2: emit bin2d base + l1_rec_base rows (whole-page bulk writes)
+        //    from the L1-cached histogram (or re-read DRAM in the fallback).
+        //    page_acc/rec_acc carry the running per-(core,tile) prefix exactly as
+        //    the host c-inner loop. ────────────────────────────────────────────
         for (uint32_t c = 0; c < num_cores; c++) {
-            read_pages(c * pages_per_core, row_pages, bin2d_acc, row_l1);
+            uint32_t rl1;
+            if (cached) {
+                rl1 = hcache_l1 + c * row_span * 4u;  // already loaded in Pass 1
+            } else {
+                rl1 = row_l1;
+                read_pages(c * pages_per_core, row_pages, bin2d_acc, row_l1);
+            }
+            auto* rp = reinterpret_cast<volatile uint32_t*>(rl1);
             for (uint32_t t = 0; t < num_tiles; t++) {
-                const uint32_t h = rowp[t];
+                const uint32_t h = rp[t];
                 binp[t] = page_acc[t] * ELEMS_PER_PAGE;
                 l1bp[t] = t * bucket_fit + rec_acc[t];
                 rec_acc[t] += h;
@@ -243,33 +279,55 @@ void kernel_main() {
             }
         }
 
-        // ── LPT (build_lpt): descending (cost, tile_id) sort of non-empty
+        // ── LPT (build_lpt): descending (cost, tile_id) order of non-empty
         //    tiles, then first-min-load greedy assignment. cost = tile_pad. ──
+        // The descending (cost, tile_id) order is produced by an LSD radix sort
+        // on the composite 32-bit key k=(cost<<16)|tid (cost=tile_pad ≤ 32768 <
+        // 2^16, tid < num_tiles ≤ 2048 < 2^16). k is a strict total order on
+        // (cost, tile_id), so the radix order equals the old selection-sort order
+        // bit-for-bit. Build the keys in the now-free page_acc/rec_acc regions,
+        // radix-sort ascending (4× 8-bit passes), then walk descending into
+        // lpt_cost/lpt_tid.
         volatile uint32_t* lpt_cost = counts;  // reuse; counts already written out
         volatile uint32_t* lpt_tid = starts;
+        volatile uint32_t* keyA = page_acc;  // free after Pass 2
+        volatile uint32_t* keyB = rec_acc;   // free after Pass 2
+        volatile uint32_t* radix_cnt = outp;  // out_l1 (>=256 u32); free until greedy
         uint32_t n_nonempty = 0;
         for (uint32_t t = 0; t < num_tiles; t++) {
-            if (counts[t] > 0) {  // note: reading counts[t] before overwrite at n<=t
-                lpt_cost[n_nonempty] = tpad[t];
-                lpt_tid[n_nonempty] = t;
+            if (counts[t] > 0) {
+                keyA[n_nonempty] = (tpad[t] << 16) | t;
                 n_nonempty++;
             }
         }
-        for (uint32_t i = 0; i + 1 < n_nonempty; i++) {
-            uint32_t best = i;
-            for (uint32_t j = i + 1; j < n_nonempty; j++) {
-                if (lpt_cost[j] > lpt_cost[best] ||
-                    (lpt_cost[j] == lpt_cost[best] && lpt_tid[j] > lpt_tid[best])) {
-                    best = j;
+        {
+            volatile uint32_t* src = keyA;
+            volatile uint32_t* dst = keyB;
+            for (uint32_t pass = 0; pass < 4u; pass++) {
+                const uint32_t shift = pass * 8u;
+                for (uint32_t d = 0; d < 256u; d++) radix_cnt[d] = 0;
+                for (uint32_t i = 0; i < n_nonempty; i++)
+                    radix_cnt[(src[i] >> shift) & 0xffu]++;
+                uint32_t sum = 0;
+                for (uint32_t d = 0; d < 256u; d++) {
+                    const uint32_t c0 = radix_cnt[d];
+                    radix_cnt[d] = sum;
+                    sum += c0;
                 }
+                for (uint32_t i = 0; i < n_nonempty; i++) {
+                    const uint32_t d = (src[i] >> shift) & 0xffu;
+                    dst[radix_cnt[d]] = src[i];
+                    radix_cnt[d]++;
+                }
+                volatile uint32_t* tmp = src;
+                src = dst;
+                dst = tmp;
             }
-            if (best != i) {
-                const uint32_t tc = lpt_cost[i];
-                lpt_cost[i] = lpt_cost[best];
-                lpt_cost[best] = tc;
-                const uint32_t tt = lpt_tid[i];
-                lpt_tid[i] = lpt_tid[best];
-                lpt_tid[best] = tt;
+            // 4 swaps → src == keyA, sorted ascending. Walk descending.
+            for (uint32_t i = 0; i < n_nonempty; i++) {
+                const uint32_t key = src[n_nonempty - 1u - i];
+                lpt_cost[i] = key >> 16;
+                lpt_tid[i] = key & 0xffffu;
             }
         }
 
