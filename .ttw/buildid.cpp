@@ -1,5 +1,5 @@
-id=82
-sha=d33d3da
-ts=2026-06-11T01:46:22-0700
-desc=iter 113: Sort Stage 1: delete materialize DRAM scatter for in-budget tiles (in-place L1 permute + emit)
-bin=25c03b1a2df09b00
+id=83
+sha=7f71e2c
+ts=2026-06-11T02:02:44-0700
+desc=iter 114: Sort Stage 2: blendrec[g] read once per gaussian in the bucket fill (kills the random per-pair re-read); sort reads its tile bucket coalesced (materialize in-place L1 permute, iter 113)
+bin=51cd210056487289
