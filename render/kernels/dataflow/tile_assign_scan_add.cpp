@@ -18,11 +18,14 @@
 //   1: offs_addr    int32 SoA exclusive prefix-sum (output)
 //   2: page_start   first 16-elem page this core handles
 //   3: page_count   number of pages this core handles
-//   4: M            real Gaussian count (entries >= M are padding -> 0)
+//   4: M            real Gaussian count (entries >= M are padding -> 0) — IGNORED
+//                   when mctrl_addr (arg 7) != 0: M read from resident proj_M.
 //   5: base_addr    per-core exclusive bases (from scan_bases on device)
 //   6: core_slot    this core's linear index
+//   7: mctrl_addr   resident proj_M base (page[0] = real M); 0 = use arg 4.
 //
 // COMPILE-TIME ARGS: 3 TensorAccessorArgs (tpg, offs, base), DRAM-interleaved.
+// proj_M is read via a runtime InterleavedAddrGen (no CT args), S5.3.
 
 #include <cstdint>
 
@@ -38,9 +41,10 @@ void kernel_main() {
     const uint32_t offs_addr  = get_arg_val<uint32_t>(1);
     const uint32_t page_start = get_arg_val<uint32_t>(2);
     const uint32_t page_count = get_arg_val<uint32_t>(3);
-    const uint32_t M          = get_arg_val<uint32_t>(4);
+    uint32_t M                = get_arg_val<uint32_t>(4);
     const uint32_t base_addr  = get_arg_val<uint32_t>(5);
     const uint32_t core_slot  = get_arg_val<uint32_t>(6);
+    const uint32_t mctrl_addr = get_arg_val<uint32_t>(7);
 
     if (page_count == 0) {
         return;
@@ -62,6 +66,18 @@ void kernel_main() {
     auto tpgp  = reinterpret_cast<volatile int32_t*>(tpg_l1);
     auto offsp = reinterpret_cast<volatile int32_t*>(offs_l1);
     auto basep = reinterpret_cast<volatile uint32_t*>(base_l1);
+
+    // S5.3: read the REAL M from the resident proj_M control page (page 0). The
+    // host over-provisions the work-split to the static padded_n ceiling; the
+    // g0 >= M guard writes offs == running == P for every padding entry, exactly
+    // like the host scan's offs[m..] = P tail fill (so offs[M] == P). Read into
+    // offs_l1 scratch first (overwritten in the loop below).
+    if (mctrl_addr != 0) {
+        const InterleavedAddrGen<true> mctrl_gen{mctrl_addr, PAGE_BYTES};
+        noc_async_read(get_noc_addr(0, mctrl_gen), offs_l1, PAGE_BYTES);
+        noc_async_read_barrier();
+        M = static_cast<uint32_t>(offsp[0]);
+    }
 
     noc_async_read(get_noc_addr(core_slot, base_acc), base_l1, PAGE_BYTES);
     noc_async_read_barrier();

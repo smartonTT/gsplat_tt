@@ -20,10 +20,13 @@
 //   1: total_addr   uint32 SoA per-core partial totals (output, 1 per page)
 //   2: page_start   first 16-elem page this core handles
 //   3: page_count   number of pages this core handles
-//   4: M            real Gaussian count (entries >= M are padding -> 0)
+//   4: M            real Gaussian count (entries >= M are padding -> 0) — IGNORED
+//                   when mctrl_addr (arg 6) != 0: M read from resident proj_M.
 //   5: core_slot    this core's linear index (page index in core_total[])
+//   6: mctrl_addr   resident proj_M base (page[0] = real M); 0 = use arg 4.
 //
 // COMPILE-TIME ARGS: 2 TensorAccessorArgs (tpg, total), DRAM-interleaved.
+// proj_M is read via a runtime InterleavedAddrGen (no CT args), S5.3.
 
 #include <cstdint>
 
@@ -39,8 +42,9 @@ void kernel_main() {
     const uint32_t total_addr = get_arg_val<uint32_t>(1);
     const uint32_t page_start = get_arg_val<uint32_t>(2);
     const uint32_t page_count = get_arg_val<uint32_t>(3);
-    const uint32_t M          = get_arg_val<uint32_t>(4);
+    uint32_t M                = get_arg_val<uint32_t>(4);
     const uint32_t core_slot  = get_arg_val<uint32_t>(5);
+    const uint32_t mctrl_addr = get_arg_val<uint32_t>(6);
 
     constexpr auto tpg_args   = TensorAccessorArgs<0>();
     constexpr auto total_args = TensorAccessorArgs<tpg_args.next_compile_time_args_offset()>();
@@ -53,6 +57,16 @@ void kernel_main() {
     const uint32_t tot_l1 = get_write_ptr(CB_TOT);
     auto tpgp = reinterpret_cast<volatile int32_t*>(tpg_l1);
     auto totp = reinterpret_cast<volatile uint32_t*>(tot_l1);
+
+    // S5.3: read the REAL M from the resident proj_M control page (page 0) so the
+    // host can over-provision the work-split to the static padded_n ceiling. The
+    // g0 >= M / (g0+i) < M guards make the extra padding pages contribute 0.
+    if (mctrl_addr != 0) {
+        const InterleavedAddrGen<true> mctrl_gen{mctrl_addr, PAGE_BYTES};
+        noc_async_read(get_noc_addr(0, mctrl_gen), tot_l1, PAGE_BYTES);
+        noc_async_read_barrier();
+        M = totp[0];
+    }
 
     uint32_t running = 0;
     for (uint32_t pg = 0; pg < page_count; pg++) {

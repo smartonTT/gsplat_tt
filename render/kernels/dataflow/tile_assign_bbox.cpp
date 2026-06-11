@@ -22,12 +22,18 @@
 //   4: tpg_addr     DRAM base, int32 SoA tiles_per_gaussian (output)
 //   5: page_start   first 16-Gaussian page this core handles
 //   6: page_count   number of pages this core handles
-//   7: M            real Gaussian count (entries >= M are padding)
+//   7: M            real Gaussian count (entries >= M are padding) — IGNORED when
+//                   mctrl_addr (arg 11) != 0: M is read from the resident proj_M
+//                   control page so the work-split can be over-provisioned to the
+//                   static padded_n ceiling without a host M-read (S5.3).
 //   8: tiles_x
 //   9: tiles_y
 //  10: tile_size
+//  11: mctrl_addr   resident proj_M base (page[0] = real M); 0 = use arg 7.
 //
 // COMPILE-TIME ARGS: 5 TensorAccessorArgs (px, py, rx, ry, tpg), DRAM-interleaved.
+// proj_M is read via a runtime InterleavedAddrGen (no CT args) so the host
+// accessor list is unchanged (S5.3).
 
 #include <cstdint>
 
@@ -61,10 +67,11 @@ void kernel_main() {
     const uint32_t tpg_addr   = get_arg_val<uint32_t>(4);
     const uint32_t page_start = get_arg_val<uint32_t>(5);
     const uint32_t page_count = get_arg_val<uint32_t>(6);
-    const uint32_t M          = get_arg_val<uint32_t>(7);
+    uint32_t M                = get_arg_val<uint32_t>(7);
     const int tiles_x         = static_cast<int>(get_arg_val<uint32_t>(8));
     const int tiles_y         = static_cast<int>(get_arg_val<uint32_t>(9));
     const float tsf           = static_cast<float>(get_arg_val<uint32_t>(10));
+    const uint32_t mctrl_addr = get_arg_val<uint32_t>(11);
 
     constexpr auto px_args  = TensorAccessorArgs<0>();
     constexpr auto py_args  = TensorAccessorArgs<px_args.next_compile_time_args_offset()>();
@@ -102,6 +109,18 @@ void kernel_main() {
     auto rxp = reinterpret_cast<volatile uint32_t*>(rx_l1);
     auto ryp = reinterpret_cast<volatile uint32_t*>(ry_l1);
     auto outp = reinterpret_cast<volatile int32_t*>(out_l1);
+
+    // S5.3: read the REAL M from the resident proj_M control page (page 0). The
+    // host over-provisions the work-split to the static padded_n ceiling and no
+    // longer needs a mid-frame M-read; the g >= M guard below makes the extra
+    // padding pages exact no-ops (tpg = 0), so the prefix-sum is unaffected. Read
+    // into out_l1 scratch before the loop overwrites it.
+    if (mctrl_addr != 0) {
+        const InterleavedAddrGen<true> mctrl_gen{mctrl_addr, PAGE_BYTES};
+        noc_async_read(get_noc_addr(0, mctrl_gen), out_l1, PAGE_BYTES);
+        noc_async_read_barrier();
+        M = static_cast<uint32_t>(outp[0]);
+    }
 
     for (uint32_t pg = 0; pg < page_count; pg++) {
         const uint32_t page = page_start + pg;
