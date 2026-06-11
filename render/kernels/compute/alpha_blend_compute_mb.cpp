@@ -155,21 +155,117 @@ inline void blend_one_gaussian_math(
     dst_reg[DR_T + IX] = t * one_minus;
 }
 
+// CHEAP MICROBLOCK ILP (Track 1b): one gaussian's contribution to TWO covered
+// microblocks (IXA, IXB), with the per-pair dependent chain issued STAGE-
+// INTERLEAVED so the two INDEPENDENT microblock recurrences overlap and hide the
+// SFPU op-latency stalls that dominate the blend (iter-115 ablation: blend is
+// dependency-STALL-bound, NOT SFPU-throughput-bound — a cheaper exp does not
+// help, but overlapping two independent chains fills the latency bubbles).
+//
+// CRITICAL: every intermediate stays in an LREG (vFloat local) — NOTHING spills
+// to L1/DR_SCR (that spill is exactly what killed the iter-112 phasing). The two
+// microblocks have INDEPENDENT accumulators (distinct DEST vectors IXA/IXB), so
+// reordering ops across them cannot change any per-microblock result => output is
+// BIT-IDENTICAL to the per-microblock full-chain form. Per-gaussian coeffs are
+// re-materialized per stage (as_float == a cheap SFPLOADI immediate, no DEST
+// traffic) to keep peak LREG pressure low (no spill). vec_min_max writes BOTH
+// args (a=min,b=max), so each chain uses its OWN zero/clamp constant.
+template <uint32_t IXA, uint32_t IXB>
+inline void blend_pair_gaussian_math(
+    uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
+    uint32_t d_bits, uint32_t e_bits, uint32_t f_bits,
+    uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
+    using namespace sfpi;
+    (void)f_bits;
+
+    vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
+    vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
+    vFloat dxa = vFloat(dst_reg[DR_X + IXA]) - mx;
+    vFloat dxb = vFloat(dst_reg[DR_X + IXB]) - mx;
+    vFloat dya = vFloat(dst_reg[DR_Y + IXA]) - my;
+    vFloat dyb = vFloat(dst_reg[DR_Y + IXB]) - my;
+
+    // power = A dx^2 + B dx dy + C dy^2 (both microblocks, interleaved).
+    vFloat A = ckernel::sfpu::Converter::as_float(a_bits);
+    vFloat pa = A * (dxa * dxa);
+    vFloat pb = A * (dxb * dxb);
+    vFloat B = ckernel::sfpu::Converter::as_float(b_bits);
+    pa = pa + B * (dxa * dya);
+    pb = pb + B * (dxb * dyb);
+    vFloat C = ckernel::sfpu::Converter::as_float(c_bits);
+    pa = pa + C * (dya * dya);
+    pb = pb + C * (dyb * dyb);
+
+    // weight = exp(min(power, 0)) (own zero const per chain).
+    vFloat zeroA = 0.0f;
+    vFloat zeroB = 0.0f;
+    vec_min_max(pa, zeroA);
+    vec_min_max(pb, zeroB);
+    vFloat wa = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(pa);
+    vFloat wb = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(pb);
+
+    // alpha = min(opacity * weight, 0.99) (own clamp const per chain).
+    vFloat op = ckernel::sfpu::Converter::as_float(op_bits);
+    vFloat aa = op * wa;
+    vFloat ab = op * wb;
+    vFloat clampA = 0.99f;
+    vFloat clampB = 0.99f;
+    vec_min_max(aa, clampA);
+    vec_min_max(ab, clampB);
+
+    // at = alpha * T.
+    vFloat ta = dst_reg[DR_T + IXA];
+    vFloat tb = dst_reg[DR_T + IXB];
+    vFloat ata = aa * ta;
+    vFloat atb = ab * tb;
+
+    // R/G/B += at * color ; T *= (1 - alpha). Interleaved across A and B.
+    vFloat cr = ckernel::sfpu::Converter::as_float(cr_bits);
+    dst_reg[DR_R + IXA] = vFloat(dst_reg[DR_R + IXA]) + ata * cr;
+    dst_reg[DR_R + IXB] = vFloat(dst_reg[DR_R + IXB]) + atb * cr;
+    vFloat cg = ckernel::sfpu::Converter::as_float(cg_bits);
+    dst_reg[DR_G + IXA] = vFloat(dst_reg[DR_G + IXA]) + ata * cg;
+    dst_reg[DR_G + IXB] = vFloat(dst_reg[DR_G + IXB]) + atb * cg;
+    vFloat cbc = ckernel::sfpu::Converter::as_float(cb_bits);
+    dst_reg[DR_B + IXA] = vFloat(dst_reg[DR_B + IXA]) + ata * cbc;
+    dst_reg[DR_B + IXB] = vFloat(dst_reg[DR_B + IXB]) + atb * cbc;
+    dst_reg[DR_T + IXA] = ta * (vFloat(1.0f) - aa);
+    dst_reg[DR_T + IXB] = tb * (vFloat(1.0f) - ab);
+}
+
 #endif
 
 // Dispatch one gaussian (coeffs in GPRs) to every microblock its mask selects,
-// each blend as its OWN MATH() invocation (mirrors the working mb-major kernel:
-// one blend_one_gaussian_math per MATH call). Compile-time unrolled; the runtime
-// mask test skips untouched microblocks. Identity permutation: bit m -> vector m.
-template <uint32_t M>
-inline void dispatch_blend_guarded(
+// CHEAP MICROBLOCK ILP (Track 1b). SINGLE mask-scan: the 32-bit live-microblock
+// mask is examined ONCE here, two bits (one PAIR of adjacent microblock vectors)
+// per recursion step — NOT re-scanned per phase (that 4x re-traversal + DR_SCR
+// spill is what made the iter-112 phasing a net regression). For each pair:
+//   - both covered  -> blend_pair_gaussian_math<A,B> issues the two INDEPENDENT
+//                       dependent chains STAGE-INTERLEAVED so the SFPU op-latency
+//                       stalls of one microblock are hidden by the other's ops;
+//   - only one      -> blend_one_gaussian_math<A|B> (no wasted SFPU work, no ILP
+//                       — but no penalty vs the old per-microblock form either);
+//   - neither       -> skipped.
+// Everything is compile-time unrolled (SFPLOAD/SFPSTORE addresses must be
+// immediates); the runtime mask test selects the path. Each microblock keeps its
+// own DEST accumulators, so pairing/interleaving is BIT-IDENTICAL. Identity
+// permutation: bit m -> vector m.
+template <uint32_t J>
+inline void dispatch_blend_pairs(
     uint32_t mask, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e,
     uint32_t fc, uint32_t op, uint32_t cr, uint32_t cg, uint32_t cbv) {
-    if constexpr (M < NUM_MB) {
-        if (mask & (1u << M)) {
-            MATH((blend_one_gaussian_math<M>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+    if constexpr (J < (NUM_MB / 2)) {
+        constexpr uint32_t A = 2u * J;
+        constexpr uint32_t B = 2u * J + 1u;
+        const uint32_t pm = (mask >> (2u * J)) & 3u;
+        if (pm == 3u) {
+            MATH((blend_pair_gaussian_math<A, B>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+        } else if (pm == 1u) {
+            MATH((blend_one_gaussian_math<A>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+        } else if (pm == 2u) {
+            MATH((blend_one_gaussian_math<B>(a, b, c, d, e, fc, op, cr, cg, cbv)));
         }
-        dispatch_blend_guarded<M + 1>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
+        dispatch_blend_pairs<J + 1>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
     }
 }
 
@@ -332,7 +428,7 @@ inline void process_tile_l1_blend(
         // live_mb_mask stays all-ones on UNPACK/PACK, whose dispatch is a no-op).
         const uint32_t mask = rec[3] & live_mb_mask;
         if (mask != 0u) {
-            dispatch_blend_guarded<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
+            dispatch_blend_pairs<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
