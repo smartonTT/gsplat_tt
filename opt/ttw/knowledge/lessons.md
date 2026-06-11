@@ -9,6 +9,31 @@ back those generic rules. Newest on top; each entry keeps its date.
 
 ---
 
+## 2026-06-11 NEW REF rebaseline VERIFIED on-device + devsync does NOT cover the verify clone
+
+- **NEW REF gate metric works on-device (PASS).** After commit `18e2f35` (gate is
+  now 8-bit PSNR vs committed golden `tests/fixtures/hero/hero_golden_8bit.png`,
+  md5 `e3fefb11…`), an on-device verify on `yyzo-bh-07` (build-ID `cpp#110
+  bin=ae4373403d20ecbd`, iter-132, `ninja: no work to do`) reported
+  `hero_vs_ref=100.00dB(8bit-vs-golden)` (bit-identical, `hero_diff10.png` all-black)
+  and secondary `hero_vs_cpu=63.95dB(float-vs-cpu)`. Freshly-rendered hero md5 ==
+  golden md5. Capped-100 means the loop parses a finite number, not `inf`.
+- **FOOTGUN — devsync leaves the device verify clone STALE.** The loop's
+  `remote_root` `/localdev/smarton/gstt2` is a **git worktree of `gsplat_tt`
+  symlinked to a SEPARATE clone (`gstt2-clone`)**. `devsync push` does NOT update it
+  because: (a) it skips worktrees (their `.git` is a *file*, so `find -name .git
+  -type d` misses them), and (b) it targets the `/proj_sw/user_dev/smarton` Weka
+  mirror, not `/localdev`. On the verify run the golden + new `run.py` were INITIALLY
+  ABSENT on the device (device git HEAD was `e28b5f9`, behind `18e2f35`) — run.py
+  would have silently fallen back to float-vs-CPU (~63.95, NOT 100). The worker had
+  to rsync the two committed files to the clone directly and md5-verify before
+  running. **Lesson: any commit touching files OUTSIDE `render/` (e.g.
+  `tests/fixtures/`) must be manually synced to `/localdev/smarton/gstt2` before a
+  device verify; do not trust `devsync` for the verify clone.** Workers already
+  rsync `render/` before building, so render-only changes are covered; everything
+  else is not. Fix candidate: add an explicit clone-sync (git fetch/checkout or a
+  targeted rsync of changed tracked files) to the devrun/verify prologue.
+
 ## 2026-06-03 iter-59 try 2 — mat on CQ1 + publish/dir Finish on CQ0 still hangs
 
 - **Change (`ttw-059` try 2):** `MeshDevice::create_unit_mesh(..., num_command_queues=2)`;
