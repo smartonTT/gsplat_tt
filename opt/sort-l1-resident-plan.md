@@ -438,12 +438,39 @@ audit, in dependency order:
     **frame-neutral** (`min_ms 213.0`; the verify avg 238.4 is thermal). 30-view Tracy
     at `opt/profiler/ttw-124/render.tracy` (705k device-zone rows). Code preserved on
     `wip/s5.3-p-read-iter124` (`dc7f4b5`) and now merged here.
-  - **STILL PENDING read-deletions (mid-frame host blocking-read drains):**
-    1. `sort` `P`-read (`sort_device.cpp:~1240`) — redundant; frees once #2 below lands
-       (size from the static ceiling, read P on-device for kernel guards). → iter-125.
-    2. `gather` `M`-read (`gather_visible_device.cpp:~833`) — contract change
-       (size `depths` to capacity, `M==0` → device no-op, read `M` post-frame for
-       stats). Higher risk. → iter-126.
+  - **STILL PENDING read-deletions (mid-frame host blocking-read drains) — both
+    ASSESSED + DEFERRED (NOT a clean tonight landing; not the "small follow-ons"
+    first expected):**
+    1. `sort` `P`-read (`sort_device.cpp:~1240`) — **DEFERRED.** Two real blockers,
+       not a drop-in of the iter-124 ceiling pattern:
+       (a) **Load-balance / frame regression.** The bin pass per-core work-split
+       (`split_pages(P_pad/16, num_cores)`, `sort_device.cpp:1269`) is **contiguous**
+       and sized to the REAL `P` so the dominant sort bin compute (~59 ms,
+       `sort_bin.cpp` count+scatter) spreads evenly across all cores. Re-sizing it to
+       the static `pair_ceiling()` (the iter-124 trick) concentrates the real pairs on
+       only the first `~(P/ceiling)·N` cores (≈76 % active at P≈3.6 M, ≈51 % at
+       P≈2.4 M), inflating the bin pass ~+30 % to ~+2× → ~+9 % to much-larger frame
+       regression — **fails the ≤3 % gate.** iter-124's K2 scatter tolerated the
+       ceiling split because it is a thin pass; the sort bin pass is the frame's
+       largest compute. A clean deletion needs an **on-device balanced page-split**
+       (small kernel computing per-core `[start,count)` from resident `P` at the REAL
+       `P`, not the ceiling) — bit-identity needs the split to stay contiguous +
+       gaussian-major.
+       (b) **Overflow safety-net coupling.** iter-124 deliberately placed the
+       pair-ceiling overflow hard-fail (`ta_pairs_P[2]/[3]`) on THIS sort P-read (the
+       last mid-frame consumer of `ta_pairs_P`). Deleting it drops the safety net
+       unless it is relocated on-device — cleanest is to have `sort_bin_layout.cpp`
+       surface overflow/`P_true` into its layout ctrl page so the host picks it up via
+       the EXISTING post-count `read_bin_layout_ctrl` read (no new drain).
+       NB: the sort stage also still does ~5 other mid-frame metadata reads in
+       device-layout mode (`read_bin_layout_ctrl` P_kept/P_aligned, tile_counts,
+       tile_ranges, tmeta, lpt_meta, tile_ids), so deleting just the P-read does **not**
+       make the sort stage trace-able on its own.
+    2. `gather` `M`-read (`gather_visible_device.cpp:~833`) — **DEFERRED** (higher
+       risk, as flagged). `M` (post-cull visible count) is read after count+scan+
+       scatter and used to size `depths`/outputs + gate downstream; the contract change
+       (size to capacity, `M==0`→device no-op, `M` post-frame for stats) is a larger
+       refactor best done after the sort metadata reads are also addressed.
 - **S5.4:** static/device subchunk alloc (5c) → no host `build_subchunk_layout`.
 - **S5.5:** persistent per-core kernels looping the resident assignment (variable
   per-view iteration is device data → one trace replays for any view).
