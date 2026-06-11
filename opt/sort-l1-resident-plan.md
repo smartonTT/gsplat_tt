@@ -101,6 +101,34 @@ under which it was refuted; re-test when HW/thermal/code state changes materiall
 - **"K ≈ 1 (one microblock per tile)"** — REFUTED (fan-out histogram showed
   meaningful K>1). RE-TEST per scene/view set.
 
+### Fusion scoping (MEASURED iter-132, `opt/profiler/ttw-132/profile_log_device.csv`)
+Per-frame the chain launches **~17 programs (14 full-grid 110-core + 3 single-core
+coordinators)**; the busiest BRISC core sees **15.50 program dispatches/view**.
+Arithmetic on the long pole:
+```
+BRISC-FW/view      = 161.71 ms (frame long pole)
+BRISC-KERNEL/view  =  85.39 ms (real data-mover work)
+BRISC non-kernel   =  76.32 ms (per-program launch/dispatch/barrier firmware)
+per-program launch ≈ 76.32 / 15.50 ≈ 4.8-4.9 ms / program
+```
+So **each pair of adjacent same-grid programs fused ≈ −4.8 ms/view** off the long
+pole. Collapsing the whole chain into one persistent super-kernel reclaims most of
+the 76 ms — that is the north-star end state, not the first step.
+
+Ranked fusion candidates (same-grid, no cross-core barrier preferred, bit-identical):
+1. **project(means_cam)+pfwc** — identical 110 grid, identical `split_chunks(ceil(N/1024))`
+   per-core split, pure per-gaussian element-wise, NO cross-core dep / no semaphore.
+   `means_cam` is an fp32 DRAM round-trip today → becomes a core-local L1 CB pass.
+   **CHOSEN FIRST.** Expected ~4.5-5 ms launch + small dataflow saving (~4-6 ms/view),
+   bit-identical (fp32 lossless, same HiFi4). → iter 133.
+2. radix+publish (110, per-core LPT tiles, no cross-core) — low risk, publish tiny.
+3. cull+radix (110, same per-core tiles) — low-med risk, 1 launch saved.
+4. pfwc+gather (110) — med: gather has an internal count→core0-prefix→scatter sync.
+5. emit+cull+radix (110) — med-high: emit scatters gaussian→tile ACROSS cores →
+   needs a global semaphore phase barrier before radix.
+- BLOCKED: bin_hist+bin_emit (host prefix-sum+LPT sits between; on-device layout was
+  a regression iter-127); anything+single-core coordinators (grid mismatch 110 vs 1).
+
 ---
 
 ## Correction up front (read this first)
