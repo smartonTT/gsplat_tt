@@ -217,6 +217,32 @@ the only DRAM read.**
 - Risk: medium; couples two stages. Keep the count sub-pass light (AABB/footprint
   from positions only; full `blendrec` computed once in the scatter sub-pass).
 
+> **iter-119 DIAGNOSTIC — Stage 2b (kill `blendrec`) attempted & REVERTED (premise refuted).**
+> Implemented the cheaper realization of Stage 2b: gather stops writing the
+> gaussian-major `proj_m_blendrec` AoS; `sort_bin` (in-budget fill) and
+> `sort_subchunk_materialize` (overflow re-gather) assemble each 32B PACK2 record
+> from the compacted SoA `proj_m_*` instead. Output **bit-identical** (hero md5
+> `e3fefb11…`). **Measured (30-view device makespan, vs iter-116):**
+> - `proj_scatter` 20.83 → 18.79 ms/view (**−2.0 only**) — *`blendrec` is NOT the
+>   20.8 ms cost; the bulk is the REQUIRED SoA writes (px,py,rx,ry,a,b,c,depth,op,
+>   colors) that blend/cull/tile_assign still read.* The original premise is wrong.
+> - `sort_bucket_emit` 39.68 → 36.02 (−3.7) — the in-budget fill *improved* (gaussian-
+>   major SoA page caching, 9 pages / 16 gaussians).
+> - `sort_subchunk_mat` 26.15 → **35.79 (+9.6)** (naive per-record-barrier form was
+>   +18.2 → 44.33; batched 4-record form recovers ~8.5). `blendrec`'s real value was
+>   making the **depth-sorted overflow re-gather** cheap (1 contiguous 64B AoS read/
+>   record); without it the overflow gather needs ~8 SoA page reads/record (gids
+>   depth-sorted → uncacheable) on the NCRISC long pole.
+> - **NET ms_view 195.51 → 198.07 (+2.56, +1.3%)**, BRISC-FW 179.7 → 183.6, NCRISC-KERNEL
+>   144.5 → 150.5. Clear structural regression on a refuted premise → reverted to
+>   pristine HEAD (md5 re-verified, ms_view 195.24). Tracy: `opt/profiler/ttw-119/`.
+> - **Re-scoped lever:** the only *winning* form of Stage 2b keeps ALL records (incl.
+>   overflow) in the per-(core,tile) buckets so `materialize` reads them coalesced
+>   from `buf_l1_recs` — NO depth-sorted SoA re-gather. (Grow/segment the bucket for
+>   overflow subchunks instead of re-fetching by `gid`.) Until then, leave `blendrec`.
+>   The real frame win is the **host-dispatch** long pole (BRISC-FW 179.7 ≈ 92 ms is
+>   host overhead) → Stage 5 host-free glue, not `blendrec`.
+
 ### Stage 3 — Per-core L1 sort, emit blend's PACK2 layout into L1
 Each sort core reads ITS tile's bucket into L1 and radix-sorts **(key, index)**
 (8B ping-pong — small scratch). Then the **emit pass writes the depth-sorted 32B
