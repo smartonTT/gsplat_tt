@@ -29,11 +29,22 @@
 // recbase/bin2d_rec is the retired tile_recs path and is left unwritten (the
 // live L1_RECORD scatter consumes l1_rec_base, populated here).
 //
+// S5.4 (iter-125): Pass 2 (the per-(core,tile) bin2d + l1_rec_base base-emit, the
+//   ~14k single-core DRAM writes that dominate the residual +13 ms) is no longer
+//   emitted here. Instead this coordinator publishes the per-WORKER running prefix
+//   (page_acc/rec_acc snapshot at each worker's FIRST source-core) into a small
+//   checkpoint buffer (CB_OUT staging → ckpt DRAM). The companion emit kernel
+//   (sort_bin_emit.cpp) then emits each worker's source-core rows in PARALLEL
+//   across num_workers cores (disjoint DRAM regions, contention-free). The scan
+//   over source-cores is identical to the old Pass-2 accumulation, so the emitted
+//   bases are bit-for-bit identical to the single-core version.
+//
 // RUNTIME ARGS
 //   0: bin2d_addr  1: tmeta_addr  2: tile_ids_addr  3: lpt_meta_addr
 //   4: tile_counts_addr  5: ctrl_addr  6: num_cores  7: num_tiles  8: stride
 //   9: recbase_addr (unused)  10: bucket_meta_addr (0=skip)  11: tile_ranges_addr
 //   12: bucket_fit (l1_record per-tile slot count)  13: l1_base_addr (0=skip)
+//   14: num_workers (emit core count for the checkpoint split)  15: ckpt_addr
 //
 // ctrl page: [0]=P_kept [1]=P_aligned [2]=max_pad_n [3]=status [4]=total_pages
 // status 0=ok, 1=BIN_LOCAL_MAX, 2=MAX_TILE_ENTRIES
@@ -86,8 +97,10 @@ void kernel_main() {
     // arg 9 (recbase_addr) is the retired tile_recs base — intentionally unused.
     const uint32_t bucket_meta_addr = get_arg_val<uint32_t>(10);
     const uint32_t tile_ranges_addr = get_arg_val<uint32_t>(11);
-    const uint32_t bucket_fit = get_arg_val<uint32_t>(12);
-    const uint32_t l1_base_addr = get_arg_val<uint32_t>(13);
+    // args 12 (bucket_fit) and 13 (l1_base_addr) are now consumed by the parallel
+    // emit kernel (sort_bin_emit.cpp), not here — intentionally not read.
+    const uint32_t num_workers = get_arg_val<uint32_t>(14);
+    const uint32_t ckpt_addr = get_arg_val<uint32_t>(15);
 
     constexpr auto bin2d_args = TensorAccessorArgs<0>();
     constexpr auto tmeta_args =
@@ -108,6 +121,8 @@ void kernel_main() {
         TensorAccessorArgs<bucket_args.next_compile_time_args_offset()>();
     constexpr auto l1base_args =
         TensorAccessorArgs<ranges_args.next_compile_time_args_offset()>();
+    constexpr auto ckpt_args =
+        TensorAccessorArgs<l1base_args.next_compile_time_args_offset()>();
 
     const auto bin2d_acc = TensorAccessor(bin2d_args, bin2d_addr, PAGE_BYTES);
     const auto tmeta_acc = TensorAccessor(tmeta_args, tmeta_addr, PAGE_BYTES);
@@ -117,7 +132,9 @@ void kernel_main() {
     const auto ctrl_acc = TensorAccessor(ctrl_args, ctrl_addr, PAGE_BYTES);
     const auto bucket_acc = TensorAccessor(bucket_args, bucket_meta_addr, PAGE_BYTES);
     const auto ranges_acc = TensorAccessor(ranges_args, tile_ranges_addr, PAGE_BYTES);
-    const auto l1base_acc = TensorAccessor(l1base_args, l1_base_addr, PAGE_BYTES);
+    // l1base accessor is constructed in the emit kernel; only its arg-offset is
+    // needed here so ckpt chains after it.
+    const auto ckpt_acc = TensorAccessor(ckpt_args, ckpt_addr, PAGE_BYTES);
 
     constexpr uint32_t CB_CTRL = 0;     // 64B ctrl staging
     constexpr uint32_t CB_SCRATCH = 1;  // 5*MAX_TILES + 5*MAX_CORES u32
@@ -134,14 +151,12 @@ void kernel_main() {
     const uint32_t ctrl_l1 = get_write_ptr(CB_CTRL);
     const uint32_t scratch_l1 = get_write_ptr(CB_SCRATCH);
     const uint32_t row_l1 = get_write_ptr(CB_ROW);
-    const uint32_t bin_l1 = get_write_ptr(CB_BIN);
-    const uint32_t l1b_l1 = get_write_ptr(CB_L1B);
+    // CB_BIN / CB_L1B are now consumed by the parallel emit kernel
+    // (sort_bin_emit.cpp); the coordinator only stages checkpoints in CB_OUT.
     const uint32_t out_l1 = get_write_ptr(CB_OUT);
     const uint32_t hcache_l1 = get_write_ptr(CB_HCACHE);
 
     auto* ctrl = reinterpret_cast<volatile uint32_t*>(ctrl_l1);
-    auto* binp = reinterpret_cast<volatile uint32_t*>(bin_l1);
-    auto* l1bp = reinterpret_cast<volatile uint32_t*>(l1b_l1);
     auto* outp = reinterpret_cast<volatile uint32_t*>(out_l1);
 
     auto* sc = reinterpret_cast<volatile uint32_t*>(scratch_l1);
@@ -249,33 +264,45 @@ void kernel_main() {
             write_pages(0, ceil_pages(num_tiles * 2u), bucket_acc, out_l1);
         }
 
-        // ── Pass 2: emit bin2d base + l1_rec_base rows (whole-page bulk writes)
-        //    from the L1-cached histogram (or re-read DRAM in the fallback).
-        //    page_acc/rec_acc carry the running per-(core,tile) prefix exactly as
-        //    the host c-inner loop. ────────────────────────────────────────────
-        for (uint32_t c = 0; c < num_cores; c++) {
-            uint32_t rl1;
-            if (cached) {
-                rl1 = hcache_l1 + c * row_span * 4u;  // already loaded in Pass 1
-            } else {
-                rl1 = row_l1;
-                read_pages(c * pages_per_core, row_pages, bin2d_acc, row_l1);
-            }
-            auto* rp = reinterpret_cast<volatile uint32_t*>(rl1);
-            for (uint32_t t = 0; t < num_tiles; t++) {
-                const uint32_t h = rp[t];
-                binp[t] = page_acc[t] * ELEMS_PER_PAGE;
-                l1bp[t] = t * bucket_fit + rec_acc[t];
-                rec_acc[t] += h;
-                if (h > 0) page_acc[t] += ceil_pages(h);
-            }
-            for (uint32_t t = num_tiles; t < row_span; t++) {
-                binp[t] = 0;
-                l1bp[t] = 0;
-            }
-            write_pages(c * pages_per_core, row_pages, bin2d_acc, bin_l1);
-            if (l1_base_addr != 0) {
-                write_pages(c * pages_per_core, row_pages, l1base_acc, l1b_l1);
+        // ── Pass 2 (PARALLEL via sort_bin_emit.cpp): publish per-worker prefix
+        //    checkpoints instead of emitting the ~14k single-core base writes.
+        //    For each emit worker w (covering a contiguous source-core range),
+        //    snapshot the running page_acc (pages) + rec_acc (real counts) at its
+        //    FIRST source-core, then advance the prefix over its cores. The advance
+        //    loop is the SAME accumulation the old single-core Pass 2 did, so the
+        //    workers — which replay it from these checkpoints — emit bit-identical
+        //    bin2d/l1_rec_base bases. ckpt slot w = pages [w*2*row_pages ..) holds
+        //    {page_acc row, rec_acc row}. ─────────────────────────────────────────
+        const uint32_t W = num_workers;
+        const uint32_t base_c = num_cores / W;
+        const uint32_t rem_c = num_cores % W;
+        uint32_t cc = 0;
+        for (uint32_t w = 0; w < W; w++) {
+            const uint32_t cnt = base_c + (w < rem_c ? 1u : 0u);
+            // Snapshot page_acc (pages) → ckpt slot w, page row.
+            for (uint32_t t = 0; t < num_tiles; t++) outp[t] = page_acc[t];
+            for (uint32_t t = num_tiles; t < row_span; t++) outp[t] = 0;
+            write_pages(w * 2u * row_pages, row_pages, ckpt_acc, out_l1);
+            // Snapshot rec_acc (real counts) → ckpt slot w, rec row.
+            for (uint32_t t = 0; t < num_tiles; t++) outp[t] = rec_acc[t];
+            for (uint32_t t = num_tiles; t < row_span; t++) outp[t] = 0;
+            write_pages(w * 2u * row_pages + row_pages, row_pages, ckpt_acc, out_l1);
+            // Advance the running prefix over this worker's source-cores
+            // (ceil_pages(0)==0 so the unconditional add matches the old `if h>0`).
+            for (uint32_t k = 0; k < cnt; k++, cc++) {
+                uint32_t rl1;
+                if (cached) {
+                    rl1 = hcache_l1 + cc * row_span * 4u;  // loaded in Pass 1
+                } else {
+                    rl1 = row_l1;
+                    read_pages(cc * pages_per_core, row_pages, bin2d_acc, row_l1);
+                }
+                auto* rp = reinterpret_cast<volatile uint32_t*>(rl1);
+                for (uint32_t t = 0; t < num_tiles; t++) {
+                    const uint32_t h = rp[t];
+                    rec_acc[t] += h;
+                    page_acc[t] += ceil_pages(h);
+                }
             }
         }
 

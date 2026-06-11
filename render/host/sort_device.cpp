@@ -162,6 +162,13 @@ struct SortDeviceContext {
     distributed::MeshWorkload wl_bin_layout;
     KernelHandle kbin_layout{};
     std::shared_ptr<distributed::MeshBuffer> buf_bin_ctrl;  // 1-page control out
+    // S5.4 (iter-125): parallel Pass-2 base emit. The coordinator (wl_bin_layout)
+    // publishes per-worker running-prefix checkpoints into buf_layout_ckpt; this
+    // multi-core workload emits the bin2d + l1_rec_base rows in parallel.
+    distributed::MeshWorkload wl_bin_layout_emit;
+    KernelHandle kbin_layout_emit{};
+    std::shared_ptr<distributed::MeshBuffer> buf_layout_ckpt;  // num_workers × 2 rows
+    std::size_t cap_layout_ckpt_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_bin2d;  // per-core 2D hist/base
     std::size_t cap_bin2d_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_bin_dbg;  // core0 scatter dump
@@ -601,6 +608,13 @@ static void build_program_bin(SortDeviceContext& ctx) {
     ctx.wl_bin.add_program(device_range, std::move(program));
 }
 
+// S5.4 (iter-125): number of cores the parallel Pass-2 base emit is spread over.
+// The coordinator publishes one prefix checkpoint per worker (W × 2 × row_span u32
+// of serial DRAM writes), so W trades emit parallelism against checkpoint-publish
+// cost — ~16 is near the makespan minimum (the single serial Pass-1 count read
+// dominates the coordinator either way). Clamped to num_cores at enqueue time.
+constexpr uint32_t kLayoutEmitWorkers = 16u;
+
 static void build_program_bin_layout(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreCoord core0{0, 0};
@@ -645,6 +659,43 @@ static void build_program_bin_layout(SortDeviceContext& ctx) {
         });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.wl_bin_layout.add_program(device_range, std::move(program));
+}
+
+// S5.4 (iter-125): parallel Pass-2 base emit. Each worker core emits the bin2d
+// base + l1_rec_base rows for a contiguous range of source-cores, seeded from the
+// coordinator's per-worker prefix checkpoint. Created on the full grid; cores
+// without an assigned range get core_count=0 and no-op.
+static void build_program_bin_layout_emit(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    constexpr uint32_t KMAX_TILES = 2048;
+    constexpr uint32_t row_bytes = KMAX_TILES * 4u;  // one row (page_acc/rec_acc/hist/bin/l1b)
+    auto cb = [&](uint32_t id, uint32_t bytes) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+    cb(0, PAGE_BYTES);  // CB_CTRL (status)
+    cb(1, row_bytes);   // CB_PAGE (page_acc)
+    cb(2, row_bytes);   // CB_REC  (rec_acc)
+    cb(3, row_bytes);   // CB_HIST (source-core hist row)
+    cb(4, row_bytes);   // CB_BIN  (bin2d base out)
+    cb(5, row_bytes);   // CB_L1B  (l1_rec_base out)
+
+    std::vector<uint32_t> ct;
+    // 4 DRAM-interleaved accessors: bin2d, l1_base, ckpt, ctrl.
+    for (int i = 0; i < 4; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.kbin_layout_emit = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_emit.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_bin_layout_emit.add_program(device_range, std::move(program));
 }
 
 // ROUTE C: 3-kernel bucket-cull program. reader_bucket_cull streams each LPT
@@ -730,6 +781,7 @@ static SortDeviceContext init_context() {
     build_program(ctx);
     build_program_bin(ctx);
     build_program_bin_layout(ctx);
+    build_program_bin_layout_emit(ctx);
     build_program_publish(ctx);
     build_program_subchunk(ctx);
     build_program_subchunk_directory(ctx);
@@ -927,6 +979,52 @@ static BinLayoutResult host_bin_layout_from_hist(
     return r;
 }
 
+// S5.4 (iter-125): enqueue the parallel Pass-2 base emit. Splits the num_cores
+// source rows into W contiguous ranges (must match the coordinator's checkpoint
+// split exactly), one per worker core; grid cores beyond W get core_count=0.
+static void enqueue_bin_layout_emit_kernel(
+    SortDeviceContext* ctx,
+    uint32_t num_cores,
+    uint32_t num_tiles,
+    uint32_t stride,
+    bool l1_record,
+    uint32_t bucket_fit,
+    uint32_t ckpt_addr,
+    uint32_t W) {
+    Program& prog = ctx->wl_bin_layout_emit.get_programs().begin()->second;
+    const uint32_t grid_cores = ctx->grid.x * ctx->grid.y;
+    const uint32_t base_c = num_cores / W;
+    const uint32_t rem_c = num_cores % W;
+    const uint32_t l1_base_addr = (l1_record && ctx->buf_l1_rec_base)
+        ? static_cast<uint32_t>(ctx->buf_l1_rec_base->address())
+        : 0u;
+    uint32_t cc = 0;
+    for (uint32_t g = 0; g < grid_cores; g++) {
+        CoreCoord core{g % ctx->grid.x, g / ctx->grid.x};
+        uint32_t cstart = 0, ccount = 0, widx = 0;
+        if (g < W) {
+            const uint32_t cnt = base_c + (g < rem_c ? 1u : 0u);
+            cstart = cc;
+            ccount = cnt;
+            widx = g;
+            cc += cnt;
+        }
+        SetRuntimeArgs(prog, ctx->kbin_layout_emit, core, {
+            static_cast<uint32_t>(ctx->buf_bin2d->address()),
+            l1_base_addr,
+            ckpt_addr,
+            static_cast<uint32_t>(ctx->buf_bin_ctrl->address()),
+            num_tiles,
+            stride,
+            bucket_fit,
+            cstart,
+            ccount,
+            widx,
+        });
+    }
+    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin_layout_emit, false);
+}
+
 static void enqueue_bin_layout_kernel(
     SortDeviceContext* ctx,
     uint32_t num_cores,
@@ -939,6 +1037,19 @@ static void enqueue_bin_layout_kernel(
     if (!ctx->buf_bin_ctrl) {
         ctx->buf_bin_ctrl = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
     }
+    // Checkpoint buffer: W slots × {page_acc row, rec_acc row}, each row_pages
+    // 64B pages. W is the emit worker count (clamped to num_cores).
+    const uint32_t W = std::min(num_cores, kLayoutEmitWorkers);
+    const uint32_t row_pages = (num_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
+    const uint32_t row_span = row_pages * ELEMS_PER_PAGE;
+    const std::size_t ckpt_bytes =
+        static_cast<std::size_t>(W) * 2u * row_span * 4u;
+    if (!ctx->buf_layout_ckpt || ctx->cap_layout_ckpt_bytes < ckpt_bytes) {
+        ctx->buf_layout_ckpt = make_dram(ctx->mesh_device.get(), ckpt_bytes);
+        ctx->cap_layout_ckpt_bytes = ckpt_bytes;
+    }
+    const uint32_t ckpt_addr = static_cast<uint32_t>(ctx->buf_layout_ckpt->address());
+
     Program& prog = ctx->wl_bin_layout.get_programs().begin()->second;
     CoreCoord core0{0, 0};
     SetRuntimeArgs(prog, ctx->kbin_layout, core0, {
@@ -962,8 +1073,14 @@ static void enqueue_bin_layout_kernel(
         l1_record && ctx->buf_l1_rec_base
             ? static_cast<uint32_t>(ctx->buf_l1_rec_base->address())
             : 0u,
+        W,
+        ckpt_addr,
     });
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin_layout, false);
+    // Parallel Pass-2 base emit (CQ-ordered after the coordinator: it sees the
+    // coordinator's checkpoint writes and the still-intact histogram in bin2d).
+    enqueue_bin_layout_emit_kernel(
+        ctx, num_cores, num_tiles, stride, l1_record, bucket_fit, ckpt_addr, W);
 }
 
 static bool read_bin_layout_ctrl(
