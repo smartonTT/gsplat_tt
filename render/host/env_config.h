@@ -31,8 +31,9 @@ inline constexpr bool cull_pipeline_enabled() { return true; }
 // Chain sort publish -> cull -> blend on one CQ drain.
 inline constexpr bool sort_blend_pipe_enabled() { return true; }
 
-// On-device bin histogram layout: OFF — production uses the HOST bin layout.
-inline constexpr bool sort_device_layout_enabled() { return false; }
+// On-device bin histogram layout: ON (S5.1) — device computes the page layout +
+// LPT on-device, host reads only a tiny ctrl page (was: HOST bin layout).
+inline constexpr bool sort_device_layout_enabled() { return true; }
 
 // Blend writer fully overwrites res_out each frame — skip the zero H2D.
 inline constexpr bool blend_skip_zero_out_enabled() { return true; }

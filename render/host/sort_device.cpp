@@ -605,15 +605,24 @@ static void build_program_bin_layout(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreCoord core0{0, 0};
     const CoreRangeSet cores(core0);
-    constexpr uint32_t scratch_u32 = 3 * 2048 + 4 * 128 + 2 * 128;
-    constexpr uint32_t scratch_bytes = scratch_u32 * 4;
+    // Bulk-row layout kernel L1 budget (single core). MAX_TILES/MAX_CORES mirror
+    // the kernel's compile-time bounds.
+    constexpr uint32_t KMAX_TILES = 2048;
+    constexpr uint32_t KMAX_CORES = 128;
+    constexpr uint32_t scratch_bytes = (5u * KMAX_TILES + 5u * KMAX_CORES) * 4u;
+    constexpr uint32_t row_bytes = KMAX_TILES * 4u;       // one core row (hist/bin2d/l1base)
+    constexpr uint32_t out_bytes = 2u * KMAX_TILES * 4u;  // per-tile staging (tmeta/ranges/...)
     auto cb = [&](uint32_t id, uint32_t bytes) {
         CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
         c.set_page_size(id, bytes);
         CreateCircularBuffer(program, cores, c);
     };
-    cb(0, PAGE_BYTES);
-    cb(1, scratch_bytes);
+    cb(0, PAGE_BYTES);      // CB_CTRL
+    cb(1, scratch_bytes);   // CB_SCRATCH
+    cb(2, row_bytes);       // CB_ROW
+    cb(3, row_bytes);       // CB_BIN
+    cb(4, row_bytes);       // CB_L1B
+    cb(5, out_bytes);       // CB_OUT
 
     std::vector<uint32_t> ct;
     for (int i = 0; i < 12; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
@@ -916,7 +925,9 @@ static void enqueue_bin_layout_kernel(
     uint32_t num_tiles,
     uint32_t stride,
     bool tile_bucket,
-    uint32_t tile_ranges_addr) {
+    uint32_t tile_ranges_addr,
+    bool l1_record,
+    uint32_t bucket_fit) {
     if (!ctx->buf_bin_ctrl) {
         ctx->buf_bin_ctrl = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
     }
@@ -939,6 +950,10 @@ static void enqueue_bin_layout_kernel(
             ? static_cast<uint32_t>(ctx->buf_bucket_meta->address())
             : 0u,
         tile_ranges_addr,
+        bucket_fit,
+        l1_record && ctx->buf_l1_rec_base
+            ? static_cast<uint32_t>(ctx->buf_l1_rec_base->address())
+            : 0u,
     });
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin_layout, false);
 }
@@ -1409,7 +1424,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 num_tiles,
                 stride,
                 tile_bucket,
-                static_cast<uint32_t>(ctx->buf_tile_ranges->address()));
+                static_cast<uint32_t>(ctx->buf_tile_ranges->address()),
+                l1_record_early,
+                bucket_fit);
             GSPLAT_HOST_ZONE("host_finish_sort_bin_layout");
             distributed::Finish(*ctx->cq);
             if (layout_verify_ref->status == 0) {
@@ -1478,7 +1495,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     num_tiles,
                     stride,
                     tile_bucket,
-                    static_cast<uint32_t>(ctx->buf_tile_ranges->address()));
+                    static_cast<uint32_t>(ctx->buf_tile_ranges->address()),
+                    l1_record_early,
+                    bucket_fit);
                 GSPLAT_HOST_ZONE("host_finish_sort_bin_cnt");
                 distributed::Finish(*ctx->cq);
                 t_bin1 = clk::now();
