@@ -665,6 +665,13 @@ static void build_program_bin(SortDeviceContext& ctx) {
         // (512B), plus REC_BATCH × 4B for the optional M1 gid stash (L1_SORT_VERIFY).
         cb(12, 16u * 32u + 16u * 4u);  // 512B staging + 64B gid scratch
     }
+    // iter 132: cb(13) — PACKOC_BATCH × 16B ring staging the per-gaussian blendrec
+    // chunk [words 8,9,10,11] (orig cb/depth + packed op/color) written back
+    // 16B-aligned (offset 32) to blendrec for materialize. 16B is the natural DRAM
+    // write granule (sub-16B / unaligned writes to blendrec do not land on this BH).
+    // Sized to the kernel's PACKOC_BATCH=16 (256B). Allocated unconditionally (used
+    // whenever the blendrec record is read, i.e. tile_bucket).
+    cb(13, 16u * 16u);
 
     std::vector<uint32_t> ct;
     // Accessors: 7 base + 3 tile_bucket + 2 l1_record

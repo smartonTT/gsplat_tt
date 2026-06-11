@@ -329,15 +329,17 @@ void kernel_main() {
                 splat[3] = aos[9];
                 splat[4] = f_to_bits(mx);
                 splat[5] = f_to_bits(my);
-                // Stage-2b (iter 131): op/color UNORM16 are PRE-PACKED once at
-                // birth in gather_visible_scatter (aos[5]=op|cr, aos[6]=cg|cb),
-                // so the depth-sorted overflow gather only COPIES the two packed
-                // words instead of re-deriving 4 fp32->UNORM16 conversions per
-                // record. Bit-identical (same pack formula, computed once). iter-131
-                // ablation MEASURED this re-pack at ~5.3 ms/view busiest-core
-                // (frame BRISC-FW -7.1) — the dominant overflow-gather cost.
-                splat[6] = aos[5];
-                splat[7] = aos[6];
+                // iter 132: op/color UNORM16 are packed ONCE per gaussian on the
+                // NCRISC side (sort_bin pack_invariants) and published into
+                // blendrec[10],[11] (via a full-64B page write-back); this depth-
+                // sorted overflow gather only COPIES the two packed words from the
+                // 64B blendrec page it already reads — NO re-pack and NO extra read.
+                // Bit-identical to iter-131's birth pack (same fp32 inputs, same
+                // rounding). iter-131 ablation MEASURED the re-pack at ~5.3 ms/view
+                // busiest-core (frame BRISC-FW -7.1) — the dominant overflow-gather
+                // cost, now eliminated off the long pole.
+                splat[6] = aos[10];
+                splat[7] = aos[11];
                 const uint32_t out_g = brec_out_g[b];
                 const uint32_t out_page = sc_page + (out_g / SLAB_RECS_PER_PAGE);
                 const uint32_t out_off = (out_g % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;

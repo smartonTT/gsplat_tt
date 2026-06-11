@@ -161,6 +161,7 @@ void kernel_main() {
     constexpr uint32_t CB_REC = 9;     // 64B blendrec staging (read page g, +depth, write bucket)
     constexpr uint32_t CB_L1BASE   = 11; // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
     constexpr uint32_t CB_L1SCRATCH = 12; // 32B staging buffer for pack → noc write
+    constexpr uint32_t CB_PACKOC   = 13; // iter 132: 64B-per-gaussian blendrec page write-back ring (publishes packed op/color)
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
     const uint32_t tid_l1  = get_write_ptr(CB_TID);
@@ -298,6 +299,40 @@ void kernel_main() {
         nbrec = 0;
     };
 
+    // iter 132: publish the per-gaussian packed op/color words (inv_opr, inv_cgb)
+    // into blendrec[10],[11] so the depth-sorted materialize overflow gather COPIES
+    // them (it already reads the 64B blendrec page) instead of re-deriving 4
+    // fp32->UNORM16 conversions per overflow record.
+    //
+    // WRITE GRANULARITY (measured): sub-page 8B/4B splats to byte-offset 40 of a
+    // blendrec page did NOT land on this BH (materialize read 0 -> 25.5 dB) — 8B at
+    // a non-16B-aligned offset is below the DRAM write granule. A full-64B page
+    // write-back DOES land (mirrors gather), but costs +15.4 ms on NCRISC-KERNEL
+    // (Tracy) which couples ~1:1 into BRISC-FW via handoff stalls and exactly
+    // cancels the proj_scatter revert. So publish the MINIMAL 16B-aligned chunk that
+    // covers words 10,11: a 16B write at byte-offset 32 = words [8,9,10,11]. 16B is
+    // the natural DRAM granule (16-aligned offset + 16B size) so it lands. Words 8,9
+    // are re-written with their EXACT original gather values (cb, depth/0), so a
+    // gaussian processed by two cores at a pair-page boundary writes byte-identical
+    // 16B — no clobber, fully idempotent. ~1/4 the bytes + copy of the 64B version.
+    // Staged in a ring (one write barrier per batch), mirroring flush_recs.
+    constexpr uint32_t PACKOC_BATCH = 16u;
+    constexpr uint32_t PACKOC_ENT_W = 4u;   // 16B chunk = 4 u32 (words 8,9,10,11)
+    const uint32_t packoc_l1 = get_write_ptr(CB_PACKOC);
+    auto packocp = reinterpret_cast<volatile uint32_t*>(packoc_l1);
+    uint32_t packoc_g[PACKOC_BATCH];
+    uint32_t n_packoc = 0;
+    auto flush_packoc = [&]() {
+        if (n_packoc == 0) return;
+        for (uint32_t b = 0; b < n_packoc; b++) {
+            noc_async_write(packoc_l1 + b * (PACKOC_ENT_W * 4u),
+                            get_noc_addr(packoc_g[b], blendrec_acc) + 32u,
+                            PACKOC_ENT_W * 4u);
+        }
+        noc_async_write_barrier();
+        n_packoc = 0;
+    };
+
     // Pack the 32B PACK2 record. Covariance FULL fp32 — precision-critical (the
     // blend recomputes the conic via det = a*c - b*b, which loses too much to
     // fp16 when a,c are large, ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL
@@ -329,12 +364,24 @@ void kernel_main() {
         inv_depth = depth_key;
         inv_mx = *reinterpret_cast<const volatile float*>(&cachep[3]);
         inv_my = *reinterpret_cast<const volatile float*>(&cachep[4]);
-        // Stage-2b (iter 131): op/color UNORM16 words are PRE-PACKED once at
-        // birth in gather_visible_scatter (cachep[5]=op|cr, cachep[6]=cg|cb), so
-        // pack_invariants only COPIES them — no fp32->UNORM16 conversion here.
-        // Bit-identical (same pack formula, computed once per gaussian at birth).
-        inv_opr = cachep[5];
-        inv_cgb = cachep[6];
+        // iter 132: compute the op/color UNORM16 pack ONCE per gaussian, here on
+        // the NCRISC side (gather now writes raw fp32 op/cr/cg/cb at words 5..8,
+        // keeping the pack off the BRISC proj_scatter long pole). The two packed
+        // words feed this core's in-budget bucket record AND are published into
+        // blendrec[10],[11] (publish_packoc) so the depth-sorted materialize
+        // overflow gather COPIES them instead of re-packing. Byte-identical to
+        // the iter-131 birth pack (same fp32 inputs, same rounding formula).
+        float op = *reinterpret_cast<const volatile float*>(&cachep[5]);
+        float cr = *reinterpret_cast<const volatile float*>(&cachep[6]);
+        float cg = *reinterpret_cast<const volatile float*>(&cachep[7]);
+        float cb_v = *reinterpret_cast<const volatile float*>(&cachep[8]);
+        auto to_unorm = [](float v) -> uint32_t {
+            if (v <= 0.0f) return 0u;
+            if (v >= 1.0f) return 65535u;
+            return static_cast<uint32_t>(v * 65535.0f + 0.5f);
+        };
+        inv_opr = (to_unorm(op) | (to_unorm(cr) << 16));
+        inv_cgb = (to_unorm(cg) | (to_unorm(cb_v) << 16));
     };
     auto pack_rec = [&](uint32_t b, uint32_t tt) {
         // Tile-local mean: the blend reader reconstructs absolute via
@@ -395,6 +442,21 @@ void kernel_main() {
                 // key (= depp[g % 16]) is the GAUSSIAN's depth — invariant across
                 // its pairs — so the full invariant prefix is computed once here.
                 pack_invariants(key);
+                // iter 132: stage the 16B blendrec chunk [words 8,9,10,11] — words
+                // 8,9 keep their original gather bytes (cb, depth/0), words 10,11 get
+                // the packed op/color — written back 16B-aligned (offset 32) in
+                // flush_packoc for materialize to copy.
+                {
+                    volatile uint32_t* ent =
+                        packocp + n_packoc * PACKOC_ENT_W;
+                    ent[0] = cachep[8];   // original cb (fp32) — preserved
+                    ent[1] = cachep[9];   // original depth/0 — preserved
+                    ent[2] = inv_opr;     // -> blendrec[10]
+                    ent[3] = inv_cgb;     // -> blendrec[11]
+                    packoc_g[n_packoc] = g;
+                    n_packoc++;
+                    if (n_packoc == PACKOC_BATCH) flush_packoc();
+                }
             }
             {
                 // Absolute slot in buf_l1_recs = per-core base + local cursor.
@@ -421,7 +483,8 @@ void kernel_main() {
             isp[li] = g;
         }
     }
-    flush_recs();  // drain the partial final batch
+    flush_recs();    // drain the partial final batch
+    flush_packoc();  // iter 132: drain the partial final packed-op/color batch
 
     // Write each tile's page-aligned L1 block to DRAM as WHOLE PAGES. The block
     // base (rowp[t]) and L1 source (offp[t]) are both page-aligned, and the size

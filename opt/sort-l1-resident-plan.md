@@ -434,6 +434,52 @@ the only DRAM read.**
 >   re-pack WITHOUT loading the BRISC long pole. (Needs a tiny buffer + arg plumbing; the
 >   gather-side pre-pack shipped here is the lower-risk first increment.)
 
+> **iter-132 — relocate the op/color UNORM16 pack OFF the BRISC `proj_scatter` long pole
+> onto NCRISC `sort_bin` `pack_invariants` (the iter-131 follow-up above). KEEP,
+> bit-identical, small reproducible frame win.**
+>
+> **What shipped:** revert iter-131's gather birth-pack — `gather_visible_scatter` again
+> writes raw fp32 `op,cr,cg,cb` to `blendrec` words `r[5..8]` (so `proj_scatter` returns
+> to ~20.8). `sort_bin` `pack_invariants` (once per gaussian) computes the two UNORM16
+> words and (a) feeds them into this core's in-budget bucket record AND (b) PUBLISHES them
+> into `blendrec[10],[11]` so the depth-sorted `materialize` overflow gather just COPIES
+> `aos[10],aos[11]` (no re-pack, no extra read). Same fp32 inputs + same UNORM formula ⇒
+> byte-identical. New CB(13) ring + `cb(13, …)` host alloc; static, no over-provisioning.
+>
+> **Publish write granularity (measured, this is the crux):** sub-page 8B/4B splats to
+> `blendrec[g]`+40 (words 10,11) did **NOT land** on this BH — correctness collapsed to
+> 25.5 dB (materialize read zeros). 8B at a non-16B-aligned offset is below the DRAM write
+> granule. A full-64B page write-back lands (mirrors gather's only reliable pattern) but
+> costs +15.4 NCRISC. The shipped fix writes the **minimal 16B-aligned chunk** = a 16B
+> write at byte-offset 32 covering words `[8,9,10,11]` (16-aligned offset + 16B size = the
+> natural DRAM granule). Words 8,9 are re-written with their EXACT original gather bytes
+> (cb, depth/0), so a boundary gaussian processed by two cores writes byte-identical 16B —
+> fully idempotent, no clobber. Diagnostic that localized the bug: temporarily re-packing
+> materialize from fp32 `aos[5..8]` gave 63.95 dB, proving gather+sort_bin were correct and
+> the publish path was the only fault.
+>
+> **Measured (same-thermal apples-to-apples, iter-131 HEAD rebuilt + rerun NOW, 4+4 verify
+> passes each):** hero md5 `e3fefb116d860f99d92bba1ef51d820c` **BIT-IDENTICAL**, 63.95 dB.
+> - **ms_view avg 178.8→177.1 (−1.7); min 143.9→142.3 (−1.6).** Min clusters cleanly
+>   separated with no overlap (iter-131 143.7–144.1 vs iter-132 142.1–142.7 across 8 runs)
+>   ⇒ real, reproducible, not thermal noise.
+> - Tracy (`ttw-132`): **`proj_scatter` 35.40→20.83 (−14.6)** ✓ (revert worked), but the
+>   publish cost landed in **`sort_bucket_emit` 18.83→32.45 (+13.6)** / NCRISC-KERNEL
+>   113.80→127.34 (+13.5). **BRISC-FW makespan 162.12→161.71 (≈flat, −0.4).**
+>
+> **Honest read of the tradeoff:** the +14.6 `proj_scatter` cost did NOT vanish — it moved
+> to NCRISC `sort_bucket_emit` as ~+13.6 of per-gaussian write-ISSUE overhead (64B vs 16B
+> write barely differed: 129.2 vs 127.3 NCRISC ⇒ the cost is the scatter *write count*, not
+> bytes). The pack is fundamentally ~13–15 ms of work + a scatter publish wherever it runs.
+> BRISC-FW makespan is flat, yet the wall-clock frame improves a small, reproducible −1.6 ms
+> (likely reduced BRISC producer-side stall/backpressure that the summed-makespan proxy
+> doesn't capture). Gate is `bit-identical AND ms_view improves` — both hold — so **KEPT**,
+> but the win is marginal. **Next lever to actually bank the −14.6:** publish ONLY for
+> overflow/heavy-tile gaussians (materialize reads `blendrec` only for the dense fallback;
+> in-budget records already carry the packed words in their bucket slot) to cut the publish
+> write count far below one-per-gaussian — the per-gaussian scatter issue is what eats the
+> proj_scatter saving.
+
 ### Stage 3 — Per-core L1 sort, emit blend's PACK2 layout into L1
 Each sort core reads ITS tile's bucket into L1 and radix-sorts **(key, index)**
 (8B ping-pong — small scratch). Then the **emit pass writes the depth-sorted 32B
