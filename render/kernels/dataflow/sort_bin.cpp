@@ -298,45 +298,67 @@ void kernel_main() {
         nbrec = 0;
     };
 
-    // Pack the 32B PACK2 record from the cached 64B blendrec into l1_scratch slot
-    // `b`. Covariance FULL fp32 — precision-critical (the blend recomputes the
-    // conic via det = a*c - b*b, which loses too much to fp16 when a,c are large,
-    // ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL fp32 (sub-px center);
-    // opacity/color are [0,1] => UNORM16 (~30x tighter than fp16, the op/color
-    // precision wall).
+    // Pack the 32B PACK2 record. Covariance FULL fp32 — precision-critical (the
+    // blend recomputes the conic via det = a*c - b*b, which loses too much to
+    // fp16 when a,c are large, ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL
+    // fp32 (sub-px center); opacity/color are [0,1] => UNORM16 (~30x tighter than
+    // fp16, the op/color precision wall).
     // 64B blendrec (fp32 words): 0=cov_a 1=cov_b 2=cov_c 3=mx 4=my 5=op
     //                            6=cr    7=cg    8=cb    9=depth_key(u32)
     // 32B layout (M0): [0]fp32 cov_a [1]fp32 cov_b [2]fp32 cov_c [3]u32 depth_key
     //   [4]fp32 mx_local [5]fp32 my_local [6]unorm16 op,r [7]unorm16 g,b
-    auto pack_rec = [&](uint32_t b, uint32_t tt, uint32_t depth_key) {
-        float mx = *reinterpret_cast<const volatile float*>(&cachep[3]);
-        float my = *reinterpret_cast<const volatile float*>(&cachep[4]);
-        // Tile-local mean: the blend reader reconstructs absolute via
-        // mean = local + tile_origin.
-        mx -= static_cast<float>((tt % l1_tiles_x) * L1_TILE_SIZE);
-        my -= static_cast<float>((tt / l1_tiles_x) * L1_TILE_SIZE);
+    //
+    // iter-128: hoist the per-gaussian-INVARIANT packing out of the per-pair
+    // loop. cov(0,1,2), depth_key(3), and the op/color UNORM16 words(6,7) are
+    // functions of the GAUSSIAN only — identical for every one of the K tiles a
+    // gaussian touches — yet the old pack recomputed the four UNORM conversions
+    // (float multiplies) and re-read the cached blendrec for EVERY pair. Measured
+    // (iter-128 ablation, 30-view makespan): pack_rec was ~27 ms/view = 71 % of
+    // sort_bucket_emit (the 32B scatter writes were only ~1.6 ms — the scattered-
+    // DRAM-write premise was refuted). Only the tile-local mean (words 4,5) varies
+    // per pair, so we compute the invariant words ONCE per gaussian (when blendrec
+    // is read) into registers, and per pair only subtract the tile origin from the
+    // cached fp32 mean. The bytes written to buf_l1_recs are BIT-IDENTICAL.
+    uint32_t inv_cov0 = 0, inv_cov1 = 0, inv_cov2 = 0, inv_depth = 0,
+             inv_opr = 0, inv_cgb = 0;
+    float inv_mx = 0.0f, inv_my = 0.0f;
+    auto pack_invariants = [&](uint32_t depth_key) {
+        inv_cov0 = cachep[0];  // fp32 cov_a (exact: no fp16 det cancellation)
+        inv_cov1 = cachep[1];  // fp32 cov_b
+        inv_cov2 = cachep[2];  // fp32 cov_c
+        inv_depth = depth_key;
+        inv_mx = *reinterpret_cast<const volatile float*>(&cachep[3]);
+        inv_my = *reinterpret_cast<const volatile float*>(&cachep[4]);
         float op = *reinterpret_cast<const volatile float*>(&cachep[5]);
         float cr = *reinterpret_cast<const volatile float*>(&cachep[6]);
         float cg = *reinterpret_cast<const volatile float*>(&cachep[7]);
         float cb_v = *reinterpret_cast<const volatile float*>(&cachep[8]);
-        volatile uint32_t* p32 =
-            reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
-        uint32_t mx_bits, my_bits;
-        __builtin_memcpy(&mx_bits, &mx, 4);
-        __builtin_memcpy(&my_bits, &my, 4);
         auto to_unorm = [](float v) -> uint32_t {
             if (v <= 0.0f) return 0u;
             if (v >= 1.0f) return 65535u;
             return static_cast<uint32_t>(v * 65535.0f + 0.5f);
         };
-        p32[0] = cachep[0];  // fp32 cov_a (exact: no fp16 det cancellation)
-        p32[1] = cachep[1];  // fp32 cov_b
-        p32[2] = cachep[2];  // fp32 cov_c
-        p32[3] = depth_key;
+        inv_opr = (to_unorm(op) | (to_unorm(cr) << 16));
+        inv_cgb = (to_unorm(cg) | (to_unorm(cb_v) << 16));
+    };
+    auto pack_rec = [&](uint32_t b, uint32_t tt) {
+        // Tile-local mean: the blend reader reconstructs absolute via
+        // mean = local + tile_origin. Only this is per-pair (per-tile) work.
+        float mx = inv_mx - static_cast<float>((tt % l1_tiles_x) * L1_TILE_SIZE);
+        float my = inv_my - static_cast<float>((tt / l1_tiles_x) * L1_TILE_SIZE);
+        volatile uint32_t* p32 =
+            reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
+        uint32_t mx_bits, my_bits;
+        __builtin_memcpy(&mx_bits, &mx, 4);
+        __builtin_memcpy(&my_bits, &my, 4);
+        p32[0] = inv_cov0;
+        p32[1] = inv_cov1;
+        p32[2] = inv_cov2;
+        p32[3] = inv_depth;
         p32[4] = mx_bits;  // fp32 tile-local mean x (sub-px center precision)
         p32[5] = my_bits;  // fp32 tile-local mean y
-        p32[6] = (to_unorm(op) | (to_unorm(cr) << 16));
-        p32[7] = (to_unorm(cg) | (to_unorm(cb_v) << 16));
+        p32[6] = inv_opr;
+        p32[7] = inv_cgb;
     };
 
     // Sub-pass 2: counting-sort kept pairs into L1, grouped by tile (gaussian-
@@ -375,6 +397,9 @@ void kernel_main() {
                 noc_async_read(get_noc_addr(g, blendrec_acc), rec_cache_l1, PAGE_BYTES);
                 noc_async_read_barrier();
                 blendrec_cached_g = static_cast<int32_t>(g);
+                // key (= depp[g % 16]) is the GAUSSIAN's depth — invariant across
+                // its pairs — so the full invariant prefix is computed once here.
+                pack_invariants(key);
             }
             {
                 // Absolute slot in buf_l1_recs = per-core base + local cursor.
@@ -391,7 +416,7 @@ void kernel_main() {
                     (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot : 0xFFFFFFFFu;
                 brec_l1_slot[nbrec] = out_slot;
                 if (out_slot != 0xFFFFFFFFu) {
-                    pack_rec(nbrec, t, key);  // pack into l1_scratch + nbrec*32
+                    pack_rec(nbrec, t);  // pack into l1_scratch + nbrec*32
                 }
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();

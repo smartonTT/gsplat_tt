@@ -243,6 +243,45 @@ the only DRAM read.**
 >   The real frame win is the **host-dispatch** long pole (BRISC-FW 179.7 ≈ 92 ms is
 >   host overhead) → Stage 5 host-free glue, not `blendrec`.
 
+> **iter-128 — `sort_bucket_emit` DIAGNOSED then OPTIMIZED (KEEP, bit-identical, frame win).**
+> Built a 4-mode runtime-arg ablation (gated, since reverted) + nested phase zones
+> (`be_cnt`/`be_main`/`be_kv`, since reverted) and measured the ~40 ms scatter on a
+> 30-view Tracy capture (`analyze_zones.py`). **The "scattered DRAM writes" premise
+> was REFUTED.** Full per-view-makespan attribution of `sort_bucket_emit` = 40.9 ms:
+> - `be_cnt` (sub-pass-1 count) 1.41, `be_kv` (final page-aligned key/id writes)
+>   0.39, prefix/prefill 0.33, **`be_main` (the per-pair scatter loop) 37.84**.
+> - Within `be_main` (ablation, each = skip one component, subtract makespans):
+>   - **`pack_rec` scalar packing = 27.0 ms (71 % of bucket_emit!)** — the per-pair
+>     fp32→UNORM16 conversions (float multiplies) + volatile L1 re-loads of the
+>     cached blendrec, on the NCRISC (a dataflow RISC; scalar float is slow).
+>   - blendrec 64B read (once/gaussian, iter-114) = 5.84 ms.
+>   - **32B record scatter writes = only 1.64 ms (4 %)** — coalescing them is NOT
+>     the lever; NoC write traffic is cheap. (Refutes candidate-cause #1/#3.)
+>   - counting-sort core (pair-stream reads + ksp/isp) = 3.37 ms.
+> - Structural (30-view): P_kept 2.4M–3.7M, num_tiles 1024, num_cores 110,
+>   ~21.7k recs/core; 78–113 overflow tiles drop ~330k recs (~14 %) past BUCKET_FIT.
+>
+> **Fix (bit-identical):** cov(0,1,2), depth_key(3) and the op/color UNORM16
+> words(6,7) are functions of the **GAUSSIAN only** (identical for all K tiles a
+> gaussian touches); only the tile-local mean (words 4,5) varies per pair. Hoisted
+> the invariant packing — the 4 UNORM float-muls + the blendrec re-loads — to run
+> **once per gaussian** (in the existing blendrec-read branch, `pack_invariants`),
+> leaving only `mean − tile_origin` per pair. Bytes written to `buf_l1_recs` are
+> byte-identical. (`render/kernels/dataflow/sort_bin.cpp` only; host untouched.)
+> - **Measured (clean verify, 30 views): hero md5 `e3fefb11…` BIT-IDENTICAL, 63.95 dB;
+>   ms_view 195.6→187.4 avg (−8.2), min 163.7→157.6 (−6.1).** Tracy (`ttw-128`):
+>   **`sort_bucket_emit` 40.92→30.57 (−10.35, −25 %)**, **NCRISC-KERNEL 144.6→134.2
+>   (−10.4)**, **BRISC-FW (frame critical path) ~179→169 (−10)**; all other zones
+>   unchanged (`sort_subchunk_mat` 26.1, `tile_blend_*`, TRISC 51.9 off-path). The
+>   sort scatter IS on the frame critical path (BRISC-FW tracks it), so the NCRISC
+>   win propagated to the frame. **KEPT.**
+> - **Residual `be_main` after hoist ≈ 27 ms** still has a per-pair tail: 2 fp32
+>   mean subtracts + the `tt % / tt / l1_tiles_x` integer **div/mod** (no HW divide
+>   on NCRISC) + 8 L1 stores, × ~21.7k pairs/core. **Next lever:** precompute a
+>   per-tile origin table (1024×2) in L1 once and replace the per-pair div/mod with
+>   a lookup; or move the whole pack into the (future) TA-side fill so the record is
+>   born once per (gaussian) not per pair. Either is bit-identical.
+
 ### Stage 3 — Per-core L1 sort, emit blend's PACK2 layout into L1
 Each sort core reads ITS tile's bucket into L1 and radix-sorts **(key, index)**
 (8B ping-pong — small scratch). Then the **emit pass writes the depth-sorted 32B
