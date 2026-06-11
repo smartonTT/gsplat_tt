@@ -324,6 +324,69 @@ Make the whole frame one Metal trace replayed per view (see "End-state" above).
 > 92 ms are: (a) **fewer programs** (true fusion), or (b) **Metal Trace** that
 > pre-records the ~18-program dispatch so BRISC-FW replays it without re-launching.
 
+### Stage 5 — MEASURED: Metal Trace payoff (iter-126, DIAGNOSTIC — REFUTES the trace endgame as a perf lever)
+**Verdict: NO-GO.** A gated measurement prototype (`GSPLAT_TT_TRACE_PROTO=1`,
+since reverted) opened the `MeshDevice` with a 256 MB trace region + program cache,
+captured the real hero-view program stream, and timed `ReplayTrace` vs host dispatch
+on the device (`yyzo-bh-07`, N=50). **Metal Trace replays the recorded commands
+bit-identically but removes essentially ZERO frame time** — because this frame is
+**on-device-execution bound, not host-dispatch bound**, and trace only removes
+host-side dispatch (which is already fully overlapped on the in-order async CQ).
+
+Measured (per-iter, ms; bit-identical confirmed — `ta_pairs_gid` FNV-1a
+`4587123369709330712` matches across host-reenqueue == trace-replay == after-frame,
+≠ zeroed buffer):
+
+| chain (distinct programs, single-enqueue) | host pipelined | host drained (Finish/prog) | **trace replay** | per-drain bubble |
+| --- | --- | --- | --- | --- |
+| tile_assign sub-chain (5 heavy programs, ~57 ms) | 57.106 | 57.169 | **57.102** | **15.6 µs** |
+| project head means_cam+pfwc (2 light programs, ~2.5 ms) | 2.5132 | 2.5333 | **2.5125** | **20.0 µs** |
+
+- **Trace ≈ host, to within noise** (heavy Δ = +0.004 ms pipelined / +0.067 ms
+  drained; light Δ = +0.0007 / +0.021 ms). The light-program probe is decisive: the
+  per-drain bubble is **program-weight-independent (~16–20 µs)** — heavy TA compute
+  was NOT masking a large per-launch cost; the host-dispatch cost is genuinely ~µs.
+- **Implied full-frame trace-removable host dispatch** = ~13 CQ drains × ~18 µs +
+  ~20 programs × ~1–4 µs ≈ **< 0.5 ms** — three orders of magnitude below the
+  hypothesized ~92 ms / ~45–60 ms.
+- **The ~145–160 ms post-trace floor is REFUTED.** Metal Trace does NOT reduce the
+  on-device BRISC-FW per-program launch/barrier firmware: the bit-identical 5-program
+  replay takes the SAME wall time as host dispatch (57.102 vs 57.106). The ~92 ms
+  "BRISC-FW − BRISC-KERNEL" is **on-device firmware execution** (launch_msg / NoC /
+  CB-setup / barrier / inter-program worker idle), which a trace **re-executes
+  unchanged** — it only pre-stages the host→prefetcher command issue, and the
+  measurement proves the dispatcher already keeps the device fed.
+- This is corroborated by iter-120 (host `Finish`-removal frame-neutral) and by the
+  S5.1–S5.4 device-residency landings coming out **frame-neutral / slightly
+  regressed** — i.e. the inter-stage host glue that device-residency removes was
+  already small/overlapped, so neither the prerequisites nor the trace capstone
+  unlock a hidden 45–60 ms.
+
+**tt-metal trace gotchas discovered (for whoever revisits this):**
+1. `DEFAULT_TRACE_REGION_SIZE = 0` — must pass an explicit `trace_region_size` to
+   `MeshDevice::create_unit_mesh` (used 256 MB) or capture is a no-op / asserts.
+2. `enable_program_cache()` is **required** before capture (trace replays cached
+   program binaries).
+3. **Per-program double-enqueue is uncapturable as one replay unit.** A `MeshWorkload`
+   re-enqueued with different `SetRuntimeArgs` within a frame (gather workload mode
+   0→1; sort `wl_bin` reuse) bakes whatever args were live at capture; replay re-runs
+   them. The measurement had to restrict capture to an **all-distinct sub-chain**
+   (verified `chain_distinct=true`). Real Stage 5 would need a distinct program
+   instance per logical dispatch, or fully device-resident/stable args.
+4. **No host ops inside `BeginTraceCapture`…`EndTraceCapture`** — confirms the listed
+   blockers (M/P/hist reads, `build_subchunk_layout`) are hard constraints.
+5. **Buffer addresses are baked into the trace** — replay reuses captured addresses;
+   works only because `device_state` buffers are persistent (no realloc). A real impl
+   must statically allocate to ceilings and never reallocate across views.
+
+**Recommendation:** do NOT spend the 4–6 prerequisite cycles on the host-free single
+trace as a *performance* lever — the measured trace payoff is < 0.5 ms. The frame is
+bound by **on-device firmware + NCRISC dataflow** (`sort_bucket_emit` ~40 ms,
+`sort_subchunk_mat` ~26 ms, the single-core bin-layout ~+13 ms, blend SFPU). The only
+levers that move the 92 ms are **fewer programs (true fusion)** and **faster
+kernels** — not trace. (Trace may still be worth it later as an ergonomics/
+determinism tool once program count is already low, but it is not the perf endgame.)
+
 ### Stage 5 — concrete ordered host-free plan (what blocks the single trace TODAY)
 A trace records a FIXED `EnqueueProgram` sequence with fixed runtime args + buffer
 addresses; it cannot host-compute a size/branch mid-frame. So every **blocking host
@@ -511,8 +574,11 @@ audit, in dependency order:
 - **S5.5:** persistent per-core kernels looping the resident assignment (variable
   per-view iteration is device data → one trace replays for any view).
 - **S5.6:** `BeginTraceCapture` the frame; per view = `EnqueueWriteBuffer(camera)`
-  + `ReplayTrace` + one image D2H. This is the step that finally removes the 92 ms
-  BRISC-FW per-program launch overhead (the only thing that can).
+  + `ReplayTrace` + one image D2H. ~~This is the step that finally removes the 92 ms
+  BRISC-FW per-program launch overhead (the only thing that can).~~ **SUPERSEDED by
+  the iter-126 measurement above: Metal Trace removes < 0.5 ms here (it replays the
+  on-device launch firmware unchanged). S5.6 is NOT a perf lever — the 92 ms is
+  on-device firmware + dataflow, addressable only by fusion / faster kernels.**
 
 ## Sequencing & honest expectation
 - Stage 1 is a safe, standalone win (delete the second DRAM scatter, `materialize`).
