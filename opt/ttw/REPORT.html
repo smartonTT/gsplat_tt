@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-06-11 07:38 PDT · 74 metal + 119 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-06-11 07:41 PDT · 74 metal + 119 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -51,7 +51,7 @@
     
     <p class='idea-desc'>S5.3 tile_assign P-read deletion — pair buffers + K2 scatter work-split sized to static pair_ceiling() (4,718,592); K2 reads clamped P from resident ta_pairs_P ctrl page (InterleavedAddrGen<true>); scan_bases clamps published P + publishes overflow/true-P; sort_device hard-fails on overflow. Behind host_free_mp_enabled (reversible). Frame-neutral trace-prerequisite (removes one of three mid-frame host blocking-read drains).</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>d754416</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-124/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gstt2/opt/profiler/ttw-124/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-124/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-124/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-124/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-124/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
