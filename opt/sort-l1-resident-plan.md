@@ -83,9 +83,17 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
    - `sort_subchunk_mat` 13.5 — ground iter-130.
    - `ta_bucket_scatter` 11.9 → **10.5 (DONE iter-134, −1.74, reciprocal-mul)**; was
      compute-exposed.
-   - `ta_gauss_aabb` 9.7 — flat to the divide lever (NoC-READ-bound: 4 input pages /16
-     gaussians; divides hidden under the read barrier). Needs read-batching /
-     double-buffering — a separate, bigger change.
+   - `ta_gauss_aabb` 9.7 → **9.2 (DONE iter-137, −0.49, read MULTIBUF_PAGES=8)** — was
+     read-LATENCY-bound (single-buffered: per-page DRAM round-trip exposed); batching 8
+     pages of reads before the barrier hid it, bit-identical. Confirmed latency- not
+     bandwidth-bound.
+   - **NEW lever (iter-137), NEARLY EXHAUSTED: read multi-buffering** (batch N pages of
+     `noc_async_read` before one barrier to hide per-page DRAM round-trip). Applies ONLY
+     to read-LATENCY-bound sort/TA NCRISC kernels. The big remaining read kernels are NOT
+     candidates: `sort_bucket_emit` is STORE-bound (per-pair 32B floor, not reads);
+     `tile_blend_load`/`rd_l1_bulk`/`tile_l1_cull_rd` are **~98% SFPU-backpressured**
+     (SFPU-paced, off the makespan path) — do NOT chase them with read-buffering. Only
+     small candidates left (`sort_tile_depth` 7.1 maybe). Lever effectively tapped.
    - `sort_tile_depth` 7.1 — radix; **EXAMINED iter-135: no soft-divide (only
      compile-time const /16,%16 ⇒ already shift/mask). NOT a strength-reduction lever.**
      Its fixed 256-bucket zero+prefix ×4 passes/tile is the only inefficiency, but that
