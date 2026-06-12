@@ -41,16 +41,30 @@ Frame is at the **173.1 ms PLATEAU** (bit-identical). Two read-only scopes settl
 Gate passed → committing to the staged rewrite (full design: `tmp/hostfree-rewrite-scope-notes.md` §B3).
 Each stage is independently KEEP/REVERT-able with a kill-criterion; hang-safe ordering MANDATORY
 (single in-order CQ, no 2nd CQ, no intermediate Finish while publish-pending, CB-fence handshake).
-- **Stage 1 (iter-141, NEXT): L1-resident sort→cull handoff for in-budget tiles.** Sort emits the
-  depth-sorted PACK2 slab into L1 in cull's vector layout; cull reads from L1 (not the DRAM slab),
-  fused with sort under one CQ so the SFPU cull hides under NCRISC emit. Hypothesis: deletes the
-  `tile_l1_cull_rd` DRAM dependency AND realizes the measured overlap on the REAL stages. Kill: any
-  hang unresolved in 3 tries → split/revert; if real-stage overlap ≪ the 23% microbench signal →
-  reassess. Expect bit-identical (schedule + L1-residency, same math).
-- **Stage 2 (later): extend L1 handoff through blend** (delete blend DRAM readers; NCRISC dataflow
-  ~73 overlaps SFPU ~52). Kill: if frame doesn't drop below ~150 ms, pipelining isn't compounding.
+- **Stage 1 (iter-141): SPLIT/REVERT — scoped in-budget sort→cull fusion is a SUB-NOISE lever
+  (~0-1.7 ms).** Disposed on measured grounds BEFORE the hang-prone restructure (0/3 device tries,
+  no hangs). WHY it doesn't pay, and the KEY correction to the iter-140 framing: **cull is ALREADY
+  one program** (`reader_tile_l1_cull` + `microblock_cull_compute`), already NCRISC↔SFPU-overlapped
+  at its fused optimum 22.4 ms = max(reader 21.99, SFPU 22.39) — there is no materialize→cull "sum"
+  inside it to collapse. The in-budget emit Stage 1 could move is only **~1.7 ms** (NCRISC ≪ SFPU →
+  nothing to hide), and the deleted in-budget DRAM round-trip (~0.57 ms) is ~98% backpressured (~0
+  net). The iter-140 23% was a SYNTHETIC 73.66 ms NCRISC stage over 22 ms SFPU (NCRISC ≫ SFPU). **The
+  real idle-NCRISC shadow under the cull SFPU (~21 ms) is REAL — but only the BIG NCRISC stages can
+  fill it.** (Bonus, kept: fixed CPU ref broken since iter-133 — `hero_vs_cpu` restored to 63.95 dB.)
+- **Stage 2 (RESCOPED — the only paying version): full cross-stage per-tile pipeline.** Fill the
+  ~21 ms idle-NCRISC shadow under the cull+blend SFPU (~51 ms) with the HEAVY NCRISC stages —
+  `sort_bucket_emit` (~32) + materialize overflow (~12) — i.e. pipeline emit/scatter of tile T+1
+  under the SFPU cull/blend of tile T. This is the real lever; the "delete the DRAM reader"
+  L1-residency framing saves ~0 (readers are already backpressure shadows). Big, hang-prone,
+  multi-iteration restructure → OWNER decision before committing.
 - **Stage 3 (later): device-ify inter-stage glue + persistent project/TA** (re-test S5.1/5.3/5.4/5.5
   under persistence; pay back the ~45-54 ms prerequisite regression hole via pipelining).
+
+**REALITY CHECK (post iter-141):** frame still **173.3 ms** (measured, hero_vs_ref=100.00). iter-140
+proved the overlap MECHANISM; iter-141 proved the cheap/scoped version of it banks ~0. The only
+remaining frame lever is the big Stage-2 cross-stage pipeline above — a multi-iteration, hang-prone
+restructure with a bounded ceiling (~125 ms NCRISC pole, ~20% best case, minus a ~45-54 ms prereq
+hole). NOT a cheap win. Pending owner go/no-go.
 
 ### Where the frame stands (measured, iter 132)
 Frame **177.1 avg / 142.3 min ms/view**. Critical path = **BRISC-FW ~161.7 ms**
