@@ -24,6 +24,7 @@
 
 #include "pfwc.h"
 #include "device_state.h"
+#include "host_profile.h"
 
 #include <algorithm>
 #include <chrono>
@@ -565,6 +566,7 @@ double pfwc_tt(
     const uint32_t neg_fx_bits = fp32_bits(-fx);
     const uint32_t neg_fy_bits = fp32_bits(-fy);
 
+    gsplat_tt::hostprof::on_pfwc_dispatch_start();
     const auto t_launch0 = std::chrono::high_resolution_clock::now();
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -614,6 +616,7 @@ double pfwc_tt(
              chunk_start, num_chunks});
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, /*blocking=*/false);
+    gsplat_tt::hostprof::on_pfwc_enqueued();
     const auto t_launch1 = std::chrono::high_resolution_clock::now();
     distributed::Finish(*ctx->cq);
     const auto t_launch_end = std::chrono::high_resolution_clock::now();

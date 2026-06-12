@@ -211,12 +211,21 @@ def _spawn_ref_hero(out_npy: Path, scene: str, cameras: Path, iter_dir: str) -> 
     subprocess.run(cmd, env=env, check=True)
 
 
+_HOST_PROFILE = bool(os.environ.get("GSPLAT_TT_HOST_PROFILE", "").strip() not in ("", "0"))
+
+
 def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
+    t_c2w = time.perf_counter()
     extr = c2w_to_w2c(torch.from_numpy(np.asarray(c2w, dtype=np.float32)))
+    c2w_ms = (time.perf_counter() - t_c2w) * 1000.0
     t = time.perf_counter()
     res = pipeline.render(gauss, extr, K, H, W)
     wall_ms = (time.perf_counter() - t) * 1000.0
-    return _to_image(res), wall_ms
+    img = _to_image(res)
+    if _HOST_PROFILE:
+        to_img_ms = (time.perf_counter() - t) * 1000.0 - wall_ms
+        print(f"HPPY c2w_ms={c2w_ms:.3f} to_image_ms={to_img_ms:.3f}", flush=True)
+    return img, wall_ms
 
 
 def main():

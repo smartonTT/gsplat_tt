@@ -77,14 +77,40 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
    Result: iter-134 NCRISC-FW 127.4→125.6, BRISC-FW 161.7→159.9, frame 177.0→175.0.
    Result: iter-135 sort_bucket_emit 32.45→32.02, NCRISC-FW 125.55→125.25, BRISC-FW
    159.91→159.59, frame 175.0→174.7 (small; divmod partly hidden under the L1 floor).
-2. **Remove host/cross-engine sync gaps — the NEXT BIG LEVER (MEASURED iter-135).**
-   Inter-frame host gap `blend→[mcam=pfwc]` is a REAL steady-state **~32 ms/view**
-   (iter-135 Part B: 28 interior boundaries, median 32.4 / mean 32.2, range 28.9–37.4;
-   the warmup boundary was 393 ms — that was the source of the prior skew, correctly
-   EXCLUDED). NOT a warmup artifact, and a touch larger than the iter-133 ~27 ms guess.
-   (`mcam` was fused into `pfwc` in iter-133, so the first per-frame compute zone is
-   now `pfwc`.) Overlap next-view setup with device blend — pure north-star "host out
-   of loop." Also `sort_bin_hist→sort_bucket_emit` host-prefix sync ≈ 3.8 ms.
+2. **~~Remove host/cross-engine sync gaps — the NEXT BIG LEVER (MEASURED iter-135).~~**
+   **REFUTED iter-136 (diagnostic):** the "~32 ms inter-frame host gap" was a TRACY
+   OBSERVER ARTIFACT, not real. The iter-135 Part-B number came from a `python -m tracy
+   --dump-device-data-mid-run` capture whose per-frame `ReadMeshDeviceProfilerResults`
+   dump (`maybe_dump_device_profiler`, fires ONLY under `TT_METAL_DEVICE_PROFILER=1`) +
+   mid-run TCP streaming stalls the host between blend and the next `pfwc`. Direct
+   host-side chrono (`GSPLAT_TT_HOST_PROFILE=1`, env-gated, KEPT) on yyzo-bh-07, 30 views,
+   30 interior boundaries, warmup excluded, measured the REAL production gap = **~4.86
+   ms/view** (median; range 4.59–5.27), composed of: **image unpack bf16→fp32 3.24
+   (67%)**, python/pybind+c2w 0.76 (16%), final-image D2H 0.55 (11%), render_view head
+   (request+12.6MB memset+cached jit/cov3d) 0.18 (4%), pfwc dispatch (110×3 SetRuntimeArgs
+   + EnqueueMeshWorkload) 0.07 (1.5%), post-blend tail 0.004. Controlled A/B nailing the
+   artifact (same build/views): clean tail=0.004 gap=4.86 frame=174.7; bare
+   `TT_METAL_DEVICE_PROFILER=1` tail=9.4 gap=14.5 frame=184.2; full mid-run tracy tail=17.3
+   gap=22.5 AND the **warmup boundary=395.9 ms ≡ iter-135's reported 393 ms** (same
+   measurement, same artifact). Only `tail` (= the profiler dump) scales with profiler
+   intrusiveness; every other component is constant.
+   - **Classification of the 4.86 ms:** ALL of it is device-idle host work ⇒ **HIDEABLE**
+     behind the next view's device exec (double-buffer the output image + dispatch view
+     i+1's pfwc before unpacking view i). The biggest piece, `unpack` 3.24, is also
+     **REDUCIBLE** (land a de-tiled fp32 image from the blend writer/readback so the host
+     skips the repack). D2H 0.55 = **IRREDUCIBLE** (one image out per frame). pfwc dispatch
+     0.07 = IRREDUCIBLE & ~µs (corroborates iter-126 trace<0.5ms).
+   - **The genuinely-reducible host COMPUTE** (`sort_bin_hist`→host-prefix/LPT ≈ 3.8 ms,
+     gather M-read, ta P-read) is a **WITHIN-frame** bubble, NOT part of this inter-frame
+     gap; iter-120 already proved removing those host Finishes is frame-neutral on the
+     in-order CQ (re-imposed by the next blocking read).
+   - **DECISION (decides iter-137): do NOT make the host gap the next lever.** 4.86 ms =
+     2.8% of the 174.7 ms frame. The frame stays device-kernel-bound (NCRISC sort/TA
+     ~125 ms; roadmap #1). If ever pursued, lowest-risk = hide unpack+D2H behind next-view
+     device exec (~3–4 ms, bit-identical) — but **single-frame-latency CAVEAT:** that is a
+     cross-frame/30-view-AVG win only and does NOT reduce true single-frame real-time
+     latency (unpack+D2H stay on the critical path for one frame), conflicting with the
+     production single-frame goal.
 3. **BRISC-KERNEL data-mover (85.4 ms/view of real BRISC work)** if shrinking BRISC's
    own contribution: `proj_scatter` 19.9, `proj_count` 14.4, `tile_l1_cull_rd` 21.0,
    `rd_l1_bulk`+blend 28.0.

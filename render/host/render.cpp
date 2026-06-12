@@ -44,6 +44,7 @@
 #include "config.h"
 #include "device_state.h"
 #include "gather_visible.h"
+#include "host_profile.h"
 #include "jit_warmup.h"
 #include "pfwc.h"
 #include "project.h"
@@ -170,6 +171,8 @@ py::tuple render_view(
     (void)use_isoellipse;
     (void)blend_mode;  // baked: BLEND_MODE=2 (TT device microblock SFPU blend).
 
+    gsplat_tt::hostprof::on_view_enter();
+
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
     const float* means_ptr = static_cast<const float*>(means_info.ptr);
@@ -268,6 +271,7 @@ py::tuple render_view(
     // Push this frame's device-profiler zones into the live Tracy stream (no-op
     // unless TT_METAL_DEVICE_PROFILER=1). See above.
     maybe_dump_device_profiler();
+    gsplat_tt::hostprof::on_view_return();
     return py::make_tuple(image, stats);
 }
 

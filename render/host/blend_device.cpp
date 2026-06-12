@@ -35,6 +35,7 @@
 #include "tt-metalium/kernel_types.hpp"
 
 #include "env_config.h"
+#include "host_profile.h"
 #include "host_tracy.hpp"
 
 #include "alpha_blend_host.h"
@@ -671,12 +672,15 @@ static double process_frame_mb_devcull_resident(
         GSPLAT_HOST_ZONE("host_finish_blend");
         distributed::Finish(*ctx.cq);
     }
+    gsplat_tt::hostprof::on_blend_device_done();
     gsplat_tt::device_state::clear_sort_publish_pending();
     std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
     const auto t_end = std::chrono::steady_clock::now();
+    gsplat_tt::hostprof::on_blend_readback_done();
 
     tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
+    gsplat_tt::hostprof::on_blend_unpack_done();
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
 
