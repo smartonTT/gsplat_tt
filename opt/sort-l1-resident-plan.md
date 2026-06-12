@@ -61,9 +61,25 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
 1. **NCRISC sort/TA data-mover kernels (~73 ms/view of BRISC-idle barrier-wait).**
    The real long pole. Ranked items + status:
    - `sort_bucket_emit` **32.4** — at its per-pair-32B-L1-store floor (iter-129); the
-     per-pair runtime divmod was shaved iter-135 (**−0.43, pow2 shift/mask**, the
-     divmod was only partly compute-exposed under the L1-store floor). The big prize is
-     still the record-layout change (parked; not bit-identical). RE-EVALUATE bit-identity.
+     per-pair runtime divmod was shaved iter-135 (**−0.43, pow2 shift/mask**). The
+     record-layout dedup is **REFUTED as a COST-SHUFFLE TRAP (iter-137 scope, READ-ONLY).**
+     Only words 4,5 (8B tile-local mean) are truly per-pair; words 0,1,2,6,7 (20B) are
+     gaussian-invariant — BUT the per-pair 32B store is INTRINSIC to the per-tile full-
+     record slab that cull/blend bulk-read (the K physically-distinct slabs each need the
+     full 32B record). Deduping invariants only RELOCATES the 8-store assembly from
+     `sort_bin` into `materialize` (+11-13 ms) and ADDS a `blendrec` gather (+5-20 ms; no
+     cache-friendly layout — `sort_bin`'s once/gaussian cache works only because it streams
+     gaussian-major; `materialize` is per-tile/depth-sorted). Store saving only 5-13 ms ⇒
+     **net ~+5 to +25 ms WORSE** (same shuffle as iter-131/132's ±13.6). Bit-identity IS
+     feasible (parked tag was overcautious) — net cost is the blocker, not the golden. K
+     (pairs/gaussian) ≈ 1.71 (hero; 1.3-2.0 over 30 views). DO NOT pursue.
+     **★ The real structural prize for sort cost = the Stage-3 L1-RESIDENT
+     sort→cull→blend handoff** (deletes `materialize` ~19.6 ms entirely + lets cull/blend
+     drop their DRAM slab readers): removes DRAM round-trips instead of shuffling stores,
+     bit-identical-feasible, multi-iteration. This is the north-star direction — promote it.
+     **HW write-granule constraint (hard):** Blackhole DRAM writes must be ≥16 B at a 16 B-
+     aligned offset (root of iter-132's 25.5 dB bug from 8B/4B sub-granule splats). Any
+     record/layout change must keep every write ≥16 B and 16 B-aligned.
    - `sort_subchunk_mat` 13.5 — ground iter-130.
    - `ta_bucket_scatter` 11.9 → **10.5 (DONE iter-134, −1.74, reciprocal-mul)**; was
      compute-exposed.
