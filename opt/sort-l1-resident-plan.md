@@ -129,6 +129,24 @@ Ranked fusion candidates (same-grid, no cross-core barrier preferred, bit-identi
 - BLOCKED: bin_hist+bin_emit (host prefix-sum+LPT sits between; on-device layout was
   a regression iter-127); anything+single-core coordinators (grid mismatch 110 vs 1).
 
+### iter-133 RESULT + premise re-litigation (the ~4.8 ms/program figure is SUSPECT)
+Fused project(means_cam)+pfwc (iter 133, KEPT, bit-identical, `155b083`, build
+cpp#111). Dispatch count dropped exactly one (**15.53→14.49/view**), means_cam DRAM
+round-trip removed — BUT **BRISC-FW makespan moved only 161.71→161.60 (−0.1 ms)**;
+frame 177.1→176.8 avg / 142.3→141.8 min. The expected ~4-6 ms did NOT materialize.
+- **PREMISE TAGGED FOR RE-LITIGATION — "each fused same-grid pair ≈ −4.8 ms":**
+  REFUTED as a UNIFORM per-program figure (as of iter 133, this BH board, cpp#111).
+  The 4.8 ms = (76.3 ms BRISC non-kernel)/15.5 is an AVERAGE; removing the *cheapest*
+  program reclaimed almost none of it. **Open question (must diagnose before more
+  fusion): is the 76 ms BRISC non-kernel actually serialized launch firmware ON the
+  critical-path makespan and reclaimable by fusion, or is most of it overlapped/idle
+  that does NOT shrink when a program is removed?** If reclaimable, it is non-uniform
+  — concentrated in specific heavy/multi-launch programs (sort's ~22 sub-launches,
+  blend); target those, not light element-wise pairs. If NOT reclaimable, **program
+  fusion is not the BRISC-FW lever and roadmap #1 must pivot** to the BRISC-KERNEL
+  data-mover work (~86 ms) or NCRISC. RE-TEST with a direct inter-program gap
+  measurement on the iter-133 trace (next diagnostic).
+
 ---
 
 ## Correction up front (read this first)
