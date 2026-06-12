@@ -84,6 +84,10 @@ struct DeviceContext {
     // xramp/yramp are constant; upload once. out/tile_ids grow on demand.
     std::shared_ptr<distributed::MeshBuffer> res_xramp;
     std::shared_ptr<distributed::MeshBuffer> res_yramp;
+    // iter-140 Stage-0 OVERLAP PROBE: throwaway DRAM scratch ring for the gated
+    // NCRISC store-stress in reader_tile_l1_cull (never read; allocated only when
+    // GSPLAT_TT_OVERLAP_PROBE is set).
+    std::shared_ptr<distributed::MeshBuffer> res_scratch;
     std::shared_ptr<distributed::MeshBuffer> res_out;
     std::shared_ptr<distributed::MeshBuffer> res_tile_ids;
     uint32_t res_out_tiles = 0;
@@ -1007,7 +1011,9 @@ static void build_program_and_workload(DeviceContext& ctx) {
     // M2: +2 accessors for the depth-sorted slab (sort_subchunk_payload) and its
     // per-subchunk dir (sort_subchunk_dir) so cull bulk-loads the slab from L1.
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 13; i++) {
+    // iter-140 OVERLAP PROBE: 14th accessor = throwaway DRAM scratch ring (the
+    // gated store-stress target; inert when store_reps==0).
+    for (int i = 0; i < 14; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     ctx.reader = CreateKernel(
@@ -1076,6 +1082,20 @@ static double process_frame(
     bool* ok,
     bool defer_cq_finish = false) {
     namespace ds = gsplat_tt::device_state;
+    // iter-140 Stage-0 OVERLAP PROBE (gated, default-off, reversible). When
+    // GSPLAT_TT_OVERLAP_PROBE is set: inject store_reps NCRISC 32B-stores/subchunk
+    // into reader_tile_l1_cull, FORCE a clean Finish after cull (so cull_ms is the
+    // true program makespan, not the deferred-pipeline enqueue time), and print
+    // TTW_OVERLAP. Output stays bit-identical (stores -> throwaway scratch).
+    static const bool kProbe = [] {
+        const char* e = std::getenv("GSPLAT_TT_OVERLAP_PROBE");
+        return e && e[0] && e[0] != '0';
+    }();
+    static const uint32_t kReps = [] {
+        const char* e = std::getenv("GSPLAT_TT_OVERLAP_REPS");
+        return (e && e[0]) ? static_cast<uint32_t>(std::strtoul(e, nullptr, 10)) : 0u;
+    }();
+    const uint32_t store_reps_arg = kProbe ? kReps : 0u;
     auto buf_ids = ds::get_buffer("sort_sorted_ids");
     auto buf_rng = ds::get_buffer("sort_tile_ranges");
     auto buf_l1r = ds::get_buffer("sort_l1_recs");
@@ -1120,6 +1140,22 @@ static double process_frame(
         ctx.res_yramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
         ctx.res_ramp_uploaded = false;
     }
+    // iter-140 OVERLAP PROBE: lazily allocate the throwaway store-stress scratch
+    // ring (per-core SCRATCH_RING_PAGES=4096 * 64B). Only when the probe is on.
+    if (kProbe && store_reps_arg > 0u && !ctx.res_scratch) {
+        constexpr uint32_t kScratchRingPages = 4096u;
+        constexpr uint32_t kScratchPageBytes = 64u;
+        const uint32_t ncores =
+            static_cast<uint32_t>(ctx.grid.x) * static_cast<uint32_t>(ctx.grid.y);
+        const size_t bytes =
+            static_cast<size_t>(ncores) * kScratchRingPages * kScratchPageBytes;
+        distributed::ReplicatedBufferConfig rc{.size = bytes};
+        distributed::DeviceLocalBufferConfig lc{
+            .page_size = kScratchPageBytes, .buffer_type = BufferType::DRAM};
+        ctx.res_scratch = distributed::MeshBuffer::create(rc, lc, ctx.mesh_device.get());
+    }
+    const uint32_t scratch_addr =
+        ctx.res_scratch ? static_cast<uint32_t>(ctx.res_scratch->address()) : 0u;
 
     Program& program = get_program_for_workload(ctx);
     uint32_t core_index = 0;
@@ -1149,6 +1185,7 @@ static double process_frame(
                         box_ox_addr, box_oy_addr, tile_ids_addr, lpt_meta_addr,
                         core_index, tiles_x, floor_bits,
                         subchunk_payload_addr, subchunk_dir_addr,
+                        store_reps_arg, scratch_addr,  // iter-140 OVERLAP PROBE
                     });
                     SetRuntimeArgs(program, ctx.compute, core, {
                         0u, floor_bits, cull_disabled ? 1u : 0u,
@@ -1164,8 +1201,11 @@ static double process_frame(
         }
     }
 
-    const bool pipeline =
-        defer_cq_finish || gsplat_tt::env_config::cull_pipeline_enabled();
+    // iter-140 OVERLAP PROBE forces a clean Finish (pipeline off) so cull_ms below
+    // is the true SFPU-cull+store program makespan, not the deferred enqueue time.
+    const bool pipeline = kProbe
+        ? false
+        : (defer_cq_finish || gsplat_tt::env_config::cull_pipeline_enabled());
     const auto t_start = std::chrono::steady_clock::now();
     if (!ctx.res_ramp_uploaded) {
         auto bx = cull::make_box_ramp(/*is_x=*/true);
@@ -1180,7 +1220,13 @@ static double process_frame(
     }
     const auto t_end = std::chrono::steady_clock::now();
     (void)num_tiles;
-    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    const double cull_ms =
+        std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    if (kProbe) {
+        std::printf("TTW_OVERLAP cull_ms=%.3f reps=%u\n", cull_ms, store_reps_arg);
+        std::fflush(stdout);
+    }
+    return cull_ms;
 }
 
 }  // namespace tile_l1_cull

@@ -93,6 +93,15 @@ void kernel_main() {
     const uint32_t floor_bits        = get_arg_val<uint32_t>(13);
     const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(14);  // M2: sorted PACK2 slab
     const uint32_t subchunk_dir_addr     = get_arg_val<uint32_t>(15);  // M2: dir_base+sc -> page
+    // iter-140 Stage-0 OVERLAP PROBE (gated, default-off). store_reps>0 injects a
+    // calibrated NCRISC 32B-store loop (a faithful sort-emit store-bound proxy)
+    // AFTER each CB_BUCKET push, so it runs while the SFPU (TRISC) drains the
+    // just-pushed slot. Tests whether NCRISC-dataflow store work overlaps the
+    // SFPU-compute stage (makespan -> max) or serializes (makespan -> sum). The
+    // stores target a throwaway DRAM scratch ring (never read) -> output is
+    // bit-identical. reps==0 (default) -> the loop + scratch accessor are inert.
+    const uint32_t store_reps   = get_arg_val<uint32_t>(16);
+    const uint32_t scratch_addr = get_arg_val<uint32_t>(17);
     float contrib_floor;
     __builtin_memcpy(&contrib_floor, &floor_bits, 4);
 
@@ -111,6 +120,9 @@ void kernel_main() {
         TensorAccessorArgs<lpt_meta_args.next_compile_time_args_offset()>();
     constexpr auto subchunk_dir_args =
         TensorAccessorArgs<subchunk_payload_args.next_compile_time_args_offset()>();
+    // iter-140 OVERLAP PROBE: throwaway DRAM scratch ring (store-stress target).
+    constexpr auto scratch_args =
+        TensorAccessorArgs<subchunk_dir_args.next_compile_time_args_offset()>();
 
     const auto l1_recs_acc   = TensorAccessor(l1_recs_args, l1_recs_addr, L1_PACK_PAGE_BYTES);
     const auto ids_acc       = TensorAccessor(ids_args, ids_addr, IDS_PAGE_BYTES);
@@ -127,6 +139,13 @@ void kernel_main() {
         TensorAccessor(subchunk_payload_args, subchunk_payload_addr, SLAB_PAGE_BYTES);
     const auto subchunk_dir_acc =
         TensorAccessor(subchunk_dir_args, subchunk_dir_addr, SOA_PAGE_BYTES);
+    // iter-140 OVERLAP PROBE: 64B-page interleaved DRAM scratch (write-only).
+    constexpr uint32_t SCRATCH_PAGE_BYTES = 64u;
+    constexpr uint32_t SCRATCH_RING_PAGES = 4096u;  // per-core ring (256 KB/core)
+    const auto scratch_acc =
+        TensorAccessor(scratch_args, scratch_addr, SCRATCH_PAGE_BYTES);
+    const uint32_t scratch_ring_base = core_index * SCRATCH_RING_PAGES;
+    uint32_t store_phase = 0;
     // M2: l1_recs / ids / blendrec / bucket_meta are dead on the cull hot path
     // (the slab is the depth-sorted source of truth). Bindings kept for ABI
     // parity; cleaned up in M4.
@@ -311,6 +330,27 @@ void kernel_main() {
             }
             mb_cb_commit_fence();
             cb_push_back(CB_BUCKET, BULK_REC_SLOT);
+
+            // iter-140 Stage-0 OVERLAP PROBE: store-stress on NCRISC. With the
+            // just-pushed slot now draining on the SFPU (TRISC), issue store_reps
+            // 32B writes (sort-emit store-bound proxy) into the throwaway DRAM
+            // scratch ring. If NCRISC stores overlap the SFPU cull, the program
+            // makespan stays ~max(store,SFPU); if they serialize (NoC/L1
+            // contention), it grows toward sum. Single in-order CQ, no CB-handshake
+            // change, no Finish -> hang-safe. reps==0 -> inert (production path).
+            if (store_reps > 0u) {
+                DeviceZoneScopedN("ovlp_store");
+                const uint32_t src = get_write_ptr(CB_SCR_ATTR);
+                uint32_t issued = 0;
+                for (uint32_t r = 0; r < store_reps; ++r) {
+                    const uint32_t pg =
+                        scratch_ring_base + (store_phase % SCRATCH_RING_PAGES);
+                    noc_async_write(src, get_noc_addr(pg, scratch_acc), L1_SPLAT_BYTES);
+                    ++store_phase;
+                    if (++issued == 64u) { noc_async_write_barrier(); issued = 0; }
+                }
+                if (issued) noc_async_write_barrier();
+            }
         }
     }
 }
