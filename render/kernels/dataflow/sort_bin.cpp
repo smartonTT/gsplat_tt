@@ -113,6 +113,16 @@ void kernel_main() {
     const uint32_t l1_base_addr  = get_arg_val<uint32_t>(19);
     const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(20);  // per-tile bucket slot count
     const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(21);  // tiles per row (tile-local mean)
+    // iter-138 (Stage-2b overflow pre-pack): for overflow tiles whose count fits
+    // the materialize L1 cap, emit pre-packs the FULL tile (all records, not just
+    // the first BUCKET_FIT) into a SEPARATE compact overflow region so the
+    // materialize overflow path reads them COALESCED + L1-radix-permutes (like the
+    // in-budget path) instead of random-gathering blendrec[gid]. The per-(core,tile)
+    // overflow slot base row is l1_ov_base (sentinel 0xFFFFFFFF for non-overflow
+    // tiles ⇒ those keep the buf_l1_recs bucket path). Both 0 ⇒ feature disabled
+    // (e.g. device-layout path) ⇒ legacy behavior (overflow records dropped).
+    const uint32_t l1_ov_addr      = get_arg_val<uint32_t>(22);  // overflow region base (0=off)
+    const uint32_t l1_ov_base_addr = get_arg_val<uint32_t>(23);  // per-(core,tile) overflow slot base
     constexpr uint32_t L1_TILE_SIZE = 32u;  // microblock tile = 32x32 px
     // iter 135 (bit-identical strength reduction): the per-pair tile-local-mean
     // recompute in pack_rec needs tt/l1_tiles_x and tt%l1_tiles_x. l1_tiles_x is
@@ -141,6 +151,9 @@ void kernel_main() {
     constexpr auto recbase_args  = TensorAccessorArgs<tile_recs_args.next_compile_time_args_offset()>();
     constexpr auto l1_recs_args  = TensorAccessorArgs<recbase_args.next_compile_time_args_offset()>();
     constexpr auto l1_base_args  = TensorAccessorArgs<l1_recs_args.next_compile_time_args_offset()>();
+    // iter-138: overflow region (PACK2, 64B page) + per-(core,tile) overflow base row.
+    constexpr auto l1_ov_args      = TensorAccessorArgs<l1_base_args.next_compile_time_args_offset()>();
+    constexpr auto l1_ov_base_args = TensorAccessorArgs<l1_ov_args.next_compile_time_args_offset()>();
 
     const auto gids_acc  = TensorAccessor(gids_args,  gids_addr,  PAGE_BYTES);
     const auto tids_acc  = TensorAccessor(tids_args,  tids_addr,  PAGE_BYTES);
@@ -162,6 +175,10 @@ void kernel_main() {
     // Accessor page = 64B; sub-64B page size is unreliable on BH.
     const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  64u);
     const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
+    // iter-138: overflow region is the same PACK2 64B-page layout as buf_l1_recs.
+    const bool l1_ov_enabled = (l1_ov_addr != 0u) && (l1_ov_base_addr != 0u);
+    const auto l1_ov_acc      = TensorAccessor(l1_ov_args,      l1_ov_addr,      64u);
+    const auto l1_ov_base_acc = TensorAccessor(l1_ov_base_args, l1_ov_base_addr, PAGE_BYTES);
 
     // CB layout (declared in sort_device.cpp binning program):
     //   0 gid_in (64B)  1 tid_in (64B)  2 keep_in (64B)  3 depth (64B)
@@ -176,6 +193,7 @@ void kernel_main() {
     constexpr uint32_t CB_L1BASE   = 11; // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
     constexpr uint32_t CB_L1SCRATCH = 12; // 32B staging buffer for pack → noc write
     constexpr uint32_t CB_PACKOC   = 13; // iter 132: 64B-per-gaussian blendrec page write-back ring (publishes packed op/color)
+    constexpr uint32_t CB_L1OVBASE = 14; // iter-138: per-(core,tile) overflow slot base row (sentinel = non-overflow tile)
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
     const uint32_t tid_l1  = get_write_ptr(CB_TID);
@@ -233,6 +251,18 @@ void kernel_main() {
                        l1base_l1 + pp * PAGE_BYTES, PAGE_BYTES);
     }
     noc_async_read_barrier();
+    // iter-138: load this core's per-(core,tile) overflow slot base row. Entry is
+    // the absolute slot in the overflow region (sentinel 0xFFFFFFFF for tiles that
+    // are NOT pre-packed overflow tiles ⇒ keep the buf_l1_recs bucket path).
+    const uint32_t ov_base_l1 = get_write_ptr(CB_L1OVBASE);
+    auto ov_basep = reinterpret_cast<volatile uint32_t*>(ov_base_l1);
+    if (l1_ov_enabled) {
+        for (uint32_t pp = 0; pp < row_pages; pp++) {
+            noc_async_read(get_noc_addr(base_page + pp, l1_ov_base_acc),
+                           ov_base_l1 + pp * PAGE_BYTES, PAGE_BYTES);
+        }
+        noc_async_read_barrier();
+    }
     // The local slot cursor reuses curp[t]: it gets reset to 0 in the prefix loop
     // below, then incremented in the scatter loop alongside the (key,id) write.
     const uint32_t l1_scratch = get_write_ptr(CB_L1SCRATCH);
@@ -292,22 +322,34 @@ void kernel_main() {
     const uint32_t rec_cache_l1 = get_write_ptr(CB_REC);  // 64B cache for current g's blendrec
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
     int32_t blendrec_cached_g = -1;
-    uint32_t brec_l1_slot[REC_BATCH];  // abs slot in buf_l1_recs (overflow → 0xFFFFFFFF)
+    uint32_t brec_l1_slot[REC_BATCH];  // abs slot (in buf_l1_recs OR overflow region; 0xFFFFFFFF = drop)
+    uint32_t brec_is_ov[REC_BATCH];    // iter-138: 1 ⇒ slot is in the overflow region, 0 ⇒ buf_l1_recs
     uint32_t nbrec = 0;
     // The 32B record is packed at enqueue time (blendrec already cached), so the
     // flush only issues the pre-packed writes under one barrier — no per-record
-    // blendrec read barrier here.
+    // blendrec read barrier here. iter-138: each batched entry targets either the
+    // per-tile buf_l1_recs bucket (in-budget tiles) or the compact overflow region
+    // (overflow tiles within the materialize L1 cap); both are PACK2 64B pages, so
+    // the 32B write to (slot>>1) page + (slot&1)*32 byte is identical bar the
+    // accessor. The 32B half-write at a 16B-aligned offset is within the DRAM write
+    // granule (same as the proven buf_l1_recs scatter).
     auto flush_recs = [&]() {
         if (nbrec == 0) return;
         for (uint32_t b = 0; b < nbrec; b++) {
-            // Skip the 32B scatter for overflow records (heavy tile past its bucket).
+            // Skip the 32B scatter for over-cap overflow records (gather fallback).
             if (brec_l1_slot[b] == 0xFFFFFFFFu) continue;
             const uint32_t slot = brec_l1_slot[b];
             const uint32_t page = slot >> 1;
             const uint32_t half_off = (slot & 1u) * 32u;
-            noc_async_write(l1_scratch + b * 32u,
-                            get_noc_addr(page, l1_recs_acc) + half_off,
-                            32u);
+            if (brec_is_ov[b]) {
+                noc_async_write(l1_scratch + b * 32u,
+                                get_noc_addr(page, l1_ov_acc) + half_off,
+                                32u);
+            } else {
+                noc_async_write(l1_scratch + b * 32u,
+                                get_noc_addr(page, l1_recs_acc) + half_off,
+                                32u);
+            }
         }
         noc_async_write_barrier();
         nbrec = 0;
@@ -486,10 +528,25 @@ void kernel_main() {
                 // dense gather fallback (Lb > MB_BUCKET_FIT), never from this bucket,
                 // so dropping the overflow records here is correct. Sentinel
                 // 0xFFFFFFFF marks "skip the 32B scatter" for this batched entry.
-                const uint32_t l1_slot = l1basep[t] + curp[t];
-                const uint32_t out_slot =
-                    (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot : 0xFFFFFFFFu;
+                // iter-138: overflow tiles (within the materialize L1 cap) carry a
+                // non-sentinel base in ov_basep[t] and pre-pack the FULL tile into
+                // the compact overflow region (no bucket clamp). Non-overflow / over-
+                // cap tiles keep the buf_l1_recs bucket path (over-bucket records
+                // dropped → materialize gathers them).
+                const uint32_t ovb = l1_ov_enabled ? ov_basep[t] : 0xFFFFFFFFu;
+                uint32_t out_slot;
+                uint32_t is_ov;
+                if (ovb != 0xFFFFFFFFu) {
+                    out_slot = ovb + curp[t];
+                    is_ov = 1u;
+                } else {
+                    const uint32_t l1_slot = l1basep[t] + curp[t];
+                    out_slot = (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot
+                                                                    : 0xFFFFFFFFu;
+                    is_ov = 0u;
+                }
                 brec_l1_slot[nbrec] = out_slot;
+                brec_is_ov[nbrec] = is_ov;
                 if (out_slot != 0xFFFFFFFFu) {
                     pack_rec(nbrec, t);  // pack into l1_scratch + nbrec*32
                 }

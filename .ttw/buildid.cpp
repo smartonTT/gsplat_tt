@@ -1,5 +1,5 @@
-id=117
-sha=369831f
-ts=2026-06-11T18:34:50-0700
-desc=iter-137 CANDIDATE ta_gauss_aabb multi-buffered read pipeline (MULTIBUF_PAGES=8)
-bin=866fe0ae739bf6c7
+id=120
+sha=1753eb4
+ts=2026-06-11T19:44:05-0700
+desc=iter-138 Stage-2b overflow pre-pack (coalesced overflow materialize) KEEP
+bin=806c9ff1d117ba19

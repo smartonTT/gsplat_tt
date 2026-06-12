@@ -93,6 +93,14 @@ void kernel_main() {
     const uint32_t work_count     = get_arg_val<uint32_t>(9);
     const uint32_t tiles_x        = get_arg_val<uint32_t>(10);
     const uint32_t bucket_fit     = get_arg_val<uint32_t>(11);
+    // iter-138 (Stage-2b overflow pre-pack): the compact overflow region (PACK2,
+    // pre-packed by sort_bucket_emit) + per-tile start slot (sentinel 0xFFFFFFFF
+    // for non-prepacked tiles) + the L1 cap. For an in-cap overflow tile this core
+    // gets ONE work item (sc==0) and processes the WHOLE tile: coalesced bucket
+    // read + L1 radix depth-permute + per-subchunk slab emit — NO blendrec gather.
+    const uint32_t ov_recs_addr   = get_arg_val<uint32_t>(12);  // overflow region (0=off)
+    const uint32_t ov_base_addr   = get_arg_val<uint32_t>(13);  // per-tile slot base (0=off)
+    const uint32_t ov_cap         = get_arg_val<uint32_t>(14);  // kOverflowL1Cap
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -102,6 +110,9 @@ void kernel_main() {
     constexpr auto blend_meta_args = TensorAccessorArgs<payload_args.next_compile_time_args_offset()>();
     constexpr auto dir_args = TensorAccessorArgs<blend_meta_args.next_compile_time_args_offset()>();
     constexpr auto work_args = TensorAccessorArgs<dir_args.next_compile_time_args_offset()>();
+    // iter-138: overflow region (PACK2 64B page) + per-tile overflow base row.
+    constexpr auto ov_recs_args = TensorAccessorArgs<work_args.next_compile_time_args_offset()>();
+    constexpr auto ov_base_args = TensorAccessorArgs<ov_recs_args.next_compile_time_args_offset()>();
 
     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
@@ -111,6 +122,9 @@ void kernel_main() {
     const auto blend_meta_acc = TensorAccessor(blend_meta_args, blend_meta_addr, PAGE_BYTES);
     const auto dir_acc      = TensorAccessor(dir_args,      dir_addr,      PAGE_BYTES);
     const auto work_acc     = TensorAccessor(work_args,     work_addr,     PAGE_BYTES);
+    const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
+    const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  L1_PACK_PAGE_BYTES);
+    const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
 
     if (work_count == 0) {
         return;
@@ -196,6 +210,114 @@ void kernel_main() {
             noc_async_read(get_noc_addr(pg, blend_meta_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
             dir_base = scrp[off];
+        }
+
+        // iter-138: in-cap overflow tile pre-pack path. The whole tile's records
+        // are pre-packed (gaussian/core-major, identical to buf_l1_recs) in the
+        // compact overflow region at tile_ov_base[tile_id]. Read them COALESCED,
+        // L1-radix-sort ALL `count` by depth key, then emit each subchunk's slab
+        // (coalesced page writes) — byte-identical to the sorted_ids blendrec
+        // gather (same keys, same stable order) but no random gather. Only this
+        // single sc==0 item is scheduled for the tile (build_mat_worklist).
+        if (ov_enabled && count > bucket_fit && count <= ov_cap) {
+            uint32_t ov_base = 0xFFFFFFFFu;
+            {
+                const uint32_t e0 = tile_id;  // 1 u32 per tile
+                const uint32_t pg = e0 >> 4;
+                const uint32_t off = e0 & 0xF;
+                noc_async_read(get_noc_addr(pg, ov_base_acc), scr, PAGE_BYTES);
+                noc_async_read_barrier();
+                ov_base = scrp[off];
+            }
+            if (ov_base != 0xFFFFFFFFu) {
+                // Coalesced read of the whole overflow bucket (PACK2 64B pages).
+                const uint32_t npages = (count + 1u) >> 1;
+                const uint32_t buck = get_write_ptr(CB_BUCKET);
+                {
+                    const uint32_t page0 = ov_base >> 1;  // ov_base is even-aligned
+                    uint32_t pp = 0;
+                    while (pp < npages) {
+                        const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+                        for (uint32_t q = pp; q < end; ++q) {
+                            noc_async_read_tile(
+                                page0 + q, ov_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
+                        }
+                        noc_async_read_barrier();
+                        pp = end;
+                    }
+                }
+                // Stable LSD radix sort over ALL `count` records by key word[3].
+                const uint32_t bs = get_write_ptr(CB_BSORT);
+                uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
+                uint32_t* idxB = idxA + ov_cap;
+                uint32_t* cnt  = idxB + ov_cap;
+                for (uint32_t i = 0; i < count; ++i) idxA[i] = i;
+                uint32_t* cur = idxA;
+                uint32_t* nxt = idxB;
+                for (uint32_t byte = 0; byte < 4u; ++byte) {
+                    const uint32_t shift = byte * 8u;
+                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
+                    for (uint32_t i = 0; i < count; ++i) {
+                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
+                    }
+                    uint32_t sum = 0;
+                    for (uint32_t c = 0; c < 256u; ++c) {
+                        const uint32_t t = cnt[c];
+                        cnt[c] = sum;
+                        sum += t;
+                    }
+                    for (uint32_t i = 0; i < count; ++i) {
+                        const uint32_t b =
+                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
+                        nxt[cnt[b]++] = cur[i];
+                    }
+                    uint32_t* tp = cur;
+                    cur = nxt;
+                    nxt = tp;
+                }
+                uint32_t* sorted = cur;
+                // Emit each subchunk's depth-sorted slab to its directory page run.
+                const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
+                const uint32_t slab = get_write_ptr(CB_SLAB);
+                for (uint32_t s = 0; s < num_sc; ++s) {
+                    const uint32_t sc_off2 = s * bucket_fit;
+                    const uint32_t Ls = (count - sc_off2 > bucket_fit)
+                        ? bucket_fit : (count - sc_off2);
+                    uint32_t scp = 0;
+                    {
+                        const uint32_t e0 = (dir_base + s) * 4u;
+                        const uint32_t pg = e0 >> 4;
+                        const uint32_t off = e0 & 0xF;
+                        noc_async_read(get_noc_addr(pg, dir_acc), scr, PAGE_BYTES);
+                        noc_async_read_barrier();
+                        scp = scrp[off];
+                    }
+                    for (uint32_t k = 0; k < Ls; ++k) {
+                        const uint32_t idx = sorted[sc_off2 + k];
+                        const uint32_t src_page = (idx >> 1);
+                        const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
+                        auto src = reinterpret_cast<volatile uint32_t*>(
+                            buck + src_page * L1_PACK_PAGE_BYTES + src_half);
+                        auto dst = reinterpret_cast<volatile uint32_t*>(
+                            slab + k * L1_SPLAT_BYTES);
+                        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
+                        dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+                    }
+                    const uint32_t out_pages =
+                        (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+                    for (uint32_t p = 0; p < out_pages; ++p) {
+                        const uint32_t recs = (p + 1u < out_pages)
+                            ? SLAB_RECS_PER_PAGE
+                            : (Ls - p * SLAB_RECS_PER_PAGE);
+                        noc_async_write(
+                            slab + p * SLAB_PAGE_BYTES,
+                            get_noc_addr(scp + p, payload_acc),
+                            recs * L1_SPLAT_BYTES);
+                    }
+                    noc_async_write_barrier();
+                }
+                continue;
+            }
         }
 
         // C1b: page index must match sort_subchunk_dir (same field blend reader DMAs).

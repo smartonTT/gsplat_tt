@@ -35,6 +35,23 @@ inline constexpr uint32_t kTileSize = 32;
 // operate inside this footprint.
 inline constexpr uint32_t kBucketFit = 8192;
 
+// iter-138 (Stage-2b overflow pre-pack): the largest overflow tile (count >
+// kBucketFit) the materialize kernel will pre-pack + L1-radix in-place (the
+// "coalesced bucket read + depth-permute" path that replaces the random
+// blendrec gather). Tiles whose count exceeds this cap fall back to the
+// existing per-subchunk blendrec gather.
+//
+// Sized to the EXISTING materialize CB budget so the L1 footprint barely moves:
+// the in-budget path's CB_BUCKET is already allocated at kBucketFit*64 B = 512 KB
+// but only ever uses kBucketFit*32 B (PACK2: kBucketFit/2 pages * 64 B) — 2x slack.
+// cap = 2*kBucketFit makes the overflow bucket read reuse that exact 512 KB with
+// ZERO CB_BUCKET growth; only CB_BSORT grows ((2*cap+256)*4 = 129 KB vs 65 KB).
+// CB_SLAB stays kBucketFit*32 (the sorted slab is streamed to DRAM one subchunk
+// at a time). Total materialize CB footprint ~0.9 MB — safely within L1.
+// Overflow tiles with count > cap (the few heaviest, max_tile_n peaks ~26.5k)
+// keep the legacy blendrec gather.
+inline constexpr uint32_t kOverflowL1Cap = 2u * kBucketFit;  // 16384
+
 // Device microblock blend selector (GSPLAT_TT_BLEND_MODE). 2 == the TT device
 // microblock-major SFPU kernel (the production blend).
 inline constexpr int kBlendMode = 2;
