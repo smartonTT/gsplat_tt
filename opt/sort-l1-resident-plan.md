@@ -73,13 +73,27 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
      **net ~+5 to +25 ms WORSE** (same shuffle as iter-131/132's ±13.6). Bit-identity IS
      feasible (parked tag was overcautious) — net cost is the blocker, not the golden. K
      (pairs/gaussian) ≈ 1.71 (hero; 1.3-2.0 over 30 views). DO NOT pursue.
-     **★ The real structural prize for sort cost = the Stage-3 L1-RESIDENT
-     sort→cull→blend handoff** (deletes `materialize` ~19.6 ms entirely + lets cull/blend
-     drop their DRAM slab readers): removes DRAM round-trips instead of shuffling stores,
-     bit-identical-feasible, multi-iteration. This is the north-star direction — promote it.
+     **★ iter-138 = Stage-2b OVERFLOW PRE-PACK (recommended, iter-137 Stage-3 scope).**
+     The on-critical-path part of `materialize` (~19.6 ms) is the OVERFLOW GATHER (random
+     `blendrec[gid]` re-read + UNORM re-pack in sorted-id order; iter-130). Fix: overflow
+     records born PRE-PACKED in their `(core,tile)` bucket at emit so `materialize` reads
+     them COALESCED (no gather, no re-pack). Single-program, no fusion/hang surface,
+     bit-identical-feasible, respects the 16 B granule. Est ~5-10 ms (NCRISC has ~48 ms
+     headroom vs the BRISC pole). MEASURE-FIRST: reject if it just shuffles the gather cost
+     into emit stores.
      **HW write-granule constraint (hard):** Blackhole DRAM writes must be ≥16 B at a 16 B-
-     aligned offset (root of iter-132's 25.5 dB bug from 8B/4B sub-granule splats). Any
-     record/layout change must keep every write ≥16 B and 16 B-aligned.
+     aligned offset (root of iter-132's 25.5 dB bug). Records are 32B-aligned → safe.
+     **Stage-3 L1-resident slab handoff = NO-GO for now (iter-137 scope).** The in-budget
+     slab round-trip it deletes is only ~0.57 ms, and the cull/blend slab READS are ~98%
+     SFPU-backpressured (masked) → ~0 banks. It also needs fusing materialize+cull+blend
+     into ONE persistent per-core kernel (they are 3 programs today; L1 CBs are program-
+     local), the highest-risk restructure. DEFER until (a) Stage-2b removes the overflow
+     gather and (b) a blend/SFPU restructure flips the bottleneck so the masked reader
+     savings become real. GOOD NEWS for when we do: the iters 55-59 hang is SOLVED in
+     shipping code — single in-order CQ, NO `Finish` between mat→cull→blend while
+     publish-pending, ONE drain at blend readback; intra-program fusion via the existing
+     CB-fence handshake is SAFER than the old multi-program pipe. NEVER reintroduce a 2nd
+     CQ or an intermediate Finish.
    - `sort_subchunk_mat` 13.5 — ground iter-130.
    - `ta_bucket_scatter` 11.9 → **10.5 (DONE iter-134, −1.74, reciprocal-mul)**; was
      compute-exposed.
