@@ -138,15 +138,23 @@ static std::shared_ptr<distributed::MeshBuffer> make_dram(
     return distributed::MeshBuffer::create(rc, lc, dev);
 }
 
+// iter-137: ta_gauss_aabb (tile_assign_bbox.cpp) batches MULTIBUF_PAGES pages of
+// input reads before each NoC read barrier to overlap DRAM read latency (the
+// kernel is NoC-READ-bound). Its scratch CBs 0..4 (px,py,rx,ry,out) must hold
+// MULTIBUF_PAGES 64B pages each instead of one. Keep in sync with the
+// MULTIBUF_PAGES constant in render/kernels/dataflow/tile_assign_bbox.cpp.
+constexpr uint32_t K1_MULTIBUF_PAGES = 8;
+
 static void build_program_k1(TileAssignDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
     auto scratch_cb = [&](uint32_t id) {
-        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::UInt32}});
+        const uint32_t bytes = K1_MULTIBUF_PAGES * PAGE_BYTES;
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
         c.set_page_size(id, PAGE_BYTES);
         CreateCircularBuffer(program, cores, c);
     };
-    for (uint32_t id = 0; id < 5; id++) scratch_cb(id);  // px,py,rx,ry,out
+    for (uint32_t id = 0; id < 5; id++) scratch_cb(id);  // px,py,rx,ry,out (MULTIBUF_PAGES-deep)
 
     std::vector<uint32_t> ct;
     // 5 input/output accessors (px,py,rx,ry,tpg). proj_M is read in-kernel via a

@@ -44,6 +44,21 @@ namespace {
 constexpr uint32_t PAGE_BYTES = 64;       // 16 elements
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 
+// iter-137: read-pipeline depth. ta_gauss_aabb is NoC-READ-bound (4 input pages
+// per 16-Gaussian page; the per-Gaussian arithmetic is hidden under the read
+// barrier — that is why the iter-134 reciprocal-multiply was flat here). The
+// single-buffered loop paid a full DRAM read round-trip latency PER page: it
+// issued 4 reads, hit noc_async_read_barrier (NoC drains), computed, wrote, and
+// only THEN issued the next page's reads cold — so the read latency was exposed,
+// never overlapped. Batching MULTIBUF_PAGES pages of reads before ONE barrier
+// keeps 4*MULTIBUF_PAGES reads pipelined through the NoC so the fixed round-trip
+// latency is paid ONCE per batch instead of once per page (a deeper read
+// pipeline). BIT-IDENTICAL: same pages read, same per-Gaussian compute, same
+// output pages written in the same order — only the read/barrier/write batching
+// changes. The host sizes CB 0..4 to MULTIBUF_PAGES pages each (keep in sync
+// with tile_assign_device.cpp build_program_k1).
+constexpr uint32_t MULTIBUF_PAGES = 8;
+
 inline float bits_to_f(uint32_t b) {
     float f;
     __builtin_memcpy(&f, &b, 4);
@@ -97,8 +112,9 @@ void kernel_main() {
     }
 
     // Scratch CBs (declared in tile_assign_device.cpp): CB 0..4 each reserve
-    // one 64B page in L1. get_write_ptr returns the L1 address we DMA in/out
-    // of (no cb_reserve/push — these are fixed scratch regions).
+    // MULTIBUF_PAGES 64B pages in L1 (the read-pipeline batch buffer).
+    // get_write_ptr returns the L1 base we DMA in/out of (no cb_reserve/push —
+    // these are fixed scratch regions); page j lives at base + j*PAGE_BYTES.
     constexpr uint32_t CB_PX  = 0;
     constexpr uint32_t CB_PY  = 1;
     constexpr uint32_t CB_RX  = 2;
@@ -129,37 +145,54 @@ void kernel_main() {
         M = static_cast<uint32_t>(outp[0]);
     }
 
-    for (uint32_t pg = 0; pg < page_count; pg++) {
-        const uint32_t page = page_start + pg;
-        const uint32_t g0 = page * ELEMS_PER_PAGE;
+    // Multi-buffered (batched) read pipeline: process pages in batches of up to
+    // MULTIBUF_PAGES. Issue ALL of the batch's input reads first (they pipeline
+    // through the NoC), barrier once, then compute + issue all writes, then one
+    // write barrier. This overlaps the per-page DRAM read latency across the
+    // batch instead of serializing on a per-page read barrier (see MULTIBUF_PAGES
+    // comment). Output is bit-identical to the per-page loop above.
+    for (uint32_t pg0 = 0; pg0 < page_count; pg0 += MULTIBUF_PAGES) {
+        uint32_t nb = page_count - pg0;
+        if (nb > MULTIBUF_PAGES) nb = MULTIBUF_PAGES;
 
-        noc_async_read(get_noc_addr(page, px_acc), px_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(page, py_acc), py_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(page, rx_acc), rx_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(page, ry_acc), ry_l1, PAGE_BYTES);
+        // Issue every page's 4 input reads up front (4*nb reads in flight).
+        for (uint32_t j = 0; j < nb; j++) {
+            const uint32_t page = page_start + pg0 + j;
+            const uint32_t off = j * PAGE_BYTES;
+            noc_async_read(get_noc_addr(page, px_acc), px_l1 + off, PAGE_BYTES);
+            noc_async_read(get_noc_addr(page, py_acc), py_l1 + off, PAGE_BYTES);
+            noc_async_read(get_noc_addr(page, rx_acc), rx_l1 + off, PAGE_BYTES);
+            noc_async_read(get_noc_addr(page, ry_acc), ry_l1 + off, PAGE_BYTES);
+        }
         noc_async_read_barrier();
 
-        for (uint32_t i = 0; i < ELEMS_PER_PAGE; i++) {
-            const uint32_t g = g0 + i;
-            if (g >= M) {
-                outp[i] = 0;
-                continue;
+        for (uint32_t j = 0; j < nb; j++) {
+            const uint32_t page = page_start + pg0 + j;
+            const uint32_t g0 = page * ELEMS_PER_PAGE;
+            const uint32_t e0 = j * ELEMS_PER_PAGE;  // L1 element base for this page
+
+            for (uint32_t i = 0; i < ELEMS_PER_PAGE; i++) {
+                const uint32_t g = g0 + i;
+                if (g >= M) {
+                    outp[e0 + i] = 0;
+                    continue;
+                }
+                const float px = bits_to_f(pxp[e0 + i]);
+                const float py = bits_to_f(pyp[e0 + i]);
+                const float rx = bits_to_f(rxp[e0 + i]);
+                const float ry = bits_to_f(ryp[e0 + i]);
+
+                const int min_x = clampi(static_cast<int>((px - rx) * inv_tsf), 0, tiles_x - 1);
+                const int max_x = clampi(static_cast<int>((px + rx) * inv_tsf), 0, tiles_x - 1);
+                const int min_y = clampi(static_cast<int>((py - ry) * inv_tsf), 0, tiles_y - 1);
+                const int max_y = clampi(static_cast<int>((py + ry) * inv_tsf), 0, tiles_y - 1);
+                const int w = max_x - min_x + 1;
+                const int h = max_y - min_y + 1;
+                outp[e0 + i] = w * h;
             }
-            const float px = bits_to_f(pxp[i]);
-            const float py = bits_to_f(pyp[i]);
-            const float rx = bits_to_f(rxp[i]);
-            const float ry = bits_to_f(ryp[i]);
 
-            const int min_x = clampi(static_cast<int>((px - rx) * inv_tsf), 0, tiles_x - 1);
-            const int max_x = clampi(static_cast<int>((px + rx) * inv_tsf), 0, tiles_x - 1);
-            const int min_y = clampi(static_cast<int>((py - ry) * inv_tsf), 0, tiles_y - 1);
-            const int max_y = clampi(static_cast<int>((py + ry) * inv_tsf), 0, tiles_y - 1);
-            const int w = max_x - min_x + 1;
-            const int h = max_y - min_y + 1;
-            outp[i] = w * h;
+            noc_async_write(out_l1 + j * PAGE_BYTES, get_noc_addr(page, tpg_acc), PAGE_BYTES);
         }
-
-        noc_async_write(out_l1, get_noc_addr(page, tpg_acc), PAGE_BYTES);
         noc_async_write_barrier();
     }
 }
