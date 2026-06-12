@@ -23,21 +23,39 @@ NCRISC zones down (`sort_bucket_emit`, `sort_subchunk_mat`, op/color pre-pack) b
 the wins keep landing on a RISC that has slack, so **BRISC-FW barely moves**. We are
 out of cheap NCRISC micro-opts that move the frame.
 
-### Prioritized roadmap — what I want to do next (in order)
-1. **PROGRAM FUSION (top lever).** BRISC-FW carries ~90 ms of per-program launch
-   firmware across ~dozen device programs. Cheap NCRISC reshuffles can't touch it;
-   only **fewer, fused programs** can. Fuse adjacent same-grid stages
-   (project→gather→tile_assign, then sort→cull→blend) into persistent kernels with
-   on-device phase barriers instead of host-relaunched programs. This is the only
-   evidenced path to a step-change, and it's the same direction the host-free plan
-   already wants. Measure launch-count vs BRISC-FW first to size the prize.
-2. **NCRISC dataflow + DRAM-free handoff.** Keep collapsing the sort→cull→blend
-   data path so it stays L1-resident (no DRAM scatter/gather round-trip): subchunk
-   directory + materialize folded into the sort emit, payload read once. Banks the
-   NCRISC slack into real frame time *once fusion frees the BRISC long pole*.
-3. **Blend/cull reader cluster (`~78 ms`, SFPU-backpressure).** Needs the blend
-   phasing rework (Track 1 failed once — high risk). Only worth it after (1)/(2)
-   shift the bottleneck onto SFPU. Parked until then.
+### Prioritized roadmap — POST-DIAGNOSTIC (iter-133, REVISED)
+**~~PROGRAM FUSION~~ — REFUTED as a makespan lever (iter 133 diagnostic).** The
+busiest BRISC core's "76 ms non-kernel" is NOT reclaimable launch firmware — it is
+BRISC **parked in end-of-program barriers while NCRISC runs the heavy sort/TA
+kernels**. Actual reclaimable launch firmware across ALL 15 programs ≈ **0.11
+ms/view** (proj_scatter 0.107 + ~0.001 each). NCRISC-FW = 127.4 ms at ~100%
+occupancy (NCRISC-KERNEL 127.34 ≈ NCRISC-FW) — **NCRISC is the truly saturated
+RISC; BRISC idle-waits on it.** Do NOT fuse more programs for makespan. (Concurrency
+fusion — overlapping a BRISC-bound and an NCRISC-bound program — is a DIFFERENT, much
+harder mechanism; see #4.)
+
+New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
+1. **NCRISC sort/TA data-mover kernels (~73 ms/view of BRISC-idle barrier-wait).**
+   The real long pole. Ranked items: `sort_bucket_emit` **30.1** (already near its
+   per-pair-32B-L1-store floor — needs the record-layout change, see parked),
+   `sort_subchunk_mat` 13.5 (ground iter-130), `ta_bucket_scatter` **11.9**,
+   `ta_gauss_aabb` **9.7**, `sort_tile_depth` 7.1. Attack NCRISC NoC/DRAM/L1 traffic.
+   **Freshest ground = tile_assign NCRISC (`ta_gauss_aabb`+`ta_bucket_scatter` ≈ 21.6
+   ms), not yet optimized in 128-132 → best odds of a clean win. → next iter.**
+2. **Remove host/cross-engine sync gaps (~31 ms/view of inter-FW gap).** Inter-frame
+   host gap `blend→mcam` ≈ 27 ms (overlap next-view setup with device blend — pure
+   north-star "host out of loop"); `sort_bin_hist→sort_bucket_emit` host-prefix sync
+   ≈ 3.8 ms (push prefix-sum on-device). NOTE: 27 ms may be partly warmup-skewed in
+   the CSV — re-measure steady-state before committing to it.
+3. **BRISC-KERNEL data-mover (85.4 ms/view of real BRISC work)** if shrinking BRISC's
+   own contribution: `proj_scatter` 19.9, `proj_count` 14.4, `tile_l1_cull_rd` 21.0,
+   `rd_l1_bulk`+blend 28.0.
+4. **Concurrency fusion (overlap BRISC-bound proj phase with NCRISC-bound sort
+   phase).** The frame runs these as sequential barrier-separated phases so the two
+   movers never overlap. Co-scheduling could hide wait time but needs breaking the
+   proj→sort data dependency — high effort, defer.
+5. **Blend/cull reader cluster (~78 ms SFPU-backpressure).** Only after SFPU becomes
+   the bottleneck (it is ~52 ms, off-path today). Parked.
 
 ### "1 ms north star — where would you have to leave to?" (user question)
 The current design **cannot reach ~1 ms** without leaving these constraints:
@@ -134,18 +152,18 @@ Fused project(means_cam)+pfwc (iter 133, KEPT, bit-identical, `155b083`, build
 cpp#111). Dispatch count dropped exactly one (**15.53→14.49/view**), means_cam DRAM
 round-trip removed — BUT **BRISC-FW makespan moved only 161.71→161.60 (−0.1 ms)**;
 frame 177.1→176.8 avg / 142.3→141.8 min. The expected ~4-6 ms did NOT materialize.
-- **PREMISE TAGGED FOR RE-LITIGATION — "each fused same-grid pair ≈ −4.8 ms":**
-  REFUTED as a UNIFORM per-program figure (as of iter 133, this BH board, cpp#111).
-  The 4.8 ms = (76.3 ms BRISC non-kernel)/15.5 is an AVERAGE; removing the *cheapest*
-  program reclaimed almost none of it. **Open question (must diagnose before more
-  fusion): is the 76 ms BRISC non-kernel actually serialized launch firmware ON the
-  critical-path makespan and reclaimable by fusion, or is most of it overlapped/idle
-  that does NOT shrink when a program is removed?** If reclaimable, it is non-uniform
-  — concentrated in specific heavy/multi-launch programs (sort's ~22 sub-launches,
-  blend); target those, not light element-wise pairs. If NOT reclaimable, **program
-  fusion is not the BRISC-FW lever and roadmap #1 must pivot** to the BRISC-KERNEL
-  data-mover work (~86 ms) or NCRISC. RE-TEST with a direct inter-program gap
-  measurement on the iter-133 trace (next diagnostic).
+- **PREMISE RESOLVED — "fusing same-grid programs reclaims ~4.8 ms/program of BRISC
+  launch firmware": REFUTED (iter-133 diagnostic, busiest core (13,9), iter-132 CSV).**
+  The 76.3 ms "BRISC non-kernel" is NOT launch firmware — it is BRISC sitting in the
+  end-of-program BARRIER while NCRISC runs heavy kernels (sort_bucket_emit 30.1,
+  sort_subchunk_mat 13.5, ta_bucket_scatter 11.9, ta_gauss_aabb 9.7, sort_tile_depth
+  7.1 ms/view). True reclaimable launch firmware (FW−KERNEL on BRISC-active programs)
+  = **≈ 0.11 ms/view total** across all 15 programs. The removed means_cam↔pfwc gap
+  was ~0.49 ms and not even counted in the sum(FW) makespan → exactly the observed
+  −0.1 ms. **Conclusion: program fusion (launch-coalescing) is dead as a makespan
+  lever.** NCRISC-FW = 127.4 ms at ~100% occupancy = the truly saturated RISC. New
+  ranking above. RE-TEST only if program count or the per-program barrier model
+  changes materially.
 
 ---
 
