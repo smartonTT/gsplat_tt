@@ -1,5 +1,5 @@
-id=111
-sha=c067ff1
-ts=2026-06-11T16:57:47-0700
-desc=iter 133: fuse project(means_cam)+pfwc into ONE program; means_cam handoff via core-local L1 CB (no DRAM round-trip), translation folded into transform; bit-identical
-bin=1fe38deb098213d3
+id=113
+sha=80df833
+ts=2026-06-11T17:25:29-0700
+desc=iter 134: tile_assign K1/K2 reciprocal-multiply (replace per-Gaussian soft-float /tsf with *(1/tsf); tile_size=32 power-of-two => bit-identical); cut NCRISC __divsf3 in ta_gauss_aabb + ta_bucket_scatter
+bin=6d633cdbff5f8be9

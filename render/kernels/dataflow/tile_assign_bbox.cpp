@@ -72,6 +72,13 @@ void kernel_main() {
     const int tiles_y         = static_cast<int>(get_arg_val<uint32_t>(9));
     const float tsf           = static_cast<float>(get_arg_val<uint32_t>(10));
     const uint32_t mctrl_addr = get_arg_val<uint32_t>(11);
+    // tile_size is a power of two (32) so its reciprocal is exactly representable
+    // in fp32; hoist it once and replace the per-Gaussian soft-float DIVIDE by tsf
+    // (expensive __divsf3 on the FPU-less data-mover RISC) with a soft-float
+    // MULTIPLY. `x * (1.0f/tsf)` is BIT-IDENTICAL to `x / tsf` here: dividing by a
+    // power of two only decrements the exponent (no mantissa rounding, no
+    // underflow for these tile coordinates), so the int truncation is unchanged.
+    const float inv_tsf = 1.0f / tsf;
 
     constexpr auto px_args  = TensorAccessorArgs<0>();
     constexpr auto py_args  = TensorAccessorArgs<px_args.next_compile_time_args_offset()>();
@@ -143,10 +150,10 @@ void kernel_main() {
             const float rx = bits_to_f(rxp[i]);
             const float ry = bits_to_f(ryp[i]);
 
-            const int min_x = clampi(static_cast<int>((px - rx) / tsf), 0, tiles_x - 1);
-            const int max_x = clampi(static_cast<int>((px + rx) / tsf), 0, tiles_x - 1);
-            const int min_y = clampi(static_cast<int>((py - ry) / tsf), 0, tiles_y - 1);
-            const int max_y = clampi(static_cast<int>((py + ry) / tsf), 0, tiles_y - 1);
+            const int min_x = clampi(static_cast<int>((px - rx) * inv_tsf), 0, tiles_x - 1);
+            const int max_x = clampi(static_cast<int>((px + rx) * inv_tsf), 0, tiles_x - 1);
+            const int min_y = clampi(static_cast<int>((py - ry) * inv_tsf), 0, tiles_y - 1);
+            const int max_y = clampi(static_cast<int>((py + ry) * inv_tsf), 0, tiles_y - 1);
             const int w = max_x - min_x + 1;
             const int h = max_y - min_y + 1;
             outp[i] = w * h;
