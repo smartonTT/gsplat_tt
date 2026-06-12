@@ -34,14 +34,27 @@ RISC; BRISC idle-waits on it.** Do NOT fuse more programs for makespan. (Concurr
 fusion — overlapping a BRISC-bound and an NCRISC-bound program — is a DIFFERENT, much
 harder mechanism; see #4.)
 
+**GENERALIZABLE LEVER (validated iter-134, bit-identical):** on the FPU-less data
+movers (NCRISC/BRISC), `x / tsf` where `tsf` is a runtime power-of-two (e.g.
+tile_size=32) compiles to soft-float `__divsf3`. Replace with `x * (1.0f/tsf)`:
+`1/32 = 0.03125` is EXACTLY representable in fp32 and dividing by 2^k only decrements
+the exponent → **bit-identical**, and `__mulsf3` is much cheaper. Hoist the reciprocal
+once/kernel. Only helps where the divide is COMPUTE-EXPOSED (not hidden under a NoC
+read barrier). Scan other data-mover kernels for this + other strength reductions.
+
 New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
 1. **NCRISC sort/TA data-mover kernels (~73 ms/view of BRISC-idle barrier-wait).**
-   The real long pole. Ranked items: `sort_bucket_emit` **30.1** (already near its
-   per-pair-32B-L1-store floor — needs the record-layout change, see parked),
-   `sort_subchunk_mat` 13.5 (ground iter-130), `ta_bucket_scatter` **11.9**,
-   `ta_gauss_aabb` **9.7**, `sort_tile_depth` 7.1. Attack NCRISC NoC/DRAM/L1 traffic.
-   **Freshest ground = tile_assign NCRISC (`ta_gauss_aabb`+`ta_bucket_scatter` ≈ 21.6
-   ms), not yet optimized in 128-132 → best odds of a clean win. → next iter.**
+   The real long pole. Ranked items + status:
+   - `sort_bucket_emit` **30.1** — near its per-pair-32B-L1-store floor; needs the
+     record-layout change (parked; biggest single prize). RE-EVALUATE bit-identity.
+   - `sort_subchunk_mat` 13.5 — ground iter-130.
+   - `ta_bucket_scatter` 11.9 → **10.5 (DONE iter-134, −1.74, reciprocal-mul)**; was
+     compute-exposed.
+   - `ta_gauss_aabb` 9.7 — flat to the divide lever (NoC-READ-bound: 4 input pages /16
+     gaussians; divides hidden under the read barrier). Needs read-batching /
+     double-buffering — a separate, bigger change.
+   - `sort_tile_depth` 7.1 — radix; un-examined → candidate next.
+   Result: iter-134 NCRISC-FW 127.4→125.6, BRISC-FW 161.7→159.9, frame 177.0→175.0.
 2. **Remove host/cross-engine sync gaps (~31 ms/view of inter-FW gap).** Inter-frame
    host gap `blend→mcam` ≈ 27 ms (overlap next-view setup with device blend — pure
    north-star "host out of loop"); `sort_bin_hist→sort_bucket_emit` host-prefix sync
