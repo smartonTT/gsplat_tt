@@ -115,6 +115,25 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
    Result: iter-134 NCRISC-FW 127.4→125.6, BRISC-FW 161.7→159.9, frame 177.0→175.0.
    Result: iter-135 sort_bucket_emit 32.45→32.02, NCRISC-FW 125.55→125.25, BRISC-FW
    159.91→159.59, frame 175.0→174.7 (small; divmod partly hidden under the L1 floor).
+   Result: iter-137 ta_gauss_aabb 9.70→9.20, NCRISC-FW 125.25→124.75, BRISC-FW
+   159.59→159.09, frame 174.6→174.1.
+   Result: iter-138 (Stage-2b overflow pre-pack) net(emit+mat) −1.18, frame 174.05→173.10
+   — **but NCRISC-FW 124.8→125.0 and BRISC-FW 159.1→159.7 FLAT: the trim did NOT propagate
+   to the saturated pole.**
+
+   ### ★★ INFLECTION (iter-138): incremental NCRISC zone-trimming is EXHAUSTED.
+   iters 134-138 walked the frame 177.0→173.1 (all bit-identical), but the long poles are
+   now SATURATED and FLAT (NCRISC-FW ~125, BRISC-FW ~159). Trimming individual NCRISC
+   zones no longer moves the ceiling. **The ONLY remaining lever that can move the pole is
+   cracking the ~50 ms NCRISC READER CLUSTER (`tile_l1_cull_rd` 22 + `rd_l1_bulk` 28) that
+   is ~98% SFPU-BACKPRESSURED** — those reader makespans are long because they wait on the
+   SFPU/CB pipeline, so they only shrink when SFPU CONSUMES FASTER. That requires the blend
+   transmittance-EARLY-OUT / microblock-major restructure (the north-star ALU-bound dir;
+   parked as "blend reader cluster" / Track-1-failed-once iter-115). Once SFPU is faster,
+   the readers un-backpressure → NCRISC-FW drops → BRISC-FW drops → frame drops, AND the
+   previously-masked Stage-3 L1-resident reader savings finally become real. **Next:
+   read-only SCOPE the blend early-out restructure (incorporate the iter-115 Track-1
+   failure) before any device iteration.**
 2. **~~Remove host/cross-engine sync gaps — the NEXT BIG LEVER (MEASURED iter-135).~~**
    **REFUTED iter-136 (diagnostic):** the "~32 ms inter-frame host gap" was a TRACY
    OBSERVER ARTIFACT, not real. The iter-135 Part-B number came from a `python -m tracy
