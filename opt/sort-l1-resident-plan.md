@@ -131,9 +131,20 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
    transmittance-EARLY-OUT / microblock-major restructure (the north-star ALU-bound dir;
    parked as "blend reader cluster" / Track-1-failed-once iter-115). Once SFPU is faster,
    the readers un-backpressure → NCRISC-FW drops → BRISC-FW drops → frame drops, AND the
-   previously-masked Stage-3 L1-resident reader savings finally become real. **Next:
-   read-only SCOPE the blend early-out restructure (incorporate the iter-115 Track-1
-   failure) before any device iteration.**
+   previously-masked Stage-3 L1-resident reader savings finally become real.
+   **iter-139 blend scope RESULT (read-only): LEAN NO-GO → PLATEAU.** The transmittance
+   early-out is ALREADY SHIPPED (iter-107, ON, period=512, eps=1/256, LOSSY/baked into
+   golden). A BIT-IDENTICAL early-out needs T<~1e-7 ⇒ reclaims ~0; `contrib_floor` (peak-
+   alpha cull) is a different axis, no bit-identity bridge. The aggressive (refreeze)
+   version is bounded MODEST + RISKY: iter-107 −7% SFPU, period=64 net-SLOWER, iter-46
+   zero-overshoot perf-neutral, iter-52 HUNG the device. True microblock-major (reader
+   stops reading) needs the per-microblock-list re-sort = cost-shuffle (refuted ledger).
+   Optimistic frame win if pursued: ~3-7 ms, NOT bit-identical, hang-risk. **DECISIVE
+   GATE = iter-139 bit-identical OVERSHOOT-HISTOGRAM measurement** (count gaussians blended
+   after a microblock saturates; zero-risk DPRINT like iter-117). If overshoot is small
+   (predicted), the 173 ms frame is CONFIRMED at its plateau for this architecture and the
+   only sub-173 lever is the host-free/persistent-kernel rewrite (1 ms north-star). Stale-
+   premise fix logged: blend-cull-speedup-plan.md "K≈1" is REFUTED (iter-117 median K=4).
 2. **~~Remove host/cross-engine sync gaps — the NEXT BIG LEVER (MEASURED iter-135).~~**
    **REFUTED iter-136 (diagnostic):** the "~32 ms inter-frame host gap" was a TRACY
    OBSERVER ARTIFACT, not real. The iter-135 Part-B number came from a `python -m tracy

@@ -3,15 +3,28 @@
 Status: PARKED behind fusion. Owner: supervisor. Evidence: on-device
 ablation captured 2026-06-08 (see "Evidence" below).
 
-> **READ FIRST — frame priority as of iter 132:** the frame is **BRISC-FW /
-> host-dispatch bound (~161.7 ms)**; **TRISC (all SFPU) is ~52 ms, OFF the critical
-> path**. Blend SFPU micro-opt therefore **cannot move the frame** until program
-> fusion + a transmittance-early-out blend flip the bottleneck onto SFPU. The
-> prioritized roadmap, the 1 ms north-star answer, parked levers, and the
-> refuted-premises ledger (incl. "cull+blend SFPU ~175 ms is the killer" — REFUTED
-> iter 116, RE-TEST if the blend algorithm changes) live at the top of
-> **`opt/sort-l1-resident-plan.md`**. This blend plan stays valid as the design for
-> roadmap step #3 (blend reader-cluster / phasing rework), to execute AFTER fusion.
+> **READ FIRST — CORRECTIONS (iter-139 blend scope). Several premises in THIS doc are
+> stale/refuted; trust this banner over the body below:**
+> - **Frame is BRISC-FW/NCRISC-bound (~159/~125 ms); TRISC/SFPU ~52 ms is OFF the
+>   critical path.** Blend SFPU micro-opt cannot move the frame today. (Program fusion
+>   was REFUTED as a lever, iter-133 — ignore "behind fusion" framing.)
+> - **"Fan-out K≈1" (lines ~73-151) is REFUTED — iter-117 measured median K=4, mean
+>   ≥3.267 (85% of gaussians cover ≥2 microblocks).** The Track-1 phasing regression
+>   (iter-112, +33.6%) was caused by IMPLEMENTATION overhead (4× mask-scan + DEST/DR_SCR
+>   spill), NOT absence of ILP. iter-118 Track-1b (single scan, C=2 pair-interleave, zero
+>   spill) got the ILP right: −13.1% (bit-identical). The alive cheap ILP follow-on is
+>   **C=3 interleave** — but it is FRAME-MASKED (SFPU off-path) so it won't move the frame.
+> - **Transmittance early-out is ALREADY SHIPPED (iter-107, ON by default,
+>   `BLEND_T_PERIOD=512`, `BLEND_T_EPS=1/256`) and is LOSSY (baked into the golden).** A
+>   BIT-IDENTICAL early-out needs T<~1e-7 ⇒ reclaims ~0. `contrib_floor` (1/255 peak-alpha
+>   CULL) is a DIFFERENT axis — no bit-identity bridge. Tightening it (period→1) is
+>   non-bit-identical (needs golden refreeze) and bounded MODEST: iter-107 was −7% SFPU,
+>   period=64 was net-SLOWER, iter-46 zero-overshoot was perf-neutral, iter-52 HUNG the
+>   device. True microblock-major (reader stops reading) needs a per-microblock-list
+>   re-sort = the cost-shuffle the refuted ledger blocks.
+> - **NET: the 173 ms frame is at/near its plateau for this architecture.** The only path
+>   below it is the host-free/persistent-kernel rewrite (the 1 ms north-star). Roadmap +
+>   refuted ledger live at the top of **`opt/sort-l1-resident-plan.md`**.
 
 ## TL;DR
 
