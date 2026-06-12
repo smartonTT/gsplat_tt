@@ -139,12 +139,22 @@ New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
    version is bounded MODEST + RISKY: iter-107 −7% SFPU, period=64 net-SLOWER, iter-46
    zero-overshoot perf-neutral, iter-52 HUNG the device. True microblock-major (reader
    stops reading) needs the per-microblock-list re-sort = cost-shuffle (refuted ledger).
-   Optimistic frame win if pursued: ~3-7 ms, NOT bit-identical, hang-risk. **DECISIVE
-   GATE = iter-139 bit-identical OVERSHOOT-HISTOGRAM measurement** (count gaussians blended
-   after a microblock saturates; zero-risk DPRINT like iter-117). If overshoot is small
-   (predicted), the 173 ms frame is CONFIRMED at its plateau for this architecture and the
-   only sub-173 lever is the host-free/persistent-kernel rewrite (1 ms north-star). Stale-
-   premise fix logged: blend-cull-speedup-plan.md "K≈1" is REFUTED (iter-117 median K=4).
+   Optimistic frame win if pursued: ~3-7 ms, NOT bit-identical, hang-risk.
+   **iter-139 OVERSHOOT-HISTOGRAM measured (bit-identical DPRINT, hero_vs_ref=100.00) →
+   PLATEAU CONFIRMED.** Over 350.08M shipped blend dispatches (warmup+30 views): the
+   shipped period-512 early-out already reclaims 18.57% of no-early-out work; the residual
+   OVERSHOOT (gaussians blended after a microblock's max-T saturated < eps) is just
+   **7.82%** — only 20.0% of microblocks ever saturate before their list ends (80% → zero
+   reclaimable). Perfect zero-overshoot ceiling = 7.82% × blend SFPU 29.65 ms ≈ **2.3 ms
+   SFPU ≈ 2.3 ms frame (~1.3% of 173.1)** — and that is the UNPHYSICAL zero-overhead bound;
+   the realizable version is lossy (refreeze), far smaller, and hazardous (iter-107 −7%,
+   period-64 net-slower, iter-52 HUNG). **NET: the blend/SFPU early-out CANNOT move the
+   frame. 173.1 ms is the architectural PLATEAU for this design.** Every cheap/medium
+   bit-identical kernel lever is now exhausted (177→173, all bit-identical) and the long
+   poles (BRISC-FW ~159 / NCRISC-FW ~125) are saturated. **The ONLY remaining sub-173 lever
+   is the host-free / persistent-kernel rewrite (the 1 ms north-star) — a different renderer
+   architecture, NOT an incremental kernel opt.** This is a scope-change decision for the
+   owner. Stale-premise fix logged: blend-cull-speedup-plan.md "K≈1" REFUTED (iter-117 median K=4).
 2. **~~Remove host/cross-engine sync gaps — the NEXT BIG LEVER (MEASURED iter-135).~~**
    **REFUTED iter-136 (diagnostic):** the "~32 ms inter-frame host gap" was a TRACY
    OBSERVER ARTIFACT, not real. The iter-135 Part-B number came from a `python -m tracy
