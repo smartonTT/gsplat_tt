@@ -114,6 +114,20 @@ void kernel_main() {
     const uint32_t l1_bucket_fit = get_arg_val<uint32_t>(20);  // per-tile bucket slot count
     const uint32_t l1_tiles_x    = get_arg_val<uint32_t>(21);  // tiles per row (tile-local mean)
     constexpr uint32_t L1_TILE_SIZE = 32u;  // microblock tile = 32x32 px
+    // iter 135 (bit-identical strength reduction): the per-pair tile-local-mean
+    // recompute in pack_rec needs tt/l1_tiles_x and tt%l1_tiles_x. l1_tiles_x is
+    // a RUNTIME arg, so the compiler cannot strength-reduce it and emits a soft
+    // __udivmodsi4 PER KEPT PAIR on the divider-less NCRISC (this is the dominant
+    // sort_bucket_emit zone, every pair is compute-exposed once blendrec is
+    // cached). When the tile grid is a power of two (e.g. 1024px/32 => 32 tiles
+    // per row) the divide is EXACTLY a right shift and the modulo EXACTLY a mask
+    // — BIT-IDENTICAL for unsigned (same quotient/remainder, no rounding). Detect
+    // the power-of-two case ONCE here; non-power-of-two grids fall back to the
+    // exact divmod so output is unchanged for any tiles_x.
+    const bool tx_is_pow2 = (l1_tiles_x != 0u) && ((l1_tiles_x & (l1_tiles_x - 1u)) == 0u);
+    uint32_t tx_shift = 0u;
+    if (tx_is_pow2) { uint32_t v = l1_tiles_x; while (v > 1u) { v >>= 1; tx_shift++; } }
+    const uint32_t tx_mask = l1_tiles_x - 1u;
 
     constexpr auto gids_args  = TensorAccessorArgs<0>();
     constexpr auto tids_args  = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -386,8 +400,12 @@ void kernel_main() {
     auto pack_rec = [&](uint32_t b, uint32_t tt) {
         // Tile-local mean: the blend reader reconstructs absolute via
         // mean = local + tile_origin. Only this is per-pair (per-tile) work.
-        float mx = inv_mx - static_cast<float>((tt % l1_tiles_x) * L1_TILE_SIZE);
-        float my = inv_my - static_cast<float>((tt / l1_tiles_x) * L1_TILE_SIZE);
+        // tx = tt % l1_tiles_x, ty = tt / l1_tiles_x — soft-divmod replaced by a
+        // shift/mask on the power-of-two grid (bit-identical; see hoist above).
+        const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % l1_tiles_x);
+        const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / l1_tiles_x);
+        float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
+        float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
         volatile uint32_t* p32 =
             reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
         uint32_t mx_bits, my_bits;

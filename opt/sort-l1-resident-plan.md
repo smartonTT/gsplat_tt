@@ -42,24 +42,49 @@ the exponent → **bit-identical**, and `__mulsf3` is much cheaper. Hoist the re
 once/kernel. Only helps where the divide is COMPUTE-EXPOSED (not hidden under a NoC
 read barrier). Scan other data-mover kernels for this + other strength reductions.
 
+**INTEGER variant (iter-135, bit-identical):** the same lever applies to a runtime
+INTEGER divmod by a power of two. `tt / tiles_x` + `tt % tiles_x` where `tiles_x`
+is a runtime arg compiles to a soft `__udivmodsi4` (no HW divider). When `tiles_x`
+is a power of two (1024px/32 ⇒ 32 tiles/row) `tt/32 == tt>>5` and `tt%32 == tt&31`
+EXACTLY (unsigned) — bit-identical — so detect pow2 once and replace with shift/mask
+(non-pow2 grids fall back to exact /,% so output is unchanged for any tiles_x).
+
+**LEVER STATUS — now NEARLY EXHAUSTED on the NCRISC movers.** Both float `/tsf`
+sites done (iter-134); the densest remaining per-item soft-divmod (sort_bucket_emit
+pack_rec) done iter-135. The NAMED candidate `sort_tile_depth` has NO soft-divide —
+its only `/`,`%` are by the COMPILE-TIME const `ELEMS_PER_PAGE=16`, which the compiler
+already strength-reduces to shift/mask. Remaining divmods (materialize/cull/blend
+readers' once-per-tile `tt/tiles_x`) are NoC-read-hidden. Pivot to the host-gap (#2)
+or the `sort_bucket_emit` record-layout next.
+
 New ranking (by reclaimable BRISC-FW long-pole ms/view, from the diagnostic):
 1. **NCRISC sort/TA data-mover kernels (~73 ms/view of BRISC-idle barrier-wait).**
    The real long pole. Ranked items + status:
-   - `sort_bucket_emit` **30.1** — near its per-pair-32B-L1-store floor; needs the
-     record-layout change (parked; biggest single prize). RE-EVALUATE bit-identity.
+   - `sort_bucket_emit` **32.4** — at its per-pair-32B-L1-store floor (iter-129); the
+     per-pair runtime divmod was shaved iter-135 (**−0.43, pow2 shift/mask**, the
+     divmod was only partly compute-exposed under the L1-store floor). The big prize is
+     still the record-layout change (parked; not bit-identical). RE-EVALUATE bit-identity.
    - `sort_subchunk_mat` 13.5 — ground iter-130.
    - `ta_bucket_scatter` 11.9 → **10.5 (DONE iter-134, −1.74, reciprocal-mul)**; was
      compute-exposed.
    - `ta_gauss_aabb` 9.7 — flat to the divide lever (NoC-READ-bound: 4 input pages /16
      gaussians; divides hidden under the read barrier). Needs read-batching /
      double-buffering — a separate, bigger change.
-   - `sort_tile_depth` 7.1 — radix; un-examined → candidate next.
+   - `sort_tile_depth` 7.1 — radix; **EXAMINED iter-135: no soft-divide (only
+     compile-time const /16,%16 ⇒ already shift/mask). NOT a strength-reduction lever.**
+     Its fixed 256-bucket zero+prefix ×4 passes/tile is the only inefficiency, but that
+     is an algorithm change, not the cheap lever.
    Result: iter-134 NCRISC-FW 127.4→125.6, BRISC-FW 161.7→159.9, frame 177.0→175.0.
-2. **Remove host/cross-engine sync gaps (~31 ms/view of inter-FW gap).** Inter-frame
-   host gap `blend→mcam` ≈ 27 ms (overlap next-view setup with device blend — pure
-   north-star "host out of loop"); `sort_bin_hist→sort_bucket_emit` host-prefix sync
-   ≈ 3.8 ms (push prefix-sum on-device). NOTE: 27 ms may be partly warmup-skewed in
-   the CSV — re-measure steady-state before committing to it.
+   Result: iter-135 sort_bucket_emit 32.45→32.02, NCRISC-FW 125.55→125.25, BRISC-FW
+   159.91→159.59, frame 175.0→174.7 (small; divmod partly hidden under the L1 floor).
+2. **Remove host/cross-engine sync gaps — the NEXT BIG LEVER (MEASURED iter-135).**
+   Inter-frame host gap `blend→[mcam=pfwc]` is a REAL steady-state **~32 ms/view**
+   (iter-135 Part B: 28 interior boundaries, median 32.4 / mean 32.2, range 28.9–37.4;
+   the warmup boundary was 393 ms — that was the source of the prior skew, correctly
+   EXCLUDED). NOT a warmup artifact, and a touch larger than the iter-133 ~27 ms guess.
+   (`mcam` was fused into `pfwc` in iter-133, so the first per-frame compute zone is
+   now `pfwc`.) Overlap next-view setup with device blend — pure north-star "host out
+   of loop." Also `sort_bin_hist→sort_bucket_emit` host-prefix sync ≈ 3.8 ms.
 3. **BRISC-KERNEL data-mover (85.4 ms/view of real BRISC work)** if shrinking BRISC's
    own contribution: `proj_scatter` 19.9, `proj_count` 14.4, `tile_l1_cull_rd` 21.0,
    `rd_l1_bulk`+blend 28.0.
