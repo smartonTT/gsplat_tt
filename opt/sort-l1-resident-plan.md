@@ -15,6 +15,25 @@ Companion to `opt/blend-cull-speedup-plan.md`.
   Ledger has a `NEW REF` divider row. Refreeze + add a new divider whenever an
   accepted iteration legitimately changes output.
 
+### ★★ POST-PLATEAU DECISION (iter-139 scope, 2026-06-11) — READ FIRST
+Frame is at the **173.1 ms PLATEAU** (bit-identical). Two read-only scopes settled the endgame:
+- **No missed incremental lever.** Fresh ttw-138 full-frame audit: every top zone is at a
+  structural floor, refuted, or SFPU-backpressured (off-path). `project` kernels re-checked —
+  no missed strength-reduction. **No bit-identical/low-risk lever ≥2-3 ms remains.**
+- **Host-free / persistent-kernel rewrite = LEAN NO-GO, gated on ONE cheap test.** The "host-free"
+  framing is perf-irrelevant: trace removes <0.5 ms (iter-126), launch fw is 0.11 ms (iter-133).
+  The 73 ms "BRISC non-kernel" is barrier-**WAIT** on NCRISC, recoverable ONLY via cross-tile
+  pipelining + L1 handoff. Theoretical floor ≈125 ms (NCRISC pole, ~20% best case), eroded by a
+  ~45-54 ms prerequisite regression hole (host_free_mp +31, on-device layout +13-23). SFPU is a
+  shared serial resource (cull+blend can't co-run) and every prior sort→blend fusion HUNG the
+  device (iters 52, 55-59). Risk-adjusted EV is poor.
+- **DECISIVE GATE = Stage-0 falsification microbench** (iter-140): one persistent per-core kernel
+  double-buffering sort-emit (NCRISC, tile T+1) against cull (SFPU, tile T) — the cleanest
+  NCRISC↔SFPU overlap probe. Single in-order CQ, no intermediate Finish (hang-safe). **KILL: if
+  fused makespan ≈ sum (no overlap) → persistent kernels hit the same wall as trace → FREEZE at
+  173.1 and write the final report.** If makespan → max (~20 ms signal) → proceed to staged L1
+  handoff (Stages 1-3). Full scope notes: `tmp/hostfree-rewrite-scope-notes.md`.
+
 ### Where the frame stands (measured, iter 132)
 Frame **177.1 avg / 142.3 min ms/view**. Critical path = **BRISC-FW ~161.7 ms**
 (data mover + per-program launch firmware). NCRISC-KERNEL ~127 ms (dataflow, some
