@@ -1,4 +1,0 @@
-{
-  "verdict": "KEEP",
-  "reasoning": "iter-031: project early-cull on tz/opacity. Per-Gaussian compute now short-circuits BEFORE the 36-byte cov3d memory read and the cov_cam (R @ cov3d @ R^T) + cov2d (J @ cov_cam @ J^T) sandwich whenever tz <= k_near (0.2; behind / near camera) OR opacity < min_opacity. On stitch_doll hero those checks cull ~20% of the 601k Gaussians cheap, so we skip ~9 MB of cov3d reads + the 6 inner FMAs per Gaussian. Visual: PSNR per-view bit-identical to iter-030 (min 60.33, mean 63.26) - the skipped Gaussians were already marked invalid downstream, just earlier now. Macro 30-frame sum_total_ms: 341.6 -> 341.2 (within noise; project p50 2.94 ms unchanged vs 3.0 ms iter-030 - the cov3d read may already be L2-hot on M-Pro). Kept as an architectural cleanup with zero downside; the cov3d memory savings should compound when we extend the same gate to the cov2d/Jacobian path or move to a two-phase project."
-}

@@ -12,7 +12,10 @@
 # maybe_dump_device_profiler() (GSPLAT_TT_PROFILE=1) pushes each view's device
 # zones into the live stream under --dump-device-data-mid-run.
 set -uo pipefail
-source .venv/bin/activate 2>/dev/null || true
+REPO=/localdev/smarton/gstt2
+cd "$REPO" || exit 1
+# shellcheck source=/dev/null
+source "$REPO/.venv/bin/activate"
 echo "[render-clean-inner] python3 render/run.py --no-ref --iter-dir rc-tracy" \
      "(MID_RUN_DUMP=${TT_METAL_PROFILER_MID_RUN_DUMP:-unset}" \
      "DEVICE_PROFILER=${TT_METAL_DEVICE_PROFILER:-unset}" \

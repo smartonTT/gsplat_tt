@@ -1,8 +1,0 @@
-{
-  "verdict": "KEEP",
-  "action": "commit",
-  "high_promotion_priority": false,
-  "sum_total_ms": 341.57037691329606,
-  "prev_best_sum_ms": 358.30925303162076,
-  "commit_sha": "5b523a899e3874f3ca852edcf63fd3d33b3184cb"
-}

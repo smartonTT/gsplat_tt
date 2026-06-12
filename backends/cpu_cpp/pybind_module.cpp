@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 #include <string>
 
 #include <pybind11/numpy.h>
@@ -17,6 +18,12 @@
 #include "gsplat_cpu/sort.h"
 #include "gsplat_cpu/thread_pool.h"
 #include "gsplat_cpu/tile_assign.h"
+
+// Tracy host-zone macros. host_tracy.hpp self-guards on TRACY_ENABLE and
+// expands to no-ops when Tracy is absent, so it is safe — and required, since
+// GSPLAT_HOST_ZONE / GSPLAT_HOST_FRAME_MARK are used unconditionally in
+// render_full_py — to include it in CPU-only (GSPLAT_WITH_TT=OFF) builds.
+#include "gsplat_tt/host_tracy.hpp"
 
 #ifdef GSPLAT_WITH_TT
 #include "gsplat_tt/blend.h"
@@ -1003,7 +1010,7 @@ static gsplat_cpu::ProjectResult project_via_device(
     std::vector<float> mean_2d, depth, cov2d, radii;
     const auto t_pf0 = prof_clock::now();
     if (resident_project) {
-        if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+        if (gsplat_tt::pfwc_tt(means, cov3d_u.data(), extrinsics, intrinsics, N,
                                nullptr, nullptr, nullptr, nullptr, &pf_t) < 0.0)
             return empty;
     } else {
@@ -1011,7 +1018,7 @@ static gsplat_cpu::ProjectResult project_via_device(
         depth.resize(N);
         cov2d.resize(N * 3);
         radii.resize(N * 2);
-        if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+        if (gsplat_tt::pfwc_tt(means, cov3d_u.data(), extrinsics, intrinsics, N,
                                mean_2d.data(), depth.data(), cov2d.data(),
                                radii.data(), &pf_t) < 0.0)
             return empty;
@@ -1284,9 +1291,9 @@ py::tuple render_full_py(
     auto t_ta0 = clock::now();
     gsplat_cpu::TileAssignResult ta;
     bool ta_done = false;
-#ifdef GSPLAT_WITH_TT
     {  // Tracy: one ZoneScopedN per scope
     GSPLAT_HOST_ZONE("host_stage_ta");
+#ifdef GSPLAT_WITH_TT
     // tt-006: opt-in device tile_assign (GSPLAT_TT_DEVICE_TILE_ASSIGN=1).
     // Produces a layout-identical TileAssignResult (same (gid,tid) pair set
     // and gaussian-major order); falls back to CPU on device failure. Mirrors
@@ -1372,13 +1379,13 @@ py::tuple render_full_py(
     // sort+cull+blend device window; these let render report them separately.
     double cont_cull_ms = 0.0;
     double cont_blend_ms = 0.0;
-#ifdef GSPLAT_WITH_TT
     {
     if (sort_blend_chain) {
         GSPLAT_HOST_ZONE("host_stage_sort_blend");
     } else {
         GSPLAT_HOST_ZONE("host_stage_sort");
     }
+#ifdef GSPLAT_WITH_TT
     // tt-003: opt-in device sort (GSPLAT_TT_DEVICE_SORT>=1). Produces a
     // layout-identical SortResult (byte-identical sorted_gaussian_ids +
     // tile_ranges) and publishes the contiguous outputs resident in
@@ -1399,6 +1406,7 @@ py::tuple render_full_py(
             sort_blend.image_height = image_height;
             sort_blend.image_width = image_width;
             sort_blend.mb_contrib_floor = mb_contrib_floor;
+            sort_blend.transmittance_threshold = transmittance_threshold;
             sort_blend.cull_disabled = cull_disabled;
             sort_blend.blend_ok = &blend_ok;
         }
@@ -1425,12 +1433,19 @@ py::tuple render_full_py(
                 if (!blend_ok && tt_host_free_render) {
                     std::fprintf(stderr,
                         "[render_full] FATAL: in-sort resident blend failed\n");
+                    if (std::getenv("GSPLAT_TT_SOFTFAIL"))
+                        throw std::runtime_error(
+                            "[render_full] in-sort resident blend failed (softfail)");
                     std::abort();
                 }
             }
         } else if (tt_host_free_render) {
             std::fprintf(stderr,
                 "[render_full] FATAL: device sort failed with host-free env stack\n");
+            if (std::getenv("GSPLAT_TT_SOFTFAIL"))
+                throw std::runtime_error(
+                    "[render_full] device sort failed: a tile exceeds the device "
+                    "sort capacity at this view (softfail; move the camera back)");
             std::abort();
         }
     }
@@ -1439,6 +1454,9 @@ py::tuple render_full_py(
         if (tt_host_free_render) {
             std::fprintf(stderr,
                 "[render_full] FATAL: GSPLAT_TT_DEVICE_SORT not set on host-free path\n");
+            if (std::getenv("GSPLAT_TT_SOFTFAIL"))
+                throw std::runtime_error(
+                    "[render_full] GSPLAT_TT_DEVICE_SORT not set on host-free path (softfail)");
             std::abort();
         }
         sr = gsplat_cpu::sort_and_bin(
@@ -1825,7 +1843,13 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
             float* c2d_ptr = download ? cov2d.mutable_data()   : nullptr;
             float* r_ptr   = download ? radii.mutable_data()   : nullptr;
             gsplat_tt::PfwcCallTimings timings;
+            // iter-133 fused the means->camera transform into pfwc_tt, so it now
+            // takes `means` as the first arg. This manual test hook predates the
+            // fusion and does not supply means; pass nullptr (it is not on the
+            // render path — run.py never calls transform_pfwc_tt). Kept only so
+            // the extension links/imports.
             const double kernel_ms = gsplat_tt::pfwc_tt(
+                nullptr,
                 static_cast<const float*>(c_info.ptr),
                 static_cast<const float*>(e_info.ptr),
                 static_cast<const float*>(i_info.ptr),

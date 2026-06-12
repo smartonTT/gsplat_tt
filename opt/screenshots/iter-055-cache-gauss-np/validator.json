@@ -1,4 +1,0 @@
-{
-  "verdict": "ACCEPT",
-  "reasoning": "iter-055: cache per-Gaussian numpy views (means/scales/rotations/opacities/colors) across render_full frames keyed by tensor data_ptr+shape. In the 30-view bench only extrinsics/intrinsics change per frame; the five detach().cpu().numpy() conversions were redundant on views 2-30. Also fixed CpuCppBackend to accept verbose= for the viewer. Clean trials after fixing accidental iter-054 reintroduction in cull_and_blend: 254/254/256/251 ms (avg ~254 ms) vs iter-053 single-trial 255 ms — ~1 ms improvement, within noise but real overhead removed. PSNR identical. Best sum_total so far ~254 ms (hero p50 ~8.3 ms, blend sum ~138 ms in clean trials)."
-}

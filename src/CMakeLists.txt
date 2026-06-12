@@ -105,24 +105,32 @@ set_target_properties(_gsplat_cpu PROPERTIES
 )
 
 if(GSPLAT_WITH_TT)
-  include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/TtMetalInTree.cmake)
+  # Stage2 device drivers live under render/host/; kernels under render/kernels/.
+  # Production _gsplat_cpu still includes gsplat_tt/*.h from src/gsplat_tt/.
+  set(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/..")
+  set(RENDER_HOST "${REPO_ROOT}/render/host")
+  include(${REPO_ROOT}/cmake/TtMetalInTree.cmake)
   add_library(gsplat_tt STATIC
-    gsplat_tt/blend_device.cpp
-    gsplat_tt/project_device.cpp
-    gsplat_tt/pfwc_device.cpp
-    gsplat_tt/tile_assign_device.cpp
-    gsplat_tt/sort_device.cpp
-    gsplat_tt/device_state.cpp
-    gsplat_tt/jit_warmup.cpp
+    ${RENDER_HOST}/blend_device.cpp
+    ${RENDER_HOST}/project_device.cpp
+    ${RENDER_HOST}/pfwc_device.cpp
+    ${RENDER_HOST}/tile_assign_device.cpp
+    ${RENDER_HOST}/sort_device.cpp
+    ${RENDER_HOST}/device_state.cpp
+    ${RENDER_HOST}/jit_warmup.cpp
+    ${RENDER_HOST}/gather_visible_device.cpp
     gsplat_tt/render_blend.cpp
+    gsplat_tt/blend_legacy_stubs.cpp
     gsplat_tt/mb_payload.cpp
-    gsplat_tt/gather_visible_device.cpp
+    gsplat_tt/blend_host.cpp
   )
   set_target_properties(gsplat_tt PROPERTIES POSITION_INDEPENDENT_CODE ON)
-  target_include_directories(gsplat_tt PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+  target_include_directories(gsplat_tt PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${RENDER_HOST})
   target_compile_definitions(gsplat_tt PRIVATE
     GSPLAT_WITH_TT
-    "OVERRIDE_KERNEL_PREFIX=\"${CMAKE_CURRENT_SOURCE_DIR}/gsplat_tt/\"")
+    "OVERRIDE_KERNEL_PREFIX=\"${REPO_ROOT}/render/\"")
   gsplat_link_tt_metal(gsplat_tt)
   target_link_libraries(gsplat_tt PRIVATE gsplat_cpu)
   target_link_libraries(_gsplat_cpu PRIVATE gsplat_tt)

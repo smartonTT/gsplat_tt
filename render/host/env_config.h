@@ -31,8 +31,36 @@ inline constexpr bool cull_pipeline_enabled() { return true; }
 // Chain sort publish -> cull -> blend on one CQ drain.
 inline constexpr bool sort_blend_pipe_enabled() { return true; }
 
-// On-device bin histogram layout: OFF — production uses the HOST bin layout.
+// On-device bin histogram layout: OFF (iter-127) — reverts to the host
+// host_bin_layout_from_hist + build_lpt path (the pre-iter-121 working path).
+// The on-device layout (S5.1-S5.5, sort_bin_layout.cpp / sort_bin_emit.cpp) was
+// justified SOLELY as a Metal Trace prerequisite; iter-126 MEASURED the trace
+// endgame to be a no-go (replay removes <0.5ms; the ~92ms BRISC-FW is on-device
+// firmware+NCRISC dataflow that trace replays unchanged), so the single-core
+// device layout is pure regression (~+10-16ms/view vs the iter-116 baseline).
+// Disabled to recover the frame. The on-device code is KEPT (gated off) — it may
+// matter for a future fusion lever (see opt/sort-l1-resident-plan.md S5.x).
 inline constexpr bool sort_device_layout_enabled() { return false; }
+
+// S5.3 (host-free M/P): over-provision the M-domain (tile_assign K1/scan) to the
+// static padded_n ceiling (= proj_m_* capacity, host-known, view-independent) and
+// the P-domain (tile_assign pair buffers + sort bin work-split) to a static
+// P_max ceiling. The kernels read the REAL M / P from the resident proj_M /
+// ta_pairs_P control pages and guard every loop/work-split so the over-provisioned
+// launches are exact no-ops beyond the real count. This DELETES the three
+// mid-frame host blocking reads that previously sized the next dispatch (gather
+// M-read, tile_assign P-read, sort P-read) — trace prerequisite (S5.6). Expected
+// frame-neutral (iter-120: removing host drains is re-imposed by the in-order CQ;
+// only Metal Trace removes the launch overhead). Bit-identical: the resident
+// M/P the kernels read == the values the host args carried.
+inline constexpr bool host_free_mp_enabled() { return false; }
+
+// Static P-domain ceiling (pairs). Σ tiles-per-gaussian (pre-cull P) over the
+// FIXED 30-view bicycle bench peaks at 3,700,450 (measured, iter-123). 4,718,592
+// (= 4608*1024, 16-aligned) gives ~27% margin — a safe worst-case bound for the
+// pair buffers (gid/tid/keep) + the sort bin work-split. Too small = overflow/
+// corruption; too large = wasted DRAM + no-op work, so the margin is bounded.
+inline constexpr unsigned int pair_ceiling() { return 4718592u; }
 
 // Blend writer fully overwrites res_out each frame — skip the zero H2D.
 inline constexpr bool blend_skip_zero_out_enabled() { return true; }

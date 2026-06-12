@@ -26,13 +26,22 @@
 //   6: tids_addr     int32 SoA output
 //   7: page_start    first 16-pair page this core handles
 //   8: page_count    number of pages this core handles
-//   9: P             real pair count (entries >= P are padding -> 0)
+//   9: P             real pair count (entries >= P are padding -> 0); used only
+//                    when pctrl_addr (arg 14) == 0 (legacy host-read path)
 //  10: M
 //  11: tiles_x
 //  12: tiles_y
 //  13: tile_size
+//  14: pctrl_addr    S5.3 host-free: resident ta_pairs_P ctrl page base (0 =>
+//                    use the host-passed P at arg 9). When nonzero P is read
+//                    on-device from [0] (the static-ceiling-CLAMPED count, so it
+//                    can never exceed the p_max work-split / buffer size) — this
+//                    deletes the mid-frame host P-read drain. The work-split is
+//                    sized to the static p_max ceiling; cores whose entire range
+//                    is >= P early-out, and the p<P guard zero-pads any straddle.
 //
 // COMPILE-TIME ARGS: 7 TensorAccessorArgs (offs, px, py, rx, ry, gids, tids).
+// proj-pair-count P is read via a runtime InterleavedAddrGen (no CT args), S5.3.
 
 #include <cstdint>
 
@@ -68,11 +77,19 @@ void kernel_main() {
     const uint32_t tids_addr  = get_arg_val<uint32_t>(6);
     const uint32_t page_start = get_arg_val<uint32_t>(7);
     const uint32_t page_count = get_arg_val<uint32_t>(8);
-    const int P               = static_cast<int>(get_arg_val<uint32_t>(9));
+    int P                     = static_cast<int>(get_arg_val<uint32_t>(9));
     const int M               = static_cast<int>(get_arg_val<uint32_t>(10));
     const int tiles_x         = static_cast<int>(get_arg_val<uint32_t>(11));
     const int tiles_y         = static_cast<int>(get_arg_val<uint32_t>(12));
     const float tsf           = static_cast<float>(get_arg_val<uint32_t>(13));
+    const uint32_t pctrl_addr = get_arg_val<uint32_t>(14);  // 0 => use host P
+    // tile_size is a power of two (32) so its reciprocal is exactly representable
+    // in fp32; hoist it once and replace the per-Gaussian soft-float DIVIDE by tsf
+    // (expensive __divsf3 on the FPU-less data-mover RISC) with a soft-float
+    // MULTIPLY in the AABB recompute. `x * (1.0f/tsf)` is BIT-IDENTICAL to
+    // `x / tsf`: dividing by a power of two only decrements the exponent (no
+    // mantissa rounding, no underflow here), so min_x/min_y/max_x are unchanged.
+    const float inv_tsf = 1.0f / tsf;
 
     constexpr auto offs_args = TensorAccessorArgs<0>();
     constexpr auto px_args   = TensorAccessorArgs<offs_args.next_compile_time_args_offset()>();
@@ -119,6 +136,18 @@ void kernel_main() {
     auto gidp = reinterpret_cast<volatile int32_t*>(gid_l1);
     auto tidp = reinterpret_cast<volatile int32_t*>(tid_l1);
 
+    // S5.3 host-free: read the static-ceiling-clamped pair count P from the
+    // resident ta_pairs_P control page (deletes the mid-frame host P-read). The
+    // gid scratch CB is reused as the read landing pad — it is not populated with
+    // output until the scatter loop below. A runtime InterleavedAddrGen needs no
+    // compile-time accessor args, so the CT accessor list is unchanged.
+    if (pctrl_addr != 0) {
+        const InterleavedAddrGen<true> pctrl_gen{pctrl_addr, PAGE_BYTES};
+        noc_async_read(get_noc_addr(0, pctrl_gen), gid_l1, PAGE_BYTES);
+        noc_async_read_barrier();
+        P = static_cast<int>(static_cast<uint32_t>(gidp[0]));
+    }
+
     // 1-page caches keyed by page index.
     int32_t offs_cached_page = -1;
     int32_t attr_cached_page = -1;
@@ -158,9 +187,9 @@ void kernel_main() {
         const float py = bits_to_f(pyp[ip]);
         const float rx = bits_to_f(rxp[ip]);
         const float ry = bits_to_f(ryp[ip]);
-        const int min_x = clampi(static_cast<int>((px - rx) / tsf), 0, tiles_x - 1);
-        const int min_y = clampi(static_cast<int>((py - ry) / tsf), 0, tiles_y - 1);
-        const int max_x = clampi(static_cast<int>((px + rx) / tsf), 0, tiles_x - 1);
+        const int min_x = clampi(static_cast<int>((px - rx) * inv_tsf), 0, tiles_x - 1);
+        const int min_y = clampi(static_cast<int>((py - ry) * inv_tsf), 0, tiles_y - 1);
+        const int max_x = clampi(static_cast<int>((px + rx) * inv_tsf), 0, tiles_x - 1);
         cur_minx = min_x;
         cur_miny = min_y;
         cur_w = max_x - min_x + 1;
@@ -175,6 +204,14 @@ void kernel_main() {
 
     const int p_start = static_cast<int>(page_start) * static_cast<int>(ELEMS_PER_PAGE);
     const int p_end   = p_start + static_cast<int>(page_count) * static_cast<int>(ELEMS_PER_PAGE);
+
+    // S5.3 host-free: with the work-split sized to the static p_max ceiling, a
+    // core whose entire page range lies beyond the real P has nothing to scatter
+    // (sort never reads pairs >= P). Skip the binary search + per-pair work. A
+    // straddling range still falls through and the p<P guard zero-pads the tail.
+    if (p_start >= P) {
+        return;
+    }
 
     // Binary search: largest g in [0, M-1] with offs[g] <= p_start.
     {

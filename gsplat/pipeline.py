@@ -156,7 +156,6 @@ class Pipeline:
                 "project": float(stats.get("project_ms", 0.0)),
                 "tile_assign": float(stats.get("tile_assign_ms", 0.0)),
                 "sort": float(stats.get("sort_ms", 0.0)),
-                "cull": float(stats.get("cull_ms", 0.0)),
                 "blend": float(stats.get("blend_ms", 0.0)),
                 "total": wall_ms,
             }

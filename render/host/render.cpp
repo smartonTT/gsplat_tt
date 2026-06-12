@@ -44,6 +44,7 @@
 #include "config.h"
 #include "device_state.h"
 #include "gather_visible.h"
+#include "host_profile.h"
 #include "jit_warmup.h"
 #include "pfwc.h"
 #include "project.h"
@@ -125,13 +126,12 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
                                       const float* opacities, float min_opacity,
                                       std::size_t N, int image_height,
                                       int image_width, int max_radius) {
-    // 1a. means_cam = R @ means, kept device-resident (no D2H).
-    gsplat_tt::transform_means_cam_tt_no_download(means, extrinsics, N);
-
-    // 1b. pfwc -> mean_2d / depth / cov2d(a,b,c) / radii, all resident
-    //     (null host outputs => RESIDENT_PROJECT, nothing is read back).
+    // 1a+1b. FUSED project(means_cam)+pfwc (iter-133): one device program runs
+    //     the world→camera means transform in L1 and then mean_2d / depth /
+    //     cov2d(a,b,c) / radii, all resident (null host outputs => nothing read
+    //     back). Replaces the former 2-program means_cam→DRAM→pfwc handoff.
     const std::vector<float>& cov_u = cov3d_unique(cov3d, N);
-    gsplat_tt::pfwc_tt(cov_u.data(), extrinsics, intrinsics, N,
+    gsplat_tt::pfwc_tt(means, cov_u.data(), extrinsics, intrinsics, N,
                        /*mean_2d=*/nullptr, /*depth=*/nullptr, /*cov2d=*/nullptr,
                        /*radii=*/nullptr);
 
@@ -170,6 +170,8 @@ py::tuple render_view(
     (void)k_cap;
     (void)use_isoellipse;
     (void)blend_mode;  // baked: BLEND_MODE=2 (TT device microblock SFPU blend).
+
+    gsplat_tt::hostprof::on_view_enter();
 
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
@@ -269,6 +271,7 @@ py::tuple render_view(
     // Push this frame's device-profiler zones into the live Tracy stream (no-op
     // unless TT_METAL_DEVICE_PROFILER=1). See above.
     maybe_dump_device_profiler();
+    gsplat_tt::hostprof::on_view_return();
     return py::make_tuple(image, stats);
 }
 

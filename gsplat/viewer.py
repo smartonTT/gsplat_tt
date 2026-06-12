@@ -134,13 +134,23 @@ def _orbit_pose(
 
 
 def _repo_cameras_json() -> Path:
-    return Path(__file__).resolve().parent.parent / "benchmarks" / "cameras.json"
+    base = Path(__file__).resolve().parent.parent / "benchmarks"
+    v2 = base / "cameras_v2.json"
+    if v2.exists():
+        return v2
+    return base / "cameras.json"
 
 
 def _load_scene_preset(
     scene_path: str | None,
 ) -> tuple[np.ndarray, float] | None:
-    """Return (hero c2w, fov_deg) from cameras.json for a fixed iconic view."""
+    """Return (hero c2w, fov_deg) for a fixed iconic view.
+
+    Prefer an exact PLY-name match (e.g. ``bicycle.ply`` matches the catalog
+    entry), but fall back to the sole/first entry with a hero view so a scene
+    loaded under a different filename still gets the hero instead of the
+    generic orbit default.
+    """
     if not scene_path:
         return None
     cam_file = _repo_cameras_json()
@@ -148,14 +158,24 @@ def _load_scene_preset(
         return None
     ply_name = Path(scene_path).name
     cams = json.loads(cam_file.read_text())
-    for entry in cams.values():
-        if Path(entry.get("ply", "")).name != ply_name:
-            continue
+
+    def _hero_of(entry) -> tuple[np.ndarray, float] | None:
         hero = (entry.get("views") or {}).get("hero") or {}
         c2w = hero.get("c2w")
-        if c2w is not None:
-            fov_deg = float(entry.get("fov_deg", 50.0))
-            return np.asarray(c2w, dtype=np.float64), fov_deg
+        if c2w is None:
+            return None
+        fov_deg = float(entry.get("fov_deg", 50.0))
+        return np.asarray(c2w, dtype=np.float64), fov_deg
+
+    for entry in cams.values():
+        if Path(entry.get("ply", "")).name == ply_name:
+            hit = _hero_of(entry)
+            if hit is not None:
+                return hit
+    for entry in cams.values():
+        hit = _hero_of(entry)
+        if hit is not None:
+            return hit
     return None
 
 
@@ -393,7 +413,7 @@ class GaussianViewer:
                 min=-1.0,
                 max=1024.0,
                 step=1.0,
-                initial_value=-1.0,
+                initial_value=0.0,
                 hint=(
                     "Project-stage cull: drop Gaussians whose AABB half-extent "
                     "exceeds this (pixels). 0 = min(H,W)/2. −1 = disabled (needed "

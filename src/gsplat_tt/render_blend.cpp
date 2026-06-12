@@ -227,7 +227,9 @@ gsplat_cpu::CullAndBlendResult render_blend_tt(
                     bool resident_ok = false;
                     blend_mb_devcull_resident(
                         mb_contrib_floor, cull_disabled, num_tiles, tiles_x,
-                        image_height, image_width, image_out, &resident_ok);
+                        image_height, image_width, image_out, &resident_ok,
+                        /*cull_ms_out=*/nullptr, /*blend_ms_out=*/nullptr,
+                        transmittance_threshold);
                     const auto _r1 = std::chrono::steady_clock::now();
                     if (!resident_ok) {
                         std::fprintf(stderr,

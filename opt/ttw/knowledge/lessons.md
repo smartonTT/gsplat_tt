@@ -9,6 +9,136 @@ back those generic rules. Newest on top; each entry keeps its date.
 
 ---
 
+## 2026-06-11 MEASUREMENT TRAP — never measure host/inter-frame timing from a Tracy run
+
+- **The "~32 ms inter-frame host gap" (iter-135 Part B) was a TRACY OBSERVER ARTIFACT,
+  not real** (iter-136 diagnostic). The number came from a `python -m tracy
+  --dump-device-data-mid-run` capture; that build sets `TT_METAL_DEVICE_PROFILER=1`, so
+  per frame `maybe_dump_device_profiler` calls `ReadMeshDeviceProfilerResults` + streams
+  zones over TCP, **stalling the host in the post-blend → next-`pfwc` window**. The REAL
+  production gap (env-gated `GSPLAT_TT_HOST_PROFILE=1` host chrono, NO profiler, 30 views,
+  warmup excluded) is **~4.86 ms/view** (unpack bf16→fp32 3.24 / pybind+c2w 0.76 / D2H
+  0.55 / head 0.18 / dispatch 0.07 / tail 0.004).
+- **Smoking gun (controlled A/B, same build/views):** only the post-blend `tail` scales
+  with profiler intrusiveness — clean tail=0.004 gap=4.86 frame=174.7; bare
+  `TT_METAL_DEVICE_PROFILER=1` tail=9.4 gap=14.5 frame=184.2; full mid-run tracy tail=17.3
+  gap=22.5; and the tracy warmup boundary=395.9 ms ≡ iter-135's reported 393 ms (same
+  artifact). Every non-tail component is constant.
+- **LESSON: Tracy/device-profiler perturbs HOST-side and inter-frame timing.** Trust
+  Tracy ONLY for on-device zone makespan (deterministic device cycles). For host gaps /
+  inter-frame / wall-clock, use the env-gated `GSPLAT_TT_HOST_PROFILE` chrono on a
+  NON-profiler build, or `render/run.py` frame avg/min — never a `--dump-device-data-mid-run`
+  capture. (`GSPLAT_TT_HOST_PROFILE` instrumentation is KEPT, env-gated, in render.cpp.)
+- Consequence: roadmap #2 (attack the inter-frame host gap) is REFUTED; the frame stays
+  device-kernel-bound (NCRISC sort/TA ~125 ms). The genuinely-reducible host *compute*
+  (sort host prefix/LPT ~3.8 ms) is a WITHIN-frame bubble, and iter-120 already showed
+  removing those in-order-CQ Finishes is frame-neutral.
+
+## 2026-06-11 NEW REF rebaseline VERIFIED on-device + devsync does NOT cover the verify clone
+
+- **NEW REF gate metric works on-device (PASS).** After commit `18e2f35` (gate is
+  now 8-bit PSNR vs committed golden `tests/fixtures/hero/hero_golden_8bit.png`,
+  md5 `e3fefb11…`), an on-device verify on `yyzo-bh-07` (build-ID `cpp#110
+  bin=ae4373403d20ecbd`, iter-132, `ninja: no work to do`) reported
+  `hero_vs_ref=100.00dB(8bit-vs-golden)` (bit-identical, `hero_diff10.png` all-black)
+  and secondary `hero_vs_cpu=63.95dB(float-vs-cpu)`. Freshly-rendered hero md5 ==
+  golden md5. Capped-100 means the loop parses a finite number, not `inf`.
+- **FOOTGUN — devsync leaves the device verify clone STALE.** The loop's
+  `remote_root` `/localdev/smarton/gstt2` is a **git worktree of `gsplat_tt`
+  symlinked to a SEPARATE clone (`gstt2-clone`)**. `devsync push` does NOT update it
+  because: (a) it skips worktrees (their `.git` is a *file*, so `find -name .git
+  -type d` misses them), and (b) it targets the `/proj_sw/user_dev/smarton` Weka
+  mirror, not `/localdev`. On the verify run the golden + new `run.py` were INITIALLY
+  ABSENT on the device (device git HEAD was `e28b5f9`, behind `18e2f35`) — run.py
+  would have silently fallen back to float-vs-CPU (~63.95, NOT 100). The worker had
+  to rsync the two committed files to the clone directly and md5-verify before
+  running. **Lesson: any commit touching files OUTSIDE `render/` (e.g.
+  `tests/fixtures/`) must be manually synced to `/localdev/smarton/gstt2` before a
+  device verify; do not trust `devsync` for the verify clone.** Workers already
+  rsync `render/` before building, so render-only changes are covered; everything
+  else is not. Fix candidate: add an explicit clone-sync (git fetch/checkout or a
+  targeted rsync of changed tracked files) to the devrun/verify prologue.
+
+## 2026-06-03 iter-59 try 2 — mat on CQ1 + publish/dir Finish on CQ0 still hangs
+
+- **Change (`ttw-059` try 2):** `MeshDevice::create_unit_mesh(..., num_command_queues=2)`;
+  pipe path = publish+dir on CQ0 → **`Finish(CQ0)`** (drain publish+dir only) →
+  `launch_subchunk_materialize` + **`Finish(CQ1)`** → `maybe_run_sort_blend_continuation`
+  (cull+blend on CQ0, single blend `Finish`). Iter-55 reader unchanged.
+- **Repro (1-view smoke, post-unwedge):** warmup prints `[SUBCHUNK] materialize_ms=712.22`
+  then **host hang** (no timed views, no SUMMARY) — same stall class as try 1 (post-mat,
+  blend `Finish`), not an early-Finish-on-shared-CQ-only failure.
+- **Status:** try 2 blocked; **reverted `render/host/{device_state,sort_device}.cpp` to
+  5624b96**. Step C mat-before-blend exhausted (try 1 + try 2); defer C2 / keep iter-55
+  mat-after-blend anchor until separate debug. No commit.
+
+## 2026-06-03 iter-59 — mat-before-blend enqueue-only still hangs (try 1)
+
+- **Change (`ttw-059` try 1):** pipe path = `mark_sort_publish_pending()` →
+  `launch_subchunk_materialize` (**enqueue only, no `Finish`**) →
+  `maybe_run_sort_blend_continuation`; removed post-blend mat+Finish block. Logs
+  `[SUBCHUNK] materialize_enqueued_ms=…`. iter-55 reader + anchor directory kernel
+  (`5624b96` layout) unchanged.
+- **Repro (post-`recover.sh --unwedge`, clean `render/build-tt`):** warmup prints
+  `[SUBCHUNK] materialize_enqueued_ms` + `[SORT]`, then **host hang** in blend
+  `Finish` (no `[run] timing`, no SUMMARY) — same stall as iter-58 try 2, not the
+  early-Finish mismatch.
+- **Env gotcha:** device had **fixed** directory kernel `[dir_base, num_sc]` while
+  iter-55 reader reads `num_subchunks` from meta `[off]` — yields ~34.9 dB false
+  fail without hanging; revert directory kernel to anchor before quality gates.
+- **SIGKILL wedged device:** killing a hung run wedges ARC; must `recover.sh
+  --unwedge` before further tries (anchor mat-after also hung post-SIGKILL).
+- **Status:** try 1 blocked; **reverted `sort_device.cpp` to 5624b96**. Tries 2–3
+  TBD (parent loop). No commit.
+
+## 2026-06-03 REPORT in-flight banner stale (supervisor must clear)
+
+- **`opt/current-iter.json` drives the yellow "NOW / in flight" card**, not
+  `iters.jsonl`. Leaving it on iter 57 after 57–59 blocked made `REPORT.html`
+  lie while the ledger showed 60 keep. On every blocked/keep: `build_report.py
+  --clear-in-flight` then full regen; on dispatch: `--set-in-flight` with the new
+  iter. See `tt-loop` skill § "Report + in-flight state".
+
+## 2026-06-03 iter-58 — mat-before-blend CQ hang (bisected)
+
+- **Repro (try 1, `ttw-058`):** reorder only — `launch_subchunk_materialize` + `Finish()`
+  **before** `maybe_run_sort_blend_continuation`, iter-55 reader unchanged. Post-JIT warmup
+  hang on first frame; **no `[SUBCHUNK]`** (stuck before/during mat `Finish`, same as iter 56/57).
+- **Root cause:** `sort_blend_pipe` uses one shared `command_queue()`; `mark_sort_publish_pending()`
+  means publish+dir must **not** be drained until blend’s `Finish` (see
+  `finish_sort_cq_if_needed` / `clear_sort_publish_pending` in `blend_device.cpp`). An
+  **intermediate `Finish` after materialize** drains publish+dir+mat while
+  `sort_publish_pending` is still true, then blend enqueues cull on an empty/mismatched CQ →
+  **host hang** (not a reader bug).
+- **Required ordering for step C:** enqueue **publish → directory → materialize → cull → blend**
+  with **one** `Finish` at blend readback (iter-55 safe order: mat **after** blend Finish).
+  Do **not** call `Finish` between mat and blend when the pipe flag is on.
+- **Try 2 (deferred finish):** mat enqueued before blend, no early `Finish` — process died
+  ~12s post-JIT (exit 255); device then wedged (baseline 5624b96 also hung after SIGKILL).
+  **Recover device** before more tries (`recover.sh`).
+- **Anchor:** **5624b96** (iter 55). No commit until gate on fixed ordering.
+
+## 2026-06-03 step C blocked — split C1/C2; fix dir meta layout
+
+- **Unified payload reader (iter 56) → 10.18 dB** (tile-grid corruption), not a small drift.
+  Required mat-before-blend; materialize was never exercised at blend until C. Device
+  `blend_subchunk_meta` writer used `[num_sc, count]` while reader expected
+  `[dir_base, num_sc]` — fix directory kernel before re-unifying paths.
+- **Split:** C1 overflow-only payload reader (keep in-budget `rd_bk_emit`); C2 in-budget
+  after C1 passes. mat-before-blend + iter-55 reader alone **hung** >25 min — debug
+  separately. Revert anchor: **5624b96** (iter 55).
+
+## 2026-06-03 unified subchunk plan — one step per iter; 3 tries then split
+
+- **Ship plan steps A→B→C→D→E as separate kept iterations, not one mega-diff.** The
+  in-flight iter-53 monolith (materialize + directory + unified reader, D still
+  open) is hard to bisect; prefer splitting on failure. User: *"If it can't be
+  fixed or near fixed in three tries, then split it."*
+- **Three tries per step:** repro → fix → re-verify on device; if still broken
+  after three attempts, split into a smaller step or revert — do not loop
+  indefinitely on the same combined changeset. See
+  `~/.cursor/plans/unified_l1_chunk_pipeline_9cc07f6a.plan.md`.
+
 ## 2026-06-02 timing metric (gsplat specifics)
 
 - **The gsplat timing metric is the AVERAGE FRAME TIME over ALL 30 bench views

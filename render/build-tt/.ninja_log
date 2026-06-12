@@ -1,0 +1,18 @@
+# ninja log v5
+33	1107	1780579216206651701	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/thread_pool.cpp.o	b8d37565b08293e6
+36	1163	1780579216262651647	CMakeFiles/render_tt.dir/host/jit_warmup.cpp.o	33ec1b3b95f28d3e
+34	1171	1780579216266651643	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/microblock_cull.cpp.o	7cacf5564f53c9ec
+34	1306	1780579216403456305	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/blend.cpp.o	77355d0ff1c96f78
+34	1501	1780579216598651320	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/sort.cpp.o	ce61715b3e965d5c
+33	1577	1780579216674651247	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/tile_assign.cpp.o	4996bcf34702115e
+34	2041	1780579217138650795	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/cull_and_blend.cpp.o	b84d9267f9b2d014
+34	2185	1780579217278650659	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/blend_microblock.cpp.o	9f94cddaf2525e6a
+33	2651	1780579217746650204	CMakeFiles/render_gsplat_cpu.dir/localdev/smarton/gstt2/src/gsplat_cpu/project.cpp.o	6641f76f3fe5feaa
+2653	2738	1780579217838650115	librender_gsplat_cpu.a	afcbfa4da39c5dd
+37	3315	1780579218414649555	CMakeFiles/render_tt.dir/host/device_state.cpp.o	d6e6ce641342bba9
+34	5750	1780579220846647191	CMakeFiles/render_tt.dir/host/project_device.cpp.o	9851984c066d8bcf
+34	5888	1780579220982647059	CMakeFiles/render_tt.dir/host/gather_visible_device.cpp.o	a253f94cb50279f2
+34	6166	1780579221262646787	CMakeFiles/render_tt.dir/host/pfwc_device.cpp.o	71182698c7f69753
+35	6227	1780579221322646729	CMakeFiles/render_tt.dir/host/tile_assign_device.cpp.o	8f349778de6d8e98
+37	7212	1780579222306645773	CMakeFiles/render_tt.dir/host/sort_device.cpp.o	476be2a050444730
+1115	8200	1780579223286644820	CMakeFiles/render_clean.dir/host/render.cpp.o	340d2ae5a4209031

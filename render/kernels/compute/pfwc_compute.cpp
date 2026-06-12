@@ -44,6 +44,11 @@
 #include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/eltwise_unary/rounding.h"
 
+#ifdef TRISC_MATH
+#include "sfpi.h"
+#include "llk_math_eltwise_unary_sfpu.h"
+#endif
+
 namespace {
 
 // CB layout — must match pfwc_device.cpp.
@@ -78,6 +83,15 @@ constexpr uint32_t CB_TMP_CC02   = 23;
 constexpr uint32_t CB_TMP_CC11   = 24;
 constexpr uint32_t CB_TMP_CC12   = 25;
 constexpr uint32_t CB_TMP_CC22   = 26;
+
+// A1 (iter 111): per-gaussian conic scratch. cov2d a,b,c are computed into these
+// scratch CBs (instead of straight to the cov2d outputs); a final conic block
+// reads them back and folds a,b,c -> A,B,C ON THE SFPU, then emits A,B,C as the
+// stored "cov2d" output words. Downstream blend/cull consume A,B,C directly,
+// removing the per-(gaussian × microblock) conic recompute from the SFPU wall.
+constexpr uint32_t CB_TMP_A      = 27;
+constexpr uint32_t CB_TMP_B      = 28;
+constexpr uint32_t CB_TMP_C      = 29;
 
 constexpr uint32_t COV3D_CB[6] = {CB_C00, CB_C11, CB_C22, CB_C01, CB_C02, CB_C12};
 constexpr uint32_t CC_SCRATCH[6] = {
@@ -122,6 +136,45 @@ inline void compute_cc_entry_to_scratch(uint32_t base_arg, uint32_t cb_out_scrat
     tile_regs_wait();
     emit_scratch(0, cb_out_scratch);
     tile_regs_release();
+}
+
+#ifdef TRISC_MATH
+// A1 conic fold for ONE 32-lane vector V of the chunk tile. DEST tile 0 holds
+// cov2d_a, tile 1 cov2d_b, tile 2 cov2d_c (32 vectors each). Fold a,b,c -> A,B,C
+// IN PLACE (slot 0=A, 1=B, 2=C). The op sequence is lifted VERBATIM from
+// alpha_blend_compute_mb.cpp::blend_one_gaussian_math (same approx_recip + 2
+// Newton iterations + 1e-6 det floor + the -0.5 folding and operand order) so
+// the emitted A,B,C are BIT-IDENTICAL to what the blend kernel computed today.
+// Each lane carries a distinct gaussian, but approx_recip/vec_min_max are pure
+// per-lane ops, so per-gaussian results match the per-broadcast blend math.
+template <uint32_t V>
+__attribute__((noinline, noipa)) void pfwc_conic_one() {
+    using namespace sfpi;
+    vFloat cov_a = dst_reg[0 * 32 + V];
+    vFloat cov_b = dst_reg[1 * 32 + V];
+    vFloat cov_c = dst_reg[2 * 32 + V];
+    vFloat det = cov_a * cov_c - cov_b * cov_b;
+    vFloat det_floor = 1e-6f;
+    vec_min_max(det_floor, det);          // det = max(det, 1e-6)
+    vFloat inv = approx_recip(det);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    inv = inv * (vFloat(2.0f) - det * inv);
+    dst_reg[0 * 32 + V] = vFloat(-0.5f) * (cov_c * inv);  // A
+    dst_reg[1 * 32 + V] = cov_b * inv;                    // B
+    dst_reg[2 * 32 + V] = vFloat(-0.5f) * (cov_a * inv);  // C
+}
+#endif
+
+// Compile-time unrolled fold over all 32 vectors of the chunk tile. Each call
+// reads/writes a DISTINCT vector address (V), so there is no DEST
+// read-after-write hazard across the unroll (cf. the cull kernel's phased
+// dispatch, which DID share addresses).
+template <uint32_t V>
+inline void pfwc_conic_unroll() {
+    if constexpr (V < 32) {
+        MATH((pfwc_conic_one<V>()));
+        pfwc_conic_unroll<V + 1>();
+    }
 }
 
 inline void translate_and_pack(uint32_t cb_in, uint32_t t_bits, uint32_t cb_out) {
@@ -314,10 +367,10 @@ void kernel_main() {
 
             add_unary_tile(0, pt3_fp32_bits);   // dst[0] = a
 
-            // emit a → output
+            // A1: stash a into scratch (conic fold below emits the cov2d words).
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_A);
+            emit_scratch(0, CB_TMP_A);
             tile_regs_release();
         }
 
@@ -377,7 +430,7 @@ void kernel_main() {
 
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_B);
+            emit_scratch(0, CB_TMP_B);
             tile_regs_release();
         }
 
@@ -424,7 +477,31 @@ void kernel_main() {
 
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_C);
+            emit_scratch(0, CB_TMP_C);
+            tile_regs_release();
+        }
+
+        // ── 9.5 (A1). Conic fold: A,B,C from the scratch a,b,c, BIT-IDENTICAL
+        // to alpha_blend_compute_mb's per-microblock derivation, emitted as the
+        // stored cov2d words. Blend/cull downstream consume A,B,C directly.
+        {
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_TMP_A);
+            copy_tile(CB_TMP_A, 0, 0);
+            copy_tile_to_dst_init_short(CB_TMP_B);
+            copy_tile(CB_TMP_B, 0, 1);
+            copy_tile_to_dst_init_short(CB_TMP_C);
+            copy_tile(CB_TMP_C, 0, 2);
+
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            pfwc_conic_unroll<0>();
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_dst(0, CB_A);
+            emit_dst(1, CB_B);
+            emit_dst(2, CB_C);
             tile_regs_release();
         }
 
@@ -540,6 +617,9 @@ void kernel_main() {
         cb_pop_front(CB_TMP_CC11, 1);
         cb_pop_front(CB_TMP_CC12, 1);
         cb_pop_front(CB_TMP_CC22, 1);
+        cb_pop_front(CB_TMP_A, 1);
+        cb_pop_front(CB_TMP_B, 1);
+        cb_pop_front(CB_TMP_C, 1);
 
         // ── 13. Drain remaining inputs (means_cam).
         cb_pop_front(CB_MCX, 1);

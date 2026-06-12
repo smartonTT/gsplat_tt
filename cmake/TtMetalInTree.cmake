@@ -55,6 +55,14 @@ function(gsplat_link_tt_metal target)
 
   target_link_libraries(${target} PUBLIC "${TT_METAL_SO}")
 
+  # tt-metal uses SPDLOG_COMPILED_LIB + SPDLOG_FMT_EXTERNAL; without linking
+  # libspdlog (and its bundled fmt objects) device modules that pull tt headers
+  # can load with undefined fmt::format_system_error.
+  set(_spdlog_a "${TT_BUILD}/_deps/spdlog-build/libspdlog.a")
+  if(EXISTS "${_spdlog_a}")
+    target_link_libraries(${target} PUBLIC "${_spdlog_a}")
+  endif()
+
   # Host Tracy (same 0.10 client as tt-metal ENABLE_TRACY builds).
   set(_tracy_so "${TT_BUILD}/lib/libtracy.so.0.10.0")
   set(_tracy_inc "")

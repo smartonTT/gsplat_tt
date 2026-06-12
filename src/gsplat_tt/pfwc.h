@@ -49,7 +49,13 @@ struct PfwcCallTimings {
 //                  D2H, registered "pfwc_rx", "pfwc_ry".
 //
 // Returns total wall-time of the call in ms, or -1.0 on failure.
+// iter-133 fusion: pfwc_tt now also runs the world→camera means transform
+// in-kernel (the former standalone project_means_cam program is fused in), so
+// it takes `means` directly and no longer depends on a prior project_tt call /
+// device-resident means_cam buffers.
+//   means : (N, 3) row-major world-space means.
 double pfwc_tt(
+    const float* means,
     const float* cov3d_unique,
     const float* extrinsics,
     const float* intrinsics,

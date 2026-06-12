@@ -407,6 +407,11 @@ void kernel_main() {
                 r[0] = p_a[il];   r[1] = p_b[il];   r[2] = p_c[il];
                 r[3] = p_m2x[il]; r[4] = p_m2y[il]; r[5] = p_op[il];
                 r[6] = p_cr[il];  r[7] = p_cg[il];  r[8] = p_cb[il];
+                // iter 132: revert the iter-131 birth-side UNORM16 pack. Writing
+                // op/color as fp32 keeps the pack OFF the BRISC proj_scatter long
+                // pole; the UNORM16 pack now runs ONCE per gaussian on the NCRISC
+                // side (sort_bin pack_invariants), which publishes the two packed
+                // words into blendrec[10],[11] for the materialize overflow gather.
                 r[9] = 0; r[10] = 0; r[11] = 0; r[12] = 0;
                 r[13] = 0; r[14] = 0; r[15] = 0;
             }
