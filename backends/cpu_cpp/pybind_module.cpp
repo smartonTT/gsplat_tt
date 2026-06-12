@@ -1010,7 +1010,7 @@ static gsplat_cpu::ProjectResult project_via_device(
     std::vector<float> mean_2d, depth, cov2d, radii;
     const auto t_pf0 = prof_clock::now();
     if (resident_project) {
-        if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+        if (gsplat_tt::pfwc_tt(means, cov3d_u.data(), extrinsics, intrinsics, N,
                                nullptr, nullptr, nullptr, nullptr, &pf_t) < 0.0)
             return empty;
     } else {
@@ -1018,7 +1018,7 @@ static gsplat_cpu::ProjectResult project_via_device(
         depth.resize(N);
         cov2d.resize(N * 3);
         radii.resize(N * 2);
-        if (gsplat_tt::pfwc_tt(cov3d_u.data(), extrinsics, intrinsics, N,
+        if (gsplat_tt::pfwc_tt(means, cov3d_u.data(), extrinsics, intrinsics, N,
                                mean_2d.data(), depth.data(), cov2d.data(),
                                radii.data(), &pf_t) < 0.0)
             return empty;
@@ -1843,7 +1843,13 @@ PYBIND11_MODULE(_gsplat_cpu, m) {
             float* c2d_ptr = download ? cov2d.mutable_data()   : nullptr;
             float* r_ptr   = download ? radii.mutable_data()   : nullptr;
             gsplat_tt::PfwcCallTimings timings;
+            // iter-133 fused the means->camera transform into pfwc_tt, so it now
+            // takes `means` as the first arg. This manual test hook predates the
+            // fusion and does not supply means; pass nullptr (it is not on the
+            // render path — run.py never calls transform_pfwc_tt). Kept only so
+            // the extension links/imports.
             const double kernel_ms = gsplat_tt::pfwc_tt(
+                nullptr,
                 static_cast<const float*>(c_info.ptr),
                 static_cast<const float*>(e_info.ptr),
                 static_cast<const float*>(i_info.ptr),
