@@ -1,7 +1,22 @@
 # Sort: L1-resident, DRAM-free plan
 
-Status: PLANNED (not yet executed). Owner: supervisor.
-Companion to `opt/blend-cull-speedup-plan.md`.
+Status: **FROZEN at the 173.1 ms plateau (iter-141, 2026-06-11).** Owner: supervisor.
+Companion to `opt/blend-cull-speedup-plan.md`. Final write-up: `opt/FINAL-REPORT.md`.
+
+> ## ⛔ FROZEN — 173.1 ms is the architectural floor for this renderer design
+> Every lever is exhausted or refuted. The endgame, in order:
+> - **No missed incremental lever** (iter-139 audit): all top zones at structural floors, refuted, or
+>   SFPU-backpressured (off-path). Frame drove ~236 → **173.3 ms, bit-identical (hero_vs_ref=100.00)**.
+> - **Overlap MECHANISM proven** (iter-140): NCRISC↔SFPU run concurrently on same cores under one CQ
+>   (fused=max not sum, zero hangs) — refuted the lean-no-go premise.
+> - **Cheap rewrite version banks ~0** (iter-141): scoped in-budget sort→cull fusion is sub-noise
+>   (cull already one overlapped program; in-budget emit ~1.7 ms; readers already backpressure-shadowed).
+> - **Heavy rewrite version NO-GO** (iter-141 feasibility): the ~32 ms `sort_bucket_emit` prize is a
+>   GLOBAL gaussian→tile transpose gated by a prefix-sum barrier → **0 ms pipelinable** per-tile; the
+>   only per-tile heavy stage (materialize ~12 ms) is already shadowed; L1 (exactly 1.5 MB) blows the
+>   budget on the heavy/overflow tiles; net would be **~+33-42 ms WORSE** after the ~45-54 ms prereq
+>   regression hole. Notes: `tmp/stage2-pipeline-feasibility-notes.md`.
+> **Sub-173 ms requires a fundamentally different algorithm (not this pipeline).** See `opt/FINAL-REPORT.md`.
 
 ---
 
