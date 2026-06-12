@@ -9,6 +9,31 @@ back those generic rules. Newest on top; each entry keeps its date.
 
 ---
 
+## 2026-06-11 MEASUREMENT TRAP — never measure host/inter-frame timing from a Tracy run
+
+- **The "~32 ms inter-frame host gap" (iter-135 Part B) was a TRACY OBSERVER ARTIFACT,
+  not real** (iter-136 diagnostic). The number came from a `python -m tracy
+  --dump-device-data-mid-run` capture; that build sets `TT_METAL_DEVICE_PROFILER=1`, so
+  per frame `maybe_dump_device_profiler` calls `ReadMeshDeviceProfilerResults` + streams
+  zones over TCP, **stalling the host in the post-blend → next-`pfwc` window**. The REAL
+  production gap (env-gated `GSPLAT_TT_HOST_PROFILE=1` host chrono, NO profiler, 30 views,
+  warmup excluded) is **~4.86 ms/view** (unpack bf16→fp32 3.24 / pybind+c2w 0.76 / D2H
+  0.55 / head 0.18 / dispatch 0.07 / tail 0.004).
+- **Smoking gun (controlled A/B, same build/views):** only the post-blend `tail` scales
+  with profiler intrusiveness — clean tail=0.004 gap=4.86 frame=174.7; bare
+  `TT_METAL_DEVICE_PROFILER=1` tail=9.4 gap=14.5 frame=184.2; full mid-run tracy tail=17.3
+  gap=22.5; and the tracy warmup boundary=395.9 ms ≡ iter-135's reported 393 ms (same
+  artifact). Every non-tail component is constant.
+- **LESSON: Tracy/device-profiler perturbs HOST-side and inter-frame timing.** Trust
+  Tracy ONLY for on-device zone makespan (deterministic device cycles). For host gaps /
+  inter-frame / wall-clock, use the env-gated `GSPLAT_TT_HOST_PROFILE` chrono on a
+  NON-profiler build, or `render/run.py` frame avg/min — never a `--dump-device-data-mid-run`
+  capture. (`GSPLAT_TT_HOST_PROFILE` instrumentation is KEPT, env-gated, in render.cpp.)
+- Consequence: roadmap #2 (attack the inter-frame host gap) is REFUTED; the frame stays
+  device-kernel-bound (NCRISC sort/TA ~125 ms). The genuinely-reducible host *compute*
+  (sort host prefix/LPT ~3.8 ms) is a WITHIN-frame bubble, and iter-120 already showed
+  removing those in-order-CQ Finishes is frame-neutral.
+
 ## 2026-06-11 NEW REF rebaseline VERIFIED on-device + devsync does NOT cover the verify clone
 
 - **NEW REF gate metric works on-device (PASS).** After commit `18e2f35` (gate is
