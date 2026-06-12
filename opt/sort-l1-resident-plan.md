@@ -27,12 +27,30 @@ Frame is at the **173.1 ms PLATEAU** (bit-identical). Two read-only scopes settl
   ~45-54 ms prerequisite regression hole (host_free_mp +31, on-device layout +13-23). SFPU is a
   shared serial resource (cull+blend can't co-run) and every prior sort→blend fusion HUNG the
   device (iters 52, 55-59). Risk-adjusted EV is poor.
-- **DECISIVE GATE = Stage-0 falsification microbench** (iter-140): one persistent per-core kernel
-  double-buffering sort-emit (NCRISC, tile T+1) against cull (SFPU, tile T) — the cleanest
-  NCRISC↔SFPU overlap probe. Single in-order CQ, no intermediate Finish (hang-safe). **KILL: if
-  fused makespan ≈ sum (no overlap) → persistent kernels hit the same wall as trace → FREEZE at
-  173.1 and write the final report.** If makespan → max (~20 ms signal) → proceed to staged L1
-  handoff (Stages 1-3). Full scope notes: `tmp/hostfree-rewrite-scope-notes.md`.
+- **DECISIVE GATE = Stage-0 falsification microbench (iter-140): ★ PASSED → PROCEED.** A persistent
+  per-core probe overlapping NCRISC stores against SFPU cull under ONE in-order CQ + CB handshake
+  measured **fused makespan 73.66 ms = max(73.66, 22)**, NOT the barrier-separated sum 95.65 ms —
+  the entire ~22 ms SFPU stage HID under the NCRISC stage (**23% reduction, 93.1% same-core
+  concurrency, hero_vs_ref=100.00, ZERO hangs across 6 runs**). This REFUTES the lean-no-go: the
+  rewrite's load-bearing assumption (NCRISC↔SFPU overlap on same cores) HOLDS, and the iter-55-59
+  hangs were the 2nd-CQ / intermediate-Finish-while-publish-pending class — NOT same-program
+  overlap. **The 173.1 ms plateau is NOT the architectural floor.** Caveat: synthetic store proxy
+  proves the MECHANISM; real-stage overlap efficiency is the Stage-1 measurement.
+
+### ★★ REWRITE IN PROGRESS — staged persistent-kernel / L1-handoff (post iter-140)
+Gate passed → committing to the staged rewrite (full design: `tmp/hostfree-rewrite-scope-notes.md` §B3).
+Each stage is independently KEEP/REVERT-able with a kill-criterion; hang-safe ordering MANDATORY
+(single in-order CQ, no 2nd CQ, no intermediate Finish while publish-pending, CB-fence handshake).
+- **Stage 1 (iter-141, NEXT): L1-resident sort→cull handoff for in-budget tiles.** Sort emits the
+  depth-sorted PACK2 slab into L1 in cull's vector layout; cull reads from L1 (not the DRAM slab),
+  fused with sort under one CQ so the SFPU cull hides under NCRISC emit. Hypothesis: deletes the
+  `tile_l1_cull_rd` DRAM dependency AND realizes the measured overlap on the REAL stages. Kill: any
+  hang unresolved in 3 tries → split/revert; if real-stage overlap ≪ the 23% microbench signal →
+  reassess. Expect bit-identical (schedule + L1-residency, same math).
+- **Stage 2 (later): extend L1 handoff through blend** (delete blend DRAM readers; NCRISC dataflow
+  ~73 overlaps SFPU ~52). Kill: if frame doesn't drop below ~150 ms, pipelining isn't compounding.
+- **Stage 3 (later): device-ify inter-stage glue + persistent project/TA** (re-test S5.1/5.3/5.4/5.5
+  under persistence; pay back the ~45-54 ms prerequisite regression hole via pipelining).
 
 ### Where the frame stands (measured, iter 132)
 Frame **177.1 avg / 142.3 min ms/view**. Critical path = **BRISC-FW ~161.7 ms**
