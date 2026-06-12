@@ -23,7 +23,9 @@ void jit_warmup_ideal_path() {
     std::call_once(once, []() {
         const auto t0 = std::chrono::steady_clock::now();
         (void)device_state::get_device();
-        (void)project_device_ready();
+        // iter-133: the standalone project_means_cam program is fused into pfwc;
+        // only the fused pfwc context is warmed (project_device.cpp is no longer
+        // on the render path).
         (void)pfwc_device_ready();
         (void)gather_visible_device_ready();
         (void)tile_assign_device_ready();

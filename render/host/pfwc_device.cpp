@@ -2,12 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// In-process host driver for gsplat_tt pfwc — amendment-002 tt-008c.
+// In-process host driver for gsplat_tt FUSED project(means_cam)+pfwc —
+// amendment-002 tt-008c / iter-133 (program fusion #1).
 //
-// Companion to project_device.cpp; runs after the project kernel has
-// populated means_cam_x/y/z (registered in gsplat_tt::device_state by
-// the project context). The kernel reads those buffers via NoC plus a
-// one-time cached cov3d upload, and produces 8 per-Gaussian outputs:
+// iter-133: the former standalone project_means_cam program is fused into this
+// ONE program (single CreateProgram / EnqueueMeshWorkload). The reader streams
+// world-space means (mx,my,mz) + cov3d unique; the compute kernel runs the
+// world→camera means transform in L1 (no means_cam DRAM round-trip) and then the
+// pfwc body; the writer emits 8 per-Gaussian outputs:
 //   mean_2d.{x,y}, depth, cov2d.{a,b,c}, radii.{x,y}
 // All 8 outputs are registered in device_state under
 //   pfwc_m2x / pfwc_m2y / pfwc_depth / pfwc_a / pfwc_b / pfwc_c /
@@ -58,10 +60,12 @@ constexpr uint32_t TILE_W = 32;
 constexpr uint32_t ELEMS_PER_TILE = TILE_H * TILE_W;
 constexpr uint32_t TILE_BYTES_FP32 = ELEMS_PER_TILE * sizeof(float);
 
-// CB layout — must match pfwc_compute.cpp and writer_pfwc.cpp.
-constexpr uint32_t CB_MCX = 0;
-constexpr uint32_t CB_MCY = 1;
-constexpr uint32_t CB_MCZ = 2;
+// CB layout — must match project_pfwc_compute.cpp and writer_pfwc.cpp.
+// iter-133 fusion: CBs 0,1,2 now carry the WORLD-space means (mx,my,mz); the
+// fused compute kernel applies the means_cam transform + translation in L1.
+constexpr uint32_t CB_MX  = 0;
+constexpr uint32_t CB_MY  = 1;
+constexpr uint32_t CB_MZ  = 2;
 constexpr uint32_t CB_C00 = 3;
 constexpr uint32_t CB_C01 = 4;
 constexpr uint32_t CB_C02 = 5;
@@ -100,6 +104,17 @@ struct PfwcDeviceContext {
     KernelHandle writer{};
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+
+    // Cached world-space means input buffers (3 SoA streams). iter-133 fusion:
+    // the fused kernel reads means directly and runs the means_cam transform in
+    // L1, so there is no longer a separate project program / means_cam DRAM
+    // round-trip. Pointer-keyed upload cache (fires on frame 0 only).
+    std::shared_ptr<distributed::MeshBuffer> buf_mx;
+    std::shared_ptr<distributed::MeshBuffer> buf_my;
+    std::shared_ptr<distributed::MeshBuffer> buf_mz;
+    std::size_t means_cached_bytes = 0;
+    const float* uploaded_means_ptr = nullptr;
+    std::size_t uploaded_means_N = 0;
 
     // Cached cov3d input buffers (6 SoA streams of unique entries).
     std::shared_ptr<distributed::MeshBuffer> buf_c00;
@@ -175,6 +190,44 @@ static Cov3dSoa pack_cov3d_soa(const float* cov3d_unique, std::size_t N) {
     return s;
 }
 
+struct MeansSoa {
+    std::vector<float> mx, my, mz;
+    uint32_t num_tiles = 0;
+    uint32_t padded_n = 0;
+};
+
+static MeansSoa pack_means_soa(const float* means, std::size_t N) {
+    const uint32_t num_tiles =
+        static_cast<uint32_t>((N + ELEMS_PER_TILE - 1) / ELEMS_PER_TILE);
+    const uint32_t padded_n = num_tiles * ELEMS_PER_TILE;
+    MeansSoa s;
+    s.num_tiles = num_tiles;
+    s.padded_n = padded_n;
+    s.mx.resize(padded_n);
+    s.my.resize(padded_n);
+    s.mz.resize(padded_n);
+
+    auto& pool = soa_pool();
+    const std::size_t W = pool.size();
+    const std::size_t chunk = (N + W - 1) / W;
+    for (std::size_t w = 0; w < W; ++w) {
+        pool.submit([w, chunk, N, means, &s]() {
+            const std::size_t lo = std::min(w * chunk, N);
+            const std::size_t hi = std::min(lo + chunk, N);
+            for (std::size_t i = lo; i < hi; ++i) {
+                s.mx[i] = means[i * 3 + 0];
+                s.my[i] = means[i * 3 + 1];
+                s.mz[i] = means[i * 3 + 2];
+            }
+        });
+    }
+    pool.wait();
+    for (std::size_t i = N; i < padded_n; ++i) {
+        s.mx[i] = 0.0f; s.my[i] = 0.0f; s.mz[i] = 0.0f;
+    }
+    return s;
+}
+
 static inline uint32_t fp32_bits(float v) {
     uint32_t u;
     std::memcpy(&u, &v, sizeof(uint32_t));
@@ -212,8 +265,8 @@ static void build_program(PfwcDeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     };
 
-    // 9 input CBs (means_cam + cov3d unique)
-    cb_fp32(CB_MCX, 2); cb_fp32(CB_MCY, 2); cb_fp32(CB_MCZ, 2);
+    // 9 input CBs (world means + cov3d unique)
+    cb_fp32(CB_MX, 2); cb_fp32(CB_MY, 2); cb_fp32(CB_MZ, 2);
     cb_fp32(CB_C00, 2); cb_fp32(CB_C01, 2); cb_fp32(CB_C02, 2);
     cb_fp32(CB_C11, 2); cb_fp32(CB_C12, 2); cb_fp32(CB_C22, 2);
     // 8 output CBs (mean_2d, depth, cov2d, radii)
@@ -228,7 +281,10 @@ static void build_program(PfwcDeviceContext& ctx) {
     // 3 conic scratch CBs (A1): cov2d a,b,c stashed, then folded to A,B,C.
     cb_fp32(CB_TMP_A, 2);      cb_fp32(CB_TMP_B, 2);      cb_fp32(CB_TMP_C, 2);
 
-    // Reader: 9 input streams (unchanged layout).
+    // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
+    // layout as before; the fused kernel just reads world means in slots 0..2
+    // (instead of the project program's means_cam output), so reader_pfwc.cpp is
+    // reused verbatim — only the runtime base addresses change.
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < 9; ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -246,7 +302,7 @@ static void build_program(PfwcDeviceContext& ctx) {
     // tt-007 fp32 unpack-to-DEST for every FP32 CB the compute kernel reads
     // (inputs + scratch). Outputs are pack-only, no unpack mode needed.
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
-    for (uint32_t cb : {CB_MCX, CB_MCY, CB_MCZ,
+    for (uint32_t cb : {CB_MX, CB_MY, CB_MZ,
                         CB_C00, CB_C01, CB_C02,
                         CB_C11, CB_C12, CB_C22,
                         CB_TMP_TX, CB_TMP_TY, CB_TMP_TZ, CB_TMP_INV_TZ,
@@ -264,7 +320,7 @@ static void build_program(PfwcDeviceContext& ctx) {
     // is dominated by math anyway.
     ctx.compute = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/compute/pfwc_compute.cpp",
+        OVERRIDE_KERNEL_PREFIX "kernels/compute/project_pfwc_compute.cpp",
         cores,
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi4,
@@ -359,6 +415,7 @@ void pfwc_device_shutdown() {
 }
 
 double pfwc_tt(
+    const float* means,
     const float* cov3d_unique,
     const float* extrinsics,
     const float* intrinsics,
@@ -396,6 +453,19 @@ double pfwc_tt(
         static_cast<uint32_t>((N + ELEMS_PER_TILE - 1) / ELEMS_PER_TILE);
     const uint32_t padded_n = num_tiles * ELEMS_PER_TILE;
     const std::size_t soa_bytes = static_cast<std::size_t>(padded_n) * sizeof(float);
+
+    // Allocate or grow world-means DRAM buffers (iter-133 fusion input).
+    if (!ctx->buf_mx || ctx->means_cached_bytes < soa_bytes) {
+        distributed::DeviceLocalBufferConfig dram_cfg{
+            .page_size = TILE_BYTES_FP32, .buffer_type = BufferType::DRAM};
+        distributed::ReplicatedBufferConfig rep_cfg{.size = soa_bytes};
+        ctx->buf_mx = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_my = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->buf_mz = distributed::MeshBuffer::create(rep_cfg, dram_cfg, ctx->mesh_device.get());
+        ctx->means_cached_bytes = soa_bytes;
+        ctx->uploaded_means_ptr = nullptr;
+        ctx->uploaded_means_N = 0;
+    }
 
     // Allocate or grow cov3d / output DRAM buffers.
     if (!ctx->buf_c00 || ctx->cov3d_cached_bytes < soa_bytes) {
@@ -436,6 +506,24 @@ double pfwc_tt(
         device_state::register_buffer("pfwc_ry", ctx->buf_ry);
     }
 
+    // world-means upload (cached across views — fires on frame 0 only, since
+    // means_3d is a single tensor reused for all 30 views).
+    const bool means_hit =
+        ctx->uploaded_means_ptr == means && ctx->uploaded_means_N == N;
+    if (!means_hit) {
+        const auto m_pack0 = std::chrono::high_resolution_clock::now();
+        const MeansSoa msoa = pack_means_soa(means, N);
+        const auto m_pack1 = std::chrono::high_resolution_clock::now();
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mx, msoa.mx, /*blocking=*/false);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_my, msoa.my, /*blocking=*/false);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mz, msoa.mz, /*blocking=*/false);
+        const auto m_pack2 = std::chrono::high_resolution_clock::now();
+        T.pack_ms += std::chrono::duration<double, std::milli>(m_pack1 - m_pack0).count();
+        T.upload_ms += std::chrono::duration<double, std::milli>(m_pack2 - m_pack1).count();
+        ctx->uploaded_means_ptr = means;
+        ctx->uploaded_means_N = N;
+    }
+
     // cov3d upload (cached across views).
     T.cache_hit =
         ctx->uploaded_cov3d_ptr == cov3d_unique && ctx->uploaded_cov3d_N == N;
@@ -450,21 +538,18 @@ double pfwc_tt(
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c12, soa.c12, /*blocking=*/false);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_c22, soa.c22, /*blocking=*/false);
         const auto t_pack2 = std::chrono::high_resolution_clock::now();
-        T.pack_ms = std::chrono::duration<double, std::milli>(t_pack1 - t_pack0).count();
-        T.upload_ms = std::chrono::duration<double, std::milli>(t_pack2 - t_pack1).count();
+        T.pack_ms += std::chrono::duration<double, std::milli>(t_pack1 - t_pack0).count();
+        T.upload_ms += std::chrono::duration<double, std::milli>(t_pack2 - t_pack1).count();
         ctx->uploaded_cov3d_ptr = cov3d_unique;
         ctx->uploaded_cov3d_N = N;
     }
 
-    // Pull mc{x,y,z} addresses from the project context's device-registered
-    // buffers.
-    auto buf_mcx = device_state::get_buffer("means_cam_x");
-    auto buf_mcy = device_state::get_buffer("means_cam_y");
-    auto buf_mcz = device_state::get_buffer("means_cam_z");
-    if (!buf_mcx || !buf_mcy || !buf_mcz) {
-        std::cerr << "[gsplat_tt::pfwc] means_cam_* not registered — call project_tt first\n";
-        return -1.0;
-    }
+    // iter-133 fusion: world means feed the reader directly (the fused compute
+    // kernel runs the means_cam transform in L1). No separate project program /
+    // means_cam DRAM round-trip.
+    auto& buf_mx = ctx->buf_mx;
+    auto& buf_my = ctx->buf_my;
+    auto& buf_mz = ctx->buf_mz;
 
     std::vector<uint32_t> cc_scales;
     pack_cc_scales(r, cc_scales);  // 36 fp32 bits
@@ -488,9 +573,9 @@ double pfwc_tt(
 
         SetRuntimeArgs(
             program, ctx->reader, core,
-            {static_cast<uint32_t>(buf_mcx->address()),
-             static_cast<uint32_t>(buf_mcy->address()),
-             static_cast<uint32_t>(buf_mcz->address()),
+            {static_cast<uint32_t>(buf_mx->address()),
+             static_cast<uint32_t>(buf_my->address()),
+             static_cast<uint32_t>(buf_mz->address()),
              static_cast<uint32_t>(ctx->buf_c00->address()),
              static_cast<uint32_t>(ctx->buf_c01->address()),
              static_cast<uint32_t>(ctx->buf_c02->address()),
