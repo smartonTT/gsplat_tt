@@ -1941,6 +1941,42 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             }
             const auto t_e1 = clk::now();
             T.bin_emit_ms = ms_t(t_e1 - t_e0).count();
+            // GSPLAT_TT_SORT_ATOMIC_CHECK=1: read the chunk table back and check
+            // that each tile's chunks tile [0, total) exactly (debug only).
+            static const bool atomic_check = [] {
+                const char* e = std::getenv("GSPLAT_TT_SORT_ATOMIC_CHECK");
+                return e != nullptr && e[0] == '1';
+            }();
+            if (atomic_check) {
+                std::vector<uint32_t> tbl(ctx->cap_atable_bytes / 4, 0u);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, tbl, ctx->buf_atable, true);
+                uint32_t bad = 0;
+                for (uint32_t t = 0; t < num_tiles; t++) {
+                    std::vector<std::pair<uint32_t, uint32_t>> ch;
+                    uint64_t sum = 0;
+                    for (uint32_t c = 0; c < num_cores; c++) {
+                        const uint32_t e = tbl[static_cast<std::size_t>(c) * stride + t];
+                        if (e == 0u) continue;
+                        ch.emplace_back(e & 0xFFFFu, e >> 16);
+                        sum += e >> 16;
+                    }
+                    std::sort(ch.begin(), ch.end());
+                    bool ok = (sum == tot[t]);
+                    uint32_t next = 0;
+                    for (const auto& [b, l] : ch) {
+                        ok = ok && (b == next);
+                        next = b + l;
+                    }
+                    if (!ok && bad++ < 8) {
+                        std::fprintf(stderr, "[SORT] ATOMIC_CHECK tile %u total %u chunk_sum %llu chunks %zu",
+                                     t, tot[t], static_cast<unsigned long long>(sum), ch.size());
+                        for (std::size_t i = 0; i < ch.size() && i < 6; i++)
+                            std::fprintf(stderr, " [%u,+%u)", ch[i].first, ch[i].second);
+                        std::fprintf(stderr, "\n");
+                    }
+                }
+                std::fprintf(stderr, "[SORT] ATOMIC_CHECK bad_tiles=%u\n", bad);
+            }
             T.bin_ms = T.bin_emit_ms;
 
             // Per-tile layout from the totals alone.
