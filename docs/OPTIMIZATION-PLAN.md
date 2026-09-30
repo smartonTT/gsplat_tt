@@ -306,6 +306,7 @@ Ranked by expected gain per unit effort. Effort: **S** ≤1 day, **M** 2–4 day
 | **R9** | Move per-pair scalar float/UNORM work to the idle SFPU | −5 to −12 ms | M–L | med | bit-identical-ish (fp32 SFPU) |
 | **R10** | Overlap the 3.24 ms image unpack + 0.55 ms D2H with the next view | −3.8 ms (throughput only) | S | low | bit-identical |
 | **R16** | Kill the mid-sort host serialisation: move `host_bin_layout_from_hist` on-device (or overlap it with the previous view) and shrink the ~9–10 ms `publish` H2D | −5 to −12 ms | M | low–med | bit-identical |
+| | **Status (task #18, measured):** the host part was only ~2.4 ms and `publish` was device time (radix + a single-core directory kernel). Landed −6.5 ms/view on sort (layout rewrite, host-uploaded directory, emit reads the count histogram, batched count reads); host bridge now ~0.65 ms, at its floor. See `docs/sort-stage-split-2026-09-30.md`. | | | | |
 | **R11** | Adaptive radix bucket count in `sort_tile_depth` | −2 to −3 ms | S–M | low | bit-identical |
 | **R12** | `Q = Φθᵀ` as `matmul_tiles` on the FPU + tilized θ operand | ~0 now; −10 to −20 ms after the pole flips to SFPU | L | med | refreeze golden |
 | **R13** | Fitted polynomial replacing `_sfpu_exp_21f_bf16_` | ~0 alone; prerequisite for R12 | S | low | refreeze golden |

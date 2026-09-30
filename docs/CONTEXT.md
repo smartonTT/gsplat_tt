@@ -89,7 +89,7 @@ project → pfwc → gather → tile_assign → sort/bin → SFPU cull → blend
 | 1b | pfwc | `pfwc_device.cpp` | `pfwc_compute` + r/w | projection + 2D covariance + **conic (A,B,C)** hoisted here (iter-111) |
 | 1c | gather visible | `gather_visible_device.cpp` | `gather_visible_scatter`, `gather_scan_bases` | compaction to M visible; emits the 32B `blendrec` AoS record |
 | 2 | tile assign | `tile_assign_device.cpp` | `tile_assign_bbox` (K1), scan trio, `tile_assign_scatter` (K2) | per-Gaussian AABB → (gaussian, tile) pairs |
-| 3 | sort + bin | `sort_device.cpp` | `sort_bin`, `sort_radix_tile`, `sort_publish`, `sort_subchunk_directory`, `sort_subchunk_materialize` | gaussian→tile bucket scatter, per-tile depth radix, materialize depth-sorted PACK2 slabs |
+| 3 | sort + bin | `sort_device.cpp` | `sort_bin`, `sort_radix_tile`, `sort_publish`, `sort_subchunk_materialize` (subchunk directory host-uploaded since task #18) | gaussian→tile bucket scatter, per-tile depth radix, materialize depth-sorted PACK2 slabs |
 | 4 | SFPU cull | `blend_device.cpp::mb::cull` | `reader_tile_l1_cull` + `microblock_cull_compute` | per-microblock Mahalanobis keep-mask (32 lanes = 32 microblocks) |
 | 5 | blend | `blend_device.cpp` | `reader_alpha_blend_mb_devcull` + `alpha_blend_compute_mb` + `writer_alpha_blend` | microblock alpha blend with transmittance early-out; writes bf16 `res_out` |
 
