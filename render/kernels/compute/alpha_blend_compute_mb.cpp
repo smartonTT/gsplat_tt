@@ -110,13 +110,13 @@ constexpr uint32_t DR_Y = 5 * 32;
 // in place the mapping host-m -> vector is the IDENTITY (dispatch_blend_guarded
 // blends microblock bit M directly into vector M).
 
-// Per-pixel contribution floor (task #41, BLEND_PIXEL_FLOOR, default OFF): the
+// Per-pixel contribution floor (task #41, BLEND_PIXEL_FLOOR, host default ON): the
 // GPU 3DGS rule alpha < floor -> skip, applied per pixel. The microblock mask is
 // a conservative per-8x4-block superset, so without this a block where ANY pixel
 // reaches the floor also keeps every sub-floor tail in its other 31 pixels. That
-// is harmless at the 1/16384 default, but at 1/255 the faint haze in front of
-// thin structures is kept in some blocks and dropped in the next -> seams on
-// microblock lines. Floor bits come from compute runtime-arg 1.
+// is harmless at a 1/16384 floor, but at 1/255 the faint haze in front of thin
+// structures is kept in some blocks and dropped in the next -> seams on
+// microblock lines (task #28). Floor bits come from compute runtime-arg 1.
 static uint32_t g_pixel_floor_bits = 0u;
 #if defined(BLEND_PIXEL_FLOOR)
 #define BLEND_APPLY_PIXEL_FLOOR(al)                                               \
