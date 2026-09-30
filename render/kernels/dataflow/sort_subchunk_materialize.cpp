@@ -47,16 +47,23 @@ constexpr uint32_t TILE_SIZE = 32u;
 // iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
 constexpr uint32_t REC_BATCH = 32u;
 
-constexpr uint32_t CB_SCR = 0;
-constexpr uint32_t CB_IDS = 1;
-constexpr uint32_t CB_REC = 2;
-constexpr uint32_t CB_PACK = 3;
-constexpr uint32_t CB_BUCKET = 4;
-constexpr uint32_t CB_BSORT = 5;
+// Dual mover: BRISC runs this kernel too, on its own (smaller) copies of every
+// CB at id + 16 (MAT_CB_BASE) and its own work-item slice. The host gives it
+// only items that fit its buffers (whole-tile items of <= idx_stride records,
+// any gather item).
+#ifndef MAT_CB_BASE
+#define MAT_CB_BASE 0
+#endif
+constexpr uint32_t CB_SCR = MAT_CB_BASE + 0;
+constexpr uint32_t CB_IDS = MAT_CB_BASE + 1;
+constexpr uint32_t CB_REC = MAT_CB_BASE + 2;
+constexpr uint32_t CB_PACK = MAT_CB_BASE + 3;
+constexpr uint32_t CB_BUCKET = MAT_CB_BASE + 4;
+constexpr uint32_t CB_BSORT = MAT_CB_BASE + 5;
 // iter 113 (sort Stage 1): contiguous L1 scratch the depth permutation lands in
 // (record k at byte k*32) so the depth-sorted slab is written to DRAM in
 // coalesced SLAB_PAGE_BYTES pages instead of bucket_fit per-record 32B writes.
-constexpr uint32_t CB_SLAB = 6;
+constexpr uint32_t CB_SLAB = MAT_CB_BASE + 6;
 
 inline float bits_to_f(uint32_t b) {
     float f;
@@ -102,6 +109,9 @@ void kernel_main() {
     const uint32_t ov_recs_addr   = get_arg_val<uint32_t>(12);  // overflow region (0=off)
     const uint32_t ov_base_addr   = get_arg_val<uint32_t>(13);  // per-tile slot base (0=off)
     const uint32_t ov_cap         = get_arg_val<uint32_t>(14);  // kOverflowL1Cap
+    // In-budget radix index stride = this mover's CB_BSORT record capacity
+    // (bucket_fit on NCRISC, the smaller mover-0 cap on BRISC).
+    const uint32_t idx_stride     = get_arg_val<uint32_t>(15);
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -353,8 +363,8 @@ void kernel_main() {
             }
             const uint32_t bs = get_write_ptr(CB_BSORT);
             uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-            uint32_t* idxB = idxA + bucket_fit;
-            uint32_t* cnt  = idxB + bucket_fit;
+            uint32_t* idxB = idxA + idx_stride;
+            uint32_t* cnt  = idxB + idx_stride;
             uint32_t* sorted;
             if (L <= 16u) {
                 for (uint32_t i = 0; i < L; ++i) idxA[i] = i;

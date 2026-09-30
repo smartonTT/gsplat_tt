@@ -21,6 +21,7 @@
 #include "config.h"
 #include "env_config.h"
 #include "sort.h"
+#include "sort_mover_split.h"
 #include "device_state.h"
 #include "host_tracy.hpp"
 
@@ -63,6 +64,7 @@ using namespace tt::tt_metal;
 
 namespace gsplat_tt {
 namespace {
+using namespace gsplat_tt::sort_split;
 
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t PAGE_BYTES = ELEMS_PER_PAGE * 4;  // 64
@@ -141,6 +143,7 @@ struct SortDeviceContext {
 
     distributed::MeshWorkload workload;
     KernelHandle kernel{};
+    KernelHandle kernel_m0{};  // radix on BRISC (mover 0), CBs at id + 16
 
     // On-device compact+publish (buf_out -> sort_sorted_ids).
     distributed::MeshWorkload wl_publish;
@@ -255,6 +258,7 @@ struct SortDeviceContext {
     // Iter 53+: post-radix PACK2 subchunk payloads + device-resident directory.
     distributed::MeshWorkload wl_subchunk;
     KernelHandle ksubchunk{};
+    KernelHandle ksubchunk_m0{};  // materialize on BRISC (mover 0), CBs at id + 16
     std::shared_ptr<distributed::MeshBuffer> buf_blend_subchunk_meta;
     std::size_t cap_blend_subchunk_meta_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_payload;
@@ -285,6 +289,22 @@ static std::shared_ptr<distributed::MeshBuffer> make_dram_paged(
     return distributed::MeshBuffer::create(rc, lc, dev);
 }
 
+// Dual-mover sort tail (task #35): the radix (sort_radix_tile) and the
+// materialize (sort_subchunk_materialize) run on BRISC as well as NCRISC.
+// GSPLAT_TT_SORT_RADIX_MOVERS=1 / GSPLAT_TT_SORT_MAT_MOVERS=1 keep each on
+// NCRISC alone (A/B baseline in the same build). Read once.
+static uint32_t env_movers(const char* name) {
+    const char* e = std::getenv(name);
+    return (e != nullptr && std::atoi(e) == 1) ? 1u : 2u;
+}
+static uint32_t sort_radix_movers() {
+    static const uint32_t v = env_movers("GSPLAT_TT_SORT_RADIX_MOVERS");
+    return v;
+}
+static uint32_t sort_mat_movers() {
+    static const uint32_t v = env_movers("GSPLAT_TT_SORT_MAT_MOVERS");
+    return v;
+}
 static void build_program(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -300,6 +320,15 @@ static void build_program(SortDeviceContext& ctx) {
     big_cb(3, SCRATCH_BYTES);  // CB_IOUT
     big_cb(4, PAGE_BYTES);     // CB_TIDS
     big_cb(5, PAGE_BYTES);     // CB_META
+    // Dual mover: BRISC sorts the other part of each core's tile slice on its
+    // own full-size copies (id + 16, created after NCRISC's so those keep their
+    // single-mover L1 addresses). 2 x 4 x 128 KB fits the 1.5 MB L1.
+    big_cb(16, SCRATCH_BYTES);
+    big_cb(17, SCRATCH_BYTES);
+    big_cb(18, SCRATCH_BYTES);
+    big_cb(19, SCRATCH_BYTES);
+    big_cb(20, PAGE_BYTES);
+    big_cb(21, PAGE_BYTES);
 
     std::vector<uint32_t> ct;
     for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
@@ -311,6 +340,16 @@ static void build_program(SortDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = ct,
+        });
+    ctx.kernel_m0 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_radix_tile.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = ct,
+            .defines = {{"RADIX_CB_BASE", "16"}},
         });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.workload.add_program(device_range, std::move(program));
@@ -411,6 +450,17 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     // depth permutation lands in (bucket_fit * 32B records) so the slab is
     // emitted in coalesced SLAB_PAGE_BYTES writes, not per-record DRAM scatter.
     page_cb(6, bucket_fit * 32u);
+    // Dual mover: BRISC's copies (id + 16) sized for kMatMover0Cap records —
+    // NCRISC's ~900 KB set does not fit twice in L1. build_mat_worklist gives
+    // BRISC only whole-tile items of <= kMatMover0Cap records and gather items.
+    const uint32_t m0_cap = kMatMover0Cap;
+    page_cb(16, PAGE_BYTES);
+    page_cb(17, PAGE_BYTES);
+    page_cb(18, 32u * PAGE_BYTES);
+    page_cb(19, 32u);
+    page_cb(20, m0_cap * 32u);           // CB_BUCKET (PACK2, m0_cap recs)
+    page_cb(21, (2u * m0_cap + 256u) * 4u);  // CB_BSORT
+    page_cb(22, m0_cap * 32u);           // CB_SLAB
 
     std::vector<uint32_t> ct;
     // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
@@ -425,6 +475,16 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = ct,
+        });
+    ctx.ksubchunk_m0 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_subchunk_materialize.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = ct,
+            .defines = {{"MAT_CB_BASE", "16"}},
         });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.wl_subchunk.add_program(device_range, std::move(program));
@@ -494,81 +554,6 @@ static void upload_subchunk_directory(
     upload(ctx->buf_subchunk_dir, ctx->cap_subchunk_dir_bytes, layout.dir);
 }
 
-// iter 130: materialize work-item assignment — balance at (tile, subchunk)
-// granularity. iter-130 MEASURED the dominant materialize cost as the OVERFLOW
-// gather (24.6 ms/view busiest-core vs the in-budget permute's 1.7 ms), and the
-// shared per-tile count-LPT overloads cores owning big overflow tiles (max 27.1
-// vs the 17.0 ms balanced floor). Each (tile, sc) item is independent and writes
-// byte-identical output regardless of which core runs it (in-budget reads
-// buf_l1_recs by tile / writes payload by (tile,sc); gather reads sorted_ids +
-// blendrec by global id / writes payload by (tile,sc)). So greedily LPT-balance
-// all items, weighting gather subchunks GATHER_WEIGHT x their record count.
-struct MatWorkAssignment {
-    std::vector<uint32_t> flat;             // 2 u32 / item: {tile_id, sc}
-    std::vector<uint32_t> per_core_offset;  // in ITEMS
-    std::vector<uint32_t> per_core_count;   // in ITEMS
-    uint32_t max_items_per_core = 0;
-};
-
-static MatWorkAssignment build_mat_worklist(
-    const std::vector<int64_t>& counts,
-    uint32_t num_tiles,
-    uint32_t num_cores,
-    uint32_t bucket_fit) {
-    constexpr uint64_t GATHER_WEIGHT = 8;  // gather ~8-10x an in-budget record
-    // iter-138: overflow tiles within the L1 cap are pre-packed at emit; the
-    // materialize path reads the WHOLE tile coalesced + L1-radix-permutes it in a
-    // SINGLE work item (sc==0, processes every subchunk internally) — like the
-    // in-budget permute, ~1x per record (NOT the GATHER_WEIGHT random gather).
-    const uint32_t ov_cap = render_config::kOverflowL1Cap;
-    struct Item { uint32_t tile; uint32_t sc; uint64_t cost; };
-    std::vector<Item> items;
-    items.reserve(static_cast<std::size_t>(num_tiles) + 256u);
-    for (uint32_t t = 0; t < num_tiles; ++t) {
-        const uint32_t cnt = static_cast<uint32_t>(counts[t]);
-        if (cnt == 0u) continue;
-        const bool inbudget = (cnt <= bucket_fit);
-        const bool prepack_ov = (cnt > bucket_fit && cnt <= ov_cap);
-        if (inbudget || prepack_ov) {
-            // ONE whole-tile item: coalesced bucket read + L1 depth permute.
-            items.push_back({t, 0u, static_cast<uint64_t>(cnt)});
-            continue;
-        }
-        // Over-cap overflow tile: legacy per-subchunk blendrec gather.
-        const uint32_t num_sc = (cnt + bucket_fit - 1u) / bucket_fit;
-        for (uint32_t sc = 0; sc < num_sc; ++sc) {
-            const uint32_t sc_off = sc * bucket_fit;
-            const uint32_t l_sub = (sc_off >= cnt) ? 0u
-                : ((cnt - sc_off > bucket_fit) ? bucket_fit : (cnt - sc_off));
-            if (l_sub == 0u) continue;
-            items.push_back({t, sc, static_cast<uint64_t>(l_sub) * GATHER_WEIGHT});
-        }
-    }
-    std::sort(items.begin(), items.end(),
-              [](const Item& a, const Item& b) { return a.cost > b.cost; });
-    std::vector<std::vector<std::pair<uint32_t, uint32_t>>> per_core(num_cores);
-    std::vector<uint64_t> load(num_cores, 0);
-    for (const auto& it : items) {
-        const auto m = std::min_element(load.begin(), load.end());
-        const uint32_t c = static_cast<uint32_t>(std::distance(load.begin(), m));
-        per_core[c].emplace_back(it.tile, it.sc);
-        load[c] += it.cost;
-    }
-    MatWorkAssignment a;
-    a.per_core_offset.assign(num_cores, 0);
-    a.per_core_count.assign(num_cores, 0);
-    for (uint32_t c = 0; c < num_cores; ++c) {
-        a.per_core_offset[c] = static_cast<uint32_t>(a.flat.size() / 2u);
-        a.per_core_count[c] = static_cast<uint32_t>(per_core[c].size());
-        a.max_items_per_core = std::max(a.max_items_per_core, a.per_core_count[c]);
-        for (const auto& pr : per_core[c]) {
-            a.flat.push_back(pr.first);
-            a.flat.push_back(pr.second);
-        }
-    }
-    return a;
-}
-
 // Device post-radix PACK2 materialize (enqueue only; caller Finish()).
 // Kernel: in-budget sc==0 uses buf_l1_recs bulk; overflow sc==0/sc>=1 use sorted_ids gather.
 static bool launch_subchunk_materialize(
@@ -610,23 +595,30 @@ static bool launch_subchunk_materialize(
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-        SetRuntimeArgs(prog, ctx->ksubchunk, core, {
-            static_cast<uint32_t>(bsids->address()),
-            static_cast<uint32_t>(brng->address()),
-            static_cast<uint32_t>(bbrec->address()),
-            static_cast<uint32_t>(bl1->address()),
-            static_cast<uint32_t>(ctx->buf_subchunk_payload->address()),
-            static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
-            static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
-            static_cast<uint32_t>(ctx->buf_mat_work->address()),
-            work.per_core_offset[c],
-            work.per_core_count[c],
-            tiles_x,
-            bucket_fit,
-            ov_addr,
-            ov_base_addr,
-            render_config::kOverflowL1Cap,
-        });
+        // Slot 2c = NCRISC, 2c+1 = BRISC; single mover: slot c, BRISC idle.
+        for (uint32_t m = 0; m < 2; ++m) {
+            const bool ncrisc = (m == 0);
+            const uint32_t slot = (work.movers == 2) ? 2u * c + m : c;
+            const bool idle = !ncrisc && work.movers != 2;
+            SetRuntimeArgs(prog, ncrisc ? ctx->ksubchunk : ctx->ksubchunk_m0, core, {
+                static_cast<uint32_t>(bsids->address()),
+                static_cast<uint32_t>(brng->address()),
+                static_cast<uint32_t>(bbrec->address()),
+                static_cast<uint32_t>(bl1->address()),
+                static_cast<uint32_t>(ctx->buf_subchunk_payload->address()),
+                static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
+                static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
+                static_cast<uint32_t>(ctx->buf_mat_work->address()),
+                idle ? 0u : work.per_core_offset[slot],
+                idle ? 0u : work.per_core_count[slot],
+                tiles_x,
+                bucket_fit,
+                ov_addr,
+                ov_base_addr,
+                render_config::kOverflowL1Cap,
+                ncrisc ? bucket_fit : kMatMover0Cap,
+            });
+        }
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
     return true;
@@ -2333,15 +2325,27 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         Program& prog = ctx->workload.get_programs().begin()->second;
         for (uint32_t c = 0; c < num_cores; c++) {
             CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-            SetRuntimeArgs(prog, ctx->kernel, core, {
-                static_cast<uint32_t>(ctx->buf_keys->address()),
-                static_cast<uint32_t>(ctx->buf_ids->address()),
-                static_cast<uint32_t>(ctx->buf_out->address()),
-                static_cast<uint32_t>(ctx->buf_tile_ids->address()),
-                static_cast<uint32_t>(ctx->buf_tmeta->address()),
-                lpt.per_core_offset[c],
-                lpt.per_core_count[c],
-            });
+            const uint32_t start = lpt.per_core_offset[c];
+            const uint32_t count = lpt.per_core_count[c];
+            // NCRISC sorts the first k tiles of the core's slice, BRISC the
+            // rest; tiles are independent (exclusive pages), so the output is
+            // byte-identical for any k.
+            const uint32_t k = (sort_radix_movers() == 2)
+                ? radix_split_point(lpt.flat_tile_ids, start, count, counts)
+                : count;
+            auto args = [&](uint32_t s, uint32_t n) {
+                return std::vector<uint32_t>{
+                    static_cast<uint32_t>(ctx->buf_keys->address()),
+                    static_cast<uint32_t>(ctx->buf_ids->address()),
+                    static_cast<uint32_t>(ctx->buf_out->address()),
+                    static_cast<uint32_t>(ctx->buf_tile_ids->address()),
+                    static_cast<uint32_t>(ctx->buf_tmeta->address()),
+                    s,
+                    n,
+                };
+            };
+            SetRuntimeArgs(prog, ctx->kernel, core, args(start, k));
+            SetRuntimeArgs(prog, ctx->kernel_m0, core, args(start + k, count - k));
         }
         distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
         if (!sort_stage_defer_finish()) {
@@ -2394,7 +2398,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_publish, false);
             sc_layout = build_subchunk_layout(counts, num_tiles, bucket_fit);
             log_subchunk_layout_stats(sc_layout);
-            mat_work = build_mat_worklist(counts, num_tiles, num_cores, bucket_fit);
+            mat_work = build_mat_worklist(counts, num_tiles, num_cores, bucket_fit,
+                                          sort_mat_movers(), kMatMover0Cap);
             if (!prepare_subchunk_buffers(ctx, sc_layout, num_tiles)) {
                 std::cerr << "[gsplat_tt::sort] subchunk buffer setup failed\n";
                 return fail();
