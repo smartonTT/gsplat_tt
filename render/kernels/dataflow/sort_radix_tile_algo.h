@@ -55,7 +55,7 @@ inline Plan choose_plan(uint32_t n, uint32_t B) {
     uint32_t best_cost = 0xFFFFFFFFu;
     for (uint32_t p = 1; p <= MAX_PASSES; p++) {
         const uint32_t d = ceil_div(B, p);
-        if ((p << d) > HIST_ENTRIES) continue;
+        if (d > 15u || (p << d) > HIST_ENTRIES) continue;  // d guard: no 1 << 32
         const uint32_t cost = p * ((BUCKET_COST << d) + ELEM_COST * n);
         if (cost < best_cost) {
             best_cost = cost;
