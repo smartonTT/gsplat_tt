@@ -56,6 +56,18 @@ full sweeps of `a` against 20 fixed `b` incl. ±0, subnormals, ±inf, NaN, max;
 `hero_vs_ref = 100.00 dB`, hero md5 `e3fefb116d860f99d92bba1ef51d820c`, all 30 dumped
 views byte-identical to the base build.
 
+30-view Tracy (profiler on), per-view busiest-core makespan, base = `ttw-149`
+(same kernels for these zones), new = `opt/profiler/ttw-151/zones.txt`:
+
+| zone (RISC) | base | t30 | delta |
+|---|---:|---:|---:|
+| `proj_count` (BRISC) | 14.96 | 6.32 | -8.64 (2.4x) |
+| `proj_scatter` (BRISC) | 20.81 | 12.36 | -8.45 |
+| `ta_gauss_aabb` (NCRISC) | 9.20 | 5.25 | -3.95 |
+| `ta_bucket_scatter` (NCRISC) | 10.49 | 7.18 | -3.31 |
+| `sort_subchunk_mat` (NCRISC) | 12.37 | 12.38 | 0 |
+| `BRISC-FW` | 135.67 | 112.29 | -23.38 |
+
 ## Follow-ups
 
 - `microblock_cull_compute` TRISC1 has 128 `__subsf3` call sites (plus add/div/mul);
