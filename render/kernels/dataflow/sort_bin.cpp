@@ -40,6 +40,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_bin_fp32.h"
 
 namespace {
 
@@ -446,13 +447,16 @@ void kernel_main() {
     uint32_t inv_cov0 = 0, inv_cov1 = 0, inv_cov2 = 0, inv_depth = 0,
              inv_opr = 0, inv_cgb = 0;
     float inv_mx = 0.0f, inv_my = 0.0f;
+    uint32_t inv_mx_bits = 0, inv_my_bits = 0;
     auto pack_invariants = [&](uint32_t depth_key) {
         inv_cov0 = cachep[0];  // fp32 cov_a (exact: no fp16 det cancellation)
         inv_cov1 = cachep[1];  // fp32 cov_b
         inv_cov2 = cachep[2];  // fp32 cov_c
         inv_depth = depth_key;
-        inv_mx = *reinterpret_cast<const volatile float*>(&cachep[3]);
-        inv_my = *reinterpret_cast<const volatile float*>(&cachep[4]);
+        inv_mx_bits = cachep[3];
+        inv_my_bits = cachep[4];
+        __builtin_memcpy(&inv_mx, &inv_mx_bits, 4);
+        __builtin_memcpy(&inv_my, &inv_my_bits, 4);
         // iter 132: compute the op/color UNORM16 pack ONCE per gaussian, here on
         // the NCRISC side (gather now writes raw fp32 op/cr/cg/cb at words 5..8,
         // keeping the pack off the BRISC proj_scatter long pole). The two packed
@@ -460,17 +464,22 @@ void kernel_main() {
         // blendrec[10],[11] (publish_packoc) so the depth-sorted materialize
         // overflow gather COPIES them instead of re-packing. Byte-identical to
         // the iter-131 birth pack (same fp32 inputs, same rounding formula).
-        float op = *reinterpret_cast<const volatile float*>(&cachep[5]);
-        float cr = *reinterpret_cast<const volatile float*>(&cachep[6]);
-        float cg = *reinterpret_cast<const volatile float*>(&cachep[7]);
-        float cb_v = *reinterpret_cast<const volatile float*>(&cachep[8]);
-        auto to_unorm = [](float v) -> uint32_t {
+        //
+        // T-B(3): NCRISC has no FPU, so the float form below costs ~20 libgcc
+        // soft-float calls per gaussian. sort_bin_fp32::unorm16 computes the
+        // same bits with integer ops (exhaustively verified); NaN keeps the
+        // float path.
+        auto to_unorm = [](uint32_t bits) -> uint32_t {
+            uint32_t u;
+            if (sort_bin_fp32::unorm16(bits, &u)) return u;
+            float v;
+            __builtin_memcpy(&v, &bits, 4);
             if (v <= 0.0f) return 0u;
             if (v >= 1.0f) return 65535u;
             return static_cast<uint32_t>(v * 65535.0f + 0.5f);
         };
-        inv_opr = (to_unorm(op) | (to_unorm(cr) << 16));
-        inv_cgb = (to_unorm(cg) | (to_unorm(cb_v) << 16));
+        inv_opr = (to_unorm(cachep[5]) | (to_unorm(cachep[6]) << 16));
+        inv_cgb = (to_unorm(cachep[7]) | (to_unorm(cachep[8]) << 16));
     };
     auto pack_rec = [&](uint32_t b, uint32_t tt) {
         // Tile-local mean: the blend reader reconstructs absolute via
@@ -479,13 +488,19 @@ void kernel_main() {
         // shift/mask on the power-of-two grid (bit-identical; see hoist above).
         const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % l1_tiles_x);
         const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / l1_tiles_x);
-        float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
-        float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
+        // T-B(3): integer fl(mean - origin) (bit-exact); float path only
+        // outside sort_bin_fp32::sub_int's range (|mean| < 2^-17 or >= 2^24).
+        uint32_t mx_bits, my_bits;
+        if (!sort_bin_fp32::sub_int(inv_mx_bits, txi * L1_TILE_SIZE, &mx_bits)) {
+            const float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
+            __builtin_memcpy(&mx_bits, &mx, 4);
+        }
+        if (!sort_bin_fp32::sub_int(inv_my_bits, tyi * L1_TILE_SIZE, &my_bits)) {
+            const float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
+            __builtin_memcpy(&my_bits, &my, 4);
+        }
         volatile uint32_t* p32 =
             reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
-        uint32_t mx_bits, my_bits;
-        __builtin_memcpy(&mx_bits, &mx, 4);
-        __builtin_memcpy(&my_bits, &my, 4);
         p32[0] = inv_cov0;
         p32[1] = inv_cov1;
         p32[2] = inv_cov2;
