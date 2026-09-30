@@ -195,13 +195,13 @@ py::tuple render_view(
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
 
-    // Output image (H, W, 3), pre-zeroed. The blend writer fully overwrites it.
-    py::array_t<float> image({static_cast<py::ssize_t>(image_height),
-                              static_cast<py::ssize_t>(image_width),
-                              static_cast<py::ssize_t>(3)});
-    std::memset(image.mutable_data(), 0,
-                static_cast<std::size_t>(image_height) *
-                    static_cast<std::size_t>(image_width) * 3 * sizeof(float));
+    // Output image (H, W, 3) uint8 = uint8(clip(rgb, 0, 1) * 255), packed on
+    // device by the blend writer (task #61), which fully overwrites it.
+    py::array_t<uint8_t> image({static_cast<py::ssize_t>(image_height),
+                                static_cast<py::ssize_t>(image_width),
+                                static_cast<py::ssize_t>(3)});
+    const std::size_t image_bytes = static_cast<std::size_t>(image_height) *
+                                    static_cast<std::size_t>(image_width) * 3;
 
     // One-shot JIT compile of all device programs at scene open.
     gsplat_tt::jit_warmup_ideal_path();
@@ -219,6 +219,7 @@ py::tuple render_view(
 
     py::dict stats;
     if (M == 0) {
+        std::memset(image.mutable_data(), 0, image_bytes);
         stats["num_visible"] = 0;
         stats["num_entries"] = 0;
         st::acc().views++;

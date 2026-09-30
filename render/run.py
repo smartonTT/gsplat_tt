@@ -150,8 +150,18 @@ def psnr(a, b):
 
 
 def _to_u8(img01):
-    """Quantize a [0,1] float image to uint8 with floor — matches the saved PNG."""
+    """Quantize a [0,1] float image to uint8 with floor — matches the saved PNG.
+    render_clean already returns this uint8 image (packed on device, task #61)."""
+    if isinstance(img01, np.ndarray) and img01.dtype == np.uint8:
+        return img01
     return (np.clip(np.asarray(img01, dtype=np.float32), 0.0, 1.0) * 255.0).astype(np.uint8)
+
+
+def _to_f01(img):
+    """Float [0,1] view of an image (uint8 render_clean output or float ref)."""
+    if isinstance(img, np.ndarray) and img.dtype == np.uint8:
+        return img.astype(np.float32) / 255.0
+    return img
 
 
 def psnr8(img01, ref01):
@@ -172,6 +182,8 @@ def _to_image(res):
     img = res.image
     if hasattr(img, "numpy"):
         img = img.numpy()
+    if isinstance(img, np.ndarray) and img.dtype == np.uint8:
+        return img
     return np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0)
 
 
@@ -321,7 +333,7 @@ def main():
             hero_clean = img
         if dump_dir is not None:
             png = dump_dir / f"view{i:02d}_{name}.png"
-            Image.fromarray((img * 255.0).astype(np.uint8)).save(png)
+            Image.fromarray(_to_u8(img)).save(png)
             print(f"[run]   view={name} {wall_ms:.1f}ms saved={png.name}", flush=True)
         else:
             print(f"[run]   view={name} {wall_ms:.1f}ms", flush=True)
@@ -340,7 +352,7 @@ def main():
     # Secondary diagnostic: float PSNR vs the freshly-rendered CPU reference.
     hero_vs_cpu = float("nan")
     if not args.no_ref and ref is not None:
-        hero_vs_cpu = psnr(hero_clean, ref)
+        hero_vs_cpu = psnr(_to_f01(hero_clean), ref)
         ref_mean = float(ref.mean())
         if ref_mean > 0.95 or ref_mean < 0.05:
             print(f"[run] FATAL: reference mean={ref_mean:.4f} looks invalid "
@@ -364,7 +376,7 @@ def main():
     # CPU reference artifacts (ground-truth visibility, regardless of golden).
     if not args.no_ref and ref is not None:
         Image.fromarray(_to_u8(ref)).save(out_dir / "hero_ref.png")
-        cpu_diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
+        cpu_diff = np.clip(np.abs(_to_f01(hero_clean) - ref) * 10.0, 0.0, 1.0)
         cpu_diff_name = "hero_diff10_cpu.png" if GOLDEN_REF.exists() else "hero_diff10.png"
         Image.fromarray((cpu_diff * 255.0).astype(np.uint8)).save(out_dir / cpu_diff_name)
 

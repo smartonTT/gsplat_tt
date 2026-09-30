@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "img_pack_u8.h"
 
 // Alpha-blend WRITER kernel (BRISC, NoC0; see DataMovementProcessor::RISCV_0
 // in alpha_blend.cpp).
@@ -12,11 +13,14 @@
 // ROLE
 // ----
 // The mirror of the reader on the output side. For each screen tile this
-// core processed, the compute kernel pushes 3 fp32 32x32 tiles (R, G, B in
-// that order) to CB_COLOR_OUT. We async-write them to consecutive DRAM
-// pages at offsets `3*screen_tile + {0, 1, 2}` of the output buffer. The
-// writer uses NoC0 while the reader uses NoC1 — bidirectional dual-NoC
-// torus lets I/O overlap.
+// core processed, the compute kernel pushes 3 bf16 32x32 tiles (R, G, B in
+// that order) to CB_COLOR_OUT. The writer packs them into the final 8-bit RGB
+// image on device (task #61, img_pack_u8.h): bf16 -> u8 with the host's
+// uint8(clip(x,0,1)*255) rule, microblock permutation undone, RGB interleaved
+// into a 32-row x 96-byte staging block, then written as 32 row segments into
+// the row-major (rows, pitch) u8 image buffer. The host reads the image back
+// as-is: no bf16->fp32 assemble, half the D2H bytes. The writer uses NoC0
+// while the reader uses NoC1.
 //
 // TILE ASSIGNMENT (task #60)
 // ---------------------------
@@ -26,22 +30,27 @@
 // PER-TILE WORK
 // -------------
 //   1. cb_wait_front(CB_COLOR_OUT, 3)   wait for compute's R/G/B push
-//   2. async-write 3 channels to DRAM pages 3*screen_tile + {0, 1, 2}
-//   3. cb_pop_front(CB_COLOR_OUT, 3)
+//   2. pack the 3 channels into a CB_IMG_U8 staging block, pop CB_COLOR_OUT
+//   3. async-write the 32 rows to image rows ty*32 + i, byte offset tx*96
 //
 // RUNTIME ARGS
-//   0: out_addr           DRAM base of the (num_tiles, 3, 32, 32) fp32 output buffer
+//   0: out_addr           DRAM base of the u8 image buffer (one page per image row)
 //   1-3: tile_ids_addr, lpt_meta_addr, core_index (unused since task #60)
+//   4: tiles_x
+//   5: pitch              image buffer row pitch in bytes (page size)
 //
-// COMPILE-TIME ARGS: 2 TensorAccessorArgs in order: out, tile_ids.
+// COMPILE-TIME ARGS: 3 TensorAccessorArgs in order: out, tile_ids, lpt_meta.
 
 void kernel_main() {
     uint32_t out_addr        = get_arg_val<uint32_t>(0);
     uint32_t tile_ids_addr   = get_arg_val<uint32_t>(1);
     const uint32_t lpt_meta_addr = get_arg_val<uint32_t>(2);
     const uint32_t core_index    = get_arg_val<uint32_t>(3);
+    const uint32_t tiles_x       = get_arg_val<uint32_t>(4);
+    const uint32_t pitch         = get_arg_val<uint32_t>(5);
 
     constexpr uint32_t CB_COLOR_OUT = 16;
+    constexpr uint32_t CB_IMG_U8 = 8;  // 32 x 96 B RGB staging block
     const uint32_t tile_bytes = get_tile_size(CB_COLOR_OUT);
     constexpr uint32_t tile_ids_page_bytes = 64;
 
@@ -49,14 +58,17 @@ void kernel_main() {
     constexpr auto tile_ids_args = TensorAccessorArgs<out_args.next_compile_time_args_offset()>();
     constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
 
-    const auto out          = TensorAccessor(out_args,      out_addr,      tile_bytes);
+    const auto out          = TensorAccessor(out_args,      out_addr,      pitch);
     (void)tile_ids_addr; (void)lpt_meta_addr; (void)core_index;
     // Task #60: the reader claims tiles dynamically and queues each claimed
     // screen tile id here (CB_TILE_Q) before its data; 0xFFFFFFFF ends the stream.
     constexpr uint32_t CB_TILE_Q = 13;
 
-    // Main per-tile loop: drain 3 R/G/B tiles compute pushed for this screen
-    // tile and async-write them to their global slots in the output buffer.
+    // Main per-tile loop: pack the 3 R/G/B tiles compute pushed for this
+    // screen tile into u8 image rows and write them to the image buffer.
+    using img_pack_u8::ROW_BYTES;
+    const uint32_t stage_addr = get_write_ptr(CB_IMG_U8);
+    auto stage = reinterpret_cast<volatile uint8_t*>(stage_addr);
     for (;;) {
         cb_wait_front(CB_TILE_Q, 1);
         const uint32_t screen_tile =
@@ -65,22 +77,29 @@ void kernel_main() {
         if (screen_tile == 0xFFFFFFFFu) {
             break;
         }
+        const uint32_t ty = screen_tile / tiles_x;
+        const uint32_t tx = screen_tile - ty * tiles_x;
 
-        // Wait for compute's batch of 3 tiles (R, then G, then B) in order.
-        // Note: CB_COLOR_OUT has depth 6 (multiple of 3) on the host side so
-        // this 3-tile batch never straddles a CB wrap, which would break the
-        // `read_ptr += tile_bytes` arithmetic below.
+        // CB_COLOR_OUT has depth 6 (multiple of 3) on the host side so this
+        // 3-tile batch never straddles a CB wrap.
         cb_wait_front(CB_COLOR_OUT, 3);
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
+        // The previous tile's rows must have left the staging block (they had
+        // a whole blend tile to drain, so this does not wait in practice).
+        noc_async_writes_flushed();
         for (uint32_t ch = 0; ch < 3; ch++) {
-            // Output buffer layout: (num_tiles, 3, 32, 32) fp32. Tile-major
-            // order with R/G/B interleaved per screen tile, so the global
-            // page index for channel `ch` of `screen_tile` is `3*screen_tile + ch`.
-            uint32_t out_tile_id = 3 * screen_tile + ch;
-            noc_async_write_tile(out_tile_id, out, read_ptr);
+            img_pack_u8::pack_channel(
+                reinterpret_cast<volatile uint32_t*>(read_ptr), stage, ch);
             read_ptr += tile_bytes;
         }
-        noc_async_write_barrier();
         cb_pop_front(CB_COLOR_OUT, 3);
+
+        const uint32_t row0 = ty * 32u;
+        const uint32_t col_off = tx * ROW_BYTES;
+        for (uint32_t i = 0; i < 32u; i++) {
+            noc_async_write(stage_addr + i * ROW_BYTES,
+                            out.get_noc_addr(row0 + i, col_off), ROW_BYTES);
+        }
     }
+    noc_async_write_barrier();
 }

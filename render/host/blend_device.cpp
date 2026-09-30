@@ -52,15 +52,6 @@ using namespace gsplat;
 #define OVERRIDE_KERNEL_PREFIX ""
 #endif
 
-static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
-    std::vector<float> dst(TILE_H * TILE_W);
-    for (size_t i = 0; i < TILE_H * TILE_W; i++) {
-        uint32_t u = static_cast<uint32_t>(src[i]) << 16;
-        std::memcpy(&dst[i], &u, 4);
-    }
-    return dst;
-}
-
 // ---------------------------------------------------------------------------
 // Device + program reusable context
 // ---------------------------------------------------------------------------
@@ -90,9 +81,12 @@ struct DeviceContext {
     // NCRISC store-stress in reader_tile_l1_cull (never read; allocated only when
     // GSPLAT_TT_OVERLAP_PROBE is set).
     std::shared_ptr<distributed::MeshBuffer> res_scratch;
+    // Final u8 RGB image, one page per image row (task #61: packed on device).
     std::shared_ptr<distributed::MeshBuffer> res_out;
     std::shared_ptr<distributed::MeshBuffer> res_tile_ids;
-    uint32_t res_out_tiles = 0;
+    size_t res_out_bytes = 0;
+    // Host bounce buffer, only used when the device row pitch != W*3.
+    std::vector<uint8_t> res_out_host;
     size_t res_tile_ids_bytes = 0;
     bool res_ramp_uploaded = false;
 
@@ -125,6 +119,14 @@ constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp
 constexpr uint32_t CB_T_RB      = 2;   // iter 107: mid-accumulation T readback (bf16, 1 tile)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 128B = 32 uint32 per tile
 constexpr uint32_t CB_OUT       = 16;  // 3 bf16 color tiles per screen tile
+constexpr uint32_t CB_IMG_U8    = 8;   // writer: u8 RGB staging (32 x 96 B)
+constexpr uint32_t IMG_ROW_BYTES = TILE_W * 3;  // one screen-tile row of u8 RGB
+
+// Device image buffer row pitch: whole tile rows, padded to the 64 B Blackhole
+// DRAM alignment so the interleaved page stride is the same on host and device.
+static uint32_t image_pitch_bytes(uint32_t tiles_x) {
+    return (tiles_x * IMG_ROW_BYTES + 63u) & ~63u;
+}
 
 // (The M2 §6 tail-skip CB_HS handshake region is dropped: the production blend
 // never raises the whole-tile saturation early-out.)
@@ -165,6 +167,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // reader bulk path can push counts faster than compute pops.
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    // Writer-private staging for the on-device u8 image pack (task #61):
+    // one screen tile as 32 rows x 96 B RGB.
+    cb_cfg(CB_IMG_U8, IMG_ROW_BYTES * TILE_H, 1, DataFormat::UInt8);
     // iter 107: scratch CB the compute packs the running T slot into for the
     // mid-accumulation transmittance readback (bf16, same fmt as CB_OUT so the
     // packer needs no reconfig). Never pushed/popped — pure read-back scratch.
@@ -376,65 +381,6 @@ static std::vector<uint32_t> make_ramp(bool is_x) {
     return r;
 }
 
-// Microblock-permuted variant of tiles_to_image: scatters each device tile-
-// local raster slot back to its true microblock raster position via the fixed
-// permutation, then places the tile into the full image.
-static std::vector<float> tiles_to_image_mb(
-    const std::vector<uint16_t>& result_bf16,
-    uint32_t num_tiles,
-    uint32_t tiles_x,
-    uint32_t image_h,
-    uint32_t image_w) {
-    const auto& tbl = mb_perm_img_of_dev();
-    std::vector<float> img(static_cast<size_t>(image_h) * image_w * 3, 0.0f);
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        const uint32_t ty = t / tiles_x;
-        const uint32_t tx = t % tiles_x;
-        for (uint32_t ch = 0; ch < 3; ch++) {
-            const auto fp = bf16_tile_to_fp32(&result_bf16[(3 * t + ch) * TILE_H * TILE_W]);
-            for (uint32_t dev = 0; dev < TILE_H * TILE_W; dev++) {
-                const uint32_t imgpos = tbl[dev];
-                const uint32_t i = imgpos / TILE_W;
-                const uint32_t j = imgpos % TILE_W;
-                const uint32_t y = ty * TILE_H + i;
-                const uint32_t x = tx * TILE_W + j;
-                if (y < image_h && x < image_w) {
-                    img[(static_cast<size_t>(y) * image_w + x) * 3 + ch] = fp[dev];
-                }
-            }
-        }
-    }
-    return img;
-}
-
-static void tiles_to_image_mb_into(
-    const std::vector<uint16_t>& result_bf16,
-    uint32_t num_tiles,
-    uint32_t tiles_x,
-    uint32_t image_h,
-    uint32_t image_w,
-    float* image_out) {
-    const auto& tbl = mb_perm_img_of_dev();
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        const uint32_t ty = t / tiles_x;
-        const uint32_t tx = t % tiles_x;
-        for (uint32_t ch = 0; ch < 3; ch++) {
-            const auto fp = bf16_tile_to_fp32(&result_bf16[(3 * t + ch) * TILE_H * TILE_W]);
-            for (uint32_t dev = 0; dev < TILE_H * TILE_W; dev++) {
-                const uint32_t imgpos = tbl[dev];
-                const uint32_t i = imgpos / TILE_W;
-                const uint32_t j = imgpos % TILE_W;
-                const uint32_t y = ty * TILE_H + i;
-                const uint32_t x = tx * TILE_W + j;
-                if (y < image_h && x < image_w) {
-                    image_out[(static_cast<size_t>(y) * image_w + x) * 3 + ch] = fp[dev];
-                }
-            }
-        }
-    }
-}
-
-
 namespace {
 
 constexpr uint32_t SORT_META_ELEMS_PER_PAGE = 16;
@@ -502,7 +448,7 @@ static double process_frame_mb_devcull_resident(
     uint32_t tiles_x,
     uint32_t image_h,
     uint32_t image_w,
-    float* image_out,
+    uint8_t* image_out,
     bool* ok,
     float transmittance_threshold = 0.0f,
     ResidentBlendPhase phase = ResidentBlendPhase::Complete) {
@@ -598,9 +544,12 @@ static double process_frame_mb_devcull_resident(
         ctx.res_yramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
         ctx.res_ramp_uploaded = false;
     }
-    if (!ctx.res_out || ctx.res_out_tiles < num_tiles) {
-        ctx.res_out = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
-        ctx.res_out_tiles = num_tiles;
+    const uint32_t pitch = image_pitch_bytes(tiles_x);
+    const size_t out_bytes =
+        static_cast<size_t>((num_tiles + tiles_x - 1) / tiles_x) * TILE_H * pitch;
+    if (!ctx.res_out || ctx.res_out_bytes != out_bytes) {
+        ctx.res_out = make_dram(out_bytes, pitch);
+        ctx.res_out_bytes = out_bytes;
     }
 
     Program& program = get_program_for_workload(ctx);
@@ -664,6 +613,7 @@ static double process_frame_mb_devcull_resident(
                     SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
                     SetRuntimeArgs(program, ctx.writer, core, {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
+                        tiles_x, pitch,
                     });
                     core_index++;
                 }
@@ -682,11 +632,7 @@ static double process_frame_mb_devcull_resident(
     }
 
     const auto t_start = std::chrono::steady_clock::now();
-    // Writer overwrites every LPT tile in res_out; skip the per-frame zero H2D.
-    if (!gsplat_tt::env_config::blend_skip_zero_out_enabled()) {
-        std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
-        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
-    }
+    // Writer overwrites every LPT tile in res_out; no per-frame zero H2D.
     // Constant ramps: upload once, then reuse the resident copy every frame.
     if (!ctx.res_ramp_uploaded) {
         auto xramp = make_ramp(/*is_x=*/true);
@@ -703,19 +649,32 @@ static double process_frame_mb_devcull_resident(
     gsplat_tt::hostprof::on_blend_device_done();
     gsplat_tt::device_state::clear_sort_publish_pending();
     // Per-stage attribution (stage_timers.h): the D2H readback and the host
-    // bf16->fp32 assemble are separate buckets; the caller derives the pure
-    // device blend window as (returned ms - d2h).
+    // assemble are separate buckets; the caller derives the pure device blend
+    // window as (returned ms - d2h). The writer already packed the final u8
+    // image (task #61), so when the device row pitch is W*3 the D2H lands
+    // straight in image_out and there is no assemble at all.
+    const uint32_t out_pitch = image_pitch_bytes(tiles_x);
+    const size_t row_bytes = static_cast<size_t>(image_w) * 3;
+    const bool direct = (out_pitch == row_bytes) &&
+                        (ctx.res_out_bytes == static_cast<size_t>(image_h) * row_bytes);
     gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
-    std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
-    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
+    if (direct) {
+        ctx.cq->enqueue_read_mesh_buffer(image_out, ctx.res_out, /*blocking=*/true);
+    } else {
+        ctx.res_out_host.resize(ctx.res_out_bytes);
+        ctx.cq->enqueue_read_mesh_buffer(ctx.res_out_host.data(), ctx.res_out, /*blocking=*/true);
+    }
     const auto t_end = std::chrono::steady_clock::now();
     d2h_span.stop();
     gsplat_tt::hostprof::on_blend_readback_done();
 
-    {
+    if (!direct) {
         gsplat_tt::stagetimers::Span assemble_span(
             gsplat_tt::stagetimers::acc().assemble);
-        tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
+        for (uint32_t y = 0; y < image_h; y++) {
+            std::memcpy(image_out + y * row_bytes,
+                        ctx.res_out_host.data() + static_cast<size_t>(y) * out_pitch, row_bytes);
+        }
     }
     gsplat_tt::hostprof::on_blend_unpack_done();
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
@@ -1292,7 +1251,7 @@ double blend_mb_devcull_resident(
     int tiles_x,
     int image_height,
     int image_width,
-    float* image_out,
+    uint8_t* image_out,
     bool* device_ok,
     double* cull_ms_out,
     double* blend_ms_out,

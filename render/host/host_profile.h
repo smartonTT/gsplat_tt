@@ -54,7 +54,7 @@ struct Marks {
     tp t_pfwc_enq{};         // pfwc EnqueueMeshWorkload returned (device starts pfwc)
     tp t_blend_dev_done{};   // host_finish_blend Finish returned (blend done on device)
     tp t_blend_readback{};   // final image D2H read returned
-    tp t_blend_unpack{};     // tiles_to_image (bf16->fp32) done
+    tp t_blend_unpack{};     // u8 image in place (row copy only if pitch != W*3)
     tp t_return{};           // render_view return
 };
 

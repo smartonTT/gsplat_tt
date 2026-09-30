@@ -47,7 +47,7 @@ namespace gsplat_tt {
 // device sort succeeds, cull+blend run before returning to render_full_py so
 // frame-1 does not pay a separate blend cold-start / host gap after sort.
 struct SortBlendContinuation {
-    float* image_out = nullptr;
+    uint8_t* image_out = nullptr;  // final u8 RGB image, H*W*3
     int image_height = 0;
     int image_width = 0;
     float mb_contrib_floor = 0.0f;
