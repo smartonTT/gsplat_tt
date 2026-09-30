@@ -1,0 +1,917 @@
+From 0e274294bb85f8092e8e8711f6343edd2635f963 Mon Sep 17 00:00:00 2001
+From: Steve Marton <smarton@tenstorrent.com>
+Date: Wed, 30 Sep 2026 03:51:21 -0700
+Subject: [PATCH] =?UTF-8?q?sort:=20R16=20experiment=20=E2=80=94=2016=20B?=
+ =?UTF-8?q?=20per-pair=20bucket=20record=20(task=20#23,=20candidate=205.1)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Measured and rejected; reverted in the next commit, kept here so the
+numbers in the ledger (iter-143) are reproducible from the branch.
+
+Emit writes a 16 B record (PACK4): half conic x2^10, half tile-local mean,
+UNORM16 opacity, UNORM 11/11/10 color, packed with integer-only math
+(rec16_codec.h, tested by tests/unit/test_rec16_codec.cpp). The depth key
+leaves the record; materialize reads it from the emit's keys layout and
+expands each record to the unchanged 32 B slab.
+
+yyzo-bh-07 (p100a), 3 interleaved rounds: 157.23 ms/view vs 167.13 base,
+but the same integer packing on the 32 B record gives 154.87 ms/view and
+68.68 dB, so the 16 B format itself costs +2.37 ms and 9.3 dB
+(hero_vs_ref 59.40; a thin-splat streak from the fp16 conic).
+---
+ render/host/config.h                          |   3 +
+ render/host/sort_device.cpp                   |  29 ++--
+ render/kernels/dataflow/rec16_codec.h         | 121 ++++++++++++++
+ render/kernels/dataflow/sort_bin.cpp          | 157 ++++++++----------
+ .../dataflow/sort_subchunk_materialize.cpp    | 115 +++++++++----
+ tests/unit/test_rec16_codec.cpp               | 118 +++++++++++++
+ 6 files changed, 410 insertions(+), 133 deletions(-)
+ create mode 100644 render/kernels/dataflow/rec16_codec.h
+ create mode 100644 tests/unit/test_rec16_codec.cpp
+
+diff --git a/render/host/config.h b/render/host/config.h
+index ed8b2db..a29672e 100644
+--- a/render/host/config.h
++++ b/render/host/config.h
+@@ -48,6 +48,9 @@ inline constexpr uint32_t kBucketFit = 8192;
+ // ZERO CB_BUCKET growth; only CB_BSORT grows ((2*cap+256)*4 = 129 KB vs 65 KB).
+ // CB_SLAB stays kBucketFit*32 (the sorted slab is streamed to DRAM one subchunk
+ // at a time). Total materialize CB footprint ~0.9 MB — safely within L1.
++// R16 (task #23): bucket records are now 16B (PACK4), so a cap-sized tile uses
++// only cap*16 B = 256 KB of CB_BUCKET; the upper half holds the tile's depth keys
++// (<= (cap + 15*cores)*4 B), which the records no longer carry.
+ // Overflow tiles with count > cap (the few heaviest, max_tile_n peaks ~26.5k)
+ // keep the legacy blendrec gather.
+ inline constexpr uint32_t kOverflowL1Cap = 2u * kBucketFit;  // 16384
+diff --git a/render/host/sort_device.cpp b/render/host/sort_device.cpp
+index a128198..f4c6276 100644
+--- a/render/host/sort_device.cpp
++++ b/render/host/sort_device.cpp
+@@ -403,8 +403,9 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
+     page_cb(6, bucket_fit * 32u);
+ 
+     std::vector<uint32_t> ct;
+-    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
+-    for (int i = 0; i < 11; i++) {
++    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}
++    // + R16 {keys, tmeta} (the bucket records carry no depth key).
++    for (int i = 0; i < 13; i++) {
+         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+     }
+     ctx.ksubchunk = CreateKernel(
+@@ -575,7 +576,7 @@ static bool launch_subchunk_materialize(
+     auto bsids = device_state::get_buffer("sort_sorted_ids");
+     auto brng = device_state::get_buffer("sort_tile_ranges");
+     if (!bbrec || !bl1 || !bsids || !brng || !ctx->buf_blend_subchunk_meta ||
+-        !ctx->buf_subchunk_dir) {
++        !ctx->buf_subchunk_dir || !ctx->buf_keys || !ctx->buf_tmeta) {
+         return false;
+     }
+     // Grow-only work buffer; EnqueueWriteMeshBuffer writes the WHOLE buffer, so
+@@ -616,6 +617,8 @@ static bool launch_subchunk_materialize(
+             ov_addr,
+             ov_base_addr,
+             render_config::kOverflowL1Cap,
++            static_cast<uint32_t>(ctx->buf_keys->address()),
++            static_cast<uint32_t>(ctx->buf_tmeta->address()),
+         });
+     }
+     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
+@@ -1079,16 +1082,16 @@ static void host_bin_layout_into(
+     if (l1_record) {
+         // iter-138: prefix-allocate the COMPACT overflow region over in-cap
+         // overflow tiles only (kBucketFit < count <= kOverflowL1Cap). Each such
+-        // tile's base is EVEN-aligned so its PACK2 page run starts at half 0
+-        // (the materialize reader indexes record g at page base/2 + g/2, half g&1).
++        // tile's base is 4-aligned so its PACK4 page run starts at quarter 0
++        // (the materialize reader indexes record g at byte 16*g of page base/4).
+         r.tile_ov_base.assign(num_tiles, SENT);
+         const uint32_t ov_cap = render_config::kOverflowL1Cap;
+-        uint64_t ov_cursor = 0;  // in 32B slots; kept even per tile for PACK2
++        uint64_t ov_cursor = 0;  // in 16B slots; kept 4-aligned per tile for PACK4
+         for (uint32_t t = 0; t < num_tiles; ++t) {
+             const uint64_t c = static_cast<uint64_t>(r.counts[t]);
+             if (c > bucket_fit && c <= ov_cap) {
+                 r.tile_ov_base[t] = static_cast<uint32_t>(ov_cursor);
+-                ov_cursor += (c + 1u) & ~static_cast<uint64_t>(1u);  // round up to even
++                ov_cursor += (c + 3u) & ~static_cast<uint64_t>(3u);  // round up to x4
+                 r.ov_tiles += 1u;
+                 r.ov_records += c;
+             }
+@@ -1189,7 +1192,7 @@ static void host_bin_layout_into(
+                              static_cast<double>(gathered_total) : 0.0,
+             static_cast<unsigned long long>(over_cap),
+             static_cast<unsigned long long>(r.ov_total_slots),
+-            static_cast<double>(r.ov_total_slots) * 32.0 / (1024.0 * 1024.0));
++            static_cast<double>(r.ov_total_slots) * 16.0 / (1024.0 * 1024.0));
+     }
+     std::vector<int64_t> pad_counts(num_tiles, 0);
+     for (uint32_t t = 0; t < num_tiles; t++)
+@@ -1708,11 +1711,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+         uint32_t l1_ov_addr = 0u;
+         uint32_t l1_ov_base_addr = 0u;
+         if (l1_record_early) {
+-            // M0/iter50: two 32B splats per 64B DRAM page (PACK2). Sub-64B paging
+-            // is unreliable; 64B pages hold low/high splat at +0/+32. kBucketFit
+-            // logical slots => bucket_fit/2 pages per tile.
++            // R16 (task #23): four 16B records per 64B DRAM page (PACK4). Sub-64B
++            // paging is unreliable; 64B pages hold records at +0/+16/+32/+48.
++            // kBucketFit logical slots => bucket_fit/4 pages per tile.
+             const std::size_t l1_rec_bytes =
+-                static_cast<std::size_t>(num_tiles) * bucket_fit * 32u;
++                static_cast<std::size_t>(num_tiles) * bucket_fit * 16u;
+             if (!ctx->buf_l1_recs || ctx->cap_l1_recs_bytes < l1_rec_bytes) {
+                 ctx->buf_l1_recs = make_dram_paged(ctx->mesh_device.get(), l1_rec_bytes, 64u);
+                 ctx->cap_l1_recs_bytes = l1_rec_bytes;
+@@ -2074,7 +2077,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+             // valid addresses even when this view has no in-cap overflow tile.
+             if (l1_record_early && !bl.histrec_overflow.empty()) {
+                 const std::size_t ov_region_bytes = std::max<std::size_t>(
+-                    PAGE_BYTES, static_cast<std::size_t>(bl.ov_total_slots) * 32u);
++                    PAGE_BYTES, static_cast<std::size_t>(bl.ov_total_slots) * 16u);
+                 if (!ctx->buf_l1_ov || ctx->cap_l1_ov_bytes < ov_region_bytes) {
+                     ctx->buf_l1_ov =
+                         make_dram_paged(ctx->mesh_device.get(), ov_region_bytes, 64u);
+diff --git a/render/kernels/dataflow/rec16_codec.h b/render/kernels/dataflow/rec16_codec.h
+new file mode 100644
+index 0000000..c965ce0
+--- /dev/null
++++ b/render/kernels/dataflow/rec16_codec.h
+@@ -0,0 +1,121 @@
++// SPDX-FileCopyrightText: © 2026 Tenstorrent USA, Inc.
++//
++// SPDX-License-Identifier: Apache-2.0
++//
++// 16 B per-pair bucket record (R16, task #23): integer-only encode/decode.
++//
++// sort_bin.cpp (the emit) packs one record per kept (gaussian, tile) pair;
++// sort_subchunk_materialize.cpp expands it back to the 32 B slab record the
++// cull/blend kernels read. Everything here is plain integer C++ with no
++// tt-metal dependency, so tests/unit/test_rec16_codec.cpp checks it on the host.
++// The data movers have no FPU: each float op in the old pack was a libgcc
++// soft-float call, so the encode side avoids float arithmetic entirely.
++//
++// Record words (little-endian u32):
++//   [0] half A | half B << 16        conic (power = A dx^2 + B dx dy + C dy^2) x 2^10
++//   [1] half C | half mx << 16       mx, my: mean relative to the tile origin, px
++//   [2] half my | unorm16 op << 16
++//   [3] unorm11 r | unorm11 g << 11 | unorm10 b << 22
++// The x2^10 (tile^2 units) conic scale keeps |A|,|C| of splats up to ~2900 px
++// sigma in the half normal range; unscaled, anything past ~90 px sigma would
++// go denormal. The depth key is not in the record (materialize reads it from
++// the emit's keys layout).
++//
++// Every half written here is normal: magnitudes below the normal range clamp to
++// the smallest normal and magnitudes above it saturate, so decode is a single
++// exponent rebias with no special cases.
++
++#pragma once
++
++#include <cstdint>
++
++namespace rec16 {
++
++constexpr int32_t kConicScaleLog2 = 10;  // 32x32 px tile => x1024
++
++// fp32 bits -> half bits of x * 2^scale_log2, round half away from zero.
++inline uint32_t f32_to_h16(uint32_t u, int32_t scale_log2) {
++    const uint32_t sign = (u >> 16) & 0x8000u;
++    const int32_t e = static_cast<int32_t>((u >> 23) & 0xffu) - 112 + scale_log2;
++    if (e <= 0) return sign | 0x0400u;
++    uint32_t h = (static_cast<uint32_t>(e) << 10) | ((u >> 13) & 0x3ffu);
++    h += (u >> 12) & 1u;
++    if (h >= 0x7c00u) h = 0x7bffu;
++    return sign | h;
++}
++
++// fp32 bits -> round(x * 2^8), i.e. 1/256 px fixed point. Valid for |x| < 2^22.
++inline int32_t f32_to_fx8(uint32_t u) {
++    const int32_t e = static_cast<int32_t>((u >> 23) & 0xffu) - 127;
++    if (e < -9) return 0;
++    const uint32_t m = (u & 0x7fffffu) | 0x800000u;  // x = m * 2^(e-23)
++    const int32_t sh = e - 15;                         // x * 2^8 = m * 2^sh
++    uint32_t a;
++    if (sh >= 0) {
++        a = m << (sh > 7 ? 7 : sh);
++    } else {
++        a = (m + (1u << (-sh - 1))) >> (-sh);
++    }
++    return (u >> 31) ? -static_cast<int32_t>(a) : static_cast<int32_t>(a);
++}
++
++// 1/256 px fixed point -> half bits of v / 256, round half up.
++inline uint32_t fx8_to_h16(int32_t v) {
++    const uint32_t sign = (v < 0) ? 0x8000u : 0u;
++    const uint32_t a = (v < 0) ? static_cast<uint32_t>(-v) : static_cast<uint32_t>(v);
++    if (a == 0u) return sign | 0x0400u;
++    const uint32_t e = 31u - static_cast<uint32_t>(__builtin_clz(a));  // a in [2^e, 2^(e+1))
++    uint32_t h;
++    if (e >= 10u) {
++        const uint32_t s = e - 10u;
++        h = ((e + 7u) << 10) | ((a >> s) & 0x3ffu);
++        if (s != 0u) h += (a >> (s - 1u)) & 1u;
++        if (h >= 0x7c00u) h = 0x7bffu;
++    } else {
++        h = ((e + 7u) << 10) | ((a << (10u - e)) & 0x3ffu);
++    }
++    return sign | h;
++}
++
++// fp32 bits of v -> round(clamp(v, 0, 1) * (2^n - 1)), n <= 16: exact product,
++// one rounding.
++inline uint32_t f32_to_unorm(uint32_t u, uint32_t n) {
++    if (static_cast<int32_t>(u) <= 0) return 0u;  // +0 and negatives
++    if (u >= 0x3f800000u) return (1u << n) - 1u;  // >= 1.0
++    const uint32_t sh = 150u - (u >> 23);         // v = m * 2^-sh, sh >= 24
++    if (sh > 48u) return 0u;
++    const uint32_t m = (u & 0x7fffffu) | 0x800000u;
++    const uint64_t p = (static_cast<uint64_t>(m) << n) - m;  // m * (2^n - 1)
++    return static_cast<uint32_t>((p + (1ull << (sh - 1u))) >> sh);
++}
++
++inline uint32_t f32_to_unorm16(uint32_t u) { return f32_to_unorm(u, 16u); }
++
++// Record word [3] from the fp32 colors: UNORM 11/11/10 (expand() widens them
++// back to UNORM16 by bit replication, i.e. q * 65535 / (2^n - 1) to within 1).
++inline uint32_t pack_color_word(uint32_t r_bits, uint32_t g_bits, uint32_t b_bits) {
++    return f32_to_unorm(r_bits, 11u) | (f32_to_unorm(g_bits, 11u) << 11) |
++           (f32_to_unorm(b_bits, 10u) << 22);
++}
++
++// Half bits from the encoders above -> fp32 bits of h * 2^-scale_log2 (exact).
++inline uint32_t h16_to_f32(uint32_t h, uint32_t scale_log2) {
++    return ((h & 0x8000u) << 16) | (((h & 0x7fffu) << 13) + ((112u - scale_log2) << 23));
++}
++
++// Record -> the 32 B slab words: [0..2] fp32 A,B,C  [3] key  [4,5] fp32 mean
++// [6] unorm16 op | r << 16  [7] unorm16 g | b << 16 (colors re-expanded by bit
++// replication, so 0 and full scale are exact).
++inline void expand(const uint32_t w[4], uint32_t key, uint32_t out[8]) {
++    const uint32_t r11 = w[3] & 0x7ffu, g11 = (w[3] >> 11) & 0x7ffu, b10 = w[3] >> 22;
++    out[0] = h16_to_f32(w[0] & 0xffffu, kConicScaleLog2);
++    out[1] = h16_to_f32(w[0] >> 16, kConicScaleLog2);
++    out[2] = h16_to_f32(w[1] & 0xffffu, kConicScaleLog2);
++    out[3] = key;
++    out[4] = h16_to_f32(w[1] >> 16, 0u);
++    out[5] = h16_to_f32(w[2] & 0xffffu, 0u);
++    out[6] = (w[2] >> 16) | (((r11 << 5) | (r11 >> 6)) << 16);
++    out[7] = ((g11 << 5) | (g11 >> 6)) | (((b10 << 6) | (b10 >> 4)) << 16);
++}
++
++}  // namespace rec16
+diff --git a/render/kernels/dataflow/sort_bin.cpp b/render/kernels/dataflow/sort_bin.cpp
+index 86431e5..745f26a 100644
+--- a/render/kernels/dataflow/sort_bin.cpp
++++ b/render/kernels/dataflow/sort_bin.cpp
+@@ -40,6 +40,7 @@
+ #include <cstdint>
+ 
+ #include "api/dataflow/dataflow_api.h"
++#include "rec16_codec.h"
+ 
+ namespace {
+ 
+@@ -109,8 +110,8 @@ void kernel_main() {
+     // kept counts sub-pass 1 would recompute (same page range, same keep test),
+     // so it is read instead of re-scanning every tid/keep page. 0 => recount.
+     const uint32_t hist_rows_addr = get_arg_val<uint32_t>(17);
+-    // L1_RECORD (PACK2): scatter 32B records into pre-sized per-tile buckets.
+-    // buf_l1_recs is BUCKET_FIT*num_tiles logical slots, two per 64B page;
++    // L1_RECORD (PACK4): scatter 16B records into pre-sized per-tile buckets.
++    // buf_l1_recs is BUCKET_FIT*num_tiles logical slots, four per 64B page;
+     // buf_l1_rec_base
+     // provides per-(core,tile) start slot = t*BUCKET_FIT + prefix.
+     const uint32_t l1_recs_addr  = get_arg_val<uint32_t>(18);
+@@ -169,16 +170,16 @@ void kernel_main() {
+     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
+     // tile_recs (dense 64B record buffer) is parsed to keep the accessor offsets
+     // aligned with the host's CT-arg order, but the blend reader serves every
+-    // tile from the 32B buf_l1_recs (L1_RECORD) and never reads tile_recs, so it
++    // tile from the depth-sorted slab (materialized from buf_l1_recs) and never reads tile_recs, so it
+     // is intentionally unwritten here.
+     const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
+     const auto hist_rows_acc = TensorAccessor(recbase_args, hist_rows_addr, PAGE_BYTES);
+     (void)tile_recs_acc;
+-    // PACK2: two 32B splats per 64B page (slot s => page s/2, half s&1 at +32*half).
++    // PACK4: four 16B records per 64B page (slot s => page s/4, byte 16*(s&3)).
+     // Accessor page = 64B; sub-64B page size is unreliable on BH.
+     const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  64u);
+     const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
+-    // iter-138: overflow region is the same PACK2 64B-page layout as buf_l1_recs.
++    // iter-138: overflow region is the same PACK4 64B-page layout as buf_l1_recs.
+     const bool l1_ov_enabled = (l1_ov_addr != 0u) && (l1_ov_base_addr != 0u);
+     const auto l1_ov_acc      = TensorAccessor(l1_ov_args,      l1_ov_addr,      64u);
+     const auto l1_ov_base_acc = TensorAccessor(l1_ov_base_args, l1_ov_base_addr, PAGE_BYTES);
+@@ -194,7 +195,7 @@ void kernel_main() {
+                        CB_ROW = 4, CB_CUR = 5, CB_OFF = 6, CB_KS = 7, CB_IS = 8;
+     constexpr uint32_t CB_REC = 9;     // 64B blendrec staging (read page g, +depth, write bucket)
+     constexpr uint32_t CB_L1BASE   = 11; // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
+-    constexpr uint32_t CB_L1SCRATCH = 12; // 32B staging buffer for pack → noc write
++    constexpr uint32_t CB_L1SCRATCH = 12; // 16B-record staging buffer for pack → noc write
+     constexpr uint32_t CB_PACKOC   = 13; // iter 132: 64B-per-gaussian blendrec page write-back ring (publishes packed op/color)
+     constexpr uint32_t CB_L1OVBASE = 14; // iter-138: per-(core,tile) overflow slot base row (sentinel = non-overflow tile)
+ 
+@@ -343,10 +344,10 @@ void kernel_main() {
+     // re-read the same 64B blendrec page once PER PAIR (the "random per-pair
+     // blendrec gather" the Stage-2 plan calls out — a K-tile gaussian re-read
+     // its record K times). We now read blendrec[g] into ONE L1 cache page when g
+-    // changes and pack every pair's 32B record straight from that cache. The
++    // changes and pack every pair's 16B record straight from that cache. The
+     // bytes written to buf_l1_recs are bit-identical; only the redundant DRAM
+     // reads are removed (blendrec read once per gaussian, not once per pair).
+-    // The packed 32B records still stage into a per-batch region of l1_scratch
++    // The packed 16B records still stage into a per-batch region of l1_scratch
+     // and flush to buf_l1_recs under ONE write barrier per REC_BATCH.
+     constexpr uint32_t REC_BATCH = 16u;
+     const uint32_t rec_cache_l1 = get_write_ptr(CB_REC);  // 64B cache for current g's blendrec
+@@ -355,30 +356,30 @@ void kernel_main() {
+     uint32_t brec_l1_slot[REC_BATCH];  // abs slot (in buf_l1_recs OR overflow region; 0xFFFFFFFF = drop)
+     uint32_t brec_is_ov[REC_BATCH];    // iter-138: 1 ⇒ slot is in the overflow region, 0 ⇒ buf_l1_recs
+     uint32_t nbrec = 0;
+-    // The 32B record is packed at enqueue time (blendrec already cached), so the
++    // The 16B record is packed at enqueue time (blendrec already cached), so the
+     // flush only issues the pre-packed writes under one barrier — no per-record
+     // blendrec read barrier here. iter-138: each batched entry targets either the
+     // per-tile buf_l1_recs bucket (in-budget tiles) or the compact overflow region
+-    // (overflow tiles within the materialize L1 cap); both are PACK2 64B pages, so
+-    // the 32B write to (slot>>1) page + (slot&1)*32 byte is identical bar the
+-    // accessor. The 32B half-write at a 16B-aligned offset is within the DRAM write
+-    // granule (same as the proven buf_l1_recs scatter).
++    // (overflow tiles within the materialize L1 cap); both are PACK4 64B pages, so
++    // the 16B write to (slot>>2) page + (slot&3)*16 byte is identical bar the
++    // accessor. 16B at a 16B-aligned offset is exactly the Blackhole DRAM write
++    // granule (the same size/alignment the packoc publish below relies on).
+     auto flush_recs = [&]() {
+         if (nbrec == 0) return;
+         for (uint32_t b = 0; b < nbrec; b++) {
+-            // Skip the 32B scatter for over-cap overflow records (gather fallback).
++            // Skip the scatter for over-cap overflow records (gather fallback).
+             if (brec_l1_slot[b] == 0xFFFFFFFFu) continue;
+             const uint32_t slot = brec_l1_slot[b];
+-            const uint32_t page = slot >> 1;
+-            const uint32_t half_off = (slot & 1u) * 32u;
++            const uint32_t page = slot >> 2;
++            const uint32_t quarter_off = (slot & 3u) * 16u;
+             if (brec_is_ov[b]) {
+-                noc_async_write(l1_scratch + b * 32u,
+-                                get_noc_addr(page, l1_ov_acc) + half_off,
+-                                32u);
++                noc_async_write(l1_scratch + b * 16u,
++                                get_noc_addr(page, l1_ov_acc) + quarter_off,
++                                16u);
+             } else {
+-                noc_async_write(l1_scratch + b * 32u,
+-                                get_noc_addr(page, l1_recs_acc) + half_off,
+-                                32u);
++                noc_async_write(l1_scratch + b * 16u,
++                                get_noc_addr(page, l1_recs_acc) + quarter_off,
++                                16u);
+             }
+         }
+         noc_async_write_barrier();
+@@ -419,78 +420,66 @@ void kernel_main() {
+         n_packoc = 0;
+     };
+ 
+-    // Pack the 32B PACK2 record. Covariance FULL fp32 — precision-critical (the
+-    // blend recomputes the conic via det = a*c - b*b, which loses too much to
+-    // fp16 when a,c are large, ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL
+-    // fp32 (sub-px center); opacity/color are [0,1] => UNORM16 (~30x tighter than
+-    // fp16, the op/color precision wall).
+-    // 64B blendrec (fp32 words): 0=cov_a 1=cov_b 2=cov_c 3=mx 4=my 5=op
+-    //                            6=cr    7=cg    8=cb    9=depth_key(u32)
+-    // 32B layout (M0): [0]fp32 cov_a [1]fp32 cov_b [2]fp32 cov_c [3]u32 depth_key
+-    //   [4]fp32 mx_local [5]fp32 my_local [6]unorm16 op,r [7]unorm16 g,b
++    // Pack the 16B PACK4 bucket record (R16, task #23; layout and codec in
++    // rec16_codec.h). The depth key is NOT in the record:
++    // sort_subchunk_materialize reads it from the keys layout this kernel writes
++    // below (ksp -> keys_addr), which holds the same key in the same per-tile,
++    // core-major, curp order as the bucket slots. Materialize expands the record
++    // back to the 32B slab layout the cull/blend kernels read.
++    // 64B blendrec (fp32 words): 0=A 1=B 2=C (conic, -0.5 folded) 3=mx 4=my 5=op
++    //                            6=cr 7=cg 8=cb 9=depth_key(u32)
+     //
+     // iter-128: hoist the per-gaussian-INVARIANT packing out of the per-pair
+-    // loop. cov(0,1,2), depth_key(3), and the op/color UNORM16 words(6,7) are
+-    // functions of the GAUSSIAN only — identical for every one of the K tiles a
+-    // gaussian touches — yet the old pack recomputed the four UNORM conversions
+-    // (float multiplies) and re-read the cached blendrec for EVERY pair. Measured
+-    // (iter-128 ablation, 30-view makespan): pack_rec was ~27 ms/view = 71 % of
+-    // sort_bucket_emit (the 32B scatter writes were only ~1.6 ms — the scattered-
+-    // DRAM-write premise was refuted). Only the tile-local mean (words 4,5) varies
+-    // per pair, so we compute the invariant words ONCE per gaussian (when blendrec
+-    // is read) into registers, and per pair only subtract the tile origin from the
+-    // cached fp32 mean. The bytes written to buf_l1_recs are BIT-IDENTICAL.
+-    uint32_t inv_cov0 = 0, inv_cov1 = 0, inv_cov2 = 0, inv_depth = 0,
++    // loop. The conic, depth key and op/color words are functions of the
++    // GAUSSIAN only — identical for every one of the K tiles a gaussian touches.
++    // Measured (iter-128 ablation, 30-view makespan): pack_rec was ~27 ms/view =
++    // 71 % of sort_bucket_emit. Only the tile-local mean varies per pair, so the
++    // invariant words are computed ONCE per gaussian (when blendrec is read) into
++    // registers, and per pair only the tile origin is subtracted from the cached
++    // fixed-point mean before the half conversion.
++    uint32_t inv_w0 = 0, inv_c16 = 0, inv_op_hi = 0, inv_w3 = 0,
+              inv_opr = 0, inv_cgb = 0;
+-    float inv_mx = 0.0f, inv_my = 0.0f;
++    int32_t inv_mx8 = 0, inv_my8 = 0;  // gaussian mean, 1/256 px fixed point
+     auto pack_invariants = [&](uint32_t depth_key) {
+-        inv_cov0 = cachep[0];  // fp32 cov_a (exact: no fp16 det cancellation)
+-        inv_cov1 = cachep[1];  // fp32 cov_b
+-        inv_cov2 = cachep[2];  // fp32 cov_c
+-        inv_depth = depth_key;
+-        inv_mx = *reinterpret_cast<const volatile float*>(&cachep[3]);
+-        inv_my = *reinterpret_cast<const volatile float*>(&cachep[4]);
+-        // iter 132: compute the op/color UNORM16 pack ONCE per gaussian, here on
+-        // the NCRISC side (gather now writes raw fp32 op/cr/cg/cb at words 5..8,
+-        // keeping the pack off the BRISC proj_scatter long pole). The two packed
+-        // words feed this core's in-budget bucket record AND are published into
+-        // blendrec[10],[11] (publish_packoc) so the depth-sorted materialize
+-        // overflow gather COPIES them instead of re-packing. Byte-identical to
+-        // the iter-131 birth pack (same fp32 inputs, same rounding formula).
+-        float op = *reinterpret_cast<const volatile float*>(&cachep[5]);
+-        float cr = *reinterpret_cast<const volatile float*>(&cachep[6]);
+-        float cg = *reinterpret_cast<const volatile float*>(&cachep[7]);
+-        float cb_v = *reinterpret_cast<const volatile float*>(&cachep[8]);
+-        auto to_unorm = [](float v) -> uint32_t {
+-            if (v <= 0.0f) return 0u;
+-            if (v >= 1.0f) return 65535u;
+-            return static_cast<uint32_t>(v * 65535.0f + 0.5f);
+-        };
+-        inv_opr = (to_unorm(op) | (to_unorm(cr) << 16));
+-        inv_cgb = (to_unorm(cg) | (to_unorm(cb_v) << 16));
++        (void)depth_key;
++        inv_w0 = rec16::f32_to_h16(cachep[0], rec16::kConicScaleLog2) |
++                 (rec16::f32_to_h16(cachep[1], rec16::kConicScaleLog2) << 16);
++        inv_c16 = rec16::f32_to_h16(cachep[2], rec16::kConicScaleLog2);
++        inv_mx8 = rec16::f32_to_fx8(cachep[3]);
++        inv_my8 = rec16::f32_to_fx8(cachep[4]);
++        // iter 132: the op/color UNORM16 pack runs ONCE per gaussian, here on the
++        // NCRISC side (gather writes raw fp32 op/cr/cg/cb at words 5..8, keeping
++        // the pack off the BRISC proj_scatter long pole). The two packed words are
++        // also published into blendrec[10],[11] (publish_packoc) so the depth-
++        // sorted materialize overflow gather COPIES them instead of re-packing.
++        // R16: integer-only quantization (was four soft-float mul/add/convert).
++        const uint32_t op16 = rec16::f32_to_unorm16(cachep[5]);
++        const uint32_t r16 = rec16::f32_to_unorm16(cachep[6]);
++        const uint32_t g16 = rec16::f32_to_unorm16(cachep[7]);
++        const uint32_t b16 = rec16::f32_to_unorm16(cachep[8]);
++        inv_opr = op16 | (r16 << 16);
++        inv_cgb = g16 | (b16 << 16);
++        inv_op_hi = op16 << 16;
++        inv_w3 = rec16::pack_color_word(cachep[6], cachep[7], cachep[8]);
+     };
+     auto pack_rec = [&](uint32_t b, uint32_t tt) {
+         // Tile-local mean: the blend reader reconstructs absolute via
+         // mean = local + tile_origin. Only this is per-pair (per-tile) work.
+         // tx = tt % l1_tiles_x, ty = tt / l1_tiles_x — soft-divmod replaced by a
+         // shift/mask on the power-of-two grid (bit-identical; see hoist above).
++        // R16: the origin is subtracted in 1/256 px fixed point (one integer
++        // sub) and converted straight to half — no soft-float per pair.
+         const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % l1_tiles_x);
+         const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / l1_tiles_x);
+-        float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
+-        float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
++        constexpr uint32_t kTileFx8 = L1_TILE_SIZE << 8;
+         volatile uint32_t* p32 =
+-            reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
+-        uint32_t mx_bits, my_bits;
+-        __builtin_memcpy(&mx_bits, &mx, 4);
+-        __builtin_memcpy(&my_bits, &my, 4);
+-        p32[0] = inv_cov0;
+-        p32[1] = inv_cov1;
+-        p32[2] = inv_cov2;
+-        p32[3] = inv_depth;
+-        p32[4] = mx_bits;  // fp32 tile-local mean x (sub-px center precision)
+-        p32[5] = my_bits;  // fp32 tile-local mean y
+-        p32[6] = inv_opr;
+-        p32[7] = inv_cgb;
++            reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 16u);
++        p32[0] = inv_w0;
++        p32[1] = inv_c16 |
++                 (rec16::fx8_to_h16(inv_mx8 - static_cast<int32_t>(txi * kTileFx8)) << 16);
++        p32[2] = rec16::fx8_to_h16(inv_my8 - static_cast<int32_t>(tyi * kTileFx8)) |
++                 inv_op_hi;
++        p32[3] = inv_w3;
+     };
+ 
+     // Sub-pass 2: counting-sort kept pairs into L1, grouped by tile (gaussian-
+@@ -523,7 +512,7 @@ void kernel_main() {
+             // never share a slot — no race, no atomics.
+             //
+             // Stage 2: blendrec[g] is read ONCE per gaussian into rec_cache_l1
+-            // (consecutive pairs share g), then every pair's 32B record is packed
++            // (consecutive pairs share g), then every pair's 16B record is packed
+             // straight from that cache — no random per-pair re-read.
+             if (static_cast<int32_t>(g) != blendrec_cached_g) {
+                 noc_async_read(get_noc_addr(g, blendrec_acc), rec_cache_l1, PAGE_BYTES);
+@@ -557,7 +546,7 @@ void kernel_main() {
+                 // adjacent DRAM. The blend reader serves such heavy tiles from the
+                 // dense gather fallback (Lb > MB_BUCKET_FIT), never from this bucket,
+                 // so dropping the overflow records here is correct. Sentinel
+-                // 0xFFFFFFFF marks "skip the 32B scatter" for this batched entry.
++                // 0xFFFFFFFF marks "skip the record scatter" for this batched entry.
+                 // iter-138: overflow tiles (within the materialize L1 cap) carry a
+                 // non-sentinel base in ov_basep[t] and pre-pack the FULL tile into
+                 // the compact overflow region (no bucket clamp). Non-overflow / over-
+@@ -578,7 +567,7 @@ void kernel_main() {
+                 brec_l1_slot[nbrec] = out_slot;
+                 brec_is_ov[nbrec] = is_ov;
+                 if (out_slot != 0xFFFFFFFFu) {
+-                    pack_rec(nbrec, t);  // pack into l1_scratch + nbrec*32
++                    pack_rec(nbrec, t);  // pack into l1_scratch + nbrec*16
+                 }
+                 nbrec++;
+                 if (nbrec == REC_BATCH) flush_recs();
+diff --git a/render/kernels/dataflow/sort_subchunk_materialize.cpp b/render/kernels/dataflow/sort_subchunk_materialize.cpp
+index 4d11f74..9ad6d2d 100644
+--- a/render/kernels/dataflow/sort_subchunk_materialize.cpp
++++ b/render/kernels/dataflow/sort_subchunk_materialize.cpp
+@@ -27,6 +27,7 @@
+ #include <cstdint>
+ 
+ #include "api/dataflow/dataflow_api.h"
++#include "rec16_codec.h"
+ 
+ namespace {
+ 
+@@ -34,12 +35,17 @@ constexpr uint32_t PAGE_BYTES = 64;
+ constexpr uint32_t ELEMS_PER_PAGE = 16;
+ constexpr uint32_t L1_SPLAT_BYTES = 32u;
+ constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
++// R16 (task #23): the emit writes 16B bucket records, four per 64B page (PACK4:
++// record i at page i/4, byte 16*(i&3), i.e. byte 16*i of a coalesced page run).
++// The depth-sorted slab this kernel writes keeps the 32B layout the cull/blend
++// kernels read; expand_rec16 converts one record.
++constexpr uint32_t L1_REC16_BYTES = 16u;
+ // iter 110 (A2): the depth-sorted slab is materialized into a DRAM buffer with a
+ // LARGE interleave page (SLAB_PAGE_BYTES) so the cull/blend readers coalesce the
+ // per-subchunk load into ceil(L/SLAB_RECS_PER_PAGE) big transfers. The slab is
+ // still a contiguous array of 32B records: subchunk-local record g lives at
+ // page (sc_page + g/SLAB_RECS_PER_PAGE), byte (g % SLAB_RECS_PER_PAGE)*32. The
+-// source L1 bucket layout (PACK2, 2 recs / 64B) is unchanged.
++// source L1 bucket layout is PACK4 (4 x 16B records / 64B page, R16).
+ constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
+ constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
+ constexpr uint32_t TILE_SIZE = 32u;
+@@ -69,9 +75,15 @@ inline uint32_t f_to_bits(float f) {
+     return b;
+ }
+ 
+-inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
+-    return reinterpret_cast<volatile uint32_t*>(
+-        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
++// 16B bucket record (rec16_codec.h) -> 32B slab record at dst_l1.
++inline void expand_rec16(uint32_t dst_l1, uint32_t src_l1, uint32_t key) {
++    auto src = reinterpret_cast<volatile uint32_t*>(src_l1);
++    auto dst = reinterpret_cast<volatile uint32_t*>(dst_l1);
++    const uint32_t w[4] = {src[0], src[1], src[2], src[3]};
++    uint32_t out[8];
++    rec16::expand(w, key, out);
++    dst[0] = out[0]; dst[1] = out[1]; dst[2] = out[2]; dst[3] = out[3];
++    dst[4] = out[4]; dst[5] = out[5]; dst[6] = out[6]; dst[7] = out[7];
+ }
+ 
+ }  // namespace
+@@ -93,7 +105,7 @@ void kernel_main() {
+     const uint32_t work_count     = get_arg_val<uint32_t>(9);
+     const uint32_t tiles_x        = get_arg_val<uint32_t>(10);
+     const uint32_t bucket_fit     = get_arg_val<uint32_t>(11);
+-    // iter-138 (Stage-2b overflow pre-pack): the compact overflow region (PACK2,
++    // iter-138 (Stage-2b overflow pre-pack): the compact overflow region (PACK4,
+     // pre-packed by sort_bucket_emit) + per-tile start slot (sentinel 0xFFFFFFFF
+     // for non-prepacked tiles) + the L1 cap. For an in-cap overflow tile this core
+     // gets ONE work item (sc==0) and processes the WHOLE tile: coalesced bucket
+@@ -101,6 +113,12 @@ void kernel_main() {
+     const uint32_t ov_recs_addr   = get_arg_val<uint32_t>(12);  // overflow region (0=off)
+     const uint32_t ov_base_addr   = get_arg_val<uint32_t>(13);  // per-tile slot base (0=off)
+     const uint32_t ov_cap         = get_arg_val<uint32_t>(14);  // kOverflowL1Cap
++    // R16: the depth keys of the bucket/overflow records, read from the emit's
++    // page-aligned keys layout (tile t = pages [pstart_page, +tile_pad/16), core-
++    // major per-(core,tile) blocks padded with 0xFFFFFFFF). Dropping the padding
++    // yields the tile's keys in exactly the bucket slot order.
++    const uint32_t keys_addr      = get_arg_val<uint32_t>(15);
++    const uint32_t tmeta_addr     = get_arg_val<uint32_t>(16);  // (pstart_page, tile_pad)
+ 
+     constexpr auto sorted_args = TensorAccessorArgs<0>();
+     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
+@@ -110,9 +128,11 @@ void kernel_main() {
+     constexpr auto blend_meta_args = TensorAccessorArgs<payload_args.next_compile_time_args_offset()>();
+     constexpr auto dir_args = TensorAccessorArgs<blend_meta_args.next_compile_time_args_offset()>();
+     constexpr auto work_args = TensorAccessorArgs<dir_args.next_compile_time_args_offset()>();
+-    // iter-138: overflow region (PACK2 64B page) + per-tile overflow base row.
++    // iter-138: overflow region (PACK4 64B page) + per-tile overflow base row.
+     constexpr auto ov_recs_args = TensorAccessorArgs<work_args.next_compile_time_args_offset()>();
+     constexpr auto ov_base_args = TensorAccessorArgs<ov_recs_args.next_compile_time_args_offset()>();
++    constexpr auto keys_args = TensorAccessorArgs<ov_base_args.next_compile_time_args_offset()>();
++    constexpr auto tmeta_args = TensorAccessorArgs<keys_args.next_compile_time_args_offset()>();
+ 
+     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
+     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
+@@ -125,6 +145,8 @@ void kernel_main() {
+     const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
+     const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  L1_PACK_PAGE_BYTES);
+     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
++    const auto keys_acc     = TensorAccessor(keys_args,     keys_addr,     PAGE_BYTES);
++    const auto tmeta_acc    = TensorAccessor(tmeta_args,    tmeta_addr,    PAGE_BYTES);
+ 
+     if (work_count == 0) {
+         return;
+@@ -137,6 +159,35 @@ void kernel_main() {
+     const uint32_t rec_l1 = get_write_ptr(CB_REC);
+     const uint32_t pack_l1 = get_write_ptr(CB_PACK);
+ 
++    // R16: fill keyc[0..n) with tile_id's depth keys in bucket slot order (see
++    // keys_addr above). keyc sits in the upper half of CB_BUCKET: the PACK4
++    // records use at most ov_cap*16 B of its max(bucket_fit*64, ov_cap*32) B.
++    auto load_tile_keys = [&](uint32_t tile_id, uint32_t keyc_l1, uint32_t n) {
++        const uint32_t e0 = tile_id * 2u;
++        noc_async_read(get_noc_addr(e0 >> 4, tmeta_acc), scr, PAGE_BYTES);
++        noc_async_read_barrier();
++        const uint32_t pstart = scrp[e0 & 0xFu];
++        const uint32_t npages = scrp[(e0 & 0xFu) + 1u] / ELEMS_PER_PAGE;
++        uint32_t pp = 0;
++        while (pp < npages) {
++            const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
++            for (uint32_t q = pp; q < end; ++q) {
++                noc_async_read(get_noc_addr(pstart + q, keys_acc),
++                               keyc_l1 + q * PAGE_BYTES, PAGE_BYTES);
++            }
++            noc_async_read_barrier();
++            pp = end;
++        }
++        auto kp = reinterpret_cast<volatile uint32_t*>(keyc_l1);
++        const uint32_t total = npages * ELEMS_PER_PAGE;
++        uint32_t j = 0;
++        for (uint32_t i = 0; i < total; ++i) {
++            const uint32_t k = kp[i];
++            if (k != 0xFFFFFFFFu) kp[j++] = k;
++        }
++        for (; j < n; ++j) kp[j] = 0xFFFFFFFFu;  // defensive: counts always match
++    };
++
+     constexpr uint32_t MAX_WORK = 1024;
+     // Packed work item: (tile_id << 8) | sc. tile_id < 2^16, sc < 2^8 — fits.
+     uint32_t work_item[MAX_WORK];
+@@ -230,11 +281,11 @@ void kernel_main() {
+                 ov_base = scrp[off];
+             }
+             if (ov_base != 0xFFFFFFFFu) {
+-                // Coalesced read of the whole overflow bucket (PACK2 64B pages).
+-                const uint32_t npages = (count + 1u) >> 1;
++                // Coalesced read of the whole overflow bucket (PACK4 64B pages).
++                const uint32_t npages = (count + 3u) >> 2;
+                 const uint32_t buck = get_write_ptr(CB_BUCKET);
+                 {
+-                    const uint32_t page0 = ov_base >> 1;  // ov_base is even-aligned
++                    const uint32_t page0 = ov_base >> 2;  // ov_base is 4-aligned
+                     uint32_t pp = 0;
+                     while (pp < npages) {
+                         const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+@@ -246,7 +297,10 @@ void kernel_main() {
+                         pp = end;
+                     }
+                 }
+-                // Stable LSD radix sort over ALL `count` records by key word[3].
++                const uint32_t keyc_l1 = buck + ov_cap * L1_REC16_BYTES;
++                load_tile_keys(tile_id, keyc_l1, count);
++                const uint32_t* keyc = reinterpret_cast<const uint32_t*>(keyc_l1);
++                // Stable LSD radix sort over ALL `count` records by depth key.
+                 const uint32_t bs = get_write_ptr(CB_BSORT);
+                 uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
+                 uint32_t* idxB = idxA + ov_cap;
+@@ -258,7 +312,7 @@ void kernel_main() {
+                     const uint32_t shift = byte * 8u;
+                     for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
+                     for (uint32_t i = 0; i < count; ++i) {
+-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
++                        cnt[(keyc[cur[i]] >> shift) & 0xFFu]++;
+                     }
+                     uint32_t sum = 0;
+                     for (uint32_t c = 0; c < 256u; ++c) {
+@@ -267,8 +321,7 @@ void kernel_main() {
+                         sum += t;
+                     }
+                     for (uint32_t i = 0; i < count; ++i) {
+-                        const uint32_t b =
+-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
++                        const uint32_t b = (keyc[cur[i]] >> shift) & 0xFFu;
+                         nxt[cnt[b]++] = cur[i];
+                     }
+                     uint32_t* tp = cur;
+@@ -294,14 +347,8 @@ void kernel_main() {
+                     }
+                     for (uint32_t k = 0; k < Ls; ++k) {
+                         const uint32_t idx = sorted[sc_off2 + k];
+-                        const uint32_t src_page = (idx >> 1);
+-                        const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
+-                        auto src = reinterpret_cast<volatile uint32_t*>(
+-                            buck + src_page * L1_PACK_PAGE_BYTES + src_half);
+-                        auto dst = reinterpret_cast<volatile uint32_t*>(
+-                            slab + k * L1_SPLAT_BYTES);
+-                        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
+-                        dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
++                        expand_rec16(slab + k * L1_SPLAT_BYTES,
++                                     buck + idx * L1_REC16_BYTES, keyc[idx]);
+                     }
+                     const uint32_t out_pages =
+                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+@@ -335,10 +382,10 @@ void kernel_main() {
+         // falls through to sorted_ids gather (iter 83: L1 slot order != masks).
+         if (sc == 0u && L_sub <= bucket_fit && count <= bucket_fit) {
+             const uint32_t L = L_sub;
+-            const uint32_t npages = (L + 1u) >> 1;
++            const uint32_t npages = (L + 3u) >> 2;
+             const uint32_t buck = get_write_ptr(CB_BUCKET);
+             {
+-                const uint32_t page0 = tile_id * (bucket_fit >> 1);
++                const uint32_t page0 = tile_id * (bucket_fit >> 2);
+                 uint32_t pp = 0;
+                 while (pp < npages) {
+                     const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+@@ -350,6 +397,9 @@ void kernel_main() {
+                     pp = end;
+                 }
+             }
++            const uint32_t keyc_l1 = buck + ov_cap * L1_REC16_BYTES;
++            load_tile_keys(tile_id, keyc_l1, L);
++            const uint32_t* keyc = reinterpret_cast<const uint32_t*>(keyc_l1);
+             const uint32_t bs = get_write_ptr(CB_BSORT);
+             uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
+             uint32_t* idxB = idxA + bucket_fit;
+@@ -359,9 +409,9 @@ void kernel_main() {
+                 for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
+                 for (uint32_t i = 1; i < L; ++i) {
+                     const uint32_t tmp = idxA[i];
+-                    const uint32_t ki = l1_splat_words(buck, tmp)[3];
++                    const uint32_t ki = keyc[tmp];
+                     uint32_t j = i;
+-                    while (j > 0 && l1_splat_words(buck, idxA[j - 1])[3] > ki) {
++                    while (j > 0 && keyc[idxA[j - 1]] > ki) {
+                         idxA[j] = idxA[j - 1];
+                         --j;
+                     }
+@@ -376,7 +426,7 @@ void kernel_main() {
+                     const uint32_t shift = byte * 8u;
+                     for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
+                     for (uint32_t i = 0; i < L; ++i) {
+-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
++                        cnt[(keyc[cur[i]] >> shift) & 0xFFu]++;
+                     }
+                     uint32_t sum = 0;
+                     for (uint32_t c = 0; c < 256u; ++c) {
+@@ -385,8 +435,7 @@ void kernel_main() {
+                         sum += t;
+                     }
+                     for (uint32_t i = 0; i < L; ++i) {
+-                        const uint32_t b =
+-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
++                        const uint32_t b = (keyc[cur[i]] >> shift) & 0xFFu;
+                         nxt[cnt[b]++] = cur[i];
+                     }
+                     uint32_t* t = cur;
+@@ -401,14 +450,8 @@ void kernel_main() {
+             const uint32_t slab = get_write_ptr(CB_SLAB);
+             for (uint32_t k = 0; k < L; ++k) {
+                 const uint32_t idx = sorted[k];
+-                const uint32_t src_page = (idx >> 1);
+-                const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
+-                auto src = reinterpret_cast<volatile uint32_t*>(
+-                    buck + src_page * L1_PACK_PAGE_BYTES + src_half);
+-                auto dst = reinterpret_cast<volatile uint32_t*>(
+-                    slab + k * L1_SPLAT_BYTES);
+-                dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
+-                dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
++                expand_rec16(slab + k * L1_SPLAT_BYTES, buck + idx * L1_REC16_BYTES,
++                             keyc[idx]);
+             }
+             const uint32_t out_pages =
+                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+diff --git a/tests/unit/test_rec16_codec.cpp b/tests/unit/test_rec16_codec.cpp
+new file mode 100644
+index 0000000..3d6e56f
+--- /dev/null
++++ b/tests/unit/test_rec16_codec.cpp
+@@ -0,0 +1,118 @@
++// Host check of the 16 B per-pair bucket record codec
++// (render/kernels/dataflow/rec16_codec.h), which the device kernels include.
++// Standalone (no Catch2/tt-metal):
++//   c++ -std=c++17 -O2 -I render/kernels/dataflow tests/unit/test_rec16_codec.cpp -o /tmp/t && /tmp/t
++#include <cmath>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <algorithm>
++#include <random>
++
++#include "rec16_codec.h"
++
++namespace {
++
++int g_fail = 0;
++
++void check(bool ok, const char* what, double a, double b) {
++    if (!ok && g_fail++ < 20) std::printf("FAIL %s: %.9g vs %.9g\n", what, a, b);
++}
++
++uint32_t bits(float f) { uint32_t u; std::memcpy(&u, &f, 4); return u; }
++float val(uint32_t u) { float f; std::memcpy(&f, &u, 4); return f; }
++
++// IEEE half -> double, for normal halves (the only kind the encoders emit).
++double half_value(uint32_t h) {
++    const int e = static_cast<int>((h >> 10) & 0x1f);
++    const double m = 1.0 + (h & 0x3ff) / 1024.0;
++    const double v = std::ldexp(m, e - 15);
++    return (h & 0x8000) ? -v : v;
++}
++
++}  // namespace
++
++int main() {
++    std::mt19937 rng(23);
++    std::uniform_real_distribution<float> u01(0.0f, 1.0f);
++
++    // Decode is exact: h16_to_f32 reproduces the IEEE half value (times 2^-s).
++    for (uint32_t h = 0x0400; h < 0x7c00; ++h) {
++        for (uint32_t s : {0u, 10u}) {
++            const double ref = std::ldexp(half_value(h), -static_cast<int>(s));
++            check(val(rec16::h16_to_f32(h, s)) == ref, "decode", val(rec16::h16_to_f32(h, s)), ref);
++            check(val(rec16::h16_to_f32(h | 0x8000, s)) == -ref, "decode-neg", 0, ref);
++        }
++    }
++
++    // Conic: half of x*2^10, relative error <= 2^-11 across 1e-7..3 (|A|,|B|,|C| range).
++    for (int i = 0; i < 200000; ++i) {
++        const float x = (i & 1 ? -1.0f : 1.0f) * std::pow(10.0f, -7.0f + 7.5f * u01(rng));
++        const uint32_t h = rec16::f32_to_h16(bits(x), rec16::kConicScaleLog2);
++        const double back = val(rec16::h16_to_f32(h, rec16::kConicScaleLog2));
++        const double tol = std::fabs(x) >= 6.2e-8 ? std::ldexp(std::fabs(x), -11) * 1.0001 : 6.2e-8;
++        check(std::fabs(back - x) <= tol, "conic", back, x);
++        check((h & 0x7c00) != 0 && (h & 0x7c00) != 0x7c00, "conic-normal", h, 0);
++    }
++
++    // Mean: exact 1/256 px fixed point, then half of v/256.
++    for (int i = 0; i < 400000; ++i) {
++        const float x = (u01(rng) - 0.3f) * (i % 4 == 0 ? 16000.0f : 96.0f);
++        const int32_t fx = rec16::f32_to_fx8(bits(x));
++        const double ref_fx = std::copysign(std::floor(std::fabs(static_cast<double>(x)) * 256.0 + 0.5), x);
++        check(fx == ref_fx, "fx8", fx, ref_fx);
++        for (int32_t tile = 0; tile < 1024 * 256; tile += 32 * 256 * 7) {
++            const int32_t v = fx - tile;
++            const double ref = v / 256.0;
++            const double back = val(rec16::h16_to_f32(rec16::fx8_to_h16(v), 0));
++            const double tol = std::max(std::ldexp(std::fabs(ref), -11) * 1.0001, std::ldexp(1.0, -14));
++            check(std::fabs(back - ref) <= tol, "mean", back, ref);
++        }
++    }
++
++    // UNORM16: exact round(v*65535) with clamping.
++    for (int i = 0; i < 400000; ++i) {
++        const float v = u01(rng) * 1.2f - 0.1f;
++        const double c = v < 0 ? 0.0 : (v > 1 ? 1.0 : v);
++        const double ref = std::floor(c * 65535.0 + 0.5);
++        check(rec16::f32_to_unorm16(bits(v)) == ref, "unorm16", rec16::f32_to_unorm16(bits(v)), ref);
++    }
++    check(rec16::f32_to_unorm16(bits(0.0f)) == 0, "unorm16-0", 0, 0);
++    check(rec16::f32_to_unorm16(bits(1.0f)) == 65535, "unorm16-1", 0, 0);
++
++    // Full record round trip.
++    for (int i = 0; i < 100000; ++i) {
++        const float A = -std::pow(10.0f, -6.0f + 6.0f * u01(rng)), B = (u01(rng) - 0.5f) * 0.5f * std::fabs(A);
++        const float C = -std::pow(10.0f, -6.0f + 6.0f * u01(rng));
++        const float mx = (u01(rng) - 0.5f) * 300.0f, my = (u01(rng) - 0.5f) * 300.0f;
++        const uint32_t op = static_cast<uint32_t>(u01(rng) * 65535.0f);
++        const float rf = u01(rng), gf = (i & 7) ? u01(rng) : 1.0f, bf = (i & 15) ? u01(rng) : 0.0f;
++        const uint32_t r = rec16::f32_to_unorm16(bits(rf)), g = rec16::f32_to_unorm16(bits(gf)),
++                       b = rec16::f32_to_unorm16(bits(bf));
++        const uint32_t w[4] = {
++            rec16::f32_to_h16(bits(A), 10) | (rec16::f32_to_h16(bits(B), 10) << 16),
++            rec16::f32_to_h16(bits(C), 10) | (rec16::fx8_to_h16(rec16::f32_to_fx8(bits(mx))) << 16),
++            rec16::fx8_to_h16(rec16::f32_to_fx8(bits(my))) | (op << 16),
++            rec16::pack_color_word(bits(rf), bits(gf), bits(bf))};
++        uint32_t out[8];
++        rec16::expand(w, 0x12345678u, out);
++        check(std::fabs(val(out[0]) - A) <= std::ldexp(std::fabs(A), -11) * 1.0001, "rec-A", val(out[0]), A);
++        check(std::fabs(val(out[2]) - C) <= std::ldexp(std::fabs(C), -11) * 1.0001, "rec-C", val(out[2]), C);
++        check(out[3] == 0x12345678u, "rec-key", out[3], 0);
++        check(std::fabs(val(out[4]) - mx) <= (std::ldexp(std::fabs(static_cast<double>(mx)), -11) + 1.0 / 512) * 1.0001, "rec-mx", val(out[4]), mx);
++        check(std::fabs(val(out[5]) - my) <= (std::ldexp(std::fabs(static_cast<double>(my)), -11) + 1.0 / 512) * 1.0001, "rec-my", val(out[5]), my);
++        check((out[6] & 0xffff) == op, "rec-op", out[6] & 0xffff, op);
++        const int dr = static_cast<int>(out[6] >> 16) - static_cast<int>(r);
++        const int dg = static_cast<int>(out[7] & 0xffff) - static_cast<int>(g);
++        const int db = static_cast<int>(out[7] >> 16) - static_cast<int>(b);
++        check(std::abs(dr) <= 18 && std::abs(dg) <= 18 && std::abs(db) <= 34, "rec-color", dr, db);
++    }
++    uint32_t out[8];
++    const uint32_t full[4] = {0x3c003c00u, 0x3c003c00u, 0x3c00u,
++                              rec16::pack_color_word(bits(1.0f), bits(1.0f), bits(1.0f))};
++    rec16::expand(full, 0, out);
++    check(out[6] >> 16 == 65535 && out[7] == 0xffffffffu, "color-full-scale", out[6] >> 16, out[7]);
++
++    std::printf(g_fail ? "rec16 codec: %d FAILURES\n" : "rec16 codec: all checks passed\n", g_fail);
++    return g_fail ? 1 : 0;
++}
+-- 
+2.50.1 (Apple Git-155)
+
