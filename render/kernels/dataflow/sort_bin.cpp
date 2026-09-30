@@ -104,7 +104,11 @@ void kernel_main() {
     // keys/ids layout (record page e ↔ keys/ids element e).
     const uint32_t blendrec_addr = get_arg_val<uint32_t>(15);
     const uint32_t tile_recs_addr= get_arg_val<uint32_t>(16);
-    const uint32_t recbase_addr  = get_arg_val<uint32_t>(17);  // dense per-(core,tile) base
+    // Arg 17 (formerly the retired dense tile_recs base): the count pass's
+    // histogram rows. In scatter mode this core's row is exactly the per-tile
+    // kept counts sub-pass 1 would recompute (same page range, same keep test),
+    // so it is read instead of re-scanning every tid/keep page. 0 => recount.
+    const uint32_t hist_rows_addr = get_arg_val<uint32_t>(17);
     // L1_RECORD (PACK2): scatter 32B records into pre-sized per-tile buckets.
     // buf_l1_recs is BUCKET_FIT*num_tiles logical slots, two per 64B page;
     // buf_l1_rec_base
@@ -168,9 +172,8 @@ void kernel_main() {
     // tile from the 32B buf_l1_recs (L1_RECORD) and never reads tile_recs, so it
     // is intentionally unwritten here.
     const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
-    const auto recbase_acc  = TensorAccessor(recbase_args,  recbase_addr,  PAGE_BYTES);
+    const auto hist_rows_acc = TensorAccessor(recbase_args, hist_rows_addr, PAGE_BYTES);
     (void)tile_recs_acc;
-    (void)recbase_acc;  // dense per-(core,tile) base — only used by the retired tile_recs scatter
     // PACK2: two 32B splats per 64B page (slot s => page s/2, half s&1 at +32*half).
     // Accessor page = 64B; sub-64B page size is unreliable on BH.
     const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  64u);
@@ -273,16 +276,26 @@ void kernel_main() {
     auto offp = reinterpret_cast<volatile uint32_t*>(off_l1);
 
     // Sub-pass 1: local per-tile kept count -> curp (reused as scratch count).
-    for (uint32_t t = 0; t < num_tiles; t++) curp[t] = 0;
-    for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
-        noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+    if (hist_rows_addr != 0u) {
+        // The count pass wrote this core's row; one 4 KB read replaces a second
+        // full scan of the core's tid/keep pages.
+        for (uint32_t pp = 0; pp < row_pages; pp++) {
+            noc_async_read(get_noc_addr(base_page + pp, hist_rows_acc),
+                           cur_l1 + pp * PAGE_BYTES, PAGE_BYTES);
+        }
         noc_async_read_barrier();
-        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-            const uint32_t p = pg * ELEMS_PER_PAGE + j;
-            if (p >= P) break;
-            if (keepp[j] == 0) continue;
-            curp[static_cast<uint32_t>(tidp[j])]++;
+    } else {
+        for (uint32_t t = 0; t < num_tiles; t++) curp[t] = 0;
+        for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
+            noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+            noc_async_read_barrier();
+            for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+                const uint32_t p = pg * ELEMS_PER_PAGE + j;
+                if (p >= P) break;
+                if (keepp[j] == 0) continue;
+                curp[static_cast<uint32_t>(tidp[j])]++;
+            }
         }
     }
     const uint32_t ks_l1 = get_write_ptr(CB_KS);

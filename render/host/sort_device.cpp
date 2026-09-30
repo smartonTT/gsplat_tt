@@ -38,6 +38,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <queue>
 #include <string>
 #include <utility>
 #include <vector>
@@ -171,6 +172,11 @@ struct SortDeviceContext {
     std::size_t cap_layout_ckpt_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_bin2d;  // per-core 2D hist/base
     std::size_t cap_bin2d_bytes = 0;
+    // Host-bridge path: the count pass writes its per-(core,tile) histogram here
+    // (not into bin2d, which receives the host's page bases), so the emit pass
+    // can read its own row back instead of recounting.
+    std::shared_ptr<distributed::MeshBuffer> buf_bin_hist;
+    std::size_t cap_bin_hist_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_bin_dbg;  // core0 scatter dump
 
     // Cached DRAM buffers (grow-on-demand).
@@ -239,8 +245,6 @@ struct SortDeviceContext {
     // Iter 53+: post-radix PACK2 subchunk payloads + device-resident directory.
     distributed::MeshWorkload wl_subchunk;
     KernelHandle ksubchunk{};
-    distributed::MeshWorkload wl_subchunk_dir;
-    KernelHandle ksubchunk_dir{};
     std::shared_ptr<distributed::MeshBuffer> buf_blend_subchunk_meta;
     std::size_t cap_blend_subchunk_meta_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_payload;
@@ -416,54 +420,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     ctx.wl_subchunk.add_program(device_range, std::move(program));
 }
 
-// Iter 55 / step B: device writes blend meta + dir + prefix at sort publish.
-static void build_program_subchunk_directory(SortDeviceContext& ctx) {
-    Program program = CreateProgram();
-    const CoreRange core0({0, 0}, {0, 0});
-    CircularBufferConfig c(PAGE_BYTES, {{0, DataFormat::UInt32}});
-    c.set_page_size(0, PAGE_BYTES);
-    CreateCircularBuffer(program, core0, c);
-
-    std::vector<uint32_t> ct;
-    for (int i = 0; i < 4; i++) {
-        TensorAccessorArgs::create_dram_interleaved().append_to(ct);
-    }
-    ctx.ksubchunk_dir = CreateKernel(
-        program,
-        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_subchunk_directory.cpp",
-        core0,
-        DataMovementConfig{
-            .processor = DataMovementProcessor::RISCV_1,
-            .noc = NOC::RISCV_1_default,
-            .compile_args = ct,
-        });
-    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
-    ctx.wl_subchunk_dir.add_program(device_range, std::move(program));
-}
-
-static bool launch_subchunk_directory(
-    SortDeviceContext* ctx,
-    uint32_t num_tiles,
-    uint32_t bucket_fit) {
-    auto brng = device_state::get_buffer("sort_tile_ranges");
-    if (!brng || !ctx->buf_blend_subchunk_meta || !ctx->buf_subchunk_dir ||
-        !ctx->buf_subchunk_prefix) {
-        return false;
-    }
-    Program& prog = ctx->wl_subchunk_dir.get_programs().begin()->second;
-    SetRuntimeArgs(prog, ctx->ksubchunk_dir, CoreCoord{0, 0}, {
-        static_cast<uint32_t>(brng->address()),
-        static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
-        static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
-        static_cast<uint32_t>(ctx->buf_subchunk_prefix->address()),
-        num_tiles,
-        bucket_fit,
-    });
-    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk_dir, false);
-    return true;
-}
-
-// Host layout sizing + DRAM alloc; device fills meta/dir/prefix at publish.
+// Host layout sizing + DRAM alloc; upload_subchunk_directory fills meta/dir/prefix.
 static bool prepare_subchunk_buffers(
     SortDeviceContext* ctx,
     const SubchunkLayout& layout,
@@ -503,6 +460,28 @@ static bool prepare_subchunk_buffers(
             "blend_subchunk_meta", ctx->buf_blend_subchunk_meta);
     }
     return true;
+}
+
+// Upload the per-tile blend meta [dir_base, num_subchunks], the payload page
+// prefix and the per-subchunk dir entries [page, L_sub, flags, 0]. These are
+// exactly build_subchunk_layout's tile_meta / prefix / dir, which the host has
+// already computed for sizing; the former sort_subchunk_directory kernel rebuilt
+// them serially on ONE core with ~4 dependent DRAM read-modify-write round trips
+// per tile (~2.4 ms/view of device time between publish and materialize). ~30 KB
+// of H2D, ordered on the CQ ahead of materialize/cull/blend, their only readers.
+static void upload_subchunk_directory(
+    SortDeviceContext* ctx, const SubchunkLayout& layout) {
+    auto upload = [&](std::shared_ptr<distributed::MeshBuffer>& buf,
+                      std::size_t cap_bytes, const std::vector<uint32_t>& src) {
+        // EnqueueWriteMeshBuffer writes the WHOLE (grow-only) buffer.
+        std::vector<uint32_t> v(cap_bytes / 4, 0u);
+        std::copy(src.begin(), src.begin() + std::min(src.size(), v.size()), v.begin());
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, buf, v, false);
+    };
+    upload(ctx->buf_blend_subchunk_meta, ctx->cap_blend_subchunk_meta_bytes,
+           layout.tile_meta);
+    upload(ctx->buf_subchunk_prefix, ctx->cap_subchunk_prefix_bytes, layout.prefix);
+    upload(ctx->buf_subchunk_dir, ctx->cap_subchunk_dir_bytes, layout.dir);
 }
 
 // iter 130: materialize work-item assignment — balance at (tile, subchunk)
@@ -918,7 +897,6 @@ static SortDeviceContext init_context() {
     build_program_bin_layout_emit(ctx);
     build_program_publish(ctx);
     build_program_subchunk(ctx);
-    build_program_subchunk_directory(ctx);
     if (bucket_mask_enabled()) {
         build_program_bucket_cull(ctx);
     }
@@ -979,13 +957,21 @@ static LptAssignment build_lpt(
     }
     std::sort(cost_id.begin(), cost_id.end(), std::greater<>());
 
+    // Least-loaded core first, ties -> lowest core index: a (load, core) min-heap
+    // makes exactly the choices std::min_element (first minimum) made, in
+    // O(tiles log cores) instead of O(tiles * cores) on the critical path.
     std::vector<std::vector<uint32_t>> per_core(num_cores);
-    std::vector<uint64_t> load(num_cores, 0);
+    using Slot = std::pair<uint64_t, uint32_t>;
+    std::vector<Slot> heap_store;
+    heap_store.reserve(num_cores);
+    for (uint32_t c = 0; c < num_cores; c++) heap_store.emplace_back(0u, c);
+    std::priority_queue<Slot, std::vector<Slot>, std::greater<Slot>> heap(
+        std::greater<Slot>{}, std::move(heap_store));
     for (const auto& [cost, id] : cost_id) {
-        const auto it = std::min_element(load.begin(), load.end());
-        const uint32_t c = static_cast<uint32_t>(std::distance(load.begin(), it));
-        per_core[c].push_back(id);
-        load[c] += cost;
+        const Slot top = heap.top();
+        heap.pop();
+        per_core[top.second].push_back(id);
+        heap.emplace(top.first + cost, top.second);
     }
 
     LptAssignment a;
@@ -1030,62 +1016,81 @@ struct BinLayoutResult {
     uint32_t status = 0;  // 0=ok, 1=BIN_LOCAL_MAX, 2=MAX_TILE_ENTRIES
 };
 
-static BinLayoutResult host_bin_layout_from_hist(
+// Host page layout from the per-(core,tile) histogram. Fills `r` IN PLACE so a
+// caller-owned result keeps the capacity of its num_cores x stride tables across
+// views. Three row-major passes over the histogram (sequential in memory; the
+// per-tile running state stays in cache) replace the former tile-outer /
+// core-inner walk that touched a new 4 KB row per element. Every output is
+// bit-identical to that walk:
+//   hist[c][t]       = 16 * (pstart_page[t] + sum_{c'<c} ceil16(h[c'][t]))
+//   histrec_l1[c][t] = t*bucket_fit + sum_{c'<c} h[c'][t]
+//   histrec[c][t]    = starts[t]    + sum_{c'<c} h[c'][t]   (only if dense_recbase)
+// dense_recbase=false skips histrec: the emit kernel ignores recbase (it only fed
+// the retired tile_recs scatter), so production neither builds nor uploads it.
+static void host_bin_layout_into(
     const std::vector<uint32_t>& hist_in,
     uint32_t num_cores,
     uint32_t num_tiles,
     uint32_t stride,
     bool tile_bucket,
-    bool l1_record = false,
-    uint32_t bucket_fit = 8192u) {
-    BinLayoutResult r;
-    r.hist = hist_in;
-    r.counts.assign(num_tiles, 0);
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        uint64_t s = 0;
-        for (uint32_t c = 0; c < num_cores; c++)
-            s += r.hist[static_cast<std::size_t>(c) * stride + t];
-        r.counts[t] = static_cast<int64_t>(s);
-    }
-    uint32_t max_core_padded = 0;
+    bool l1_record,
+    uint32_t bucket_fit,
+    bool dense_recbase,
+    BinLayoutResult& r) {
+    constexpr uint32_t SENT = 0xFFFFFFFFu;
+    const std::size_t n2d = static_cast<std::size_t>(num_cores) * stride;
+    r.status = 0;
+    r.ov_total_slots = 0;
+    r.ov_tiles = 0;
+    r.ov_records = 0;
+    r.P_kept = 0;
+    r.P_aligned = 0;
+    r.max_pad_n = 0;
+
+    // Pass 1: per-tile totals + padded page counts, per-core padded footprint.
+    std::vector<uint64_t> cnt(num_tiles, 0);
+    std::vector<uint32_t> tpages(num_tiles, 0);
+    uint64_t max_core_padded = 0;
     for (uint32_t c = 0; c < num_cores; c++) {
+        const uint32_t* row = hist_in.data() + static_cast<std::size_t>(c) * stride;
         uint64_t s = 0;
         for (uint32_t t = 0; t < num_tiles; t++) {
-            const uint64_t h = r.hist[static_cast<std::size_t>(c) * stride + t];
-            s += ((h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE) * ELEMS_PER_PAGE;
+            const uint32_t h = row[t];
+            const uint32_t pg = (h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
+            cnt[t] += h;
+            tpages[t] += pg;
+            s += static_cast<uint64_t>(pg) * ELEMS_PER_PAGE;
         }
-        if (s > max_core_padded) max_core_padded = static_cast<uint32_t>(s);
+        if (s > max_core_padded) max_core_padded = s;
     }
+    r.counts.resize(num_tiles);
+    for (uint32_t t = 0; t < num_tiles; t++) r.counts[t] = static_cast<int64_t>(cnt[t]);
     if (max_core_padded > BIN_LOCAL_MAX) {
         r.status = 1;
-        return r;
+        return;
     }
-    r.starts.assign(num_tiles, 0);
-    r.pstart_page.assign(num_tiles, 0);
-    r.pstart_elem.assign(num_tiles, 0);
-    r.tile_pad.assign(num_tiles, 0);
-    if (tile_bucket) {
-        r.histrec.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
-        r.bucket_meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
-    }
+
+    // Pass 2: per-tile prefixes (starts, page starts, overflow region bases).
+    r.starts.resize(num_tiles);
+    r.pstart_page.resize(num_tiles);
+    r.pstart_elem.resize(num_tiles);
+    r.tile_pad.resize(num_tiles);
+    if (tile_bucket) r.bucket_meta.assign(static_cast<std::size_t>(num_tiles) * 2u, 0u);
     if (l1_record) {
-        r.histrec_l1.assign(static_cast<std::size_t>(num_cores) * stride, 0u);
         // iter-138: prefix-allocate the COMPACT overflow region over in-cap
         // overflow tiles only (kBucketFit < count <= kOverflowL1Cap). Each such
         // tile's base is EVEN-aligned so its PACK2 page run starts at half 0
         // (the materialize reader indexes record g at page base/2 + g/2, half g&1).
-        r.histrec_overflow.assign(
-            static_cast<std::size_t>(num_cores) * stride, 0xFFFFFFFFu);
-        r.tile_ov_base.assign(num_tiles, 0xFFFFFFFFu);
+        r.tile_ov_base.assign(num_tiles, SENT);
         const uint32_t ov_cap = render_config::kOverflowL1Cap;
         uint64_t ov_cursor = 0;  // in 32B slots; kept even per tile for PACK2
         for (uint32_t t = 0; t < num_tiles; ++t) {
-            const uint64_t cnt = static_cast<uint64_t>(r.counts[t]);
-            if (cnt > bucket_fit && cnt <= ov_cap) {
+            const uint64_t c = static_cast<uint64_t>(r.counts[t]);
+            if (c > bucket_fit && c <= ov_cap) {
                 r.tile_ov_base[t] = static_cast<uint32_t>(ov_cursor);
-                ov_cursor += (cnt + 1u) & ~static_cast<uint64_t>(1u);  // round up to even
+                ov_cursor += (c + 1u) & ~static_cast<uint64_t>(1u);  // round up to even
                 r.ov_tiles += 1u;
-                r.ov_records += cnt;
+                r.ov_records += c;
             }
         }
         r.ov_total_slots = ov_cursor;
@@ -1094,52 +1099,69 @@ static BinLayoutResult host_bin_layout_from_hist(
     uint32_t apage = 0;
     uint32_t max_pad_n = 0;
     for (uint32_t t = 0; t < num_tiles; t++) {
-        const int64_t creal = r.counts[t];
         r.starts[t] = cstart;
-        cstart += creal;
+        cstart += r.counts[t];
         r.pstart_page[t] = apage;
         r.pstart_elem[t] = apage * ELEMS_PER_PAGE;
-        const uint32_t tile_start_page = apage;
-        uint32_t rec_run = 0;
-        for (uint32_t c = 0; c < num_cores; c++) {
-            const std::size_t idx = static_cast<std::size_t>(c) * stride + t;
-            const uint32_t h = r.hist[idx];
-            if (tile_bucket) {
-                r.histrec[idx] = static_cast<uint32_t>(r.starts[t]) + rec_run;
-            }
-            if (l1_record) {
-                // M0: pre-sized bucket; tile t starts at slot t*bucket_fit.
-                // Per-core base = t*bucket_fit + prefix of cores before this one.
-                r.histrec_l1[idx] = t * bucket_fit + rec_run;
-                // iter-138: overflow tiles also pre-pack the FULL tile into the
-                // compact region at tile_ov_base[t] + (core prefix). Sentinel ⇒
-                // non-overflow tile (emit keeps the buf_l1_recs bucket clamp path).
-                if (r.tile_ov_base[t] != 0xFFFFFFFFu) {
-                    r.histrec_overflow[idx] = r.tile_ov_base[t] + rec_run;
-                }
-            }
-            if (tile_bucket || l1_record) {
-                rec_run += h;
-            }
-            r.hist[idx] = apage * ELEMS_PER_PAGE;
-            if (h > 0) apage += (h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
-        }
-        const uint32_t pad_pages = apage - tile_start_page;
-        r.tile_pad[t] = pad_pages * ELEMS_PER_PAGE;
+        apage += tpages[t];
+        r.tile_pad[t] = tpages[t] * ELEMS_PER_PAGE;
         if (tile_bucket) {
             r.bucket_meta[static_cast<std::size_t>(t) * 2 + 0] =
                 static_cast<uint32_t>(r.starts[t]);
-            r.bucket_meta[static_cast<std::size_t>(t) * 2 + 1] = static_cast<uint32_t>(creal);
+            r.bucket_meta[static_cast<std::size_t>(t) * 2 + 1] =
+                static_cast<uint32_t>(r.counts[t]);
         }
         if (r.tile_pad[t] > max_pad_n) max_pad_n = r.tile_pad[t];
     }
     if (max_pad_n > MAX_TILE_ENTRIES) {
         r.status = 2;
-        return r;
+        return;
     }
     r.P_kept = static_cast<uint32_t>(cstart);
     r.max_pad_n = max_pad_n;
     r.P_aligned = std::max<uint32_t>(apage, 1u) * ELEMS_PER_PAGE;
+
+    // Pass 3: per-(core,tile) bases, core-major with per-tile running cursors.
+    const bool want_rec = tile_bucket && dense_recbase;
+    r.hist.resize(n2d);
+    if (want_rec) r.histrec.resize(n2d);
+    if (l1_record) {
+        r.histrec_l1.resize(n2d);
+        r.histrec_overflow.resize(n2d);
+    }
+    std::vector<uint32_t> rec_run(num_tiles, 0u);
+    std::vector<uint32_t> page_cur(r.pstart_page);
+    for (uint32_t c = 0; c < num_cores; c++) {
+        const std::size_t row0 = static_cast<std::size_t>(c) * stride;
+        const uint32_t* in = hist_in.data() + row0;
+        uint32_t* base = r.hist.data() + row0;
+        for (uint32_t t = 0; t < num_tiles; t++) {
+            const uint32_t h = in[t];
+            const uint32_t run = rec_run[t];
+            if (want_rec) r.histrec[row0 + t] = static_cast<uint32_t>(r.starts[t]) + run;
+            if (l1_record) {
+                // M0: pre-sized bucket; tile t starts at slot t*bucket_fit.
+                r.histrec_l1[row0 + t] = t * bucket_fit + run;
+                // iter-138: pre-packed overflow tiles also place the core's block
+                // in the compact region; sentinel => non-overflow tile.
+                const uint32_t ovb = r.tile_ov_base[t];
+                r.histrec_overflow[row0 + t] = (ovb != SENT) ? ovb + run : SENT;
+            }
+            base[t] = page_cur[t] * ELEMS_PER_PAGE;
+            rec_run[t] = run + h;
+            page_cur[t] += (h + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
+        }
+        // Stride padding columns: same values the old full-table init left there.
+        for (uint32_t t = num_tiles; t < stride; t++) {
+            base[t] = in[t];
+            if (want_rec) r.histrec[row0 + t] = 0u;
+            if (l1_record) {
+                r.histrec_l1[row0 + t] = 0u;
+                r.histrec_overflow[row0 + t] = SENT;
+            }
+        }
+    }
+
     if (l1_record) {
         // iter-138 feasibility diagnostic: how the GATHERED records (all records of
         // tiles with count > bucket_fit) split across cap buckets. The pre-pack path
@@ -1147,12 +1169,12 @@ static BinLayoutResult host_bin_layout_from_hist(
         uint64_t gathered_total = 0, in_cap = 0, over_cap = 0;
         uint32_t over_cap_tiles = 0, max_tile = 0;
         for (uint32_t t = 0; t < num_tiles; ++t) {
-            const uint64_t cnt = static_cast<uint64_t>(r.counts[t]);
-            if (cnt > max_tile) max_tile = static_cast<uint32_t>(cnt);
-            if (cnt > bucket_fit) {
-                gathered_total += cnt;
-                if (cnt <= render_config::kOverflowL1Cap) in_cap += cnt;
-                else { over_cap += cnt; over_cap_tiles += 1u; }
+            const uint64_t c = static_cast<uint64_t>(r.counts[t]);
+            if (c > max_tile) max_tile = static_cast<uint32_t>(c);
+            if (c > bucket_fit) {
+                gathered_total += c;
+                if (c <= render_config::kOverflowL1Cap) in_cap += c;
+                else { over_cap += c; over_cap_tiles += 1u; }
             }
         }
         std::fprintf(stderr,
@@ -1173,6 +1195,19 @@ static BinLayoutResult host_bin_layout_from_hist(
     for (uint32_t t = 0; t < num_tiles; t++)
         pad_counts[t] = static_cast<int64_t>(r.tile_pad[t]);
     r.lpt = build_lpt(pad_counts, num_tiles, num_cores);
+}
+
+static BinLayoutResult host_bin_layout_from_hist(
+    const std::vector<uint32_t>& hist_in,
+    uint32_t num_cores,
+    uint32_t num_tiles,
+    uint32_t stride,
+    bool tile_bucket,
+    bool l1_record = false,
+    uint32_t bucket_fit = 8192u) {
+    BinLayoutResult r;
+    host_bin_layout_into(hist_in, num_cores, num_tiles, stride, tile_bucket, l1_record,
+                         bucket_fit, /*dense_recbase=*/true, r);
     return r;
 }
 
@@ -1592,6 +1627,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->buf_bin2d = make_dram(ctx->mesh_device.get(), bin2d_bytes);
             ctx->cap_bin2d_bytes = bin2d_bytes;
         }
+        if (!ctx->buf_bin_hist || ctx->cap_bin_hist_bytes < bin2d_bytes) {
+            ctx->buf_bin_hist = make_dram(ctx->mesh_device.get(), bin2d_bytes);
+            ctx->cap_bin_hist_bytes = bin2d_bytes;
+        }
 
         // T1 (GSPLAT_TT_TILE_BUCKET): scatter full records into per-tile buckets.
         const bool tile_bucket = tile_bucket_enabled();
@@ -1604,7 +1643,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }
         const uint32_t blendrec_addr = bbrec ? static_cast<uint32_t>(bbrec->address()) : 0u;
         uint32_t tile_recs_addr = 0u;  // real address set after P_aligned is known
-        uint32_t recbase_addr = 0u;    // dense per-(core,tile) record base (set w/ buf)
 
         // Metadata buffers (layout kernel writes these resident on device).
         const uint32_t tmeta_pad = round_up(std::max(num_tiles * 2u, 1u), ELEMS_PER_PAGE);
@@ -1649,7 +1687,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->buf_bin2d_rec = make_dram(ctx->mesh_device.get(), rec_base_bytes);
                 ctx->cap_bin2d_rec_bytes = rec_base_bytes;
             }
-            recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
             const uint32_t bm_pad = round_up(num_tiles * 2u, ELEMS_PER_PAGE);
             const std::size_t bm_bytes = static_cast<std::size_t>(bm_pad) * 4;
             if (!ctx->buf_bucket_meta || ctx->cap_bucket_meta_bytes < bm_bytes) {
@@ -1694,6 +1731,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
 
         const bool device_layout = gsplat_tt::env_config::sort_device_layout_enabled();
         const bool layout_verify = false;
+        // The (gated-off) device layout kernels transform the histogram in bin2d
+        // in place, so only the host bridge keeps it in buf_bin_hist for the emit.
+        const bool hist_rows = !device_layout && !layout_verify;
 
         // ── Pass A: per-core histogram (count) ──────────────────────────
         const auto t_bin0 = clk::now();
@@ -1701,12 +1741,16 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             Program& prog = ctx->wl_bin.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                // mode 0 writes the histogram (buf_bin_hist on the host bridge);
+                // mode 1 reads the page bases the host wrote into bin2d.
+                const auto& row_buf =
+                    (mode == 0 && hist_rows) ? ctx->buf_bin_hist : ctx->buf_bin2d;
                 std::vector<uint32_t> args = {
                     static_cast<uint32_t>(bgid->address()),
                     static_cast<uint32_t>(btid->address()),
                     static_cast<uint32_t>(bkeep->address()),
                     static_cast<uint32_t>(bdep->address()),
-                    static_cast<uint32_t>(ctx->buf_bin2d->address()),
+                    static_cast<uint32_t>(row_buf->address()),
                     ctx->buf_keys ? static_cast<uint32_t>(ctx->buf_keys->address()) : 0u,
                     ctx->buf_ids ? static_cast<uint32_t>(ctx->buf_ids->address()) : 0u,
                     ws.start[c], ws.count[c], P_full, num_tiles, stride, c, mode,
@@ -1715,7 +1759,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 if (tile_bucket) {
                     args.push_back(blendrec_addr);
                     args.push_back(tile_recs_addr);
-                    args.push_back(recbase_addr);
+                    // Arg 17: count-pass histogram rows for the emit (0 => recount).
+                    args.push_back((mode == 1 && hist_rows)
+                                       ? static_cast<uint32_t>(ctx->buf_bin_hist->address())
+                                       : 0u);
                 }
                 if (l1_record_early) {
                     args.push_back(l1_recs_addr);
@@ -1923,7 +1970,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             if (tile_bucket) {
                 distributed::EnqueueWriteMeshBuffer(
                     *ctx->cq, ctx->buf_bin2d_rec, bl.histrec, false);
-                recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
                 bl.bucket_meta.resize(
                     static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
                 distributed::EnqueueWriteMeshBuffer(
@@ -1959,16 +2005,20 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             T.upload_ms =
                 std::chrono::duration<double, std::milli>(clk::now() - t_up0).count();
         } else {
-            // Host bridge: D2H histogram + page layout + LPT + H2D metadata.
-            std::vector<uint32_t> hist(static_cast<std::size_t>(num_cores) * stride);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, hist, ctx->buf_bin2d, true);
+            // Host bridge: D2H histogram + page layout + LPT + H2D metadata. This
+            // whole block runs with the device idle between the count and emit
+            // kernels, so the histogram and the layout tables are kept across
+            // views (no per-view ~2 MB of allocation + page faults).
+            static std::vector<uint32_t> hist;
+            static BinLayoutResult bl;
+            hist.resize(static_cast<std::size_t>(num_cores) * stride);
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, hist, ctx->buf_bin_hist, true);
             t_d2h = clk::now();
             T.bin_hist_d2h_ms =
                 std::chrono::duration<double, std::milli>(t_d2h - t_cnt).count();
 
-            BinLayoutResult bl =
-                host_bin_layout_from_hist(hist, num_cores, num_tiles, stride, tile_bucket,
-                                          l1_record_early, bucket_fit);
+            host_bin_layout_into(hist, num_cores, num_tiles, stride, tile_bucket,
+                                 l1_record_early, bucket_fit, /*dense_recbase=*/false, bl);
             if (bl.status == 1) {
                 std::cerr << "[gsplat_tt::sort] per-core padded run > BIN_LOCAL_MAX; "
                              "exceeds device sort capacity — hard fail "
@@ -1981,16 +2031,15 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                              "(render_clean is single-path TT, no host fallback)\n";
                 return fail();
             }
-            counts = std::move(bl.counts);
-            starts = std::move(bl.starts);
-            pstart_page = std::move(bl.pstart_page);
-            pstart_elem = std::move(bl.pstart_elem);
-            tile_pad = std::move(bl.tile_pad);
-            lpt = std::move(bl.lpt);
+            counts = bl.counts;
+            starts = bl.starts;
+            pstart_page = bl.pstart_page;
+            pstart_elem = bl.pstart_elem;
+            tile_pad = bl.tile_pad;
+            lpt = bl.lpt;
             P_kept = bl.P_kept;
             P_aligned = bl.P_aligned;
             max_n = bl.max_pad_n;
-            hist = std::move(bl.hist);
             for (uint32_t t = 0; t < num_tiles; t++) {
                 if (counts[t] > 0) {
                     result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = starts[t];
@@ -2003,9 +2052,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::chrono::duration<double, std::milli>(t_bin1 - t_d2h).count();
 
             if (tile_bucket) {
-                distributed::EnqueueWriteMeshBuffer(
-                    *ctx->cq, ctx->buf_bin2d_rec, bl.histrec, false);
-                recbase_addr = static_cast<uint32_t>(ctx->buf_bin2d_rec->address());
+                // buf_bin2d_rec (the dense per-(core,tile) record base) only fed the
+                // retired tile_recs scatter; its per-view 450 KB build + H2D are
+                // skipped (dense_recbase=false above).
                 bl.bucket_meta.resize(
                     static_cast<std::size_t>(ctx->cap_bucket_meta_bytes / 4), 0u);
                 distributed::EnqueueWriteMeshBuffer(
@@ -2074,7 +2123,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
             publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
             const auto t_up0 = clk::now();
-            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, hist, false);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bin2d, bl.hist, false);
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tmeta, tmeta, false);
             distributed::EnqueueWriteMeshBuffer(
                 *ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
@@ -2236,17 +2285,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::cerr << "[gsplat_tt::sort] subchunk buffer setup failed\n";
                 return fail();
             }
-            if (!launch_subchunk_directory(ctx, num_tiles, bucket_fit)) {
-                std::cerr << "[gsplat_tt::sort] subchunk directory launch failed\n";
-                return fail();
-            }
+            upload_subchunk_directory(ctx, sc_layout);
             const auto t_pubw0 = clk::now();
             T.publish_host_ms =
                 std::chrono::duration<double, std::milli>(t_pubw0 - t_pub0).count();
             if (sort_blend_pipe_enabled()) {
-                // C1: materialize reads prefix/dir written by directory — drain dir
-                // before enqueueing mat on the piped CQ (not between mat and blend).
-                GSPLAT_HOST_ZONE("host_finish_sort_subchunk_dir");
+                // C1: drain radix + publish before enqueueing mat on the piped CQ
+                // (not between mat and blend).
+                GSPLAT_HOST_ZONE("host_finish_sort_publish");
                 distributed::Finish(*ctx->cq);
             }
             T.publish_wait_ms =
