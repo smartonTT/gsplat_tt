@@ -7,9 +7,11 @@
 // Replays each kernel's page loop for one core's page range on random inputs:
 // once on a single mover over [lo, hi), and once split at every page boundary
 // mid (BRISC = [lo, mid), NCRISC = [mid, hi)). Both movers write into the same
-// output array; the split must leave exactly the single-mover bytes. A negative
-// control runs the scatter's mover 1 without its own binary search (resuming a
-// stale cursor from gaussian 0) and must mismatch. Returns non-zero on failure.
+// output array (scatter movers interleaved pair by pair, as they run
+// concurrently); the split must leave exactly the single-mover bytes. A
+// negative control gives both scatter movers the same scratch CBs (no private
+// CB copies) and must mismatch. Returns non-zero on failure.
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <random>
@@ -49,36 +51,80 @@ void run_bbox(const Scene& s, uint32_t start, uint32_t count, std::vector<int>& 
         }
 }
 
-// tile_assign_scatter.cpp page loop: (gid, tid) for pair pages [start, start + count).
-// stale_cursor = negative control (skip the per-mover binary search).
-void run_scatter(const Scene& s, uint32_t start, uint32_t count, std::vector<int>& gid,
-                 std::vector<int>& tid, bool stale_cursor = false) {
-    if (count == 0) return;
-    const int p_start = static_cast<int>(start) * EPP;
-    const int p_end = p_start + static_cast<int>(count) * EPP;
-    if (p_start >= s.P) return;
-    int lo = 0;
-    if (!stale_cursor) {
-        int hi = s.M - 1;
+// tile_assign_scatter.cpp for one mover, stepped one pair at a time so two
+// movers can be interleaved. `l1` is the mover's scratch (CB_PX..RY attribute
+// page + CB_GID/CB_TID staging); the dual-mover build gives each mover its own.
+struct L1 {
+    int attr_page = -1;  // page index held by the attribute CBs
+    float px[EPP], py[EPP], rx[EPP], ry[EPP];
+    int gid[EPP], tid[EPP];
+};
+
+struct ScatterMover {
+    const Scene* s;
+    L1* l1;
+    int p = 0, p_end = 0, g = 0, out_idx = 0, attr_page = -1;
+    Box b{};
+
+    Box load(int gg) {  // load_attrs: refetch the page only on a page change
+        const int pg = gg / EPP, ip = gg % EPP;
+        if (pg != attr_page) {
+            for (int i = 0; i < EPP; i++) {
+                const int x = std::min(pg * EPP + i, s->M - 1);
+                l1->px[i] = s->px[x]; l1->py[i] = s->py[x];
+                l1->rx[i] = s->rx[x]; l1->ry[i] = s->ry[x];
+            }
+            attr_page = l1->attr_page = pg;
+        }
+        Scene one;
+        one.tiles_x = s->tiles_x; one.tiles_y = s->tiles_y; one.inv_tsf = s->inv_tsf;
+        one.px = {l1->px[ip]}; one.py = {l1->py[ip]}; one.rx = {l1->rx[ip]}; one.ry = {l1->ry[ip]};
+        return aabb(one, 0);
+    }
+    void start(uint32_t page_start, uint32_t count) {
+        p = static_cast<int>(page_start) * EPP;
+        p_end = p + static_cast<int>(count) * EPP;
+        if (count == 0 || p >= s->P) { p_end = p; return; }  // kernel early-outs
+        int lo = 0, hi = s->M - 1;  // binary search: largest g with offs[g] <= p_start
         while (lo < hi) {
             const int mid = (lo + hi + 1) >> 1;
-            if (s.offs[mid] <= p_start) lo = mid; else hi = mid - 1;
+            if (s->offs[mid] <= p) lo = mid; else hi = mid - 1;
         }
+        g = lo;
+        b = load(g);
     }
-    int g = lo;
-    Box b = aabb(s, g);
-    for (int p = p_start; p < p_end; p++) {
+    bool done() const { return p >= p_end; }
+    void step(std::vector<int>& gid, std::vector<int>& tid) {
         int og = 0, ot = 0;
-        if (p < s.P) {
-            while (p >= s.offs[g + 1]) b = aabb(s, ++g);
-            const int local = p - s.offs[g];
+        if (p < s->P) {
+            while (p >= s->offs[g + 1]) b = load(++g);
+            const int local = p - s->offs[g];
             const int dy = local / b.w;
             const int dx = local - dy * b.w;
             og = g;
-            ot = (b.miny + dy) * s.tiles_x + (b.minx + dx);
+            ot = (b.miny + dy) * s->tiles_x + (b.minx + dx);
         }
-        gid[p] = og;
-        tid[p] = ot;
+        l1->gid[out_idx] = og;
+        l1->tid[out_idx] = ot;
+        if (++out_idx == EPP) {  // write out the full page
+            const int base = p + 1 - EPP;
+            for (int i = 0; i < EPP; i++) { gid[base + i] = l1->gid[i]; tid[base + i] = l1->tid[i]; }
+            out_idx = 0;
+        }
+        p++;
+    }
+};
+
+// Movers run concurrently on the device: interleave them one pair at a time.
+void run_scatter_split(const Scene& s, uint32_t lo, uint32_t mid, uint32_t hi, bool shared_l1,
+                       std::vector<int>& gid, std::vector<int>& tid) {
+    L1 a, b;
+    ScatterMover m0{&s, &a}, m1{&s, shared_l1 ? &a : &b};
+    m0.start(lo, mid - lo);
+    m1.start(mid, hi - mid);
+    while (!m0.done() || !m1.done()) {
+        if (!m0.done()) m0.step(gid, tid);
+        if (!m1.done()) m1.step(gid, tid);
     }
 }
 
@@ -124,33 +170,37 @@ int main() {
             if (out != ref1) fails++;
         }
 
-        // K2: a core range inside the pair pages, plus a range straddling P and
-        // wholly-past-P pages (host_free over-provisions the split to a ceiling).
+        // K2: a core range from pair page 0 and one from inside the pairs, both
+        // running past P (host_free over-provisions the split to a ceiling).
+        // Compared over the pages that hold pairs < P: sort never reads past P,
+        // and pages wholly past P are left unwritten by any mover whose range
+        // starts past P (single-mover cores past P already skip them).
         const uint32_t p_pages = static_cast<uint32_t>((s.P + EPP - 1) / EPP) + 3;
+        const size_t live = static_cast<size_t>((s.P + EPP - 1) / EPP) * EPP;
+        auto same = [&](const std::vector<int>& a, const std::vector<int>& b) {
+            return std::equal(a.begin(), a.begin() + live, b.begin());
+        };
         for (uint32_t lo : {0u, p_pages / 3}) {
             const uint32_t hi = p_pages;
             std::vector<int> rg(p_pages * EPP, -1), rt(p_pages * EPP, -1);
-            run_scatter(s, lo, hi - lo, rg, rt);
+            run_scatter_split(s, lo, hi, hi, false, rg, rt);  // single mover
             for (uint32_t mid = lo; mid <= hi; mid++) {
                 std::vector<int> og(p_pages * EPP, -1), ot(p_pages * EPP, -1);
-                run_scatter(s, lo, mid - lo, og, ot);
-                run_scatter(s, mid, hi - mid, og, ot);
+                run_scatter_split(s, lo, mid, hi, false, og, ot);
                 cases++;
-                if (og != rg || ot != rt) fails++;
-                // Negative control: mover 1 starts from gaussian 0's cursor.
-                if (mid > lo && mid * EPP < static_cast<uint32_t>(s.P) &&
-                    s.offs[1] <= static_cast<int>(mid) * EPP) {
+                if (!same(og, rg) || !same(ot, rt)) fails++;
+                // Negative control: both movers on one set of scratch CBs.
+                if (mid > lo && mid < hi && static_cast<int>(mid) * EPP < s.P) {
                     std::vector<int> cg(p_pages * EPP, -1), ct(p_pages * EPP, -1);
-                    run_scatter(s, lo, mid - lo, cg, ct);
-                    run_scatter(s, mid, hi - mid, cg, ct, /*stale_cursor=*/true);
+                    run_scatter_split(s, lo, mid, hi, true, cg, ct);
                     control_cases++;
-                    if (cg != rg || ct != rt) control_hits++;
+                    if (!same(cg, rg) || !same(ct, rt)) control_hits++;
                 }
             }
         }
     }
     std::printf("tile_assign dual-mover split: %ld cases, %ld mismatches; "
-                "stale-cursor control caught %ld/%ld\n",
+                "shared-scratch control caught %ld/%ld\n",
                 cases, fails, control_hits, control_cases);
     return (fails == 0 && control_cases > 0 && control_hits == control_cases) ? 0 : 1;
 }
