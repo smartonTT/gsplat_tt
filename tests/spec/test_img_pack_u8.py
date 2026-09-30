@@ -64,6 +64,13 @@ def harness_out(tmp_path_factory):
     if cxx is None:
         pytest.skip("no C++ compiler")
     d = tmp_path_factory.mktemp("img_pack_u8")
+    # Some hosts (e.g. macOS with a CLT/SDK mismatch) cannot link even a trivial
+    # program. Skip there; a failure on a working toolchain still fails the test.
+    (d / "probe.cpp").write_text("int main() { return 0; }\n")
+    probe = subprocess.run([cxx, "-std=c++17", str(d / "probe.cpp"), "-o", str(d / "probe")],
+                           capture_output=True, text=True)
+    if probe.returncode != 0:
+        pytest.skip(f"host C++ toolchain cannot build a trivial program: {probe.stderr[:200]}")
     (d / "h.cpp").write_text(HARNESS)
     subprocess.run([cxx, "-std=c++17", "-O2", f"-I{HDR_DIR}", str(d / "h.cpp"),
                     "-o", str(d / "h")], check=True)
