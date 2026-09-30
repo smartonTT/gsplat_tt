@@ -385,7 +385,7 @@ void kernel_main() {
                                 32u);
             }
         }
-        noc_async_write_barrier();
+        noc_async_writes_flushed();  // T-B(4): staging reuse only needs the data sent
         nbrec = 0;
     };
 
@@ -419,7 +419,7 @@ void kernel_main() {
                             get_noc_addr(packoc_g[b], blendrec_acc) + 32u,
                             PACKOC_ENT_W * 4u);
         }
-        noc_async_write_barrier();
+        noc_async_writes_flushed();  // T-B(4): staging reuse only needs the data sent
         n_packoc = 0;
     };
 
@@ -648,6 +648,9 @@ void kernel_main() {
             noc_async_write(ks_l1 + soff, get_noc_addr(base_pg + pp, keys_acc), PAGE_BYTES);
             noc_async_write(is_l1 + soff, get_noc_addr(base_pg + pp, ids_acc),  PAGE_BYTES);
         }
-        noc_async_write_barrier();
     }
+    // T-B(4): one barrier for all tiles' write-out (was one per tile); it also
+    // retires the flushed-but-unacked record and packoc writes above.
+    noc_async_write_barrier();
 }
+
