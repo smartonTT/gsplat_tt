@@ -1,0 +1,59 @@
+# T-C dual-mover emit: 30-view Tracy device zones, yyzo-bh-07 (Blackhole p100a), bicycle 1024x1024
+# ttw-149-base = T-B head 967e973 (single-mover emit); ttw-149 = + T-C (BRISC+NCRISC emit).
+# pv_makespan = busiest (core, RISC) summed zone time per view (profiler on; perturbs timing).
+
+=== ttw-149-base
+n_views=30  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                  493113.7 16437.124      1555.3      51.842    30690  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL              493042.1 16434.736      1555.2      51.841    30690  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                  452910.8 15097.027      4292.3     143.077    47802  BRISC
+NCRISC-FW                 341671.0 11389.035      3250.2     108.338    40951  NCRISC
+NCRISC-KERNEL             341575.2 11385.840      3249.7     108.325    40951  NCRISC
+BRISC-KERNEL              271062.1  9035.402      2586.8      86.227    17081  BRISC
+tile_blend_sfpu           264210.9  8807.031       863.8      28.793    10230  TRISC_0,TRISC_1,TRISC_2
+tile_mb_mask              208850.0  6961.665       671.4      22.382    10230  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            85530.9  2851.030       841.8      28.061     3410  NCRISC
+rd_l1_bulk                 85243.5  2841.449       836.9      27.896    35073  NCRISC
+tile_l1_cull_rd            68321.8  2277.393       659.4      21.979     3410  NCRISC
+proj_scatter               61389.2  2046.306       624.4      20.812     3410  BRISC
+sort_bucket_emit           51215.1  1707.169       477.6      15.921     3410  NCRISC
+proj_count                 45266.6  1508.888       448.8      14.960     3410  BRISC
+ta_bucket_scatter          33471.6  1115.721       314.8      10.494     3410  NCRISC
+sort_subchunk_mat          32412.3  1080.411       371.4      12.381     3410  NCRISC
+ta_gauss_aabb              30331.8  1011.059       276.1       9.202     3410  NCRISC
+sort_tile_depth            23087.4   769.581       214.7       7.155     3410  NCRISC
+pfwc                       19978.9   665.964        61.6       2.052    10230  TRISC_0,TRISC_1,TRISC_2
+sort_bin_hist               2913.9    97.130        26.9       0.895     3410  NCRISC
+=== ttw-149
+n_views=30  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                  493109.1 16436.971      1555.2      51.839    30690  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL              493037.5 16434.582      1555.1      51.838    30690  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                  428925.9 14297.532      4069.9     135.665    47802  BRISC
+NCRISC-FW                 317664.5 10588.815      3027.7     100.924    40951  NCRISC
+NCRISC-KERNEL             317566.4 10585.547      3027.3     100.909    40951  NCRISC
+BRISC-KERNEL              298233.2  9941.105      2838.2      94.606    23901  BRISC
+tile_blend_sfpu           264209.9  8806.998       863.8      28.793    10230  TRISC_0,TRISC_1,TRISC_2
+tile_mb_mask              208847.1  6961.569       671.5      22.383    10230  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            85530.6  2851.020       841.8      28.061     3410  NCRISC
+rd_l1_bulk                 85243.1  2841.437       836.7      27.890    35073  NCRISC
+tile_l1_cull_rd            68320.8  2277.359       659.4      21.981     3410  NCRISC
+proj_scatter               61390.3  2046.344       624.4      20.813     3410  BRISC
+sort_bucket_emit           54324.2  1810.808       252.9       8.432     6820  BRISC,NCRISC
+proj_count                 45266.8  1508.894       448.8      14.961     3410  BRISC
+ta_bucket_scatter          33472.4  1115.746       314.8      10.494     3410  NCRISC
+sort_subchunk_mat          32430.2  1081.005       371.2      12.372     3410  NCRISC
+ta_gauss_aabb              30331.6  1011.055       276.1       9.202     3410  NCRISC
+sort_tile_depth            23087.0   769.566       214.6       7.155     3410  NCRISC
+pfwc                       19978.1   665.938        61.6       2.053    10230  TRISC_0,TRISC_1,TRISC_2
+sort_bin_hist               2949.5    98.318        27.2       0.906     3410  NCRISC
+=== ttw-149-base
+sort_bucket_emit NCRISC: pv_makespan=15.921 ms  median_core=15.520 ms  min_core=15.121 ms  cores=110
+sort_bin_hist NCRISC: pv_makespan=0.895 ms  median_core=0.884 ms  min_core=0.866 ms  cores=110
+=== ttw-149
+sort_bucket_emit BRISC: pv_makespan=8.432 ms  median_core=8.225 ms  min_core=8.007 ms  cores=110
+sort_bucket_emit NCRISC: pv_makespan=8.429 ms  median_core=8.219 ms  min_core=8.004 ms  cores=110
+sort_bin_hist NCRISC: pv_makespan=0.906 ms  median_core=0.894 ms  min_core=0.875 ms  cores=110

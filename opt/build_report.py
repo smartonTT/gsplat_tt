@@ -1399,10 +1399,10 @@ def cull_tune_section() -> str:
 
 
 # TT anchor for the GPU ratio: the latest measured 30-view 1024x1024 bicycle
-# average (iter-142 / task #18, docs/sort-stage-split-2026-09-30.md), measured on
-# a Blackhole P100 (p100a) in yyzo-bh-07. The iter-141 plateau was 173.3 ms.
-TT_ANCHOR_MS = 166.6
-TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-142 sort-stage cut (was 173.3 at the iter-141 plateau)"
+# average (iter-149 / task #22, docs/sort-emit-dual-mover-2026-09-30.md), measured
+# on a Blackhole P100 (p100a) in yyzo-bh-07. The iter-141 plateau was 173.3 ms.
+TT_ANCHOR_MS = 145.4
+TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-149 dual-mover sort emit (152.6 after the T-B de-stall; 173.3 at the iter-141 plateau)"
 
 GPU_RESULT_JSON = OPT_DIR / "cpu-vs-tt" / "gpu_result.json"
 
