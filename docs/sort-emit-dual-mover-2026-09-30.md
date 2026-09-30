@@ -66,8 +66,10 @@ of a core share the core's existing layout:
   blocks start in the first half of the core's pages, mover 1 the rest.
 - Every other staging CB is private per mover (BRISC's at id + 16, created
   after the originals so NCRISC's L1 addresses are unchanged): +42 KB L1.
-- Kill switch / A-B in one build: `GSPLAT_TT_SORT_EMIT_MOVERS=1`;
-  `GSPLAT_TT_SORT_EMIT_SPLIT=<permille>` sets BRISC's page share.
+- Kill switch / A-B in one build: `GSPLAT_TT_SORT_EMIT_MOVERS=1` builds the
+  pre-T-C program exactly: no BRISC kernel, mover-0 CBs, semaphores or
+  `buf_bin_h0`. `GSPLAT_TT_SORT_EMIT_SPLIT=<permille>` sets BRISC's page share
+  (integer 0..1000; anything else warns and uses 500).
 
 Checks: `tests/unit/test_sort_bin_dual_mover.cpp` replays the placement rules
 single-mover vs split at every page boundary (21 447 cases, 0 mismatches;

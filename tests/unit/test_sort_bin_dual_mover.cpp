@@ -6,7 +6,8 @@
 //
 // Replays the kernel's placement rules for one core's pair-page range on random
 // gaussian-major inputs: once on a single mover over [lo, hi), and once split at
-// every page boundary mid (mover 0 = [lo, mid) with cursors from 0, mover 1 =
+// every page boundary mid, with h0 from a replay of the kernel's batched count
+// pass (mover 0 = [lo, mid) with cursors from 0, mover 1 =
 // [mid, hi) with cursors from the count pass's snapshot h0). The split must
 // leave the same counting-sort bytes in the core's shared L1 region, the same
 // record / overflow slots, and the same written-out pages. The movers run
@@ -50,6 +51,31 @@ std::vector<uint32_t> count(const Input& in, uint32_t a, uint32_t b) {
             if (in.keep[p]) h[in.tid[p]]++;
         }
     return h;
+}
+
+// The kernel's count pass (mode 0): CNT_BATCH-page batches over [lo, hi) that
+// stop at the split, snapshotting the running histogram when pg0 reaches it
+// (or before the loop when split == lo). Returns the full histogram in n and
+// the snapshot in h0; h0 stays all-zero if the snapshot never fires.
+void count_pass(const Input& in, bool dual, uint32_t mid, std::vector<uint32_t>& n,
+                std::vector<uint32_t>& h0) {
+    constexpr uint32_t CNT_BATCH = 32u;
+    n.assign(in.num_tiles, 0);
+    h0.assign(in.num_tiles, 0);
+    const uint32_t split = dual ? mid : in.hi + 1u;
+    if (split == in.lo) h0 = n;
+    for (uint32_t pg0 = in.lo; pg0 < in.hi;) {
+        const uint32_t lim = (pg0 < split && split < in.hi) ? split : in.hi;
+        const uint32_t nb = (lim - pg0 < CNT_BATCH) ? (lim - pg0) : CNT_BATCH;
+        for (uint32_t b = 0; b < nb; b++)
+            for (uint32_t j = 0; j < EPP; j++) {
+                const uint32_t p = (pg0 + b) * EPP + j;
+                if (p >= in.P) break;
+                if (in.keep[p]) n[in.tid[p]]++;
+            }
+        pg0 += nb;
+        if (pg0 == split) h0 = n;
+    }
 }
 
 // One mover of the scatter: the kernel's prefix, t_split, tail pre-fill,
@@ -123,8 +149,14 @@ void write_out(const Input& in, const Mover& m, const std::vector<uint32_t>& off
 }
 
 Output emit(const Input& in, bool dual, uint32_t mid) {
-    const auto n = count(in, in.lo, in.hi);
-    const auto h0 = count(in, in.lo, dual ? mid : in.lo);
+    std::vector<uint32_t> n, h0;
+    count_pass(in, dual, mid, n, h0);
+    // Sanity: the batched pass must agree with a direct count of each range.
+    if (n != count(in, in.lo, in.hi) || (dual && h0 != count(in, in.lo, mid))) {
+        Output bad;
+        bad.conflict = true;
+        return bad;
+    }
     uint32_t cap = 0;
     for (uint32_t t = 0; t < in.num_tiles; t++) cap += ((n[t] + EPP - 1) / EPP) * EPP;
     Output o;
@@ -150,7 +182,7 @@ Input make_input(std::mt19937& rng) {
     Input in;
     in.num_tiles = 8 + rng() % 40;
     in.fit = 1 + rng() % 12;
-    const uint32_t G = 1 + rng() % 300;
+    const uint32_t G = 1 + rng() % 600;
     for (uint32_t g = 0; g < G; g++) {
         in.key.push_back(rng());
         const uint32_t k = 1 + rng() % 4;  // tiles per gaussian (gaussian-major)
