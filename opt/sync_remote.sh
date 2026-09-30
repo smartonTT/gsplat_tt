@@ -13,6 +13,9 @@ git archive --format=tar "$SHA" | ssh -o BatchMode=yes "$HOST" \
 ssh -o BatchMode=yes "$HOST" "DIR='$DIR' bash -s" <<'REMOTE'
 set -eu
 cd "$DIR"
+# non-interactive ssh has no TT env; cmake needs TT_METAL_HOME (GSPLAT_WITH_TT)
+export TT_METAL_HOME=${TT_METAL_HOME:-/localdev/smarton/tt-metal}
+export TT_METAL_RUNTIME_ROOT=${TT_METAL_RUNTIME_ROOT:-$TT_METAL_HOME} TT_METAL_ARCH_NAME=${TT_METAL_ARCH_NAME:-blackhole}
 [ -f /localdev/smarton/gstt2/.venv/bin/activate ] && . /localdev/smarton/gstt2/.venv/bin/activate
 [ -L .venv ] && [ ! -e .venv ] && rm -f .venv   # tracked .venv symlink breaks remote CMake
 so_md5() { md5sum render/render_clean*.so 2>/dev/null | awk '{print $1}' | sort | tr '\n' ' '; }
@@ -22,7 +25,7 @@ src_md5() { find render -path render/build-tt -prune -o -path '*/kernels' -prune
 SRC_NOW=$(src_md5); SRC_OLD=$(cat .host_src.md5 2>/dev/null || true); SO_OLD=$(so_md5)
 mkdir -p tmp
 (cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release > tmp/cfg.log 2>&1 &&
- cmake --build render/build-tt -j 16 > tmp/build.log 2>&1) || { tail -30 tmp/cfg.log tmp/build.log; exit 1; }
+ cmake --build render/build-tt -j 16 > tmp/build.log 2>&1) || { tail -n 30 tmp/cfg.log tmp/build.log 2>/dev/null; exit 1; }
 SO_NEW=$(so_md5); echo "$SRC_NOW" > .host_src.md5
 echo "[sync_remote] sha=$(cat SHA) so_md5=$SO_NEW"
 if [ -n "$SRC_OLD" ] && [ "$SRC_OLD" != "$SRC_NOW" ] && [ "$SO_OLD" = "$SO_NEW" ]; then
