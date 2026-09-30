@@ -124,6 +124,9 @@ constexpr uint32_t SCRATCH_BYTES = MAX_TILE_ENTRIES * 4;  // 128 KB per CB
 // Task #24: fixed per-tile bucket capacity (32B records) of the atomic layout.
 // Same limit as MAX_TILE_ENTRIES; a tile beyond it fails the frame, as before.
 constexpr uint32_t kTileCap = MAX_TILE_ENTRIES;
+// Pages of a mover's range the atomic emit keeps in L1 from its count pass
+// (== sort_bin_atomic.cpp WIN_PAGES); ~1.1k per mover on the bicycle bench.
+constexpr uint32_t kAtomicWinPages = 1536;
 
 // Device-binning: max tiles the per-core L1 row / cursor / offset CBs hold
 // (hero is 1024 tiles). Larger inputs are unsupported and hard-fail.
@@ -993,13 +996,14 @@ static void build_program_bin_atomic(SortDeviceContext& ctx) {
         cb(0 + off, PAGE_BYTES);             // gid page
         cb(1 + off, PAGE_BYTES);             // tid page
         cb(2 + off, PAGE_BYTES);             // keep page
-        cb(3 + off, PAGE_BYTES);             // depth page
+        cb(3 + off, 2u * 16u * PAGE_BYTES);  // depth page ring (2 halves)
         cb(4 + off, BIN_ROW_BYTES);          // per-tile count of this mover
         cb(5 + off, BIN_ROW_BYTES);          // per-tile cursor
         cb(6 + off, 2u * 32u * PAGE_BYTES);  // count-pass read batch (tid, keep)
-        cb(7 + off, 16u * PAGE_BYTES);       // blendrec prefetch ring
+        cb(7 + off, 2u * 16u * PAGE_BYTES);  // blendrec prefetch ring (2 halves)
         cb(8 + off, 16u * 32u);              // 32B record staging
         cb(9 + off, 16u * 16u);              // packed op/color write-back ring
+        cb(12 + off, kAtomicWinPages * 3u * PAGE_BYTES);  // gid/tid/keep page window
     }
     cb(10, BIN_ROW_BYTES);  // per-tile first slot (atomic return values)
     cb(11, BIN_ROW_BYTES);  // chunk-table row staging

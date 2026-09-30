@@ -61,7 +61,13 @@ constexpr uint32_t PACKOC_ENT_W = 4u;
 constexpr uint32_t MOVER0_CB_OFFSET = 16;
 // Private CBs (per mover).
 constexpr uint32_t CB_GID = 0, CB_TID = 1, CB_KEEP = 2, CB_DEP = 3, CB_H = 4, CB_CUR = 5,
-                   CB_BATCH = 6, CB_REC = 7, CB_SCRATCH = 8, CB_PACKOC = 9;
+                   CB_BATCH = 6, CB_REC = 7, CB_SCRATCH = 8, CB_PACKOC = 9, CB_WIN = 12;
+// The first WIN_PAGES pages of a mover's range stay in L1 (gid, tid, keep
+// planes) from the count pass to the emit; the emit prefetches page i+1's
+// blendrec and depth pages into the other half of a two-half ring while it
+// packs page i. Pages past the window take the unpipelined path.
+constexpr uint32_t WIN_PAGES = 1536;  // == sort_device.cpp kAtomicWinPages
+constexpr uint32_t RING = 16;         // entries per ring half (<= 16 gaussians per page)
 // Shared CBs (both movers, one copy per core).
 constexpr uint32_t CB_BASE = 10, CB_TBL = 11;
 
@@ -112,6 +118,15 @@ void kernel_main() {
     auto h0p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + MOVER0_CB_OFFSET));
     auto h1p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H));
 
+    const uint32_t npages = pg_hi - pg_lo;
+    // Window size rounded down to whole count batches (a batch is all-window
+    // or all-fallback).
+    const uint32_t nwin_raw = (npages < WIN_PAGES) ? npages : WIN_PAGES;
+    const uint32_t nwin = (nwin_raw == npages) ? npages : (nwin_raw / CNT_BATCH) * CNT_BATCH;
+    const uint32_t win_gid = get_write_ptr(CB_WIN + cbo);
+    const uint32_t win_tid = win_gid + WIN_PAGES * PAGE_BYTES;
+    const uint32_t win_keep = win_tid + WIN_PAGES * PAGE_BYTES;
+
     // ── 1. count this mover's kept pairs per tile ──────────────────────────
     {
         DeviceZoneScopedN("sort_atomic_count");
@@ -122,17 +137,29 @@ void kernel_main() {
         for (uint32_t t = 0; t < num_tiles; t++) hp[t] = 0;
         for (uint32_t pg0 = pg_lo; pg0 < pg_hi;) {
             const uint32_t nb = (pg_hi - pg0 < CNT_BATCH) ? (pg_hi - pg0) : CNT_BATCH;
+            const bool in_win = (pg0 - pg_lo) + nb <= nwin;  // batches never straddle nwin
             for (uint32_t b = 0; b < nb; b++) {
-                noc_async_read(get_noc_addr(pg0 + b, tids_acc), btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
-                noc_async_read(get_noc_addr(pg0 + b, keep_acc), bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                const uint32_t w = pg0 - pg_lo + b;
+                if (in_win) {
+                    noc_async_read(get_noc_addr(pg0 + b, gids_acc), win_gid + w * PAGE_BYTES, PAGE_BYTES);
+                    noc_async_read(get_noc_addr(pg0 + b, tids_acc), win_tid + w * PAGE_BYTES, PAGE_BYTES);
+                    noc_async_read(get_noc_addr(pg0 + b, keep_acc), win_keep + w * PAGE_BYTES, PAGE_BYTES);
+                } else {
+                    noc_async_read(get_noc_addr(pg0 + b, tids_acc), btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                    noc_async_read(get_noc_addr(pg0 + b, keep_acc), bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                }
             }
             noc_async_read_barrier();
             for (uint32_t b = 0; b < nb; b++) {
-                const uint32_t e0 = b * ELEMS_PER_PAGE;
+                const uint32_t w = pg0 - pg_lo + b;
+                auto tp = in_win ? reinterpret_cast<volatile int32_t*>(win_tid + w * PAGE_BYTES)
+                                 : btidp + b * ELEMS_PER_PAGE;
+                auto kp = in_win ? reinterpret_cast<volatile int32_t*>(win_keep + w * PAGE_BYTES)
+                                 : bkeepp + b * ELEMS_PER_PAGE;
                 for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
                     if ((pg0 + b) * ELEMS_PER_PAGE + j >= P) break;
-                    if (bkeepp[e0 + j] == 0) continue;
-                    hp[static_cast<uint32_t>(btidp[e0 + j])]++;
+                    if (kp[j] == 0) continue;
+                    hp[static_cast<uint32_t>(tp[j])]++;
                 }
             }
             pg0 += nb;
@@ -205,14 +232,12 @@ void kernel_main() {
     auto gidp = reinterpret_cast<volatile int32_t*>(gid_l1);
     auto tidp = reinterpret_cast<volatile int32_t*>(tid_l1);
     auto keepp = reinterpret_cast<volatile int32_t*>(keep_l1);
-    auto depp = reinterpret_cast<volatile uint32_t*>(dep_l1);
     const uint32_t rec_cache_l1 = get_write_ptr(CB_REC + cbo);
     const uint32_t l1_scratch = get_write_ptr(CB_SCRATCH + cbo);
     const uint32_t packoc_l1 = get_write_ptr(CB_PACKOC + cbo);
     auto packocp = reinterpret_cast<volatile uint32_t*>(packoc_l1);
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
 
-    int32_t dep_cached_page = -1;
     int32_t blendrec_cached_g = -1;
     uint32_t brec_slot[REC_BATCH];
     uint32_t nbrec = 0;
@@ -289,61 +314,91 @@ void kernel_main() {
         p32[7] = inv_cgb;
     };
 
-    for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
-        noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
-        noc_async_read_barrier();
-        // Prefetch this page's distinct gaussians' blendrec pages (T-B(2)).
-        {
-            int32_t prev_g = blendrec_cached_g;
-            uint32_t n_pf = 0;
-            for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-                if (pg * ELEMS_PER_PAGE + j >= P) break;
-                if (keepp[j] == 0) continue;
-                const int32_t gj = gidp[j];
-                if (gj != prev_g) {
-                    noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc),
-                                   rec_cache_l1 + n_pf * PAGE_BYTES, PAGE_BYTES);
-                    n_pf++;
-                    prev_g = gj;
-                }
-            }
-            if (n_pf != 0) noc_async_read_barrier();
-        }
-        uint32_t rec_slot = 0;
+    // Two-half rings: page i's distinct gaussians' blendrec pages (and the depth
+    // pages they need) sit in half i & 1. Each page starts its own entries (a
+    // gaussian continuing from the previous page is read again), so a half is
+    // never referenced after the next prefetch into it is issued.
+    const uint32_t dep_ring = dep_l1;  // RING x 2 depth pages
+    uint32_t ent_dslot[2][RING];
+    auto prefetch = [&](volatile int32_t* gp, volatile int32_t* kp, uint32_t pg, uint32_t h) {
+        int32_t prev_g = -1;
+        int32_t prev_dpg = -1;
+        uint32_t nb = 0, nd = 0;
         for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
             if (pg * ELEMS_PER_PAGE + j >= P) break;
-            if (keepp[j] == 0) continue;
-            const uint32_t g = static_cast<uint32_t>(gidp[j]);
-            const uint32_t t = static_cast<uint32_t>(tidp[j]);
-            const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
-            if (dpg != dep_cached_page) {
-                noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc), dep_l1, PAGE_BYTES);
-                noc_async_read_barrier();
-                dep_cached_page = dpg;
+            if (kp[j] == 0) continue;
+            const int32_t gj = gp[j];
+            if (gj == prev_g) continue;
+            prev_g = gj;
+            noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc),
+                           rec_cache_l1 + (h * RING + nb) * PAGE_BYTES, PAGE_BYTES);
+            const int32_t dpg = gj / static_cast<int32_t>(ELEMS_PER_PAGE);
+            if (dpg != prev_dpg) {
+                prev_dpg = dpg;
+                noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
+                               dep_ring + (h * RING + nd) * PAGE_BYTES, PAGE_BYTES);
+                nd++;
             }
-            if (static_cast<int32_t>(g) != blendrec_cached_g) {
-                cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1 + rec_slot * PAGE_BYTES);
-                rec_slot++;
-                blendrec_cached_g = static_cast<int32_t>(g);
-                pack_invariants(depp[g % ELEMS_PER_PAGE]);
-                volatile uint32_t* ent = packocp + n_packoc * PACKOC_ENT_W;
-                ent[0] = cachep[8];
-                ent[1] = cachep[9];
-                ent[2] = inv_opr;
-                ent[3] = inv_cgb;
-                packoc_g[n_packoc] = g;
-                n_packoc++;
-                if (n_packoc == PACKOC_BATCH) flush_packoc();
+            ent_dslot[h][nb] = nd - 1u;
+            nb++;
+        }
+    };
+    auto consume = [&](volatile int32_t* gp, volatile int32_t* tp, volatile int32_t* kp, uint32_t pg,
+                       uint32_t h) {
+        int32_t page_prev_g = -1;
+        uint32_t k = 0;
+        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+            if (pg * ELEMS_PER_PAGE + j >= P) break;
+            if (kp[j] == 0) continue;
+            const uint32_t g = static_cast<uint32_t>(gp[j]);
+            const uint32_t t = static_cast<uint32_t>(tp[j]);
+            if (static_cast<int32_t>(g) != page_prev_g) {
+                page_prev_g = static_cast<int32_t>(g);
+                cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1 + (h * RING + k) * PAGE_BYTES);
+                if (static_cast<int32_t>(g) != blendrec_cached_g) {
+                    blendrec_cached_g = static_cast<int32_t>(g);
+                    auto dp = reinterpret_cast<volatile uint32_t*>(
+                        dep_ring + (h * RING + ent_dslot[h][k]) * PAGE_BYTES);
+                    pack_invariants(dp[g % ELEMS_PER_PAGE]);
+                    volatile uint32_t* ent = packocp + n_packoc * PACKOC_ENT_W;
+                    ent[0] = cachep[8];
+                    ent[1] = cachep[9];
+                    ent[2] = inv_opr;
+                    ent[3] = inv_cgb;
+                    packoc_g[n_packoc] = g;
+                    n_packoc++;
+                    if (n_packoc == PACKOC_BATCH) flush_packoc();
+                }
+                k++;
             }
-            const uint32_t k = curp[t];
-            curp[t] = k + 1u;
-            const uint32_t slot = (k < tile_cap) ? t * tile_cap + k : 0xFFFFFFFFu;
+            const uint32_t c = curp[t];
+            curp[t] = c + 1u;
+            const uint32_t slot = (c < tile_cap) ? t * tile_cap + c : 0xFFFFFFFFu;
             brec_slot[nbrec] = slot;
             if (slot != 0xFFFFFFFFu) pack_rec(nbrec, t);
             nbrec++;
             if (nbrec == REC_BATCH) flush_recs();
+        }
+    };
+    auto wptr = [&](uint32_t plane, uint32_t i) {
+        return reinterpret_cast<volatile int32_t*>(plane + i * PAGE_BYTES);
+    };
+    if (nwin > 0) prefetch(wptr(win_gid, 0), wptr(win_keep, 0), pg_lo, 0);
+    for (uint32_t i = 0; i < npages; i++) {
+        const uint32_t pg = pg_lo + i;
+        const uint32_t h = i & 1u;
+        if (i < nwin) {
+            noc_async_read_barrier();  // page i's prefetch (issued one page ago)
+            if (i + 1u < nwin) prefetch(wptr(win_gid, i + 1u), wptr(win_keep, i + 1u), pg + 1u, h ^ 1u);
+            consume(wptr(win_gid, i), wptr(win_tid, i), wptr(win_keep, i), pg, h);
+        } else {
+            noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+            noc_async_read_barrier();
+            prefetch(gidp, keepp, pg, h);
+            noc_async_read_barrier();
+            consume(gidp, tidp, keepp, pg, h);
         }
     }
     flush_recs();
