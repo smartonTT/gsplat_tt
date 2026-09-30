@@ -1,0 +1,33 @@
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t83-verify  timeout=400s  worry=320s  ts=2026-09-30T14:58:46-0700
+cmd: bash /localdev/smarton/t83_scripts/remote_verify.sh tip /localdev/smarton/t82_scripts/md5-r82new.txt
+-----------------------------------------
+== tip run 21:58:46
+run rc=0 21:59:16
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 46.6ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.6 p50_ms=43.8 min_ms=36.5 max_ms=62.4 n_views=30 warmup_s=18.8 out=/localdev/smarton/gstt2-t83/tmp/t83-tip
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.701 tile_assign=8.954 sort=14.352 blend_setup=0.035 cull=0.010 blend=12.298 d2h=0.224 assemble=0.000 tail=0.002 | sum=44.580 view_total=44.581 resid_in_view=+0.001 avg_frame_ms=44.624 resid_vs_frame=+0.044
+dump dir: ./tmp/t83-dump-tip
+tip views: 30
+ALL_VIEWS_IDENTICAL /localdev/smarton/t82_scripts/md5-r82new.txt vs tip
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t83/.ttw/logs/t83-verify-20260930-145846.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t83-ab-1  timeout=400s  worry=320s  ts=2026-09-30T14:59:17-0700
+cmd: bash /localdev/smarton/t83_scripts/remote_ab.sh 1 0 4
+-----------------------------------------
+=== AB round=1 a=0 21:59:17
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.5 p50_ms=43.9 min_ms=36.2 max_ms=61.7 n_views=30 warmup_s=19.1 out=/localdev/smarton/gstt2-t83/tmp/t83-ab-1-a0
+STAGES n=30 head=0.002 project=8.663 tile_assign=8.882 sort=14.187 blend_setup=0.025 cull=0.006 blend=12.394 d2h=0.354 assemble=0.000 tail=0.002 | sum=44.515 view_total=44.516 resid_in_view=+0.001 avg_frame_ms=44.545 resid_vs_frame=+0.030
+=== AB round=1 a=4 21:59:40
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=38.1 p50_ms=37.4 min_ms=31.0 max_ms=54.3 n_views=30 warmup_s=17.8 out=/localdev/smarton/gstt2-t83/tmp/t83-ab-1-a4
+STAGES n=30 head=0.003 project=8.694 tile_assign=8.943 sort=14.413 blend_setup=0.040 cull=0.009 blend=5.583 d2h=0.396 assemble=0.000 tail=0.003 | sum=38.082 view_total=38.083 resid_in_view=+0.001 avg_frame_ms=38.120 resid_vs_frame=+0.038
+=== end 22:00:01
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t83/.ttw/logs/t83-ab-1-20260930-145916.log
