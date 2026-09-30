@@ -6,9 +6,11 @@
 set -u
 cd "$(git rev-parse --show-toplevel)"
 D=docs/img-pack-t61
-BASE=${BASE:-27348a1}
+BASE=${BASE:-834ac4e}
 DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
 S=/localdev/smarton/t61_scripts
+# devrun only goes remote when ttw.toml (untracked, git-excluded) names device_host.
+grep -q '^device_host *= *"yyzo-bh-07"' ttw.toml || { echo 'ttw.toml missing device_host'; exit 8; }
 scp -q $D/remote_build_dump.sh $D/remote_verify_pair.sh $D/remote_ab.sh yyzo-bh-07:$S/ || exit 9
 ttp lock p100 -- bash -c "$D/sync_tree.sh t61base $BASE && $D/sync_tree.sh t61 HEAD && $DEVRUN --no-verify --timeout 420 --tag t61-verify -- 'bash $S/remote_verify_pair.sh t61base t61'"
 RC=$?; echo "VERIFY_RC=$RC"
