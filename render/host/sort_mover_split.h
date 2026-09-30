@@ -57,12 +57,16 @@ inline MatWorkAssignment build_mat_worklist(
     uint32_t bucket_fit,
     uint32_t movers = 1,
     uint32_t m0_cap = 0) {
-    // gather ~8-10x an in-budget record (iter 130); GSPLAT_TT_MAT_GATHER_WEIGHT
-    // overrides it for tuning.
+    // Cost of a gather record relative to a whole-tile (coalesced + L1 radix)
+    // record. iter 130 assumed 8; task #35 measured (yyzo-bh-07, bicycle 30
+    // views, dual mover) blend stage 60.74 / 59.74 / 58.48 / 57.95 / 57.78 ms
+    // at weight 16 / 8 / 4 / 2 / 1: since iter 131/132 moved the op/color
+    // re-pack off the gather, a gather record costs about the same as a
+    // whole-tile one. GSPLAT_TT_MAT_GATHER_WEIGHT overrides it for tuning.
     static const uint64_t GATHER_WEIGHT = [] {
         const char* e = std::getenv("GSPLAT_TT_MAT_GATHER_WEIGHT");
-        const int w = (e != nullptr) ? std::atoi(e) : 8;
-        return static_cast<uint64_t>(w > 0 ? w : 8);
+        const int w = (e != nullptr) ? std::atoi(e) : 1;
+        return static_cast<uint64_t>(w > 0 ? w : 1);
     }();
     // iter-138: overflow tiles within the L1 cap are pre-packed at emit; the
     // materialize path reads the WHOLE tile coalesced + L1-radix-permutes it in a

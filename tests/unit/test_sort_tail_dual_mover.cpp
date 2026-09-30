@@ -32,6 +32,7 @@ constexpr uint32_t kBucketFit = render_config::kBucketFit;
 constexpr uint32_t kCores = 110;
 constexpr uint32_t kTiles = 1024;
 constexpr uint32_t kMaxWork = 1024;  // sort_subchunk_materialize.cpp MAX_WORK
+constexpr uint64_t kGatherWeight = 1;  // build_mat_worklist default
 
 std::vector<int64_t> random_counts(std::mt19937& rng) {
     std::lognormal_distribution<double> ln(7.0, 1.3);
@@ -58,7 +59,7 @@ uint64_t item_cost(const std::vector<int64_t>& counts, uint32_t t, uint32_t w) {
     const uint32_t sc = w & 0xFFu, part = w >> 8;
     const uint32_t l_sub = std::min(kBucketFit, cnt - sc * kBucketFit);
     const uint32_t p0 = part * kGatherPartRecs;
-    return 8ull * std::min(kGatherPartRecs, l_sub - p0);
+    return kGatherWeight * std::min(kGatherPartRecs, l_sub - p0);
 }
 
 // Every record of every over-cap subchunk is covered by exactly one part.
@@ -67,7 +68,8 @@ int check_parts(const std::vector<int64_t>& counts, const MatWorkAssignment& a) 
     for (std::size_t i = 0; i + 1 < a.flat.size(); i += 2) {
         const uint32_t t = a.flat[i];
         if (static_cast<uint32_t>(counts[t]) <= render_config::kOverflowL1Cap) continue;
-        covered[{t, a.flat[i + 1] & 0xFFu}] += item_cost(counts, t, a.flat[i + 1]) / 8;
+        covered[{t, a.flat[i + 1] & 0xFFu}] +=
+            item_cost(counts, t, a.flat[i + 1]) / kGatherWeight;
     }
     int bad = 0;
     for (uint32_t t = 0; t < kTiles; ++t) {
