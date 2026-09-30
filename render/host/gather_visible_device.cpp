@@ -17,6 +17,7 @@
 #include "device_state.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
+#include "stage_timers.h"
 
 #include <algorithm>
 #include <chrono>
@@ -675,6 +676,8 @@ static void launch_pass(
     uint32_t num_tiles, float min_opacity, int H, int W, float max_radius,
     bool count_only, const std::vector<uint32_t>* bases, int last_core,
     uint32_t t_stride, bool do_finish = true, bool device_scan = false) {
+    auto& st_acc = stagetimers::acc();
+    stagetimers::Span rtargs_span(st_acc.project_gather_rtargs);
     Program& program = ctx->workload.get_programs().begin()->second;
     auto bm2x = device_state::get_buffer("pfwc_m2x");
     auto bm2y = device_state::get_buffer("pfwc_m2y");
@@ -759,8 +762,15 @@ static void launch_pass(
         args.push_back(mv);                        // arg 40: mover
         SetRuntimeArgs(program, mv == 0 ? ctx->kernel : ctx->kernel1, core, args);
     }
-    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
-    if (do_finish) distributed::Finish(*ctx->cq);
+    rtargs_span.stop();
+    {
+        stagetimers::Span s(st_acc.project_gather_enqueue);
+        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
+    }
+    if (do_finish) {
+        stagetimers::Span s(st_acc.project_gather_wait);
+        distributed::Finish(*ctx->cq);
+    }
 }
 
 }  // namespace
@@ -813,6 +823,10 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         if (device_ok) *device_ok = true;
         return gsplat_cpu::ProjectResult{};
     }
+    // Stage-timer sub-buckets of `project` (stage_timers.h). launch_pass books
+    // its own rtargs / enqueue spans; setup runs until the first launch.
+    auto& st_acc = stagetimers::acc();
+    stagetimers::Span setup_span(st_acc.project_gather_setup);
     auto* ctx = ensure_context();
     if (ctx == nullptr) return set_fail();
 
@@ -864,6 +878,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             // sort-publish+cull+blend). The project stage's ONLY host sync is the
             // single post-chain 1-page M read below.
             ensure_outputs(ctx, padded_n);
+            setup_span.stop();
 
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/true,
@@ -872,6 +887,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
 
             // scan_bases: counts -> buf_core_base ([0]=base,[1]=is_last) + proj_M.
             {
+                stagetimers::Span rtargs_span(st_acc.project_gather_rtargs);
                 Program& sp = ctx->wl_scan.get_programs().begin()->second;
                 SetRuntimeArgs(sp, ctx->kscan, CoreCoord{0, 0}, {
                     static_cast<uint32_t>(ctx->buf_counts->address()),
@@ -879,6 +895,8 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                     static_cast<uint32_t>(ctx->buf_M->address()),
                     ctx->num_slots,
                 });
+                rtargs_span.stop();
+                stagetimers::Span enq_span(st_acc.project_gather_enqueue);
                 distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan, false);
             }
 
@@ -897,9 +915,13 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             // depth D2H). proj_M is already published on-device for the resident
             // downstream consumers.
             std::vector<uint32_t> mread(PAGE_ELEMS, 0);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
+            {
+                stagetimers::Span s(st_acc.project_gather_wait);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
+            }
             M = mread[0];
         } else {
+            setup_span.stop();
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/true,
                         /*bases=*/nullptr, /*last_core=*/-1, t_stride);
@@ -956,6 +978,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         // non-resident, or verify configs (which DO consume host-side proj_m_*).
         const bool fused_count_only =
             proj_device_scan_enabled() && minimal_readback;
+        stagetimers::Span result_span(st_acc.project_gather_result);
         gsplat_cpu::ProjectResult proj =
             fused_count_only
                 ? readback_proj_m_count_only(M, &T.readback_ms)

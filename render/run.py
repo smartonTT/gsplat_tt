@@ -429,6 +429,31 @@ def main():
               + f" | sum={sort_sum:.3f} sort={sort_ms:.3f}"
               + f" resid={sort_ms - sort_sum:+.3f}", flush=True)
 
+        # Leaf split of `project` and `tile_assign` (stage_timers.h): host setup
+        # / SetRuntimeArgs / enqueue / Finish-or-blocking-read per device driver.
+        _SUB_ORDER = {
+            "project": ["cov3d", "pfwc_setup", "pfwc_rtargs", "pfwc_enqueue",
+                        "pfwc_finish", "gather_setup", "gather_rtargs",
+                        "gather_enqueue", "gather_wait", "gather_result"],
+            "tile_assign": ["setup", "rtargs", "enqueue", "scan_finish",
+                            "p_d2h", "k2_finish", "publish"],
+        }
+        for stage, keys in _SUB_ORDER.items():
+            sub_parts = []
+            sub_sum = 0.0
+            for k in keys:
+                v = float(st.get(f"{stage}_{k}", 0.0)) / n
+                sub_sum += v
+                sub_parts.append(f"{k}={v:.3f}")
+                print(f"TTW_TIMING stage_{stage}_{k}={v:.3f}", flush=True)
+            stage_ms = float(st.get(stage, 0.0)) / n
+            print(f"TTW_TIMING stage_{stage}_other={stage_ms - sub_sum:.3f}",
+                  flush=True)
+            print(f"{stage.upper()}_STAGES n={st.get('views', 0)} "
+                  + " ".join(sub_parts)
+                  + f" | sum={sub_sum:.3f} {stage}={stage_ms:.3f}"
+                  + f" resid={stage_ms - sub_sum:+.3f}", flush=True)
+
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)

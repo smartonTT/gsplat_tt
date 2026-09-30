@@ -25,6 +25,7 @@
 #include "pfwc.h"
 #include "device_state.h"
 #include "host_profile.h"
+#include "stage_timers.h"
 
 #include <algorithm>
 #include <chrono>
@@ -429,6 +430,10 @@ double pfwc_tt(
     if (N == 0) {
         return 0.0;
     }
+    // Stage-timer sub-buckets of `project` (stage_timers.h): setup runs until
+    // the per-core arg loop, then rtargs / enqueue / finish.
+    auto& st_acc = stagetimers::acc();
+    stagetimers::Span setup_span(st_acc.project_pfwc_setup);
     auto* ctx = ensure_context();
     if (ctx == nullptr) {
         return -1.0;
@@ -566,8 +571,10 @@ double pfwc_tt(
     const uint32_t neg_fx_bits = fp32_bits(-fx);
     const uint32_t neg_fy_bits = fp32_bits(-fy);
 
+    setup_span.stop();
     gsplat_tt::hostprof::on_pfwc_dispatch_start();
     const auto t_launch0 = std::chrono::high_resolution_clock::now();
+    stagetimers::Span rtargs_span(st_acc.project_pfwc_rtargs);
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t chunk_start = ws.chunk_start[c];
@@ -615,10 +622,17 @@ double pfwc_tt(
              static_cast<uint32_t>(ctx->buf_ry->address()),
              chunk_start, num_chunks});
     }
-    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, /*blocking=*/false);
+    rtargs_span.stop();
+    {
+        stagetimers::Span s(st_acc.project_pfwc_enqueue);
+        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, /*blocking=*/false);
+    }
     gsplat_tt::hostprof::on_pfwc_enqueued();
     const auto t_launch1 = std::chrono::high_resolution_clock::now();
-    distributed::Finish(*ctx->cq);
+    {
+        stagetimers::Span s(st_acc.project_pfwc_finish);
+        distributed::Finish(*ctx->cq);
+    }
     const auto t_launch_end = std::chrono::high_resolution_clock::now();
     T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
     T.compute_ms = std::chrono::duration<double, std::milli>(t_launch_end - t_launch1).count();

@@ -131,7 +131,10 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
     //     the world→camera means transform in L1 and then mean_2d / depth /
     //     cov2d(a,b,c) / radii, all resident (null host outputs => nothing read
     //     back). Replaces the former 2-program means_cam→DRAM→pfwc handoff.
+    gsplat_tt::stagetimers::Span cov3d_span(
+        gsplat_tt::stagetimers::acc().project_cov3d);
     const std::vector<float>& cov_u = cov3d_unique(cov3d, N);
+    cov3d_span.stop();
     gsplat_tt::pfwc_tt(means, cov_u.data(), extrinsics, intrinsics, N,
                        /*mean_2d=*/nullptr, /*depth=*/nullptr, /*cov2d=*/nullptr,
                        /*radii=*/nullptr);
@@ -366,6 +369,23 @@ PYBIND11_MODULE(render_clean, m) {
         d["sort_publish_host"] = a.sort_publish_host;
         d["sort_publish_wait"] = a.sort_publish_wait;
         d["sort_mat"] = a.sort_mat;
+        d["project_cov3d"] = a.project_cov3d;
+        d["project_pfwc_setup"] = a.project_pfwc_setup;
+        d["project_pfwc_rtargs"] = a.project_pfwc_rtargs;
+        d["project_pfwc_enqueue"] = a.project_pfwc_enqueue;
+        d["project_pfwc_finish"] = a.project_pfwc_finish;
+        d["project_gather_setup"] = a.project_gather_setup;
+        d["project_gather_rtargs"] = a.project_gather_rtargs;
+        d["project_gather_enqueue"] = a.project_gather_enqueue;
+        d["project_gather_wait"] = a.project_gather_wait;
+        d["project_gather_result"] = a.project_gather_result;
+        d["tile_assign_setup"] = a.tile_assign_setup;
+        d["tile_assign_rtargs"] = a.tile_assign_rtargs;
+        d["tile_assign_enqueue"] = a.tile_assign_enqueue;
+        d["tile_assign_scan_finish"] = a.tile_assign_scan_finish;
+        d["tile_assign_p_d2h"] = a.tile_assign_p_d2h;
+        d["tile_assign_k2_finish"] = a.tile_assign_k2_finish;
+        d["tile_assign_publish"] = a.tile_assign_publish;
         return d;
     });
     m.def("reset_stage_timings", []() { gsplat_tt::stagetimers::reset(); });

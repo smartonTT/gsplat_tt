@@ -24,7 +24,7 @@
 // must reconstruct view_total; view_total vs the Python-side avg_frame_ms
 // leaves only the pybind/marshal residual.
 //
-// Cost: two steady_clock::now() per span, ~10 spans per view -> well under a
+// Cost: two steady_clock::now() per span, ~50 spans per view -> well under a
 // microsecond on a 173 ms frame. Unconditional (no env gate) so the numbers are
 // always available, and it never touches pixels.
 
@@ -62,6 +62,43 @@ struct Acc {
     double sort_publish_host = 0.0;
     double sort_publish_wait = 0.0;
     double sort_mat = 0.0;
+    // Sub-buckets of `project` (render.cpp run_project + pfwc_device +
+    // gather_visible_device). Disjoint; project - sum(project_*) is the rest.
+    //   cov3d           scene cov3d 9->6 repack (cached after the first view)
+    //   pfwc_setup      context + buffer checks, cached H2D, cc_scales, split
+    //   pfwc_rtargs     per-core runtime-arg build + SetRuntimeArgs
+    //   pfwc_enqueue    EnqueueMeshWorkload
+    //   pfwc_finish     Finish (pfwc device time not hidden by the enqueue)
+    //   gather_setup    context, cached scene H2D, output/count buffer checks
+    //   gather_rtargs   count + scan + scatter arg build + SetRuntimeArgs
+    //   gather_enqueue  the 3 EnqueueMeshWorkload (count, scan, scatter)
+    //   gather_wait     blocking 1-page M read = drain of count+scan+scatter
+    //   gather_result   host ProjectResult build (depths sized M)
+    double project_cov3d = 0.0;
+    double project_pfwc_setup = 0.0;
+    double project_pfwc_rtargs = 0.0;
+    double project_pfwc_enqueue = 0.0;
+    double project_pfwc_finish = 0.0;
+    double project_gather_setup = 0.0;
+    double project_gather_rtargs = 0.0;
+    double project_gather_enqueue = 0.0;
+    double project_gather_wait = 0.0;
+    double project_gather_result = 0.0;
+    // Sub-buckets of `tile_assign` (tile_assign_device). Disjoint.
+    //   setup        context, resident-buffer lookups, buffer grow checks
+    //   rtargs       K1 + scan1 + scan_bases + scan2 + K2 SetRuntimeArgs
+    //   enqueue      the 5 EnqueueMeshWorkload
+    //   scan_finish  Finish after scan_bases (drains K1 + scan1 + scan_bases)
+    //   p_d2h        blocking 64 B read of the pair count P
+    //   k2_finish    Finish after K2 (drains scan2 + K2)
+    //   publish      keep-mask fill check + resident-pair registration
+    double tile_assign_setup = 0.0;
+    double tile_assign_rtargs = 0.0;
+    double tile_assign_enqueue = 0.0;
+    double tile_assign_scan_finish = 0.0;
+    double tile_assign_p_d2h = 0.0;
+    double tile_assign_k2_finish = 0.0;
+    double tile_assign_publish = 0.0;
     std::uint64_t views = 0;
 };
 

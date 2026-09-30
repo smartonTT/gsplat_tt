@@ -19,6 +19,7 @@
 #include "device_state.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
+#include "stage_timers.h"
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
@@ -490,6 +491,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         if (device_ok) *device_ok = true;
         return gsplat_cpu::TileAssignResult{};
     }
+    // Stage-timer sub-buckets of `tile_assign` (stage_timers.h).
+    auto& st_acc = stagetimers::acc();
+    stagetimers::Span setup_span(st_acc.tile_assign_setup);
     auto* ctx = ensure_context();
     if (ctx == nullptr) return set_fail();
 
@@ -726,6 +730,8 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 std::cerr << "[gsplat_tt::tile_assign] CHUNK_FUSION set but "
                              "ta_tiles_per_gaussian missing; running K1\n";
             }
+            setup_span.stop();
+            stagetimers::Span rtargs_span(st_acc.tile_assign_rtargs);
             const uint32_t k1_pages = n_ceil / ELEMS_PER_PAGE;
             const WorkSplit ws1 = split_pages(k1_pages, num_cores);
             Program& prog1 = ctx->wl_k1.get_programs().begin()->second;
@@ -749,8 +755,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 SetRuntimeArgs(prog1, ctx->k1, core, args(ws1.start[c] + n0, ws1.count[c] - n0));
                 if (ctx->dual) SetRuntimeArgs(prog1, ctx->k1b, core, args(ws1.start[c], n0));
             }
+            rtargs_span.stop();
+            stagetimers::Span enq_span(st_acc.tile_assign_enqueue);
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k1, false);
         }
+        setup_span.stop();  // no-op unless K1 was skipped
         // K1 -> scan chain on one in-order CQ; scan Finish drains K1 (drops k1-only lock).
         const auto t_k1_1 = clk::now();
         T.k1_ms = skip_k1 ? 0.0
@@ -777,6 +786,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 k3_pipelined = true;
             }
             const auto t_s1_0 = clk::now();
+            stagetimers::Span s1_rt_span(st_acc.tile_assign_rtargs);
             Program& progs1 = ctx->wl_scan1.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -787,8 +797,13 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     mctrl_addr,  // arg 6: resident proj_M (real M); 0 = use Mu
                 });
             }
-            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan1, false);
+            s1_rt_span.stop();
+            {
+                stagetimers::Span s(st_acc.tile_assign_enqueue);
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan1, false);
+            }
             // scan_bases chains on scan1 output — one Finish for both (in-order CQ).
+            stagetimers::Span sb_rt_span(st_acc.tile_assign_rtargs);
             Program& progb = ctx->wl_scan_bases.get_programs().begin()->second;
             CoreCoord core0{0, 0};
             SetRuntimeArgs(progb, ctx->ks_bases, core0, {
@@ -798,9 +813,14 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 num_cores,
                 p_max,  // arg 4: static pair ceiling (0 => no clamp), S5.3
             });
-            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan_bases, false);
+            sb_rt_span.stop();
+            {
+                stagetimers::Span s(st_acc.tile_assign_enqueue);
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan_bases, false);
+            }
             {
                 GSPLAT_HOST_ZONE("host_finish_ta_scan");
+                stagetimers::Span s(st_acc.tile_assign_scan_finish);
                 distributed::Finish(*ctx->cq);
             }
             const auto t_scan_done = clk::now();
@@ -827,6 +847,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 std::vector<uint32_t> pbuf(ELEMS_PER_PAGE, 0);
                 {
                     GSPLAT_HOST_ZONE("host_ta_d2h_p");
+                    stagetimers::Span s(st_acc.tile_assign_p_d2h);
                     distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, ctx->buf_pairs_P, true);
                 }
                 P = pbuf[0];
@@ -846,6 +867,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 
             // Phase 2: per-core exclusive prefix-add seeded by core_base -> offs.
             t_s2_0 = clk::now();
+            stagetimers::Span s2_rt_span(st_acc.tile_assign_rtargs);
             Program& progs2 = ctx->wl_scan2.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -858,7 +880,11 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     mctrl_addr,  // arg 7: resident proj_M (real M); 0 = use Mu
                 });
             }
-            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan2, false);
+            s2_rt_span.stop();
+            {
+                stagetimers::Span s(st_acc.tile_assign_enqueue);
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan2, false);
+            }
             // When not pipelined with K3, scan2 Finish merges with K2 below.
             if (k3_pipelined) {
                 T.scan2_ms = 0.0;  // attributed in the scan2+K2 barrier below
@@ -907,6 +933,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // S5.3 host-free: size to the static p_max ceiling (view-independent) so
         // the allocation is fixed and the host needs no per-frame P. Legacy path
         // grows to the dynamic P_pad read back above.
+        stagetimers::Span palloc_span(st_acc.tile_assign_setup);
         const uint32_t P_pad = host_free ? p_max_pad : round_up(P, ELEMS_PER_PAGE);
         const std::size_t p_bytes = static_cast<std::size_t>(P_pad) * 4;
         if (!ctx->buf_gids || ctx->cap_p_bytes < p_bytes) {
@@ -919,7 +946,9 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const uint32_t cap_p_elems = static_cast<uint32_t>(ctx->cap_p_bytes / 4);
 
         // ── K2: pair-centric scatter ────────────────────────────────────
+        palloc_span.stop();
         const auto t_k2_0 = clk::now();
+        stagetimers::Span k2_rt_span(st_acc.tile_assign_rtargs);
         const uint32_t k2_pages = P_pad / ELEMS_PER_PAGE;
         const WorkSplit ws2 = split_pages(k2_pages, num_cores);
         Program& prog2 = ctx->wl_k2.get_programs().begin()->second;
@@ -948,11 +977,18 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             SetRuntimeArgs(prog2, ctx->k2, core, args(ws2.start[c] + n0, ws2.count[c] - n0));
             if (ctx->dual) SetRuntimeArgs(prog2, ctx->k2b, core, args(ws2.start[c], n0));
         }
-        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2, false);
+        k2_rt_span.stop();
+        {
+            stagetimers::Span s(st_acc.tile_assign_enqueue);
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2, false);
+        }
         if (k3_pipelined) {
             // scan2 + K2 share one barrier with any in-flight K3 (started before scan1).
             GSPLAT_HOST_ZONE("host_finish_ta_k2");
-            distributed::Finish(*ctx->cq);
+            {
+                stagetimers::Span s(st_acc.tile_assign_k2_finish);
+                distributed::Finish(*ctx->cq);
+            }
             const auto t_barrier = clk::now();
             if (device_scan) {
                 T.scan2_ms =
@@ -966,7 +1002,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         } else {
             // scan2 + K2 on one in-order CQ — single Finish (drops scan2-only drain).
             GSPLAT_HOST_ZONE("host_finish_ta_k2");
-            distributed::Finish(*ctx->cq);
+            {
+                stagetimers::Span s(st_acc.tile_assign_k2_finish);
+                distributed::Finish(*ctx->cq);
+            }
             const auto t_k2_1 = clk::now();
             T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
             if (device_scan) {
@@ -984,6 +1023,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // passes opacities==nullptr in both modes.) Without this, an M-only
         // ProjectResult (empty host covs_2d) would silently drop the cull and
         // the resident-pairs publish, breaking the resident sort/blend handoff.
+        stagetimers::Span publish_span(st_acc.tile_assign_publish);
         const bool do_cull = resident_in
             ? static_cast<bool>(res_op)
             : ((covs_2d != nullptr) && (opacities != nullptr));
