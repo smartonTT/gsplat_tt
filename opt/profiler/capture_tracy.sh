@@ -35,7 +35,7 @@ export PYTHONPATH=/localdev/smarton/tt-metal/tools:${PYTHONPATH:-}
 export TT_METAL_DEVICE_PROFILER=1
 export GSPLAT_TT_PROFILE=1
 
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
 cd "$REPO" || { echo "[capture_tracy] FATAL: cannot cd $REPO" >&2; exit 1; }
 OUTDIR="$REPO/opt/profiler/wrap_out_${ITER_DIR}"
 TRACY="$OUTDIR/.logs/tracy_profile_log_host.tracy"

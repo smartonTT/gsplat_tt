@@ -14,7 +14,7 @@
 # maybe_dump_device_profiler() (GSPLAT_TT_PROFILE=1) pushes each view's device
 # zones into the live stream under --dump-device-data-mid-run.
 set -uo pipefail
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
 cd "$REPO" || exit 1
 ITER_DIR="${TTW_ITER_DIR:-tracy}"
 # shellcheck source=/dev/null
