@@ -98,6 +98,14 @@ inline bool sub_lt(uint32_t a, uint32_t b, uint32_t w) {
     return fa - fb < fw;
 }
 
+// sub_lt(a, b, w) for b > 0 finite (caller checks). If a < w then fl(a - b)
+// <= a < w (a - b < a and RNE rounding is monotone), so the soft-float
+// subtract only runs when a >= w. Same result as sub_lt for every such b.
+inline bool sub_lt_pos(uint32_t a, uint32_t b, uint32_t w) {
+    return lt(a, w) || sub_lt(a, b, w);
+}
+
+
 // (int)(x * 2^-s) for fp32 bits x and s < 32, i.e. the int conversion of
 // x * inv_tsf where inv_tsf = 1/2^s is exact. Fast range: |x| < 2^31 and not
 // NaN/inf. Returns false otherwise.

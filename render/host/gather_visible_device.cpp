@@ -59,6 +59,7 @@ constexpr uint32_t TILE_BYTES = TILE_ELEMS * 4;   // 4096
 constexpr uint32_t PAGE_ELEMS = 16;
 constexpr uint32_t PAGE_BYTES = PAGE_ELEMS * 4;   // 64
 constexpr uint32_t COLOR_ACC_BYTES = PAGE_ELEMS * 3 * 4;  // 192
+constexpr uint32_t MASK_BYTES = TILE_ELEMS / 8;  // 128: 1 visibility bit per element
 
 inline uint32_t round_up(uint32_t v, uint32_t m) { return ((v + m - 1) / m) * m; }
 
@@ -197,6 +198,11 @@ struct GatherDeviceContext {
     // num_slots is fixed for the device).
     std::shared_ptr<distributed::MeshBuffer> buf_counts;
 
+    // Per-tile visibility mask (one 128B page per N tile): written by the count
+    // pass, read by the scatter pass (task #75).
+    std::shared_ptr<distributed::MeshBuffer> buf_mask;
+    uint32_t cap_mask_tiles = 0;
+
     // Scene inputs (uploaded once per scene, cached by pointer + N).
     std::shared_ptr<distributed::MeshBuffer> buf_cr;
     std::shared_ptr<distributed::MeshBuffer> buf_cg;
@@ -253,9 +259,11 @@ static void build_program(GatherDeviceContext& ctx) {
     // emits the AoS record (GATHER_EMIT_BLENDREC is inlined), so this CB and the
     // matching accessor are unconditional.
     cb(23, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);
+    // Visibility-mask staging: two 128B pages per mover.
+    cb(24, 2 * MASK_BYTES, MASK_BYTES);
 
     std::vector<uint32_t> ct;
-    constexpr int n_acc = 25;  // 24 base + 1 AoS blend-record accessor
+    constexpr int n_acc = 26;  // 24 base + AoS blend-record + visibility mask
     for (int i = 0; i < n_acc; i++)
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
@@ -461,6 +469,14 @@ static void ensure_counts(GatherDeviceContext* ctx) {
         std::vector<uint32_t> zeros(bytes / sizeof(uint32_t), 0u);
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_counts, zeros, true);
     }
+}
+
+// Allocate/grow the per-tile visibility mask buffer.
+static void ensure_mask(GatherDeviceContext* ctx, uint32_t num_tiles) {
+    if (ctx->buf_mask && ctx->cap_mask_tiles >= num_tiles) return;
+    ctx->buf_mask = make_dram(ctx->mesh_device.get(),
+                              static_cast<std::size_t>(num_tiles) * MASK_BYTES, MASK_BYTES);
+    ctx->cap_mask_tiles = num_tiles;
 }
 
 // Effective max_radius matching project_finish_with_cov2d_radii.
@@ -679,6 +695,8 @@ static void launch_pass(
     auto& st_acc = stagetimers::acc();
     stagetimers::Span rtargs_span(st_acc.project_gather_rtargs);
     Program& program = ctx->workload.get_programs().begin()->second;
+    // The count pass writes the mask the scatter pass reads (same num_tiles).
+    if (count_only) ensure_mask(ctx, num_tiles);
     auto bm2x = device_state::get_buffer("pfwc_m2x");
     auto bm2y = device_state::get_buffer("pfwc_m2y");
     auto bdep = device_state::get_buffer("pfwc_depth");
@@ -760,6 +778,7 @@ static void launch_pass(
         args.push_back(t_stride);                  // arg 38: tile stride
         args.push_back(device_scan ? 1u : 0u);     // arg 39: device-scan flag
         args.push_back(mv);                        // arg 40: mover
+        args.push_back(static_cast<uint32_t>(ctx->buf_mask->address()));  // arg 41: mask
         SetRuntimeArgs(program, mv == 0 ? ctx->kernel : ctx->kernel1, core, args);
     }
     rtargs_span.stop();

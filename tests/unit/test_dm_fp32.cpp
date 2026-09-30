@@ -35,6 +35,10 @@ static void check_pair(uint32_t a, uint32_t b) {
     static const uint32_t ws[] = {u(1024.0f), u(0.0f), u(-0.0f), a, b, u(1e-40f)};
     for (uint32_t w : ws)
         if (dm_fp32::sub_lt(a, b, w) != (f(a) - f(b) < f(w))) fail("sub_lt", a, b, w, 0);
+    // sub_lt_pos: the gather's fast path, valid for b > 0 finite.
+    if (dm_fp32::lt(0u, b) && b < 0x7F800000u)
+        for (uint32_t w : ws)
+            if (dm_fp32::sub_lt_pos(a, b, w) != (f(a) - f(b) < f(w))) fail("sub_lt_pos", a, b, w, 0);
     // tile_assign's (int)((a + b) * (1/32.f)), fast path only (the fallback is
     // the same expression) and within int range on both sides.
     {
