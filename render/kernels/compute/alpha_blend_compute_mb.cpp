@@ -327,6 +327,26 @@ inline void blend_stage_floor() {
 // immediates); the runtime mask test selects the path. Each microblock keeps its
 // own DEST accumulators, so pairing/interleaving is BIT-IDENTICAL. Identity
 // permutation: bit m -> vector m.
+// Task #78 timing-only ablation (host env GSPLAT_TT_BLEND_ABL, default 0 =
+// compiled out). 1 = skip the SFPU blend bodies (per-record cost only; output
+// is wrong). 2 = pad each pair body with 24 SFPNOPs and each single with 12
+// (output unchanged): the cost of the issue slots a const-load hoist would free.
+#ifndef BLEND_ABL
+#define BLEND_ABL 0
+#endif
+#if BLEND_ABL == 2 && defined(TRISC_MATH)
+template <uint32_t N>
+inline void blend_abl_pad() {
+    if constexpr (N > 0) {
+        TTI_SFPNOP;
+        blend_abl_pad<N - 1>();
+    }
+}
+#define BLEND_ABL_PAD(n) MATH((blend_abl_pad<n>()))
+#else
+#define BLEND_ABL_PAD(n) ((void)0)
+#endif
+
 template <uint32_t J>
 inline void dispatch_blend_pairs(
     uint32_t mask, uint32_t a, uint32_t b, uint32_t c, uint32_t d, uint32_t e,
@@ -335,13 +355,20 @@ inline void dispatch_blend_pairs(
         constexpr uint32_t A = 2u * J;
         constexpr uint32_t B = 2u * J + 1u;
         const uint32_t pm = (mask >> (2u * J)) & 3u;
+#if BLEND_ABL != 1
         if (pm == 3u) {
             MATH((blend_pair_gaussian_math<A, B>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+            BLEND_ABL_PAD(24);
         } else if (pm == 1u) {
             MATH((blend_one_gaussian_math<A>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+            BLEND_ABL_PAD(12);
         } else if (pm == 2u) {
             MATH((blend_one_gaussian_math<B>(a, b, c, d, e, fc, op, cr, cg, cbv)));
+            BLEND_ABL_PAD(12);
         }
+#else
+        (void)pm;
+#endif
         dispatch_blend_pairs<J + 1>(mask, a, b, c, d, e, fc, op, cr, cg, cbv);
     }
 }

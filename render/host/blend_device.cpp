@@ -273,6 +273,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         // Task #68: stage per-gaussian coefficients in DEST (1 = on, 0 = old
         // per-dispatch SFPLOADI form, kept for A/B).
         compute_defines["BLEND_COEF_DEST"] = env_or("GSPLAT_TT_BLEND_COEF_DEST", "1");
+        // Task #78: timing-only ablation (1 = skip SFPU bodies, 2 = NOP padding).
+        compute_defines["BLEND_ABL"] = env_or("GSPLAT_TT_BLEND_ABL", "0");
     }
     ctx.compute = CreateKernel(
         program,
