@@ -172,3 +172,66 @@ plateau from `opt/FINAL-REPORT.md` — **173.3 ms/view avg** over the same 30-vi
 on a **Blackhole P100** in `yyzo-bh-07`. That is ~5.8 FPS. Note the charter
 targets a **p150**; the frozen number is a P100, so a p150 re-measure should
 accompany the GPU row.
+
+---
+
+# Published GPU reference rows (2026-09-30) — **published, not measured**
+
+Because no CUDA host is reachable (search log above), the report still needs a
+GPU comparison point. The rows below are **published figures quoted from their
+source papers — not measured by this project, not measured on our bench, not
+re-run here.** Every row is labelled `published, not measured` in
+`opt/REPORT.html` as well.
+
+## Rows
+
+| # | Renderer | Scene | GPU | Resolution | Published speed | ms/view | Source |
+|---|---|---|---|---|---|---|---|
+| G1 | INRIA 3DGS (`diff-gaussian-rasterization`, Kerbl et al. 2023) | Mip-NeRF360 **bicycle** | NVIDIA RTX **A6000** | 1920×1080 (1080p) | **93 FPS** (Fig. 1 teaser, "Ours-51 min" bicycle) | **10.75** | [arXiv:2308.04079](https://arxiv.org/abs/2308.04079) |
+| G2 | INRIA 3DGS, pixel-normalized to our bench | bicycle | A6000 | **1024×1024** (normalized, see assumption) | 183.8 FPS-equivalent | **5.44** | derived from G1 |
+| G3 | Kovinić/Stojković TT line vs consumer GPU | their test scenes | **GTX 4060** (their CUDA reference) | not stated | their TT result ≈ **1.6× slower than the 4060** | n/a | Slack DM D0C1CV1AJJV, 2026-09-14 (`docs/slack-notes.md` in the sibling checkout) |
+
+Context row (different, optimized renderer — not vanilla 3DGS, kept out of the
+ratio): Optimized Minimal 3D Gaussian Splatting reports **682 FPS on bicycle**
+([arXiv:2503.16924](https://arxiv.org/abs/2503.16924)); it is a compressed /
+minimal-Gaussian variant, so it is not an apples-to-apples rasterizer comparison
+with our full 6.13 M-Gaussian render.
+
+## Normalization assumption (explicit)
+
+G2 scales G1 by pixel count only:
+
+```
+ms_1024x1024 = ms_1080p × (1024·1024) / (1920·1080) = 10.75 × 0.5059 = 5.44 ms
+```
+
+This assumes 3DGS rasterization time is **linear in pixel count** at fixed
+Gaussian count. That is only partly true: projection, tiling and the depth sort
+are per-Gaussian and do not shrink with resolution, so G2 is an **optimistic
+(too-fast) normalization** — the real 1024×1024 A6000 number would be somewhat
+higher than 5.44 ms, making the TT/GPU gap somewhat smaller than G2 implies.
+Both the normalized and unnormalized ratios are therefore reported.
+
+Other unnormalized differences that are **not** corrected for: different scene
+reconstruction (the paper's own 30K-iteration bicycle model vs our
+`scenes/bicycle.ply`, 6,131,954 Gaussians), full SH vs our SH-degree-0 colors,
+and a different camera set than `benchmarks/cameras_v2.json`.
+
+## TT vs published GPU
+
+TT anchor: **173.3 ms/view** (5.77 FPS), 30-view 1024×1024 bicycle, iter-141
+frozen plateau, measured on a Blackhole **P100** in `yyzo-bh-07`. (Charter
+targets a p150; a p150 re-measure is in flight separately.)
+
+| Comparison | GPU ms/view | TT ms/view | Ratio |
+|---|---|---|---|
+| vs G1 (A6000 @1080p, unnormalized) | 10.75 | 173.3 | **GPU 16.1× faster** |
+| vs G2 (A6000 pixel-normalized to 1024²) | 5.44 | 173.3 | **GPU 31.9× faster** |
+
+G3 says another TT lineage reached **1.6× slower than a GTX 4060**, i.e. the
+gap is known to be closable by roughly an order of magnitude with better
+kernels *and* algorithms — consistent with this project's thrust.
+
+**None of the GPU numbers above were measured by this project.** The moment a
+CUDA host exists, `bench/gpu_reference/run_gpu_bench.py` produces a measured row
+and `opt/build_report.py` promotes it above these published ones.

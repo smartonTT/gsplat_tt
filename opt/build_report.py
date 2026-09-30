@@ -1405,6 +1405,101 @@ TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-141 frozen plateau"
 
 GPU_RESULT_JSON = OPT_DIR / "cpu-vs-tt" / "gpu_result.json"
 
+# --- Published (NOT measured) GPU reference rows -------------------------
+# Every figure below is quoted from its source publication. No number here was
+# measured by this project, on our bench, or on any hardware we control.
+PUBLISHED_GPU_ROWS = [
+    {
+        "id": "G1",
+        "renderer": "INRIA 3DGS (diff-gaussian-rasterization, Kerbl et al. 2023)",
+        "scene": "Mip-NeRF360 bicycle",
+        "gpu": "NVIDIA RTX A6000",
+        "res": "1920&times;1080",
+        "speed": "93 FPS (Fig. 1 teaser, bicycle)",
+        "ms": 10.75,
+        "src": "https://arxiv.org/abs/2308.04079",
+        "src_label": "arXiv:2308.04079",
+    },
+    {
+        "id": "G2",
+        "renderer": "INRIA 3DGS, pixel-normalized to our bench",
+        "scene": "bicycle",
+        "gpu": "NVIDIA RTX A6000",
+        "res": "1024&times;1024 (normalized)",
+        "speed": "183.8 FPS-equivalent",
+        "ms": 5.44,
+        "src": "https://arxiv.org/abs/2308.04079",
+        "src_label": "derived from G1",
+    },
+    {
+        "id": "G3",
+        "renderer": "Kovini&cacute;/Stojkovi&cacute; TT line vs their CUDA reference",
+        "scene": "their test scenes",
+        "gpu": "NVIDIA GTX 4060",
+        "res": "not stated",
+        "speed": "their TT result &asymp; 1.6&times; slower than the 4060",
+        "ms": None,
+        "src": "",
+        "src_label": "Slack DM D0C1CV1AJJV, 2026-09-14",
+    },
+]
+
+
+def published_gpu_section() -> str:
+    """Published-literature GPU rows. Always labelled 'published, not measured'."""
+    doc_link = (
+        "<a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a>"
+        " &sect; Published GPU reference rows"
+    )
+    rows = []
+    for r in PUBLISHED_GPU_ROWS:
+        ms = "&mdash;" if r["ms"] is None else f"{r['ms']:.2f}"
+        ratio = (
+            "&mdash;"
+            if r["ms"] is None
+            else f"GPU <b>{TT_ANCHOR_MS / r['ms']:.1f}&times;</b> faster"
+        )
+        src = (
+            f"<a href='{r['src']}' target='_blank'>{r['src_label']}</a>"
+            if r["src"]
+            else r["src_label"]
+        )
+        rows.append(
+            f"<tr><td>{r['id']}</td><td>{r['renderer']}</td><td>{r['scene']}</td>"
+            f"<td>{r['gpu']}</td><td>{r['res']}</td><td>{r['speed']}</td>"
+            f"<td>{ms}</td><td>{ratio}</td><td>{src}</td></tr>"
+        )
+    body = "\n".join(rows)
+    return f"""
+<section style='background:#fdf3f3;border-left:4px solid #e76f51;padding:12px 16px'>
+  <h2 style='margin-top:0'>GPU reference &mdash;
+    <span style='background:#e76f51;color:#fff;padding:1px 8px;border-radius:10px;
+      font-size:12px;letter-spacing:.5px'>PUBLISHED, NOT MEASURED</span></h2>
+  <p>No CUDA host is reachable from this project, so the rows below are
+  <b>figures quoted from their source publications</b>. They were <b>not</b>
+  measured by this project, not run on our bench, and not run on any hardware we
+  control. They exist only to give the charter's &ldquo;beat the GPU&rdquo;
+  criterion an order-of-magnitude reference.</p>
+  <table class='rows'>
+    <tr><th>#</th><th>Renderer</th><th>Scene</th><th>GPU</th><th>Resolution</th>
+        <th>Published speed</th><th>ms/view</th>
+        <th>vs TT ({TT_ANCHOR_MS} ms/view)</th><th>Source</th></tr>
+    {body}
+  </table>
+  <p><b>Normalization assumption (G2):</b>
+  <code>ms<sub>1024&sup2;</sub> = ms<sub>1080p</sub> &times; (1024&middot;1024)/(1920&middot;1080)
+  = 10.75 &times; 0.5059 = 5.44&nbsp;ms</code>, i.e. rasterization time is assumed
+  <b>linear in pixel count</b> at fixed Gaussian count. Projection, tiling and the
+  depth sort are per-Gaussian and do <i>not</i> shrink with resolution, so G2 is an
+  <b>optimistic (too-fast)</b> normalization and the true 1024&sup2; A6000 number
+  would be higher. Not corrected for: different reconstruction (paper's 30K-iter
+  bicycle vs our 6,131,954-Gaussian <code>bicycle.ply</code>), full SH vs our
+  SH-degree-0 colors, and a different camera set.</p>
+  <p><b>TT anchor:</b> {TT_ANCHOR_MS} ms/view ({1000.0 / TT_ANCHOR_MS:.2f} FPS)
+  &mdash; {TT_ANCHOR_LABEL}. Detail, sources and caveats: {doc_link}.</p>
+</section>
+"""
+
 
 def gpu_reference_section() -> str:
     """GPU row for the charter's 'beat the GPU' criterion.
@@ -1591,6 +1686,7 @@ def build_html(rows: list[dict]) -> str:
 {meta}
 {in_flight_section()}
 {figs_html}
+{published_gpu_section()}
 {gpu_reference_section()}
 {ledger_section(rows)}
 {algorithm_snapshot(rows)}
