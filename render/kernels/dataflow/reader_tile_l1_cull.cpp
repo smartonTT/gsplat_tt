@@ -97,6 +97,14 @@ inline void mb_cb_commit_fence() {
     asm volatile("fence" ::: "memory");
 }
 
+// Task #86: fine per-subchunk zones for attribution (host env
+// GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
+#if defined(MATCULL_PROF) && MATCULL_PROF
+#define CULL_PZ(name) DeviceZoneScopedN(name)
+#else
+#define CULL_PZ(name) ((void)0)
+#endif
+
 }  // namespace
 
 void kernel_main() {
@@ -256,6 +264,7 @@ void kernel_main() {
 
         uint32_t id_start, id_end;
         {
+            CULL_PZ("cr_meta");
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
             const uint32_t elem0 = tile_id * 2u;
             const uint32_t page = elem0 >> 4;
@@ -273,6 +282,7 @@ void kernel_main() {
             }
         }
         const uint32_t L = id_end - id_start;
+        CULL_PZ("cr_tile");
         const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
 
         // blend_subchunk_meta: per-tile (dir_base, num_sc) pair. dir_base indexes
@@ -319,6 +329,7 @@ void kernel_main() {
             // Depth-rank k == slab record k stays aligned with the blend reader.
             uint32_t payload_page = 0;
             {
+                CULL_PZ("cr_meta");
                 const uint32_t de = (dir_base + sc) * 4u;
                 const uint32_t dpg = de >> 4;
                 const uint32_t dof = de & 0xF;
@@ -330,9 +341,13 @@ void kernel_main() {
 
             const uint32_t rec_pages =
                 (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
-            cb_reserve_back(CB_BUCKET, BULK_REC_SLOT);
+            {
+                CULL_PZ("cr_slot_wait");
+                cb_reserve_back(CB_BUCKET, BULK_REC_SLOT);
+            }
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
+                CULL_PZ("cr_bulk");
                 const uint32_t page0 = payload_page;
                 uint32_t pp = 0;
                 while (pp < rec_pages) {
@@ -349,6 +364,7 @@ void kernel_main() {
             // Task #59: the slot goes to the writer (mask -> word3, slab write-back);
             // it only touches word3, the transpose below only reads the others.
             cb_push_back(CB_BUCKET, BULK_REC_SLOT);
+            CULL_PZ("cr_fill");
             for (uint32_t base = 0; base < L_sub; base += COEFF_BATCH) {
                 const uint32_t n = (L_sub - base < COEFF_BATCH) ? (L_sub - base) : COEFF_BATCH;
                 cb_reserve_back(CB_COEFF, 1);

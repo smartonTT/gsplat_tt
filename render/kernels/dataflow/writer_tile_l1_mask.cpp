@@ -42,9 +42,18 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
     return reinterpret_cast<volatile uint32_t*>(scratch_addr)[elem & 0xF];
 }
 
+// Task #86: fine per-subchunk zones for attribution (host env
+// GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
+#if defined(MATCULL_PROF) && MATCULL_PROF
+#define CULL_PZ(name) DeviceZoneScopedN(name)
+#else
+#define CULL_PZ(name) ((void)0)
+#endif
+
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("tile_l1_mask_wr");
     const uint32_t payload_addr      = get_arg_val<uint32_t>(0);  // sort_subchunk_payload slab
     const uint32_t ranges_addr       = get_arg_val<uint32_t>(1);
     const uint32_t subchunk_meta_addr= get_arg_val<uint32_t>(2);  // [dir_base, num_sc] per tile
@@ -113,6 +122,7 @@ void kernel_main() {
 
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
+        CULL_PZ("cw_tile");
         uint32_t id_start = read_soa_u32(ranges_acc, tile_id * 2u + 0u, scratch_addr);
         uint32_t id_end   = read_soa_u32(ranges_acc, tile_id * 2u + 1u, scratch_addr);
         const uint32_t L = id_end - id_start;
@@ -152,8 +162,12 @@ void kernel_main() {
                 payload_page = scratch_ptr[dof];
             }
 
-            cb_wait_front(CB_BUCKET, BULK_REC_SLOT);
+            {
+                CULL_PZ("cw_slab_wait");
+                cb_wait_front(CB_BUCKET, BULK_REC_SLOT);
+            }
             const uint32_t slab = get_read_ptr(CB_BUCKET);
+            CULL_PZ("cw_patch_wr");
             for (uint32_t base = 0; base < L_sub; base += COEFF_BATCH) {
                 const uint32_t n = (L_sub - base < COEFF_BATCH) ? (L_sub - base) : COEFF_BATCH;
                 cb_wait_front(CB_KEEP, 1);
@@ -167,6 +181,7 @@ void kernel_main() {
                 cb_pop_front(CB_KEEP, 1);
             }
             asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads it
+            CULL_PZ("cw_wr");
             const uint32_t out_pages = (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             for (uint32_t p = 0; p < out_pages; ++p) {
                 const uint32_t recs = (p + 1u < out_pages)

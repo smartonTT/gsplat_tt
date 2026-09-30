@@ -97,6 +97,14 @@ inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted
     }
 }
 
+// Task #86: fine per-item zones for attribution (host env
+// GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
+#if defined(MATCULL_PROF) && MATCULL_PROF
+#define MAT_PZ(name) DeviceZoneScopedN(name)
+#else
+#define MAT_PZ(name) ((void)0)
+#endif
+
 }  // namespace
 
 void kernel_main() {
@@ -174,6 +182,7 @@ void kernel_main() {
         // sc | part << 8 at 2i+1}, both in the same 64 B page (2i is even).
         uint32_t tile_id, sc, part;
         {
+            MAT_PZ("mat_meta");
             const uint32_t u = (work_start + wi) * 2u;
             noc_async_read(get_noc_addr(u / ELEMS_PER_PAGE, work_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
@@ -189,6 +198,7 @@ void kernel_main() {
 
         uint32_t id_start = 0, id_end = 0;
         {
+            MAT_PZ("mat_meta");
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -216,6 +226,7 @@ void kernel_main() {
 
         uint32_t dir_base = 0;
         {
+            MAT_PZ("mat_meta");
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -234,6 +245,7 @@ void kernel_main() {
         if (ov_enabled && count > bucket_fit && count <= ov_cap) {
             uint32_t ov_base = 0xFFFFFFFFu;
             {
+                MAT_PZ("mat_meta");
                 const uint32_t e0 = tile_id;  // 1 u32 per tile
                 const uint32_t pg = e0 >> 4;
                 const uint32_t off = e0 & 0xF;
@@ -246,6 +258,7 @@ void kernel_main() {
                 const uint32_t npages = (count + 1u) >> 1;
                 const uint32_t buck = get_write_ptr(CB_BUCKET);
                 {
+                    MAT_PZ("mat_ov_rd");
                     const uint32_t page0 = ov_base >> 1;  // ov_base is even-aligned
                     uint32_t pp = 0;
                     while (pp < npages) {
@@ -267,9 +280,13 @@ void kernel_main() {
                 const uint32_t slab = get_write_ptr(CB_SLAB);
                 uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
                 uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
-                const uint32_t* sorted = sort_radix_tile::sort_record_ids(
-                    reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ov_cap,
-                    kB, kB + count, hist);
+                const uint32_t* sorted;
+                {
+                    MAT_PZ("mat_ov_sort");
+                    sorted = sort_radix_tile::sort_record_ids(
+                        reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ov_cap,
+                        kB, kB + count, hist);
+                }
                 // Emit each subchunk's depth-sorted slab to its directory page run.
                 const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
                 for (uint32_t s = 0; s < num_sc; ++s) {
@@ -278,6 +295,7 @@ void kernel_main() {
                         ? bucket_fit : (count - sc_off2);
                     uint32_t scp = 0;
                     {
+                        MAT_PZ("mat_meta");
                         const uint32_t e0 = (dir_base + s) * 4u;
                         const uint32_t pg = e0 >> 4;
                         const uint32_t off = e0 & 0xF;
@@ -285,7 +303,11 @@ void kernel_main() {
                         noc_async_read_barrier();
                         scp = scrp[off];
                     }
-                    permute_records(buck, slab, sorted + sc_off2, Ls);
+                    {
+                        MAT_PZ("mat_ov_perm");
+                        permute_records(buck, slab, sorted + sc_off2, Ls);
+                    }
+                    MAT_PZ("mat_ov_wr");
                     const uint32_t out_pages =
                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
                     for (uint32_t p = 0; p < out_pages; ++p) {
@@ -306,6 +328,7 @@ void kernel_main() {
         // C1b: page index must match sort_subchunk_dir (same field blend reader DMAs).
         uint32_t sc_page = 0;
         {
+            MAT_PZ("mat_meta");
             const uint32_t e0 = (dir_base + sc) * 4u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -321,6 +344,7 @@ void kernel_main() {
             const uint32_t npages = (L + 1u) >> 1;
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
+                MAT_PZ("mat_rd");
                 const uint32_t page0 = tile_id * (bucket_fit >> 1);
                 uint32_t pp = 0;
                 while (pp < npages) {
@@ -340,13 +364,21 @@ void kernel_main() {
             const uint32_t slab = get_write_ptr(CB_SLAB);
             uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
             uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
-            const uint32_t* sorted = sort_radix_tile::sort_record_ids(
-                reinterpret_cast<volatile uint32_t*>(buck), L, kA, kA + idx_stride,
-                kB, kB + L, hist);
+            const uint32_t* sorted;
+            {
+                MAT_PZ("mat_sort");
+                sorted = sort_radix_tile::sort_record_ids(
+                    reinterpret_cast<volatile uint32_t*>(buck), L, kA, kA + idx_stride,
+                    kB, kB + L, hist);
+            }
             // Stage 1: apply the radix permutation L1->L1 into a contiguous
             // slab scratch (output order), then emit the depth-sorted slab in
             // coalesced SLAB_PAGE_BYTES page writes (no per-record DRAM scatter).
-            permute_records(buck, slab, sorted, L);
+            {
+                MAT_PZ("mat_perm");
+                permute_records(buck, slab, sorted, L);
+            }
+            MAT_PZ("mat_wr");
             const uint32_t out_pages =
                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             for (uint32_t p = 0; p < out_pages; ++p) {
@@ -364,6 +396,7 @@ void kernel_main() {
 
         // sc>=1 / overflow sc==0: batched blendrec gather (iter 76: REC_BATCH=32,
         // per-slot PACK2, one write barrier per batch; reuse sorted-id page).
+        MAT_PZ("mat_gather");
         const uint32_t id_start_sc = id_start + sc_off;
         uint32_t processed = part * GATHER_PART_RECS;
         const uint32_t part_end = (L_sub - processed > GATHER_PART_RECS)

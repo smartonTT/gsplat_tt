@@ -1027,6 +1027,12 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     // M2: +2 accessors for the depth-sorted slab (sort_subchunk_payload) and its
     // per-subchunk dir (sort_subchunk_dir) so cull bulk-loads the slab from L1.
+    // Task #86: GSPLAT_TT_MATCULL_PROF=1 compiles fine per-subchunk Tracy zones
+    // into the cull reader and writer (attribution). Default OFF.
+    std::map<std::string, std::string> cull_dm_defines = {{"MB_BUCKET_FIT", "8192u"}};
+    if (const char* mcp = std::getenv("GSPLAT_TT_MATCULL_PROF"); mcp != nullptr && mcp[0] == '1') {
+        cull_dm_defines["MATCULL_PROF"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     // iter-140 OVERLAP PROBE: 14th accessor = throwaway DRAM scratch ring (the
     // gated store-stress target; inert when store_reps==0).
@@ -1041,7 +1047,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
-            .defines = {{"MB_BUCKET_FIT", "8192u"}},
+            .defines = cull_dm_defines,
         });
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
@@ -1071,7 +1077,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
-            .defines = {{"MB_BUCKET_FIT", "8192u"}},
+            .defines = cull_dm_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
