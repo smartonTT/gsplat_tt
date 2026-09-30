@@ -47,10 +47,11 @@ invisible splats).
   pixel centre >= 0.047 m2 beyond the live threshold (peak alpha*255 < 1). All
   non-mask slab words byte-identical (the write-back preserves the record).
 - 30-view `--dump-views` md5: all 30 identical to the base; hero_vs_ref 100.00 dB.
-- Timing: see the ledger row (iters.jsonl) and the table below.
+- Timing (3 interleaved rounds, one session, base fdef315): frame 76.23/76.54/76.53 -> 61.90/61.67/61.83 ms/view, mean 76.43 -> 61.80 (-14.63, -19.1%), 13.08 -> 16.18 FPS; stage blend bucket (materialize + cull + blend) 36.88 -> 22.24 ms. Ledger: iter-164.
 
 ## Scripts
 
+`sync_tree.sh` (git archive of a commit into /localdev/smarton/gstt2-<variant>), `run_followup.sh` (detached re-verify + Tracy),
 `remote_build_dump.sh` (build + one render with the cull dump and 30-view dump),
 `remote_ab.sh` (3 interleaved A/B rounds), `remote_tracy.sh` (one 10-view Tracy
 chunk + zone table). All run on the remote under
