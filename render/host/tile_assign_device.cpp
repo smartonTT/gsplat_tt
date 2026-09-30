@@ -937,10 +937,18 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const uint32_t P_pad = host_free ? p_max_pad : round_up(P, ELEMS_PER_PAGE);
         const std::size_t p_bytes = static_cast<std::size_t>(P_pad) * 4;
         if (!ctx->buf_gids || ctx->cap_p_bytes < p_bytes) {
-            ctx->buf_gids = make_dram(ctx->mesh_device.get(), p_bytes);
-            ctx->buf_tids = make_dram(ctx->mesh_device.get(), p_bytes);
-            ctx->buf_keep = make_dram(ctx->mesh_device.get(), p_bytes);
-            ctx->cap_p_bytes = p_bytes;
+            // Size to at least the static pair ceiling (task #85). A view with a
+            // larger P than any before it used to regrow these buffers, and each
+            // regrowth refilled the all-ones keep mask (~19 MB H2D + Finish,
+            // 9-12 ms). On the bicycle orbit that hit 4 of 30 views (1.3 ms/view).
+            // A P above the ceiling still grows the buffers.
+            const std::size_t ceil_bytes =
+                static_cast<std::size_t>(round_up(env_config::pair_ceiling(), ELEMS_PER_PAGE)) * 4;
+            const std::size_t alloc_bytes = std::max(p_bytes, ceil_bytes);
+            ctx->buf_gids = make_dram(ctx->mesh_device.get(), alloc_bytes);
+            ctx->buf_tids = make_dram(ctx->mesh_device.get(), alloc_bytes);
+            ctx->buf_keep = make_dram(ctx->mesh_device.get(), alloc_bytes);
+            ctx->cap_p_bytes = alloc_bytes;
             ctx->buf_keep_all_ones = false;  // fresh DRAM: needs the all-ones fill
         }
         const uint32_t cap_p_elems = static_cast<uint32_t>(ctx->cap_p_bytes / 4);

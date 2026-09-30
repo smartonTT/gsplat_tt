@@ -325,10 +325,22 @@ def main():
     per_view_ms = []
     # The warmup is a hero render; a --view-range chunk may not contain the hero.
     hero_clean = warm_img
+    # GSPLAT_PER_VIEW_STAGES=1: print each view's stage-timer deltas, to find
+    # one-off per-view costs (buffer regrowth) that the averages hide.
+    pv_stages = (os.environ.get("GSPLAT_PER_VIEW_STAGES") == "1"
+                 and hasattr(clean_backend._clean, "stage_timings"))
+    st_prev = clean_backend._clean.stage_timings() if pv_stages else None
     for i, name in enumerate(order):
         img, wall_ms = render_clean_view_timed(
             clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
         per_view_ms.append(wall_ms)
+        if pv_stages:
+            st_now = clean_backend._clean.stage_timings()
+            d = {k: float(st_now[k]) - float(st_prev[k]) for k in st_now
+                 if k != "views" and abs(float(st_now[k]) - float(st_prev[k])) >= 0.05}
+            st_prev = st_now
+            print(f"VIEW_STAGES i={i} name={name} wall={wall_ms:.2f} "
+                  + " ".join(f"{k}={v:.2f}" for k, v in d.items()), flush=True)
         if name == hero_name:
             hero_clean = img
         if dump_dir is not None:

@@ -1,0 +1,33 @@
+[sync_remote] sha=9cced7e3d1c830d4d2c19aa0241e6c909fc0ba9d so_md5=2730950d5ffe7514333b809c12ea67e6 
+=== round=1 base
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.6 p50_ms=44.1 min_ms=36.5 max_ms=60.7 n_views=30 warmup_s=18.5 out=/localdev/smarton/gstt2-t85b/tmp/t85-ab1-base
+STAGES n=30 head=0.003 project=8.696 tile_assign=8.894 sort=14.274 blend_setup=0.028 cull=0.009 blend=12.389 d2h=0.233 assemble=0.000 tail=0.003 | sum=44.529 view_total=44.530 resid_in_view=+0.001 avg_frame_ms=44.568 resid_vs_frame=+0.039
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.054 enqueue=0.055 scan_finish=3.087 p_d2h=0.018 k2_finish=4.354 publish=1.320 | sum=8.893 tile_assign=8.894 resid=+0.002
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== round=1 fix
+=== round=1 fix
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=43.4 p50_ms=44.2 min_ms=36.7 max_ms=50.2 n_views=30 warmup_s=36.5 out=/localdev/smarton/gstt2-t85/tmp/t85-ab1-fix
+STAGES n=30 head=0.002 project=8.697 tile_assign=7.597 sort=14.290 blend_setup=0.032 cull=0.009 blend=12.393 d2h=0.317 assemble=0.000 tail=0.002 | sum=43.339 view_total=43.340 resid_in_view=+0.001 avg_frame_ms=43.375 resid_vs_frame=+0.036
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.054 enqueue=0.066 scan_finish=3.088 p_d2h=0.022 k2_finish=4.360 publish=0.001 | sum=7.596 tile_assign=7.597 resid=+0.002
+ALL_VIEWS_IDENTICAL
+30
+=== round=2 base
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.5 p50_ms=44.0 min_ms=36.5 max_ms=61.1 n_views=30 warmup_s=32.6 out=/localdev/smarton/gstt2-t85b/tmp/t85-ab2-base
+STAGES n=30 head=0.003 project=8.685 tile_assign=8.891 sort=14.227 blend_setup=0.028 cull=0.008 blend=12.360 d2h=0.211 assemble=0.000 tail=0.002 | sum=44.415 view_total=44.416 resid_in_view=+0.001 avg_frame_ms=44.453 resid_vs_frame=+0.039
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.051 enqueue=0.052 scan_finish=3.086 p_d2h=0.016 k2_finish=4.354 publish=1.326 | sum=8.889 tile_assign=8.891 resid=+0.001
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== round=2 fix
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=43.1 p50_ms=43.9 min_ms=36.7 max_ms=50.3 n_views=30 warmup_s=18.8 out=/localdev/smarton/gstt2-t85/tmp/t85-ab2-fix
+STAGES n=30 head=0.003 project=8.686 tile_assign=7.564 sort=14.215 blend_setup=0.029 cull=0.008 blend=12.351 d2h=0.251 assemble=0.000 tail=0.002 | sum=43.108 view_total=43.109 resid_in_view=+0.001 avg_frame_ms=43.144 resid_vs_frame=+0.036
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.051 enqueue=0.048 scan_finish=3.087 p_d2h=0.016 k2_finish=4.356 publish=0.001 | sum=7.563 tile_assign=7.564 resid=+0.001
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== round=3 base
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.8 p50_ms=44.3 min_ms=36.7 max_ms=62.6 n_views=30 warmup_s=18.6 out=/localdev/smarton/gstt2-t85b/tmp/t85-ab3-base
+STAGES n=30 head=0.003 project=8.705 tile_assign=8.955 sort=14.389 blend_setup=0.039 cull=0.011 blend=12.383 d2h=0.302 assemble=0.000 tail=0.003 | sum=44.789 view_total=44.790 resid_in_view=+0.001 avg_frame_ms=44.832 resid_vs_frame=+0.043
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.067 enqueue=0.064 scan_finish=3.078 p_d2h=0.018 k2_finish=4.346 publish=1.375 | sum=8.953 tile_assign=8.955 resid=+0.002
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== round=3 fix
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=43.3 p50_ms=43.9 min_ms=36.4 max_ms=50.1 n_views=30 warmup_s=18.7 out=/localdev/smarton/gstt2-t85/tmp/t85-ab3-fix
+STAGES n=30 head=0.003 project=8.700 tile_assign=7.585 sort=14.261 blend_setup=0.029 cull=0.009 blend=12.354 d2h=0.282 assemble=0.000 tail=0.002 | sum=43.224 view_total=43.225 resid_in_view=+0.001 avg_frame_ms=43.261 resid_vs_frame=+0.037
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.054 enqueue=0.062 scan_finish=3.087 p_d2h=0.020 k2_finish=4.357 publish=0.001 | sum=7.584 tile_assign=7.585 resid=+0.002
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
