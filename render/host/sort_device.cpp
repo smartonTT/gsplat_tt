@@ -1880,6 +1880,12 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->cap_abucket_bytes = bucket_bytes;
             }
             device_state::register_buffer("sort_l1_recs", ctx->buf_abucket);
+            // The blend's argument list still names sort_tile_recs (never read).
+            if (!ctx->buf_tile_recs) {
+                ctx->buf_tile_recs = make_dram(dev, PAGE_BYTES);
+                ctx->cap_tile_recs_bytes = PAGE_BYTES;
+                device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
+            }
             const std::size_t cnt_bytes = static_cast<std::size_t>(stride) * 4u;
             if (!ctx->buf_acount || ctx->cap_acount_bytes < cnt_bytes) {
                 distributed::ReplicatedBufferConfig rc{.size = cnt_bytes};
