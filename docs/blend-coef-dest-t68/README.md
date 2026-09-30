@@ -48,3 +48,15 @@ After: pair body 130 insns (122 native SFPU incl. 22 const SFPLOADI, 0 runtime p
 
 30 views md5-identical k0 vs k1, hero_vs_ref 100 dB. The reader's load zone shrinks
 with the SFPU: it was waiting on compute, not the other way round.
+
+## Result on rebased tip (base bb1a75e = 9800d99 + report fixes; run 226 chain, yyzo-bh-07 p100a)
+
+| | k0 (old) | k1 (DEST) | delta |
+|---|---:|---:|---:|
+| avg ms/view, 3 interleaved rounds | 51.18 | 48.95 | -2.23 |
+| blend stage ms | 19.19 | 16.97 | -2.22 |
+| Tracy tile_blend_sfpu makespan ms/view (10 views) | 14.96 | 12.42 | -2.54 |
+| Tracy tile_blend_load (NCRISC) makespan | 14.10 | 11.87 | -2.23 |
+
+30 views md5-identical k0 vs k1, hero_vs_ref 100 dB. Ledger iter 172.
+The JIT TRISC1 ELF on this tip matches the run 221 mix (pair body 130, single body 72).
