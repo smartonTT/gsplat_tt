@@ -49,7 +49,8 @@ int main() {
     // sub_int: every fp32 pattern for the tile origins of a 1024 px frame
     // (k = 32*t, t < 32) sampled at a stride, plus all patterns for a few k.
     bad = 0; fast = 0;
-    const uint32_t ks_full[] = {0u, 32u, 480u, 992u};
+    // 1016 is the last k on the 32-bit path for |a| in [4, 8); 1024 is the first past it.
+    const uint32_t ks_full[] = {0u, 32u, 480u, 992u, 1016u, 1024u};
     for (uint32_t k : ks_full) {
         for (uint64_t i = 0; i <= 0xFFFFFFFFull; i++) {
             const uint32_t b = static_cast<uint32_t>(i);

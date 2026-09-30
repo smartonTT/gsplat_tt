@@ -652,7 +652,13 @@ void kernel_main() {
                 blendrec_cached_g = static_cast<int32_t>(g);
                 // key (= depp[g % 16]) is the GAUSSIAN's depth — invariant across
                 // its pairs — so the full invariant prefix is computed once here.
-                pack_invariants(key);
+                {
+                    // Accumulating sub-zones (task #27): one summed duration per
+                    // RISC per launch; active only with TT_METAL_DEVICE_PROFILER=1
+                    // and TT_METAL_PROFILER_SUM=1, empty otherwise.
+                    DeviceZoneScopedSumN1("emit_pack_invariants");
+                    pack_invariants(key);
+                }
                 // iter 132: stage the 16B blendrec chunk [words 8,9,10,11] — words
                 // 8,9 keep their original gather bytes (cb, depth/0), words 10,11 get
                 // the packed op/color — written back 16B-aligned (offset 32) in
@@ -699,6 +705,7 @@ void kernel_main() {
                 brec_l1_slot[nbrec] = out_slot;
                 brec_is_ov[nbrec] = is_ov;
                 if (out_slot != 0xFFFFFFFFu) {
+                    DeviceZoneScopedSumN2("emit_pack_rec");
                     pack_rec(nbrec, t);  // pack into l1_scratch + nbrec*32
                 }
                 nbrec++;

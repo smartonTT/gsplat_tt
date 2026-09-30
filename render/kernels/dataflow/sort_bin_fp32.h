@@ -36,6 +36,19 @@ inline uint32_t bitlen64(uint64_t v) {
     return lo ? 32u - static_cast<uint32_t>(__builtin_clz(lo)) : 0u;
 }
 
+// 32-bit rne24 for a positive `m` with bit length nb in (24, 32].
+inline uint32_t rne24_32(uint32_t m, uint32_t nb, int32_t* t) {
+    const uint32_t s = nb - 24u;
+    uint32_t r = m >> s;
+    const uint32_t rem = m & ((1u << s) - 1u);
+    const uint32_t half = 1u << (s - 1u);
+    if (rem > half || (rem == half && (r & 1u))) r++;
+    int32_t sh = static_cast<int32_t>(s);
+    if (r == (1u << 24)) { r >>= 1; sh++; }
+    *t += sh;
+    return r;
+}
+
 // Bit-exact: v <= 0 ? 0 : v >= 1 ? 65535 : (uint32_t)(v * 65535.0f + 0.5f)
 // with two separately rounded fp32 ops (no FMA), v given as its fp32 bits.
 // Returns false only for NaN.
@@ -46,15 +59,24 @@ inline bool unorm16(uint32_t bits, uint32_t* out) {
     if (bits >= 0x3F800000u) { *out = 65535u; return true; }  // v >= 1 (incl. +inf)
     if (e < 107u) { *out = 0u; return true; }            // v < 2^-20: v*65535+0.5 < 1
     // p = fl(v * 65535): v = M * 2^(e-150), exact product M*65535 is 39-40 bits.
-    const uint64_t q = static_cast<uint64_t>((bits & 0x7FFFFFu) | 0x800000u) * 65535u;
-    int32_t x = static_cast<int32_t>(e) - 150;
-    const uint32_t r = rne24(q, (q >> 39) ? 40u : 39u, &x);  // p = r * 2^x, x in [-28,-8]
+    // Only the product is 64-bit (mul + mulhu); the rounding runs on 32 bits:
+    // q = floor(P / 2^8) keeps 31-32 bits, and the dropped low byte only feeds
+    // the sticky part of the remainder.
+    const uint64_t P = static_cast<uint64_t>((bits & 0x7FFFFFu) | 0x800000u) * 65535u;
+    const uint32_t q = static_cast<uint32_t>(P >> 8);
+    const uint32_t sticky = (static_cast<uint32_t>(P) & 0xFFu) != 0u;
+    const uint32_t s = (q >> 31) ? 8u : 7u;  // drop to 24 bits
+    uint32_t r = q >> s;
+    const uint32_t rem = ((q & ((1u << s) - 1u)) << 1) | sticky;  // 2*rem' (+1 if sticky)
+    const uint32_t half = 1u << s;                                 // 2*half'
+    if (rem > half || (rem == half && (r & 1u))) r++;
+    int32_t x = static_cast<int32_t>(e) - 150 + 8 + static_cast<int32_t>(s);
+    if (r == (1u << 24)) { r >>= 1; x++; }  // p = r * 2^x, x in [-28,-8]
     // a = fl(p + 0.5): exact sum in units of 2^x fits 28 bits.
     const uint32_t S = r + (1u << static_cast<uint32_t>(-1 - x));
-    uint32_t nb = 24u;
-    while (S >> nb) nb++;
+    const uint32_t nb = 32u - static_cast<uint32_t>(__builtin_clz(S));
     uint32_t a = S;
-    if (nb > 24u) a = rne24(S, nb, &x);
+    if (nb > 24u) a = rne24_32(S, nb, &x);
     // trunc(a * 2^x); x <= -8 here since a < 65536.
     const uint32_t rs = static_cast<uint32_t>(-x);
     *out = rs >= 32u ? 0u : (a >> rs);
@@ -67,6 +89,28 @@ inline bool sub_int(uint32_t abits, uint32_t k, uint32_t* out) {
     const uint32_t ea = (abits >> 23) & 0xFFu;
     if (ea < 110u || ea > 150u) return false;
     const uint32_t lsh = 150u - ea;  // a's ulp is 2^-lsh, lsh in [0,40]
+    if (k == 0u) { *out = abits; return true; }  // a - 0 = a
+    // 32-bit path: |D| < 2^24 + (k << lsh) <= 2^31. Holds for |a| >= 4 and every
+    // tile origin k <= 1016 (a 1024 px frame); the rest takes the 64-bit path.
+    if (lsh <= 21u && k <= (0x7F000000u >> lsh)) {
+        const int32_t A32 = static_cast<int32_t>((abits & 0x7FFFFFu) | 0x800000u);
+        const int32_t D32 = ((abits >> 31) ? -A32 : A32) - static_cast<int32_t>(k << lsh);
+        if (D32 == 0) { *out = 0u; return true; }
+        const uint32_t sign = D32 < 0 ? 0x80000000u : 0u;
+        const uint32_t mag = D32 < 0 ? 0u - static_cast<uint32_t>(D32) : static_cast<uint32_t>(D32);
+        const uint32_t nb = 32u - static_cast<uint32_t>(__builtin_clz(mag));
+        int32_t t = 0;
+        uint32_t r;
+        if (nb > 24u) {
+            r = rne24_32(mag, nb, &t);
+        } else {
+            r = mag << (24u - nb);
+            t = static_cast<int32_t>(nb) - 24;
+        }
+        const uint32_t E = static_cast<uint32_t>(t - static_cast<int32_t>(lsh) + 150);
+        *out = sign | (E << 23) | (r & 0x7FFFFFu);
+        return true;
+    }
     const int64_t A = static_cast<int64_t>((abits & 0x7FFFFFu) | 0x800000u);
     const int64_t D = ((abits >> 31) ? -A : A) - (static_cast<int64_t>(k) << lsh);
     if (D == 0) { *out = 0u; return true; }  // x - x = +0 under RNE
