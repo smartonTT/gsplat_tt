@@ -18,12 +18,10 @@
 // writer uses NoC0 while the reader uses NoC1 — bidirectional dual-NoC
 // torus lets I/O overlap.
 //
-// LPT TILE ASSIGNMENT
-// -------------------
-// Same shape as the reader: the host writes a per-core slice of (possibly
-// non-contiguous) tile IDs into a shared DRAM buffer; we cache our slice
-// in an L1 stack array at startup and index by element. Sizing is the same
-// (MAX_TILE_IDS_PER_CORE = 256, supporting up to 4K renders).
+// TILE ASSIGNMENT (task #60)
+// ---------------------------
+// Tiles are claimed dynamically by the reader; it queues each claimed screen
+// tile id in CB_TILE_Q (in blend order) and 0xFFFFFFFF at the end.
 //
 // PER-TILE WORK
 // -------------
@@ -33,15 +31,9 @@
 //
 // RUNTIME ARGS
 //   0: out_addr           DRAM base of the (num_tiles, 3, 32, 32) fp32 output buffer
-//   1: tile_ids_addr      DRAM base of concatenated tile-id list
-//   2: tile_ids_start     this core's element offset into that list
-//   3: tile_ids_count     number of tile IDs this core handles
+//   1-3: tile_ids_addr, lpt_meta_addr, core_index (unused since task #60)
 //
 // COMPILE-TIME ARGS: 2 TensorAccessorArgs in order: out, tile_ids.
-
-// Match the reader's cap (sized for 4K renders); see reader_alpha_blend.cpp
-// for the reasoning.
-constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
 
 void kernel_main() {
     uint32_t out_addr        = get_arg_val<uint32_t>(0);
@@ -58,61 +50,21 @@ void kernel_main() {
     constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
 
     const auto out          = TensorAccessor(out_args,      out_addr,      tile_bytes);
-    const auto tile_ids_acc = TensorAccessor(tile_ids_args, tile_ids_addr, tile_ids_page_bytes);
-    const auto lpt_meta_acc = TensorAccessor(lpt_meta_args, lpt_meta_addr, tile_ids_page_bytes);
-    constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
-    const uint32_t meta_elem0 = core_index * 2u;
-    const uint32_t meta_page0 = meta_elem0 / META_ELEMS_PER_PAGE;
-    const uint32_t meta_ip0   = meta_elem0 % META_ELEMS_PER_PAGE;
-    uint32_t scratch_addr = get_write_ptr(CB_COLOR_OUT);
-    auto meta_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
-    noc_async_read(get_noc_addr(meta_page0, lpt_meta_acc), scratch_addr, 64);
-    noc_async_read_barrier();
-    uint32_t tile_ids_start = meta_ptr[meta_ip0];
-    uint32_t tile_ids_count = 0;
-    if (meta_ip0 + 1u < META_ELEMS_PER_PAGE) {
-        tile_ids_count = meta_ptr[meta_ip0 + 1u];
-    } else {
-        noc_async_read(get_noc_addr(meta_page0 + 1u, lpt_meta_acc), scratch_addr, 64);
-        noc_async_read_barrier();
-        tile_ids_count = meta_ptr[0];
-    }
-
-    if (tile_ids_count == 0) {
-        return;
-    }
-
-    // Read per-core tile-ID slice into L1, reusing the CB_COLOR_OUT write-pointer
-    // region as a one-page (64B) scratch slot (it isn't in use yet).
-    auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
-
-    uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
-    {
-        const uint32_t ids_per_page = tile_ids_page_bytes / 4;  // 16
-        uint32_t page_idx = tile_ids_start / ids_per_page;
-        uint32_t in_page  = tile_ids_start % ids_per_page;
-        uint32_t remaining = tile_ids_count;
-        uint32_t out_idx = 0;
-        while (remaining > 0) {
-            uint64_t page_noc = get_noc_addr(page_idx, tile_ids_acc);
-            noc_async_read(page_noc, scratch_addr, tile_ids_page_bytes);
-            noc_async_read_barrier();
-            uint32_t take = ids_per_page - in_page;
-            if (take > remaining) take = remaining;
-            for (uint32_t i = 0; i < take; i++) {
-                tile_ids[out_idx + i] = scratch_ptr[in_page + i];
-            }
-            out_idx   += take;
-            remaining -= take;
-            page_idx  += 1;
-            in_page    = 0;
-        }
-    }
+    (void)tile_ids_addr; (void)lpt_meta_addr; (void)core_index;
+    // Task #60: the reader claims tiles dynamically and queues each claimed
+    // screen tile id here (CB_TILE_Q) before its data; 0xFFFFFFFF ends the stream.
+    constexpr uint32_t CB_TILE_Q = 13;
 
     // Main per-tile loop: drain 3 R/G/B tiles compute pushed for this screen
     // tile and async-write them to their global slots in the output buffer.
-    for (uint32_t t = 0; t < tile_ids_count; t++) {
-        uint32_t screen_tile = tile_ids[t];
+    for (;;) {
+        cb_wait_front(CB_TILE_Q, 1);
+        const uint32_t screen_tile =
+            reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
+        cb_pop_front(CB_TILE_Q, 1);
+        if (screen_tile == 0xFFFFFFFFu) {
+            break;
+        }
 
         // Wait for compute's batch of 3 tiles (R, then G, then B) in order.
         // Note: CB_COLOR_OUT has depth 6 (multiple of 3) on the host side so

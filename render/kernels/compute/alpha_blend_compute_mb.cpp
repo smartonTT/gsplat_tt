@@ -71,6 +71,7 @@ constexpr uint32_t CB_T_RB = 2;        // iter 107: mid-accumulation T readback 
 constexpr uint32_t MB_FLAG_EMIT = 1u;
 constexpr uint32_t MB_FLAG_CONTINUE = 2u;
 constexpr uint32_t MB_FLAG_L1_BULK = 4u;
+constexpr uint32_t MB_FLAG_DONE = 8u;   // task #60: reader ran out of tiles to claim
 
 // Tiles with num_g<=FIT are served L1-resident by the reader (bucket path);
 // num_g>FIT take the DRAM-gather fallback. Mirrors the host BUCKET_FIT (8192).
@@ -617,7 +618,19 @@ void kernel_main() {
     cb_wait_front(CB_XRAMP, 1);
     cb_wait_front(CB_YRAMP, 1);
 
-    for (uint32_t t = 0; t < num_tiles; t++) {
+    // Task #60: num_tiles == 0xFFFFFFFF => the reader claims tiles dynamically
+    // and ends the stream with an MB_FLAG_DONE counts page.
+    const bool dynamic = num_tiles == 0xFFFFFFFFu;
+    for (uint32_t t = 0; dynamic || t < num_tiles; t++) {
+        if (dynamic) {
+            cb_wait_front(CB_MB_COUNTS, 1);
+            const uint32_t f0 =
+                reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_MB_COUNTS, 0))[1];
+            if ((f0 & MB_FLAG_DONE) != 0u) {
+                cb_pop_front(CB_MB_COUNTS, 1);
+                break;
+            }
+        }
         bool tile_regs_held = false;
         bool tile_done = false;
         // Per-tile early-out state (persists across this tile's subchunks).

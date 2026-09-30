@@ -78,6 +78,7 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+    uint32_t claim_sem = 0;  // task #60: blend tile-claim counter semaphore id
 
     // RESIDENT blend scratch (GSPLAT_TT_RESIDENT_BLEND): persistent per-context
     // DRAM buffers reused across frames (the render intermediates themselves —
@@ -185,6 +186,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // 64B = 256B): each <=16-gaussian chunk's masks span at most two 64B pages.
     cb_cfg(CB_SCR_MASK, 256, 1, DataFormat::UInt32);
     cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
+    // Task #60: reader -> writer queue of dynamically claimed tile ids, and the
+    // shared claim counter (a semaphore; the copy on the first core is used).
+    constexpr uint32_t CB_TILE_Q = 13;
+    cb_cfg(CB_TILE_Q, 16, 16, DataFormat::UInt32);
+    ctx.claim_sem = CreateSemaphore(program, cores, 0);
 
     // CB_BUCKET/CB_BMASK: in-budget sort+emit scratch (push deferred until after
     // coeff stream). CB_BUCKET_BULK/CB_BMASK_BULK: overflow bulk L1 (iter 49) —
@@ -614,6 +620,10 @@ static double process_frame_mb_devcull_resident(
     const uint32_t out_addr   = static_cast<uint32_t>(ctx.res_out->address());
     uint32_t floor_bits;
     std::memcpy(&floor_bits, &contrib_floor, 4);
+    // Task #60: dynamic tile claiming. Counter = claim_sem on the first core.
+    const uint32_t num_cores = static_cast<uint32_t>(ctx.all_cores.num_cores());
+    const CoreCoord ctr_core =
+        ctx.mesh_device->worker_core_from_logical_core(ctx.all_cores.ranges()[0].start_coord);
     {
         GSPLAT_HOST_ZONE("host_blend_setup");
         for (const auto& range : ctx.all_cores.ranges()) {
@@ -646,6 +656,10 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(subchunk_meta_addr);       // arg 21
                     reader_args.push_back(subchunk_payload_addr);   // arg 22
                     reader_args.push_back(subchunk_dir_addr);       // arg 23
+                    reader_args.push_back(num_cores);                // arg 24
+                    reader_args.push_back(static_cast<uint32_t>(ctr_core.x));  // arg 25
+                    reader_args.push_back(static_cast<uint32_t>(ctr_core.y));  // arg 26
+                    reader_args.push_back(ctx.claim_sem);            // arg 27
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
                     SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
                     SetRuntimeArgs(program, ctx.writer, core, {
