@@ -239,6 +239,10 @@ def main():
                     help="skip the cpu_cpp_mb reference render + PSNR gate; time "
                          "the 30 render_clean views only (used for a clean Tracy "
                          "device-profiler capture). Does not change render_clean.")
+    ap.add_argument("--view-range", default=None, metavar="START:END",
+                    help="time only order[START:END] (python slice). Used by the "
+                         "chunked Tracy capture so each devrun job fits the 600 s "
+                         "ceiling. The warmup still renders the hero view.")
     ap.add_argument("--ref-only", nargs=1, metavar="OUT_NPY",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
@@ -294,15 +298,21 @@ def main():
     print(f"[run] warmup (hero='{hero_name}', {W}x{H}, scene={args.scene})",
           flush=True)
     t_warm = time.perf_counter()
-    _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
     warmup_s = time.perf_counter() - t_warm
 
+    if args.view_range:
+        a, b = args.view_range.split(":")
+        order = order[int(a) if a else None:int(b) if b else None]
+        if not order:
+            sys.exit(f"[run] --view-range {args.view_range} selects no views")
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
     # Zero the C++ per-stage accumulators so they cover the timed views only.
     if hasattr(clean_backend._clean, "reset_stage_timings"):
         clean_backend._clean.reset_stage_timings()
     per_view_ms = []
-    hero_clean = None
+    # The warmup is a hero render; a --view-range chunk may not contain the hero.
+    hero_clean = warm_img
     for i, name in enumerate(order):
         img, wall_ms = render_clean_view_timed(
             clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
