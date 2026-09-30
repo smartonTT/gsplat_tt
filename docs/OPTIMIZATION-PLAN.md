@@ -298,6 +298,7 @@ Ranked by expected gain per unit effort. Effort: **S** ≤1 day, **M** 2–4 day
 | **R1** | Hardware-ceiling microbenchmark suite (tooling) | 0 ms direct; gates R2–R5 | S | none | n/a |
 | **R2** | Split single-mover stages across BRISC **and** NCRISC | **−30 to −55 ms** | M | low–med | bit-identical |
 | **R3** | De-stall the emit inner loop (register-built record, prefetched `blendrec`, batched `ksp`/`isp`) | **−8 to −18 ms** | S–M | low | bit-identical |
+| | **Status (task #20, measured, yyzo-bh-07 p100a):** the dominant stall was soft-float, not stores or reads. NCRISC has no FPU; the emit's UNORM16 pack + tile-local mean were ~24 libgcc float calls per gaussian (~15 ms by ablation). Integer bit-exact replacement + blendrec page prefetch + flush-not-ack write waits: `bin_emit` 30.26 → 16.15 ms, frame 167.1 → 152.6 ms, bit-identical. Register-built record (8 stores → memcpy) was flat. Other NCRISC/BRISC kernels should be audited for the same soft-float cost. | | | | |
 | **R4** | Per-pair record 32 B → 16 B (fp16 tile-local conic + mean) | −8 to −15 ms, halves L1 footprint | M | low–med | refreeze golden |
 | **R5** | p150 re-baseline + re-test stale refutations | −15 to −25 ms from 110→130 cores | S (resource-gated) | none | bit-identical |
 | **R6** | Hierarchical pre-project frustum/size cull (6.13 M → ~1.4 M before project) | −10 to −25 ms | M | low | bit-identical if conservative |
