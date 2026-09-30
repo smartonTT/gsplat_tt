@@ -16,3 +16,4 @@ build_*/
 # Build outputs: never track (absolute paths clobber other trees on sync)
 render/build-tt/
 *.so
+.venv
