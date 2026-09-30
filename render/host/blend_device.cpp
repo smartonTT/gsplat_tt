@@ -37,6 +37,7 @@
 #include "env_config.h"
 #include "host_profile.h"
 #include "host_tracy.hpp"
+#include "stage_timers.h"
 
 #include "alpha_blend_host.h"
 #include "blend.h"
@@ -678,12 +679,21 @@ static double process_frame_mb_devcull_resident(
     }
     gsplat_tt::hostprof::on_blend_device_done();
     gsplat_tt::device_state::clear_sort_publish_pending();
+    // Per-stage attribution (stage_timers.h): the D2H readback and the host
+    // bf16->fp32 assemble are separate buckets; the caller derives the pure
+    // device blend window as (returned ms - d2h).
+    gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
     std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
     distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
     const auto t_end = std::chrono::steady_clock::now();
+    d2h_span.stop();
     gsplat_tt::hostprof::on_blend_readback_done();
 
-    tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
+    {
+        gsplat_tt::stagetimers::Span assemble_span(
+            gsplat_tt::stagetimers::acc().assemble);
+        tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
+    }
     gsplat_tt::hostprof::on_blend_unpack_done();
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
@@ -1282,6 +1292,8 @@ double blend_mb_devcull_resident(
         if (chain_cull_blend) {
             {
                 GSPLAT_HOST_ZONE("host_blend_setup");
+                gsplat_tt::stagetimers::Span setup_span(
+                    gsplat_tt::stagetimers::acc().blend_setup);
                 ::mb::process_frame_mb_devcull_resident(
                     *g_ctx_mb, contrib_floor, cull_disabled,
                     static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
@@ -1303,6 +1315,9 @@ double blend_mb_devcull_resident(
             return 0.0;
         }
     }
+    // d2h/assemble are booked by process_frame_mb_devcull_resident itself; snapshot
+    // d2h so the blend bucket below is the pure device window (enqueue + Finish).
+    const double d2h_before = gsplat_tt::stagetimers::acc().d2h;
     const double blend_ms = chain_cull_blend
         ? ::mb::process_frame_mb_devcull_resident(
               *g_ctx_mb, contrib_floor, cull_disabled,
@@ -1317,6 +1332,11 @@ double blend_mb_devcull_resident(
               image_out, device_ok, transmittance_threshold);
     if (cull_ms_out) *cull_ms_out = cull_ms;
     if (blend_ms_out) *blend_ms_out = blend_ms;
+    {
+        auto& st = gsplat_tt::stagetimers::acc();
+        st.cull += cull_ms;
+        st.blend += blend_ms - (st.d2h - d2h_before);
+    }
     return cull_ms + blend_ms;
 }
 

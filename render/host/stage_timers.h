@@ -1,0 +1,83 @@
+#pragma once
+//
+// stage_timers.h — always-on, per-stage host wall-clock attribution for the
+// clean render pipeline.
+//
+// Before this, the bench only emitted `TTW_TIMING ms_view=` / `blend=` (both the
+// same avg frame time) plus the [SORT] line, so ~135 ms of the ~173 ms/view
+// bicycle frame was unattributed. These counters split render_view into the
+// stages the pipeline actually executes:
+//
+//   head         render_view entry -> stage 1 (py buffer requests, image memset)
+//   project      fused means_cam+pfwc, then gather_visible                (stage 1)
+//   tile_assign  device tile_assign                                       (stage 2)
+//   sort         sort_and_bin_tt MINUS its fused cull/blend continuation  (stage 3)
+//   blend_setup  resident-blend SetRuntimeArgs pre-pass (SetupRuntimeArgsOnly)
+//   cull         SFPU microblock cull pass                                (stage 4)
+//   blend        blend enqueue + Finish (the device blend window)         (stage 5)
+//   d2h          final image bf16 readback
+//   assemble     bf16 microblock tiles -> fp32 HWC image (host CPU)
+//   tail         P_kept scan + stats dict + pybind return build
+//   view_total   render_view entry -> return
+//
+// head+project+tile_assign+sort+blend_setup+cull+blend+d2h+assemble+tail
+// must reconstruct view_total; view_total vs the Python-side avg_frame_ms
+// leaves only the pybind/marshal residual.
+//
+// Cost: two steady_clock::now() per span, ~10 spans per view -> well under a
+// microsecond on a 173 ms frame. Unconditional (no env gate) so the numbers are
+// always available, and it never touches pixels.
+
+#include <chrono>
+#include <cstdint>
+
+namespace gsplat_tt::stagetimers {
+
+using clk = std::chrono::steady_clock;
+
+// Milliseconds accumulated over every render_view since the last reset().
+struct Acc {
+    double head = 0.0;
+    double project = 0.0;
+    double tile_assign = 0.0;
+    double sort = 0.0;
+    double blend_setup = 0.0;
+    double cull = 0.0;
+    double blend = 0.0;
+    double d2h = 0.0;
+    double assemble = 0.0;
+    double tail = 0.0;
+    double view_total = 0.0;
+    std::uint64_t views = 0;
+};
+
+// Single process-wide accumulator. Defined out-of-line in stage_timers.cpp
+// (part of render_tt) so the pybind module and the device drivers — which are
+// compiled with different -fvisibility — share exactly one instance.
+Acc& acc();
+void reset();
+
+// Scoped span: adds its lifetime (ms) into `sink` at stop()/destruction.
+class Span {
+  public:
+    explicit Span(double& sink) : sink_(&sink), t0_(clk::now()) {}
+    Span(const Span&) = delete;
+    Span& operator=(const Span&) = delete;
+    ~Span() { stop(); }
+
+    // Closes the span early. Returns the elapsed ms (0 if already closed).
+    double stop() {
+        if (sink_ == nullptr) return 0.0;
+        const double ms =
+            std::chrono::duration<double, std::milli>(clk::now() - t0_).count();
+        *sink_ += ms;
+        sink_ = nullptr;
+        return ms;
+    }
+
+  private:
+    double* sink_;
+    clk::time_point t0_;
+};
+
+}  // namespace gsplat_tt::stagetimers

@@ -49,6 +49,7 @@
 #include "pfwc.h"
 #include "project.h"
 #include "sort.h"
+#include "stage_timers.h"
 #include "tile_assign.h"
 
 #include "gsplat_cpu/project.h"
@@ -173,6 +174,12 @@ py::tuple render_view(
 
     gsplat_tt::hostprof::on_view_enter();
 
+    // Per-stage host attribution (stage_timers.h). `head` runs until the first
+    // device stage; the fused cull/blend buckets are booked by blend_device.
+    namespace st = gsplat_tt::stagetimers;
+    st::Span view_span(st::acc().view_total);
+    st::Span head_span(st::acc().head);
+
     const auto means_info = means.request();
     const std::size_t N = static_cast<std::size_t>(means_info.shape[0]);
     const float* means_ptr = static_cast<const float*>(means_info.ptr);
@@ -195,27 +202,36 @@ py::tuple render_view(
 
     // One-shot JIT compile of all device programs at scene open.
     gsplat_tt::jit_warmup_ideal_path();
+    head_span.stop();
 
     // Stage 1: project.
-    gsplat_cpu::ProjectResult proj =
-        run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
-                    opacities_ptr, min_opacity, N, image_height, image_width,
-                    max_radius);
+    gsplat_cpu::ProjectResult proj;
+    {
+        st::Span s(st::acc().project);
+        proj = run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
+                           opacities_ptr, min_opacity, N, image_height,
+                           image_width, max_radius);
+    }
     const std::size_t M = proj.depths.size();
 
     py::dict stats;
     if (M == 0) {
         stats["num_visible"] = 0;
         stats["num_entries"] = 0;
+        st::acc().views++;
         return py::make_tuple(image, stats);
     }
 
     // Stage 2: tile_assign (resident inputs => null host pointers).
     bool ta_ok = false;
-    gsplat_cpu::TileAssignResult ta = gsplat_tt::tile_assign_tt(
-        /*means_2d=*/nullptr, /*radii=*/nullptr, M, image_height, image_width,
-        tile_size, /*covs_2d=*/nullptr, /*opacities=*/nullptr, contrib_floor,
-        &ta_ok);
+    gsplat_cpu::TileAssignResult ta;
+    {
+        st::Span s(st::acc().tile_assign);
+        ta = gsplat_tt::tile_assign_tt(
+            /*means_2d=*/nullptr, /*radii=*/nullptr, M, image_height,
+            image_width, tile_size, /*covs_2d=*/nullptr, /*opacities=*/nullptr,
+            contrib_floor, &ta_ok);
+    }
     if (!ta_ok) {
         throw std::runtime_error(
             "render_clean: device tile_assign failed; single-path TT, no CPU "
@@ -241,10 +257,28 @@ py::tuple render_view(
     sort_blend.cull_disabled = cull_disabled;
     sort_blend.blend_ok = &blend_ok;
 
-    gsplat_cpu::SortResult sr = gsplat_tt::sort_and_bin_tt(
-        ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
-        ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(), &sort_ok,
-        /*timings=*/nullptr, /*need_host_sorted_ids=*/false, &sort_blend);
+    // The whole call is timed into `sort`, then the fused continuation's own
+    // buckets (blend_setup/cull/blend/d2h/assemble, booked inside blend_device)
+    // are subtracted back out so `sort` is the sort work alone.
+    const st::Acc fused_before = st::acc();
+    gsplat_cpu::SortResult sr;
+    {
+        st::Span s(st::acc().sort);
+        sr = gsplat_tt::sort_and_bin_tt(
+            ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
+            ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(),
+            &sort_ok,
+            /*timings=*/nullptr, /*need_host_sorted_ids=*/false, &sort_blend);
+    }
+    {
+        const st::Acc& a = st::acc();
+        st::acc().sort -= (a.blend_setup - fused_before.blend_setup) +
+                          (a.cull - fused_before.cull) +
+                          (a.blend - fused_before.blend) +
+                          (a.d2h - fused_before.d2h) +
+                          (a.assemble - fused_before.assemble);
+    }
+    st::Span tail_span(st::acc().tail);
     // The sort driver runs the SFPU cull + microblock blend as its on-device
     // continuation. Both must have run on-device; hard-fail otherwise (the CPU
     // sort fallback / any host blend are not a valid result for render_clean).
@@ -272,6 +306,7 @@ py::tuple render_view(
     // unless TT_METAL_DEVICE_PROFILER=1). See above.
     maybe_dump_device_profiler();
     gsplat_tt::hostprof::on_view_return();
+    st::acc().views++;
     return py::make_tuple(image, stats);
 }
 
@@ -288,4 +323,24 @@ PYBIND11_MODULE(render_clean, m) {
           py::arg("transmittance_threshold"), py::arg("max_radius"),
           py::arg("k_cap"), py::arg("use_isoellipse"), py::arg("blend_mode") = 2);
     m.def("device_shutdown", []() { gsplat_tt::device_state::shutdown(); });
+    // Per-stage host attribution. Totals in ms accumulated over every
+    // render_view since reset_stage_timings(); `views` is the sample count.
+    m.def("stage_timings", []() {
+        const auto& a = gsplat_tt::stagetimers::acc();
+        py::dict d;
+        d["views"] = static_cast<int64_t>(a.views);
+        d["head"] = a.head;
+        d["project"] = a.project;
+        d["tile_assign"] = a.tile_assign;
+        d["sort"] = a.sort;
+        d["blend_setup"] = a.blend_setup;
+        d["cull"] = a.cull;
+        d["blend"] = a.blend;
+        d["d2h"] = a.d2h;
+        d["assemble"] = a.assemble;
+        d["tail"] = a.tail;
+        d["view_total"] = a.view_total;
+        return d;
+    });
+    m.def("reset_stage_timings", []() { gsplat_tt::stagetimers::reset(); });
 }

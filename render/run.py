@@ -298,6 +298,9 @@ def main():
     warmup_s = time.perf_counter() - t_warm
 
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
+    # Zero the C++ per-stage accumulators so they cover the timed views only.
+    if hasattr(clean_backend._clean, "reset_stage_timings"):
+        clean_backend._clean.reset_stage_timings()
     per_view_ms = []
     hero_clean = None
     for i, name in enumerate(order):
@@ -369,6 +372,33 @@ def main():
         print(f"TTW_METRIC hero_vs_ref={fmt(hero_vs_ref)}", flush=True)
     print(f"TTW_TIMING ms_view={avg_ms:.3f}", flush=True)
     print(f"TTW_TIMING blend={avg_ms:.3f}", flush=True)
+
+    # Per-stage host attribution of the frame (render/host/stage_timers.h).
+    # Emitted as stage_<name> so the legacy ms_view/blend aliases above keep
+    # their meaning (both = avg frame time) for the existing report tooling.
+    _STAGE_ORDER = ["head", "project", "tile_assign", "sort", "blend_setup",
+                    "cull", "blend", "d2h", "assemble", "tail"]
+    if hasattr(clean_backend._clean, "stage_timings"):
+        st = clean_backend._clean.stage_timings()
+        n = max(1, int(st.get("views", 0)))
+        parts = []
+        stage_sum = 0.0
+        for k in _STAGE_ORDER:
+            v = float(st.get(k, 0.0)) / n
+            stage_sum += v
+            parts.append(f"{k}={v:.3f}")
+            print(f"TTW_TIMING stage_{k}={v:.3f}", flush=True)
+        view_total = float(st.get("view_total", 0.0)) / n
+        # view_total - sum(stages) is unaccounted C++ time inside render_view;
+        # avg_ms - view_total is the Python/pybind marshal residual.
+        print(f"TTW_TIMING stage_view_total={view_total:.3f}", flush=True)
+        print(f"TTW_TIMING stage_pybind={max(0.0, avg_ms - view_total):.3f}",
+              flush=True)
+        print(f"STAGES n={st.get('views', 0)} " + " ".join(parts)
+              + f" | sum={stage_sum:.3f} view_total={view_total:.3f}"
+              + f" resid_in_view={view_total - stage_sum:+.3f}"
+              + f" avg_frame_ms={avg_ms:.3f}"
+              + f" resid_vs_frame={avg_ms - stage_sum:+.3f}", flush=True)
 
     sys.stdout.flush()
     sys.stderr.flush()
