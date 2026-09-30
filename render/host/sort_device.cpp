@@ -1909,6 +1909,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             std::vector<uint32_t> tot(ctx->cap_acount_bytes / 4, 0u);
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_acount, tot, false);
             Program& aprog = ctx->wl_atomic.get_programs().begin()->second;
+            static const uint32_t atomic_dbg = [] {
+                const char* e = std::getenv("GSPLAT_TT_SORT_ATOMIC_DBG");
+                return e != nullptr ? static_cast<uint32_t>(std::atoi(e)) : 0u;
+            }();
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
                 const uint32_t lo = ws.start[c];
@@ -1926,7 +1930,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     static_cast<uint32_t>(ctx->buf_atable->address()),
                     mid, hi, P_full, num_tiles, row_pages, c, cap,
                     static_cast<uint32_t>(tiles_x), 1u,
-                    ctx->atomic_sem[0], ctx->atomic_sem[1],
+                    ctx->atomic_sem[0], ctx->atomic_sem[1], atomic_dbg,
                 };
                 SetRuntimeArgs(aprog, ctx->katomic, core, a);
                 a[8] = lo;

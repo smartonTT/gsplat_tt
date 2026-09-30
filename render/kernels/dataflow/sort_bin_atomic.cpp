@@ -98,6 +98,10 @@ void kernel_main() {
     const uint32_t mover = get_arg_val<uint32_t>(16);
     const uint32_t sem_counted_id = get_arg_val<uint32_t>(17);
     const uint32_t sem_reserved_id = get_arg_val<uint32_t>(18);
+    // Debug (GSPLAT_TT_SORT_ATOMIC_DBG): bit0 = one atomic in flight at a time,
+    // bit1 = pre-fill the return slots with 0xFFFFFFFF (a missing return shows
+    // as base 0xFFFF in the host check).
+    const uint32_t dbg = get_arg_val<uint32_t>(19);
 
     constexpr auto gids_args = TensorAccessorArgs<0>();
     constexpr auto tids_args = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -189,6 +193,10 @@ void kernel_main() {
         // shared base row. That needs the AT command buffer's return address
         // register, which firmware points at a scratch word and later kernels
         // rely on: save the buffer state and restore it after the barrier.
+        if (dbg & 2u) {
+            for (uint32_t t = 0; t < num_tiles; t++) basep[t * RET_STRIDE] = 0xFFFFFFFFu;
+            asm volatile("fence" ::: "memory");
+        }
         NocCmdBufState saved;
         noc_cmd_buf_save_state(noc_index, write_at_cmd_buf, &saved);
         for (uint32_t t = 0; t < num_tiles; t++) {
@@ -198,8 +206,10 @@ void kernel_main() {
             noc_fast_atomic_increment<noc_mode, true>(
                 noc_index, write_at_cmd_buf, a, NOC_UNICAST_WRITE_VC, h, 31 /*wrap*/, false /*linked*/,
                 false /*posted*/, reinterpret_cast<uint32_t>(basep + t * RET_STRIDE));
+            if (dbg & 1u) noc_async_atomic_barrier();
         }
         noc_async_atomic_barrier();
+        invalidate_l1_cache();
         noc_cmd_buf_restore_state(noc_index, write_at_cmd_buf, &saved);
         // Chunk table row: (count << 16) | first slot, 0 for an empty tile. Both
         // fit 16 bits whenever the host accepts the frame (count <= tile_cap).
