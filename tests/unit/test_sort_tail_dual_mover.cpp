@@ -2,8 +2,8 @@
 // (render/host/sort_mover_split.h; kernels sort_subchunk_materialize.cpp and
 // sort_radix_tile.cpp, launched from render/host/sort_device.cpp). Standalone:
 //
-//   c++ -O2 -std=c++17 -Irender/host tests/unit/test_sort_tail_dual_mover.cpp \
-//       -o /tmp/t_tail && /tmp/t_tail
+//   c++ -O2 -std=c++17 -Irender/host tests/unit/test_sort_tail_dual_mover.cpp
+//     -o /tmp/t_tail && /tmp/t_tail
 //
 // Every materialize item and every radix tile writes only its own output, so
 // the split is byte-identical iff each unit of work runs exactly once and fits
