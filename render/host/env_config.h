@@ -62,9 +62,6 @@ inline constexpr bool host_free_mp_enabled() { return false; }
 // corruption; too large = wasted DRAM + no-op work, so the margin is bounded.
 inline constexpr unsigned int pair_ceiling() { return 4718592u; }
 
-// Blend writer fully overwrites res_out each frame — skip the zero H2D.
-inline constexpr bool blend_skip_zero_out_enabled() { return true; }
-
 // M0: 32B per-entry record + pre-sized per-tile buckets.
 inline constexpr bool l1_record_enabled() { return true; }         // L1_RECORD=1
 

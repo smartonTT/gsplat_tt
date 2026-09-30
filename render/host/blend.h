@@ -16,7 +16,8 @@ namespace gsplat_tt {
 // balancing). Returns false (device_ok=false) if any required resident buffer is
 // missing, so the caller can fall back to the uploaded devcull path.
 // LPT + per-tile counts come from resident sort_* buffers (no host tile_ranges
-// scan). Writes the final hero image into image_out (pre-zeroed, H*W*3).
+// scan). Writes the final 8-bit RGB image into image_out (H*W*3 bytes,
+// uint8(clip(x,0,1)*255), packed on device).
 // cull_ms_out / blend_ms_out (optional): when non-null, receive the de-lumped
 // SFPU cull-pass ms and blend-pass ms separately (the return value is their
 // sum). Used by the sort-blend continuation so render_full_py can report SORT,
@@ -28,7 +29,7 @@ double blend_mb_devcull_resident(
     int tiles_x,
     int image_height,
     int image_width,
-    float* image_out,
+    uint8_t* image_out,
     bool* device_ok,
     double* cull_ms_out = nullptr,
     double* blend_ms_out = nullptr,
