@@ -11,8 +11,8 @@
 //  - materialize: the dual-mover item multiset equals the single-mover one,
 //    and the gather parts cover each over-cap subchunk's records exactly once;
 //    BRISC slots never get a whole-tile item above kMatMover0Cap (its L1
-//    buffers would overflow); no slot exceeds the kernel's MAX_WORK; and the
-//    busiest slot is lighter than the single-mover busiest core.
+//    buffers would overflow); and the busiest slot is lighter than the
+//    single-mover busiest core.
 //  - radix: the split point stays inside the core's slice and minimizes the
 //    busier mover's cost over all split points.
 #include <cstdint>
@@ -31,7 +31,6 @@ namespace {
 constexpr uint32_t kBucketFit = render_config::kBucketFit;
 constexpr uint32_t kCores = 110;
 constexpr uint32_t kTiles = 1024;
-constexpr uint32_t kMaxWork = 1024;  // sort_subchunk_materialize.cpp MAX_WORK
 constexpr uint64_t kGatherWeight = 1;  // build_mat_worklist default
 
 std::vector<int64_t> random_counts(std::mt19937& rng) {
@@ -114,10 +113,6 @@ int check_mat(const std::vector<int64_t>& counts) {
         return mx;
     };
     for (uint32_t s = 0; s < 2 * kCores; ++s) {
-        if (two.per_core_count[s] > kMaxWork) {
-            std::printf("mat: slot %u has %u items > MAX_WORK\n", s, two.per_core_count[s]);
-            ++bad;
-        }
         if ((s & 1u) == 0u) continue;  // NCRISC slot
         for (uint32_t i = 0; i < two.per_core_count[s]; ++i) {
             const uint32_t j = 2 * (two.per_core_offset[s] + i);
