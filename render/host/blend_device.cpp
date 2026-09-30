@@ -1341,6 +1341,28 @@ double blend_mb_devcull_resident(
               image_out, device_ok, transmittance_threshold);
     if (cull_ms_out) *cull_ms_out = cull_ms;
     if (blend_ms_out) *blend_ms_out = blend_ms;
+    // Debug (task #41): GSPLAT_TT_DUMP_CULL=<dir> dumps the first frame's cull
+    // inputs/outputs (slab records carry the conic, mean, opacity and the
+    // word3 mask) as raw u32 files for an offline exact-cull comparison.
+    // Default OFF; one Finish + four readbacks, first frame only.
+    static bool dumped = false;
+    if (const char* dd = std::getenv("GSPLAT_TT_DUMP_CULL"); dd && dd[0] && !dumped) {
+        dumped = true;
+        namespace ds = gsplat_tt::device_state;
+        distributed::Finish(*g_ctx_mb->cq);
+        for (const char* name : {"sort_tile_ranges", "blend_subchunk_meta",
+                                 "sort_subchunk_dir", "sort_subchunk_payload"}) {
+            auto b = ds::get_buffer(name);
+            if (!b) continue;
+            std::vector<uint32_t> v(b->size() / 4, 0);
+            distributed::EnqueueReadMeshBuffer(*g_ctx_mb->cq, v, b, true);
+            std::ofstream f(std::string(dd) + "/" + name + ".u32", std::ios::binary);
+            f.write(reinterpret_cast<const char*>(v.data()), v.size() * 4);
+        }
+        std::ofstream f(std::string(dd) + "/meta.txt");
+        f << "num_tiles " << num_tiles << "\ntiles_x " << tiles_x << "\nfloor "
+          << std::setprecision(9) << contrib_floor << "\n";
+    }
     {
         auto& st = gsplat_tt::stagetimers::acc();
         st.cull += cull_ms;
