@@ -263,41 +263,44 @@ void kernel_main() {
         auto btidp = reinterpret_cast<volatile int32_t*>(btid_l1);
         auto bkeepp = reinterpret_cast<volatile int32_t*>(bkeep_l1);
         for (uint32_t t = 0; t < num_tiles; t++) rowp[t] = 0;
-        auto count_pages = [&](uint32_t a, uint32_t b_end) {
-            for (uint32_t pg0 = a; pg0 < b_end; pg0 += CNT_BATCH) {
-                const uint32_t nb = (b_end - pg0 < CNT_BATCH) ? (b_end - pg0) : CNT_BATCH;
-                for (uint32_t b = 0; b < nb; b++) {
-                    noc_async_read(get_noc_addr(pg0 + b, tids_acc),
-                                   btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
-                    noc_async_read(get_noc_addr(pg0 + b, keep_acc),
-                                   bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
-                }
-                noc_async_read_barrier();
-                for (uint32_t b = 0; b < nb; b++) {
-                    const uint32_t pg = pg0 + b;
-                    const uint32_t e0 = b * ELEMS_PER_PAGE;
-                    for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-                        const uint32_t p = pg * ELEMS_PER_PAGE + j;
-                        if (p >= P) break;
-                        if (bkeepp[e0 + j] == 0) continue;
-                        rowp[static_cast<uint32_t>(btidp[e0 + j])]++;
-                    }
-                }
-            }
-        };
         // T-C: with the scatter split, snapshot the running histogram at pg_mid
         // — mover 0's kept count per tile, i.e. mover 1's cursor start — into
-        // h0_rows before counting the rest of the range.
-        const uint32_t split = dual ? pg_mid : pg_lo;
-        count_pages(pg_lo, split);
-        if (dual) {
+        // h0_rows, then keep counting. Batches stop at the split so the snapshot
+        // covers exactly [pg_lo, pg_mid). One inline loop on purpose: wrapping it
+        // in a by-reference lambda called twice cost +0.22 ms on this pass
+        // (measured, yyzo-bh-07).
+        const uint32_t split = dual ? pg_mid : pg_hi + 1u;  // unreachable when single
+        auto snapshot_h0 = [&]() {
             for (uint32_t pp = 0; pp < row_pages; pp++) {
                 noc_async_write(row_l1 + pp * PAGE_BYTES,
                                 get_noc_addr(base_page + pp, h0_rows_acc), PAGE_BYTES);
             }
             noc_async_write_barrier();  // row_l1 keeps counting below
+        };
+        if (split == pg_lo) snapshot_h0();
+        for (uint32_t pg0 = pg_lo; pg0 < pg_hi;) {
+            const uint32_t lim = (pg0 < split && split < pg_hi) ? split : pg_hi;
+            const uint32_t nb = (lim - pg0 < CNT_BATCH) ? (lim - pg0) : CNT_BATCH;
+            for (uint32_t b = 0; b < nb; b++) {
+                noc_async_read(get_noc_addr(pg0 + b, tids_acc),
+                               btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                noc_async_read(get_noc_addr(pg0 + b, keep_acc),
+                               bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
+            }
+            noc_async_read_barrier();
+            for (uint32_t b = 0; b < nb; b++) {
+                const uint32_t pg = pg0 + b;
+                const uint32_t e0 = b * ELEMS_PER_PAGE;
+                for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+                    const uint32_t p = pg * ELEMS_PER_PAGE + j;
+                    if (p >= P) break;
+                    if (bkeepp[e0 + j] == 0) continue;
+                    rowp[static_cast<uint32_t>(btidp[e0 + j])]++;
+                }
+            }
+            pg0 += nb;
+            if (pg0 == split) snapshot_h0();
         }
-        count_pages(split, pg_hi);
         for (uint32_t pp = 0; pp < row_pages; pp++) {
             noc_async_write(row_l1 + pp * PAGE_BYTES,
                             get_noc_addr(base_page + pp, bin2d_acc), PAGE_BYTES);
