@@ -349,7 +349,10 @@ void kernel_main() {
     // The packed 32B records still stage into a per-batch region of l1_scratch
     // and flush to buf_l1_recs under ONE write barrier per REC_BATCH.
     constexpr uint32_t REC_BATCH = 16u;
-    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC);  // 64B cache for current g's blendrec
+    // T-B(2): CB_REC is a 16-page ring. Each pair page names at most 16 distinct
+    // gaussians, so all of a page's blendrec reads are issued up front under one
+    // barrier and consumed in order; cachep walks the ring.
+    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC);  // 16 x 64B blendrec ring
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
     int32_t blendrec_cached_g = -1;
     uint32_t brec_l1_slot[REC_BATCH];  // abs slot (in buf_l1_recs OR overflow region; 0xFFFFFFFF = drop)
@@ -500,6 +503,26 @@ void kernel_main() {
         noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
         noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
         noc_async_read_barrier();
+        // T-B(2): prefetch this page's blendrec pages. The scan uses the same
+        // "g differs from the previous kept g" test as the consume loop below,
+        // so slot k holds exactly the page the old code read at its k-th miss.
+        {
+            int32_t prev_g = blendrec_cached_g;
+            uint32_t n_pf = 0;
+            for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+                if (pg * ELEMS_PER_PAGE + j >= P) break;
+                if (keepp[j] == 0) continue;
+                const int32_t gj = gidp[j];
+                if (gj != prev_g) {
+                    noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), blendrec_acc),
+                                   rec_cache_l1 + n_pf * PAGE_BYTES, PAGE_BYTES);
+                    n_pf++;
+                    prev_g = gj;
+                }
+            }
+            if (n_pf != 0) noc_async_read_barrier();
+        }
+        uint32_t rec_slot = 0;
         for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
             const uint32_t p = pg * ELEMS_PER_PAGE + j;
             if (p >= P) break;
@@ -526,8 +549,9 @@ void kernel_main() {
             // (consecutive pairs share g), then every pair's 32B record is packed
             // straight from that cache — no random per-pair re-read.
             if (static_cast<int32_t>(g) != blendrec_cached_g) {
-                noc_async_read(get_noc_addr(g, blendrec_acc), rec_cache_l1, PAGE_BYTES);
-                noc_async_read_barrier();
+                cachep = reinterpret_cast<volatile uint32_t*>(
+                    rec_cache_l1 + rec_slot * PAGE_BYTES);  // prefetched above
+                rec_slot++;
                 blendrec_cached_g = static_cast<int32_t>(g);
                 // key (= depp[g % 16]) is the GAUSSIAN's depth — invariant across
                 // its pairs — so the full invariant prefix is computed once here.
