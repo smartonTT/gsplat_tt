@@ -24,3 +24,10 @@ wait on the 2-slot bulk CB, so it tracks the SFPU time; the blend is SFPU-bound.
 ## Scripts
 `run_all.sh <base> <cand>` (detached): verify (30-view md5) -> 3 interleaved A/B
 rounds -> 10-view Tracy for both trees. Remote trees /localdev/smarton/gstt2-t60{base,}.
+
+## Result (iter-168)
+3 interleaved A/B rounds, yyzo-bh-07 p100a: 58.16 -> 57.23 ms/view (-0.93, -1.6%),
+blend bucket 20.19 -> 19.09 ms. Tracy makespan tile_blend_sfpu 16.02 -> 14.88 ms/view.
+30 views md5-identical to base 27348a1, hero_vs_ref 100 dB, no hangs.
+The gain is below the 2-4 ms upper bound: the blend is SFPU-bound, so balancing
+only removes the tail, not the per-tile SFPU work.
