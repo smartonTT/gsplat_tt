@@ -60,6 +60,16 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 // with tile_assign_device.cpp build_program_k1).
 constexpr uint32_t MULTIBUF_PAGES = 8;
 
+// Dual data mover (task #34): the host runs this kernel on NCRISC and BRISC,
+// each over its own half of the core's page range. Pages are independent (one
+// input page -> one output page), so the split output is byte-identical. The
+// BRISC instance is built with TA_CB_OFFSET=16 and uses its private copy of
+// CBs 0..4 at id + 16.
+#ifndef TA_CB_OFFSET
+#define TA_CB_OFFSET 0
+#endif
+constexpr uint32_t CB_OFFSET = TA_CB_OFFSET;
+
 inline int clampi(int v, int lo, int hi) {
     if (v < lo) v = lo;
     if (v > hi) v = hi;
@@ -109,15 +119,15 @@ void kernel_main() {
         return;
     }
 
-    // Scratch CBs (declared in tile_assign_device.cpp): CB 0..4 each reserve
-    // MULTIBUF_PAGES 64B pages in L1 (the read-pipeline batch buffer).
+    // Scratch CBs (declared in tile_assign_device.cpp): CB 0..4 (+CB_OFFSET) each
+    // reserve MULTIBUF_PAGES 64B pages in L1 (the read-pipeline batch buffer).
     // get_write_ptr returns the L1 base we DMA in/out of (no cb_reserve/push —
     // these are fixed scratch regions); page j lives at base + j*PAGE_BYTES.
-    constexpr uint32_t CB_PX  = 0;
-    constexpr uint32_t CB_PY  = 1;
-    constexpr uint32_t CB_RX  = 2;
-    constexpr uint32_t CB_RY  = 3;
-    constexpr uint32_t CB_OUT = 4;
+    constexpr uint32_t CB_PX  = 0 + CB_OFFSET;
+    constexpr uint32_t CB_PY  = 1 + CB_OFFSET;
+    constexpr uint32_t CB_RX  = 2 + CB_OFFSET;
+    constexpr uint32_t CB_RY  = 3 + CB_OFFSET;
+    constexpr uint32_t CB_OUT = 4 + CB_OFFSET;
 
     const uint32_t px_l1  = get_write_ptr(CB_PX);
     const uint32_t py_l1  = get_write_ptr(CB_PY);

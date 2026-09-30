@@ -53,6 +53,16 @@ namespace {
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 
+// Dual data mover (task #34): the host runs this kernel on NCRISC and BRISC,
+// each over its own half of the core's pair-page range. Every output page is a
+// pure function of its pair indices (offs + AABB), so the split output is
+// byte-identical. The BRISC instance is built with TA_CB_OFFSET=16 and uses its
+// private copy of CBs 0..6 at id + 16.
+#ifndef TA_CB_OFFSET
+#define TA_CB_OFFSET 0
+#endif
+constexpr uint32_t CB_OFFSET = TA_CB_OFFSET;
+
 inline int clampi(int v, int lo, int hi) {
     if (v < lo) v = lo;
     if (v > hi) v = hi;
@@ -110,13 +120,13 @@ void kernel_main() {
     }
 
     // Scratch CBs (declared in tile_assign_device.cpp scatter program).
-    constexpr uint32_t CB_OFFS = 0;
-    constexpr uint32_t CB_PX   = 1;
-    constexpr uint32_t CB_PY   = 2;
-    constexpr uint32_t CB_RX   = 3;
-    constexpr uint32_t CB_RY   = 4;
-    constexpr uint32_t CB_GID  = 5;
-    constexpr uint32_t CB_TID  = 6;
+    constexpr uint32_t CB_OFFS = 0 + CB_OFFSET;
+    constexpr uint32_t CB_PX   = 1 + CB_OFFSET;
+    constexpr uint32_t CB_PY   = 2 + CB_OFFSET;
+    constexpr uint32_t CB_RX   = 3 + CB_OFFSET;
+    constexpr uint32_t CB_RY   = 4 + CB_OFFSET;
+    constexpr uint32_t CB_GID  = 5 + CB_OFFSET;
+    constexpr uint32_t CB_TID  = 6 + CB_OFFSET;
 
     const uint32_t offs_l1 = get_write_ptr(CB_OFFS);
     const uint32_t px_l1   = get_write_ptr(CB_PX);
