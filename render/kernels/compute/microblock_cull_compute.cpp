@@ -115,6 +115,13 @@ constexpr uint32_t DR_THR    = 5 * 32;  // iter 108: per-gaussian thr = 2*ln(op/
 // between/outside the centres reached it.
 constexpr float kBoxW = 7.0f;
 constexpr float kBoxH = 3.0f;
+// With no slack between the box and the pixel centres, the cull and the blend
+// must agree on a pixel sitting right at the floor. They don't bit-for-bit: the
+// cull thr uses an SFPU log, the blend alpha a bf16-rounded approx exp (a 2^-8
+// alpha error is ~0.008 in m2). Widen thr by kThrMargin (m2 units) so the mask
+// stays a superset; extra keeps are zeroed by the per-pixel floor, so output is
+// unchanged.
+constexpr float kThrMargin = 0.05f;
 
 #ifdef TRISC_MATH
 // EXACT box-constrained min Mahalanobis^2 (mirrors the soft-float reference
@@ -220,7 +227,7 @@ __attribute__((noinline, noipa)) void cull_thr(uint32_t op_bits, uint32_t inv_fl
     vFloat inv_floor = cs::Converter::as_float(inv_floor_bits);
     vFloat ratio = op * inv_floor;
     vFloat logv = cs::_calculate_log_body_no_init_(ratio);
-    dst_reg[DR_THR + V] = logv + logv;  // 2*ln(op/floor)
+    dst_reg[DR_THR + V] = logv + logv + vFloat(kThrMargin);  // 2*ln(op/floor) + margin
 }
 
 // combine (conic): m2_min = min(DR_QV, DR_QH); keep iff m2_min <= thr. A1: the
