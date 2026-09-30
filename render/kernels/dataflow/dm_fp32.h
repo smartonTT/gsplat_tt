@@ -146,27 +146,17 @@ inline uint32_t pow2_shift(uint32_t n) {
 // Bits of fl((float)q * (1.0f / 65535.0f)) for q < 2^16 (UNORM16 -> float).
 // fl(1/65535) = 0x800080 * 2^-39, so the exact product is q * 65537 * 2^-32,
 // which fits 32 bits; round it to 24 significant bits, nearest-even.
-inline uint32_t unorm16_to_f(uint32_t q) {
-    if (q == 0u) return 0u;
+// Branchless (task #80): q < 2^16 so p = q << 16 | q with no overlap. Normalize
+// p so its top bit is bit 31, keep 24 bits, round the low 8 nearest-even, and add
+// the rounded significand (hidden bit included) to (e - 1) << 23, so a round-up
+// to 2^24 carries into the exponent. Inlined: the blend decodes 4 per record.
+__attribute__((always_inline)) inline uint32_t unorm16_to_f(uint32_t q) {
     const uint32_t p = (q << 16) + q;  // q * 65537
-    const uint32_t nb = 32u - static_cast<uint32_t>(__builtin_clz(p));  // 17..32
-    uint32_t e = nb + 94u;  // biased exponent of p * 2^-32
-    uint32_t m;
-    if (nb > 24u) {
-        const uint32_t s = nb - 24u;
-        m = p >> s;
-        const uint32_t rem = p & ((1u << s) - 1u), half = 1u << (s - 1u);
-        if (rem > half || (rem == half && (m & 1u))) {
-            m++;
-            if (m >> 24) {
-                m >>= 1;
-                e++;
-            }
-        }
-    } else {
-        m = p << (24u - nb);
-    }
-    return (e << 23) | (m & 0x7FFFFFu);
+    const uint32_t lz = static_cast<uint32_t>(__builtin_clz(p | 1u));  // 0..15 for q != 0
+    const uint32_t t = p << lz;
+    const uint32_t m = (t >> 8) + (((t & 0xFFu) + 0x7Fu + ((t >> 8) & 1u)) >> 8);
+    const uint32_t bits = ((125u - lz) << 23) + m;  // biased exponent 126 - lz
+    return q != 0u ? bits : 0u;
 }
 
 // Bits of fl(fl(a + k) - k) for fp32 bits a and kb = bits of an integer k

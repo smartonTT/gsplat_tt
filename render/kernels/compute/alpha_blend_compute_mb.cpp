@@ -385,6 +385,48 @@ inline void dispatch_blend_pairs(
     }
 }
 
+// Task #80: jump-table mask walk (host env GSPLAT_TT_BLEND_JUMP_WALK, default 1;
+// needs BLEND_COEF_DEST, so the bodies take no arguments). The recursive walk
+// above tests all 16 pairs with compare/branch steps (2.6 ms/view measured with
+// empty bodies). This one visits only the pairs with a set bit: ctz finds the
+// lowest one, the 2-bit pair value picks the out-of-line body from a table.
+// Same bodies, same ascending pair order -> bit-identical.
+#ifndef BLEND_JUMP_WALK
+#define BLEND_JUMP_WALK 0
+#endif
+#if BLEND_JUMP_WALK && BLEND_COEF_DEST && BLEND_ABL == 0 && defined(TRISC_MATH)
+#define BLEND_USE_JUMP_WALK 1
+template <uint32_t J, uint32_t PM>
+__attribute__((noinline)) void blend_pair_body() {
+    if constexpr (PM == 3u) {
+        blend_pair_gaussian_math<2u * J, 2u * J + 1u>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    } else if constexpr (PM == 1u) {
+        blend_one_gaussian_math<2u * J>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    } else {
+        blend_one_gaussian_math<2u * J + 1u>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
+    }
+}
+using BlendBodyFn = void (*)();
+// Index 4 * pair + (2-bit pair mask); entry 0 of each pair is never called.
+#define BLEND_BODIES4(J) nullptr, &blend_pair_body<J, 1u>, &blend_pair_body<J, 2u>, &blend_pair_body<J, 3u>
+BlendBodyFn const kBlendBodies[64] = {
+    BLEND_BODIES4(0),  BLEND_BODIES4(1),  BLEND_BODIES4(2),  BLEND_BODIES4(3),
+    BLEND_BODIES4(4),  BLEND_BODIES4(5),  BLEND_BODIES4(6),  BLEND_BODIES4(7),
+    BLEND_BODIES4(8),  BLEND_BODIES4(9),  BLEND_BODIES4(10), BLEND_BODIES4(11),
+    BLEND_BODIES4(12), BLEND_BODIES4(13), BLEND_BODIES4(14), BLEND_BODIES4(15)};
+#undef BLEND_BODIES4
+
+inline void dispatch_blend_jump(uint32_t mask) {
+    while (mask != 0u) {
+        const uint32_t b = static_cast<uint32_t>(__builtin_ctz(mask)) & ~1u;  // pair's low bit
+        kBlendBodies[2u * b + ((mask >> b) & 3u)]();
+        mask &= ~(3u << b);
+    }
+}
+#else
+#define BLEND_USE_JUMP_WALK 0
+#endif
+
 // PACK2 (iter 50): two 32B splats per 64B page in CB_BUCKET_BULK; splat g at
 // page g/2, half g&1. Tile-local mean in words [4,5]; UNORM16 op/color [6,7].
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
@@ -675,8 +717,12 @@ inline void process_tile_l1_blend(
 #if BLEND_COEF_DEST
             MATH((blend_stage_coeffs(rec[0], rec[1], rec[2], rec[4], rec[5], op, cr, cg, cbv)));
 #endif
+#if BLEND_USE_JUMP_WALK
+            dispatch_blend_jump(mask);
+#else
             dispatch_blend_pairs<0>(mask, rec[0], rec[1], rec[2], rec[4], rec[5], 0u,
                                     op, cr, cg, cbv);
+#endif
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
