@@ -70,6 +70,11 @@ constexpr uint32_t WIN_PAGES = 1536;  // == sort_device.cpp kAtomicWinPages
 constexpr uint32_t RING = 16;         // entries per ring half (<= 16 gaussians per page)
 // Shared CBs (both movers, one copy per core).
 constexpr uint32_t CB_BASE = 10, CB_TBL = 11;
+// One atomic return value per 16 B word of CB_BASE: with 4 B spacing, returns
+// for neighbouring tiles share a word and about one tile per frame came back
+// with a stale base (overlapping chunks; the host GSPLAT_TT_SORT_ATOMIC_CHECK
+// saw it, and the frame after hung).
+constexpr uint32_t RET_STRIDE = 4;
 
 }  // namespace
 
@@ -192,7 +197,7 @@ void kernel_main() {
             const uint64_t a = get_noc_addr(t / ELEMS_PER_PAGE, cnt_acc) + (t % ELEMS_PER_PAGE) * 4u;
             noc_fast_atomic_increment<noc_mode, true>(
                 noc_index, write_at_cmd_buf, a, NOC_UNICAST_WRITE_VC, h, 31 /*wrap*/, false /*linked*/,
-                false /*posted*/, reinterpret_cast<uint32_t>(basep + t));
+                false /*posted*/, reinterpret_cast<uint32_t>(basep + t * RET_STRIDE));
         }
         noc_async_atomic_barrier();
         noc_cmd_buf_restore_state(noc_index, write_at_cmd_buf, &saved);
@@ -202,7 +207,7 @@ void kernel_main() {
         const uint32_t row_span = row_pages * ELEMS_PER_PAGE;
         for (uint32_t t = 0; t < row_span; t++) {
             const uint32_t h = (t < num_tiles) ? h0p[t] + h1p[t] : 0u;
-            tblp[t] = (h == 0u) ? 0u : ((h << 16) | (basep[t] & 0xFFFFu));
+            tblp[t] = (h == 0u) ? 0u : ((h << 16) | (basep[t * RET_STRIDE] & 0xFFFFu));
         }
         const uint32_t tbl_l1 = get_write_ptr(CB_TBL);
         for (uint32_t pp = 0; pp < row_pages; pp++) {
@@ -213,7 +218,7 @@ void kernel_main() {
         noc_semaphore_set(sem_reserved, 1u);
     }
     // Cursors: BRISC's records first, then NCRISC's, inside the core's chunk.
-    for (uint32_t t = 0; t < num_tiles; t++) curp[t] = basep[t] + ((mover == 1) ? h0p[t] : 0u);
+    for (uint32_t t = 0; t < num_tiles; t++) curp[t] = basep[t * RET_STRIDE] + ((mover == 1) ? h0p[t] : 0u);
 
     // ── 3. emit: pack each kept pair's 32B record into its bucket slot ─────
     DeviceZoneScopedN("sort_atomic_emit");

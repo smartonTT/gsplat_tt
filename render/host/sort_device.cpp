@@ -1005,7 +1005,7 @@ static void build_program_bin_atomic(SortDeviceContext& ctx) {
         cb(9 + off, 16u * 16u);              // packed op/color write-back ring
         cb(12 + off, kAtomicWinPages * 3u * PAGE_BYTES);  // gid/tid/keep page window
     }
-    cb(10, BIN_ROW_BYTES);  // per-tile first slot (atomic return values)
+    cb(10, 4u * BIN_ROW_BYTES);  // per-tile first slot (atomic returns, one per 16 B)
     cb(11, BIN_ROW_BYTES);  // chunk-table row staging
     ctx.atomic_sem[0] = CreateSemaphore(program, cores, 0);
     ctx.atomic_sem[1] = CreateSemaphore(program, cores, 0);
