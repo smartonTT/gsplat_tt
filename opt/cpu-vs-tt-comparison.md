@@ -106,3 +106,69 @@ undefined macros (the function body closed early). The minimal fix applied
 
 This only changes conditional-compilation/structure; under `GSPLAT_WITH_TT` the
 emitted code is unchanged, and the CPU compute path is untouched.
+
+---
+
+# GPU reference (CUDA 3DGS) — searched 2026-09-30, **not measurable here**
+
+The charter's success criterion is "beat GPU performance", so this doc needs a
+row for a CUDA 3DGS rasterizer (nerfstudio `gsplat` or graphdeco
+`diff-gaussian-rasterization`) on the same bench: `scenes/bicycle.ply`, the same
+30 `cameras_v2.json` views, 1024×1024. **No number is recorded below, because no
+NVIDIA GPU is reachable from this environment.** Per the project restriction
+("all performance numbers must come from real measurement"), nothing is
+estimated, extrapolated from spec sheets, or quoted from papers.
+
+## What was searched (2026-09-30)
+
+| probe | result |
+|---|---|
+| `ird reserve --help` | the only reservable architectures are `grayskull`, `wormhole`, `wormhole_b0`, `blackhole`, `compute`. There is no GPU class to request. |
+| `ird list-machines` (216 machines, clusters `tt_yyz`, `tt_aus`, `tt_sjc`, `tt_bgd`, `tt_blr`) | `ARCH` column is only `blackhole` (77), `wormhole_b0` (111), `compute` (28). No GPU arch exists in the inventory. |
+| `lspci \| grep -ci nvidia` on every one of the 216 hostnames | 25 hosts answered ssh on bare metal (the other 191 only accept ssh inside an IRD reservation container). **All 25 report 0 NVIDIA PCI devices.** The `compute` machines (`yyzepyc12/13`, `yyzeon20`, `ausc-*`, `bgdepyc0*`) are CPU-only; the silicon hosts carry TT boards. |
+| `nvidia-smi` on the reachable dev hosts (`yyz-ird`, `g15blx01`, `g15blx02`, `g14blx03`, `f07cs04`) | `command not found`; the only VGA device on each is an ASPEED BMC graphics controller. |
+| local cloud-GPU escape hatches (`gcloud`, `aws`, `az`, `runpodctl`, `vastai`, `modal` + their credential dirs) | none installed, no credentials present. Renting a cloud GPU is a spend decision for the human, not something to do unilaterally. |
+
+Conclusion: **a CUDA baseline cannot be produced from inside this project's
+current resource set.** Getting one needs a human to provide either a GPU host
+(lab machine, workstation, or a colleague's box) or a cloud-GPU credential.
+
+## The harness is committed and ready
+
+`bench/gpu_reference/run_gpu_bench.py` (+ `README.md`) will produce the row in
+one command the moment a CUDA host exists. It is a single dependency-light file
+(torch + gsplat/diff-gaussian-rasterization + plyfile + pillow) that can be
+copied onto any GPU box alongside `scenes/` and `benchmarks/`.
+
+Bench identity is not assumed — it was verified against this repo on 2026-09-30:
+
+* **Camera math bit-identical.** The script's `intrinsics_from_fov` and
+  `c2w_to_viewmat` were diffed against `gsplat/viewer.py::_intrinsics_from_fov`
+  and `gsplat/utils.py::c2w_to_w2c`: max abs diff **0.0** on `K` and on all 30
+  viewmats.
+* **PLY activations bit-identical.** Both loaders were run over the full
+  6,131,954-Gaussian `bicycle.ply`: `means`, `quats`, `scales`, `colors` max abs
+  diff **0.0**; `opacities` 1 ULP (1.19e-07) from the numpy-vs-tensor `sigmoid`
+  path.
+* **Colors, not SH.** Colors are handed to the GPU rasterizer as precomputed RGB
+  with `sh_degree=None`, so it renders the SH-degree-0 image our pipeline
+  renders rather than evaluating the ply's higher bands.
+* **Same warmup and timing rules as the CPU rows above**: hero view is warmup
+  and excluded (29 timed views); CUDA-synchronised wall time around the
+  rasterization call only; hero PSNR by the same `-10·log10(MSE)` against the
+  same `benchmarks/reference_v2/hero.png`.
+* The script **exits non-zero if no CUDA device is visible** instead of falling
+  back to CPU, so it cannot produce a mislabelled number.
+
+Running it writes `opt/cpu-vs-tt/gpu_result.json`; `opt/build_report.py` then
+renders the GPU row (and the TT-vs-GPU ratio) into `opt/REPORT.html`
+automatically.
+
+## The TT side of the eventual ratio
+
+For whoever runs the GPU box: the TT anchor to divide against is the frozen
+plateau from `opt/FINAL-REPORT.md` — **173.3 ms/view avg** over the same 30-view
+1024×1024 bicycle bench (iter-141, bit-identical to the 8-bit golden), measured
+on a **Blackhole P100** in `yyzo-bh-07`. That is ~5.8 FPS. Note the charter
+targets a **p150**; the frozen number is a P100, so a p150 re-measure should
+accompany the GPU row.

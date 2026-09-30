@@ -1398,6 +1398,102 @@ def cull_tune_section() -> str:
 """
 
 
+# TT anchor for the GPU ratio: the frozen 30-view 1024x1024 bicycle plateau
+# (iter-141, opt/FINAL-REPORT.md), measured on a Blackhole P100 in yyzo-bh-07.
+TT_ANCHOR_MS = 173.3
+TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-141 frozen plateau"
+
+GPU_RESULT_JSON = OPT_DIR / "cpu-vs-tt" / "gpu_result.json"
+
+
+def gpu_reference_section() -> str:
+    """GPU row for the charter's 'beat the GPU' criterion.
+
+    Data-driven: fills in from opt/cpu-vs-tt/gpu_result.json as soon as
+    bench/gpu_reference/run_gpu_bench.py has been run on a CUDA host. Until
+    then it states plainly that no GPU is reachable -- never an estimate.
+    """
+    doc_link = (
+        "<a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a>"
+        " &sect; GPU reference"
+    )
+    if not GPU_RESULT_JSON.exists():
+        return f"""
+<section style='background:#fff8e6;border-left:4px solid #e9c46a;padding:12px 16px'>
+  <h2 style='margin-top:0'>GPU reference &mdash; <span style='color:#b8860b'>not measured</span></h2>
+  <p>The charter's success criterion is beating GPU performance, but
+  <b>no NVIDIA GPU is reachable from this environment</b> (searched 2026-09-30):
+  IRD offers no GPU architecture (<code>grayskull</code> / <code>wormhole</code> /
+  <code>wormhole_b0</code> / <code>blackhole</code> / <code>compute</code> only),
+  all 216 inventory machines report arch <code>blackhole</code>,
+  <code>wormhole_b0</code> or <code>compute</code>, and every one of the 25
+  ssh-reachable bare-metal hosts reports <b>0 NVIDIA PCI devices</b>. No cloud-GPU
+  CLI or credential is present either.</p>
+  <p><b>No number is shown rather than an estimated one.</b> The harness is
+  committed and verified against this repo's camera math and PLY activations
+  (bit-identical) &mdash; see
+  <code>bench/gpu_reference/run_gpu_bench.py</code>. Run it on any CUDA host and
+  this section fills itself in:</p>
+  <p><code>python bench/gpu_reference/run_gpu_bench.py --backend gsplat --repeats 2
+  &amp;&amp; python3 opt/build_report.py</code></p>
+  <p>Unblocking needs a human to supply a GPU host or a cloud-GPU credential.
+  Detail and the full search log: {doc_link}.</p>
+  <table class='kv'>
+    <tr><th>TT anchor for the eventual ratio</th>
+        <td>{TT_ANCHOR_MS} ms/view ({1000.0 / TT_ANCHOR_MS:.2f} FPS) &mdash; {TT_ANCHOR_LABEL}</td></tr>
+  </table>
+</section>
+"""
+
+    r = json.loads(GPU_RESULT_JSON.read_text())
+    gpu = r.get("gpu", {})
+    gpu_name = gpu.get("name", "unknown GPU")
+    avg = float(r["avg_frame_ms"])
+    ratio = TT_ANCHOR_MS / avg
+    verdict = (
+        f"<span style='color:#2a9d8f;font-weight:600'>TT is {1 / ratio:.2f}&times; "
+        f"faster</span>"
+        if avg > TT_ANCHOR_MS
+        else f"<span style='color:#e76f51;font-weight:600'>GPU is {ratio:.2f}&times; "
+        f"faster</span>"
+    )
+    hero = ""
+    hero_png = r.get("hero_png")
+    if hero_png and (OPT_DIR.parent / hero_png).exists():
+        rel = Path(hero_png).name
+        hero = (
+            f"<div style='float:right;margin-left:16px;text-align:center;"
+            f"font-size:11px;color:#777'>"
+            f"<a href='cpu-vs-tt/{rel}' target='_blank'>"
+            f"<img src='cpu-vs-tt/{rel}' style='max-width:220px;border-radius:4px;"
+            f"border:1px solid #ddd'></a><br>GPU hero render</div>"
+        )
+    return f"""
+<section style='background:#f1faee;border-left:4px solid #2a9d8f;padding:12px 16px;overflow:hidden'>
+  {hero}
+  <h2 style='margin-top:0'>GPU reference &mdash; measured</h2>
+  <table class='kv'>
+    <tr><th>GPU</th><td>{gpu_name} &middot; {gpu.get('vram_gb', '?')} GB &middot;
+        sm{gpu.get('sm', '?')} &middot; host {gpu.get('host', '?')}</td></tr>
+    <tr><th>Rasterizer</th><td>{r.get('backend')} {r.get('backend_version', '')}</td></tr>
+    <tr><th>Bench</th><td>{r.get('scene')} &middot; {r.get('n_gaussians', 0):,} gaussians
+        &middot; {r['image_size'][0]}&times;{r['image_size'][1]}
+        &middot; {r.get('n_timed_views')} timed views (hero warmup excluded)</td></tr>
+    <tr><th>GPU frame</th><td><b>{avg} ms/view</b> avg &middot;
+        p50 {r.get('p50_frame_ms')} &middot; min {r.get('min_frame_ms')} &middot;
+        max {r.get('max_frame_ms')} &middot; {r.get('fps_from_avg')} FPS</td></tr>
+    <tr><th>TT frame</th><td>{TT_ANCHOR_MS} ms/view avg &mdash; {TT_ANCHOR_LABEL}</td></tr>
+    <tr><th>TT vs GPU</th><td>{verdict}</td></tr>
+    <tr><th>GPU hero PSNR</th><td>{r.get('hero_psnr_db')} dB vs
+        <code>benchmarks/reference_v2/hero.png</code></td></tr>
+    <tr><th>Measured</th><td>{r.get('timestamp', '')}</td></tr>
+  </table>
+  <p>Raw per-view timings: <code>opt/cpu-vs-tt/gpu_result.json</code>.
+  Bench-identity notes and caveats: {doc_link}.</p>
+</section>
+"""
+
+
 def algorithm_snapshot(rows: list[dict]) -> str:
     return """
 <section>
@@ -1495,6 +1591,7 @@ def build_html(rows: list[dict]) -> str:
 {meta}
 {in_flight_section()}
 {figs_html}
+{gpu_reference_section()}
 {ledger_section(rows)}
 {algorithm_snapshot(rows)}
 </body>
