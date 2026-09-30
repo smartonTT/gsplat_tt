@@ -331,6 +331,10 @@ inline void blend_stage_floor() {
 // compiled out). 1 = skip the SFPU blend bodies (per-record cost only; output
 // is wrong). 2 = pad each pair body with 24 SFPNOPs and each single with 12
 // (output unchanged): the cost of the issue slots a const-load hoist would free.
+// Task #80 (floor attribution, output wrong for all three): 3 = 1 + skip the
+// UNORM decode and coefficient staging (loop + mask read + T readbacks only);
+// 4 = skip the whole per-record loop (reader/CB handshake floor); 5 = 1 but keep
+// the 16-step mask walk (one nop per taken branch), so a5 - a1 = walk cost.
 #ifndef BLEND_ABL
 #define BLEND_ABL 0
 #endif
@@ -355,7 +359,7 @@ inline void dispatch_blend_pairs(
         constexpr uint32_t A = 2u * J;
         constexpr uint32_t B = 2u * J + 1u;
         const uint32_t pm = (mask >> (2u * J)) & 3u;
-#if BLEND_ABL != 1
+#if BLEND_ABL == 0 || BLEND_ABL == 2
         if (pm == 3u) {
             MATH((blend_pair_gaussian_math<A, B>(a, b, c, d, e, fc, op, cr, cg, cbv)));
             BLEND_ABL_PAD(24);
@@ -365,6 +369,14 @@ inline void dispatch_blend_pairs(
         } else if (pm == 2u) {
             MATH((blend_one_gaussian_math<B>(a, b, c, d, e, fc, op, cr, cg, cbv)));
             BLEND_ABL_PAD(12);
+        }
+#elif BLEND_ABL == 5 && defined(TRISC_MATH)
+        if (pm == 3u) {
+            asm volatile("nop");
+        } else if (pm == 1u) {
+            asm volatile("nop; nop");
+        } else if (pm == 2u) {
+            asm volatile("nop; nop; nop");
         }
 #else
         (void)pm;
@@ -626,7 +638,11 @@ inline void process_tile_l1_blend(
 #if BLEND_COEF_DEST && defined(BLEND_PIXEL_FLOOR)
     MATH((blend_stage_floor()));
 #endif
+#if BLEND_ABL == 4
+    for (uint32_t g = num_g; g < num_g; g++) {
+#else
     for (uint32_t g = 0; g < num_g; g++) {
+#endif
         // Periodic transmittance readback (per-tile gaussian count, across
         // subchunks). period 0 => disabled (compiles out to the baseline path).
         if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
@@ -641,7 +657,14 @@ inline void process_tile_l1_blend(
         // live_mb_mask stays all-ones on UNPACK/PACK, whose dispatch is a no-op).
         const uint32_t mask = rec[3] & live_mb_mask;
         MB_STATS_RECORD(rec, mask);
+#if BLEND_ABL == 3
+        if (mask == 0xFFFFFFFFu && rec[6] == 0xFFFFFFFFu) {
+            asm volatile("nop");  // keep the mask read; never true in practice
+        }
+        if (false) {
+#else
         if (mask != 0u) {
+#endif
             // UNORM16 op/color -> fp32 bits, integer bit-exact (TRISC scalar code
             // has no FPU; the float form was 8 libgcc calls per record, task #39).
             const uint32_t w6 = rec[6], w7 = rec[7];
