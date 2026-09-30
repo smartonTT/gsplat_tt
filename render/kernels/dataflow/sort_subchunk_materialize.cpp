@@ -27,6 +27,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_bin_fp32.h"
 
 namespace {
 
@@ -441,16 +442,19 @@ void kernel_main() {
                 // Pack into CB_PACK (not slot+32): blendrec aos[8]/aos[9] live in
                 // the upper 32B of the 64B page and overlap PACK2 splat[0..1].
                 auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
-                float mx = bits_to_f(aos[3]);
-                float my = bits_to_f(aos[4]);
-                mx -= tx_tile;
-                my -= ty_tile;
+                // Tile-local mean fl(m - tile origin) via the integer sub_int
+                // (bit-exact, no __subsf3 on NCRISC); float only outside its range.
+                uint32_t mxb, myb;
+                if (!sort_bin_fp32::sub_int(aos[3], tx * TILE_SIZE, &mxb))
+                    mxb = f_to_bits(bits_to_f(aos[3]) - tx_tile);
+                if (!sort_bin_fp32::sub_int(aos[4], ty * TILE_SIZE, &myb))
+                    myb = f_to_bits(bits_to_f(aos[4]) - ty_tile);
                 splat[0] = aos[0];
                 splat[1] = aos[1];
                 splat[2] = aos[2];
                 splat[3] = aos[9];
-                splat[4] = f_to_bits(mx);
-                splat[5] = f_to_bits(my);
+                splat[4] = mxb;
+                splat[5] = myb;
                 // iter 132: op/color UNORM16 are packed ONCE per gaussian on the
                 // NCRISC side (sort_bin pack_invariants) and published into
                 // blendrec[10],[11] (via a full-64B page write-back); this depth-

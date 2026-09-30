@@ -46,17 +46,12 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "dm_fp32.h"
 
 namespace {
 
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
-
-inline float bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
-}
 
 inline int clampi(int v, int lo, int hi) {
     if (v < lo) v = lo;
@@ -90,6 +85,9 @@ void kernel_main() {
     // `x / tsf`: dividing by a power of two only decrements the exponent (no
     // mantissa rounding, no underflow here), so min_x/min_y/max_x are unchanged.
     const float inv_tsf = 1.0f / tsf;
+    // The AABB tile coords run through dm_fp32 (integer add + shift, no
+    // __addsf3/__mulsf3/__fixsfsi): bit-identical to the float expression.
+    const uint32_t tile_shift = dm_fp32::pow2_shift(get_arg_val<uint32_t>(13));
 
     constexpr auto offs_args = TensorAccessorArgs<0>();
     constexpr auto px_args   = TensorAccessorArgs<offs_args.next_compile_time_args_offset()>();
@@ -183,13 +181,13 @@ void kernel_main() {
             noc_async_read_barrier();
             attr_cached_page = pg;
         }
-        const float px = bits_to_f(pxp[ip]);
-        const float py = bits_to_f(pyp[ip]);
-        const float rx = bits_to_f(rxp[ip]);
-        const float ry = bits_to_f(ryp[ip]);
-        const int min_x = clampi(static_cast<int>((px - rx) * inv_tsf), 0, tiles_x - 1);
-        const int min_y = clampi(static_cast<int>((py - ry) * inv_tsf), 0, tiles_y - 1);
-        const int max_x = clampi(static_cast<int>((px + rx) * inv_tsf), 0, tiles_x - 1);
+        const uint32_t pxb = pxp[ip];
+        const uint32_t pyb = pyp[ip];
+        const uint32_t rxb = rxp[ip];
+        const uint32_t ryb = ryp[ip];
+        const int min_x = clampi(dm_fp32::add_mul_pow2_to_int(pxb, rxb ^ dm_fp32::SIGN, tile_shift, inv_tsf), 0, tiles_x - 1);
+        const int min_y = clampi(dm_fp32::add_mul_pow2_to_int(pyb, ryb ^ dm_fp32::SIGN, tile_shift, inv_tsf), 0, tiles_y - 1);
+        const int max_x = clampi(dm_fp32::add_mul_pow2_to_int(pxb, rxb, tile_shift, inv_tsf), 0, tiles_x - 1);
         cur_minx = min_x;
         cur_miny = min_y;
         cur_w = max_x - min_x + 1;

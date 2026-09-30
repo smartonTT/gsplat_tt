@@ -64,6 +64,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "dm_fp32.h"
 
 namespace {
 
@@ -73,10 +74,22 @@ constexpr uint32_t PAGE_ELEMS = 16;
 constexpr uint32_t PAGE_BYTES = PAGE_ELEMS * 4;  // 64
 constexpr uint32_t COLOR_GROUP_FLOATS = PAGE_ELEMS * 3;  // 48 floats / 16-Gaussian group
 
-inline float bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
+// The visibility test on fp32 bits, with no libgcc soft-float call (BRISC has
+// no FPU): same result for every input, incl. NaN/inf/-0, as
+//   !(tz <= k_near || op < min_opacity) &&
+//   mx + rx > 0 && mx - rx < img_w && my + ry > 0 && my - ry < img_h &&
+//   rx > 0 && ry > 0 && rx <= max_radius && ry <= max_radius
+// A rounded fp32 sum is > 0 iff the exact sum is, so `mx + rx > 0` is exactly
+// `-rx < mx`; the two subtractions go through dm_fp32::sub_lt (checked by
+// tests/unit/test_dm_fp32.cpp). Cheap compares first to skip the subtractions.
+inline bool visible_bits(uint32_t tz, uint32_t op, uint32_t mx, uint32_t my, uint32_t rx,
+                         uint32_t ry, uint32_t k_near, uint32_t min_opacity, uint32_t img_w,
+                         uint32_t img_h, uint32_t max_radius) {
+    using namespace dm_fp32;
+    if (le(tz, k_near) || lt(op, min_opacity)) return false;
+    return lt(0u, rx) && lt(0u, ry) && le(rx, max_radius) && le(ry, max_radius) &&
+           lt(rx ^ SIGN, mx) && lt(ry ^ SIGN, my) && sub_lt(mx, rx, img_w) &&
+           sub_lt(my, ry, img_h);
 }
 
 inline int clampi(int v, int lo, int hi) {
@@ -119,11 +132,12 @@ void kernel_main() {
     const uint32_t o_M_addr      = get_arg_val<uint32_t>(22);
     const uint32_t N          = get_arg_val<uint32_t>(23);
     const uint32_t num_tiles  = get_arg_val<uint32_t>(24);
-    const float min_opacity   = bits_to_f(get_arg_val<uint32_t>(25));
-    const float k_near        = bits_to_f(get_arg_val<uint32_t>(26));
-    const float img_w         = bits_to_f(get_arg_val<uint32_t>(27));
-    const float img_h         = bits_to_f(get_arg_val<uint32_t>(28));
-    const float max_radius    = bits_to_f(get_arg_val<uint32_t>(29));
+    // fp32 bits: compared with dm_fp32 (integer ops), see visible_bits().
+    const uint32_t min_opacity = get_arg_val<uint32_t>(25);
+    const uint32_t k_near      = get_arg_val<uint32_t>(26);
+    const uint32_t img_w       = get_arg_val<uint32_t>(27);
+    const uint32_t img_h       = get_arg_val<uint32_t>(28);
+    const uint32_t max_radius  = get_arg_val<uint32_t>(29);
     const uint32_t t_start    = get_arg_val<uint32_t>(31);
     const uint32_t t_count    = get_arg_val<uint32_t>(32);
     const uint32_t base       = get_arg_val<uint32_t>(33);
@@ -280,18 +294,9 @@ void kernel_main() {
             for (uint32_t il = 0; il < TILE_ELEMS; il++) {
                 const uint32_t i = tbase + il;
                 if (i >= i_hi) break;
-                const float tz = bits_to_f(p_dep[il]);
-                const float op = bits_to_f(p_op[il]);
-                if (tz <= k_near || op < min_opacity) continue;
-                const float mx = bits_to_f(p_m2x[il]);
-                const float my = bits_to_f(p_m2y[il]);
-                const float rx = bits_to_f(p_rx[il]);
-                const float ry = bits_to_f(p_ry[il]);
-                const bool valid = (mx + rx > 0.0f) && (mx - rx < img_w) &&
-                                   (my + ry > 0.0f) && (my - ry < img_h) &&
-                                   (rx > 0.0f) && (ry > 0.0f) &&
-                                   (rx <= max_radius) && (ry <= max_radius);
-                if (valid) vcount++;
+                if (visible_bits(p_dep[il], p_op[il], p_m2x[il], p_m2y[il], p_rx[il], p_ry[il],
+                                 k_near, min_opacity, img_w, img_h, max_radius))
+                    vcount++;
             }
         }
         o_Mp[0] = vcount;
@@ -376,19 +381,9 @@ void kernel_main() {
             const uint32_t i = tbase + il;
             if (i >= i_hi) break;
 
-            const float tz = bits_to_f(p_dep[il]);
-            const float op = bits_to_f(p_op[il]);
-            if (tz <= k_near || op < min_opacity) continue;
-
-            const float mx = bits_to_f(p_m2x[il]);
-            const float my = bits_to_f(p_m2y[il]);
-            const float rx = bits_to_f(p_rx[il]);
-            const float ry = bits_to_f(p_ry[il]);
-            const bool valid = (mx + rx > 0.0f) && (mx - rx < img_w) &&
-                               (my + ry > 0.0f) && (my - ry < img_h) &&
-                               (rx > 0.0f) && (ry > 0.0f) &&
-                               (rx <= max_radius) && (ry <= max_radius);
-            if (!valid) continue;
+            if (!visible_bits(p_dep[il], p_op[il], p_m2x[il], p_m2y[il], p_rx[il], p_ry[il],
+                              k_near, min_opacity, img_w, img_h, max_radius))
+                continue;
 
             o_px[slot]  = p_m2x[il];
             o_py[slot]  = p_m2y[il];
