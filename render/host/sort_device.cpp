@@ -462,6 +462,13 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     page_cb(21, (2u * m0_cap + 256u) * 4u);  // CB_BSORT
     page_cb(22, m0_cap * 32u);           // CB_SLAB
 
+    // Task #86: GSPLAT_TT_MATCULL_PROF=1 compiles fine per-item Tracy zones
+    // into the materialize kernel (attribution). Default OFF.
+    const char* mc_prof = std::getenv("GSPLAT_TT_MATCULL_PROF");
+    std::map<std::string, std::string> mat_defines;
+    if (mc_prof != nullptr && mc_prof[0] == '1') mat_defines["MATCULL_PROF"] = "1";
+    std::map<std::string, std::string> mat_defines_m0 = mat_defines;
+    mat_defines_m0["MAT_CB_BASE"] = "16";
     std::vector<uint32_t> ct;
     // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
     for (int i = 0; i < 11; i++) {
@@ -475,6 +482,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = ct,
+            .defines = mat_defines,
         });
     ctx.ksubchunk_m0 = CreateKernel(
         program,
@@ -484,7 +492,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = ct,
-            .defines = {{"MAT_CB_BASE", "16"}},
+            .defines = mat_defines_m0,
         });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.wl_subchunk.add_program(device_range, std::move(program));
