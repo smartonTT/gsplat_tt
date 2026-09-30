@@ -76,16 +76,30 @@ inline uint32_t bit_length(uint32_t x) {
 }
 
 template <uint32_t P>
+inline void hist_add(hist_t* hist, uint32_t r, uint32_t d, uint32_t mask) {
+    const uint32_t R = mask + 1u;
+    hist[r & mask]++;
+    if (P > 1) hist[R + ((r >> d) & mask)]++;
+    if (P > 2) hist[2u * R + ((r >> (2u * d)) & mask)]++;
+    if (P > 3) hist[3u * R + ((r >> (3u * d)) & mask)]++;
+}
+
+// Loops below load UNROLL keys/ids up front so the ~8-cycle L1 load-to-use
+// latency overlaps; the bucket updates stay in element order (stability).
+constexpr uint32_t UNROLL = 4;
+
+template <uint32_t P>
 inline void fill_hist(const uint32_t* k, uint32_t n, uint32_t kmin, uint32_t d,
                       uint32_t mask, hist_t* hist) {
-    const uint32_t R = mask + 1u;
-    for (uint32_t i = 0; i < n; i++) {
-        const uint32_t r = k[i] - kmin;
-        hist[r & mask]++;
-        if (P > 1) hist[R + ((r >> d) & mask)]++;
-        if (P > 2) hist[2u * R + ((r >> (2u * d)) & mask)]++;
-        if (P > 3) hist[3u * R + ((r >> (3u * d)) & mask)]++;
+    uint32_t i = 0;
+    for (; i + UNROLL <= n; i += UNROLL) {
+        uint32_t r[UNROLL];
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) r[u] = k[i + u] - kmin;
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) hist_add<P>(hist, r[u], d, mask);
     }
+    for (; i < n; i++) hist_add<P>(hist, k[i] - kmin, d, mask);
 }
 
 // Stable sort of the pairs (k[i], v[i]), i < n, by k. (k2, v2) is ping-pong
@@ -149,13 +163,35 @@ inline bool sort_pairs(uint32_t* k, uint32_t* v, uint32_t* k2, uint32_t* v2,
         hist_t* h = hist + p * R;
         const uint32_t sh = p * d;
         const uint32_t sub = (p == 0) ? kmin : 0u;  // pass 0 stores r = k - kmin
+        uint32_t i = 0;
         if (p + 1u == P) {
-            for (uint32_t i = 0; i < n; i++) {
-                const uint32_t pos = h[((ik[i] - sub) >> sh) & mask]++;
-                ov[pos] = iv[i];
+            for (; i + UNROLL <= n; i += UNROLL) {
+                uint32_t r[UNROLL], vv[UNROLL];
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) {
+                    r[u] = ik[i + u] - sub;
+                    vv[u] = iv[i + u];
+                }
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) ov[h[(r[u] >> sh) & mask]++] = vv[u];
             }
+            for (; i < n; i++) ov[h[((ik[i] - sub) >> sh) & mask]++] = iv[i];
         } else {
-            for (uint32_t i = 0; i < n; i++) {
+            for (; i + UNROLL <= n; i += UNROLL) {
+                uint32_t r[UNROLL], vv[UNROLL];
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) {
+                    r[u] = ik[i + u] - sub;
+                    vv[u] = iv[i + u];
+                }
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) {
+                    const uint32_t pos = h[(r[u] >> sh) & mask]++;
+                    ok[pos] = r[u];
+                    ov[pos] = vv[u];
+                }
+            }
+            for (; i < n; i++) {
                 const uint32_t r = ik[i] - sub;
                 const uint32_t pos = h[(r >> sh) & mask]++;
                 ok[pos] = r;
