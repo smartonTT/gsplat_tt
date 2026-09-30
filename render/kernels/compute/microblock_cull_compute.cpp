@@ -106,6 +106,16 @@ constexpr uint32_t DR_QV     = 3 * 32;  // x-face UN-normalized Qraw (== det*m2_
 constexpr uint32_t DR_QH     = 4 * 32;  // y-face UN-normalized Qraw (== det*m2_h)
 constexpr uint32_t DR_THR    = 5 * 32;  // iter 108: per-gaussian thr = 2*ln(op/floor) (SFPU log)
 
+// Task #44: the keep box is the PIXEL-CENTRE box of the 8x4 microblock,
+// [x0+0.5, x0+7.5] x [y0+0.5, y0+3.5]. The host box ramps carry the +0.5
+// (make_box_ramp); the extent is 7 x 3. The blend applies the floor per pixel
+// (BLEND_PIXEL_FLOOR) at pixel centres (c+0.5, r+0.5), so the mask only has to
+// be a superset of blocks with a pixel centre reaching the floor; the old
+// continuous [x0,x0+8] x [y0,y0+4] box also kept blocks where only the space
+// between/outside the centres reached it.
+constexpr float kBoxW = 7.0f;
+constexpr float kBoxH = 3.0f;
+
 #ifdef TRISC_MATH
 // EXACT box-constrained min Mahalanobis^2 (mirrors the soft-float reference
 // compute_microblock_mask two-candidate edge projection). The WHOLE metric in
@@ -151,9 +161,9 @@ __attribute__((noinline, noipa)) void cull_face_x(
     vFloat mlx = cs::Converter::as_float(mlx_bits);
     vFloat mly = cs::Converter::as_float(mly_bits);
     vFloat u_c = vFloat(dst_reg[DR_BOX_OX + V]) - mlx;
-    { vFloat uh = u_c + vFloat(8.0f); vFloat z = 0.0f; vec_min_max(z, u_c); vec_min_max(u_c, uh); }
+    { vFloat uh = u_c + vFloat(kBoxW); vFloat z = 0.0f; vec_min_max(z, u_c); vec_min_max(u_c, uh); }
     vFloat v_lo = vFloat(dst_reg[DR_BOX_OY + V]) - mly;
-    vFloat v_hi = v_lo + vFloat(4.0f);
+    vFloat v_hi = v_lo + vFloat(kBoxH);
     // v* = -ci_b*u_c/ci_c minimizes m2 along the fixed-u edge; clamp to the box.
     vFloat rc = approx_recip(ci_c);
     rc = rc * (vFloat(2.0f) - ci_c * rc);
@@ -179,9 +189,9 @@ __attribute__((noinline, noipa)) void cull_face_y(
     vFloat mlx = cs::Converter::as_float(mlx_bits);
     vFloat mly = cs::Converter::as_float(mly_bits);
     vFloat v_c = vFloat(dst_reg[DR_BOX_OY + V]) - mly;
-    { vFloat vh = v_c + vFloat(4.0f); vFloat z = 0.0f; vec_min_max(z, v_c); vec_min_max(v_c, vh); }
+    { vFloat vh = v_c + vFloat(kBoxH); vFloat z = 0.0f; vec_min_max(z, v_c); vec_min_max(v_c, vh); }
     vFloat u_lo = vFloat(dst_reg[DR_BOX_OX + V]) - mlx;
-    vFloat u_hi = u_lo + vFloat(8.0f);
+    vFloat u_hi = u_lo + vFloat(kBoxW);
     // u* = -ci_b*v_c/ci_a minimizes m2 along the fixed-v edge; clamp to the box.
     vFloat ra = approx_recip(ci_a);
     ra = ra * (vFloat(2.0f) - ci_a * ra);

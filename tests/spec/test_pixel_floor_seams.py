@@ -94,3 +94,57 @@ def test_mask_only_blend_deviates_from_gpu_rule():
 def test_pixel_floor_blend_matches_gpu_rule():
     gs = _haze_scene()
     assert np.abs(_render(gs, pixel_floor=True) - _gpu_rule(gs)).max() < 1e-6
+
+
+# Task #44: with the per-pixel floor the mask only has to cover blocks where a
+# pixel CENTRE reaches the floor, so the device box is the pixel-centre box
+# [x0+0.5, x0+7.5] x [y0+0.5, y0+3.5] instead of [x0, x0+8] x [y0, y0+4].
+PC_OX, PC_OY = OX + 0.5, OY + 0.5
+
+
+def _pc_keep(mx, my, op, ca, cb, cc):
+    m2 = cmc.boxmin_m2(ca, cb, cc, PC_OX - mx, PC_OX - mx + cmc.BOX_W,
+                       PC_OY - my, PC_OY - my + cmc.BOX_H)
+    return op * np.exp(-0.5 * m2) >= FLOOR
+
+
+def test_checker_models_pixel_centre_box():
+    assert (cmc.BOX_W, cmc.BOX_H) == (7.0, 3.0)
+
+
+def test_pixel_centre_mask_covers_every_live_pixel():
+    rng = np.random.default_rng(2)
+    yy, xx = np.mgrid[0:32, 0:32] + 0.5
+    mb = ((yy // 4) * 4 + (xx // 8)).astype(int)
+    tighter = 0
+    for _ in range(2000):
+        ca, cb, cc = _conic(10 ** rng.uniform(-1, 1.5), 10 ** rng.uniform(-1, 1.5),
+                            rng.uniform(0, np.pi))
+        mx, my = rng.uniform(-16, 48, 2)
+        op = 10 ** rng.uniform(-2.5, 0)
+        dx, dy = xx - mx, yy - my
+        a = op * np.exp(-0.5 * (ca * dx * dx + 2 * cb * dx * dy + cc * dy * dy))
+        live = np.zeros(32, bool)
+        np.logical_or.at(live, mb.ravel(), (a >= FLOOR).ravel())
+        keep = _pc_keep(mx, my, op, ca, cb, cc)
+        assert not (live & ~keep).any()
+        old = op * np.exp(-0.5 * cmc.boxmin_m2(ca, cb, cc, OX - mx, OX - mx + 8,
+                                              OY - my, OY - my + 4)) >= FLOOR
+        assert not (keep & ~old).any()
+        tighter += int((old & ~keep).sum())
+    assert tighter > 0
+
+
+def test_pixel_centre_mask_blend_matches_gpu_rule():
+    gs = _haze_scene()
+    yy, xx = np.mgrid[0:32, 0:32] + 0.5
+    mb = ((yy // 4) * 4 + (xx // 8)).astype(int)
+    rgb, t = np.zeros((32, 32)), np.ones((32, 32))
+    for (mx, my, op, ca, cb, cc, col) in gs:
+        keep = _pc_keep(mx, my, op, ca, cb, cc)[mb]
+        dx, dy = xx - mx, yy - my
+        a = np.minimum(op * np.exp(-0.5 * (ca * dx * dx + 2 * cb * dx * dy + cc * dy * dy)), 0.99)
+        a = np.where(keep & (a >= FLOOR), a, 0.0)
+        rgb += a * t * col
+        t *= 1 - a
+    assert np.abs(rgb * 255 - _gpu_rule(gs)).max() < 1e-6

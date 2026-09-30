@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 
 MB_FIT = 8192
+BOX_W, BOX_H = 7.0, 3.0  # pixel-centre extent of an 8x4 microblock (task #44)
 SLAB_PAGE_WORDS = 2048 // 4  # sort_subchunk_payload interleave page (64 recs)
 
 
@@ -95,8 +96,10 @@ def main():
     print(f"pairs={n} floor={floor:.9g} tiles_x={tiles_x}")
 
     m = np.arange(32)
-    ox = ((m & 3) * 8).astype(np.float64)
-    oy = ((m >> 2) * 4).astype(np.float64)
+    # Task #44: the device box is the pixel-centre box of each 8x4 microblock,
+    # [x0+0.5, x0+7.5] x [y0+0.5, y0+3.5] (BOX_W x BOX_H), not the continuous one.
+    ox = ((m & 3) * 8 + 0.5).astype(np.float64)
+    oy = ((m >> 2) * 4 + 0.5).astype(np.float64)
     dev = ((mask[:, None] >> m[None, :].astype(np.uint32)) & 1).astype(bool)
 
     thr = 2 * np.log(np.maximum(op, 1e-300) / floor)
@@ -109,18 +112,18 @@ def main():
         sl = slice(s, e)
         ulo = ox[None, :] - mx[sl, None]
         vlo = oy[None, :] - my[sl, None]
-        m2 = boxmin_m2(ca[sl, None], cb[sl, None], cc[sl, None], ulo, ulo + 8, vlo, vlo + 4)
+        m2 = boxmin_m2(ca[sl, None], cb[sl, None], cc[sl, None], ulo, ulo + BOX_W, vlo, vlo + BOX_H)
         # fp32 emulation of the device math
         f = np.float32
         m2f = boxmin_m2(ca[sl, None].astype(f), cb[sl, None].astype(f), cc[sl, None].astype(f),
-                        ulo.astype(f), (ulo + 8).astype(f), vlo.astype(f), (vlo + 4).astype(f),
+                        ulo.astype(f), (ulo + BOX_W).astype(f), vlo.astype(f), (vlo + BOX_H).astype(f),
                         dtype=f)
         fk_list.append(m2f.astype(np.float64) <= thr[sl, None])
         fc_list.append(m2 <= thr[sl, None])
     def m2_at(i, mb):
         ulo = ox[mb] - mx[i]
         vlo = oy[mb] - my[i]
-        return float(boxmin_m2(ca[i], cb[i], cc[i], ulo, ulo + 8, vlo, vlo + 4))
+        return float(boxmin_m2(ca[i], cb[i], cc[i], ulo, ulo + BOX_W, vlo, vlo + BOX_H))
 
     keep_exact = np.concatenate(fc_list)
     keep_f32 = np.concatenate(fk_list)

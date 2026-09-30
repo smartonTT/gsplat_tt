@@ -761,8 +761,9 @@ std::vector<uint32_t> make_box_ramp(bool is_x) {
     for (uint32_t g = 0; g < 32; ++g) {
         for (uint32_t m = 0; m < 32; ++m) {
             const uint32_t dev = perm(g, m);
-            const float v = is_x ? static_cast<float>((m & 3u) * 8u)
-                                 : static_cast<float>((m >> 2) * 4u);
+            // Task #44: pixel-centre box origin (+0.5); extent 7x3 in the kernel.
+            const float v = is_x ? static_cast<float>((m & 3u) * 8u) + 0.5f
+                                 : static_cast<float>((m >> 2) * 4u) + 0.5f;
             uint32_t bits;
             std::memcpy(&bits, &v, 4);
             r[dev] = bits;
