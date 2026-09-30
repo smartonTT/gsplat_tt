@@ -54,8 +54,20 @@
 //   32    : t_count     (number of tiles this core owns)
 //   33    : base        (global compact output offset for this core, scatter pass)
 //   34    : is_last     (1 = this core writes the final element; zero-pads tail)
-//   35    : core_id     (slot in the per-core counts buffer)
-//   36    : counts DRAM base (per-core counts, one 64B page per core)
+//   35    : core_id     (count/base slot: 2*core + mover)
+//   36    : counts DRAM base (per-slot counts, one 64B page per slot)
+//   37    : AoS blend-record DRAM base
+//   38    : tile stride
+//   39    : device_scan (read base/is_last from counts_addr page core_id)
+//   40    : mover       (0 = BRISC, 1 = NCRISC; selects the L1 staging copy)
+//
+// DUAL DATA MOVER: the host gives each core's (strided) tile list to its two
+// movers as two contiguous halves, BRISC the first, NCRISC the second, and
+// numbers the slots 2*core + mover. The compaction order is the concatenation
+// of the slots' visible elements in slot order, i.e. core 0's first half,
+// core 0's second half, core 1's first half, ... — exactly the single-mover
+// order. So every output byte is unchanged; the page shared by two adjacent
+// slots (same core or not) is handled by the boundary-page rule below.
 //
 // COMPILE-TIME ARGS: 24 TensorAccessorArgs in the order
 //   m2x,m2y,depth,a,b,c,rx,ry, col_r,col_g,col_b,op,
@@ -156,6 +168,12 @@ void kernel_main() {
     // (repointed by the host at the device-scan base buffer) page core_id,
     // instead of the host-computed `base`/`is_last` args (which are 0).
     const uint32_t device_scan = get_arg_val<uint32_t>(39);
+    // Dual data mover: 0 = BRISC, 1 = NCRISC. Both run this kernel on the same
+    // core, each on its own slice of the core's tile list with its own count /
+    // base slot (core_id is the (core, mover) slot). Every staging CB is
+    // allocated twice as deep; mover m uses the m-th copy, so the two movers
+    // share no L1.
+    const uint32_t mover = get_arg_val<uint32_t>(40);
     (void)num_tiles;
     (void)o_M_addr;
 
@@ -219,21 +237,21 @@ void kernel_main() {
                        CB_OOP = 20, CB_OCOL = 21, CB_OM = 22;
     constexpr uint32_t CB_OREC = 23;  // 16 records x 64B AoS staging
     constexpr uint32_t REC_WORDS = 16;  // 64B / 4
-    const uint32_t l1_orec = get_write_ptr(CB_OREC);
+    const uint32_t l1_orec = get_write_ptr(CB_OREC) + mover * PAGE_ELEMS * PAGE_BYTES;
     auto o_rec = reinterpret_cast<volatile uint32_t*>(l1_orec);
 
-    const uint32_t l1_m2x = get_write_ptr(CB_M2X);
-    const uint32_t l1_m2y = get_write_ptr(CB_M2Y);
-    const uint32_t l1_dep = get_write_ptr(CB_DEP);
-    const uint32_t l1_a   = get_write_ptr(CB_A);
-    const uint32_t l1_b   = get_write_ptr(CB_B);
-    const uint32_t l1_c   = get_write_ptr(CB_C);
-    const uint32_t l1_rx  = get_write_ptr(CB_RX);
-    const uint32_t l1_ry  = get_write_ptr(CB_RY);
-    const uint32_t l1_cr  = get_write_ptr(CB_CR);
-    const uint32_t l1_cg  = get_write_ptr(CB_CG);
-    const uint32_t l1_cb  = get_write_ptr(CB_CB);
-    const uint32_t l1_op  = get_write_ptr(CB_OP);
+    const uint32_t l1_m2x = get_write_ptr(CB_M2X) + mover * TILE_BYTES;
+    const uint32_t l1_m2y = get_write_ptr(CB_M2Y) + mover * TILE_BYTES;
+    const uint32_t l1_dep = get_write_ptr(CB_DEP) + mover * TILE_BYTES;
+    const uint32_t l1_a   = get_write_ptr(CB_A) + mover * TILE_BYTES;
+    const uint32_t l1_b   = get_write_ptr(CB_B) + mover * TILE_BYTES;
+    const uint32_t l1_c   = get_write_ptr(CB_C) + mover * TILE_BYTES;
+    const uint32_t l1_rx  = get_write_ptr(CB_RX) + mover * TILE_BYTES;
+    const uint32_t l1_ry  = get_write_ptr(CB_RY) + mover * TILE_BYTES;
+    const uint32_t l1_cr  = get_write_ptr(CB_CR) + mover * TILE_BYTES;
+    const uint32_t l1_cg  = get_write_ptr(CB_CG) + mover * TILE_BYTES;
+    const uint32_t l1_cb  = get_write_ptr(CB_CB) + mover * TILE_BYTES;
+    const uint32_t l1_op  = get_write_ptr(CB_OP) + mover * TILE_BYTES;
 
     auto p_m2x = reinterpret_cast<volatile uint32_t*>(l1_m2x);
     auto p_m2y = reinterpret_cast<volatile uint32_t*>(l1_m2y);
@@ -248,17 +266,17 @@ void kernel_main() {
     auto p_cb  = reinterpret_cast<volatile uint32_t*>(l1_cb);
     auto p_op  = reinterpret_cast<volatile uint32_t*>(l1_op);
 
-    const uint32_t l1_opx = get_write_ptr(CB_OPX);
-    const uint32_t l1_opy = get_write_ptr(CB_OPY);
-    const uint32_t l1_orx = get_write_ptr(CB_ORX);
-    const uint32_t l1_ory = get_write_ptr(CB_ORY);
-    const uint32_t l1_oa  = get_write_ptr(CB_OA);
-    const uint32_t l1_ob  = get_write_ptr(CB_OB);
-    const uint32_t l1_oc  = get_write_ptr(CB_OC);
-    const uint32_t l1_odep= get_write_ptr(CB_ODEP);
-    const uint32_t l1_oop = get_write_ptr(CB_OOP);
-    const uint32_t l1_ocol= get_write_ptr(CB_OCOL);
-    const uint32_t l1_oM  = get_write_ptr(CB_OM);
+    const uint32_t l1_opx = get_write_ptr(CB_OPX) + mover * PAGE_BYTES;
+    const uint32_t l1_opy = get_write_ptr(CB_OPY) + mover * PAGE_BYTES;
+    const uint32_t l1_orx = get_write_ptr(CB_ORX) + mover * PAGE_BYTES;
+    const uint32_t l1_ory = get_write_ptr(CB_ORY) + mover * PAGE_BYTES;
+    const uint32_t l1_oa  = get_write_ptr(CB_OA) + mover * PAGE_BYTES;
+    const uint32_t l1_ob  = get_write_ptr(CB_OB) + mover * PAGE_BYTES;
+    const uint32_t l1_oc  = get_write_ptr(CB_OC) + mover * PAGE_BYTES;
+    const uint32_t l1_odep= get_write_ptr(CB_ODEP) + mover * PAGE_BYTES;
+    const uint32_t l1_oop = get_write_ptr(CB_OOP) + mover * PAGE_BYTES;
+    const uint32_t l1_ocol= get_write_ptr(CB_OCOL) + mover * COLOR_GROUP_FLOATS * 4;
+    const uint32_t l1_oM  = get_write_ptr(CB_OM) + mover * PAGE_BYTES;
 
     auto o_px  = reinterpret_cast<volatile uint32_t*>(l1_opx);
     auto o_py  = reinterpret_cast<volatile uint32_t*>(l1_opy);

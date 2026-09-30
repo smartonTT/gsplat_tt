@@ -98,6 +98,25 @@ inline bool proj_balance_enabled() { return true; }  // PROJ_BALANCE default-on
 // 63.85 dB bit-identical); disable with GSPLAT_TT_PROJ_DEVICE_SCAN=0.
 inline bool proj_device_scan_enabled() { return true; }  // PROJ_DEVICE_SCAN=1
 
+// Dual data mover (task #33, the T-C pattern on the gather): the count and
+// scatter kernels run on BRISC and NCRISC of every core, each on one half of
+// the core's tile list, with count/base slot 2*core + mover. The slot order is
+// the single-mover compaction order, so outputs are byte-identical.
+// GSPLAT_TT_PROJ_GATHER_MOVERS=1 gives BRISC the whole list (A/B baseline in
+// the same build); GSPLAT_TT_PROJ_GATHER_SPLIT=<n> gives BRISC n/1000 of each
+// core's tiles (default 500). Read once.
+constexpr uint32_t GATHER_MOVERS = 2;
+static uint32_t proj_gather_split_permille() {
+    static const uint32_t v = [] {
+        const char* m = std::getenv("GSPLAT_TT_PROJ_GATHER_MOVERS");
+        if (m != nullptr && std::atoi(m) == 1) return 1000u;
+        const char* e = std::getenv("GSPLAT_TT_PROJ_GATHER_SPLIT");
+        const int x = (e != nullptr) ? std::atoi(e) : 500;
+        return static_cast<uint32_t>(std::clamp(x, 0, 1000));
+    }();
+    return v;
+}
+
 inline uint32_t fp32_bits(float v) {
     uint32_t u;
     std::memcpy(&u, &v, sizeof(uint32_t));
@@ -144,21 +163,23 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
     distributed::MeshCommandQueue* cq = nullptr;
     distributed::MeshWorkload workload;
-    KernelHandle kernel{};
+    KernelHandle kernel{};   // BRISC mover
+    KernelHandle kernel1{};  // NCRISC mover
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
     uint32_t num_cores = 0;
+    uint32_t num_slots = 0;  // count/base slots: GATHER_MOVERS per core
 
     // GSPLAT_TT_PROJ_DEVICE_SCAN: single-core on-device exclusive prefix-sum of
     // the per-core counts (scan_bases-style). Replaces the host D2H(counts) +
     // host scan + host proj_M write between the count and scatter passes.
     distributed::MeshWorkload wl_scan;
     KernelHandle kscan{};
-    // Per-core exclusive bases ([0]=base, [1]=is_last); one 64B page per core.
+    // Per-slot exclusive bases ([0]=base, [1]=is_last); one 64B page per slot.
     std::shared_ptr<distributed::MeshBuffer> buf_core_base;
 
-    // Per-core visible counts (one 64B page per core; grow-on-demand never:
-    // num_cores is fixed for the device).
+    // Per-slot visible counts (one 64B page per slot; grow-on-demand never:
+    // num_slots is fixed for the device).
     std::shared_ptr<distributed::MeshBuffer> buf_counts;
 
     // Scene inputs (uploaded once per scene, cached by pointer + N).
@@ -199,8 +220,10 @@ static void build_program(GatherDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
 
+    // Every staging CB holds one copy per mover (the kernel offsets by
+    // mover * total_bytes), so BRISC and NCRISC share no L1.
     auto cb = [&](uint32_t id, uint32_t total_bytes, uint32_t page_bytes) {
-        CircularBufferConfig c(total_bytes, {{id, DataFormat::Float32}});
+        CircularBufferConfig c(GATHER_MOVERS * total_bytes, {{id, DataFormat::Float32}});
         c.set_page_size(id, page_bytes);
         CreateCircularBuffer(program, cores, c);
     };
@@ -231,6 +254,16 @@ static void build_program(GatherDeviceContext& ctx) {
             .compile_args = ct,
             .defines = defines,
         });
+    ctx.kernel1 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+            .defines = defines,
+        });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.workload.add_program(device_range, std::move(program));
 }
@@ -240,8 +273,11 @@ static void build_program(GatherDeviceContext& ctx) {
 static void build_program_scan(GatherDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet core0(CoreRange({0, 0}, {0, 0}));
+    // One 64B page per slot for both the counts in and the bases out: the scan
+    // issues all reads, then all writes, with one barrier each.
+    const uint32_t bytes = ctx.num_slots * PAGE_BYTES;
     auto cb = [&](uint32_t id) {
-        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::Float32}});
+        CircularBufferConfig c(bytes, {{id, DataFormat::Float32}});
         c.set_page_size(id, PAGE_BYTES);
         CreateCircularBuffer(program, core0, c);
     };
@@ -269,6 +305,7 @@ static GatherDeviceContext init_context() {
     ctx.cq = device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
     ctx.num_cores = ctx.grid.x * ctx.grid.y;
+    ctx.num_slots = ctx.num_cores * GATHER_MOVERS;
     ctx.all_cores =
         CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program(ctx);
@@ -396,10 +433,10 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
     device_state::register_buffer("proj_m_colors", ctx->buf_colors);
 }
 
-// Allocate the per-core counts buffer once (one 64B page per core).
+// Allocate the per-slot counts buffer once (one 64B page per slot).
 static void ensure_counts(GatherDeviceContext* ctx) {
     if (ctx->buf_counts) return;
-    const std::size_t bytes = static_cast<std::size_t>(ctx->num_cores) * PAGE_BYTES;
+    const std::size_t bytes = static_cast<std::size_t>(ctx->num_slots) * PAGE_BYTES;
     ctx->buf_counts = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
     // Device-scan output bases (one 64B page per core); allocated alongside.
     ctx->buf_core_base = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
@@ -643,11 +680,20 @@ static void launch_pass(
     const uint32_t blendrec_addr =
         ctx->buf_blendrec ? static_cast<uint32_t>(ctx->buf_blendrec->address()) : 0u;
 
-    for (uint32_t c = 0; c < ctx->num_cores; ++c) {
+    const uint32_t split = proj_gather_split_permille();
+    for (uint32_t c = 0; c < ctx->num_cores; ++c)
+    for (uint32_t mv = 0; mv < GATHER_MOVERS; ++mv) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-        const uint32_t base = bases ? (*bases)[c] : 0u;
+        // Mover 0 takes the first h0 tiles of the core's list, mover 1 the rest
+        // (slot order == single-mover order; see the kernel header).
+        const uint32_t n_all = ws.num_chunks[c];
+        const uint32_t h0 = (n_all * split + 500u) / 1000u;
+        const uint32_t t_first = ws.chunk_start[c] + (mv == 0 ? 0u : h0 * t_stride);
+        const uint32_t t_cnt = (mv == 0) ? h0 : n_all - h0;
+        const uint32_t slot = c * GATHER_MOVERS + mv;
+        const uint32_t base = bases ? (*bases)[slot] : 0u;
         const uint32_t is_last =
-            (bases && static_cast<int>(c) == last_core) ? 1u : 0u;
+            (bases && static_cast<int>(slot) == last_core) ? 1u : 0u;
         std::vector<uint32_t> args = {
             static_cast<uint32_t>(bm2x->address()),
             static_cast<uint32_t>(bm2y->address()),
@@ -680,17 +726,18 @@ static void launch_pass(
             common_h,
             common_maxr,
             count_only ? 1u : 0u,
-            ws.chunk_start[c],
-            ws.num_chunks[c],
+            t_first,
+            t_cnt,
             base,
             is_last,
-            c,
+            slot,
             counts_addr,
         };
         args.push_back(blendrec_addr);             // arg 37: AoS blend-record base
         args.push_back(t_stride);                  // arg 38: tile stride
         args.push_back(device_scan ? 1u : 0u);     // arg 39: device-scan flag
-        SetRuntimeArgs(program, ctx->kernel, core, args);
+        args.push_back(mv);                        // arg 40: mover
+        SetRuntimeArgs(program, mv == 0 ? ctx->kernel : ctx->kernel1, core, args);
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
     if (do_finish) distributed::Finish(*ctx->cq);
@@ -810,7 +857,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                     static_cast<uint32_t>(ctx->buf_counts->address()),
                     static_cast<uint32_t>(ctx->buf_core_base->address()),
                     static_cast<uint32_t>(ctx->buf_M->address()),
-                    ctx->num_cores,
+                    ctx->num_slots,
                 });
                 distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan, false);
             }
@@ -839,12 +886,13 @@ gsplat_cpu::ProjectResult gather_visible_tt(
 
             // Read per-core counts (each occupies the first uint32 of its 64B page).
             std::vector<uint32_t> craw(
-                static_cast<std::size_t>(ctx->num_cores) * PAGE_ELEMS);
+                static_cast<std::size_t>(ctx->num_slots) * PAGE_ELEMS);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, craw, ctx->buf_counts, true);
 
-            std::vector<uint32_t> bases(ctx->num_cores, 0);
+            // Per (core, mover) slot; last_core is the last non-empty slot.
+            std::vector<uint32_t> bases(ctx->num_slots, 0);
             int last_core = -1;
-            for (uint32_t c = 0; c < ctx->num_cores; ++c) {
+            for (uint32_t c = 0; c < ctx->num_slots; ++c) {
                 const uint32_t cnt = craw[static_cast<std::size_t>(c) * PAGE_ELEMS];
                 bases[c] = static_cast<uint32_t>(M);
                 M += cnt;

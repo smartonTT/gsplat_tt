@@ -24,7 +24,8 @@
 //   0: counts_addr   per-core visible counts (input; count at word[0] of page c)
 //   1: base_addr     per-core exclusive bases (output; [0]=base, [1]=is_last)
 //   2: m_addr        proj_M (output; M at word[0] of page 0)
-//   3: num_cores     number of core slots in counts/base
+//   3: num_cores     number of slots in counts/base (CB_IN/CB_OUT hold that
+//                    many 64B pages)
 //
 // COMPILE-TIME ARGS: 3 TensorAccessorArgs (counts, base, m), DRAM-interleaved.
 
@@ -52,21 +53,28 @@ void kernel_main() {
     const auto base_acc    = TensorAccessor(base_args, base_addr, PAGE_BYTES);
     const auto m_acc       = TensorAccessor(m_args, m_addr, PAGE_BYTES);
 
+    // CB_IN / CB_OUT hold one 64B page per slot: all count reads are issued
+    // before one barrier, and all base writes before one barrier (no per-slot
+    // DRAM round trip; the gather's dual-mover split doubled the slot count).
     constexpr uint32_t CB_IN = 0;
     constexpr uint32_t CB_OUT = 1;
     const uint32_t in_l1  = get_write_ptr(CB_IN);
     const uint32_t out_l1 = get_write_ptr(CB_OUT);
-    auto* inp  = reinterpret_cast<volatile uint32_t*>(in_l1);
-    auto* outp = reinterpret_cast<volatile uint32_t*>(out_l1);
+
+    for (uint32_t c = 0; c < num_cores; c++) {
+        noc_async_read(get_noc_addr(c, counts_acc), in_l1 + c * PAGE_BYTES, PAGE_BYTES);
+    }
+    noc_async_read_barrier();
+    auto cnt_of = [&](uint32_t c) {
+        return reinterpret_cast<volatile uint32_t*>(in_l1 + c * PAGE_BYTES)[0];
+    };
 
     // Pass 1: total M + the last non-empty core (it owns the tail zero-pad).
     uint32_t M = 0;
     uint32_t last_nz = 0;
     bool any = false;
     for (uint32_t c = 0; c < num_cores; c++) {
-        noc_async_read(get_noc_addr(c, counts_acc), in_l1, PAGE_BYTES);
-        noc_async_read_barrier();
-        const uint32_t cnt = inp[0];
+        const uint32_t cnt = cnt_of(c);
         if (cnt > 0) { last_nz = c; any = true; }
         M += cnt;
     }
@@ -74,17 +82,18 @@ void kernel_main() {
     // Pass 2: exclusive prefix -> base[c], plus the is_last flag.
     uint32_t acc = 0;
     for (uint32_t c = 0; c < num_cores; c++) {
-        noc_async_read(get_noc_addr(c, counts_acc), in_l1, PAGE_BYTES);
-        noc_async_read_barrier();
-        const uint32_t cnt = inp[0];
+        const uint32_t cnt = cnt_of(c);
+        auto* outp = reinterpret_cast<volatile uint32_t*>(out_l1 + c * PAGE_BYTES);
         outp[0] = acc;
         outp[1] = (any && c == last_nz) ? 1u : 0u;
-        noc_async_write(out_l1, get_noc_addr(c, base_acc), PAGE_BYTES);
-        noc_async_write_barrier();
+        noc_async_write(out_l1 + c * PAGE_BYTES, get_noc_addr(c, base_acc), PAGE_BYTES);
         acc += cnt;
     }
+    noc_async_write_barrier();
 
-    outp[0] = M;
-    noc_async_write(out_l1, get_noc_addr(0, m_acc), PAGE_BYTES);
+    // proj_M: reuse the input staging (all counts are consumed).
+    auto* mp = reinterpret_cast<volatile uint32_t*>(in_l1);
+    mp[0] = M;
+    noc_async_write(in_l1, get_noc_addr(0, m_acc), PAGE_BYTES);
     noc_async_write_barrier();
 }
