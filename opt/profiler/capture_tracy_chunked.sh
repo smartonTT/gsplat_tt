@@ -9,6 +9,8 @@
 #   opt/profiler/<iter-dir>/chunks/<a>-<b>/{render.tracy,profile_log_device.csv}
 #   opt/profiler/<iter-dir>/profile_log_device.csv   (stitched, warmups dropped)
 # Each chunk re-runs one warmup hero render (JIT cache warm); the stitcher drops it.
+# DEVRUN_FLAGS is passed to devrun.sh (e.g. --no-verify when $GSTT2_REPO is not the
+# stamped remote_root tree). DEVICE_LOCK prefixes each device job (e.g. "ttp lock p150 --").
 set -euo pipefail
 ITER_DIR="${1:?usage: capture_tracy_chunked.sh <iter-dir> [chunk_views] [timeout_s]}"
 CHUNK="${2:-10}"
@@ -21,7 +23,7 @@ HOST="$(awk -F'"' '/^device_host/{print $2}' ttw.toml)"
 csvs=()
 for ((a = 0; a < NVIEWS; a += CHUNK)); do
   b=$((a + CHUNK < NVIEWS ? a + CHUNK : NVIEWS))
-  "$DEVRUN" --timeout "$TIMEOUT" --tag "tracy-${ITER_DIR}-${a}-${b}" -- \
+  ${DEVICE_LOCK:-} "$DEVRUN" ${DEVRUN_FLAGS:-} --timeout "$TIMEOUT" --tag "tracy-${ITER_DIR}-${a}-${b}" -- \
     "export GSTT2_REPO=$REPO; bash $REPO/opt/profiler/capture_tracy.sh $ITER_DIR $a:$b 2>&1 \
      | grep -v '^\[run\]\|OVERFLOW-DIST\|SUBCHUNK\|^\[SORT\]' | tail -30"
   csvs+=("$REPO/opt/profiler/$ITER_DIR/chunks/$a-$b/profile_log_device.csv")
