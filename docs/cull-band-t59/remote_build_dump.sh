@@ -17,6 +17,6 @@ TT_METAL_LOG_KERNELS_COMPILE_COMMANDS=${LOGCC:-0} GSPLAT_TT_DUMP_CULL=$PWD/tmp/c
   TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-$V \
   timeout 400 python3 render/run.py --no-ref --iter-dir t59-$V --dump-views t59-dump > tmp/run1.log 2>&1
 echo "run rc=$?"
-grep -E "^(SUMMARY|STAGES)|rror|FATAL|Timeout|hang" tmp/run1.log | head -20
+grep -E "^(SUMMARY|STAGES)|Traceback|TT_THROW|TT_FATAL" tmp/run1.log | head -20
 ls tmp/cull-dump | head
 echo "== $V end $(date +%T)"
