@@ -49,6 +49,97 @@ slower than a GTX 4060 `[P]`, which says the remaining gap is algorithmic.
 
 ---
 
+## 0.5 Re-profile at 7533fd8 and re-ranked levers (task #50, 2026-09-30)
+
+**Board: every number in this section is from `yyzo-bh-07` (Blackhole p100a,
+110 Tensix cores), not a p150.** Code: `origin/smarton/tt-project-opt` @
+`7533fd8` (iter-161). `114a882` (cull cleanup, retires a dead probe) landed
+after the capture and is not expected to change timing. Raw outputs and the
+exact script: `docs/reprofile-t50/`; Tracy chunks: `opt/profiler/ttw-162/chunks/`.
+
+**Headline `[M]`:** 3 untraced rounds, bicycle, 30 views, 1024×1024:
+**82.5 / 82.6 / 82.7 ms/view (≈12.1 FPS)**. The iter-161 ledger row says
+85.51 (same board, different session). Target: published GPU reference
+**10.75 ms/view `[P]` (published, not measured)** ⇒ we are **7.7× off**.
+
+Caveat: `hero_vs_ref` printed 67.20 dB in this run because the profiling tree
+took `tests/fixtures/` from the shared remote base checkout, not from the SHA.
+This task checked timing only; bit-identity of 7533fd8 was checked by iter-161
+itself (100 dB, md5 over 30 views).
+
+Tracy: 3 chunks of 10 views (0:10, 10:20, 20:30), stitched to 30 views, then
+`zone_occupancy.py`, `program_gaps.py`, `analyze_zones.py`. Traced runs are
+slower on the host side (95–109 ms/view) because of profiler dumps; device
+zone times below are the traced device times (device frame span mean
+**78.39 ms**, min 63.25, max 100.47).
+
+### 0.5.1 Critical path per stage and per RISC `[M]` (yyzo-bh-07 p100a)
+
+Device timeline is the mean over 30 views. "mean/max" are per-core zone ms.
+BRISC/NCRISC figures for dual-mover stages are per mover. Host column is the
+untraced `STAGES` bucket from the same build.
+
+| Stage (device window) | Window ms | BRISC | NCRISC | TRISC ×3 | Critical | Host bucket ms |
+|---|---:|---|---|---|---|---:|
+| project: `pfwc` → `proj_count` → `proj_scatter` (0.00–10.80) | **10.80** | count 2.76 + scatter 4.60 | same (dual mover) | pfwc 1.95 (balance 0.98) | movers; scatter balance 0.84 | project 10.94 |
+| tile_assign: `ta_gauss_aabb` → `ta_bucket_scatter` (10.96–18.49) | **7.53** | aabb 2.53 + scatter 3.36 | same (dual mover) | idle | movers; **1.39 ms** between aabb zone end and scatter zone start (aabb program tail 0.56 + scatter setup) | tile_assign 8.79 |
+| host gap (bin-hist launch) | 1.29 | idle | idle | idle | host | in sort |
+| sort: `sort_bin_hist` (19.78–20.66) | 0.88 | idle | 0.86 | idle | NCRISC | bin_count 0.92 |
+| host gap (hist D2H + layout + upload) | 1.36 | idle | idle | idle | host | 0.25+0.24+0.07 |
+| sort: `sort_bucket_emit` (22.02–30.05) | **8.04** | 7.74 | 7.74 | idle | movers (balance 0.96) | bin_emit 8.84 |
+| sort: `sort_tile_depth` radix (30.08–34.06; program to 35.23) | **3.98** (+1.17 tail) | **idle** | 3.80 | idle | NCRISC only | publish_wait 5.01 |
+| `sort_subchunk_mat` (35.29–40.91) | **5.62** | **idle** | 4.61 (balance 0.82) | idle | NCRISC only | in blend |
+| cull: `tile_mb_mask` + `tile_l1_cull_rd` (40.91–56.90) | **15.99** | **idle** (no zone) | cull_rd 14.74 | mask 15.02 (max 15.99) | TRISC SFPU, NCRISC co-busy | in blend |
+| blend: `tile_blend_sfpu` + `tile_blend_load`/`rd_l1_bulk` (56.91–78.39) | **21.48** | writer, no zone | load 17.42 (max 20.86) | sfpu **18.09 (max 21.48, balance 0.84)** | slowest core's TRISC | in blend |
+| device total (8 programs) | **78.39** | | | | | blend bucket 42.93 = mat+cull+blend |
+| inter-program idle, all cores | 3.00 | | | | 8 programs, gaps above plus ~0.05–0.16 each | |
+| host after device: D2H + assemble + head | ≈4.1 | | | | host, serial | d2h 0.67 + assemble 3.30 + head 0.19 |
+
+Observations:
+
+1. **The last program (mat + cull + blend) is 43.1 ms = 52 % of the frame**,
+   and inside it BRISC has no zone at all (BRISC-KERNEL 56.2 ms/core total,
+   of which only ~21 ms is tagged in earlier stages). The cull pass reads
+   every pair once (`tile_l1_cull_rd` 14.7 ms) and the blend reads them again
+   (`rd_l1_bulk` 17.3 ms).
+2. **Cull costs almost as much as blend** (16.0 vs 21.5 ms window). The mask
+   (`tile_mb_mask`, TRISC SFPU) is 15.0 ms/core — it is a second per-pair
+   Gaussian evaluation.
+3. **Blend is tail-bound**: balance 0.84, max − mean = 3.4 ms. The slowest
+   core sets the window.
+4. **Two sort programs still run on NCRISC only** (`sort_tile_depth` 3.98,
+   `sort_subchunk_mat` 5.62) while BRISC idles — task #35 already has the
+   dual-mover split for both, measured but not merged (see L1).
+5. Host work left on the critical path is ≈ 4.1 ms after the device plus
+   2.65 ms of mid-sort round trip; total all-core device idle is 3.0 ms.
+
+Task #19 (project / tile_assign sub-stage instrumentation) has not landed
+(still queued), so project and tile_assign are shown at zone granularity.
+
+### 0.5.2 Top-5 levers at 82.5 ms/view (savings are upper bounds `[D]` from the table above, yyzo-bh-07 p100a)
+
+| # | Lever | Evidence (this profile) | Saves ms/view `[D]` | Effort | Quality |
+|---|---|---|---:|---|---|
+| **L1** | **Merge task #35**: dual-mover `sort_tile_depth` + `sort_subchunk_mat`. Code exists on `ttp/t35` (c595a4f), needs a hand port onto the new `sort_record_ids` / `CB_SLAB` materialize and a re-measure. | 9.6 ms of NCRISC-only work with BRISC idle; #35 measured **−7.22 ms/view** on af239ef `[M]` (includes a knock-on in the blend bucket) | **4.8–7** | S | byte-identical (measured) |
+| **L2** | **Cheaper or fused cull**: stop evaluating each pair's Gaussian twice. Options in order: (a) emit the 32-bit microblock mask in `sort_bucket_emit` / materialize where the pair is already in registers, (b) a cheaper conservative mask (per-pair separable bound, one exp per row/column instead of per microblock), (c) retry cull-in-blend fusion (iter-61 hung; probe retired in 114a882 — root-cause the hang, don't just retry). | cull window 16.0 ms: mask 15.0 ms TRISC + 14.7 ms NCRISC re-read of every pair | **6–12** | M–L | must stay a superset of the per-pixel floor ⇒ byte-identical |
+| **L3** | **Blend tail + mover balance**: re-weight the tile→core LPT by measured per-tile blend cost (pairs × kept microblocks, not pairs), and split the blend load across BRISC + NCRISC (BRISC has no zone in this program). | blend balance 0.84, max − mean 3.4 ms; NCRISC load 17.4 ms tracks SFPU 18.1 ms | **2–4** | S–M | byte-identical |
+| **L4** | **Project / tile_assign pre-cull** (R6): chunk-level frustum + size cull before `proj_count`, so count/scatter/aabb touch ~23 % of 6.13 M. Also close the 1.39 ms gap inside tile_assign. | project 10.8 + tile_assign 7.5 = 18.3 ms, all proportional to gaussians touched | **4–8** | M | byte-identical if conservative |
+| **L5** | **Remove host work around the device**: pack the final 8-bit image on device (drop the 3.30 ms host bf16→fp32 assemble, shrink D2H), and move the bin layout on device (R8/R16) to delete the two mid-sort host gaps (2.65 ms). | host after device ≈ 4.1 ms; mid-sort host gaps 1.29 + 1.36 ms | **4–6** | S–M | byte-identical |
+
+Not in the top 5 (and why): R12 (blend `Q` on the FPU) is the only route to
+the GPU class but is L effort and should wait until L2 removes the duplicate
+cull evaluation; `sort_bucket_emit` (8.0 ms) is already dual-mover and
+balanced (0.96); R7 (tile-owner L1 pipeline) is still the structural endgame
+but its prize now overlaps L1 + L2.
+
+**Where this leaves the target.** Taking every upper bound, L1–L5 together
+save ≤ 37 ms ⇒ **≥ 45 ms/view (~22 FPS) on this board `[D]`**, still ~4× the
+10.75 ms/view published GPU reference `[P]`. Beating the GPU needs the
+structural levers (R7 tile-owner pipeline, R12 FPU blend) on top of these,
+and a p150 re-baseline (R5, 110 → 130 cores).
+
+---
+
 ## 1. The workload, in numbers
 
 | Quantity | Value | Tag |

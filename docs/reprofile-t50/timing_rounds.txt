@@ -1,0 +1,12 @@
+=== timing r1 14:51:33
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=67.20dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=82.5 p50_ms=82.6 min_ms=67.2 max_ms=104.3 n_views=30 warmup_s=18.7 out=/localdev/smarton/gstt2-t50/tmp/t50-time
+STAGES n=30 head=0.190 project=10.936 tile_assign=8.788 sort=15.582 blend_setup=0.026 cull=0.009 blend=42.934 d2h=0.668 assemble=3.300 tail=0.003 | sum=82.436 view_total=82.437 resid_in_view=+0.001 avg_frame_ms=82.482 resid_vs_frame=+0.046
+SORT_STAGES n=30 pread=0.012 bin_count=0.917 bin_hist_d2h=0.249 bin_layout=0.243 upload=0.069 bin_emit=8.837 kernel=0.020 d2h=0.000 compact=0.000 publish_host=0.162 publish_wait=5.010 mat=0.026 | sum=15.546 sort=15.582 resid=+0.036
+=== timing r2 14:51:57
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=67.20dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=82.6 p50_ms=82.5 min_ms=68.2 max_ms=104.4 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t50/tmp/t50-time
+STAGES n=30 head=0.189 project=10.980 tile_assign=8.846 sort=15.687 blend_setup=0.030 cull=0.011 blend=42.928 d2h=0.566 assemble=3.317 tail=0.003 | sum=82.557 view_total=82.558 resid_in_view=+0.001 avg_frame_ms=82.604 resid_vs_frame=+0.047
+SORT_STAGES n=30 pread=0.027 bin_count=0.936 bin_hist_d2h=0.259 bin_layout=0.242 upload=0.070 bin_emit=8.849 kernel=0.035 d2h=0.000 compact=0.000 publish_host=0.205 publish_wait=4.975 mat=0.044 | sum=15.642 sort=15.687 resid=+0.045
+=== timing r3 14:52:03
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=67.20dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=82.7 p50_ms=82.9 min_ms=67.9 max_ms=104.3 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t50/tmp/t50-time
+STAGES n=30 head=0.194 project=10.942 tile_assign=8.773 sort=15.598 blend_setup=0.026 cull=0.008 blend=42.934 d2h=0.805 assemble=3.367 tail=0.003 | sum=82.652 view_total=82.653 resid_in_view=+0.001 avg_frame_ms=82.696 resid_vs_frame=+0.044
+SORT_STAGES n=30 pread=0.014 bin_count=0.916 bin_hist_d2h=0.250 bin_layout=0.241 upload=0.067 bin_emit=8.851 kernel=0.020 d2h=0.000 compact=0.000 publish_host=0.168 publish_wait=5.008 mat=0.027 | sum=15.562 sort=15.598 resid=+0.037
