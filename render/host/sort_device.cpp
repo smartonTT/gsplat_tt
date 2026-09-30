@@ -1552,6 +1552,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // Read full P + P_pad published by tile_assign.
         std::vector<uint32_t> pbuf(ELEMS_PER_PAGE);
         distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
+        T.pread_ms =
+            std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
         const uint32_t P_full = pbuf[0];
         const uint32_t P_pad = pbuf[1];
         // S5.3 host-free overflow guard: tile_assign's scan_bases CLAMPS the
@@ -1737,6 +1739,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         };
         launch_bin(0, !device_layout);
         const auto t_cnt = clk::now();
+        T.bin_count_ms = std::chrono::duration<double, std::milli>(t_cnt - t_bin0).count();
 
         std::vector<int64_t> counts(num_tiles, 0);
         std::vector<int64_t> starts(num_tiles, 0);
@@ -1960,6 +1963,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             std::vector<uint32_t> hist(static_cast<std::size_t>(num_cores) * stride);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, hist, ctx->buf_bin2d, true);
             t_d2h = clk::now();
+            T.bin_hist_d2h_ms =
+                std::chrono::duration<double, std::milli>(t_d2h - t_cnt).count();
 
             BinLayoutResult bl =
                 host_bin_layout_from_hist(hist, num_cores, num_tiles, stride, tile_bucket,
@@ -1994,6 +1999,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 }
             }
             t_bin1 = clk::now();
+            T.bin_layout_ms =
+                std::chrono::duration<double, std::milli>(t_bin1 - t_d2h).count();
 
             if (tile_bucket) {
                 distributed::EnqueueWriteMeshBuffer(
@@ -2103,7 +2110,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         const auto t_sc0 = clk::now();
         launch_bin(1, true);
         const auto t_sc1 = clk::now();
-        T.bin_ms += std::chrono::duration<double, std::milli>(t_sc1 - t_sc0).count();
+        T.bin_emit_ms = std::chrono::duration<double, std::milli>(t_sc1 - t_sc0).count();
+        T.bin_ms += T.bin_emit_ms;
+        T.upload_ms = std::chrono::duration<double, std::milli>(t_sc0 - t_bin1).count();
 
         // ── ROUTE C: SFPU microblock cull over the dense bucket ─────────
         // Records are now scattered (launch_bin(1) Finished) and bucket_meta /
@@ -2231,12 +2240,17 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::cerr << "[gsplat_tt::sort] subchunk directory launch failed\n";
                 return fail();
             }
+            const auto t_pubw0 = clk::now();
+            T.publish_host_ms =
+                std::chrono::duration<double, std::milli>(t_pubw0 - t_pub0).count();
             if (sort_blend_pipe_enabled()) {
                 // C1: materialize reads prefix/dir written by directory — drain dir
                 // before enqueueing mat on the piped CQ (not between mat and blend).
                 GSPLAT_HOST_ZONE("host_finish_sort_subchunk_dir");
                 distributed::Finish(*ctx->cq);
             }
+            T.publish_wait_ms =
+                std::chrono::duration<double, std::milli>(clk::now() - t_pubw0).count();
             if (mat_work.max_items_per_core > 1024u) {
                 std::cerr << "[gsplat_tt::sort] materialize work items/core "
                           << mat_work.max_items_per_core << " > MAX_WORK=1024\n";
@@ -2317,9 +2331,13 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
         std::fprintf(stderr,
             "[SORT] stage=RP P=%u P_kept=%u num_tiles=%u max_tile_n=%u bin=%.2f "
-            "up=%.2f kernel=%.2f d2h=%.2f compact=%.2f publish=%.2f mat=%.2f total=%.2fms\n",
+            "up=%.2f kernel=%.2f d2h=%.2f compact=%.2f publish=%.2f mat=%.2f total=%.2fms"
+            " | pread=%.2f count=%.2f hist_d2h=%.2f layout=%.2f emit=%.2f"
+            " pub_host=%.2f pub_wait=%.2f\n",
             P_full, P_kept, num_tiles, max_n, T.bin_ms, T.upload_ms, T.kernel_ms,
-            T.d2h_ms, T.compact_ms, T.publish_ms, T.materialize_ms, T.total_ms);
+            T.d2h_ms, T.compact_ms, T.publish_ms, T.materialize_ms, T.total_ms,
+            T.pread_ms, T.bin_count_ms, T.bin_hist_d2h_ms, T.bin_layout_ms,
+            T.bin_emit_ms, T.publish_host_ms, T.publish_wait_ms);
         if (device_ok) *device_ok = true;
         // Step C1: materialize before blend on the piped CQ (no Finish here —
         // sort_publish_pending: one drain at blend readback; iter-58/83).

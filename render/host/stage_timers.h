@@ -48,6 +48,20 @@ struct Acc {
     double assemble = 0.0;
     double tail = 0.0;
     double view_total = 0.0;
+    // Sub-buckets of `sort`, booked by render.cpp from SortCallTimings. They
+    // partition the sort span; sort - sum(sort_*) is the unattributed rest.
+    double sort_pread = 0.0;
+    double sort_bin_count = 0.0;
+    double sort_bin_hist_d2h = 0.0;
+    double sort_bin_layout = 0.0;
+    double sort_upload = 0.0;
+    double sort_bin_emit = 0.0;
+    double sort_kernel = 0.0;
+    double sort_d2h = 0.0;
+    double sort_compact = 0.0;
+    double sort_publish_host = 0.0;
+    double sort_publish_wait = 0.0;
+    double sort_mat = 0.0;
     std::uint64_t views = 0;
 };
 

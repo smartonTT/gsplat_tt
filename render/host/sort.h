@@ -66,16 +66,29 @@ struct SortBlendContinuation {
     double blend_ms = 0.0;
 };
 
+// On the resident-pairs path (the only one render_clean runs) every "bin" step
+// is a DEVICE kernel except the per-tile layout: bin_ms = bin_count_ms +
+// bin_hist_d2h_ms + bin_layout_ms + bin_emit_ms. The leaf fields below are
+// disjoint wall-clock spans of sort_and_bin_tt (the fused cull/blend
+// continuation excluded); render.cpp books them as stage_sort_* buckets.
 struct SortCallTimings {
-    double bin_ms = 0.0;       // host Pass1+Pass2 binning into aligned layout
-    double upload_ms = 0.0;    // H2D of packed keys/ids
-    double kernel_ms = 0.0;    // device per-tile radix kernel
+    double bin_ms = 0.0;       // count + hist D2H + host layout + emit (aggregate)
+    double upload_ms = 0.0;    // H2D enqueue of the layout outputs + metadata
+    double kernel_ms = 0.0;    // device per-tile radix kernel (enqueue only; drained in publish)
     double d2h_ms = 0.0;       // device->host readback of sorted ids
     double compact_ms = 0.0;   // host Pass4 aligned->contiguous compaction
-    double publish_ms = 0.0;   // H2D of the resident contiguous outputs
+    double publish_ms = 0.0;   // publish_host_ms + publish_wait_ms
     double materialize_ms = 0.0;  // post-radix PACK2 subchunk materialize (step A)
     double total_ms = 0.0;     // wall clock of the whole call
     int stage = -1;            // which staged path ran (0 = S0, 1 = S1)
+    // Leaf split (task #18).
+    double pread_ms = 0.0;         // blocking D2H of tile_assign's P control page
+    double bin_count_ms = 0.0;     // Pass A device histogram kernel: launch + Finish
+    double bin_hist_d2h_ms = 0.0;  // blocking D2H of the per-(core,tile) histogram
+    double bin_layout_ms = 0.0;    // host_bin_layout_from_hist (host CPU only)
+    double bin_emit_ms = 0.0;      // Pass B device scatter/emit kernel: launch + Finish
+    double publish_host_ms = 0.0;  // publish: host prep + enqueues before the drain
+    double publish_wait_ms = 0.0;  // publish: Finish draining radix+publish+directory
 };
 
 // Device sort. Same signature shape as gsplat_cpu::sort_and_bin. On success

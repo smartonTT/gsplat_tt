@@ -262,21 +262,35 @@ py::tuple render_view(
     // are subtracted back out so `sort` is the sort work alone.
     const st::Acc fused_before = st::acc();
     gsplat_cpu::SortResult sr;
+    gsplat_tt::SortCallTimings sort_t;
     {
         st::Span s(st::acc().sort);
         sr = gsplat_tt::sort_and_bin_tt(
             ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
             ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(),
             &sort_ok,
-            /*timings=*/nullptr, /*need_host_sorted_ids=*/false, &sort_blend);
+            &sort_t, /*need_host_sorted_ids=*/false, &sort_blend);
     }
     {
-        const st::Acc& a = st::acc();
-        st::acc().sort -= (a.blend_setup - fused_before.blend_setup) +
-                          (a.cull - fused_before.cull) +
-                          (a.blend - fused_before.blend) +
-                          (a.d2h - fused_before.d2h) +
-                          (a.assemble - fused_before.assemble);
+        st::Acc& a = st::acc();
+        a.sort -= (a.blend_setup - fused_before.blend_setup) +
+                  (a.cull - fused_before.cull) +
+                  (a.blend - fused_before.blend) +
+                  (a.d2h - fused_before.d2h) +
+                  (a.assemble - fused_before.assemble);
+        // The sort driver's own leaf spans (SortCallTimings) as sort_* buckets.
+        a.sort_pread += sort_t.pread_ms;
+        a.sort_bin_count += sort_t.bin_count_ms;
+        a.sort_bin_hist_d2h += sort_t.bin_hist_d2h_ms;
+        a.sort_bin_layout += sort_t.bin_layout_ms;
+        a.sort_upload += sort_t.upload_ms;
+        a.sort_bin_emit += sort_t.bin_emit_ms;
+        a.sort_kernel += sort_t.kernel_ms;
+        a.sort_d2h += sort_t.d2h_ms;
+        a.sort_compact += sort_t.compact_ms;
+        a.sort_publish_host += sort_t.publish_host_ms;
+        a.sort_publish_wait += sort_t.publish_wait_ms;
+        a.sort_mat += sort_t.materialize_ms;
     }
     st::Span tail_span(st::acc().tail);
     // The sort driver runs the SFPU cull + microblock blend as its on-device
@@ -340,6 +354,18 @@ PYBIND11_MODULE(render_clean, m) {
         d["assemble"] = a.assemble;
         d["tail"] = a.tail;
         d["view_total"] = a.view_total;
+        d["sort_pread"] = a.sort_pread;
+        d["sort_bin_count"] = a.sort_bin_count;
+        d["sort_bin_hist_d2h"] = a.sort_bin_hist_d2h;
+        d["sort_bin_layout"] = a.sort_bin_layout;
+        d["sort_upload"] = a.sort_upload;
+        d["sort_bin_emit"] = a.sort_bin_emit;
+        d["sort_kernel"] = a.sort_kernel;
+        d["sort_d2h"] = a.sort_d2h;
+        d["sort_compact"] = a.sort_compact;
+        d["sort_publish_host"] = a.sort_publish_host;
+        d["sort_publish_wait"] = a.sort_publish_wait;
+        d["sort_mat"] = a.sort_mat;
         return d;
     });
     m.def("reset_stage_timings", []() { gsplat_tt::stagetimers::reset(); });

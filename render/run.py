@@ -400,6 +400,25 @@ def main():
               + f" avg_frame_ms={avg_ms:.3f}"
               + f" resid_vs_frame={avg_ms - stage_sum:+.3f}", flush=True)
 
+        # Leaf split of `sort` (SortCallTimings, render/host/sort.h). bin_* are
+        # the Pass A count kernel, the histogram D2H, the host layout and the
+        # Pass B emit kernel; publish_wait is the drain of radix+publish+dir.
+        _SORT_ORDER = ["pread", "bin_count", "bin_hist_d2h", "bin_layout",
+                       "upload", "bin_emit", "kernel", "d2h", "compact",
+                       "publish_host", "publish_wait", "mat"]
+        sort_parts = []
+        sort_sum = 0.0
+        for k in _SORT_ORDER:
+            v = float(st.get(f"sort_{k}", 0.0)) / n
+            sort_sum += v
+            sort_parts.append(f"{k}={v:.3f}")
+            print(f"TTW_TIMING stage_sort_{k}={v:.3f}", flush=True)
+        sort_ms = float(st.get("sort", 0.0)) / n
+        print(f"TTW_TIMING stage_sort_other={sort_ms - sort_sum:.3f}", flush=True)
+        print(f"SORT_STAGES n={st.get('views', 0)} " + " ".join(sort_parts)
+              + f" | sum={sort_sum:.3f} sort={sort_ms:.3f}"
+              + f" resid={sort_ms - sort_sum:+.3f}", flush=True)
+
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)
