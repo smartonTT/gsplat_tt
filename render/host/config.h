@@ -48,9 +48,6 @@ inline constexpr uint32_t kBucketFit = 8192;
 // ZERO CB_BUCKET growth; only CB_BSORT grows ((2*cap+256)*4 = 129 KB vs 65 KB).
 // CB_SLAB stays kBucketFit*32 (the sorted slab is streamed to DRAM one subchunk
 // at a time). Total materialize CB footprint ~0.9 MB — safely within L1.
-// R16 (task #23): bucket records are now 16B (PACK4), so a cap-sized tile uses
-// only cap*16 B = 256 KB of CB_BUCKET; the upper half holds the tile's depth keys
-// (<= (cap + 15*cores)*4 B), which the records no longer carry.
 // Overflow tiles with count > cap (the few heaviest, max_tile_n peaks ~26.5k)
 // keep the legacy blendrec gather.
 inline constexpr uint32_t kOverflowL1Cap = 2u * kBucketFit;  // 16384
