@@ -40,7 +40,7 @@ void kernel_main() {
             for (uint32_t b = 0; b < 16; b++) {
                 const uint32_t j = i + b;
                 noc_async_write(a.scratch + b * 32u,
-                                get_noc_addr((salt * 131u + j * 7u) & pmask, data_acc) + (j & 31u) * 32u, 32u);
+                                get_noc_addr((salt * 131u + j * 5u) & pmask, data_acc) + (j & 31u) * 32u, 32u);
             }
             noc_async_write_barrier();
         }

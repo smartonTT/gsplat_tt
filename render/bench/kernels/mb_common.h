@@ -8,7 +8,9 @@
 //                     disjoint halves)
 //   4: data_addr     (DRAM target buffer for NoC probes)
 //   5: data_npages   (power of two)
-//   6: salt          (core_linear; spreads cores over DRAM pages)
+//   6: salt          (core_linear; spreads cores over DRAM pages). Scatter
+//                     probes step pages by 5, coprime with 7 (p100a) and 8
+//                     (p150) DRAM channels, so each core touches every bank.
 //   7: mode          (probe-specific)
 // COMPILE-TIME ARGS: TensorAccessorArgs(results), TensorAccessorArgs(data).
 //

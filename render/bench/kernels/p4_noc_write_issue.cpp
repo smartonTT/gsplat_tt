@@ -12,7 +12,7 @@ void kernel_main() {
     MB_DATA_ACC(a);
     const uint32_t pmask = a.data_npages - 1u;
     uint64_t pre[16];
-    for (uint32_t b = 0; b < 16; b++) pre[b] = get_noc_addr((a.salt * 131u + b * 7u) & pmask, data_acc);
+    for (uint32_t b = 0; b < 16; b++) pre[b] = get_noc_addr((a.salt * 131u + b * 5u) & pmask, data_acc);
     uint64_t issue = 0, bar = 0, t0, t1;
     {
         DeviceZoneScopedN("p4_noc_write_issue");
@@ -23,7 +23,7 @@ void kernel_main() {
                 const uint32_t j = i + b;
                 const uint32_t off = (j & 31u) * 32u;
 #if MB_ACC
-                const uint64_t dst = get_noc_addr((a.salt * 131u + j * 7u) & pmask, data_acc) + off;
+                const uint64_t dst = get_noc_addr((a.salt * 131u + j * 5u) & pmask, data_acc) + off;
 #else
                 const uint64_t dst = pre[b] + off;
 #endif

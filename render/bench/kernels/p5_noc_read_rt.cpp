@@ -17,7 +17,7 @@ void kernel_main() {
         for (uint32_t i = 0; i < a.n; i += MB_DEPTH) {
             for (uint32_t d = 0; d < MB_DEPTH; d++) {
                 const uint32_t j = i + d;
-                noc_async_read(get_noc_addr((a.salt * 131u + j * 7u) & pmask, data_acc) + (j & 15u) * 64u,
+                noc_async_read(get_noc_addr((a.salt * 131u + j * 5u) & pmask, data_acc) + (j & 15u) * 64u,
                                a.scratch + d * 64u, 64u);
             }
             noc_async_read_barrier();
