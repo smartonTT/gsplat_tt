@@ -270,6 +270,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         // / net slower — 512 is the measured green+faster operating point).
         compute_defines["BLEND_T_EPS"] = env_or("BLEND_T_EPS", "0.00390625f");
         compute_defines["BLEND_T_PERIOD"] = env_or("BLEND_T_PERIOD", "512u");
+        // Task #68: stage per-gaussian coefficients in DEST (1 = on, 0 = old
+        // per-dispatch SFPLOADI form, kept for A/B).
+        compute_defines["BLEND_COEF_DEST"] = env_or("GSPLAT_TT_BLEND_COEF_DEST", "1");
     }
     ctx.compute = CreateKernel(
         program,

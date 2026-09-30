@@ -95,6 +95,28 @@ constexpr uint32_t DR_T = 3 * 32;
 constexpr uint32_t DR_X = 4 * 32;
 constexpr uint32_t DR_Y = 5 * 32;
 
+// Task #68: per-gaussian coefficient staging in DEST slot 6 (BLEND_COEF_DEST,
+// host default ON). A runtime scalar reaches the SFPU as two SFPLOADIs whose
+// instruction words TRISC1 builds in GPRs (zext.h/srli + lui + add + sw per
+// half): 8 RISC instructions per scalar. The dispatch bodies re-materialized
+// ~10 scalars per microblock (pair) dispatch, so 42% (pair) / 54% (single) of
+// their RISC instructions went to that and TRISC1 was issue-bound (objdump,
+// docs/blend-coef-dest-t68). Now each gaussian's scalars are built ONCE and
+// SFPSTOREd to lane-broadcast vectors in slot 6; the dispatch reads them with
+// SFPLOAD (one native instruction, immediate address). fp32 DEST round-trips
+// exactly (same path as the R/G/B/T accumulators), so output is byte-identical.
+constexpr uint32_t DR_S = 6 * 32;
+constexpr uint32_t S_MX = 0, S_MY = 1, S_A = 2, S_B = 3, S_C = 4, S_OP = 5, S_FL = 6, S_CR = 7,
+                   S_CG = 8, S_CB = 9;
+#ifndef BLEND_COEF_DEST
+#define BLEND_COEF_DEST 0
+#endif
+#if BLEND_COEF_DEST
+#define BLEND_COEF(slot, bits) ((void)(bits), sfpi::vFloat(sfpi::dst_reg[DR_S + (slot)]))
+#else
+#define BLEND_COEF(slot, bits) ckernel::sfpu::Converter::as_float(bits)
+#endif
+
 // Host microblock m -> dst_reg vector index within a tile slot.
 //
 // GEOMETRY (empirically verified on Blackhole via the VECMAP probe, fp32 dest
@@ -122,7 +144,7 @@ static uint32_t g_pixel_floor_bits = 0u;
 #if defined(BLEND_PIXEL_FLOOR)
 #define BLEND_APPLY_PIXEL_FLOOR(al)                                               \
     do {                                                                          \
-        sfpi::vFloat fl_ = ckernel::sfpu::Converter::as_float(g_pixel_floor_bits); \
+        sfpi::vFloat fl_ = BLEND_COEF(S_FL, g_pixel_floor_bits);                   \
         v_if((al) < fl_) { (al) = 0.0f; }                                         \
         v_endif;                                                                  \
     } while (0)
@@ -147,11 +169,11 @@ inline void blend_one_gaussian_math(
     // {A,B,C}, hoisted once-per-gaussian into pfwc_compute.cpp (bit-identical to
     // the det/recip/-0.5-fold that USED to run here for every (gaussian ×
     // microblock) pair). The redundant SFPU recompute is gone — read straight.
-    vFloat A = ckernel::sfpu::Converter::as_float(a_bits);
-    vFloat B = ckernel::sfpu::Converter::as_float(b_bits);
-    vFloat C = ckernel::sfpu::Converter::as_float(c_bits);
-    vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
-    vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
+    vFloat A = BLEND_COEF(S_A, a_bits);
+    vFloat B = BLEND_COEF(S_B, b_bits);
+    vFloat C = BLEND_COEF(S_C, c_bits);
+    vFloat mx = BLEND_COEF(S_MX, d_bits);
+    vFloat my = BLEND_COEF(S_MY, e_bits);
     vFloat dx = x - mx;
     vFloat dy = y - my;
     vFloat power = A * (dx * dx);                                                    // A dx^2
@@ -165,7 +187,7 @@ inline void blend_one_gaussian_math(
     vFloat weight = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(power);
 
     // alpha = min(opacity * weight, 0.99)
-    vFloat alpha = ckernel::sfpu::Converter::as_float(op_bits) * weight;
+    vFloat alpha = BLEND_COEF(S_OP, op_bits) * weight;
     vFloat clamp = 0.99f;
     vec_min_max(alpha, clamp);  // alpha = min(alpha, 0.99)
     BLEND_APPLY_PIXEL_FLOOR(alpha);
@@ -173,9 +195,9 @@ inline void blend_one_gaussian_math(
     vFloat t = dst_reg[DR_T + IX];
     vFloat at = alpha * t;
 
-    dst_reg[DR_R + IX] = vFloat(dst_reg[DR_R + IX]) + at * ckernel::sfpu::Converter::as_float(cr_bits);
-    dst_reg[DR_G + IX] = vFloat(dst_reg[DR_G + IX]) + at * ckernel::sfpu::Converter::as_float(cg_bits);
-    dst_reg[DR_B + IX] = vFloat(dst_reg[DR_B + IX]) + at * ckernel::sfpu::Converter::as_float(cb_bits);
+    dst_reg[DR_R + IX] = vFloat(dst_reg[DR_R + IX]) + at * BLEND_COEF(S_CR, cr_bits);
+    dst_reg[DR_G + IX] = vFloat(dst_reg[DR_G + IX]) + at * BLEND_COEF(S_CG, cg_bits);
+    dst_reg[DR_B + IX] = vFloat(dst_reg[DR_B + IX]) + at * BLEND_COEF(S_CB, cb_bits);
 
     vFloat one_minus = vFloat(1.0f) - alpha;
     dst_reg[DR_T + IX] = t * one_minus;
@@ -204,21 +226,21 @@ inline void blend_pair_gaussian_math(
     using namespace sfpi;
     (void)f_bits;
 
-    vFloat mx = ckernel::sfpu::Converter::as_float(d_bits);
-    vFloat my = ckernel::sfpu::Converter::as_float(e_bits);
+    vFloat mx = BLEND_COEF(S_MX, d_bits);
+    vFloat my = BLEND_COEF(S_MY, e_bits);
     vFloat dxa = vFloat(dst_reg[DR_X + IXA]) - mx;
     vFloat dxb = vFloat(dst_reg[DR_X + IXB]) - mx;
     vFloat dya = vFloat(dst_reg[DR_Y + IXA]) - my;
     vFloat dyb = vFloat(dst_reg[DR_Y + IXB]) - my;
 
     // power = A dx^2 + B dx dy + C dy^2 (both microblocks, interleaved).
-    vFloat A = ckernel::sfpu::Converter::as_float(a_bits);
+    vFloat A = BLEND_COEF(S_A, a_bits);
     vFloat pa = A * (dxa * dxa);
     vFloat pb = A * (dxb * dxb);
-    vFloat B = ckernel::sfpu::Converter::as_float(b_bits);
+    vFloat B = BLEND_COEF(S_B, b_bits);
     pa = pa + B * (dxa * dya);
     pb = pb + B * (dxb * dyb);
-    vFloat C = ckernel::sfpu::Converter::as_float(c_bits);
+    vFloat C = BLEND_COEF(S_C, c_bits);
     pa = pa + C * (dya * dya);
     pb = pb + C * (dyb * dyb);
 
@@ -231,7 +253,7 @@ inline void blend_pair_gaussian_math(
     vFloat wb = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(pb);
 
     // alpha = min(opacity * weight, 0.99) (own clamp const per chain).
-    vFloat op = ckernel::sfpu::Converter::as_float(op_bits);
+    vFloat op = BLEND_COEF(S_OP, op_bits);
     vFloat aa = op * wa;
     vFloat ab = op * wb;
     vFloat clampA = 0.99f;
@@ -248,18 +270,45 @@ inline void blend_pair_gaussian_math(
     vFloat atb = ab * tb;
 
     // R/G/B += at * color ; T *= (1 - alpha). Interleaved across A and B.
-    vFloat cr = ckernel::sfpu::Converter::as_float(cr_bits);
+    vFloat cr = BLEND_COEF(S_CR, cr_bits);
     dst_reg[DR_R + IXA] = vFloat(dst_reg[DR_R + IXA]) + ata * cr;
     dst_reg[DR_R + IXB] = vFloat(dst_reg[DR_R + IXB]) + atb * cr;
-    vFloat cg = ckernel::sfpu::Converter::as_float(cg_bits);
+    vFloat cg = BLEND_COEF(S_CG, cg_bits);
     dst_reg[DR_G + IXA] = vFloat(dst_reg[DR_G + IXA]) + ata * cg;
     dst_reg[DR_G + IXB] = vFloat(dst_reg[DR_G + IXB]) + atb * cg;
-    vFloat cbc = ckernel::sfpu::Converter::as_float(cb_bits);
+    vFloat cbc = BLEND_COEF(S_CB, cb_bits);
     dst_reg[DR_B + IXA] = vFloat(dst_reg[DR_B + IXA]) + ata * cbc;
     dst_reg[DR_B + IXB] = vFloat(dst_reg[DR_B + IXB]) + atb * cbc;
     dst_reg[DR_T + IXA] = ta * (vFloat(1.0f) - aa);
     dst_reg[DR_T + IXB] = tb * (vFloat(1.0f) - ab);
 }
+
+#if BLEND_COEF_DEST
+// Build each runtime scalar once per gaussian and park it, lane-broadcast, in
+// DEST slot 6. Stored in first-use order so each store is several instructions
+// ahead of the dispatch's SFPLOAD of it.
+inline void blend_stage_coeffs(
+    uint32_t a_bits, uint32_t b_bits, uint32_t c_bits, uint32_t d_bits, uint32_t e_bits,
+    uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+    dst_reg[DR_S + S_MX] = Converter::as_float(d_bits);
+    dst_reg[DR_S + S_MY] = Converter::as_float(e_bits);
+    dst_reg[DR_S + S_A] = Converter::as_float(a_bits);
+    dst_reg[DR_S + S_B] = Converter::as_float(b_bits);
+    dst_reg[DR_S + S_C] = Converter::as_float(c_bits);
+    dst_reg[DR_S + S_OP] = Converter::as_float(op_bits);
+    dst_reg[DR_S + S_CR] = Converter::as_float(cr_bits);
+    dst_reg[DR_S + S_CG] = Converter::as_float(cg_bits);
+    dst_reg[DR_S + S_CB] = Converter::as_float(cb_bits);
+}
+
+// The pixel floor is constant per launch; slot 6 survives the non-zeroing T
+// readback and the subchunks of a tile, and is rewritten per subchunk call.
+inline void blend_stage_floor() {
+    sfpi::dst_reg[DR_S + S_FL] = ckernel::sfpu::Converter::as_float(g_pixel_floor_bits);
+}
+#endif
 
 #endif
 
@@ -547,6 +596,9 @@ inline void process_tile_l1_blend(
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+#if BLEND_COEF_DEST && defined(BLEND_PIXEL_FLOOR)
+    MATH((blend_stage_floor()));
+#endif
     for (uint32_t g = 0; g < num_g; g++) {
         // Periodic transmittance readback (per-tile gaussian count, across
         // subchunks). period 0 => disabled (compiles out to the baseline path).
@@ -570,6 +622,9 @@ inline void process_tile_l1_blend(
             const uint32_t cr = dm_fp32::unorm16_to_f(w6 >> 16);
             const uint32_t cg = dm_fp32::unorm16_to_f(w7 & 0xffffu);
             const uint32_t cbv = dm_fp32::unorm16_to_f(w7 >> 16);
+#if BLEND_COEF_DEST
+            MATH((blend_stage_coeffs(rec[0], rec[1], rec[2], rec[4], rec[5], op, cr, cg, cbv)));
+#endif
             dispatch_blend_pairs<0>(mask, rec[0], rec[1], rec[2], rec[4], rec[5], 0u,
                                     op, cr, cg, cbv);
         }
