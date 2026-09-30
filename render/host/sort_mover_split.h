@@ -57,7 +57,13 @@ inline MatWorkAssignment build_mat_worklist(
     uint32_t bucket_fit,
     uint32_t movers = 1,
     uint32_t m0_cap = 0) {
-    constexpr uint64_t GATHER_WEIGHT = 8;  // gather ~8-10x an in-budget record
+    // gather ~8-10x an in-budget record (iter 130); GSPLAT_TT_MAT_GATHER_WEIGHT
+    // overrides it for tuning.
+    static const uint64_t GATHER_WEIGHT = [] {
+        const char* e = std::getenv("GSPLAT_TT_MAT_GATHER_WEIGHT");
+        const int w = (e != nullptr) ? std::atoi(e) : 8;
+        return static_cast<uint64_t>(w > 0 ? w : 8);
+    }();
     // iter-138: overflow tiles within the L1 cap are pre-packed at emit; the
     // materialize path reads the WHOLE tile coalesced + L1-radix-permutes it in a
     // SINGLE work item (sc==0, processes every subchunk internally) — like the
