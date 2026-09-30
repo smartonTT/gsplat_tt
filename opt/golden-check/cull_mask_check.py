@@ -24,6 +24,7 @@ import numpy as np
 
 MB_FIT = 8192
 BOX_W, BOX_H = 7.0, 3.0  # pixel-centre extent of an 8x4 microblock (task #44)
+THR_MARGIN = 0.05  # m2 slack added to thr on device (kThrMargin, task #44)
 SLAB_PAGE_WORDS = 2048 // 4  # sort_subchunk_payload interleave page (64 recs)
 
 
@@ -102,7 +103,7 @@ def main():
     oy = ((m >> 2) * 4 + 0.5).astype(np.float64)
     dev = ((mask[:, None] >> m[None, :].astype(np.uint32)) & 1).astype(bool)
 
-    thr = 2 * np.log(np.maximum(op, 1e-300) / floor)
+    thr = 2 * np.log(np.maximum(op, 1e-300) / floor) + THR_MARGIN
     res = {}
     CH = 200000
     fc_list, fk_list = [], []

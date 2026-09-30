@@ -148,3 +148,27 @@ def test_pixel_centre_mask_blend_matches_gpu_rule():
         rgb += a * t * col
         t *= 1 - a
     assert np.abs(rgb * 255 - _gpu_rule(gs)).max() < 1e-6
+
+
+def test_thr_margin_covers_blend_alpha_rounding():
+    # The blend's alpha is a bf16-rounded approx exp; near the floor it can read
+    # up to ~2^-8 high relative to the exact value the cull uses. Right at a
+    # pixel centre there is no box slack left, so thr + THR_MARGIN must absorb
+    # that: every pixel whose alpha*(1+2^-7) reaches the floor stays kept.
+    assert cmc.THR_MARGIN >= 2 * np.log1p(2.0 ** -7)
+    rng = np.random.default_rng(3)
+    yy, xx = np.mgrid[0:32, 0:32] + 0.5
+    mb = ((yy // 4) * 4 + (xx // 8)).astype(int)
+    for _ in range(2000):
+        ca, cb, cc = _conic(10 ** rng.uniform(-1, 1.5), 10 ** rng.uniform(-1, 1.5),
+                            rng.uniform(0, np.pi))
+        mx, my = rng.uniform(-16, 48, 2)
+        op = 10 ** rng.uniform(-2.5, 0)
+        dx, dy = xx - mx, yy - my
+        a = op * np.exp(-0.5 * (ca * dx * dx + 2 * cb * dx * dy + cc * dy * dy))
+        live = np.zeros(32, bool)
+        np.logical_or.at(live, mb.ravel(), (a * (1 + 2.0 ** -7) >= FLOOR).ravel())
+        m2 = cmc.boxmin_m2(ca, cb, cc, PC_OX - mx, PC_OX - mx + cmc.BOX_W,
+                           PC_OY - my, PC_OY - my + cmc.BOX_H)
+        keep = m2 <= 2 * np.log(op / FLOOR) + cmc.THR_MARGIN
+        assert not (live & ~keep).any()
