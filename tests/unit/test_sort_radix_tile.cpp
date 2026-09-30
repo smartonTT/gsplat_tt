@@ -36,14 +36,14 @@ static bool check(const std::vector<uint32_t>& keys, const char* what, uint32_t*
                      [&](uint32_t a, uint32_t b) { return keys[a] < keys[b]; });
 
     std::vector<uint32_t> k = keys, v = ids, k2(n + 1, 0xDEADBEEFu), v2(n + 1, 0xDEADBEEFu);
-    std::vector<uint32_t> hist(srt::HIST_WORDS + 1, 0xDEADBEEFu);
+    std::vector<srt::hist_t> hist(srt::HIST_ENTRIES + 1, 0xBEEFu);
     const uint32_t guard = 0xA5A5A5A5u;
-    hist[srt::HIST_WORDS] = guard;
+    hist[srt::HIST_ENTRIES] = 0xA5A5u;
     k2[n] = guard;
     v2[n] = guard;
     const bool in2 = srt::sort_pairs(k.data(), v.data(), k2.data(), v2.data(), n, hist.data());
     const std::vector<uint32_t>& out = in2 ? v2 : v;
-    if (hist[srt::HIST_WORDS] != guard || k2[n] != guard || v2[n] != guard) {
+    if (hist[srt::HIST_ENTRIES] != 0xA5A5u || k2[n] != guard || v2[n] != guard) {
         std::printf("FAIL %s n=%u: scratch overrun\n", what, n);
         return false;
     }
@@ -68,7 +68,7 @@ int main() {
     std::mt19937 rng(12345);
     uint32_t passes_seen[5] = {0, 0, 0, 0, 0};
     uint32_t cases = 0, fails = 0;
-    const uint32_t sizes[] = {0, 1, 2, 7, 16, 17, 18, 31, 64, 100, 257, 1000, 2600, 9000, 25000, 32768};
+    const uint32_t sizes[] = {0, 1, 2, 7, 16, 17, 18, 31, 64, 100, 257, 1000, 2600, 9000, 25000, srt::MAX_N};
     for (uint32_t n : sizes) {
         for (uint32_t trial = 0; trial < 6; trial++) {
             std::vector<uint32_t> keys(n);
@@ -107,9 +107,9 @@ int main() {
         for (auto& x : keys) x = 0xFFFFF000u + (rng() % 0x1000u);
         fails += !check(keys, "top", passes_seen); cases++;
     }
-    std::printf("cases=%u fails=%u passes_seen=[1:%u 2:%u 3:%u 4:%u] HIST_WORDS=%u DMAX=%u\n",
+    std::printf("cases=%u fails=%u passes_seen=[1:%u 2:%u 3:%u 4:%u] HIST_ENTRIES=%u\n",
                 cases, fails, passes_seen[1], passes_seen[2], passes_seen[3], passes_seen[4],
-                srt::HIST_WORDS, srt::DMAX);
+                srt::HIST_ENTRIES);
     const bool all_passes = passes_seen[1] && passes_seen[2] && passes_seen[3] && passes_seen[4];
     if (!all_passes) std::printf("FAIL: not every pass count was exercised\n");
     return (fails == 0 && all_passes) ? 0 : 1;

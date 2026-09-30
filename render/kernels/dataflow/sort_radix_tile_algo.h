@@ -11,8 +11,8 @@
 //   1. one scan finds kmin / kmax; all keys equal -> input order is the answer;
 //   2. keys are sorted as r = key - kmin, which needs only B = bitlen(kmax-kmin)
 //      bits (order-preserving since key >= kmin);
-//   3. the pass count P (1..4) and digit width d = ceil(B/P) <= DMAX are picked
-//      per tile from n and B with a small cost model;
+//   3. the pass count P (1..4) and digit width d = ceil(B/P) are picked per
+//      tile from n and B with a small cost model (P << d <= HIST_ENTRIES);
 //   4. one scan fills all P histograms, then P scatter passes; the last pass
 //      writes ids only (the keys are not an output).
 // Every choice is a STABLE sort by key, so the permutation (and the output) is
@@ -23,12 +23,19 @@
 
 namespace sort_radix_tile {
 
-#ifndef SORT_RADIX_DMAX
-#define SORT_RADIX_DMAX 11
+// Histograms live in the RISC's 8 KB local memory (kernel stack), not L1: a
+// bucket counter is loaded right after the store to the same bucket, and on
+// L1 that read-after-write costs ~7% of the radix time (measured, task #26).
+// uint16 counts suffice since n <= 32768 (MAX_TILE_ENTRIES). 1536 entries =
+// 3 KB covers 3 passes x 9-bit digits (27 key bits) or 4 x 8.
+using hist_t = uint16_t;
+#ifndef SORT_RADIX_HIST_ENTRIES
+#define SORT_RADIX_HIST_ENTRIES 1536
 #endif
-constexpr uint32_t DMAX = SORT_RADIX_DMAX;   // max digit width (bits)
+constexpr uint32_t HIST_ENTRIES = SORT_RADIX_HIST_ENTRIES;
 constexpr uint32_t MAX_PASSES = 4;           // 4 x 8 >= 32 bits always fits
-static_assert(DMAX >= 8 && DMAX <= 16, "DMAX out of range");
+constexpr uint32_t MAX_N = 32768;            // hist_t range
+static_assert(HIST_ENTRIES >= MAX_PASSES * 256u, "4 x 8-bit plan must fit");
 
 // Relative costs per pass: each bucket is cleared + prefix-summed, each element
 // is histogrammed + scattered.
@@ -36,28 +43,19 @@ constexpr uint32_t BUCKET_COST = 1;
 constexpr uint32_t ELEM_COST = 8;
 
 constexpr uint32_t ceil_div(uint32_t a, uint32_t b) { return (a + b - 1u) / b; }
-constexpr uint32_t min_u(uint32_t a, uint32_t b) { return a < b ? a : b; }
-constexpr uint32_t max_u(uint32_t a, uint32_t b) { return a > b ? a : b; }
-constexpr uint32_t hist_words_for(uint32_t p) {
-    return p * (1u << min_u(DMAX, ceil_div(32u, p)));
-}
-// Histogram scratch (uint32 words) needed for any (n, B).
-constexpr uint32_t HIST_WORDS =
-    max_u(max_u(hist_words_for(1), hist_words_for(2)),
-          max_u(hist_words_for(3), hist_words_for(4)));
 
 struct Plan {
     uint32_t passes;
     uint32_t bits;
 };
 
-// Pick (P, d) for n elements whose relative keys need B (1..32) bits.
+// Pick (P, d) for n (<= MAX_N) elements whose relative keys need B (1..32) bits.
 inline Plan choose_plan(uint32_t n, uint32_t B) {
     Plan best{0u, 0u};
     uint32_t best_cost = 0xFFFFFFFFu;
     for (uint32_t p = 1; p <= MAX_PASSES; p++) {
         const uint32_t d = ceil_div(B, p);
-        if (d > DMAX) continue;
+        if ((p << d) > HIST_ENTRIES) continue;
         const uint32_t cost = p * ((BUCKET_COST << d) + ELEM_COST * n);
         if (cost < best_cost) {
             best_cost = cost;
@@ -79,7 +77,7 @@ inline uint32_t bit_length(uint32_t x) {
 
 template <uint32_t P>
 inline void fill_hist(const uint32_t* k, uint32_t n, uint32_t kmin, uint32_t d,
-                      uint32_t mask, uint32_t* hist) {
+                      uint32_t mask, hist_t* hist) {
     const uint32_t R = mask + 1u;
     for (uint32_t i = 0; i < n; i++) {
         const uint32_t r = k[i] - kmin;
@@ -91,10 +89,10 @@ inline void fill_hist(const uint32_t* k, uint32_t n, uint32_t kmin, uint32_t d,
 }
 
 // Stable sort of the pairs (k[i], v[i]), i < n, by k. (k2, v2) is ping-pong
-// scratch of n entries; hist holds >= HIST_WORDS words. Returns true when the
+// scratch of n entries; hist holds HIST_ENTRIES counters. Returns true when the
 // sorted ids end up in v2, false when they are in v. Keys are clobbered.
 inline bool sort_pairs(uint32_t* k, uint32_t* v, uint32_t* k2, uint32_t* v2,
-                       uint32_t n, uint32_t* hist) {
+                       uint32_t n, hist_t* hist) {
     if (n <= 16u) {
         for (uint32_t i = 1; i < n; i++) {
             const uint32_t kk = k[i];
@@ -134,11 +132,11 @@ inline bool sort_pairs(uint32_t* k, uint32_t* v, uint32_t* k2, uint32_t* v2,
         default: fill_hist<4>(k, n, kmin, d, mask, hist); break;
     }
     for (uint32_t p = 0; p < P; p++) {
-        uint32_t* h = hist + p * R;
+        hist_t* h = hist + p * R;
         uint32_t sum = 0;
         for (uint32_t b = 0; b < R; b++) {
             const uint32_t c = h[b];
-            h[b] = sum;
+            h[b] = static_cast<hist_t>(sum);
             sum += c;
         }
     }
@@ -148,7 +146,7 @@ inline bool sort_pairs(uint32_t* k, uint32_t* v, uint32_t* k2, uint32_t* v2,
     uint32_t* ok = k2;
     uint32_t* ov = v2;
     for (uint32_t p = 0; p < P; p++) {
-        uint32_t* h = hist + p * R;
+        hist_t* h = hist + p * R;
         const uint32_t sh = p * d;
         const uint32_t sub = (p == 0) ? kmin : 0u;  // pass 0 stores r = k - kmin
         if (p + 1u == P) {

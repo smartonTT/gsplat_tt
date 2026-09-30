@@ -47,7 +47,6 @@ constexpr uint32_t CB_KOUT = 2;   // keys pong
 constexpr uint32_t CB_IOUT = 3;   // ids  pong
 constexpr uint32_t CB_TIDS = 4;   // tile-id list scratch (one page)
 constexpr uint32_t CB_META = 5;   // tmeta scratch (one page)
-constexpr uint32_t CB_HIST = 6;   // radix histograms (HIST_WORDS uint32)
 
 }  // namespace
 
@@ -89,7 +88,8 @@ void kernel_main() {
     auto iin  = reinterpret_cast<uint32_t*>(iin_l1);
     auto kout = reinterpret_cast<uint32_t*>(kout_l1);
     auto iout = reinterpret_cast<uint32_t*>(iout_l1);
-    auto hist = reinterpret_cast<uint32_t*>(get_write_ptr(CB_HIST));
+    // Radix histograms in local memory (stack), see sort_radix_tile_algo.h.
+    sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
 
     const uint32_t meta_scratch = get_write_ptr(CB_META);
     auto meta_ptr = reinterpret_cast<volatile uint32_t*>(meta_scratch);

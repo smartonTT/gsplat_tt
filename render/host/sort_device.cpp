@@ -52,7 +52,6 @@
 #include "tt-metalium/kernel_types.hpp"
 
 #include "gsplat_cpu/thread_pool.h"
-#include "../kernels/dataflow/sort_radix_tile_algo.h"
 
 using namespace tt;
 using namespace tt::tt_metal;
@@ -299,7 +298,6 @@ static void build_program(SortDeviceContext& ctx) {
     big_cb(3, SCRATCH_BYTES);  // CB_IOUT
     big_cb(4, PAGE_BYTES);     // CB_TIDS
     big_cb(5, PAGE_BYTES);     // CB_META
-    big_cb(6, sort_radix_tile::HIST_WORDS * 4u);  // CB_HIST (R11 radix histograms)
 
     std::vector<uint32_t> ct;
     for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
