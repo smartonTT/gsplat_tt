@@ -77,6 +77,64 @@ def boxmin_m2(ca, cb, cc, ulo, uhi, vlo, vhi, dtype=np.float64):
     return np.minimum(qv, qh)
 
 
+def band_keep_f32(A, B, C, mx, my, q, floor, margin=THR_MARGIN, log_under=0.0):
+    """fp32 model of the band-extent microblock cull (task #59).
+
+    Mirrors microblock_cull_compute.cpp: one SFPU lane per gaussian, the 8
+    microblock rows ("bands") of a tile evaluated in turn. For band j (pixel-
+    centre rows v in [4j+0.5, 4j+3.5] - my) the ellipse m2 <= t has an exact
+    u-extent [R*vl - S*sqrt(dl), R*vr + S*sqrt(dr)], where vr/vl clamp the
+    ellipse's right/left-most point into the band (the extent is concave /
+    convex in v). Column k is kept iff that extent meets its pixel-centre span
+    [8k+0.5, 8k+7.5] - mx; the comparison is done on squares (no sqrt). This is
+    the same "ellipse meets the pixel-centre box" test as boxmin_m2, just
+    organised by rows. Inputs are the slab record fields (A,B,C pre-folded
+    conic, tile-local mean, UNORM16 opacity q). Returns bool [n, 32], bit m =
+    microblock m (x-block m&3, y-block m>>2).
+    """
+    f = np.float32
+    A, B, C, mx, my = (np.asarray(x, dtype=f) for x in (A, B, C, mx, my))
+    ci_a = f(-2) * A
+    ci_c = f(-2) * C
+    det = ci_a * ci_c - B * B  # ci_b = -B
+    op = np.asarray(q, dtype=f) * f(1.0 / 65535.0)
+    ratio = op * f(1.0 / floor)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = (f(2) * (np.log(ratio.astype(np.float64)) - log_under).astype(f) + f(margin)).astype(f)
+        P = t * ci_a
+        nQ = -det
+        S = f(1) / ci_a
+        S2 = S * S
+        R = B * S
+        nR = -R
+        vR = B * np.sqrt(np.maximum(t, f(0)) * (f(1) / (det * ci_c)))
+        nvR = -vR
+        vb = f(0.5) - my
+        nc0 = mx - f(0.5)
+        c07 = f(7.5) - mx
+        keep = np.zeros((len(A), 32), dtype=bool)
+        for j in range(8):
+            v0 = vb + f(4 * j)
+            v1 = vb + f(4 * j + 3)
+            vc = np.minimum(np.maximum(f(0), v0), v1)
+            dc = nQ * (vc * vc) + P
+            vr = np.minimum(np.maximum(v0, vR), v1)
+            vl = np.minimum(np.maximum(v0, nvR), v1)
+            Dr = S2 * (nQ * (vr * vr) + P)
+            Dl = S2 * (nQ * (vl * vl) + P)
+            Dr = np.where(dc < 0, f(-1e30), Dr)
+            Dl = np.where(dc < 0, f(-1e30), Dl)
+            nwr0 = R * vr + nc0
+            nzl0 = nR * vl + c07
+            for k in range(4):
+                nw = nwr0 - f(8 * k)
+                nz = nzl0 + f(8 * k)
+                tr = nw * np.abs(nw) + Dr
+                tl = nz * np.abs(nz) + Dl
+                keep[:, 4 * j + k] = np.minimum(tr, tl) >= 0
+    return keep
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dump")

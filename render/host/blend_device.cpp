@@ -1014,15 +1014,17 @@ static void build_program_and_workload(DeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     };
 
-    cb_cfg(cull::CB_BOX_OX, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
-    cb_cfg(cull::CB_BOX_OY, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
-    cb_cfg(cull::CB_CULL_COEFF, cull::COEFF_ROW_BYTES, 32, DataFormat::Float32);
+    // Task #59 band cull: the reader transposes each 128-record batch into one
+    // fp32 coefficient tile (CB 2, unpacked to DEST as fp32); the compute packs
+    // one fp32 mask tile per batch into CB_KEEP. The slab slot (CB_BUCKET) is
+    // produced by the reader and consumed by the writer (mask -> word3 in L1,
+    // then the slab is written back). No box-origin ramps.
+    constexpr uint32_t CB_COEFF = cull::CB_CULL_COEFF;
+    cb_cfg(CB_COEFF, mb::RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(cull::CB_CULL_COUNTS, cull::COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(cull::CB_SCR_IDS, 64, 2, DataFormat::UInt32);
     cb_cfg(cull::CB_SCR_ATTR, 64, 2u * 16u, DataFormat::Float32);
-    // M3 writer: word3 mask write-back is an aligned per-batch 64B page RMW, so
-    // CB_MASK_SCR holds a full BATCH (32 records == 16 pages == 1024B).
-    cb_cfg(cull::CB_MASK_SCR, 64, 16, DataFormat::UInt32);
+    cb_cfg(cull::CB_MASK_SCR, 64, 16, DataFormat::UInt32);  // writer metadata scratch
     cb_cfg(cull::CB_KEEP, mb::RAMP_TILE_BYTES, 4, DataFormat::Float32);
     cb_cfg(cull::CB_CORE_TILES, 64, 1, DataFormat::UInt32);
     constexpr uint32_t CB_BUCKET = 8;
@@ -1048,11 +1050,10 @@ static void build_program_and_workload(DeviceContext& ctx) {
         });
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
-    u2d[cull::CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
-    u2d[cull::CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[CB_COEFF] = UnpackToDestMode::UnpackToDestFp32;
     ctx.compute = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
+        OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_band_cull_compute.cpp",
         cores,
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi3,
@@ -1060,7 +1061,6 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
-            .defines = {{"TILE_L1_CULL", "1"}},
         });
 
     std::vector<uint32_t> writer_ct;
