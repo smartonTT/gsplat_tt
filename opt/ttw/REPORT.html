@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-09-30 02:41 PDT · 74 metal + 138 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-09-30 02:45 PDT · 74 metal + 138 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -108,7 +108,7 @@
     
     <p class='idea-desc'>Task #18: split the 46.5 ms sort stage (SortCallTimings wired into stage_timers as stage_sort_* leaves) and cut what the device actually waits on inside it. Measured split refuted the '~36 ms host binning' premise: Pass A count and Pass B emit were already device kernels; host-serial time was ~2.4 ms. Four bit-identical cuts: (1) host_bin_layout_into: row-major passes, persistent tables, heap LPT, no build/upload of the dead dense recbase table; (2) subchunk directory uploaded from the host's build_subchunk_layout instead of the serial single-core sort_subchunk_directory kernel (deleted); (3) emit reads its own count-pass histogram row (new buf_bin_hist, arg 17) instead of re-scanning its tid/keep pages; (4) count pass batches 32 pages of NoC reads per barrier.</p><p class='reason'>A/B, 3 interleaved rounds per build inside one reservation on yyzo-bh-07 (Blackhole p100a), bicycle 30 views 1024x1024: avg_frame_ms 173.53 +/- 0.56 -> 166.63 +/- 0.05 (-6.90 ms, 5.76 -> 6.00 FPS); stage_sort 46.49 -> 40.00 (-6.50 ms). Leaves: bin_layout 1.98 -> 0.25, publish_wait 10.31 -> 8.02 (directory kernel gone), bin_emit 32.17 -> 30.26, bin_count 1.40 -> 0.90; project/tile_assign/blend unchanged within 0.02 ms. hero_vs_ref 100.00 dB in all six runs and all 30 dumped views byte-identical to the baseline build. Host bridge now ~0.65 ms (at its floor); sort is 99% device: emit 30.3, radix+publish 8.0, count 0.9. Next lever: de-stall sort_bucket_emit (R3), -5 to -10 ms expected. Detail: docs/sort-stage-split-2026-09-30.md.</p>
     <p class='iter-build'><code>dede928</code></p>
-    
+    <p class='iter-tracy'><a href='profiler/ttw-142/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t18/opt/profiler/ttw-142/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-142/hero.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-142/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-142/hero_diff10.png" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-142/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
