@@ -11,6 +11,9 @@ be dropped, or pass --skip-first). For every zone, per view:
   occ_%      : max_ms / device frame span (share of the frame the busiest core
                spends in this zone)
 Device frame span = last - first device timestamp of the frame.
+Then a stage table: per view, the device window (first START -> last END over all
+cores) of each pipeline stage's zones, to line up with run.py's TTW_TIMING
+stage_* host timers (docs/stage-timing-2026-09-30.md).
 
 Usage: zone_occupancy.py <csv> [--skip-first] [--top N]
 """
@@ -25,6 +28,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from stitch_device_csv import read_csv, segment_frames  # noqa: E402
 
 CYC_MS = 1350.0 * 1000.0
+# render_clean zones by host stage (render_view stage_* timers).
+STAGES = [
+    ("project", ("pfwc", "proj_count", "proj_scatter")),
+    ("tile_assign", ("ta_gauss_aabb", "ta_bucket_scatter")),
+    ("sort", ("sort_bin_hist", "sort_bucket_emit", "sort_tile_depth", "sort_subchunk_mat")),
+    ("cull", ("tile_mb_mask", "tile_l1_cull_rd")),
+    ("blend", ("tile_blend_sfpu", "tile_blend_load", "rd_l1_bulk")),
+]
 
 
 def main():
@@ -40,6 +51,8 @@ def main():
     nv = n_frames - first
 
     stack = defaultdict(list)
+    win = {}  # (frame, stage) -> [first START, last END]
+    stage_of = {z: st for st, zs in STAGES for z in zs}
     # busy[zone][(frame, core)] = cycles
     busy = defaultdict(lambda: defaultdict(int))
     riscs = defaultdict(set)
@@ -50,11 +63,18 @@ def main():
         key = (p[1], p[2], p[3], p[ZONE])
         if p[TYPE] == "ZONE_START":
             stack[key].append(t)
+            st = stage_of.get(p[ZONE])
+            if st:
+                w = win.setdefault((fr, st), [t, t])
+                w[0] = min(w[0], t)
         elif p[TYPE] == "ZONE_END" and stack[key]:
             d = int(t) - stack[key].pop()
             if d >= 0:
                 busy[p[ZONE]][(fr, (p[1], p[2], p[3]))] += d
                 riscs[p[ZONE]].add(p[3])
+                st = stage_of.get(p[ZONE])
+                if st:
+                    win[(fr, st)][1] = max(win[(fr, st)][1], int(t))
 
     span = np.zeros(n_frames)
     for f in range(first, n_frames):
@@ -83,6 +103,15 @@ def main():
     print("-" * 80)
     for z, s, c, mn, mx, b, o, r in rows[:args.top]:
         print(f"{z:<20} {s:>9.2f} {c:>5} {mn:>8.3f} {mx:>8.3f} {b:>7.2f} {o:>6.1f}  {r}")
+
+
+    print(f"\n{'stage':<12} {'window_ms/v':>11} {'min':>7} {'max':>7}  zones")
+    print("-" * 80)
+    for st, zs in STAGES:
+        w = [(win[(f, st)][1] - win[(f, st)][0]) / CYC_MS
+             for f in range(first, n_frames) if (f, st) in win]
+        if w:
+            print(f"{st:<12} {np.mean(w):>11.2f} {min(w):>7.2f} {max(w):>7.2f}  {'+'.join(zs)}")
 
 
 ZONE, TYPE = 10, 11
