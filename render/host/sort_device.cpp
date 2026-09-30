@@ -1890,7 +1890,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->cap_tile_recs_bytes = PAGE_BYTES;
                 device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
             }
-            const std::size_t cnt_bytes = static_cast<std::size_t>(stride) * 4u;
+            const std::size_t cnt_bytes = static_cast<std::size_t>(stride) * 16u;  // 1 per 16 B
             if (!ctx->buf_acount || ctx->cap_acount_bytes < cnt_bytes) {
                 distributed::ReplicatedBufferConfig rc{.size = cnt_bytes};
                 distributed::DeviceLocalBufferConfig lc{
@@ -1943,6 +1943,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 GSPLAT_HOST_ZONE("host_finish_sort_atomic");
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, tot, ctx->buf_acount, true);
             }
+            for (uint32_t t = 0; t < num_tiles; t++) tot[t] = tot[static_cast<std::size_t>(t) * 4u];
             const auto t_e1 = clk::now();
             T.bin_emit_ms = ms_t(t_e1 - t_e0).count();
             // GSPLAT_TT_SORT_ATOMIC_CHECK=1: read the chunk table back and check

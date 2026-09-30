@@ -199,10 +199,14 @@ void kernel_main() {
         }
         NocCmdBufState saved;
         noc_cmd_buf_save_state(noc_index, write_at_cmd_buf, &saved);
-        for (uint32_t t = 0; t < num_tiles; t++) {
+        // One counter per 16 B word (4 per page), and each core starts at a
+        // different tile: concurrent fetch-and-adds on one word occasionally
+        // returned a wrong old value (overlapping chunks, sums still right).
+        for (uint32_t i = 0; i < num_tiles; i++) {
+            const uint32_t t = (i + core_id * 97u) % num_tiles;
             const uint32_t h = h0p[t] + h1p[t];
             if (h == 0u) continue;
-            const uint64_t a = get_noc_addr(t / ELEMS_PER_PAGE, cnt_acc) + (t % ELEMS_PER_PAGE) * 4u;
+            const uint64_t a = get_noc_addr(t / 4u, cnt_acc) + (t % 4u) * 16u;
             noc_fast_atomic_increment<noc_mode, true>(
                 noc_index, write_at_cmd_buf, a, NOC_UNICAST_WRITE_VC, h, 31 /*wrap*/, false /*linked*/,
                 false /*posted*/, reinterpret_cast<uint32_t>(basep + t * RET_STRIDE));
