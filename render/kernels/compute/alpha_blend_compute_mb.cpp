@@ -44,6 +44,7 @@
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/fill.h"
+#include "../dataflow/dm_fp32.h"
 
 #ifdef TRISC_MATH
 #include "sfpi.h"
@@ -338,9 +339,13 @@ inline void non_zeroing_pack_release() {
 inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
     mb_cb_consume_fence();
     const volatile uint32_t* w = reinterpret_cast<const volatile uint32_t*>(t_rb_addr);
-    float mbmax[NUM_MB];
+    // Per-microblock max T as fp32 bits (integer compares: no scalar FPU on
+    // the TRISCs). mbmax stays a non-negative non-NaN float (starts at +0), so
+    // `tf > mbmax` is `fb > mbmax && fb <= +inf` on the bits: negatives (sign
+    // bit set) and NaNs compare above +inf as unsigned and are rejected.
+    uint32_t mbmax[NUM_MB];
     for (uint32_t m = 0; m < NUM_MB; ++m) {
-        mbmax[m] = 0.0f;
+        mbmax[m] = 0u;
     }
     // The packed bf16 tile is 1024 values in ROW-MAJOR device-raster order (this
     // kernel's pack/unpack is set up so device raster index == memory index; cf.
@@ -351,18 +356,18 @@ inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
         const uint32_t word = w[t >> 1];
         const uint32_t half = (t & 1u) ? (word >> 16) : (word & 0xffffu);
         const uint32_t fb = half << 16;
-        float tf;
-        __builtin_memcpy(&tf, &fb, 4);
         const uint32_t r = t >> 5;       // t = r*32 + c (row-major)
         const uint32_t c = t & 31u;
         const uint32_t V = (r & ~1u) | (c & 1u);
-        if (tf > mbmax[V]) {
-            mbmax[V] = tf;
+        if (fb > mbmax[V] && fb <= 0x7F800000u) {
+            mbmax[V] = fb;
         }
     }
+    uint32_t eps_bits;
+    __builtin_memcpy(&eps_bits, &g_blend_t_eps, 4);
     uint32_t live = 0u;
     for (uint32_t m = 0; m < NUM_MB; ++m) {
-        if (mbmax[m] >= g_blend_t_eps) {
+        if (dm_fp32::le(eps_bits, mbmax[m])) {  // mbmax >= eps
             live |= (1u << m);
         }
     }
@@ -527,20 +532,6 @@ inline void process_tile_l1_blend(
         }
         ++g_seen;
         const uint32_t* rec = l1_splat_words(buck, g);
-        const uint32_t a = rec[0], b = rec[1], c = rec[2];
-        const uint32_t d = rec[4], e = rec[5];
-        const uint32_t w6 = rec[6], w7 = rec[7];
-        constexpr float kUnormInv = 1.0f / 65535.0f;
-        auto unorm_bits = [](uint32_t u16) -> uint32_t {
-            const float f = static_cast<float>(u16) * kUnormInv;
-            uint32_t bits;
-            __builtin_memcpy(&bits, &f, 4);
-            return bits;
-        };
-        const uint32_t op = unorm_bits(w6 & 0xffffu);
-        const uint32_t cr = unorm_bits(w6 >> 16);
-        const uint32_t cg = unorm_bits(w7 & 0xffffu);
-        const uint32_t cbv = unorm_bits(w7 >> 16);
         // M3: the cull writer stored the 32-bit microblock mask into word3 of the
         // slab record (the dead depth key). Read it straight from rec[3] — no
         // separate CB_BMASK_BULK / DRAM cull_masks round-trip.
@@ -549,7 +540,15 @@ inline void process_tile_l1_blend(
         const uint32_t mask = rec[3] & live_mb_mask;
         MB_STATS_RECORD(rec, mask);
         if (mask != 0u) {
-            dispatch_blend_pairs<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
+            // UNORM16 op/color -> fp32 bits, integer bit-exact (TRISC scalar code
+            // has no FPU; the float form was 8 libgcc calls per record, task #39).
+            const uint32_t w6 = rec[6], w7 = rec[7];
+            const uint32_t op = dm_fp32::unorm16_to_f(w6 & 0xffffu);
+            const uint32_t cr = dm_fp32::unorm16_to_f(w6 >> 16);
+            const uint32_t cg = dm_fp32::unorm16_to_f(w7 & 0xffffu);
+            const uint32_t cbv = dm_fp32::unorm16_to_f(w7 >> 16);
+            dispatch_blend_pairs<0>(mask, rec[0], rec[1], rec[2], rec[4], rec[5], 0u,
+                                    op, cr, cg, cbv);
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));

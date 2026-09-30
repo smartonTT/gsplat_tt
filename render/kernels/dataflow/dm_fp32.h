@@ -132,4 +132,52 @@ inline uint32_t pow2_shift(uint32_t n) {
     return static_cast<uint32_t>(__builtin_ctz(n));
 }
 
+// Record decode for the cull/blend TRISC compute kernels (their scalar code has
+// no FPU either).
+
+// Bits of fl((float)q * (1.0f / 65535.0f)) for q < 2^16 (UNORM16 -> float).
+// fl(1/65535) = 0x800080 * 2^-39, so the exact product is q * 65537 * 2^-32,
+// which fits 32 bits; round it to 24 significant bits, nearest-even.
+inline uint32_t unorm16_to_f(uint32_t q) {
+    if (q == 0u) return 0u;
+    const uint32_t p = (q << 16) + q;  // q * 65537
+    const uint32_t nb = 32u - static_cast<uint32_t>(__builtin_clz(p));  // 17..32
+    uint32_t e = nb + 94u;  // biased exponent of p * 2^-32
+    uint32_t m;
+    if (nb > 24u) {
+        const uint32_t s = nb - 24u;
+        m = p >> s;
+        const uint32_t rem = p & ((1u << s) - 1u), half = 1u << (s - 1u);
+        if (rem > half || (rem == half && (m & 1u))) {
+            m++;
+            if (m >> 24) {
+                m >>= 1;
+                e++;
+            }
+        }
+    } else {
+        m = p << (24u - nb);
+    }
+    return (e << 23) | (m & 0x7FFFFFu);
+}
+
+// Bits of fl(fl(a + k) - k) for fp32 bits a and kb = bits of an integer k
+// (the tile-local mean round-tripped through the absolute pixel position).
+// Same result as the float expression for every input.
+inline uint32_t add_sub_roundtrip(uint32_t a, uint32_t kb) {
+    uint32_t s, r;
+    if (kb == 0u) {
+        if (!is_nan(a)) return a == SIGN ? 0u : a;  // -0 + 0 = +0
+    } else if (add(a, kb, &s) && add(s, kb ^ SIGN, &r)) {
+        return r;
+    }
+    float fa, fk;
+    __builtin_memcpy(&fa, &a, 4);
+    __builtin_memcpy(&fk, &kb, 4);
+    volatile float x = fa + fk;  // keep the two roundings
+    const float y = x - fk;
+    __builtin_memcpy(&r, &y, 4);
+    return r;
+}
+
 }  // namespace dm_fp32

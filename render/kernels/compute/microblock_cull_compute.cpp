@@ -56,6 +56,7 @@
 #include "api/compute/pack.h"
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/fill.h"
+#include "../dataflow/dm_fp32.h"
 
 #ifdef TRISC_MATH
 #include "sfpi.h"
@@ -84,12 +85,6 @@ constexpr uint32_t L1_SPLAT_BYTES     = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
 constexpr uint32_t MB_BUCKET_FIT      = 8192u;
 constexpr uint32_t BULK_REC_SLOT      = (MB_BUCKET_FIT + 1u) >> 1;  // 4096
-
-inline float bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
-}
 
 inline const uint32_t* l1_splat_words(uint32_t buck, uint32_t g) {
     return reinterpret_cast<const uint32_t*>(
@@ -147,14 +142,14 @@ constexpr uint32_t DR_THR    = 5 * 32;  // iter 108: per-gaussian thr = 2*ln(op/
 template <uint32_t V>
 __attribute__((noinline, noipa)) void cull_face_x(
     uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
-    uint32_t mx_bits, uint32_t my_bits, uint32_t txf_bits, uint32_t tyf_bits) {
+    uint32_t mlx_bits, uint32_t mly_bits) {
     using namespace sfpi;
     namespace cs = ckernel::sfpu;
     vFloat ci_a = vFloat(-2.0f) * cs::Converter::as_float(a_bits);  // = cov_c/det
     vFloat ci_b = vFloat(-1.0f) * cs::Converter::as_float(b_bits);  // = -cov_b/det
     vFloat ci_c = vFloat(-2.0f) * cs::Converter::as_float(c_bits);  // = cov_a/det
-    vFloat mlx = cs::Converter::as_float(mx_bits) - cs::Converter::as_float(txf_bits);
-    vFloat mly = cs::Converter::as_float(my_bits) - cs::Converter::as_float(tyf_bits);
+    vFloat mlx = cs::Converter::as_float(mlx_bits);
+    vFloat mly = cs::Converter::as_float(mly_bits);
     vFloat u_c = vFloat(dst_reg[DR_BOX_OX + V]) - mlx;
     { vFloat uh = u_c + vFloat(8.0f); vFloat z = 0.0f; vec_min_max(z, u_c); vec_min_max(u_c, uh); }
     vFloat v_lo = vFloat(dst_reg[DR_BOX_OY + V]) - mly;
@@ -175,14 +170,14 @@ __attribute__((noinline, noipa)) void cull_face_x(
 template <uint32_t V>
 __attribute__((noinline, noipa)) void cull_face_y(
     uint32_t a_bits, uint32_t b_bits, uint32_t c_bits,
-    uint32_t mx_bits, uint32_t my_bits, uint32_t txf_bits, uint32_t tyf_bits) {
+    uint32_t mlx_bits, uint32_t mly_bits) {
     using namespace sfpi;
     namespace cs = ckernel::sfpu;
     vFloat ci_a = vFloat(-2.0f) * cs::Converter::as_float(a_bits);  // = cov_c/det
     vFloat ci_b = vFloat(-1.0f) * cs::Converter::as_float(b_bits);  // = -cov_b/det
     vFloat ci_c = vFloat(-2.0f) * cs::Converter::as_float(c_bits);  // = cov_a/det
-    vFloat mlx = cs::Converter::as_float(mx_bits) - cs::Converter::as_float(txf_bits);
-    vFloat mly = cs::Converter::as_float(my_bits) - cs::Converter::as_float(tyf_bits);
+    vFloat mlx = cs::Converter::as_float(mlx_bits);
+    vFloat mly = cs::Converter::as_float(mly_bits);
     vFloat v_c = vFloat(dst_reg[DR_BOX_OY + V]) - mly;
     { vFloat vh = v_c + vFloat(4.0f); vFloat z = 0.0f; vec_min_max(z, v_c); vec_min_max(v_c, vh); }
     vFloat u_lo = vFloat(dst_reg[DR_BOX_OX + V]) - mlx;
@@ -263,13 +258,12 @@ inline void cull_phase_thr(
 template <uint32_t V>
 inline void cull_phase_fx(
     uint32_t nb, const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my,
-    uint32_t txf_bits, uint32_t tyf_bits) {
+    const uint32_t* mlx, const uint32_t* mly) {
     if constexpr (V < BATCH) {
         if (V < nb) {
-            MATH((cull_face_x<V>(a[V], b[V], c[V], mx[V], my[V], txf_bits, tyf_bits)));
+            MATH((cull_face_x<V>(a[V], b[V], c[V], mlx[V], mly[V])));
         }
-        cull_phase_fx<V + 1>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+        cull_phase_fx<V + 1>(nb, a, b, c, mlx, mly);
     }
 }
 
@@ -277,13 +271,12 @@ inline void cull_phase_fx(
 template <uint32_t V>
 inline void cull_phase_fy(
     uint32_t nb, const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my,
-    uint32_t txf_bits, uint32_t tyf_bits) {
+    const uint32_t* mlx, const uint32_t* mly) {
     if constexpr (V < BATCH) {
         if (V < nb) {
-            MATH((cull_face_y<V>(a[V], b[V], c[V], mx[V], my[V], txf_bits, tyf_bits)));
+            MATH((cull_face_y<V>(a[V], b[V], c[V], mlx[V], mly[V])));
         }
-        cull_phase_fy<V + 1>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+        cull_phase_fy<V + 1>(nb, a, b, c, mlx, mly);
     }
 }
 
@@ -303,13 +296,12 @@ inline void cull_phase_combine(
 inline void cull_dispatch(
     uint32_t keep_base, uint32_t nb, uint32_t pos_base,
     const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, const uint32_t* op,
-    uint32_t inv_floor_bits, uint32_t txf_bits, uint32_t tyf_bits,
-    bool cull_disabled) {
+    const uint32_t* mlx, const uint32_t* mly, const uint32_t* op,
+    uint32_t inv_floor_bits, bool cull_disabled) {
     (void)pos_base;
     cull_phase_thr<0>(nb, op, inv_floor_bits);
-    cull_phase_fx<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
-    cull_phase_fy<0>(nb, a, b, c, mx, my, txf_bits, tyf_bits);
+    cull_phase_fx<0>(nb, a, b, c, mlx, mly);
+    cull_phase_fy<0>(nb, a, b, c, mlx, mly);
     cull_phase_combine<0>(keep_base, nb, cull_disabled);
 }
 
@@ -385,9 +377,6 @@ void kernel_main() {
         cb_wait_front(CB_BUCKET, BULK_REC_SLOT);
         const uint32_t buck = get_tile_address(CB_BUCKET, 0);
         mb_cb_consume_fence();
-        const float tx_tile_f = bits_to_f(txf_bits);
-        const float ty_tile_f = bits_to_f(tyf_bits);
-        constexpr float kUnormInv = 1.0f / 65535.0f;
 
         uint32_t processed = 0;
         while (processed < L) {
@@ -396,18 +385,20 @@ void kernel_main() {
 
             // Reproduce emit_cull_row_from_l1_splat (A1: rec[0..2] now carry the
             // pre-folded conic {A,B,C} instead of raw cov; the faces recover the
-            // precision matrix as ci=-2A,-B,-2C). center = tile-local mean
-            // (rec[4],rec[5]) + tile origin (the SFPU subtracts it back via
-            // txf/tyf); op = UNORM16 (rec[6]&0xffff)/65535. thr is SFPU (cull_thr).
-            uint32_t a[BATCH], b[BATCH], c[BATCH], mx[BATCH], my[BATCH], op[BATCH];
+            // precision matrix as ci=-2A,-B,-2C). mlx/mly = (tile-local mean +
+            // tile origin) - tile origin, both fp32-rounded (the old absolute
+            // center round trip); op = UNORM16 (rec[6]&0xffff)/65535. thr is SFPU
+            // (cull_thr). Integer bit-exact decode: TRISC scalar code has no FPU,
+            // the float form was 8 libgcc calls per record (task #39).
+            uint32_t a[BATCH], b[BATCH], c[BATCH], mlx[BATCH], mly[BATCH], op[BATCH];
             for (uint32_t i = 0; i < nb; i++) {
                 const uint32_t* rec = l1_splat_words(buck, processed + i);
-                a[i]  = rec[0];
-                b[i]  = rec[1];
-                c[i]  = rec[2];
-                mx[i] = f_to_u32(bits_to_f(rec[4]) + tx_tile_f);
-                my[i] = f_to_u32(bits_to_f(rec[5]) + ty_tile_f);
-                op[i] = f_to_u32(static_cast<float>(rec[6] & 0xffffu) * kUnormInv);
+                a[i]   = rec[0];
+                b[i]   = rec[1];
+                c[i]   = rec[2];
+                mlx[i] = dm_fp32::add_sub_roundtrip(rec[4], txf_bits);
+                mly[i] = dm_fp32::add_sub_roundtrip(rec[5], tyf_bits);
+                op[i]  = dm_fp32::unorm16_to_f(rec[6] & 0xffffu);
             }
 
             tile_regs_acquire();
@@ -422,8 +413,8 @@ void kernel_main() {
             copy_tile(CB_BOX_OY, 0, DR_BOX_OY / 32);
 
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-            cull_dispatch(DR_KEEP, nb, processed, a, b, c, mx, my, op,
-                          inv_floor_bits, txf_bits, tyf_bits, cull_disabled);
+            cull_dispatch(DR_KEEP, nb, processed, a, b, c, mlx, mly, op,
+                          inv_floor_bits, cull_disabled);
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
 
             tile_regs_commit();
