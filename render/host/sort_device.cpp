@@ -403,8 +403,9 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     page_cb(6, bucket_fit * 32u);
 
     std::vector<uint32_t> ct;
-    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
-    for (int i = 0; i < 11; i++) {
+    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}
+    // + R16 {keys, tmeta} (the bucket records carry no depth key).
+    for (int i = 0; i < 13; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     }
     ctx.ksubchunk = CreateKernel(
@@ -575,7 +576,7 @@ static bool launch_subchunk_materialize(
     auto bsids = device_state::get_buffer("sort_sorted_ids");
     auto brng = device_state::get_buffer("sort_tile_ranges");
     if (!bbrec || !bl1 || !bsids || !brng || !ctx->buf_blend_subchunk_meta ||
-        !ctx->buf_subchunk_dir) {
+        !ctx->buf_subchunk_dir || !ctx->buf_keys || !ctx->buf_tmeta) {
         return false;
     }
     // Grow-only work buffer; EnqueueWriteMeshBuffer writes the WHOLE buffer, so
@@ -616,6 +617,8 @@ static bool launch_subchunk_materialize(
             ov_addr,
             ov_base_addr,
             render_config::kOverflowL1Cap,
+            static_cast<uint32_t>(ctx->buf_keys->address()),
+            static_cast<uint32_t>(ctx->buf_tmeta->address()),
         });
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
@@ -1079,16 +1082,16 @@ static void host_bin_layout_into(
     if (l1_record) {
         // iter-138: prefix-allocate the COMPACT overflow region over in-cap
         // overflow tiles only (kBucketFit < count <= kOverflowL1Cap). Each such
-        // tile's base is EVEN-aligned so its PACK2 page run starts at half 0
-        // (the materialize reader indexes record g at page base/2 + g/2, half g&1).
+        // tile's base is 4-aligned so its PACK4 page run starts at quarter 0
+        // (the materialize reader indexes record g at byte 16*g of page base/4).
         r.tile_ov_base.assign(num_tiles, SENT);
         const uint32_t ov_cap = render_config::kOverflowL1Cap;
-        uint64_t ov_cursor = 0;  // in 32B slots; kept even per tile for PACK2
+        uint64_t ov_cursor = 0;  // in 16B slots; kept 4-aligned per tile for PACK4
         for (uint32_t t = 0; t < num_tiles; ++t) {
             const uint64_t c = static_cast<uint64_t>(r.counts[t]);
             if (c > bucket_fit && c <= ov_cap) {
                 r.tile_ov_base[t] = static_cast<uint32_t>(ov_cursor);
-                ov_cursor += (c + 1u) & ~static_cast<uint64_t>(1u);  // round up to even
+                ov_cursor += (c + 3u) & ~static_cast<uint64_t>(3u);  // round up to x4
                 r.ov_tiles += 1u;
                 r.ov_records += c;
             }
@@ -1189,7 +1192,7 @@ static void host_bin_layout_into(
                              static_cast<double>(gathered_total) : 0.0,
             static_cast<unsigned long long>(over_cap),
             static_cast<unsigned long long>(r.ov_total_slots),
-            static_cast<double>(r.ov_total_slots) * 32.0 / (1024.0 * 1024.0));
+            static_cast<double>(r.ov_total_slots) * 16.0 / (1024.0 * 1024.0));
     }
     std::vector<int64_t> pad_counts(num_tiles, 0);
     for (uint32_t t = 0; t < num_tiles; t++)
@@ -1708,11 +1711,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         uint32_t l1_ov_addr = 0u;
         uint32_t l1_ov_base_addr = 0u;
         if (l1_record_early) {
-            // M0/iter50: two 32B splats per 64B DRAM page (PACK2). Sub-64B paging
-            // is unreliable; 64B pages hold low/high splat at +0/+32. kBucketFit
-            // logical slots => bucket_fit/2 pages per tile.
+            // R16 (task #23): four 16B records per 64B DRAM page (PACK4). Sub-64B
+            // paging is unreliable; 64B pages hold records at +0/+16/+32/+48.
+            // kBucketFit logical slots => bucket_fit/4 pages per tile.
             const std::size_t l1_rec_bytes =
-                static_cast<std::size_t>(num_tiles) * bucket_fit * 32u;
+                static_cast<std::size_t>(num_tiles) * bucket_fit * 16u;
             if (!ctx->buf_l1_recs || ctx->cap_l1_recs_bytes < l1_rec_bytes) {
                 ctx->buf_l1_recs = make_dram_paged(ctx->mesh_device.get(), l1_rec_bytes, 64u);
                 ctx->cap_l1_recs_bytes = l1_rec_bytes;
@@ -2074,7 +2077,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             // valid addresses even when this view has no in-cap overflow tile.
             if (l1_record_early && !bl.histrec_overflow.empty()) {
                 const std::size_t ov_region_bytes = std::max<std::size_t>(
-                    PAGE_BYTES, static_cast<std::size_t>(bl.ov_total_slots) * 32u);
+                    PAGE_BYTES, static_cast<std::size_t>(bl.ov_total_slots) * 16u);
                 if (!ctx->buf_l1_ov || ctx->cap_l1_ov_bytes < ov_region_bytes) {
                     ctx->buf_l1_ov =
                         make_dram_paged(ctx->mesh_device.get(), ov_region_bytes, 64u);

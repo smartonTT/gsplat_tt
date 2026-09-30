@@ -27,6 +27,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "rec16_codec.h"
 
 namespace {
 
@@ -34,12 +35,17 @@ constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+// R16 (task #23): the emit writes 16B bucket records, four per 64B page (PACK4:
+// record i at page i/4, byte 16*(i&3), i.e. byte 16*i of a coalesced page run).
+// The depth-sorted slab this kernel writes keeps the 32B layout the cull/blend
+// kernels read; expand_rec16 converts one record.
+constexpr uint32_t L1_REC16_BYTES = 16u;
 // iter 110 (A2): the depth-sorted slab is materialized into a DRAM buffer with a
 // LARGE interleave page (SLAB_PAGE_BYTES) so the cull/blend readers coalesce the
 // per-subchunk load into ceil(L/SLAB_RECS_PER_PAGE) big transfers. The slab is
 // still a contiguous array of 32B records: subchunk-local record g lives at
 // page (sc_page + g/SLAB_RECS_PER_PAGE), byte (g % SLAB_RECS_PER_PAGE)*32. The
-// source L1 bucket layout (PACK2, 2 recs / 64B) is unchanged.
+// source L1 bucket layout is PACK4 (4 x 16B records / 64B page, R16).
 constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
 constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 constexpr uint32_t TILE_SIZE = 32u;
@@ -69,9 +75,15 @@ inline uint32_t f_to_bits(float f) {
     return b;
 }
 
-inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
-    return reinterpret_cast<volatile uint32_t*>(
-        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
+// 16B bucket record (rec16_codec.h) -> 32B slab record at dst_l1.
+inline void expand_rec16(uint32_t dst_l1, uint32_t src_l1, uint32_t key) {
+    auto src = reinterpret_cast<volatile uint32_t*>(src_l1);
+    auto dst = reinterpret_cast<volatile uint32_t*>(dst_l1);
+    const uint32_t w[4] = {src[0], src[1], src[2], src[3]};
+    uint32_t out[8];
+    rec16::expand(w, key, out);
+    dst[0] = out[0]; dst[1] = out[1]; dst[2] = out[2]; dst[3] = out[3];
+    dst[4] = out[4]; dst[5] = out[5]; dst[6] = out[6]; dst[7] = out[7];
 }
 
 }  // namespace
@@ -93,7 +105,7 @@ void kernel_main() {
     const uint32_t work_count     = get_arg_val<uint32_t>(9);
     const uint32_t tiles_x        = get_arg_val<uint32_t>(10);
     const uint32_t bucket_fit     = get_arg_val<uint32_t>(11);
-    // iter-138 (Stage-2b overflow pre-pack): the compact overflow region (PACK2,
+    // iter-138 (Stage-2b overflow pre-pack): the compact overflow region (PACK4,
     // pre-packed by sort_bucket_emit) + per-tile start slot (sentinel 0xFFFFFFFF
     // for non-prepacked tiles) + the L1 cap. For an in-cap overflow tile this core
     // gets ONE work item (sc==0) and processes the WHOLE tile: coalesced bucket
@@ -101,6 +113,12 @@ void kernel_main() {
     const uint32_t ov_recs_addr   = get_arg_val<uint32_t>(12);  // overflow region (0=off)
     const uint32_t ov_base_addr   = get_arg_val<uint32_t>(13);  // per-tile slot base (0=off)
     const uint32_t ov_cap         = get_arg_val<uint32_t>(14);  // kOverflowL1Cap
+    // R16: the depth keys of the bucket/overflow records, read from the emit's
+    // page-aligned keys layout (tile t = pages [pstart_page, +tile_pad/16), core-
+    // major per-(core,tile) blocks padded with 0xFFFFFFFF). Dropping the padding
+    // yields the tile's keys in exactly the bucket slot order.
+    const uint32_t keys_addr      = get_arg_val<uint32_t>(15);
+    const uint32_t tmeta_addr     = get_arg_val<uint32_t>(16);  // (pstart_page, tile_pad)
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -110,9 +128,11 @@ void kernel_main() {
     constexpr auto blend_meta_args = TensorAccessorArgs<payload_args.next_compile_time_args_offset()>();
     constexpr auto dir_args = TensorAccessorArgs<blend_meta_args.next_compile_time_args_offset()>();
     constexpr auto work_args = TensorAccessorArgs<dir_args.next_compile_time_args_offset()>();
-    // iter-138: overflow region (PACK2 64B page) + per-tile overflow base row.
+    // iter-138: overflow region (PACK4 64B page) + per-tile overflow base row.
     constexpr auto ov_recs_args = TensorAccessorArgs<work_args.next_compile_time_args_offset()>();
     constexpr auto ov_base_args = TensorAccessorArgs<ov_recs_args.next_compile_time_args_offset()>();
+    constexpr auto keys_args = TensorAccessorArgs<ov_base_args.next_compile_time_args_offset()>();
+    constexpr auto tmeta_args = TensorAccessorArgs<keys_args.next_compile_time_args_offset()>();
 
     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
@@ -125,6 +145,8 @@ void kernel_main() {
     const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
     const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  L1_PACK_PAGE_BYTES);
     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
+    const auto keys_acc     = TensorAccessor(keys_args,     keys_addr,     PAGE_BYTES);
+    const auto tmeta_acc    = TensorAccessor(tmeta_args,    tmeta_addr,    PAGE_BYTES);
 
     if (work_count == 0) {
         return;
@@ -136,6 +158,35 @@ void kernel_main() {
     auto idsp = reinterpret_cast<volatile uint32_t*>(ids_scr);
     const uint32_t rec_l1 = get_write_ptr(CB_REC);
     const uint32_t pack_l1 = get_write_ptr(CB_PACK);
+
+    // R16: fill keyc[0..n) with tile_id's depth keys in bucket slot order (see
+    // keys_addr above). keyc sits in the upper half of CB_BUCKET: the PACK4
+    // records use at most ov_cap*16 B of its max(bucket_fit*64, ov_cap*32) B.
+    auto load_tile_keys = [&](uint32_t tile_id, uint32_t keyc_l1, uint32_t n) {
+        const uint32_t e0 = tile_id * 2u;
+        noc_async_read(get_noc_addr(e0 >> 4, tmeta_acc), scr, PAGE_BYTES);
+        noc_async_read_barrier();
+        const uint32_t pstart = scrp[e0 & 0xFu];
+        const uint32_t npages = scrp[(e0 & 0xFu) + 1u] / ELEMS_PER_PAGE;
+        uint32_t pp = 0;
+        while (pp < npages) {
+            const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+            for (uint32_t q = pp; q < end; ++q) {
+                noc_async_read(get_noc_addr(pstart + q, keys_acc),
+                               keyc_l1 + q * PAGE_BYTES, PAGE_BYTES);
+            }
+            noc_async_read_barrier();
+            pp = end;
+        }
+        auto kp = reinterpret_cast<volatile uint32_t*>(keyc_l1);
+        const uint32_t total = npages * ELEMS_PER_PAGE;
+        uint32_t j = 0;
+        for (uint32_t i = 0; i < total; ++i) {
+            const uint32_t k = kp[i];
+            if (k != 0xFFFFFFFFu) kp[j++] = k;
+        }
+        for (; j < n; ++j) kp[j] = 0xFFFFFFFFu;  // defensive: counts always match
+    };
 
     constexpr uint32_t MAX_WORK = 1024;
     // Packed work item: (tile_id << 8) | sc. tile_id < 2^16, sc < 2^8 — fits.
@@ -230,11 +281,11 @@ void kernel_main() {
                 ov_base = scrp[off];
             }
             if (ov_base != 0xFFFFFFFFu) {
-                // Coalesced read of the whole overflow bucket (PACK2 64B pages).
-                const uint32_t npages = (count + 1u) >> 1;
+                // Coalesced read of the whole overflow bucket (PACK4 64B pages).
+                const uint32_t npages = (count + 3u) >> 2;
                 const uint32_t buck = get_write_ptr(CB_BUCKET);
                 {
-                    const uint32_t page0 = ov_base >> 1;  // ov_base is even-aligned
+                    const uint32_t page0 = ov_base >> 2;  // ov_base is 4-aligned
                     uint32_t pp = 0;
                     while (pp < npages) {
                         const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
@@ -246,7 +297,10 @@ void kernel_main() {
                         pp = end;
                     }
                 }
-                // Stable LSD radix sort over ALL `count` records by key word[3].
+                const uint32_t keyc_l1 = buck + ov_cap * L1_REC16_BYTES;
+                load_tile_keys(tile_id, keyc_l1, count);
+                const uint32_t* keyc = reinterpret_cast<const uint32_t*>(keyc_l1);
+                // Stable LSD radix sort over ALL `count` records by depth key.
                 const uint32_t bs = get_write_ptr(CB_BSORT);
                 uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
                 uint32_t* idxB = idxA + ov_cap;
@@ -258,7 +312,7 @@ void kernel_main() {
                     const uint32_t shift = byte * 8u;
                     for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
                     for (uint32_t i = 0; i < count; ++i) {
-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
+                        cnt[(keyc[cur[i]] >> shift) & 0xFFu]++;
                     }
                     uint32_t sum = 0;
                     for (uint32_t c = 0; c < 256u; ++c) {
@@ -267,8 +321,7 @@ void kernel_main() {
                         sum += t;
                     }
                     for (uint32_t i = 0; i < count; ++i) {
-                        const uint32_t b =
-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
+                        const uint32_t b = (keyc[cur[i]] >> shift) & 0xFFu;
                         nxt[cnt[b]++] = cur[i];
                     }
                     uint32_t* tp = cur;
@@ -294,14 +347,8 @@ void kernel_main() {
                     }
                     for (uint32_t k = 0; k < Ls; ++k) {
                         const uint32_t idx = sorted[sc_off2 + k];
-                        const uint32_t src_page = (idx >> 1);
-                        const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                        auto src = reinterpret_cast<volatile uint32_t*>(
-                            buck + src_page * L1_PACK_PAGE_BYTES + src_half);
-                        auto dst = reinterpret_cast<volatile uint32_t*>(
-                            slab + k * L1_SPLAT_BYTES);
-                        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-                        dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+                        expand_rec16(slab + k * L1_SPLAT_BYTES,
+                                     buck + idx * L1_REC16_BYTES, keyc[idx]);
                     }
                     const uint32_t out_pages =
                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
@@ -335,10 +382,10 @@ void kernel_main() {
         // falls through to sorted_ids gather (iter 83: L1 slot order != masks).
         if (sc == 0u && L_sub <= bucket_fit && count <= bucket_fit) {
             const uint32_t L = L_sub;
-            const uint32_t npages = (L + 1u) >> 1;
+            const uint32_t npages = (L + 3u) >> 2;
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
-                const uint32_t page0 = tile_id * (bucket_fit >> 1);
+                const uint32_t page0 = tile_id * (bucket_fit >> 2);
                 uint32_t pp = 0;
                 while (pp < npages) {
                     const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
@@ -350,6 +397,9 @@ void kernel_main() {
                     pp = end;
                 }
             }
+            const uint32_t keyc_l1 = buck + ov_cap * L1_REC16_BYTES;
+            load_tile_keys(tile_id, keyc_l1, L);
+            const uint32_t* keyc = reinterpret_cast<const uint32_t*>(keyc_l1);
             const uint32_t bs = get_write_ptr(CB_BSORT);
             uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
             uint32_t* idxB = idxA + bucket_fit;
@@ -359,9 +409,9 @@ void kernel_main() {
                 for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
                 for (uint32_t i = 1; i < L; ++i) {
                     const uint32_t tmp = idxA[i];
-                    const uint32_t ki = l1_splat_words(buck, tmp)[3];
+                    const uint32_t ki = keyc[tmp];
                     uint32_t j = i;
-                    while (j > 0 && l1_splat_words(buck, idxA[j - 1])[3] > ki) {
+                    while (j > 0 && keyc[idxA[j - 1]] > ki) {
                         idxA[j] = idxA[j - 1];
                         --j;
                     }
@@ -376,7 +426,7 @@ void kernel_main() {
                     const uint32_t shift = byte * 8u;
                     for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
                     for (uint32_t i = 0; i < L; ++i) {
-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
+                        cnt[(keyc[cur[i]] >> shift) & 0xFFu]++;
                     }
                     uint32_t sum = 0;
                     for (uint32_t c = 0; c < 256u; ++c) {
@@ -385,8 +435,7 @@ void kernel_main() {
                         sum += t;
                     }
                     for (uint32_t i = 0; i < L; ++i) {
-                        const uint32_t b =
-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
+                        const uint32_t b = (keyc[cur[i]] >> shift) & 0xFFu;
                         nxt[cnt[b]++] = cur[i];
                     }
                     uint32_t* t = cur;
@@ -401,14 +450,8 @@ void kernel_main() {
             const uint32_t slab = get_write_ptr(CB_SLAB);
             for (uint32_t k = 0; k < L; ++k) {
                 const uint32_t idx = sorted[k];
-                const uint32_t src_page = (idx >> 1);
-                const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                auto src = reinterpret_cast<volatile uint32_t*>(
-                    buck + src_page * L1_PACK_PAGE_BYTES + src_half);
-                auto dst = reinterpret_cast<volatile uint32_t*>(
-                    slab + k * L1_SPLAT_BYTES);
-                dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-                dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+                expand_rec16(slab + k * L1_SPLAT_BYTES, buck + idx * L1_REC16_BYTES,
+                             keyc[idx]);
             }
             const uint32_t out_pages =
                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
