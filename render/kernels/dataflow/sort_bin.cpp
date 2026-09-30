@@ -634,7 +634,12 @@ void kernel_main() {
                 dep_cached_page = dpg;
             }
             const uint32_t key = depp[g % ELEMS_PER_PAGE];
-            const uint32_t li = offp[t] + curp[t];
+            // This pair's per-tile cursor and bases, each loaded from L1 once
+            // (volatile: every use was a separate load, three of curp[t]).
+            const uint32_t ct = curp[t];
+            const uint32_t li = offp[t] + ct;
+            const uint32_t ovb = l1_ov_enabled ? ov_basep[t] : 0xFFFFFFFFu;
+            const uint32_t lbase = l1basep[t];
             // Scatter the full record to its per-tile bucket slot. DENSE layout:
             // tile t's records occupy slots [t*FIT, ...); this core's k-th kept
             // pair for tile t goes to l1basep[t] + curp[t] (l1basep[t] =
@@ -690,14 +695,13 @@ void kernel_main() {
                 // the compact overflow region (no bucket clamp). Non-overflow / over-
                 // cap tiles keep the buf_l1_recs bucket path (over-bucket records
                 // dropped → materialize gathers them).
-                const uint32_t ovb = l1_ov_enabled ? ov_basep[t] : 0xFFFFFFFFu;
                 uint32_t out_slot;
                 uint32_t is_ov;
                 if (ovb != 0xFFFFFFFFu) {
-                    out_slot = ovb + curp[t];
+                    out_slot = ovb + ct;
                     is_ov = 1u;
                 } else {
-                    const uint32_t l1_slot = l1basep[t] + curp[t];
+                    const uint32_t l1_slot = lbase + ct;
                     out_slot = (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot
                                                                     : 0xFFFFFFFFu;
                     is_ov = 0u;
@@ -711,7 +715,7 @@ void kernel_main() {
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();
             }
-            curp[t] = curp[t] + 1;
+            curp[t] = ct + 1u;
             ksp[li] = key;
             isp[li] = g;
         }

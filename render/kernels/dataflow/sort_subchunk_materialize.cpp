@@ -28,6 +28,7 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
+#include "sort_radix_tile_algo.h"
 
 namespace {
 
@@ -70,9 +71,19 @@ inline uint32_t f_to_bits(float f) {
     return b;
 }
 
-inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
-    return reinterpret_cast<volatile uint32_t*>(
-        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
+// Copy the n records buck[sorted[k]] (32 B each; PACK2 slot g sits at byte
+// 32g) to slab record k. All 8 words of a record are loaded before any store:
+// alternating volatile load/store made every store wait for its own load.
+inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted,
+                            uint32_t n) {
+    for (uint32_t k = 0; k < n; ++k) {
+        auto src = reinterpret_cast<volatile uint32_t*>(buck + sorted[k] * L1_SPLAT_BYTES);
+        auto dst = reinterpret_cast<volatile uint32_t*>(slab + k * L1_SPLAT_BYTES);
+        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2], w3 = src[3];
+        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+        dst[0] = w0; dst[1] = w1; dst[2] = w2; dst[3] = w3;
+        dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+    }
 }
 
 }  // namespace
@@ -138,39 +149,23 @@ void kernel_main() {
     const uint32_t rec_l1 = get_write_ptr(CB_REC);
     const uint32_t pack_l1 = get_write_ptr(CB_PACK);
 
-    constexpr uint32_t MAX_WORK = 1024;
-    // Packed work item: (tile_id << 8) | sc. tile_id < 2^16, sc < 2^8 — fits.
-    uint32_t work_item[MAX_WORK];
-    {
-        // The work buffer is a flat u32 array; this core's items occupy u32
-        // indices [2*work_start, 2*work_start + 2*work_count). Stream the slice
-        // through CB_IDS; even u32 = tile_id, odd = sc, packed into work_item.
-        const uint32_t total_u32 = work_count * 2u;
-        const uint32_t u0 = work_start * 2u;
-        uint32_t page_idx = u0 / ELEMS_PER_PAGE;
-        uint32_t in_page  = u0 % ELEMS_PER_PAGE;
-        uint32_t got = 0;
-        uint32_t pend_tile = 0;
-        while (got < total_u32) {
-            noc_async_read(get_noc_addr(page_idx, work_acc), ids_scr, PAGE_BYTES);
-            noc_async_read_barrier();
-            uint32_t take = ELEMS_PER_PAGE - in_page;
-            if (take > total_u32 - got) take = total_u32 - got;
-            for (uint32_t i = 0; i < take; i++) {
-                const uint32_t gu = got + i;        // u32 offset within this slice
-                const uint32_t val = idsp[in_page + i];
-                if ((gu & 1u) == 0u) pend_tile = val;
-                else work_item[gu >> 1] = (pend_tile << 8) | (val & 0xFFu);
-            }
-            got += take;
-            page_idx += 1;
-            in_page = 0;
-        }
-    }
+    // Radix histograms in local memory (stack), see sort_radix_tile_algo.h.
+    // The work items are no longer copied to a 4 KB stack array (that plus
+    // the 3 KB histograms would not fit the 8 KB local memory): each item is
+    // read from DRAM when it is processed (a few dozen items per core).
+    sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
 
     for (uint32_t wi = 0; wi < work_count; wi++) {
-        const uint32_t tile_id = work_item[wi] >> 8;
-        const uint32_t sc = work_item[wi] & 0xFFu;
+        // The work buffer is a flat u32 array; item i = {tile_id at 2i, sc at
+        // 2i+1}, both in the same 64 B page (2i is even).
+        uint32_t tile_id, sc;
+        {
+            const uint32_t u = (work_start + wi) * 2u;
+            noc_async_read(get_noc_addr(u / ELEMS_PER_PAGE, work_acc), scr, PAGE_BYTES);
+            noc_async_read_barrier();
+            tile_id = scrp[u % ELEMS_PER_PAGE] & 0xFFFFFFu;
+            sc = scrp[u % ELEMS_PER_PAGE + 1u] & 0xFFu;
+        }
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
@@ -247,39 +242,20 @@ void kernel_main() {
                         pp = end;
                     }
                 }
-                // Stable LSD radix sort over ALL `count` records by key word[3].
+                // Stable sort of ALL `count` records by key word[3] (adaptive
+                // radix, sort_radix_tile_algo.h). Keys/ids in CB_BSORT; the
+                // ping-pong pair borrows CB_SLAB (2*count u32 <= count*32 B),
+                // which is only written after the sort.
+                asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
                 const uint32_t bs = get_write_ptr(CB_BSORT);
-                uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-                uint32_t* idxB = idxA + ov_cap;
-                uint32_t* cnt  = idxB + ov_cap;
-                for (uint32_t i = 0; i < count; ++i) idxA[i] = i;
-                uint32_t* cur = idxA;
-                uint32_t* nxt = idxB;
-                for (uint32_t byte = 0; byte < 4u; ++byte) {
-                    const uint32_t shift = byte * 8u;
-                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
-                    for (uint32_t i = 0; i < count; ++i) {
-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
-                    }
-                    uint32_t sum = 0;
-                    for (uint32_t c = 0; c < 256u; ++c) {
-                        const uint32_t t = cnt[c];
-                        cnt[c] = sum;
-                        sum += t;
-                    }
-                    for (uint32_t i = 0; i < count; ++i) {
-                        const uint32_t b =
-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
-                        nxt[cnt[b]++] = cur[i];
-                    }
-                    uint32_t* tp = cur;
-                    cur = nxt;
-                    nxt = tp;
-                }
-                uint32_t* sorted = cur;
+                const uint32_t slab = get_write_ptr(CB_SLAB);
+                uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
+                uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+                const uint32_t* sorted = sort_radix_tile::sort_record_ids(
+                    reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ov_cap,
+                    kB, kB + count, hist);
                 // Emit each subchunk's depth-sorted slab to its directory page run.
                 const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
-                const uint32_t slab = get_write_ptr(CB_SLAB);
                 for (uint32_t s = 0; s < num_sc; ++s) {
                     const uint32_t sc_off2 = s * bucket_fit;
                     const uint32_t Ls = (count - sc_off2 > bucket_fit)
@@ -293,17 +269,7 @@ void kernel_main() {
                         noc_async_read_barrier();
                         scp = scrp[off];
                     }
-                    for (uint32_t k = 0; k < Ls; ++k) {
-                        const uint32_t idx = sorted[sc_off2 + k];
-                        const uint32_t src_page = (idx >> 1);
-                        const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                        auto src = reinterpret_cast<volatile uint32_t*>(
-                            buck + src_page * L1_PACK_PAGE_BYTES + src_half);
-                        auto dst = reinterpret_cast<volatile uint32_t*>(
-                            slab + k * L1_SPLAT_BYTES);
-                        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-                        dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
-                    }
+                    permute_records(buck, slab, sorted + sc_off2, Ls);
                     const uint32_t out_pages =
                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
                     for (uint32_t p = 0; p < out_pages; ++p) {
@@ -351,66 +317,20 @@ void kernel_main() {
                     pp = end;
                 }
             }
+            // Stable sort by key word[3] (adaptive radix, histograms in local
+            // memory; see the overflow path above for the scratch layout).
+            asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
             const uint32_t bs = get_write_ptr(CB_BSORT);
-            uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-            uint32_t* idxB = idxA + bucket_fit;
-            uint32_t* cnt  = idxB + bucket_fit;
-            uint32_t* sorted;
-            if (L <= 16u) {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                for (uint32_t i = 1; i < L; ++i) {
-                    const uint32_t tmp = idxA[i];
-                    const uint32_t ki = l1_splat_words(buck, tmp)[3];
-                    uint32_t j = i;
-                    while (j > 0 && l1_splat_words(buck, idxA[j - 1])[3] > ki) {
-                        idxA[j] = idxA[j - 1];
-                        --j;
-                    }
-                    idxA[j] = tmp;
-                }
-                sorted = idxA;
-            } else {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                uint32_t* cur = idxA;
-                uint32_t* nxt = idxB;
-                for (uint32_t byte = 0; byte < 4u; ++byte) {
-                    const uint32_t shift = byte * 8u;
-                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
-                    for (uint32_t i = 0; i < L; ++i) {
-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
-                    }
-                    uint32_t sum = 0;
-                    for (uint32_t c = 0; c < 256u; ++c) {
-                        const uint32_t t = cnt[c];
-                        cnt[c] = sum;
-                        sum += t;
-                    }
-                    for (uint32_t i = 0; i < L; ++i) {
-                        const uint32_t b =
-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
-                        nxt[cnt[b]++] = cur[i];
-                    }
-                    uint32_t* t = cur;
-                    cur = nxt;
-                    nxt = t;
-                }
-                sorted = cur;
-            }
+            const uint32_t slab = get_write_ptr(CB_SLAB);
+            uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
+            uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+            const uint32_t* sorted = sort_radix_tile::sort_record_ids(
+                reinterpret_cast<volatile uint32_t*>(buck), L, kA, kA + bucket_fit,
+                kB, kB + L, hist);
             // Stage 1: apply the radix permutation L1->L1 into a contiguous
             // slab scratch (output order), then emit the depth-sorted slab in
             // coalesced SLAB_PAGE_BYTES page writes (no per-record DRAM scatter).
-            const uint32_t slab = get_write_ptr(CB_SLAB);
-            for (uint32_t k = 0; k < L; ++k) {
-                const uint32_t idx = sorted[k];
-                const uint32_t src_page = (idx >> 1);
-                const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                auto src = reinterpret_cast<volatile uint32_t*>(
-                    buck + src_page * L1_PACK_PAGE_BYTES + src_half);
-                auto dst = reinterpret_cast<volatile uint32_t*>(
-                    slab + k * L1_SPLAT_BYTES);
-                dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-                dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
-            }
+            permute_records(buck, slab, sorted, L);
             const uint32_t out_pages =
                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             for (uint32_t p = 0; p < out_pages; ++p) {
@@ -444,15 +364,19 @@ void kernel_main() {
                 auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
                 // Tile-local mean fl(m - tile origin) via the integer sub_int
                 // (bit-exact, no __subsf3 on NCRISC); float only outside its range.
+                // Load every needed word before the first store (see
+                // permute_records).
+                const uint32_t a0 = aos[0], a1 = aos[1], a2 = aos[2], a3 = aos[3];
+                const uint32_t a4 = aos[4], a9 = aos[9], a10 = aos[10], a11 = aos[11];
                 uint32_t mxb, myb;
-                if (!sort_bin_fp32::sub_int(aos[3], tx * TILE_SIZE, &mxb))
-                    mxb = f_to_bits(bits_to_f(aos[3]) - tx_tile);
-                if (!sort_bin_fp32::sub_int(aos[4], ty * TILE_SIZE, &myb))
-                    myb = f_to_bits(bits_to_f(aos[4]) - ty_tile);
-                splat[0] = aos[0];
-                splat[1] = aos[1];
-                splat[2] = aos[2];
-                splat[3] = aos[9];
+                if (!sort_bin_fp32::sub_int(a3, tx * TILE_SIZE, &mxb))
+                    mxb = f_to_bits(bits_to_f(a3) - tx_tile);
+                if (!sort_bin_fp32::sub_int(a4, ty * TILE_SIZE, &myb))
+                    myb = f_to_bits(bits_to_f(a4) - ty_tile);
+                splat[0] = a0;
+                splat[1] = a1;
+                splat[2] = a2;
+                splat[3] = a9;
                 splat[4] = mxb;
                 splat[5] = myb;
                 // iter 132: op/color UNORM16 are packed ONCE per gaussian on the
@@ -464,8 +388,8 @@ void kernel_main() {
                 // rounding). iter-131 ablation MEASURED the re-pack at ~5.3 ms/view
                 // busiest-core (frame BRISC-FW -7.1) — the dominant overflow-gather
                 // cost, now eliminated off the long pole.
-                splat[6] = aos[10];
-                splat[7] = aos[11];
+                splat[6] = a10;
+                splat[7] = a11;
                 const uint32_t out_g = brec_out_g[b];
                 const uint32_t out_page = sc_page + (out_g / SLAB_RECS_PER_PAGE);
                 const uint32_t out_off = (out_g % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;

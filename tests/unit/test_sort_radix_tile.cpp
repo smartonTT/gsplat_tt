@@ -64,6 +64,68 @@ static bool check(const std::vector<uint32_t>& keys, const char* what, uint32_t*
     return true;
 }
 
+
+// The pre-task-#47 sort_subchunk_materialize depth sort, verbatim in effect:
+// n <= 16 insertion sort, else 4 x 8-bit LSD radix through an index array,
+// reading the key (word 3 of 32 B record i) through the index every pass.
+static std::vector<uint32_t> old_materialize_sort(const std::vector<uint32_t>& recs, uint32_t n) {
+    auto key = [&](uint32_t i) { return recs[i * 8u + 3u]; };
+    std::vector<uint32_t> a(n), b(n), cnt(256);
+    std::iota(a.begin(), a.end(), 0u);
+    if (n <= 16u) {
+        for (uint32_t i = 1; i < n; ++i) {
+            const uint32_t tmp = a[i];
+            const uint32_t ki = key(tmp);
+            uint32_t j = i;
+            while (j > 0 && key(a[j - 1]) > ki) {
+                a[j] = a[j - 1];
+                --j;
+            }
+            a[j] = tmp;
+        }
+        return a;
+    }
+    for (uint32_t byte = 0; byte < 4u; ++byte) {
+        const uint32_t shift = byte * 8u;
+        std::fill(cnt.begin(), cnt.end(), 0u);
+        for (uint32_t i = 0; i < n; ++i) cnt[(key(a[i]) >> shift) & 0xFFu]++;
+        uint32_t sum = 0;
+        for (uint32_t c = 0; c < 256u; ++c) {
+            const uint32_t t = cnt[c];
+            cnt[c] = sum;
+            sum += t;
+        }
+        for (uint32_t i = 0; i < n; ++i) b[cnt[(key(a[i]) >> shift) & 0xFFu]++] = a[i];
+        std::swap(a, b);
+    }
+    return a;
+}
+
+// sort_record_ids (materialize) must give exactly the old permutation.
+static bool check_records(const std::vector<uint32_t>& keys, const char* what) {
+    const uint32_t n = static_cast<uint32_t>(keys.size());
+    std::vector<uint32_t> recs(n * 8u);
+    for (uint32_t i = 0; i < n * 8u; i++) recs[i] = 0x1000u + i;
+    for (uint32_t i = 0; i < n; i++) recs[i * 8u + 3u] = keys[i];
+    const std::vector<uint32_t> ref = old_materialize_sort(recs, n);
+    std::vector<uint32_t> k(n + 1, 0xDEADBEEFu), v(n + 1, 0xDEADBEEFu);
+    std::vector<uint32_t> k2(n + 1, 0xDEADBEEFu), v2(n + 1, 0xDEADBEEFu);
+    std::vector<srt::hist_t> hist(srt::HIST_ENTRIES);
+    const uint32_t* out = srt::sort_record_ids(recs.data(), n, k.data(), v.data(), k2.data(),
+                                               v2.data(), hist.data());
+    if (out != v.data() || v[n] != 0xDEADBEEFu || v2[n] != 0xDEADBEEFu) {
+        std::printf("FAIL records %s n=%u: result not in v or scratch overrun\n", what, n);
+        return false;
+    }
+    for (uint32_t i = 0; i < n; i++) {
+        if (out[i] != ref[i]) {
+            std::printf("FAIL records %s n=%u at %u: got %u want %u\n", what, n, i, out[i], ref[i]);
+            return false;
+        }
+    }
+    return true;
+}
+
 int main() {
     std::mt19937 rng(12345);
     uint32_t passes_seen[5] = {0, 0, 0, 0, 0};
@@ -106,6 +168,24 @@ int main() {
         std::vector<uint32_t> keys(5000);
         for (auto& x : keys) x = 0xFFFFF000u + (rng() % 0x1000u);
         fails += !check(keys, "top", passes_seen); cases++;
+    }
+    // Materialize record sort (n <= kOverflowL1Cap = 16384) vs the old kernel.
+    {
+        const uint32_t rsizes[] = {0, 1, 5, 16, 17, 33, 300, 2049, 8192, 16384};
+        for (uint32_t n : rsizes) {
+            for (uint32_t trial = 0; trial < 3; trial++) {
+                std::vector<uint32_t> keys(n);
+                for (auto& x : keys) x = rng();
+                fails += !check_records(keys, "full32"); cases++;
+                for (auto& x : keys) x = 0x3F800000u + (rng() % 7u) * 131u;
+                fails += !check_records(keys, "ties"); cases++;
+                std::fill(keys.begin(), keys.end(), 0x40000000u);
+                fails += !check_records(keys, "equal"); cases++;
+                std::uniform_real_distribution<float> dist(0.5f, 60.0f);
+                for (auto& x : keys) x = fbits(dist(rng));
+                fails += !check_records(keys, "depth"); cases++;
+            }
+        }
     }
     std::printf("cases=%u fails=%u passes_seen=[1:%u 2:%u 3:%u 4:%u] HIST_ENTRIES=%u\n",
                 cases, fails, passes_seen[1], passes_seen[2], passes_seen[3], passes_seen[4],

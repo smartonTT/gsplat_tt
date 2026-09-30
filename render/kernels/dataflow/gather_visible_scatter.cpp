@@ -361,6 +361,18 @@ void kernel_main() {
         noc_async_write_barrier();
     };
 
+    // AoS record words 9..15 are always zero and nothing else writes them,
+    // so they are zeroed once here instead of per visible element. iter 132
+    // reverted the iter-131 birth-side UNORM16 pack: op/color are written as
+    // fp32 (keeps the pack off the BRISC proj_scatter long pole); the UNORM16
+    // pack runs once per gaussian on the NCRISC side (sort_bin
+    // pack_invariants), which publishes the packed words into blendrec[10],[11]
+    // for the materialize overflow gather.
+    for (uint32_t s = 0; s < PAGE_ELEMS; ++s) {
+        volatile uint32_t* r = o_rec + s * REC_WORDS;
+        for (uint32_t w = 9; w < REC_WORDS; ++w) r[w] = 0;
+    }
+
     for (uint32_t kk = 0, t = t_start; kk < t_count; kk++, t += t_stride) {
         noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
         noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
@@ -381,34 +393,35 @@ void kernel_main() {
             const uint32_t i = tbase + il;
             if (i >= i_hi) break;
 
-            if (!visible_bits(p_dep[il], p_op[il], p_m2x[il], p_m2y[il], p_rx[il], p_ry[il],
+            // Each input word is loaded once, and all loads come before the
+            // stores: with volatile L1 pointers the old form re-read every
+            // input for the AoS record and made each store wait on its load.
+            const uint32_t dep = p_dep[il], op = p_op[il], mx = p_m2x[il];
+            const uint32_t my = p_m2y[il], rx = p_rx[il], ry = p_ry[il];
+            if (!visible_bits(dep, op, mx, my, rx, ry,
                               k_near, min_opacity, img_w, img_h, max_radius))
                 continue;
+            const uint32_t a = p_a[il], b = p_b[il], c = p_c[il];
+            const uint32_t cr = p_cr[il], cg = p_cg[il], cb = p_cb[il];
 
-            o_px[slot]  = p_m2x[il];
-            o_py[slot]  = p_m2y[il];
-            o_rx[slot]  = p_rx[il];
-            o_ry[slot]  = p_ry[il];
-            o_a[slot]   = p_a[il];
-            o_b[slot]   = p_b[il];
-            o_c[slot]   = p_c[il];
-            o_dep[slot] = p_dep[il];
-            o_op[slot]  = p_op[il];
-            o_col[slot * 3 + 0] = p_cr[il];
-            o_col[slot * 3 + 1] = p_cg[il];
-            o_col[slot * 3 + 2] = p_cb[il];
+            o_px[slot]  = mx;
+            o_py[slot]  = my;
+            o_rx[slot]  = rx;
+            o_ry[slot]  = ry;
+            o_a[slot]   = a;
+            o_b[slot]   = b;
+            o_c[slot]   = c;
+            o_dep[slot] = dep;
+            o_op[slot]  = op;
+            o_col[slot * 3 + 0] = cr;
+            o_col[slot * 3 + 1] = cg;
+            o_col[slot * 3 + 2] = cb;
             {
+                // Words 9..15 stay zero from the pre-fill above the loop.
                 volatile uint32_t* r = o_rec + slot * REC_WORDS;
-                r[0] = p_a[il];   r[1] = p_b[il];   r[2] = p_c[il];
-                r[3] = p_m2x[il]; r[4] = p_m2y[il]; r[5] = p_op[il];
-                r[6] = p_cr[il];  r[7] = p_cg[il];  r[8] = p_cb[il];
-                // iter 132: revert the iter-131 birth-side UNORM16 pack. Writing
-                // op/color as fp32 keeps the pack OFF the BRISC proj_scatter long
-                // pole; the UNORM16 pack now runs ONCE per gaussian on the NCRISC
-                // side (sort_bin pack_invariants), which publishes the two packed
-                // words into blendrec[10],[11] for the materialize overflow gather.
-                r[9] = 0; r[10] = 0; r[11] = 0; r[12] = 0;
-                r[13] = 0; r[14] = 0; r[15] = 0;
+                r[0] = a;  r[1] = b;  r[2] = c;
+                r[3] = mx; r[4] = my; r[5] = op;
+                r[6] = cr; r[7] = cg; r[8] = cb;
             }
 
             slot++;

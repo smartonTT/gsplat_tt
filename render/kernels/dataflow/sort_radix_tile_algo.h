@@ -205,3 +205,36 @@ inline bool sort_pairs(uint32_t* k, uint32_t* v, uint32_t* k2, uint32_t* v2,
 }
 
 }  // namespace sort_radix_tile
+
+namespace sort_radix_tile {
+
+// Stable depth order of n 32 B records (8 u32 words, record i at words
+// [8i, 8i+8), depth key at word 3) for sort_subchunk_materialize.cpp. Returns
+// the sorted record indices, always in v. k, v, k2, v2 hold n entries each.
+// Same permutation as the old fixed 4 x 8-bit radix / n <= 16 insertion sort
+// (both are stable sorts by the key), with the keys gathered once instead of
+// re-read through the index on every pass.
+inline uint32_t* sort_record_ids(const volatile uint32_t* recs, uint32_t n, uint32_t* k,
+                                 uint32_t* v, uint32_t* k2, uint32_t* v2, hist_t* hist) {
+    uint32_t i = 0;
+    for (; i + UNROLL <= n; i += UNROLL) {
+        uint32_t kk[UNROLL];
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) kk[u] = recs[(i + u) * 8u + 3u];
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) {
+            k[i + u] = kk[u];
+            v[i + u] = i + u;
+        }
+    }
+    for (; i < n; i++) {
+        k[i] = recs[i * 8u + 3u];
+        v[i] = i;
+    }
+    if (sort_pairs(k, v, k2, v2, n, hist)) {
+        for (i = 0; i < n; i++) v[i] = v2[i];
+    }
+    return v;
+}
+
+}  // namespace sort_radix_tile
