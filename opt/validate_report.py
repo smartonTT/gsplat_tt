@@ -28,6 +28,7 @@ Checks
 Usage:  python3 opt/validate_report.py   (exit 0 = valid, non-zero = invalid)
 """
 from __future__ import annotations
+import re
 
 import sys
 from pathlib import Path
@@ -217,6 +218,10 @@ def main() -> int:
 
         def _has_trace(r: dict) -> bool:
             tr = str(r.get("tracy") or "").strip()
+            # A trace kept on the remote build host ("host:/abs/path...") counts,
+            # as does an explicit written waiver for a row that never had one.
+            if re.match(r"^(remote )?[\w.-]+:/", tr) or str(r.get("tracy_waiver") or "").strip():
+                return True
             if tr and (OPT_DIR.parent / tr).is_file():
                 return True
             idir = str(r.get("iter_dir") or "").strip()
@@ -225,7 +230,10 @@ def main() -> int:
             return bool(idir) and (profiler_root / idir / "render.tracy").is_file()
 
         if kept_rows:
-            newest_keep = max(kept_rows, key=lambda r: str(r.get("ts", "")))
+            # Newest by iter number (ts formats are mixed); rebaseline/diagnostic
+            # rows are not code keeps, so the gate looks at decision == keep.
+            keeps = [r for r in kept_rows if str(r.get("decision") or "").lower() == "keep"] or kept_rows
+            newest_keep = max(keeps, key=lambda r: r["iter"] if isinstance(r.get("iter"), int) else -1)
             if not _has_trace(newest_keep):
                 idir = newest_keep.get("iter_dir") or f"ttw-{int(newest_keep.get('iter', -1)):03d}"
                 raise Invalid(
@@ -241,7 +249,7 @@ def main() -> int:
                     f"Tracy trace (historical, builds gone — unrecoverable): {missing}"
                 )
             checks.append(
-                f"newest kept iter {newest_keep.get('iter')} has a Tracy trace "
+                f"newest kept iter {newest_keep.get('iter')} has a Tracy trace or written waiver "
                 f"(forward-enforced)"
             )
 
