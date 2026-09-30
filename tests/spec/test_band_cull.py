@@ -139,29 +139,38 @@ def test_coeff_tile_and_mask_layout_match_sfpu_words():
 
 
 # det = ci_a*ci_c - B^2 is formed in fp32 in the kernel. For a needle splat
-# (sigma_minor^2 = 0.3, the anti-alias floor) at a 45 deg angle, ci_a ~ ci_c ~
-# 1/0.6 and B^2 ~ ci_a*ci_c, so det ~ 1/(0.3*sigma_major^2) is a small
-# difference of O(1) terms: relative error ~ 2^-24 * 0.3*sigma_major^2 / 0.3.
-# By sigma_major ~ 1000 px that eats the extent and tip microblocks get culled
-# (seen at 1000 and 2000 px; 300-700 px are clean). The default max_radius =
-# min(H, W)/2 (bicycle: ~400 px) keeps real splats inside the safe range, so
-# the >=1000 px cases are expected fails. Kernels are unchanged.
-@pytest.mark.parametrize("sig_major", [
-    300.0, 500.0, 700.0,
-    *(pytest.param(s, marks=pytest.mark.xfail(
-        reason="fp32 det cancellation limit (det=ci_a*ci_c-B^2)", strict=False))
-      for s in (1000.0, 2000.0)),
-])
-def test_needle_tip_no_false_cull(sig_major):
-    """Elongated splat with the tile at its ellipse tip (tt-project run 174 model)."""
+# (sigma_minor^2 ~ 0.3, the anti-alias floor) at an oblique angle, ci_a*ci_c
+# and B^2 are both ~1/0.3^2 while det ~ 1/(0.3*sigma_major^2): a small
+# difference of O(1) terms, so its relative error grows ~ sigma_major^2 * 2^-24
+# / 0.3. At large sigma_major that eats the ellipse extent and tip microblocks
+# get culled (model: clean to sigma_major 500 px, misses from ~600 px when the
+# splat is not radius-capped). The default max_radius = min(H, W)/2 caps each
+# splat's projected x/y radius (sqrt(thr * cov_xx), sqrt(thr * cov_yy)), which
+# drops the long needles before the cull ever sees them: with the bicycle cap
+# the model shows no false culls at 300-700 px, and at >= 1000 px no needle
+# that reaches the tile survives the cap at all. Uncapped (max_radius<0)
+# needles of sigma_major >= 1000 px are the known limit: expected fail.
+# Kernels are unchanged.
+BICYCLE_HW = (822, 1237)  # 4x-downsampled bicycle; cap = min(H, W)/2
+
+
+def _needle_tip_false_culls(sig_major, max_radius):
+    """Needle splats with the tile at the ellipse tip (tt-project run 174 model).
+
+    Returns (live microblocks, falsely culled microblocks) over splats whose
+    projected radius passes max_radius (None = no cap).
+    """
     rng = np.random.default_rng(int(sig_major))
     n = 1000
     th = rng.uniform(0, np.pi, n)
     smin = np.sqrt(0.3 + rng.uniform(0, 0.2, n))
     cth, sth = np.cos(th), np.sin(th)
     q = np.round(10 ** rng.uniform(np.log10(1.2 / 255), 0, n) * 65535).astype(np.int64)
-    op = q / 65535.0
-    thr = 2 * np.log(op / FLOOR)
+    thr = 2 * np.log((q / 65535.0) / FLOOR)
+    cov_xx = sig_major**2 * cth**2 + smin**2 * sth**2
+    cov_yy = sig_major**2 * sth**2 + smin**2 * cth**2
+    ok = np.ones(n, bool) if max_radius is None else (
+        np.maximum(np.sqrt(thr * cov_xx), np.sqrt(thr * cov_yy)) <= max_radius)
     l1, l2 = 1 / smin**2, 1 / sig_major**2
     ca = l1 * sth**2 + l2 * cth**2
     cc = l1 * cth**2 + l2 * sth**2
@@ -176,12 +185,34 @@ def test_needle_tip_no_false_cull(sig_major):
     ca, cb, cc, mxd, myd, op = _exact(A, B, C, mx, my, q)
     yy, xx = np.mgrid[0:32, 0:32] + 0.5
     mb = ((yy // 4) * 4 + (xx // 8)).astype(int).ravel()
-    n_live = 0
-    for i in range(n):
+    n_live = n_bad = 0
+    for i in np.nonzero(ok)[0]:
         dx, dy = xx.ravel() - mxd[i], yy.ravel() - myd[i]
         a = op[i] * np.exp(-0.5 * (ca[i] * dx * dx + 2 * cb[i] * dx * dy + cc[i] * dy * dy))
         live = np.zeros(32, bool)
         np.logical_or.at(live, mb, a >= FLOOR)
         n_live += live.sum()
-        assert not (live & ~keep[i]).any(), i
-    assert n_live > 0  # the tip really reaches the tile
+        n_bad += (live & ~keep[i]).sum()
+    return n_live, n_bad
+
+
+@pytest.mark.parametrize("sig_major", [300.0, 500.0, 600.0, 700.0, 1000.0, 2000.0])
+def test_needle_tip_no_false_cull_default_cap(sig_major):
+    n_live, n_bad = _needle_tip_false_culls(sig_major, min(BICYCLE_HW) / 2)
+    assert n_bad == 0
+    if sig_major < 1000:
+        assert n_live > 0  # the tip really reaches the tile
+    else:
+        assert n_live == 0  # cap removes every tip-reaching needle
+
+
+@pytest.mark.parametrize("sig_major", [
+    300.0, 500.0,
+    *(pytest.param(s, marks=pytest.mark.xfail(
+        reason="fp32 det cancellation limit (det=ci_a*ci_c-B^2)", strict=True))
+      for s in (1000.0, 2000.0)),
+])
+def test_needle_tip_no_false_cull_uncapped(sig_major):
+    n_live, n_bad = _needle_tip_false_culls(sig_major, None)
+    assert n_live > 0
+    assert n_bad == 0
