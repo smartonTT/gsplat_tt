@@ -8,7 +8,8 @@
 // Every materialize item and every radix tile writes only its own output, so
 // the split is byte-identical iff each unit of work runs exactly once and fits
 // the mover's buffers. On random heavy-tailed per-tile counts:
-//  - materialize: the dual-mover item multiset equals the single-mover one;
+//  - materialize: the dual-mover item multiset equals the single-mover one,
+//    and the gather parts cover each over-cap subchunk's records exactly once;
 //    BRISC slots never get a whole-tile item above kMatMover0Cap (its L1
 //    buffers would overflow); no slot exceeds the kernel's MAX_WORK; and the
 //    busiest slot is lighter than the single-mover busiest core.
@@ -51,11 +52,37 @@ ItemSet items_of(const MatWorkAssignment& a) {
     return s;
 }
 
-uint64_t item_cost(const std::vector<int64_t>& counts, uint32_t t, uint32_t sc) {
+uint64_t item_cost(const std::vector<int64_t>& counts, uint32_t t, uint32_t w) {
     const uint32_t cnt = static_cast<uint32_t>(counts[t]);
     if (cnt <= render_config::kOverflowL1Cap) return cnt;
-    const uint32_t off = sc * kBucketFit;
-    return 8ull * std::min(kBucketFit, cnt - off);
+    const uint32_t sc = w & 0xFFu, part = w >> 8;
+    const uint32_t l_sub = std::min(kBucketFit, cnt - sc * kBucketFit);
+    const uint32_t p0 = part * kGatherPartRecs;
+    return 8ull * std::min(kGatherPartRecs, l_sub - p0);
+}
+
+// Every record of every over-cap subchunk is covered by exactly one part.
+int check_parts(const std::vector<int64_t>& counts, const MatWorkAssignment& a) {
+    std::map<std::pair<uint32_t, uint32_t>, uint32_t> covered;  // (tile, sc) -> recs
+    for (std::size_t i = 0; i + 1 < a.flat.size(); i += 2) {
+        const uint32_t t = a.flat[i];
+        if (static_cast<uint32_t>(counts[t]) <= render_config::kOverflowL1Cap) continue;
+        covered[{t, a.flat[i + 1] & 0xFFu}] += item_cost(counts, t, a.flat[i + 1]) / 8;
+    }
+    int bad = 0;
+    for (uint32_t t = 0; t < kTiles; ++t) {
+        const uint32_t cnt = static_cast<uint32_t>(counts[t]);
+        if (cnt <= render_config::kOverflowL1Cap) continue;
+        for (uint32_t sc = 0; sc * kBucketFit < cnt; ++sc) {
+            const uint32_t l_sub = std::min(kBucketFit, cnt - sc * kBucketFit);
+            if (covered[{t, sc}] != l_sub) {
+                std::printf("mat: tile %u sc %u parts cover %u of %u\n", t, sc,
+                            covered[{t, sc}], l_sub);
+                ++bad;
+            }
+        }
+    }
+    return bad;
 }
 
 int check_mat(const std::vector<int64_t>& counts) {
@@ -100,6 +127,7 @@ int check_mat(const std::vector<int64_t>& counts) {
             }
         }
     }
+    bad += check_parts(counts, two);
     const uint64_t m1 = max_load(one, kCores), m2 = max_load(two, 2 * kCores);
     if (!(m2 < m1)) {
         std::printf("mat: dual busiest slot %llu not below single %llu\n",

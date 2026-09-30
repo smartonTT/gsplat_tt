@@ -47,6 +47,10 @@ constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 constexpr uint32_t TILE_SIZE = 32u;
 // iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
 constexpr uint32_t REC_BATCH = 32u;
+// Task #35: an over-cap gather item covers part `part` of its subchunk, records
+// [part * GATHER_PART_RECS, +GATHER_PART_RECS) (host sort_mover_split.h
+// kGatherPartRecs). Other items have part 0 and cover their whole tile/subchunk.
+constexpr uint32_t GATHER_PART_RECS = 2048u;
 
 // Dual mover: BRISC runs this kernel too, on its own (smaller) copies of every
 // CB at id + 16 (MAT_CB_BASE) and its own work-item slice. The host gives it
@@ -166,15 +170,17 @@ void kernel_main() {
     sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
 
     for (uint32_t wi = 0; wi < work_count; wi++) {
-        // The work buffer is a flat u32 array; item i = {tile_id at 2i, sc at
-        // 2i+1}, both in the same 64 B page (2i is even).
-        uint32_t tile_id, sc;
+        // The work buffer is a flat u32 array; item i = {tile_id at 2i,
+        // sc | part << 8 at 2i+1}, both in the same 64 B page (2i is even).
+        uint32_t tile_id, sc, part;
         {
             const uint32_t u = (work_start + wi) * 2u;
             noc_async_read(get_noc_addr(u / ELEMS_PER_PAGE, work_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
             tile_id = scrp[u % ELEMS_PER_PAGE] & 0xFFFFFFu;
-            sc = scrp[u % ELEMS_PER_PAGE + 1u] & 0xFFu;
+            const uint32_t w1 = scrp[u % ELEMS_PER_PAGE + 1u];
+            sc = w1 & 0xFFu;
+            part = (w1 >> 8) & 0xFFu;
         }
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
@@ -359,7 +365,9 @@ void kernel_main() {
         // sc>=1 / overflow sc==0: batched blendrec gather (iter 76: REC_BATCH=32,
         // per-slot PACK2, one write barrier per batch; reuse sorted-id page).
         const uint32_t id_start_sc = id_start + sc_off;
-        uint32_t processed = 0;
+        uint32_t processed = part * GATHER_PART_RECS;
+        const uint32_t part_end = (L_sub - processed > GATHER_PART_RECS)
+            ? processed + GATHER_PART_RECS : L_sub;
         uint32_t nbrec = 0;
         uint32_t brec_out_g[REC_BATCH];
         int32_t sorted_id_page_cached = -1;
@@ -411,7 +419,7 @@ void kernel_main() {
             noc_async_write_barrier();
             nbrec = 0;
         };
-        while (processed < L_sub) {
+        while (processed < part_end) {
             const uint32_t global_idx = id_start_sc + processed;
             const uint32_t id_page = global_idx >> 4;
             const uint32_t id_ip = global_idx & 0xF;
@@ -421,7 +429,7 @@ void kernel_main() {
                 sorted_id_page_cached = static_cast<int32_t>(id_page);
             }
             uint32_t take = ELEMS_PER_PAGE - id_ip;
-            if (take > L_sub - processed) take = L_sub - processed;
+            if (take > part_end - processed) take = part_end - processed;
             for (uint32_t j = 0; j < take; ++j) {
                 const uint32_t gid = idsp[id_ip + j];
                 const uint32_t slot = rec_l1 + nbrec * PAGE_BYTES;

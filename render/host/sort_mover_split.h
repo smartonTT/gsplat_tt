@@ -21,6 +21,11 @@ namespace gsplat_tt::sort_split {
 
 // Record capacity of BRISC's materialize buffers (L1: 72 B / record).
 inline constexpr uint32_t kMatMover0Cap = 6144;
+// Over-cap gather subchunks are split into parts of this many records (the
+// second work-item word is sc | part << 8); one whole 8192-record subchunk was
+// a single ~8x-weighted item that set the busiest core's time by itself.
+// == sort_subchunk_materialize.cpp GATHER_PART_RECS.
+inline constexpr uint32_t kGatherPartRecs = 2048;
 
 // iter 130: materialize work-item assignment — balance at (tile, subchunk)
 // granularity. iter-130 MEASURED the dominant materialize cost as the OVERFLOW
@@ -38,7 +43,7 @@ inline constexpr uint32_t kMatMover0Cap = 6144;
 // NCRISC slot; gather items use no big buffer and go anywhere. Items stay
 // independent, so the output is byte-identical to the single-mover pass.
 struct MatWorkAssignment {
-    std::vector<uint32_t> flat;             // 2 u32 / item: {tile_id, sc}
+    std::vector<uint32_t> flat;             // 2 u32 / item: {tile_id, sc | part << 8}
     std::vector<uint32_t> per_core_offset;  // in ITEMS, per slot
     std::vector<uint32_t> per_core_count;   // in ITEMS, per slot
     uint32_t max_items_per_core = 0;
@@ -77,9 +82,11 @@ inline MatWorkAssignment build_mat_worklist(
             const uint32_t sc_off = sc * bucket_fit;
             const uint32_t l_sub = (sc_off >= cnt) ? 0u
                 : ((cnt - sc_off > bucket_fit) ? bucket_fit : (cnt - sc_off));
-            if (l_sub == 0u) continue;
-            items.push_back(
-                {t, sc, static_cast<uint64_t>(l_sub) * GATHER_WEIGHT, false});
+            for (uint32_t p0 = 0, part = 0; p0 < l_sub; p0 += kGatherPartRecs, ++part) {
+                const uint32_t recs = std::min(kGatherPartRecs, l_sub - p0);
+                items.push_back({t, sc | (part << 8),
+                                 static_cast<uint64_t>(recs) * GATHER_WEIGHT, false});
+            }
         }
     }
     std::sort(items.begin(), items.end(),
@@ -103,7 +110,7 @@ inline MatWorkAssignment build_mat_worklist(
         for (const auto& it : items) {
             tot += it.cost;
             if (it.big) big += it.cost;
-            if (it.cost > 0 && it.sc > 0) gather += it.cost;
+            if (it.cost > 0 && !it.big && counts[it.tile] > ov_cap) gather += it.cost;
         }
         for (uint32_t k = 0; k < slots; ++k) {
             const uint32_t m = (movers == 2) ? (k & 1u) : 0u;
@@ -111,7 +118,7 @@ inline MatWorkAssignment build_mat_worklist(
         }
         std::fprintf(stderr,
                      "[MAT_STATS] items=%zu slots=%u cost_total=%llu big=%llu "
-                     "sc_gt0=%llu max_item=%llu mean_slot=%llu "
+                     "gather=%llu max_item=%llu mean_slot=%llu "
                      "max_ncrisc=%llu max_brisc=%llu\n",
                      items.size(), slots, (unsigned long long)tot,
                      (unsigned long long)big, (unsigned long long)gather,
