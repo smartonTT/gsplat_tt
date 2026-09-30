@@ -261,8 +261,9 @@ bash opt/profiler/capture_tracy.sh <iter-dir>   # → opt/profiler/<iter-dir>/re
 ```
 This wraps `python -m tracy --dump-device-data-mid-run`, which is the only path that streams
 device zones (gsplat never closes the device, so a plain `capture-release` gets host/JIT zones
-only). Verify coverage by row count in `profile_log_device.csv` (~30× the ~65.6k 1-view
-baseline). Analyse with `analyze_zones.py` using **per-view busiest-core makespan**, never
+only). Verify coverage by row count in `profile_log_device.csv` (~19.9k rows/view at
+ttw-142; the old ~65.6k/view figure predates the kernel fusions). Chunked variant and
+stitcher: `docs/tracy-chunked-2026-09-30.md`. Analyse with `analyze_zones.py` using **per-view busiest-core makespan**, never
 aggregate column sums.
 
 Report:

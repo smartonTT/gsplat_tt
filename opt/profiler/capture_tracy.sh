@@ -75,7 +75,7 @@ if [[ -s "$TRACY" ]]; then
   if [[ -f "$DLOG" ]]; then
     cp -f "$DLOG" "$DST_CSV"
     rows=$(($(wc -l < "$DLOG") - 1))
-    echo "[capture_tracy] device profiler CSV data rows: $rows (1-view baseline ~65600; ~30x => full 30-view)"
+    echo "[capture_tracy] device profiler CSV data rows: $rows (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)"
     echo "[capture_tracy] per-zone-hash device marker counts (each zone repeats ~30x across views):"
     awk -F, 'NR>1 {print $5}' "$DLOG" 2>/dev/null | sort | uniq -c | sort -rn | head -25
   else

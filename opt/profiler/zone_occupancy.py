@@ -32,7 +32,9 @@ CYC_MS = 1350.0 * 1000.0
 STAGES = [
     ("project", ("pfwc", "proj_count", "proj_scatter")),
     ("tile_assign", ("ta_gauss_aabb", "ta_bucket_scatter")),
-    ("sort", ("sort_bin_hist", "sort_bucket_emit", "sort_tile_depth", "sort_subchunk_mat")),
+    ("sort", ("sort_bin_hist", "sort_bucket_emit", "sort_tile_depth")),
+    # subchunk_mat, cull and blend all drain in the host `blend` bucket (one Finish).
+    ("subchunk_mat", ("sort_subchunk_mat",)),
     ("cull", ("tile_mb_mask", "tile_l1_cull_rd")),
     ("blend", ("tile_blend_sfpu", "tile_blend_load", "rd_l1_bulk")),
 ]
@@ -52,6 +54,7 @@ def main():
 
     stack = defaultdict(list)
     win = {}  # (frame, stage) -> [first START, last END]
+    zwin = {}  # (frame, zone) -> [first START, last END]  (kernel zones only)
     stage_of = {z: st for st, zs in STAGES for z in zs}
     # busy[zone][(frame, core)] = cycles
     busy = defaultdict(lambda: defaultdict(int))
@@ -63,6 +66,9 @@ def main():
         key = (p[1], p[2], p[3], p[ZONE])
         if p[TYPE] == "ZONE_START":
             stack[key].append(t)
+            if not p[ZONE].endswith(("-FW", "-KERNEL")):
+                w = zwin.setdefault((fr, p[ZONE]), [t, t])
+                w[0] = min(w[0], t)
             st = stage_of.get(p[ZONE])
             if st:
                 w = win.setdefault((fr, st), [t, t])
@@ -72,6 +78,8 @@ def main():
             if d >= 0:
                 busy[p[ZONE]][(fr, (p[1], p[2], p[3]))] += d
                 riscs[p[ZONE]].add(p[3])
+                if (fr, p[ZONE]) in zwin:
+                    zwin[(fr, p[ZONE])][1] = max(zwin[(fr, p[ZONE])][1], int(t))
                 st = stage_of.get(p[ZONE])
                 if st:
                     win[(fr, st)][1] = max(win[(fr, st)][1], int(t))
@@ -112,6 +120,17 @@ def main():
              for f in range(first, n_frames) if (f, st) in win]
         if w:
             print(f"{st:<12} {np.mean(w):>11.2f} {min(w):>7.2f} {max(w):>7.2f}  {'+'.join(zs)}")
+
+    # Device timeline: each kernel zone's window relative to the frame's first marker.
+    f0 = {f: ts[frame == f].min() for f in range(first, n_frames)}
+    tl = defaultdict(list)
+    for (f, z), (a, b) in zwin.items():
+        tl[z].append(((a - f0[f]) / CYC_MS, (b - f0[f]) / CYC_MS))
+    print(f"\n{'zone (timeline)':<20} {'start_ms':>8} {'end_ms':>8} {'window':>8}  (mean over views)")
+    print("-" * 60)
+    for z, v in sorted(tl.items(), key=lambda kv: np.mean([a for a, _ in kv[1]])):
+        a, b = np.mean([x for x, _ in v]), np.mean([y for _, y in v])
+        print(f"{z:<20} {a:>8.2f} {b:>8.2f} {np.mean([y - x for x, y in v]):>8.2f}")
 
 
 ZONE, TYPE = 10, 11
