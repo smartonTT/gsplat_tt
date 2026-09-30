@@ -1390,7 +1390,10 @@ def cull_tune_section() -> str:
   alpha_blend without microblock cull. Quality floor: PSNR ≥ {PSNR_FLOOR} dB,
   max_abs ≤ 0.05 @ 1024² stitch_doll (+ orbit + close-zoom views).</p>
   <p>Production default: <b>Mahalanobis</b> per-pair and per-microblock cull with
-  <code>contrib_floor=1/16384</code> (~68.6 dB worst vs true GT; ~18 ms/view).</p>
+  <code>contrib_floor=1/255</code> plus the GPU-3DGS per-pixel blend floor
+  (iter-156, <code>BLEND_PIXEL_FLOOR</code> default on). Was 1/16384; that golden is
+  archived under <code>tests/fixtures/hero/archive/</code>. PSNR vs old golden
+  42-43 dB (faint haze dropped); independent review task #43 PASS, no seams.</p>
   <table class='kv'>{head}</table>
   {table}
   <p>Full log: <code>opt/cull_tune.jsonl</code></p>
@@ -1613,8 +1616,10 @@ def algorithm_snapshot(rows: list[dict]) -> str:
     <li><b>tt</b> (target): same C++ pipeline as cpu_cpp_mb with one stage at a
         time swapped to a TT-metal kernel (plan-amendment-002). PSNR-gated:
         <code>tt</code> hero PSNR &ge; <code>cpu_cpp_mb</code> hero &minus; 0.5 dB.</li>
-    <li><b>contrib_floor</b> = 1/16384 (set in <code>benchmarks/cameras_v2.json</code>;
-        Pipeline default in <code>gsplat/pipeline.py</code>).</li>
+    <li><b>contrib_floor</b> = 1/255 with the per-pixel blend floor (iter-156,
+        <code>BLEND_PIXEL_FLOOR</code> default on). The old 1/16384 golden is archived
+        under <code>tests/fixtures/hero/archive/</code>; PSNR vs old golden 42-43 dB;
+        independent review task #43 PASS, no seams.</li>
     <li><b>Reference views</b>: <code>benchmarks/reference_v2/</code> @ 1024×1024,
         regenerated 2026-05-28 with current code (cpu_cpp_mb @ cf=1/16384). The
         prior cad8f91 snapshot is preserved at
