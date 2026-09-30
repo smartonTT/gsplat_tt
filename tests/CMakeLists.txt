@@ -32,3 +32,7 @@ target_compile_definitions(gsplat_cpu_tests PRIVATE
   GSPLAT_HERO_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/../tests/fixtures/hero")
 
 catch_discover_tests(gsplat_cpu_tests)
+
+# Standalone host model of the dual-mover gather split (no Catch2, no device).
+add_executable(test_gather_dual_mover unit/test_gather_dual_mover.cpp)
+add_test(NAME test_gather_dual_mover COMMAND test_gather_dual_mover)

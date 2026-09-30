@@ -30,6 +30,8 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -102,14 +104,26 @@ inline bool proj_device_scan_enabled() { return true; }  // PROJ_DEVICE_SCAN=1
 // scatter kernels run on BRISC and NCRISC of every core, each on one half of
 // the core's tile list, with count/base slot 2*core + mover. The slot order is
 // the single-mover compaction order, so outputs are byte-identical.
-// GSPLAT_TT_PROJ_GATHER_MOVERS=1 gives BRISC the whole list (A/B baseline in
-// the same build); GSPLAT_TT_PROJ_GATHER_SPLIT=<n> gives BRISC n/1000 of each
-// core's tiles (default 500). Read once.
-constexpr uint32_t GATHER_MOVERS = 2;
-static uint32_t proj_gather_split_permille() {
+// GSPLAT_TT_PROJ_GATHER_MOVERS=1 runs the pass on BRISC alone and does not
+// launch the NCRISC mover (A/B baseline in the same build; the unused slots
+// 2*core+1 stay zero so the scan is unchanged). Only 1 or 2 is accepted.
+// GSPLAT_TT_PROJ_GATHER_SPLIT=<n> gives BRISC n/1000 of each core's tiles
+// (default 500). Both are read once.
+constexpr uint32_t GATHER_MOVERS = 2;  // slots per core (layout, fixed)
+static uint32_t proj_gather_movers() {
     static const uint32_t v = [] {
         const char* m = std::getenv("GSPLAT_TT_PROJ_GATHER_MOVERS");
-        if (m != nullptr && std::atoi(m) == 1) return 1000u;
+        if (m == nullptr || *m == '\0') return 2u;
+        if (std::strcmp(m, "1") == 0) return 1u;
+        if (std::strcmp(m, "2") == 0) return 2u;
+        throw std::invalid_argument(
+            std::string("GSPLAT_TT_PROJ_GATHER_MOVERS must be 1 or 2, got '") + m + "'");
+    }();
+    return v;
+}
+static uint32_t proj_gather_split_permille() {
+    static const uint32_t v = [] {
+        if (proj_gather_movers() == 1) return 1000u;
         const char* e = std::getenv("GSPLAT_TT_PROJ_GATHER_SPLIT");
         const int x = (e != nullptr) ? std::atoi(e) : 500;
         return static_cast<uint32_t>(std::clamp(x, 0, 1000));
@@ -164,14 +178,14 @@ struct GatherDeviceContext {
     distributed::MeshCommandQueue* cq = nullptr;
     distributed::MeshWorkload workload;
     KernelHandle kernel{};   // BRISC mover
-    KernelHandle kernel1{};  // NCRISC mover
+    KernelHandle kernel1{};  // NCRISC mover (not created when MOVERS=1)
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
     uint32_t num_cores = 0;
     uint32_t num_slots = 0;  // count/base slots: GATHER_MOVERS per core
 
     // GSPLAT_TT_PROJ_DEVICE_SCAN: single-core on-device exclusive prefix-sum of
-    // the per-core counts (scan_bases-style). Replaces the host D2H(counts) +
+    // the per-slot counts (scan_bases-style). Replaces the host D2H(counts) +
     // host scan + host proj_M write between the count and scatter passes.
     distributed::MeshWorkload wl_scan;
     KernelHandle kscan{};
@@ -254,7 +268,7 @@ static void build_program(GatherDeviceContext& ctx) {
             .compile_args = ct,
             .defines = defines,
         });
-    ctx.kernel1 = CreateKernel(
+    if (proj_gather_movers() == 2) ctx.kernel1 = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
         cores,
@@ -268,8 +282,9 @@ static void build_program(GatherDeviceContext& ctx) {
     ctx.workload.add_program(device_range, std::move(program));
 }
 
-// Single-core on-device exclusive prefix-sum of the per-core counts. Two 64B CBs
-// (in/out staging) + 3 DRAM-interleaved accessors (counts, base, proj_M).
+// Single-core on-device exclusive prefix-sum of the per-slot counts. Two CBs of
+// num_slots 64B pages (in/out staging) + 3 DRAM-interleaved accessors (counts,
+// base, proj_M).
 static void build_program_scan(GatherDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet core0(CoreRange({0, 0}, {0, 0}));
@@ -433,13 +448,18 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
     device_state::register_buffer("proj_m_colors", ctx->buf_colors);
 }
 
-// Allocate the per-slot counts buffer once (one 64B page per slot).
+// Allocate the per-slot counts and device-scan bases buffers once (one 64B
+// page per slot, GATHER_MOVERS slots per core). With MOVERS=1 the NCRISC slots
+// are never written by a kernel, so zero the counts once here.
 static void ensure_counts(GatherDeviceContext* ctx) {
     if (ctx->buf_counts) return;
     const std::size_t bytes = static_cast<std::size_t>(ctx->num_slots) * PAGE_BYTES;
     ctx->buf_counts = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
-    // Device-scan output bases (one 64B page per core); allocated alongside.
     ctx->buf_core_base = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
+    if (proj_gather_movers() == 1) {
+        std::vector<uint32_t> zeros(bytes / sizeof(uint32_t), 0u);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_counts, zeros, true);
+    }
 }
 
 // Effective max_radius matching project_finish_with_cov2d_radii.
@@ -682,7 +702,7 @@ static void launch_pass(
 
     const uint32_t split = proj_gather_split_permille();
     for (uint32_t c = 0; c < ctx->num_cores; ++c)
-    for (uint32_t mv = 0; mv < GATHER_MOVERS; ++mv) {
+    for (uint32_t mv = 0; mv < proj_gather_movers(); ++mv) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         // Mover 0 takes the first h0 tiles of the core's list, mover 1 the rest
         // (slot order == single-mover order; see the kernel header).
