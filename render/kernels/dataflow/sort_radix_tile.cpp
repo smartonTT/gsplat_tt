@@ -12,7 +12,8 @@
 // of sort_radix_tile_algo.h, R11: digits sized to the tile's key range and n).
 // The (key, id) pair is moved together; only the depth_bits key drives order.
 //
-// Each core processes an LPT-assigned slice of NON-EMPTY tiles. Tiles live in
+// Each core processes an LPT-assigned slice of NON-EMPTY tiles, split between
+// its two data movers (NCRISC a prefix, BRISC the rest). Tiles live in
 // a PAGE-ALIGNED DRAM layout (each tile owns ceil(n/16) exclusive 64B pages),
 // so every read/write is a whole page exclusive to one tile — no cross-tile
 // page sharing, no write races. The host compacts the aligned segments back
@@ -41,12 +42,17 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 
 // L1 scratch CB ids (declared in sort_device.cpp). Used as fixed scratch
 // regions via get_write_ptr (no cb_reserve/push).
-constexpr uint32_t CB_KIN  = 0;   // keys ping
-constexpr uint32_t CB_IIN  = 1;   // ids  ping
-constexpr uint32_t CB_KOUT = 2;   // keys pong
-constexpr uint32_t CB_IOUT = 3;   // ids  pong
-constexpr uint32_t CB_TIDS = 4;   // tile-id list scratch (one page)
-constexpr uint32_t CB_META = 5;   // tmeta scratch (one page)
+// Dual mover: BRISC runs this kernel too, on its own copies of every CB at
+// id + 16 (RADIX_CB_BASE), over the other part of its core's tile slice.
+#ifndef RADIX_CB_BASE
+#define RADIX_CB_BASE 0
+#endif
+constexpr uint32_t CB_KIN  = RADIX_CB_BASE + 0;   // keys ping
+constexpr uint32_t CB_IIN  = RADIX_CB_BASE + 1;   // ids  ping
+constexpr uint32_t CB_KOUT = RADIX_CB_BASE + 2;   // keys pong
+constexpr uint32_t CB_IOUT = RADIX_CB_BASE + 3;   // ids  pong
+constexpr uint32_t CB_TIDS = RADIX_CB_BASE + 4;   // tile-id list scratch (one page)
+constexpr uint32_t CB_META = RADIX_CB_BASE + 5;   // tmeta scratch (one page)
 
 }  // namespace
 
