@@ -246,6 +246,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             compute_defines["GSPLAT_TT_MB_STATS_INV_FLOOR"] = std::string(f) + ".0f";
         }
     }
+    // Task #41: GSPLAT_TT_BLEND_PIXEL_FLOOR=1 compiles the per-pixel
+    // contribution floor (alpha < contrib_floor -> 0, the GPU 3DGS rule) into the
+    // blend. Default OFF (output byte-identical to the mask-only blend).
+    if (const char* pf = std::getenv("GSPLAT_TT_BLEND_PIXEL_FLOOR"); pf != nullptr && pf[0] == '1') {
+        compute_defines["BLEND_PIXEL_FLOOR"] = "1";
+    }
     // iter 107: transmittance saturation early-out knobs (runtime via env, no
     // .so rebuild to sweep — they are kernel compile-defines resolved per python
     // process at program-build time). BLEND_T_EPS = drop a microblock once its
@@ -647,7 +653,7 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(subchunk_payload_addr);   // arg 22
                     reader_args.push_back(subchunk_dir_addr);       // arg 23
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
-                    SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits});
+                    SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
                     SetRuntimeArgs(program, ctx.writer, core, {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                     });

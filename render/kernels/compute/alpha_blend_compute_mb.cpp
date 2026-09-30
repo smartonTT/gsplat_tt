@@ -110,6 +110,25 @@ constexpr uint32_t DR_Y = 5 * 32;
 // in place the mapping host-m -> vector is the IDENTITY (dispatch_blend_guarded
 // blends microblock bit M directly into vector M).
 
+// Per-pixel contribution floor (task #41, BLEND_PIXEL_FLOOR, default OFF): the
+// GPU 3DGS rule alpha < floor -> skip, applied per pixel. The microblock mask is
+// a conservative per-8x4-block superset, so without this a block where ANY pixel
+// reaches the floor also keeps every sub-floor tail in its other 31 pixels. That
+// is harmless at the 1/16384 default, but at 1/255 the faint haze in front of
+// thin structures is kept in some blocks and dropped in the next -> seams on
+// microblock lines. Floor bits come from compute runtime-arg 1.
+static uint32_t g_pixel_floor_bits = 0u;
+#if defined(BLEND_PIXEL_FLOOR)
+#define BLEND_APPLY_PIXEL_FLOOR(al)                                               \
+    do {                                                                          \
+        sfpi::vFloat fl_ = ckernel::sfpu::Converter::as_float(g_pixel_floor_bits); \
+        v_if((al) < fl_) { (al) = 0.0f; }                                         \
+        v_endif;                                                                  \
+    } while (0)
+#else
+#define BLEND_APPLY_PIXEL_FLOOR(al) ((void)0)
+#endif
+
 #ifdef TRISC_MATH
 // One gaussian's contribution to a single microblock's 32-lane vector.
 // IX is the dst_reg vector index (compile-time so SFPLOAD/SFPSTORE addresses
@@ -148,6 +167,7 @@ inline void blend_one_gaussian_math(
     vFloat alpha = ckernel::sfpu::Converter::as_float(op_bits) * weight;
     vFloat clamp = 0.99f;
     vec_min_max(alpha, clamp);  // alpha = min(alpha, 0.99)
+    BLEND_APPLY_PIXEL_FLOOR(alpha);
 
     vFloat t = dst_reg[DR_T + IX];
     vFloat at = alpha * t;
@@ -217,6 +237,8 @@ inline void blend_pair_gaussian_math(
     vFloat clampB = 0.99f;
     vec_min_max(aa, clampA);
     vec_min_max(ab, clampB);
+    BLEND_APPLY_PIXEL_FLOOR(aa);
+    BLEND_APPLY_PIXEL_FLOOR(ab);
 
     // at = alpha * T.
     vFloat ta = dst_reg[DR_T + IXA];
@@ -593,6 +615,9 @@ void kernel_main() {
             __builtin_memcpy(&g_blend_t_eps, &eps_bits, 4);
         }
     }
+#if defined(BLEND_PIXEL_FLOOR)
+    g_pixel_floor_bits = get_arg_val<uint32_t>(1);
+#endif
     cb_wait_front(CB_CORE_TILES, 1);
     const uint32_t num_tiles =
         reinterpret_cast<volatile uint32_t*>(get_tile_address(CB_CORE_TILES, 0))[0];
