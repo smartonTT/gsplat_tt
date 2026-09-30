@@ -3,7 +3,7 @@
 
 Frames are segmented with stitch_device_csv.segment_frames (warmup must already
 be dropped, or pass --skip-first). For every zone, per view:
-  sum_ms     : busy time summed over all cores
+  core_ms/v  : busy time summed over all cores (core-ms per view)
   cores      : distinct (core, RISC) that emit the zone
   mean_ms    : mean busy time per emitting core
   max_ms     : busiest-core time (per-view makespan proxy; averaged over views)
@@ -98,7 +98,7 @@ def main():
 
     print(f"views={nv} cores/frame(anchor)={ncores} device_frame_span_ms "
           f"mean={mean_span:.2f} min={span[first:].min():.2f} max={span[first:].max():.2f}")
-    print(f"{'zone':<20} {'sum_ms/v':>9} {'cores':>5} {'mean_ms':>8} {'max_ms':>8} "
+    print(f"{'zone':<20} {'core_ms/v':>9} {'cores':>5} {'mean_ms':>8} {'max_ms':>8} "
           f"{'balance':>7} {'occ_%':>6}  riscs")
     print("-" * 80)
     for z, s, c, mn, mx, b, o, r in rows[:args.top]:
