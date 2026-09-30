@@ -1,7 +1,7 @@
 # Task #83 — the "blend reader/handshake floor" at GSPLAT_TT_BLEND_ABL=4: attribution
 
 **Board: yyzo-bh-07 (Blackhole p100a), not a p150.** Bicycle, 1024x1024. Code: d8afd09
-(= 8fc8c31 kernels) plus default-off profiling zones (597ac2c). Result: **no fix; the
+(= 8fc8c31 kernels) plus default-off profiling zones (3808ef2). Result: **no fix; the
 floor is not the blend reader.** Nothing to gain above the 3 ms gate in the blend program's
 reader/handshake/emit path.
 
