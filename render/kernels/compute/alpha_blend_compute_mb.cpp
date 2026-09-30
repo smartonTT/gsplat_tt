@@ -585,24 +585,6 @@ inline void process_tile_l1_blend(
     cb_pop_front(CB_BUCKET_BULK, BULK_REC_SLOT);
 }
 
-#if defined(MB_FUSE_TILE_L1_CULL)
-#include "tile_l1_cull_sfpu.hpp"
-
-// Minimal fuse compile hook (iter 71): pulls tile_l1_cull SFPU into the blend
-// compute TU for LRA margin measurement; not called on the default path.
-inline void fuse_l1_cull_compile_hook(
-    uint32_t keep_base, uint32_t nb, uint32_t pos_base,
-    const uint32_t* a, const uint32_t* b, const uint32_t* c,
-    const uint32_t* mx, const uint32_t* my, const uint32_t* thr,
-    uint32_t txf_bits, uint32_t tyf_bits) {
-    if (nb == 0u) {
-        return;
-    }
-    tile_l1_cull_sfpu::cull_dispatch(
-        keep_base, nb, pos_base, a, b, c, mx, my, thr, txf_bits, tyf_bits, false);
-}
-#endif
-
 }  // namespace
 
 void kernel_main() {

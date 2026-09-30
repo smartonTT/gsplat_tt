@@ -230,13 +230,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
 
-    // Optional compile probe: MB_FUSE_TILE_L1_CULL=1 pulls fuse SFPU into the
-    // blend compute TU for LRA margin measurement (iter 71); default OFF.
     std::map<std::string, std::string> compute_defines;
-    if (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL");
-        fuse != nullptr && fuse[0] == '1') {
-        compute_defines["MB_FUSE_TILE_L1_CULL"] = "1";
-    }
     // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
     // per-core record/microblock/pixel counters into the blend compute kernel
     // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.

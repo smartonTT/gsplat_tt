@@ -150,12 +150,18 @@ def test_pixel_centre_mask_blend_matches_gpu_rule():
     assert np.abs(rgb * 255 - _gpu_rule(gs)).max() < 1e-6
 
 
+EXP_REL_ERR = 1.73e-3   # blend exp_21f fit, max relative over-read of alpha
+LOG_UNDER = 0.0035      # cull SFPU log, max underestimate of ln
+
+
 def test_thr_margin_covers_blend_alpha_rounding():
-    # The blend's alpha is a bf16-rounded approx exp; near the floor it can read
-    # up to ~2^-8 high relative to the exact value the cull uses. Right at a
-    # pixel centre there is no box slack left, so thr + THR_MARGIN must absorb
-    # that: every pixel whose alpha*(1+2^-7) reaches the floor stays kept.
-    assert cmc.THR_MARGIN >= 2 * np.log1p(2.0 ** -7)
+    # fp32 dest, no bf16 rounding. The blend's exp_21f alpha can read up to
+    # EXP_REL_ERR high (~0.0035 in m2) and the cull's SFPU log can read ln up to
+    # LOG_UNDER low (0.007 in thr): ~0.011 worst case. Right at a pixel centre
+    # there is no box slack, so THR_MARGIN must absorb both.
+    worst = 2 * np.log1p(EXP_REL_ERR) + 2 * LOG_UNDER
+    assert 0.010 < worst < 0.012
+    assert cmc.THR_MARGIN >= worst
     rng = np.random.default_rng(3)
     yy, xx = np.mgrid[0:32, 0:32] + 0.5
     mb = ((yy // 4) * 4 + (xx // 8)).astype(int)
@@ -167,8 +173,8 @@ def test_thr_margin_covers_blend_alpha_rounding():
         dx, dy = xx - mx, yy - my
         a = op * np.exp(-0.5 * (ca * dx * dx + 2 * cb * dx * dy + cc * dy * dy))
         live = np.zeros(32, bool)
-        np.logical_or.at(live, mb.ravel(), (a * (1 + 2.0 ** -7) >= FLOOR).ravel())
+        np.logical_or.at(live, mb.ravel(), (a * (1 + EXP_REL_ERR) >= FLOOR).ravel())
         m2 = cmc.boxmin_m2(ca, cb, cc, PC_OX - mx, PC_OX - mx + cmc.BOX_W,
                            PC_OY - my, PC_OY - my + cmc.BOX_H)
-        keep = m2 <= 2 * np.log(op / FLOOR) + cmc.THR_MARGIN
+        keep = m2 <= 2 * (np.log(op / FLOOR) - LOG_UNDER) + cmc.THR_MARGIN
         assert not (live & ~keep).any()

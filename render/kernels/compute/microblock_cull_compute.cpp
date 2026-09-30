@@ -116,11 +116,12 @@ constexpr uint32_t DR_THR    = 5 * 32;  // iter 108: per-gaussian thr = 2*ln(op/
 constexpr float kBoxW = 7.0f;
 constexpr float kBoxH = 3.0f;
 // With no slack between the box and the pixel centres, the cull and the blend
-// must agree on a pixel sitting right at the floor. They don't bit-for-bit: the
-// cull thr uses an SFPU log, the blend alpha a bf16-rounded approx exp (a 2^-8
-// alpha error is ~0.008 in m2). Widen thr by kThrMargin (m2 units) so the mask
-// stays a superset; extra keeps are zeroed by the per-pixel floor, so output is
-// unchanged.
+// must agree on a pixel sitting right at the floor. They don't bit-for-bit.
+// Dest is fp32, so there is no bf16 rounding; the gaps are the blend's exp_21f
+// fit (alpha up to +1.73e-3 relative, ~0.0035 in m2) and the cull's SFPU log
+// (underestimates ln by up to 0.0035, i.e. 0.007 in thr). Worst case ~0.011 in
+// m2, so widen thr by kThrMargin (m2 units) to keep the mask a superset; extra
+// keeps are zeroed by the per-pixel floor, so output is unchanged.
 constexpr float kThrMargin = 0.05f;
 
 #ifdef TRISC_MATH
