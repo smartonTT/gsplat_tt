@@ -408,18 +408,23 @@ __attribute__((noinline)) void blend_pair_body() {
 }
 using BlendBodyFn = void (*)();
 // Index 4 * pair + (2-bit pair mask); entry 0 of each pair is never called.
-#define BLEND_BODIES4(J) nullptr, &blend_pair_body<J, 1u>, &blend_pair_body<J, 2u>, &blend_pair_body<J, 3u>
-BlendBodyFn const kBlendBodies[64] = {
-    BLEND_BODIES4(0),  BLEND_BODIES4(1),  BLEND_BODIES4(2),  BLEND_BODIES4(3),
-    BLEND_BODIES4(4),  BLEND_BODIES4(5),  BLEND_BODIES4(6),  BLEND_BODIES4(7),
-    BLEND_BODIES4(8),  BLEND_BODIES4(9),  BLEND_BODIES4(10), BLEND_BODIES4(11),
-    BLEND_BODIES4(12), BLEND_BODIES4(13), BLEND_BODIES4(14), BLEND_BODIES4(15)};
-#undef BLEND_BODIES4
+// Filled at runtime: a const initializer would need dynamic relocations, which
+// the kernel loader rejects. Globals live in the TRISC's local memory.
+BlendBodyFn g_blend_bodies[64];
+template <uint32_t I>
+inline void blend_bodies_init() {
+    if constexpr (I < 64u) {
+        if constexpr ((I & 3u) != 0u) {
+            g_blend_bodies[I] = &blend_pair_body<I / 4u, I & 3u>;
+        }
+        blend_bodies_init<I + 1u>();
+    }
+}
 
 inline void dispatch_blend_jump(uint32_t mask) {
     while (mask != 0u) {
         const uint32_t b = static_cast<uint32_t>(__builtin_ctz(mask)) & ~1u;  // pair's low bit
-        kBlendBodies[2u * b + ((mask >> b) & 3u)]();
+        g_blend_bodies[2u * b + ((mask >> b) & 3u)]();
         mask &= ~(3u << b);
     }
 }
@@ -759,6 +764,9 @@ void kernel_main() {
 
     init_sfpu(CB_XRAMP, CB_COLOR_OUT);
     fill_tile_init();
+#if BLEND_USE_JUMP_WALK
+    blend_bodies_init<0>();
+#endif
 
     if (num_tiles == 0) {
         MB_STATS_EMIT();
