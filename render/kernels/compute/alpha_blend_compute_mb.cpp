@@ -52,6 +52,10 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 #endif
 
+#ifdef GSPLAT_TT_MB_STATS
+#include "api/debug/dprint.h"
+#endif
+
 namespace {
 
 constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp (c + 0.5)
@@ -387,6 +391,117 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));   // resume the SFPU section
 }
 
+// ---- Sub-tile waste instrumentation (GSPLAT_TT_MB_STATS, default OFF) -------
+// Scalar MATH-thread counters over every slab record the blend consumes; one
+// DPRINT line per core per launch at kernel end. Compiled out entirely unless
+// the host sets GSPLAT_TT_MB_STATS=1 (blend_device.cpp), so the perf path is
+// untouched. Pixel test mirrors blend_one_gaussian_math: pixel (c+0.5, r+0.5)
+// of microblock m (box origin ((m&3)*8, (m>>2)*4), 8 wide x 4 tall) is "live"
+// iff op*exp(min(power,0)) >= 1/255  <=>  min(power,0) >= -ln(255*op).
+#if defined(GSPLAT_TT_MB_STATS) && defined(TRISC_MATH)
+struct MbStats {
+    uint32_t rec;        // records consumed (splat-tile pairs reaching blend)
+    uint32_t rec_live;   // records with a non-zero cull mask
+    uint32_t mb_kept;    // popcount(cull mask)
+    uint32_t mb_sat;     // kept microblocks skipped by T-saturation early-out
+    uint32_t mb_disp;    // microblocks actually blended (SFPU vector dispatches)
+    uint32_t pairops;    // dispatch_blend_pairs calls (pair or single)
+    uint32_t mb_useful;  // dispatched microblocks with >= 1 live pixel
+    uint32_t px_live;    // live pixels inside dispatched microblocks
+};
+MbStats g_mb_st{};
+
+inline uint32_t st_popc(uint32_t v) {
+    uint32_t n = 0;
+    while (v != 0u) {
+        v &= v - 1u;
+        ++n;
+    }
+    return n;
+}
+
+inline float st_bits_f(uint32_t u) {
+    float f;
+    __builtin_memcpy(&f, &u, 4);
+    return f;
+}
+
+// ln(x), x > 0 normal: exponent split + atanh series (|err| ~1e-5).
+inline float st_ln(float x) {
+    uint32_t bits;
+    __builtin_memcpy(&bits, &x, 4);
+    const int32_t ex = static_cast<int32_t>((bits >> 23) & 0xffu) - 127;
+    const float m = st_bits_f((bits & 0x7fffffu) | 0x3f800000u);
+    const float s = (m - 1.0f) / (m + 1.0f);
+    const float s2 = s * s;
+    const float lnm = 2.0f * s * (1.0f + s2 * (1.0f / 3.0f + s2 * (1.0f / 5.0f + s2 * (1.0f / 7.0f))));
+    return lnm + static_cast<float>(ex) * 0.69314718f;
+}
+
+inline void st_record(const uint32_t* rec, uint32_t mask) {
+    const uint32_t raw = rec[3];
+    ++g_mb_st.rec;
+    if (raw == 0u) {
+        return;
+    }
+    ++g_mb_st.rec_live;
+    g_mb_st.mb_kept += st_popc(raw);
+    g_mb_st.mb_sat += st_popc(raw & ~mask);
+    if (mask == 0u) {
+        return;
+    }
+    g_mb_st.mb_disp += st_popc(mask);
+    for (uint32_t j = 0; j < NUM_MB / 2; ++j) {
+        if (((mask >> (2u * j)) & 3u) != 0u) {
+            ++g_mb_st.pairops;
+        }
+    }
+    const float op = static_cast<float>(rec[6] & 0xffffu) * (1.0f / 65535.0f);
+    if (op * 255.0f < 1.0f) {
+        return;  // no pixel can reach 1/255
+    }
+    const float thr = -st_ln(op * 255.0f);
+    const float A = st_bits_f(rec[0]), B = st_bits_f(rec[1]), C = st_bits_f(rec[2]);
+    const float mx = st_bits_f(rec[4]), my = st_bits_f(rec[5]);
+    for (uint32_t m = 0; m < NUM_MB; ++m) {
+        if (((mask >> m) & 1u) == 0u) {
+            continue;
+        }
+        const float ox = static_cast<float>((m & 3u) * 8u) + 0.5f - mx;
+        const float oy = static_cast<float>((m >> 2) * 4u) + 0.5f - my;
+        uint32_t n = 0;
+        for (uint32_t r = 0; r < 4u; ++r) {
+            const float dy = oy + static_cast<float>(r);
+            for (uint32_t c = 0; c < 8u; ++c) {
+                const float dx = ox + static_cast<float>(c);
+                float p = A * (dx * dx) + B * (dx * dy) + C * (dy * dy);
+                if (p > 0.0f) {
+                    p = 0.0f;
+                }
+                if (p >= thr) {
+                    ++n;
+                }
+            }
+        }
+        g_mb_st.px_live += n;
+        if (n != 0u) {
+            ++g_mb_st.mb_useful;
+        }
+    }
+}
+
+inline void st_emit() {
+    DPRINT << "MBSTATS " << g_mb_st.rec << " " << g_mb_st.rec_live << " " << g_mb_st.mb_kept << " "
+           << g_mb_st.mb_sat << " " << g_mb_st.mb_disp << " " << g_mb_st.pairops << " "
+           << g_mb_st.mb_useful << " " << g_mb_st.px_live << ENDL();
+}
+#define MB_STATS_RECORD(rec, mask) MATH((st_record((rec), (mask))))
+#define MB_STATS_EMIT() MATH((st_emit()))
+#else
+#define MB_STATS_RECORD(rec, mask)
+#define MB_STATS_EMIT()
+#endif
+
 // Blend one subchunk whose PACK2 records + masks sit in CB_BUCKET_BULK /
 // CB_BMASK_BULK (iter 49/50). Separate from in-budget CB_BUCKET/CB_BMASK so
 // bulk reserve does not deadlock against coeff-stream scratch.
@@ -427,6 +542,7 @@ inline void process_tile_l1_blend(
         // Mask out microblocks whose transmittance already saturated (MATH-only:
         // live_mb_mask stays all-ones on UNPACK/PACK, whose dispatch is a no-op).
         const uint32_t mask = rec[3] & live_mb_mask;
+        MB_STATS_RECORD(rec, mask);
         if (mask != 0u) {
             dispatch_blend_pairs<0>(mask, a, b, c, d, e, 0u, op, cr, cg, cbv);
         }
@@ -482,6 +598,7 @@ void kernel_main() {
     fill_tile_init();
 
     if (num_tiles == 0) {
+        MB_STATS_EMIT();
         return;
     }
 
@@ -548,4 +665,5 @@ void kernel_main() {
 
     cb_pop_front(CB_XRAMP, 1);
     cb_pop_front(CB_YRAMP, 1);
+    MB_STATS_EMIT();
 }
