@@ -378,6 +378,14 @@ inline void blend_stage_floor() {
 // UNORM decode and coefficient staging (loop + mask read + T readbacks only);
 // 4 = skip the whole per-record loop (reader/CB handshake floor); 5 = 1 but keep
 // the 16-step mask walk (one nop per taken branch), so a5 - a1 = walk cost.
+// Task #83: fine per-tile zones for floor attribution (host env
+// GSPLAT_TT_BLEND_PROF=1; compiled out by default).
+#if defined(BLEND_PROF) && BLEND_PROF
+#define BLEND_PZ(name) DeviceZoneScopedN(name)
+#else
+#define BLEND_PZ(name) ((void)0)
+#endif
+
 #ifndef BLEND_ABL
 #define BLEND_ABL 0
 #endif
@@ -721,7 +729,10 @@ inline void process_tile_l1_blend(
     if (num_g == 0) {
         return;
     }
-    cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+    {
+        BLEND_PZ("cmp_bulk_wait");
+        cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+    }
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
@@ -854,7 +865,10 @@ void kernel_main() {
         uint32_t live_mb_mask = 0xFFFFFFFFu;
         uint32_t g_seen = 0u;
         while (!tile_done) {
-            cb_wait_front(CB_MB_COUNTS, 1);
+            {
+                BLEND_PZ("cmp_wait_cnt");
+                cb_wait_front(CB_MB_COUNTS, 1);
+            }
             uint32_t num_g;
             uint32_t flags = 1u;
             {
@@ -867,6 +881,7 @@ void kernel_main() {
             const bool l1_bulk = (flags & MB_FLAG_L1_BULK) != 0;
 
             if (!continue_blend) {
+                BLEND_PZ("cmp_init");
                 tile_regs_acquire();
                 tile_regs_held = true;
 
@@ -887,6 +902,7 @@ void kernel_main() {
             process_tile_l1_blend(num_g, live_mb_mask, g_seen);
 
             if (emit_tile) {
+                BLEND_PZ("cmp_emit");
                 tile_regs_commit();
                 tile_regs_wait();
                 cb_reserve_back(CB_COLOR_OUT, 3);

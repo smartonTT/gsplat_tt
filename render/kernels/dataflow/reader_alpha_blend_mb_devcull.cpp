@@ -98,6 +98,14 @@ inline void mb_cb_commit_fence() {
     asm volatile("fence" ::: "memory");
 }
 
+// Task #83: fine per-tile zones for floor attribution (host env
+// GSPLAT_TT_BLEND_PROF=1; compiled out by default).
+#if defined(BLEND_PROF) && BLEND_PROF
+#define BLEND_PZ(name) DeviceZoneScopedN(name)
+#else
+#define BLEND_PZ(name) ((void)0)
+#endif
+
 }  // namespace
 
 void kernel_main() {
@@ -252,10 +260,13 @@ void kernel_main() {
             false, false, ret_l1);
         noc_async_atomic_barrier();
         uint32_t claim;
-        do {
-            invalidate_l1_cache();
-            claim = ret_ptr[0];
-        } while (claim == 0xFFFFFFFFu);
+        {
+            BLEND_PZ("rd_claim");
+            do {
+                invalidate_l1_cache();
+                claim = ret_ptr[0];
+            } while (claim == 0xFFFFFFFFu);
+        }
         if (claim >= total_tiles) {
             break;
         }
@@ -277,8 +288,11 @@ void kernel_main() {
             }
         }
         const uint32_t flat = lpt_meta[core_sel * 2u] + rank;
-        noc_async_read_tile(flat >> 4, tile_ids_acc, tid_scr);
-        noc_async_read_barrier();
+        {
+            BLEND_PZ("rd_tid");
+            noc_async_read_tile(flat >> 4, tile_ids_acc, tid_scr);
+            noc_async_read_barrier();
+        }
         const uint32_t tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
         // Hand the tile id to the writer (output address) before its data.
         cb_reserve_back(CB_TILE_Q, 1);
@@ -297,6 +311,7 @@ void kernel_main() {
         // (start/end into it == ids_off[t]/ids_off[t+1]); empty tiles read
         // (0,0) -> L==0, matching the uploaded path.
         {
+            BLEND_PZ("rd_meta");
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
             const uint32_t elem0 = tile_id * 2u;
             const uint32_t page = elem0 >> 4;
@@ -320,6 +335,7 @@ void kernel_main() {
         uint32_t dir_base = 0;
         uint32_t num_subchunks = 1;
         {
+            BLEND_PZ("rd_meta");
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -344,6 +360,7 @@ void kernel_main() {
             // every tile can consume the materialized slab via process_tile_l1_blend.
             uint32_t payload_page = 0;
             {
+                BLEND_PZ("rd_dir");
                 const uint32_t de = (dir_base + sc) * 4u;
                 const uint32_t dpg = de >> 4;
                 const uint32_t dof = de & 0xF;
@@ -365,7 +382,10 @@ void kernel_main() {
             // ack (the fast payload DMA otherwise raced slot-recycle vs MATH reads)
             // and the bulk CB is slot-aligned (no ring straddle on variable tiles).
             DeviceZoneScopedN("rd_l1_bulk");
-            cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+            {
+                BLEND_PZ("rd_bulk_wait");
+                cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+            }
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
                 const uint32_t page0 = payload_page;

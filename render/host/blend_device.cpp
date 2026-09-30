@@ -222,6 +222,15 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         {"MB_BUCKET_FIT", "8192u"},
         {"MB_TILE_L1_MASKS", "1"},
     };
+    // Task #83: GSPLAT_TT_BLEND_PROF=1 compiles fine per-tile Tracy zones into
+    // the blend reader, compute and writer (floor attribution). Default OFF.
+    const char* blend_prof = std::getenv("GSPLAT_TT_BLEND_PROF");
+    const bool blend_prof_on = blend_prof != nullptr && blend_prof[0] == '1';
+    std::map<std::string, std::string> writer_defines;
+    if (blend_prof_on) {
+        reader_defines["BLEND_PROF"] = "1";
+        writer_defines["BLEND_PROF"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -242,6 +251,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
 
     std::map<std::string, std::string> compute_defines;
+    if (blend_prof_on) {
+        compute_defines["BLEND_PROF"] = "1";
+    }
     // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
     // per-core record/microblock/pixel counters into the blend compute kernel
     // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.
@@ -305,6 +317,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
+            .defines = writer_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());

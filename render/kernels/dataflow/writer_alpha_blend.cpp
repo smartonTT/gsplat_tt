@@ -41,6 +41,14 @@
 //
 // COMPILE-TIME ARGS: 3 TensorAccessorArgs in order: out, tile_ids, lpt_meta.
 
+// Task #83: fine per-tile zones for floor attribution (host env
+// GSPLAT_TT_BLEND_PROF=1; compiled out by default).
+#if defined(BLEND_PROF) && BLEND_PROF
+#define BLEND_PZ(name) DeviceZoneScopedN(name)
+#else
+#define BLEND_PZ(name) ((void)0)
+#endif
+
 void kernel_main() {
     uint32_t out_addr        = get_arg_val<uint32_t>(0);
     uint32_t tile_ids_addr   = get_arg_val<uint32_t>(1);
@@ -82,11 +90,15 @@ void kernel_main() {
 
         // CB_COLOR_OUT has depth 6 (multiple of 3) on the host side so this
         // 3-tile batch never straddles a CB wrap.
-        cb_wait_front(CB_COLOR_OUT, 3);
+        {
+            BLEND_PZ("wr_wait_out");
+            cb_wait_front(CB_COLOR_OUT, 3);
+        }
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
         // The previous tile's rows must have left the staging block (they had
         // a whole blend tile to drain, so this does not wait in practice).
         noc_async_writes_flushed();
+        BLEND_PZ("wr_pack");
         for (uint32_t ch = 0; ch < 3; ch++) {
             img_pack_u8::pack_channel(
                 reinterpret_cast<volatile uint32_t*>(read_ptr), stage, ch);
