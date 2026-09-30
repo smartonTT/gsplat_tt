@@ -1,0 +1,54 @@
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t78-ab-1  timeout=400s  worry=320s  ts=2026-09-30T13:31:22-0700
+cmd: bash /localdev/smarton/t78_scripts/remote_ab.sh 1
+-----------------------------------------
+=== AB round=1 a=0 20:31:22
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.0 p50_ms=48.4 min_ms=40.3 max_ms=66.0 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-1-a0
+STAGES n=30 head=0.002 project=8.646 tile_assign=8.846 sort=14.171 blend_setup=0.022 cull=0.006 blend=16.967 d2h=0.285 assemble=0.000 tail=0.002 | sum=48.947 view_total=48.948 resid_in_view=+0.001 avg_frame_ms=48.974 resid_vs_frame=+0.027
+=== AB round=1 a=1 20:31:28
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=42.8 p50_ms=42.2 min_ms=35.4 max_ms=59.0 n_views=30 warmup_s=18.5 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-1-a1
+STAGES n=30 head=0.002 project=8.669 tile_assign=8.874 sort=14.196 blend_setup=0.026 cull=0.007 blend=10.814 d2h=0.215 assemble=0.000 tail=0.002 | sum=42.804 view_total=42.805 resid_in_view=+0.001 avg_frame_ms=42.835 resid_vs_frame=+0.030
+=== AB round=1 a=2 20:31:50
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.8 p50_ms=49.2 min_ms=40.8 max_ms=66.8 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-1-a2
+STAGES n=30 head=0.002 project=8.651 tile_assign=8.860 sort=14.167 blend_setup=0.025 cull=0.006 blend=17.780 d2h=0.232 assemble=0.000 tail=0.002 | sum=49.725 view_total=49.726 resid_in_view=+0.001 avg_frame_ms=49.758 resid_vs_frame=+0.032
+=== end 20:31:56
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t78/.ttw/logs/t78-ab-1-20260930-133121.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t78-ab-2  timeout=400s  worry=320s  ts=2026-09-30T13:31:57-0700
+cmd: bash /localdev/smarton/t78_scripts/remote_ab.sh 2
+-----------------------------------------
+=== AB round=2 a=0 20:31:58
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=48.9 p50_ms=48.5 min_ms=40.1 max_ms=65.9 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-2-a0
+STAGES n=30 head=0.002 project=8.668 tile_assign=8.869 sort=14.176 blend_setup=0.023 cull=0.006 blend=16.862 d2h=0.257 assemble=0.000 tail=0.002 | sum=48.866 view_total=48.867 resid_in_view=+0.001 avg_frame_ms=48.894 resid_vs_frame=+0.028
+=== AB round=2 a=1 20:32:04
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=42.9 p50_ms=42.3 min_ms=35.4 max_ms=59.0 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-2-a1
+STAGES n=30 head=0.002 project=8.654 tile_assign=8.850 sort=14.172 blend_setup=0.023 cull=0.006 blend=10.857 d2h=0.300 assemble=0.000 tail=0.002 | sum=42.865 view_total=42.866 resid_in_view=+0.001 avg_frame_ms=42.892 resid_vs_frame=+0.027
+=== AB round=2 a=2 20:32:09
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.8 p50_ms=49.3 min_ms=41.0 max_ms=66.9 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-2-a2
+STAGES n=30 head=0.002 project=8.656 tile_assign=8.859 sort=14.168 blend_setup=0.023 cull=0.006 blend=17.792 d2h=0.313 assemble=0.000 tail=0.002 | sum=49.821 view_total=49.822 resid_in_view=+0.001 avg_frame_ms=49.849 resid_vs_frame=+0.028
+=== end 20:32:15
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t78/.ttw/logs/t78-ab-2-20260930-133157.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t78-ab-3  timeout=400s  worry=320s  ts=2026-09-30T13:32:16-0700
+cmd: bash /localdev/smarton/t78_scripts/remote_ab.sh 3
+-----------------------------------------
+=== AB round=3 a=0 20:32:17
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=48.9 p50_ms=48.4 min_ms=39.8 max_ms=66.1 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-3-a0
+STAGES n=30 head=0.002 project=8.655 tile_assign=8.860 sort=14.175 blend_setup=0.024 cull=0.006 blend=16.899 d2h=0.206 assemble=0.000 tail=0.002 | sum=48.828 view_total=48.829 resid_in_view=+0.001 avg_frame_ms=48.855 resid_vs_frame=+0.027
+=== AB round=3 a=1 20:32:22
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=42.7 p50_ms=42.1 min_ms=35.3 max_ms=58.8 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-3-a1
+STAGES n=30 head=0.002 project=8.645 tile_assign=8.861 sort=14.155 blend_setup=0.023 cull=0.006 blend=10.805 d2h=0.220 assemble=0.000 tail=0.002 | sum=42.720 view_total=42.720 resid_in_view=+0.001 avg_frame_ms=42.748 resid_vs_frame=+0.028
+=== AB round=3 a=2 20:32:27
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.8 p50_ms=49.2 min_ms=41.1 max_ms=66.8 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t78/tmp/t78-ab-3-a2
+STAGES n=30 head=0.002 project=8.659 tile_assign=8.864 sort=14.176 blend_setup=0.024 cull=0.006 blend=17.800 d2h=0.239 assemble=0.000 tail=0.002 | sum=49.773 view_total=49.773 resid_in_view=+0.001 avg_frame_ms=49.803 resid_vs_frame=+0.030
+=== end 20:32:33
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t78/.ttw/logs/t78-ab-3-20260930-133216.log
