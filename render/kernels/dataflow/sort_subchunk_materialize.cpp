@@ -46,6 +46,10 @@ constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 constexpr uint32_t TILE_SIZE = 32u;
 // iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
 constexpr uint32_t REC_BATCH = 32u;
+// Task #35: an over-cap gather item covers part `part` of its subchunk, records
+// [part * GATHER_PART_RECS, +GATHER_PART_RECS) (host sort_mover_split.h
+// kGatherPartRecs). Other items have part 0 and cover their whole tile/subchunk.
+constexpr uint32_t GATHER_PART_RECS = 2048u;
 
 // Dual mover: BRISC runs this kernel too, on its own (smaller) copies of every
 // CB at id + 16 (MAT_CB_BASE) and its own work-item slice. The host gives it
@@ -149,7 +153,8 @@ void kernel_main() {
     const uint32_t pack_l1 = get_write_ptr(CB_PACK);
 
     constexpr uint32_t MAX_WORK = 1024;
-    // Packed work item: (tile_id << 8) | sc. tile_id < 2^16, sc < 2^8 — fits.
+    // Packed work item: (part << 24) | (tile_id << 8) | sc. tile_id < 2^16,
+    // sc < 2^8, part < 2^8 — fits. The odd u32 of an item is sc | part << 8.
     uint32_t work_item[MAX_WORK];
     {
         // The work buffer is a flat u32 array; this core's items occupy u32
@@ -170,7 +175,8 @@ void kernel_main() {
                 const uint32_t gu = got + i;        // u32 offset within this slice
                 const uint32_t val = idsp[in_page + i];
                 if ((gu & 1u) == 0u) pend_tile = val;
-                else work_item[gu >> 1] = (pend_tile << 8) | (val & 0xFFu);
+                else work_item[gu >> 1] =
+                    ((val >> 8) << 24) | (pend_tile << 8) | (val & 0xFFu);
             }
             got += take;
             page_idx += 1;
@@ -179,8 +185,9 @@ void kernel_main() {
     }
 
     for (uint32_t wi = 0; wi < work_count; wi++) {
-        const uint32_t tile_id = work_item[wi] >> 8;
+        const uint32_t tile_id = (work_item[wi] >> 8) & 0xFFFFu;
         const uint32_t sc = work_item[wi] & 0xFFu;
+        const uint32_t part = work_item[wi] >> 24;
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
@@ -439,7 +446,9 @@ void kernel_main() {
         // sc>=1 / overflow sc==0: batched blendrec gather (iter 76: REC_BATCH=32,
         // per-slot PACK2, one write barrier per batch; reuse sorted-id page).
         const uint32_t id_start_sc = id_start + sc_off;
-        uint32_t processed = 0;
+        uint32_t processed = part * GATHER_PART_RECS;
+        const uint32_t part_end = (L_sub - processed > GATHER_PART_RECS)
+            ? processed + GATHER_PART_RECS : L_sub;
         uint32_t nbrec = 0;
         uint32_t brec_out_g[REC_BATCH];
         int32_t sorted_id_page_cached = -1;
@@ -487,7 +496,7 @@ void kernel_main() {
             noc_async_write_barrier();
             nbrec = 0;
         };
-        while (processed < L_sub) {
+        while (processed < part_end) {
             const uint32_t global_idx = id_start_sc + processed;
             const uint32_t id_page = global_idx >> 4;
             const uint32_t id_ip = global_idx & 0xF;
@@ -497,7 +506,7 @@ void kernel_main() {
                 sorted_id_page_cached = static_cast<int32_t>(id_page);
             }
             uint32_t take = ELEMS_PER_PAGE - id_ip;
-            if (take > L_sub - processed) take = L_sub - processed;
+            if (take > part_end - processed) take = part_end - processed;
             for (uint32_t j = 0; j < take; ++j) {
                 const uint32_t gid = idsp[id_ip + j];
                 const uint32_t slot = rec_l1 + nbrec * PAGE_BYTES;
