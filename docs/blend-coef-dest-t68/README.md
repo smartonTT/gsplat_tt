@@ -33,3 +33,18 @@ byte-identical. `=0` compiles the old form, for an in-session A/B from one tree.
 `run_all.sh <rev>` (detached, repo root): `opt/sync_remote.sh` -> `remote_verify.sh`
 (30-view md5, k0 vs k1) -> `remote_ab.sh` (3 interleaved rounds) -> `remote_tracy.sh`
 k0/k1 -> objdump of the new TRISC1. Remote tree `/localdev/smarton/gstt2-t68`.
+
+## Result on base 27348a1 (run 221, yyzo-bh-07 p100a)
+
+After: pair body 130 insns (122 native SFPU incl. 22 const SFPLOADI, 0 runtime pushes,
+1 branch); single body 72 (0 runtime pushes). TRISC1 now only issues SFPU words.
+
+| | k0 (old) | k1 (DEST) | delta |
+|---|---:|---:|---:|
+| avg ms/view, 3 interleaved rounds | 58.39 | 55.69 | -2.70 |
+| blend stage ms | 20.19 | 17.54 | -2.65 |
+| Tracy tile_blend_sfpu makespan ms/view | 16.02 | 13.36 | -2.67 |
+| Tracy tile_blend_load (NCRISC) makespan | 15.48 | 12.97 | -2.51 |
+
+30 views md5-identical k0 vs k1, hero_vs_ref 100 dB. The reader's load zone shrinks
+with the SFPU: it was waiting on compute, not the other way round.
