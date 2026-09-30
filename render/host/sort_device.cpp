@@ -159,6 +159,10 @@ struct SortDeviceContext {
     // R4/R5 device-binning program (count + scatter) for resident pairs.
     distributed::MeshWorkload wl_bin;
     KernelHandle kbin{};
+    // T-C: the same kernel on BRISC (mover 0) of the same cores, and the two
+    // per-core fill-done semaphores of the dual-mover emit (see sort_bin.cpp).
+    KernelHandle kbin0{};
+    uint32_t bin_sem[2] = {0, 0};
     // Post-count layout + LPT (single core, GSPLAT_TT_SORT_DEVICE_LAYOUT).
     distributed::MeshWorkload wl_bin_layout;
     KernelHandle kbin_layout{};
@@ -177,6 +181,10 @@ struct SortDeviceContext {
     // can read its own row back instead of recounting.
     std::shared_ptr<distributed::MeshBuffer> buf_bin_hist;
     std::size_t cap_bin_hist_bytes = 0;
+    // T-C: the count pass's per-core histogram of the first (mover 0) half of
+    // each core's page range; mover 1 of the emit starts its cursors there.
+    std::shared_ptr<distributed::MeshBuffer> buf_bin_h0;
+    std::size_t cap_bin_h0_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_bin_dbg;  // core0 scatter dump
 
     // Cached DRAM buffers (grow-on-demand).
@@ -657,10 +665,17 @@ static bool tile_bucket_enabled() { return true; }  // TILE_BUCKET=1
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
+    // T-C: every staging CB except the shared counting-sort regions (7, 8) and
+    // the unused recrow (10) gets a private copy for mover 0 (BRISC) at id +
+    // kMover0CbOffset, created after the originals so NCRISC's CBs keep their
+    // single-mover L1 addresses.
+    constexpr uint32_t kMover0CbOffset = 16;  // == sort_bin.cpp MOVER0_CB_OFFSET
+    std::vector<std::pair<uint32_t, uint32_t>> mover0_cbs;
     auto cb = [&](uint32_t id, uint32_t bytes) {
         CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
         c.set_page_size(id, bytes);
         CreateCircularBuffer(program, cores, c);
+        if (id != 7 && id != 8 && id != 10) mover0_cbs.emplace_back(id + kMover0CbOffset, bytes);
     };
     cb(0, PAGE_BYTES);        // gid_in
     cb(1, PAGE_BYTES);        // tid_in
@@ -695,6 +710,13 @@ static void build_program_bin(SortDeviceContext& ctx) {
     // Sized to the kernel's PACKOC_BATCH=16 (256B). Allocated unconditionally (used
     // whenever the blendrec record is read, i.e. tile_bucket).
     cb(13, 16u * 16u);
+    for (const auto& [id, bytes] : mover0_cbs) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, bytes);
+        CreateCircularBuffer(program, cores, c);
+    }
+    ctx.bin_sem[0] = CreateSemaphore(program, cores, 0);
+    ctx.bin_sem[1] = CreateSemaphore(program, cores, 0);
 
     std::vector<uint32_t> ct;
     // Accessors: 7 base + 3 tile_bucket + 2 l1_record + 2 l1_overflow (iter-138)
@@ -714,6 +736,16 @@ static void build_program_bin(SortDeviceContext& ctx) {
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+            .defines = defines,
+        });
+    ctx.kbin0 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
             .compile_args = ct,
             .defines = defines,
         });
@@ -1348,6 +1380,25 @@ static bool sort_stage_defer_finish() {
     return sort_blend_pipe_enabled();
 }
 
+// T-C dual-data-mover emit. GSPLAT_TT_SORT_EMIT_MOVERS=1 keeps the scatter on
+// NCRISC alone (A/B baseline in the same build); GSPLAT_TT_SORT_EMIT_SPLIT=<n>
+// gives mover 0 (BRISC) n/1000 of each core's pair pages (default 500). Read once.
+static uint32_t sort_emit_movers() {
+    static const uint32_t v = [] {
+        const char* e = std::getenv("GSPLAT_TT_SORT_EMIT_MOVERS");
+        return (e != nullptr && std::atoi(e) == 1) ? 1u : 2u;
+    }();
+    return v;
+}
+static uint32_t sort_emit_split_permille() {
+    static const uint32_t v = [] {
+        const char* e = std::getenv("GSPLAT_TT_SORT_EMIT_SPLIT");
+        const int x = (e != nullptr) ? std::atoi(e) : 500;
+        return static_cast<uint32_t>(std::clamp(x, 0, 1000));
+    }();
+    return v;
+}
+
 static void finish_sort_cq_if_needed(SortDeviceContext* ctx) {
     if (device_state::sort_publish_pending()) {
         GSPLAT_HOST_ZONE("host_finish_sort");
@@ -1631,6 +1682,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ctx->buf_bin_hist = make_dram(ctx->mesh_device.get(), bin2d_bytes);
             ctx->cap_bin_hist_bytes = bin2d_bytes;
         }
+        if (!ctx->buf_bin_h0 || ctx->cap_bin_h0_bytes < bin2d_bytes) {
+            ctx->buf_bin_h0 = make_dram(ctx->mesh_device.get(), bin2d_bytes);
+            ctx->cap_bin_h0_bytes = bin2d_bytes;
+        }
 
         // T1 (GSPLAT_TT_TILE_BUCKET): scatter full records into per-tile buckets.
         const bool tile_bucket = tile_bucket_enabled();
@@ -1735,6 +1790,25 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // in place, so only the host bridge keeps it in buf_bin_hist for the emit.
         const bool hist_rows = !device_layout && !layout_verify;
 
+        // T-C: split each core's emit over BRISC (pages [lo, mid)) and NCRISC
+        // ([mid, hi)). Needs the count pass's rows (the emit's whole-core counts
+        // and the h0 snapshot at mid) and the full tile_bucket/l1_record arg list.
+        // Ordering invariant (=> byte-identical output): lo <= mid <= hi and the
+        // count pass snapshots at the SAME mid the emit splits at, so mover 1's
+        // cursors start exactly where the single-mover pass would have them.
+        const bool dual_emit =
+            sort_emit_movers() == 2 && hist_rows && tile_bucket && l1_record_early;
+        std::vector<uint32_t> mover_mid(num_cores);
+        for (uint32_t c = 0; c < num_cores; c++) {
+            mover_mid[c] = ws.start[c] + static_cast<uint32_t>(
+                static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
+            if (mover_mid[c] < ws.start[c] || mover_mid[c] > ws.start[c] + ws.count[c]) {
+                std::cerr << "[gsplat_tt::sort] emit mover split outside core " << c
+                          << "'s page range — hard fail\n";
+                return fail();
+            }
+        }
+
         // ── Pass A: per-core histogram (count) ──────────────────────────
         const auto t_bin0 = clk::now();
         auto launch_bin = [&](uint32_t mode, bool finish_cq) {
@@ -1772,7 +1846,25 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     args.push_back(l1_ov_addr);       // iter-138: overflow region (0=off)
                     args.push_back(l1_ov_base_addr);  // iter-138: per-(core,tile) ov base
                 }
+                // T-C args 24..29: mover, dual, h0 rows, mid, own / peer semaphore.
+                args.resize(24, 0u);
+                const uint32_t lo = ws.start[c];
+                const uint32_t hi = ws.start[c] + ws.count[c];
+                const uint32_t mid = mover_mid[c];
+                const uint32_t h0_addr = static_cast<uint32_t>(ctx->buf_bin_h0->address());
+                std::vector<uint32_t> args0 = args;  // BRISC (mover 0)
+                args.insert(args.end(), {1u, dual_emit ? 1u : 0u, h0_addr, mid,
+                                         ctx->bin_sem[1], ctx->bin_sem[0]});
+                args0.insert(args0.end(), {0u, dual_emit ? 1u : 0u, h0_addr, mid,
+                                           ctx->bin_sem[0], ctx->bin_sem[1]});
+                if (mode == 1 && dual_emit) {
+                    args0[7] = lo;
+                    args0[8] = mid - lo;
+                    args[7] = mid;
+                    args[8] = hi - mid;
+                }
                 SetRuntimeArgs(prog, ctx->kbin, core, args);
+                SetRuntimeArgs(prog, ctx->kbin0, core, args0);
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_bin, false);
             if (finish_cq) {

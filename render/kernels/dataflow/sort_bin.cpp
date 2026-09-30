@@ -33,6 +33,23 @@
 //   5: keys_out_addr  6: ids_out_addr  (page-aligned layout, scatter out)
 //   7: page_start  8: page_count  9: P  10: num_tiles  11: stride
 //   12: core_id    13: mode (0=count, 1=scatter)
+//   15..23: tile_bucket / l1_record args (see below)
+//   24: mover (0 = BRISC, 1 = NCRISC)   25: dual (1 = scatter split over both)
+//   26: h0_rows_addr   27: pg_mid (count pass split point)
+//   28: own fill-done semaphore id   29: peer fill-done semaphore id
+//
+// DUAL DATA MOVER (T-C). The same kernel runs on BRISC (mover 0) and NCRISC
+// (mover 1) of every core. With dual=1 the scatter splits the core's page range
+// [lo, hi) at mid: mover 0 takes [lo, mid), mover 1 takes [mid, hi). Both fill
+// the core's ONE shared counting-sort region (CB_KS/CB_IS) and write the same
+// per-(core, tile) record / overflow slots as the single-mover pass: a tile's
+// k-th kept pair in page order lands at offset k, and mover 1's cursors start
+// at h0[t] (= mover 0's kept count for tile t, snapshotted by the count pass at
+// mid). Pairs are gaussian-major, so [lo, mid) precedes [mid, hi) in the
+// single-mover order and every DRAM output is byte-identical to it. After both
+// fills (a fill-done semaphore each), mover 0 writes out tiles [0, t_split) and
+// mover 1 [t_split, num_tiles). All other staging CBs are private per mover:
+// mover 0 uses CB id + MOVER0_CB_OFFSET. The count pass stays on NCRISC.
 //
 // COMPILE-TIME ARGS: 7 TensorAccessorArgs
 //   gids, tids, keep, depth, bin2d, keys_out, ids_out.
@@ -46,6 +63,9 @@ namespace {
 
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
+// Mover 0 (BRISC) uses its own copy of every staging CB at this id offset
+// (allocated in sort_device.cpp build_program_bin); mover 1 uses the base ids.
+constexpr uint32_t MOVER0_CB_OFFSET = 16;
 
 // Bit-exact IEEE 754 fp32→fp16 (round-to-nearest-even, no flush-to-zero).
 // Used for packing the 32B L1 record (M0, GSPLAT_TT_L1_RECORD).
@@ -128,6 +148,15 @@ void kernel_main() {
     // (e.g. device-layout path) ⇒ legacy behavior (overflow records dropped).
     const uint32_t l1_ov_addr      = get_arg_val<uint32_t>(22);  // overflow region base (0=off)
     const uint32_t l1_ov_base_addr = get_arg_val<uint32_t>(23);  // per-(core,tile) overflow slot base
+    // T-C dual data mover (see header).
+    const uint32_t mover        = get_arg_val<uint32_t>(24);
+    const bool dual             = get_arg_val<uint32_t>(25) != 0u;
+    const uint32_t h0_rows_addr = get_arg_val<uint32_t>(26);
+    const uint32_t pg_mid       = get_arg_val<uint32_t>(27);
+    const uint32_t sem_own_id   = get_arg_val<uint32_t>(28);
+    const uint32_t sem_peer_id  = get_arg_val<uint32_t>(29);
+    // BRISC has no count work, and no scatter work unless the split is on.
+    if (mover == 0 && (mode == 0 || !dual)) return;
     constexpr uint32_t L1_TILE_SIZE = 32u;  // microblock tile = 32x32 px
     // iter 135 (bit-identical strength reduction): the per-pair tile-local-mean
     // recompute in pack_rec needs tt/l1_tiles_x and tt%l1_tiles_x. l1_tiles_x is
@@ -174,6 +203,8 @@ void kernel_main() {
     // is intentionally unwritten here.
     const auto tile_recs_acc= TensorAccessor(tile_recs_args, tile_recs_addr, PAGE_BYTES);
     const auto hist_rows_acc = TensorAccessor(recbase_args, hist_rows_addr, PAGE_BYTES);
+    // T-C: per-core histogram of [page_start, pg_mid) (same interleaved layout).
+    const auto h0_rows_acc = TensorAccessor(recbase_args, h0_rows_addr, PAGE_BYTES);
     (void)tile_recs_acc;
     // PACK2: two 32B splats per 64B page (slot s => page s/2, half s&1 at +32*half).
     // Accessor page = 64B; sub-64B page size is unreliable on BH.
@@ -191,13 +222,17 @@ void kernel_main() {
     //   6 off    (MAX_BIN_TILES*4: local per-tile L1 offset)
     //   7 ksort  (BIN_LOCAL_MAX*4: L1 counting-sort keys)
     //   8 isort  (BIN_LOCAL_MAX*4: L1 counting-sort ids)
-    constexpr uint32_t CB_GID = 0, CB_TID = 1, CB_KEEP = 2, CB_DEP = 3,
-                       CB_ROW = 4, CB_CUR = 5, CB_OFF = 6, CB_KS = 7, CB_IS = 8;
-    constexpr uint32_t CB_REC = 9;     // 64B blendrec staging (read page g, +depth, write bucket)
-    constexpr uint32_t CB_L1BASE   = 11; // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
-    constexpr uint32_t CB_L1SCRATCH = 12; // 32B staging buffer for pack → noc write
-    constexpr uint32_t CB_PACKOC   = 13; // iter 132: 64B-per-gaussian blendrec page write-back ring (publishes packed op/color)
-    constexpr uint32_t CB_L1OVBASE = 14; // iter-138: per-(core,tile) overflow slot base row (sentinel = non-overflow tile)
+    // CB_KS / CB_IS are the core's shared counting-sort regions; every other
+    // CB is this mover's private copy (mover 0 at id + MOVER0_CB_OFFSET).
+    const uint32_t cbo = (mover == 0) ? MOVER0_CB_OFFSET : 0u;
+    const uint32_t CB_GID = 0 + cbo, CB_TID = 1 + cbo, CB_KEEP = 2 + cbo, CB_DEP = 3 + cbo,
+                   CB_ROW = 4 + cbo, CB_CUR = 5 + cbo, CB_OFF = 6 + cbo;
+    constexpr uint32_t CB_KS = 7, CB_IS = 8;
+    const uint32_t CB_REC = 9 + cbo;        // 64B blendrec staging (read page g, +depth, write bucket)
+    const uint32_t CB_L1BASE = 11 + cbo;    // per-(core,tile) L1 slot base row (= t*BUCKET_FIT + prefix)
+    const uint32_t CB_L1SCRATCH = 12 + cbo; // 32B staging buffer for pack → noc write
+    const uint32_t CB_PACKOC = 13 + cbo;    // iter 132: 64B-per-gaussian blendrec page write-back ring (publishes packed op/color)
+    const uint32_t CB_L1OVBASE = 14 + cbo;  // iter-138: per-(core,tile) overflow slot base row (sentinel = non-overflow tile)
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
     const uint32_t tid_l1  = get_write_ptr(CB_TID);
@@ -228,26 +263,41 @@ void kernel_main() {
         auto btidp = reinterpret_cast<volatile int32_t*>(btid_l1);
         auto bkeepp = reinterpret_cast<volatile int32_t*>(bkeep_l1);
         for (uint32_t t = 0; t < num_tiles; t++) rowp[t] = 0;
-        for (uint32_t pg0 = pg_lo; pg0 < pg_hi; pg0 += CNT_BATCH) {
-            const uint32_t nb = (pg_hi - pg0 < CNT_BATCH) ? (pg_hi - pg0) : CNT_BATCH;
-            for (uint32_t b = 0; b < nb; b++) {
-                noc_async_read(get_noc_addr(pg0 + b, tids_acc),
-                               btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
-                noc_async_read(get_noc_addr(pg0 + b, keep_acc),
-                               bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
-            }
-            noc_async_read_barrier();
-            for (uint32_t b = 0; b < nb; b++) {
-                const uint32_t pg = pg0 + b;
-                const uint32_t e0 = b * ELEMS_PER_PAGE;
-                for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-                    const uint32_t p = pg * ELEMS_PER_PAGE + j;
-                    if (p >= P) break;
-                    if (bkeepp[e0 + j] == 0) continue;
-                    rowp[static_cast<uint32_t>(btidp[e0 + j])]++;
+        auto count_pages = [&](uint32_t a, uint32_t b_end) {
+            for (uint32_t pg0 = a; pg0 < b_end; pg0 += CNT_BATCH) {
+                const uint32_t nb = (b_end - pg0 < CNT_BATCH) ? (b_end - pg0) : CNT_BATCH;
+                for (uint32_t b = 0; b < nb; b++) {
+                    noc_async_read(get_noc_addr(pg0 + b, tids_acc),
+                                   btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                    noc_async_read(get_noc_addr(pg0 + b, keep_acc),
+                                   bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                }
+                noc_async_read_barrier();
+                for (uint32_t b = 0; b < nb; b++) {
+                    const uint32_t pg = pg0 + b;
+                    const uint32_t e0 = b * ELEMS_PER_PAGE;
+                    for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+                        const uint32_t p = pg * ELEMS_PER_PAGE + j;
+                        if (p >= P) break;
+                        if (bkeepp[e0 + j] == 0) continue;
+                        rowp[static_cast<uint32_t>(btidp[e0 + j])]++;
+                    }
                 }
             }
+        };
+        // T-C: with the scatter split, snapshot the running histogram at pg_mid
+        // — mover 0's kept count per tile, i.e. mover 1's cursor start — into
+        // h0_rows before counting the rest of the range.
+        const uint32_t split = dual ? pg_mid : pg_lo;
+        count_pages(pg_lo, split);
+        if (dual) {
+            for (uint32_t pp = 0; pp < row_pages; pp++) {
+                noc_async_write(row_l1 + pp * PAGE_BYTES,
+                                get_noc_addr(base_page + pp, h0_rows_acc), PAGE_BYTES);
+            }
+            noc_async_write_barrier();  // row_l1 keeps counting below
         }
+        count_pages(split, pg_hi);
         for (uint32_t pp = 0; pp < row_pages; pp++) {
             noc_async_write(row_l1 + pp * PAGE_BYTES,
                             get_noc_addr(base_page + pp, bin2d_acc), PAGE_BYTES);
@@ -294,6 +344,8 @@ void kernel_main() {
     auto offp = reinterpret_cast<volatile uint32_t*>(off_l1);
 
     // Sub-pass 1: local per-tile kept count -> curp (reused as scratch count).
+    // With the dual-mover split this must be the WHOLE core's row (the host only
+    // splits when the count pass wrote it): a recount would see one sub-range.
     if (hist_rows_addr != 0u) {
         // The count pass wrote this core's row; one 4 KB read replaces a second
         // full scan of the core's tid/keep pages.
@@ -321,21 +373,48 @@ void kernel_main() {
     auto ksp = reinterpret_cast<volatile uint32_t*>(ks_l1);
     auto isp = reinterpret_cast<volatile uint32_t*>(is_l1);
 
-    // PAGE-ALIGNED exclusive prefix over tiles -> local L1 block offsets; reset
-    // curp to 0. Each tile's L1 block is rounded up to a whole page so the
-    // write-out can emit only whole-page, page-aligned DRAM transfers (no
-    // sub-page writes -> no multi-writer/same-chunk DRAM write race).
+    // PAGE-ALIGNED exclusive prefix over tiles -> local L1 block offsets. Each
+    // tile's L1 block is rounded up to a whole page so the write-out can emit
+    // only whole-page, page-aligned DRAM transfers (no sub-page writes -> no
+    // multi-writer/same-chunk DRAM write race).
     uint32_t run = 0;
     for (uint32_t t = 0; t < num_tiles; t++) {
         offp[t] = run;
         const uint32_t c = curp[t];
         run += ((c + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE) * ELEMS_PER_PAGE;
-        curp[t] = 0;
     }
-    // Pre-fill the L1 counting-sort region with the max key (0xffffffff) / 0 id
-    // so unfilled tail slots of each tile's page-block become padding the stable
-    // radix pushes to the end of the tile.
-    for (uint32_t i = 0; i < run; i++) { ksp[i] = 0xffffffffu; isp[i] = 0u; }
+    // Tiles this mover writes out: all of them single-mover; with the split,
+    // mover 0 takes the tiles whose blocks start in the first half of the
+    // core's pages and mover 1 the rest (both compute the same t_split).
+    uint32_t t_split = num_tiles;
+    if (dual) {
+        const uint32_t half = run / 2u;
+        t_split = 0;
+        while (t_split < num_tiles && offp[t_split] < half) t_split++;
+    }
+    const uint32_t wt_lo = (dual && mover == 1) ? t_split : 0u;
+    const uint32_t wt_hi = (dual && mover == 0) ? t_split : num_tiles;
+    // Pre-fill the tail slots of each written-out tile's page-block with the max
+    // key (0xffffffff) / 0 id: padding the stable radix pushes to the end of the
+    // tile. Only the tails: every slot before them is written by the fill below
+    // (by either mover), so this leaves the same bytes as a full pre-fill and
+    // never races the peer mover's entries.
+    for (uint32_t t = wt_lo; t < wt_hi; t++) {
+        const uint32_t end = (t + 1u < num_tiles) ? offp[t + 1u] : run;
+        for (uint32_t i = offp[t] + curp[t]; i < end; i++) { ksp[i] = 0xffffffffu; isp[i] = 0u; }
+    }
+    // Local cursors: 0, or for mover 1 of the split, mover 0's kept count per
+    // tile (the count pass's snapshot at pg_mid), so its pairs land right
+    // after mover 0's in every per-tile block, record bucket and overflow run.
+    if (dual && mover == 1) {
+        for (uint32_t pp = 0; pp < row_pages; pp++) {
+            noc_async_read(get_noc_addr(base_page + pp, h0_rows_acc),
+                           cur_l1 + pp * PAGE_BYTES, PAGE_BYTES);
+        }
+        noc_async_read_barrier();
+    } else {
+        for (uint32_t t = 0; t < num_tiles; t++) curp[t] = 0;
+    }
 
     int32_t dep_cached_page = -1;
 
@@ -630,19 +709,32 @@ void kernel_main() {
     flush_recs();    // drain the partial final batch
     flush_packoc();  // iter 132: drain the partial final packed-op/color batch
 
+    if (dual) {
+        // A tile block holds both movers' entries: publish this mover's fill
+        // (fence: its L1 stores land before the flag) and wait for the peer's.
+        // The waiter re-arms the peer's flag for the next launch.
+        asm volatile("fence" ::: "memory");
+        auto own = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(sem_own_id));
+        auto peer = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(sem_peer_id));
+        noc_semaphore_set(own, 1u);
+        noc_semaphore_wait(peer, 1u);
+        noc_semaphore_set(peer, 0u);
+    }
+
     // Write each tile's page-aligned L1 block to DRAM as WHOLE PAGES. The block
     // base (rowp[t]) and L1 source (offp[t]) are both page-aligned, and the size
     // is a page multiple, so every transfer is a clean whole-page write to pages
     // this core owns EXCLUSIVELY. No sub-page writes and no shared pages -> no
     // multi-writer DRAM write race. Tail slots already hold max-key/0 padding
     // (pre-filled above), which the stable radix sorts to the end of the tile;
-    // host compaction keeps only the real count.
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        const uint32_t n = curp[t];
-        if (n == 0) continue;
+    // host compaction keeps only the real count. The block size comes from the
+    // offsets (= ceil16(count)): mover 0's cursors stop at its own share.
+    for (uint32_t t = wt_lo; t < wt_hi; t++) {
+        const uint32_t end = (t + 1u < num_tiles) ? offp[t + 1u] : run;
+        const uint32_t pages = (end - offp[t]) / ELEMS_PER_PAGE;
+        if (pages == 0) continue;
         const uint32_t base_pg = rowp[t] / ELEMS_PER_PAGE;   // page-aligned base
         const uint32_t src = offp[t];                        // page-aligned L1 src
-        const uint32_t pages = (n + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
         for (uint32_t pp = 0; pp < pages; pp++) {
             const uint32_t soff = (src + pp * ELEMS_PER_PAGE) * 4;
             noc_async_write(ks_l1 + soff, get_noc_addr(base_pg + pp, keys_acc), PAGE_BYTES);
