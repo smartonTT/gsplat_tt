@@ -218,16 +218,33 @@ void kernel_main() {
     if (mode == 0) {
         DeviceZoneScopedN("sort_bin_hist");
         // ── count: per-tile histogram of kept pairs ─────────────────────
+        // Reads are batched CNT_BATCH pages per barrier (one exposed NoC round
+        // trip per batch instead of per 16 pairs), staged in the counting-sort
+        // regions, which the count pass does not otherwise use.
+        constexpr uint32_t CNT_BATCH = 32u;
+        const uint32_t btid_l1 = get_write_ptr(CB_KS);
+        const uint32_t bkeep_l1 = get_write_ptr(CB_IS);
+        auto btidp = reinterpret_cast<volatile int32_t*>(btid_l1);
+        auto bkeepp = reinterpret_cast<volatile int32_t*>(bkeep_l1);
         for (uint32_t t = 0; t < num_tiles; t++) rowp[t] = 0;
-        for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
-            noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
-            noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
+        for (uint32_t pg0 = pg_lo; pg0 < pg_hi; pg0 += CNT_BATCH) {
+            const uint32_t nb = (pg_hi - pg0 < CNT_BATCH) ? (pg_hi - pg0) : CNT_BATCH;
+            for (uint32_t b = 0; b < nb; b++) {
+                noc_async_read(get_noc_addr(pg0 + b, tids_acc),
+                               btid_l1 + b * PAGE_BYTES, PAGE_BYTES);
+                noc_async_read(get_noc_addr(pg0 + b, keep_acc),
+                               bkeep_l1 + b * PAGE_BYTES, PAGE_BYTES);
+            }
             noc_async_read_barrier();
-            for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-                const uint32_t p = pg * ELEMS_PER_PAGE + j;
-                if (p >= P) break;
-                if (keepp[j] == 0) continue;
-                rowp[static_cast<uint32_t>(tidp[j])]++;
+            for (uint32_t b = 0; b < nb; b++) {
+                const uint32_t pg = pg0 + b;
+                const uint32_t e0 = b * ELEMS_PER_PAGE;
+                for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+                    const uint32_t p = pg * ELEMS_PER_PAGE + j;
+                    if (p >= P) break;
+                    if (bkeepp[e0 + j] == 0) continue;
+                    rowp[static_cast<uint32_t>(btidp[e0 + j])]++;
+                }
             }
         }
         for (uint32_t pp = 0; pp < row_pages; pp++) {
