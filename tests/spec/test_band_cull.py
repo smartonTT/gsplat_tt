@@ -13,12 +13,13 @@ extent meets (compared on squares, no sqrt). Geometrically that is the same
    even when the SFPU log reads ln low and the blend exp reads alpha high, and
 2. match the box-min mask except for pairs sitting on the thr boundary.
 
-band_keep_f32 is the fp32 model of microblock_cull_compute.cpp.
+band_keep_f32 is the fp32 model of microblock_band_cull_compute.cpp.
 """
 import importlib.util
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 _CHK = Path(__file__).resolve().parents[2] / "opt" / "golden-check" / "cull_mask_check.py"
 _spec = importlib.util.spec_from_file_location("cull_mask_check", _CHK)
@@ -99,3 +100,88 @@ def test_band_mask_drops_invisible_splats():
     assert not cmc.band_keep_f32(A, B, C, mx, my, q, FLOOR).any()
     q = np.full_like(q, 2)  # op*255 < 1: below the floor everywhere
     assert not cmc.band_keep_f32(A, B, C, mx, my, q, FLOOR, margin=0.0).any()
+
+
+def test_coeff_tile_and_mask_layout_match_sfpu_words():
+    """Pure-index mirror of reader fill_coeff_tile and writer mask decode.
+
+    SFPU layout: vector V lane l lives at tile word 64*(V>>1) + (V&1) + 2*l.
+    Record i is group g=i>>5, lane l=i&31; its coeff field f (A,B,C,opq,mx,my)
+    goes to vector V=6g+f, and its mask halves come back in vectors 2g (bits
+    0-15) and 2g+1 (bits 16-31) of the keep tile.
+    """
+    def sfpu_word(v, lane):
+        return 64 * (v >> 1) + (v & 1) + 2 * lane
+
+    # reader_tile_l1_cull.cpp fill_coeff_tile: dst = 192*(i>>5) + 2*(i&31),
+    # fields at dst+{0,1,64,65,128,129}.
+    offs = (0, 1, 64, 65, 128, 129)
+    seen = set()
+    for i in range(128):  # COEFF_BATCH
+        dst = 192 * (i >> 5) + 2 * (i & 31)
+        for f, off in enumerate(offs):
+            w = dst + off
+            assert w == sfpu_word(6 * (i >> 5) + f, i & 31), (i, f)
+            seen.add(w)
+    assert len(seen) == 128 * 6 and max(seen) < 1024  # no overlap, fits a tile
+
+    # writer_tile_l1_mask.cpp: o = 64*(i>>5) + 2*(i&31); lo = t[o], hi = t[o+1].
+    rng = np.random.default_rng(3)
+    masks = rng.integers(0, 2**32, 128, dtype=np.uint64)
+    tile = np.zeros(1024, np.uint64)
+    for i in range(128):  # compute side: fp32 2^23 + 16-bit half per vector
+        tile[sfpu_word(2 * (i >> 5), i & 31)] = 0x4B000000 | (masks[i] & 0xFFFF)
+        tile[sfpu_word(2 * (i >> 5) + 1, i & 31)] = 0x4B000000 | (masks[i] >> 16)
+    for i in range(128):
+        o = 64 * (i >> 5) + 2 * (i & 31)
+        lo, hi = int(tile[o]), int(tile[o + 1])
+        assert ((lo & 0xFFFF) | ((hi << 16) & 0xFFFFFFFF)) == int(masks[i]), i
+
+
+# det = ci_a*ci_c - B^2 is formed in fp32 in the kernel. For a needle splat
+# (sigma_minor^2 = 0.3, the anti-alias floor) at a 45 deg angle, ci_a ~ ci_c ~
+# 1/0.6 and B^2 ~ ci_a*ci_c, so det ~ 1/(0.3*sigma_major^2) is a small
+# difference of O(1) terms: relative error ~ 2^-24 * 0.3*sigma_major^2 / 0.3.
+# By sigma_major ~ 1000 px that eats the extent and tip microblocks get culled
+# (seen at 1000 and 2000 px; 300-700 px are clean). The default max_radius =
+# min(H, W)/2 (bicycle: ~400 px) keeps real splats inside the safe range, so
+# the >=1000 px cases are expected fails. Kernels are unchanged.
+@pytest.mark.parametrize("sig_major", [
+    300.0, 500.0, 700.0,
+    *(pytest.param(s, marks=pytest.mark.xfail(
+        reason="fp32 det cancellation limit (det=ci_a*ci_c-B^2)", strict=False))
+      for s in (1000.0, 2000.0)),
+])
+def test_needle_tip_no_false_cull(sig_major):
+    """Elongated splat with the tile at its ellipse tip (tt-project run 174 model)."""
+    rng = np.random.default_rng(int(sig_major))
+    n = 1000
+    th = rng.uniform(0, np.pi, n)
+    smin = np.sqrt(0.3 + rng.uniform(0, 0.2, n))
+    cth, sth = np.cos(th), np.sin(th)
+    q = np.round(10 ** rng.uniform(np.log10(1.2 / 255), 0, n) * 65535).astype(np.int64)
+    op = q / 65535.0
+    thr = 2 * np.log(op / FLOOR)
+    l1, l2 = 1 / smin**2, 1 / sig_major**2
+    ca = l1 * sth**2 + l2 * cth**2
+    cc = l1 * cth**2 + l2 * sth**2
+    cb = (l2 - l1) * cth * sth
+    A = (-0.5 * ca).astype(np.float32)
+    B = (-cb).astype(np.float32)
+    C = (-0.5 * cc).astype(np.float32)
+    dist = np.sqrt(thr) * sig_major * rng.uniform(0.9, 1.02, n)
+    mx = (16 - dist * cth).astype(np.float32)
+    my = (16 - dist * sth).astype(np.float32)
+    keep = cmc.band_keep_f32(A, B, C, mx, my, q, FLOOR)
+    ca, cb, cc, mxd, myd, op = _exact(A, B, C, mx, my, q)
+    yy, xx = np.mgrid[0:32, 0:32] + 0.5
+    mb = ((yy // 4) * 4 + (xx // 8)).astype(int).ravel()
+    n_live = 0
+    for i in range(n):
+        dx, dy = xx.ravel() - mxd[i], yy.ravel() - myd[i]
+        a = op[i] * np.exp(-0.5 * (ca[i] * dx * dx + 2 * cb[i] * dx * dy + cc[i] * dy * dy))
+        live = np.zeros(32, bool)
+        np.logical_or.at(live, mb, a >= FLOOR)
+        n_live += live.sum()
+        assert not (live & ~keep[i]).any(), i
+    assert n_live > 0  # the tip really reaches the tile

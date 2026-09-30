@@ -80,7 +80,7 @@ def boxmin_m2(ca, cb, cc, ulo, uhi, vlo, vhi, dtype=np.float64):
 def band_keep_f32(A, B, C, mx, my, q, floor, margin=THR_MARGIN, log_under=0.0):
     """fp32 model of the band-extent microblock cull (task #59).
 
-    Mirrors microblock_cull_compute.cpp: one SFPU lane per gaussian, the 8
+    Mirrors microblock_band_cull_compute.cpp: one SFPU lane per gaussian, the 8
     microblock rows ("bands") of a tile evaluated in turn. For band j (pixel-
     centre rows v in [4j+0.5, 4j+3.5] - my) the ellipse m2 <= t has an exact
     u-extent [R*vl - S*sqrt(dl), R*vr + S*sqrt(dr)], where vr/vl clamp the
