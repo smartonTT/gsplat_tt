@@ -390,7 +390,10 @@ void kernel_main() {
             // center round trip); op = UNORM16 (rec[6]&0xffff)/65535. thr is SFPU
             // (cull_thr). Integer bit-exact decode: TRISC scalar code has no FPU,
             // the float form was 8 libgcc calls per record (task #39).
+            // MATH-only: the float fallback inside the helpers is not dead code, so
+            // UNPACK/PACK (whose dispatch is a no-op) would otherwise run it too.
             uint32_t a[BATCH], b[BATCH], c[BATCH], mlx[BATCH], mly[BATCH], op[BATCH];
+#ifdef TRISC_MATH
             for (uint32_t i = 0; i < nb; i++) {
                 const uint32_t* rec = l1_splat_words(buck, processed + i);
                 a[i]   = rec[0];
@@ -400,6 +403,7 @@ void kernel_main() {
                 mly[i] = dm_fp32::add_sub_roundtrip(rec[5], tyf_bits);
                 op[i]  = dm_fp32::unorm16_to_f(rec[6] & 0xffffu);
             }
+#endif
 
             tile_regs_acquire();
             // Seed DR_KEEP to 0 (default-cull), copy the resident box-origin
