@@ -3,6 +3,9 @@
 // of 16 as 32 B noc_async_writes (get_noc_addr per write), one write barrier per
 // batch. The host runs it on NCRISC only, BRISC only, and split N/2 + N/2 over
 // both movers (disjoint scratch halves, each on its default NoC).
+//   MB_READ=1: additionally one 64 B DRAM read + immediate barrier per record
+//   (the 1-deep blendrec read), so the loop is latency-bound rather than
+//   NoC-write-throughput-bound — closer to production intensity.
 #include "mb_common.h"
 
 #define MB_DATA_PAGE 1024u
@@ -19,6 +22,11 @@ void kernel_main() {
         for (uint32_t i = 0; i < a.n; i += 16) {
             for (uint32_t b = 0; b < 16; b++) {
                 const uint32_t j = i + b;
+#if MB_READ
+                noc_async_read(get_noc_addr((salt * 61u + j * 13u) & pmask, data_acc) + (j & 15u) * 64u,
+                               a.scratch + 512u, 64u);
+                noc_async_read_barrier();
+#endif
                 volatile uint32_t* p = reinterpret_cast<volatile uint32_t*>(a.scratch + b * 32u);
                 p[0] = j;
                 p[1] = j ^ 1u;

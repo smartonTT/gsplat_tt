@@ -1,5 +1,6 @@
 // p7: achieved DRAM bandwidth, large sequential transfers. n = 8 KiB pages per
-// core; 8 transfers outstanding per barrier; 64 KiB L1 ring.
+// core; 8 transfers outstanding per barrier into a 4-page (32 KiB) L1 ring, so
+// two movers on one core fit in disjoint halves of the 64 KiB scratch CB.
 //   mode 0: noc_async_read  (DRAM -> L1)
 //   mode 1: noc_async_write (L1 -> DRAM)
 #include "mb_common.h"
@@ -18,14 +19,14 @@ void kernel_main() {
         if (a.mode == 0) {
             for (uint32_t i = 0; i < a.n; i += 8) {
                 for (uint32_t d = 0; d < 8; d++)
-                    noc_async_read(get_noc_addr((start + i + d) & pmask, data_acc), a.scratch + d * MB_DATA_PAGE,
+                    noc_async_read(get_noc_addr((start + i + d) & pmask, data_acc), a.scratch + (d & 3u) * MB_DATA_PAGE,
                                    MB_DATA_PAGE);
                 noc_async_read_barrier();
             }
         } else {
             for (uint32_t i = 0; i < a.n; i += 8) {
                 for (uint32_t d = 0; d < 8; d++)
-                    noc_async_write(a.scratch + d * MB_DATA_PAGE, get_noc_addr((start + i + d) & pmask, data_acc),
+                    noc_async_write(a.scratch + (d & 3u) * MB_DATA_PAGE, get_noc_addr((start + i + d) & pmask, data_acc),
                                     MB_DATA_PAGE);
                 noc_async_write_barrier();
             }
