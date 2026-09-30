@@ -113,6 +113,14 @@ void kernel_main() {
     const uint32_t ov_recs_addr   = get_arg_val<uint32_t>(12);  // overflow region (0=off)
     const uint32_t ov_base_addr   = get_arg_val<uint32_t>(13);  // per-tile slot base (0=off)
     const uint32_t ov_cap         = get_arg_val<uint32_t>(14);  // kOverflowL1Cap
+    // Task #24 atomic bucket layout (0 => legacy): every tile's full record set
+    // sits at slot tile_id * tile_cap of l1_recs, its cores' chunks in arrival
+    // order; the chunk table (sort_bin_atomic.cpp) gives each core's
+    // (count << 16 | first slot) per tile, rows of tbl_row_pages pages.
+    const uint32_t tbl_addr       = get_arg_val<uint32_t>(15);
+    const uint32_t num_src        = get_arg_val<uint32_t>(16);
+    const uint32_t tbl_row_pages  = get_arg_val<uint32_t>(17);
+    const uint32_t tile_cap       = get_arg_val<uint32_t>(18);
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -125,6 +133,8 @@ void kernel_main() {
     // iter-138: overflow region (PACK2 64B page) + per-tile overflow base row.
     constexpr auto ov_recs_args = TensorAccessorArgs<work_args.next_compile_time_args_offset()>();
     constexpr auto ov_base_args = TensorAccessorArgs<ov_recs_args.next_compile_time_args_offset()>();
+    constexpr auto tbl_args = TensorAccessorArgs<ov_base_args.next_compile_time_args_offset()>();
+    const auto tbl_acc = TensorAccessor(tbl_args, tbl_addr, PAGE_BYTES);
 
     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
@@ -206,6 +216,133 @@ void kernel_main() {
             noc_async_read(get_noc_addr(pg, blend_meta_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
             dir_base = scrp[off];
+        }
+
+        if (tbl_addr != 0u) {
+            // Task #24: one item per tile (sc == 0). The bucket holds the
+            // cores' chunks in arrival order; keys and slots are gathered in
+            // canonical (core, then page) order from the chunk table, so the
+            // stable depth radix below gives the prefix-sum layout's output
+            // byte for byte. N <= ov_cap: whole tile in CB_BUCKET (keys/slots
+            // in CB_BSORT, ping-pong in CB_SLAB, as the pre-pack path above).
+            // N > ov_cap: keys are extracted in ov_cap-record chunks, and each
+            // output subchunk is filled chunk by chunk (coalesced reads).
+            const uint32_t N = count;
+            const uint32_t tile_page0 = tile_id * (tile_cap >> 1);
+            const uint32_t buck = get_write_ptr(CB_BUCKET);
+            const uint32_t bs = get_write_ptr(CB_BSORT);
+            const uint32_t slab = get_write_ptr(CB_SLAB);
+            const bool whole = (N <= ov_cap);
+            auto read_pages = [&](uint32_t page0, uint32_t npages) {
+                for (uint32_t pp = 0; pp < npages;) {
+                    const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
+                    for (uint32_t q = pp; q < end; ++q) {
+                        noc_async_read_tile(page0 + q, l1_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
+                    }
+                    noc_async_read_barrier();
+                    pp = end;
+                }
+                asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
+            };
+            // Scratch: whole  -> keys k/slots v in CB_BSORT, k2/v2 in CB_SLAB,
+            //                    by-slot keys read straight from the bucket;
+            //          big    -> by-slot keys + chunk rows in CB_SLAB, k in
+            //                    CB_BSORT, v/k2/v2 in CB_BUCKET (free after the
+            //                    key extraction).
+            uint32_t* k = reinterpret_cast<uint32_t*>(bs);
+            uint32_t* v = whole ? k + ov_cap : reinterpret_cast<uint32_t*>(buck);
+            uint32_t* k2 = whole ? reinterpret_cast<uint32_t*>(slab) : v + tile_cap;
+            uint32_t* v2 = whole ? k2 + N : k2 + tile_cap;
+            const uint32_t* by_slot;  // key of bucket slot s at by_slot[8 * s] (whole) / [s] (big)
+            uint32_t by_slot_stride;
+            if (whole) {
+                read_pages(tile_page0, (N + 1u) >> 1);
+                by_slot = reinterpret_cast<const uint32_t*>(buck) + 3;
+                by_slot_stride = 8u;
+            } else {
+                uint32_t* ks = reinterpret_cast<uint32_t*>(slab);
+                for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
+                    const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
+                    read_pages(tile_page0 + (r0 >> 1), (nr + 1u) >> 1);
+                    auto rw = reinterpret_cast<const volatile uint32_t*>(buck);
+                    for (uint32_t i = 0; i < nr; ++i) ks[r0 + i] = rw[i * 8u + 3u];
+                }
+                by_slot = ks;
+                by_slot_stride = 1u;
+            }
+            {
+                // Chunk-table rows: one 64 B page per core (this tile's word at tw).
+                // Staged past the by-slot keys (big) / at the slab head (whole,
+                // consumed before the radix uses the slab as k2/v2).
+                const uint32_t stage = whole ? slab : slab + tile_cap * 4u;
+                const uint32_t tp = tile_id / ELEMS_PER_PAGE;
+                const uint32_t tw = tile_id % ELEMS_PER_PAGE;
+                for (uint32_t c = 0; c < num_src; ++c) {
+                    noc_async_read(get_noc_addr(c * tbl_row_pages + tp, tbl_acc),
+                                   stage + c * PAGE_BYTES, PAGE_BYTES);
+                }
+                noc_async_read_barrier();
+                auto st = reinterpret_cast<const volatile uint32_t*>(stage);
+                uint32_t pos = 0;
+                for (uint32_t c = 0; c < num_src && pos < N; ++c) {
+                    const uint32_t e = st[c * ELEMS_PER_PAGE + tw];
+                    uint32_t len = e >> 16;
+                    const uint32_t base = e & 0xFFFFu;
+                    if (len > N - pos) len = N - pos;
+                    for (uint32_t j = 0; j < len; ++j) {
+                        k[pos + j] = by_slot[(base + j) * by_slot_stride];
+                        v[pos + j] = base + j;
+                    }
+                    pos += len;
+                }
+            }
+            if (sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist)) {
+                for (uint32_t i = 0; i < N; ++i) v[i] = v2[i];
+            }
+            if (!whole) {
+                // Sorted slots to CB_BSORT (k is dead) so CB_BUCKET can take chunks.
+                for (uint32_t i = 0; i < N; ++i) k[i] = v[i];
+                v = k;
+            }
+            const uint32_t num_sc = (N + bucket_fit - 1u) / bucket_fit;
+            for (uint32_t s = 0; s < num_sc; ++s) {
+                const uint32_t k0 = s * bucket_fit;
+                const uint32_t Ls = (N - k0 > bucket_fit) ? bucket_fit : (N - k0);
+                uint32_t scp = 0;
+                {
+                    const uint32_t e0 = (dir_base + s) * 4u;
+                    noc_async_read(get_noc_addr(e0 >> 4, dir_acc), scr, PAGE_BYTES);
+                    noc_async_read_barrier();
+                    scp = scrp[e0 & 0xF];
+                }
+                if (whole) {
+                    permute_records(buck, slab, v + k0, Ls);
+                } else {
+                    for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
+                        const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
+                        read_pages(tile_page0 + (r0 >> 1), (nr + 1u) >> 1);
+                        for (uint32_t i = 0; i < Ls; ++i) {
+                            const uint32_t off = v[k0 + i] - r0;
+                            if (off >= nr) continue;
+                            auto src = reinterpret_cast<volatile uint32_t*>(buck + off * L1_SPLAT_BYTES);
+                            auto dst = reinterpret_cast<volatile uint32_t*>(slab + i * L1_SPLAT_BYTES);
+                            const uint32_t w0 = src[0], w1 = src[1], w2 = src[2], w3 = src[3];
+                            const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+                            dst[0] = w0; dst[1] = w1; dst[2] = w2; dst[3] = w3;
+                            dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+                        }
+                    }
+                }
+                const uint32_t out_pages = (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+                for (uint32_t p = 0; p < out_pages; ++p) {
+                    const uint32_t recs =
+                        (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE : (Ls - p * SLAB_RECS_PER_PAGE);
+                    noc_async_write(slab + p * SLAB_PAGE_BYTES, get_noc_addr(scp + p, payload_acc),
+                                    recs * L1_SPLAT_BYTES);
+                }
+                noc_async_write_barrier();
+            }
+            continue;
         }
 
         // iter-138: in-cap overflow tile pre-pack path. The whole tile's records

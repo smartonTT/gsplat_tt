@@ -21,6 +21,7 @@
 #include "config.h"
 #include "env_config.h"
 #include "sort.h"
+#include "sort_atomic_layout.h"
 #include "device_state.h"
 #include "host_tracy.hpp"
 
@@ -120,6 +121,9 @@ static bool bucket_mask_enabled() { return false; }  // BUCKET_MASK unset
 constexpr uint32_t MAX_TILE_ENTRIES = 32768;
 constexpr uint32_t MAX_TILE_PAGES = MAX_TILE_ENTRIES / ELEMS_PER_PAGE;  // 2048
 constexpr uint32_t SCRATCH_BYTES = MAX_TILE_ENTRIES * 4;  // 128 KB per CB
+// Task #24: fixed per-tile bucket capacity (32B records) of the atomic layout.
+// Same limit as MAX_TILE_ENTRIES; a tile beyond it fails the frame, as before.
+constexpr uint32_t kTileCap = MAX_TILE_ENTRIES;
 
 // Device-binning: max tiles the per-core L1 row / cursor / offset CBs hold
 // (hero is 1024 tiles). Larger inputs are unsupported and hard-fail.
@@ -255,6 +259,20 @@ struct SortDeviceContext {
     // Iter 53+: post-radix PACK2 subchunk payloads + device-resident directory.
     distributed::MeshWorkload wl_subchunk;
     KernelHandle ksubchunk{};
+    // Task #24 (R8): atomic fixed-capacity bucket append (sort_bin_atomic.cpp) —
+    // one launch replaces count + host layout + scatter + radix + publish.
+    distributed::MeshWorkload wl_atomic;
+    KernelHandle katomic{};   // NCRISC (mover 1): count, reserve, emit
+    KernelHandle katomic0{};  // BRISC (mover 0): count, emit
+    uint32_t atomic_sem[2] = {0, 0};
+    std::shared_ptr<distributed::MeshBuffer> buf_abucket;  // num_tiles x kTileCap 32B records
+    std::size_t cap_abucket_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_acount;   // L1: per-tile append counters
+    std::size_t cap_acount_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_atable;   // per-(core, tile) chunk table
+    std::size_t cap_atable_bytes = 0;
+    bool atomic_frame = false;  // this frame's materialize reads the atomic layout
+    uint32_t atomic_row_pages = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_blend_subchunk_meta;
     std::size_t cap_blend_subchunk_meta_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_payload;
@@ -413,8 +431,9 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     page_cb(6, bucket_fit * 32u);
 
     std::vector<uint32_t> ct;
-    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
-    for (int i = 0; i < 11; i++) {
+    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}
+    // + task #24 chunk table.
+    for (int i = 0; i < 12; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     }
     ctx.ksubchunk = CreateKernel(
@@ -626,6 +645,10 @@ static bool launch_subchunk_materialize(
             ov_addr,
             ov_base_addr,
             render_config::kOverflowL1Cap,
+            ctx->atomic_frame ? static_cast<uint32_t>(ctx->buf_atable->address()) : 0u,
+            num_cores,
+            ctx->atomic_row_pages,
+            kTileCap,
         });
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
@@ -955,6 +978,69 @@ static void build_program_bucket_cull(SortDeviceContext& ctx) {
     ctx.cull_built = true;
 }
 
+// Task #24: atomic bucket-append program. The same kernel on NCRISC (mover 1)
+// and BRISC (mover 0) of every core; private CBs at id (NCRISC) / id + 16
+// (BRISC), the base row and chunk-table staging shared (ids 10, 11).
+static void build_program_bin_atomic(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    auto cb = [&](uint32_t id, uint32_t bytes) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+    for (const uint32_t off : {0u, 16u}) {
+        cb(0 + off, PAGE_BYTES);             // gid page
+        cb(1 + off, PAGE_BYTES);             // tid page
+        cb(2 + off, PAGE_BYTES);             // keep page
+        cb(3 + off, PAGE_BYTES);             // depth page
+        cb(4 + off, BIN_ROW_BYTES);          // per-tile count of this mover
+        cb(5 + off, BIN_ROW_BYTES);          // per-tile cursor
+        cb(6 + off, 2u * 32u * PAGE_BYTES);  // count-pass read batch (tid, keep)
+        cb(7 + off, 16u * PAGE_BYTES);       // blendrec prefetch ring
+        cb(8 + off, 16u * 32u);              // 32B record staging
+        cb(9 + off, 16u * 16u);              // packed op/color write-back ring
+    }
+    cb(10, BIN_ROW_BYTES);  // per-tile first slot (atomic return values)
+    cb(11, BIN_ROW_BYTES);  // chunk-table row staging
+    ctx.atomic_sem[0] = CreateSemaphore(program, cores, 0);
+    ctx.atomic_sem[1] = CreateSemaphore(program, cores, 0);
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 6; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    TensorAccessorArgs::create_l1_interleaved().append_to(ct);  // counters
+    TensorAccessorArgs::create_dram_interleaved().append_to(ct);  // chunk table
+    ctx.katomic = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_atomic.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    ctx.katomic0 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_atomic.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_atomic.add_program(device_range, std::move(program));
+}
+
+// Task #24: GSPLAT_TT_SORT_ATOMIC=0 keeps the count + host layout + scatter +
+// radix + publish path (A/B baseline in the same build). Read once.
+static bool sort_atomic_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_SORT_ATOMIC");
+        return !(e != nullptr && e[0] == '0');
+    }();
+    return v;
+}
+
 static SortDeviceContext init_context() {
     SortDeviceContext ctx;
     ctx.mesh_device = device_state::get_device();
@@ -968,6 +1054,7 @@ static SortDeviceContext init_context() {
     build_program_bin_layout_emit(ctx);
     build_program_publish(ctx);
     build_program_subchunk(ctx);
+    build_program_bin_atomic(ctx);
     if (bucket_mask_enabled()) {
         build_program_bucket_cull(ctx);
     }
@@ -1770,6 +1857,196 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->cap_bucket_meta_bytes = bm_bytes;
                 device_state::register_buffer("sort_bucket_meta", ctx->buf_bucket_meta);
             }
+        }
+
+        // ── Task #24 (R8 / candidate 5.3): atomic fixed-capacity bucket append ──
+        // One device launch (sort_bin_atomic.cpp) counts, reserves each
+        // (core, tile) chunk with a NoC atomic on the tile's counter, and emits
+        // every record into its tile's fixed-capacity bucket. The host reads the
+        // per-tile totals once (4 KB) instead of the per-(core, tile) histogram,
+        // uploads no layout, and launches no radix/publish: the materialize sorts
+        // each tile's bucket (canonical chunk order, stable depth radix), which
+        // is byte-identical to the prefix-sum layout's sort.
+        ctx->atomic_frame = false;
+        if (sort_atomic_enabled() && tile_bucket && !need_host_sorted_ids &&
+            resident_blend_chain_enabled() && sort_device_publish_enabled()) {
+            using ms_t = std::chrono::duration<double, std::milli>;
+            const uint32_t cap = kTileCap;
+            const uint32_t row_pages = stride / ELEMS_PER_PAGE;
+            auto* dev = ctx->mesh_device.get();
+            const std::size_t bucket_bytes = static_cast<std::size_t>(num_tiles) * cap * 32u;
+            if (!ctx->buf_abucket || ctx->cap_abucket_bytes < bucket_bytes) {
+                ctx->buf_abucket = make_dram_paged(dev, bucket_bytes, 64u);
+                ctx->cap_abucket_bytes = bucket_bytes;
+            }
+            device_state::register_buffer("sort_l1_recs", ctx->buf_abucket);
+            const std::size_t cnt_bytes = static_cast<std::size_t>(stride) * 4u;
+            if (!ctx->buf_acount || ctx->cap_acount_bytes < cnt_bytes) {
+                distributed::ReplicatedBufferConfig rc{.size = cnt_bytes};
+                distributed::DeviceLocalBufferConfig lc{
+                    .page_size = PAGE_BYTES, .buffer_type = BufferType::L1};
+                ctx->buf_acount = distributed::MeshBuffer::create(rc, lc, dev);
+                ctx->cap_acount_bytes = cnt_bytes;
+            }
+            const std::size_t tbl_bytes = static_cast<std::size_t>(num_cores) * stride * 4u;
+            if (!ctx->buf_atable || ctx->cap_atable_bytes < tbl_bytes) {
+                ctx->buf_atable = make_dram(dev, tbl_bytes);
+                ctx->cap_atable_bytes = tbl_bytes;
+            }
+
+            const auto t_e0 = clk::now();
+            // Counters start at 0 (CQ-ordered ahead of the emit).
+            std::vector<uint32_t> tot(ctx->cap_acount_bytes / 4, 0u);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_acount, tot, false);
+            Program& aprog = ctx->wl_atomic.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                const uint32_t lo = ws.start[c];
+                const uint32_t hi = ws.start[c] + ws.count[c];
+                const uint32_t mid = lo + static_cast<uint32_t>(
+                    static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
+                std::vector<uint32_t> a = {
+                    static_cast<uint32_t>(bgid->address()),
+                    static_cast<uint32_t>(btid->address()),
+                    static_cast<uint32_t>(bkeep->address()),
+                    static_cast<uint32_t>(bdep->address()),
+                    blendrec_addr,
+                    static_cast<uint32_t>(ctx->buf_abucket->address()),
+                    static_cast<uint32_t>(ctx->buf_acount->address()),
+                    static_cast<uint32_t>(ctx->buf_atable->address()),
+                    mid, hi, P_full, num_tiles, row_pages, c, cap,
+                    static_cast<uint32_t>(tiles_x), 1u,
+                    ctx->atomic_sem[0], ctx->atomic_sem[1],
+                };
+                SetRuntimeArgs(aprog, ctx->katomic, core, a);
+                a[8] = lo;
+                a[9] = mid;
+                a[16] = 0u;
+                SetRuntimeArgs(aprog, ctx->katomic0, core, a);
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_atomic, false);
+            {
+                GSPLAT_HOST_ZONE("host_finish_sort_atomic");
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, tot, ctx->buf_acount, true);
+            }
+            const auto t_e1 = clk::now();
+            T.bin_emit_ms = ms_t(t_e1 - t_e0).count();
+            T.bin_ms = T.bin_emit_ms;
+
+            // Per-tile layout from the totals alone.
+            std::vector<int64_t> counts(num_tiles, 0);
+            std::vector<int64_t> starts(num_tiles, 0);
+            uint32_t P_kept = 0;
+            uint32_t max_n = 0;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                const uint32_t n = tot[t];
+                if (n > cap) {
+                    std::cerr << "[gsplat_tt::sort] tile " << t << " holds " << n
+                              << " records > bucket capacity " << cap
+                              << " (records past it were dropped) — hard fail "
+                                 "(render_clean is single-path TT, no host fallback)\n";
+                    return fail();
+                }
+                counts[t] = n;
+                starts[t] = P_kept;
+                if (n > 0) {
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = P_kept;
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] = P_kept + n;
+                }
+                P_kept += n;
+                max_n = std::max(max_n, n);
+            }
+            std::vector<uint32_t> bmeta(ctx->cap_bucket_meta_bytes / 4, 0u);
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                bmeta[static_cast<std::size_t>(t) * 2 + 0] = static_cast<uint32_t>(starts[t]);
+                bmeta[static_cast<std::size_t>(t) * 2 + 1] = static_cast<uint32_t>(counts[t]);
+            }
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bucket_meta, bmeta, false);
+            // LPT over page-rounded counts (the prefix layout used per-core
+            // padded footprints; assignment only moves load, not output).
+            std::vector<int64_t> pad_counts(num_tiles, 0);
+            for (uint32_t t = 0; t < num_tiles; t++)
+                pad_counts[t] = static_cast<int64_t>(round_up(static_cast<uint32_t>(counts[t]),
+                                                              ELEMS_PER_PAGE));
+            const LptAssignment lpt = build_lpt(pad_counts, num_tiles, num_cores);
+            std::vector<uint32_t> tile_ids_flat(ctx->cap_tile_ids_bytes / 4, 0u);
+            std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
+            publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
+            // Padded [start, start + count) per tile, the publish path's layout
+            // (cull/blend/materialize read counts from it).
+            std::vector<int64_t> padded_ranges(result.tile_ranges.size(), 0);
+            uint32_t padded_cursor = 0;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                const uint32_t n = static_cast<uint32_t>(counts[t]);
+                padded_ranges[2 * t] = static_cast<int64_t>(padded_cursor);
+                padded_ranges[2 * t + 1] = static_cast<int64_t>(padded_cursor + n);
+                padded_cursor += round_up(n, ELEMS_PER_PAGE);
+            }
+            // sort_sorted_ids has no reader on this path; keep a buffer registered
+            // for the cull/blend argument lists.
+            ensure_resident_sorted_buffer(ctx, ELEMS_PER_PAGE);
+            upload_resident_tile_ranges(ctx, padded_ranges);
+            const auto t_l1 = clk::now();
+            T.bin_layout_ms = ms_t(t_l1 - t_e1).count();
+
+            const SubchunkLayout sc_layout =
+                build_subchunk_layout(counts, num_tiles, render_config::kBucketFit);
+            log_subchunk_layout_stats(sc_layout);
+            MatWorkAssignment mat_work;
+            {
+                const auto per_core = sort_atomic::lpt_whole_tiles(
+                    counts, num_tiles, num_cores, render_config::kOverflowL1Cap);
+                mat_work.per_core_offset.assign(num_cores, 0);
+                mat_work.per_core_count.assign(num_cores, 0);
+                for (uint32_t c = 0; c < num_cores; ++c) {
+                    mat_work.per_core_offset[c] = static_cast<uint32_t>(mat_work.flat.size() / 2u);
+                    mat_work.per_core_count[c] = static_cast<uint32_t>(per_core[c].size());
+                    mat_work.max_items_per_core =
+                        std::max(mat_work.max_items_per_core, mat_work.per_core_count[c]);
+                    for (const uint32_t t : per_core[c]) {
+                        mat_work.flat.push_back(t);
+                        mat_work.flat.push_back(0u);
+                    }
+                }
+            }
+            if (mat_work.max_items_per_core > 1024u) {
+                std::cerr << "[gsplat_tt::sort] materialize work items/core "
+                          << mat_work.max_items_per_core << " > MAX_WORK=1024\n";
+                return fail();
+            }
+            if (!prepare_subchunk_buffers(ctx, sc_layout, num_tiles)) {
+                std::cerr << "[gsplat_tt::sort] subchunk buffer setup failed\n";
+                return fail();
+            }
+            upload_subchunk_directory(ctx, sc_layout);
+            ctx->atomic_frame = true;
+            ctx->atomic_row_pages = row_pages;
+            T.publish_host_ms = ms_t(clk::now() - t_l1).count();
+            T.publish_ms = T.publish_host_ms;
+            T.total_ms = ms_t(clk::now() - t_total0_rp).count();
+            std::fprintf(stderr,
+                "[SORT] stage=ATOMIC P=%u P_kept=%u num_tiles=%u max_tile_n=%u emit=%.2f "
+                "layout=%.2f pub_host=%.2f total=%.2fms\n",
+                P_full, P_kept, num_tiles, max_n, T.bin_emit_ms, T.bin_layout_ms,
+                T.publish_host_ms, T.total_ms);
+            if (device_ok) *device_ok = true;
+            const auto t_mat0 = clk::now();
+            if (!launch_subchunk_materialize(ctx, mat_work, num_cores,
+                                             static_cast<uint32_t>(tiles_x),
+                                             render_config::kBucketFit)) {
+                std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
+                return fail();
+            }
+            if (sort_blend_pipe_enabled()) {
+                device_state::mark_sort_publish_pending();
+            } else {
+                GSPLAT_HOST_ZONE("host_finish_sort_materialize");
+                distributed::Finish(*ctx->cq);
+            }
+            T.materialize_ms = ms_t(clk::now() - t_mat0).count();
+            maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
+            return result;
         }
 
         // M0: l1_record buffers.
