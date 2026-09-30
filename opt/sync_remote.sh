@@ -5,6 +5,11 @@
 # mtimes, which can be older than build outputs, so ninja skips changed host
 # sources and a stale render_clean .so hangs the device (task #47).
 # Wrap device use in `ttp lock p100 -- opt/sync_remote.sh ...`.
+# Exit codes: 0 ok, 1 configure/build failed (last log lines printed), 3 stale
+# .so. Callers MUST check the exit code: don't pipe the output (e.g. `| tail`)
+# without `set -o pipefail`, or a failed build looks like success.
+# Remote env defaults: TT_METAL_HOME=/localdev/smarton/tt-metal,
+# TT_METAL_ARCH_NAME=blackhole; set them on the remote side to override.
 set -euo pipefail
 HOST=${1:?host}; DIR=${2:?remote_dir}; REV=${3:-HEAD}
 SHA=$(git rev-parse "$REV")
