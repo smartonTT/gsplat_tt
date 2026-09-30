@@ -1,0 +1,28 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=7715fe4a5209e343967f1fa61f40e735a4139f62 so_md5=6f8060451612a5115b6ba90e17266278 
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-ab-1  timeout=400s  worry=320s  ts=2026-09-30T13:45:30-0700
+cmd: bash /localdev/smarton/t80_scripts/remote_ab.sh 1
+-----------------------------------------
+=== AB round=1 a=0 20:45:30
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.0 p50_ms=48.5 min_ms=39.8 max_ms=66.3 n_views=30 warmup_s=22.8 out=/localdev/smarton/gstt2-t80/tmp/t80-ab-1-a0
+STAGES n=30 head=0.002 project=8.666 tile_assign=8.852 sort=14.184 blend_setup=0.024 cull=0.006 blend=16.969 d2h=0.227 assemble=0.000 tail=0.002 | sum=48.931 view_total=48.932 resid_in_view=+0.001 avg_frame_ms=48.959 resid_vs_frame=+0.027
+=== AB round=1 a=1 20:45:57
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=42.9 p50_ms=42.3 min_ms=35.4 max_ms=59.1 n_views=30 warmup_s=18.2 out=/localdev/smarton/gstt2-t80/tmp/t80-ab-1-a1
+STAGES n=30 head=0.002 project=8.668 tile_assign=8.866 sort=14.194 blend_setup=0.027 cull=0.007 blend=10.835 d2h=0.274 assemble=0.000 tail=0.002 | sum=42.876 view_total=42.877 resid_in_view=+0.001 avg_frame_ms=42.904 resid_vs_frame=+0.029
+=== AB round=1 a=3 20:46:19
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=38.7 p50_ms=38.0 min_ms=31.3 max_ms=54.2 n_views=30 warmup_s=18.5 out=/localdev/smarton/gstt2-t80/tmp/t80-ab-1-a3
+STAGES n=30 head=0.002 project=8.665 tile_assign=8.883 sort=14.212 blend_setup=0.026 cull=0.007 blend=6.606 d2h=0.228 assemble=0.000 tail=0.002 | sum=38.631 view_total=38.632 resid_in_view=+0.001 avg_frame_ms=38.661 resid_vs_frame=+0.029
+=== AB round=1 a=4 20:46:41
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=37.7 p50_ms=37.2 min_ms=30.5 max_ms=53.3 n_views=30 warmup_s=18.4 out=/localdev/smarton/gstt2-t80/tmp/t80-ab-1-a4
+STAGES n=30 head=0.002 project=8.682 tile_assign=8.889 sort=14.225 blend_setup=0.027 cull=0.007 blend=5.607 d2h=0.222 assemble=0.000 tail=0.002 | sum=37.663 view_total=37.664 resid_in_view=+0.001 avg_frame_ms=37.696 resid_vs_frame=+0.033
+=== AB round=1 a=5 20:47:02
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.5 p50_ms=44.8 min_ms=38.1 max_ms=61.8 n_views=30 warmup_s=45.3 out=/localdev/smarton/gstt2-t80/tmp/t80-ab-1-a5
+STAGES n=30 head=0.002 project=8.675 tile_assign=8.885 sort=14.235 blend_setup=0.027 cull=0.007 blend=13.444 d2h=0.227 assemble=0.000 tail=0.002 | sum=45.505 view_total=45.506 resid_in_view=+0.001 avg_frame_ms=45.538 resid_vs_frame=+0.033
+=== end 20:47:51
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-ab-1-20260930-134530.log

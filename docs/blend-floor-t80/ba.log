@@ -1,0 +1,231 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=28d5c6addddd6298c1908e2c1726e2f75c5e5c1d so_md5=c55d5b17d3a8225ac0d4378bd76d29b2 
+checks=26836897484 mismatches=0
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-verify-base  timeout=400s  worry=320s  ts=2026-09-30T13:58:29-0700
+cmd: T80_TREE=/localdev/smarton/gstt2-t80 bash /localdev/smarton/t80_scripts/remote_verify.sh base
+-----------------------------------------
+== base run 20:58:29
+run rc=0 20:58:59
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 51.8ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.1 p50_ms=48.5 min_ms=40.3 max_ms=66.3 n_views=30 warmup_s=19.3 out=/localdev/smarton/gstt2-t80/tmp/t80-base
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.698 tile_assign=8.908 sort=14.252 blend_setup=0.031 cull=0.009 blend=16.960 d2h=0.207 assemble=0.000 tail=0.003 | sum=49.070 view_total=49.071 resid_in_view=+0.001 avg_frame_ms=49.110 resid_vs_frame=+0.040
+dump dir: ./tmp/t80-dump-base
+base views: 30
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-verify-base-20260930-135828.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-verify-new  timeout=400s  worry=320s  ts=2026-09-30T13:59:00-0700
+cmd: T80_TREE=/localdev/smarton/gstt2-t80b bash /localdev/smarton/t80_scripts/remote_verify.sh new base
+-----------------------------------------
+== new run 20:59:00
+/localdev/smarton/t80_scripts/remote_verify.sh: line 9: 325977 Segmentation fault      TT_METAL_CACHE_RENDER=$(cache 0 -v$tag) timeout 330 python3 render/run.py --no-ref --iter-dir t80-$tag --dump-views t80-dump-$tag > tmp/t80-run-$tag.log 2>&1
+run rc=139 20:59:24
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-09-30 20:59:21.332 | critical |          Always | TT_THROW: /localdev/smarton/.cache/ttmc-gstt2-t80b-a0-vnew/tt-metal-cache431005707817566179/kernels/alpha_blend_compute_mb/7507959288463388927//trisc1/trisc1.elf: unexpected dynamic relocations (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/llrt/tt_memory.cpp:72: tt::exception
+Traceback (most recent call last):
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+dump dir: ./tmp/t80-dump-new
+md5sum: '*': No such file or directory
+new views: 0
+VIEWS DIFFER
+1,30d0
+< 3ec8d74121198dbe0b0f0e9bc410e358  view00_hero.png
+< 68c1688258f940abfce264b8e2959390  view01_orb_00.png
+< 34407838efbf40f5fdfa7f4694406c30  view02_orb_01.png
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-verify-new-20260930-135859.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-ba-1  timeout=400s  worry=320s  ts=2026-09-30T13:59:24-0700
+cmd: bash /localdev/smarton/t80_scripts/remote_ba.sh 1
+-----------------------------------------
+=== BA round=1 base 20:59:25
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=48.9 p50_ms=48.4 min_ms=39.9 max_ms=66.0 n_views=30 warmup_s=21.4 out=/localdev/smarton/gstt2-t80/tmp/t80-ba-1-base
+STAGES n=30 head=0.002 project=8.663 tile_assign=8.855 sort=14.176 blend_setup=0.025 cull=0.006 blend=16.878 d2h=0.215 assemble=0.000 tail=0.002 | sum=48.823 view_total=48.824 resid_in_view=+0.001 avg_frame_ms=48.851 resid_vs_frame=+0.028
+=== BA round=1 new 20:59:50
+2026-09-30 21:00:15.702 | critical |          Always | TT_THROW: /localdev/smarton/.cache/ttmc-gstt2-t80b-a0-new/tt-metal-cache431005707817566179/kernels/alpha_blend_compute_mb/7507959288463388927//trisc1/trisc1.elf: unexpected dynamic relocations (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/llrt/tt_memory.cpp:72: tt::exception
+Traceback (most recent call last):
+=== BA round=1 new-oldwalk 21:00:18
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=47.7 p50_ms=47.1 min_ms=39.1 max_ms=64.2 n_views=30 warmup_s=20.1 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-1-new-oldwalk
+STAGES n=30 head=0.002 project=8.684 tile_assign=8.881 sort=14.192 blend_setup=0.026 cull=0.007 blend=15.459 d2h=0.382 assemble=0.000 tail=0.003 | sum=47.636 view_total=47.638 resid_in_view=+0.001 avg_frame_ms=47.679 resid_vs_frame=+0.043
+=== end 21:00:42
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-ba-1-20260930-135924.log
+[sync_remote] sha=d10580eb656562c1ba5446aed52f19a74a33241f so_md5=c55d5b17d3a8225ac0d4378bd76d29b2 
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-verify-new  timeout=400s  worry=320s  ts=2026-09-30T14:08:05-0700
+cmd: T80_TREE=/localdev/smarton/gstt2-t80b bash /localdev/smarton/t80_scripts/remote_verify.sh new base
+-----------------------------------------
+== new run 21:08:05
+run rc=0 21:08:20
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 48.7ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.8 p50_ms=45.3 min_ms=37.5 max_ms=61.5 n_views=30 warmup_s=3.6 out=/localdev/smarton/gstt2-t80b/tmp/t80-new
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.687 tile_assign=8.878 sort=14.256 blend_setup=0.029 cull=0.008 blend=13.698 d2h=0.210 assemble=0.000 tail=0.002 | sum=45.772 view_total=45.773 resid_in_view=+0.001 avg_frame_ms=45.810 resid_vs_frame=+0.038
+dump dir: ./tmp/t80-dump-new
+new views: 30
+ALL_VIEWS_IDENTICAL base vs new
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-verify-new-20260930-140804.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-ba-2  timeout=400s  worry=320s  ts=2026-09-30T14:08:21-0700
+cmd: bash /localdev/smarton/t80_scripts/remote_ba.sh 2
+-----------------------------------------
+=== BA round=2 base 21:08:21
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=48.9 p50_ms=48.2 min_ms=40.2 max_ms=65.7 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t80/tmp/t80-ba-2-base
+STAGES n=30 head=0.002 project=8.651 tile_assign=8.855 sort=14.171 blend_setup=0.023 cull=0.006 blend=16.919 d2h=0.204 assemble=0.000 tail=0.002 | sum=48.833 view_total=48.834 resid_in_view=+0.001 avg_frame_ms=48.862 resid_vs_frame=+0.028
+=== BA round=2 new 21:08:27
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=46.0 p50_ms=45.4 min_ms=37.8 max_ms=62.3 n_views=30 warmup_s=3.6 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-2-new
+STAGES n=30 head=0.002 project=8.677 tile_assign=8.869 sort=14.280 blend_setup=0.031 cull=0.007 blend=13.755 d2h=0.337 assemble=0.000 tail=0.002 | sum=45.961 view_total=45.962 resid_in_view=+0.001 avg_frame_ms=45.990 resid_vs_frame=+0.030
+=== BA round=2 new-oldwalk 21:08:34
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=47.6 p50_ms=47.1 min_ms=38.9 max_ms=64.8 n_views=30 warmup_s=3.7 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-2-new-oldwalk
+STAGES n=30 head=0.002 project=8.686 tile_assign=8.913 sort=14.222 blend_setup=0.028 cull=0.007 blend=15.485 d2h=0.222 assemble=0.000 tail=0.002 | sum=47.568 view_total=47.569 resid_in_view=+0.001 avg_frame_ms=47.601 resid_vs_frame=+0.033
+=== end 21:08:42
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-ba-2-20260930-140820.log
+[sync_remote] sha=0626a2cc62b71739aa314023d380de2a1bbefdf6 so_md5=d1f0d12272de4fce3e4d781c9970fbea 
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-verify-new  timeout=400s  worry=320s  ts=2026-09-30T14:15:51-0700
+cmd: T80_TREE=/localdev/smarton/gstt2-t80b bash /localdev/smarton/t80_scripts/remote_verify.sh new base
+-----------------------------------------
+== new run 21:15:51
+run rc=0 21:16:05
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 46.4ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.5 p50_ms=43.9 min_ms=36.7 max_ms=60.1 n_views=30 warmup_s=3.7 out=/localdev/smarton/gstt2-t80b/tmp/t80-new
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.690 tile_assign=8.883 sort=14.307 blend_setup=0.029 cull=0.008 blend=12.373 d2h=0.208 assemble=0.000 tail=0.002 | sum=44.504 view_total=44.505 resid_in_view=+0.001 avg_frame_ms=44.542 resid_vs_frame=+0.038
+dump dir: ./tmp/t80-dump-new
+new views: 30
+ALL_VIEWS_IDENTICAL base vs new
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-verify-new-20260930-141550.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-verify-chk  timeout=400s  worry=320s  ts=2026-09-30T14:16:06-0700
+cmd: GSPLAT_TT_BLEND_SFPU_UNORM=2 T80_TREE=/localdev/smarton/gstt2-t80b bash /localdev/smarton/t80_scripts/remote_verify.sh chk base
+-----------------------------------------
+== chk run 21:16:06
+run rc=0 21:16:36
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 49.2ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=47.1 p50_ms=46.5 min_ms=38.6 max_ms=63.8 n_views=30 warmup_s=19.3 out=/localdev/smarton/gstt2-t80b/tmp/t80-chk
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.685 tile_assign=8.898 sort=14.240 blend_setup=0.030 cull=0.009 blend=14.940 d2h=0.212 assemble=0.000 tail=0.003 | sum=47.018 view_total=47.019 resid_in_view=+0.001 avg_frame_ms=47.058 resid_vs_frame=+0.040
+dump dir: ./tmp/t80-dump-chk
+chk views: 30
+ALL_VIEWS_IDENTICAL base vs chk
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-verify-chk-20260930-141606.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-ba-3  timeout=400s  worry=320s  ts=2026-09-30T14:16:37-0700
+cmd: bash /localdev/smarton/t80_scripts/remote_ba.sh 3
+-----------------------------------------
+=== BA round=3 base 21:16:37
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=48.9 p50_ms=48.2 min_ms=40.2 max_ms=66.0 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t80/tmp/t80-ba-3-base
+STAGES n=30 head=0.002 project=8.657 tile_assign=8.851 sort=14.179 blend_setup=0.025 cull=0.006 blend=16.898 d2h=0.212 assemble=0.000 tail=0.002 | sum=48.831 view_total=48.832 resid_in_view=+0.001 avg_frame_ms=48.859 resid_vs_frame=+0.028
+=== BA round=3 new 21:16:43
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.3 p50_ms=43.7 min_ms=36.1 max_ms=61.0 n_views=30 warmup_s=3.6 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-3-new
+STAGES n=30 head=0.002 project=8.658 tile_assign=8.863 sort=14.181 blend_setup=0.025 cull=0.007 blend=12.337 d2h=0.218 assemble=0.000 tail=0.002 | sum=44.292 view_total=44.293 resid_in_view=+0.001 avg_frame_ms=44.321 resid_vs_frame=+0.029
+=== BA round=3 new-riscdec 21:16:51
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.7 p50_ms=45.0 min_ms=37.5 max_ms=62.2 n_views=30 warmup_s=19.0 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-3-new-riscdec
+STAGES n=30 head=0.002 project=8.661 tile_assign=8.857 sort=14.177 blend_setup=0.023 cull=0.006 blend=13.748 d2h=0.224 assemble=0.000 tail=0.002 | sum=45.700 view_total=45.701 resid_in_view=+0.001 avg_frame_ms=45.729 resid_vs_frame=+0.029
+=== end 21:17:13
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-ba-3-20260930-141637.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-tracy-new  timeout=400s  worry=320s  ts=2026-09-30T14:17:32-0700
+cmd: T80_TREE=/localdev/smarton/gstt2-t80b bash /localdev/smarton/t80_scripts/remote_tracy.sh 0
+-----------------------------------------
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=65.0 p50_ms=62.6 min_ms=56.5 max_ms=80.8 n_views=10 warmup_s=30.1 out=/localdev/smarton/gstt2-t80b/tmp/t80-a0
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 4636139 Sep 30 21:18 /localdev/smarton/gstt2-t80b/opt/profiler/t80-a0/chunks/0-10/render.tracy
+[capture_tracy] device profiler CSV data rows: 259755 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t80b/opt/profiler/t80-a0/chunks/0-10/render.tracy
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+NCRISC-KERNEL              43739.8  4373.984       414.0      41.398    16951  NCRISC
+BRISC-KERNEL               41167.2  4116.715       395.9      39.590    13321  BRISC
+TRISC-KERNEL               36776.2  3677.619       113.5      11.355    10890  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu            25292.3  2529.232        78.8       7.884     3630  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load             8035.2   803.522        74.2       7.416     1210  NCRISC
+rd_l1_bulk                  7908.0   790.797        73.2       7.318    12452  NCRISC
+tile_mb_mask                4394.8   439.480        14.4       1.435     3630  TRISC_0,TRISC_1,TRISC_2
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-tracy-new-20260930-141732.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-abl-new  timeout=400s  worry=320s  ts=2026-09-30T14:18:12-0700
+cmd: T80_TREE=/localdev/smarton/gstt2-t80b bash /localdev/smarton/t80_scripts/remote_ab.sh n 1 3 4
+-----------------------------------------
+=== AB round=n a=1 21:18:12
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=40.6 p50_ms=39.9 min_ms=33.0 max_ms=57.7 n_views=30 warmup_s=18.7 out=/localdev/smarton/gstt2-t80b/tmp/t80-ab-n-a1
+STAGES n=30 head=0.002 project=8.683 tile_assign=8.928 sort=14.316 blend_setup=0.034 cull=0.007 blend=8.365 d2h=0.230 assemble=0.000 tail=0.002 | sum=40.567 view_total=40.568 resid_in_view=+0.001 avg_frame_ms=40.599 resid_vs_frame=+0.033
+=== AB round=n a=3 21:18:34
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=38.6 p50_ms=37.9 min_ms=31.5 max_ms=54.1 n_views=30 warmup_s=19.3 out=/localdev/smarton/gstt2-t80b/tmp/t80-ab-n-a3
+STAGES n=30 head=0.002 project=8.652 tile_assign=8.854 sort=14.182 blend_setup=0.025 cull=0.007 blend=6.610 d2h=0.202 assemble=0.000 tail=0.002 | sum=38.537 view_total=38.538 resid_in_view=+0.001 avg_frame_ms=38.565 resid_vs_frame=+0.028
+=== AB round=n a=4 21:18:57
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=37.6 p50_ms=37.0 min_ms=30.6 max_ms=53.1 n_views=30 warmup_s=18.3 out=/localdev/smarton/gstt2-t80b/tmp/t80-ab-n-a4
+STAGES n=30 head=0.002 project=8.653 tile_assign=8.858 sort=14.188 blend_setup=0.024 cull=0.006 blend=5.617 d2h=0.216 assemble=0.000 tail=0.002 | sum=37.567 view_total=37.568 resid_in_view=+0.001 avg_frame_ms=37.594 resid_vs_frame=+0.027
+=== end 21:19:18
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-abl-new-20260930-141811.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-ba-4  timeout=400s  worry=320s  ts=2026-09-30T14:19:31-0700
+cmd: bash /localdev/smarton/t80_scripts/remote_ba.sh 4
+-----------------------------------------
+=== BA round=4 base 21:19:31
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=48.8 p50_ms=48.4 min_ms=39.9 max_ms=65.7 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t80/tmp/t80-ba-4-base
+STAGES n=30 head=0.002 project=8.670 tile_assign=8.851 sort=14.185 blend_setup=0.025 cull=0.006 blend=16.842 d2h=0.228 assemble=0.000 tail=0.002 | sum=48.812 view_total=48.813 resid_in_view=+0.001 avg_frame_ms=48.842 resid_vs_frame=+0.031
+=== BA round=4 new 21:19:37
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.5 p50_ms=43.9 min_ms=36.1 max_ms=61.2 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-4-new
+STAGES n=30 head=0.002 project=8.675 tile_assign=8.892 sort=14.238 blend_setup=0.027 cull=0.007 blend=12.365 d2h=0.217 assemble=0.000 tail=0.002 | sum=44.425 view_total=44.426 resid_in_view=+0.001 avg_frame_ms=44.457 resid_vs_frame=+0.032
+=== BA round=4 new-riscdec 21:19:43
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.7 p50_ms=45.1 min_ms=37.4 max_ms=62.3 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-4-new-riscdec
+STAGES n=30 head=0.002 project=8.658 tile_assign=8.866 sort=14.180 blend_setup=0.023 cull=0.006 blend=13.684 d2h=0.217 assemble=0.000 tail=0.002 | sum=45.638 view_total=45.639 resid_in_view=+0.001 avg_frame_ms=45.666 resid_vs_frame=+0.028
+=== end 21:19:48
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-ba-4-20260930-141930.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t80-ba-5  timeout=400s  worry=320s  ts=2026-09-30T14:19:49-0700
+cmd: bash /localdev/smarton/t80_scripts/remote_ba.sh 5
+-----------------------------------------
+=== BA round=5 base 21:19:50
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.0 p50_ms=48.3 min_ms=40.0 max_ms=66.7 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t80/tmp/t80-ba-5-base
+STAGES n=30 head=0.002 project=8.661 tile_assign=8.884 sort=14.189 blend_setup=0.026 cull=0.006 blend=16.993 d2h=0.201 assemble=0.000 tail=0.002 | sum=48.964 view_total=48.965 resid_in_view=+0.001 avg_frame_ms=48.994 resid_vs_frame=+0.030
+=== BA round=5 new 21:19:55
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=44.4 p50_ms=43.8 min_ms=36.2 max_ms=61.1 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-5-new
+STAGES n=30 head=0.002 project=8.660 tile_assign=8.869 sort=14.189 blend_setup=0.023 cull=0.006 blend=12.385 d2h=0.224 assemble=0.000 tail=0.002 | sum=44.361 view_total=44.362 resid_in_view=+0.001 avg_frame_ms=44.389 resid_vs_frame=+0.028
+=== BA round=5 new-riscdec 21:20:00
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.7 p50_ms=45.2 min_ms=37.4 max_ms=62.3 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t80b/tmp/t80-ba-5-new-riscdec
+STAGES n=30 head=0.002 project=8.654 tile_assign=8.858 sort=14.164 blend_setup=0.023 cull=0.006 blend=13.714 d2h=0.223 assemble=0.000 tail=0.002 | sum=45.646 view_total=45.646 resid_in_view=+0.001 avg_frame_ms=45.673 resid_vs_frame=+0.028
+=== end 21:20:06
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t80/.ttw/logs/t80-ba-5-20260930-141949.log
