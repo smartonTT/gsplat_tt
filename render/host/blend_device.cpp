@@ -242,6 +242,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.
     if (const char* st = std::getenv("GSPLAT_TT_MB_STATS"); st != nullptr && st[0] == '1') {
         compute_defines["GSPLAT_TT_MB_STATS"] = "1";
+        if (const char* f = std::getenv("GSPLAT_TT_MB_STATS_INV_FLOOR"); f != nullptr && f[0] != '\0') {
+            compute_defines["GSPLAT_TT_MB_STATS_INV_FLOOR"] = std::string(f) + ".0f";
+        }
     }
     // iter 107: transmittance saturation early-out knobs (runtime via env, no
     // .so rebuild to sweep — they are kernel compile-defines resolved per python

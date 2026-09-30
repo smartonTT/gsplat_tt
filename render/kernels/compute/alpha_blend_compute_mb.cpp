@@ -397,8 +397,13 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
 // the host sets GSPLAT_TT_MB_STATS=1 (blend_device.cpp), so the perf path is
 // untouched. Pixel test mirrors blend_one_gaussian_math: pixel (c+0.5, r+0.5)
 // of microblock m (box origin ((m&3)*8, (m>>2)*4), 8 wide x 4 tall) is "live"
-// iff op*exp(min(power,0)) >= 1/255  <=>  min(power,0) >= -ln(255*op).
+// iff op*exp(min(power,0)) >= floor  <=>  min(power,0) >= -ln(op/floor);
+// floor = 1/GSPLAT_TT_MB_STATS_INV_FLOOR (default 255, the GPU 3DGS skip).
 #if defined(GSPLAT_TT_MB_STATS) && defined(TRISC_MATH)
+#ifndef GSPLAT_TT_MB_STATS_INV_FLOOR
+#define GSPLAT_TT_MB_STATS_INV_FLOOR 255.0f
+#endif
+constexpr float kStInvFloor = GSPLAT_TT_MB_STATS_INV_FLOOR;
 struct MbStats {
     uint32_t rec;        // records consumed (splat-tile pairs reaching blend)
     uint32_t rec_live;   // records with a non-zero cull mask
@@ -457,10 +462,10 @@ inline void st_record(const uint32_t* rec, uint32_t mask) {
         }
     }
     const float op = static_cast<float>(rec[6] & 0xffffu) * (1.0f / 65535.0f);
-    if (op * 255.0f < 1.0f) {
-        return;  // no pixel can reach 1/255
+    if (op * kStInvFloor < 1.0f) {
+        return;  // no pixel can reach floor
     }
-    const float thr = -st_ln(op * 255.0f);
+    const float thr = -st_ln(op * kStInvFloor);
     const float A = st_bits_f(rec[0]), B = st_bits_f(rec[1]), C = st_bits_f(rec[2]);
     const float mx = st_bits_f(rec[4]), my = st_bits_f(rec[5]);
     for (uint32_t m = 0; m < NUM_MB; ++m) {
