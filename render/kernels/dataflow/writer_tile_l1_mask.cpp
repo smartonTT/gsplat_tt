@@ -167,18 +167,20 @@ void kernel_main() {
                 cb_wait_front(CB_BUCKET, BULK_REC_SLOT);
             }
             const uint32_t slab = get_read_ptr(CB_BUCKET);
-            CULL_PZ("cw_patch_wr");
-            for (uint32_t base = 0; base < L_sub; base += COEFF_BATCH) {
-                const uint32_t n = (L_sub - base < COEFF_BATCH) ? (L_sub - base) : COEFF_BATCH;
-                cb_wait_front(CB_KEEP, 1);
-                auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
-                auto rec = reinterpret_cast<volatile uint32_t*>(slab + base * L1_SPLAT_BYTES);
-                for (uint32_t i = 0; i < n; ++i) {
-                    const uint32_t o = 64u * (i >> 5) + 2u * (i & 31u);
-                    const uint32_t lo = keep[o], hi = keep[o + 1u];
-                    rec[i * 8u + 3u] = (lo & 0xffffu) | (hi << 16);
+            {
+                CULL_PZ("cw_patch");
+                for (uint32_t base = 0; base < L_sub; base += COEFF_BATCH) {
+                    const uint32_t n = (L_sub - base < COEFF_BATCH) ? (L_sub - base) : COEFF_BATCH;
+                    cb_wait_front(CB_KEEP, 1);
+                    auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
+                    auto rec = reinterpret_cast<volatile uint32_t*>(slab + base * L1_SPLAT_BYTES);
+                    for (uint32_t i = 0; i < n; ++i) {
+                        const uint32_t o = 64u * (i >> 5) + 2u * (i & 31u);
+                        const uint32_t lo = keep[o], hi = keep[o + 1u];
+                        rec[i * 8u + 3u] = (lo & 0xffffu) | (hi << 16);
+                    }
+                    cb_pop_front(CB_KEEP, 1);
                 }
-                cb_pop_front(CB_KEEP, 1);
             }
             asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads it
             CULL_PZ("cw_wr");
