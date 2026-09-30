@@ -311,6 +311,7 @@ Ranked by expected gain per unit effort. Effort: **S** ≤1 day, **M** 2–4 day
 | **R16** | Kill the mid-sort host serialisation: move `host_bin_layout_from_hist` on-device (or overlap it with the previous view) and shrink the ~9–10 ms `publish` H2D | −5 to −12 ms | M | low–med | bit-identical |
 | | **Status (task #18, measured):** the host part was only ~2.4 ms and `publish` was device time (radix + a single-core directory kernel). Landed −6.5 ms/view on sort (layout rewrite, host-uploaded directory, emit reads the count histogram, batched count reads); host bridge now ~0.65 ms, at its floor. See `docs/sort-stage-split-2026-09-30.md`. | | | | |
 | **R11** | Adaptive radix bucket count in `sort_tile_depth` | −2 to −3 ms | S–M | low | bit-identical |
+| | **Status (task #26, measured, iter-159):** done. Key-range digits (1–4 passes), one fused histogram scan, ids-only last pass, u16 histograms in RISC local memory (L1 histograms only saved 0.4 ms: bucket read-after-write), 4-wide load-ahead. `publish_wait` 8.02 → 5.02 ms, frame 96.95 → 94.10 ms/view, Tracy `sort_tile_depth` 6.97 → 3.98 ms, byte-identical (yyzo-bh-07 p100a). | | | | |
 | **R12** | `Q = Φθᵀ` as `matmul_tiles` on the FPU + tilized θ operand | ~0 now; −10 to −20 ms after the pole flips to SFPU | L | med | refreeze golden |
 | **R13** | Fitted polynomial replacing `_sfpu_exp_21f_bf16_` | ~0 alone; prerequisite for R12 | S | low | refreeze golden |
 | **R14** | Whole-tile skip for negligible-contribution tiles | unknown; gated on E5 | M | low | lossy |
