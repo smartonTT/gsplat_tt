@@ -11,5 +11,5 @@ for k in 0 1; do
   d=$(find . -maxdepth 3 -type d -name t68-dump-k$k | head -1); echo "dump dir: $d"
   (cd $d && md5sum * | sort -k2) > /tmp/t68-md5-k$k.txt; echo "k=$k views: $(wc -l < /tmp/t68-md5-k$k.txt)"
 done
-diff /tmp/t68-md5-k0.txt /tmp/t68-md5-k1.txt > /dev/null && echo "ALL_VIEWS_IDENTICAL k0 vs k1" || { echo "VIEWS DIFFER"; diff /tmp/t68-md5-k0.txt /tmp/t68-md5-k1.txt | head; }
+[ "$(wc -l < /tmp/t68-md5-k1.txt)" -ge 30 ] && diff /tmp/t68-md5-k0.txt /tmp/t68-md5-k1.txt > /dev/null && echo "ALL_VIEWS_IDENTICAL k0 vs k1" || { echo "VIEWS DIFFER"; diff /tmp/t68-md5-k0.txt /tmp/t68-md5-k1.txt | head; }
 head -3 /tmp/t68-md5-k1.txt
