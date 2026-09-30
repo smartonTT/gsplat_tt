@@ -107,7 +107,7 @@ constexpr uint32_t DR_Y = 5 * 32;
 // exactly (same path as the R/G/B/T accumulators), so output is byte-identical.
 constexpr uint32_t DR_S = 6 * 32;
 constexpr uint32_t S_MX = 0, S_MY = 1, S_A = 2, S_B = 3, S_C = 4, S_OP = 5, S_FL = 6, S_CR = 7,
-                   S_CG = 8, S_CB = 9;
+                   S_CG = 8, S_CB = 9, S_INV = 10;
 #ifndef BLEND_COEF_DEST
 #define BLEND_COEF_DEST 0
 #endif
@@ -302,6 +302,49 @@ inline void blend_stage_coeffs(
     dst_reg[DR_S + S_CG] = Converter::as_float(cg_bits);
     dst_reg[DR_S + S_CB] = Converter::as_float(cb_bits);
 }
+
+#ifndef BLEND_SFPU_UNORM
+#define BLEND_SFPU_UNORM 0
+#endif
+#if BLEND_SFPU_UNORM
+// Task #80: UNORM16 op/colour decoded on the SFPU instead of the RISC. The
+// reference is fl((float)q * fl(1/65535)): q (< 2^16) loads with one SFPLOADI
+// (USHORT), converts exactly, and one fp32 multiply by the staged 1/65535 rounds
+// it (SFPMAD, nearest-even). Replaces ~22 RISC insns + 2 SFPLOADIs per value.
+// BLEND_SFPU_UNORM=2 is a check mode: stage the RISC decode as before, and if
+// the SFPU decode differs in any bit, poison microblock 0's R (visible in md5).
+inline sfpi::vFloat unorm16_sfpu(uint32_t q) {
+    return sfpi::int32_to_float(sfpi::vInt(static_cast<uint16_t>(q)), sfpi::RoundMode::NearestEven) *
+           sfpi::vFloat(sfpi::dst_reg[DR_S + S_INV]);
+}
+#if BLEND_SFPU_UNORM == 2
+inline void unorm16_sfpu_check(uint32_t q, uint32_t ref_bits) {
+    using namespace sfpi;
+    vInt got = reinterpret<vInt>(unorm16_sfpu(q));
+    v_if(got != vInt(ref_bits)) { dst_reg[DR_R] = 1.0e30f; }
+    v_endif;
+}
+#endif
+inline void blend_stage_coeffs_q(
+    uint32_t a_bits, uint32_t b_bits, uint32_t c_bits, uint32_t d_bits, uint32_t e_bits,
+    uint32_t w6, uint32_t w7) {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+    dst_reg[DR_S + S_MX] = Converter::as_float(d_bits);
+    dst_reg[DR_S + S_MY] = Converter::as_float(e_bits);
+    dst_reg[DR_S + S_A] = Converter::as_float(a_bits);
+    dst_reg[DR_S + S_B] = Converter::as_float(b_bits);
+    dst_reg[DR_S + S_C] = Converter::as_float(c_bits);
+    dst_reg[DR_S + S_OP] = unorm16_sfpu(w6 & 0xffffu);
+    dst_reg[DR_S + S_CR] = unorm16_sfpu(w6 >> 16);
+    dst_reg[DR_S + S_CG] = unorm16_sfpu(w7 & 0xffffu);
+    dst_reg[DR_S + S_CB] = unorm16_sfpu(w7 >> 16);
+}
+// Bits of fl(1/65535) (0x37800080), staged once per subchunk like the floor.
+inline void blend_stage_inv() {
+    sfpi::dst_reg[DR_S + S_INV] = ckernel::sfpu::Converter::as_float(0x37800080u);
+}
+#endif
 
 // The pixel floor is constant per launch; slot 6 survives the non-zeroing T
 // readback and the subchunks of a tile, and is rewritten per subchunk call.
@@ -685,6 +728,9 @@ inline void process_tile_l1_blend(
 #if BLEND_COEF_DEST && defined(BLEND_PIXEL_FLOOR)
     MATH((blend_stage_floor()));
 #endif
+#if BLEND_COEF_DEST && BLEND_SFPU_UNORM
+    MATH((blend_stage_inv()));
+#endif
 #if BLEND_ABL == 4
     for (uint32_t g = num_g; g < num_g; g++) {
 #else
@@ -715,12 +761,24 @@ inline void process_tile_l1_blend(
             // UNORM16 op/color -> fp32 bits, integer bit-exact (TRISC scalar code
             // has no FPU; the float form was 8 libgcc calls per record, task #39).
             const uint32_t w6 = rec[6], w7 = rec[7];
+#if BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1
+            // Decoded on the SFPU; the dispatch reads the staged values, not these.
+            const uint32_t op = 0u, cr = 0u, cg = 0u, cbv = 0u;
+            MATH((blend_stage_coeffs_q(rec[0], rec[1], rec[2], rec[4], rec[5], w6, w7)));
+#else
             const uint32_t op = dm_fp32::unorm16_to_f(w6 & 0xffffu);
             const uint32_t cr = dm_fp32::unorm16_to_f(w6 >> 16);
             const uint32_t cg = dm_fp32::unorm16_to_f(w7 & 0xffffu);
             const uint32_t cbv = dm_fp32::unorm16_to_f(w7 >> 16);
 #if BLEND_COEF_DEST
             MATH((blend_stage_coeffs(rec[0], rec[1], rec[2], rec[4], rec[5], op, cr, cg, cbv)));
+#if BLEND_SFPU_UNORM == 2
+            MATH((unorm16_sfpu_check(w6 & 0xffffu, op)));
+            MATH((unorm16_sfpu_check(w6 >> 16, cr)));
+            MATH((unorm16_sfpu_check(w7 & 0xffffu, cg)));
+            MATH((unorm16_sfpu_check(w7 >> 16, cbv)));
+#endif
+#endif
 #endif
 #if BLEND_USE_JUMP_WALK
             dispatch_blend_jump(mask);

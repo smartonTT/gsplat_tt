@@ -1,5 +1,5 @@
 #!/bin/bash
-# One interleaved before/after round <r>: base tree, change tree, change tree with the old walk.
+# One interleaved before/after round <r>: base tree, change tree, change tree with the RISC UNORM decode.
 set -u
 r=$1
 run() {  # <label> <tree> [env...]
@@ -10,5 +10,5 @@ run() {  # <label> <tree> [env...]
 }
 run base gstt2-t80 X=1
 run new gstt2-t80b X=1
-run new-oldwalk gstt2-t80b GSPLAT_TT_BLEND_JUMP_WALK=0
+run new-riscdec gstt2-t80b GSPLAT_TT_BLEND_SFPU_UNORM=0
 echo "=== end $(date +%T)"
