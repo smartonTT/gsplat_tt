@@ -63,6 +63,9 @@ namespace {
 
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
+// == render_config::kRecPageBytes / kRecsPerPage (buf_l1_recs + overflow region).
+constexpr uint32_t REC_PAGE_BYTES = 2048;
+constexpr uint32_t REC_PAGE_RECS = REC_PAGE_BYTES / 32u;
 // Mover 0 (BRISC) uses its own copy of every staging CB at this id offset
 // (allocated in sort_device.cpp build_program_bin); mover 1 uses the base ids.
 constexpr uint32_t MOVER0_CB_OFFSET = 16;
@@ -206,13 +209,13 @@ void kernel_main() {
     // T-C: per-core histogram of [page_start, pg_mid) (same interleaved layout).
     const auto h0_rows_acc = TensorAccessor(recbase_args, h0_rows_addr, PAGE_BYTES);
     (void)tile_recs_acc;
-    // PACK2: two 32B splats per 64B page (slot s => page s/2, half s&1 at +32*half).
-    // Accessor page = 64B; sub-64B page size is unreliable on BH.
-    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  64u);
+    // 32B record slots, REC_PAGE_RECS per REC_PAGE_BYTES DRAM page (task #86;
+    // was PACK2, two per 64B page): slot s => page s/64, byte (s%64)*32.
+    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  REC_PAGE_BYTES);
     const auto l1_base_acc  = TensorAccessor(l1_base_args,  l1_base_addr,  PAGE_BYTES);
-    // iter-138: overflow region is the same PACK2 64B-page layout as buf_l1_recs.
+    // iter-138: overflow region uses the same page layout as buf_l1_recs.
     const bool l1_ov_enabled = (l1_ov_addr != 0u) && (l1_ov_base_addr != 0u);
-    const auto l1_ov_acc      = TensorAccessor(l1_ov_args,      l1_ov_addr,      64u);
+    const auto l1_ov_acc      = TensorAccessor(l1_ov_args,      l1_ov_addr,      REC_PAGE_BYTES);
     const auto l1_ov_base_acc = TensorAccessor(l1_ov_base_args, l1_ov_base_addr, PAGE_BYTES);
 
     // CB layout (declared in sort_device.cpp binning program):
@@ -455,8 +458,8 @@ void kernel_main() {
             // Skip the 32B scatter for over-cap overflow records (gather fallback).
             if (brec_l1_slot[b] == 0xFFFFFFFFu) continue;
             const uint32_t slot = brec_l1_slot[b];
-            const uint32_t page = slot >> 1;
-            const uint32_t half_off = (slot & 1u) * 32u;
+            const uint32_t page = slot / REC_PAGE_RECS;
+            const uint32_t half_off = (slot % REC_PAGE_RECS) * 32u;
             if (brec_is_ov[b]) {
                 noc_async_write(l1_scratch + b * 32u,
                                 get_noc_addr(page, l1_ov_acc) + half_off,
