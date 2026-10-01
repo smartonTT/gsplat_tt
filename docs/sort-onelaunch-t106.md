@@ -1,13 +1,16 @@
 # Task #106 — lever 1: one-launch device sort (`GSPLAT_TT_SORT_ONELAUNCH`)
 
 Code only, no device run yet. Default off; with the knob unset the build, the
-programs, the runtime args and the frame are the same as 72cd487.
+programs, the runtime args and the frame are the same as the base (c5fed7d,
+which includes #100's emit rewrite 2e72691).
 
 ## What it replaces
 
-At 72cd487 (32.6 ms/view, sort stage 14.2 ms) the sort stage is: count launch
-→ host reads the per-(core, tile) histogram and lays out pages (~1.3 ms, #85)
-→ upload → emit launch (8.8 ms, DRAM bound, #98) → radix launch → publish.
+At the tip (2e72691, #100: 29.59 ms/view, 33.8 FPS) the sort stage is
+10.68 ms: count launch → host reads the per-(core, tile) histogram and lays
+out pages (~1.3 ms, #85) → upload → emit launch (5.29 ms) → radix launch →
+publish. Everything but the emit is 5.39 ms. (#93 ranked this lever at
+72cd487: 32.6 ms/view, sort 14.2 ms, emit 8.8 ms.)
 
 With the knob on, `sort_bin_onelaunch.cpp` does it in **one launch** (both
 data movers of all 110 cores):
@@ -27,6 +30,10 @@ data movers of all 110 cores):
    goes to slot `tile * 32768 + cursor` of a fixed-capacity bucket
    (1 MiB per tile, 1 GiB for 1024 tiles, 2 KB pages). Excess records are
    dropped and the host fails the frame, like the legacy MAX_TILE_ENTRIES check.
+   With `GSPLAT_TT_EMIT_PUBOC=1` (#100's default) the record's op/color/depth
+   words are copied from the gather-published blendrec[10..12], as in #100's
+   emit; no depth reads. #100's PB batching and RING write coalescing are not
+   ported (follow-up).
 
 The host then reads only the 8 KB totals rows, builds `bucket_meta`, the LPT
 (from the padded totals, so the blend schedule is unchanged), the tile ranges
@@ -68,30 +75,35 @@ this against a model of the legacy layout.
 
 ## Expected savings
 
-The upper bound is ~7 ms/view (#93): 32.6 → ~25.6 ms/view, 30.7 → ~39 FPS.
+#93's upper bound was ~7 ms/view at 72cd487. #100 has since cut the legacy
+emit from 8.8 to 5.29 ms, so less is left at the tip:
 
-#24 measured the same one-launch shape (with atomics) at **6.6-6.8 ms/view**
-for the sort stage, against 15.6 ms legacy. Our version adds two 110-core
-barriers and a prefix pass of one 64 B page per core (tens of µs).
-
-The materialize now also sorts in-budget tiles, which the radix launch used
-to do. So part of the radix cost moves into the blend chain, and big tiles
-(over 16384 records) are sorted once per subchunk. Realistic net:
-**-4 to -7 ms/view**, to be measured.
+- #24 measured the same one-launch shape (count, bases, emit into 1 MiB
+  buckets; atomics for the bases, no PUBOC) at 6.2-6.4 ms per launch plus
+  0.33 ms host. Ours replaces the atomics with two barriers and a
+  one-page-per-core prefix (tens of µs) and copies the published words
+  (PUBOC). Expected sort stage: **~5-6 ms vs 10.68 ms**.
+- Moved into the materialize: sorting in-budget tiles (the radix launch's
+  job), and big tiles (over 16384 records) sorted once per subchunk item.
+  Estimate +0.5-1.5 ms.
+- **Net: -3 to -5 ms/view** (29.6 → ~25-26.5 ms/view, ~38-40 FPS), to be
+  measured. Porting RING into this emit is worth up to ~1.2 ms more (#98's
+  write-coalescing bound).
 
 ## Local checks (Mac, no device)
 
-- `tests/unit/test_sort_onelaunch.cpp`: PASS on 4 random frames (1.2 M
+- `CXXFLAGS=-Irender/host bash tests/unit/run_cpp.sh
+  tests/unit/test_sort_onelaunch.cpp`: PASS on 4 random frames (1.2 M
   pairs, odd tile counts, more cores than row pages, forced drops), plus
   check_prefix corruption detection and 20×2 worklist rounds. Two mutations
   fail it: NCRISC's cursor without BRISC's count, and the legacy worklist.
 - Existing: `test_sort_tail_dual_mover` 60/60, `test_sort_bin_dual_mover` 0
   mismatches, `test_sort_radix_tile` 0 fails, `test_gather_dual_mover` 0
   mismatches.
-- `tests/syntax_stub/check.sh`: all ok, including `sort_device.cpp`,
-  `sort_bin_onelaunch.cpp`, and the materialize with and without
-  `SORT_ONELAUNCH`.
-- `pytest tests/spec`: see the hand-off.
+- `tests/syntax_stub/check.sh`: 21/21 ok, including `sort_device.cpp`,
+  `sort_bin_onelaunch.cpp` (with and without `EMIT_PUBOC`), and the
+  materialize with and without `SORT_ONELAUNCH`.
+- `python3 -m pytest tests/spec -q`: 36 passed, 2 skipped, 2 xfailed.
 
 ## Device A/B plan (follow-up task)
 
@@ -106,7 +118,7 @@ All steps on yyzo-bh-07 p100a, inside `ttp lock p100 -- ...`, with the
 2. **Hang check.** 3 consecutive 30-view runs with the knob on.
 3. **A/B.** 3 interleaved rounds of knob 0/1, 30 bicycle views each. Report
    ms/view, FPS, and the per-stage sort and blend times. Watch the
-   `[SORT] stage=ONELAUNCH ... onelaunch=` time (expect ~6-7 ms) and the blend
+   `[SORT] stage=ONELAUNCH ... onelaunch=` time (expect ~5-6 ms) and the blend
    stage (the materialize now sorts in-budget tiles).
 4. **Attribution.** One Tracy capture (docs/gaps-t85/remote_tracy.sh):
    - The count, emit, radix and publish programs should be gone.
@@ -127,3 +139,11 @@ Likely first-run problems:
   (`noc_async_write_barrier` placement).
 - Wrong pixels with check OK: the materialize branch (bucket page math
   `tile * 512`, or a big-path chunk offset).
+
+## Follow-ups after the A/B
+
+- Port #100's PB batching and RING write coalescing into the one-launch
+  emit (up to ~1.2 ms, #98). RING needs per-tile L1 staging, about 256 KB per
+  mover, so it is tight next to the count pass's page cache.
+- If big tiles set the materialize pace, cache a per-tile sorted index in
+  DRAM from the first subchunk item instead of re-sorting per item.
