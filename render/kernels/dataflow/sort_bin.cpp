@@ -79,6 +79,20 @@ constexpr uint32_t MOVER0_CB_OFFSET = 16;
 #ifndef EMIT_ABLATE
 #define EMIT_ABLATE 0u
 #endif
+// Task #100 emit knobs (host env GSPLAT_TT_EMIT_PB / _RING / _PUBOC; see the
+// scatter sub-pass 2 below). EMIT_RING_TILES: tile capacity of the ring CB.
+#ifndef EMIT_PB
+#define EMIT_PB 1u
+#endif
+#ifndef EMIT_RING
+#define EMIT_RING 0u
+#endif
+#ifndef EMIT_RING_TILES
+#define EMIT_RING_TILES 1024u
+#endif
+#ifndef EMIT_PUBOC
+#define EMIT_PUBOC 0u
+#endif
 
 // Bit-exact IEEE 754 fp32→fp16 (round-to-nearest-even, no flush-to-zero).
 // Used for packing the 32B L1 record (M0, GSPLAT_TT_L1_RECORD).
@@ -246,6 +260,7 @@ void kernel_main() {
     const uint32_t CB_L1SCRATCH = 12 + cbo; // 32B staging buffer for pack → noc write
     const uint32_t CB_PACKOC = 13 + cbo;    // iter 132: 64B-per-gaussian blendrec page write-back ring (publishes packed op/color)
     const uint32_t CB_L1OVBASE = 14 + cbo;  // iter-138: per-(core,tile) overflow slot base row (sentinel = non-overflow tile)
+    const uint32_t CB_RING = 15 + cbo;      // task #100: per-tile record staging runs + start cursors
 
     const uint32_t gid_l1  = get_write_ptr(CB_GID);
     const uint32_t tid_l1  = get_write_ptr(CB_TID);
@@ -434,34 +449,47 @@ void kernel_main() {
 
     int32_t dep_cached_page = -1;
 
-    // iter 114 (sort Stage 2): cache blendrec[g] ONCE per gaussian. Pairs are
-    // gaussian-major, so consecutive kept pairs share the same g; the old fill
-    // re-read the same 64B blendrec page once PER PAIR (the "random per-pair
-    // blendrec gather" the Stage-2 plan calls out — a K-tile gaussian re-read
-    // its record K times). We now read blendrec[g] into ONE L1 cache page when g
-    // changes and pack every pair's 32B record straight from that cache. The
-    // bytes written to buf_l1_recs are bit-identical; only the redundant DRAM
-    // reads are removed (blendrec read once per gaussian, not once per pair).
-    // The packed 32B records still stage into a per-batch region of l1_scratch
-    // and flush to buf_l1_recs under ONE write barrier per REC_BATCH.
+    // ── Sub-pass 2 (task #100 rewrite) ──────────────────────────────────
+    // Counting-sort the kept pairs into L1 (key = depth, id = g) and emit each
+    // pair's 32B record. Knobs (host env, see env_config.h):
+    //   EMIT_PB     pair pages per read batch. 1: one page per barrier and its
+    //               blendrec reads under a second barrier (the pre-#100 loop).
+    //               >1: batch k+1's pair pages and blendrec reads are in flight
+    //               while batch k packs (3 pair buffers, 2 blendrec rings).
+    //   EMIT_RING   R records per per-tile L1 staging run. Run slots are aligned
+    //               to absolute record slots (slot & (R-1)), so a full run is one
+    //               R*32 B write inside one 2 KB record page; partial runs at a
+    //               mover's first/last slot of a tile are clipped to its own
+    //               slots. 0: one 32 B write per record (pre-#100).
+    //   EMIT_PUBOC  the gather published op/color UNORM16 (blendrec[10], [11])
+    //               and the depth key ([12]): no pack, no 16 B write-back, no
+    //               depth pages.
+    // Pairs are gaussian-major, so consecutive kept pairs share g; blendrec[g]
+    // is read once per run of equal g (prefetched per batch) and the
+    // per-gaussian words are held in registers. The bytes written to every
+    // output are identical for every knob setting.
+    constexpr uint32_t PB = EMIT_PB;
+    constexpr bool PIPE = PB > 1u;
+    constexpr uint32_t NPBUF = PIPE ? 3u : 1u;
+    constexpr uint32_t BATCH_ELEMS = PB * ELEMS_PER_PAGE;
+    constexpr uint32_t R = EMIT_RING;
+    constexpr bool PUBOC = EMIT_PUBOC != 0u;
+    static_assert(PB >= 1u && PB <= 16u, "EMIT_PB in 1..16");
+    static_assert(R == 0u || ((R & (R - 1u)) == 0u && R <= 16u && REC_PAGE_RECS % R == 0u),
+                  "EMIT_RING: power of two dividing the record page");
+    const bool ring_on = (R != 0u) && num_tiles <= EMIT_RING_TILES;
+
     constexpr uint32_t REC_BATCH = 16u;
-    // T-B(2): CB_REC is a 16-page ring. Each pair page names at most 16 distinct
-    // gaussians, so all of a page's blendrec reads are issued up front under one
-    // barrier and consumed in order; cachep walks the ring.
-    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC);  // 16 x 64B blendrec ring
+    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC);  // PB*16 x 64B blendrec ring(s)
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
     int32_t blendrec_cached_g = -1;
     uint32_t brec_l1_slot[REC_BATCH];  // abs slot (in buf_l1_recs OR overflow region; 0xFFFFFFFF = drop)
     uint32_t brec_is_ov[REC_BATCH];    // iter-138: 1 ⇒ slot is in the overflow region, 0 ⇒ buf_l1_recs
     uint32_t nbrec = 0;
-    // The 32B record is packed at enqueue time (blendrec already cached), so the
-    // flush only issues the pre-packed writes under one barrier — no per-record
-    // blendrec read barrier here. iter-138: each batched entry targets either the
-    // per-tile buf_l1_recs bucket (in-budget tiles) or the compact overflow region
-    // (overflow tiles within the materialize L1 cap); both are PACK2 64B pages, so
-    // the 32B write to (slot>>1) page + (slot&1)*32 byte is identical bar the
-    // accessor. The 32B half-write at a 16B-aligned offset is within the DRAM write
-    // granule (same as the proven buf_l1_recs scatter).
+    // EMIT_RING=0: records stage in l1_scratch and flush REC_BATCH 32B writes
+    // at a time. Each targets either the per-tile buf_l1_recs bucket (in-budget
+    // tiles) or the compact overflow region (overflow tiles within the
+    // materialize L1 cap); both use the 2 KB record page layout.
     auto flush_recs = [&]() {
         if (nbrec == 0) return;
         if constexpr ((EMIT_ABLATE & 1u) != 0u) { nbrec = 0; return; }
@@ -485,23 +513,36 @@ void kernel_main() {
         nbrec = 0;
     };
 
-    // iter 132: publish the per-gaussian packed op/color words (inv_opr, inv_cgb)
-    // into blendrec[10],[11] so the depth-sorted materialize overflow gather COPIES
-    // them (it already reads the 64B blendrec page) instead of re-deriving 4
-    // fp32->UNORM16 conversions per overflow record.
-    //
-    // WRITE GRANULARITY (measured): sub-page 8B/4B splats to byte-offset 40 of a
-    // blendrec page did NOT land on this BH (materialize read 0 -> 25.5 dB) — 8B at
-    // a non-16B-aligned offset is below the DRAM write granule. A full-64B page
-    // write-back DOES land (mirrors gather), but costs +15.4 ms on NCRISC-KERNEL
-    // (Tracy) which couples ~1:1 into BRISC-FW via handoff stalls and exactly
-    // cancels the proj_scatter revert. So publish the MINIMAL 16B-aligned chunk that
-    // covers words 10,11: a 16B write at byte-offset 32 = words [8,9,10,11]. 16B is
-    // the natural DRAM granule (16-aligned offset + 16B size) so it lands. Words 8,9
-    // are re-written with their EXACT original gather values (cb, depth/0), so a
-    // gaussian processed by two cores at a pair-page boundary writes byte-identical
-    // 16B — no clobber, fully idempotent. ~1/4 the bytes + copy of the 64B version.
-    // Staged in a ring (one write barrier per batch), mirroring flush_recs.
+    // EMIT_RING: per-tile staging runs at ring_l1 + (t*R + slot%R)*32, and each
+    // tile's first local cursor (0, or mover 0's count for mover 1 of the split)
+    // in startp[t]: a run never writes below this mover's first slot.
+    const uint32_t ring_l1 = (R != 0u) ? get_write_ptr(CB_RING) : 0u;
+    auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + EMIT_RING_TILES * R * 32u);
+    if (ring_on) {
+        for (uint32_t t = 0; t < num_tiles; t++) startp[t] = curp[t];
+    }
+    auto flush_run = [&](uint32_t t, uint32_t last, uint32_t ovb) {
+        if constexpr ((EMIT_ABLATE & 1u) != 0u) { return; }
+        const uint32_t first_ok = ((ovb != 0xFFFFFFFFu) ? ovb : l1basep[t]) + startp[t];
+        const uint32_t grp = last & ~(R - 1u);
+        const uint32_t s0 = grp > first_ok ? grp : first_ok;
+        const uint32_t src = ring_l1 + (t * R + (s0 & (R - 1u))) * 32u;
+        const uint32_t off = (s0 % REC_PAGE_RECS) * 32u;
+        const uint32_t bytes = (last + 1u - s0) * 32u;
+        if (ovb != 0xFFFFFFFFu) {
+            noc_async_write(src, get_noc_addr(s0 / REC_PAGE_RECS, l1_ov_acc) + off, bytes);
+        } else {
+            noc_async_write(src, get_noc_addr(s0 / REC_PAGE_RECS, l1_recs_acc) + off, bytes);
+        }
+    };
+
+    // iter 132 (EMIT_PUBOC=0): publish the per-gaussian packed op/color words
+    // (inv_opr, inv_cgb) into blendrec[10],[11] so the depth-sorted materialize
+    // overflow gather COPIES them. 16B write at byte-offset 32 = words
+    // [8,9,10,11] (16B is the DRAM write granule; 8B/4B splats did not land);
+    // words 8,9 are re-written with their original gather values, so a gaussian
+    // processed by two cores writes byte-identical 16B. Staged in a ring (one
+    // flush per batch), mirroring flush_recs.
     constexpr uint32_t PACKOC_BATCH = 16u;
     constexpr uint32_t PACKOC_ENT_W = 4u;   // 16B chunk = 4 u32 (words 8,9,10,11)
     const uint32_t packoc_l1 = get_write_ptr(CB_PACKOC);
@@ -520,179 +561,147 @@ void kernel_main() {
         n_packoc = 0;
     };
 
-    // Pack the 32B PACK2 record. Covariance FULL fp32 — precision-critical (the
-    // blend recomputes the conic via det = a*c - b*b, which loses too much to
-    // fp16 when a,c are large, ~10000s px^2 => only ~47 dB). Mean is TILE-LOCAL
-    // fp32 (sub-px center); opacity/color are [0,1] => UNORM16 (~30x tighter than
-    // fp16, the op/color precision wall).
-    // 64B blendrec (fp32 words): 0=cov_a 1=cov_b 2=cov_c 3=mx 4=my 5=op
-    //                            6=cr    7=cg    8=cb    9=depth_key(u32)
-    // 32B layout (M0): [0]fp32 cov_a [1]fp32 cov_b [2]fp32 cov_c [3]u32 depth_key
-    //   [4]fp32 mx_local [5]fp32 my_local [6]unorm16 op,r [7]unorm16 g,b
-    //
-    // iter-128: hoist the per-gaussian-INVARIANT packing out of the per-pair
-    // loop. cov(0,1,2), depth_key(3), and the op/color UNORM16 words(6,7) are
-    // functions of the GAUSSIAN only — identical for every one of the K tiles a
-    // gaussian touches — yet the old pack recomputed the four UNORM conversions
-    // (float multiplies) and re-read the cached blendrec for EVERY pair. Measured
-    // (iter-128 ablation, 30-view makespan): pack_rec was ~27 ms/view = 71 % of
-    // sort_bucket_emit (the 32B scatter writes were only ~1.6 ms — the scattered-
-    // DRAM-write premise was refuted). Only the tile-local mean (words 4,5) varies
-    // per pair, so we compute the invariant words ONCE per gaussian (when blendrec
-    // is read) into registers, and per pair only subtract the tile origin from the
-    // cached fp32 mean. The bytes written to buf_l1_recs are BIT-IDENTICAL.
+    // 32B record (M0): [0..2] fp32 cov a,b,c (full fp32: the blend's det
+    // a*c - b*b needs it) [3] u32 depth key [4,5] fp32 tile-local mean x,y
+    // [6] unorm16 op,r [7] unorm16 g,b. 64B blendrec (fp32 words): 0..2 cov,
+    // 3,4 mean, 5 op, 6..8 color, 9 zero, 10,11 packed op/color, 12 depth key
+    // (10..12 only with EMIT_PUBOC from the gather; otherwise 10,11 from the
+    // write-back above).
+    // iter-128: everything but the tile-local mean is per GAUSSIAN and is held
+    // in registers (inv_*); per pair only the tile origin is subtracted.
     uint32_t inv_cov0 = 0, inv_cov1 = 0, inv_cov2 = 0, inv_depth = 0,
              inv_opr = 0, inv_cgb = 0;
     float inv_mx = 0.0f, inv_my = 0.0f;
     uint32_t inv_mx_bits = 0, inv_my_bits = 0;
+    // Tile-local mean y per gaussian: its pairs walk its tile rectangle row by
+    // row, so my only changes with the tile row.
+    uint32_t c_ty = 0xFFFFFFFFu, c_my_bits = 0;
     auto pack_invariants = [&](uint32_t depth_key) {
         if constexpr ((EMIT_ABLATE & 4u) != 0u) { inv_depth = depth_key; return; }
-        inv_cov0 = cachep[0];  // fp32 cov_a (exact: no fp16 det cancellation)
-        inv_cov1 = cachep[1];  // fp32 cov_b
-        inv_cov2 = cachep[2];  // fp32 cov_c
+        inv_cov0 = cachep[0];
+        inv_cov1 = cachep[1];
+        inv_cov2 = cachep[2];
         inv_depth = depth_key;
         inv_mx_bits = cachep[3];
         inv_my_bits = cachep[4];
         __builtin_memcpy(&inv_mx, &inv_mx_bits, 4);
         __builtin_memcpy(&inv_my, &inv_my_bits, 4);
-        // iter 132: compute the op/color UNORM16 pack ONCE per gaussian, here on
-        // the NCRISC side (gather now writes raw fp32 op/cr/cg/cb at words 5..8,
-        // keeping the pack off the BRISC proj_scatter long pole). The two packed
-        // words feed this core's in-budget bucket record AND are published into
-        // blendrec[10],[11] (publish_packoc) so the depth-sorted materialize
-        // overflow gather COPIES them instead of re-packing. Byte-identical to
-        // the iter-131 birth pack (same fp32 inputs, same rounding formula).
-        //
-        // T-B(3): NCRISC has no FPU, so the float form below costs ~20 libgcc
-        // soft-float calls per gaussian. sort_bin_fp32::unorm16 computes the
-        // same bits with integer ops (exhaustively verified); NaN keeps the
-        // float path.
-        auto to_unorm = [](uint32_t bits) -> uint32_t {
-            uint32_t u;
-            if (sort_bin_fp32::unorm16(bits, &u)) return u;
-            float v;
-            __builtin_memcpy(&v, &bits, 4);
-            if (v <= 0.0f) return 0u;
-            if (v >= 1.0f) return 65535u;
-            return static_cast<uint32_t>(v * 65535.0f + 0.5f);
-        };
-        inv_opr = (to_unorm(cachep[5]) | (to_unorm(cachep[6]) << 16));
-        inv_cgb = (to_unorm(cachep[7]) | (to_unorm(cachep[8]) << 16));
+        c_ty = 0xFFFFFFFFu;
+        if constexpr (PUBOC) {
+            inv_opr = cachep[10];
+            inv_cgb = cachep[11];
+        } else {
+            // T-B(3): integer UNORM16 (bit-exact; NaN keeps the float path).
+            inv_opr = sort_bin_fp32::to_unorm16(cachep[5]) |
+                      (sort_bin_fp32::to_unorm16(cachep[6]) << 16);
+            inv_cgb = sort_bin_fp32::to_unorm16(cachep[7]) |
+                      (sort_bin_fp32::to_unorm16(cachep[8]) << 16);
+        }
     };
-    auto pack_rec = [&](uint32_t b, uint32_t tt) {
-        if constexpr ((EMIT_ABLATE & 4u) != 0u) { (void)b; (void)tt; return; }
-        // Tile-local mean: the blend reader reconstructs absolute via
-        // mean = local + tile_origin. Only this is per-pair (per-tile) work.
-        // tx = tt % l1_tiles_x, ty = tt / l1_tiles_x — soft-divmod replaced by a
-        // shift/mask on the power-of-two grid (bit-identical; see hoist above).
+    auto pack_rec = [&](volatile uint32_t* p32, uint32_t tt) {
+        if constexpr ((EMIT_ABLATE & 4u) != 0u) { (void)p32; (void)tt; return; }
+        // tx = tt % l1_tiles_x, ty = tt / l1_tiles_x (shift/mask on a
+        // power-of-two grid). Integer fl(mean - origin) (bit-exact); float
+        // only outside sort_bin_fp32::sub_int's range.
         const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % l1_tiles_x);
         const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / l1_tiles_x);
-        // T-B(3): integer fl(mean - origin) (bit-exact); float path only
-        // outside sort_bin_fp32::sub_int's range (|mean| < 2^-17 or >= 2^24).
-        uint32_t mx_bits, my_bits;
+        uint32_t mx_bits;
         if (!sort_bin_fp32::sub_int(inv_mx_bits, txi * L1_TILE_SIZE, &mx_bits)) {
             const float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
             __builtin_memcpy(&mx_bits, &mx, 4);
         }
-        if (!sort_bin_fp32::sub_int(inv_my_bits, tyi * L1_TILE_SIZE, &my_bits)) {
-            const float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
-            __builtin_memcpy(&my_bits, &my, 4);
+        if (tyi != c_ty) {
+            c_ty = tyi;
+            if (!sort_bin_fp32::sub_int(inv_my_bits, tyi * L1_TILE_SIZE, &c_my_bits)) {
+                const float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
+                __builtin_memcpy(&c_my_bits, &my, 4);
+            }
         }
-        volatile uint32_t* p32 =
-            reinterpret_cast<volatile uint32_t*>(l1_scratch + b * 32u);
         p32[0] = inv_cov0;
         p32[1] = inv_cov1;
         p32[2] = inv_cov2;
         p32[3] = inv_depth;
-        p32[4] = mx_bits;  // fp32 tile-local mean x (sub-px center precision)
-        p32[5] = my_bits;  // fp32 tile-local mean y
+        p32[4] = mx_bits;
+        p32[5] = c_my_bits;
         p32[6] = inv_opr;
         p32[7] = inv_cgb;
     };
 
-    // Sub-pass 2: counting-sort kept pairs into L1, grouped by tile (gaussian-
-    // major within each tile). key = depth_bits[g], id = g.
-    for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
-        noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
-        noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
-        noc_async_read_barrier();
-        // T-B(2): prefetch this page's blendrec pages. The scan uses the same
-        // "g differs from the previous kept g" test as the consume loop below,
-        // so slot k holds exactly the page the old code read at its k-th miss.
-        if constexpr ((EMIT_ABLATE & 8u) == 0u) {
-            int32_t prev_g = blendrec_cached_g;
-            uint32_t n_pf = 0;
-            for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-                if (pg * ELEMS_PER_PAGE + j >= P) break;
-                if (keepp[j] == 0) continue;
-                const int32_t gj = gidp[j];
-                if (gj != prev_g) {
-                    noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), blendrec_acc),
-                                   rec_cache_l1 + n_pf * PAGE_BYTES, PAGE_BYTES);
-                    n_pf++;
-                    prev_g = gj;
-                }
-            }
-            if (n_pf != 0) noc_async_read_barrier();
+    // Pair-page staging: buffer i of NPBUF at {gid,tid,keep}_l1 + i*PB*64.
+    auto issue_pairs = [&](uint32_t pg0, uint32_t nb, uint32_t buf) {
+        const uint32_t o = buf * PB * PAGE_BYTES;
+        for (uint32_t b = 0; b < nb; b++) {
+            noc_async_read(get_noc_addr(pg0 + b, gids_acc), gid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg0 + b, tids_acc), tid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg0 + b, keep_acc), keep_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
         }
-        if constexpr ((EMIT_ABLATE & 32u) != 0u) continue;
-        uint32_t rec_slot = 0;
-        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-            const uint32_t p = pg * ELEMS_PER_PAGE + j;
-            if (p >= P) break;
-            if (keepp[j] == 0) continue;
-            const uint32_t g = static_cast<uint32_t>(gidp[j]);
-            const uint32_t t = static_cast<uint32_t>(tidp[j]);
-            const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
-            if (dpg != dep_cached_page) {
-                if constexpr ((EMIT_ABLATE & 16u) == 0u) {
-                    noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
-                                   dep_l1, PAGE_BYTES);
-                    noc_async_read_barrier();
-                }
-                dep_cached_page = dpg;
+    };
+    // Read the blendrec page of every run of equal kept g in the batch into
+    // ring `ring` (slot k = the k-th g change, the same test the pack loop
+    // uses). scan_g carries the last kept g across batches.
+    int32_t scan_g = -1;
+    auto issue_brec = [&](uint32_t pg0, uint32_t nb, uint32_t buf, uint32_t ring) -> uint32_t {
+        if constexpr ((EMIT_ABLATE & 8u) != 0u) { return 0u; }
+        const uint32_t e0 = buf * BATCH_ELEMS;
+        const uint32_t dst0 = rec_cache_l1 + ring * BATCH_ELEMS * PAGE_BYTES;
+        uint32_t n_pf = 0;
+        const uint32_t n_el = nb * ELEMS_PER_PAGE;
+        const uint32_t p0 = pg0 * ELEMS_PER_PAGE;
+        for (uint32_t j = 0; j < n_el; j++) {
+            if (p0 + j >= P) break;
+            if (keepp[e0 + j] == 0) continue;
+            const int32_t gj = gidp[e0 + j];
+            if (gj != scan_g) {
+                noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), blendrec_acc),
+                               dst0 + n_pf * PAGE_BYTES, PAGE_BYTES);
+                n_pf++;
+                scan_g = gj;
             }
-            const uint32_t key = depp[g % ELEMS_PER_PAGE];
-            // This pair's per-tile cursor and bases, each loaded from L1 once
-            // (volatile: every use was a separate load, three of curp[t]).
-            const uint32_t ct = curp[t];
-            const uint32_t li = offp[t] + ct;
-            const uint32_t ovb = l1_ov_enabled ? ov_basep[t] : 0xFFFFFFFFu;
-            const uint32_t lbase = l1basep[t];
-            // Scatter the full record to its per-tile bucket slot. DENSE layout:
-            // tile t's records occupy slots [t*FIT, ...); this core's k-th kept
-            // pair for tile t goes to l1basep[t] + curp[t] (l1basep[t] =
-            // t*FIT + prefix of cores < this core). Each (core,tile) region is
-            // disjoint (the "[tile][core][slot]" address partitioning), so cores
-            // never share a slot — no race, no atomics.
-            //
-            // Stage 2: blendrec[g] is read ONCE per gaussian into rec_cache_l1
-            // (consecutive pairs share g), then every pair's 32B record is packed
-            // straight from that cache — no random per-pair re-read.
+        }
+        return n_pf;
+    };
+
+    auto process_batch = [&](uint32_t pg0, uint32_t nb, uint32_t buf, uint32_t ring) {
+        const uint32_t e0 = buf * BATCH_ELEMS;
+        const uint32_t ring0 = rec_cache_l1 + ring * BATCH_ELEMS * PAGE_BYTES;
+        const uint32_t n_el = nb * ELEMS_PER_PAGE;
+        const uint32_t p0 = pg0 * ELEMS_PER_PAGE;
+        uint32_t rec_slot = 0;
+        for (uint32_t j = 0; j < n_el; j++) {
+            if (p0 + j >= P) break;
+            if (keepp[e0 + j] == 0) continue;
+            const uint32_t g = static_cast<uint32_t>(gidp[e0 + j]);
+            const uint32_t t = static_cast<uint32_t>(tidp[e0 + j]);
             if (static_cast<int32_t>(g) != blendrec_cached_g) {
-                cachep = reinterpret_cast<volatile uint32_t*>(
-                    rec_cache_l1 + rec_slot * PAGE_BYTES);  // prefetched above
+                cachep = reinterpret_cast<volatile uint32_t*>(ring0 + rec_slot * PAGE_BYTES);
                 rec_slot++;
                 blendrec_cached_g = static_cast<int32_t>(g);
-                // key (= depp[g % 16]) is the GAUSSIAN's depth — invariant across
-                // its pairs — so the full invariant prefix is computed once here.
+                uint32_t key;
+                if constexpr (PUBOC) {
+                    key = cachep[12];
+                } else {
+                    // The depth key is the GAUSSIAN's: one page per 16 g.
+                    const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
+                    if (dpg != dep_cached_page) {
+                        if constexpr ((EMIT_ABLATE & 16u) == 0u) {
+                            noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
+                                           dep_l1, PAGE_BYTES);
+                            noc_async_read_barrier();
+                        }
+                        dep_cached_page = dpg;
+                    }
+                    key = depp[g % ELEMS_PER_PAGE];
+                }
                 {
-                    // Accumulating sub-zones (task #27): one summed duration per
-                    // RISC per launch; active only with TT_METAL_DEVICE_PROFILER=1
-                    // and TT_METAL_PROFILER_SUM=1, empty otherwise.
+                    // Accumulating sub-zone (task #27): one summed duration per
+                    // RISC per launch with TT_METAL_PROFILER_SUM=1, else empty.
                     DeviceZoneScopedSumN1("emit_pack_invariants");
                     pack_invariants(key);
                 }
-                // iter 132: stage the 16B blendrec chunk [words 8,9,10,11] — words
-                // 8,9 keep their original gather bytes (cb, depth/0), words 10,11 get
-                // the packed op/color — written back 16B-aligned (offset 32) in
-                // flush_packoc for materialize to copy.
-                {
-                    volatile uint32_t* ent =
-                        packocp + n_packoc * PACKOC_ENT_W;
+                if constexpr (!PUBOC) {
+                    volatile uint32_t* ent = packocp + n_packoc * PACKOC_ENT_W;
                     ent[0] = cachep[8];   // original cb (fp32) — preserved
-                    ent[1] = cachep[9];   // original depth/0 — preserved
+                    ent[1] = cachep[9];   // original word 9 — preserved
                     ent[2] = inv_opr;     // -> blendrec[10]
                     ent[3] = inv_cgb;     // -> blendrec[11]
                     packoc_g[n_packoc] = g;
@@ -700,48 +709,107 @@ void kernel_main() {
                     if (n_packoc == PACKOC_BATCH) flush_packoc();
                 }
             }
-            {
-                // Absolute slot in buf_l1_recs = per-core base + local cursor.
-                // Clamp to this tile's pre-sized bucket [t*FIT, (t+1)*FIT): tiles
-                // whose count exceeds FIT (e.g. max_tile_n > BUCKET_FIT) would
-                // otherwise scatter past their bucket — corrupting neighbor tiles'
-                // buckets and (for the last tiles) writing past buf_l1_recs into
-                // adjacent DRAM. The blend reader serves such heavy tiles from the
-                // dense gather fallback (Lb > MB_BUCKET_FIT), never from this bucket,
-                // so dropping the overflow records here is correct. Sentinel
-                // 0xFFFFFFFF marks "skip the 32B scatter" for this batched entry.
-                // iter-138: overflow tiles (within the materialize L1 cap) carry a
-                // non-sentinel base in ov_basep[t] and pre-pack the FULL tile into
-                // the compact overflow region (no bucket clamp). Non-overflow / over-
-                // cap tiles keep the buf_l1_recs bucket path (over-bucket records
-                // dropped → materialize gathers them).
-                uint32_t out_slot;
-                uint32_t is_ov;
-                if (ovb != 0xFFFFFFFFu) {
-                    out_slot = ovb + ct;
-                    is_ov = 1u;
-                } else {
-                    const uint32_t l1_slot = lbase + ct;
-                    out_slot = (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot
-                                                                    : 0xFFFFFFFFu;
-                    is_ov = 0u;
+            // This pair's per-tile cursor and bases, each loaded from L1 once.
+            const uint32_t ct = curp[t];
+            const uint32_t li = offp[t] + ct;
+            const uint32_t ovb = l1_ov_enabled ? ov_basep[t] : 0xFFFFFFFFu;
+            // Record slot: overflow tiles (within the materialize L1 cap) pre-pack
+            // the FULL tile into the overflow region at ov_basep[t] + cursor;
+            // other tiles go to their buf_l1_recs bucket at l1basep[t] + cursor
+            // (= t*FIT + prefix of earlier cores), clamped to [t*FIT, (t+1)*FIT):
+            // records past the bucket are dropped (materialize gathers them).
+            // (core, tile) regions are disjoint, so no two writers share a slot.
+            uint32_t out_slot;
+            if (ovb != 0xFFFFFFFFu) {
+                out_slot = ovb + ct;
+            } else {
+                const uint32_t l1_slot = l1basep[t] + ct;
+                out_slot = (l1_slot < (t + 1u) * l1_bucket_fit) ? l1_slot : 0xFFFFFFFFu;
+            }
+            if (ring_on) {
+                if (out_slot != 0xFFFFFFFFu) {
+                    const uint32_t ri = out_slot & (R - 1u);
+                    // Entry 0 starts a new run: the previous run of this tile
+                    // must have left L1.
+                    if (ri == 0u) noc_async_writes_flushed();
+                    {
+                        DeviceZoneScopedSumN2("emit_pack_rec");
+                        pack_rec(reinterpret_cast<volatile uint32_t*>(
+                                     ring_l1 + (t * R + ri) * 32u), t);
+                    }
+                    if (ri == R - 1u) flush_run(t, out_slot, ovb);
                 }
+            } else {
                 brec_l1_slot[nbrec] = out_slot;
-                brec_is_ov[nbrec] = is_ov;
+                brec_is_ov[nbrec] = (ovb != 0xFFFFFFFFu) ? 1u : 0u;
                 if (out_slot != 0xFFFFFFFFu) {
                     DeviceZoneScopedSumN2("emit_pack_rec");
-                    pack_rec(nbrec, t);  // pack into l1_scratch + nbrec*32
+                    pack_rec(reinterpret_cast<volatile uint32_t*>(l1_scratch + nbrec * 32u), t);
                 }
                 nbrec++;
                 if (nbrec == REC_BATCH) flush_recs();
             }
             curp[t] = ct + 1u;
-            ksp[li] = key;
+            ksp[li] = inv_depth;
             isp[li] = g;
         }
+    };
+
+    if constexpr (!PIPE) {
+        for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
+            issue_pairs(pg, 1u, 0u);
+            noc_async_read_barrier();
+            if (issue_brec(pg, 1u, 0u, 0u) != 0u) noc_async_read_barrier();
+            if constexpr ((EMIT_ABLATE & 32u) != 0u) continue;
+            process_batch(pg, 1u, 0u, 0u);
+        }
+    } else if (pg_lo < pg_hi) {
+        // Batch k: pages [pg_lo + k*PB, +nb), pair buffer k%3, blendrec ring k%2.
+        auto nb_at = [&](uint32_t pg) { return (pg_hi - pg < PB) ? (pg_hi - pg) : PB; };
+        uint32_t pg = pg_lo, nb = nb_at(pg), buf = 0u, ring = 0u;
+        issue_pairs(pg, nb, buf);
+        noc_async_read_barrier();
+        issue_brec(pg, nb, buf, ring);
+        uint32_t pg_n = pg + nb;
+        if (pg_n < pg_hi) issue_pairs(pg_n, nb_at(pg_n), 1u);
+        while (pg < pg_hi) {
+            noc_async_read_barrier();  // blendrec of batch k, pairs of batch k+1
+            const uint32_t buf_n = (buf == 2u) ? 0u : buf + 1u;
+            if (pg_n < pg_hi) {
+                const uint32_t nb_n = nb_at(pg_n);
+                issue_brec(pg_n, nb_n, buf_n, ring ^ 1u);
+                const uint32_t pg_nn = pg_n + nb_n;
+                if (pg_nn < pg_hi) issue_pairs(pg_nn, nb_at(pg_nn), (buf_n == 2u) ? 0u : buf_n + 1u);
+            }
+            if constexpr ((EMIT_ABLATE & 32u) == 0u) process_batch(pg, nb, buf, ring);
+            pg = pg_n;
+            nb = (pg < pg_hi) ? nb_at(pg) : 0u;
+            pg_n = pg + nb;
+            buf = buf_n;
+            ring ^= 1u;
+        }
     }
-    flush_recs();    // drain the partial final batch
+    flush_recs();    // EMIT_RING=0: drain the partial final batch
     flush_packoc();  // iter 132: drain the partial final packed-op/color batch
+    if (ring_on) {
+        // Drain each tile's partial final run (full runs flushed in the loop).
+        for (uint32_t t = 0; t < num_tiles; t++) {
+            const uint32_t st = startp[t], en = curp[t];
+            if (en == st) continue;
+            const uint32_t ovb = l1_ov_enabled ? ov_basep[t] : 0xFFFFFFFFu;
+            uint32_t end_slot;
+            if (ovb != 0xFFFFFFFFu) {
+                end_slot = ovb + en;
+            } else {
+                const uint32_t cap = (t + 1u) * l1_bucket_fit;
+                end_slot = l1basep[t] + en;
+                if (end_slot > cap) end_slot = cap;
+                if (end_slot <= l1basep[t] + st) continue;
+            }
+            const uint32_t last = end_slot - 1u;
+            if ((last & (R - 1u)) != R - 1u) flush_run(t, last, ovb);
+        }
+    }
 
     if (dual) {
         // A tile block holds both movers' entries: publish this mover's fill

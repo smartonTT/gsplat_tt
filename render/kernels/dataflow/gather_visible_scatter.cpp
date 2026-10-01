@@ -85,6 +85,11 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_bin_fp32.h"
+
+#ifndef EMIT_PUBOC
+#define EMIT_PUBOC 0
+#endif
 #include "dm_fp32.h"
 #include "gather_visible_pred.h"
 
@@ -476,6 +481,12 @@ void kernel_main() {
                 r[0] = a;  r[1] = b;  r[2] = c;
                 r[3] = mx; r[4] = my; r[5] = op;
                 r[6] = cr; r[7] = cg; r[8] = cb;
+#if EMIT_PUBOC
+                // Task #100: see gather_vis_scatter.cpp.
+                r[10] = sort_bin_fp32::to_unorm16(op) | (sort_bin_fp32::to_unorm16(cr) << 16);
+                r[11] = sort_bin_fp32::to_unorm16(cg) | (sort_bin_fp32::to_unorm16(cb) << 16);
+                r[12] = dep;
+#endif
             }
 
             slot++;

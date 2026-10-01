@@ -69,3 +69,40 @@ inline constexpr bool l1_record_enabled() { return true; }         // L1_RECORD=
 inline constexpr bool jit_warmup_enabled() { return true; }        // JIT_WARMUP=1
 
 }  // namespace gsplat_tt::env_config
+
+#include <cstdlib>
+
+namespace gsplat_tt::env_config {
+
+// Task #100 sort_bucket_emit knobs (runtime env, read once; see sort_bin.cpp).
+inline unsigned int env_uint(const char* name, unsigned int dflt) {
+    const char* e = std::getenv(name);
+    return (e != nullptr && *e != '\0') ? static_cast<unsigned int>(std::atoi(e)) : dflt;
+}
+// Pair pages per read batch (1 = one page per barrier, no prefetch; 2..16 =
+// batched and double-buffered).
+inline unsigned int emit_pair_batch() {
+    static const unsigned int v = [] {
+        const unsigned int b = env_uint("GSPLAT_TT_EMIT_PB", 1u);
+        return (b >= 1u && b <= 16u) ? b : 1u;
+    }();
+    return v;
+}
+// Records per per-tile L1 staging run (0 = one 32 B write per record; else a
+// power of two <= 16 that divides the 64-record DRAM page).
+inline unsigned int emit_ring() {
+    static const unsigned int v = [] {
+        const unsigned int r = env_uint("GSPLAT_TT_EMIT_RING", 0u);
+        return (r == 2u || r == 4u || r == 8u || r == 16u) ? r : 0u;
+    }();
+    return v;
+}
+// The gather publishes the packed op/color words (blendrec[10], [11]) and the
+// depth key (blendrec[12]); the emit copies them instead of packing them and
+// writing them back, and reads no depth pages.
+inline bool emit_puboc() {
+    static const bool v = env_uint("GSPLAT_TT_EMIT_PUBOC", 0u) != 0u;
+    return v;
+}
+
+}  // namespace gsplat_tt::env_config

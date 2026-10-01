@@ -38,6 +38,11 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_bin_fp32.h"
+
+#ifndef EMIT_PUBOC
+#define EMIT_PUBOC 0
+#endif
 #include "vis_tile.h"
 
 namespace {
@@ -232,6 +237,16 @@ void kernel_main() {
                 r[6] = p_cr[il];
                 r[7] = p_cg[il];
                 r[8] = p_cb[il];
+#if EMIT_PUBOC
+                // Task #100: publish the emit's per-gaussian pack (op/color
+                // UNORM16 at words 10, 11, as sort_bin did) and the depth key
+                // (word 12) so the emit only copies them.
+                r[10] = sort_bin_fp32::to_unorm16(p_op[il]) |
+                        (sort_bin_fp32::to_unorm16(p_cr[il]) << 16);
+                r[11] = sort_bin_fp32::to_unorm16(p_cg[il]) |
+                        (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
+                r[12] = p_dep[il];
+#endif
                 if (check) {
                     w_px[slot] = mx;
                     w_py[slot] = my;

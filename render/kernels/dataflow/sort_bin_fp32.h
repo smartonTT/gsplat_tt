@@ -131,4 +131,15 @@ inline bool sub_int(uint32_t abits, uint32_t k, uint32_t* out) {
     return true;
 }
 
+// The emit's UNORM16 pack of an fp32 in [0,1]: unorm16 bits, float path for NaN.
+inline uint32_t to_unorm16(uint32_t bits) {
+    uint32_t u;
+    if (unorm16(bits, &u)) return u;
+    float v;
+    __builtin_memcpy(&v, &bits, 4);
+    if (v <= 0.0f) return 0u;
+    if (v >= 1.0f) return 65535u;
+    return static_cast<uint32_t>(v * 65535.0f + 0.5f);
+}
+
 }  // namespace sort_bin_fp32

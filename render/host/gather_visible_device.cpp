@@ -284,6 +284,7 @@ static void build_program(GatherDeviceContext& ctx) {
     for (int i = 0; i < n_acc; i++)
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
+    if (gsplat_tt::env_config::emit_puboc()) defines["EMIT_PUBOC"] = "1";
     ctx.kernel = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
@@ -359,16 +360,20 @@ static void build_programs_vis(GatherDeviceContext& ctx) {
         cb(23, PAGE_BYTES, PAGE_BYTES);  // slot parameters
         std::vector<uint32_t> ct;
         for (int i = 0; i < 24; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+        std::map<std::string, std::string> vdefines;
+        if (gsplat_tt::env_config::emit_puboc()) vdefines["EMIT_PUBOC"] = "1";
         ctx.kv0 = CreateKernel(
             program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_vis_scatter.cpp", cores,
             DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
                                .noc = NOC::RISCV_0_default,
-                               .compile_args = ct});
+                               .compile_args = ct,
+                               .defines = vdefines});
         ctx.kv1 = CreateKernel(
             program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_vis_scatter.cpp", cores,
             DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
                                .noc = NOC::RISCV_1_default,
-                               .compile_args = ct});
+                               .compile_args = ct,
+                               .defines = vdefines});
         distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
         ctx.wl_vis.add_program(device_range, std::move(program));
     }

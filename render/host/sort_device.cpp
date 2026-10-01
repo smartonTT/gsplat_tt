@@ -791,9 +791,16 @@ static void build_program_bin(SortDeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
         if (id != 7 && id != 8 && id != 10) mover0_cbs.emplace_back(id + kMover0CbOffset, bytes);
     };
-    cb(0, PAGE_BYTES);        // gid_in
-    cb(1, PAGE_BYTES);        // tid_in
-    cb(2, PAGE_BYTES);        // keep_in
+    // Task #100 emit knobs (see sort_bin.cpp sub-pass 2): EMIT_PB pair pages
+    // per batch (3 staging buffers and 2 blendrec rings when > 1), EMIT_RING
+    // records per per-tile staging run (cb 15), EMIT_PUBOC op/color/depth taken
+    // from the gather's blendrec words 10..12.
+    const uint32_t emit_pb = gsplat_tt::env_config::emit_pair_batch();
+    const uint32_t emit_npbuf = emit_pb > 1u ? 3u : 1u;
+    const uint32_t emit_nring = emit_pb > 1u ? 2u : 1u;
+    cb(0, emit_npbuf * emit_pb * PAGE_BYTES);  // gid_in
+    cb(1, emit_npbuf * emit_pb * PAGE_BYTES);  // tid_in
+    cb(2, emit_npbuf * emit_pb * PAGE_BYTES);  // keep_in
     cb(3, PAGE_BYTES);        // depth
     cb(4, BIN_ROW_BYTES);     // row (hist out / base in)
     cb(5, BIN_ROW_BYTES);     // cur (local per-tile cursor)
@@ -804,7 +811,7 @@ static void build_program_bin(SortDeviceContext& ctx) {
     const bool tile_bucket = tile_bucket_enabled();
     const bool l1_record = gsplat_tt::env_config::l1_record_enabled();
     if (tile_bucket) {
-        cb(9, 16u * PAGE_BYTES);  // rec staging ring (REC_BATCH=16 blendrec pages)
+        cb(9, emit_nring * emit_pb * 16u * PAGE_BYTES);  // blendrec ring(s): 16 pages per pair page
         cb(10, BIN_ROW_BYTES);    // recrow (per-(core,tile) DENSE record base)
     }
     if (l1_record) {
@@ -824,6 +831,11 @@ static void build_program_bin(SortDeviceContext& ctx) {
     // Sized to the kernel's PACKOC_BATCH=16 (256B). Allocated unconditionally (used
     // whenever the blendrec record is read, i.e. tile_bucket).
     cb(13, 16u * 16u);
+    // Task #100: cb(15) per-tile record staging runs (EMIT_RING_TILES x R x 32B)
+    // plus each tile's first local cursor (MAX_BIN_TILES x 4B).
+    constexpr uint32_t kEmitRingTiles = 1024;  // == sort_bin.cpp EMIT_RING_TILES
+    const uint32_t emit_ring = l1_record ? gsplat_tt::env_config::emit_ring() : 0u;
+    if (emit_ring != 0u) cb(15, kEmitRingTiles * emit_ring * 32u + MAX_BIN_TILES * 4u);
     // GSPLAT_TT_SORT_EMIT_MOVERS=1: none of the mover-0 resources exist, so the
     // program is the pre-T-C single-mover one.
     const bool dual_movers = sort_emit_movers() == 2;
@@ -855,6 +867,10 @@ static void build_program_bin(SortDeviceContext& ctx) {
         std::cerr << "[gsplat_tt::sort] GSPLAT_TT_EMIT_ABLATE=" << e
                   << ": profiling ablation, the rendered output is WRONG\n";
     }
+    defines["EMIT_PB"] = std::to_string(emit_pb) + "u";
+    defines["EMIT_RING"] = std::to_string(emit_ring) + "u";
+    defines["EMIT_RING_TILES"] = std::to_string(kEmitRingTiles) + "u";
+    defines["EMIT_PUBOC"] = gsplat_tt::env_config::emit_puboc() ? "1u" : "0u";
     ctx.kbin = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
