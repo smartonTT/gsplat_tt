@@ -28,3 +28,11 @@ template <class A> void noc_async_write_tile(uint32_t id, const TensorAccessor<A
 void noc_async_read_barrier();
 void noc_async_write_barrier();
 void noc_async_writes_flushed();
+// Semaphores (task #106).
+#define tt_l1_ptr
+uint32_t get_semaphore(uint32_t id);
+void noc_semaphore_wait(volatile uint32_t* sem, uint32_t val);
+void noc_semaphore_set(volatile uint32_t* sem, uint32_t val);
+void noc_semaphore_inc(uint64_t addr, uint32_t incr);
+void noc_async_atomic_barrier();
+void invalidate_l1_cache();

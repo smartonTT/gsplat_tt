@@ -56,7 +56,8 @@ inline MatWorkAssignment build_mat_worklist(
     uint32_t num_cores,
     uint32_t bucket_fit,
     uint32_t movers = 1,
-    uint32_t m0_cap = 0) {
+    uint32_t m0_cap = 0,
+    bool onelaunch = false) {
     // Cost of a gather record relative to a whole-tile (coalesced + L1 radix)
     // record. iter 130 assumed 8; task #35 measured (yyzo-bh-07, bicycle 30
     // views, dual mover) blend stage 60.74 / 59.74 / 58.48 / 57.95 / 57.78 ms
@@ -92,6 +93,13 @@ inline MatWorkAssignment build_mat_worklist(
             const uint32_t sc_off = sc * bucket_fit;
             const uint32_t l_sub = (sc_off >= cnt) ? 0u
                 : ((cnt - sc_off > bucket_fit) ? bucket_fit : (cnt - sc_off));
+            if (onelaunch) {
+                // Task #106 one-launch sort: the whole tile is in its bucket.
+                // One item per subchunk sorts the tile's keys and fills only
+                // its own subchunk; NCRISC only (BRISC's buffers are too small).
+                items.push_back({t, sc, static_cast<uint64_t>(cnt) + l_sub, true});
+                continue;
+            }
             for (uint32_t p0 = 0, part = 0; p0 < l_sub; p0 += kGatherPartRecs, ++part) {
                 const uint32_t recs = std::min(kGatherPartRecs, l_sub - p0);
                 items.push_back({t, sc | (part << 8),

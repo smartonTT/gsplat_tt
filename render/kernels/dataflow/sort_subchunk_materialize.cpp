@@ -293,6 +293,15 @@ void kernel_main() {
     // In-budget radix index stride = this mover's CB_BSORT record capacity
     // (bucket_fit on NCRISC, the smaller mover-0 cap on BRISC).
     const uint32_t idx_stride     = get_arg_val<uint32_t>(15);
+#if defined(SORT_ONELAUNCH) && SORT_ONELAUNCH
+    // Task #106 (GSPLAT_TT_SORT_ONELAUNCH=1): non-zero => this frame's records
+    // are in sort_bin_onelaunch.cpp's fixed-capacity tile buckets (l1_recs
+    // = the bucket buffer, tile t's records from slot t * ol_tile_cap, in the
+    // prefix-sum layout's canonical order). ol_whole_cap = the most records
+    // this mover sorts as a whole tile (its CB_BUCKET / CB_BSORT capacity).
+    const uint32_t ol_tile_cap    = get_arg_val<uint32_t>(16);
+    const uint32_t ol_whole_cap   = get_arg_val<uint32_t>(17);
+#endif
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -396,6 +405,116 @@ void kernel_main() {
             noc_async_read_barrier();
             dir_base = scrp[off];
         }
+
+#if defined(SORT_ONELAUNCH) && SORT_ONELAUNCH
+        if (ol_tile_cap != 0u) {
+            // Task #106: the bucket holds the tile's records in canonical
+            // order, so the stable depth radix gives the legacy output byte
+            // for byte. count <= ol_whole_cap: one item (sc == 0) sorts the
+            // whole tile in L1 and emits every subchunk (== the overflow
+            // pre-pack path below). Bigger tiles (NCRISC only, one item per
+            // subchunk sc, build_mat_worklist onelaunch): keys extracted in
+            // ov_cap-record chunks, index sort, then the item fills its own
+            // subchunk from coalesced chunk re-reads.
+            const uint32_t page0 = tile_id * (ol_tile_cap / REC_PAGE_RECS);
+            const uint32_t buck = get_write_ptr(CB_BUCKET);
+            const uint32_t bs = get_write_ptr(CB_BSORT);
+            const uint32_t slab = get_write_ptr(CB_SLAB);
+            auto emit_slab = [&](uint32_t s, uint32_t Ls) {
+                uint32_t scp = 0;
+                {
+                    const uint32_t e0 = (dir_base + s) * 4u;
+                    noc_async_read(get_noc_addr(e0 >> 4, dir_acc), scr, PAGE_BYTES);
+                    noc_async_read_barrier();
+                    scp = scrp[e0 & 0xF];
+                }
+                const uint32_t out_pages = (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+                for (uint32_t p = 0; p < out_pages; ++p) {
+                    const uint32_t recs = (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE
+                                                               : (Ls - p * SLAB_RECS_PER_PAGE);
+                    noc_async_write(slab + p * SLAB_PAGE_BYTES, get_noc_addr(scp + p, payload_acc),
+                                    recs * L1_SPLAT_BYTES);
+                }
+                noc_async_write_barrier();
+            };
+            if (count <= ol_whole_cap) {
+                {
+                    MAT_PZ("mat_ol_rd");
+                    read_bucket(l1_recs_acc, page0, count, buck);
+                }
+                asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
+                uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
+                uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+                const uint32_t* sorted;
+                {
+                    MAT_PZ("mat_ol_sort");
+                    sorted = sort_radix_tile::sort_record_ids(
+                        reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ol_whole_cap,
+                        kB, kB + count, hist);
+                }
+                const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
+                for (uint32_t s = 0; s < num_sc; ++s) {
+                    const uint32_t Ls = (count - s * bucket_fit > bucket_fit)
+                        ? bucket_fit : (count - s * bucket_fit);
+                    {
+                        MAT_PZ("mat_ol_perm");
+                        PERMUTE_CULL(buck, slab, sorted + s * bucket_fit, Ls);
+                    }
+                    MAT_PZ("mat_ol_wr");
+                    emit_slab(s, Ls);
+                }
+                continue;
+            }
+#if MAT_CB_BASE != 0
+            continue;  // BRISC's buffers are too small; build_mat_worklist never does this
+#endif
+            // Big tile: k (keys, then this subchunk's sorted slots) in
+            // CB_BSORT; v / k2 / v2 in CB_BUCKET until the chunk re-reads.
+            const uint32_t N = count;
+            uint32_t* k = reinterpret_cast<uint32_t*>(bs);
+            {
+                MAT_PZ("mat_ol_keys");
+                for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
+                    const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
+                    read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
+                    auto rw = reinterpret_cast<const volatile uint32_t*>(buck);
+                    for (uint32_t i = 0; i < nr; ++i) k[r0 + i] = rw[i * 8u + 3u];
+                }
+            }
+            uint32_t* v = reinterpret_cast<uint32_t*>(buck);
+            uint32_t* k2 = v + N;
+            uint32_t* v2 = k2 + N;
+            for (uint32_t i = 0; i < N; ++i) v[i] = i;
+            {
+                MAT_PZ("mat_ol_sort");
+                const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
+                for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
+            }
+            {
+                MAT_PZ("mat_ol_gather");
+                for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
+                    const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
+                    read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
+                    for (uint32_t i = 0; i < L_sub; ++i) {
+                        const uint32_t off = k[i] - r0;
+                        if (off >= nr) continue;
+                        auto src = reinterpret_cast<volatile uint32_t*>(buck + off * L1_SPLAT_BYTES);
+                        auto dst = reinterpret_cast<volatile uint32_t*>(slab + i * L1_SPLAT_BYTES);
+                        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2], w3 = src[3];
+                        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+                        dst[0] = w0; dst[1] = w1; dst[2] = w2; dst[3] = w3;
+                        dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+                    }
+                }
+            }
+#if defined(FUSE_CULL) && FUSE_CULL
+            cull_slab(slab, L_sub);
+#endif
+            MAT_PZ("mat_ol_wr");
+            emit_slab(sc, L_sub);
+            continue;
+        }
+#endif
 
         // iter-138: in-cap overflow tile pre-pack path. The whole tile's records
         // are pre-packed (gaussian/core-major, identical to buf_l1_recs) in the

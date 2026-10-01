@@ -44,6 +44,7 @@ KernelHandle CreateKernel(Program&, const std::string&, const CoreRangeSet&,
                           const std::variant<DataMovementConfig, ComputeConfig>&);
 uint32_t CreateCircularBuffer(Program&, const CoreRangeSet&, const CircularBufferConfig&);
 void SetRuntimeArgs(Program&, KernelHandle, const CoreCoord&, const std::vector<uint32_t>&);
+uint32_t CreateSemaphore(Program&, const CoreRangeSet&, uint32_t);
 namespace distributed { class MeshDevice; }
 void ReadMeshDeviceProfilerResults(distributed::MeshDevice&);
 struct TensorAccessorArgs {
@@ -52,10 +53,11 @@ struct TensorAccessorArgs {
 };
 namespace distributed {
 struct MeshShape {};
-class MeshDevice { public: CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const; };
+class MeshDevice { public: CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const;
+    CoreCoord worker_core_from_logical_core(const CoreCoord&) const; };
 class MeshCommandQueue {};
 struct MeshCoordinateRange { explicit MeshCoordinateRange(MeshShape) {} };
-struct DeviceLocalBufferConfig { uint32_t page_size = 0; BufferType buffer_type = BufferType::DRAM; };
+struct DeviceLocalBufferConfig { uint64_t page_size = 0; BufferType buffer_type = BufferType::DRAM; };
 struct ReplicatedBufferConfig { std::size_t size = 0; };
 class MeshBuffer { public:
     static std::shared_ptr<MeshBuffer> create(const ReplicatedBufferConfig&, const DeviceLocalBufferConfig&, MeshDevice*);
