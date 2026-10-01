@@ -5,7 +5,10 @@ set -o pipefail
 REV=${1:?rev}; PH=${2:-all}
 H=yyzo-bh-07; D=/localdev/smarton/gstt2-t114
 J="T114_TREE=$D bash $D/docs/sort-onelaunch-t114/remote_job.sh"
-CHK=chk:GSPLAT_TT_SORT_ONELAUNCH=1,GSPLAT_TT_SORT_ONELAUNCH_CHECK=1,TT_METAL_WATCHER=2
+# The watcher build of PFWC_VIS (~66 KB) overflows the 70.6 KB kernel config buffer
+# (76128 B), so the checked run has no watcher; a second watcher run uses SFPU_VIS=0.
+CHK=chk:GSPLAT_TT_SORT_ONELAUNCH=1,GSPLAT_TT_SORT_ONELAUNCH_CHECK=1
+CHKW=chkw:GSPLAT_TT_SORT_ONELAUNCH=1,GSPLAT_TT_SORT_ONELAUNCH_CHECK=1,GSPLAT_TT_SFPU_VIS=0,TT_METAL_WATCHER=2
 opt/sync_remote.sh $H $D $REV || { echo SYNC_FAIL; exit 1; }
 if [ $PH = all ] || [ $PH = chk ]; then
   out=$(ssh -o BatchMode=yes $H "VIEWS=0:5 TMO=600 $J c $CHK"); rc=$?; echo "$out"; echo "chk rc=$rc"
@@ -13,6 +16,8 @@ if [ $PH = all ] || [ $PH = chk ]; then
   echo "$out" | grep -q 'bad_tiles=[1-9]' && { echo CHK_BAD_TILES; exit 3; }
   echo "$out" | grep -q 'VIEWS DIFFER' && { echo CHK_VIEWS_DIFFER; exit 4; }
   echo "$out" | grep -q 'ALL_VIEWS_IDENTICAL' || { echo CHK_NO_DUMP; exit 5; }
+  out=$(ssh -o BatchMode=yes $H "VIEWS=0:3 TMO=600 $J w $CHKW"); rc=$?; echo "$out"; echo "chkw rc=$rc"
+  echo "$out" | grep -q 'bad_tiles=[1-9]' && { echo CHKW_BAD_TILES; exit 6; }
 fi
 if [ $PH = all ] || [ $PH = ab ]; then
   ssh -o BatchMode=yes $H "$J h on on on"; echo "hang rc=$?"
