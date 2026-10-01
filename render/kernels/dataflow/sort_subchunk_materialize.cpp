@@ -35,7 +35,12 @@ namespace {
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
-constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+// Task #86: buf_l1_recs and the overflow region hold REC_PAGE_RECS 32B records
+// per REC_PAGE_BYTES DRAM page (== render_config::kRecPageBytes), so a bucket
+// is read in 2 KB transfers (was 64 B PACK2 pages: ~1.0 ms/view per mover).
+// Record g of a bucket still lands at buck + g*32.
+constexpr uint32_t REC_PAGE_BYTES = 2048u;
+constexpr uint32_t REC_PAGE_RECS = REC_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 // iter 110 (A2): the depth-sorted slab is materialized into a DRAM buffer with a
 // LARGE interleave page (SLAB_PAGE_BYTES) so the cull/blend readers coalesce the
 // per-subchunk load into ceil(L/SLAB_RECS_PER_PAGE) big transfers. The slab is
@@ -97,6 +102,19 @@ inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted
     }
 }
 
+// Read n 32B records starting at page page0 into buck (record g at buck + g*32):
+// whole REC_PAGE_BYTES pages, only the used bytes of the last one.
+template <typename Acc>
+inline void read_bucket(const Acc& acc, uint32_t page0, uint32_t n, uint32_t buck) {
+    const uint32_t npages = (n + REC_PAGE_RECS - 1u) / REC_PAGE_RECS;
+    for (uint32_t q = 0; q < npages; ++q) {
+        const uint32_t recs = (q + 1u < npages) ? REC_PAGE_RECS : (n - q * REC_PAGE_RECS);
+        noc_async_read(get_noc_addr(page0 + q, acc), buck + q * REC_PAGE_BYTES,
+                       recs * L1_SPLAT_BYTES);
+    }
+    noc_async_read_barrier();
+}
+
 // Task #86: fine per-item zones for attribution (host env
 // GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
 #if defined(MATCULL_PROF) && MATCULL_PROF
@@ -151,13 +169,13 @@ void kernel_main() {
     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
-    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_PACK_PAGE_BYTES);
+    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  REC_PAGE_BYTES);
     const auto payload_acc  = TensorAccessor(payload_args,  payload_addr,  SLAB_PAGE_BYTES);
     const auto blend_meta_acc = TensorAccessor(blend_meta_args, blend_meta_addr, PAGE_BYTES);
     const auto dir_acc      = TensorAccessor(dir_args,      dir_addr,      PAGE_BYTES);
     const auto work_acc     = TensorAccessor(work_args,     work_addr,     PAGE_BYTES);
     const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
-    const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  L1_PACK_PAGE_BYTES);
+    const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  REC_PAGE_BYTES);
     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
 
     if (work_count == 0) {
@@ -254,22 +272,12 @@ void kernel_main() {
                 ov_base = scrp[off];
             }
             if (ov_base != 0xFFFFFFFFu) {
-                // Coalesced read of the whole overflow bucket (PACK2 64B pages).
-                const uint32_t npages = (count + 1u) >> 1;
+                // Coalesced read of the whole overflow bucket (2 KB pages;
+                // ov_base is page-aligned).
                 const uint32_t buck = get_write_ptr(CB_BUCKET);
                 {
                     MAT_PZ("mat_ov_rd");
-                    const uint32_t page0 = ov_base >> 1;  // ov_base is even-aligned
-                    uint32_t pp = 0;
-                    while (pp < npages) {
-                        const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
-                        for (uint32_t q = pp; q < end; ++q) {
-                            noc_async_read_tile(
-                                page0 + q, ov_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
-                        }
-                        noc_async_read_barrier();
-                        pp = end;
-                    }
+                    read_bucket(ov_recs_acc, ov_base / REC_PAGE_RECS, count, buck);
                 }
                 // Stable sort of ALL `count` records by key word[3] (adaptive
                 // radix, sort_radix_tile_algo.h). Keys/ids in CB_BSORT; the
@@ -341,21 +349,10 @@ void kernel_main() {
         // falls through to sorted_ids gather (iter 83: L1 slot order != masks).
         if (sc == 0u && L_sub <= bucket_fit && count <= bucket_fit) {
             const uint32_t L = L_sub;
-            const uint32_t npages = (L + 1u) >> 1;
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
                 MAT_PZ("mat_rd");
-                const uint32_t page0 = tile_id * (bucket_fit >> 1);
-                uint32_t pp = 0;
-                while (pp < npages) {
-                    const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(
-                            page0 + q, l1_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
+                read_bucket(l1_recs_acc, tile_id * (bucket_fit / REC_PAGE_RECS), L, buck);
             }
             // Stable sort by key word[3] (adaptive radix, histograms in local
             // memory; see the overflow path above for the scratch layout).

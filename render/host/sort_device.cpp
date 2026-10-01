@@ -1150,16 +1150,17 @@ static void host_bin_layout_into(
     if (l1_record) {
         // iter-138: prefix-allocate the COMPACT overflow region over in-cap
         // overflow tiles only (kBucketFit < count <= kOverflowL1Cap). Each such
-        // tile's base is EVEN-aligned so its PACK2 page run starts at half 0
-        // (the materialize reader indexes record g at page base/2 + g/2, half g&1).
+        // tile's base is page-aligned (task #86: kRecsPerPage records per page) so
+        // the materialize reader reads record g at page base/64 + g/64, slot g%64.
         r.tile_ov_base.assign(num_tiles, SENT);
         const uint32_t ov_cap = render_config::kOverflowL1Cap;
-        uint64_t ov_cursor = 0;  // in 32B slots; kept even per tile for PACK2
+        uint64_t ov_cursor = 0;  // in 32B slots; page-aligned per tile
+        constexpr uint64_t kPg = render_config::kRecsPerPage;
         for (uint32_t t = 0; t < num_tiles; ++t) {
             const uint64_t c = static_cast<uint64_t>(r.counts[t]);
             if (c > bucket_fit && c <= ov_cap) {
                 r.tile_ov_base[t] = static_cast<uint32_t>(ov_cursor);
-                ov_cursor += (c + 1u) & ~static_cast<uint64_t>(1u);  // round up to even
+                ov_cursor += (c + kPg - 1u) / kPg * kPg;  // round up to a page
                 r.ov_tiles += 1u;
                 r.ov_records += c;
             }
@@ -1790,7 +1791,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             const std::size_t l1_rec_bytes =
                 static_cast<std::size_t>(num_tiles) * bucket_fit * 32u;
             if (!ctx->buf_l1_recs || ctx->cap_l1_recs_bytes < l1_rec_bytes) {
-                ctx->buf_l1_recs = make_dram_paged(ctx->mesh_device.get(), l1_rec_bytes, 64u);
+                ctx->buf_l1_recs = make_dram_paged(
+                    ctx->mesh_device.get(), l1_rec_bytes, render_config::kRecPageBytes);
                 ctx->cap_l1_recs_bytes = l1_rec_bytes;
                 device_state::register_buffer("sort_l1_recs", ctx->buf_l1_recs);
             }
@@ -2188,10 +2190,12 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             // valid addresses even when this view has no in-cap overflow tile.
             if (l1_record_early && !bl.histrec_overflow.empty()) {
                 const std::size_t ov_region_bytes = std::max<std::size_t>(
-                    PAGE_BYTES, static_cast<std::size_t>(bl.ov_total_slots) * 32u);
+                    render_config::kRecPageBytes,
+                    static_cast<std::size_t>(bl.ov_total_slots) * 32u);
                 if (!ctx->buf_l1_ov || ctx->cap_l1_ov_bytes < ov_region_bytes) {
                     ctx->buf_l1_ov =
-                        make_dram_paged(ctx->mesh_device.get(), ov_region_bytes, 64u);
+                        make_dram_paged(ctx->mesh_device.get(), ov_region_bytes,
+                                        render_config::kRecPageBytes);
                     ctx->cap_l1_ov_bytes = ov_region_bytes;
                     device_state::register_buffer("sort_l1_overflow", ctx->buf_l1_ov);
                 }
