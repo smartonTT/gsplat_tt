@@ -71,6 +71,12 @@ def hero_blend_inputs() -> dict:
     return dict(np.load(FIXTURES / "blend_inputs.npz"))
 
 
+@pytest.fixture(scope="module")
+def hero_cull_blend(hero_blend_inputs) -> tuple[np.ndarray, dict]:
+    # ~100 s on CPU; computed once and shared by the slow tests below.
+    return _run_cull_blend(hero_blend_inputs)
+
+
 def test_mb_stream_length_matches_header(hero_blend_inputs):
     inp = hero_blend_inputs
     tiles_x = int((int(inp["W"]) + 31) // 32)
@@ -88,6 +94,7 @@ def test_mb_stream_length_matches_header(hero_blend_inputs):
     assert int(h[:, :, 1].sum()) == int(mb_stream.numel())
 
 
+@pytest.mark.slow
 def test_per_microblock_depth_monotonicity(hero_blend_inputs):
     inp = hero_blend_inputs
     tiles_x = int((int(inp["W"]) + 31) // 32)
@@ -205,19 +212,22 @@ def test_mask_completeness_random_synthetic():
                     )
 
 
-def test_drop_rate_under_five_percent(hero_blend_inputs):
-    _, stats = _run_cull_blend(hero_blend_inputs)
+@pytest.mark.slow
+def test_drop_rate_under_five_percent(hero_cull_blend):
+    _, stats = hero_cull_blend
     assert stats["drop_pct"] < 5.0
 
 
-def test_work_reduction_above_50_percent(hero_blend_inputs):
-    _, stats = _run_cull_blend(hero_blend_inputs)
+@pytest.mark.slow
+def test_work_reduction_above_50_percent(hero_cull_blend):
+    _, stats = hero_cull_blend
     assert stats["work_reduction_pct"] >= 50.0, (
         f"work_reduction_pct {stats['work_reduction_pct']:.2f}% below 50% gate"
     )
 
 
-def test_end_to_end_psnr_vs_hero_reference(hero_blend_inputs):
+@pytest.mark.slow
+def test_end_to_end_psnr_vs_hero_reference(hero_blend_inputs, hero_cull_blend):
     # blend_output.npy is tile-major alpha_blend with its default T < 1/255 early
     # stop; alpha_blend_microblock stops at T < 1e-4. That threshold gap alone costs
     # ~54 dB, so gate against the tile-major blend at the same early stop: this
@@ -227,6 +237,6 @@ def test_end_to_end_psnr_vs_hero_reference(hero_blend_inputs):
     ref_t255 = _run_tile_blend(inp, 1.0 / 255.0)
     assert np.array_equal(ref_t255, stored), "blend_output.npy no longer matches alpha_blend"
     ref = _run_tile_blend(inp, MB_T_STOP)
-    out, _ = _run_cull_blend(inp)
+    out, _ = hero_cull_blend
     psnr = _psnr(ref, out)
     assert psnr >= 60.0, f"PSNR {psnr:.2f} dB < 60 dB gate"

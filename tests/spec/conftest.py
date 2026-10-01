@@ -3,6 +3,7 @@
 If backends/cpu_cpp/_gsplat_cpu<EXT_SUFFIX> is missing for this Python, build
 it once with opt/build_cpu_ext.sh (10 min cap). If that fails, or
 GSPLAT_NO_AUTOBUILD=1 is set, skip the tests that need it with the reason.
+Tests marked slow are skipped unless GSPLAT_SLOW_TESTS=1 or -m slow.
 """
 from __future__ import annotations
 
@@ -41,7 +42,23 @@ def _ensure_ext() -> str | None:
     return None
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "slow: minutes-long CPU tests; run with GSPLAT_SLOW_TESTS=1 or -m slow"
+    )
+
+
+def _skip_slow(config, items):
+    if os.environ.get("GSPLAT_SLOW_TESTS") or "slow" in (config.getoption("-m") or ""):
+        return
+    mark = pytest.mark.skip(reason="slow; set GSPLAT_SLOW_TESTS=1 or pass -m slow")
+    for it in items:
+        if "slow" in it.keywords:
+            it.add_marker(mark)
+
+
 def pytest_collection_modifyitems(config, items):
+    _skip_slow(config, items)
     needing = [it for it in items if Path(str(it.fspath)).name in NEEDS_EXT]
     if not needing:
         return
