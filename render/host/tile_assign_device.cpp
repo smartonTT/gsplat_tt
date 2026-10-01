@@ -543,7 +543,7 @@ static void vis_check_legacy(
     distributed::EnqueueMeshWorkload(*ctx.cq, ctx.wl_scan2, false);
     distributed::Finish(*ctx.cq);
 
-    auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+    auto rd = [&](std::shared_ptr<distributed::MeshBuffer> b) {
         std::vector<uint32_t> v(b->size() / 4);
         distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, true);
         return v;
