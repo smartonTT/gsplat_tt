@@ -49,6 +49,9 @@ struct PfwcVisParams {
     int tile_size = 32;
     int tiles_x = 1;
     int tiles_y = 1;
+    // Lanes whose fl(m + r) / tile_size is within edge_tau of an integer are
+    // re-evaluated exactly by the writer (SFPMAD rounding insurance; 0 = off).
+    float edge_tau = 1.0f / 4096.0f;
 };
 
 // Compute mean_2d, depth, cov2d, radii for N Gaussians using device-resident

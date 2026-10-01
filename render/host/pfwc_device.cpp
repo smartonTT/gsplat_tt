@@ -642,10 +642,14 @@ double pfwc_tt(
     if (vis != nullptr) {
         vis_op = device_state::get_buffer("scene_opacities");
         if (!vis_op) {
+            // Keep the frame correct: run the legacy program (gather then takes
+            // its legacy path too, pfwc_ran_vis() == false).
             std::cerr << "[gsplat_tt::pfwc] PFWC_VIS needs the resident scene_opacities "
-                         "(gather_visible_upload_scene); not uploaded\n";
-            return -1.0;
+                         "(gather_visible_upload_scene); running the legacy program\n";
+            vis = nullptr;
         }
+    }
+    if (vis != nullptr) {
         if (!ctx->vis_built) build_program(*ctx, /*vis=*/true);
         if (!ctx->buf_vtpg || ctx->vis_cap_tiles < num_tiles) {
             distributed::DeviceLocalBufferConfig tile_cfg{
@@ -688,6 +692,7 @@ double pfwc_tt(
             fp32_bits(1.0f / static_cast<float>(vis->tile_size)),
             fp32_bits(static_cast<float>(vis->tiles_x - 1)),
             fp32_bits(static_cast<float>(vis->tiles_y - 1)),
+            fp32_bits(vis->edge_tau),
         };
     }
 
@@ -735,7 +740,7 @@ double pfwc_tt(
         compute_args.push_back(k_bits);        // arg 53
         compute_args.push_back(neg_fx_bits);   // arg 54
         compute_args.push_back(neg_fy_bits);   // arg 55
-        for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..63 (PFWC_VIS)
+        for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..64 (PFWC_VIS)
         SetRuntimeArgs(program, k_compute, core, compute_args);
 
         std::vector<uint32_t> writer_args = {
