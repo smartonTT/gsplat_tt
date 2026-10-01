@@ -231,10 +231,10 @@ inline void pfwc_vis_stage(const uint32_t* b) {
     }
 }
 
-// Advance the SFPU DEST counter by 16 vectors (32 rows) in 8-row steps, as
-// _llk_math_eltwise_unary_sfpu_inc_dst_face_addr_ does.
+// Advance the SFPU DEST counter by 16 vectors (32 rows); the INCRWC field is
+// signed 4-bit ([-8, 7] rows), so in 4-row steps.
 inline void pfwc_vis_half() {
-    for (uint32_t k = 0; k < 4; k++) sfpi::dst_reg += 4;
+    for (uint32_t k = 0; k < 8; k++) sfpi::dst_reg += 2;
 }
 
 // Tile coordinate of a scaled edge q = fl(m +- r) * 2^-s: clamp to [0, hi],
