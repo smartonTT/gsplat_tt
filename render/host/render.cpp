@@ -157,6 +157,11 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
             vis_params.tile_size = tile_size;
             vis_params.tiles_x = tx;
             vis_params.tiles_y = ty;
+            static const float edge_tau = [] {
+                const char* e = std::getenv("GSPLAT_TT_VIS_EDGE_TAU");
+                return (e != nullptr && *e != '\0') ? std::strtof(e, nullptr) : 1.0f / 4096.0f;
+            }();
+            vis_params.edge_tau = edge_tau;
             vis = &vis_params;
         }
     }

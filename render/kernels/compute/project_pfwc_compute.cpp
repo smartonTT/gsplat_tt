@@ -36,9 +36,9 @@
 //   53          : k_bits (fp32 of k = 3.0 default)
 //   54          : neg_fx_bits (fp32 of -fx)
 //   55          : neg_fy_bits (fp32 of -fy)
-//   56..63      : PFWC_VIS only (task #99, lever 2): k_near, min_opacity, image
+//   56..64      : PFWC_VIS only (task #99, lever 2): k_near, min_opacity, image
 //                 width, image height, max_radius, 1/tile_size, tiles_x - 1,
-//                 tiles_y - 1, all fp32 bits.
+//                 tiles_y - 1, edge tau, all fp32 bits.
 //
 // PFWC_VIS (task #99, GSPLAT_TT_SFPU_VIS): step 11.5 also evaluates the gather
 // visibility predicate and the tile_assign K1 rectangle on the SFPU and emits
@@ -206,7 +206,8 @@ inline void pfwc_conic_unroll() {
 // and slot 1 (aabb word).
 constexpr uint32_t DR_VP = 6 * 32;
 constexpr uint32_t VP_KN = 0, VP_MO = 1, VP_W = 2, VP_H = 3, VP_R = 4, VP_INV = 5, VP_TX1 = 6,
-                   VP_TY1 = 7;
+                   VP_TY1 = 7, VP_TAU = 8;
+constexpr uint32_t VIS_PARAMS = 9;
 
 #ifdef TRISC_MATH
 inline void pfwc_vis_stage(const uint32_t* b) {
@@ -220,6 +221,7 @@ inline void pfwc_vis_stage(const uint32_t* b) {
     dst_reg[DR_VP + VP_INV] = Converter::as_float(b[VP_INV]);
     dst_reg[DR_VP + VP_TX1] = Converter::as_float(b[VP_TX1]);
     dst_reg[DR_VP + VP_TY1] = Converter::as_float(b[VP_TY1]);
+    dst_reg[DR_VP + VP_TAU] = Converter::as_float(b[VP_TAU]);
 }
 
 // Tile coordinate of a scaled edge q = fl(m +- r) * 2^-s: clamp to [0, hi],
@@ -241,9 +243,13 @@ sfpi_inline sfpi::vFloat pfwc_vis_cell(sfpi::vFloat q, sfpi::vFloat hi) {
 // One 32-lane vector V. Every comparison is a sign/zero test of one rounded
 // fp32 difference or sum, which has the sign of the exact value, so for finite
 // inputs the predicate is exact whatever the rounding (fl(m - r) is exact near
-// the image edge: r is an integer and |m| < 2^24 there). The rectangle's
-// fl(m + r) needs SFPMAD round-to-nearest-even (the check mode
-// GSPLAT_TT_SFPU_VIS=2 verifies it on device). inf/NaN inputs give RECHECK.
+// the image edge: r is an integer and |m| < 2^24 there). In the rectangle,
+// fl(m + r) is the one rounding that matters: if SFPMAD rounded it differently
+// from nearest-even, floor(fl(m + r) / tile) could only change when
+// q = fl(m + r) / tile is within tau of an integer, so those still-visible
+// lanes go to the writer's exact path too (tau = runtime arg 64,
+// GSPLAT_TT_VIS_EDGE_TAU, default 2^-12; ~0.1% of visible lanes). inf/NaN
+// inputs also give RECHECK. GSPLAT_TT_SFPU_VIS=2 cross-checks it all on device.
 // The SFPU has 8 vector registers and sfpi cannot spill them, so consumed
 // input rows are reused for intermediates (DEST round-trips fp32 exactly) and
 // at most ~6 vectors are live: slot 7 = recheck flag, then x0 -> slot 0,
@@ -292,8 +298,19 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
                                     vFloat(dst_reg[DR_VP + VP_TX1]));  // x0
     }
     {
-        vFloat x1 = pfwc_vis_cell(vFloat(dst_reg[RX]) * vFloat(dst_reg[DR_VP + VP_INV]),
-                                  vFloat(dst_reg[DR_VP + VP_TX1]));
+        vFloat q0 = vFloat(dst_reg[RX]) * vFloat(dst_reg[DR_VP + VP_INV]);
+        vFloat x1 = pfwc_vis_cell(q0, vFloat(dst_reg[DR_VP + VP_TX1]));
+        v_if(fail <= 0.0f) {
+            v_if(q0 - x1 <= vFloat(dst_reg[DR_VP + VP_TAU])) { dst_reg[RCK] = 1.0f; }
+            v_endif;
+            vFloat d = x1 + 1.0f - q0;  // < 0 when clamped at the far edge: no flag
+            v_if(d >= 0.0f) {
+                v_if(d <= vFloat(dst_reg[DR_VP + VP_TAU])) { dst_reg[RCK] = 1.0f; }
+                v_endif;
+            }
+            v_endif;
+        }
+        v_endif;
         dst_reg[MX] = x1 - vFloat(dst_reg[TZ]);  // w - 1
     }
     // y: same with ry / my.
@@ -315,8 +332,19 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
                                     vFloat(dst_reg[DR_VP + VP_TY1]));  // y0
     }
     {
-        vFloat y1 = pfwc_vis_cell(vFloat(dst_reg[RY]) * vFloat(dst_reg[DR_VP + VP_INV]),
-                                  vFloat(dst_reg[DR_VP + VP_TY1]));
+        vFloat q0 = vFloat(dst_reg[RY]) * vFloat(dst_reg[DR_VP + VP_INV]);
+        vFloat y1 = pfwc_vis_cell(q0, vFloat(dst_reg[DR_VP + VP_TY1]));
+        v_if(fail <= 0.0f) {
+            v_if(q0 - y1 <= vFloat(dst_reg[DR_VP + VP_TAU])) { dst_reg[RCK] = 1.0f; }
+            v_endif;
+            vFloat d = y1 + 1.0f - q0;  // < 0 when clamped at the far edge: no flag
+            v_if(d >= 0.0f) {
+                v_if(d <= vFloat(dst_reg[DR_VP + VP_TAU])) { dst_reg[RCK] = 1.0f; }
+                v_endif;
+            }
+            v_endif;
+        }
+        v_endif;
         dst_reg[MY] = y1 - vFloat(dst_reg[OP]);  // h - 1
     }
     // 3. Words. bits(x + 2^23) == 0x4B000000 + x for an integer x in [0, 2^23);
@@ -373,8 +401,8 @@ void kernel_main() {
     constexpr uint32_t two_fp32_bits = 0x40000000U;
     constexpr uint32_t pt3_fp32_bits = 0x3E99999AU;  // 0.3f
 #ifdef PFWC_VIS
-    uint32_t vis_bits[8];
-    for (uint32_t k = 0; k < 8; k++) vis_bits[k] = get_arg_val<uint32_t>(56 + k);
+    uint32_t vis_bits[VIS_PARAMS];
+    for (uint32_t k = 0; k < VIS_PARAMS; k++) vis_bits[k] = get_arg_val<uint32_t>(56 + k);
 #endif
 
     init_sfpu(CB_MX, CB_M2X);

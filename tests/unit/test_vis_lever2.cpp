@@ -52,38 +52,67 @@ SfpuParams sfpu_params(const Params& p) {
 float vmax(float a, float b) { return a > b ? a : b; }
 float vmin(float a, float b) { return a < b ? a : b; }
 
-// pfwc_vis_one, one lane. Keep in step with the kernel.
+// Round-toward-zero fp32 add, to model an SFPMAD that is faithful but not
+// nearest-even (exact for the operand ranges that can be visible).
+float add_rtz(float a, float b) {
+    const double x = static_cast<double>(a) + static_cast<double>(b);
+    float r = static_cast<float>(x);
+    if (static_cast<double>(r) != x && std::fabs(static_cast<double>(r)) > std::fabs(x))
+        r = std::nextafter(r, 0.0f);
+    return r;
+}
+
+bool g_rtz = false;   // model the fl(m + r) adds with add_rtz
+float g_tau = 1.0f / 4096.0f;
+
+// pfwc_vis_one, one lane, in the kernel's order. Keep in step with the kernel.
 void sfpu_model(float tz, float op, float mx, float my, float rx, float ry, const SfpuParams& P,
                 uint32_t* tpg_word, uint32_t* aabb_word) {
     constexpr float TWO23 = 8388608.0f;
-    // Non-finite input: (biased exponent + 1) has bit 8 set only for 255.
+    // 1. Non-finite input: (biased exponent + 1) has bit 8 set only for 255.
     auto e1 = [](float x) { return ((u(x) >> 23) & 0xFFu) + 1u; };
-    const uint32_t nf = e1(tz) | e1(op) | e1(mx) | e1(my) | e1(rx) | e1(ry);
-    // Rounded sums, shared by the predicate and the rectangle.
-    const float sx = mx + rx, dx = mx - rx, sy = my + ry, dy = my - ry;
-    auto cell = [&](float d, float hi) {
-        float q = d * P.inv;  // exact: power-of-two scale
+    bool rck = ((e1(tz) | e1(op) | e1(mx) | e1(my) | e1(rx) | e1(ry)) & 0x100u) != 0;
+    auto cell = [&](float q, float hi) {
         q = vmax(q, 0.0f);
         q = vmin(q, hi);
         float r = (q + TWO23) - TWO23;  // nearest integer (any faithful rounding works)
         if (gt0(r - q)) r = r - 1.0f;   // -> floor(q) == trunc(q) for q >= 0
         return r;
     };
-    const float x0 = cell(dx, P.tx1), x1 = cell(sx, P.tx1);
-    const float y0 = cell(dy, P.ty1), y1 = cell(sy, P.ty1);
+    // 2. Predicate, then the cells; x first, then y.
+    bool fail = false;
+    if (le0(tz - P.kn)) fail = true;  // tz <= k_near
+    if (gt0(P.mo - op)) fail = true;  // op < min_opacity
+    if (le0(rx)) fail = true;
+    if (gt0(rx - P.R)) fail = true;
+    const float sx = g_rtz ? add_rtz(mx, rx) : mx + rx;
+    const float dx = mx - rx;
+    if (le0(sx)) fail = true;          // !(-rx < mx)
+    if (le0(P.W - dx)) fail = true;    // !(fl(mx - rx) < W)
+    const float x0 = cell(dx * P.inv, P.tx1);
+    const float qx = sx * P.inv;
+    const float x1 = cell(qx, P.tx1);
+    if (!fail && !gt0(qx - x1 - g_tau)) rck = true;
+    if (!fail && !(u(x1 + 1.0f - qx) & 0x80000000u) && !gt0(x1 + 1.0f - qx - g_tau)) rck = true;
+    if (le0(ry)) fail = true;
+    if (gt0(ry - P.R)) fail = true;
+    const float sy = g_rtz ? add_rtz(my, ry) : my + ry;
+    const float dy = my - ry;
+    if (le0(sy)) fail = true;
+    if (le0(P.H - dy)) fail = true;
+    const float y0 = cell(dy * P.inv, P.ty1);
+    const float qy = sy * P.inv;
+    const float y1 = cell(qy, P.ty1);
+    if (!fail && !gt0(qy - y1 - g_tau)) rck = true;
+    if (!fail && !(u(y1 + 1.0f - qy) & 0x80000000u) && !gt0(y1 + 1.0f - qy - g_tau)) rck = true;
+    // 3. Words: u(x + 2^23) == 0x4B000000 + x for an integer x in [0, 2^23).
     const float wm1 = x1 - x0, hm1 = y1 - y0;
-    const float tpg = (wm1 + 1.0f) * (hm1 + 1.0f);
     const float low = x0 + y0 * 1024.0f;
-    // u(x + 2^23) == 0x4B000000 + x for an integer x in [0, 2^23).
     *aabb_word = (u(low + TWO23) - 0x0B000000u) + ((u(wm1 + TWO23) - 0x4B000000u) << 20);
+    const float tpg = (wm1 + 1.0f) * (hm1 + 1.0f);
     uint32_t w = u(tpg + TWO23) - 0x0B000000u;
-    if (le0(tz - P.kn)) w = 0;     // tz <= k_near
-    if (gt0(P.mo - op)) w = 0;     // op < min_opacity
-    if (le0(rx) || le0(ry)) w = 0; // !(rx > 0 && ry > 0)
-    if (gt0(rx - P.R) || gt0(ry - P.R)) w = 0;
-    if (le0(sx) || le0(sy)) w = 0;  // !(-rx < mx), !(-ry < my)
-    if (le0(P.W - dx) || le0(P.H - dy)) w = 0;  // !(fl(mx - rx) < W), same for y
-    if (nf & 0x100u) w = vis_tile::RECHECK;
+    if (fail) w = 0;
+    if (rck) w = vis_tile::RECHECK;
     *tpg_word = w;
 }
 
@@ -107,7 +136,7 @@ struct Scene {
 };
 
 // Random pfwc outputs with many exact ties. rx/ry are ceil(k sqrt(a)) like pfwc.
-Scene make_scene(std::mt19937& rng, uint32_t N, const Params& p, bool nasty) {
+Scene make_scene(std::mt19937& rng, uint32_t N, const Params& p, bool nasty, bool ties = true) {
     Scene s;
     s.N = N;
     for (auto* v : {&s.tz, &s.op, &s.mx, &s.my, &s.rx, &s.ry}) v->resize(N);
@@ -131,7 +160,7 @@ Scene make_scene(std::mt19937& rng, uint32_t N, const Params& p, bool nasty) {
         float ry = std::ceil(3.0f * std::sqrt(uni(0.3f, 400.0f)));
         float mx = uni(-700.0f, W + 700.0f);
         float my = uni(-700.0f, H + 700.0f);
-        switch (rng() % 16) {
+        switch (ties ? rng() % 16 : 15u) {
             case 0: mx = nudge(std::floor(uni(-2.0f, W / tile + 2.0f)) * tile + rx); break;
             case 1: mx = nudge(std::floor(uni(-2.0f, W / tile + 2.0f)) * tile - rx); break;
             case 2: my = nudge(std::floor(uni(-2.0f, H / tile + 2.0f)) * tile + ry); break;
@@ -370,8 +399,10 @@ int main() {
         const Params p = make_params(c.W, c.H, c.tile, c.maxr, c.minop);
         const uint32_t N = 1 + rng() % (1024 * (trial < 4 ? 300 : 40));
         const Scene s = make_scene(rng, N, p, trial % 2 == 1);
+        g_rtz = (trial % 3 == 2);  // also model a round-toward-zero SFPMAD
         const Tiles t = run_pfwc(s, p, &recheck);
         check_words(s, p, t, &visible);
+        g_rtz = false;
         gaussians += N;
         const uint32_t nt = (N + 1023) / 1024;
         for (uint32_t cores : {1u, 3u, 13u, 110u}) {
@@ -388,6 +419,34 @@ int main() {
                 pipelines++;
             }
         }
+    }
+    // Recheck rate on a scene without planted ties (the writer's extra work).
+    {
+        uint64_t rk = 0, vis2 = 0;
+        const Params p = make_params(1024, 1024, 32, 512.0f, 1.0f / 255.0f);
+        const Scene s = make_scene(rng, 1024 * 400, p, false, false);
+        const Tiles t = run_pfwc(s, p, &rk);
+        check_words(s, p, t, &vis2);
+        std::printf("natural scene: %llu visible, %llu recheck (%.3f%% of visible)\n",
+                    (unsigned long long)vis2, (unsigned long long)rk, 100.0 * rk / (vis2 ? vis2 : 1));
+    }
+    // Sensitivity: without the edge recheck a round-toward-zero adder must
+    // break some rectangles (otherwise the RTZ runs above prove nothing).
+    {
+        const uint64_t bad_before = g_bad;
+        g_rtz = true;
+        g_tau = 0.0f;
+        uint64_t rk = 0, vis2 = 0;
+        const Params p = make_params(1024, 1024, 32, 512.0f, 1.0f / 255.0f);
+        const Scene s = make_scene(rng, 1024 * 400, p, false);
+        const Tiles t = run_pfwc(s, p, &rk);
+        check_words(s, p, t, &vis2);
+        const uint64_t caught = g_bad - bad_before;
+        std::printf("sensitivity (RTZ adder, tau = 0): %llu word mismatches (expected > 0)\n",
+                    (unsigned long long)caught);
+        g_bad = bad_before + (caught == 0 ? 1 : 0);
+        g_rtz = false;
+        g_tau = 1.0f / 4096.0f;
     }
     std::printf("vis lever2: %llu gaussians (%llu visible, %llu recheck), %llu pipelines, "
                 "%llu mismatches\n",

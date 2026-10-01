@@ -17,6 +17,10 @@
 // GSPLAT_TT_VIS_BALANCE=0 keeps the legacy per-core halves for the scatter
 // (A/B of the balance alone); GSPLAT_TT_VIS_TILE_WEIGHT / _EMPTY_WEIGHT set the
 // cut's cost model (defaults 24 / 1, in units of one visible gaussian).
+// GSPLAT_TT_VIS_EDGE_TAU (default 2^-12, 0 = off): lanes whose right / bottom
+// tile edge q = fl(m + r) / tile_size is within tau of an integer are resolved
+// by the pfwc writer's exact soft-float path (insurance against an SFPMAD
+// rounding that is not nearest-even).
 #pragma once
 
 #include <cstdlib>
