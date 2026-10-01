@@ -1,0 +1,26 @@
+== mat (views=10)
+window_ms 3.536
+risc/zone                                 busy       start         end    mat_meta      mat_rd    mat_sort    mat_perm      mat_wr   mat_ov_rd mat_ov_sort mat_ov_perm   mat_ov_wr  mat_gather
+BRISC/sort_subchunk_mat mean             2.669       0.000       2.669       0.016       0.628       1.183       0.349       0.029       0.000       0.000       0.000       0.000       0.461  n/view=110
+BRISC/sort_subchunk_mat max              4.101       0.000       4.102       0.096       1.529       1.673       0.543       0.308       0.000       0.000       0.000       0.000       1.404
+NCRISC/sort_subchunk_mat mean            2.779       0.000       2.779       0.007       0.264       0.462       0.130       0.005       0.731       0.808       0.239       0.006       0.127  n/view=110
+NCRISC/sort_subchunk_mat max             3.913       0.000       3.913       0.020       1.595       1.616       0.476       0.035       1.594       1.539       0.477       0.024       0.982
+critical RISC per view: {'BRISC/sort_subchunk_mat': 3, 'NCRISC/sort_subchunk_mat': 7}
+critical mean                            3.536       0.000       0.000       0.014       0.560       0.549       0.150       0.041       0.863       0.660       0.194       0.005       0.499
+
+== cull (views=10)
+window_ms 1.311
+risc/zone                                 busy       start         end     cr_meta     cr_tile cr_slot_wai     cr_bulk     cr_fill     cw_tile cw_slab_wai    cw_patch       cw_wr
+BRISC/tile_l1_mask_wr mean               1.201       0.000       1.202       0.000       0.000       0.000       0.000       0.000       1.200       0.096       0.999       0.089  n/view=110
+BRISC/tile_l1_mask_wr max                1.524       0.001       1.524       0.000       0.000       0.000       0.000       0.000       1.523       0.141       1.255       0.248
+NCRISC/tile_l1_cull_rd mean              1.195       0.000       1.195       0.012       1.185       0.005       0.109       1.052       0.000       0.000       0.000       0.000  n/view=110
+NCRISC/tile_l1_cull_rd max               1.517       0.001       1.517       0.096       1.508       0.102       0.162       1.419       0.000       0.000       0.000       0.000
+TRISC_0/tile_mb_mask mean                1.196       0.000       1.196       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000  n/view=110
+TRISC_0/tile_mb_mask max                 1.519       0.001       1.519       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000
+TRISC_1/tile_mb_mask mean                1.200       0.000       1.200       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000  n/view=110
+TRISC_1/tile_mb_mask max                 1.523       0.001       1.523       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000
+TRISC_2/tile_mb_mask mean                1.196       0.000       1.196       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000  n/view=110
+TRISC_2/tile_mb_mask max                 1.519       0.001       1.519       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000       0.000
+critical RISC per view: {'BRISC/tile_l1_mask_wr': 10}
+critical mean                            1.311       0.000       0.000       0.000       0.000       0.000       0.000       0.000       1.310       0.059       1.034       0.202
+

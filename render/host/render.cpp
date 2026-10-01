@@ -278,6 +278,7 @@ py::tuple render_view(
     {
         st::Acc& a = st::acc();
         a.sort -= (a.blend_setup - fused_before.blend_setup) +
+                  (a.mat - fused_before.mat) +
                   (a.cull - fused_before.cull) +
                   (a.blend - fused_before.blend) +
                   (a.d2h - fused_before.d2h) +
@@ -352,6 +353,7 @@ PYBIND11_MODULE(render_clean, m) {
         d["tile_assign"] = a.tile_assign;
         d["sort"] = a.sort;
         d["blend_setup"] = a.blend_setup;
+        d["mat"] = a.mat;
         d["cull"] = a.cull;
         d["blend"] = a.blend;
         d["d2h"] = a.d2h;

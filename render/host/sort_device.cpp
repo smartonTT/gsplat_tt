@@ -24,6 +24,7 @@
 #include "sort_mover_split.h"
 #include "device_state.h"
 #include "host_tracy.hpp"
+#include "stage_timers.h"
 
 #include <algorithm>
 #include <bit>
@@ -2520,14 +2521,21 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // sort_publish_pending: one drain at blend readback; iter-58/83).
         if (subchunk_materialize && sort_blend_pipe_enabled()) {
             const auto t_mat0 = clk::now();
+            // GSPLAT_TT_SPLIT_BLEND=1: drain mat here so stage `mat` is its device
+            // window (stage_timers.h); sort_mat then stays 0.
+            const bool split = stagetimers::split_blend();
+            stagetimers::Span mat_span(split ? stagetimers::acc().mat : T.materialize_ms);
             if (!launch_subchunk_materialize(
                     ctx, mat_work, num_cores,
                     static_cast<uint32_t>(tiles_x), bucket_fit)) {
                 std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
                 return fail();
             }
-            T.materialize_ms =
-                std::chrono::duration<double, std::milli>(clk::now() - t_mat0).count();
+            if (split) {
+                GSPLAT_HOST_ZONE("host_finish_mat_split");
+                distributed::Finish(*ctx->cq);
+            }
+            mat_span.stop();
             std::fprintf(
                 stderr, "[SUBCHUNK] materialize_ms=%.2f (piped pre-blend)\n",
                 T.materialize_ms);

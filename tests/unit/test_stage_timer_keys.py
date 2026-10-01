@@ -44,6 +44,30 @@ def test_stage_timer_keys_consistent():
     assert acc == run_py, (acc ^ run_py)
 
 
+_SUB_PREFIXES = ("sort_", "project_", "tile_assign_")
+
+
+def _top_level(keys):
+    return {k for k in keys if not k.startswith(_SUB_PREFIXES) and k != "view_total"}
+
+
+def test_top_level_stage_keys_consistent():
+    """The STAGES buckets (head ... tail, incl. task #90's `mat`) must match too."""
+    acc = _top_level(re.findall(r"double (\w+) = 0\.0;",
+                                (ROOT / "render/host/stage_timers.h").read_text()))
+    binding = _top_level(k for k, f in re.findall(
+        r'd\["(\w+)"\] = a\.(\w+);', (ROOT / "render/host/render.cpp").read_text())
+        if k == f)
+    src = (ROOT / "render/run.py").read_text()
+    m = re.search(r"_STAGE_ORDER = \[(.*?)\]", src, re.S)
+    assert m, "_STAGE_ORDER not found in render/run.py"
+    run_py = set(re.findall(r'"(\w+)"', m.group(1)))
+    assert "mat" in acc, "stage_timers.h has no `mat` bucket"
+    assert acc == binding, (acc ^ binding)
+    assert acc == run_py, (acc ^ run_py)
+
+
 if __name__ == "__main__":
     test_stage_timer_keys_consistent()
-    print(f"OK {len(_acc_fields())} sub-bucket keys consistent")
+    test_top_level_stage_keys_consistent()
+    print(f"OK {len(_acc_fields())} sub-bucket keys + top-level stages consistent")

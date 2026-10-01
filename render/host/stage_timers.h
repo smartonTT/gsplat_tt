@@ -13,8 +13,17 @@
 //   tile_assign  device tile_assign                                       (stage 2)
 //   sort         sort_and_bin_tt MINUS its fused cull/blend continuation  (stage 3)
 //   blend_setup  resident-blend SetRuntimeArgs pre-pass (SetupRuntimeArgsOnly)
+//   mat          sort_subchunk_mat launch + Finish; GSPLAT_TT_SPLIT_BLEND=1 only
 //   cull         SFPU microblock cull pass                                (stage 4)
 //   blend        blend enqueue + Finish (the device blend window)         (stage 5)
+//
+// Booking of the device windows (task #90): by default sort_subchunk_mat, the
+// SFPU cull and the blend run back to back on one in-order CQ with ONE Finish
+// at the blend readback, so `blend` holds the device time of all three
+// programs, `cull` is only its enqueue, `mat` is 0 and `sort_mat` is the mat
+// enqueue. GSPLAT_TT_SPLIT_BLEND=1 (diagnostic) adds a Finish after mat and
+// after cull so `mat`, `cull` and `blend` each hold one program (plus ~0.1 ms
+// of extra drain/launch latency per added Finish); the image is unchanged.
 //   d2h          final image bf16 readback
 //   assemble     bf16 microblock tiles -> fp32 HWC image (host CPU)
 //   tail         P_kept scan + stats dict + pybind return build
@@ -42,6 +51,7 @@ struct Acc {
     double tile_assign = 0.0;
     double sort = 0.0;
     double blend_setup = 0.0;
+    double mat = 0.0;
     double cull = 0.0;
     double blend = 0.0;
     double d2h = 0.0;
@@ -107,6 +117,10 @@ struct Acc {
 // compiled with different -fvisibility — share exactly one instance.
 Acc& acc();
 void reset();
+
+// GSPLAT_TT_SPLIT_BLEND=1: Finish after sort_subchunk_mat and after the cull so
+// the mat / cull / blend buckets each time one program (default off).
+bool split_blend();
 
 // Scoped span: adds its lifetime (ms) into `sink` at stop()/destruction.
 class Span {

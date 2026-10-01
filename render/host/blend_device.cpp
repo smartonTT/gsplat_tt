@@ -1224,7 +1224,8 @@ static double process_frame(
 
     // iter-140 OVERLAP PROBE forces a clean Finish (pipeline off) so cull_ms below
     // is the true SFPU-cull+store program makespan, not the deferred enqueue time.
-    const bool pipeline = kProbe
+    // GSPLAT_TT_SPLIT_BLEND=1 does the same so stage `cull` is the cull window.
+    const bool pipeline = (kProbe || gsplat_tt::stagetimers::split_blend())
         ? false
         : (defer_cq_finish || gsplat_tt::env_config::cull_pipeline_enabled());
     const auto t_start = std::chrono::steady_clock::now();

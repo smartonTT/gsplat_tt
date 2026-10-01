@@ -4,6 +4,8 @@
 
 #include "stage_timers.h"
 
+#include <cstdlib>
+
 namespace gsplat_tt::stagetimers {
 
 Acc& acc() {
@@ -12,5 +14,13 @@ Acc& acc() {
 }
 
 void reset() { acc() = Acc{}; }
+
+bool split_blend() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_SPLIT_BLEND");
+        return e != nullptr && e[0] == '1';
+    }();
+    return on;
+}
 
 }  // namespace gsplat_tt::stagetimers

@@ -410,8 +410,9 @@ def main():
     # Per-stage host attribution of the frame (render/host/stage_timers.h).
     # Emitted as stage_<name> so the legacy ms_view/blend aliases above keep
     # their meaning (both = avg frame time) for the existing report tooling.
+    # mat is 0 unless GSPLAT_TT_SPLIT_BLEND=1 (else blend holds mat+cull+blend).
     _STAGE_ORDER = ["head", "project", "tile_assign", "sort", "blend_setup",
-                    "cull", "blend", "d2h", "assemble", "tail"]
+                    "mat", "cull", "blend", "d2h", "assemble", "tail"]
     if hasattr(clean_backend._clean, "stage_timings"):
         st = clean_backend._clean.stage_timings()
         n = max(1, int(st.get("views", 0)))
