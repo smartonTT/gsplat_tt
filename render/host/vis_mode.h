@@ -4,8 +4,8 @@
 // run on the SFPU inside pfwc, so proj_count, ta_gauss_aabb and the three TA
 // scan programs drop out of the frame. Selected once per process:
 //
-//   GSPLAT_TT_SFPU_VIS=0 (default) legacy path, unchanged.
-//   GSPLAT_TT_SFPU_VIS=1           pfwc (PFWC_VIS) emits the tpg / aabb word
+//   GSPLAT_TT_SFPU_VIS=0           legacy path, unchanged (kill switch).
+//   GSPLAT_TT_SFPU_VIS=1 (default) pfwc (PFWC_VIS) emits the tpg / aabb word
 //       tiles, the visibility mask and per-tile counts; gather_vis_scan +
 //       gather_vis_scatter compact with a balanced cut and write proj_m_depth,
 //       the blend record, proj_m_offs and proj_m_aabb; tile_assign runs K2 only
@@ -32,7 +32,7 @@ namespace gsplat_tt {
 inline int sfpu_vis_mode() {
     static const int v = [] {
         const char* e = std::getenv("GSPLAT_TT_SFPU_VIS");
-        if (e == nullptr || *e == '\0') return 0;
+        if (e == nullptr || *e == '\0') return 1;  // adopted in task #102
         const int x = std::atoi(e);
         if (x < 0 || x > 2)
             throw std::invalid_argument(std::string("GSPLAT_TT_SFPU_VIS must be 0, 1 or 2, got '") +

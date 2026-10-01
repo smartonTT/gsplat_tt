@@ -7,6 +7,7 @@
 #   legacy    branch tree, GSPLAT_TT_SFPU_VIS=0 (must equal base: md5 and time)
 #   check     branch tree, GSPLAT_TT_SFPU_VIS=2 (per-view [VIS-CHECK] lines, slow)
 #   vis       branch tree, GSPLAT_TT_SFPU_VIS=1 (the timed candidate)
+#   default   branch tree, GSPLAT_TT_SFPU_VIS unset (lever 2 on by default since #102)
 #   vis_nobal GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_BALANCE=0 (balance attribution)
 #   vis_w8 / vis_w64  GSPLAT_TT_VIS_TILE_WEIGHT=8 / 64 (cost-model sweep)
 #   vis_notau GSPLAT_TT_VIS_EDGE_TAU=0 (insurance off; md5 says if SFPMAD is RNE)
@@ -46,6 +47,7 @@ for s in $steps; do
     legacy)    run t99r$r-legacy $F GSPLAT_TT_SFPU_VIS=0 ;;
     check)     run t99r$r-check $F GSPLAT_TT_SFPU_VIS=2 ;;
     vis)       run t99r$r-vis $F GSPLAT_TT_SFPU_VIS=1 ;;
+    default)   run t99r$r-default $F ;;
     vis_nobal) run t99r$r-vis-nobal $F GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_BALANCE=0 ;;
     vis_w8)    run t99r$r-vis-w8 $F GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_TILE_WEIGHT=8 ;;
     vis_w64)   run t99r$r-vis-w64 $F GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_TILE_WEIGHT=64 ;;

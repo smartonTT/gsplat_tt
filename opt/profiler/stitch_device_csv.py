@@ -52,6 +52,9 @@ def segment_frames(lines, ts, anchor=ANCHOR):
                                 if ln.split(",", 12)[ZONE_COL] == anchor
                                 and ln.split(",", 12)[TYPE_COL] == "ZONE_START"],
                                dtype=np.int64))
+    if anchors.size == 0 and anchor == ANCHOR:
+        # GSPLAT_TT_SFPU_VIS=1 (lever 2) has no proj_count program: anchor on pfwc.
+        return segment_frames(lines, ts, anchor="pfwc")
     if anchors.size == 0:
         raise ValueError(f"no {anchor} ZONE_START rows: not a render_clean capture")
     breaks = np.nonzero(np.diff(anchors) > CLUSTER_GAP_CYC)[0] + 1

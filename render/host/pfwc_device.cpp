@@ -35,6 +35,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -650,6 +651,20 @@ double pfwc_tt(
         }
     }
     if (vis != nullptr) {
+        // The PFWC_VIS writer stages the 1 KB count pages spanned by its tile
+        // range in CB_VCNT (task #102); a range that outgrows it would overrun L1.
+        constexpr uint32_t CTILES = VIS_COUNTS_PAGE / (2 * sizeof(uint32_t));  // COUNT_WORDS = 2
+        for (uint32_t c = 0; c < num_cores; ++c) {
+            if (ws.num_chunks[c] == 0) continue;
+            const uint32_t p0 = ws.chunk_start[c] / CTILES;
+            const uint32_t p1 = (ws.chunk_start[c] + ws.num_chunks[c] - 1) / CTILES;
+            if ((p1 - p0 + 1) * VIS_COUNTS_PAGE > VIS_CNT_STAGING)
+                throw std::runtime_error(
+                    "[gsplat_tt::pfwc] PFWC_VIS core " + std::to_string(c) + " spans " +
+                    std::to_string(p1 - p0 + 1) + " count pages (" +
+                    std::to_string(ws.num_chunks[c]) + " tiles), over the CB_VCNT staging of " +
+                    std::to_string(VIS_CNT_STAGING) + " B");
+        }
         if (!ctx->vis_built) build_program(*ctx, /*vis=*/true);
         if (!ctx->buf_vtpg || ctx->vis_cap_tiles < num_tiles) {
             distributed::DeviceLocalBufferConfig tile_cfg{
