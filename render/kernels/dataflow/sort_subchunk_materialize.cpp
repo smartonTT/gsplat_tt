@@ -56,6 +56,12 @@ constexpr uint32_t REC_BATCH = 32u;
 // [part * GATHER_PART_RECS, +GATHER_PART_RECS) (host sort_mover_split.h
 // kGatherPartRecs). Other items have part 0 and cover their whole tile/subchunk.
 constexpr uint32_t GATHER_PART_RECS = 2048u;
+#if defined(GATHER_PART_RECS_HOST) && defined(MAT_M0_CAP)
+static_assert(GATHER_PART_RECS == GATHER_PART_RECS_HOST,
+              "GATHER_PART_RECS must match sort_mover_split.h kGatherPartRecs");
+static_assert(GATHER_PART_RECS <= MAT_M0_CAP,
+              "a gather part must fit BRISC's materialize slab (kMatMover0Cap)");
+#endif
 
 // Dual mover: BRISC runs this kernel too, on its own (smaller) copies of every
 // CB at id + 16 (MAT_CB_BASE) and its own work-item slice. The host gives it

@@ -313,8 +313,16 @@ static uint32_t sort_mat_movers() {
 static uint32_t mat_cull_depth() {
     static const uint32_t v = [] {
         const char* e = std::getenv("GSPLAT_TT_MATCULL_DEPTH");
-        const int d = (e != nullptr) ? std::atoi(e) : 0;
-        return (d >= 1 && d <= 8) ? static_cast<uint32_t>(d) : 2u;
+        // 4 CBs x depth x 4 KB: depth 8 is 128 KB of the materialize program's
+        // L1, the most it can spare next to the slab; out-of-range values warn
+        // and use the default instead of silently overflowing L1.
+        constexpr int kMaxDepth = 8;
+        if (e == nullptr) return 2u;
+        const int d = std::atoi(e);
+        if (d >= 1 && d <= kMaxDepth) return static_cast<uint32_t>(d);
+        std::cerr << "[gsplat_tt::sort] GSPLAT_TT_MATCULL_DEPTH=" << e
+                  << " outside 1.." << kMaxDepth << "; using 2\n";
+        return 2u;
     }();
     return v;
 }
@@ -517,6 +525,12 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     }
     std::map<std::string, std::string> mat_defines_m0 = mat_defines;
     mat_defines_m0["MAT_CB_BASE"] = "16";
+    // A gather part is staged whole in the mover's slab (BRISC: kMatMover0Cap).
+    static_assert(kGatherPartRecs <= kMatMover0Cap);
+    mat_defines["GATHER_PART_RECS_HOST"] = std::to_string(kGatherPartRecs) + "u";
+    mat_defines["MAT_M0_CAP"] = std::to_string(kMatMover0Cap) + "u";
+    mat_defines_m0["GATHER_PART_RECS_HOST"] = mat_defines["GATHER_PART_RECS_HOST"];
+    mat_defines_m0["MAT_M0_CAP"] = mat_defines["MAT_M0_CAP"];
     std::vector<uint32_t> ct;
     // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
     for (int i = 0; i < 11; i++) {
@@ -649,11 +663,21 @@ static bool launch_subchunk_materialize(
         ? static_cast<uint32_t>(ctx->buf_l1_ov->address()) : 0u;
     const uint32_t ov_base_addr = ctx->buf_tile_ov_base
         ? static_cast<uint32_t>(ctx->buf_tile_ov_base->address()) : 0u;
-    // Task #90 fused cull: the blend's contrib floor and cull switch.
-    const float floor_f = cont ? cont->mb_contrib_floor : 0.0f;
+    // Task #90 fused cull: the blend's contrib floor and cull switch. Without a
+    // continuation (non-piped launch) use the same device_state parameters the
+    // blend reads, so the fused cull never runs with floor 0 while blend skips
+    // its own cull.
+    float floor_f = 1.0f / 16384.0f;
+    bool cull_off = false;
+    if (cont != nullptr) {
+        floor_f = cont->mb_contrib_floor;
+        cull_off = cont->cull_disabled;
+    } else {
+        device_state::get_bucket_cull_params(&floor_f, &cull_off);
+    }
     uint32_t floor_bits = 0;
     std::memcpy(&floor_bits, &floor_f, 4);
-    const uint32_t cull_disabled = (cont && cont->cull_disabled) ? 1u : 0u;
+    const uint32_t cull_disabled = cull_off ? 1u : 0u;
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -2584,7 +2608,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // Step C1: materialize before blend on the piped CQ (no Finish here —
         // sort_publish_pending: one drain at blend readback; iter-58/83).
         if (subchunk_materialize && sort_blend_pipe_enabled()) {
-            const auto t_mat0 = clk::now();
             // GSPLAT_TT_SPLIT_BLEND=1: drain mat here so stage `mat` is its device
             // window (stage_timers.h); sort_mat then stays 0.
             const bool split = stagetimers::split_blend();
