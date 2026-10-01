@@ -496,6 +496,10 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
         tile_cb(25);
         mat_defines["FUSE_CULL"] = "1";
         mat_defines["FUSE_CULL_DEPTH"] = std::to_string(mat_cull_depth()) + "u";
+        // GSPLAT_TT_MATCULL_FOLD=1: fill the coefficient tiles inside the permute
+        // (permute_cull) instead of a second pass over the slab (cull_slab).
+        const char* fold = std::getenv("GSPLAT_TT_MATCULL_FOLD");
+        mat_defines["MATCULL_FOLD"] = (fold != nullptr && fold[0] == '1') ? "1" : "0";
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[8] = UnpackToDestMode::UnpackToDestFp32;
         u2d[24] = UnpackToDestMode::UnpackToDestFp32;

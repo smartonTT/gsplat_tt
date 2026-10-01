@@ -1,0 +1,37 @@
+[sync_remote] sha=f33ce052a4b6d99e575e9d7ccad04e8db77cb9bf so_md5=c4147d0ad4593d10b794f8c18ad74c18 
+=== t90r2-fuse f33ce05 GSPLAT_TT_FUSE_MATCULL=1
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=41.5 p50_ms=42.3 min_ms=35.3 max_ms=48.0 n_views=30 warmup_s=3.0 out=/localdev/smarton/gstt2-t86/tmp/t86-t90r2-fuse
+STAGES n=30 head=0.003 project=8.701 tile_assign=7.584 sort=14.251 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.741 d2h=0.226 assemble=0.000 tail=0.003 | sum=41.507 view_total=41.508 resid_in_view=+0.001 avg_frame_ms=41.545 resid_vs_frame=+0.038
+SORT_STAGES n=30 pread=0.019 bin_count=0.921 bin_hist_d2h=0.255 bin_layout=0.244 upload=0.069 bin_emit=8.829 kernel=0.037 d2h=0.000 compact=0.000 publish_host=0.208 publish_wait=3.569 mat=0.054 | sum=14.206 sort=14.251 resid=+0.044
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== t90r2-fuse-d4 f33ce05 GSPLAT_TT_FUSE_MATCULL=1 GSPLAT_TT_MATCULL_DEPTH=4
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=41.4 p50_ms=41.9 min_ms=34.7 max_ms=48.0 n_views=30 warmup_s=2.9 out=/localdev/smarton/gstt2-t86/tmp/t86-t90r2-fuse-d4
+STAGES n=30 head=0.002 project=8.670 tile_assign=7.556 sort=14.194 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.744 d2h=0.208 assemble=0.000 tail=0.002 | sum=41.377 view_total=41.377 resid_in_view=+0.001 avg_frame_ms=41.409 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.014 bin_count=0.912 bin_hist_d2h=0.249 bin_layout=0.246 upload=0.067 bin_emit=8.821 kernel=0.026 d2h=0.000 compact=0.000 publish_host=0.182 publish_wait=3.594 mat=0.044 | sum=14.154 sort=14.194 resid=+0.041
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== t90r2-fuse-split f33ce05 GSPLAT_TT_FUSE_MATCULL=1 GSPLAT_TT_SPLIT_BLEND=1
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=41.5 p50_ms=42.1 min_ms=35.5 max_ms=48.0 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t86/tmp/t86-t90r2-fuse-split
+STAGES n=30 head=0.002 project=8.675 tile_assign=7.553 sort=14.148 blend_setup=0.000 mat=3.266 cull=0.000 blend=7.581 d2h=0.213 assemble=0.000 tail=0.002 | sum=41.440 view_total=41.441 resid_in_view=+0.001 avg_frame_ms=41.473 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.014 bin_count=0.909 bin_hist_d2h=0.248 bin_layout=0.245 upload=0.067 bin_emit=8.825 kernel=0.023 d2h=0.000 compact=0.000 publish_host=0.178 publish_wait=3.599 mat=0.000 | sum=14.107 sort=14.148 resid=+0.041
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== t90r2-fuse-d4-split f33ce05 GSPLAT_TT_FUSE_MATCULL=1 GSPLAT_TT_MATCULL_DEPTH=4 GSPLAT_TT_SPLIT_BLEND=1
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=41.4 p50_ms=42.1 min_ms=34.9 max_ms=48.0 n_views=30 warmup_s=2.3 out=/localdev/smarton/gstt2-t86/tmp/t86-t90r2-fuse-d4-split
+STAGES n=30 head=0.002 project=8.680 tile_assign=7.551 sort=14.135 blend_setup=0.000 mat=3.257 cull=0.000 blend=7.533 d2h=0.210 assemble=0.000 tail=0.002 | sum=41.370 view_total=41.371 resid_in_view=+0.001 avg_frame_ms=41.403 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.013 bin_count=0.911 bin_hist_d2h=0.247 bin_layout=0.234 upload=0.066 bin_emit=8.823 kernel=0.024 d2h=0.000 compact=0.000 publish_host=0.175 publish_wait=3.601 mat=0.000 | sum=14.094 sort=14.135 resid=+0.041
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== t90r2-nofuse f33ce05 GSPLAT_TT_FUSE_MATCULL=0
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=42.0 p50_ms=42.7 min_ms=35.2 max_ms=48.8 n_views=30 warmup_s=2.7 out=/localdev/smarton/gstt2-t86/tmp/t86-t90r2-nofuse
+STAGES n=30 head=0.003 project=8.674 tile_assign=7.555 sort=14.187 blend_setup=0.030 mat=0.000 cull=0.008 blend=11.248 d2h=0.215 assemble=0.000 tail=0.002 | sum=41.922 view_total=41.923 resid_in_view=+0.001 avg_frame_ms=41.960 resid_vs_frame=+0.038
+SORT_STAGES n=30 pread=0.013 bin_count=0.914 bin_hist_d2h=0.248 bin_layout=0.238 upload=0.068 bin_emit=8.823 kernel=0.027 d2h=0.000 compact=0.000 publish_host=0.195 publish_wait=3.582 mat=0.039 | sum=14.147 sort=14.187 resid=+0.041
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt
+=== t90r2-base 4d71d96 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=43.2 p50_ms=44.1 min_ms=36.4 max_ms=50.0 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t85/tmp/t86-t90r2-base
+STAGES n=30 head=0.003 project=8.683 tile_assign=7.568 sort=14.234 blend_setup=0.028 cull=0.008 blend=12.419 d2h=0.214 assemble=0.000 tail=0.002 | sum=43.159 view_total=43.160 resid_in_view=+0.001 avg_frame_ms=43.196 resid_vs_frame=+0.037
+SORT_STAGES n=30 pread=0.016 bin_count=0.919 bin_hist_d2h=0.250 bin_layout=0.243 upload=0.068 bin_emit=8.850 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.206 publish_wait=3.572 mat=0.041 | sum=14.195 sort=14.234 resid=+0.039
+ALL_VIEWS_IDENTICAL vs /localdev/smarton/t82_scripts/md5-r82new.txt

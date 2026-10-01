@@ -247,7 +247,12 @@ inline void cull_end_stream() {
     asm volatile("fence" ::: "memory");
     cb_push_back(CB_COEFF, 1);
 }
+#if defined(MATCULL_FOLD) && MATCULL_FOLD
 #define PERMUTE_CULL(buck, slab, sorted, n) permute_cull((buck), (slab), (sorted), (n))
+#else
+#define PERMUTE_CULL(buck, slab, sorted, n) \
+    do { permute_records((buck), (slab), (sorted), (n)); cull_slab((slab), (n)); } while (0)
+#endif
 #else
 #define PERMUTE_CULL(buck, slab, sorted, n) permute_records((buck), (slab), (sorted), (n))
 #endif
