@@ -584,7 +584,15 @@ static void vis_check_legacy(
                  (bad_offs == 0 && bad_box == 0) ? "OK" : "MISMATCH");
 }
 
+bool g_last_fused = false;
+uint32_t g_last_fused_M = 0;
+
 }  // namespace
+
+bool tile_assign_last_fused(uint32_t* M) {
+    if (M) *M = g_last_fused_M;
+    return g_last_fused;
+}
 
 bool tile_assign_device_ready() { return ensure_context() != nullptr; }
 
@@ -704,6 +712,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         res_a, res_b, res_c;
     std::shared_ptr<distributed::MeshBuffer> res_op;
 
+    g_last_fused = false;
     try {
         if (resident_in) {
             res_px = device_state::get_buffer("proj_m_px");
@@ -1106,75 +1115,84 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 
         // ── K2: pair-centric scatter ────────────────────────────────────
         palloc_span.stop();
-        const auto t_k2_0 = clk::now();
-        stagetimers::Span k2_rt_span(st_acc.tile_assign_rtargs);
+        // Lever 3 (task #105, GSPLAT_TT_FUSED_PAIRS): the sort enumerates the
+        // pairs from proj_m_offs + proj_m_aabb itself, so K2 and its drain are
+        // skipped and the gid/tid lists are never written.
+        const bool fuse_k2 = vis_path && fused_pairs_enabled() && ta_no_cull &&
+                             resident_pairs && static_cast<bool>(res_op);
+        g_last_fused = fuse_k2;
+        g_last_fused_M = Mu;
         const uint32_t k2_pages = P_pad / ELEMS_PER_PAGE;
-        const WorkSplit ws2 = split_pages(k2_pages, num_cores);
-        Program& prog2 = (vis_path ? ctx->wl_k2v : ctx->wl_k2).get_programs().begin()->second;
-        const KernelHandle k2_nc = vis_path ? ctx->k2v : ctx->k2;
-        const KernelHandle k2_br = vis_path ? ctx->k2vb : ctx->k2b;
-        const uint32_t k2_offs = static_cast<uint32_t>((vis_path ? vis_offs : ctx->buf_offs)->address());
-        // TA_K2_AABB reads the packed rectangle through the px slot (args 2..4 unused).
-        const uint32_t k2_box = vis_path ? static_cast<uint32_t>(vis_aabb->address()) : 0u;
-        for (uint32_t c = 0; c < num_cores; c++) {
-            CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-            // Dual mover: BRISC [start, start+n0), NCRISC [start+n0, end).
-            const uint32_t n0 = ctx->dual ? mover0_pages(ws2.count[c]) : 0u;
-            auto args = [&](uint32_t start, uint32_t count) -> std::vector<uint32_t> {
-                return {
-                    k2_offs,
-                    vis_path ? k2_box : in_px,
-                    vis_path ? k2_box : in_py,
-                    vis_path ? k2_box : in_rx,
-                    vis_path ? k2_box : in_ry,
-                    static_cast<uint32_t>(ctx->buf_gids->address()),
-                    static_cast<uint32_t>(ctx->buf_tids->address()),
-                    start, count,
-                    host_free ? 0u : P,  // arg 9: host P (host_free => read resident)
-                    Mu,
-                    static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y),
-                    static_cast<uint32_t>(tile_size),
-                    // arg 14: resident ta_pairs_P ctrl page (0 => use host P), S5.3
-                    host_free ? static_cast<uint32_t>(ctx->buf_pairs_P->address()) : 0u,
+        const WorkSplit ws2 = split_pages(k2_pages, num_cores);  // also K4's split
+        if (!fuse_k2) {
+            const auto t_k2_0 = clk::now();
+            stagetimers::Span k2_rt_span(st_acc.tile_assign_rtargs);
+            Program& prog2 = (vis_path ? ctx->wl_k2v : ctx->wl_k2).get_programs().begin()->second;
+            const KernelHandle k2_nc = vis_path ? ctx->k2v : ctx->k2;
+            const KernelHandle k2_br = vis_path ? ctx->k2vb : ctx->k2b;
+            const uint32_t k2_offs = static_cast<uint32_t>((vis_path ? vis_offs : ctx->buf_offs)->address());
+            // TA_K2_AABB reads the packed rectangle through the px slot (args 2..4 unused).
+            const uint32_t k2_box = vis_path ? static_cast<uint32_t>(vis_aabb->address()) : 0u;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                // Dual mover: BRISC [start, start+n0), NCRISC [start+n0, end).
+                const uint32_t n0 = ctx->dual ? mover0_pages(ws2.count[c]) : 0u;
+                auto args = [&](uint32_t start, uint32_t count) -> std::vector<uint32_t> {
+                    return {
+                        k2_offs,
+                        vis_path ? k2_box : in_px,
+                        vis_path ? k2_box : in_py,
+                        vis_path ? k2_box : in_rx,
+                        vis_path ? k2_box : in_ry,
+                        static_cast<uint32_t>(ctx->buf_gids->address()),
+                        static_cast<uint32_t>(ctx->buf_tids->address()),
+                        start, count,
+                        host_free ? 0u : P,  // arg 9: host P (host_free => read resident)
+                        Mu,
+                        static_cast<uint32_t>(tiles_x), static_cast<uint32_t>(tiles_y),
+                        static_cast<uint32_t>(tile_size),
+                        // arg 14: resident ta_pairs_P ctrl page (0 => use host P), S5.3
+                        host_free ? static_cast<uint32_t>(ctx->buf_pairs_P->address()) : 0u,
+                    };
                 };
-            };
-            SetRuntimeArgs(prog2, k2_nc, core, args(ws2.start[c] + n0, ws2.count[c] - n0));
-            if (ctx->dual) SetRuntimeArgs(prog2, k2_br, core, args(ws2.start[c], n0));
-        }
-        k2_rt_span.stop();
-        {
-            stagetimers::Span s(st_acc.tile_assign_enqueue);
-            distributed::EnqueueMeshWorkload(*ctx->cq, vis_path ? ctx->wl_k2v : ctx->wl_k2, false);
-        }
-        if (k3_pipelined) {
-            // scan2 + K2 share one barrier with any in-flight K3 (started before scan1).
-            GSPLAT_HOST_ZONE("host_finish_ta_k2");
+                SetRuntimeArgs(prog2, k2_nc, core, args(ws2.start[c] + n0, ws2.count[c] - n0));
+                if (ctx->dual) SetRuntimeArgs(prog2, k2_br, core, args(ws2.start[c], n0));
+            }
+            k2_rt_span.stop();
             {
-                stagetimers::Span s(st_acc.tile_assign_k2_finish);
-                distributed::Finish(*ctx->cq);
+                stagetimers::Span s(st_acc.tile_assign_enqueue);
+                distributed::EnqueueMeshWorkload(*ctx->cq, vis_path ? ctx->wl_k2v : ctx->wl_k2, false);
             }
-            const auto t_barrier = clk::now();
-            if (device_scan && !vis_path) {
-                T.scan2_ms =
-                    std::chrono::duration<double, std::milli>(t_barrier - t_s2_0).count();
-            }
-            T.k2_ms = std::chrono::duration<double, std::milli>(t_barrier - t_k2_0).count();
-            if (T.k3_compute_ms == 0.0) {
-                T.k3_compute_ms =
-                    std::chrono::duration<double, std::milli>(t_barrier - k3_t0).count();
-            }
-        } else {
-            // scan2 + K2 on one in-order CQ — single Finish (drops scan2-only drain).
-            GSPLAT_HOST_ZONE("host_finish_ta_k2");
-            {
-                stagetimers::Span s(st_acc.tile_assign_k2_finish);
-                distributed::Finish(*ctx->cq);
-            }
-            const auto t_k2_1 = clk::now();
-            T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
-            if (device_scan && !vis_path) {
-                T.scan2_ms =
-                    std::chrono::duration<double, std::milli>(t_k2_1 - t_s2_0).count();
+            if (k3_pipelined) {
+                // scan2 + K2 share one barrier with any in-flight K3 (started before scan1).
+                GSPLAT_HOST_ZONE("host_finish_ta_k2");
+                {
+                    stagetimers::Span s(st_acc.tile_assign_k2_finish);
+                    distributed::Finish(*ctx->cq);
+                }
+                const auto t_barrier = clk::now();
+                if (device_scan && !vis_path) {
+                    T.scan2_ms =
+                        std::chrono::duration<double, std::milli>(t_barrier - t_s2_0).count();
+                }
+                T.k2_ms = std::chrono::duration<double, std::milli>(t_barrier - t_k2_0).count();
+                if (T.k3_compute_ms == 0.0) {
+                    T.k3_compute_ms =
+                        std::chrono::duration<double, std::milli>(t_barrier - k3_t0).count();
+                }
+            } else {
+                // scan2 + K2 on one in-order CQ — single Finish (drops scan2-only drain).
+                GSPLAT_HOST_ZONE("host_finish_ta_k2");
+                {
+                    stagetimers::Span s(st_acc.tile_assign_k2_finish);
+                    distributed::Finish(*ctx->cq);
+                }
+                const auto t_k2_1 = clk::now();
+                T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
+                if (device_scan && !vis_path) {
+                    T.scan2_ms =
+                        std::chrono::duration<double, std::milli>(t_k2_1 - t_s2_0).count();
+                }
             }
         }
 

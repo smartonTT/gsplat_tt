@@ -23,6 +23,7 @@
 // rounding that is not nearest-even).
 #pragma once
 
+#include <cstdint>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
@@ -41,6 +42,22 @@ inline int sfpu_vis_mode() {
     }();
     return v;
 }
+
+// GSPLAT_TT_FUSED_PAIRS (task #105, lever 3; default 1, 0 = kill switch): with
+// the SFPU visibility path, tile_assign skips K2 (ta_bucket_scatter) and the
+// sort's hist + emit enumerate the (gid, tid) pairs themselves from proj_m_offs
+// and proj_m_aabb (SORT_FUSED_PAIRS in sort_bin.cpp). Same pairs, same order.
+inline bool fused_pairs_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_FUSED_PAIRS");
+        return sfpu_vis_mode() != 0 && (e == nullptr || *e == '\0' || std::atoi(e) != 0);
+    }();
+    return v;
+}
+
+// Set by tile_assign_tt for the frame: true when K2 was skipped (the sort must
+// enumerate the pairs), with the visible count M the enumeration searches.
+bool tile_assign_last_fused(uint32_t* M);
 
 inline unsigned vis_env_u32(const char* name, unsigned dflt) {
     const char* e = std::getenv(name);

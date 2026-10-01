@@ -53,11 +53,21 @@
 //
 // COMPILE-TIME ARGS: 7 TensorAccessorArgs
 //   gids, tids, keep, depth, bin2d, keys_out, ids_out.
+//
+// SORT_FUSED_PAIRS (task #105, lever 3, GSPLAT_TT_FUSED_PAIRS): tile_assign K2
+// no longer writes the gid/tid lists. Arg 0 is proj_m_offs (exclusive pair
+// prefix, offs[M] = P), arg 1 proj_m_aabb (vis_tile.h packed rectangle) and
+// arg 14 the visible count M; every pair page is enumerated here with K2's
+// formula (tile_assign_scatter.cpp), so the pairs and their order are
+// unchanged. Keep is all ones (the TA_NO_CULL default).
 
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
+#ifdef SORT_FUSED_PAIRS
+#include "vis_tile.h"
+#endif
 
 namespace {
 
@@ -183,7 +193,13 @@ void kernel_main() {
     const uint32_t sem_own_id   = get_arg_val<uint32_t>(28);
     const uint32_t sem_peer_id  = get_arg_val<uint32_t>(29);
     // BRISC has no count work, and no scatter work unless the split is on.
+#ifdef SORT_FUSED_PAIRS
+    // Task #105: with the split on, the enumerating count pass runs on both
+    // movers (mover 0 counts [lo, mid), which is exactly h0).
+    if (mover == 0 && !dual) return;
+#else
     if (mover == 0 && (mode == 0 || !dual)) return;
+#endif
     constexpr uint32_t L1_TILE_SIZE = 32u;  // microblock tile = 32x32 px
     // iter 135 (bit-identical strength reduction): the per-pair tile-local-mean
     // recompute in pack_rec needs tt/l1_tiles_x and tt%l1_tiles_x. l1_tiles_x is
@@ -274,6 +290,110 @@ void kernel_main() {
     auto depp  = reinterpret_cast<volatile uint32_t*>(dep_l1);
     auto rowp  = reinterpret_cast<volatile uint32_t*>(row_l1);
 
+#ifdef SORT_FUSED_PAIRS
+    // Pair enumerator. CB_KEEP holds F_KEEP all-ones keep pages (the emit's
+    // pair-buffer shape), then a window
+    // of F_WIN gaussian pages: aabb pages [f_page, f_page + F_WIN) and offs
+    // pages [f_page, f_page + F_WIN] (offs[g + 1] of the window's last gaussian
+    // is on the next page). One read barrier per 16 * F_WIN gaussians.
+    constexpr uint32_t F_WIN = 32u;
+    const uint32_t fM = get_arg_val<uint32_t>(14);
+    const uint32_t f_aabb_pages = (fM + ELEMS_PER_PAGE - 1u) / ELEMS_PER_PAGE;
+    const uint32_t f_offs_pages = fM / ELEMS_PER_PAGE + 1u;  // offs has M + 1 entries
+    constexpr uint32_t F_KEEP = (EMIT_PB > 1u ? 3u : 1u) * EMIT_PB;
+    const uint32_t f_aabb_l1 = keep_l1 + F_KEEP * PAGE_BYTES;
+    const uint32_t f_offs_l1 = f_aabb_l1 + F_WIN * PAGE_BYTES;
+    auto f_aabb = reinterpret_cast<volatile uint32_t*>(f_aabb_l1);
+    auto f_offs = reinterpret_cast<volatile uint32_t*>(f_offs_l1);
+    for (uint32_t j = 0; j < F_KEEP * ELEMS_PER_PAGE; j++) keepp[j] = 1;
+    uint32_t f_g = 0, f_o1 = 0, f_minx = 0, f_miny = 0, f_w = 1, f_dx = 0, f_dy = 0;
+    uint32_t f_p = 0xFFFFFFFFu;  // pair index the enumerator is positioned at
+    constexpr uint32_t F_NONE = 0x80000000u;  // no window: gp - F_NONE >= F_WIN for any gp
+    uint32_t f_page = F_NONE;  // first gaussian page of the window
+    // Position on gaussian g at its first pair; returns offs[g].
+    auto f_set_g = [&](uint32_t g) -> uint32_t {
+        const uint32_t gp = g / ELEMS_PER_PAGE;
+        if (gp - f_page >= F_WIN) {  // unsigned: also gp < f_page and F_NONE
+            const uint32_t na = (f_aabb_pages - gp < F_WIN) ? f_aabb_pages - gp : F_WIN;
+            const uint32_t no = (f_offs_pages - gp < F_WIN + 1u) ? f_offs_pages - gp : F_WIN + 1u;
+            for (uint32_t k = 0; k < na; k++) {
+                noc_async_read(get_noc_addr(gp + k, tids_acc), f_aabb_l1 + k * PAGE_BYTES,
+                               PAGE_BYTES);
+            }
+            for (uint32_t k = 0; k < no; k++) {
+                noc_async_read(get_noc_addr(gp + k, gids_acc), f_offs_l1 + k * PAGE_BYTES,
+                               PAGE_BYTES);
+            }
+            noc_async_read_barrier();
+            f_page = gp;
+        }
+        const uint32_t i = g - f_page * ELEMS_PER_PAGE;
+        const uint32_t box = f_aabb[i];
+        f_g = g;
+        f_o1 = f_offs[i + 1u];
+        f_minx = vis_tile::aabb_min_x(box);
+        f_miny = vis_tile::aabb_min_y(box);
+        f_w = vis_tile::aabb_w(box);
+        f_dx = 0;
+        f_dy = 0;
+        return f_offs[i];
+    };
+    // Position on pair p: the largest g in [0, M - 1] with offs[g] <= p (K2's
+    // binary search), then (dx, dy) of p inside g's rectangle.
+    auto f_seek = [&](uint32_t p) {
+        uint32_t lo = 0, hi = fM - 1u;
+        uint32_t cpg = 0xFFFFFFFFu;
+        while (lo < hi) {
+            const uint32_t mid = (lo + hi + 1u) >> 1;
+            const uint32_t pg = mid / ELEMS_PER_PAGE;
+            if (pg != cpg) {
+                noc_async_read(get_noc_addr(pg, gids_acc), f_offs_l1, PAGE_BYTES);
+                noc_async_read_barrier();
+                cpg = pg;
+            }
+            if (f_offs[mid % ELEMS_PER_PAGE] <= p) lo = mid; else hi = mid - 1u;
+        }
+        f_page = F_NONE;  // the search overwrote the window
+        const uint32_t local = p - f_set_g(lo);
+        f_dy = local / f_w;
+        f_dx = local - f_dy * f_w;
+        f_p = p;
+    };
+    // The pairs of page pg below P, in K2's order: gid -> gout (if set), tid -> tout.
+    auto f_fill = [&](uint32_t pg, volatile int32_t* gout, volatile int32_t* tout) {
+        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
+            const uint32_t p = pg * ELEMS_PER_PAGE + j;
+            if (p >= P) break;
+            if (p != f_p) f_seek(p);
+            while (p >= f_o1) f_set_g(f_g + 1u);
+            if (gout != nullptr) gout[j] = static_cast<int32_t>(f_g);
+            tout[j] = static_cast<int32_t>((f_miny + f_dy) * l1_tiles_x + f_minx + f_dx);
+            if (++f_dx == f_w) { f_dx = 0; f_dy++; }
+            f_p = p + 1u;
+        }
+    };
+    // Count pass: tile histogram of pairs [a, b) by rectangle row runs.
+    auto f_count = [&](uint32_t a, uint32_t b) {
+        if (a >= b) return;
+        if (a != f_p) f_seek(a);
+        uint32_t p = a;
+        while (p < b) {
+            while (p >= f_o1) f_set_g(f_g + 1u);
+            uint32_t n = ((f_o1 < b) ? f_o1 : b) - p;
+            p += n;
+            while (n != 0) {
+                const uint32_t run = (f_w - f_dx < n) ? f_w - f_dx : n;
+                volatile uint32_t* r = rowp + (f_miny + f_dy) * l1_tiles_x + f_minx + f_dx;
+                for (uint32_t k = 0; k < run; k++) r[k]++;
+                n -= run;
+                f_dx += run;
+                if (f_dx == f_w) { f_dx = 0; f_dy++; }
+            }
+        }
+        f_p = b;
+    };
+#endif
+
     const uint32_t row_pages = (num_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
     const uint32_t base_page = core_id * (stride / ELEMS_PER_PAGE);
     const uint32_t pg_lo = page_start;
@@ -305,6 +425,36 @@ void kernel_main() {
             }
             noc_async_write_barrier();  // row_l1 keeps counting below
         };
+#ifdef SORT_FUSED_PAIRS
+        (void)btidp;
+        (void)bkeepp;
+        {
+            auto pmin = [&](uint32_t pg) { return (pg * ELEMS_PER_PAGE < P) ? pg * ELEMS_PER_PAGE : P; };
+            if (dual) {
+                // Mover 0 counts [lo, mid) = h0 and publishes it; mover 1 counts
+                // [mid, hi) and adds mover 0's row (same core L1) on its signal.
+                auto own = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(sem_own_id));
+                auto peer = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(sem_peer_id));
+                if (mover == 0) {
+                    f_count(pmin(pg_lo), pmin(pg_mid));
+                    snapshot_h0();
+                    noc_semaphore_set(own, 1u);
+                    return;
+                }
+                f_count(pmin(pg_mid), pmin(pg_hi));
+                noc_semaphore_wait(peer, 1u);
+                noc_semaphore_set(peer, 0u);
+                auto row0 = reinterpret_cast<volatile uint32_t*>(
+                    get_write_ptr(4u + MOVER0_CB_OFFSET));
+                for (uint32_t t = 0; t < num_tiles; t++) rowp[t] += row0[t];
+            } else {
+                const bool snap_lo = (split == pg_lo);
+                if (snap_lo) snapshot_h0();
+                f_count(pmin(pg_lo), pmin(pg_hi));
+                if (!snap_lo && split == pg_hi) snapshot_h0();
+            }
+        }
+#else
         if (split == pg_lo) snapshot_h0();
         for (uint32_t pg0 = pg_lo; pg0 < pg_hi;) {
             const uint32_t lim = (pg0 < split && split < pg_hi) ? split : pg_hi;
@@ -329,6 +479,7 @@ void kernel_main() {
             pg0 += nb;
             if (pg0 == split) snapshot_h0();
         }
+#endif
         for (uint32_t pp = 0; pp < row_pages; pp++) {
             noc_async_write(row_l1 + pp * PAGE_BYTES,
                             get_noc_addr(base_page + pp, bin2d_acc), PAGE_BYTES);
@@ -388,9 +539,13 @@ void kernel_main() {
     } else {
         for (uint32_t t = 0; t < num_tiles; t++) curp[t] = 0;
         for (uint32_t pg = pg_lo; pg < pg_hi; pg++) {
+#ifdef SORT_FUSED_PAIRS
+            f_fill(pg, nullptr, tidp);
+#else
             noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
             noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
             noc_async_read_barrier();
+#endif
             for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
                 const uint32_t p = pg * ELEMS_PER_PAGE + j;
                 if (p >= P) break;
@@ -629,6 +784,14 @@ void kernel_main() {
 
     // Pair-page staging: buffer i of NPBUF at {gid,tid,keep}_l1 + i*PB*64.
     auto issue_pairs = [&](uint32_t pg0, uint32_t nb, uint32_t buf) {
+#ifdef SORT_FUSED_PAIRS
+        // Enumerated in place (synchronous; reads of the batch in flight continue).
+        for (uint32_t b = 0; b < nb; b++) {
+            const uint32_t e = (buf * PB + b) * ELEMS_PER_PAGE;
+            f_fill(pg0 + b, gidp + e, tidp + e);
+        }
+        return;
+#endif
         const uint32_t o = buf * PB * PAGE_BYTES;
         for (uint32_t b = 0; b < nb; b++) {
             noc_async_read(get_noc_addr(pg0 + b, gids_acc), gid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);

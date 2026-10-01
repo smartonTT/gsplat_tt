@@ -22,6 +22,7 @@
 #include "env_config.h"
 #include "sort.h"
 #include "sort_mover_split.h"
+#include "vis_mode.h"
 #include "device_state.h"
 #include "host_tracy.hpp"
 #include "stage_timers.h"
@@ -800,7 +801,9 @@ static void build_program_bin(SortDeviceContext& ctx) {
     const uint32_t emit_nring = emit_pb > 1u ? 2u : 1u;
     cb(0, emit_npbuf * emit_pb * PAGE_BYTES);  // gid_in
     cb(1, emit_npbuf * emit_pb * PAGE_BYTES);  // tid_in
-    cb(2, emit_npbuf * emit_pb * PAGE_BYTES);  // keep_in
+    // keep_in. SORT_FUSED_PAIRS (task #105): all-ones keep pages + the pair
+    // enumerator's window of F_WIN = 32 aabb pages and 33 offs pages.
+    cb(2, (emit_npbuf * emit_pb + (fused_pairs_enabled() ? 32u + 33u : 0u)) * PAGE_BYTES);
     cb(3, PAGE_BYTES);        // depth
     cb(4, BIN_ROW_BYTES);     // row (hist out / base in)
     cb(5, BIN_ROW_BYTES);     // cur (local per-tile cursor)
@@ -871,6 +874,7 @@ static void build_program_bin(SortDeviceContext& ctx) {
     defines["EMIT_RING"] = std::to_string(emit_ring) + "u";
     defines["EMIT_RING_TILES"] = std::to_string(kEmitRingTiles) + "u";
     defines["EMIT_PUBOC"] = gsplat_tt::env_config::emit_puboc() ? "1u" : "0u";
+    if (fused_pairs_enabled()) defines["SORT_FUSED_PAIRS"] = "1";
     ctx.kbin = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
@@ -1760,6 +1764,26 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         return fail();
     }
 
+    // Lever 3 (task #105): tile_assign skipped K2, so hist + emit enumerate the
+    // pairs from the gather's offs + packed rectangles (args 0, 1; M at arg 14).
+    uint32_t fused_M = 0;
+    const bool fused = tile_assign_last_fused(&fused_M);
+    std::shared_ptr<distributed::MeshBuffer> boffs, baabb;
+    if (fused != fused_pairs_enabled()) {
+        std::cerr << "[gsplat_tt::sort] GSPLAT_TT_FUSED_PAIRS: tile_assign "
+                  << (fused ? "skipped" : "ran") << " K2 but the bin kernel was built "
+                  << (fused ? "without" : "with") << " SORT_FUSED_PAIRS — hard fail\n";
+        return fail();
+    }
+    if (fused) {
+        boffs = device_state::get_buffer("proj_m_offs");
+        baabb = device_state::get_buffer("proj_m_aabb");
+        if (!boffs || !baabb) {
+            std::cerr << "[gsplat_tt::sort] FUSED_PAIRS: proj_m_offs/aabb missing — hard fail\n";
+            return fail();
+        }
+    }
+
     try {
         // Read full P + P_pad published by tile_assign.
         std::vector<uint32_t> pbuf(ELEMS_PER_PAGE);
@@ -1948,15 +1972,15 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 const auto& row_buf =
                     (mode == 0 && hist_rows) ? ctx->buf_bin_hist : ctx->buf_bin2d;
                 std::vector<uint32_t> args = {
-                    static_cast<uint32_t>(bgid->address()),
-                    static_cast<uint32_t>(btid->address()),
+                    static_cast<uint32_t>((fused ? boffs : bgid)->address()),
+                    static_cast<uint32_t>((fused ? baabb : btid)->address()),
                     static_cast<uint32_t>(bkeep->address()),
                     static_cast<uint32_t>(bdep->address()),
                     static_cast<uint32_t>(row_buf->address()),
                     ctx->buf_keys ? static_cast<uint32_t>(ctx->buf_keys->address()) : 0u,
                     ctx->buf_ids ? static_cast<uint32_t>(ctx->buf_ids->address()) : 0u,
                     ws.start[c], ws.count[c], P_full, num_tiles, stride, c, mode,
-                    dump_tile,
+                    fused ? fused_M : dump_tile,  // arg 14
                 };
                 if (tile_bucket) {
                     args.push_back(blendrec_addr);
@@ -1976,6 +2000,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 }
                 // T-C args 24..29: mover, dual, h0 rows, mid, own / peer semaphore.
                 args.resize(24, 0u);
+                if (fused) args[21] = static_cast<uint32_t>(tiles_x);  // enumerator tid
                 const uint32_t lo = ws.start[c];
                 const uint32_t hi = ws.start[c] + ws.count[c];
                 const uint32_t mid = mover_mid[c];
