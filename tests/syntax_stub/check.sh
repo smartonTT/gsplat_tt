@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Syntax-only compile of render kernels / host drivers against minimal stub
+# tt-metal, sfpi and dataflow headers (task #99). For no-device tasks on a Mac:
+# catches C++ errors in kernel and host code before a device run. It does NOT
+# validate tt-metal / sfpi API details (overloads, register pressure).
+#   tests/syntax_stub/check.sh            (from the repo root)
+set -u
+cd "$(dirname "$0")/../.."
+ST=tests/syntax_stub
+CXX=${CXX:-c++}
+fail=0
+chk() { local what=$1; shift; if out=$("$CXX" -fsyntax-only "$@" 2>&1 | grep -E "error" ); then echo "FAIL $what"; echo "$out" | head -10; fail=1; else echo "ok   $what"; fi; }
+DF="-std=c++17 -I$ST -Irender/kernels/dataflow"
+for f in writer_pfwc_vis.cpp gather_vis_scan.cpp gather_vis_scatter.cpp gather_visible_scatter.cpp \
+         tile_assign_bbox.cpp writer_pfwc.cpp; do chk "$f" $DF render/kernels/dataflow/$f; done
+chk "tile_assign_scatter.cpp" $DF render/kernels/dataflow/tile_assign_scatter.cpp
+chk "tile_assign_scatter.cpp TA_K2_AABB" $DF -DTA_K2_AABB=1 render/kernels/dataflow/tile_assign_scatter.cpp
+chk "reader_pfwc.cpp" $DF render/kernels/dataflow/reader_pfwc.cpp
+chk "reader_pfwc.cpp PFWC_VIS" $DF -DPFWC_VIS=1 render/kernels/dataflow/reader_pfwc.cpp
+CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
+chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp
+chk "project_pfwc_compute.cpp PFWC_VIS" $CP -DPFWC_VIS=1 render/kernels/compute/project_pfwc_compute.cpp
+HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
+for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp; do chk "$f" $HS render/host/$f; done
+PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)
+PYH=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['include'])" 2>/dev/null)
+[ -f "$PYH/Python.h" ] || PYH=$(ls -d /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/*/Headers 2>/dev/null | head -1)
+if [ -n "$PB" ] && [ -f "$PYH/Python.h" ]; then chk "render.cpp" $HS -I"$PB" -I"$PYH" render/host/render.cpp
+else echo "skip render.cpp (no pybind11 / Python.h)"; fi
+exit $fail
