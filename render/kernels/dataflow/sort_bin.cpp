@@ -74,7 +74,8 @@ constexpr uint32_t MOVER0_CB_OFFSET = 16;
 // Each set bit removes one part so an untraced run bounds what it costs; the
 // output is WRONG with any bit set. 1: 32 B record writes, 2: 16 B packoc
 // writes, 4: pack_invariants + pack_rec, 8: blendrec prefetch reads,
-// 16: depth page reads. Unset (default) builds the unchanged kernel.
+// 16: depth page reads, 32: the whole per-pair loop (pair pages are still
+// read). Unset (default) builds the unchanged kernel.
 #ifndef EMIT_ABLATE
 #define EMIT_ABLATE 0u
 #endif
@@ -635,6 +636,7 @@ void kernel_main() {
             }
             if (n_pf != 0) noc_async_read_barrier();
         }
+        if constexpr ((EMIT_ABLATE & 32u) != 0u) continue;
         uint32_t rec_slot = 0;
         for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
             const uint32_t p = pg * ELEMS_PER_PAGE + j;
