@@ -80,28 +80,28 @@ inline unsigned int env_uint(const char* name, unsigned int dflt) {
     return (e != nullptr && *e != '\0') ? static_cast<unsigned int>(std::atoi(e)) : dflt;
 }
 // Pair pages per read batch (1 = one page per barrier, no prefetch; 2..16 =
-// batched and double-buffered).
+// batched and double-buffered). Default 8 (t100 A/B winner).
 inline unsigned int emit_pair_batch() {
     static const unsigned int v = [] {
-        const unsigned int b = env_uint("GSPLAT_TT_EMIT_PB", 1u);
-        return (b >= 1u && b <= 16u) ? b : 1u;
+        const unsigned int b = env_uint("GSPLAT_TT_EMIT_PB", 8u);
+        return (b >= 1u && b <= 16u) ? b : 8u;
     }();
     return v;
 }
 // Records per per-tile L1 staging run (0 = one 32 B write per record; else a
-// power of two <= 16 that divides the 64-record DRAM page).
+// power of two <= 16 that divides the 64-record DRAM page). Default 8.
 inline unsigned int emit_ring() {
     static const unsigned int v = [] {
-        const unsigned int r = env_uint("GSPLAT_TT_EMIT_RING", 0u);
+        const unsigned int r = env_uint("GSPLAT_TT_EMIT_RING", 8u);
         return (r == 2u || r == 4u || r == 8u || r == 16u) ? r : 0u;
     }();
     return v;
 }
 // The gather publishes the packed op/color words (blendrec[10], [11]) and the
 // depth key (blendrec[12]); the emit copies them instead of packing them and
-// writing them back, and reads no depth pages.
+// writing them back, and reads no depth pages. Default on; 0 = legacy.
 inline bool emit_puboc() {
-    static const bool v = env_uint("GSPLAT_TT_EMIT_PUBOC", 0u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_EMIT_PUBOC", 1u) != 0u;
     return v;
 }
 
