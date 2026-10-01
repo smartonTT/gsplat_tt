@@ -114,7 +114,7 @@ Likely first-run fixes (kernels never compiled):
 
 - `tests/unit/test_vis_lever2.cpp` (new): 0 mismatches (command in the file header).
 - Existing: test_gather_visible_mask PASS, test_gather_dual_mover 0/2400, test_tile_assign_dual_mover
-  0/1353; `pytest tests/spec` (see the hand-off).
+  0/1353; `pytest tests/spec`: 36 passed, 2 skipped, 2 xfailed (401 s, Mac).
 - Syntax-only compiles against stub tt-metal / sfpi headers (`tests/syntax_stub/check.sh`):
   the new/changed dataflow kernels (both variants), the compute kernel with and without
   `PFWC_VIS`, and the four host files.
