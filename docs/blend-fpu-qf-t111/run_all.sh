@@ -1,6 +1,15 @@
 #!/bin/bash
-# Mac side: sync + build + A/B under the p100 lock. Usage: run_all.sh <rev>
-set -euo pipefail
-REV=${1:-HEAD}
-opt/sync_remote.sh yyzo-bh-07 /localdev/smarton/gstt2-t111 "$REV"
-ssh -o BatchMode=yes yyzo-bh-07 "bash /localdev/smarton/gstt2-t111/docs/blend-fpu-qf-t111/remote_ab.sh"
+# Mac side: sync + build, then one devrun chunk per A/B round, each under the p100 lock.
+# Usage: run_all.sh <rev>  (run from the repo root, detached)
+set -u
+cd "$(git rev-parse --show-toplevel)"
+DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
+H=yyzo-bh-07
+T=/localdev/smarton/gstt2-t111
+ttp lock p100 -- opt/sync_remote.sh $H $T "${1:-HEAD}" || exit $?
+for r in 1 2; do
+  ttp lock p100 -- $DEVRUN --host $H --no-verify --timeout 400 --tag t111-ab-$r -- "bash $T/docs/blend-fpu-qf-t111/remote_ab.sh $r"
+  rc=$?; echo "AB_${r}_RC=$rc"
+  [ $rc -eq 75 ] && exit 75
+done
+echo CHAIN_DONE

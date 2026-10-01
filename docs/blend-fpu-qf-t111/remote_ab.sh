@@ -8,7 +8,7 @@ T=${T111_TREE:-/localdev/smarton/gstt2-t111}
 cd $T || exit 1
 source .venv/bin/activate
 cache() { echo /localdev/smarton/.cache/ttmc-$(basename $T)-$1; }
-for r in ${ROUNDS:-1 2}; do
+for r in ${1:-1}; do
   for arm in d p0 q0; do
     case $arm in
       d)  envs="" ;;
