@@ -152,6 +152,15 @@ static uint32_t g_pixel_floor_bits = 0u;
 #define BLEND_APPLY_PIXEL_FLOOR(al) ((void)0)
 #endif
 
+// Task #111 (lever 4 probe, host env GSPLAT_TT_BLEND_FPU_QF_ABL, default 0 =
+// compiled out): 1 = the bodies skip the conic (dx, dy, A dx^2 + B dx dy +
+// C dy^2) and SFPLOAD the x ramp as "power", i.e. the SFPU side of an ideal
+// FPU quadratic form with the FPU work free. Timing only; output is wrong.
+// Run with BLEND_T_PERIOD=0 in both arms: a fake power changes T saturation.
+#ifndef BLEND_FPU_QF_ABL
+#define BLEND_FPU_QF_ABL 0
+#endif
+
 #ifdef TRISC_MATH
 // One gaussian's contribution to a single microblock's 32-lane vector.
 // IX is the dst_reg vector index (compile-time so SFPLOAD/SFPSTORE addresses
@@ -162,6 +171,12 @@ inline void blend_one_gaussian_math(
     uint32_t d_bits, uint32_t e_bits, uint32_t f_bits,
     uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
     using namespace sfpi;
+#if BLEND_FPU_QF_ABL
+    // Task #111 timing-only ablation: power arrives precomputed in DEST (what an
+    // FPU quadratic form would leave the SFPU: one SFPLOAD). Output is wrong.
+    (void)a_bits; (void)b_bits; (void)c_bits; (void)d_bits; (void)e_bits;
+    vFloat power = dst_reg[DR_X + IX];
+#else
     vFloat x = dst_reg[DR_X + IX];
     vFloat y = dst_reg[DR_Y + IX];
 
@@ -179,6 +194,7 @@ inline void blend_one_gaussian_math(
     vFloat power = A * (dx * dx);                                                    // A dx^2
     power = power + B * (dx * dy);                                                   // + B dx dy
     power = power + C * (dy * dy);                                                   // + C dy^2
+#endif
     (void)f_bits;
 
     // weight = exp(min(power, 0))
@@ -226,6 +242,11 @@ inline void blend_pair_gaussian_math(
     using namespace sfpi;
     (void)f_bits;
 
+#if BLEND_FPU_QF_ABL
+    (void)a_bits; (void)b_bits; (void)c_bits; (void)d_bits; (void)e_bits;
+    vFloat pa = dst_reg[DR_X + IXA];
+    vFloat pb = dst_reg[DR_X + IXB];
+#else
     vFloat mx = BLEND_COEF(S_MX, d_bits);
     vFloat my = BLEND_COEF(S_MY, e_bits);
     vFloat dxa = vFloat(dst_reg[DR_X + IXA]) - mx;
@@ -243,6 +264,7 @@ inline void blend_pair_gaussian_math(
     vFloat C = BLEND_COEF(S_C, c_bits);
     pa = pa + C * (dya * dya);
     pb = pb + C * (dyb * dyb);
+#endif
 
     // weight = exp(min(power, 0)) (own zero const per chain).
     vFloat zeroA = 0.0f;
@@ -292,11 +314,15 @@ inline void blend_stage_coeffs(
     uint32_t op_bits, uint32_t cr_bits, uint32_t cg_bits, uint32_t cb_bits) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
+#if BLEND_FPU_QF_ABL
+    (void)a_bits; (void)b_bits; (void)c_bits; (void)d_bits; (void)e_bits;
+#else
     dst_reg[DR_S + S_MX] = Converter::as_float(d_bits);
     dst_reg[DR_S + S_MY] = Converter::as_float(e_bits);
     dst_reg[DR_S + S_A] = Converter::as_float(a_bits);
     dst_reg[DR_S + S_B] = Converter::as_float(b_bits);
     dst_reg[DR_S + S_C] = Converter::as_float(c_bits);
+#endif
     dst_reg[DR_S + S_OP] = Converter::as_float(op_bits);
     dst_reg[DR_S + S_CR] = Converter::as_float(cr_bits);
     dst_reg[DR_S + S_CG] = Converter::as_float(cg_bits);
@@ -330,11 +356,15 @@ inline void blend_stage_coeffs_q(
     uint32_t w6, uint32_t w7) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
+#if BLEND_FPU_QF_ABL
+    (void)a_bits; (void)b_bits; (void)c_bits; (void)d_bits; (void)e_bits;
+#else
     dst_reg[DR_S + S_MX] = Converter::as_float(d_bits);
     dst_reg[DR_S + S_MY] = Converter::as_float(e_bits);
     dst_reg[DR_S + S_A] = Converter::as_float(a_bits);
     dst_reg[DR_S + S_B] = Converter::as_float(b_bits);
     dst_reg[DR_S + S_C] = Converter::as_float(c_bits);
+#endif
     dst_reg[DR_S + S_OP] = unorm16_sfpu(w6 & 0xffffu);
     dst_reg[DR_S + S_CR] = unorm16_sfpu(w6 >> 16);
     dst_reg[DR_S + S_CG] = unorm16_sfpu(w7 & 0xffffu);
