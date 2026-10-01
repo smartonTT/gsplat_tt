@@ -216,6 +216,7 @@ void kernel_main() {
                 noc_async_atomic_barrier();
             } else {
                 sem_inc(coord_x, coord_y, arrive_id);
+                noc_async_atomic_barrier();
                 auto release = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(release_id));
                 noc_semaphore_wait(release, 1u);
                 noc_semaphore_set(release, 0u);

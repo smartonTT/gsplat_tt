@@ -273,6 +273,21 @@ struct SortDeviceContext {
     // — subchunk-granular, gather-cost-weighted balance (see build_mat_worklist).
     std::shared_ptr<distributed::MeshBuffer> buf_mat_work;
     std::size_t cap_mat_work_bytes = 0;
+
+    // Task #106: one-launch sort (sort_bin_onelaunch.cpp, GSPLAT_TT_SORT_ONELAUNCH=1).
+    distributed::MeshWorkload wl_onelaunch;
+    KernelHandle kol{};   // NCRISC (mover 1)
+    KernelHandle kol0{};  // BRISC (mover 0)
+    uint32_t ol_sem[6] = {0, 0, 0, 0, 0, 0};  // counted, based, arrive1, release1, arrive2, release2
+    bool ol_built = false;
+    bool ol_frame = false;  // this frame's materialize reads the tile buckets
+    std::shared_ptr<distributed::MeshBuffer> buf_ol_bucket;  // tile t at slot t * tile cap
+    std::size_t cap_ol_bucket_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_ol_counts;  // per-core count rows
+    std::shared_ptr<distributed::MeshBuffer> buf_ol_bases;   // per-core base rows
+    std::size_t cap_ol_rows_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_ol_totals;  // totals row, padded-totals row
+    std::size_t cap_ol_totals_bytes = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -307,6 +322,20 @@ static uint32_t sort_mat_movers() {
     static const uint32_t v = env_movers("GSPLAT_TT_SORT_MAT_MOVERS");
     return v;
 }
+// Task #106 (lever 1): GSPLAT_TT_SORT_ONELAUNCH=1 replaces count + hist D2H +
+// host layout + emit + radix + publish with one launch (sort_bin_onelaunch.cpp)
+// and lets the materialize sort the tile buckets. Default off. Read once.
+static bool sort_onelaunch_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_SORT_ONELAUNCH");
+        return e != nullptr && e[0] == '1';
+    }();
+    return v;
+}
+// Records per tile bucket (== the legacy MAX_TILE_ENTRIES limit) and the
+// emit's L1 page window (== sort_bin_onelaunch.cpp WIN_PAGES).
+constexpr uint32_t kOneLaunchTileCap = 32768;
+constexpr uint32_t kOneLaunchWinPages = 1536;
 // Coefficient/mask tiles in flight per mover in the fused mat+cull program
 // (== the depth of each CB_COEFF / CB_KEEP; 4 KB fp32 tiles, 4 CBs).
 // GSPLAT_TT_MATCULL_DEPTH overrides it for tuning (1..8).
@@ -523,6 +552,8 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
                 .math_approx_mode = false,
             });
     }
+    // Task #106: the one-launch bucket branch (args 16, 17).
+    if (sort_onelaunch_enabled()) mat_defines["SORT_ONELAUNCH"] = "1";
     std::map<std::string, std::string> mat_defines_m0 = mat_defines;
     mat_defines_m0["MAT_CB_BASE"] = "16";
     // A gather part is staged whole in the mover's slab (BRISC: kMatMover0Cap).
@@ -678,6 +709,9 @@ static bool launch_subchunk_materialize(
     uint32_t floor_bits = 0;
     std::memcpy(&floor_bits, &floor_f, 4);
     const uint32_t cull_disabled = cull_off ? 1u : 0u;
+    // Task #106: a one-launch frame's records are in the tile buckets.
+    const uint32_t l1_addr = ctx->ol_frame ? static_cast<uint32_t>(ctx->buf_ol_bucket->address())
+                                           : static_cast<uint32_t>(bl1->address());
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -686,11 +720,11 @@ static bool launch_subchunk_materialize(
             const bool ncrisc = (m == 0);
             const uint32_t slot = (work.movers == 2) ? 2u * c + m : c;
             const bool idle = !ncrisc && work.movers != 2;
-            SetRuntimeArgs(prog, ncrisc ? ctx->ksubchunk : ctx->ksubchunk_m0, core, {
+            std::vector<uint32_t> args = {
                 static_cast<uint32_t>(bsids->address()),
                 static_cast<uint32_t>(brng->address()),
                 static_cast<uint32_t>(bbrec->address()),
-                static_cast<uint32_t>(bl1->address()),
+                l1_addr,
                 static_cast<uint32_t>(ctx->buf_subchunk_payload->address()),
                 static_cast<uint32_t>(ctx->buf_blend_subchunk_meta->address()),
                 static_cast<uint32_t>(ctx->buf_subchunk_dir->address()),
@@ -703,7 +737,14 @@ static bool launch_subchunk_materialize(
                 ov_base_addr,
                 render_config::kOverflowL1Cap,
                 ncrisc ? bucket_fit : kMatMover0Cap,
-            });
+            };
+            if (sort_onelaunch_enabled()) {
+                // Built with SORT_ONELAUNCH: bucket capacity (0 = legacy frame)
+                // and this mover's whole-tile sort capacity.
+                args.push_back(ctx->ol_frame ? kOneLaunchTileCap : 0u);
+                args.push_back(ncrisc ? render_config::kOverflowL1Cap : kMatMover0Cap);
+            }
+            SetRuntimeArgs(prog, ncrisc ? ctx->ksubchunk : ctx->ksubchunk_m0, core, args);
         }
         if (sort_matcull_fused()) {
             // Both movers always end their stream (idle ones at once): live = 3.
@@ -712,6 +753,59 @@ static bool launch_subchunk_materialize(
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
     return true;
+}
+
+// Task #106: one-launch sort program (sort_bin_onelaunch.cpp). The same kernel
+// on BRISC (mover 0) and NCRISC (mover 1) of every core; private CBs at id
+// (NCRISC) / id + 16 (BRISC), the count/base row (10) and the prefix staging
+// (11) shared. Semaphores: the mover handshake and two all-core barriers.
+static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    const uint32_t num_cores = ctx.grid.x * ctx.grid.y;
+    auto cb = [&](uint32_t id, uint32_t bytes) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
+        c.set_page_size(id, bytes);
+        CreateCircularBuffer(program, cores, c);
+    };
+    for (const uint32_t off : {0u, 16u}) {
+        cb(0 + off, PAGE_BYTES);             // gid page (pages past the window)
+        cb(1 + off, PAGE_BYTES);             // tid page
+        cb(2 + off, PAGE_BYTES);             // keep page
+        cb(3 + off, 2u * 16u * PAGE_BYTES);  // depth page ring (2 halves)
+        cb(4 + off, BIN_ROW_BYTES);          // per-tile count of this mover
+        cb(5 + off, BIN_ROW_BYTES);          // per-tile cursor
+        cb(6 + off, 2u * 32u * PAGE_BYTES);  // count-pass read batch (tid, keep)
+        cb(7 + off, 2u * 16u * PAGE_BYTES);  // blendrec prefetch ring (2 halves)
+        cb(8 + off, 16u * 32u);              // 32 B record staging
+        cb(12 + off, kOneLaunchWinPages * 3u * PAGE_BYTES);  // gid/tid/keep window
+    }
+    cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
+    cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
+    for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < 9; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    ctx.kol = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+        });
+    ctx.kol0 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_0,
+            .noc = NOC::RISCV_0_default,
+            .compile_args = ct,
+        });
+    distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+    ctx.wl_onelaunch.add_program(device_range, std::move(program));
+    ctx.ol_built = true;
 }
 
 static void build_program_publish(SortDeviceContext& ctx) {
