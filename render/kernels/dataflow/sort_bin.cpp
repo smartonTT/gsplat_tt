@@ -359,18 +359,37 @@ void kernel_main() {
         f_dx = local - f_dy * f_w;
         f_p = p;
     };
-    // The pairs of page pg below P, in K2's order: gid -> gout (if set), tid -> tout.
+    // The pairs of page pg below P, in K2's order: gid -> gout (if set), tid ->
+    // tout. Written by rectangle row runs (consecutive tids within a run).
     auto f_fill = [&](uint32_t pg, volatile int32_t* gout, volatile int32_t* tout) {
-        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-            const uint32_t p = pg * ELEMS_PER_PAGE + j;
-            if (p >= P) break;
-            if (p != f_p) f_seek(p);
+        uint32_t p = pg * ELEMS_PER_PAGE;
+        const uint32_t b = (p + ELEMS_PER_PAGE < P) ? p + ELEMS_PER_PAGE : P;
+        if (p >= b) return;
+        if (p != f_p) f_seek(p);
+        uint32_t j = 0;
+        while (p < b) {
             while (p >= f_o1) f_set_g(f_g + 1u);
-            if (gout != nullptr) gout[j] = static_cast<int32_t>(f_g);
-            tout[j] = static_cast<int32_t>((f_miny + f_dy) * l1_tiles_x + f_minx + f_dx);
-            if (++f_dx == f_w) { f_dx = 0; f_dy++; }
-            f_p = p + 1u;
+            uint32_t n = ((f_o1 < b) ? f_o1 : b) - p;
+            p += n;
+            const int32_t g = static_cast<int32_t>(f_g);
+            const uint32_t w = f_w, x0 = f_minx, y0 = f_miny;
+            uint32_t dx = f_dx, dy = f_dy;
+            while (n != 0) {
+                const uint32_t run = (w - dx < n) ? w - dx : n;
+                const int32_t t0 = static_cast<int32_t>((y0 + dy) * l1_tiles_x + x0 + dx);
+                if (gout != nullptr) {
+                    for (uint32_t k = 0; k < run; k++) gout[j + k] = g;
+                }
+                for (uint32_t k = 0; k < run; k++) tout[j + k] = t0 + static_cast<int32_t>(k);
+                j += run;
+                n -= run;
+                dx += run;
+                if (dx == w) { dx = 0; dy++; }
+            }
+            f_dx = dx;
+            f_dy = dy;
         }
+        f_p = b;
     };
     // Count pass: tile histogram of pairs [a, b) by rectangle row runs.
     auto f_count = [&](uint32_t a, uint32_t b) {
