@@ -44,6 +44,7 @@
 #include "config.h"
 #include "device_state.h"
 #include "gather_visible.h"
+#include "vis_mode.h"
 #include "host_profile.h"
 #include "jit_warmup.h"
 #include "pfwc.h"
@@ -126,7 +127,8 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
                                       const float* colors,
                                       const float* opacities, float min_opacity,
                                       std::size_t N, int image_height,
-                                      int image_width, int max_radius) {
+                                      int image_width, int max_radius,
+                                      int tile_size) {
     // 1a+1b. FUSED project(means_cam)+pfwc (iter-133): one device program runs
     //     the world→camera means transform in L1 and then mean_2d / depth /
     //     cov2d(a,b,c) / radii, all resident (null host outputs => nothing read
@@ -135,9 +137,32 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
         gsplat_tt::stagetimers::acc().project_cov3d);
     const std::vector<float>& cov_u = cov3d_unique(cov3d, N);
     cov3d_span.stop();
+    // Lever 2 (task #99, GSPLAT_TT_SFPU_VIS, render/host/vis_mode.h): pfwc also
+    // evaluates the visibility predicate and the tile rectangle on the SFPU.
+    // Needs the scene opacities resident first; the packed rectangle limits the
+    // grid (vis_tile.h), so larger grids keep the legacy path.
+    gsplat_tt::PfwcVisParams vis_params;
+    const gsplat_tt::PfwcVisParams* vis = nullptr;
+    if (gsplat_tt::sfpu_vis_mode() != 0 && tile_size > 0 &&
+        (tile_size & (tile_size - 1)) == 0) {
+        const int tx = (image_width + tile_size - 1) / tile_size;
+        const int ty = (image_height + tile_size - 1) / tile_size;
+        if (tx <= 512 && ty <= 1024 &&
+            gsplat_tt::gather_visible_upload_scene(colors, opacities, N)) {
+            vis_params.min_opacity = min_opacity;
+            vis_params.image_width = static_cast<float>(image_width);
+            vis_params.image_height = static_cast<float>(image_height);
+            vis_params.max_radius = gsplat_tt::gather_visible_effective_max_radius(
+                max_radius, image_height, image_width);
+            vis_params.tile_size = tile_size;
+            vis_params.tiles_x = tx;
+            vis_params.tiles_y = ty;
+            vis = &vis_params;
+        }
+    }
     gsplat_tt::pfwc_tt(means, cov_u.data(), extrinsics, intrinsics, N,
                        /*mean_2d=*/nullptr, /*depth=*/nullptr, /*cov2d=*/nullptr,
-                       /*radii=*/nullptr);
+                       /*radii=*/nullptr, /*timings_out=*/nullptr, vis);
 
     // 1c. gather the M visible Gaussians into resident M-compact SoA buffers.
     //     downstream_resident=true: the resident tile_assign/sort/blend read
@@ -213,7 +238,7 @@ py::tuple render_view(
         st::Span s(st::acc().project);
         proj = run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
                            opacities_ptr, min_opacity, N, image_height,
-                           image_width, max_radius);
+                           image_width, max_radius, tile_size);
     }
     const std::size_t M = proj.depths.size();
 

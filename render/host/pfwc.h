@@ -33,6 +33,24 @@ struct PfwcCallTimings {
     bool   cache_hit   = false;
 };
 
+// Lever 2 (task #99, GSPLAT_TT_SFPU_VIS): parameters of the visibility
+// predicate (gather_visible) and the tile rectangle (tile_assign K1). When
+// pfwc_tt gets them it runs the PFWC_VIS program, which also reads the resident
+// scene opacities ("scene_opacities", uploaded by gather_visible_upload_scene)
+// and registers "pfwc_tpg", "pfwc_aabb" (word tiles, vis_tile.h),
+// "pfwc_vis_mask" (128 B per tile) and "pfwc_tile_counts" ([visible, pairs]
+// per tile, 1 KB pages).
+struct PfwcVisParams {
+    float k_near = 0.2f;
+    float min_opacity = 0.0f;
+    float image_width = 0.0f;
+    float image_height = 0.0f;
+    float max_radius = 0.0f;  // effective (gather_visible_effective_max_radius)
+    int tile_size = 32;
+    int tiles_x = 1;
+    int tiles_y = 1;
+};
+
 // Compute mean_2d, depth, cov2d, radii for N Gaussians using device-resident
 // means_cam (already on device from the prior project kernel call).
 //
@@ -64,7 +82,12 @@ double pfwc_tt(
     float* depth_out,
     float* cov2d_out,
     float* radii_out,
-    PfwcCallTimings* timings_out = nullptr);
+    PfwcCallTimings* timings_out = nullptr,
+    const PfwcVisParams* vis = nullptr);
+
+// True when the last pfwc_tt call ran the PFWC_VIS program (its word tiles,
+// mask and counts are current); gather_visible only takes the SFPU path then.
+bool pfwc_ran_vis();
 
 bool pfwc_device_ready();
 void pfwc_device_shutdown();
