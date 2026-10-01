@@ -260,6 +260,7 @@ struct SortDeviceContext {
     distributed::MeshWorkload wl_subchunk;
     KernelHandle ksubchunk{};
     KernelHandle ksubchunk_m0{};  // materialize on BRISC (mover 0), CBs at id + 16
+    KernelHandle kmatcull{};      // task #90: fused SFPU cull (mat_cull_compute.cpp)
     std::shared_ptr<distributed::MeshBuffer> buf_blend_subchunk_meta;
     std::size_t cap_blend_subchunk_meta_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_subchunk_payload;
@@ -306,6 +307,9 @@ static uint32_t sort_mat_movers() {
     static const uint32_t v = env_movers("GSPLAT_TT_SORT_MAT_MOVERS");
     return v;
 }
+// Coefficient/mask tiles in flight per mover in the fused mat+cull program
+// (== the depth of each CB_COEFF / CB_KEEP; 4 KB fp32 tiles).
+constexpr uint32_t kMatCullDepth = 2;
 static void build_program(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -468,6 +472,37 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     const char* mc_prof = std::getenv("GSPLAT_TT_MATCULL_PROF");
     std::map<std::string, std::string> mat_defines;
     if (mc_prof != nullptr && mc_prof[0] == '1') mat_defines["MATCULL_PROF"] = "1";
+    // Task #90: fused SFPU cull. Per mover a coefficient and a mask CB of
+    // kMatCullDepth fp32 tiles at id 8 / 9 (+16 on BRISC), served by one
+    // compute kernel (same config as the tile_l1_cull compute).
+    const bool fuse_cull = sort_matcull_fused();
+    if (fuse_cull) {
+        auto tile_cb = [&](uint32_t id) {
+            CircularBufferConfig c(kMatCullDepth * 4096u, {{id, DataFormat::Float32}});
+            c.set_page_size(id, 4096u);
+            CreateCircularBuffer(program, cores, c);
+        };
+        tile_cb(8);
+        tile_cb(9);
+        tile_cb(24);
+        tile_cb(25);
+        mat_defines["FUSE_CULL"] = "1";
+        mat_defines["FUSE_CULL_DEPTH"] = std::to_string(kMatCullDepth) + "u";
+        std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
+        u2d[8] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[24] = UnpackToDestMode::UnpackToDestFp32;
+        ctx.kmatcull = CreateKernel(
+            program,
+            OVERRIDE_KERNEL_PREFIX "kernels/compute/mat_cull_compute.cpp",
+            cores,
+            ComputeConfig{
+                .math_fidelity = MathFidelity::HiFi3,
+                .fp32_dest_acc_en = true,
+                .dst_full_sync_en = true,
+                .unpack_to_dest_mode = u2d,
+                .math_approx_mode = false,
+            });
+    }
     std::map<std::string, std::string> mat_defines_m0 = mat_defines;
     mat_defines_m0["MAT_CB_BASE"] = "16";
     std::vector<uint32_t> ct;
@@ -570,7 +605,8 @@ static bool launch_subchunk_materialize(
     const MatWorkAssignment& work,
     uint32_t num_cores,
     uint32_t tiles_x,
-    uint32_t bucket_fit) {
+    uint32_t bucket_fit,
+    const SortBlendContinuation* cont = nullptr) {
     if (work.flat.empty()) {
         return true;
     }
@@ -601,6 +637,11 @@ static bool launch_subchunk_materialize(
         ? static_cast<uint32_t>(ctx->buf_l1_ov->address()) : 0u;
     const uint32_t ov_base_addr = ctx->buf_tile_ov_base
         ? static_cast<uint32_t>(ctx->buf_tile_ov_base->address()) : 0u;
+    // Task #90 fused cull: the blend's contrib floor and cull switch.
+    const float floor_f = cont ? cont->mb_contrib_floor : 0.0f;
+    uint32_t floor_bits = 0;
+    std::memcpy(&floor_bits, &floor_f, 4);
+    const uint32_t cull_disabled = (cont && cont->cull_disabled) ? 1u : 0u;
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -627,6 +668,10 @@ static bool launch_subchunk_materialize(
                 render_config::kOverflowL1Cap,
                 ncrisc ? bucket_fit : kMatMover0Cap,
             });
+        }
+        if (sort_matcull_fused()) {
+            // Both movers always end their stream (idle ones at once): live = 3.
+            SetRuntimeArgs(prog, ctx->kmatcull, core, {floor_bits, cull_disabled, 3u});
         }
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
@@ -2527,7 +2572,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             stagetimers::Span mat_span(split ? stagetimers::acc().mat : T.materialize_ms);
             if (!launch_subchunk_materialize(
                     ctx, mat_work, num_cores,
-                    static_cast<uint32_t>(tiles_x), bucket_fit)) {
+                    static_cast<uint32_t>(tiles_x), bucket_fit, sort_blend)) {
                 std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
                 return fail();
             }
@@ -2552,6 +2597,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
 }  // namespace
 
 bool sort_device_ready() { return ensure_context() != nullptr; }
+
+bool sort_matcull_fused() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_FUSE_MATCULL");
+        return !(e != nullptr && e[0] == '0');
+    }();
+    return v;
+}
 
 void sort_device_shutdown() {
     auto& slot = context_slot();

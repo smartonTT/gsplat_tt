@@ -123,6 +123,91 @@ inline void read_bucket(const Acc& acc, uint32_t page0, uint32_t n, uint32_t buc
 #define MAT_PZ(name) ((void)0)
 #endif
 
+// Task #90: the SFPU cull runs in this program (mat_cull_compute.cpp). Each
+// mover culls the slab it just depth-sorted before writing it: it transposes
+// every COEFF_BATCH records into an fp32 coefficient tile on its own stream
+// (CB_COEFF / CB_KEEP), and patches the returned 32-bit microblock mask into
+// word3 of each record (the depth key, dead after the sort), exactly what
+// reader_tile_l1_cull + writer_tile_l1_mask did in the separate cull program.
+// At most CULL_DEPTH batches are in flight per mover (== the CB depths), so
+// neither side ever blocks on a full CB. The stream ends with a tile whose
+// word END_WORD is non-zero.
+#if defined(FUSE_CULL) && FUSE_CULL
+constexpr uint32_t CB_COEFF = MAT_CB_BASE + 8;
+constexpr uint32_t CB_KEEP = MAT_CB_BASE + 9;
+constexpr uint32_t COEFF_BATCH = 128u;      // 4 groups x 32 SFPU lanes
+constexpr uint32_t OPQ_BIAS = 0x4B000000u;  // fp32 2^23; field = 2^23 + UNORM16 opacity
+constexpr uint32_t END_WORD = 1023u;        // == mat_cull_compute.cpp (outside the SFPU fields)
+constexpr uint32_t CULL_DEPTH = FUSE_CULL_DEPTH;
+
+// == reader_tile_l1_cull.cpp fill_coeff_tile: record i -> lane i%32 of group
+// i/32; field pairs (A,B), (C,opq), (mx,my) are adjacent tile words.
+inline void fill_coeff_tile(uint32_t slab, uint32_t base, uint32_t n, uint32_t tile) {
+    for (uint32_t i = 0; i < n; ++i) {
+        auto src = reinterpret_cast<volatile uint32_t*>(slab + (base + i) * L1_SPLAT_BYTES);
+        auto dst = reinterpret_cast<volatile uint32_t*>(tile) + 192u * (i >> 5) + 2u * (i & 31u);
+        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2];
+        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6];
+        dst[0] = w0;
+        dst[1] = w1;
+        dst[64] = w2;
+        dst[65] = OPQ_BIAS | (w6 & 0xffffu);
+        dst[128] = w4;
+        dst[129] = w5;
+    }
+    reinterpret_cast<volatile uint32_t*>(tile)[END_WORD] = 0u;
+}
+
+// == writer_tile_l1_mask.cpp: record i's mask halves are 2^23 + bits at keep
+// words 64*(i/32) + 2*(i%32) (+1 for bits 16-31).
+inline void patch_batch(uint32_t slab, uint32_t base, uint32_t n) {
+    cb_wait_front(CB_KEEP, 1);
+    auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
+    auto rec = reinterpret_cast<volatile uint32_t*>(slab + base * L1_SPLAT_BYTES);
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t o = 64u * (i >> 5) + 2u * (i & 31u);
+        const uint32_t lo = keep[o], hi = keep[o + 1u];
+        rec[i * 8u + 3u] = (lo & 0xffffu) | (hi << 16);
+    }
+    cb_pop_front(CB_KEEP, 1);
+}
+
+// Cull the n records at slab (record k at slab + 32k): word3 := mask.
+inline void cull_slab(uint32_t slab, uint32_t n) {
+    MAT_PZ("mat_cull");
+    uint32_t pushed = 0, patched = 0;
+    for (uint32_t base = 0; base < n; base += COEFF_BATCH) {
+        if (pushed - patched == CULL_DEPTH) {
+            const uint32_t pb = patched * COEFF_BATCH;
+            patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+            ++patched;
+        }
+        cb_reserve_back(CB_COEFF, 1);
+        const uint32_t tile = get_write_ptr(CB_COEFF);
+        fill_coeff_tile(slab, base, (n - base < COEFF_BATCH) ? (n - base) : COEFF_BATCH, tile);
+        asm volatile("fence" ::: "memory");
+        cb_push_back(CB_COEFF, 1);
+        ++pushed;
+    }
+    while (patched < pushed) {
+        const uint32_t pb = patched * COEFF_BATCH;
+        patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+        ++patched;
+    }
+    asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads the slab
+}
+
+inline void cull_end_stream() {
+    cb_reserve_back(CB_COEFF, 1);
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_COEFF))[END_WORD] = 1u;
+    asm volatile("fence" ::: "memory");
+    cb_push_back(CB_COEFF, 1);
+}
+#define CULL_SLAB(slab, n) cull_slab((slab), (n))
+#else
+#define CULL_SLAB(slab, n) ((void)0)
+#endif
+
 }  // namespace
 
 void kernel_main() {
@@ -179,6 +264,9 @@ void kernel_main() {
     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
 
     if (work_count == 0) {
+#if defined(FUSE_CULL) && FUSE_CULL
+        cull_end_stream();
+#endif
         return;
     }
 
@@ -188,6 +276,7 @@ void kernel_main() {
     auto idsp = reinterpret_cast<volatile uint32_t*>(ids_scr);
     const uint32_t rec_l1 = get_write_ptr(CB_REC);
     const uint32_t pack_l1 = get_write_ptr(CB_PACK);
+    (void)pack_l1;  // unused when FUSE_CULL gathers into the L1 slab
 
     // Radix histograms in local memory (stack), see sort_radix_tile_algo.h.
     // The work items are no longer copied to a 4 KB stack array (that plus
@@ -315,6 +404,7 @@ void kernel_main() {
                         MAT_PZ("mat_ov_perm");
                         permute_records(buck, slab, sorted + sc_off2, Ls);
                     }
+                    CULL_SLAB(slab, Ls);
                     MAT_PZ("mat_ov_wr");
                     const uint32_t out_pages =
                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
@@ -375,6 +465,7 @@ void kernel_main() {
                 MAT_PZ("mat_perm");
                 permute_records(buck, slab, sorted, L);
             }
+            CULL_SLAB(slab, L);
             MAT_PZ("mat_wr");
             const uint32_t out_pages =
                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
@@ -401,6 +492,14 @@ void kernel_main() {
         uint32_t nbrec = 0;
         uint32_t brec_out_g[REC_BATCH];
         int32_t sorted_id_page_cached = -1;
+#if defined(FUSE_CULL) && FUSE_CULL
+        // Task #90: gather the part into the L1 slab (record out_g - part_start
+        // at slab + 32 * (out_g - part_start)), cull it, then write it in
+        // SLAB_PAGE_BYTES pages (part_start is a multiple of GATHER_PART_RECS,
+        // so the part starts on a payload page).
+        const uint32_t part_start = processed;
+        const uint32_t gslab = get_write_ptr(CB_SLAB);
+#endif
         auto flush_brec_batch = [&]() {
             if (nbrec == 0) return;
             noc_async_read_barrier();
@@ -409,7 +508,12 @@ void kernel_main() {
                 auto aos = reinterpret_cast<volatile uint32_t*>(slot);
                 // Pack into CB_PACK (not slot+32): blendrec aos[8]/aos[9] live in
                 // the upper 32B of the 64B page and overlap PACK2 splat[0..1].
+#if defined(FUSE_CULL) && FUSE_CULL
+                auto splat = reinterpret_cast<volatile uint32_t*>(
+                    gslab + (brec_out_g[b] - part_start) * L1_SPLAT_BYTES);
+#else
                 auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
+#endif
                 // Tile-local mean fl(m - tile origin) via the integer sub_int
                 // (bit-exact, no __subsf3 on NCRISC); float only outside its range.
                 // Load every needed word before the first store (see
@@ -438,6 +542,7 @@ void kernel_main() {
                 // cost, now eliminated off the long pole.
                 splat[6] = a10;
                 splat[7] = a11;
+#if !(defined(FUSE_CULL) && FUSE_CULL)
                 const uint32_t out_g = brec_out_g[b];
                 const uint32_t out_page = sc_page + (out_g / SLAB_RECS_PER_PAGE);
                 const uint32_t out_off = (out_g % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;
@@ -445,8 +550,11 @@ void kernel_main() {
                     pack_l1,
                     get_noc_addr(out_page, payload_acc) + out_off,
                     L1_SPLAT_BYTES);
+#endif
             }
+#if !(defined(FUSE_CULL) && FUSE_CULL)
             noc_async_write_barrier();
+#endif
             nbrec = 0;
         };
         while (processed < part_end) {
@@ -471,5 +579,23 @@ void kernel_main() {
             processed += take;
         }
         flush_brec_batch();
+#if defined(FUSE_CULL) && FUSE_CULL
+        {
+            const uint32_t n = part_end - part_start;
+            cull_slab(gslab, n);
+            const uint32_t page0 = sc_page + part_start / SLAB_RECS_PER_PAGE;
+            const uint32_t out_pages = (n + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+            for (uint32_t p = 0; p < out_pages; ++p) {
+                const uint32_t recs = (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE
+                                                           : (n - p * SLAB_RECS_PER_PAGE);
+                noc_async_write(gslab + p * SLAB_PAGE_BYTES,
+                                get_noc_addr(page0 + p, payload_acc), recs * L1_SPLAT_BYTES);
+            }
+            noc_async_write_barrier();
+        }
+#endif
     }
+#if defined(FUSE_CULL) && FUSE_CULL
+    cull_end_stream();
+#endif
 }

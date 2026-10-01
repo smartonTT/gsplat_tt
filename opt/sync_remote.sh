@@ -16,7 +16,16 @@
 set -euo pipefail
 HOST=${1:?host}; DIR=${2:?remote_dir}; REV=${3:-HEAD}
 SHA=$(git rev-parse "$REV")
-git archive --format=tar "$SHA" | ssh -o BatchMode=yes "$HOST" \
+# Skip what a device run never reads: the LFS hero fixtures (*.npz, ~330 MB once
+# git-lfs smudges them; test inputs only), committed profiler captures
+# (ttw-*/, *.tracy, profile_log_device*.csv, ~600 MB) and screenshots (~150 MB).
+# Streaming those made a sync take 15-30+ min (tasks #86, #90); the remote keeps
+# any copies it already has. SYNC_ALL=1 sends the whole tree.
+EXCL=(":(exclude)tests/fixtures/hero/*.npz" ":(exclude)opt/profiler/ttw-*"
+      ":(exclude,glob)**/*.tracy" ":(exclude,glob)**/profile_log_device*.csv"
+      ":(exclude)opt/metal-screenshots")
+[ "${SYNC_ALL:-0}" = 1 ] && EXCL=()
+git archive --format=tar "$SHA" -- . "${EXCL[@]}" | ssh -o BatchMode=yes "$HOST" \
   "mkdir -p '$DIR' && tar -m -x -C '$DIR' && echo $SHA > '$DIR/SHA'"
 ssh -o BatchMode=yes "$HOST" "DIR='$DIR' bash -s" <<'REMOTE'
 set -eu

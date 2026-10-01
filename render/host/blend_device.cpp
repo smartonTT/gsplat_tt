@@ -1294,7 +1294,9 @@ double blend_mb_devcull_resident(
 
     // Tile-local L1 cull (step D): SFPU masks on loaded subchunks into L1 buffer.
     double cull_ms = 0.0;
-    const bool sfpu_cull = true;
+    // Task #90: with the cull fused into sort_subchunk_mat the masks are already
+    // in slab word3 when the blend launches.
+    const bool sfpu_cull = !gsplat_tt::sort_matcull_fused();
     const bool chain_cull_blend = sfpu_cull && gsplat_tt::env_config::cull_pipeline_enabled();
     if (sfpu_cull) {
         if (!g_ctx_cull) {

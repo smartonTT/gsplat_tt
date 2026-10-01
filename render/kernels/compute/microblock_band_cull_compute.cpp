@@ -279,6 +279,9 @@ inline void band_batch(uint32_t inv_floor_bits) {
 
 }  // namespace
 
+// Task #90: mat_cull_compute.cpp includes this file for the band-cull SFPU code
+// and supplies its own kernel_main.
+#ifndef BAND_CULL_NO_MAIN
 void kernel_main() {
     DeviceZoneScopedN("tile_mb_mask");
     const uint32_t floor_bits = get_arg_val<uint32_t>(1);
@@ -330,3 +333,4 @@ void kernel_main() {
         }
     }
 }
+#endif  // BAND_CULL_NO_MAIN

@@ -40,6 +40,11 @@ double blend_mb_devcull_resident(
 
 void device_shutdown();
 
+// Task #90: true when the SFPU microblock cull runs inside the sort_subchunk_mat
+// program (sort_device.cpp; GSPLAT_TT_FUSE_MATCULL=0 restores the separate
+// tile_l1_cull program). The blend then skips its own cull pass.
+bool sort_matcull_fused();
+
 // Force-create resident blend/cull MeshWorkload contexts (JIT compile only).
 void blend_warmup_resident_contexts();
 
