@@ -1091,7 +1091,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             ctx->last_vis_P = mread[1];
             ctx->last_vis = true;
             if (check) {
-                auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+                auto rd = [&](std::shared_ptr<distributed::MeshBuffer> b) {
                     std::vector<uint32_t> v(b->size() / 4);
                     distributed::EnqueueReadMeshBuffer(*ctx->cq, v, b, true);
                     return v;
