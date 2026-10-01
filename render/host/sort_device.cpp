@@ -335,7 +335,7 @@ static bool sort_onelaunch_enabled() {
 }
 // Records per tile bucket (== the legacy MAX_TILE_ENTRIES limit) and the
 // emit's L1 page window (== sort_bin_onelaunch.cpp WIN_PAGES).
-constexpr uint32_t kOneLaunchTileCap = 32768;
+constexpr uint32_t kOneLaunchTileCap = sort_onelaunch::kTileCap;
 constexpr uint32_t kOneLaunchWinPages = 1536;
 // Coefficient/mask tiles in flight per mover in the fused mat+cull program
 // (== the depth of each CB_COEFF / CB_KEEP; 4 KB fp32 tiles, 4 CBs).

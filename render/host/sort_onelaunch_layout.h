@@ -24,6 +24,10 @@ namespace gsplat_tt::sort_onelaunch {
 
 inline constexpr uint32_t kElemsPerPage = 16;  // u32 per 64 B page
 inline constexpr uint32_t kDropped = 0xFFFFFFFFu;
+// Records per tile bucket (== sort_device.cpp MAX_TILE_ENTRIES, the legacy
+// per-tile limit). The materialize's big path keeps keys + 3 tile_cap u32
+// arrays in its 512 KB bucket CB, so tile_cap <= 43690.
+inline constexpr uint32_t kTileCap = 32768;
 
 struct CoreSplit {
     uint32_t lo = 0, mid = 0, hi = 0;  // pair pages: mover 0 [lo, mid), mover 1 [mid, hi)
