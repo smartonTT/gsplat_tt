@@ -70,6 +70,15 @@ constexpr uint32_t REC_PAGE_RECS = REC_PAGE_BYTES / 32u;
 // (allocated in sort_device.cpp build_program_bin); mover 1 uses the base ids.
 constexpr uint32_t MOVER0_CB_OFFSET = 16;
 
+// Task #98: profiling-only ablations of the emit (GSPLAT_TT_EMIT_ABLATE=<mask>).
+// Each set bit removes one part so an untraced run bounds what it costs; the
+// output is WRONG with any bit set. 1: 32 B record writes, 2: 16 B packoc
+// writes, 4: pack_invariants + pack_rec, 8: blendrec prefetch reads,
+// 16: depth page reads. Unset (default) builds the unchanged kernel.
+#ifndef EMIT_ABLATE
+#define EMIT_ABLATE 0u
+#endif
+
 // Bit-exact IEEE 754 fp32→fp16 (round-to-nearest-even, no flush-to-zero).
 // Used for packing the 32B L1 record (M0, GSPLAT_TT_L1_RECORD).
 inline uint16_t fp32_to_fp16(float x) {
@@ -454,6 +463,7 @@ void kernel_main() {
     // granule (same as the proven buf_l1_recs scatter).
     auto flush_recs = [&]() {
         if (nbrec == 0) return;
+        if constexpr ((EMIT_ABLATE & 1u) != 0u) { nbrec = 0; return; }
         for (uint32_t b = 0; b < nbrec; b++) {
             // Skip the 32B scatter for over-cap overflow records (gather fallback).
             if (brec_l1_slot[b] == 0xFFFFFFFFu) continue;
@@ -499,6 +509,7 @@ void kernel_main() {
     uint32_t n_packoc = 0;
     auto flush_packoc = [&]() {
         if (n_packoc == 0) return;
+        if constexpr ((EMIT_ABLATE & 2u) != 0u) { n_packoc = 0; return; }
         for (uint32_t b = 0; b < n_packoc; b++) {
             noc_async_write(packoc_l1 + b * (PACKOC_ENT_W * 4u),
                             get_noc_addr(packoc_g[b], blendrec_acc) + 32u,
@@ -534,6 +545,7 @@ void kernel_main() {
     float inv_mx = 0.0f, inv_my = 0.0f;
     uint32_t inv_mx_bits = 0, inv_my_bits = 0;
     auto pack_invariants = [&](uint32_t depth_key) {
+        if constexpr ((EMIT_ABLATE & 4u) != 0u) { inv_depth = depth_key; return; }
         inv_cov0 = cachep[0];  // fp32 cov_a (exact: no fp16 det cancellation)
         inv_cov1 = cachep[1];  // fp32 cov_b
         inv_cov2 = cachep[2];  // fp32 cov_c
@@ -567,6 +579,7 @@ void kernel_main() {
         inv_cgb = (to_unorm(cachep[7]) | (to_unorm(cachep[8]) << 16));
     };
     auto pack_rec = [&](uint32_t b, uint32_t tt) {
+        if constexpr ((EMIT_ABLATE & 4u) != 0u) { (void)b; (void)tt; return; }
         // Tile-local mean: the blend reader reconstructs absolute via
         // mean = local + tile_origin. Only this is per-pair (per-tile) work.
         // tx = tt % l1_tiles_x, ty = tt / l1_tiles_x — soft-divmod replaced by a
@@ -606,7 +619,7 @@ void kernel_main() {
         // T-B(2): prefetch this page's blendrec pages. The scan uses the same
         // "g differs from the previous kept g" test as the consume loop below,
         // so slot k holds exactly the page the old code read at its k-th miss.
-        {
+        if constexpr ((EMIT_ABLATE & 8u) == 0u) {
             int32_t prev_g = blendrec_cached_g;
             uint32_t n_pf = 0;
             for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
@@ -631,9 +644,11 @@ void kernel_main() {
             const uint32_t t = static_cast<uint32_t>(tidp[j]);
             const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
             if (dpg != dep_cached_page) {
-                noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
-                               dep_l1, PAGE_BYTES);
-                noc_async_read_barrier();
+                if constexpr ((EMIT_ABLATE & 16u) == 0u) {
+                    noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
+                                   dep_l1, PAGE_BYTES);
+                    noc_async_read_barrier();
+                }
                 dep_cached_page = dpg;
             }
             const uint32_t key = depp[g % ELEMS_PER_PAGE];

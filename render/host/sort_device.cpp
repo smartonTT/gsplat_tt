@@ -824,6 +824,13 @@ static void build_program_bin(SortDeviceContext& ctx) {
     // kernel source; the debug/verify defines (BIN_NO_DEPTH, BIN_DUMP,
     // L1_SORT_VERIFY) were removed with their kernel branches.
     std::map<std::string, std::string> defines;
+    // Task #98: GSPLAT_TT_EMIT_ABLATE=<mask> (profiling only, output is wrong)
+    // removes parts of the emit; see EMIT_ABLATE in sort_bin.cpp.
+    if (const char* e = std::getenv("GSPLAT_TT_EMIT_ABLATE"); e != nullptr && std::atoi(e) > 0) {
+        defines["EMIT_ABLATE"] = std::to_string(std::atoi(e)) + "u";
+        std::cerr << "[gsplat_tt::sort] GSPLAT_TT_EMIT_ABLATE=" << e
+                  << ": profiling ablation, the rendered output is WRONG\n";
+    }
     ctx.kbin = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin.cpp",
