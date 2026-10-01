@@ -22,6 +22,7 @@
 #include "env_config.h"
 #include "sort.h"
 #include "sort_mover_split.h"
+#include "sort_onelaunch_layout.h"
 #include "device_state.h"
 #include "host_tracy.hpp"
 #include "stage_timers.h"
@@ -1970,6 +1971,226 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->cap_bucket_meta_bytes = bm_bytes;
                 device_state::register_buffer("sort_bucket_meta", ctx->buf_bucket_meta);
             }
+        }
+
+        // ── Task #106 (lever 1): one-launch device sort ─────────────────────
+        // GSPLAT_TT_SORT_ONELAUNCH=1: sort_bin_onelaunch.cpp counts, lays out
+        // (device prefix sum over cores between two semaphore barriers) and
+        // emits every record into its tile's fixed-capacity bucket in ONE
+        // launch; the materialize sorts each bucket (canonical order, stable
+        // depth radix), byte-identical to the prefix-sum layout's sort. The
+        // host reads the totals rows (8 KB) instead of the histogram, uploads
+        // no layout and launches no radix or publish.
+        ctx->ol_frame = false;
+        if (sort_onelaunch_enabled() && tile_bucket && !need_host_sorted_ids &&
+            resident_blend_chain_enabled() && sort_device_publish_enabled()) {
+            using ms_t = std::chrono::duration<double, std::milli>;
+            if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
+            const uint32_t cap = kOneLaunchTileCap;
+            const uint32_t row_pages = stride / ELEMS_PER_PAGE;
+            auto* dev = ctx->mesh_device.get();
+            const std::size_t bucket_bytes = static_cast<std::size_t>(num_tiles) * cap * 32u;
+            if (!ctx->buf_ol_bucket || ctx->cap_ol_bucket_bytes < bucket_bytes) {
+                ctx->buf_ol_bucket = make_dram_paged(dev, bucket_bytes, render_config::kRecPageBytes);
+                ctx->cap_ol_bucket_bytes = bucket_bytes;
+            }
+            // The blend's argument lists name sort_l1_recs and sort_tile_recs; a
+            // run with only one-launch frames never creates them (not read here).
+            if (!device_state::get_buffer("sort_l1_recs")) {
+                device_state::register_buffer("sort_l1_recs", ctx->buf_ol_bucket);
+            }
+            if (!ctx->buf_tile_recs) {
+                ctx->buf_tile_recs = make_dram(dev, PAGE_BYTES);
+                ctx->cap_tile_recs_bytes = PAGE_BYTES;
+                device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
+            }
+            const std::size_t rows_bytes = static_cast<std::size_t>(num_cores) * stride * 4u;
+            if (!ctx->buf_ol_counts || ctx->cap_ol_rows_bytes < rows_bytes) {
+                ctx->buf_ol_counts = make_dram(dev, rows_bytes);
+                ctx->buf_ol_bases = make_dram(dev, rows_bytes);
+                ctx->cap_ol_rows_bytes = rows_bytes;
+            }
+            const std::size_t totals_bytes = static_cast<std::size_t>(stride) * 2u * 4u;
+            if (!ctx->buf_ol_totals || ctx->cap_ol_totals_bytes < totals_bytes) {
+                ctx->buf_ol_totals = make_dram(dev, totals_bytes);
+                ctx->cap_ol_totals_bytes = totals_bytes;
+            }
+
+            const auto t_e0 = clk::now();
+            Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+            std::vector<uint32_t> noc_xy(num_cores, 0u);
+            for (uint32_t c = 0; c < num_cores; c++) {
+                const CoreCoord v = ctx->mesh_device->worker_core_from_logical_core(
+                    CoreCoord{c % ctx->grid.x, c / ctx->grid.x});
+                noc_xy[c] = static_cast<uint32_t>(v.x) | (static_cast<uint32_t>(v.y) << 16);
+            }
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                const uint32_t lo = ws.start[c];
+                const uint32_t hi = ws.start[c] + ws.count[c];
+                const uint32_t mid = lo + static_cast<uint32_t>(
+                    static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
+                std::vector<uint32_t> a = {
+                    static_cast<uint32_t>(bgid->address()),
+                    static_cast<uint32_t>(btid->address()),
+                    static_cast<uint32_t>(bkeep->address()),
+                    static_cast<uint32_t>(bdep->address()),
+                    blendrec_addr,
+                    static_cast<uint32_t>(ctx->buf_ol_bucket->address()),
+                    static_cast<uint32_t>(ctx->buf_ol_counts->address()),
+                    static_cast<uint32_t>(ctx->buf_ol_bases->address()),
+                    static_cast<uint32_t>(ctx->buf_ol_totals->address()),
+                    mid, hi, P_full, num_tiles, row_pages, c, num_cores, cap,
+                    static_cast<uint32_t>(tiles_x), 1u,
+                    ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
+                    ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
+                    noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16,
+                };
+                SetRuntimeArgs(oprog, ctx->kol, core, a);
+                a[9] = lo;
+                a[10] = mid;
+                a[18] = 0u;
+                if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
+                SetRuntimeArgs(oprog, ctx->kol0, core, a);
+            }
+            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_onelaunch, false);
+            std::vector<uint32_t> tot(ctx->cap_ol_totals_bytes / 4, 0u);
+            {
+                GSPLAT_HOST_ZONE("host_finish_sort_onelaunch");
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, tot, ctx->buf_ol_totals, true);
+            }
+            const auto t_e1 = clk::now();
+            T.bin_emit_ms = ms_t(t_e1 - t_e0).count();
+            T.bin_ms = T.bin_emit_ms;
+            // GSPLAT_TT_SORT_ONELAUNCH_CHECK=1 (debug): read the count and base
+            // rows back and check the device prefix against the host's.
+            static const bool ol_check = [] {
+                const char* e = std::getenv("GSPLAT_TT_SORT_ONELAUNCH_CHECK");
+                return e != nullptr && e[0] == '1';
+            }();
+            if (ol_check) {
+                std::vector<uint32_t> crow(ctx->cap_ol_rows_bytes / 4, 0u);
+                std::vector<uint32_t> brow(ctx->cap_ol_rows_bytes / 4, 0u);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, crow, ctx->buf_ol_counts, true);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, brow, ctx->buf_ol_bases, true);
+                const uint32_t bad = sort_onelaunch::check_prefix(crow, brow, tot, num_cores,
+                                                                  stride, num_tiles);
+                std::fprintf(stderr, "[SORT] ONELAUNCH_CHECK bad_tiles=%u\n", bad);
+            }
+
+            // Per-tile layout from the totals alone.
+            std::vector<int64_t> counts(num_tiles, 0);
+            std::vector<int64_t> pad_counts(num_tiles, 0);
+            std::vector<uint32_t> bmeta(ctx->cap_bucket_meta_bytes / 4, 0u);
+            uint32_t P_kept = 0;
+            uint32_t max_n = 0;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                const uint32_t n = tot[t];
+                if (n > cap) {
+                    std::cerr << "[gsplat_tt::sort] tile " << t << " holds " << n
+                              << " records > bucket capacity " << cap
+                              << " (records past it were dropped) — hard fail "
+                                 "(render_clean is single-path TT, no host fallback)\n";
+                    return fail();
+                }
+                if (tot[stride + t] > MAX_TILE_ENTRIES) {  // the legacy layout's status 2
+                    std::cerr << "[gsplat_tt::sort] padded tile exceeds MAX_TILE_ENTRIES; "
+                                 "hard fail (render_clean is single-path TT, no host fallback)\n";
+                    return fail();
+                }
+                counts[t] = n;
+                pad_counts[t] = tot[stride + t];  // == the legacy LPT cost (per-core pages)
+                bmeta[static_cast<std::size_t>(t) * 2 + 0] = P_kept;
+                bmeta[static_cast<std::size_t>(t) * 2 + 1] = n;
+                if (n > 0) {
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 0] = P_kept;
+                    result.tile_ranges[static_cast<std::size_t>(t) * 2 + 1] = P_kept + n;
+                }
+                P_kept += n;
+                max_n = std::max(max_n, n);
+            }
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bucket_meta, bmeta, false);
+            const LptAssignment lpt = build_lpt(pad_counts, num_tiles, num_cores);
+            std::vector<uint32_t> tile_ids_flat(ctx->cap_tile_ids_bytes / 4, 0u);
+            std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
+            publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tile_ids, tile_ids_flat, false);
+            // Padded [start, start + count) per tile, the publish path's layout
+            // (the materialize and blend read counts from it).
+            std::vector<int64_t> padded_ranges(result.tile_ranges.size(), 0);
+            uint32_t padded_cursor = 0;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                const uint32_t n = static_cast<uint32_t>(counts[t]);
+                padded_ranges[2 * t] = static_cast<int64_t>(padded_cursor);
+                padded_ranges[2 * t + 1] = static_cast<int64_t>(padded_cursor + n);
+                padded_cursor += round_up(n, ELEMS_PER_PAGE);
+            }
+            // sort_sorted_ids has no reader here; keep one registered for the
+            // blend's argument lists.
+            ensure_resident_sorted_buffer(ctx, ELEMS_PER_PAGE);
+            upload_resident_tile_ranges(ctx, padded_ranges);
+            const auto t_l1 = clk::now();
+            T.bin_layout_ms = ms_t(t_l1 - t_e1).count();
+
+            const SubchunkLayout sc_layout =
+                build_subchunk_layout(counts, num_tiles, render_config::kBucketFit);
+            log_subchunk_layout_stats(sc_layout);
+            const MatWorkAssignment ol_work =
+                build_mat_worklist(counts, num_tiles, num_cores, render_config::kBucketFit,
+                                   sort_mat_movers(), kMatMover0Cap, /*onelaunch=*/true);
+            if (ol_work.max_items_per_core > 1024u) {
+                std::cerr << "[gsplat_tt::sort] materialize work items/core "
+                          << ol_work.max_items_per_core << " > MAX_WORK=1024\n";
+                return fail();
+            }
+            if (!prepare_subchunk_buffers(ctx, sc_layout, num_tiles)) {
+                std::cerr << "[gsplat_tt::sort] subchunk buffer setup failed\n";
+                return fail();
+            }
+            upload_subchunk_directory(ctx, sc_layout);
+            T.publish_host_ms = ms_t(clk::now() - t_l1).count();
+            T.publish_ms = T.publish_host_ms;
+            T.total_ms = ms_t(clk::now() - t_total0_rp).count();
+            std::fprintf(stderr,
+                "[SORT] stage=ONELAUNCH P=%u P_kept=%u num_tiles=%u max_tile_n=%u "
+                "onelaunch=%.2f layout=%.2f pub_host=%.2f total=%.2fms\n",
+                P_full, P_kept, num_tiles, max_n, T.bin_emit_ms, T.bin_layout_ms,
+                T.publish_host_ms, T.total_ms);
+            if (device_ok) *device_ok = true;
+            // Materialize as the legacy path does (piped: before the blend, no
+            // drain unless GSPLAT_TT_SPLIT_BLEND=1).
+            ctx->ol_frame = true;
+            bool mat_ok = true;
+            if (sort_blend_pipe_enabled()) {
+                device_state::mark_sort_publish_pending();
+                const bool split = stagetimers::split_blend();
+                stagetimers::Span mat_span(split ? stagetimers::acc().mat : T.materialize_ms);
+                mat_ok = launch_subchunk_materialize(ctx, ol_work, num_cores,
+                                                     static_cast<uint32_t>(tiles_x),
+                                                     render_config::kBucketFit, sort_blend);
+                if (mat_ok && split) {
+                    GSPLAT_HOST_ZONE("host_finish_mat_split");
+                    distributed::Finish(*ctx->cq);
+                }
+                mat_span.stop();
+            } else {
+                const auto t_mat0 = clk::now();
+                mat_ok = launch_subchunk_materialize(ctx, ol_work, num_cores,
+                                                     static_cast<uint32_t>(tiles_x),
+                                                     render_config::kBucketFit);
+                if (mat_ok) {
+                    GSPLAT_HOST_ZONE("host_finish_sort_materialize");
+                    distributed::Finish(*ctx->cq);
+                }
+                T.materialize_ms = ms_t(clk::now() - t_mat0).count();
+            }
+            ctx->ol_frame = false;
+            if (!mat_ok) {
+                std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
+                return fail();
+            }
+            maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
+            return result;
         }
 
         // M0: l1_record buffers.
