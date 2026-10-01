@@ -26,7 +26,7 @@ struct vUInt {
     vUInt operator|(const vUInt&) const; vUInt operator&(const vUInt&) const;
 };
 struct DstProxy { operator vFloat() const; DstProxy& operator=(const vFloat&); };
-struct DstReg { DstProxy operator[](int) const; };
+struct DstReg { DstProxy operator[](int) const; void operator+=(int) const; void operator++(int) const; };
 extern DstReg dst_reg;
 template <class T, class U> T reinterpret(const U&);
 void vec_min_max(vFloat&, vFloat&);

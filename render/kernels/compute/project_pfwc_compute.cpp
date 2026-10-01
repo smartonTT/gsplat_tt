@@ -210,18 +210,31 @@ constexpr uint32_t VP_KN = 0, VP_MO = 1, VP_W = 2, VP_H = 3, VP_R = 4, VP_INV = 
 constexpr uint32_t VIS_PARAMS = 9;
 
 #ifdef TRISC_MATH
+// pfwc_vis_one<V> is instantiated for V < 16 only and run twice per tile, the
+// second time with the DEST counter advanced by 16 vectors (pfwc_vis_half):
+// 32 noinline copies made the PFWC_VIS program 83 KB, over the 70.6 KB kernel
+// config buffer (task #102). The counter also offsets the slot-6 parameter
+// reads, so the parameters are staged at rows p and 16 + p.
 inline void pfwc_vis_stage(const uint32_t* b) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
-    dst_reg[DR_VP + VP_KN] = Converter::as_float(b[VP_KN]);
-    dst_reg[DR_VP + VP_MO] = Converter::as_float(b[VP_MO]);
-    dst_reg[DR_VP + VP_W] = Converter::as_float(b[VP_W]);
-    dst_reg[DR_VP + VP_H] = Converter::as_float(b[VP_H]);
-    dst_reg[DR_VP + VP_R] = Converter::as_float(b[VP_R]);
-    dst_reg[DR_VP + VP_INV] = Converter::as_float(b[VP_INV]);
-    dst_reg[DR_VP + VP_TX1] = Converter::as_float(b[VP_TX1]);
-    dst_reg[DR_VP + VP_TY1] = Converter::as_float(b[VP_TY1]);
-    dst_reg[DR_VP + VP_TAU] = Converter::as_float(b[VP_TAU]);
+    for (uint32_t h = 0; h < 32; h += 16) {
+        dst_reg[DR_VP + h + VP_KN] = Converter::as_float(b[VP_KN]);
+        dst_reg[DR_VP + h + VP_MO] = Converter::as_float(b[VP_MO]);
+        dst_reg[DR_VP + h + VP_W] = Converter::as_float(b[VP_W]);
+        dst_reg[DR_VP + h + VP_H] = Converter::as_float(b[VP_H]);
+        dst_reg[DR_VP + h + VP_R] = Converter::as_float(b[VP_R]);
+        dst_reg[DR_VP + h + VP_INV] = Converter::as_float(b[VP_INV]);
+        dst_reg[DR_VP + h + VP_TX1] = Converter::as_float(b[VP_TX1]);
+        dst_reg[DR_VP + h + VP_TY1] = Converter::as_float(b[VP_TY1]);
+        dst_reg[DR_VP + h + VP_TAU] = Converter::as_float(b[VP_TAU]);
+    }
+}
+
+// Advance the SFPU DEST counter by 16 vectors (32 rows) in 8-row steps, as
+// _llk_math_eltwise_unary_sfpu_inc_dst_face_addr_ does.
+inline void pfwc_vis_half() {
+    for (uint32_t k = 0; k < 4; k++) sfpi::dst_reg += 4;
 }
 
 // Tile coordinate of a scaled edge q = fl(m +- r) * 2^-s: clamp to [0, hi],
@@ -370,7 +383,7 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
 
 template <uint32_t V>
 inline void pfwc_vis_unroll() {
-    if constexpr (V < 32) {
+    if constexpr (V < 16) {
         MATH((pfwc_vis_one<V>()));
         pfwc_vis_unroll<V + 1>();
     }
@@ -823,6 +836,8 @@ void kernel_main() {
 
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
             MATH((pfwc_vis_stage(vis_bits)));
+            pfwc_vis_unroll<0>();
+            MATH((pfwc_vis_half()));
             pfwc_vis_unroll<0>();
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
 
