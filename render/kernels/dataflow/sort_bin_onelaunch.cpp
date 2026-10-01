@@ -33,7 +33,9 @@
 // the frame (the legacy MAX_TILE_ENTRIES limit is the same number). No (key, id)
 // layout and no packoc write-back: in this mode nothing reads sort_sorted_ids or
 // blendrec words 10, 11 (the over-cap gather they fed is replaced by the
-// materialize's bucket path).
+// materialize's bucket path). EMIT_PUBOC (host GSPLAT_TT_EMIT_PUBOC, task #100):
+// the gather published op/color UNORM16 (blendrec[10], [11]) and the depth key
+// ([12]), so the emit copies them and reads no depth pages.
 //
 // RUNTIME ARGS
 //   0 gids  1 tids  2 keep  3 depth  4 blendrec  5 bucket  6 count rows
@@ -50,6 +52,10 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
+
+#ifndef EMIT_PUBOC
+#define EMIT_PUBOC 0u
+#endif
 
 namespace {
 
@@ -343,8 +349,13 @@ void kernel_main() {
         inv_my_bits = cachep[4];
         __builtin_memcpy(&inv_mx, &inv_mx_bits, 4);
         __builtin_memcpy(&inv_my, &inv_my_bits, 4);
-        inv_opr = (to_unorm(cachep[5]) | (to_unorm(cachep[6]) << 16));
-        inv_cgb = (to_unorm(cachep[7]) | (to_unorm(cachep[8]) << 16));
+        if constexpr (EMIT_PUBOC != 0u) {
+            inv_opr = cachep[10];
+            inv_cgb = cachep[11];
+        } else {
+            inv_opr = (to_unorm(cachep[5]) | (to_unorm(cachep[6]) << 16));
+            inv_cgb = (to_unorm(cachep[7]) | (to_unorm(cachep[8]) << 16));
+        }
     };
     auto pack_rec = [&](uint32_t b, uint32_t tt) {
         const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % tiles_x);
@@ -388,7 +399,7 @@ void kernel_main() {
             noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc),
                            rec_cache_l1 + (h * RING + nb) * PAGE_BYTES, PAGE_BYTES);
             const int32_t dpg = gj / static_cast<int32_t>(ELEMS_PER_PAGE);
-            if (dpg != prev_dpg) {
+            if (EMIT_PUBOC == 0u && dpg != prev_dpg) {
                 prev_dpg = dpg;
                 noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
                                dep_ring + (h * RING + nd) * PAGE_BYTES, PAGE_BYTES);
@@ -412,9 +423,13 @@ void kernel_main() {
                 cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1 + (h * RING + k) * PAGE_BYTES);
                 if (static_cast<int32_t>(g) != blendrec_cached_g) {
                     blendrec_cached_g = static_cast<int32_t>(g);
-                    auto dp = reinterpret_cast<volatile uint32_t*>(
-                        dep_ring + (h * RING + ent_dslot[h][k]) * PAGE_BYTES);
-                    pack_invariants(dp[g % ELEMS_PER_PAGE]);
+                    if constexpr (EMIT_PUBOC != 0u) {
+                        pack_invariants(cachep[12]);
+                    } else {
+                        auto dp = reinterpret_cast<volatile uint32_t*>(
+                            dep_ring + (h * RING + ent_dslot[h][k]) * PAGE_BYTES);
+                        pack_invariants(dp[g % ELEMS_PER_PAGE]);
+                    }
                 }
                 k++;
             }

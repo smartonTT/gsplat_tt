@@ -786,6 +786,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
     std::vector<uint32_t> ct;
     for (int i = 0; i < 9; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    // Task #100 PUBOC: copy the gather-published op/color/depth words.
+    std::map<std::string, std::string> defines;
+    defines["EMIT_PUBOC"] = gsplat_tt::env_config::emit_puboc() ? "1u" : "0u";
     ctx.kol = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",
@@ -794,6 +797,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = ct,
+            .defines = defines,
         });
     ctx.kol0 = CreateKernel(
         program,
@@ -803,6 +807,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = ct,
+            .defines = defines,
         });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.wl_onelaunch.add_program(device_range, std::move(program));

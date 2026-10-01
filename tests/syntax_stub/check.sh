@@ -17,6 +17,7 @@ chk "tile_assign_scatter.cpp" $DF render/kernels/dataflow/tile_assign_scatter.cp
 chk "tile_assign_scatter.cpp TA_K2_AABB" $DF -DTA_K2_AABB=1 render/kernels/dataflow/tile_assign_scatter.cpp
 chk "reader_pfwc.cpp" $DF render/kernels/dataflow/reader_pfwc.cpp
 chk "sort_bin_onelaunch.cpp" $DF render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "reader_pfwc.cpp PFWC_VIS" $DF -DPFWC_VIS=1 render/kernels/dataflow/reader_pfwc.cpp
