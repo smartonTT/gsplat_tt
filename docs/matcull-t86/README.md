@@ -1,7 +1,7 @@
 # Task #86: sort_subchunk_mat + SFPU cull attribution (written up by task #90)
 
 #86 was cancelled after two run timeouts and an API outage; this is what its
-branch (2603c40, 9abff74, d9373a6) and notes contain. Board: yyzo-bh-07 p100a,
+branch (2603c40, 9abff74, d9373a6; rebased as 3895efa, 4c16332, d8117a5) and notes contain. Board: yyzo-bh-07 p100a,
 bicycle views 0-9, Tracy with `GSPLAT_TT_MATCULL_PROF=1` (fine zones, default
 off) at 9abff74 (= a5f2bd6 + zones). Script: `opt/profiler/matcull_breakdown.py`.
 
