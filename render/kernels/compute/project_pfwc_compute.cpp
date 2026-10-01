@@ -36,6 +36,17 @@
 //   53          : k_bits (fp32 of k = 3.0 default)
 //   54          : neg_fx_bits (fp32 of -fx)
 //   55          : neg_fy_bits (fp32 of -fy)
+//   56..63      : PFWC_VIS only (task #99, lever 2): k_near, min_opacity, image
+//                 width, image height, max_radius, 1/tile_size, tiles_x - 1,
+//                 tiles_y - 1, all fp32 bits.
+//
+// PFWC_VIS (task #99, GSPLAT_TT_SFPU_VIS): step 11.5 also evaluates the gather
+// visibility predicate and the tile_assign K1 rectangle on the SFPU and emits
+// two more tiles, the tpg word and the aabb word per gaussian (encoding in
+// render/kernels/dataflow/vis_tile.h). Inputs: tz (CB_TMP_TZ), opacity (new
+// reader stream CB_OP) and mean_x/mean_y/rx/ry, which steps 4/5/10/11 also pack
+// into scratch CBs. tests/unit/test_vis_lever2.cpp models pfwc_vis_one lane by
+// lane and checks it against gather_visible_pred.h + tile_assign_bbox.cpp.
 
 #include <cstdint>
 
@@ -55,6 +66,9 @@
 #ifdef TRISC_MATH
 #include "sfpi.h"
 #include "llk_math_eltwise_unary_sfpu.h"
+#ifdef PFWC_VIS
+#include "sfpu/ckernel_sfpu_converter.h"
+#endif
 #endif
 
 namespace {
@@ -98,6 +112,17 @@ constexpr uint32_t CB_TMP_CC22   = 26;
 constexpr uint32_t CB_TMP_A      = 27;
 constexpr uint32_t CB_TMP_B      = 28;
 constexpr uint32_t CB_TMP_C      = 29;
+#ifdef PFWC_VIS
+// Lever 2 (task #99): opacity input, scratch copies of the outputs the
+// predicate needs, and the two word tiles (vis_tile.h).
+constexpr uint32_t CB_OP     = 30;
+constexpr uint32_t CB_TMP_MX = 31;
+constexpr uint32_t CB_TMP_MY = 32;
+constexpr uint32_t CB_TMP_RX = 33;
+constexpr uint32_t CB_TMP_RY = 34;
+constexpr uint32_t CB_TPG    = 35;
+constexpr uint32_t CB_AABB   = 36;
+#endif
 
 constexpr uint32_t COV3D_CB[6] = {CB_C00, CB_C11, CB_C22, CB_C01, CB_C02, CB_C12};
 constexpr uint32_t CC_SCRATCH[6] = {
@@ -174,6 +199,156 @@ inline void pfwc_conic_unroll() {
     }
 }
 
+#ifdef PFWC_VIS
+// Lever 2 (task #99). DEST slots: 0 tz, 1 opacity, 2 mean_x, 3 mean_y, 4 rx,
+// 5 ry; slot 6 holds the 8 runtime parameters as lane-broadcast vectors
+// (staged once per tile, task #68 pattern); outputs go to slot 0 (tpg word)
+// and slot 1 (aabb word).
+constexpr uint32_t DR_VP = 6 * 32;
+constexpr uint32_t VP_KN = 0, VP_MO = 1, VP_W = 2, VP_H = 3, VP_R = 4, VP_INV = 5, VP_TX1 = 6,
+                   VP_TY1 = 7;
+
+#ifdef TRISC_MATH
+inline void pfwc_vis_stage(const uint32_t* b) {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+    dst_reg[DR_VP + VP_KN] = Converter::as_float(b[VP_KN]);
+    dst_reg[DR_VP + VP_MO] = Converter::as_float(b[VP_MO]);
+    dst_reg[DR_VP + VP_W] = Converter::as_float(b[VP_W]);
+    dst_reg[DR_VP + VP_H] = Converter::as_float(b[VP_H]);
+    dst_reg[DR_VP + VP_R] = Converter::as_float(b[VP_R]);
+    dst_reg[DR_VP + VP_INV] = Converter::as_float(b[VP_INV]);
+    dst_reg[DR_VP + VP_TX1] = Converter::as_float(b[VP_TX1]);
+    dst_reg[DR_VP + VP_TY1] = Converter::as_float(b[VP_TY1]);
+}
+
+// Tile coordinate of a scaled edge q = fl(m +- r) * 2^-s: clamp to [0, hi],
+// then floor. For q in [0, 2^23), q + 2^23 rounds to one of the two integers
+// around q (any faithful rounding), and the r > q fix-up turns it into floor.
+// trunc(q) clamped == floor(clamp(q)) for an integer hi >= 0, which is what
+// tile_assign_bbox.cpp computes ((int) cast, then clampi).
+sfpi_inline sfpi::vFloat pfwc_vis_cell(sfpi::vFloat q, sfpi::vFloat hi) {
+    using namespace sfpi;
+    vFloat lo = 0.0f;
+    vec_min_max(lo, q);  // q = max(q, 0)
+    vec_min_max(q, hi);  // q = min(q, hi)
+    vFloat r = (q + 8388608.0f) - 8388608.0f;
+    v_if(r > q) { r = r - 1.0f; }
+    v_endif;
+    return r;
+}
+
+// One 32-lane vector V. Every comparison is a sign/zero test of one rounded
+// fp32 difference or sum, which has the sign of the exact value, so for finite
+// inputs the predicate is exact whatever the rounding (fl(m - r) is exact near
+// the image edge: r is an integer and |m| < 2^24 there). The rectangle's
+// fl(m + r) needs SFPMAD round-to-nearest-even (the check mode
+// GSPLAT_TT_SFPU_VIS=2 verifies it on device). inf/NaN inputs give RECHECK.
+// The SFPU has 8 vector registers and sfpi cannot spill them, so consumed
+// input rows are reused for intermediates (DEST round-trips fp32 exactly) and
+// at most ~6 vectors are live: slot 7 = recheck flag, then x0 -> slot 0,
+// y0 -> slot 1, x1 - x0 -> slot 2, y1 - y0 -> slot 3, sx / sy parked in 4 / 5.
+template <uint32_t V>
+__attribute__((noinline, noipa)) void pfwc_vis_one() {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+    constexpr uint32_t TZ = 0 * 32 + V, OP = 1 * 32 + V, MX = 2 * 32 + V, MY = 3 * 32 + V,
+                       RX = 4 * 32 + V, RY = 5 * 32 + V, RCK = 7 * 32 + V;
+    // 1. Recheck flag: exexp + 128 = biased exponent + 1 in [1, 256], 256 (bit 8)
+    //    only for inf/NaN; OR over the six inputs.
+    {
+        vInt nf = exexp(vFloat(dst_reg[TZ])) + 128;
+        nf = nf | (exexp(vFloat(dst_reg[OP])) + 128);
+        nf = nf | (exexp(vFloat(dst_reg[MX])) + 128);
+        nf = nf | (exexp(vFloat(dst_reg[MY])) + 128);
+        nf = nf | (exexp(vFloat(dst_reg[RX])) + 128);
+        nf = nf | (exexp(vFloat(dst_reg[RY])) + 128);
+        dst_reg[RCK] = 0.0f;
+        v_if(nf >= 256) { dst_reg[RCK] = 1.0f; }
+        v_endif;
+    }
+    // 2. gather_pred::visible_bits, one failed test at a time.
+    vFloat fail = 0.0f;
+    v_if(vFloat(dst_reg[TZ]) - vFloat(dst_reg[DR_VP + VP_KN]) <= 0.0f) { fail = 1.0f; }  // tz <= k_near
+    v_endif;
+    v_if(vFloat(dst_reg[DR_VP + VP_MO]) - vFloat(dst_reg[OP]) > 0.0f) { fail = 1.0f; }  // op < min_op
+    v_endif;
+    // x: rx tests, sx = fl(mx + rx), dx = fl(mx - rx), their tests, then x0 / x1.
+    {
+        vFloat rx = dst_reg[RX];
+        v_if(rx <= 0.0f) { fail = 1.0f; }
+        v_endif;
+        v_if(rx - vFloat(dst_reg[DR_VP + VP_R]) > 0.0f) { fail = 1.0f; }  // rx > max_radius
+        v_endif;
+        vFloat mx = dst_reg[MX];
+        vFloat sx = mx + rx;
+        vFloat dx = mx - rx;
+        v_if(sx <= 0.0f) { fail = 1.0f; }  // !(-rx < mx)
+        v_endif;
+        v_if(vFloat(dst_reg[DR_VP + VP_W]) - dx <= 0.0f) { fail = 1.0f; }  // !(fl(mx - rx) < W)
+        v_endif;
+        dst_reg[RX] = sx;
+        dst_reg[TZ] = pfwc_vis_cell(dx * vFloat(dst_reg[DR_VP + VP_INV]),
+                                    vFloat(dst_reg[DR_VP + VP_TX1]));  // x0
+    }
+    {
+        vFloat x1 = pfwc_vis_cell(vFloat(dst_reg[RX]) * vFloat(dst_reg[DR_VP + VP_INV]),
+                                  vFloat(dst_reg[DR_VP + VP_TX1]));
+        dst_reg[MX] = x1 - vFloat(dst_reg[TZ]);  // w - 1
+    }
+    // y: same with ry / my.
+    {
+        vFloat ry = dst_reg[RY];
+        v_if(ry <= 0.0f) { fail = 1.0f; }
+        v_endif;
+        v_if(ry - vFloat(dst_reg[DR_VP + VP_R]) > 0.0f) { fail = 1.0f; }
+        v_endif;
+        vFloat my = dst_reg[MY];
+        vFloat sy = my + ry;
+        vFloat dy = my - ry;
+        v_if(sy <= 0.0f) { fail = 1.0f; }
+        v_endif;
+        v_if(vFloat(dst_reg[DR_VP + VP_H]) - dy <= 0.0f) { fail = 1.0f; }
+        v_endif;
+        dst_reg[RY] = sy;
+        dst_reg[OP] = pfwc_vis_cell(dy * vFloat(dst_reg[DR_VP + VP_INV]),
+                                    vFloat(dst_reg[DR_VP + VP_TY1]));  // y0
+    }
+    {
+        vFloat y1 = pfwc_vis_cell(vFloat(dst_reg[RY]) * vFloat(dst_reg[DR_VP + VP_INV]),
+                                  vFloat(dst_reg[DR_VP + VP_TY1]));
+        dst_reg[MY] = y1 - vFloat(dst_reg[OP]);  // h - 1
+    }
+    // 3. Words. bits(x + 2^23) == 0x4B000000 + x for an integer x in [0, 2^23);
+    //    subtracting 0x0B000000 instead leaves TAG (0x40000000) | x.
+    {
+        vFloat low = vFloat(dst_reg[TZ]) + vFloat(dst_reg[OP]) * 1024.0f;  // x0 | y0 << 10
+        vInt aw = reinterpret<vInt>(low + 8388608.0f) - vInt(0x0B000000);
+        vInt wb = reinterpret<vInt>(vFloat(dst_reg[MX]) + 8388608.0f) - vInt(0x4B000000);
+        aw = aw + reinterpret<vInt>(reinterpret<vUInt>(wb) << 20);
+        dst_reg[OP] = reinterpret<vFloat>(aw);  // output slot 1: aabb word
+    }
+    {
+        vFloat tpg = (vFloat(dst_reg[MX]) + 1.0f) * (vFloat(dst_reg[MY]) + 1.0f);
+        vFloat tw = reinterpret<vFloat>(reinterpret<vInt>(tpg + 8388608.0f) - vInt(0x0B000000));
+        v_if(fail > 0.0f) { tw = 0.0f; }
+        v_endif;
+        v_if(vFloat(dst_reg[RCK]) > 0.0f) { tw = Converter::as_float(0x20000000u); }  // RECHECK
+        v_endif;
+        dst_reg[TZ] = tw;  // output slot 0: tpg word
+    }
+}
+#endif  // TRISC_MATH
+
+template <uint32_t V>
+inline void pfwc_vis_unroll() {
+    if constexpr (V < 32) {
+        MATH((pfwc_vis_one<V>()));
+        pfwc_vis_unroll<V + 1>();
+    }
+}
+#endif  // PFWC_VIS
+
 }  // namespace
 
 void kernel_main() {
@@ -197,6 +372,10 @@ void kernel_main() {
     const uint32_t neg_fy_bits = get_arg_val<uint32_t>(55);
     constexpr uint32_t two_fp32_bits = 0x40000000U;
     constexpr uint32_t pt3_fp32_bits = 0x3E99999AU;  // 0.3f
+#ifdef PFWC_VIS
+    uint32_t vis_bits[8];
+    for (uint32_t k = 0; k < 8; k++) vis_bits[k] = get_arg_val<uint32_t>(56 + k);
+#endif
 
     init_sfpu(CB_MX, CB_M2X);
     add_binary_tile_init();
@@ -290,6 +469,9 @@ void kernel_main() {
             tile_regs_commit();
             tile_regs_wait();
             emit_dst(0, CB_M2X);
+#ifdef PFWC_VIS
+            emit_scratch(0, CB_TMP_MX);
+#endif
             tile_regs_release();
         }
 
@@ -305,6 +487,9 @@ void kernel_main() {
             tile_regs_commit();
             tile_regs_wait();
             emit_dst(0, CB_M2Y);
+#ifdef PFWC_VIS
+            emit_scratch(0, CB_TMP_MY);
+#endif
             tile_regs_release();
         }
 
@@ -535,6 +720,9 @@ void kernel_main() {
             tile_regs_commit();
             tile_regs_wait();
             emit_dst(0, CB_RX);
+#ifdef PFWC_VIS
+            emit_scratch(0, CB_TMP_RX);
+#endif
             tile_regs_release();
         }
 
@@ -581,8 +769,47 @@ void kernel_main() {
             tile_regs_commit();
             tile_regs_wait();
             emit_dst(0, CB_RY);
+#ifdef PFWC_VIS
+            emit_scratch(0, CB_TMP_RY);
+#endif
             tile_regs_release();
         }
+
+#ifdef PFWC_VIS
+        // ── 11.5 (task #99). Visibility predicate + tile rectangle on the SFPU.
+        {
+            cb_wait_front(CB_OP, 1);
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_TMP_TZ);
+            copy_tile(CB_TMP_TZ, 0, 0);
+            copy_tile_to_dst_init_short(CB_OP);
+            copy_tile(CB_OP, 0, 1);
+            copy_tile_to_dst_init_short(CB_TMP_MX);
+            copy_tile(CB_TMP_MX, 0, 2);
+            copy_tile_to_dst_init_short(CB_TMP_MY);
+            copy_tile(CB_TMP_MY, 0, 3);
+            copy_tile_to_dst_init_short(CB_TMP_RX);
+            copy_tile(CB_TMP_RX, 0, 4);
+            copy_tile_to_dst_init_short(CB_TMP_RY);
+            copy_tile(CB_TMP_RY, 0, 5);
+
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_vis_stage(vis_bits)));
+            pfwc_vis_unroll<0>();
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_dst(0, CB_TPG);
+            emit_dst(1, CB_AABB);
+            tile_regs_release();
+            cb_pop_front(CB_OP, 1);
+            cb_pop_front(CB_TMP_MX, 1);
+            cb_pop_front(CB_TMP_MY, 1);
+            cb_pop_front(CB_TMP_RX, 1);
+            cb_pop_front(CB_TMP_RY, 1);
+        }
+#endif
 
         // ── 12. Drain scratch CBs.
         cb_pop_front(CB_TMP_TX, 1);

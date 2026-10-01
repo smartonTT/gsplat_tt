@@ -26,13 +26,16 @@
 #include "device_state.h"
 #include "host_profile.h"
 #include "stage_timers.h"
+#include "vis_mode.h"
 
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <map>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include <tt-metalium/bfloat16.hpp>
@@ -96,6 +99,21 @@ constexpr uint32_t CB_TMP_CC22   = 26;
 constexpr uint32_t CB_TMP_A      = 27;
 constexpr uint32_t CB_TMP_B      = 28;
 constexpr uint32_t CB_TMP_C      = 29;
+// Lever 2 (task #99, PFWC_VIS program only): opacity input, scratch copies of
+// mean_x/mean_y/rx/ry, the two word tiles, and writer staging (vis_tile.h).
+constexpr uint32_t CB_OP     = 30;
+constexpr uint32_t CB_TMP_MX = 31;
+constexpr uint32_t CB_TMP_MY = 32;
+constexpr uint32_t CB_TMP_RX = 33;
+constexpr uint32_t CB_TMP_RY = 34;
+constexpr uint32_t CB_TPG    = 35;
+constexpr uint32_t CB_AABB   = 36;
+constexpr uint32_t CB_VMASK  = 37;  // 128 B mask staging
+constexpr uint32_t CB_VCNT   = 38;  // per-tile counts staging
+constexpr uint32_t CB_VOP    = 39;  // opacity tile for RECHECK
+constexpr uint32_t VIS_MASK_BYTES = 128;
+constexpr uint32_t VIS_COUNTS_PAGE = 1024;  // vis_tile::COUNTS_PAGE_BYTES
+constexpr uint32_t VIS_CNT_STAGING = 16 * 1024;  // up to ~1900 tiles per core
 
 struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
@@ -139,6 +157,19 @@ struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_rx;
     std::shared_ptr<distributed::MeshBuffer> buf_ry;
     std::size_t output_cached_bytes = 0;
+
+    // Lever 2 (task #99): the PFWC_VIS program variant (built on first use) and
+    // its extra outputs.
+    bool vis_built = false;
+    distributed::MeshWorkload wl_vis;
+    KernelHandle vreader{};
+    KernelHandle vcompute{};
+    KernelHandle vwriter{};
+    std::shared_ptr<distributed::MeshBuffer> buf_vtpg;
+    std::shared_ptr<distributed::MeshBuffer> buf_vaabb;
+    std::shared_ptr<distributed::MeshBuffer> buf_vmask;
+    std::shared_ptr<distributed::MeshBuffer> buf_vcounts;
+    uint32_t vis_cap_tiles = 0;
 };
 
 static gsplat_cpu::ThreadPool& soa_pool() {
@@ -257,7 +288,7 @@ static WorkSplit split_chunks(uint32_t num_tiles, uint32_t num_cores) {
     return ws;
 }
 
-static void build_program(PfwcDeviceContext& ctx) {
+static void build_program(PfwcDeviceContext& ctx, bool vis = false) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
 
@@ -282,16 +313,32 @@ static void build_program(PfwcDeviceContext& ctx) {
     cb_fp32(CB_TMP_CC11, 2);   cb_fp32(CB_TMP_CC12, 2);   cb_fp32(CB_TMP_CC22, 2);
     // 3 conic scratch CBs (A1): cov2d a,b,c stashed, then folded to A,B,C.
     cb_fp32(CB_TMP_A, 2);      cb_fp32(CB_TMP_B, 2);      cb_fp32(CB_TMP_C, 2);
+    std::map<std::string, std::string> vis_defines;
+    if (vis) {
+        vis_defines["PFWC_VIS"] = "1";
+        cb_fp32(CB_OP, 2);
+        cb_fp32(CB_TMP_MX, 2);     cb_fp32(CB_TMP_MY, 2);
+        cb_fp32(CB_TMP_RX, 2);     cb_fp32(CB_TMP_RY, 2);
+        cb_fp32(CB_TPG, 2);        cb_fp32(CB_AABB, 2);
+        auto cb_raw = [&](uint32_t id, uint32_t bytes) {
+            CircularBufferConfig c(bytes, {{id, DataFormat::Float32}});
+            c.set_page_size(id, bytes);
+            CreateCircularBuffer(program, cores, c);
+        };
+        cb_raw(CB_VMASK, VIS_MASK_BYTES);
+        cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
+        cb_raw(CB_VOP, TILE_BYTES_FP32);
+    }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
     // layout as before; the fused kernel just reads world means in slots 0..2
     // (instead of the project program's means_cam output), so reader_pfwc.cpp is
     // reused verbatim — only the runtime base addresses change.
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < 9; ++i) {
+    for (int i = 0; i < (vis ? 10 : 9); ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
-    ctx.reader = CreateKernel(
+    const KernelHandle reader = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_pfwc.cpp",
         cores,
@@ -299,6 +346,7 @@ static void build_program(PfwcDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
+            .defines = vis_defines,
         });
 
     // tt-007 fp32 unpack-to-DEST for every FP32 CB the compute kernel reads
@@ -313,6 +361,11 @@ static void build_program(PfwcDeviceContext& ctx) {
                         CB_TMP_A, CB_TMP_B, CB_TMP_C}) {
         u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
     }
+    if (vis) {
+        for (uint32_t cb : {CB_OP, CB_TMP_MX, CB_TMP_MY, CB_TMP_RX, CB_TMP_RY}) {
+            u2d[cb] = UnpackToDestMode::UnpackToDestFp32;
+        }
+    }
 
     // dst_full_sync_en = true disables double-buffering, which is the only way
     // to get 8 fp32 DEST tile slots (vs the default 4 with double-buffering).
@@ -320,7 +373,7 @@ static void build_program(PfwcDeviceContext& ctx) {
     // (j00, j02, j11, j12, accumulator, scratch) so we MUST disable
     // double-buffering. Trade-off: math and pack can't overlap, but the kernel
     // is dominated by math anyway.
-    ctx.compute = CreateKernel(
+    const KernelHandle compute = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/compute/project_pfwc_compute.cpp",
         cores,
@@ -330,16 +383,19 @@ static void build_program(PfwcDeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
+            .defines = vis_defines,
         });
 
-    // Writer: 8 output streams.
+    // Writer: 8 output streams (13 accessors for the PFWC_VIS writer: + tpg,
+    // aabb, mask, counts, opacity).
     std::vector<uint32_t> writer_ct;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < (vis ? 13 : 8); ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     }
-    ctx.writer = CreateKernel(
+    const KernelHandle writer = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc.cpp",
+        vis ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_vis.cpp"
+            : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc.cpp",
         cores,
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_0,
@@ -348,7 +404,18 @@ static void build_program(PfwcDeviceContext& ctx) {
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
-    ctx.workload.add_program(device_range, std::move(program));
+    if (vis) {
+        ctx.vreader = reader;
+        ctx.vcompute = compute;
+        ctx.vwriter = writer;
+        ctx.wl_vis.add_program(device_range, std::move(program));
+        ctx.vis_built = true;
+    } else {
+        ctx.reader = reader;
+        ctx.compute = compute;
+        ctx.writer = writer;
+        ctx.workload.add_program(device_range, std::move(program));
+    }
 }
 
 static PfwcDeviceContext init_context() {
@@ -405,6 +472,10 @@ static void pack_cc_scales(const float r[9], std::vector<uint32_t>& out) {
 
 }  // namespace
 
+static bool g_pfwc_ran_vis = false;
+
+bool pfwc_ran_vis() { return g_pfwc_ran_vis; }
+
 bool pfwc_device_ready() {
     return ensure_context() != nullptr;
 }
@@ -426,7 +497,8 @@ double pfwc_tt(
     float* depth_out,
     float* cov2d_out,
     float* radii_out,
-    PfwcCallTimings* timings_out) {
+    PfwcCallTimings* timings_out,
+    const PfwcVisParams* vis) {
     if (N == 0) {
         return 0.0;
     }
@@ -434,6 +506,7 @@ double pfwc_tt(
     // the per-core arg loop, then rtargs / enqueue / finish.
     auto& st_acc = stagetimers::acc();
     stagetimers::Span setup_span(st_acc.project_pfwc_setup);
+    g_pfwc_ran_vis = false;
     auto* ctx = ensure_context();
     if (ctx == nullptr) {
         return -1.0;
@@ -563,7 +636,60 @@ double pfwc_tt(
     const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
     const WorkSplit ws = split_chunks(num_tiles, num_cores);
 
-    Program& program = ctx->workload.get_programs().begin()->second;
+    // Lever 2 (task #99): the PFWC_VIS variant also needs the resident scene
+    // opacities and its four extra outputs.
+    std::shared_ptr<distributed::MeshBuffer> vis_op;
+    if (vis != nullptr) {
+        vis_op = device_state::get_buffer("scene_opacities");
+        if (!vis_op) {
+            std::cerr << "[gsplat_tt::pfwc] PFWC_VIS needs the resident scene_opacities "
+                         "(gather_visible_upload_scene); not uploaded\n";
+            return -1.0;
+        }
+        if (!ctx->vis_built) build_program(*ctx, /*vis=*/true);
+        if (!ctx->buf_vtpg || ctx->vis_cap_tiles < num_tiles) {
+            distributed::DeviceLocalBufferConfig tile_cfg{
+                .page_size = TILE_BYTES_FP32, .buffer_type = BufferType::DRAM};
+            distributed::ReplicatedBufferConfig tile_rep{.size = soa_bytes};
+            ctx->buf_vtpg = distributed::MeshBuffer::create(tile_rep, tile_cfg, ctx->mesh_device.get());
+            ctx->buf_vaabb = distributed::MeshBuffer::create(tile_rep, tile_cfg, ctx->mesh_device.get());
+            distributed::DeviceLocalBufferConfig mask_cfg{
+                .page_size = VIS_MASK_BYTES, .buffer_type = BufferType::DRAM};
+            distributed::ReplicatedBufferConfig mask_rep{
+                .size = static_cast<std::size_t>(num_tiles) * VIS_MASK_BYTES};
+            ctx->buf_vmask = distributed::MeshBuffer::create(mask_rep, mask_cfg, ctx->mesh_device.get());
+            const uint32_t cpages = (num_tiles * 8u + VIS_COUNTS_PAGE - 1) / VIS_COUNTS_PAGE;
+            distributed::DeviceLocalBufferConfig cnt_cfg{
+                .page_size = VIS_COUNTS_PAGE, .buffer_type = BufferType::DRAM};
+            distributed::ReplicatedBufferConfig cnt_rep{
+                .size = static_cast<std::size_t>(cpages) * VIS_COUNTS_PAGE};
+            ctx->buf_vcounts = distributed::MeshBuffer::create(cnt_rep, cnt_cfg, ctx->mesh_device.get());
+            ctx->vis_cap_tiles = num_tiles;
+            device_state::register_buffer("pfwc_tpg", ctx->buf_vtpg);
+            device_state::register_buffer("pfwc_aabb", ctx->buf_vaabb);
+            device_state::register_buffer("pfwc_vis_mask", ctx->buf_vmask);
+            device_state::register_buffer("pfwc_tile_counts", ctx->buf_vcounts);
+        }
+    }
+    const bool vis_on = (vis != nullptr);
+    g_pfwc_ran_vis = vis_on;
+    Program& program = (vis_on ? ctx->wl_vis : ctx->workload).get_programs().begin()->second;
+    const KernelHandle k_reader = vis_on ? ctx->vreader : ctx->reader;
+    const KernelHandle k_compute = vis_on ? ctx->vcompute : ctx->compute;
+    const KernelHandle k_writer = vis_on ? ctx->vwriter : ctx->writer;
+    std::vector<uint32_t> vis_bits;
+    if (vis_on) {
+        vis_bits = {
+            fp32_bits(vis->k_near),
+            fp32_bits(vis->min_opacity),
+            fp32_bits(vis->image_width),
+            fp32_bits(vis->image_height),
+            fp32_bits(vis->max_radius),
+            fp32_bits(1.0f / static_cast<float>(vis->tile_size)),
+            fp32_bits(static_cast<float>(vis->tiles_x - 1)),
+            fp32_bits(static_cast<float>(vis->tiles_y - 1)),
+        };
+    }
 
     // Pre-pack k = 3.0, -fx, -fy as fp32 bits — match project_full_fused k_cap.
     constexpr float K_RADII = 3.0f;
@@ -580,9 +706,8 @@ double pfwc_tt(
         const uint32_t chunk_start = ws.chunk_start[c];
         const uint32_t num_chunks  = ws.num_chunks[c];
 
-        SetRuntimeArgs(
-            program, ctx->reader, core,
-            {static_cast<uint32_t>(buf_mx->address()),
+        std::vector<uint32_t> reader_args = {
+             static_cast<uint32_t>(buf_mx->address()),
              static_cast<uint32_t>(buf_my->address()),
              static_cast<uint32_t>(buf_mz->address()),
              static_cast<uint32_t>(ctx->buf_c00->address()),
@@ -591,7 +716,9 @@ double pfwc_tt(
              static_cast<uint32_t>(ctx->buf_c11->address()),
              static_cast<uint32_t>(ctx->buf_c12->address()),
              static_cast<uint32_t>(ctx->buf_c22->address()),
-             chunk_start, num_chunks});
+             chunk_start, num_chunks};
+        if (vis_on) reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
+        SetRuntimeArgs(program, k_reader, core, reader_args);
 
         std::vector<uint32_t> compute_args;
         compute_args.reserve(56);
@@ -608,24 +735,44 @@ double pfwc_tt(
         compute_args.push_back(k_bits);        // arg 53
         compute_args.push_back(neg_fx_bits);   // arg 54
         compute_args.push_back(neg_fy_bits);   // arg 55
-        SetRuntimeArgs(program, ctx->compute, core, compute_args);
+        for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..63 (PFWC_VIS)
+        SetRuntimeArgs(program, k_compute, core, compute_args);
 
-        SetRuntimeArgs(
-            program, ctx->writer, core,
-            {static_cast<uint32_t>(ctx->buf_m2x->address()),
+        std::vector<uint32_t> writer_args = {
+             static_cast<uint32_t>(ctx->buf_m2x->address()),
              static_cast<uint32_t>(ctx->buf_m2y->address()),
              static_cast<uint32_t>(ctx->buf_dep->address()),
              static_cast<uint32_t>(ctx->buf_a->address()),
              static_cast<uint32_t>(ctx->buf_b->address()),
              static_cast<uint32_t>(ctx->buf_c->address()),
              static_cast<uint32_t>(ctx->buf_rx->address()),
-             static_cast<uint32_t>(ctx->buf_ry->address()),
-             chunk_start, num_chunks});
+             static_cast<uint32_t>(ctx->buf_ry->address())};
+        if (vis_on) {
+            // writer_pfwc_vis.cpp: + tpg, aabb, mask, counts, opacity, then the
+            // chunk range, N and the predicate / grid parameters.
+            writer_args.push_back(static_cast<uint32_t>(ctx->buf_vtpg->address()));
+            writer_args.push_back(static_cast<uint32_t>(ctx->buf_vaabb->address()));
+            writer_args.push_back(static_cast<uint32_t>(ctx->buf_vmask->address()));
+            writer_args.push_back(static_cast<uint32_t>(ctx->buf_vcounts->address()));
+            writer_args.push_back(static_cast<uint32_t>(vis_op->address()));
+            writer_args.push_back(chunk_start);
+            writer_args.push_back(num_chunks);
+            writer_args.push_back(static_cast<uint32_t>(N));
+            for (uint32_t k = 0; k < 5; ++k) writer_args.push_back(vis_bits[k]);
+            writer_args.push_back(static_cast<uint32_t>(vis->tiles_x));
+            writer_args.push_back(static_cast<uint32_t>(vis->tiles_y));
+            writer_args.push_back(static_cast<uint32_t>(vis->tile_size));
+        } else {
+            writer_args.push_back(chunk_start);
+            writer_args.push_back(num_chunks);
+        }
+        SetRuntimeArgs(program, k_writer, core, writer_args);
     }
     rtargs_span.stop();
     {
         stagetimers::Span s(st_acc.project_pfwc_enqueue);
-        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, /*blocking=*/false);
+        distributed::EnqueueMeshWorkload(
+            *ctx->cq, vis_on ? ctx->wl_vis : ctx->workload, /*blocking=*/false);
     }
     gsplat_tt::hostprof::on_pfwc_enqueued();
     const auto t_launch1 = std::chrono::high_resolution_clock::now();

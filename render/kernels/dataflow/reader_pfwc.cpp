@@ -14,8 +14,10 @@
 //   0..8 : DRAM base addresses (mcx, mcy, mcz, c00, c01, c02, c11, c12, c22)
 //   9    : chunk_start (this core's first tile index)
 //   10   : num_chunks
+//   11   : PFWC_VIS only (task #99): scene opacity DRAM base (10th stream, CB 30)
 //
-// COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8.
+// COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8
+// (10 with PFWC_VIS, the opacity last).
 
 #include <cstdint>
 
@@ -33,6 +35,11 @@ void kernel_main() {
     const uint32_t c22_addr  = get_arg_val<uint32_t>(8);
     const uint32_t chunk_start = get_arg_val<uint32_t>(9);
     const uint32_t num_chunks  = get_arg_val<uint32_t>(10);
+#ifdef PFWC_VIS
+    // Task #99 (lever 2): scene opacity, the 10th stream, for the SFPU predicate.
+    const uint32_t op_addr = get_arg_val<uint32_t>(11);
+    constexpr uint32_t CB_OP = 30;
+#endif
 
     constexpr uint32_t CB_MCX = 0;
     constexpr uint32_t CB_MCY = 1;
@@ -65,6 +72,10 @@ void kernel_main() {
     const auto acc_c11 = TensorAccessor(a6, c11_addr, tile_bytes);
     const auto acc_c12 = TensorAccessor(a7, c12_addr, tile_bytes);
     const auto acc_c22 = TensorAccessor(a8, c22_addr, tile_bytes);
+#ifdef PFWC_VIS
+    constexpr auto a9 = TensorAccessorArgs<a8.next_compile_time_args_offset()>();
+    const auto acc_op = TensorAccessor(a9, op_addr, tile_bytes);
+#endif
 
     if (num_chunks == 0) {
         return;
@@ -91,6 +102,10 @@ void kernel_main() {
         noc_async_read_tile(tile_id, acc_c12, get_write_ptr(CB_C12));
         cb_reserve_back(CB_C22, 1);
         noc_async_read_tile(tile_id, acc_c22, get_write_ptr(CB_C22));
+#ifdef PFWC_VIS
+        cb_reserve_back(CB_OP, 1);
+        noc_async_read_tile(tile_id, acc_op, get_write_ptr(CB_OP));
+#endif
 
         noc_async_read_barrier();
 
@@ -103,5 +118,8 @@ void kernel_main() {
         cb_push_back(CB_C11, 1);
         cb_push_back(CB_C12, 1);
         cb_push_back(CB_C22, 1);
+#ifdef PFWC_VIS
+        cb_push_back(CB_OP, 1);
+#endif
     }
 }

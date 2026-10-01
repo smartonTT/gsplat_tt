@@ -40,6 +40,12 @@
 //                    sized to the static p_max ceiling; cores whose entire range
 //                    is >= P early-out, and the p<P guard zero-pads any straddle.
 //
+// TA_K2_AABB (task #99, lever 2, GSPLAT_TT_SFPU_VIS): offs comes from the gather
+// scatter (proj_m_offs) and arg 1 is the packed rectangle proj_m_aabb
+// (vis_tile.h: min_x | min_y << 10 | (w - 1) << 20, computed on the SFPU in
+// pfwc); args 2..4 are unused. One 64 B attribute read per 16 gaussians and no
+// soft-float rectangle per gaussian.
+//
 // COMPILE-TIME ARGS: 7 TensorAccessorArgs (offs, px, py, rx, ry, gids, tids).
 // proj-pair-count P is read via a runtime InterleavedAddrGen (no CT args), S5.3.
 
@@ -47,6 +53,9 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "dm_fp32.h"
+#ifdef TA_K2_AABB
+#include "vis_tile.h"
+#endif
 
 namespace {
 
@@ -183,6 +192,18 @@ void kernel_main() {
     auto load_attrs = [&](int g) {
         const int pg = g / static_cast<int>(ELEMS_PER_PAGE);
         const int ip = g - pg * static_cast<int>(ELEMS_PER_PAGE);
+#ifdef TA_K2_AABB
+        if (pg != attr_cached_page) {
+            noc_async_read(get_noc_addr(static_cast<uint32_t>(pg), px_acc), px_l1, PAGE_BYTES);
+            noc_async_read_barrier();
+            attr_cached_page = pg;
+        }
+        const uint32_t box = pxp[ip];
+        cur_minx = static_cast<int>(vis_tile::aabb_min_x(box));
+        cur_miny = static_cast<int>(vis_tile::aabb_min_y(box));
+        cur_w = static_cast<int>(vis_tile::aabb_w(box));
+        return;
+#endif
         if (pg != attr_cached_page) {
             noc_async_read(get_noc_addr(static_cast<uint32_t>(pg), px_acc), px_l1, PAGE_BYTES);
             noc_async_read(get_noc_addr(static_cast<uint32_t>(pg), py_acc), py_l1, PAGE_BYTES);

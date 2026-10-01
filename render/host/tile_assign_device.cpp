@@ -20,6 +20,9 @@
 #include "env_config.h"
 #include "host_tracy.hpp"
 #include "stage_timers.h"
+#include "gather_visible.h"
+#include "vis_mode.h"
+#include "../kernels/dataflow/vis_tile.h"
 #include "gsplat_cpu/thread_pool.h"
 
 #include <algorithm>
@@ -32,6 +35,7 @@
 #include <cstring>
 #include <exception>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
@@ -94,6 +98,12 @@ struct TileAssignDeviceContext {
     bool dual = false;
     KernelHandle k1b{};
     KernelHandle k2b{};
+    // Lever 2 (task #99): K2 built with TA_K2_AABB (offs + packed rectangle
+    // from the gather, no K1 / scans). Built on first use.
+    bool k2v_built = false;
+    distributed::MeshWorkload wl_k2v;
+    KernelHandle k2v{};
+    KernelHandle k2vb{};
 
     // Cached DRAM buffers (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -225,7 +235,7 @@ static void build_program_k1(TileAssignDeviceContext& ctx) {
     ctx.wl_k1.add_program(device_range, std::move(program));
 }
 
-static void build_program_k2(TileAssignDeviceContext& ctx) {
+static void build_program_k2(TileAssignDeviceContext& ctx, bool aabb = false) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
     auto scratch_cb = [&](uint32_t id) {
@@ -240,7 +250,9 @@ static void build_program_k2(TileAssignDeviceContext& ctx) {
 
     std::vector<uint32_t> ct;
     for (int i = 0; i < 7; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
-    ctx.k2 = CreateKernel(
+    std::map<std::string, std::string> defines;
+    if (aabb) defines["TA_K2_AABB"] = "1";
+    const KernelHandle k = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter.cpp",
         cores,
@@ -248,14 +260,32 @@ static void build_program_k2(TileAssignDeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = ct,
+            .defines = defines,
         });
+    KernelHandle kb{};
     if (ctx.dual) {
-        ctx.k2b = create_mover0_kernel(
-            program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter.cpp",
-            cores, ct);
+        std::map<std::string, std::string> d0 = defines;
+        d0["TA_CB_OFFSET"] = std::to_string(TA_MOVER0_CB_OFFSET);
+        kb = CreateKernel(
+            program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter.cpp", cores,
+            DataMovementConfig{
+                .processor = DataMovementProcessor::RISCV_0,
+                .noc = NOC::RISCV_0_default,
+                .compile_args = ct,
+                .defines = d0,
+            });
     }
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
-    ctx.wl_k2.add_program(device_range, std::move(program));
+    if (aabb) {
+        ctx.k2v = k;
+        ctx.k2vb = kb;
+        ctx.wl_k2v.add_program(device_range, std::move(program));
+        ctx.k2v_built = true;
+    } else {
+        ctx.k2 = k;
+        ctx.k2b = kb;
+        ctx.wl_k2.add_program(device_range, std::move(program));
+    }
 }
 
 static void build_program_cull(TileAssignDeviceContext& ctx) {
@@ -458,6 +488,100 @@ static WorkSplit split_pages(uint32_t num_pages, uint32_t num_cores) {
 static uint32_t mover0_pages(uint32_t count) {
     return static_cast<uint32_t>(
         (static_cast<uint64_t>(count) * ta_split_permille()) / 1000u);
+}
+
+// GSPLAT_TT_SFPU_VIS=2 cross-check (task #99): legacy K1 + scan1 + scan_bases +
+// scan2 into ctx.buf_tpg / ctx.buf_offs, then compare with the gather's offs
+// and check every packed rectangle against the K1 formula on the host. Note
+// scan_bases also rewrites ta_pairs_P (same values when the paths agree).
+static void vis_check_legacy(
+    TileAssignDeviceContext& ctx, uint32_t Mu, uint32_t n_ceil, uint32_t offs_pad,
+    uint32_t num_cores, uint32_t in_px, uint32_t in_py, uint32_t in_rx, uint32_t in_ry,
+    int tiles_x, int tiles_y, int tile_size,
+    const std::shared_ptr<distributed::MeshBuffer>& vis_offs,
+    const std::shared_ptr<distributed::MeshBuffer>& vis_aabb,
+    const std::shared_ptr<distributed::MeshBuffer>& res_px,
+    const std::shared_ptr<distributed::MeshBuffer>& res_py,
+    const std::shared_ptr<distributed::MeshBuffer>& res_rx,
+    const std::shared_ptr<distributed::MeshBuffer>& res_ry) {
+    const WorkSplit ws1 = split_pages(n_ceil / ELEMS_PER_PAGE, num_cores);
+    Program& prog1 = ctx.wl_k1.get_programs().begin()->second;
+    for (uint32_t c = 0; c < num_cores; c++) {
+        CoreCoord core{c % ctx.grid.x, c / ctx.grid.x};
+        const uint32_t n0 = ctx.dual ? mover0_pages(ws1.count[c]) : 0u;
+        auto args = [&](uint32_t start, uint32_t count) -> std::vector<uint32_t> {
+            return {in_px, in_py, in_rx, in_ry, static_cast<uint32_t>(ctx.buf_tpg->address()),
+                    start, count, Mu, static_cast<uint32_t>(tiles_x),
+                    static_cast<uint32_t>(tiles_y), static_cast<uint32_t>(tile_size), 0u};
+        };
+        SetRuntimeArgs(prog1, ctx.k1, core, args(ws1.start[c] + n0, ws1.count[c] - n0));
+        if (ctx.dual) SetRuntimeArgs(prog1, ctx.k1b, core, args(ws1.start[c], n0));
+    }
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.wl_k1, false);
+    const WorkSplit wss = split_pages(offs_pad / ELEMS_PER_PAGE, num_cores);
+    Program& progs1 = ctx.wl_scan1.get_programs().begin()->second;
+    Program& progs2 = ctx.wl_scan2.get_programs().begin()->second;
+    for (uint32_t c = 0; c < num_cores; c++) {
+        CoreCoord core{c % ctx.grid.x, c / ctx.grid.x};
+        SetRuntimeArgs(progs1, ctx.ks1, core, {
+            static_cast<uint32_t>(ctx.buf_tpg->address()),
+            static_cast<uint32_t>(ctx.buf_core_total->address()),
+            wss.start[c], wss.count[c], Mu, c, 0u});
+        SetRuntimeArgs(progs2, ctx.ks2, core, {
+            static_cast<uint32_t>(ctx.buf_tpg->address()),
+            static_cast<uint32_t>(ctx.buf_offs->address()),
+            wss.start[c], wss.count[c], Mu,
+            static_cast<uint32_t>(ctx.buf_core_base->address()), c, 0u});
+    }
+    Program& progb = ctx.wl_scan_bases.get_programs().begin()->second;
+    SetRuntimeArgs(progb, ctx.ks_bases, CoreCoord{0, 0}, {
+        static_cast<uint32_t>(ctx.buf_core_total->address()),
+        static_cast<uint32_t>(ctx.buf_core_base->address()),
+        static_cast<uint32_t>(ctx.buf_pairs_P->address()), num_cores, 0u});
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.wl_scan1, false);
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.wl_scan_bases, false);
+    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.wl_scan2, false);
+    distributed::Finish(*ctx.cq);
+
+    auto rd = [&](const std::shared_ptr<distributed::MeshBuffer>& b) {
+        std::vector<uint32_t> v(b->size() / 4);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, true);
+        return v;
+    };
+    const std::vector<uint32_t> lo = rd(ctx.buf_offs), no = rd(vis_offs), box = rd(vis_aabb);
+    const std::vector<uint32_t> px = rd(res_px), py = rd(res_py), rx = rd(res_rx),
+                                ry = rd(res_ry);
+    uint64_t bad_offs = 0, bad_box = 0;
+    long first_offs = -1, first_box = -1;
+    for (uint32_t g = 0; g <= Mu; g++)
+        if (lo[g] != no[g]) {
+            if (first_offs < 0) first_offs = static_cast<long>(g);
+            bad_offs++;
+        }
+    vis_tile::Params p;
+    p.tiles_x = static_cast<uint32_t>(tiles_x);
+    p.tiles_y = static_cast<uint32_t>(tiles_y);
+    p.tile_shift = dm_fp32::pow2_shift(static_cast<uint32_t>(tile_size));
+    p.inv_tile = 1.0f / static_cast<float>(tile_size);
+    for (uint32_t g = 0; g < Mu; g++) {
+        using dm_fp32::SIGN;
+        const int tx1 = tiles_x - 1, ty1 = tiles_y - 1;
+        const int x0 = vis_tile::clampi(dm_fp32::add_mul_pow2_to_int(px[g], rx[g] ^ SIGN, p.tile_shift, p.inv_tile), 0, tx1);
+        const int x1 = vis_tile::clampi(dm_fp32::add_mul_pow2_to_int(px[g], rx[g], p.tile_shift, p.inv_tile), 0, tx1);
+        const int y0 = vis_tile::clampi(dm_fp32::add_mul_pow2_to_int(py[g], ry[g] ^ SIGN, p.tile_shift, p.inv_tile), 0, ty1);
+        const uint32_t want = vis_tile::aabb_pack(static_cast<uint32_t>(x0), static_cast<uint32_t>(y0),
+                                                  static_cast<uint32_t>(x1 - x0 + 1));
+        if (box[g] != want) {
+            if (first_box < 0) first_box = static_cast<long>(g);
+            bad_box++;
+        }
+    }
+    std::fprintf(stderr,
+                 "[VIS-CHECK] tile_assign M=%u offs_mismatches=%llu first=%ld P_legacy=%u "
+                 "P=%u aabb_mismatches=%llu first=%ld %s\n",
+                 Mu, static_cast<unsigned long long>(bad_offs), first_offs, lo[Mu], no[Mu],
+                 static_cast<unsigned long long>(bad_box), first_box,
+                 (bad_offs == 0 && bad_box == 0) ? "OK" : "MISMATCH");
 }
 
 }  // namespace
@@ -713,6 +837,25 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         const uint32_t in_c = static_cast<uint32_t>(
             (resident_in ? res_c : ctx->buf_c)->address());
 
+        // Lever 2 (task #99, GSPLAT_TT_SFPU_VIS): the gather already wrote the
+        // exclusive pair offsets (proj_m_offs, offs[M] = P) and the packed tile
+        // rectangles (proj_m_aabb), and published P (ta_pairs_P, host copy via
+        // gather_visible_last_pairs). K1 and the three scans are skipped; K2
+        // reads the rectangle instead of recomputing it (TA_K2_AABB).
+        uint32_t vis_P = 0;
+        const bool vis_path = sfpu_vis_mode() != 0 && !host_free && resident_in &&
+                              gather_visible_last_pairs(&vis_P);
+        std::shared_ptr<distributed::MeshBuffer> vis_offs, vis_aabb;
+        if (vis_path) {
+            vis_offs = device_state::get_buffer("proj_m_offs");
+            vis_aabb = device_state::get_buffer("proj_m_aabb");
+            if (!vis_offs || !vis_aabb) {
+                std::cerr << "[gsplat_tt::tile_assign] SFPU_VIS: proj_m_offs/aabb missing\n";
+                return set_fail();
+            }
+            if (!ctx->k2v_built) build_program_k2(*ctx, /*aabb=*/true);
+        }
+
         // ── K1: per-Gaussian AABB -> tiles_per_gaussian ─────────────────
         // Phase B (GSPLAT_TT_CHUNK_FUSION): gather scatter already wrote tpg.
         const bool chunk_fusion_k1 =
@@ -721,10 +864,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         if (chunk_fusion_k1) {
             fused_tpg = device_state::get_buffer("ta_tiles_per_gaussian");
         }
-        const bool skip_k1 = chunk_fusion_k1 && static_cast<bool>(fused_tpg);
+        const bool skip_k1 = (chunk_fusion_k1 && static_cast<bool>(fused_tpg)) || vis_path;
         const auto t_k1_0 = clk::now();
         if (skip_k1) {
-            ctx->buf_tpg = fused_tpg;
+            if (!vis_path) ctx->buf_tpg = fused_tpg;
         } else {
             if (chunk_fusion_k1 && !fused_tpg) {
                 std::cerr << "[gsplat_tt::tile_assign] CHUNK_FUSION set but "
@@ -770,7 +913,15 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         std::vector<uint32_t> offs;  // host-scan path only
         clk::time_point t_s2_0{};
 
-        if (device_scan) {
+        if (vis_path) {
+            P = vis_P;
+            T.scan1_ms = T.prefix_ms = T.d2h_tpg_ms = T.h2d_offs_ms = 0.0;
+            if (P == 0) {
+                if (device_ok) *device_ok = true;
+                T.total_ms = std::chrono::duration<double, std::milli>(clk::now() - t_total0).count();
+                return result;
+            }
+        } else if (device_scan) {
             // ── On-device exclusive scan (two-phase) ────────────────────
             // Cover offs_pad pages so offs[M] (read by K2) is produced even
             // when M is a multiple of 16 (then offs lives one page past the
@@ -959,18 +1110,23 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         stagetimers::Span k2_rt_span(st_acc.tile_assign_rtargs);
         const uint32_t k2_pages = P_pad / ELEMS_PER_PAGE;
         const WorkSplit ws2 = split_pages(k2_pages, num_cores);
-        Program& prog2 = ctx->wl_k2.get_programs().begin()->second;
+        Program& prog2 = (vis_path ? ctx->wl_k2v : ctx->wl_k2).get_programs().begin()->second;
+        const KernelHandle k2_nc = vis_path ? ctx->k2v : ctx->k2;
+        const KernelHandle k2_br = vis_path ? ctx->k2vb : ctx->k2b;
+        const uint32_t k2_offs = static_cast<uint32_t>((vis_path ? vis_offs : ctx->buf_offs)->address());
+        // TA_K2_AABB reads the packed rectangle through the px slot (args 2..4 unused).
+        const uint32_t k2_box = vis_path ? static_cast<uint32_t>(vis_aabb->address()) : 0u;
         for (uint32_t c = 0; c < num_cores; c++) {
             CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
             // Dual mover: BRISC [start, start+n0), NCRISC [start+n0, end).
             const uint32_t n0 = ctx->dual ? mover0_pages(ws2.count[c]) : 0u;
             auto args = [&](uint32_t start, uint32_t count) -> std::vector<uint32_t> {
                 return {
-                    static_cast<uint32_t>(ctx->buf_offs->address()),
-                    in_px,
-                    in_py,
-                    in_rx,
-                    in_ry,
+                    k2_offs,
+                    vis_path ? k2_box : in_px,
+                    vis_path ? k2_box : in_py,
+                    vis_path ? k2_box : in_rx,
+                    vis_path ? k2_box : in_ry,
                     static_cast<uint32_t>(ctx->buf_gids->address()),
                     static_cast<uint32_t>(ctx->buf_tids->address()),
                     start, count,
@@ -982,13 +1138,13 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                     host_free ? static_cast<uint32_t>(ctx->buf_pairs_P->address()) : 0u,
                 };
             };
-            SetRuntimeArgs(prog2, ctx->k2, core, args(ws2.start[c] + n0, ws2.count[c] - n0));
-            if (ctx->dual) SetRuntimeArgs(prog2, ctx->k2b, core, args(ws2.start[c], n0));
+            SetRuntimeArgs(prog2, k2_nc, core, args(ws2.start[c] + n0, ws2.count[c] - n0));
+            if (ctx->dual) SetRuntimeArgs(prog2, k2_br, core, args(ws2.start[c], n0));
         }
         k2_rt_span.stop();
         {
             stagetimers::Span s(st_acc.tile_assign_enqueue);
-            distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2, false);
+            distributed::EnqueueMeshWorkload(*ctx->cq, vis_path ? ctx->wl_k2v : ctx->wl_k2, false);
         }
         if (k3_pipelined) {
             // scan2 + K2 share one barrier with any in-flight K3 (started before scan1).
@@ -998,7 +1154,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
                 distributed::Finish(*ctx->cq);
             }
             const auto t_barrier = clk::now();
-            if (device_scan) {
+            if (device_scan && !vis_path) {
                 T.scan2_ms =
                     std::chrono::duration<double, std::milli>(t_barrier - t_s2_0).count();
             }
@@ -1016,10 +1172,19 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             }
             const auto t_k2_1 = clk::now();
             T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
-            if (device_scan) {
+            if (device_scan && !vis_path) {
                 T.scan2_ms =
                     std::chrono::duration<double, std::milli>(t_k2_1 - t_s2_0).count();
             }
+        }
+
+        // GSPLAT_TT_SFPU_VIS=2: rerun the legacy K1 + scans on the compact
+        // px/py/rx/ry the check-mode scatter also wrote, and compare offs[0..M]
+        // and the packed rectangles (host K1 formula) with the gather's.
+        if (vis_path && sfpu_vis_mode() == 2) {
+            vis_check_legacy(*ctx, Mu, n_ceil, offs_pad, num_cores, in_px, in_py, in_rx, in_ry,
+                             tiles_x, tiles_y, tile_size, vis_offs, vis_aabb, res_px, res_py,
+                             res_rx, res_ry);
         }
 
         // The per-pair Mahalanobis cull needs the per-Gaussian cov (a,b,c) and
