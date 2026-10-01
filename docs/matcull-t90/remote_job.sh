@@ -3,6 +3,7 @@
 # mat+cull off / on, each also with GSPLAT_TT_SPLIT_BLEND=1 for the mat/cull/blend
 # split. 30 bicycle views each, untraced, md5 vs md5-r82new.txt.
 #   remote_job.sh <round> [steps]   steps: any of base nofuse nofuse_split fuse fuse_split
+#   fuse_d4 fuse_d4_split (GSPLAT_TT_MATCULL_DEPTH=4)
 set -u
 S=/localdev/smarton/t86_scripts
 REF=/localdev/smarton/t82_scripts/md5-r82new.txt
@@ -23,5 +24,7 @@ for s in $steps; do
     nofuse_split) run t90r$r-nofuse-split $F GSPLAT_TT_FUSE_MATCULL=0 GSPLAT_TT_SPLIT_BLEND=1 || exit 2 ;;
     fuse)         run t90r$r-fuse $F GSPLAT_TT_FUSE_MATCULL=1 || { tail -40 $F/tmp/t86-run-t90r$r-fuse.log; exit 3; } ;;
     fuse_split)   run t90r$r-fuse-split $F GSPLAT_TT_FUSE_MATCULL=1 GSPLAT_TT_SPLIT_BLEND=1 || exit 3 ;;
+    fuse_d4)      run t90r$r-fuse-d4 $F GSPLAT_TT_FUSE_MATCULL=1 GSPLAT_TT_MATCULL_DEPTH=4 || tail -20 $F/tmp/t86-run-t90r$r-fuse-d4.log ;;
+    fuse_d4_split) run t90r$r-fuse-d4-split $F GSPLAT_TT_FUSE_MATCULL=1 GSPLAT_TT_MATCULL_DEPTH=4 GSPLAT_TT_SPLIT_BLEND=1 || true ;;
   esac
 done
