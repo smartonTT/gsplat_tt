@@ -308,8 +308,16 @@ static uint32_t sort_mat_movers() {
     return v;
 }
 // Coefficient/mask tiles in flight per mover in the fused mat+cull program
-// (== the depth of each CB_COEFF / CB_KEEP; 4 KB fp32 tiles).
-constexpr uint32_t kMatCullDepth = 2;
+// (== the depth of each CB_COEFF / CB_KEEP; 4 KB fp32 tiles, 4 CBs).
+// GSPLAT_TT_MATCULL_DEPTH overrides it for tuning (1..8).
+static uint32_t mat_cull_depth() {
+    static const uint32_t v = [] {
+        const char* e = std::getenv("GSPLAT_TT_MATCULL_DEPTH");
+        const int d = (e != nullptr) ? std::atoi(e) : 0;
+        return (d >= 1 && d <= 8) ? static_cast<uint32_t>(d) : 2u;
+    }();
+    return v;
+}
 static void build_program(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -473,12 +481,12 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     std::map<std::string, std::string> mat_defines;
     if (mc_prof != nullptr && mc_prof[0] == '1') mat_defines["MATCULL_PROF"] = "1";
     // Task #90: fused SFPU cull. Per mover a coefficient and a mask CB of
-    // kMatCullDepth fp32 tiles at id 8 / 9 (+16 on BRISC), served by one
+    // mat_cull_depth() fp32 tiles at id 8 / 9 (+16 on BRISC), served by one
     // compute kernel (same config as the tile_l1_cull compute).
     const bool fuse_cull = sort_matcull_fused();
     if (fuse_cull) {
         auto tile_cb = [&](uint32_t id) {
-            CircularBufferConfig c(kMatCullDepth * 4096u, {{id, DataFormat::Float32}});
+            CircularBufferConfig c(mat_cull_depth() * 4096u, {{id, DataFormat::Float32}});
             c.set_page_size(id, 4096u);
             CreateCircularBuffer(program, cores, c);
         };
@@ -487,7 +495,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
         tile_cb(24);
         tile_cb(25);
         mat_defines["FUSE_CULL"] = "1";
-        mat_defines["FUSE_CULL_DEPTH"] = std::to_string(kMatCullDepth) + "u";
+        mat_defines["FUSE_CULL_DEPTH"] = std::to_string(mat_cull_depth()) + "u";
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[8] = UnpackToDestMode::UnpackToDestFp32;
         u2d[24] = UnpackToDestMode::UnpackToDestFp32;

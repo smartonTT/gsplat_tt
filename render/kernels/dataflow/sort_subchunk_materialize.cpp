@@ -197,15 +197,59 @@ inline void cull_slab(uint32_t slab, uint32_t n) {
     asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads the slab
 }
 
+// permute_records + cull_slab in one pass: slab[k] = buck[sorted[k]], and the
+// coefficient tile is filled from the words already loaded (no re-read of the
+// slab). word3 (the depth key) is not copied: patch_batch overwrites it with
+// the mask for every k < n.
+inline void permute_cull(uint32_t buck, uint32_t slab, const uint32_t* sorted, uint32_t n) {
+    uint32_t pushed = 0, patched = 0;
+    for (uint32_t base = 0; base < n; base += COEFF_BATCH) {
+        const uint32_t nb = (n - base < COEFF_BATCH) ? (n - base) : COEFF_BATCH;
+        if (pushed - patched == CULL_DEPTH) {
+            const uint32_t pb = patched * COEFF_BATCH;
+            patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+            ++patched;
+        }
+        cb_reserve_back(CB_COEFF, 1);
+        const uint32_t tile = get_write_ptr(CB_COEFF);
+        for (uint32_t i = 0; i < nb; ++i) {
+            const uint32_t k = base + i;
+            auto src = reinterpret_cast<volatile uint32_t*>(buck + sorted[k] * L1_SPLAT_BYTES);
+            auto dst = reinterpret_cast<volatile uint32_t*>(slab + k * L1_SPLAT_BYTES);
+            auto ct = reinterpret_cast<volatile uint32_t*>(tile) + 192u * (i >> 5) + 2u * (i & 31u);
+            const uint32_t w0 = src[0], w1 = src[1], w2 = src[2];
+            const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+            dst[0] = w0; dst[1] = w1; dst[2] = w2;
+            dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+            ct[0] = w0;
+            ct[1] = w1;
+            ct[64] = w2;
+            ct[65] = OPQ_BIAS | (w6 & 0xffffu);
+            ct[128] = w4;
+            ct[129] = w5;
+        }
+        reinterpret_cast<volatile uint32_t*>(tile)[END_WORD] = 0u;
+        asm volatile("fence" ::: "memory");
+        cb_push_back(CB_COEFF, 1);
+        ++pushed;
+    }
+    while (patched < pushed) {
+        const uint32_t pb = patched * COEFF_BATCH;
+        patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+        ++patched;
+    }
+    asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads the slab
+}
+
 inline void cull_end_stream() {
     cb_reserve_back(CB_COEFF, 1);
     reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_COEFF))[END_WORD] = 1u;
     asm volatile("fence" ::: "memory");
     cb_push_back(CB_COEFF, 1);
 }
-#define CULL_SLAB(slab, n) cull_slab((slab), (n))
+#define PERMUTE_CULL(buck, slab, sorted, n) permute_cull((buck), (slab), (sorted), (n))
 #else
-#define CULL_SLAB(slab, n) ((void)0)
+#define PERMUTE_CULL(buck, slab, sorted, n) permute_records((buck), (slab), (sorted), (n))
 #endif
 
 }  // namespace
@@ -402,9 +446,8 @@ void kernel_main() {
                     }
                     {
                         MAT_PZ("mat_ov_perm");
-                        permute_records(buck, slab, sorted + sc_off2, Ls);
+                        PERMUTE_CULL(buck, slab, sorted + sc_off2, Ls);
                     }
-                    CULL_SLAB(slab, Ls);
                     MAT_PZ("mat_ov_wr");
                     const uint32_t out_pages =
                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
@@ -463,9 +506,8 @@ void kernel_main() {
             // coalesced SLAB_PAGE_BYTES page writes (no per-record DRAM scatter).
             {
                 MAT_PZ("mat_perm");
-                permute_records(buck, slab, sorted, L);
+                PERMUTE_CULL(buck, slab, sorted, L);
             }
-            CULL_SLAB(slab, L);
             MAT_PZ("mat_wr");
             const uint32_t out_pages =
                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
