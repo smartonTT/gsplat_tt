@@ -1,0 +1,12 @@
+tip rc=0
+=== t99r0-check ec1d90c GSPLAT_TT_SFPU_VIS=2
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=158.1 p50_ms=159.8 min_ms=139.1 max_ms=169.8 n_views=30 warmup_s=14.3 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r0-check
+STAGES n=30 head=0.003 project=9.916 tile_assign=122.819 sort=14.336 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.693 d2h=0.232 assemble=0.000 tail=0.006 | sum=158.005 view_total=158.008 resid_in_view=+0.002 avg_frame_ms=158.074 resid_vs_frame=+0.069
+SORT_STAGES n=30 pread=0.039 bin_count=0.953 bin_hist_d2h=0.258 bin_layout=0.253 upload=0.079 bin_emit=8.820 kernel=0.039 d2h=0.000 compact=0.000 publish_host=0.224 publish_wait=3.554 mat=0.064 | sum=14.284 sort=14.336 resid=+0.052
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.034 pfwc_enqueue=0.034 pfwc_finish=2.479 gather_setup=0.003 gather_rtargs=0.042 gather_enqueue=0.044 gather_wait=6.587 gather_result=0.112 | sum=9.338 project=9.916 resid=+0.578
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.021 enqueue=0.017 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.003 | sum=1.448 tile_assign=122.819 resid=+121.371
+VIS-CHECK OK=62 MISMATCH=0
+t99r0-check views: 30
+ALL_VIEWS_IDENTICAL
+job rc=0

@@ -1,8 +1,12 @@
 # Lever 2: visibility predicate + tile rectangle on the SFPU in pfwc (task #99)
 
+**Measured and adopted in task #102 (iter-176): 41.42 -> 32.61 ms/view, 30.7 FPS, all views
+md5-identical; see [RESULTS.md](RESULTS.md). `GSPLAT_TT_SFPU_VIS` now defaults to 1; `=0` is
+the kill switch.** The text below is the task #99 prep write-up.
+
 Code only, no device runs. Branch `ttp/t99-prep-lever-2-visibility-predicate-tile-a`, based on
-the 41.40 ms/view tip 08f9200. Everything is behind `GSPLAT_TT_SFPU_VIS` (default 0 = the
-legacy path, unchanged), so one build A/Bs both paths. The kernels are **not compiled yet**:
+the 41.40 ms/view tip 08f9200. Everything is behind `GSPLAT_TT_SFPU_VIS` (default 0 at the time =
+the legacy path, unchanged), so one build A/Bs both paths. The kernels are **not compiled yet**:
 there is no tt-metal / sfpi toolchain on the Mac. They pass a syntax-only compile against
 stub headers (below). The first device run will probably surface some sfpi API details.
 

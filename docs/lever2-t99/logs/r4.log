@@ -1,0 +1,36 @@
+=== t99r4-vis-nobal ec1d90c GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_BALANCE=0
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.8 p50_ms=33.3 min_ms=27.8 max_ms=37.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r4-vis-nobal
+STAGES n=30 head=0.003 project=6.018 tile_assign=1.452 sort=14.300 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.686 d2h=0.253 assemble=0.000 tail=0.003 | sum=32.715 view_total=32.716 resid_in_view=+0.001 avg_frame_ms=32.753 resid_vs_frame=+0.038
+SORT_STAGES n=30 pread=0.020 bin_count=0.927 bin_hist_d2h=0.258 bin_layout=0.234 upload=0.070 bin_emit=8.844 kernel=0.044 d2h=0.000 compact=0.000 publish_host=0.231 publish_wait=3.551 mat=0.069 | sum=14.248 sort=14.300 resid=+0.052
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.029 pfwc_enqueue=0.035 pfwc_finish=2.482 gather_setup=0.002 gather_rtargs=0.017 gather_enqueue=0.033 gather_wait=3.316 gather_result=0.099 | sum=6.016 project=6.018 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.019 enqueue=0.024 scan_finish=0.000 p_d2h=0.000 k2_finish=1.403 publish=0.001 | sum=1.451 tile_assign=1.452 resid=+0.001
+t99r4-vis-nobal views: 30
+ALL_VIEWS_IDENTICAL
+=== t99r4-vis-w8 ec1d90c GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_TILE_WEIGHT=8
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.6 p50_ms=33.0 min_ms=27.8 max_ms=37.8 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r4-vis-w8
+STAGES n=30 head=0.003 project=6.004 tile_assign=1.433 sort=14.210 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.715 d2h=0.196 assemble=0.000 tail=0.002 | sum=32.563 view_total=32.564 resid_in_view=+0.001 avg_frame_ms=32.597 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.014 bin_count=0.912 bin_hist_d2h=0.247 bin_layout=0.237 upload=0.067 bin_emit=8.841 kernel=0.028 d2h=0.000 compact=0.000 publish_host=0.181 publish_wait=3.596 mat=0.048 | sum=14.171 sort=14.210 resid=+0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.029 pfwc_enqueue=0.032 pfwc_finish=2.476 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.023 gather_wait=3.319 gather_result=0.106 | sum=6.003 project=6.004 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.014 enqueue=0.014 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.432 tile_assign=1.433 resid=+0.001
+t99r4-vis-w8 views: 30
+ALL_VIEWS_IDENTICAL
+=== t99r4-vis-w64 ec1d90c GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_TILE_WEIGHT=64
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.6 p50_ms=33.1 min_ms=27.7 max_ms=37.7 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r4-vis-w64
+STAGES n=30 head=0.003 project=6.028 tile_assign=1.436 sort=14.215 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.672 d2h=0.214 assemble=0.000 tail=0.002 | sum=32.569 view_total=32.569 resid_in_view=+0.001 avg_frame_ms=32.602 resid_vs_frame=+0.034
+SORT_STAGES n=30 pread=0.014 bin_count=0.915 bin_hist_d2h=0.249 bin_layout=0.237 upload=0.067 bin_emit=8.833 kernel=0.028 d2h=0.000 compact=0.000 publish_host=0.189 publish_wait=3.589 mat=0.050 | sum=14.172 sort=14.215 resid=+0.042
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.029 pfwc_enqueue=0.032 pfwc_finish=2.475 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.024 gather_wait=3.344 gather_result=0.103 | sum=6.027 project=6.028 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.015 enqueue=0.015 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.435 tile_assign=1.436 resid=+0.001
+t99r4-vis-w64 views: 30
+ALL_VIEWS_IDENTICAL
+=== t99r4-vis-notau ec1d90c GSPLAT_TT_SFPU_VIS=1 GSPLAT_TT_VIS_EDGE_TAU=0
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.6 p50_ms=33.1 min_ms=27.6 max_ms=37.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r4-vis-notau
+STAGES n=30 head=0.002 project=5.997 tile_assign=1.437 sort=14.237 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.731 d2h=0.211 assemble=0.000 tail=0.002 | sum=32.618 view_total=32.619 resid_in_view=+0.001 avg_frame_ms=32.649 resid_vs_frame=+0.031
+SORT_STAGES n=30 pread=0.016 bin_count=0.912 bin_hist_d2h=0.249 bin_layout=0.235 upload=0.068 bin_emit=8.850 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.196 publish_wait=3.583 mat=0.053 | sum=14.194 sort=14.237 resid=+0.043
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.027 pfwc_enqueue=0.027 pfwc_finish=2.470 gather_setup=0.002 gather_rtargs=0.014 gather_enqueue=0.024 gather_wait=3.327 gather_result=0.105 | sum=5.996 project=5.997 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.015 enqueue=0.016 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.001 | sum=1.436 tile_assign=1.437 resid=+0.001
+t99r4-vis-notau views: 30
+ALL_VIEWS_IDENTICAL
