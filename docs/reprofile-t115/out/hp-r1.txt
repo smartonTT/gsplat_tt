@@ -1,0 +1,91 @@
+HPPY c2w_ms=0.393 to_image_ms=0.008
+HPGAP b=1 gap=0.742 d2h=0.324 unpack=0.000 tail=0.014 py=0.340 head=0.006 pfwc_disp=0.058
+HPPY c2w_ms=0.204 to_image_ms=0.004
+VIEW_STAGES i=0 name=hero wall=31.81 project=6.78 tile_assign=1.57 sort=11.33 blend=11.83 d2h=0.24 view_total=31.76 sort_bin_count=1.00 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=5.65 sort_publish_host=0.19 sort_publish_wait=3.81 project_pfwc_finish=2.46 project_gather_wait=4.10 project_gather_result=0.11 tile_assign_k2_finish=1.53
+HPGAP b=2 gap=225.793 d2h=0.236 unpack=0.000 tail=0.004 py=225.487 head=0.004 pfwc_disp=0.063
+HPPY c2w_ms=0.127 to_image_ms=0.002
+VIEW_STAGES i=1 name=orb_00 wall=25.22 project=5.70 tile_assign=1.12 sort=9.05 blend=9.08 d2h=0.23 view_total=25.19 sort_bin_count=0.73 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.42 sort_publish_host=0.18 sort_publish_wait=3.07 project_pfwc_finish=2.46 project_gather_wait=3.05 project_gather_result=0.08 tile_assign_k2_finish=1.09
+HPGAP b=3 gap=229.163 d2h=0.225 unpack=0.000 tail=0.004 py=228.852 head=0.008 pfwc_disp=0.074
+HPPY c2w_ms=0.154 to_image_ms=0.003
+VIEW_STAGES i=2 name=orb_01 wall=26.05 project=5.77 tile_assign=1.17 sort=9.23 blend=9.63 d2h=0.20 view_total=26.01 sort_bin_count=0.76 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.09 sort_bin_emit=4.50 sort_publish_host=0.19 sort_publish_wait=3.07 project_pfwc_finish=2.47 project_gather_wait=3.09 project_gather_result=0.08 tile_assign_k2_finish=1.13
+HPGAP b=4 gap=228.020 d2h=0.197 unpack=0.000 tail=0.004 py=227.741 head=0.005 pfwc_disp=0.073
+HPPY c2w_ms=0.129 to_image_ms=0.002
+VIEW_STAGES i=3 name=orb_02 wall=26.60 project=5.92 tile_assign=1.21 sort=9.44 blend=9.73 d2h=0.26 view_total=26.57 sort_bin_count=0.78 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.70 sort_publish_host=0.19 sort_publish_wait=3.12 project_pfwc_finish=2.46 project_gather_wait=3.24 project_gather_result=0.08 tile_assign_k2_finish=1.18
+HPGAP b=5 gap=227.445 d2h=0.259 unpack=0.000 tail=0.004 py=227.066 head=0.010 pfwc_disp=0.107
+HPPY c2w_ms=0.216 to_image_ms=0.005
+VIEW_STAGES i=4 name=orb_03 wall=27.45 project=6.15 tile_assign=1.29 sort=9.83 blend=9.88 d2h=0.25 view_total=27.40 sort_bin_count=0.85 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=4.89 sort_publish_host=0.19 sort_publish_wait=3.20 project_pfwc_enqueue=0.07 project_pfwc_finish=2.47 project_gather_wait=3.42 project_gather_result=0.09 tile_assign_k2_finish=1.24
+HPGAP b=6 gap=224.202 d2h=0.248 unpack=0.000 tail=0.005 py=223.876 head=0.005 pfwc_disp=0.068
+HPPY c2w_ms=0.143 to_image_ms=0.002
+VIEW_STAGES i=5 name=orb_04 wall=28.56 project=6.32 tile_assign=1.39 sort=10.41 blend=10.17 d2h=0.23 view_total=28.52 sort_bin_count=0.88 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.15 sort_kernel=0.06 sort_publish_host=0.28 sort_publish_wait=3.33 sort_mat=0.08 project_pfwc_finish=2.49 project_gather_wait=3.59 project_gather_result=0.09 tile_assign_k2_finish=1.33
+HPGAP b=7 gap=218.865 d2h=0.231 unpack=0.000 tail=0.004 py=218.573 head=0.003 pfwc_disp=0.054
+HPPY c2w_ms=0.102 to_image_ms=0.002
+VIEW_STAGES i=6 name=orb_05 wall=29.82 project=6.46 tile_assign=1.47 sort=10.88 blend=10.79 d2h=0.19 view_total=29.79 sort_bin_count=0.94 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.44 sort_publish_host=0.18 sort_publish_wait=3.68 project_pfwc_finish=2.48 project_gather_wait=3.79 project_gather_result=0.10 tile_assign_k2_finish=1.44
+HPGAP b=8 gap=214.477 d2h=0.189 unpack=0.000 tail=0.003 py=214.174 head=0.010 pfwc_disp=0.101
+HPPY c2w_ms=0.209 to_image_ms=0.004
+VIEW_STAGES i=7 name=orb_06 wall=31.53 project=6.74 tile_assign=1.58 sort=11.37 blend=11.55 d2h=0.24 view_total=31.48 sort_bin_count=1.00 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=5.74 sort_publish_host=0.19 sort_publish_wait=3.75 project_pfwc_enqueue=0.07 project_pfwc_finish=2.45 project_gather_wait=4.02 project_gather_result=0.11 tile_assign_k2_finish=1.54
+HPGAP b=9 gap=211.060 d2h=0.238 unpack=0.000 tail=0.004 py=210.763 head=0.003 pfwc_disp=0.052
+HPPY c2w_ms=0.086 to_image_ms=0.002
+VIEW_STAGES i=8 name=orb_07 wall=33.00 project=6.92 tile_assign=1.69 sort=11.94 blend=12.23 d2h=0.19 view_total=32.97 sort_bin_count=1.04 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.06 sort_publish_host=0.19 sort_publish_wait=3.98 project_pfwc_finish=2.48 project_gather_wait=4.24 project_gather_result=0.12 tile_assign_k2_finish=1.64
+HPGAP b=10 gap=210.754 d2h=0.191 unpack=0.000 tail=0.003 py=210.505 head=0.004 pfwc_disp=0.051
+HPPY c2w_ms=0.081 to_image_ms=0.002
+VIEW_STAGES i=9 name=orb_08 wall=33.74 project=7.15 tile_assign=1.72 sort=12.07 blend=12.58 d2h=0.19 view_total=33.72 sort_bin_count=1.07 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.13 sort_publish_host=0.20 sort_publish_wait=4.02 project_pfwc_finish=2.48 project_gather_wait=4.46 project_gather_result=0.12 tile_assign_k2_finish=1.68
+HPGAP b=11 gap=212.133 d2h=0.190 unpack=0.000 tail=0.003 py=211.874 head=0.004 pfwc_disp=0.061
+HPPY c2w_ms=0.108 to_image_ms=0.002
+VIEW_STAGES i=10 name=orb_09 wall=33.80 project=7.19 tile_assign=1.75 sort=12.20 blend=12.41 d2h=0.21 view_total=33.77 sort_bin_count=1.08 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.15 sort_publish_host=0.19 sort_publish_wait=4.11 project_pfwc_finish=2.46 project_gather_wait=4.50 project_gather_result=0.12 tile_assign_k2_finish=1.71
+HPGAP b=12 gap=215.107 d2h=0.213 unpack=0.000 tail=0.003 py=214.819 head=0.005 pfwc_disp=0.067
+HPPY c2w_ms=0.122 to_image_ms=0.002
+VIEW_STAGES i=11 name=orb_10 wall=33.62 project=7.13 tile_assign=1.73 sort=12.22 blend=12.32 d2h=0.19 view_total=33.59 sort_bin_count=1.10 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.17 sort_publish_host=0.20 sort_publish_wait=4.07 project_pfwc_finish=2.46 project_gather_wait=4.44 project_gather_result=0.12 tile_assign_k2_finish=1.70
+HPGAP b=13 gap=217.993 d2h=0.195 unpack=0.000 tail=0.004 py=217.737 head=0.004 pfwc_disp=0.053
+HPPY c2w_ms=0.098 to_image_ms=0.002
+VIEW_STAGES i=12 name=orb_11 wall=32.89 project=7.03 tile_assign=1.68 sort=11.94 blend=12.02 d2h=0.18 view_total=32.86 sort_bin_count=1.07 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.07 sort_bin_emit=6.04 sort_publish_host=0.18 sort_publish_wait=4.00 project_pfwc_finish=2.48 project_gather_wait=4.34 project_gather_result=0.12 tile_assign_k2_finish=1.65
+HPGAP b=14 gap=221.479 d2h=0.183 unpack=0.000 tail=0.003 py=221.234 head=0.004 pfwc_disp=0.055
+HPPY c2w_ms=0.086 to_image_ms=0.002
+VIEW_STAGES i=13 name=orb_12 wall=31.99 project=6.85 tile_assign=1.62 sort=11.57 blend=11.73 d2h=0.19 view_total=31.96 sort_bin_count=1.04 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.83 sort_publish_host=0.18 sort_publish_wait=3.88 project_pfwc_finish=2.47 project_gather_wait=4.17 project_gather_result=0.11 tile_assign_k2_finish=1.59
+HPGAP b=15 gap=222.146 d2h=0.188 unpack=0.000 tail=0.003 py=221.901 head=0.003 pfwc_disp=0.051
+HPPY c2w_ms=0.079 to_image_ms=0.002
+VIEW_STAGES i=14 name=orb_13 wall=30.97 project=6.74 tile_assign=1.56 sort=11.24 blend=11.20 d2h=0.19 view_total=30.94 sort_bin_count=0.98 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.69 sort_publish_host=0.18 sort_publish_wait=3.75 project_pfwc_finish=2.48 project_gather_wait=4.06 project_gather_result=0.11 tile_assign_k2_finish=1.54
+HPGAP b=16 gap=226.253 d2h=0.190 unpack=0.000 tail=0.005 py=225.971 head=0.007 pfwc_disp=0.080
+HPPY c2w_ms=0.153 to_image_ms=0.002
+VIEW_STAGES i=15 name=orb_14 wall=30.52 project=6.66 tile_assign=1.53 sort=11.14 blend=10.93 d2h=0.21 view_total=30.48 sort_bin_count=0.97 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.07 sort_bin_emit=5.60 sort_publish_host=0.27 sort_publish_wait=3.62 project_pfwc_finish=2.46 project_gather_wait=3.96 project_gather_result=0.11 tile_assign_k2_finish=1.50
+HPGAP b=17 gap=225.190 d2h=0.212 unpack=0.000 tail=0.004 py=224.912 head=0.004 pfwc_disp=0.059
+HPPY c2w_ms=0.098 to_image_ms=0.002
+VIEW_STAGES i=16 name=orb_15 wall=29.98 project=6.56 tile_assign=1.50 sort=10.97 blend=10.73 d2h=0.19 view_total=29.95 sort_bin_count=0.96 sort_bin_hist_d2h=0.25 sort_bin_layout=0.25 sort_upload=0.06 sort_bin_emit=5.52 sort_publish_host=0.26 sort_publish_wait=3.55 project_pfwc_finish=2.46 project_gather_wait=3.89 project_gather_result=0.10 tile_assign_k2_finish=1.47
+HPGAP b=18 gap=225.060 d2h=0.191 unpack=0.000 tail=0.003 py=224.808 head=0.005 pfwc_disp=0.053
+HPPY c2w_ms=0.082 to_image_ms=0.002
+VIEW_STAGES i=17 name=orb_16 wall=29.73 project=6.57 tile_assign=1.47 sort=10.79 blend=10.66 d2h=0.19 view_total=29.70 sort_bin_count=0.93 sort_bin_hist_d2h=0.25 sort_bin_layout=0.22 sort_upload=0.06 sort_bin_emit=5.44 sort_publish_host=0.18 sort_publish_wait=3.60 project_pfwc_finish=2.48 project_gather_wait=3.90 project_gather_result=0.11 tile_assign_k2_finish=1.45
+HPGAP b=19 gap=225.006 d2h=0.192 unpack=0.000 tail=0.003 py=224.752 head=0.004 pfwc_disp=0.054
+HPPY c2w_ms=0.087 to_image_ms=0.002
+VIEW_STAGES i=18 name=orb_17 wall=30.04 project=6.58 tile_assign=1.47 sort=10.86 blend=10.92 d2h=0.19 view_total=30.01 sort_bin_count=0.93 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.40 sort_publish_host=0.18 sort_publish_wait=3.70 project_pfwc_finish=2.48 project_gather_wait=3.90 project_gather_result=0.10 tile_assign_k2_finish=1.44
+HPGAP b=20 gap=226.944 d2h=0.190 unpack=0.000 tail=0.003 py=226.671 head=0.007 pfwc_disp=0.073
+HPPY c2w_ms=0.136 to_image_ms=0.002
+VIEW_STAGES i=19 name=orb_18 wall=30.00 project=6.58 tile_assign=1.48 sort=10.84 blend=10.84 d2h=0.21 view_total=29.96 sort_bin_count=0.96 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.07 sort_bin_emit=5.42 sort_publish_host=0.19 sort_publish_wait=3.61 project_pfwc_finish=2.45 project_gather_wait=3.90 project_gather_result=0.10 tile_assign_k2_finish=1.45
+HPGAP b=21 gap=227.405 d2h=0.214 unpack=0.000 tail=0.004 py=227.129 head=0.003 pfwc_disp=0.054
+HPPY c2w_ms=0.097 to_image_ms=0.002
+VIEW_STAGES i=20 name=orb_19 wall=29.89 project=6.62 tile_assign=1.47 sort=10.84 blend=10.74 d2h=0.19 view_total=29.87 sort_bin_count=0.94 sort_bin_hist_d2h=0.25 sort_bin_layout=0.22 sort_upload=0.06 sort_bin_emit=5.43 sort_publish_host=0.18 sort_publish_wait=3.65 project_pfwc_finish=2.48 project_gather_wait=3.93 project_gather_result=0.10 tile_assign_k2_finish=1.45
+HPGAP b=22 gap=228.531 d2h=0.193 unpack=0.000 tail=0.003 py=228.281 head=0.003 pfwc_disp=0.051
+HPPY c2w_ms=0.084 to_image_ms=0.002
+VIEW_STAGES i=21 name=orb_20 wall=29.73 project=6.54 tile_assign=1.47 sort=10.78 blend=10.71 d2h=0.19 view_total=29.70 sort_bin_count=0.94 sort_bin_hist_d2h=0.25 sort_bin_layout=0.22 sort_upload=0.06 sort_bin_emit=5.40 sort_publish_host=0.18 sort_publish_wait=3.62 project_pfwc_finish=2.48 project_gather_wait=3.87 project_gather_result=0.10 tile_assign_k2_finish=1.44
+HPGAP b=23 gap=229.396 d2h=0.195 unpack=0.000 tail=0.003 py=229.132 head=0.004 pfwc_disp=0.062
+HPPY c2w_ms=0.110 to_image_ms=0.002
+VIEW_STAGES i=22 name=orb_21 wall=29.89 project=6.56 tile_assign=1.45 sort=10.75 blend=10.89 d2h=0.20 view_total=29.86 sort_bin_count=0.92 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.34 sort_publish_host=0.18 sort_publish_wait=3.67 project_pfwc_finish=2.47 project_gather_wait=3.88 project_gather_result=0.10 tile_assign_k2_finish=1.42
+HPGAP b=24 gap=230.858 d2h=0.196 unpack=0.000 tail=0.003 py=230.590 head=0.006 pfwc_disp=0.063
+HPPY c2w_ms=0.118 to_image_ms=0.002
+VIEW_STAGES i=23 name=orb_22 wall=28.91 project=6.44 tile_assign=1.41 sort=10.55 blend=10.26 d2h=0.21 view_total=28.88 sort_bin_count=0.91 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.07 sort_bin_emit=5.18 sort_publish_host=0.25 sort_publish_wait=3.54 project_pfwc_finish=2.47 project_gather_wait=3.76 project_gather_result=0.10 tile_assign_k2_finish=1.38
+HPGAP b=25 gap=229.711 d2h=0.213 unpack=0.000 tail=0.004 py=229.439 head=0.003 pfwc_disp=0.052
+HPPY c2w_ms=0.090 to_image_ms=0.002
+VIEW_STAGES i=24 name=orb_23 wall=28.34 project=6.24 tile_assign=1.35 sort=10.22 blend=10.32 d2h=0.18 view_total=28.31 sort_bin_count=0.86 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.05 sort_publish_host=0.18 sort_publish_wait=3.49 project_pfwc_finish=2.48 project_gather_wait=3.58 project_gather_result=0.09 tile_assign_k2_finish=1.32
+HPGAP b=26 gap=230.639 d2h=0.182 unpack=0.000 tail=0.003 py=230.394 head=0.004 pfwc_disp=0.056
+HPPY c2w_ms=0.085 to_image_ms=0.002
+VIEW_STAGES i=25 name=orb_24 wall=26.97 project=6.03 tile_assign=1.25 sort=9.65 blend=9.82 d2h=0.19 view_total=26.94 sort_bin_count=0.80 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.74 sort_publish_host=0.18 sort_publish_wait=3.29 project_pfwc_finish=2.45 project_gather_wait=3.39 project_gather_result=0.09 tile_assign_k2_finish=1.23
+HPGAP b=27 gap=230.341 d2h=0.187 unpack=0.000 tail=0.003 py=230.091 head=0.003 pfwc_disp=0.056
+HPPY c2w_ms=0.085 to_image_ms=0.002
+VIEW_STAGES i=26 name=orb_25 wall=25.96 project=5.81 tile_assign=1.18 sort=9.46 blend=9.29 d2h=0.19 view_total=25.93 sort_bin_count=0.77 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.53 sort_publish_host=0.18 sort_publish_wait=3.34 project_pfwc_finish=2.46 project_gather_wait=3.15 project_gather_result=0.11 tile_assign_k2_finish=1.15
+HPGAP b=28 gap=234.334 d2h=0.193 unpack=0.000 tail=0.003 py=234.054 head=0.007 pfwc_disp=0.076
+HPPY c2w_ms=0.158 to_image_ms=0.003
+VIEW_STAGES i=27 name=orb_26 wall=25.87 project=5.76 tile_assign=1.14 sort=9.38 blend=9.32 d2h=0.21 view_total=25.83 sort_bin_count=0.74 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=4.40 sort_publish_host=0.18 sort_publish_wait=3.39 project_pfwc_finish=2.46 project_gather_wait=3.08 project_gather_result=0.09 tile_assign_k2_finish=1.11
+HPGAP b=29 gap=234.164 d2h=0.210 unpack=0.000 tail=0.004 py=233.883 head=0.005 pfwc_disp=0.062
+HPPY c2w_ms=0.119 to_image_ms=0.003
+VIEW_STAGES i=28 name=orb_27 wall=25.75 project=5.68 tile_assign=1.10 sort=9.25 blend=9.50 d2h=0.19 view_total=25.72 sort_bin_count=0.72 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.06 sort_bin_emit=4.32 sort_publish_host=0.18 sort_publish_wait=3.36 project_pfwc_finish=2.46 project_gather_wait=3.04 project_gather_result=0.08 tile_assign_k2_finish=1.07
+HPGAP b=30 gap=233.997 d2h=0.188 unpack=0.000 tail=0.003 py=233.748 head=0.004 pfwc_disp=0.054
+HPPY c2w_ms=0.093 to_image_ms=0.002
+VIEW_STAGES i=29 name=orb_28 wall=24.97 project=5.67 tile_assign=1.10 sort=9.02 blend=8.96 d2h=0.18 view_total=24.95 sort_bin_count=0.71 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.30 sort_publish_host=0.18 sort_publish_wait=3.19 project_pfwc_finish=2.46 project_gather_wait=3.04 project_gather_result=0.08 tile_assign_k2_finish=1.07

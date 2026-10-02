@@ -1,0 +1,47 @@
+views=30 programs/view=[9] device_span_ms mean=29.450 min=25.064 max=33.784
+
+Per program (mean over views). Per RISC: mean core kernel ms / busiest core ms [busiest / window].
+ #   start  window    gap                BRISC               NCRISC              TRISC_0              TRISC_1              TRISC_2
+ 0   0.000   2.462  0.000   2.413/ 2.461[1.00]   2.302/ 2.349[0.95]   2.388/ 2.435[0.99]   2.396/ 2.443[0.99]   2.388/ 2.435[0.99]
+                          zone pfwc                     TRISC_0  mean  2.388 max  2.435 imb  0.047 cores 110
+                          zone pfwc                     TRISC_1  mean  2.396 max  2.443 imb  0.047 cores 110
+                          zone pfwc                     TRISC_2  mean  2.387 max  2.435 imb  0.047 cores 110
+ 1   2.501   3.759  0.039   3.112/ 3.599[0.96]   3.087/ 3.336[0.89]                    -                    -                    -
+                          zone proj_scatter             BRISC    mean  3.108 max  3.352 imb  0.244 cores 110
+                          zone proj_scatter             NCRISC   mean  3.087 max  3.336 imb  0.249 cores 110
+                          zone proj_vis_scan            BRISC    mean  0.396 max  0.396 imb  0.000 cores 1
+ 2   6.684   1.422  0.424   1.351/ 1.417[1.00]   1.357/ 1.419[1.00]                    -                    -                    -
+                          zone ta_bucket_scatter        BRISC    mean  1.351 max  1.416 imb  0.066 cores 110
+                          zone ta_bucket_scatter        NCRISC   mean  1.357 max  1.419 imb  0.063 cores 110
+ 3   8.161   0.874  0.055   0.000/ 0.000[0.00]   0.859/ 0.873[1.00]                    -                    -                    -
+                          zone sort_bin_hist            NCRISC   mean  0.859 max  0.873 imb  0.013 cores 110
+ 4  10.372   4.508  1.337   4.296/ 4.506[1.00]   4.304/ 4.504[1.00]                    -                    -                    -
+                          zone sort_bucket_emit         BRISC    mean  4.296 max  4.506 imb  0.210 cores 110
+                          zone sort_bucket_emit         NCRISC   mean  4.304 max  4.503 imb  0.200 cores 110
+ 5  14.920   2.585  0.040   2.215/ 2.547[0.99]   1.945/ 2.434[0.94]                    -                    -                    -
+                          zone sort_tile_depth          BRISC    mean  2.215 max  2.547 imb  0.331 cores 110
+                          zone sort_tile_depth          NCRISC   mean  1.945 max  2.434 imb  0.490 cores 110
+ 6  17.516   1.153  0.011                    -   1.064/ 1.152[1.00]                    -                    -                    -
+ 7  18.752   3.173  0.082   2.833/ 3.031[0.96]   2.796/ 3.154[0.99]   2.902/ 3.171[1.00]   2.902/ 3.172[1.00]   2.902/ 3.172[1.00]
+                          zone mat_cull_mask            TRISC_0  mean  2.902 max  3.171 imb  0.270 cores 110
+                          zone mat_cull_mask            TRISC_1  mean  2.902 max  3.172 imb  0.270 cores 110
+                          zone mat_cull_mask            TRISC_2  mean  2.902 max  3.172 imb  0.270 cores 110
+                          zone sort_subchunk_mat        BRISC    mean  2.832 max  3.031 imb  0.198 cores 110
+                          zone sort_subchunk_mat        NCRISC   mean  2.796 max  3.154 imb  0.357 cores 110
+ 8  21.931   7.519  0.006   6.971/ 7.518[1.00]   6.599/ 6.985[0.93]   6.902/ 7.451[0.99]   6.902/ 7.451[0.99]   6.902/ 7.451[0.99]
+                          zone rd_l1_bulk               NCRISC   mean  6.492 max  6.904 imb  0.412 cores 110
+                          zone tile_blend_load          NCRISC   mean  6.599 max  6.985 imb  0.386 cores 110
+                          zone tile_blend_sfpu          TRISC_0  mean  6.902 max  7.451 imb  0.549 cores 110
+                          zone tile_blend_sfpu          TRISC_1  mean  6.902 max  7.451 imb  0.549 cores 110
+                          zone tile_blend_sfpu          TRISC_2  mean  6.902 max  7.451 imb  0.549 cores 110
+
+sum of program windows 27.455 ms + idle between programs 1.995 ms
+
+Per frame, per-core kernel time summed over all programs (mean over views):
+RISC      mean core  busiest core
+BRISC        23.191        24.116
+NCRISC       24.313        25.408
+TRISC_0      12.192        12.830
+TRISC_1      12.200        12.838
+TRISC_2      12.191        12.830
+overlap bound (busiest RISC, busiest core): 25.408 ms vs device span 29.450 ms
