@@ -70,6 +70,7 @@ inline constexpr bool jit_warmup_enabled() { return true; }        // JIT_WARMUP
 
 }  // namespace gsplat_tt::env_config
 
+#include <cstdio>
 #include <cstdlib>
 
 namespace gsplat_tt::env_config {
@@ -89,11 +90,16 @@ inline unsigned int emit_pair_batch() {
     return v;
 }
 // Records per per-tile L1 staging run (0 = one 32 B write per record; else a
-// power of two <= 16 that divides the 64-record DRAM page). Default 8.
+// power of two <= 8 that divides the 64-record DRAM page). Default 8. 16 is
+// capped to 8: its cb(15) ring (~520 KB per mover) overflows L1 with dual movers.
 inline unsigned int emit_ring() {
     static const unsigned int v = [] {
         const unsigned int r = env_uint("GSPLAT_TT_EMIT_RING", 8u);
-        return (r == 2u || r == 4u || r == 8u || r == 16u) ? r : 0u;
+        if (r == 16u) {
+            std::fprintf(stderr, "gsplat_tt: GSPLAT_TT_EMIT_RING=16 overflows L1; using 8\n");
+            return 8u;
+        }
+        return (r == 2u || r == 4u || r == 8u) ? r : 0u;
     }();
     return v;
 }
