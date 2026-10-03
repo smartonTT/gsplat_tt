@@ -15,6 +15,9 @@
 //   9    : chunk_start (this core's first tile index)
 //   10   : num_chunks
 //   11   : PFWC_VIS only (task #99): scene opacity DRAM base (10th stream, CB 30)
+//   12   : PFWC_VIS only: tile stride (1: tiles chunk_start + k, the legacy
+//          contiguous range; num_cores: the strided deal of the lever B fused
+//          writer, task #125)
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8
 // (10 with PFWC_VIS, the opacity last).
@@ -38,7 +41,10 @@ void kernel_main() {
 #ifdef PFWC_VIS
     // Task #99 (lever 2): scene opacity, the 10th stream, for the SFPU predicate.
     const uint32_t op_addr = get_arg_val<uint32_t>(11);
+    const uint32_t tile_stride = get_arg_val<uint32_t>(12);
     constexpr uint32_t CB_OP = 30;
+#else
+    constexpr uint32_t tile_stride = 1;
 #endif
 
     constexpr uint32_t CB_MCX = 0;
@@ -82,7 +88,7 @@ void kernel_main() {
     }
 
     for (uint32_t k = 0; k < num_chunks; k++) {
-        const uint32_t tile_id = chunk_start + k;
+        const uint32_t tile_id = chunk_start + k * tile_stride;
 
         cb_reserve_back(CB_MCX, 1);
         noc_async_read_tile(tile_id, acc_mcx, get_write_ptr(CB_MCX));

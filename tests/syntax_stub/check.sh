@@ -24,6 +24,10 @@ chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_ma
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DOL_MAT_PART=4096u render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT FUSE_CULL" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DFUSE_CULL=1 -DFUSE_CULL_DEPTH=2 render/kernels/dataflow/sort_subchunk_materialize.cpp
+chk "writer_pfwc_fuse.cpp" $DF render/kernels/dataflow/writer_pfwc_fuse.cpp
+chk "writer_pfwc_fuse.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_fuse.cpp
+chk "tile_assign_scatter_seg.cpp" $DF render/kernels/dataflow/tile_assign_scatter_seg.cpp
+chk "tile_assign_scatter_seg.cpp TA_CB_OFFSET" $DF -DTA_CB_OFFSET=16 render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "reader_pfwc.cpp PFWC_VIS" $DF -DPFWC_VIS=1 render/kernels/dataflow/reader_pfwc.cpp
 CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
 chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp
