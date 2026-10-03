@@ -11,8 +11,9 @@
 //    a tile are clipped to its own cursors.
 //  - select_*: sort_subchunk_materialize.cpp's big-tile items (OL_MAT_SELECT).
 //    An item needs only the stable depth ranks [lo, hi) of its tile. Key
-//    histograms over 1024 linear bins find a key range [klo, khi] holding ranks
-//    lo..hi-1; only the keys in it (in index order) are radix-sorted. All
+//    histograms over 1024 linear bins narrow the key ranges of ranks lo and
+//    hi-1; only the keys from the first to the second range (in index order)
+//    are radix-sorted. All
 //    equal keys fall in it together, so they are a contiguous slice of the
 //    tile's stable order starting at rank `base`, and ranks [lo, hi) are
 //    sorted[lo - base, hi - base): the same ids as sorting the whole tile.
@@ -54,54 +55,74 @@ struct Select {
     uint32_t m;
 };
 
-// Up to SELECT_LEVELS histogram passes over k[0..n), each narrowing [klo, khi]
-// to the bins of ranks lo and hi-1 among 1024 linear bins of the current range
-// (a later level only helps when outliers stretch the range, so most keys share
-// a few bins). Stops once m <= 2 (hi - lo) or the bins are single keys.
+// A key range holding rank r: keys [klo, khi], `below` keys under klo, `cnt`
+// keys inside (below <= r < below + cnt).
+struct Edge {
+    uint32_t klo, khi, below, cnt;
+};
+
+// Histogram the keys of e over 1024 linear bins and narrow lo_e / hi_e (both
+// inside e's range) to the bins of their ranks.
+inline void select_refine(const uint32_t* k, uint32_t n, const Edge e, uint32_t r_lo, uint32_t r_hi,
+                          Edge* lo_e, Edge* hi_e, sort_radix_tile::hist_t* hist) {
+    const uint32_t span = e.khi - e.klo;
+    uint32_t shift = 0;
+    while ((span >> shift) >= SELECT_BINS) shift++;
+    for (uint32_t b = 0; b < SELECT_BINS; b++) hist[b] = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        const uint32_t d = k[i] - e.klo;  // unsigned: keys below klo wrap past span
+        if (d <= span) hist[d >> shift]++;
+    }
+    bool want_lo = lo_e != nullptr, want_hi = hi_e != nullptr;
+    uint32_t cum = e.below;
+    for (uint32_t b = 0; b < SELECT_BINS && (want_lo || want_hi); b++) {
+        const uint32_t c = hist[b];
+        if (c == 0u) continue;
+        // Bin keys [klo + (b << shift), + (1 << shift) - 1], clipped to khi.
+        // (b + 1) << shift wraps only for the last bin at shift 22, where the
+        // clip keeps khi.
+        const uint32_t top = ((b + 1u) << shift) - 1u;
+        const Edge bin{e.klo + (b << shift), (top < span) ? e.klo + top : e.khi, cum, c};
+        if (want_lo && cum + c > r_lo) {
+            *lo_e = bin;
+            want_lo = false;
+        }
+        if (want_hi && cum + c > r_hi) {
+            *hi_e = bin;
+            want_hi = false;
+        }
+        cum += c;
+    }
+}
+
+// Up to SELECT_LEVELS rounds narrowing the key ranges holding ranks lo and
+// hi - 1 (one histogram pass while they share a range, else one each), until
+// at most 2 (hi - lo) keys lie between them or both ranges are single keys.
+// Separate edges matter when outliers or a gap sit between the two ranks.
 // 0 <= lo < hi <= n <= MAX_N.
 inline Select select_bins(const uint32_t* k, uint32_t n, uint32_t lo, uint32_t hi,
                           sort_radix_tile::hist_t* hist) {
-    Select s{k[0], k[0], 0u, n};
+    Edge el{k[0], k[0], 0u, n};
     for (uint32_t i = 1; i < n; i++) {
         const uint32_t x = k[i];
-        s.klo = x < s.klo ? x : s.klo;
-        s.khi = x > s.khi ? x : s.khi;
+        el.klo = x < el.klo ? x : el.klo;
+        el.khi = x > el.khi ? x : el.khi;
     }
+    Edge eh = el;
+    auto result = [&]() { return Select{el.klo, eh.khi, el.below, eh.below + eh.cnt - el.below}; };
     for (uint32_t lvl = 0; lvl < SELECT_LEVELS; lvl++) {
-        const uint32_t span = s.khi - s.klo;
-        uint32_t shift = 0;
-        while ((span >> shift) >= SELECT_BINS) shift++;
-        for (uint32_t b = 0; b < SELECT_BINS; b++) hist[b] = 0;
-        for (uint32_t i = 0; i < n; i++) {
-            const uint32_t d = k[i] - s.klo;  // unsigned: keys below klo wrap past span
-            if (d <= span) hist[d >> shift]++;
+        if (result().m <= 2u * (hi - lo)) break;
+        const bool lo_done = el.klo == el.khi, hi_done = eh.klo == eh.khi;
+        if (lo_done && hi_done) break;
+        if (el.klo == eh.klo && el.khi == eh.khi) {
+            const Edge e = el;
+            select_refine(k, n, e, lo, hi - 1u, &el, &eh, hist);
+        } else {
+            if (!lo_done) select_refine(k, n, el, lo, 0u, &el, nullptr, hist);
+            if (!hi_done) select_refine(k, n, eh, 0u, hi - 1u, nullptr, &eh, hist);
         }
-        uint32_t cum = s.base, base = s.base, b_lo = 0, b_hi = 0;
-        bool have_lo = false;
-        for (uint32_t b = 0; b < SELECT_BINS; b++) {
-            const uint32_t c = hist[b];
-            if (!have_lo && cum + c > lo) {
-                have_lo = true;
-                b_lo = b;
-                base = cum;
-            }
-            cum += c;
-            if (cum >= hi) {
-                b_hi = b;
-                break;
-            }
-        }
-        const uint32_t klo = s.klo + (b_lo << shift);
-        // Last key of bin b_hi; wraps to 0xFFFFFFFF (>= span) only for the
-        // last of 1024 bins at shift 22, where khi stays.
-        const uint32_t top = ((b_hi + 1u) << shift) - 1u;
-        s.khi = (top < span) ? s.klo + top : s.khi;
-        s.klo = klo;
-        s.base = base;
-        s.m = cum - base;
-        if (shift == 0u || s.m <= 2u * (hi - lo)) break;
     }
-    return s;
+    return result();
 }
 
 // The candidates (key, index) in index order; returns their count (== s.m).
