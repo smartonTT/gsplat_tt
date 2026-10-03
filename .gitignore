@@ -18,3 +18,7 @@ render/build-tt/
 *.so
 .venv
 opt/profiler/**/*.tracy
+
+# Python bytecode
+__pycache__/
+*.pyc
