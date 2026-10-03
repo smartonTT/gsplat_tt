@@ -26,6 +26,10 @@ inline constexpr uint32_t kMatMover0Cap = 6144;
 // a single ~8x-weighted item that set the busiest core's time by itself.
 // == sort_subchunk_materialize.cpp GATHER_PART_RECS.
 inline constexpr uint32_t kGatherPartRecs = 2048;
+// Task #124 (one-launch v2, OL_MAT_SELECT): a big-tile item covers this many
+// records of its subchunk (second word sc | part << 8, like a gather part).
+// == sort_subchunk_materialize.cpp OL_MAT_PART.
+inline constexpr uint32_t kOlMatPartRecs = 4096;
 
 // iter 130: materialize work-item assignment — balance at (tile, subchunk)
 // granularity. iter-130 MEASURED the dominant materialize cost as the OVERFLOW
@@ -57,7 +61,8 @@ inline MatWorkAssignment build_mat_worklist(
     uint32_t bucket_fit,
     uint32_t movers = 1,
     uint32_t m0_cap = 0,
-    bool onelaunch = false) {
+    bool onelaunch = false,
+    bool ol_select = false) {
     // Cost of a gather record relative to a whole-tile (coalesced + L1 radix)
     // record. iter 130 assumed 8; task #35 measured (yyzo-bh-07, bicycle 30
     // views, dual mover) blend stage 60.74 / 59.74 / 58.48 / 57.95 / 57.78 ms
@@ -93,6 +98,18 @@ inline MatWorkAssignment build_mat_worklist(
             const uint32_t sc_off = sc * bucket_fit;
             const uint32_t l_sub = (sc_off >= cnt) ? 0u
                 : ((cnt - sc_off > bucket_fit) ? bucket_fit : (cnt - sc_off));
+            if (onelaunch && ol_select) {
+                // Task #124: one item per kOlMatPartRecs part. It still reads
+                // the tile twice and scans its keys (~cnt/4) but radix-sorts
+                // only the depth bins of its own ranks (~2 per record; an
+                // unmeasured model, calibrate with the mat_ol_* zones).
+                for (uint32_t p0 = 0, part = 0; p0 < l_sub; p0 += kOlMatPartRecs, ++part) {
+                    const uint32_t recs = std::min(kOlMatPartRecs, l_sub - p0);
+                    items.push_back({t, sc | (part << 8),
+                                     static_cast<uint64_t>(cnt) / 4u + 2u * recs, true});
+                }
+                continue;
+            }
             if (onelaunch) {
                 // Task #106 one-launch sort: the whole tile is in its bucket.
                 // One item per subchunk sorts the tile's keys and fills only

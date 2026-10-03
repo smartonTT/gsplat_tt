@@ -29,6 +29,13 @@
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
+#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
+#include "sort_onelaunch_algo.h"
+#ifndef OL_MAT_PART
+#define OL_MAT_PART 4096u  // == sort_mover_split.h kOlMatPartRecs
+#endif
+static_assert(OL_MAT_PART % 64u == 0u, "a part starts on a payload page");
+#endif
 
 namespace {
 
@@ -420,13 +427,14 @@ void kernel_main() {
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             const uint32_t bs = get_write_ptr(CB_BSORT);
             const uint32_t slab = get_write_ptr(CB_SLAB);
-            auto emit_slab = [&](uint32_t s, uint32_t Ls) {
+            // Ls records of subchunk s from slab page p0 of its payload on.
+            auto emit_slab = [&](uint32_t s, uint32_t Ls, uint32_t p0 = 0u) {
                 uint32_t scp = 0;
                 {
                     const uint32_t e0 = (dir_base + s) * 4u;
                     noc_async_read(get_noc_addr(e0 >> 4, dir_acc), scr, PAGE_BYTES);
                     noc_async_read_barrier();
-                    scp = scrp[e0 & 0xF];
+                    scp = scrp[e0 & 0xF] + p0;
                 }
                 const uint32_t out_pages = (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
                 for (uint32_t p = 0; p < out_pages; ++p) {
@@ -481,6 +489,24 @@ void kernel_main() {
                     for (uint32_t i = 0; i < nr; ++i) k[r0 + i] = rw[i * 8u + 3u];
                 }
             }
+#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
+            // Task #124: the item is part `part` of its subchunk, records
+            // [part * OL_MAT_PART, +OL_MAT_PART) (host kOlMatPartRecs), and
+            // sorts only the keys in the depth bins of those ranks
+            // (sort_onelaunch_algo.h), not the whole tile. Four N u32 arrays
+            // fill CB_BUCKET at N = 32768 (16384 x 32 B).
+            const uint32_t po = part * OL_MAT_PART;
+            if (po >= L_sub) continue;
+            const uint32_t L_item = (L_sub - po > OL_MAT_PART) ? OL_MAT_PART : (L_sub - po);
+            {
+                MAT_PZ("mat_ol_sort");
+                uint32_t* ck = reinterpret_cast<uint32_t*>(buck);
+                sort_ol::select_ranks(k, N, sc_off + po, sc_off + po + L_item, ck, ck + N,
+                                      ck + 2u * N, ck + 3u * N, k, hist);
+            }
+#else
+            const uint32_t po = 0u;
+            const uint32_t L_item = L_sub;
             uint32_t* v = reinterpret_cast<uint32_t*>(buck);
             uint32_t* k2 = v + N;
             uint32_t* v2 = k2 + N;
@@ -490,12 +516,13 @@ void kernel_main() {
                 const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
                 for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
+#endif
             {
                 MAT_PZ("mat_ol_gather");
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
-                    for (uint32_t i = 0; i < L_sub; ++i) {
+                    for (uint32_t i = 0; i < L_item; ++i) {
                         const uint32_t off = k[i] - r0;
                         if (off >= nr) continue;
                         auto src = reinterpret_cast<volatile uint32_t*>(buck + off * L1_SPLAT_BYTES);
@@ -508,10 +535,10 @@ void kernel_main() {
                 }
             }
 #if defined(FUSE_CULL) && FUSE_CULL
-            cull_slab(slab, L_sub);
+            cull_slab(slab, L_item);
 #endif
             MAT_PZ("mat_ol_wr");
-            emit_slab(sc, L_sub);
+            emit_slab(sc, L_item, po / SLAB_RECS_PER_PAGE);
             continue;
         }
 #endif

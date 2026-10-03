@@ -111,4 +111,41 @@ inline bool emit_puboc() {
     return v;
 }
 
+// Task #124 one-launch sort v2 knobs (GSPLAT_TT_SORT_ONELAUNCH=1 only; see
+// sort_bin_onelaunch.cpp and docs/sort-onelaunch-v2-t124.md). Kill switch for
+// the v1 one-launch: GSPLAT_TT_OL_PB=1 GSPLAT_TT_OL_RING=0 GSPLAT_TT_OL_MAT_SELECT=0.
+// Emit pair pages per batch: 1, 2, 4, 8 or 16. Default 8 (#100's EMIT_PB).
+inline unsigned int ol_pair_batch() {
+    static const unsigned int v = [] {
+        const unsigned int b = env_uint("GSPLAT_TT_OL_PB", 8u);
+        return (b != 0u && b <= 16u && (b & (b - 1u)) == 0u) ? b : 8u;
+    }();
+    return v;
+}
+// Emit records per per-tile run: 0 (one 32 B write per record), 2, 4 or 8.
+// Default 8 (#100's EMIT_RING).
+inline unsigned int ol_ring() {
+    static const unsigned int v = [] {
+        const unsigned int r = env_uint("GSPLAT_TT_OL_RING", 8u);
+        return (r == 2u || r == 4u || r == 8u) ? r : 0u;
+    }();
+    return v;
+}
+// Big-tile materialize items sort only the depth bins holding their own ranks
+// (sort_onelaunch_algo.h select_ranks), not the whole tile. Default on.
+inline bool ol_mat_select() {
+    static const bool v = env_uint("GSPLAT_TT_OL_MAT_SELECT", 1u) != 0u;
+    return v;
+}
+// Pair pages per mover kept in L1 from count to emit, a multiple of 32. Default
+// 1536 (v1); 1024 with the emit rings, whose ~260 KB per mover must fit too.
+inline unsigned int ol_win_pages() {
+    static const unsigned int v = [] {
+        const unsigned int d = ol_ring() != 0u ? 1024u : 1536u;
+        const unsigned int w = env_uint("GSPLAT_TT_OL_WIN_PAGES", d);
+        return (w >= 32u && w <= 2048u && w % 32u == 0u) ? w : d;
+    }();
+    return v;
+}
+
 }  // namespace gsplat_tt::env_config

@@ -333,10 +333,11 @@ static bool sort_onelaunch_enabled() {
     }();
     return v;
 }
-// Records per tile bucket (== the legacy MAX_TILE_ENTRIES limit) and the
-// emit's L1 page window (== sort_bin_onelaunch.cpp WIN_PAGES).
+// Records per tile bucket (== the legacy MAX_TILE_ENTRIES limit). The emit's
+// L1 page window is env_config::ol_win_pages() (define OL_WIN_PAGES).
 constexpr uint32_t kOneLaunchTileCap = sort_onelaunch::kTileCap;
-constexpr uint32_t kOneLaunchWinPages = 1536;
+// Tiles with an emit record ring (== OL_RING_TILES); more tiles: rings off.
+constexpr uint32_t kOneLaunchRingTiles = 1024;
 // Coefficient/mask tiles in flight per mover in the fused mat+cull program
 // (== the depth of each CB_COEFF / CB_KEEP; 4 KB fp32 tiles, 4 CBs).
 // GSPLAT_TT_MATCULL_DEPTH overrides it for tuning (1..8).
@@ -554,7 +555,14 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
             });
     }
     // Task #106: the one-launch bucket branch (args 16, 17).
-    if (sort_onelaunch_enabled()) mat_defines["SORT_ONELAUNCH"] = "1";
+    if (sort_onelaunch_enabled()) {
+        mat_defines["SORT_ONELAUNCH"] = "1";
+        // Task #124: big-tile items sort only their own ranks' depth bins.
+        if (gsplat_tt::env_config::ol_mat_select()) {
+            mat_defines["OL_MAT_SELECT"] = "1";
+            mat_defines["OL_MAT_PART"] = std::to_string(gsplat_tt::sort_split::kOlMatPartRecs) + "u";
+        }
+    }
     std::map<std::string, std::string> mat_defines_m0 = mat_defines;
     mat_defines_m0["MAT_CB_BASE"] = "16";
     // A gather part is staged whole in the mover's slab (BRISC: kMatMover0Cap).
@@ -769,17 +777,42 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         c.set_page_size(id, bytes);
         CreateCircularBuffer(program, cores, c);
     };
+    // Task #124 v2 emit: OL_PB pair pages per batch (3 staging buffers for
+    // pages past the window, 2 blendrec rings), OL_RING records per per-tile
+    // run (cb 13: kOneLaunchRingTiles x R x 32 B + the 4 B run starts).
+    const uint32_t pb = gsplat_tt::env_config::ol_pair_batch();
+    const uint32_t ring = gsplat_tt::env_config::ol_ring();
+    const uint32_t win = gsplat_tt::env_config::ol_win_pages();
+    const uint32_t ring_bytes = kOneLaunchRingTiles * (ring * 32u + 4u);
+    uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
-        cb(0 + off, PAGE_BYTES);             // gid page (pages past the window)
-        cb(1 + off, PAGE_BYTES);             // tid page
-        cb(2 + off, PAGE_BYTES);             // keep page
-        cb(3 + off, 2u * 16u * PAGE_BYTES);  // depth page ring (2 halves)
-        cb(4 + off, BIN_ROW_BYTES);          // per-tile count of this mover
-        cb(5 + off, BIN_ROW_BYTES);          // per-tile cursor
-        cb(6 + off, 2u * 32u * PAGE_BYTES);  // count-pass read batch (tid, keep)
-        cb(7 + off, 2u * 16u * PAGE_BYTES);  // blendrec prefetch ring (2 halves)
-        cb(8 + off, 16u * 32u);              // 32 B record staging
-        cb(12 + off, kOneLaunchWinPages * 3u * PAGE_BYTES);  // gid/tid/keep window
+        mover_bytes = 0;
+        auto mcb = [&](uint32_t id, uint32_t bytes) {
+            cb(id + off, bytes);
+            mover_bytes += bytes;
+        };
+        mcb(0, 3u * pb * PAGE_BYTES);         // gid pages (past the window)
+        mcb(1, 3u * pb * PAGE_BYTES);         // tid pages
+        mcb(2, 3u * pb * PAGE_BYTES);         // keep pages
+        mcb(3, PAGE_BYTES);                   // depth page (EMIT_PUBOC=0 only)
+        mcb(4, BIN_ROW_BYTES);                // per-tile count of this mover
+        mcb(5, BIN_ROW_BYTES);                // per-tile cursor
+        mcb(6, 2u * 32u * PAGE_BYTES);        // count-pass read batch (tid, keep)
+        mcb(7, 2u * pb * 16u * PAGE_BYTES);   // blendrec rings: 16 pages per pair page
+        mcb(8, 16u * 32u);                    // 32 B record staging (OL_RING=0)
+        mcb(12, win * 3u * PAGE_BYTES);       // gid/tid/keep window
+        if (ring != 0u) mcb(13, ring_bytes);  // per-tile record runs
+    }
+    cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
+    cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
+    static bool logged = false;
+    if (!logged) {
+        logged = true;
+        std::fprintf(stderr,
+                     "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
+                     "cb_bytes/mover=%u shared=%u\n",
+                     pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, mover_bytes,
+                     BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
     cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
     cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
@@ -789,6 +822,10 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     // Task #100 PUBOC: copy the gather-published op/color/depth words.
     std::map<std::string, std::string> defines;
     defines["EMIT_PUBOC"] = gsplat_tt::env_config::emit_puboc() ? "1u" : "0u";
+    defines["OL_PB"] = std::to_string(pb) + "u";
+    defines["OL_RING"] = std::to_string(ring) + "u";
+    defines["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
+    defines["OL_WIN_PAGES"] = std::to_string(win) + "u";
     ctx.kol = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",
@@ -2142,7 +2179,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             log_subchunk_layout_stats(sc_layout);
             const MatWorkAssignment ol_work =
                 build_mat_worklist(counts, num_tiles, num_cores, render_config::kBucketFit,
-                                   sort_mat_movers(), kMatMover0Cap, /*onelaunch=*/true);
+                                   sort_mat_movers(), kMatMover0Cap, /*onelaunch=*/true,
+                                   gsplat_tt::env_config::ol_mat_select());
             if (ol_work.max_items_per_core > 1024u) {
                 std::cerr << "[gsplat_tt::sort] materialize work items/core "
                           << ol_work.max_items_per_core << " > MAX_WORK=1024\n";

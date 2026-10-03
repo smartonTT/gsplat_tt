@@ -52,9 +52,24 @@
 
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
+#include "sort_onelaunch_algo.h"
 
 #ifndef EMIT_PUBOC
 #define EMIT_PUBOC 0u
+#endif
+// v2 emit (task #124; host knobs GSPLAT_TT_OL_PB / _RING / _WIN_PAGES). The
+// defaults here are the v1 emit's batching and write pattern.
+#ifndef OL_PB
+#define OL_PB 1u  // pair pages per emit batch
+#endif
+#ifndef OL_RING
+#define OL_RING 0u  // records per coalesced run (0: one 32 B write per record)
+#endif
+#ifndef OL_RING_TILES
+#define OL_RING_TILES 1024u  // tiles with a ring (CB_RING size); more: rings off
+#endif
+#ifndef OL_WIN_PAGES
+#define OL_WIN_PAGES 1536u  // == sort_device.cpp onelaunch window
 #endif
 
 namespace {
@@ -71,13 +86,11 @@ constexpr uint32_t REC_BATCH = 16u;
 constexpr uint32_t MOVER0_CB_OFFSET = 16;
 // Private CBs (per mover).
 constexpr uint32_t CB_GID = 0, CB_TID = 1, CB_KEEP = 2, CB_DEP = 3, CB_H = 4, CB_CUR = 5,
-                   CB_BATCH = 6, CB_REC = 7, CB_SCRATCH = 8, CB_WIN = 12;
+                   CB_BATCH = 6, CB_REC = 7, CB_SCRATCH = 8, CB_WIN = 12, CB_RING = 13;
 // The first WIN_PAGES pages of a mover's range stay in L1 (gid, tid, keep
-// planes) from the count pass to the emit; the emit prefetches page i+1's
-// blendrec and depth pages into the other half of a two-half ring while it
-// packs page i. Pages past the window take the unpipelined path.
-constexpr uint32_t WIN_PAGES = 1536;  // == sort_device.cpp kOneLaunchWinPages
-constexpr uint32_t RING = 16;         // entries per ring half (<= 16 gaussians per page)
+// planes) from the count pass to the emit; pages past the window are re-read
+// by the emit, two batches ahead.
+constexpr uint32_t WIN_PAGES = OL_WIN_PAGES;
 // Shared CBs (one copy per core): CB_ROW holds the core's count row, then its
 // base row; CB_PFX stages the prefix pass (num_cores count pages, num_cores
 // base pages, the totals page and the padded-totals page).
@@ -290,7 +303,24 @@ void kernel_main() {
     for (uint32_t t = 0; t < num_tiles; t++) curp[t] = rowp[t] + ((mover == 1) ? h0p[t] : 0u);
 
     // ── 5. emit: pack each kept pair's 32B record into its bucket slot ─────
+    // Task #124 (one-launch sort v2): #100's emit ported (sort_bin.cpp
+    // sub-pass 2). OL_PB pair pages per batch: batch k+1's blendrec reads (and
+    // batch k+2's pair pages, past the window) are in flight while batch k
+    // packs. OL_RING: records stage in per-tile runs (sort_onelaunch_algo.h)
+    // and leave L1 as one write per run, not one 32 B write per record.
+    // OL_PB=1 OL_RING=0 is the v1 emit's batching and write pattern. The bytes
+    // written are the same for every setting.
     DeviceZoneScopedN("sort_ol_emit");
+    constexpr uint32_t PB = OL_PB;
+    constexpr uint32_t BATCH_ELEMS = PB * ELEMS_PER_PAGE;
+    constexpr uint32_t R = OL_RING;
+    constexpr bool PUBOC = EMIT_PUBOC != 0u;
+    static_assert(PB >= 1u && PB <= 16u && (PB & (PB - 1u)) == 0u && CNT_BATCH % PB == 0u,
+                  "OL_PB: power of two <= 16 (batches never straddle the window)");
+    static_assert(R == 0u || ((R & (R - 1u)) == 0u && R <= 16u && REC_PAGE_RECS % (R ? R : 1u) == 0u),
+                  "OL_RING: power of two dividing the record page");
+    const bool ring_on = (R != 0u) && num_tiles <= OL_RING_TILES && (tile_cap % REC_PAGE_RECS) == 0u;
+
     const bool tx_is_pow2 = (tiles_x != 0u) && ((tiles_x & (tiles_x - 1u)) == 0u);
     uint32_t tx_shift = 0u;
     if (tx_is_pow2) {
@@ -299,18 +329,19 @@ void kernel_main() {
     }
     const uint32_t tx_mask = tiles_x - 1u;
 
+    // Pair staging for pages past the window: buffer b of 3 at plane + b*PB*64.
     const uint32_t gid_l1 = get_write_ptr(CB_GID + cbo);
     const uint32_t tid_l1 = get_write_ptr(CB_TID + cbo);
     const uint32_t keep_l1 = get_write_ptr(CB_KEEP + cbo);
     const uint32_t dep_l1 = get_write_ptr(CB_DEP + cbo);
-    auto gidp = reinterpret_cast<volatile int32_t*>(gid_l1);
-    auto tidp = reinterpret_cast<volatile int32_t*>(tid_l1);
-    auto keepp = reinterpret_cast<volatile int32_t*>(keep_l1);
-    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC + cbo);
+    auto depp = reinterpret_cast<volatile uint32_t*>(dep_l1);
+    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC + cbo);  // 2 x PB*16 blendrec pages
     const uint32_t l1_scratch = get_write_ptr(CB_SCRATCH + cbo);
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
-
     int32_t blendrec_cached_g = -1;
+    int32_t dep_cached_page = -1;
+
+    // OL_RING=0: REC_BATCH records stage in l1_scratch, one 32 B write each.
     uint32_t brec_slot[REC_BATCH];
     uint32_t nbrec = 0;
     auto flush_recs = [&]() {
@@ -327,19 +358,28 @@ void kernel_main() {
         nbrec = 0;
     };
 
-    // Per-gaussian invariant words of the 32B record (== sort_bin.cpp).
+    // OL_RING: tile t's run at ring_l1 + (t*R + c%R)*32, its first cursor of
+    // this mover in startp[t].
+    const uint32_t ring_l1 = (R != 0u) ? get_write_ptr(CB_RING + cbo) : 0u;
+    auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + OL_RING_TILES * R * REC_BYTES);
+    if (ring_on) {
+        for (uint32_t t = 0; t < num_tiles; t++) startp[t] = curp[t];
+    }
+    const uint32_t tile_pages = tile_cap / REC_PAGE_RECS;
+    auto flush_run = [&](uint32_t t, uint32_t last) {
+        const uint32_t s0 = sort_ol::ring_run_start(startp[t], last, R);
+        noc_async_write(ring_l1 + (t * R + (s0 & (R - 1u))) * REC_BYTES,
+                        get_noc_addr(t * tile_pages + s0 / REC_PAGE_RECS, bucket_acc) +
+                            (s0 % REC_PAGE_RECS) * REC_BYTES,
+                        (last + 1u - s0) * REC_BYTES);
+    };
+
+    // Per-gaussian invariant words of the 32B record (== sort_bin.cpp); the
+    // tile-local mean y only changes with the tile row.
     uint32_t inv_cov0 = 0, inv_cov1 = 0, inv_cov2 = 0, inv_depth = 0, inv_opr = 0, inv_cgb = 0;
     float inv_mx = 0.0f, inv_my = 0.0f;
     uint32_t inv_mx_bits = 0, inv_my_bits = 0;
-    auto to_unorm = [](uint32_t bits) -> uint32_t {
-        uint32_t u;
-        if (sort_bin_fp32::unorm16(bits, &u)) return u;
-        float v;
-        __builtin_memcpy(&v, &bits, 4);
-        if (v <= 0.0f) return 0u;
-        if (v >= 1.0f) return 65535u;
-        return static_cast<uint32_t>(v * 65535.0f + 0.5f);
-    };
+    uint32_t c_ty = 0xFFFFFFFFu, c_my_bits = 0;
     auto pack_invariants = [&](uint32_t depth_key) {
         inv_cov0 = cachep[0];
         inv_cov1 = cachep[1];
@@ -349,120 +389,163 @@ void kernel_main() {
         inv_my_bits = cachep[4];
         __builtin_memcpy(&inv_mx, &inv_mx_bits, 4);
         __builtin_memcpy(&inv_my, &inv_my_bits, 4);
-        if constexpr (EMIT_PUBOC != 0u) {
+        c_ty = 0xFFFFFFFFu;
+        if constexpr (PUBOC) {
             inv_opr = cachep[10];
             inv_cgb = cachep[11];
         } else {
-            inv_opr = (to_unorm(cachep[5]) | (to_unorm(cachep[6]) << 16));
-            inv_cgb = (to_unorm(cachep[7]) | (to_unorm(cachep[8]) << 16));
+            inv_opr = sort_bin_fp32::to_unorm16(cachep[5]) | (sort_bin_fp32::to_unorm16(cachep[6]) << 16);
+            inv_cgb = sort_bin_fp32::to_unorm16(cachep[7]) | (sort_bin_fp32::to_unorm16(cachep[8]) << 16);
         }
     };
-    auto pack_rec = [&](uint32_t b, uint32_t tt) {
+    auto pack_rec = [&](volatile uint32_t* p32, uint32_t tt) {
         const uint32_t txi = tx_is_pow2 ? (tt & tx_mask) : (tt % tiles_x);
         const uint32_t tyi = tx_is_pow2 ? (tt >> tx_shift) : (tt / tiles_x);
-        uint32_t mx_bits, my_bits;
+        uint32_t mx_bits;
         if (!sort_bin_fp32::sub_int(inv_mx_bits, txi * L1_TILE_SIZE, &mx_bits)) {
             const float mx = inv_mx - static_cast<float>(txi * L1_TILE_SIZE);
             __builtin_memcpy(&mx_bits, &mx, 4);
         }
-        if (!sort_bin_fp32::sub_int(inv_my_bits, tyi * L1_TILE_SIZE, &my_bits)) {
-            const float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
-            __builtin_memcpy(&my_bits, &my, 4);
+        if (tyi != c_ty) {
+            c_ty = tyi;
+            if (!sort_bin_fp32::sub_int(inv_my_bits, tyi * L1_TILE_SIZE, &c_my_bits)) {
+                const float my = inv_my - static_cast<float>(tyi * L1_TILE_SIZE);
+                __builtin_memcpy(&c_my_bits, &my, 4);
+            }
         }
-        volatile uint32_t* p32 = reinterpret_cast<volatile uint32_t*>(l1_scratch + b * REC_BYTES);
         p32[0] = inv_cov0;
         p32[1] = inv_cov1;
         p32[2] = inv_cov2;
         p32[3] = inv_depth;
         p32[4] = mx_bits;
-        p32[5] = my_bits;
+        p32[5] = c_my_bits;
         p32[6] = inv_opr;
         p32[7] = inv_cgb;
     };
 
-    // Two-half rings: page i's distinct gaussians' blendrec pages (and the depth
-    // pages they need) sit in half i & 1. Each page starts its own entries (a
-    // gaussian continuing from the previous page is read again), so a half is
-    // never referenced after the next prefetch into it is issued.
-    const uint32_t dep_ring = dep_l1;  // RING x 2 depth pages
-    uint32_t ent_dslot[2][RING];
-    auto prefetch = [&](volatile int32_t* gp, volatile int32_t* kp, uint32_t pg, uint32_t h) {
-        int32_t prev_g = -1;
-        int32_t prev_dpg = -1;
-        uint32_t nb = 0, nd = 0;
-        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-            if (pg * ELEMS_PER_PAGE + j >= P) break;
-            if (kp[j] == 0) continue;
-            const int32_t gj = gp[j];
-            if (gj == prev_g) continue;
-            prev_g = gj;
-            noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc),
-                           rec_cache_l1 + (h * RING + nb) * PAGE_BYTES, PAGE_BYTES);
-            const int32_t dpg = gj / static_cast<int32_t>(ELEMS_PER_PAGE);
-            if (EMIT_PUBOC == 0u && dpg != prev_dpg) {
-                prev_dpg = dpg;
-                noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc),
-                               dep_ring + (h * RING + nd) * PAGE_BYTES, PAGE_BYTES);
-                nd++;
-            }
-            ent_dslot[h][nb] = nd - 1u;
-            nb++;
+    // Batch k: pages [pg_lo + k*PB, +nb). Window batches read their planes in
+    // place; later ones use pair buffer k % 3, issued two batches ahead.
+    struct Planes { volatile int32_t* g; volatile int32_t* t; volatile int32_t* k; };
+    auto planes = [&](uint32_t k) -> Planes {
+        const uint32_t w = k * PB;
+        if (w < nwin) {
+            return {reinterpret_cast<volatile int32_t*>(win_gid + w * PAGE_BYTES),
+                    reinterpret_cast<volatile int32_t*>(win_tid + w * PAGE_BYTES),
+                    reinterpret_cast<volatile int32_t*>(win_keep + w * PAGE_BYTES)};
+        }
+        const uint32_t o = (k % 3u) * PB * PAGE_BYTES;
+        return {reinterpret_cast<volatile int32_t*>(gid_l1 + o),
+                reinterpret_cast<volatile int32_t*>(tid_l1 + o),
+                reinterpret_cast<volatile int32_t*>(keep_l1 + o)};
+    };
+    const uint32_t nbatch = (npages + PB - 1u) / PB;
+    auto batch_pages = [&](uint32_t k) { return (npages - k * PB < PB) ? (npages - k * PB) : PB; };
+    auto issue_pairs = [&](uint32_t k) {
+        if (k * PB < nwin) return;  // already in the window
+        const uint32_t pg0 = pg_lo + k * PB;
+        const uint32_t o = (k % 3u) * PB * PAGE_BYTES;
+        for (uint32_t b = 0; b < batch_pages(k); b++) {
+            noc_async_read(get_noc_addr(pg0 + b, gids_acc), gid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg0 + b, tids_acc), tid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg0 + b, keep_acc), keep_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
         }
     };
-    auto consume = [&](volatile int32_t* gp, volatile int32_t* tp, volatile int32_t* kp, uint32_t pg,
-                       uint32_t h) {
-        int32_t page_prev_g = -1;
-        uint32_t k = 0;
-        for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
-            if (pg * ELEMS_PER_PAGE + j >= P) break;
-            if (kp[j] == 0) continue;
-            const uint32_t g = static_cast<uint32_t>(gp[j]);
-            const uint32_t t = static_cast<uint32_t>(tp[j]);
-            if (static_cast<int32_t>(g) != page_prev_g) {
-                page_prev_g = static_cast<int32_t>(g);
-                cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1 + (h * RING + k) * PAGE_BYTES);
-                if (static_cast<int32_t>(g) != blendrec_cached_g) {
-                    blendrec_cached_g = static_cast<int32_t>(g);
-                    if constexpr (EMIT_PUBOC != 0u) {
-                        pack_invariants(cachep[12]);
-                    } else {
-                        auto dp = reinterpret_cast<volatile uint32_t*>(
-                            dep_ring + (h * RING + ent_dslot[h][k]) * PAGE_BYTES);
-                        pack_invariants(dp[g % ELEMS_PER_PAGE]);
+    // One blendrec page per run of equal kept g (scan_g carries the last kept
+    // g across batches, the same test process_batch uses) into ring half h.
+    int32_t scan_g = -1;
+    auto issue_brec = [&](uint32_t k, uint32_t h) {
+        const Planes pl = planes(k);
+        const uint32_t dst0 = rec_cache_l1 + h * BATCH_ELEMS * PAGE_BYTES;
+        const uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
+        const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+        uint32_t n_pf = 0;
+        for (uint32_t j = 0; j < n_el; j++) {
+            if (p0 + j >= P) break;
+            if (pl.k[j] == 0) continue;
+            const int32_t gj = pl.g[j];
+            if (gj != scan_g) {
+                noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc), dst0 + n_pf * PAGE_BYTES,
+                               PAGE_BYTES);
+                n_pf++;
+                scan_g = gj;
+            }
+        }
+    };
+    auto process_batch = [&](uint32_t k, uint32_t h) {
+        const Planes pl = planes(k);
+        const uint32_t ring0 = rec_cache_l1 + h * BATCH_ELEMS * PAGE_BYTES;
+        const uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
+        const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+        uint32_t rec_slot = 0;
+        for (uint32_t j = 0; j < n_el; j++) {
+            if (p0 + j >= P) break;
+            if (pl.k[j] == 0) continue;
+            const uint32_t g = static_cast<uint32_t>(pl.g[j]);
+            const uint32_t t = static_cast<uint32_t>(pl.t[j]);
+            if (static_cast<int32_t>(g) != blendrec_cached_g) {
+                cachep = reinterpret_cast<volatile uint32_t*>(ring0 + rec_slot * PAGE_BYTES);
+                rec_slot++;
+                blendrec_cached_g = static_cast<int32_t>(g);
+                uint32_t key;
+                if constexpr (PUBOC) {
+                    key = cachep[12];
+                } else {
+                    const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
+                    if (dpg != dep_cached_page) {
+                        noc_async_read(get_noc_addr(static_cast<uint32_t>(dpg), depth_acc), dep_l1, PAGE_BYTES);
+                        noc_async_read_barrier();
+                        dep_cached_page = dpg;
                     }
+                    key = depp[g % ELEMS_PER_PAGE];
                 }
-                k++;
+                pack_invariants(key);
             }
             const uint32_t c = curp[t];
             curp[t] = c + 1u;
-            const uint32_t slot = (c < tile_cap) ? t * tile_cap + c : 0xFFFFFFFFu;
-            brec_slot[nbrec] = slot;
-            if (slot != 0xFFFFFFFFu) pack_rec(nbrec, t);
-            nbrec++;
-            if (nbrec == REC_BATCH) flush_recs();
+            if (ring_on) {
+                if (c < tile_cap) {  // past capacity: dropped, host fails the frame
+                    const uint32_t ri = c & (R - 1u);
+                    // Entry 0 starts a new run: the previous run of this tile
+                    // must have left L1.
+                    if (ri == 0u) noc_async_writes_flushed();
+                    pack_rec(reinterpret_cast<volatile uint32_t*>(ring_l1 + (t * R + ri) * REC_BYTES), t);
+                    if (ri == R - 1u) flush_run(t, c);
+                }
+            } else {
+                const uint32_t slot = (c < tile_cap) ? t * tile_cap + c : 0xFFFFFFFFu;
+                brec_slot[nbrec] = slot;
+                if (slot != 0xFFFFFFFFu) {
+                    pack_rec(reinterpret_cast<volatile uint32_t*>(l1_scratch + nbrec * REC_BYTES), t);
+                }
+                nbrec++;
+                if (nbrec == REC_BATCH) flush_recs();
+            }
         }
     };
-    auto wptr = [&](uint32_t plane, uint32_t i) {
-        return reinterpret_cast<volatile int32_t*>(plane + i * PAGE_BYTES);
-    };
-    if (nwin > 0) prefetch(wptr(win_gid, 0), wptr(win_keep, 0), pg_lo, 0);
-    for (uint32_t i = 0; i < npages; i++) {
-        const uint32_t pg = pg_lo + i;
-        const uint32_t h = i & 1u;
-        if (i < nwin) {
-            noc_async_read_barrier();  // page i's prefetch (issued one page ago)
-            if (i + 1u < nwin) prefetch(wptr(win_gid, i + 1u), wptr(win_keep, i + 1u), pg + 1u, h ^ 1u);
-            consume(wptr(win_gid, i), wptr(win_tid, i), wptr(win_keep, i), pg, h);
-        } else {
-            noc_async_read(get_noc_addr(pg, gids_acc), gid_l1, PAGE_BYTES);
-            noc_async_read(get_noc_addr(pg, tids_acc), tid_l1, PAGE_BYTES);
-            noc_async_read(get_noc_addr(pg, keep_acc), keep_l1, PAGE_BYTES);
-            noc_async_read_barrier();
-            prefetch(gidp, keepp, pg, h);
-            noc_async_read_barrier();
-            consume(gidp, tidp, keepp, pg, h);
+
+    if (nbatch > 0) {
+        issue_pairs(0);
+        noc_async_read_barrier();
+        issue_brec(0, 0);
+        if (nbatch > 1) issue_pairs(1);
+        uint32_t h = 0;
+        for (uint32_t k = 0; k < nbatch; k++) {
+            noc_async_read_barrier();  // blendrec of batch k, pairs of batch k+1
+            if (k + 1u < nbatch) {
+                issue_brec(k + 1u, h ^ 1u);
+                if (k + 2u < nbatch) issue_pairs(k + 2u);
+            }
+            process_batch(k, h);
+            h ^= 1u;
         }
     }
     flush_recs();
+    if (ring_on) {
+        // Each tile's partial final run (full runs were written in the loop).
+        for (uint32_t t = 0; t < num_tiles; t++) {
+            uint32_t last;
+            if (sort_ol::ring_drain(startp[t], curp[t], tile_cap, R, &last)) flush_run(t, last);
+        }
+    }
     noc_async_write_barrier();
 }
