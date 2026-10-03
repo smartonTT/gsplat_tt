@@ -24,6 +24,9 @@
 
 #include "pfwc.h"
 #include "device_state.h"
+#include "env_config.h"
+#include "gather_visible.h"
+#include "../kernels/dataflow/pfwc_fuse.h"
 #include "host_profile.h"
 #include "stage_timers.h"
 #include "vis_mode.h"
@@ -115,6 +118,10 @@ constexpr uint32_t CB_VOP    = 39;  // opacity tile for RECHECK
 constexpr uint32_t VIS_MASK_BYTES = 128;
 constexpr uint32_t VIS_COUNTS_PAGE = 1024;  // vis_tile::COUNTS_PAGE_BYTES
 constexpr uint32_t VIS_CNT_STAGING = 16 * 1024;  // up to ~1900 tiles per core
+// Lever B (task #125) writer staging (writer_pfwc_fuse.cpp): col r/g/b tiles,
+// 16 records, the dep / offs / aabb pages, the counts page, 64 B alignment.
+constexpr uint32_t CB_FUSE = 40;
+constexpr uint32_t FUSE_CB_BYTES = 3 * TILE_BYTES_FP32 + 16 * 64 + 4 * 64 + 64 + 64;
 
 struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
@@ -171,6 +178,14 @@ struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_vmask;
     std::shared_ptr<distributed::MeshBuffer> buf_vcounts;
     uint32_t vis_cap_tiles = 0;
+
+    // Lever B (task #125): the PFWC_VIS program with the fused compaction
+    // writer (writer_pfwc_fuse.cpp). Built on first use.
+    bool fuse_built = false;
+    distributed::MeshWorkload wl_fuse;
+    KernelHandle freader{};
+    KernelHandle fcompute{};
+    KernelHandle fwriter{};
 };
 
 static gsplat_cpu::ThreadPool& soa_pool() {
@@ -289,7 +304,7 @@ static WorkSplit split_chunks(uint32_t num_tiles, uint32_t num_cores) {
     return ws;
 }
 
-static void build_program(PfwcDeviceContext& ctx, bool vis = false) {
+static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = false) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
 
@@ -327,8 +342,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false) {
             CreateCircularBuffer(program, cores, c);
         };
         cb_raw(CB_VMASK, VIS_MASK_BYTES);
-        cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
+        if (!fuse) cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
         cb_raw(CB_VOP, TILE_BYTES_FP32);
+        if (fuse) cb_raw(CB_FUSE, FUSE_CB_BYTES);
     }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
@@ -388,24 +404,35 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false) {
         });
 
     // Writer: 8 output streams (13 accessors for the PFWC_VIS writer: + tpg,
-    // aabb, mask, counts, opacity).
+    // aabb, mask, counts, opacity; 9 for the lever B writer: opacity, colors,
+    // the 4 compact outputs and the counts table).
     std::vector<uint32_t> writer_ct;
-    for (int i = 0; i < (vis ? 13 : 8); ++i) {
+    for (int i = 0; i < (fuse ? 9 : (vis ? 13 : 8)); ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     }
+    std::map<std::string, std::string> writer_defines;
+    if (fuse && env_config::emit_puboc()) writer_defines["EMIT_PUBOC"] = "1";
     const KernelHandle writer = CreateKernel(
         program,
-        vis ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_vis.cpp"
-            : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc.cpp",
+        fuse  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_fuse.cpp"
+        : vis ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_vis.cpp"
+              : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc.cpp",
         cores,
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
+            .defines = writer_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
-    if (vis) {
+    if (fuse) {
+        ctx.freader = reader;
+        ctx.fcompute = compute;
+        ctx.fwriter = writer;
+        ctx.wl_fuse.add_program(device_range, std::move(program));
+        ctx.fuse_built = true;
+    } else if (vis) {
         ctx.vreader = reader;
         ctx.vcompute = compute;
         ctx.vwriter = writer;
@@ -474,8 +501,15 @@ static void pack_cc_scales(const float r[9], std::vector<uint32_t>& out) {
 }  // namespace
 
 static bool g_pfwc_ran_vis = false;
+static bool g_pfwc_ran_fused = false;
+static PfwcFuseInfo g_fuse_info;
 
 bool pfwc_ran_vis() { return g_pfwc_ran_vis; }
+
+bool pfwc_ran_fused(PfwcFuseInfo* info) {
+    if (g_pfwc_ran_fused && info != nullptr) *info = g_fuse_info;
+    return g_pfwc_ran_fused;
+}
 
 bool pfwc_device_ready() {
     return ensure_context() != nullptr;
@@ -508,6 +542,7 @@ double pfwc_tt(
     auto& st_acc = stagetimers::acc();
     stagetimers::Span setup_span(st_acc.project_pfwc_setup);
     g_pfwc_ran_vis = false;
+    g_pfwc_ran_fused = false;
     auto* ctx = ensure_context();
     if (ctx == nullptr) {
         return -1.0;
@@ -650,7 +685,29 @@ double pfwc_tt(
             vis = nullptr;
         }
     }
-    if (vis != nullptr) {
+    // Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1): the fused writer compacts
+    // straight into the gather's outputs (pfwc_fuse.h). Anything missing before
+    // the enqueue drops back to the lever 2 program.
+    bool fuse_on = false;
+    if (vis != nullptr && vis->fuse) {
+        if (!gather_visible_fuse_prepare(N, num_cores) || !device_state::get_buffer("scene_col_r") ||
+            !device_state::get_buffer("scene_col_g") || !device_state::get_buffer("scene_col_b")) {
+            std::cerr << "[gsplat_tt::pfwc] GSPLAT_TT_PFWC_FUSE=1: gather outputs not ready; "
+                         "running the PFWC_VIS program\n";
+        } else if (num_cores > pfwc_fuse::MAX_SEG) {
+            std::cerr << "[gsplat_tt::pfwc] GSPLAT_TT_PFWC_FUSE=1: " << num_cores
+                      << " cores over the segment table; running the PFWC_VIS program\n";
+        } else {
+            try {
+                if (!ctx->fuse_built) build_program(*ctx, /*vis=*/true, /*fuse=*/true);
+                fuse_on = true;
+            } catch (const std::exception& e) {
+                std::cerr << "[gsplat_tt::pfwc] fused program build failed (" << e.what()
+                          << "); running the PFWC_VIS program\n";
+            }
+        }
+    }
+    if (vis != nullptr && !fuse_on) {
         // The PFWC_VIS writer stages the 1 KB count pages spanned by its tile
         // range in CB_VCNT (task #102); a range that outgrows it would overrun L1.
         constexpr uint32_t CTILES = VIS_COUNTS_PAGE / (2 * sizeof(uint32_t));  // COUNT_WORDS = 2
@@ -691,11 +748,31 @@ double pfwc_tt(
         }
     }
     const bool vis_on = (vis != nullptr);
-    g_pfwc_ran_vis = vis_on;
-    Program& program = (vis_on ? ctx->wl_vis : ctx->workload).get_programs().begin()->second;
-    const KernelHandle k_reader = vis_on ? ctx->vreader : ctx->reader;
-    const KernelHandle k_compute = vis_on ? ctx->vcompute : ctx->compute;
-    const KernelHandle k_writer = vis_on ? ctx->vwriter : ctx->writer;
+    g_pfwc_ran_vis = vis_on && !fuse_on;
+    distributed::MeshWorkload& wl =
+        fuse_on ? ctx->wl_fuse : (vis_on ? ctx->wl_vis : ctx->workload);
+    Program& program = wl.get_programs().begin()->second;
+    const KernelHandle k_reader = fuse_on ? ctx->freader : (vis_on ? ctx->vreader : ctx->reader);
+    const KernelHandle k_compute =
+        fuse_on ? ctx->fcompute : (vis_on ? ctx->vcompute : ctx->compute);
+    const KernelHandle k_writer = fuse_on ? ctx->fwriter : (vis_on ? ctx->vwriter : ctx->writer);
+    // Fused: tiles dealt strided (core c owns c, c + C, ...), the legacy
+    // compaction order (vis_tile::SeqMap).
+    vis_tile::SeqMap seq;
+    seq.init(num_tiles, num_cores);
+    auto fbuf = [](const char* name) {
+        auto b = device_state::get_buffer(name);
+        if (!b) throw std::runtime_error(std::string("[gsplat_tt::pfwc] missing ") + name);
+        return static_cast<uint32_t>(b->address());
+    };
+    std::vector<uint32_t> fuse_addr;
+    if (fuse_on) {
+        fuse_addr = {static_cast<uint32_t>(vis_op->address()), fbuf("scene_col_r"),
+                     fbuf("scene_col_g"),  fbuf("scene_col_b"),
+                     fbuf("proj_m_depth"), fbuf("proj_m_blendrec"),
+                     fbuf("proj_m_offs"),  fbuf("proj_m_aabb"),
+                     fbuf("pfwc_fuse_counts")};
+    }
     std::vector<uint32_t> vis_bits;
     if (vis_on) {
         vis_bits = {
@@ -723,8 +800,8 @@ double pfwc_tt(
     stagetimers::Span rtargs_span(st_acc.project_pfwc_rtargs);
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-        const uint32_t chunk_start = ws.chunk_start[c];
-        const uint32_t num_chunks  = ws.num_chunks[c];
+        const uint32_t chunk_start = fuse_on ? c : ws.chunk_start[c];
+        const uint32_t num_chunks  = fuse_on ? seq.count(c) : ws.num_chunks[c];
 
         std::vector<uint32_t> reader_args = {
              static_cast<uint32_t>(buf_mx->address()),
@@ -737,7 +814,10 @@ double pfwc_tt(
              static_cast<uint32_t>(ctx->buf_c12->address()),
              static_cast<uint32_t>(ctx->buf_c22->address()),
              chunk_start, num_chunks};
-        if (vis_on) reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
+        if (vis_on) {
+            reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
+            reader_args.push_back(fuse_on ? num_cores : 1u);  // arg 12: tile stride
+        }
         SetRuntimeArgs(program, k_reader, core, reader_args);
 
         std::vector<uint32_t> compute_args;
@@ -758,6 +838,22 @@ double pfwc_tt(
         for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..64 (PFWC_VIS)
         SetRuntimeArgs(program, k_compute, core, compute_args);
 
+        if (fuse_on) {
+            // writer_pfwc_fuse.cpp args 0..22.
+            std::vector<uint32_t> fw = fuse_addr;
+            fw.push_back(c);
+            fw.push_back(num_chunks);
+            fw.push_back(num_cores);
+            fw.push_back(static_cast<uint32_t>(N));
+            for (uint32_t k = 0; k < 5; ++k) fw.push_back(vis_bits[k]);
+            fw.push_back(static_cast<uint32_t>(vis->tiles_x));
+            fw.push_back(static_cast<uint32_t>(vis->tiles_y));
+            fw.push_back(static_cast<uint32_t>(vis->tile_size));
+            fw.push_back(pfwc_fuse::seg_base(num_tiles, num_cores, c));
+            fw.push_back(c);
+            SetRuntimeArgs(program, k_writer, core, fw);
+            continue;
+        }
         std::vector<uint32_t> writer_args = {
              static_cast<uint32_t>(ctx->buf_m2x->address()),
              static_cast<uint32_t>(ctx->buf_m2y->address()),
@@ -791,11 +887,25 @@ double pfwc_tt(
     rtargs_span.stop();
     {
         stagetimers::Span s(st_acc.project_pfwc_enqueue);
-        distributed::EnqueueMeshWorkload(
-            *ctx->cq, vis_on ? ctx->wl_vis : ctx->workload, /*blocking=*/false);
+        distributed::EnqueueMeshWorkload(*ctx->cq, wl, /*blocking=*/false);
     }
     gsplat_tt::hostprof::on_pfwc_enqueued();
     const auto t_launch1 = std::chrono::high_resolution_clock::now();
+    if (fuse_on) {
+        // No host sync: the segment K2 (tile_assign_fused_k2) queues behind
+        // this program and its proj_M read is the stage's one blocking read.
+        g_pfwc_ran_fused = true;
+        g_fuse_info.num_cores = num_cores;
+        g_fuse_info.num_tiles = num_tiles;
+        g_fuse_info.tiles_x = static_cast<uint32_t>(vis->tiles_x);
+        T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
+        T.compute_ms = 0.0;
+        T.download_ms = 0.0;
+        T.unpack_ms = 0.0;
+        if (mean_2d_out || depth_out || cov2d_out || radii_out)
+            throw std::runtime_error("[gsplat_tt::pfwc] the fused program writes no pfwc outputs");
+        return T.launch_ms;
+    }
     {
         stagetimers::Span s(st_acc.project_pfwc_finish);
         distributed::Finish(*ctx->cq);

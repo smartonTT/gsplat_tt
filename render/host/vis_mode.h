@@ -42,6 +42,24 @@ inline int sfpu_vis_mode() {
     return v;
 }
 
+// Lever B (task #125, GSPLAT_TT_PFWC_FUSE): 1 = the pfwc writer also compacts
+// the visible gaussians into per-core segments (writer_pfwc_fuse.cpp) and the
+// tile_assign segment K2 builds the pairs from them; the gather scan / scatter
+// and the TA vis K2 do not run. 0 (default) = kill switch, lever 2 path. Needs
+// GSPLAT_TT_SFPU_VIS != 0.
+inline int pfwc_fuse_mode() {
+    static const int v = [] {
+        const char* e = std::getenv("GSPLAT_TT_PFWC_FUSE");
+        if (e == nullptr || *e == '\0') return 0;
+        const int x = std::atoi(e);
+        if (x < 0 || x > 1)
+            throw std::invalid_argument(std::string("GSPLAT_TT_PFWC_FUSE must be 0 or 1, got '") +
+                                        e + "'");
+        return x;
+    }();
+    return v;
+}
+
 inline unsigned vis_env_u32(const char* name, unsigned dflt) {
     const char* e = std::getenv(name);
     return (e != nullptr && *e != '\0') ? static_cast<unsigned>(std::atoi(e)) : dflt;

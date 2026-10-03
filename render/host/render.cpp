@@ -162,6 +162,8 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
                 return (e != nullptr && *e != '\0') ? std::strtof(e, nullptr) : 1.0f / 4096.0f;
             }();
             vis_params.edge_tau = edge_tau;
+            // Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1, 0 = kill switch).
+            vis_params.fuse = gsplat_tt::pfwc_fuse_mode() == 1;
             vis = &vis_params;
         }
     }

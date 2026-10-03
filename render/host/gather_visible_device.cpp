@@ -242,6 +242,8 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_offs;  // proj_m_offs, M + 1 used
     std::shared_ptr<distributed::MeshBuffer> buf_aabb;  // proj_m_aabb
     std::size_t cap_vis_elems = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_fuse_counts;  // lever B, 64 B / pfwc core
+    uint32_t fuse_count_pages = 0;
     bool last_vis = false;
     uint32_t last_vis_P = 0;
 };
@@ -533,6 +535,19 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
     device_state::register_buffer("proj_m_depth", ctx->buf_depth);
     device_state::register_buffer("proj_m_opacity", ctx->buf_opacity);
     device_state::register_buffer("proj_m_colors", ctx->buf_colors);
+}
+
+// proj_m_offs (M + 1 used, + one spare page) / proj_m_aabb of the lever 2 and
+// lever B paths, at padded_n capacity.
+static void ensure_vis_outputs(GatherDeviceContext* ctx, uint32_t padded_n) {
+    if (ctx->buf_offs && ctx->cap_vis_elems >= padded_n) return;
+    ctx->buf_offs = make_dram(ctx->mesh_device.get(),
+                              (static_cast<std::size_t>(padded_n) + PAGE_ELEMS) * 4, PAGE_BYTES);
+    ctx->buf_aabb =
+        make_dram(ctx->mesh_device.get(), static_cast<std::size_t>(padded_n) * 4, PAGE_BYTES);
+    ctx->cap_vis_elems = padded_n;
+    device_state::register_buffer("proj_m_offs", ctx->buf_offs);
+    device_state::register_buffer("proj_m_aabb", ctx->buf_aabb);
 }
 
 // Allocate the per-slot counts and device-scan bases buffers once (one 64B
@@ -912,6 +927,29 @@ float gather_visible_effective_max_radius(int max_radius_param, int image_height
     return effective_max_radius(max_radius_param, image_height, image_width);
 }
 
+bool gather_visible_fuse_prepare(std::size_t N, uint32_t num_cores) {
+    if (N == 0) return true;
+    auto* ctx = ensure_context();
+    if (ctx == nullptr) return false;
+    try {
+        const uint32_t num_tiles = static_cast<uint32_t>((N + TILE_ELEMS - 1) / TILE_ELEMS);
+        const uint32_t padded_n = num_tiles * TILE_ELEMS;
+        ensure_outputs(ctx, padded_n);
+        ensure_vis_outputs(ctx, padded_n);
+        if (!ctx->buf_fuse_counts || ctx->fuse_count_pages < num_cores) {
+            ctx->buf_fuse_counts = make_dram(ctx->mesh_device.get(),
+                                             static_cast<std::size_t>(num_cores) * PAGE_BYTES,
+                                             PAGE_BYTES);
+            ctx->fuse_count_pages = num_cores;
+            device_state::register_buffer("pfwc_fuse_counts", ctx->buf_fuse_counts);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[gsplat_tt::gather] fuse prepare failed: " << e.what() << "\n";
+        return false;
+    }
+    return true;
+}
+
 bool gather_visible_last_pairs(uint32_t* P) {
     auto& slot = context_slot();
     if (!slot || !slot->last_vis) return false;
@@ -997,19 +1035,34 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                               vcounts && num_tiles <= VIS_SCAN_MAX_TILES;
         ctx->last_vis = false;
 
-        if (vis_path) {
+        PfwcFuseInfo fuse_info;
+        if (pfwc_ran_fused(&fuse_info)) {
+            // Lever B (task #125): pfwc already wrote the compact segments and
+            // the counts table; its pfwc_* tiles are stale, so there is no
+            // fallback past this point. The tile_assign segment K2 publishes
+            // proj_M / ta_pairs_P and builds the pairs; its one blocking read
+            // of proj_M is this stage's host sync (like the lever 2 path).
+            if (!(downstream_resident && downstream_chain_resident() && !verify))
+                throw std::runtime_error(
+                    "GSPLAT_TT_PFWC_FUSE=1 needs the resident chain (downstream_resident, "
+                    "no verify)");
+            if (fuse_info.num_tiles != num_tiles || ctx->cap_vis_elems < padded_n)
+                throw std::runtime_error("fused pfwc ran for another scene size");
+            setup_span.stop();
+            uint32_t Mf = 0, Pf = 0;
+            {
+                stagetimers::Span w(st_acc.project_gather_wait);
+                if (!tile_assign_fused_k2(fuse_info.num_cores, num_tiles, fuse_info.tiles_x,
+                                          &Mf, &Pf))
+                    throw std::runtime_error("tile_assign_fused_k2 failed");
+            }
+            M = Mf;
+            ctx->last_vis_P = Pf;
+            ctx->last_vis = true;
+        } else if (vis_path) {
             ensure_outputs(ctx, padded_n);
             if (!ctx->vis_built) build_programs_vis(*ctx);
-            if (!ctx->buf_offs || ctx->cap_vis_elems < padded_n) {
-                ctx->buf_offs = make_dram(ctx->mesh_device.get(),
-                                          (static_cast<std::size_t>(padded_n) + PAGE_ELEMS) * 4,
-                                          PAGE_BYTES);
-                ctx->buf_aabb = make_dram(ctx->mesh_device.get(),
-                                          static_cast<std::size_t>(padded_n) * 4, PAGE_BYTES);
-                ctx->cap_vis_elems = padded_n;
-                device_state::register_buffer("proj_m_offs", ctx->buf_offs);
-                device_state::register_buffer("proj_m_aabb", ctx->buf_aabb);
-            }
+            ensure_vis_outputs(ctx, padded_n);
             (void)tile_assign_device_ready();  // owns ta_pairs_P, which the scan publishes
             auto pairs_p = device_state::get_buffer("ta_pairs_P");
             if (!pairs_p) throw std::runtime_error("ta_pairs_P missing (tile_assign init)");

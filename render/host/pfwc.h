@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 namespace gsplat_tt {
 
@@ -52,6 +53,11 @@ struct PfwcVisParams {
     // Lanes whose fl(m + r) / tile_size is within edge_tau of an integer are
     // re-evaluated exactly by the writer (SFPMAD rounding insurance; 0 = off).
     float edge_tau = 1.0f / 4096.0f;
+    // Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1): run the fused writer, which
+    // writes the compact proj_m_depth / blendrec / offs / aabb segments and the
+    // per-core counts table ("pfwc_fuse_counts") instead of the pfwc tiles.
+    // Only for the resident chain (gather downstream_resident, no verify).
+    bool fuse = false;
 };
 
 // Compute mean_2d, depth, cov2d, radii for N Gaussians using device-resident
@@ -91,6 +97,16 @@ double pfwc_tt(
 // True when the last pfwc_tt call ran the PFWC_VIS program (its word tiles,
 // mask and counts are current); gather_visible only takes the SFPU path then.
 bool pfwc_ran_vis();
+
+// Lever B: true when the last pfwc_tt call ran the fused writer. Then the
+// compact segments and the counts table are current, the pfwc tiles are NOT,
+// and gather_visible hands over to tile_assign_fused_k2.
+struct PfwcFuseInfo {
+    uint32_t num_cores = 0;  // pfwc cores = segments
+    uint32_t num_tiles = 0;
+    uint32_t tiles_x = 0;
+};
+bool pfwc_ran_fused(PfwcFuseInfo* info = nullptr);
 
 bool pfwc_device_ready();
 void pfwc_device_shutdown();

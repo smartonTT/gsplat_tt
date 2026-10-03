@@ -118,6 +118,12 @@ float gather_visible_effective_max_radius(int max_radius_param, int image_height
 // K2). Returns false when the last call used the legacy path.
 bool gather_visible_last_pairs(uint32_t* P);
 
+// Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1): make the compact outputs the
+// fused pfwc writer fills (proj_m_depth / blendrec / offs / aabb at padded_n
+// capacity, proj_M) and the per-core counts table "pfwc_fuse_counts"
+// (num_cores 64 B pages) resident and registered. Returns false on failure.
+bool gather_visible_fuse_prepare(std::size_t N, uint32_t num_cores);
+
 bool gather_visible_device_ready();
 void gather_visible_device_shutdown();
 

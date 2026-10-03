@@ -25,6 +25,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "gsplat_cpu/tile_assign.h"
 
@@ -73,6 +74,14 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 
 // Lazily initializes the device tile_assign context. Returns true if the
 // device path is operational.
+// Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1): run the segment K2
+// (tile_assign_scatter_seg.cpp) over the fused pfwc writer's nseg segments and
+// counts table. It publishes proj_M = [M, P, overflow] and ta_pairs_P and fills
+// the pair buffers; one blocking read of proj_M returns M and P (overflow grows
+// the pair buffers and reruns). The next tile_assign_tt call then skips its K2.
+bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t* M,
+                          uint32_t* P);
+
 bool tile_assign_device_ready();
 
 // Idempotent shutdown of the tile_assign device context. Does NOT close the
