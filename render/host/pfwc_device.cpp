@@ -116,6 +116,10 @@ constexpr uint32_t CB_AABB   = 36;
 constexpr uint32_t CB_VMASK  = 37;  // 128 B mask staging
 constexpr uint32_t CB_VCNT   = 38;  // per-tile counts staging
 constexpr uint32_t CB_VOP    = 39;  // opacity tile for RECHECK
+// Task #169 tile list (fused only, reuses the CB_VCNT index): the reader's page,
+// then the writer's. Runtime args would overflow the kernel config buffer.
+constexpr uint32_t CB_TLIST = 38;
+constexpr uint32_t TLIST_MAX_PAGE = 1024;  // <= 256 tiles per core
 constexpr uint32_t VIS_MASK_BYTES = 128;
 constexpr uint32_t VIS_COUNTS_PAGE = 1024;  // vis_tile::COUNTS_PAGE_BYTES
 constexpr uint32_t VIS_CNT_STAGING = 16 * 1024;  // up to ~1900 tiles per core
@@ -188,6 +192,9 @@ struct PfwcDeviceContext {
     KernelHandle freader{};
     KernelHandle fcompute{};
     KernelHandle fwriter{};
+    std::shared_ptr<distributed::MeshBuffer> buf_tlist;  // task #169, page per core
+    uint32_t tlist_page = 0;
+    std::vector<uint32_t> tlist_host;
 };
 
 static gsplat_cpu::ThreadPool& soa_pool() {
@@ -454,6 +461,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (!fuse) cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
         cb_raw(CB_VOP, TILE_BYTES_FP32);
         if (fuse) cb_raw(CB_FUSE, FUSE_CB_BYTES);
+        if (fuse && chunk_cull_mode() != 0) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
     }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
@@ -900,10 +908,29 @@ double pfwc_tt(
         const uint32_t S = static_cast<uint32_t>(surv.size());
         return c < S ? (S - 1 - c) / num_cores + 1 : 0u;
     };
-    auto push_list = [&](std::vector<uint32_t>& a, uint32_t c) {
-        uint32_t k = 0;
-        for (std::size_t i = c; i < surv.size(); i += num_cores, ++k) a.push_back(surv[i]);
-        for (; k < list_cap; ++k) a.push_back(0u);  // fixed arg count across views
+    // One DRAM page per core (page c = core c's tiles), read to L1 by both kernels.
+    if (tile_list) {
+        const uint32_t page = (list_cap * 4u + 63u) & ~63u;
+        if (page > TLIST_MAX_PAGE)
+            throw std::runtime_error("[gsplat_tt::pfwc] chunk cull: " + std::to_string(list_cap) +
+                                     " tiles per core, over the tile-list page");
+        if (!ctx->buf_tlist || ctx->tlist_page != page) {
+            distributed::DeviceLocalBufferConfig cfg{.page_size = page,
+                                                     .buffer_type = BufferType::DRAM};
+            distributed::ReplicatedBufferConfig rep{.size = std::size_t{page} * num_cores};
+            ctx->buf_tlist = distributed::MeshBuffer::create(rep, cfg, ctx->mesh_device.get());
+            ctx->tlist_page = page;
+        }
+        const uint32_t words = page / 4u;
+        ctx->tlist_host.assign(std::size_t{words} * num_cores, 0u);
+        for (std::size_t i = 0; i < surv.size(); ++i)
+            ctx->tlist_host[(i % num_cores) * words + i / num_cores] = surv[i];
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tlist, ctx->tlist_host,
+                                            /*blocking=*/false);
+    }
+    auto push_list = [&](std::vector<uint32_t>& a) {
+        a.push_back(static_cast<uint32_t>(ctx->buf_tlist->address()));
+        a.push_back(ctx->tlist_page);
     };
     auto fbuf = [](const char* name) {
         auto b = device_state::get_buffer(name);
@@ -984,7 +1011,7 @@ double pfwc_tt(
         if (vis_on) {
             reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
             reader_args.push_back(fuse_on ? num_cores : 1u);  // arg 12: tile stride
-            if (tile_list) push_list(reader_args, c);          // args 13..
+            if (tile_list) push_list(reader_args);             // args 13, 14
         }
         SetRuntimeArgs(program, k_reader, core, reader_args);
 
@@ -1021,7 +1048,7 @@ double pfwc_tt(
             fw.push_back(c);
             fw.push_back(fuse_pub[0]);  // scene_puboc01 (0 = pack on device)
             fw.push_back(fuse_pub[1]);  // scene_puboc23
-            if (tile_list) push_list(fw, c);  // args 25.. (task #169)
+            if (tile_list) push_list(fw);  // args 25, 26 (task #169)
             SetRuntimeArgs(program, k_writer, core, fw);
             continue;
         }

@@ -28,7 +28,8 @@
 //   23, 24: scene_puboc01 / scene_puboc23 (tile pages; EMIT_PUBOC): record
 //       words 10 / 11 precomputed per scene (task #122). 0 = the scene has a
 //       NaN: the writer packs the visible lanes itself (to_unorm16).
-//   25..: PFWC_TILE_LIST only (task #169 chunk cull): the tile ids (padded)
+//   25, 26: PFWC_TILE_LIST only (task #169 chunk cull): tile-list buffer
+//       address and page bytes; page `core` holds the tile ids
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs in runtime-arg order 0..8 (the
 // puboc tiles reuse the opacity accessor's, all are DRAM interleaved).
@@ -186,9 +187,18 @@ void kernel_main() {
         noc_async_writes_flushed();  // staging reusable; completion at the end
     };
 
+#ifdef PFWC_TILE_LIST
+    constexpr uint32_t CB_TLIST = 38;  // second page: this kernel's copy
+    const uint32_t tl_page = get_arg_val<uint32_t>(26);
+    const InterleavedAddrGen<true> tl_gen{get_arg_val<uint32_t>(25), tl_page};
+    const uint32_t tl_l1 = get_write_ptr(CB_TLIST) + 1024;  // TLIST_MAX_PAGE
+    volatile tt_l1_ptr uint32_t* tl = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(tl_l1);
+    noc_async_read(get_noc_addr(core, tl_gen), tl_l1, tl_page);
+    noc_async_read_barrier();
+#endif
     for (uint32_t k = 0; k < num_chunks; k++) {
 #ifdef PFWC_TILE_LIST
-        const uint32_t t = get_arg_val<uint32_t>(25 + k);  // task #169 survivors
+        const uint32_t t = tl[k];  // task #169 survivors
 #else
         const uint32_t t = chunk_start + k * stride;
 #endif
