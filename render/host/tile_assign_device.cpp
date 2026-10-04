@@ -799,7 +799,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             rows.buf = ctx->buf_k2_rows;
             rows.num_cores = num_cores;
             rows.row_pages = row_pages;
-            rows.num_tiles = num_tiles;
+            rows.num_tiles = screen_tiles;
             rows.P_pub = std::min(mread[1], p_cap);
             // The ranges the kernel took (pfwc_fuse::k2_range[_speed]).
             rows.bounds.assign(2u * num_cores + 1u, 0u);
