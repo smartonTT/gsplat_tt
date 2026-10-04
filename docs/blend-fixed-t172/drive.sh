@@ -16,12 +16,14 @@ IFS=, read -ra ST <<< "$STEPS"
 for s in "${ST[@]}"; do
   case $s in
     sync) lk opt/sync_remote.sh $H $T "$REV"; rc=$?; echo "SYNC_RC=$rc"; [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; } ;;
-    prof) lk $DEVRUN --host $H --no-verify --timeout 900 --tag t172-prof -- "bash $T/docs/blend-fixed-t172/remote_prof.sh"
-          echo "PROF_RC=$?"
+    prof) lk $DEVRUN --host $H --no-verify --timeout 540 --tag t172-tracy -- "bash $T/docs/blend-fixed-t172/remote_prof.sh tracy"
+          echo "TRACY_RC=$?"
+          lk $DEVRUN --host $H --no-verify --timeout 560 --tag t172-tc -- "bash $T/docs/blend-fixed-t172/remote_prof.sh tc"
+          echo "TC_RC=$?"
           scp -q -o BatchMode=yes "$H:$T/tmp/t172/tc.dprint" "$H:$T/tmp/t172/*.log" $O/
           scp -q -o BatchMode=yes "$H:$T/opt/profiler/t172-prof/chunks/0-2/profile_log_device.csv" $O/prof-dev.csv ;;
     time:*) r=${s#time:}; rnd=${r%%:*}; arms=${r#*:}
-          lk $DEVRUN --host $H --no-verify --timeout 900 --tag t172-time$rnd -- \
+          lk $DEVRUN --host $H --no-verify --timeout 560 --tag t172-time$rnd -- \
             "bash $T/docs/blend-fixed-t172/remote_time.sh $rnd ${arms//+/ }"
           echo "TIME${rnd}_RC=$?"
           scp -q -o BatchMode=yes "$H:$T/tmp/t172/run-r$rnd-*.log" "$H:$T/tmp/t172/md5-r$rnd-*.txt" $O/ ;;
