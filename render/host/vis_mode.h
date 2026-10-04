@@ -91,8 +91,9 @@ inline int puboc_pre_mode() {
 // 2 cross-checks the rectangle against the legacy path) and with the band
 // cull on. 2 (task #157) = the same with the pixel-centre rect (PRECULL_PC):
 // r' = sqrt(t cov) - 3/8 instead of the integer sqrt(t cov) + 2, same image
-// (tests/unit/test_precull.cpp), far fewer records. Default 2 since task #162
-// (reviewed; <=1 LSB vs mode 1, byte-identical at BLEND_T_PERIOD=0); 1 = the
+// (tests/unit/test_precull.cpp), far fewer records. Default 2 since tasks #162/#174
+// (<=1 LSB vs mode 1, byte-identical at BLEND_T_PERIOD=0; pays off only with the
+// #174 speed-proportional emit ranges, GSPLAT_TT_OL_MOVER_SPEED); 1 = the
 // integer rect, 0 = no pre-cull (kill switches).
 inline int precull_mode() {
     static const int v = [] {
