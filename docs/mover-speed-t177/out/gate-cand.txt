@@ -1,0 +1,29 @@
+STAGES n=2 head=0.003 project=4.490 tile_assign=0.007 sort=3.934 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.579 d2h=0.229 assemble=0.000 tail=0.002 | sum=17.244 view_total=17.245 resid_in_view=+0.001 avg_frame_ms=17.289 resid_vs_frame=+0.045
+=== t162r1-tip c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v0.txt 
+STAGES n=30 head=0.003 project=4.605 tile_assign=0.005 sort=4.602 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.854 d2h=0.276 assemble=0.000 tail=0.002 | sum=18.348 view_total=18.349 resid_in_view=+0.001 avg_frame_ms=18.388 resid_vs_frame=+0.041
+=== t162r1-v2 c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=0 
+STAGES n=30 head=0.002 project=4.594 tile_assign=0.005 sort=4.323 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.897 d2h=0.205 assemble=0.000 tail=0.002 | sum=18.028 view_total=18.029 resid_in_view=+0.001 avg_frame_ms=18.061 resid_vs_frame=+0.033
+=== t162r1-cand c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=1 
+STAGES n=30 head=0.002 project=4.595 tile_assign=0.004 sort=4.046 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.930 d2h=0.292 assemble=0.000 tail=0.002 | sum=17.873 view_total=17.874 resid_in_view=+0.001 avg_frame_ms=17.906 resid_vs_frame=+0.033
+=== t162r2-cand c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=1 
+STAGES n=30 head=0.002 project=4.584 tile_assign=0.005 sort=3.962 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.877 d2h=0.192 assemble=0.000 tail=0.002 | sum=17.624 view_total=17.625 resid_in_view=+0.001 avg_frame_ms=17.655 resid_vs_frame=+0.031
+=== t162r2-tip c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v0.txt 
+STAGES n=30 head=0.002 project=4.586 tile_assign=0.004 sort=4.478 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.884 d2h=0.259 assemble=0.000 tail=0.002 | sum=18.216 view_total=18.217 resid_in_view=+0.001 avg_frame_ms=18.248 resid_vs_frame=+0.031
+=== t162r2-v2 c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=0 
+STAGES n=30 head=0.002 project=4.597 tile_assign=0.004 sort=4.237 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.873 d2h=0.192 assemble=0.000 tail=0.002 | sum=17.907 view_total=17.908 resid_in_view=+0.001 avg_frame_ms=17.939 resid_vs_frame=+0.031
+=== t162r3-v2 c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=0 
+STAGES n=30 head=0.002 project=4.597 tile_assign=0.004 sort=4.267 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.851 d2h=0.195 assemble=0.000 tail=0.002 | sum=17.918 view_total=17.919 resid_in_view=+0.001 avg_frame_ms=17.952 resid_vs_frame=+0.034
+=== t162r3-cand c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=1 
+STAGES n=30 head=0.002 project=4.597 tile_assign=0.005 sort=3.963 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.882 d2h=0.297 assemble=0.000 tail=0.002 | sum=17.749 view_total=17.750 resid_in_view=+0.001 avg_frame_ms=17.779 resid_vs_frame=+0.030
+=== t162r3-tip c1d83a9 GSPLAT_TT_OL_EMIT_FOLD=0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v0.txt 
+STAGES n=30 head=0.002 project=4.586 tile_assign=0.004 sort=4.440 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.868 d2h=0.305 assemble=0.000 tail=0.002 | sum=18.207 view_total=18.208 resid_in_view=+0.001 avg_frame_ms=18.237 resid_vs_frame=+0.030
+[sync_remote] sha=c1d83a94b2e2e29fac454a48a4f0032552c0ab07 so_md5=460b6e0e8ea4e67835a31864d8a75432 
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r1-tip.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r2-tip.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r3-tip.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r1-v2.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r2-v2.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r3-v2.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r1-cand.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r2-cand.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r3-cand.txt
