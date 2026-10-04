@@ -839,7 +839,7 @@ double pfwc_tt(
         SetRuntimeArgs(program, k_compute, core, compute_args);
 
         if (fuse_on) {
-            // writer_pfwc_fuse.cpp args 0..22.
+            // writer_pfwc_fuse.cpp args 0..23.
             std::vector<uint32_t> fw = fuse_addr;
             fw.push_back(c);
             fw.push_back(num_chunks);
@@ -851,6 +851,8 @@ double pfwc_tt(
             fw.push_back(static_cast<uint32_t>(vis->tile_size));
             fw.push_back(pfwc_fuse::seg_base(num_tiles, num_cores, c));
             fw.push_back(c);
+            static const uint32_t fuse_abl = vis_env_u32("GSPLAT_TT_FUSE_ABL", 0);
+            fw.push_back(fuse_abl);  // profiling ablation bits (0 = off)
             SetRuntimeArgs(program, k_writer, core, fw);
             continue;
         }

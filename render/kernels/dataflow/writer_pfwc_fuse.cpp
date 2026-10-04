@@ -25,6 +25,10 @@
 //   13..17: k_near, min_opacity, image width, image height, max_radius (fp32 bits)
 //   18: tiles_x   19: tiles_y   20: tile_size (power of two)
 //   21: seg_base   22: core index c (counts page)
+//   23: ablation bits, targeted profiling only (GSPLAT_TT_FUSE_ABL, task #122;
+//       0 = off; any other value writes wrong records): 1 = skip the record
+//       NoC writes, 2 = skip the record field copies, 4 = skip the opacity /
+//       color tile reads
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs in runtime-arg order 0..8.
 
@@ -55,6 +59,7 @@ void kernel_main() {
     prm.inv_tile = 1.0f / static_cast<float>(tile_size);
     const uint32_t seg_base = get_arg_val<uint32_t>(21);
     const uint32_t core = get_arg_val<uint32_t>(22);
+    const uint32_t abl = get_arg_val<uint32_t>(23);
 
     constexpr uint32_t CB_M2X = 9, CB_M2Y = 10, CB_DEP = 11, CB_A = 12, CB_B = 13, CB_C = 14,
                        CB_RX = 15, CB_RY = 16, CB_TPG = 35, CB_AABB = 36;
@@ -119,18 +124,21 @@ void kernel_main() {
         noc_async_write(l1_dep, get_noc_addr(page, o_dep), PB);
         noc_async_write(l1_offs, get_noc_addr(page, o_offs), PB);
         noc_async_write(l1_aabb, get_noc_addr(page, o_aabb), PB);
-        for (uint32_t s = 0; s < slot; ++s)
-            noc_async_write(l1_rec + s * PB, get_noc_addr(page * PW + s, o_rec), PB);
+        if (!(abl & 1u))
+            for (uint32_t s = 0; s < slot; ++s)
+                noc_async_write(l1_rec + s * PB, get_noc_addr(page * PW + s, o_rec), PB);
         noc_async_writes_flushed();  // staging reusable; completion at the end
     };
 
     for (uint32_t k = 0; k < num_chunks; k++) {
         const uint32_t t = chunk_start + k * stride;
         // The opacity / color tiles stream in while the SFPU tile lands.
-        noc_async_read_tile(t, i_op, l1_op);
-        noc_async_read_tile(t, i_cr, l1_cr);
-        noc_async_read_tile(t, i_cg, l1_cg);
-        noc_async_read_tile(t, i_cb, l1_cb);
+        if (!(abl & 4u)) {
+            noc_async_read_tile(t, i_op, l1_op);
+            noc_async_read_tile(t, i_cr, l1_cr);
+            noc_async_read_tile(t, i_cg, l1_cg);
+            noc_async_read_tile(t, i_cb, l1_cb);
+        }
         for (uint32_t o = 0; o < 10; o++) cb_wait_front(IN_CB[o], 1);
         noc_async_read_barrier();
 
@@ -168,6 +176,7 @@ void kernel_main() {
                 w_aabb[slot] = p_aabb[il] & vis_tile::PAYLOAD;
                 pr += p_tpg[il] & vis_tile::PAYLOAD;
                 volatile uint32_t* r = w_rec + slot * PW;
+                if (!(abl & 2u)) {
                 r[0] = p_a[il];
                 r[1] = p_b[il];
                 r[2] = p_c[il];
@@ -184,6 +193,7 @@ void kernel_main() {
                         (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
                 r[12] = p_dep[il];
 #endif
+                }
                 m++;
                 if (++slot == PW) {
                     flush();
