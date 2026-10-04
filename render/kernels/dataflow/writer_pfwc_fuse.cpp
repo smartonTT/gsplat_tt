@@ -25,12 +25,16 @@
 //   13..17: k_near, min_opacity, image width, image height, max_radius (fp32 bits)
 //   18: tiles_x   19: tiles_y   20: tile_size (power of two)
 //   21: seg_base   22: core index c (counts page)
-//   23: ablation bits, targeted profiling only (GSPLAT_TT_FUSE_ABL, task #122;
-//       0 = off; any other value writes wrong records): 1 = skip the record
-//       NoC writes, 2 = skip the record field copies, 4 = skip the opacity /
-//       color tile reads, 8 = plain copies in place of the UNORM16 packs
+//   23, 24: scene_puboc01 / scene_puboc23 (tile pages; EMIT_PUBOC): record
+//       words 10 / 11 precomputed per scene (task #122). 0 = the scene has a
+//       NaN: the writer packs the visible lanes itself (to_unorm16).
 //
-// COMPILE-TIME ARGS: 9 TensorAccessorArgs in runtime-arg order 0..8.
+// COMPILE-TIME ARGS: 9 TensorAccessorArgs in runtime-arg order 0..8 (the
+// puboc tiles reuse the opacity accessor's, all are DRAM interleaved).
+// FUSE_ABL (define, GSPLAT_TT_FUSE_ABL; targeted profiling only, writes wrong
+// records): 1 = skip the record NoC writes, 2 = skip the record field copies,
+// 4 = skip the opacity / color / puboc tile reads. Compile-time because
+// run-time bits in the copy loop cost 0.4-0.6 ms (task #122).
 
 #include <cstdint>
 
@@ -38,6 +42,10 @@
 #include "pfwc_fuse.h"
 #include "sort_bin_fp32.h"
 #include "vis_tile.h"
+
+#ifndef FUSE_ABL
+#define FUSE_ABL 0
+#endif
 
 void kernel_main() {
     uint32_t addr[9];
@@ -59,7 +67,9 @@ void kernel_main() {
     prm.inv_tile = 1.0f / static_cast<float>(tile_size);
     const uint32_t seg_base = get_arg_val<uint32_t>(21);
     const uint32_t core = get_arg_val<uint32_t>(22);
-    const uint32_t abl = get_arg_val<uint32_t>(23);
+    const uint32_t pub01 = get_arg_val<uint32_t>(23);
+    const uint32_t pub23 = get_arg_val<uint32_t>(24);
+    constexpr uint32_t ABL = FUSE_ABL;
 
     constexpr uint32_t CB_M2X = 9, CB_M2Y = 10, CB_DEP = 11, CB_A = 12, CB_B = 13, CB_C = 14,
                        CB_RX = 15, CB_RY = 16, CB_TPG = 35, CB_AABB = 36;
@@ -87,6 +97,8 @@ void kernel_main() {
     const auto i_cr = TensorAccessor(a1, addr[1], tile_bytes);
     const auto i_cg = TensorAccessor(a2, addr[2], tile_bytes);
     const auto i_cb = TensorAccessor(a3, addr[3], tile_bytes);
+    const auto i_q01 = TensorAccessor(a0, pub01, tile_bytes);
+    const auto i_q23 = TensorAccessor(a0, pub23, tile_bytes);
     const auto o_dep = TensorAccessor(a4, addr[4], PB);
     const auto o_rec = TensorAccessor(a5, addr[5], PB);
     const auto o_offs = TensorAccessor(a6, addr[6], PB);
@@ -97,7 +109,8 @@ void kernel_main() {
     const uint32_t l1_op = get_write_ptr(CB_OPT);
     const uint32_t l1_f = (get_write_ptr(CB_FUSE) + 63u) & ~63u;
     const uint32_t l1_cr = l1_f, l1_cg = l1_cr + tile_bytes, l1_cb = l1_cg + tile_bytes;
-    const uint32_t l1_rec = l1_cb + tile_bytes;     // PW records of PB bytes
+    const uint32_t l1_q01 = l1_cb + tile_bytes, l1_q23 = l1_q01 + tile_bytes;
+    const uint32_t l1_rec = l1_q23 + tile_bytes;    // PW records of PB bytes
     const uint32_t l1_dep = l1_rec + PW * PB;       // one page each
     const uint32_t l1_offs = l1_dep + PB;
     const uint32_t l1_aabb = l1_offs + PB;
@@ -108,6 +121,8 @@ void kernel_main() {
     auto p_cr = reinterpret_cast<volatile uint32_t*>(l1_cr);
     auto p_cg = reinterpret_cast<volatile uint32_t*>(l1_cg);
     auto p_cb = reinterpret_cast<volatile uint32_t*>(l1_cb);
+    auto q01 = reinterpret_cast<volatile uint32_t*>(l1_q01);
+    auto q23 = reinterpret_cast<volatile uint32_t*>(l1_q23);
     auto w_rec = reinterpret_cast<volatile uint32_t*>(l1_rec);
     auto w_dep = reinterpret_cast<volatile uint32_t*>(l1_dep);
     auto w_offs = reinterpret_cast<volatile uint32_t*>(l1_offs);
@@ -124,7 +139,7 @@ void kernel_main() {
         noc_async_write(l1_dep, get_noc_addr(page, o_dep), PB);
         noc_async_write(l1_offs, get_noc_addr(page, o_offs), PB);
         noc_async_write(l1_aabb, get_noc_addr(page, o_aabb), PB);
-        if (!(abl & 1u))
+        if (!(ABL & 1u))
             for (uint32_t s = 0; s < slot; ++s)
                 noc_async_write(l1_rec + s * PB, get_noc_addr(page * PW + s, o_rec), PB);
         noc_async_writes_flushed();  // staging reusable; completion at the end
@@ -133,11 +148,17 @@ void kernel_main() {
     for (uint32_t k = 0; k < num_chunks; k++) {
         const uint32_t t = chunk_start + k * stride;
         // The opacity / color tiles stream in while the SFPU tile lands.
-        if (!(abl & 4u)) {
+        if (!(ABL & 4u)) {
             noc_async_read_tile(t, i_op, l1_op);
             noc_async_read_tile(t, i_cr, l1_cr);
             noc_async_read_tile(t, i_cg, l1_cg);
             noc_async_read_tile(t, i_cb, l1_cb);
+#if EMIT_PUBOC
+            if (pub01 != 0) {
+                noc_async_read_tile(t, i_q01, l1_q01);
+                noc_async_read_tile(t, i_q23, l1_q23);
+            }
+#endif
         }
         for (uint32_t o = 0; o < 10; o++) cb_wait_front(IN_CB[o], 1);
         noc_async_read_barrier();
@@ -167,6 +188,17 @@ void kernel_main() {
         };
         uint32_t vc = 0, pc = 0;
         vis_tile::classify_tile(p_tpg, p_aabb, n_el, mw, prm, get_inputs, &vc, &pc);
+#if EMIT_PUBOC
+        if (pub01 == 0)  // NaN scene: pack the visible lanes here
+            for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++)
+                for (uint32_t bits = mw[w]; bits != 0; bits &= bits - 1) {
+                    const uint32_t il = w * 32 + static_cast<uint32_t>(__builtin_ctz(bits));
+                    q01[il] = sort_bin_fp32::to_unorm16(opw[il]) |
+                              (sort_bin_fp32::to_unorm16(p_cr[il]) << 16);
+                    q23[il] = sort_bin_fp32::to_unorm16(p_cg[il]) |
+                              (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
+                }
+#endif
 
         for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++)
             for (uint32_t bits = mw[w]; bits != 0; bits &= bits - 1) {
@@ -176,27 +208,20 @@ void kernel_main() {
                 w_aabb[slot] = p_aabb[il] & vis_tile::PAYLOAD;
                 pr += p_tpg[il] & vis_tile::PAYLOAD;
                 volatile uint32_t* r = w_rec + slot * PW;
-                if (!(abl & 2u)) {
-                r[0] = p_a[il];
-                r[1] = p_b[il];
-                r[2] = p_c[il];
-                r[3] = p_m2x[il];
-                r[4] = p_m2y[il];
-                r[5] = opw[il];
-                r[6] = p_cr[il];
-                r[7] = p_cg[il];
-                r[8] = p_cb[il];
+                if (!(ABL & 2u)) {
+                    r[0] = p_a[il];
+                    r[1] = p_b[il];
+                    r[2] = p_c[il];
+                    r[3] = p_m2x[il];
+                    r[4] = p_m2y[il];
+                    r[5] = opw[il];
+                    r[6] = p_cr[il];
+                    r[7] = p_cg[il];
+                    r[8] = p_cb[il];
 #if EMIT_PUBOC
-                if (abl & 8u) {  // profiling: plain copies in place of the UNORM16 packs
-                    r[10] = opw[il];
-                    r[11] = p_cg[il];
-                } else {
-                r[10] = sort_bin_fp32::to_unorm16(opw[il]) |
-                        (sort_bin_fp32::to_unorm16(p_cr[il]) << 16);
-                r[11] = sort_bin_fp32::to_unorm16(p_cg[il]) |
-                        (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
-                }
-                r[12] = p_dep[il];
+                    r[10] = q01[il];
+                    r[11] = q23[il];
+                    r[12] = p_dep[il];
 #endif
                 }
                 m++;

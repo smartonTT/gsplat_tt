@@ -118,10 +118,11 @@ constexpr uint32_t CB_VOP    = 39;  // opacity tile for RECHECK
 constexpr uint32_t VIS_MASK_BYTES = 128;
 constexpr uint32_t VIS_COUNTS_PAGE = 1024;  // vis_tile::COUNTS_PAGE_BYTES
 constexpr uint32_t VIS_CNT_STAGING = 16 * 1024;  // up to ~1900 tiles per core
-// Lever B (task #125) writer staging (writer_pfwc_fuse.cpp): col r/g/b tiles,
-// 16 records, the dep / offs / aabb pages, the counts page, 64 B alignment.
+// Lever B (task #125) writer staging (writer_pfwc_fuse.cpp): col r/g/b and the
+// two puboc tiles (task #122), 16 records, the dep / offs / aabb pages, the
+// counts page, 64 B alignment.
 constexpr uint32_t CB_FUSE = 40;
-constexpr uint32_t FUSE_CB_BYTES = 3 * TILE_BYTES_FP32 + 16 * 64 + 4 * 64 + 64 + 64;
+constexpr uint32_t FUSE_CB_BYTES = 5 * TILE_BYTES_FP32 + 16 * 64 + 4 * 64 + 64 + 64;
 
 struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
@@ -412,6 +413,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     }
     std::map<std::string, std::string> writer_defines;
     if (fuse && env_config::emit_puboc()) writer_defines["EMIT_PUBOC"] = "1";
+    // Targeted profiling only (task #122): writer_pfwc_fuse.cpp FUSE_ABL bits.
+    if (fuse && vis_env_u32("GSPLAT_TT_FUSE_ABL", 0) != 0)
+        writer_defines["FUSE_ABL"] = std::to_string(vis_env_u32("GSPLAT_TT_FUSE_ABL", 0)) + "u";
     const KernelHandle writer = CreateKernel(
         program,
         fuse  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_fuse.cpp"
@@ -773,6 +777,16 @@ double pfwc_tt(
                      fbuf("proj_m_offs"),  fbuf("proj_m_aabb"),
                      fbuf("pfwc_fuse_counts")};
     }
+    // Per-scene UNORM16 packs (task #122); absent = the writer packs on device.
+    uint32_t fuse_pub[2] = {0u, 0u};
+    if (fuse_on && env_config::emit_puboc()) {
+        const auto q01 = device_state::get_buffer("scene_puboc01");
+        const auto q23 = device_state::get_buffer("scene_puboc23");
+        if (q01 && q23) {
+            fuse_pub[0] = static_cast<uint32_t>(q01->address());
+            fuse_pub[1] = static_cast<uint32_t>(q23->address());
+        }
+    }
     std::vector<uint32_t> vis_bits;
     if (vis_on) {
         vis_bits = {
@@ -839,7 +853,7 @@ double pfwc_tt(
         SetRuntimeArgs(program, k_compute, core, compute_args);
 
         if (fuse_on) {
-            // writer_pfwc_fuse.cpp args 0..23.
+            // writer_pfwc_fuse.cpp args 0..24.
             std::vector<uint32_t> fw = fuse_addr;
             fw.push_back(c);
             fw.push_back(num_chunks);
@@ -851,8 +865,8 @@ double pfwc_tt(
             fw.push_back(static_cast<uint32_t>(vis->tile_size));
             fw.push_back(pfwc_fuse::seg_base(num_tiles, num_cores, c));
             fw.push_back(c);
-            static const uint32_t fuse_abl = vis_env_u32("GSPLAT_TT_FUSE_ABL", 0);
-            fw.push_back(fuse_abl);  // profiling ablation bits (0 = off)
+            fw.push_back(fuse_pub[0]);  // scene_puboc01 (0 = pack on device)
+            fw.push_back(fuse_pub[1]);  // scene_puboc23
             SetRuntimeArgs(program, k_writer, core, fw);
             continue;
         }

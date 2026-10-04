@@ -32,8 +32,12 @@
 //   23    : slot pages base (64 B)
 //   24: N   25: num_cores (tile stride)   26: num_tiles   27: slot   28: mover
 //   29: check
+//   30, 31: scene_puboc01 / scene_puboc23 (tile pages; EMIT_PUBOC): record
+//       words 10 / 11 precomputed per scene (task #122, CBs 24 / 25). 0 = the
+//       scene has a NaN: the visible lanes are packed here (to_unorm16).
 //
-// COMPILE-TIME ARGS: 24 TensorAccessorArgs in runtime-arg order 0..23.
+// COMPILE-TIME ARGS: 24 TensorAccessorArgs in runtime-arg order 0..23 (the
+// puboc tiles reuse the opacity accessor's, all are DRAM interleaved).
 
 #include <cstdint>
 
@@ -65,6 +69,8 @@ void kernel_main() {
     const uint32_t slot_id = get_arg_val<uint32_t>(27);
     const uint32_t mover = get_arg_val<uint32_t>(28);
     const bool check = get_arg_val<uint32_t>(29) != 0;
+    const uint32_t pub01 = get_arg_val<uint32_t>(30);
+    const uint32_t pub23 = get_arg_val<uint32_t>(31);
     (void)N;
 
     constexpr auto a0 = TensorAccessorArgs<0>();
@@ -116,6 +122,8 @@ void kernel_main() {
     const auto o_ry = TensorAccessor(a21, addr[21], PAGE_BYTES);
     const auto acc_mask = TensorAccessor(a22, addr[22], MASK_BYTES);
     const auto acc_slot = TensorAccessor(a23, addr[23], PAGE_BYTES);
+    const auto i_q01 = TensorAccessor(a6, pub01, TILE_BYTES);
+    const auto i_q23 = TensorAccessor(a6, pub23, TILE_BYTES);
 
     // L1: every CB holds one copy per mover; mover m uses the m-th.
     uint32_t l1_in[N_IN];
@@ -132,11 +140,16 @@ void kernel_main() {
     const uint32_t l1_orec = get_write_ptr(CB_OREC) + mover * PAGE_ELEMS * PAGE_BYTES;
     const uint32_t l1_mask = get_write_ptr(CB_MASK) + mover * MASK_BYTES;
     const uint32_t l1_slot = get_write_ptr(CB_SLOT) + mover * PAGE_BYTES;
+    constexpr uint32_t CB_Q01 = 24, CB_Q23 = 25;
+    const uint32_t l1_q01 = get_write_ptr(CB_Q01) + mover * TILE_BYTES;
+    const uint32_t l1_q23 = get_write_ptr(CB_Q23) + mover * TILE_BYTES;
 
     auto in = [&](uint32_t k) { return reinterpret_cast<volatile uint32_t*>(l1_in[k]); };
     auto p_m2x = in(0), p_m2y = in(1), p_dep = in(2), p_a = in(3), p_b = in(4), p_c = in(5);
     auto p_op = in(6), p_cr = in(7), p_cg = in(8), p_cb = in(9), p_tpg = in(10), p_aabb = in(11);
     auto p_rx = in(12), p_ry = in(13);
+    auto q01 = reinterpret_cast<volatile uint32_t*>(l1_q01);
+    auto q23 = reinterpret_cast<volatile uint32_t*>(l1_q23);
     auto w_dep = reinterpret_cast<volatile uint32_t*>(l1_odep);
     auto w_offs = reinterpret_cast<volatile uint32_t*>(l1_ooffs);
     auto w_aabb = reinterpret_cast<volatile uint32_t*>(l1_oaabb);
@@ -218,7 +231,24 @@ void kernel_main() {
             noc_async_read_tile(t, i_rx, l1_in[12]);
             noc_async_read_tile(t, i_ry, l1_in[13]);
         }
+#if EMIT_PUBOC
+        if (pub01 != 0) {
+            noc_async_read_tile(t, i_q01, l1_q01);
+            noc_async_read_tile(t, i_q23, l1_q23);
+        }
+#endif
         noc_async_read_barrier();
+#if EMIT_PUBOC
+        if (pub01 == 0)  // NaN scene: pack the visible lanes here
+            for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++)
+                for (uint32_t bits = mbits[w]; bits != 0; bits &= bits - 1) {
+                    const uint32_t il = w * 32 + static_cast<uint32_t>(__builtin_ctz(bits));
+                    q01[il] = sort_bin_fp32::to_unorm16(p_op[il]) |
+                              (sort_bin_fp32::to_unorm16(p_cr[il]) << 16);
+                    q23[il] = sort_bin_fp32::to_unorm16(p_cg[il]) |
+                              (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
+                }
+#endif
         for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++)
             for (uint32_t bits = mbits[w]; bits != 0; bits &= bits - 1) {
                 const uint32_t il = w * 32 + static_cast<uint32_t>(__builtin_ctz(bits));
@@ -240,11 +270,10 @@ void kernel_main() {
 #if EMIT_PUBOC
                 // Task #100: publish the emit's per-gaussian pack (op/color
                 // UNORM16 at words 10, 11, as sort_bin did) and the depth key
-                // (word 12) so the emit only copies them.
-                r[10] = sort_bin_fp32::to_unorm16(p_op[il]) |
-                        (sort_bin_fp32::to_unorm16(p_cr[il]) << 16);
-                r[11] = sort_bin_fp32::to_unorm16(p_cg[il]) |
-                        (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
+                // (word 12) so the emit only copies them. Task #122: the packs
+                // come per scene from the host (or the NaN pre-pass above).
+                r[10] = q01[il];
+                r[11] = q23[il];
                 r[12] = p_dep[il];
 #endif
                 if (check) {

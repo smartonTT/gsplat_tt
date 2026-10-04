@@ -60,6 +60,25 @@ inline int pfwc_fuse_mode() {
     return v;
 }
 
+// Task #122, GSPLAT_TT_PUBOC_PRE: with EMIT_PUBOC, record words 10 / 11 (the
+// UNORM16 opacity / color packs) depend only on the scene, so the host builds
+// them once per scene (scene_puboc01 / scene_puboc23, the integer
+// sort_bin_fp32::unorm16) and the fused writer and the gather scatter copy
+// them. 1 (default) = on; 0 = kill switch, packs computed per gaussian on the
+// device. A scene with a NaN opacity / color keeps the device path.
+inline int puboc_pre_mode() {
+    static const int v = [] {
+        const char* e = std::getenv("GSPLAT_TT_PUBOC_PRE");
+        if (e == nullptr || *e == '\0') return 1;
+        const int x = std::atoi(e);
+        if (x < 0 || x > 1)
+            throw std::invalid_argument(std::string("GSPLAT_TT_PUBOC_PRE must be 0 or 1, got '") +
+                                        e + "'");
+        return x;
+    }();
+    return v;
+}
+
 inline unsigned vis_env_u32(const char* name, unsigned dflt) {
     const char* e = std::getenv(name);
     return (e != nullptr && *e != '\0') ? static_cast<unsigned>(std::atoi(e)) : dflt;

@@ -21,6 +21,7 @@
 #include "pfwc.h"
 #include "tile_assign.h"
 #include "vis_mode.h"
+#include "../kernels/dataflow/sort_bin_fp32.h"
 
 #include <algorithm>
 #include <chrono>
@@ -211,6 +212,12 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_cg;
     std::shared_ptr<distributed::MeshBuffer> buf_cb;
     std::shared_ptr<distributed::MeshBuffer> buf_op;
+    // Task #122 (GSPLAT_TT_PUBOC_PRE): per-scene UNORM16 packs, record words 10
+    // (opacity | col_r << 16) and 11 (col_g | col_b << 16). pub_ok is false when
+    // the scene has a NaN opacity / color (the device packs those).
+    std::shared_ptr<distributed::MeshBuffer> buf_pub01;
+    std::shared_ptr<distributed::MeshBuffer> buf_pub23;
+    bool pub_ok = false;
     std::size_t scene_cached_bytes = 0;
     const float* uploaded_colors_ptr = nullptr;
     const float* uploaded_opacities_ptr = nullptr;
@@ -360,6 +367,8 @@ static void build_programs_vis(GatherDeviceContext& ctx) {
         cb(21, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);  // 16 AoS records
         cb(22, MASK_BYTES, MASK_BYTES);
         cb(23, PAGE_BYTES, PAGE_BYTES);  // slot parameters
+        cb(24, TILE_BYTES, TILE_BYTES);  // puboc01 / puboc23 tiles (task #122)
+        cb(25, TILE_BYTES, TILE_BYTES);
         std::vector<uint32_t> ct;
         for (int i = 0; i < 24; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
         std::map<std::string, std::string> vdefines;
@@ -459,6 +468,17 @@ static void ensure_scene_uploaded(
         device_state::register_buffer("scene_col_g", ctx->buf_cg);
         device_state::register_buffer("scene_col_b", ctx->buf_cb);
         device_state::register_buffer("scene_opacities", ctx->buf_op);
+        ctx->buf_pub01.reset();
+        ctx->buf_pub23.reset();
+    }
+    const bool want_pub = gsplat_tt::env_config::emit_puboc() && gsplat_tt::puboc_pre_mode() == 1;
+    if (want_pub && !ctx->buf_pub01) {
+        ctx->buf_pub01 = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
+        ctx->buf_pub23 = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
+        ctx->uploaded_colors_ptr = nullptr;  // fill them below
+        ctx->pub_ok = false;
+        device_state::register_buffer("scene_puboc01", nullptr);
+        device_state::register_buffer("scene_puboc23", nullptr);
     }
     const bool hit = (ctx->uploaded_colors_ptr == colors) &&
                      (ctx->uploaded_opacities_ptr == opacities) &&
@@ -469,12 +489,17 @@ static void ensure_scene_uploaded(
     const auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<float> cr(padded_n, 0.0f), cg(padded_n, 0.0f),
         cbv(padded_n, 0.0f), op(padded_n, 0.0f);
+    // The packs are the device's to_unorm16 (same integer code, bit-exact);
+    // its NaN fallback is soft-float, so a NaN leaves the packing to the device.
+    std::vector<uint32_t> p01(want_pub ? padded_n : 0, 0u), p23(want_pub ? padded_n : 0, 0u);
     {
         auto& pool = soa_pool();
         const std::size_t W = pool.size();
         const std::size_t chunk = (N + W - 1) / W;
+        std::vector<uint8_t> nan_seen(W, 0);
         for (std::size_t w = 0; w < W; ++w) {
-            pool.submit([w, chunk, N, colors, opacities, &cr, &cg, &cbv, &op]() {
+            pool.submit([w, chunk, N, colors, opacities, want_pub, &cr, &cg, &cbv, &op, &p01,
+                         &p23, &nan_seen]() {
                 const std::size_t lo = std::min(w * chunk, N);
                 const std::size_t hi = std::min(lo + chunk, N);
                 for (std::size_t i = lo; i < hi; ++i) {
@@ -483,14 +508,39 @@ static void ensure_scene_uploaded(
                     cbv[i] = colors[i * 3 + 2];
                     op[i] = opacities[i];
                 }
+                if (!want_pub) return;
+                auto u16 = [&](float v, uint32_t* out) {
+                    uint32_t b;
+                    std::memcpy(&b, &v, 4);
+                    if (!sort_bin_fp32::unorm16(b, out)) nan_seen[w] = 1;
+                };
+                for (std::size_t i = lo; i < hi; ++i) {
+                    uint32_t uo, ur, ug, ub;
+                    u16(op[i], &uo);
+                    u16(cr[i], &ur);
+                    u16(cg[i], &ug);
+                    u16(cbv[i], &ub);
+                    p01[i] = uo | (ur << 16);
+                    p23[i] = ug | (ub << 16);
+                }
             });
         }
         pool.wait();
+        ctx->pub_ok = want_pub && std::find(nan_seen.begin(), nan_seen.end(), 1) == nan_seen.end();
     }
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_cr, cr, false);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_cg, cg, false);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_cb, cbv, false);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_op, op, false);
+    if (ctx->pub_ok) {
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pub01, p01, false);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pub23, p23, false);
+    } else if (want_pub) {
+        std::cerr << "[gsplat_tt::gather] scene has a NaN opacity / color: UNORM16 packs stay "
+                     "on the device\n";
+    }
+    device_state::register_buffer("scene_puboc01", ctx->pub_ok ? ctx->buf_pub01 : nullptr);
+    device_state::register_buffer("scene_puboc23", ctx->pub_ok ? ctx->buf_pub23 : nullptr);
     distributed::Finish(*ctx->cq);
     const auto t1 = std::chrono::high_resolution_clock::now();
     if (upload_ms) *upload_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -1121,6 +1171,9 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                     addr(vmask, "pfwc_vis_mask"),
                     addr(ctx->buf_core_base, "core_base"),
                 };
+                const bool pub = ctx->pub_ok;  // per-scene UNORM16 packs (task #122)
+                const uint32_t pub01 = pub ? addr(ctx->buf_pub01, "scene_puboc01") : 0u;
+                const uint32_t pub23 = pub ? addr(ctx->buf_pub23, "scene_puboc23") : 0u;
                 for (uint32_t c = 0; c < ctx->num_cores; ++c)
                 for (uint32_t mv = 0; mv < GATHER_MOVERS; ++mv) {
                     std::vector<uint32_t> args = bufs;
@@ -1130,6 +1183,8 @@ gsplat_cpu::ProjectResult gather_visible_tt(
                     args.push_back(c * GATHER_MOVERS + mv);
                     args.push_back(mv);
                     args.push_back(check ? 1u : 0u);
+                    args.push_back(pub01);  // arg 30: scene_puboc01 (0 = pack on device)
+                    args.push_back(pub23);  // arg 31: scene_puboc23
                     SetRuntimeArgs(pg, mv == 0 ? ctx->kv0 : ctx->kv1,
                                    CoreCoord{c % ctx->grid.x, c / ctx->grid.x}, args);
                 }
