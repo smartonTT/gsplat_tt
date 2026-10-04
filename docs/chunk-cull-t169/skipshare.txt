@@ -1,0 +1,40 @@
+/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t169/docs/chunk-cull-t169/skipshare.py:26: RuntimeWarning: divide by zero encountered in matmul
+  pc = means @ w2c[:3, :3].T + w2c[:3, 3]
+/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t169/docs/chunk-cull-t169/skipshare.py:26: RuntimeWarning: overflow encountered in matmul
+  pc = means @ w2c[:3, :3].T + w2c[:3, 3]
+/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t169/docs/chunk-cull-t169/skipshare.py:26: RuntimeWarning: invalid value encountered in matmul
+  pc = means @ w2c[:3, :3].T + w2c[:3, 3]
+N 6131954; op <= floor (static, never visible): 0.0933; margin 4.0 px
+view    vis   ply  256 ply 1024 ply 4096 mor  256 mor 1024 mor 4096   (skip share of N)
+hero    0.307     0.000     0.000     0.000     0.610     0.576     0.510   lost 0
+orb_00  0.214     0.000     0.000     0.000     0.698     0.641     0.556   lost 0
+orb_01  0.222     0.000     0.000     0.000     0.684     0.631     0.548   lost 0
+orb_02  0.234     0.000     0.000     0.000     0.671     0.620     0.540   lost 0
+orb_03  0.247     0.000     0.000     0.000     0.657     0.607     0.525   lost 0
+orb_04  0.264     0.000     0.000     0.000     0.640     0.589     0.507   lost 0
+orb_05  0.284     0.000     0.000     0.000     0.621     0.574     0.493   lost 0
+orb_06  0.305     0.000     0.000     0.000     0.604     0.563     0.496   lost 0
+orb_07  0.325     0.000     0.000     0.000     0.593     0.556     0.488   lost 0
+orb_08  0.337     0.000     0.000     0.000     0.584     0.549     0.481   lost 0
+orb_09  0.342     0.000     0.000     0.000     0.579     0.543     0.478   lost 0
+orb_10  0.338     0.000     0.000     0.000     0.579     0.542     0.480   lost 0
+orb_11  0.329     0.000     0.000     0.000     0.584     0.548     0.484   lost 0
+orb_12  0.318     0.000     0.000     0.000     0.594     0.555     0.490   lost 0
+orb_13  0.306     0.000     0.000     0.000     0.603     0.564     0.498   lost 0
+orb_14  0.297     0.000     0.000     0.000     0.613     0.573     0.504   lost 0
+orb_15  0.291     0.000     0.000     0.000     0.621     0.581     0.513   lost 0
+orb_16  0.287     0.000     0.000     0.000     0.625     0.586     0.519   lost 0
+orb_17  0.288     0.000     0.000     0.000     0.626     0.589     0.528   lost 0
+orb_18  0.289     0.000     0.000     0.000     0.628     0.591     0.530   lost 0
+orb_19  0.288     0.000     0.000     0.000     0.632     0.594     0.534   lost 0
+orb_20  0.287     0.000     0.000     0.000     0.639     0.600     0.539   lost 0
+orb_21  0.282     0.000     0.000     0.000     0.647     0.607     0.546   lost 0
+orb_22  0.273     0.000     0.000     0.000     0.656     0.619     0.550   lost 0
+orb_23  0.260     0.000     0.000     0.000     0.667     0.629     0.560   lost 0
+orb_24  0.241     0.000     0.000     0.000     0.681     0.638     0.558   lost 0
+orb_25  0.225     0.000     0.000     0.000     0.696     0.648     0.560   lost 0
+orb_26  0.214     0.000     0.000     0.000     0.708     0.655     0.566   lost 0
+orb_27  0.208     0.000     0.000     0.000     0.709     0.654     0.564   lost 0
+orb_28  0.209     0.000     0.000     0.000     0.705     0.651     0.564   lost 0
+MEAN    0.277     0.000     0.000     0.000     0.638     0.596     0.524
+x 2.98 ms: ply256=0.00 ply1024=0.00 ply4096=0.00 mor256=1.90 mor1024=1.78 mor4096=1.56
