@@ -33,6 +33,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -332,6 +333,8 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     std::map<std::string, std::string> vis_defines;
     if (vis) {
         vis_defines["PFWC_VIS"] = "1";
+        if (gsplat_tt::precull_mode() == 1 && gsplat_tt::sfpu_vis_mode() == 1)
+            vis_defines["PFWC_PRECULL"] = "1";  // lever C (task #140), args 65..66
         cb_fp32(CB_OP, 2);
         cb_fp32(CB_TMP_MX, 2);     cb_fp32(CB_TMP_MY, 2);
         cb_fp32(CB_TMP_RX, 2);     cb_fp32(CB_TMP_RY, 2);
@@ -786,6 +789,14 @@ double pfwc_tt(
             fp32_bits(static_cast<float>(vis->tiles_y - 1)),
             fp32_bits(vis->edge_tau),
         };
+        // Lever C (task #140): args 65 (c0 = 2 ln(1 / floor) + margin) and 66
+        // (radius limit; -1 = no shrink on any lane). Read only by PFWC_PRECULL.
+        constexpr float PRECULL_T_MARGIN = 0.25f;  // vs the band cull's 0.05
+        constexpr float PRECULL_RMAX = 4096.0f;
+        const bool pc = vis->precull_floor > 0.0f && vis->precull_floor < 1.0f;
+        vis_bits.push_back(fp32_bits(
+            pc ? 2.0f * std::log(1.0f / vis->precull_floor) + PRECULL_T_MARGIN : 0.0f));
+        vis_bits.push_back(fp32_bits(pc ? std::min(vis->max_radius, PRECULL_RMAX) : -1.0f));
     }
 
     // Pre-pack k = 3.0, -fx, -fy as fp32 bits — match project_full_fused k_cap.
@@ -835,7 +846,7 @@ double pfwc_tt(
         compute_args.push_back(k_bits);        // arg 53
         compute_args.push_back(neg_fx_bits);   // arg 54
         compute_args.push_back(neg_fy_bits);   // arg 55
-        for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..64 (PFWC_VIS)
+        for (uint32_t b : vis_bits) compute_args.push_back(b);  // args 56..66 (PFWC_VIS)
         SetRuntimeArgs(program, k_compute, core, compute_args);
 
         if (fuse_on) {

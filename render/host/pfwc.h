@@ -58,6 +58,11 @@ struct PfwcVisParams {
     // per-core counts table ("pfwc_fuse_counts") instead of the pfwc tiles.
     // Only for the resident chain (gather downstream_resident, no verify).
     bool fuse = false;
+    // Lever C (task #140, GSPLAT_TT_PRECULL=1): the microblock band cull's
+    // contribution floor; > 0 shrinks the rectangle to the opacity-aware
+    // extent (project_pfwc_compute.cpp step 11.6). 0 = off for this view (band
+    // cull disabled), the PFWC_PRECULL program then keeps the 3-sigma radii.
+    float precull_floor = 0.0f;
 };
 
 // Compute mean_2d, depth, cov2d, radii for N Gaussians using device-resident
