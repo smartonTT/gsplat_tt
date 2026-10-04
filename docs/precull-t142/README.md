@@ -49,6 +49,9 @@ copy init per load group (rebased on iter-180). Two trims:
    larger (by <= 0.12), so the pre-cull keeps slightly more records; the host
    model (test_precull.cpp) still loses 0 kept tiles and shrinks 61938 of
    150000 lanes. 70672 B, still 16 B over.
-3. b47574d: the six pre-cull loads in a loop (slot k <- PC_CB[k]) and the
+3. b47574d: the six pre-cull loads in a loop (runtime CB ids) and the
    radius rounded from sqrt + 2 with any faithful rounding (no ceil fix-up,
-   at most 1 px more than the ceil).
+   at most 1 px more than the ceil). 71024 B: the loop costs ~350 B, as the
+   out-of-line helper did. Lesson: copy_tile with a runtime CB id is far
+   bigger than the inlined constant-id form.
+4. Loads inlined again; one radius-limit test on max(rx, ry) (SFPSWAP).

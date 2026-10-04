@@ -395,8 +395,7 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
 // Lever C (task #140). Runs in step 11.5's DEST acquire, before the TZ / MX /
 // MY loads (task #142: a separate step with its own radii repack put the
 // program over the 70.6 KB kernel config buffer). DEST slots: 0 cov b, 1
-// opacity, 2 cov a, 3 cov c, 4 rx, 5 ry (slot k <- PC_CB[k]; 1, 4 and 5 are
-// 11.5's); rx / ry are replaced in place. One loop over the 32 vectors (not
+// opacity, 2 cov a, 3 cov c, 4 rx, 5 ry (1, 4 and 5 are 11.5's); rx / ry are replaced in place. One loop over the 32 vectors (not
 // 32 instantiations, task #102). Intermediate (8 registers, no spill): t ->
 // slot 6.
 constexpr uint32_t PC_B = 0 * 32, PC_OP = 1 * 32, PC_A = 2 * 32, PC_C = 3 * 32, PC_RX = 4 * 32,
@@ -458,15 +457,14 @@ __attribute__((noinline)) void pfwc_precull_tile(uint32_t c0_bits, uint32_t rlim
         vFloat ac = vFloat(dst_reg[PC_A]) * vFloat(dst_reg[PC_C]);
         vFloat b = dst_reg[PC_B];
         vFloat cond = (ac - b * b) * 64.0f - ac;
-        vFloat rlim = Converter::as_float(rlim_bits);
+        vFloat rlo = dst_reg[PC_RX];
+        vFloat rhi = dst_reg[PC_RY];
+        vec_min_max(rlo, rhi);  // rhi = max(rx, ry)
         v_if(nf < 256) {
             v_if(cond >= 0.0f) {
-                v_if(vFloat(dst_reg[PC_RX]) - rlim <= 0.0f) {
-                    v_if(vFloat(dst_reg[PC_RY]) - rlim <= 0.0f) {
-                        precull_axis(PC_A, PC_RX);
-                        precull_axis(PC_C, PC_RY);
-                    }
-                    v_endif;
+                v_if(rhi - Converter::as_float(rlim_bits) <= 0.0f) {
+                    precull_axis(PC_A, PC_RX);
+                    precull_axis(PC_C, PC_RY);
                 }
                 v_endif;
             }
@@ -516,8 +514,6 @@ void kernel_main() {
     for (uint32_t k = 0; k < VIS_PARAMS; k++) vis_bits[k] = get_arg_val<uint32_t>(56 + k);
 #endif
 #ifdef PFWC_PRECULL
-    // DEST slot k <- PC_CB[k] (pfwc_precull_tile's layout).
-    constexpr uint32_t PC_CB[6] = {CB_TMP_B, CB_OP, CB_TMP_A, CB_TMP_C, CB_TMP_RX, CB_TMP_RY};
     const uint32_t precull_c0_bits = get_arg_val<uint32_t>(65);
     const uint32_t precull_rlim_bits = get_arg_val<uint32_t>(66);
 #endif
@@ -930,9 +926,12 @@ void kernel_main() {
             // 11.6 (task #140, lever C): opacity-aware radii for the rectangle,
             // in place in slots 4 / 5 (pfwc_precull_tile), before TZ / MX / MY
             // overwrite slots 0 / 2 / 3. CB_TMP_A/B/C are popped in step 12.
-            // A loop, not 6 inlined loads (task #142: code size).
-#pragma GCC unroll 0
-            for (uint32_t k = 0; k < 6; k++) copy_tile(PC_CB[k], 0, k);
+            copy_tile(CB_TMP_B, 0, 0);
+            copy_tile(CB_OP, 0, 1);
+            copy_tile(CB_TMP_A, 0, 2);
+            copy_tile(CB_TMP_C, 0, 3);
+            copy_tile(CB_TMP_RX, 0, 4);
+            copy_tile(CB_TMP_RY, 0, 5);
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
             MATH((pfwc_precull_tile(precull_c0_bits, precull_rlim_bits)));
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
