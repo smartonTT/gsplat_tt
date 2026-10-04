@@ -88,14 +88,16 @@ inline int puboc_pre_mode() {
 // T-saturation checkpoints shift, so <=1 LSB on ~0.3-0.5% of pixels (#142,
 // 74.9-78.2 dB). 0 (default) = off; opt-in until reviewed. Only with
 // GSPLAT_TT_SFPU_VIS=1 (mode 2 cross-checks the rectangle against the legacy
-// path) and with the band cull on.
+// path) and with the band cull on. 2 (task #157) = the same with the
+// pixel-centre rect (PRECULL_PC): r' = sqrt(t cov) - 3/8 instead of the integer
+// sqrt(t cov) + 2, same image (tests/unit/test_precull.cpp), far fewer records.
 inline int precull_mode() {
     static const int v = [] {
         const char* e = std::getenv("GSPLAT_TT_PRECULL");
         if (e == nullptr || *e == '\0') return 0;
         const int x = std::atoi(e);
-        if (x < 0 || x > 1)
-            throw std::invalid_argument(std::string("GSPLAT_TT_PRECULL must be 0 or 1, got '") +
+        if (x < 0 || x > 2)
+            throw std::invalid_argument(std::string("GSPLAT_TT_PRECULL must be 0, 1 or 2, got '") +
                                         e + "'");
         return x;
     }();

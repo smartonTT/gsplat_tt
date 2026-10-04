@@ -35,6 +35,7 @@ CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
 chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS" $CP -DPFWC_VIS=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 render/kernels/compute/project_pfwc_compute.cpp
+chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 render/kernels/compute/project_pfwc_compute.cpp
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
 for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
 PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)
