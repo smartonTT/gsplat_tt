@@ -1,0 +1,19 @@
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t165-smoke  timeout=280s  worry=224s  ts=2026-10-04T14:55:26-0700
+cmd: bash /localdev/smarton/gstt2-t165/docs/emit-tpack-t165/remote_time.sh 0 tp:GSPLAT_TT_OL_EMIT_TPACK=1
+-----------------------------------------
+=== r0-tp 9ececc0 GSPLAT_TT_OL_EMIT_TPACK=1 21:55:27
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.6 p50_ms=18.8 min_ms=15.8 max_ms=21.9 n_views=30 warmup_s=6.9 out=/localdev/smarton/gstt2-t165/tmp/t165-r0-tp
+STAGES n=30 head=0.003 project=4.656 tile_assign=0.004 sort=4.361 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.278 d2h=0.262 assemble=0.000 tail=0.002 | sum=18.566 view_total=18.567 resid_in_view=+0.001 avg_frame_ms=18.599 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.016 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.101 upload=0.000 bin_emit=4.001 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.160 publish_wait=0.000 mat=0.046 | sum=4.325 sort=4.361 resid=+0.036
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.032 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.478 gather_result=0.109 | sum=4.655 project=4.656 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 0 21:55:43
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t165/.ttw/logs/t165-smoke-20261004-145526.log
+SMOKE_RC=0
+CHAIN_DONE

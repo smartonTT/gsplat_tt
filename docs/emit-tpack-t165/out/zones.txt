@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t165/opt/profiler/analyze_zones.py", line 87, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t165/opt/profiler/analyze_zones.py", line 34, in main
+    with open(path) as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'opt/profiler/t165-ep/dev30.csv'
