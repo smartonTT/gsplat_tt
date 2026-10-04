@@ -28,6 +28,7 @@
 //   23, 24: scene_puboc01 / scene_puboc23 (tile pages; EMIT_PUBOC): record
 //       words 10 / 11 precomputed per scene (task #122). 0 = the scene has a
 //       NaN: the writer packs the visible lanes itself (to_unorm16).
+//   25..: PFWC_TILE_LIST only (task #169 chunk cull): the tile ids (padded)
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs in runtime-arg order 0..8 (the
 // puboc tiles reuse the opacity accessor's, all are DRAM interleaved).
@@ -186,7 +187,11 @@ void kernel_main() {
     };
 
     for (uint32_t k = 0; k < num_chunks; k++) {
+#ifdef PFWC_TILE_LIST
+        const uint32_t t = get_arg_val<uint32_t>(25 + k);  // task #169 survivors
+#else
         const uint32_t t = chunk_start + k * stride;
+#endif
         // The opacity / color tiles stream in while the SFPU tile lands.
         if (!(ABL & 4u)) {
             noc_async_read_tile(t, i_op, l1_op);

@@ -87,6 +87,7 @@ struct Acc {
     double project_cov3d = 0.0;
     double project_pfwc_setup = 0.0;
     double project_pfwc_rtargs = 0.0;
+    double project_pfwc_chunkcull = 0.0;  // task #169 host chunk cull
     double project_pfwc_enqueue = 0.0;
     double project_pfwc_finish = 0.0;
     double project_gather_setup = 0.0;

@@ -18,6 +18,8 @@
 //   12   : PFWC_VIS only: tile stride (1: tiles chunk_start + k, the legacy
 //          contiguous range; num_cores: the strided deal of the lever B fused
 //          writer, task #125)
+//   13.. : PFWC_TILE_LIST only (task #169 chunk cull): the tile ids, num_chunks
+//          used (padded to a fixed count)
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8
 // (10 with PFWC_VIS, the opacity last).
@@ -88,7 +90,11 @@ void kernel_main() {
     }
 
     for (uint32_t k = 0; k < num_chunks; k++) {
+#ifdef PFWC_TILE_LIST
+        const uint32_t tile_id = get_arg_val<uint32_t>(13 + k);  // task #169 survivors
+#else
         const uint32_t tile_id = chunk_start + k * tile_stride;
+#endif
 
         cb_reserve_back(CB_MCX, 1);
         noc_async_read_tile(tile_id, acc_mcx, get_write_ptr(CB_MCX));

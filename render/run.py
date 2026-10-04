@@ -240,6 +240,33 @@ def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
     return img, wall_ms
 
 
+
+def morton_order(means: np.ndarray) -> np.ndarray:
+    """Stable argsort by a 30-bit Morton code (10 bits/axis, 0.5-99.5 pct box)."""
+    m = np.nan_to_num(means.astype(np.float64), nan=0.0, posinf=1e30, neginf=-1e30)
+    lo = np.percentile(m, 0.5, axis=0)
+    hi = np.percentile(m, 99.5, axis=0)
+    u = np.clip((m - lo) / np.maximum(hi - lo, 1e-30), 0.0, 1.0)
+    q = (u * 1023).astype(np.uint64)
+
+    def spread(x):
+        x = (x | (x << np.uint64(16))) & np.uint64(0x030000FF)
+        x = (x | (x << np.uint64(8))) & np.uint64(0x0300F00F)
+        x = (x | (x << np.uint64(4))) & np.uint64(0x030C30C3)
+        x = (x | (x << np.uint64(2))) & np.uint64(0x09249249)
+        return x
+    code = spread(q[:, 0]) | (spread(q[:, 1]) << np.uint64(1)) | (spread(q[:, 2]) << np.uint64(2))
+    return np.argsort(code, kind="stable")
+
+
+def morton_reorder(gauss):
+    """Gaussians permuted into Morton order (task #169 chunk cull)."""
+    import dataclasses
+    import torch
+    idx = torch.from_numpy(morton_order(gauss.means.detach().cpu().numpy()))
+    return dataclasses.replace(
+        gauss, **{f.name: getattr(gauss, f.name)[idx] for f in dataclasses.fields(gauss)})
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", default="bicycle")
@@ -276,6 +303,11 @@ def main():
     hero_name = order[0]
     hero_view = cam["views"][hero_name]
     gauss = load_ply(str(Path(cam["ply"])))
+    # Task #169 (GSPLAT_TT_CHUNK_CULL, 0 = kill switch): per-scene Morton
+    # reorder so each 1024-gaussian pfwc tile is spatially compact; pfwc then
+    # skips the tiles whose bounds are outside the view (pfwc_device.cpp).
+    if os.environ.get("GSPLAT_TT_CHUNK_CULL", "0") not in ("", "0"):
+        gauss = morton_reorder(gauss)
 
     out_dir = REPO_ROOT / "tmp" / args.iter_dir
     out_dir.mkdir(parents=True, exist_ok=True)

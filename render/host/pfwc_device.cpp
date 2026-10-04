@@ -196,6 +196,109 @@ static gsplat_cpu::ThreadPool& soa_pool() {
     return pool;
 }
 
+// Task #169 chunk frustum cull (GSPLAT_TT_CHUNK_CULL=1, 0 = kill switch; run.py
+// Morton-orders the scene so each 1024-gaussian tile is compact). Per scene: the
+// box of mean +- K rho over each tile, rho = 3 sqrt(trace cov3d) >= 3 sigma_max,
+// and rho_max. Per view a tile is skipped when its box is behind z = k_near, or
+// beyond one side plane x = U0 z (5 px pad) with rho_max / max(zmin, k_near) <=
+// s_K: no gaussian's 3-sigma rect can then reach the image
+// (docs/chunk-cull-t169/README.md). GSPLAT_TT_CHUNK_SKIP=0 keeps every tile
+// (reorder + tile list only, a diagnostic).
+static int chunk_cull_mode() {
+    static const int m = static_cast<int>(vis_env_u32("GSPLAT_TT_CHUNK_CULL", 0));
+    return m;
+}
+
+struct ChunkTable {
+    const float* means = nullptr;
+    const float* cov = nullptr;
+    std::size_t N = 0;
+    float K = 1.5f;
+    std::vector<double> box;   // per tile: lo xyz, hi xyz, rho_max
+    std::vector<uint8_t> ok;   // 0: non-finite member, never skipped
+};
+
+static float chunk_cull_k() {
+    static const float k = [] {
+        const char* e = std::getenv("GSPLAT_TT_CHUNK_K");
+        return (e != nullptr && *e != '\0') ? std::strtof(e, nullptr) : 1.5f;
+    }();
+    return k;
+}
+
+static const ChunkTable& chunk_table(const float* means, const float* cov, std::size_t N,
+                                     uint32_t num_tiles) {
+    static ChunkTable T;
+    if (T.means == means && T.cov == cov && T.N == N) return T;
+    T.means = means; T.cov = cov; T.N = N; T.K = chunk_cull_k();
+    T.box.assign(static_cast<std::size_t>(num_tiles) * 7, 0.0);
+    T.ok.assign(num_tiles, 1);
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        double lo[3] = {1e300, 1e300, 1e300}, hi[3] = {-1e300, -1e300, -1e300}, rmax = 0.0;
+        const std::size_t i1 = std::min<std::size_t>(N, (t + 1) * std::size_t{ELEMS_PER_TILE});
+        bool ok = true;
+        for (std::size_t i = std::size_t{t} * ELEMS_PER_TILE; i < i1; ++i) {
+            const float* c = cov + 6 * i;
+            const double rho = 3.0 * std::sqrt(std::max(0.0, double(c[0]) + c[3] + c[5]));
+            if (!std::isfinite(rho)) ok = false;
+            rmax = std::max(rmax, rho);
+            for (int d = 0; d < 3; ++d) {
+                const double m = means[3 * i + d];
+                if (!std::isfinite(m)) ok = false;
+                lo[d] = std::min(lo[d], m - T.K * rho);
+                hi[d] = std::max(hi[d], m + T.K * rho);
+            }
+        }
+        double* b = &T.box[std::size_t{t} * 7];
+        for (int d = 0; d < 3; ++d) { b[d] = lo[d]; b[3 + d] = hi[d]; }
+        b[6] = rmax;
+        T.ok[t] = ok ? 1 : 0;
+    }
+    return T;
+}
+
+// Tiles that may hold a visible gaussian, ascending.
+static void chunk_survivors(const ChunkTable& T, const float r[9], const float tr[3], float fx,
+                            float fy, float cx, float cy, float W, float H, float k_near,
+                            std::vector<uint32_t>& out) {
+    constexpr double PAD = 5.0;  // px: 3 sqrt(0.3) dilation, ceil, rounding
+    const double K = T.K;
+    struct Side { int axis; double sgn, U0, sK; };
+    Side sides[4] = {{0, 1.0, (W - cx + PAD) / fx, 0}, {0, -1.0, (cx + PAD) / fx, 0},
+                     {1, 1.0, (H - cy + PAD) / fy, 0}, {1, -1.0, (cy + PAD) / fy, 0}};
+    for (Side& sd : sides) {
+        const double uk = std::sqrt(std::max(0.0, K * K * (1 + sd.U0 * sd.U0) - 1));
+        sd.sK = (uk - sd.U0) / std::sqrt(1 + uk * uk);
+    }
+    const uint32_t n = static_cast<uint32_t>(T.ok.size());
+    out.clear();
+    for (uint32_t t = 0; t < n; ++t) {
+        const double* b = &T.box[std::size_t{t} * 7];
+        bool cull = false;
+        if (T.ok[t]) {
+            double pc[8][3];
+            double zmin = 1e300, zmax = -1e300;
+            for (int k = 0; k < 8; ++k) {
+                const double p[3] = {b[(k & 1) ? 3 : 0], b[(k & 2) ? 4 : 1], b[(k & 4) ? 5 : 2]};
+                for (int a = 0; a < 3; ++a)
+                    pc[k][a] = r[3 * a] * p[0] + r[3 * a + 1] * p[1] + r[3 * a + 2] * p[2] + tr[a];
+                zmin = std::min(zmin, pc[k][2]);
+                zmax = std::max(zmax, pc[k][2]);
+            }
+            cull = zmax <= k_near;
+            const double s = b[6] / std::max(zmin, double(k_near));
+            for (const Side& sd : sides) {
+                if (cull || s > sd.sK) continue;
+                bool all = true;
+                for (int k = 0; k < 8 && all; ++k)
+                    all = sd.sgn * pc[k][sd.axis] - sd.U0 * pc[k][2] > 0.0;
+                cull = all;
+            }
+        }
+        if (!cull) out.push_back(t);
+    }
+}
+
 struct Cov3dSoa {
     std::vector<float> c00, c01, c02, c11, c12, c22;
     uint32_t num_tiles = 0;
@@ -361,6 +464,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     for (int i = 0; i < (vis ? 10 : 9); ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
+    // Task #169: tile ids from runtime args 13.. (reader) / 25.. (fused writer).
+    std::map<std::string, std::string> reader_defines = vis_defines;
+    if (fuse && chunk_cull_mode() != 0) reader_defines["PFWC_TILE_LIST"] = "1";
     const KernelHandle reader = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_pfwc.cpp",
@@ -369,7 +475,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
-            .defines = vis_defines,
+            .defines = reader_defines,
         });
 
     // tt-007 fp32 unpack-to-DEST for every FP32 CB the compute kernel reads
@@ -418,6 +524,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     }
     std::map<std::string, std::string> writer_defines;
     if (fuse && env_config::emit_puboc()) writer_defines["EMIT_PUBOC"] = "1";
+    if (fuse && chunk_cull_mode() != 0) writer_defines["PFWC_TILE_LIST"] = "1";
     // Targeted profiling only (task #122): writer_pfwc_fuse.cpp FUSE_ABL bits.
     if (fuse && vis_env_u32("GSPLAT_TT_FUSE_ABL", 0) != 0)
         writer_defines["FUSE_ABL"] = std::to_string(vis_env_u32("GSPLAT_TT_FUSE_ABL", 0)) + "u";
@@ -769,6 +876,35 @@ double pfwc_tt(
     // compaction order (vis_tile::SeqMap).
     vis_tile::SeqMap seq;
     seq.init(num_tiles, num_cores);
+    // Task #169: the surviving tiles dealt strided (core c: list[c], list[c + C],
+    // ...), so each core's count stays <= seq.count(c) and seg_base(c) holds.
+    const bool tile_list = fuse_on && chunk_cull_mode() != 0;
+    const uint32_t list_cap = seq.count(0);
+    std::vector<uint32_t> surv;
+    if (tile_list) {
+        stagetimers::Span cull_span(st_acc.project_pfwc_chunkcull);
+        const ChunkTable& tab = chunk_table(means, cov3d_unique, N, num_tiles);
+        if (vis_env_u32("GSPLAT_TT_CHUNK_SKIP", 1) != 0) {
+            const float tr[3] = {t0, t1, t2};
+            chunk_survivors(tab, r, tr, fx, fy, cx, cy, vis->image_width, vis->image_height,
+                            vis->k_near, surv);
+        } else {
+            surv.resize(num_tiles);
+            for (uint32_t t = 0; t < num_tiles; ++t) surv[t] = t;
+        }
+        if (vis_env_u32("GSPLAT_TT_CHUNK_LOG", 0) != 0)
+            std::cerr << "[gsplat_tt::pfwc] chunk cull: " << surv.size() << "/" << num_tiles
+                      << " tiles kept\n";
+    }
+    auto list_count = [&](uint32_t c) -> uint32_t {
+        const uint32_t S = static_cast<uint32_t>(surv.size());
+        return c < S ? (S - 1 - c) / num_cores + 1 : 0u;
+    };
+    auto push_list = [&](std::vector<uint32_t>& a, uint32_t c) {
+        uint32_t k = 0;
+        for (std::size_t i = c; i < surv.size(); i += num_cores, ++k) a.push_back(surv[i]);
+        for (; k < list_cap; ++k) a.push_back(0u);  // fixed arg count across views
+    };
     auto fbuf = [](const char* name) {
         auto b = device_state::get_buffer(name);
         if (!b) throw std::runtime_error(std::string("[gsplat_tt::pfwc] missing ") + name);
@@ -831,7 +967,8 @@ double pfwc_tt(
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t chunk_start = fuse_on ? c : ws.chunk_start[c];
-        const uint32_t num_chunks  = fuse_on ? seq.count(c) : ws.num_chunks[c];
+        const uint32_t num_chunks  =
+            tile_list ? list_count(c) : (fuse_on ? seq.count(c) : ws.num_chunks[c]);
 
         std::vector<uint32_t> reader_args = {
              static_cast<uint32_t>(buf_mx->address()),
@@ -847,6 +984,7 @@ double pfwc_tt(
         if (vis_on) {
             reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
             reader_args.push_back(fuse_on ? num_cores : 1u);  // arg 12: tile stride
+            if (tile_list) push_list(reader_args, c);          // args 13..
         }
         SetRuntimeArgs(program, k_reader, core, reader_args);
 
@@ -883,6 +1021,7 @@ double pfwc_tt(
             fw.push_back(c);
             fw.push_back(fuse_pub[0]);  // scene_puboc01 (0 = pack on device)
             fw.push_back(fuse_pub[1]);  // scene_puboc23
+            if (tile_list) push_list(fw, c);  // args 25.. (task #169)
             SetRuntimeArgs(program, k_writer, core, fw);
             continue;
         }
