@@ -81,7 +81,7 @@ struct K2CountRows {
 };
 void set_k2_count_rows(const K2CountRows& rows);
 bool take_k2_count_rows(K2CountRows* rows);
-void clear_k2_count_rows();
+void clear_k2_count_rows(const char* who = nullptr);  // logs the first drops of live rows
 
 // ROUTE C (GSPLAT_TT_BUCKET_MASK): the microblock-cull contrib_floor + the
 // cull_disabled flag, published by render_full_py before the sort call so the
