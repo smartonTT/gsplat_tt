@@ -3177,12 +3177,18 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
     ctx->ol_early_pending = false;
     // The same gate as sort_resident_pairs' one-launch block (need_host_sorted_ids
     // is false in the resident chain).
+    static const bool ol_log = std::getenv("GSPLAT_TT_SORT_OL_EARLY_LOG") != nullptr;
+    if (ol_log)
+        std::fprintf(stderr, "OLEARLY_GATE ol=%d tb=%d rbc=%d pub=%d tiles=%u/%u pP=%u\n",
+                     sort_onelaunch_enabled(), tile_bucket_enabled(), resident_blend_chain_enabled(),
+                     sort_device_publish_enabled(), num_tiles, MAX_BIN_TILES, pairs_P_addr);
     if (!sort_onelaunch_early_enabled() || !sort_onelaunch_enabled() || !tile_bucket_enabled() ||
         !resident_blend_chain_enabled() || !sort_device_publish_enabled() ||
         num_tiles > MAX_BIN_TILES || pairs_P_addr == 0)
         return false;
     auto bdep = device_state::get_buffer("proj_m_depth");
     auto bbrec = device_state::get_buffer("proj_m_blendrec");
+    if (ol_log) std::fprintf(stderr, "OLEARLY_GATE dep=%d brec=%d\n", bdep ? 1 : 0, bbrec ? 1 : 0);
     if (!bdep || !bbrec) return false;
     try {
         if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
