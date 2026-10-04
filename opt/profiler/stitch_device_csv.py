@@ -16,6 +16,12 @@ Checks, so a truncated/overflowed chunk or a bad split fails loudly: every frame
 has the same number of anchor starts, and every zone's START/END counts balance
 per frame (no zone straddles a boundary).
 
+Orphan markers (a START with no END before the next START of the same zone on
+the same core/RISC, an END with nothing open, or a START never closed) are put
+in frame -1 and ignored: the t142 PRECULL capture holds one stale NCRISC-KERNEL
+START ~3 s before everything else, which broke the split and faked a 341 ms
+makespan.
+
 The warmup frame of every chunk is dropped unless --keep-warmup is given.
 Timestamps of a chunk are shifted when needed so chunks never overlap in time
 (the device may be reset between jobs).
@@ -46,10 +52,35 @@ def read_csv(path):
     return header, lines, ts
 
 
+def orphan_rows(lines, ts):
+    """-> bool[] marking ZONE_START/END rows that do not pair up per (core, RISC, zone)."""
+    orphan = np.zeros(len(lines), bool)
+    open_ = {}
+    for i in np.argsort(ts, kind="stable"):
+        p = lines[i].split(",", 12)
+        typ = p[TYPE_COL]
+        if typ not in ("ZONE_START", "ZONE_END"):
+            continue
+        key = (p[0], p[1], p[2], p[3], p[ZONE_COL])
+        if typ == "ZONE_START":
+            if key in open_:
+                orphan[open_[key]] = True
+            open_[key] = i
+        elif key in open_:
+            del open_[key]
+        else:
+            orphan[i] = True
+    for i in open_.values():
+        orphan[i] = True
+    return orphan
+
+
 def segment_frames(lines, ts, anchor=ANCHOR):
-    """Assign every row a frame index. Returns (frame_of_row int[], n_frames, cores/frame)."""
-    anchors = np.sort(np.array([t for ln, t in zip(lines, ts)
-                                if ln.split(",", 12)[ZONE_COL] == anchor
+    """Assign every row a frame index (-1: orphan marker, see orphan_rows).
+    Returns (frame_of_row int[], n_frames, cores/frame)."""
+    orphan = orphan_rows(lines, ts)
+    anchors = np.sort(np.array([t for ln, t, o in zip(lines, ts, orphan)
+                                if not o and ln.split(",", 12)[ZONE_COL] == anchor
                                 and ln.split(",", 12)[TYPE_COL] == "ZONE_START"],
                                dtype=np.int64))
     if anchors.size == 0 and anchor == ANCHOR:
@@ -63,7 +94,7 @@ def segment_frames(lines, ts, anchor=ANCHOR):
     if len(sizes) != 1:
         raise ValueError(f"uneven {anchor} starts per frame {[c.size for c in clusters]}"
                          " (truncated capture or profiler buffer overflow?)")
-    all_sorted = np.sort(ts)
+    all_sorted = np.sort(ts[~orphan])
     bounds = []
     for prev, cur in zip(clusters, clusters[1:]):
         i = int(np.searchsorted(all_sorted, cur.min(), side="left"))
@@ -73,8 +104,11 @@ def segment_frames(lines, ts, anchor=ANCHOR):
                 raise ValueError("no host gap between frames: cannot split")
         bounds.append(all_sorted[i])
     frame = np.searchsorted(np.array(bounds, dtype=np.int64), ts, side="right")
+    frame[orphan] = -1
     bal = defaultdict(int)
     for ln, f in zip(lines, frame):
+        if f < 0:
+            continue
         p = ln.split(",", 12)
         if p[TYPE_COL] in ("ZONE_START", "ZONE_END"):
             bal[(int(f), p[ZONE_COL])] += 1 if p[TYPE_COL] == "ZONE_START" else -1
@@ -104,7 +138,7 @@ def main():
         if cores is not None and ncores != cores:
             sys.exit(f"{path}: {ncores} cores/frame, earlier chunks had {cores}")
         cores = ncores
-        keep = np.ones(len(lines), bool) if args.keep_warmup else frame > 0
+        keep = frame >= 0 if args.keep_warmup else frame > 0
         kept_frames = n_frames - (0 if args.keep_warmup else 1)
         shift = 0
         kts = ts[keep]
@@ -121,6 +155,8 @@ def main():
         if kts.size:
             prev_max = int(kts.max()) + shift
         total_frames += kept_frames
+        if (frame < 0).any():
+            print(f"chunk {path}: dropped {int((frame < 0).sum())} orphan zone markers")
         print(f"chunk {path}: rows={len(lines)} frames={n_frames} "
               f"(warmup rows={int((frame == 0).sum())}) kept_rows={int(keep.sum())} "
               f"kept_frames={kept_frames} cores/frame={ncores} shift_cyc={shift}")

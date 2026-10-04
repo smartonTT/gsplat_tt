@@ -3,6 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,3 +88,20 @@ def test_long_marker_free_stretch_inside_frame(tmp_path):
     frame, n, _ = segment_frames(lines, ts)
     assert n == 3
     assert list(frame) == [f for f in range(3) for _ in range(12)]
+
+
+def test_t142_precull_orphan_kernel_markers(tmp_path):
+    """Real t142-pc capture trimmed to the 3 cores whose NCRISC-KERNEL START went stale
+    (~3 s before the capture): used to raise 'zones straddle frame boundaries'."""
+    import gzip
+    p = tmp_path / "pc.csv"
+    p.write_bytes(gzip.decompress((ROOT / "tests/fixtures/profiler/t142_pc_3cores.csv.gz").read_bytes()))
+    _, lines, ts = read_csv(p)
+    frame, n, cores = segment_frames(lines, ts)
+    assert (n, cores) == (11, 9)
+    orph = [lines[i].split(",")[1:3] + [lines[i].split(",")[11]] for i in np.nonzero(frame < 0)[0]]
+    assert sorted(orph) == sorted([["12", "7", t] for t in ("ZONE_START", "ZONE_END")]
+                                  + [["14", "2", t] for t in ("ZONE_START", "ZONE_END")]
+                                  + [["15", "9", t] for t in ("ZONE_START", "ZONE_END")])
+    # no kept NCRISC-KERNEL span is longer than a frame (was 341 ms with the stale START)
+    assert ts[frame >= 0].max() - ts[frame >= 0].min() < 11 * 200 * 1350 * 1000
