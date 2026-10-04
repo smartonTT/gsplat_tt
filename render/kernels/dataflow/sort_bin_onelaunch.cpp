@@ -53,6 +53,7 @@
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
 #include "sort_onelaunch_algo.h"
+#include "sort_ol_tpack.h"
 
 #ifndef EMIT_PUBOC
 #define EMIT_PUBOC 0u
@@ -82,6 +83,11 @@
 // loop, see FAST_OK below.
 #ifndef OL_EMIT_FAST
 #define OL_EMIT_FAST 1
+#endif
+// Task #165 (host knob GSPLAT_TT_OL_EMIT_TPACK=1): the fast emit's record pack
+// runs on the TRISCs (sort_ol_tpack_compute.cpp, protocol in sort_ol_tpack.h).
+#ifndef OL_EMIT_TPACK
+#define OL_EMIT_TPACK 0
 #endif
 #if OL_EMIT_PROF
 #define EP_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
@@ -591,7 +597,149 @@ void kernel_main() {
     int32_t f_g = -1;
     uint32_t f_cov0 = 0, f_cov1 = 0, f_cov2 = 0, f_dep = 0, f_mx = 0, f_my = 0, f_opr = 0, f_cgb = 0;
     uint32_t f_ty = 0xFFFFFFFFu, f_myt = 0;
-    if (nbatch > 0) {
+#if OL_EMIT_TPACK
+    // Task #165: the movers scan the planes, assign slots (cursor + segment tag
+    // in cur_lm), issue the blendrec reads (one page per run of equal g within
+    // the batch) and write the runs; the TRISCs pack the records of a published
+    // segment while the mover scans the next. A segment ends at the batch end or
+    // before a record that would reuse a ring entry whose run completed in the
+    // same segment (that run is not packed and written yet).
+    namespace tpk = sort_ol_tpack;
+    const uint32_t tpk_l1 = get_write_ptr(tpk::CB_TPK + cbo);
+    volatile uint32_t* mb = reinterpret_cast<volatile uint32_t*>(tpk_l1);
+    const bool tpack = fast && tile_cap < (1u << (tpk::CUR_BITS - 1u));
+    uint32_t tp_seq = 0;
+    auto tp_publish = [&](uint32_t n, uint32_t items, uint32_t brec) {
+        mb[tpk::MB_N] = n;
+        mb[tpk::MB_ITEMS] = items;
+        mb[tpk::MB_B1] = n / 3u;
+        mb[tpk::MB_B2] = (2u * n) / 3u;
+        mb[tpk::MB_BREC] = brec;
+        asm volatile("fence" ::: "memory");
+        mb[tpk::MB_SEQ] = ++tp_seq;
+    };
+    auto tp_wait = [&](uint32_t seq) {
+        for (uint32_t i = 0; i < 3u; i++) {
+            while (mb[tpk::MB_DONE + 4u * i] != seq) invalidate_l1_cache();
+        }
+    };
+    mb[tpk::MB_RING] = ring_l1;
+    mb[tpk::MB_MSK] = tx_mask;
+    mb[tpk::MB_SH] = tx_shift;
+    asm volatile("fence" ::: "memory");
+    mb[tpk::MB_MAGIC] = tpk::MAGIC;
+    if (tpack && nbatch > 0) {
+        issue_pairs(0);
+        noc_async_read_barrier();
+        if (nbatch > 1) issue_pairs(1);
+        EP_ADD(ep_pro, ep_t_pro);
+        const uint32_t cap = tile_cap, R_ = R;
+        uint32_t seg = 1, ib = 0, pend_seq = 0, pend_nr = 0;
+        for (uint32_t k = 0; k < nbatch; k++) {
+            asm volatile("" ::: "memory");
+            const Planes pl = planes(k);
+            const int32_t* kp = const_cast<const int32_t*>(pl.k);
+            const int32_t* gp = const_cast<const int32_t*>(pl.g);
+            const uint32_t* tp = reinterpret_cast<const uint32_t*>(const_cast<const int32_t*>(pl.t));
+            const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+            uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
+            if (p0 + n_el > P) n_el = (P > p0) ? P - p0 : 0u;
+            const uint32_t half = rec_cache_l1 + (k & 1u) * BATCH_ELEMS * PAGE_BYTES;
+            int32_t g_c = -1;
+            uint32_t slot = 0, s_c = 0, j = 0;
+            for (;;) {
+                EP_T0(ep_t4);
+                const uint32_t items_l1 = tpk_l1 + tpk::ITEMS_OFF + ib * tpk::SEG_MAX * 4u;
+                volatile uint32_t* items = reinterpret_cast<volatile uint32_t*>(items_l1);
+                volatile uint32_t* runs =
+                    reinterpret_cast<volatile uint32_t*>(tpk_l1 + tpk::RUNS_OFF + ib * tpk::SEG_MAX * 4u);
+                const uint32_t tag = (seg & 0xFFFu) << tpk::CUR_BITS;
+                uint32_t n = 0, nr = 0;
+                bool hz = false;
+                for (; j < n_el; j++) {
+                    if (kp[j] == 0) continue;
+                    const uint32_t t = tp[j];
+                    const uint32_t v = cur_lm[t];
+                    const uint32_t c = v & tpk::CUR_MASK;
+                    const uint32_t ri = c & (R_ - 1u);
+                    if (ri == 0u && (v & ~tpk::CUR_MASK) == tag) {
+                        hz = true;
+                        break;
+                    }
+                    const int32_t g = gp[j];
+                    if (g != g_c) {
+                        g_c = g;
+                        s_c = slot++;
+                        noc_async_read(get_noc_addr(static_cast<uint32_t>(g), brec_acc), half + s_c * PAGE_BYTES,
+                                       PAGE_BYTES);
+                    }
+                    EP_CNT(ep_nrec, 1u);
+                    if (c >= cap) {  // past capacity: dropped, host fails the frame
+                        cur_lm[t] = v + 1u;
+                        continue;
+                    }
+                    items[n++] = ((t * R_ + ri) << 8) | s_c;
+                    if (ri == R_ - 1u) {
+                        runs[nr++] = t | (c << 10);
+                        cur_lm[t] = (c + 1u) | tag;
+                    } else {
+                        cur_lm[t] = v + 1u;
+                    }
+                }
+                EP_ADD(ep_proc, ep_t4);
+                // The previous segment's runs leave L1 before the TRISCs may
+                // overwrite their ring entries.
+                if (pend_seq != 0u) {
+                    EP_T0(ep_t);
+                    tp_wait(pend_seq);
+                    EP_ADD(ep_wfl, ep_t);
+                    EP_T0(ep_t5);
+                    volatile uint32_t* pr =
+                        reinterpret_cast<volatile uint32_t*>(tpk_l1 + tpk::RUNS_OFF + (ib ^ 1u) * tpk::SEG_MAX * 4u);
+                    for (uint32_t r = 0; r < pend_nr; r++) {
+                        const uint32_t w = pr[r];
+                        flush_run(w & 1023u, w >> 10);
+                    }
+                    noc_async_writes_flushed();
+                    EP_ADD(ep_wiss, ep_t5);
+                }
+                EP_T0(ep_t1);
+                noc_async_read_barrier();  // this segment's blendrec pages, pairs of batch k+1
+                EP_ADD(ep_rdw, ep_t1);
+                tp_publish(n, items_l1, half);
+                EP_CNT(ep_nb, 1u);
+                pend_seq = tp_seq;
+                pend_nr = nr;
+                ib ^= 1u;
+                seg++;
+                if (!hz) break;
+            }
+            EP_CNT(ep_npf, slot);
+            if (k + 2u < nbatch) issue_pairs(k + 2u);
+        }
+        if (pend_seq != 0u) {
+            tp_wait(pend_seq);
+            volatile uint32_t* pr =
+                reinterpret_cast<volatile uint32_t*>(tpk_l1 + tpk::RUNS_OFF + (ib ^ 1u) * tpk::SEG_MAX * 4u);
+            for (uint32_t r = 0; r < pend_nr; r++) {
+                const uint32_t w = pr[r];
+                flush_run(w & 1023u, w >> 10);
+            }
+        }
+        for (uint32_t t = 0; t < num_tiles; t++) cur_lm[t] &= tpk::CUR_MASK;
+    }
+    // Release the TRISCs and leave the mailbox zeroed for the next launch.
+    mb[tpk::MB_N] = tpk::TPK_FINAL;
+    asm volatile("fence" ::: "memory");
+    mb[tpk::MB_SEQ] = ++tp_seq;
+    tp_wait(tp_seq);
+    mb[tpk::MB_MAGIC] = 0u;
+    mb[tpk::MB_SEQ] = 0u;
+    for (uint32_t i = 0; i < 3u; i++) mb[tpk::MB_DONE + 4u * i] = 0u;
+#else
+    constexpr bool tpack = false;
+#endif
+    if (!tpack && nbatch > 0) {
         issue_pairs(0);
         noc_async_read_barrier();
         issue_brec(0, 0);

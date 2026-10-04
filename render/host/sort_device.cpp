@@ -786,6 +786,13 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const uint32_t ring = gsplat_tt::env_config::ol_ring();
     const uint32_t win = gsplat_tt::env_config::ol_win_pages();
     const uint32_t ring_bytes = kOneLaunchRingTiles * (ring * 32u + 4u);
+    // Task #165: GSPLAT_TT_OL_EMIT_TPACK=1 packs the emit's records on the 3
+    // TRISCs (sort_ol_tpack_compute.cpp); the movers only scan, read and write.
+    // Needs the ring (OL_RING != 0); same output either way.
+    bool tpack = false;
+    if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_TPACK"); e != nullptr && std::atoi(e) != 0) {
+        tpack = ring != 0u;
+    }
     uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
         mover_bytes = 0;
@@ -804,6 +811,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         mcb(8, 16u * 32u);                    // 32 B record staging (OL_RING=0)
         mcb(12, win * 3u * PAGE_BYTES);       // gid/tid/keep window
         if (ring != 0u) mcb(13, ring_bytes);  // per-tile record runs
+        if (tpack) mcb(14, 2176u);  // task #165 TRISC-pack mailbox (== sort_ol_tpack::TPK_BYTES)
     }
     cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
     cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
@@ -836,6 +844,12 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     // loop (default on; same output either way).
     if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_FAST"); e != nullptr && std::atoi(e) == 0) {
         defines["OL_EMIT_FAST"] = "0";
+    }
+    if (tpack) {
+        defines["OL_EMIT_TPACK"] = "1";
+        std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"}};
+        CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_tpack_compute.cpp", cores,
+                     ComputeConfig{.defines = tdef});
     }
     ctx.kol = CreateKernel(
         program,
