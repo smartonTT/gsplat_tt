@@ -826,6 +826,12 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["OL_RING"] = std::to_string(ring) + "u";
     defines["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
     defines["OL_WIN_PAGES"] = std::to_string(win) + "u";
+    // Task #154: GSPLAT_TT_OL_EMIT_PROF=1 (profiling only) records the emit's
+    // per-part cycle totals as Tracy "ep_*" markers. Unset: no define, the same
+    // kernel binary as before.
+    if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_PROF"); e != nullptr && std::atoi(e) != 0) {
+        defines["OL_EMIT_PROF"] = "1";
+    }
     ctx.kol = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",

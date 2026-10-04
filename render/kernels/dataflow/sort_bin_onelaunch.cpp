@@ -71,6 +71,23 @@
 #ifndef OL_WIN_PAGES
 #define OL_WIN_PAGES 1536u  // == sort_device.cpp onelaunch window
 #endif
+// Task #154 (host knob GSPLAT_TT_OL_EMIT_PROF=1, profiling only): the emit
+// accumulates wall-clock cycles per part (EP_* below) and, at its end, records
+// each total as a Tracy timestamped-data marker (zone names "ep_*", value =
+// cycles summed over the launch for this mover). Off: the macros are empty.
+#ifndef OL_EMIT_PROF
+#define OL_EMIT_PROF 0
+#endif
+#if OL_EMIT_PROF
+#define EP_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
+#define EP_T0(v) const uint32_t v = EP_NOW()
+#define EP_ADD(acc, t0) (acc) += EP_NOW() - (t0)
+#define EP_CNT(acc, n) (acc) += (n)
+#else
+#define EP_T0(v)
+#define EP_ADD(acc, t0)
+#define EP_CNT(acc, n)
+#endif
 
 namespace {
 
@@ -311,6 +328,15 @@ void kernel_main() {
     // OL_PB=1 OL_RING=0 is the v1 emit's batching and write pattern. The bytes
     // written are the same for every setting.
     DeviceZoneScopedN("sort_ol_emit");
+#if OL_EMIT_PROF
+    // Cycles: prologue (ring starts + first reads), read barrier in the loop,
+    // blendrec scan + read issue, pair read issue, process_batch (all of it),
+    // its writes-flushed waits, its run write issues, the tail drain, the final
+    // write barrier. Counts: records, blendrec pages, batches.
+    uint32_t ep_pro = 0, ep_rdw = 0, ep_brec = 0, ep_pairs = 0, ep_proc = 0, ep_wfl = 0, ep_wiss = 0,
+             ep_drain = 0, ep_wbar = 0, ep_nrec = 0, ep_npf = 0, ep_nb = 0;
+    EP_T0(ep_t_pro);
+#endif
     constexpr uint32_t PB = OL_PB;
     constexpr uint32_t BATCH_ELEMS = PB * ELEMS_PER_PAGE;
     constexpr uint32_t R = OL_RING;
@@ -470,6 +496,7 @@ void kernel_main() {
                 scan_g = gj;
             }
         }
+        EP_CNT(ep_npf, n_pf);
     };
     auto process_batch = [&](uint32_t k, uint32_t h) {
         const Planes pl = planes(k);
@@ -502,14 +529,23 @@ void kernel_main() {
             }
             const uint32_t c = curp[t];
             curp[t] = c + 1u;
+            EP_CNT(ep_nrec, 1u);
             if (ring_on) {
                 if (c < tile_cap) {  // past capacity: dropped, host fails the frame
                     const uint32_t ri = c & (R - 1u);
                     // Entry 0 starts a new run: the previous run of this tile
                     // must have left L1.
-                    if (ri == 0u) noc_async_writes_flushed();
+                    if (ri == 0u) {
+                        EP_T0(ep_t);
+                        noc_async_writes_flushed();
+                        EP_ADD(ep_wfl, ep_t);
+                    }
                     pack_rec(reinterpret_cast<volatile uint32_t*>(ring_l1 + (t * R + ri) * REC_BYTES), t);
-                    if (ri == R - 1u) flush_run(t, c);
+                    if (ri == R - 1u) {
+                        EP_T0(ep_t);
+                        flush_run(t, c);
+                        EP_ADD(ep_wiss, ep_t);
+                    }
                 }
             } else {
                 const uint32_t slot = (c < tile_cap) ? t * tile_cap + c : 0xFFFFFFFFu;
@@ -529,16 +565,27 @@ void kernel_main() {
         issue_brec(0, 0);
         if (nbatch > 1) issue_pairs(1);
         uint32_t h = 0;
+        EP_ADD(ep_pro, ep_t_pro);
         for (uint32_t k = 0; k < nbatch; k++) {
+            EP_T0(ep_t1);
             noc_async_read_barrier();  // blendrec of batch k, pairs of batch k+1
+            EP_T0(ep_t2);
+            EP_ADD(ep_rdw, ep_t1);
             if (k + 1u < nbatch) {
                 issue_brec(k + 1u, h ^ 1u);
+                EP_T0(ep_t3);
+                EP_ADD(ep_brec, ep_t2);
                 if (k + 2u < nbatch) issue_pairs(k + 2u);
+                EP_ADD(ep_pairs, ep_t3);
             }
+            EP_T0(ep_t4);
             process_batch(k, h);
+            EP_ADD(ep_proc, ep_t4);
             h ^= 1u;
         }
+        EP_CNT(ep_nb, nbatch);
     }
+    EP_T0(ep_t_drain);
     flush_recs();
     if (ring_on) {
         // Each tile's partial final run (full runs were written in the loop).
@@ -547,5 +594,22 @@ void kernel_main() {
             if (sort_ol::ring_drain(startp[t], curp[t], tile_cap, R, &last)) flush_run(t, last);
         }
     }
+    EP_ADD(ep_drain, ep_t_drain);
+    EP_T0(ep_t_wbar);
     noc_async_write_barrier();
+    EP_ADD(ep_wbar, ep_t_wbar);
+#if OL_EMIT_PROF
+    DeviceTimestampedData("ep_pro", ep_pro);
+    DeviceTimestampedData("ep_rdw", ep_rdw);
+    DeviceTimestampedData("ep_brec", ep_brec);
+    DeviceTimestampedData("ep_pairs", ep_pairs);
+    DeviceTimestampedData("ep_proc", ep_proc);
+    DeviceTimestampedData("ep_wfl", ep_wfl);
+    DeviceTimestampedData("ep_wiss", ep_wiss);
+    DeviceTimestampedData("ep_drain", ep_drain);
+    DeviceTimestampedData("ep_wbar", ep_wbar);
+    DeviceTimestampedData("ep_nrec", ep_nrec);
+    DeviceTimestampedData("ep_npf", ep_npf);
+    DeviceTimestampedData("ep_nb", ep_nb);
+#endif
 }
