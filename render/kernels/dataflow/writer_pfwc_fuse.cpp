@@ -203,26 +203,39 @@ void kernel_main() {
         for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++)
             for (uint32_t bits = mw[w]; bits != 0; bits &= bits - 1) {
                 const uint32_t il = w * 32 + static_cast<uint32_t>(__builtin_ctz(bits));
-                w_dep[slot] = p_dep[il];
+                // Loads grouped ahead of their stores so the L1 load latency
+                // overlaps (a load-store pair per word stalls on every word).
+                const uint32_t dep = p_dep[il], aabb = p_aabb[il], tpg = p_tpg[il];
+                w_dep[slot] = dep;
                 w_offs[slot] = pr;
-                w_aabb[slot] = p_aabb[il] & vis_tile::PAYLOAD;
-                pr += p_tpg[il] & vis_tile::PAYLOAD;
+                w_aabb[slot] = aabb & vis_tile::PAYLOAD;
+                pr += tpg & vis_tile::PAYLOAD;
                 volatile uint32_t* r = w_rec + slot * PW;
                 if (!(ABL & 2u)) {
-                    r[0] = p_a[il];
-                    r[1] = p_b[il];
-                    r[2] = p_c[il];
-                    r[3] = p_m2x[il];
-                    r[4] = p_m2y[il];
-                    r[5] = opw[il];
-                    r[6] = p_cr[il];
-                    r[7] = p_cg[il];
-                    r[8] = p_cb[il];
+                    {
+                        const uint32_t a = p_a[il], b = p_b[il], cc = p_c[il];
+                        const uint32_t mx = p_m2x[il], my = p_m2y[il];
+                        r[0] = a;
+                        r[1] = b;
+                        r[2] = cc;
+                        r[3] = mx;
+                        r[4] = my;
+                    }
+                    {
+                        const uint32_t op = opw[il], cr = p_cr[il], cg = p_cg[il], cb = p_cb[il];
 #if EMIT_PUBOC
-                    r[10] = q01[il];
-                    r[11] = q23[il];
-                    r[12] = p_dep[il];
+                        const uint32_t u01 = q01[il], u23 = q23[il];
 #endif
+                        r[5] = op;
+                        r[6] = cr;
+                        r[7] = cg;
+                        r[8] = cb;
+#if EMIT_PUBOC
+                        r[10] = u01;
+                        r[11] = u23;
+                        r[12] = dep;
+#endif
+                    }
                 }
                 m++;
                 if (++slot == PW) {
