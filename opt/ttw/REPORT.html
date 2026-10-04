@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-04 13:50 PDT · 74 metal + 179 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-04 13:53 PDT · 74 metal + 179 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -121,7 +121,7 @@
 
     <p class='idea-desc'>Task #156 (independent review of lever C, iter-181): GSPLAT_TT_PRECULL now defaults to 1 (dead-record pre-cull in pfwc shrinks each gaussian's tile rectangle to the opacity-aware extent the band cull keeps); GSPLAT_TT_PRECULL=0 is the kill switch. Goldens refreshed: tests/fixtures/hero/hero_golden_8bit.png (old one in tests/fixtures/hero/archive/hero_golden_8bit_pre-t156-precull.png) and the remote md5 list md5-r82new.txt (old one kept as md5-r82new.pre-t156.txt).</p><p class='reason'>Review: no blocking problems in 4b6c092. The shrunk radii only feed the tile rectangle (blend keeps the 3-sigma radii), the max_radius test is unchanged, shrunk r >= 2 so no lane changes visibility, the log2 bound only over-estimates t, non-finite lanes and cull-disabled views are left alone, and the dropped copy_tile inits are safe because every CB in that step is Float32; test_precull.cpp passes. Interleaved A/B on yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, 3 rounds, untraced: off (old default) 19.71+-0.04, on (new default) 19.21+-0.12 ms/view, paired delta -0.40/-0.54/-0.56, mean -0.50 ms (-2.5%). Stages: blend 9.68 -> 9.29, sort 5.14 -> 5.02, project 4.59 -> 4.67. Off arm md5-identical to the old golden in all 3 rounds; the new default is deterministic (same md5 list in all 3 rounds) and differs by at most 1 LSB from the old default: PSNR 74.89-78.24 dB over 90 view comparisons (gate >= 70 dB).</p>
     <p class='iter-build'><code>ttp/t156</code></p>
-
+    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t161/opt/profiler/t161-m1/chunks/0-10/render.tracy)</p>
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-182)</span></div>
 </div>
