@@ -91,11 +91,13 @@ inline int puboc_pre_mode() {
 // 2 cross-checks the rectangle against the legacy path) and with the band
 // cull on. 2 (task #157) = the same with the pixel-centre rect (PRECULL_PC):
 // r' = sqrt(t cov) - 3/8 instead of the integer sqrt(t cov) + 2, same image
-// (tests/unit/test_precull.cpp), far fewer records.
+// (tests/unit/test_precull.cpp), far fewer records. Default 2 since task #162
+// (reviewed; <=1 LSB vs mode 1, byte-identical at BLEND_T_PERIOD=0); 1 = the
+// integer rect, 0 = no pre-cull (kill switches).
 inline int precull_mode() {
     static const int v = [] {
         const char* e = std::getenv("GSPLAT_TT_PRECULL");
-        if (e == nullptr || *e == '\0') return 1;
+        if (e == nullptr || *e == '\0') return 2;
         const int x = std::atoi(e);
         if (x < 0 || x > 2)
             throw std::invalid_argument(std::string("GSPLAT_TT_PRECULL must be 0, 1 or 2, got '") +
