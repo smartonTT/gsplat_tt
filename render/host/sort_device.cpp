@@ -927,8 +927,10 @@ static uint32_t sort_emit_split_permille() {
 // Task #166: GSPLAT_TT_OL_SPLIT_ROWS="<row0>/<row1>/..." sets BRISC's share
 // (permille) of a one-launch core's pair pages per logical core row (rows past
 // the list: GSPLAT_TT_SORT_EMIT_SPLIT). Default kOlSplitRowsDefault; "" = no
-// per-row split. Same output for any split. Read once.
-static constexpr const char* kOlSplitRowsDefault = "";
+// per-row split. Same output for any split. Read once. Default from the t166
+// sweep (yyzo-bh-07 p100a): BRISC on NOC0 rows y=2,3 stalls on NoC issue, so
+// those rows give NCRISC more pages.
+static constexpr const char* kOlSplitRowsDefault = "400/440/490";
 static const std::vector<uint32_t>& ol_split_rows() {
     static const std::vector<uint32_t> v = [] {
         const char* e = std::getenv("GSPLAT_TT_OL_SPLIT_ROWS");
