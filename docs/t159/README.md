@@ -1,3 +1,5 @@
+> **Note (task #182, 2026-10-04):** this describes the lever-2 chain (GSPLAT_TT_PFWC_FUSE=0: proj_vis_scan / proj_scatter / ta_bucket_scatter), not the default pipeline (PFWC_FUSE=1 since #122: pfwc, K2, sort_ol, mat, blend). See docs/vis-scan-t180/RESULT.md (commit e13e4f8 on ttp/t180-device-build-a-b-of-fused-multi-core-pro) and docs/rerank-17ms.md.
+
 # t159: zone/gap/deep re-analysis of t142-pc (PRECULL) capture, yyzo-bh-07 p100a
 
 Source: yyzo-bh-07:/localdev/smarton/gstt2-t142/opt/profiler/t142-pc/chunks/0-10/profile_log_device.csv

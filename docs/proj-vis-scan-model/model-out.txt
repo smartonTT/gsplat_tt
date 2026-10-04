@@ -1,0 +1,6 @@
+tiles=5989 cores=110 slots=220 tiles/core=55
+serial scan model: 76 cyc/tile, io 19.3 kcyc -> 351 us  (measured t159 396 us, t121/t146 436-445 us)
+opt  : scan 445 us + boundary 40 us - fused prologue 22 us = saving 0.46 ms/view
+mid  : scan 400 us + boundary 25 us - fused prologue 31 us = saving 0.39 ms/view
+pess : scan 396 us + boundary 10 us - fused prologue 50 us = saving 0.36 ms/view
+fast serial scan: 23 cyc/tile -> 121 us, saving 0.28-0.32 ms/view
