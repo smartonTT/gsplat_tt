@@ -480,6 +480,8 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // Task #169: tile ids from a DRAM page (reader args 13, 14), shared via CB 38.
     std::map<std::string, std::string> reader_defines = vis_defines;
     if (fuse && chunk_cull_mode() != 0) reader_defines["PFWC_TILE_LIST"] = "1";
+    // The JIT kernel hash leaves out opt_level: a define keeps the -Os build apart.
+    if (fuse && chunk_cull_mode() != 0 && (chunk_os() & 1u)) reader_defines["PFWC_OS"] = "1";
     const KernelHandle reader = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_pfwc.cpp",
@@ -493,8 +495,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             // buffer; the tile-list read (+~430 B text) only fits with the reader
             // (DMA-issue bound, not the critical RISC) built for size.
             // GSPLAT_TT_CHUNK_OS bit 0: reader -Os (default), bit 1: fused writer -Os.
-            .opt_level = reader_defines.count("PFWC_TILE_LIST") != 0 && (chunk_os() & 1u)
-                             ? KernelBuildOptLevel::Os
+            .opt_level = reader_defines.count("PFWC_OS") != 0 ? KernelBuildOptLevel::Os
                              : KernelBuildOptLevel::O2,
         });
 
@@ -545,6 +546,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     std::map<std::string, std::string> writer_defines;
     if (fuse && env_config::emit_puboc()) writer_defines["EMIT_PUBOC"] = "1";
     if (fuse && chunk_cull_mode() != 0) writer_defines["PFWC_TILE_LIST"] = "1";
+    if (fuse && chunk_cull_mode() != 0 && (chunk_os() & 2u)) writer_defines["PFWC_OS"] = "1";
     // Targeted profiling only (task #122): writer_pfwc_fuse.cpp FUSE_ABL bits.
     if (fuse && vis_env_u32("GSPLAT_TT_FUSE_ABL", 0) != 0)
         writer_defines["FUSE_ABL"] = std::to_string(vis_env_u32("GSPLAT_TT_FUSE_ABL", 0)) + "u";
@@ -559,8 +561,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
             .defines = writer_defines,
-            .opt_level = writer_defines.count("PFWC_TILE_LIST") != 0 && (chunk_os() & 2u)
-                             ? KernelBuildOptLevel::Os
+            .opt_level = writer_defines.count("PFWC_OS") != 0 ? KernelBuildOptLevel::Os
                              : KernelBuildOptLevel::O2,
         });
 
