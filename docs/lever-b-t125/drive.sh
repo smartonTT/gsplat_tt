@@ -8,7 +8,8 @@ DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
 H=yyzo-bh-07
 T=/localdev/smarton/gstt2-t122
 R="T115_TREE=$T bash $T/docs/reprofile-t115"
-tt-project/harness/bin/ssh-preflight $H || exit $?
+# The harness lives at the project root, not in task worktrees.
+"${TTP_PROJECT:-tt-project}"/harness/bin/ssh-preflight $H || exit $?
 ttp lock p100 -- opt/sync_remote.sh $H $T "${1:-HEAD}"; rc=$?; echo "SYNC_RC=$rc"
 [ $rc -eq 0 ] || exit $rc
 # 3 interleaved untraced rounds, kill switch (base) vs fused, md5 vs md5-r82new.txt.
