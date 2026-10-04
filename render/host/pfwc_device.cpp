@@ -119,10 +119,10 @@ constexpr uint32_t VIS_MASK_BYTES = 128;
 constexpr uint32_t VIS_COUNTS_PAGE = 1024;  // vis_tile::COUNTS_PAGE_BYTES
 constexpr uint32_t VIS_CNT_STAGING = 16 * 1024;  // up to ~1900 tiles per core
 // Lever B (task #125) writer staging (writer_pfwc_fuse.cpp): col r/g/b and the
-// two puboc tiles (task #122), 16 records, the dep / offs / aabb pages, the
-// counts page, 64 B alignment.
+// two puboc tiles (task #122), 8 banks x 16 records (task #122), the dep /
+// offs / aabb pages, the counts page, 64 B alignment.
 constexpr uint32_t CB_FUSE = 40;
-constexpr uint32_t FUSE_CB_BYTES = 5 * TILE_BYTES_FP32 + 16 * 64 + 4 * 64 + 64 + 64;
+constexpr uint32_t FUSE_CB_BYTES = 5 * TILE_BYTES_FP32 + 8 * 16 * 64 + 4 * 64 + 64 + 64;
 
 struct PfwcDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;

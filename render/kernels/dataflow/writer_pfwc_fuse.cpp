@@ -110,8 +110,10 @@ void kernel_main() {
     const uint32_t l1_f = (get_write_ptr(CB_FUSE) + 63u) & ~63u;
     const uint32_t l1_cr = l1_f, l1_cg = l1_cr + tile_bytes, l1_cb = l1_cg + tile_bytes;
     const uint32_t l1_q01 = l1_cb + tile_bytes, l1_q23 = l1_q01 + tile_bytes;
-    const uint32_t l1_rec = l1_q23 + tile_bytes;    // PW records of PB bytes
-    const uint32_t l1_dep = l1_rec + PW * PB;       // one page each
+    // Record staging: RL records per DRAM bank, NB_MAX banks (see flush_rec).
+    constexpr uint32_t RL = 16, NB_MAX = 8;
+    const uint32_t l1_rec = l1_q23 + tile_bytes;
+    const uint32_t l1_dep = l1_rec + NB_MAX * RL * PB;  // one page each
     const uint32_t l1_offs = l1_dep + PB;
     const uint32_t l1_aabb = l1_offs + PB;
     const uint32_t l1_cnt = l1_aabb + PB;
@@ -130,8 +132,49 @@ void kernel_main() {
     auto w_cnt = reinterpret_cast<volatile uint32_t*>(l1_cnt);
 
     // Record words 9..15 are zero (gather_vis_scatter.cpp); EMIT_PUBOC sets 10..12.
-    for (uint32_t s = 0; s < PW; ++s)
+    for (uint32_t s = 0; s < NB_MAX * RL; ++s)
         for (uint32_t w = 9; w < PW; ++w) w_rec[s * PW + w] = 0;
+
+    // Records are one 64 B page each and page g sits on DRAM bank g % nb at
+    // offset g / nb, so pages g, g + nb, ... are contiguous within a bank. The
+    // records are staged bank-major in groups of RL * nb pages (group base G0 a
+    // multiple of RL * nb) and each group goes out as one write per bank of up
+    // to RL pages instead of one write per record (task #122). nb is read off
+    // the accessor; if that fails, every record is written on its own.
+    uint32_t nb = 1;
+    {
+        const uint64_t a = get_noc_addr(seg_base, o_rec);
+        while (nb <= NB_MAX && get_noc_addr(seg_base + nb, o_rec) != a + PB) nb++;
+    }
+    const bool per_page = nb > NB_MAX;
+    if (per_page) nb = NB_MAX;  // staging layout only
+    const uint32_t GS = RL * nb;
+    uint32_t G0 = seg_base / GS * GS;  // current group
+    uint32_t gs = seg_base;            // first staged record of the group
+    uint32_t rb = (seg_base - G0) % nb, rl = (seg_base - G0) / nb;
+    // Stage records [gs, ge) of group G0.
+    auto flush_rec = [&](uint32_t ge) {
+        if (!(ABL & 1u)) {
+            const uint32_t d = gs - G0, e = ge - G0;
+            for (uint32_t b = 0; b < nb; ++b) {
+                uint32_t lo = 0, hi = RL;
+                if (d != 0 || e != GS) {
+                    lo = d > b ? (d - b + nb - 1) / nb : 0;
+                    hi = e > b ? (e - b + nb - 1) / nb : 0;
+                }
+                if (hi <= lo) continue;
+                if (per_page) {
+                    for (uint32_t l = lo; l < hi; ++l)
+                        noc_async_write(l1_rec + (b * RL + l) * PB,
+                                        get_noc_addr(G0 + b + l * nb, o_rec), PB);
+                } else {
+                    noc_async_write(l1_rec + (b * RL + lo) * PB,
+                                    get_noc_addr(G0 + b + lo * nb, o_rec), (hi - lo) * PB);
+                }
+            }
+        }
+        noc_async_writes_flushed();  // staging reusable; completion at the end
+    };
 
     uint32_t page = seg_base / PW;  // seg_base is 1024-aligned
     uint32_t slot = 0, m = 0, pr = 0;
@@ -139,9 +182,6 @@ void kernel_main() {
         noc_async_write(l1_dep, get_noc_addr(page, o_dep), PB);
         noc_async_write(l1_offs, get_noc_addr(page, o_offs), PB);
         noc_async_write(l1_aabb, get_noc_addr(page, o_aabb), PB);
-        if (!(ABL & 1u))
-            for (uint32_t s = 0; s < slot; ++s)
-                noc_async_write(l1_rec + s * PB, get_noc_addr(page * PW + s, o_rec), PB);
         noc_async_writes_flushed();  // staging reusable; completion at the end
     };
 
@@ -210,7 +250,7 @@ void kernel_main() {
                 w_offs[slot] = pr;
                 w_aabb[slot] = aabb & vis_tile::PAYLOAD;
                 pr += tpg & vis_tile::PAYLOAD;
-                volatile uint32_t* r = w_rec + slot * PW;
+                volatile uint32_t* r = w_rec + (rb * RL + rl) * PW;
                 if (!(ABL & 2u)) {
                     {
                         const uint32_t a = p_a[il], b = p_b[il], cc = p_c[il];
@@ -238,6 +278,15 @@ void kernel_main() {
                     }
                 }
                 m++;
+                if (++rb == nb) {
+                    rb = 0;
+                    if (++rl == RL) {
+                        flush_rec(G0 + GS);
+                        G0 += GS;
+                        gs = G0;
+                        rl = 0;
+                    }
+                }
                 if (++slot == PW) {
                     flush();
                     slot = 0;
@@ -258,6 +307,8 @@ void kernel_main() {
         }
         flush();
     }
+    // Partial last record group.
+    if (G0 + rl * nb + rb > gs) flush_rec(G0 + rl * nb + rb);
     for (uint32_t w = 0; w < PW; w++) w_cnt[w] = 0;
     w_cnt[pfwc_fuse::T_M] = m;
     w_cnt[pfwc_fuse::T_P] = pr;
