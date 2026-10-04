@@ -49,7 +49,7 @@
 // lane and checks it against gather_visible_pred.h + tile_assign_bbox.cpp.
 //
 // PFWC_PRECULL (task #140, lever C, GSPLAT_TT_PRECULL=1, needs PFWC_VIS): step
-// 11.6 shrinks the radii that step 11.5 turns into the tile rectangle to the
+// 11.6 (inside step 11.5's DEST acquire) shrinks the radii that step 11.5 turns into the tile rectangle to the
 // opacity-aware extent ceil(sqrt(max(2 ln(op) + c0, 0) * a) + 1), with c0 =
 // 2 ln(1 / floor) + margin (runtime arg 65, the microblock band cull's floor).
 // The band cull keeps nothing outside that extent, so the records it drops
@@ -394,13 +394,14 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
     }
 }
 #ifdef PFWC_PRECULL
-// Lever C (task #140). DEST slots: 0 cov a, 1 cov b, 2 cov c, 3 opacity,
-// 4 rx, 5 ry; rx / ry are replaced in place. One loop over the 32 vectors
-// (not 32 instantiations: the PFWC_VIS program is near the 70.6 KB kernel
-// config limit, task #102). Consumed slots hold intermediates (8 registers,
-// no spill): t -> slot 3, shrink-ok flag -> slot 1.
-constexpr uint32_t PC_A = 0 * 32, PC_B = 1 * 32, PC_C = 2 * 32, PC_OP = 3 * 32, PC_RX = 4 * 32,
-                   PC_RY = 5 * 32;
+// Lever C (task #140). Runs in step 11.5's DEST acquire, before the TZ / MX /
+// MY loads (task #142: a separate step with its own radii repack put the
+// program over the 70.6 KB kernel config buffer). DEST slots: 6 cov a, 7 cov
+// b, 0 cov c, 1 opacity, 4 rx, 5 ry (11.5's layout); rx / ry are replaced in
+// place. One loop over the 32 vectors (not 32 instantiations, task #102).
+// Intermediates (8 registers, no spill): t -> slot 2, shrink-ok flag -> slot 7.
+constexpr uint32_t PC_A = 6 * 32, PC_B = 7 * 32, PC_C = 0 * 32, PC_OP = 1 * 32, PC_T = 2 * 32,
+                   PC_RX = 4 * 32, PC_RY = 5 * 32;
 
 // sqrt(x), x >= 0, ~23-bit (microblock_band_cull_compute.cpp band_sqrt).
 sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
@@ -420,7 +421,7 @@ sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
 // ceil via the 2^23 trick (q < 2^22 whenever r < radius <= 4096 matters).
 sfpi_inline void precull_axis(uint32_t cov_slot, uint32_t r_slot) {
     using namespace sfpi;
-    vFloat q = precull_sqrt(vFloat(dst_reg[PC_OP]) * vFloat(dst_reg[cov_slot])) + 1.0f;
+    vFloat q = precull_sqrt(vFloat(dst_reg[PC_T]) * vFloat(dst_reg[cov_slot])) + 1.0f;
     vFloat r = (q + 8388608.0f) - 8388608.0f;
     v_if(r < q) { r = r + 1.0f; }
     v_endif;
@@ -464,7 +465,7 @@ __attribute__((noinline)) void pfwc_precull_tile(uint32_t c0_bits, uint32_t rlim
             vFloat t = lnr + lnr + Converter::as_float(c0_bits);
             vFloat z = 0.0f;
             vec_min_max(z, t);  // t = max(t, 0)
-            dst_reg[PC_OP] = t;
+            dst_reg[PC_T] = t;
         }
         precull_axis(PC_A, PC_RX);
         precull_axis(PC_C, PC_RY);
@@ -913,49 +914,36 @@ void kernel_main() {
             tile_regs_release();
         }
 
-#ifdef PFWC_PRECULL
-        // ── 11.6 (task #140, lever C). Opacity-aware radii for the rectangle:
-        //    TMP_RX / TMP_RY are replaced (pop, then repack; 2-tile CBs).
-        {
-            cb_wait_front(CB_OP, 1);
-            tile_regs_acquire();
-            // One init: every pfwc CB is Float32 32x32 (pfwc_device.cpp), and
-            // the five redundant inits put the program over the kernel config
-            // buffer on the lever-B tip (task #142).
-            copy_tile_to_dst_init_short(CB_TMP_A);
-            copy_tile(CB_TMP_A, 0, 0);
-            copy_tile(CB_TMP_B, 0, 1);
-            copy_tile(CB_TMP_C, 0, 2);
-            copy_tile(CB_OP, 0, 3);
-            copy_tile(CB_TMP_RX, 0, 4);
-            copy_tile(CB_TMP_RY, 0, 5);
-            cb_pop_front(CB_TMP_RX, 1);
-            cb_pop_front(CB_TMP_RY, 1);
-
-            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
-            MATH((pfwc_precull_tile(precull_c0_bits, precull_rlim_bits)));
-            MATH((_llk_math_eltwise_unary_sfpu_done_()));
-
-            tile_regs_commit();
-            tile_regs_wait();
-            emit_scratch(4, CB_TMP_RX);
-            emit_scratch(5, CB_TMP_RY);
-            tile_regs_release();
-        }
-#endif
-
 #ifdef PFWC_VIS
         // ── 11.5 (task #99). Visibility predicate + tile rectangle on the SFPU.
         {
             cb_wait_front(CB_OP, 1);
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_TMP_TZ);  // all Float32: one init
+#ifdef PFWC_PRECULL
+            // 11.6 (task #140, lever C): opacity-aware radii for the rectangle,
+            // in place in slots 4 / 5 (pfwc_precull_tile), before TZ / MX / MY
+            // overwrite slots 0 / 2 / 3. CB_TMP_A/B/C are popped in step 12.
+            copy_tile(CB_TMP_A, 0, 6);
+            copy_tile(CB_TMP_B, 0, 7);
+            copy_tile(CB_TMP_C, 0, 0);
+            copy_tile(CB_OP, 0, 1);
+            copy_tile(CB_TMP_RX, 0, 4);
+            copy_tile(CB_TMP_RY, 0, 5);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_precull_tile(precull_c0_bits, precull_rlim_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            copy_tile(CB_TMP_TZ, 0, 0);
+            copy_tile(CB_TMP_MX, 0, 2);
+            copy_tile(CB_TMP_MY, 0, 3);
+#else
             copy_tile(CB_TMP_TZ, 0, 0);
             copy_tile(CB_OP, 0, 1);
             copy_tile(CB_TMP_MX, 0, 2);
             copy_tile(CB_TMP_MY, 0, 3);
             copy_tile(CB_TMP_RX, 0, 4);
             copy_tile(CB_TMP_RY, 0, 5);
+#endif
 
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
             MATH((pfwc_vis_stage(vis_bits)));
