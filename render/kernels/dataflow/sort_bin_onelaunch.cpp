@@ -352,7 +352,7 @@ void kernel_main() {
     // its writes-flushed waits, its run write issues, the tail drain, the final
     // write barrier. Counts: records, blendrec pages, batches.
     uint32_t ep_pro = 0, ep_rdw = 0, ep_brec = 0, ep_pairs = 0, ep_proc = 0, ep_wfl = 0, ep_wiss = 0,
-             ep_drain = 0, ep_wbar = 0, ep_nrec = 0, ep_npf = 0, ep_nb = 0;
+             ep_drain = 0, ep_wbar = 0, ep_nrec = 0, ep_npf = 0, ep_nb = 0, ep_ncold = 0, ep_nrun = 0;
     EP_T0(ep_t_pro);
 #endif
     constexpr uint32_t PB = OL_PB;
@@ -656,15 +656,22 @@ void kernel_main() {
                         EP_T0(ep_t);
                         noc_async_writes_flushed();
                         EP_ADD(ep_wfl, ep_t);
+                        EP_CNT(ep_nrun, 1u);
                     }
                     const uint32_t kx = (t & msk) * L1_TILE_SIZE;
                     uint32_t mx;
-                    if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) mx = sub_int_cold(mxb, kx);
+                    if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) {
+                        mx = sub_int_cold(mxb, kx);
+                        EP_CNT(ep_ncold, 1u);
+                    }
                     const uint32_t tyi = t >> sh;
                     if (tyi != ty_c) {
                         ty_c = tyi;
                         const uint32_t ky = tyi * L1_TILE_SIZE;
-                        if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) myt = sub_int_cold(myb, ky);
+                        if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) {
+                            myt = sub_int_cold(myb, ky);
+                            EP_CNT(ep_ncold, 1u);
+                        }
                     }
                     auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * R + ri) * REC_BYTES);
                     d[0] = cov0;
@@ -717,5 +724,7 @@ void kernel_main() {
     DeviceTimestampedData("ep_nrec", ep_nrec);
     DeviceTimestampedData("ep_npf", ep_npf);
     DeviceTimestampedData("ep_nb", ep_nb);
+    DeviceTimestampedData("ep_ncold", ep_ncold);
+    DeviceTimestampedData("ep_nrun", ep_nrun);
 #endif
 }

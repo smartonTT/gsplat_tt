@@ -15,7 +15,7 @@ from collections import defaultdict
 CYC_PER_MS = 1350.0 * 1000.0
 T_COL, DATA_COL, ZONE_COL, TYPE_COL = 5, 6, 10, 11
 PARTS = ["ep_pro", "ep_rdw", "ep_brec", "ep_pairs", "ep_proc", "ep_wfl", "ep_wiss", "ep_drain", "ep_wbar"]
-COUNTS = ["ep_nrec", "ep_npf", "ep_nb"]
+COUNTS = ["ep_nrec", "ep_npf", "ep_nb", "ep_ncold", "ep_nrun"]  # ncold, nrun: fast loop only (t166)
 LABEL = {
     "ep_pro": "prologue (ring starts, first pair/brec reads)",
     "ep_rdw": "read barrier wait in loop (brec k, pairs k+1)",
