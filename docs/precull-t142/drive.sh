@@ -4,7 +4,7 @@
 # chain on failure). Uses the t124 remote_job.sh / remote_tracy.sh and the t115
 # remote_time.sh (dead-pair count) on a t142 tree.
 #   ttp lock p100 -- bash docs/precull-t142/drive.sh <rev> [phase ...]
-#   phases: smoke ab psnr dc tracy size (default: all but psnr)
+#   phases: smoke ab psnr t0 dc tracy size (default: all but psnr, t0)
 set -o pipefail
 REV=${1:?rev}; shift; PHASES=${*:-smoke ab dc tracy size}
 H=yyzo-bh-07; D=/localdev/smarton/gstt2-t142
@@ -50,6 +50,11 @@ psnr)  # pre-cull vs base pixel diff of each ab round (smoke showed max 1 LSB di
     r "cd $D && source .venv/bin/activate && python3 docs/precull-t142/imgdiff.py tmp/t124-dump-t124r$k-base tmp/t124-dump-t124r$k-pc" \
       | awk -v k=$k '{print "r" k " " $0}'
   done
+  ;;
+t0)  # T-saturation early-out off (BLEND_T_PERIOD=0): its readback cadence counts dead
+      # records too, so pre-cull shifts it; with it off the two arms must be byte-identical
+  step t0 "VIEWS=0:5 TMO=600 $J t0 b0:BLEND_T_PERIOD=0 p0:BLEND_T_PERIOD=0,GSPLAT_TT_PRECULL=1"
+  r "cd $D && source .venv/bin/activate && python3 docs/precull-t142/imgdiff.py tmp/t124-dump-t124rt0-b0 tmp/t124-dump-t124rt0-p0" | sed 's/^/t0 /'
   ;;
 size)  # PFWC_VIS was ~66 KB of the 70.6 KB kernel config buffer
   r "find /localdev/smarton/.cache/ttmc-gstt2-t142 -name '*.elf' -path '*pfwc*' -newer $D/SHA | xargs -r ls -l | sort -k5 -n | tail -12"
