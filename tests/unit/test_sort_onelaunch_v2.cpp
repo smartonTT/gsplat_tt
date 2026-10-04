@@ -20,8 +20,12 @@
 //    and its largest item is <= 1.5x the mean slot on a heavy-tailed frame;
 //  - task #166: parse_row_permille accepts '/' or ',' lists in [0, 1000] and
 //    rejects anything else, and the bucket image of a core does not depend on
-//    where its pair pages split between BRISC and NCRISC (split_pages).
+//    where its pair pages split between BRISC and NCRISC (split_pages);
+//  - task #174: speed_bounds covers the pages exactly once in (core, BRISC,
+//    NCRISC) order, within one page of the speed-proportional share, and the
+//    bucket image of the whole grid is the same as for the even split.
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -38,6 +42,7 @@ using gsplat_tt::sort_split::kMatMover0Cap;
 using gsplat_tt::sort_split::kOlMatPartRecs;
 using gsplat_tt::sort_split::parse_row_permille;
 using gsplat_tt::sort_split::row_permille;
+using gsplat_tt::sort_split::speed_bounds;
 using gsplat_tt::sort_split::split_pages;
 
 namespace {
@@ -257,6 +262,47 @@ void test_row_split() {
     }
 }
 
+// ── task #174: speed-proportional page ranges over the whole grid ─────────
+void test_speed_bounds() {
+    std::mt19937 rng(174);
+    for (int trial = 0; trial < 30; ++trial) {
+        const uint32_t movers = 2u * (1u + rng() % 12u), T = 1u + rng() % 20u;
+        const uint32_t npages = (trial == 0) ? 0u : rng() % 400u, cap = REC_PAGE_RECS * 4u;
+        std::vector<uint32_t> even(movers, 1000u), speed(movers);
+        for (auto& v : speed) v = 600u + rng() % 600u;
+        const auto be = speed_bounds(npages, even), bs = speed_bounds(npages, speed);
+        uint64_t tot = 0;
+        for (const uint32_t v : speed) tot += v;
+        bool ok = be.size() == movers + 1u && bs.front() == 0u && bs.back() == npages;
+        for (uint32_t m = 0; m < movers; ++m) {
+            const double want = double(npages) * speed[m] / double(tot);
+            ok = ok && bs[m] <= bs[m + 1] && std::abs(double(bs[m + 1] - bs[m]) - want) <= 1.0;
+        }
+        CHECK(ok, "trial %d: speed_bounds not monotonic / exact / proportional", trial);
+        std::vector<std::pair<uint32_t, uint32_t>> recs;
+        for (uint32_t i = 0; i < npages * 16u; ++i) {
+            if (rng() % 3u == 0u) continue;  // keep == 0
+            recs.push_back({rng() % T, i});
+        }
+        // Mover m packs the records of its pages from the tile cursors that
+        // follow every earlier mover's records (the device prefix sum).
+        auto image = [&](const std::vector<uint32_t>& b) {
+            std::vector<uint32_t> img(T * cap, 0u), cur(T, 0u);
+            std::vector<Write> log;
+            for (uint32_t m = 0; m < movers; ++m) {
+                std::vector<std::pair<uint32_t, uint32_t>> rm;
+                for (const auto& r : recs)
+                    if (r.second >= b[m] * 16u && r.second < b[m + 1] * 16u) rm.push_back(r);
+                std::vector<uint32_t> c0 = cur;
+                for (const auto& r : rm) cur[r.first]++;
+                emit(rm, c0, cap, 8u, img, log);
+            }
+            return img;
+        };
+        CHECK(image(bs) == image(be), "trial %d: speed split changes the bucket image", trial);
+    }
+}
+
 // ── work items ────────────────────────────────────────────────────────────
 void test_worklist() {
     // Bicycle-like frame: 39 x 26 tiles, a few huge, heavy tail.
@@ -318,6 +364,7 @@ int main() {
     test_select();
     test_ring();
     test_row_split();
+    test_speed_bounds();
     test_worklist();
     if (g_fail != 0) {
         std::printf("%d check(s) failed\n", g_fail);

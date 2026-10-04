@@ -234,4 +234,22 @@ inline uint32_t split_pages(uint32_t count, uint32_t permille) {
     return static_cast<uint32_t>(static_cast<uint64_t>(count) * permille / 1000u);
 }
 
+// Task #174: one-launch page ranges in proportion to each mover's speed.
+// speed has 2 entries per core (BRISC, NCRISC), core order. Returns the
+// 2 * cores + 1 boundaries b: core c's BRISC owns [b[2c], b[2c+1]), its NCRISC
+// [b[2c+1], b[2c+2]). The ranges stay contiguous and in (core, BRISC, NCRISC)
+// order, so the bucket image is the same as for the even split.
+inline std::vector<uint32_t> speed_bounds(uint32_t num_pages, const std::vector<uint32_t>& speed) {
+    uint64_t tot = 0;
+    for (const uint32_t s : speed) tot += s;
+    std::vector<uint32_t> b(speed.size() + 1u, 0u);
+    uint64_t acc = 0;
+    for (std::size_t k = 0; k < speed.size(); k++) {
+        acc += speed[k];
+        b[k + 1] = tot ? static_cast<uint32_t>(static_cast<uint64_t>(num_pages) * acc / tot) : num_pages;
+    }
+    b.back() = num_pages;
+    return b;
+}
+
 }  // namespace gsplat_tt::sort_split

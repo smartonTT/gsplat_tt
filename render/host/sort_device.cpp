@@ -21,11 +21,13 @@
 #include "config.h"
 #include "env_config.h"
 #include "sort.h"
+#include "sort_mover_speed.h"
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
 #include "device_state.h"
 #include "host_tracy.hpp"
 #include "stage_timers.h"
+#include "vis_mode.h"
 
 #include <algorithm>
 #include <bit>
@@ -926,22 +928,39 @@ static uint32_t sort_emit_split_permille() {
 
 // Task #166: GSPLAT_TT_OL_SPLIT_ROWS="<row0>/<row1>/..." sets BRISC's share
 // (permille) of a one-launch core's pair pages per logical core row (rows past
-// the list: GSPLAT_TT_SORT_EMIT_SPLIT). Default kOlSplitRowsDefault; "" = no
-// per-row split. Same output for any split. Read once. Default from the t166
-// sweep (yyzo-bh-07 p100a): BRISC on NOC0 rows y=2,3 stalls on NoC issue, so
-// those rows give NCRISC more pages.
-static constexpr const char* kOlSplitRowsDefault = "400/440/490";
+// the list: GSPLAT_TT_SORT_EMIT_SPLIT). "" = no per-row split. Same output for
+// any split. Read once. Default from the t166 sweep (yyzo-bh-07 p100a): BRISC
+// on NOC0 rows y=2,3 stalls on NoC issue, so those rows give NCRISC more pages.
+// Task #174: the default applies only with GSPLAT_TT_PRECULL=2 (it costs
+// PRECULL=1 +0.18 ms/view) and only when ol_mover_speed() is off.
 static const std::vector<uint32_t>& ol_split_rows() {
     static const std::vector<uint32_t> v = [] {
+        const char* dflt = (gsplat_tt::precull_mode() == 2) ? "400/440/490" : "";
         const char* e = std::getenv("GSPLAT_TT_OL_SPLIT_ROWS");
         std::vector<uint32_t> rows;
-        if (!gsplat_tt::sort_split::parse_row_permille(e != nullptr ? e : kOlSplitRowsDefault, &rows)) {
+        if (!gsplat_tt::sort_split::parse_row_permille(e != nullptr ? e : dflt, &rows)) {
             std::cerr << "[gsplat_tt::sort] GSPLAT_TT_OL_SPLIT_ROWS=\"" << e
                       << "\" is not a '/'-separated list of integers in [0, 1000]; using \""
-                      << kOlSplitRowsDefault << "\"\n";
-            gsplat_tt::sort_split::parse_row_permille(kOlSplitRowsDefault, &rows);
+                      << dflt << "\"\n";
+            gsplat_tt::sort_split::parse_row_permille(dflt, &rows);
         }
         return rows;
+    }();
+    return v;
+}
+
+// Task #174: GSPLAT_TT_OL_MOVER_SPEED=1 gives every one-launch emit mover pair
+// pages in proportion to its measured speed (sort_mover_speed.h, by physical
+// NoC core) instead of an even split per core: NOC0's top rows (BRISC) and
+// NOC1's right columns (NCRISC) stall on NoC issue, and the slowest mover sets
+// the emit time. The ranges stay contiguous in (core, BRISC, NCRISC) order, so
+// the output is the same for any speeds. Default 1 with GSPLAT_TT_PRECULL=2,
+// else 0. Overrides GSPLAT_TT_OL_SPLIT_ROWS / GSPLAT_TT_SORT_EMIT_SPLIT.
+static bool ol_mover_speed() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_MOVER_SPEED");
+        if (e == nullptr || *e == '\0') return gsplat_tt::precull_mode() == 2;
+        return std::atoi(e) != 0;
     }();
     return v;
 }
@@ -2099,13 +2118,31 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     CoreCoord{c % ctx->grid.x, c / ctx->grid.x});
                 noc_xy[c] = static_cast<uint32_t>(v.x) | (static_cast<uint32_t>(v.y) << 16);
             }
+            std::vector<uint32_t> sb;  // task #174: speed-proportional mover ranges
+            if (ol_mover_speed()) {
+                std::vector<uint32_t> speed(2u * num_cores, 1000u);
+                for (uint32_t c = 0; c < num_cores; c++) {
+                    for (const auto& m : gsplat_tt::sort_split::kMoverSpeedP150) {
+                        if (m.x == (noc_xy[c] & 0xFFFFu) && m.y == (noc_xy[c] >> 16)) {
+                            speed[2u * c] = m.brisc;
+                            speed[2u * c + 1u] = m.ncrisc;
+                        }
+                    }
+                }
+                sb = gsplat_tt::sort_split::speed_bounds(total_p_pages, speed);
+            }
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-                const uint32_t lo = ws.start[c];
-                const uint32_t hi = ws.start[c] + ws.count[c];
-                const uint32_t mid = lo + gsplat_tt::sort_split::split_pages(
+                uint32_t lo = ws.start[c];
+                uint32_t hi = ws.start[c] + ws.count[c];
+                uint32_t mid = lo + gsplat_tt::sort_split::split_pages(
                     ws.count[c], gsplat_tt::sort_split::row_permille(ol_split_rows(), c / ctx->grid.x,
                                                           sort_emit_split_permille()));
+                if (!sb.empty()) {
+                    lo = sb[2u * c];
+                    mid = sb[2u * c + 1u];
+                    hi = sb[2u * c + 2u];
+                }
                 std::vector<uint32_t> a = {
                     static_cast<uint32_t>(bgid->address()),
                     static_cast<uint32_t>(btid->address()),
