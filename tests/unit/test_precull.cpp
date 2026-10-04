@@ -39,8 +39,9 @@ float rad3(float cov) { return std::ceil(3.0f * std::sqrt(std::max(cov, 0.0f)));
 
 // pfwc_precull_tile, one lane, one axis.
 float precull_axis(float t, float cov, float r, bool ok, float slack) {
+    // Device: sqrt + slack + 1 rounded to an integer, either way (faithful).
     const float q = std::sqrt(t * cov) * kSqrtErr + slack;
-    const float rr = std::ceil(q);
+    const float rr = std::floor(q + 1.0f);
     return (ok && rr < r) ? rr : r;
 }
 

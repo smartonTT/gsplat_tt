@@ -394,12 +394,13 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
 #ifdef PFWC_PRECULL
 // Lever C (task #140). Runs in step 11.5's DEST acquire, before the TZ / MX /
 // MY loads (task #142: a separate step with its own radii repack put the
-// program over the 70.6 KB kernel config buffer). DEST slots: 6 cov a, 7 cov
-// b, 0 cov c, 1 opacity, 4 rx, 5 ry (11.5's layout); rx / ry are replaced in
-// place. One loop over the 32 vectors (not 32 instantiations, task #102).
-// Intermediate (8 registers, no spill): t -> slot 2.
-constexpr uint32_t PC_A = 6 * 32, PC_B = 7 * 32, PC_C = 0 * 32, PC_OP = 1 * 32, PC_T = 2 * 32,
-                   PC_RX = 4 * 32, PC_RY = 5 * 32;
+// program over the 70.6 KB kernel config buffer). DEST slots: 0 cov b, 1
+// opacity, 2 cov a, 3 cov c, 4 rx, 5 ry (slot k <- PC_CB[k]; 1, 4 and 5 are
+// 11.5's); rx / ry are replaced in place. One loop over the 32 vectors (not
+// 32 instantiations, task #102). Intermediate (8 registers, no spill): t ->
+// slot 6.
+constexpr uint32_t PC_B = 0 * 32, PC_OP = 1 * 32, PC_A = 2 * 32, PC_C = 3 * 32, PC_RX = 4 * 32,
+                   PC_RY = 5 * 32, PC_T = 6 * 32;
 
 // sqrt(x), x >= 0, ~23-bit (microblock_band_cull_compute.cpp band_sqrt).
 sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
@@ -414,16 +415,15 @@ sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
     return one_minus_xyy * (xy * 0.5f) + xy;
 }
 
-// r = ceil(sqrt(t * cov) + 1) (the 1 px slack covers the sqrt and the band
-// cull's fp32 conic error); r replaces the radius slot when r < radius (the
-// caller's v_if holds the shrink-ok lanes). ceil via the 2^23 trick (q < 2^22
-// whenever r < radius <= 4096 matters).
+// r = an integer >= sqrt(t * cov) + 1 (the 1 px slack covers the sqrt and the
+// band cull's fp32 conic error): q = sqrt(t * cov) + 2 rounded to an integer
+// by the 2^23 trick, any faithful rounding (no ceil fix-up: task #142 code
+// size; at most 1 px more than the ceil). r replaces the radius slot when
+// r < radius (the caller's v_if holds the shrink-ok lanes).
 sfpi_inline void precull_axis(uint32_t cov_slot, uint32_t r_slot) {
     using namespace sfpi;
-    vFloat q = precull_sqrt(vFloat(dst_reg[PC_T]) * vFloat(dst_reg[cov_slot])) + 1.0f;
-    vFloat r = (q + 8388608.0f) - 8388608.0f;
-    v_if(r < q) { r = r + 1.0f; }
-    v_endif;
+    vFloat q = precull_sqrt(vFloat(dst_reg[PC_T]) * vFloat(dst_reg[cov_slot]));
+    vFloat r = (q + 8388610.0f) - 8388608.0f;
     v_if(r < vFloat(dst_reg[r_slot])) { dst_reg[r_slot] = r; }
     v_endif;
 }
@@ -516,6 +516,8 @@ void kernel_main() {
     for (uint32_t k = 0; k < VIS_PARAMS; k++) vis_bits[k] = get_arg_val<uint32_t>(56 + k);
 #endif
 #ifdef PFWC_PRECULL
+    // DEST slot k <- PC_CB[k] (pfwc_precull_tile's layout).
+    constexpr uint32_t PC_CB[6] = {CB_TMP_B, CB_OP, CB_TMP_A, CB_TMP_C, CB_TMP_RX, CB_TMP_RY};
     const uint32_t precull_c0_bits = get_arg_val<uint32_t>(65);
     const uint32_t precull_rlim_bits = get_arg_val<uint32_t>(66);
 #endif
@@ -928,12 +930,9 @@ void kernel_main() {
             // 11.6 (task #140, lever C): opacity-aware radii for the rectangle,
             // in place in slots 4 / 5 (pfwc_precull_tile), before TZ / MX / MY
             // overwrite slots 0 / 2 / 3. CB_TMP_A/B/C are popped in step 12.
-            copy_tile(CB_TMP_A, 0, 6);
-            copy_tile(CB_TMP_B, 0, 7);
-            copy_tile(CB_TMP_C, 0, 0);
-            copy_tile(CB_OP, 0, 1);
-            copy_tile(CB_TMP_RX, 0, 4);
-            copy_tile(CB_TMP_RY, 0, 5);
+            // A loop, not 6 inlined loads (task #142: code size).
+#pragma GCC unroll 0
+            for (uint32_t k = 0; k < 6; k++) copy_tile(PC_CB[k], 0, k);
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
             MATH((pfwc_precull_tile(precull_c0_bits, precull_rlim_bits)));
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
