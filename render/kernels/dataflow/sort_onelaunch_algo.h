@@ -17,6 +17,9 @@
 //    equal keys fall in it together, so they are a contiguous slice of the
 //    tile's stable order starting at rank `base`, and ranks [lo, hi) are
 //    sorted[lo - base, hi - base): the same ids as sorting the whole tile.
+//  - mover_pages: a mover's page range when the kernel splits the pairs
+//    itself (task #155, early launch), the same as the host's split_pages +
+//    GSPLAT_TT_SORT_EMIT_SPLIT.
 #pragma once
 
 #include <cstdint>
@@ -24,6 +27,21 @@
 #include "sort_radix_tile_algo.h"
 
 namespace sort_ol {
+
+// Pages [*lo, *hi) of `mover` on core `core` out of num_pages split over
+// num_cores like sort_device.cpp's split_pages (the first num_pages %
+// num_cores cores get one more); mover 0 takes the first cnt*permille/1000
+// pages, mover 1 the rest. 32-bit only: q*p + r*p/1000 == cnt*p/1000.
+inline void mover_pages(uint32_t num_pages, uint32_t num_cores, uint32_t core, uint32_t permille,
+                        uint32_t mover, uint32_t* lo, uint32_t* hi) {
+    const uint32_t base = num_pages / num_cores;
+    const uint32_t rem = num_pages % num_cores;
+    const uint32_t start = core * base + (core < rem ? core : rem);
+    const uint32_t cnt = base + (core < rem ? 1u : 0u);
+    const uint32_t mid = start + (cnt / 1000u) * permille + (cnt % 1000u) * permille / 1000u;
+    *lo = mover == 0 ? start : mid;
+    *hi = mover == 0 ? mid : start + cnt;
+}
 
 // First slot of the run that ends at cursor `last` (inclusive), clipped to
 // this mover's first cursor of the tile.

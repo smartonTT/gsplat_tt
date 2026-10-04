@@ -45,6 +45,10 @@
 //   19..24 semaphores: counted, based, arrive1, release1, arrive2, release2
 //   25 coordinator NoC x  26 coordinator NoC y
 //   27.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
+//   Early launch (task #155, host GSPLAT_TT_SORT_OL_EARLY): 11 == 0xFFFFFFFF
+//   means P is not known yet; 9 is then the ta_pairs_P control buffer ([0] P,
+//   [1] P_pad) and 10 the mover split permille. The kernel reads P there and
+//   computes its own pages (sort_ol::mover_pages, == the host's split).
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs (gids, tids, keep, depth, blendrec,
 //   bucket, count rows, base rows, totals rows).
 
@@ -147,9 +151,9 @@ void kernel_main() {
     const uint32_t counts_addr = get_arg_val<uint32_t>(6);
     const uint32_t bases_addr = get_arg_val<uint32_t>(7);
     const uint32_t totals_addr = get_arg_val<uint32_t>(8);
-    const uint32_t pg_lo = get_arg_val<uint32_t>(9);
-    const uint32_t pg_hi = get_arg_val<uint32_t>(10);
-    const uint32_t P = get_arg_val<uint32_t>(11);
+    uint32_t pg_lo = get_arg_val<uint32_t>(9);
+    uint32_t pg_hi = get_arg_val<uint32_t>(10);
+    uint32_t P = get_arg_val<uint32_t>(11);
     const uint32_t num_tiles = get_arg_val<uint32_t>(12);
     const uint32_t row_pages = get_arg_val<uint32_t>(13);
     const uint32_t core_id = get_arg_val<uint32_t>(14);
@@ -193,6 +197,16 @@ void kernel_main() {
     auto h0p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + MOVER0_CB_OFFSET));
     auto h1p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H));
 
+    if (P == 0xFFFFFFFFu) {
+        // Early launch: the control page lands in this mover's H row, which
+        // the count pass zeroes next.
+        const InterleavedAddrGen<true> pctrl_gen{pg_lo, PAGE_BYTES};
+        noc_async_read(get_noc_addr(0, pctrl_gen), reinterpret_cast<uint32_t>(hp), PAGE_BYTES);
+        noc_async_read_barrier();
+        P = hp[0];
+        sort_ol::mover_pages(hp[1] / ELEMS_PER_PAGE, num_cores, core_id, pg_hi, mover, &pg_lo,
+                             &pg_hi);
+    }
     const uint32_t npages = pg_hi - pg_lo;
     // Window size rounded down to whole count batches (a batch is all-window
     // or all-fallback).

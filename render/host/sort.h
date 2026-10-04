@@ -115,6 +115,19 @@ gsplat_cpu::SortResult sort_and_bin_tt(
 // if the device path is operational.
 bool sort_device_ready();
 
+// Task #155 (GSPLAT_TT_SORT_OL_EARLY, default on): tile_assign_fused_k2 calls
+// this right after enqueueing the K2, before it waits for proj_M, so the
+// one-launch sort sits in the queue behind the K2 and the device does not
+// idle while the host runs gather / tile_assign / sort setup. The kernel reads
+// P from ta_pairs_P itself. Returns false (nothing enqueued) when the
+// one-launch path is off; sort_and_bin_tt then launches it as before.
+bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t gids_addr,
+                                  uint32_t tids_addr, uint32_t keep_addr, uint32_t pairs_P_addr);
+// Drops a pending early launch (the K2 overflowed and reruns); sort_and_bin_tt
+// launches the one-launch sort again after the rerun.
+void sort_onelaunch_cancel_early();
+bool sort_onelaunch_early_enabled();
+
 // Idempotent shutdown of the sort device context. Does NOT close the shared
 // MeshDevice (device_state owns that).
 void sort_device_shutdown();

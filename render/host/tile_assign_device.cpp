@@ -16,6 +16,7 @@
 // bug). Pair buffers are sized to the exact padded P each call.
 
 #include "tile_assign.h"
+#include "sort.h"
 #include "device_state.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
@@ -705,8 +706,25 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
                 if (ctx->dual) SetRuntimeArgs(prog, ctx->k2sb, core, args(0));
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, true);
+            // Task #155: queue the one-launch sort right behind the K2 (it reads
+            // P on device) and wait only for proj_M, so the device does not
+            // idle through the host's gather / tile_assign / sort setup. The
+            // all-ones keep mask must already be resident (cull off).
+            bool early = false;
+            if (pass == 0 && ctx->buf_keep_all_ones && sort_onelaunch_early_enabled()) {
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, false);
+                auto ev = ctx->cq->enqueue_record_event_to_host();
+                early = sort_onelaunch_enqueue_early(
+                    num_tiles, tiles_x, static_cast<uint32_t>(ctx->buf_gids->address()),
+                    static_cast<uint32_t>(ctx->buf_tids->address()),
+                    static_cast<uint32_t>(ctx->buf_keep->address()),
+                    static_cast<uint32_t>(ctx->buf_pairs_P->address()));
+                distributed::EventSynchronize(ev);
+            } else {
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, true);
+            }
             if (mread[2] == 0 || host_free) break;
+            if (early) sort_onelaunch_cancel_early();  // the K2 reruns on grown buffers
             if (pass == 1) throw std::runtime_error("pair overflow after regrow");
             ensure_pair_buffers(*ctx, static_cast<std::size_t>(round_up(mread[1], ELEMS_PER_PAGE)) * 4);
         }

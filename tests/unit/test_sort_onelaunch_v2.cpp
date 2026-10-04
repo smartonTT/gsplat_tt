@@ -261,7 +261,37 @@ void test_worklist() {
 
 }  // namespace
 
+// ── mover_pages (task #155) ───────────────────────────────────────────────
+// Same ranges as the host's split_pages + uint64 permille split, and the two
+// movers of all cores tile [0, num_pages) exactly.
+void test_mover_pages() {
+    const uint32_t pages_list[] = {0, 1, 7, 109, 110, 111, 2681, 294912, 268435455};
+    const uint32_t cores_list[] = {1, 2, 110, 130};
+    const uint32_t permille_list[] = {0, 1, 333, 500, 999, 1000};
+    for (uint32_t np : pages_list)
+        for (uint32_t nc : cores_list)
+            for (uint32_t pm : permille_list) {
+                const uint32_t base = np / nc, rem = np % nc;
+                uint32_t cursor = 0, next = 0;
+                for (uint32_t c = 0; c < nc; c++) {
+                    const uint32_t cnt = base + (c < rem ? 1u : 0u);
+                    const uint32_t mid = cursor + static_cast<uint32_t>(
+                        static_cast<uint64_t>(cnt) * pm / 1000u);
+                    uint32_t lo0, hi0, lo1, hi1;
+                    sort_ol::mover_pages(np, nc, c, pm, 0, &lo0, &hi0);
+                    sort_ol::mover_pages(np, nc, c, pm, 1, &lo1, &hi1);
+                    CHECK(lo0 == cursor && hi0 == mid && lo1 == mid && hi1 == cursor + cnt,
+                          "mover_pages np=%u nc=%u pm=%u c=%u", np, nc, pm, c);
+                    CHECK(lo0 == next, "mover_pages gap np=%u nc=%u c=%u", np, nc, c);
+                    next = hi1;
+                    cursor += cnt;
+                }
+                CHECK(next == np, "mover_pages cover np=%u nc=%u pm=%u", np, nc, pm);
+            }
+}
+
 int main() {
+    test_mover_pages();
     test_select();
     test_ring();
     test_worklist();
