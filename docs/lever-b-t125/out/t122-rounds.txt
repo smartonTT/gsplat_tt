@@ -1,0 +1,309 @@
+# t122 device rounds, yyzo-bh-07 (Blackhole p100a), bicycle 30 views 1024x1024, untraced. Lines grepped from the run logs.
+# The only VIEWS DIFFER lines are the profiling ablation arms a1/a2/a4/a7/a8/a9 (GSPLAT_TT_FUSE_ABL skips or replaces record work by design).
+##### t122-ab.log
+=== r1-base 68aa90b  17:59:12
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.6 p50_ms=30.0 min_ms=25.5 max_ms=34.0 n_views=30 warmup_s=13.1
+STAGES n=30 head=0.003 project=6.471 tile_assign=1.443 sort=10.694 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.671 d2h=0.305 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.017 bin_count=0.917 bin_hist_d2h=0.252 bin_layout=0.236 upload=0.068 bin_emit=5.291 kernel=0.035 d2h=0.000 compact=0.000 publish_host=0.194 publish_wait=3.585 mat=0.050
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.031 pfwc_enqueue=0.034 pfwc_finish=2.483 gather_setup=0.002 gather_rtargs=0.018 gather_enqueue=0.028 gather_wait=3.769 gather_result=0.103
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.017 enqueue=0.018 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r1-fuse 68aa90b GSPLAT_TT_PFWC_FUSE=1 17:59:39
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=30.9 p50_ms=31.4 min_ms=26.1 max_ms=35.9 n_views=30 warmup_s=5.8
+STAGES n=30 head=0.002 project=9.158 tile_assign=0.004 sort=10.657 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.710 d2h=0.313 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.019 bin_count=0.913 bin_hist_d2h=0.249 bin_layout=0.235 upload=0.067 bin_emit=5.289 kernel=0.026 d2h=0.000 compact=0.000 publish_host=0.187 publish_wait=3.591 mat=0.040
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=8.987 gather_result=0.105
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r2-base 68aa90b  17:59:58
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.7 p50_ms=30.1 min_ms=25.5 max_ms=34.1 n_views=30 warmup_s=2.4
+STAGES n=30 head=0.005 project=6.512 tile_assign=1.443 sort=10.708 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.647 d2h=0.338 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.016 bin_count=0.925 bin_hist_d2h=0.251 bin_layout=0.247 upload=0.074 bin_emit=5.282 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.188 publish_wait=3.589 mat=0.054
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.036 pfwc_enqueue=0.070 pfwc_finish=2.469 gather_setup=0.003 gather_rtargs=0.019 gather_enqueue=0.025 gather_wait=3.767 gather_result=0.116
+TILE_ASSIGN_STAGES n=30 setup=0.006 rtargs=0.018 enqueue=0.017 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r2-fuse 68aa90b GSPLAT_TT_PFWC_FUSE=1 18:00:12
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=30.9 p50_ms=31.4 min_ms=25.9 max_ms=35.9 n_views=30 warmup_s=2.2
+STAGES n=30 head=0.005 project=9.210 tile_assign=0.007 sort=10.752 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.676 d2h=0.234 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.024 bin_count=0.934 bin_hist_d2h=0.257 bin_layout=0.247 upload=0.074 bin_emit=5.287 kernel=0.039 d2h=0.000 compact=0.000 publish_host=0.201 publish_wait=3.578 mat=0.058
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.006 pfwc_rtargs=0.037 pfwc_enqueue=0.067 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=8.986 gather_result=0.110
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r3-base 68aa90b  18:00:27
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.7 p50_ms=30.1 min_ms=25.4 max_ms=34.2 n_views=30 warmup_s=2.3
+STAGES n=30 head=0.005 project=6.515 tile_assign=1.445 sort=10.719 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.720 d2h=0.266 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.016 bin_count=0.923 bin_hist_d2h=0.253 bin_layout=0.261 upload=0.075 bin_emit=5.279 kernel=0.035 d2h=0.000 compact=0.000 publish_host=0.197 publish_wait=3.580 mat=0.053
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.037 pfwc_enqueue=0.068 pfwc_finish=2.473 gather_setup=0.003 gather_rtargs=0.021 gather_enqueue=0.030 gather_wait=3.765 gather_result=0.111
+TILE_ASSIGN_STAGES n=30 setup=0.006 rtargs=0.021 enqueue=0.017 scan_finish=0.000 p_d2h=0.000 k2_finish=1.399 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r3-fuse 68aa90b GSPLAT_TT_PFWC_FUSE=1 18:00:40
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=30.9 p50_ms=31.5 min_ms=25.9 max_ms=35.9 n_views=30 warmup_s=1.7
+STAGES n=30 head=0.004 project=9.182 tile_assign=0.006 sort=10.704 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.689 d2h=0.239 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.019 bin_count=0.924 bin_hist_d2h=0.251 bin_layout=0.245 upload=0.076 bin_emit=5.278 kernel=0.033 d2h=0.000 compact=0.000 publish_host=0.186 publish_wait=3.591 mat=0.052
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.006 pfwc_rtargs=0.036 pfwc_enqueue=0.052 pfwc_finish=0.000 gather_setup=0.002 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=8.984 gather_result=0.100
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+cmd: T115_TREE=/localdev/smarton/gstt2-t122 bash /localdev/smarton/gstt2-t122/docs/reprofile-t115/remote_time.sh 4 fusehp:GSPLAT_TT_PFWC_FUSE=1,GSPLAT_TT_HOST_PROFILE=1,GSPLAT_PER_VIEW_STAGES=1
+=== r4-fusehp 68aa90b GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_HOST_PROFILE=1 GSPLAT_PER_VIEW_STAGES=1 18:00:53
+run rc=0
+VIEW_STAGES i=0 name=hero wall=33.32 project=10.02 sort=11.35 blend=11.63 d2h=0.26 view_total=33.27 sort_bin_count=1.00 sort_bin_hist_d2h=0.25 sort_bin_layout=0.25 sort_upload=0.07 sort_bin_emit=5.65 sort_publish_host=0.18 sort_publish_wait=3.82 project_gather_wait=9.83 project_gather_result=0.11
+VIEW_STAGES i=1 name=orb_00 wall=25.98 project=7.44 sort=9.14 blend=9.08 d2h=0.24 view_total=25.91 sort_bin_count=0.75 sort_bin_hist_d2h=0.25 sort_bin_layout=0.25 sort_upload=0.08 sort_bin_emit=4.40 sort_publish_host=0.19 sort_publish_wait=3.07 sort_mat=0.05 project_pfwc_enqueue=0.07 project_gather_wait=7.23 project_gather_result=0.08
+VIEW_STAGES i=2 name=orb_01 wall=27.14 project=7.66 sort=9.28 blend=9.89 d2h=0.24 view_total=27.09 sort_bin_count=0.77 sort_bin_hist_d2h=0.25 sort_bin_layout=0.26 sort_upload=0.08 sort_bin_emit=4.49 sort_publish_host=0.19 sort_publish_wait=3.06 sort_mat=0.06 project_pfwc_enqueue=0.07 project_gather_wait=7.41 project_gather_result=0.12
+VIEW_STAGES i=3 name=orb_02 wall=27.43 project=7.92 sort=9.52 blend=9.68 d2h=0.24 view_total=27.38 sort_bin_count=0.79 sort_bin_hist_d2h=0.25 sort_bin_layout=0.26 sort_upload=0.08 sort_bin_emit=4.68 sort_publish_host=0.19 sort_publish_wait=3.11 project_pfwc_enqueue=0.07 project_gather_wait=7.71 project_gather_result=0.08
+VIEW_STAGES i=4 name=orb_03 wall=28.24 project=8.26 sort=9.81 blend=9.89 d2h=0.23 view_total=28.19 sort_bin_count=0.83 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.08 sort_bin_emit=4.87 sort_publish_host=0.20 sort_publish_wait=3.19 sort_mat=0.05 project_gather_wait=8.09 project_gather_result=0.09
+VIEW_STAGES i=5 name=orb_04 wall=29.61 project=8.74 sort=10.33 blend=10.25 d2h=0.23 view_total=29.56 sort_bin_count=0.87 sort_bin_hist_d2h=0.25 sort_bin_layout=0.25 sort_upload=0.08 sort_bin_emit=5.14 sort_publish_host=0.19 sort_publish_wait=3.42 project_gather_wait=8.55 project_gather_result=0.10
+VIEW_STAGES i=6 name=orb_05 wall=31.12 project=9.24 sort=10.95 blend=10.65 d2h=0.23 view_total=31.08 sort_bin_count=0.94 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=5.44 sort_publish_host=0.19 sort_publish_wait=3.67 project_gather_wait=9.06 project_gather_result=0.10
+VIEW_STAGES i=7 name=orb_06 wall=32.76 project=9.82 sort=11.41 blend=11.28 d2h=0.20 view_total=32.73 sort_bin_count=1.00 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.08 sort_bin_emit=5.74 sort_publish_host=0.18 sort_publish_wait=3.75 sort_mat=0.05 project_gather_wait=9.63 project_gather_result=0.11
+VIEW_STAGES i=8 name=orb_07 wall=34.49 project=10.39 sort=12.00 blend=11.81 d2h=0.22 view_total=34.45 sort_bin_count=1.05 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.09 sort_bin_emit=6.05 sort_publish_host=0.20 sort_publish_wait=3.98 project_gather_wait=10.20 project_gather_result=0.12
+VIEW_STAGES i=9 name=orb_08 wall=35.49 project=10.80 sort=12.17 blend=12.21 d2h=0.21 view_total=35.44 sort_bin_count=1.10 sort_bin_hist_d2h=0.25 sort_bin_layout=0.25 sort_upload=0.10 sort_bin_emit=6.09 sort_publish_host=0.21 sort_publish_wait=4.01 sort_mat=0.06 project_pfwc_enqueue=0.06 project_gather_wait=10.54 project_gather_result=0.15
+VIEW_STAGES i=10 name=orb_09 wall=35.93 project=10.89 sort=12.25 blend=12.47 d2h=0.23 view_total=35.87 sort_bin_count=1.10 sort_bin_hist_d2h=0.25 sort_bin_layout=0.25 sort_upload=0.10 sort_bin_emit=6.12 sort_publish_host=0.20 sort_publish_wait=4.10 sort_mat=0.05 project_pfwc_enqueue=0.06 project_gather_wait=10.66 project_gather_result=0.12
+VIEW_STAGES i=11 name=orb_10 wall=35.64 project=10.79 sort=12.23 blend=12.35 d2h=0.21 view_total=35.58 sort_bin_count=1.10 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.10 sort_bin_emit=6.11 sort_publish_host=0.20 sort_publish_wait=4.08 sort_mat=0.05 project_gather_wait=10.55 project_gather_result=0.15
+ALL_VIEWS_IDENTICAL (30 views)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=46.5 p50_ms=46.4 min_ms=40.5 max_ms=52.4 n_views=30 warmup_s=14.5
+STAGES n=30 head=0.003 project=9.521 tile_assign=0.006 sort=10.706 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.757 d2h=0.244 assemble=0.000 tail=15.193
+SORT_STAGES n=30 pread=0.016 bin_count=0.921 bin_hist_d2h=0.249 bin_layout=0.244 upload=0.076 bin_emit=5.278 kernel=0.034 d2h=0.000 compact=0.000 publish_host=0.187 publish_wait=3.614 mat=0.048
+##### t122-abl.log
+=== r5-fuse e408916 GSPLAT_TT_PFWC_FUSE=1 18:08:43
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=31.2 p50_ms=31.7 min_ms=25.9 max_ms=36.2 n_views=30 warmup_s=2.9
+STAGES n=30 head=0.003 project=9.543 tile_assign=0.005 sort=10.688 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.683 d2h=0.209 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.023 bin_count=0.918 bin_hist_d2h=0.251 bin_layout=0.240 upload=0.068 bin_emit=5.288 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.201 publish_wait=3.579 mat=0.046
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.031 pfwc_enqueue=0.037 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=9.359 gather_result=0.110
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r5-a1 e408916 GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_FUSE_ABL=1 18:08:56
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.20dB(8bit-vs-golden) avg_frame_ms=25.1 p50_ms=25.4 min_ms=21.0 max_ms=29.0 n_views=30 warmup_s=2.3
+STAGES n=30 head=0.002 project=8.818 tile_assign=0.004 sort=10.680 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.286 d2h=0.287 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.015 bin_count=0.909 bin_hist_d2h=0.246 bin_layout=0.249 upload=0.064 bin_emit=5.320 kernel=0.024 d2h=0.000 compact=0.000 publish_host=0.187 publish_wait=3.589 mat=0.036
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.026 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=8.655 gather_result=0.105
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000
+VIEWS DIFFER (29 of 30)
+=== r5-a2 e408916 GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_FUSE_ABL=2 18:09:04
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.02dB(8bit-vs-golden) avg_frame_ms=92.2 p50_ms=92.6 min_ms=78.7 max_ms=106.0 n_views=30 warmup_s=2.2
+STAGES n=30 head=0.002 project=4.640 tile_assign=0.004 sort=11.486 blend_setup=0.000 mat=0.000 cull=0.000 blend=75.833 d2h=0.210 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.017 bin_count=0.913 bin_hist_d2h=0.247 bin_layout=0.232 upload=0.064 bin_emit=6.136 kernel=0.024 d2h=0.000 compact=0.000 publish_host=0.192 publish_wait=3.583 mat=0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.027 pfwc_enqueue=0.025 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.481 gather_result=0.102
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+VIEWS DIFFER (30 of 30)
+=== r5-a4 e408916 GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_FUSE_ABL=4 18:09:12
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=5.54dB(8bit-vs-golden) avg_frame_ms=25.5 p50_ms=26.1 min_ms=21.5 max_ms=29.8 n_views=30 warmup_s=2.2
+STAGES n=30 head=0.003 project=7.543 tile_assign=0.006 sort=10.738 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.961 d2h=0.217 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.026 bin_count=0.924 bin_hist_d2h=0.255 bin_layout=0.245 upload=0.069 bin_emit=5.296 kernel=0.035 d2h=0.000 compact=0.000 publish_host=0.225 publish_wait=3.555 mat=0.056
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.030 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=7.371 gather_result=0.103
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+VIEWS DIFFER (30 of 30)
+=== r5-a7 e408916 GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_FUSE_ABL=7 18:09:22
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.08dB(8bit-vs-golden) avg_frame_ms=20.1 p50_ms=20.3 min_ms=17.7 max_ms=22.9 n_views=30 warmup_s=2.3
+STAGES n=30 head=0.002 project=4.225 tile_assign=0.004 sort=10.693 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.002 d2h=0.188 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.020 bin_count=0.915 bin_hist_d2h=0.252 bin_layout=0.230 upload=0.064 bin_emit=5.326 kernel=0.028 d2h=0.000 compact=0.000 publish_host=0.204 publish_wait=3.572 mat=0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.027 pfwc_enqueue=0.023 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.073 gather_result=0.098
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000
+VIEWS DIFFER (30 of 30)
+##### t122-abl2.log
+=== r6-base 7dc4f7a  18:12:19
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.6 p50_ms=30.0 min_ms=25.4 max_ms=34.0 n_views=30 warmup_s=2.3
+STAGES n=30 head=0.004 project=6.494 tile_assign=1.442 sort=10.689 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.648 d2h=0.265 assemble=0.000 tail=0.004
+SORT_STAGES n=30 pread=0.015 bin_count=0.918 bin_hist_d2h=0.250 bin_layout=0.248 upload=0.076 bin_emit=5.278 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.203 publish_wait=3.574 mat=0.047
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.036 pfwc_enqueue=0.062 pfwc_finish=2.473 gather_setup=0.003 gather_rtargs=0.018 gather_enqueue=0.025 gather_wait=3.767 gather_result=0.104
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.019 enqueue=0.016 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r6-fuse 7dc4f7a GSPLAT_TT_PFWC_FUSE=1 18:12:31
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=31.4 p50_ms=31.9 min_ms=26.1 max_ms=36.4 n_views=30 warmup_s=3.0
+STAGES n=30 head=0.003 project=9.764 tile_assign=0.005 sort=10.674 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.682 d2h=0.207 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.017 bin_count=0.913 bin_hist_d2h=0.249 bin_layout=0.246 upload=0.068 bin_emit=5.288 kernel=0.028 d2h=0.000 compact=0.000 publish_host=0.197 publish_wait=3.581 mat=0.044
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.033 pfwc_enqueue=0.038 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=9.578 gather_result=0.109
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r6-a8 7dc4f7a GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_FUSE_ABL=8 18:12:44
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=11.94dB(8bit-vs-golden) avg_frame_ms=28.0 p50_ms=28.5 min_ms=23.9 max_ms=32.3 n_views=30 warmup_s=2.3
+STAGES n=30 head=0.003 project=6.057 tile_assign=0.005 sort=10.666 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.993 d2h=0.228 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.017 bin_count=0.914 bin_hist_d2h=0.248 bin_layout=0.241 upload=0.069 bin_emit=5.287 kernel=0.028 d2h=0.000 compact=0.000 publish_host=0.188 publish_wait=3.589 mat=0.042
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.032 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=5.882 gather_result=0.107
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+VIEWS DIFFER (30 of 30)
+=== r6-a9 7dc4f7a GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_FUSE_ABL=9 18:12:58
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.24dB(8bit-vs-golden) avg_frame_ms=21.7 p50_ms=21.8 min_ms=18.3 max_ms=24.8 n_views=30 warmup_s=2.1
+STAGES n=30 head=0.002 project=5.374 tile_assign=0.004 sort=10.701 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.340 d2h=0.252 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.020 bin_count=0.915 bin_hist_d2h=0.249 bin_layout=0.233 upload=0.064 bin_emit=5.329 kernel=0.026 d2h=0.000 compact=0.000 publish_host=0.204 publish_wait=3.575 mat=0.042
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.027 pfwc_enqueue=0.023 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=5.219 gather_result=0.102
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000
+VIEWS DIFFER (30 of 30)
+##### t122-pre.log
+=== r7-base 6773f31  18:46:53
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.3 p50_ms=29.7 min_ms=25.3 max_ms=33.5 n_views=30 warmup_s=2.8
+STAGES n=30 head=0.003 project=6.339 tile_assign=1.441 sort=10.664 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.660 d2h=0.199 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.015 bin_count=0.912 bin_hist_d2h=0.249 bin_layout=0.241 upload=0.071 bin_emit=5.283 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.188 publish_wait=3.589 mat=0.044
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.031 pfwc_enqueue=0.031 pfwc_finish=2.478 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.026 gather_wait=3.643 gather_result=0.110
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.017 enqueue=0.017 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r7-base0 6773f31 GSPLAT_TT_PUBOC_PRE=0 18:47:05
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.7 p50_ms=29.9 min_ms=25.5 max_ms=34.2 n_views=30 warmup_s=1.9
+STAGES n=30 head=0.002 project=6.578 tile_assign=1.437 sort=10.684 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.714 d2h=0.232 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.017 bin_count=0.916 bin_hist_d2h=0.251 bin_layout=0.235 upload=0.067 bin_emit=5.290 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.207 publish_wait=3.571 mat=0.048
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.031 pfwc_enqueue=0.032 pfwc_finish=2.480 gather_setup=0.002 gather_rtargs=0.018 gather_enqueue=0.028 gather_wait=3.886 gather_result=0.099
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.015 enqueue=0.016 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r7-fuse 6773f31 GSPLAT_TT_PFWC_FUSE=1 18:47:17
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=27.5 p50_ms=28.0 min_ms=23.2 max_ms=31.8 n_views=30 warmup_s=2.7
+STAGES n=30 head=0.002 project=5.932 tile_assign=0.005 sort=10.634 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.700 d2h=0.212 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.016 bin_count=0.910 bin_hist_d2h=0.246 bin_layout=0.229 upload=0.064 bin_emit=5.288 kernel=0.022 d2h=0.000 compact=0.000 publish_host=0.183 publish_wait=3.595 mat=0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.030 pfwc_enqueue=0.027 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=5.766 gather_result=0.104
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r7-fuse0 6773f31 GSPLAT_TT_PFWC_FUSE=1 GSPLAT_TT_PUBOC_PRE=0 18:47:30
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=31.5 p50_ms=32.0 min_ms=26.2 max_ms=36.5 n_views=30 warmup_s=2.0
+STAGES n=30 head=0.003 project=9.884 tile_assign=0.004 sort=10.668 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.676 d2h=0.212 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.018 bin_count=0.914 bin_hist_d2h=0.248 bin_layout=0.238 upload=0.066 bin_emit=5.287 kernel=0.025 d2h=0.000 compact=0.000 publish_host=0.180 publish_wait=3.607 mat=0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.030 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=9.709 gather_result=0.105
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r8-base 6773f31  18:47:42
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.4 p50_ms=29.8 min_ms=25.5 max_ms=33.6 n_views=30 warmup_s=2.0
+STAGES n=30 head=0.002 project=6.340 tile_assign=1.442 sort=10.679 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.693 d2h=0.218 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.015 bin_count=0.914 bin_hist_d2h=0.251 bin_layout=0.240 upload=0.067 bin_emit=5.289 kernel=0.027 d2h=0.000 compact=0.000 publish_host=0.185 publish_wait=3.594 mat=0.047
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.040 pfwc_enqueue=0.029 pfwc_finish=2.477 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.025 gather_wait=3.649 gather_result=0.100
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.020 enqueue=0.015 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r8-fuse 6773f31 GSPLAT_TT_PFWC_FUSE=1 18:47:54
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=27.5 p50_ms=27.9 min_ms=23.1 max_ms=31.8 n_views=30 warmup_s=1.9
+STAGES n=30 head=0.002 project=5.935 tile_assign=0.005 sort=10.680 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.664 d2h=0.205 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.020 bin_count=0.916 bin_hist_d2h=0.250 bin_layout=0.236 upload=0.066 bin_emit=5.293 kernel=0.029 d2h=0.000 compact=0.000 publish_host=0.200 publish_wait=3.578 mat=0.046
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.030 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=5.765 gather_result=0.102
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+##### t122-lean.log
+=== r9-base e304cf4  18:50:07
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.4 p50_ms=29.7 min_ms=25.4 max_ms=33.5 n_views=30 warmup_s=2.1
+STAGES n=30 head=0.002 project=6.335 tile_assign=1.439 sort=10.683 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.651 d2h=0.220 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.017 bin_count=0.915 bin_hist_d2h=0.253 bin_layout=0.234 upload=0.067 bin_emit=5.293 kernel=0.031 d2h=0.000 compact=0.000 publish_host=0.194 publish_wait=3.585 mat=0.047
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.030 pfwc_enqueue=0.031 pfwc_finish=2.480 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.028 gather_wait=3.649 gather_result=0.098
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.014 enqueue=0.018 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r9-fuse e304cf4 GSPLAT_TT_PFWC_FUSE=1 18:50:19
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=26.7 p50_ms=27.1 min_ms=22.9 max_ms=30.9 n_views=30 warmup_s=2.7
+STAGES n=30 head=0.003 project=5.083 tile_assign=0.005 sort=10.671 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.678 d2h=0.208 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.019 bin_count=0.915 bin_hist_d2h=0.250 bin_layout=0.233 upload=0.067 bin_emit=5.290 kernel=0.028 d2h=0.000 compact=0.000 publish_host=0.189 publish_wait=3.591 mat=0.044
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.033 pfwc_enqueue=0.034 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.907 gather_result=0.104
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r10-base e304cf4  18:50:32
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.5 p50_ms=29.8 min_ms=25.6 max_ms=33.8 n_views=30 warmup_s=2.0
+STAGES n=30 head=0.003 project=6.354 tile_assign=1.449 sort=10.710 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.707 d2h=0.252 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.020 bin_count=0.921 bin_hist_d2h=0.255 bin_layout=0.236 upload=0.068 bin_emit=5.293 kernel=0.034 d2h=0.000 compact=0.000 publish_host=0.212 publish_wait=3.567 mat=0.053
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.031 pfwc_enqueue=0.035 pfwc_finish=2.482 gather_setup=0.002 gather_rtargs=0.020 gather_enqueue=0.033 gather_wait=3.649 gather_result=0.098
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.017 enqueue=0.022 scan_finish=0.000 p_d2h=0.000 k2_finish=1.403 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r10-fuse e304cf4 GSPLAT_TT_PFWC_FUSE=1 18:50:44
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=26.7 p50_ms=27.1 min_ms=22.6 max_ms=30.7 n_views=30 warmup_s=2.0
+STAGES n=30 head=0.002 project=5.080 tile_assign=0.005 sort=10.675 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.659 d2h=0.211 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.019 bin_count=0.917 bin_hist_d2h=0.252 bin_layout=0.233 upload=0.067 bin_emit=5.288 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.198 publish_wait=3.580 mat=0.045
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.031 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.911 gather_result=0.104
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+##### t122-bank.log
+=== r11-base 33a0365  18:54:21
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.5 p50_ms=30.0 min_ms=25.4 max_ms=33.7 n_views=30 warmup_s=2.0
+STAGES n=30 head=0.003 project=6.364 tile_assign=1.442 sort=10.800 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.663 d2h=0.208 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.017 bin_count=0.921 bin_hist_d2h=0.249 bin_layout=0.333 upload=0.073 bin_emit=5.281 kernel=0.039 d2h=0.000 compact=0.000 publish_host=0.241 publish_wait=3.534 mat=0.055
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.044 pfwc_enqueue=0.037 pfwc_finish=2.474 gather_setup=0.002 gather_rtargs=0.021 gather_enqueue=0.028 gather_wait=3.649 gather_result=0.105
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.019 enqueue=0.018 scan_finish=0.000 p_d2h=0.000 k2_finish=1.399 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r11-fuse 33a0365 GSPLAT_TT_PFWC_FUSE=1 18:54:34
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=26.2 p50_ms=26.6 min_ms=22.3 max_ms=30.3 n_views=30 warmup_s=2.6
+STAGES n=30 head=0.003 project=4.618 tile_assign=0.005 sort=10.689 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.657 d2h=0.225 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.019 bin_count=0.917 bin_hist_d2h=0.252 bin_layout=0.248 upload=0.068 bin_emit=5.289 kernel=0.031 d2h=0.000 compact=0.000 publish_host=0.187 publish_wait=3.592 mat=0.042
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.032 pfwc_enqueue=0.034 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.443 gather_result=0.103
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r12-base 33a0365  18:54:47
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.3 p50_ms=29.7 min_ms=25.3 max_ms=33.5 n_views=30 warmup_s=1.8
+STAGES n=30 head=0.002 project=6.319 tile_assign=1.429 sort=10.633 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.684 d2h=0.201 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.014 bin_count=0.908 bin_hist_d2h=0.248 bin_layout=0.231 upload=0.065 bin_emit=5.287 kernel=0.024 d2h=0.000 compact=0.000 publish_host=0.182 publish_wait=3.596 mat=0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.029 pfwc_enqueue=0.028 pfwc_finish=2.477 gather_setup=0.002 gather_rtargs=0.013 gather_enqueue=0.021 gather_wait=3.647 gather_result=0.099
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.012 enqueue=0.012 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r12-fuse 33a0365 GSPLAT_TT_PFWC_FUSE=1 18:54:59
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=26.3 p50_ms=26.6 min_ms=22.4 max_ms=30.2 n_views=30 warmup_s=1.7
+STAGES n=30 head=0.003 project=4.617 tile_assign=0.005 sort=10.720 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.701 d2h=0.208 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.025 bin_count=0.924 bin_hist_d2h=0.256 bin_layout=0.236 upload=0.068 bin_emit=5.293 kernel=0.038 d2h=0.000 compact=0.000 publish_host=0.198 publish_wait=3.584 mat=0.049
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.030 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.454 gather_result=0.097
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+##### t122-dflt.log
+=== r13-base ebc4492  19:00:33
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=26.5 p50_ms=26.8 min_ms=22.6 max_ms=30.5 n_views=30 warmup_s=2.8
+STAGES n=30 head=0.005 project=4.678 tile_assign=0.007 sort=10.716 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.654 d2h=0.403 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.018 bin_count=0.925 bin_hist_d2h=0.250 bin_layout=0.251 upload=0.077 bin_emit=5.281 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.193 publish_wait=3.583 mat=0.061
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.007 pfwc_rtargs=0.038 pfwc_enqueue=0.072 pfwc_finish=0.000 gather_setup=0.002 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.437 gather_result=0.120
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r13-kill ebc4492 GSPLAT_TT_PFWC_FUSE=0 19:00:45
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=29.6 p50_ms=30.1 min_ms=25.5 max_ms=33.5 n_views=30 warmup_s=1.9
+STAGES n=30 head=0.005 project=6.381 tile_assign=1.450 sort=10.730 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.685 d2h=0.263 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.019 bin_count=0.930 bin_hist_d2h=0.252 bin_layout=0.249 upload=0.076 bin_emit=5.282 kernel=0.035 d2h=0.000 compact=0.000 publish_host=0.211 publish_wait=3.567 mat=0.056
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.039 pfwc_enqueue=0.066 pfwc_finish=2.476 gather_setup=0.004 gather_rtargs=0.021 gather_enqueue=0.031 gather_wait=3.637 gather_result=0.101
+TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.020 enqueue=0.019 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+##### t122-comb.log
+=== r14-base 2b406a0  19:05:49
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=21.2 p50_ms=21.5 min_ms=17.4 max_ms=25.4 n_views=30 warmup_s=3.0
+STAGES n=30 head=0.002 project=4.571 tile_assign=0.004 sort=5.160 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.247 d2h=0.204 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.023 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.117 upload=0.000 bin_emit=4.767 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.167 publish_wait=0.000 mat=0.048
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.412 gather_result=0.096
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r14-kill 2b406a0 GSPLAT_TT_PFWC_FUSE=0 19:06:02
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=24.4 p50_ms=24.6 min_ms=20.2 max_ms=28.6 n_views=30 warmup_s=1.5
+STAGES n=30 head=0.002 project=6.310 tile_assign=1.431 sort=5.134 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.258 d2h=0.194 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.012 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.102 upload=0.000 bin_emit=4.788 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.153 publish_wait=0.000 mat=0.042
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.029 pfwc_enqueue=0.032 pfwc_finish=2.474 gather_setup=0.002 gather_rtargs=0.013 gather_enqueue=0.020 gather_wait=3.639 gather_result=0.099
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.014 enqueue=0.012 scan_finish=0.000 p_d2h=0.000 k2_finish=1.399 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r14-b2 2b406a0 GSPLAT_TT_PFWC_FUSE=1 19:06:13
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=21.3 p50_ms=21.4 min_ms=17.8 max_ms=25.4 n_views=30 warmup_s=1.5
+STAGES n=30 head=0.003 project=4.596 tile_assign=0.006 sort=5.179 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.229 d2h=0.220 assemble=0.000 tail=0.003
+SORT_STAGES n=30 pread=0.025 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.117 upload=0.000 bin_emit=4.768 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.175 publish_wait=0.000 mat=0.051
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.031 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.415 gather_result=0.111
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r14-k2 2b406a0 GSPLAT_TT_PFWC_FUSE=0 19:06:25
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) avg_frame_ms=24.6 p50_ms=24.8 min_ms=20.3 max_ms=29.1 n_views=30 warmup_s=1.5
+STAGES n=30 head=0.002 project=6.321 tile_assign=1.439 sort=5.176 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.297 d2h=0.344 assemble=0.000 tail=0.002
+SORT_STAGES n=30 pread=0.019 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.111 upload=0.000 bin_emit=4.797 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.164 publish_wait=0.000 mat=0.046
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.029 pfwc_enqueue=0.028 pfwc_finish=2.477 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.027 gather_wait=3.645 gather_result=0.095
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.014 enqueue=0.018 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.001
+ALL_VIEWS_IDENTICAL (30 views)

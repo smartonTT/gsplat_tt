@@ -1402,10 +1402,10 @@ def cull_tune_section() -> str:
 
 
 # TT anchor for the GPU ratio: the latest measured 30-view 1024x1024 bicycle
-# average (iter-178 / task #121, docs/lever-a-t121/results.md), measured on a
+# average (iter-179 / task #122, docs/lever-b-t125/README.md), measured on a
 # Blackhole P100 (p100a) in yyzo-bh-07. The iter-141 plateau was 173.3 ms.
-TT_ANCHOR_MS = 24.54
-TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-178 one-launch sort v2 (29.59 at iter-177; 173.3 at the iter-141 plateau)"
+TT_ANCHOR_MS = 21.25
+TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-179 lever B fused pfwc compaction (24.54 at iter-178; 173.3 at the iter-141 plateau)"
 
 GPU_RESULT_JSON = OPT_DIR / "cpu-vs-tt" / "gpu_result.json"
 

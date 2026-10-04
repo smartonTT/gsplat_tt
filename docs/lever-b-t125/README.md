@@ -1,8 +1,9 @@
 # Lever B (task #125): visible-gaussian compaction and TA pairs fused into the pfwc writer
 
-Code only, not yet run on a device. Switch: `GSPLAT_TT_PFWC_FUSE` (0 = default and kill
-switch, the lever 2 path; 1 = fused). It needs `GSPLAT_TT_SFPU_VIS != 0`; any other value
-throws.
+Measured and adopted in task #122 (iter-179, results below). Switch: `GSPLAT_TT_PFWC_FUSE`
+(1 = fused, the default when `GSPLAT_TT_SFPU_VIS=1`; 0 = kill switch, the lever 2 path). It
+needs `GSPLAT_TT_SFPU_VIS != 0`; any other value throws. With `GSPLAT_TT_SFPU_VIS=2` (the
+cross-check) the default stays 0.
 
 ## What changes with `GSPLAT_TT_PFWC_FUSE=1`
 
@@ -84,3 +85,47 @@ If something fails:
 - **Kernel config buffer overflow** (a TT_THROW about program or kernel config size at the first fused launch): move the RECHECK soft-float path in `vis_tile::classify_tile` out of line, or into a separate noinline section, then rerun.
 - **md5 differs**: rerun the fused arm with `TT_METAL_WATCHER=2` for 5 views. Then compare `proj_M` and `ta_pairs_P` against the kill-switch arm. M and P must be equal.
 - **Hang**: check that the CB 40 layout in `writer_pfwc_fuse.cpp` fits `FUSE_CB_BYTES`, and that the segment K2 CB fits `(nseg + 6) * 64` bytes.
+
+## Results (#122)
+
+Bicycle, 30 views, 1024x1024, untraced, on yyzo-bh-07 (Blackhole p100a, not a p150). All
+30-view runs are md5-identical to `md5-r82new.txt` (hero_vs_ref 100 dB), with no `TT_THROW` or
+`TT_FATAL`.
+
+As written in #125 the fused path was slower: 30.9 against 29.65 ms/view. Tracy showed the fused
+pfwc at 7.45 ms and bound by the writer. Compile-time ablations (`GSPLAT_TT_FUSE_ABL`, bits 1 /
+2 / 4 / 8 skip the record NoC writes, the record copies, the color tile reads, or replace the
+UNORM16 packs with plain copies) put about 3.7 ms on the per-gaussian UNORM16 packs and about
+0.7 ms on the per-record NoC writes. With all record work skipped, pfwc + segment K2 takes
+4.07 ms.
+
+Three fixes, with pfwc + segment K2 (`PROJECT_STAGES gather_wait`) after each:
+
+| step | commit | pfwc + K2 ms |
+|---|---|---|
+| #125 code as written (device packs) | | 9.71 |
+| UNORM16 op/color packs built once per scene on the host (`GSPLAT_TT_PUBOC_PRE`, default 1, 0 = kill switch; a scene with a NaN keeps the device path). The legacy scatter copies them too (legacy gather 3.89 -> 3.64 ms). | 568cb79 | 5.77 |
+| copy loop loads ahead of its stores | 27b8d52 | 4.91 |
+| records staged bank-major, one NoC write per DRAM bank per 16 records (bank count found at run time, per-page fallback) | 06dc8af | 4.44 |
+
+Frame time, ms/view:
+
+| base | kill switch / base | fused | gain |
+|---|---|---|---|
+| lever 2 (before lever A), round 11 | 29.52 | 26.23 | 3.29 |
+| lever 2 (before lever A), round 12 | 29.31 | 26.29 | 3.02 |
+| lever 2, default flipped, round 13 | 29.57 | 26.53 | 3.05 |
+| lever A tip, rebased (2b406a0), round 14a | 24.36 | 21.22 | 3.14 |
+| lever A tip, rebased (2b406a0), round 14b | 24.62 | 21.27 | 3.34 |
+
+The median gain is 3.14 ms/view, which passes the 3 ms gate. On the combined tip, the time goes
+from 24.49 to 21.25 ms/view (-13.2%, 47.1 FPS). `project` goes from 6.32 to 4.58 ms and
+`tile_assign` from 1.44 to 0.01 ms; sort (5.17) and blend (11.24) do not change.
+`GSPLAT_TT_PFWC_FUSE` now defaults to 1 (2b406a0).
+
+Left over: pfwc + K2 is 4.44 ms against the 4.07 ms floor, so about 0.4 ms of record work
+remains. The legacy scatter (the kill-switch path) still uses the old copy loop and
+per-record writes.
+
+Round summaries: `docs/lever-b-t125/out/t122-rounds.txt`. Per-run logs
+are on yyzo-bh-07 under `/localdev/smarton/gstt2-t122/tmp/t115/run-r*.log`.
