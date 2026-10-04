@@ -83,6 +83,11 @@
 #ifndef OL_EMIT_FAST
 #define OL_EMIT_FAST 1
 #endif
+// Task #164 (host knob GSPLAT_TT_OL_EMIT_FOLD=0 turns it off): the fast emit
+// scans batch k+1 for its blendrec reads inside batch k's pack loop.
+#ifndef OL_EMIT_FOLD
+#define OL_EMIT_FOLD 1
+#endif
 #if OL_EMIT_PROF
 #define EP_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define EP_T0(v) const uint32_t v = EP_NOW()
@@ -603,8 +608,10 @@ void kernel_main() {
             noc_async_read_barrier();  // blendrec of batch k, pairs of batch k+1
             EP_T0(ep_t2);
             EP_ADD(ep_rdw, ep_t1);
+            // Task #164: a window batch k+1 is scanned in batch k's fast loop.
+            const bool fold = OL_EMIT_FOLD && fast && k + 1u < nbatch && (k + 1u) * PB < nwin;
             if (k + 1u < nbatch) {
-                issue_brec(k + 1u, h ^ 1u);
+                if (!fold) issue_brec(k + 1u, h ^ 1u);
                 EP_T0(ep_t3);
                 EP_ADD(ep_brec, ep_t2);
                 if (k + 2u < nbatch) issue_pairs(k + 2u);
@@ -629,7 +636,40 @@ void kernel_main() {
                 int32_t g_c = f_g;
                 uint32_t cov0 = f_cov0, cov1 = f_cov1, cov2 = f_cov2, dep = f_dep, mxb = f_mx, myb = f_my;
                 uint32_t opr = f_opr, cgb = f_cgb, ty_c = f_ty, myt = f_myt;
+                // Fold (task #164): issue_brec's scan of batch k+1 (its planes
+                // sit in the window), two elements per pack iteration so the
+                // last read is issued halfway through this batch. Same reads,
+                // same order, same ring slots as issue_brec.
+                uint32_t n_sc = 0;
+                const int32_t* skp = kp;
+                const int32_t* sgp = gp;
+                if (fold) {
+                    const Planes pn = planes(k + 1u);
+                    skp = const_cast<const int32_t*>(pn.k);
+                    sgp = const_cast<const int32_t*>(pn.g);
+                    const uint32_t p1 = p0 + PB * ELEMS_PER_PAGE;
+                    n_sc = batch_pages(k + 1u) * ELEMS_PER_PAGE;
+                    if (p1 + n_sc > P) n_sc = (P > p1) ? P - p1 : 0u;
+                }
+                int32_t s_g = scan_g;
+                uint32_t s_dst = rec_cache_l1 + (h ^ 1u) * BATCH_ELEMS * PAGE_BYTES;
+                uint32_t sj = 0;
+#if OL_EMIT_PROF
+                const uint32_t s_dst0 = s_dst;
+#endif
                 for (uint32_t j = 0; j < n_el; j++) {
+                    if (sj < n_sc) {
+                        const uint32_t se = (sj + 2u < n_sc) ? sj + 2u : n_sc;
+                        for (; sj < se; sj++) {
+                            if (skp[sj] == 0) continue;
+                            const int32_t sg = sgp[sj];
+                            if (sg != s_g) {
+                                s_g = sg;
+                                noc_async_read(get_noc_addr(static_cast<uint32_t>(sg), brec_acc), s_dst, PAGE_BYTES);
+                                s_dst += PAGE_BYTES;
+                            }
+                        }
+                    }
                     if (kp[j] == 0) continue;
                     const int32_t g = gp[j];
                     const uint32_t t = tp[j];
@@ -681,6 +721,17 @@ void kernel_main() {
                         EP_ADD(ep_wiss, ep_t);
                     }
                 }
+                for (; sj < n_sc; sj++) {  // only if batch k is shorter than half of k+1
+                    if (skp[sj] == 0) continue;
+                    const int32_t sg = sgp[sj];
+                    if (sg != s_g) {
+                        s_g = sg;
+                        noc_async_read(get_noc_addr(static_cast<uint32_t>(sg), brec_acc), s_dst, PAGE_BYTES);
+                        s_dst += PAGE_BYTES;
+                    }
+                }
+                scan_g = s_g;
+                EP_CNT(ep_npf, (s_dst - s_dst0) / PAGE_BYTES);
                 f_g = g_c;
                 f_cov0 = cov0; f_cov1 = cov1; f_cov2 = cov2; f_dep = dep; f_mx = mxb; f_my = myb;
                 f_opr = opr; f_cgb = cgb; f_ty = ty_c; f_myt = myt;

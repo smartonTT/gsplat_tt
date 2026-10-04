@@ -837,6 +837,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_FAST"); e != nullptr && std::atoi(e) == 0) {
         defines["OL_EMIT_FAST"] = "0";
     }
+    // Task #164: GSPLAT_TT_OL_EMIT_FOLD=0 is the kill switch of the fast emit's
+    // folded blendrec scan (default on; same output either way).
+    if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_FOLD"); e != nullptr && std::atoi(e) == 0) {
+        defines["OL_EMIT_FOLD"] = "0";
+    }
     ctx.kol = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",
