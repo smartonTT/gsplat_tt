@@ -45,6 +45,7 @@
 #include "api/compute/eltwise_unary/eltwise_unary.h"
 #include "api/compute/eltwise_unary/fill.h"
 #include "../dataflow/dm_fp32.h"
+#include "blend_t_live.h"
 
 #ifdef TRISC_MATH
 #include "sfpi.h"
@@ -152,6 +153,45 @@ static uint32_t g_pixel_floor_bits = 0u;
 #define BLEND_APPLY_PIXEL_FLOOR(al) ((void)0)
 #endif
 
+// Task #146 (BLEND_CONST_HOIST, host default 1, needs BLEND_COEF_DEST): the
+// bodies' constants are staged once per subchunk instead of built per body with
+// 2 SFPLOADIs each. exp's ONE_LN2, c2, c1 live in the programmable const regs
+// (L12-L14, MAD operands directly); c0 and the 0.99 alpha clamp in DEST slot 6
+// (one SFPLOAD each; vec_min_max writes both args, so the clamp needs a copy
+// anyway). blend_exp21f is _sfpu_exp_21f_bf16_<true> op for op minus the upper
+// clamp to 255, which is dead: the input is min(power, 0) <= 0, so xlog2 <= 127.
+#ifndef BLEND_CONST_HOIST
+#define BLEND_CONST_HOIST 0
+#endif
+#if BLEND_CONST_HOIST && BLEND_COEF_DEST && defined(TRISC_MATH)
+constexpr uint32_t S_C0 = 11, S_K99 = 12;
+sfpi_inline sfpi::vFloat blend_exp21f(sfpi::vFloat val) {
+    using namespace sfpi;
+    vFloat xlog2 = val * vConstFloatPrgm0 + 127.f;
+    vFloat threshold_low = 0.f;
+    vec_min_max(threshold_low, xlog2);
+    vInt z = ckernel::sfpu::_float_to_int32_for_exp_21f_(xlog2);
+    vInt exponential_part = exexp(reinterpret<vFloat>(z), ExponentMode::NoDebias);
+    vInt fractional_part = exman(reinterpret<vFloat>(z));
+    vFloat frac = int32_to_float(fractional_part, RoundMode::NearestEven);
+    vFloat t = frac * vConstFloatPrgm1 + vConstFloatPrgm2;  // c2 x + c1
+    frac = frac * t + vFloat(dst_reg[DR_S + S_C0]);         // (.) x + c0
+    return setexp(frac, exponential_part);
+}
+inline void blend_stage_hoist() {
+    sfpi::vConstFloatPrgm0 = 1.4426950216293334961f;   // ONE_LN2
+    sfpi::vConstFloatPrgm1 = 4.791750143340323e-15f;   // c2
+    sfpi::vConstFloatPrgm2 = 7.839635491371155e-08f;   // c1
+    sfpi::dst_reg[DR_S + S_C0] = 1.0017248f;
+    sfpi::dst_reg[DR_S + S_K99] = 0.99f;
+}
+#define BLEND_EXP(v) blend_exp21f(v)
+#define BLEND_K99() sfpi::vFloat(sfpi::dst_reg[DR_S + S_K99])
+#else
+#define BLEND_EXP(v) ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(v)
+#define BLEND_K99() sfpi::vFloat(0.99f)
+#endif
+
 // Task #111 (lever 4 probe, host env GSPLAT_TT_BLEND_FPU_QF_ABL, default 0 =
 // compiled out): 1 = the bodies skip the conic (dx, dy, A dx^2 + B dx dy +
 // C dy^2) and SFPLOAD the x ramp as "power", i.e. the SFPU side of an ideal
@@ -200,11 +240,11 @@ inline void blend_one_gaussian_math(
     // weight = exp(min(power, 0))
     vFloat zero = 0.0f;
     vec_min_max(power, zero);  // power = min(power, 0)
-    vFloat weight = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(power);
+    vFloat weight = BLEND_EXP(power);
 
     // alpha = min(opacity * weight, 0.99)
     vFloat alpha = BLEND_COEF(S_OP, op_bits) * weight;
-    vFloat clamp = 0.99f;
+    vFloat clamp = BLEND_K99();
     vec_min_max(alpha, clamp);  // alpha = min(alpha, 0.99)
     BLEND_APPLY_PIXEL_FLOOR(alpha);
 
@@ -271,15 +311,15 @@ inline void blend_pair_gaussian_math(
     vFloat zeroB = 0.0f;
     vec_min_max(pa, zeroA);
     vec_min_max(pb, zeroB);
-    vFloat wa = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(pa);
-    vFloat wb = ckernel::sfpu::_sfpu_exp_21f_bf16_</*is_fp32_dest_acc_en=*/true>(pb);
+    vFloat wa = BLEND_EXP(pa);
+    vFloat wb = BLEND_EXP(pb);
 
     // alpha = min(opacity * weight, 0.99) (own clamp const per chain).
     vFloat op = BLEND_COEF(S_OP, op_bits);
     vFloat aa = op * wa;
     vFloat ab = op * wb;
-    vFloat clampA = 0.99f;
-    vFloat clampB = 0.99f;
+    vFloat clampA = BLEND_K99();
+    vFloat clampB = BLEND_K99();
     vec_min_max(aa, clampA);
     vec_min_max(ab, clampB);
     BLEND_APPLY_PIXEL_FLOOR(aa);
@@ -370,6 +410,45 @@ inline void blend_stage_coeffs_q(
     dst_reg[DR_S + S_CG] = unorm16_sfpu(w7 & 0xffffu);
     dst_reg[DR_S + S_CB] = unorm16_sfpu(w7 >> 16);
 }
+// Task #146 (BLEND_RAW_STAGE, host default 1): the same staging as
+// blend_stage_coeffs_q, written as raw instructions so the RISC side is
+// shorter: the two SFPLOADI opcode words stay in registers (the compiler
+// rebuilt them with a lui per half), and 1/65535 is loaded into L1 once per
+// record instead of once per value. Same SFPU ops on the same values in the
+// same order per value: fp32 = SFPLOADI USHORT lo + HI16_ONLY hi, SFPSTORE;
+// UNORM16 = SFPLOADI USHORT q, SFPCAST (int -> fp32 RNE), SFPMUL by 1/65535,
+// SFPSTORE. The UNORM values alternate L0/L2 so each cast is one instruction
+// ahead of its multiply, as in the compiled form. LREGs are free here (the
+// bodies keep nothing live across records).
+#ifndef BLEND_RAW_STAGE
+#define BLEND_RAW_STAGE 0
+#endif
+#if BLEND_RAW_STAGE && !BLEND_FPU_QF_ABL
+#define BLEND_USE_RAW_STAGE 1
+inline void blend_stage_coeffs_raw(const uint32_t* rec, uint32_t klo, uint32_t khi, uint32_t klo2) {
+    volatile uint32_t* ib = ckernel::instrn_buffer;
+    const uint32_t a = rec[0], b = rec[1], c = rec[2], d = rec[4], e = rec[5];
+    const uint32_t w6 = rec[6], w7 = rec[7];
+    constexpr uint32_t A0 = (DR_S) * 2u;  // SFPLOAD/SFPSTORE address of slot index 0
+    ib[0] = (d & 0xffffu) + klo; ib[0] = (d >> 16) + khi; TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_MX);
+    ib[0] = (e & 0xffffu) + klo; ib[0] = (e >> 16) + khi; TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_MY);
+    ib[0] = (a & 0xffffu) + klo; ib[0] = (a >> 16) + khi; TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_A);
+    ib[0] = (b & 0xffffu) + klo; ib[0] = (b >> 16) + khi; TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_B);
+    ib[0] = (c & 0xffffu) + klo; ib[0] = (c >> 16) + khi; TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_C);
+    TTI_SFPLOAD(1, 0, 7, A0 + 2u * S_INV);
+    ib[0] = (w6 & 0xffffu) + klo; TTI_SFPCAST(0, 0, 0);
+    ib[0] = (w6 >> 16) + klo2; TTI_SFPMUL(0, 1, 9, 0, 0); TTI_SFPCAST(2, 2, 0);
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_OP);
+    ib[0] = (w7 & 0xffffu) + klo; TTI_SFPMUL(2, 1, 9, 2, 0); TTI_SFPCAST(0, 0, 0);
+    TTI_SFPSTORE(2, 0, 7, A0 + 2u * S_CR);
+    ib[0] = (w7 >> 16) + klo2; TTI_SFPMUL(0, 1, 9, 0, 0); TTI_SFPCAST(2, 2, 0);
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_CG);
+    TTI_SFPMUL(2, 1, 9, 2, 0);
+    TTI_SFPSTORE(2, 0, 7, A0 + 2u * S_CB);
+}
+#else
+#define BLEND_USE_RAW_STAGE 0
+#endif
 // Bits of fl(1/65535) (0x37800080), staged once per subchunk like the floor.
 inline void blend_stage_inv() {
     sfpi::dst_reg[DR_S + S_INV] = ckernel::sfpu::Converter::as_float(0x37800080u);
@@ -544,6 +623,9 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 // state), so the three TRISC threads never diverge on control flow. Two runtime
 // knobs (compile-defines fed from env; sweeping needs NO .so rebuild):
 // BLEND_T_EPS and BLEND_T_PERIOD (period 0 => feature OFF / clean baseline).
+#ifndef BLEND_FAST_TRED
+#define BLEND_FAST_TRED 0
+#endif
 #ifndef BLEND_T_EPS
 #define BLEND_T_EPS 0.00390625f
 #endif
@@ -575,42 +657,19 @@ inline void non_zeroing_pack_release() {
 // MATH-only: reduce per-microblock MAX T from the packed bf16 T tile in L1 and
 // rebuild the live-microblock mask (bit m set <=> microblock m still has a pixel
 // with T >= eps). T decreases monotonically, so a cleared bit stays cleared.
+// Task #146 (BLEND_FAST_TRED, host default 1): the reduce lives in
+// blend_t_live.h; 1 = the range-compare form with a per-row-pair early exit,
+// 0 = the original per-value max loop (bit-identical, tests/unit/test_blend_t_live.cpp).
 inline void blend_t_reduce(uint32_t& live_mb_mask, uint32_t t_rb_addr) {
     mb_cb_consume_fence();
     const volatile uint32_t* w = reinterpret_cast<const volatile uint32_t*>(t_rb_addr);
-    // Per-microblock max T as fp32 bits (integer compares: no scalar FPU on
-    // the TRISCs). mbmax stays a non-negative non-NaN float (starts at +0), so
-    // `tf > mbmax` is `fb > mbmax && fb <= +inf` on the bits: negatives (sign
-    // bit set) and NaNs compare above +inf as unsigned and are rejected.
-    uint32_t mbmax[NUM_MB];
-    for (uint32_t m = 0; m < NUM_MB; ++m) {
-        mbmax[m] = 0u;
-    }
-    // The packed bf16 tile is 1024 values in ROW-MAJOR device-raster order (this
-    // kernel's pack/unpack is set up so device raster index == memory index; cf.
-    // make_ramp + mb_perm in blend_device.cpp), two bf16 per uint32 word (low
-    // half = even index). Memory index t = r*32 + c -> microblock vector
-    // V = 2*(r/2)+(c&1) (identity to the mask bit / dispatch vector).
-    for (uint32_t t = 0; t < 1024u; ++t) {
-        const uint32_t word = w[t >> 1];
-        const uint32_t half = (t & 1u) ? (word >> 16) : (word & 0xffffu);
-        const uint32_t fb = half << 16;
-        const uint32_t r = t >> 5;       // t = r*32 + c (row-major)
-        const uint32_t c = t & 31u;
-        const uint32_t V = (r & ~1u) | (c & 1u);
-        if (fb > mbmax[V] && fb <= 0x7F800000u) {
-            mbmax[V] = fb;
-        }
-    }
     uint32_t eps_bits;
     __builtin_memcpy(&eps_bits, &g_blend_t_eps, 4);
-    uint32_t live = 0u;
-    for (uint32_t m = 0; m < NUM_MB; ++m) {
-        if (dm_fp32::le(eps_bits, mbmax[m])) {  // mbmax >= eps
-            live |= (1u << m);
-        }
-    }
-    live_mb_mask = live;
+#if BLEND_FAST_TRED
+    live_mb_mask = blend_t_live_fast(w, eps_bits);
+#else
+    live_mb_mask = blend_t_live_ref(w, eps_bits);
+#endif
 }
 
 // Mid-accumulation T readback. ALL threads call this; each performs its thread
@@ -772,6 +831,14 @@ inline void process_tile_l1_blend(
 #if BLEND_COEF_DEST && BLEND_SFPU_UNORM
     MATH((blend_stage_inv()));
 #endif
+#if BLEND_CONST_HOIST && BLEND_COEF_DEST
+    MATH((blend_stage_hoist()));
+#endif
+#if BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_USE_RAW_STAGE
+    // SFPLOADI L0 USHORT, L0 HI16_ONLY, L2 USHORT opcode words, kept in registers.
+    uint32_t raw_klo = 0x71020000u, raw_khi = 0x71080000u, raw_klo2 = 0x71220000u;
+    asm volatile("" : "+r"(raw_klo), "+r"(raw_khi), "+r"(raw_klo2));
+#endif
 #if BLEND_ABL == 4
     for (uint32_t g = num_g; g < num_g; g++) {
 #else
@@ -805,7 +872,12 @@ inline void process_tile_l1_blend(
 #if BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1
             // Decoded on the SFPU; the dispatch reads the staged values, not these.
             const uint32_t op = 0u, cr = 0u, cg = 0u, cbv = 0u;
+#if BLEND_USE_RAW_STAGE
+            (void)w6; (void)w7;
+            MATH((blend_stage_coeffs_raw(rec, raw_klo, raw_khi, raw_klo2)));
+#else
             MATH((blend_stage_coeffs_q(rec[0], rec[1], rec[2], rec[4], rec[5], w6, w7)));
+#endif
 #else
             const uint32_t op = dm_fp32::unorm16_to_f(w6 & 0xffffu);
             const uint32_t cr = dm_fp32::unorm16_to_f(w6 >> 16);

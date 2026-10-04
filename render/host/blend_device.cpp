@@ -293,6 +293,12 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         compute_defines["BLEND_JUMP_WALK"] = env_or("GSPLAT_TT_BLEND_JUMP_WALK", "1");
         // Task #80: decode UNORM16 op/colour on the SFPU (0 = RISC, 2 = check mode).
         compute_defines["BLEND_SFPU_UNORM"] = env_or("GSPLAT_TT_BLEND_SFPU_UNORM", "1");
+        // Task #146 (bit-identical TRISC1 diet; 0 = the previous form, for A/B):
+        // per-subchunk constants for the bodies' exp and clamp, raw-instruction
+        // coefficient staging, and the range-compare T-saturation reduce.
+        compute_defines["BLEND_CONST_HOIST"] = env_or("GSPLAT_TT_BLEND_CONST_HOIST", "0");
+        compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "0");
+        compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "0");
     }
     ctx.compute = CreateKernel(
         program,
