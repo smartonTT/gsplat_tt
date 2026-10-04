@@ -841,6 +841,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_FAST"); e != nullptr && std::atoi(e) == 0) {
         defines["OL_EMIT_FAST"] = "0";
     }
+    // Task #164: GSPLAT_TT_OL_EMIT_FOLD=0 is the kill switch of the fast emit's
+    // folded blendrec scan (default on; same output either way).
+    if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_FOLD"); e != nullptr && std::atoi(e) == 0) {
+        defines["OL_EMIT_FOLD"] = "0";
+    }
     ctx.kol = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_bin_onelaunch.cpp",
@@ -959,6 +964,9 @@ static const std::vector<uint32_t>& ol_split_rows() {
 // the output is the same for any speeds. Default 1 with GSPLAT_TT_PRECULL=2,
 // else 0. Overrides GSPLAT_TT_OL_SPLIT_ROWS / GSPLAT_TT_SORT_EMIT_SPLIT.
 static bool ol_mover_speed() { return gsplat_tt::sort_split::ol_mover_speed_enabled(); }
+
+// Task #177: GSPLAT_TT_OL_MOVER_SPEED_FILE overrides the table for the sort and
+// the K2 alike (sort_split::mover_speed_table).
 
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
