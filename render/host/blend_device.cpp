@@ -225,7 +225,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // Task #83: GSPLAT_TT_BLEND_PROF=1 compiles fine per-tile Tracy zones into
     // the blend reader, compute and writer (floor attribution). Default OFF.
     const char* blend_prof = std::getenv("GSPLAT_TT_BLEND_PROF");
-    const bool blend_prof_on = blend_prof != nullptr && blend_prof[0] == '1';
+    // Task #172: =2 swaps the compute wait zones for per-tile fixed-cost sub-zones.
+    const bool blend_prof_on = blend_prof != nullptr && (blend_prof[0] == '1' || blend_prof[0] == '2');
+    const std::string blend_prof_level = blend_prof_on ? std::string(1, blend_prof[0]) : "0";
     std::map<std::string, std::string> writer_defines;
     if (blend_prof_on) {
         reader_defines["BLEND_PROF"] = "1";
@@ -252,7 +254,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
 
     std::map<std::string, std::string> compute_defines;
     if (blend_prof_on) {
-        compute_defines["BLEND_PROF"] = "1";
+        compute_defines["BLEND_PROF"] = blend_prof_level;
     }
     // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
     // per-core record/microblock/pixel counters into the blend compute kernel
