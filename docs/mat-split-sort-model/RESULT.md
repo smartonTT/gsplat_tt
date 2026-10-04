@@ -82,3 +82,43 @@ mean mover work goes up ~4% (each tile's records are published and re-read), and
 needed: a half-sort + merge-gather path for mid tiles, and a dependency-aware worklist built on
 t144's calibrated item costs. Before building, it needs a model over all 30 views with real counts
 (GSPLAT_TT_MAT_DUMP), using the host's cost estimates rather than the oracle.
+
+## Task #176: 30-view model with a dependency-aware host scheduler — SHELVE
+
+Data: one untraced 30-view bicycle run on yyzo-bh-07 p100a at f39a023 + the host-only
+`GSPLAT_TT_MAT_DUMP` hook (2410db6): per-tile record counts for every view (`out/dump.txt.gz`,
+first line is the warmup render and is skipped). All 30 view images are md5-identical to
+`md5-r82new.txt`. 17.5 ms/view (`out/run.log`). Per view: 57-83 tiles with 8192 < n <= 16384
+(mean 72), 0-5 tiles over 16384 (mean 3.2).
+
+Model (`model30.py`): the host plans on its cost estimates (half-sorts first, longest tile chain
+first, then the biggest ready item; a gather is ready once its halves' estimated finish has passed).
+The device runs each list in order on true costs = estimate x (1 + noise), noise per item kind from
+t144's fit residuals (4-12 %); a gather spins until both halves finish. 8 seeds per view. Untraced
+= traced x 0.5 (t168).
+
+Calibration: model tip window 3.392 ms traced vs measured 3.376 (t170 Tracy). But the model's tip
+gap between busiest mover and mean mover is 0.994 ms, and the measured one is 0.618 ms (including
+launch skew). So the model overstates the room the split can win back by ~0.38 ms traced.
+
+Mean saving, ms/view (`out/model30.txt`, `out/model30-sens.txt`):
+
+| case | merge 0.010 traced / untraced | merge 0.030 traced / untraced | views slower |
+|---|---|---|---|
+| mid tiles only (`--big=0`, the spec's case) | 0.231 / **0.115** | 0.187 / **0.094** | 4 / 6 |
+| mid + big tiles split (default) | 0.612 / **0.306** | 0.488 / **0.244** | 0 / 3 |
+| default, merge 0.015 / 0.020 / 0.025 | untraced 0.289 / 0.272 / 0.261 | | |
+| half-sort + gather 20 % slower than estimate (`--bias=0.2`) | 0.199 / 0.100 | 0.064 / 0.032 | 8 / 13 |
+| merge fixed cost 30 us | 0.590 / 0.295 | 0.471 / 0.236 | 0 / 2 |
+| no noise (`--sigma=0`, oracle) | 0.794 / 0.397 | 0.697 / 0.348 | 0 / 0 |
+| tip big items on t144 fit (`--ofit=t144`) | 0.817 / 0.408 | 0.692 / 0.346 | 0 / 0 |
+
+Measured ceiling: even a perfect split cannot beat the measured busiest-vs-mean gap (0.618 ms
+traced) minus the extra load the split adds (+0.025..+0.101 ms mean, model), i.e. at most
+~0.52-0.59 traced = **~0.26-0.30 ms/view untraced**, before the dependency waits.
+
+Recommendation: **SHELVE.** Splitting mid tiles alone gives ~0.1 ms/view. Splitting mid and big
+tiles reaches 0.24-0.31 ms/view only with costs matching estimates, sits at or below the 0.3 gate
+with no margin, and the measured ceiling caps it at ~0.3. Only the noise-free/oracle variants clear
+0.3, and they exceed the measured ceiling, so they are not credible. Revisit only if the mat window
+minus mean mover load grows past ~1.0 ms traced (e.g. a scene with more 8k-16k tiles).

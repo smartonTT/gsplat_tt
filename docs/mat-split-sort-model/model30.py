@@ -26,6 +26,7 @@ from collections import defaultdict
 ap = argparse.ArgumentParser()
 ap.add_argument('--dump', default='docs/mat-split-sort-model/out/dump.txt.gz')
 ap.add_argument('--dprint', default='', help='use t147 TC dprint (views 0,1) instead of the dump')
+ap.add_argument('--skip', type=int, default=1, help='leading dump lines to drop (run.py warmup render)')
 ap.add_argument('--merges', default='0.010,0.020,0.030')
 ap.add_argument('--merge_fix', type=float, default=10.0)
 ap.add_argument('--sort', type=float, default=0.0829)
@@ -55,7 +56,7 @@ def load_dump(path):
         if not line.startswith('MATCOUNTS') or ' ol=1 ' not in line:
             continue
         views.append([int(tok.split(':')[1]) for tok in line.split()[3:]])
-    return views
+    return views[a.skip:]
 
 
 def load_dprint(path):

@@ -1,0 +1,15 @@
+== --big=0
+  MEAN saving traced +0.231 ms/view, untraced +0.115 ms/view (min -0.078, max +0.274; 4 of 30 views slower)
+  MEAN saving traced +0.187 ms/view, untraced +0.094 ms/view (min -0.145, max +0.272; 6 of 30 views slower)
+== --bias=0.2
+  MEAN saving traced +0.199 ms/view, untraced +0.100 ms/view (min -0.204, max +0.419; 8 of 30 views slower)
+  MEAN saving traced +0.064 ms/view, untraced +0.032 ms/view (min -0.257, max +0.332; 13 of 30 views slower)
+== --sigma=0
+  MEAN saving traced +0.794 ms/view, untraced +0.397 ms/view (min +0.152, max +0.633; 0 of 30 views slower)
+  MEAN saving traced +0.697 ms/view, untraced +0.348 ms/view (min +0.109, max +0.601; 0 of 30 views slower)
+== --ofit=t144
+  MEAN saving traced +0.817 ms/view, untraced +0.408 ms/view (min +0.091, max +0.708; 0 of 30 views slower)
+  MEAN saving traced +0.692 ms/view, untraced +0.346 ms/view (min +0.029, max +0.606; 0 of 30 views slower)
+== --merge_fix=30
+  MEAN saving traced +0.590 ms/view, untraced +0.295 ms/view (min +0.017, max +0.576; 0 of 30 views slower)
+  MEAN saving traced +0.471 ms/view, untraced +0.236 ms/view (min -0.036, max +0.497; 2 of 30 views slower)
