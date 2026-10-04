@@ -80,8 +80,9 @@ ceil of the radius and the rounding. Non-finite members mark a tile "never skip"
   1 LSB gate: the reorder does not keep the original gid, so depth-tie order
   in the sort changes.
 - `drive2.sh` (reorder only, O2 kernels, `GSPLAT_TT_CHUNK_REORDER=1`) splits the
-  reorder cost from the -Os cost; it was still running at hand-off (log
-  `t169p2.log` in run 459).
+  reorder cost from the -Os cost. Inconclusive: the off arm repeated the
+  baseline (18.665 frame, gather_wait 4.481), but the reorder-only arm hit the
+  job timeout (rc 124) before printing stages (log `t169p2.log`, run 459).
 
 Decision: not landed. Stays default-off (`GSPLAT_TT_CHUNK_CULL=0`).
 What would make it pay: keep the original gid through sort (tie order and
