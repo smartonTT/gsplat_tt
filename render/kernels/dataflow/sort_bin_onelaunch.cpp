@@ -37,14 +37,24 @@
 // the gather published op/color UNORM16 (blendrec[10], [11]) and the depth key
 // ([12]), so the emit copies them and reads no depth pages.
 //
+// Fold (task #170, arg 27 = 1; host GSPLAT_TT_K2_FOLD=0 is the kill switch):
+// the K2 that wrote the pairs (tile_assign_scatter_seg.cpp K2_DIET) took the
+// same page split and already counted each mover's pairs per tile into row
+// 2 * core + mover of arg 6 (keep is all ones, so every pair counts). Steps 1,
+// 1b and 2 go away: the prefix reads both movers' rows and adds them, NCRISC
+// reads BRISC's row for its cursors. Each mover fills its pair window while it
+// waits (NCRISC for the bases, BRISC in barrier 2) and reads no keep pages (an
+// all-ones page stands in for them).
+//
 // RUNTIME ARGS
 //   0 gids  1 tids  2 keep  3 depth  4 blendrec  5 bucket  6 count rows
-//   7 base rows  8 totals rows  9 pg_lo  10 pg_hi (this mover's pages)  11 P
-//   12 num_tiles  13 row_pages (a row = row_pages 64 B pages)  14 core_id
-//   15 num_cores  16 tile_cap  17 tiles_x  18 mover (0 BRISC, 1 NCRISC)
+//   (fold: the K2's per-mover rows)  7 base rows  8 totals rows  9 pg_lo
+//   10 pg_hi (this mover's pages)  11 P  12 num_tiles  13 row_pages (a row =
+//   row_pages 64 B pages)  14 core_id  15 num_cores  16 tile_cap  17 tiles_x
+//   18 mover (0 BRISC, 1 NCRISC)
 //   19..24 semaphores: counted, based, arrive1, release1, arrive2, release2
-//   25 coordinator NoC x  26 coordinator NoC y
-//   27.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
+//   25 coordinator NoC x  26 coordinator NoC y  27 fold
+//   28.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs (gids, tids, keep, depth, blendrec,
 //   bucket, count rows, base rows, totals rows).
 
@@ -165,6 +175,7 @@ void kernel_main() {
     const uint32_t sem_release2_id = get_arg_val<uint32_t>(24);
     const uint32_t coord_x = get_arg_val<uint32_t>(25);
     const uint32_t coord_y = get_arg_val<uint32_t>(26);
+    const bool fold = get_arg_val<uint32_t>(27) != 0u;
 
     constexpr auto gids_args = TensorAccessorArgs<0>();
     constexpr auto tids_args = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -201,9 +212,16 @@ void kernel_main() {
     const uint32_t win_gid = get_write_ptr(CB_WIN + cbo);
     const uint32_t win_tid = win_gid + WIN_PAGES * PAGE_BYTES;
     const uint32_t win_keep = win_tid + WIN_PAGES * PAGE_BYTES;
+    // Fold: the window's gid and tid planes, read while this mover waits.
+    auto fill_window = [&]() {
+        for (uint32_t w = 0; w < nwin; w++) {
+            noc_async_read(get_noc_addr(pg_lo + w, gids_acc), win_gid + w * PAGE_BYTES, PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg_lo + w, tids_acc), win_tid + w * PAGE_BYTES, PAGE_BYTES);
+        }
+    };
 
     // ── 1. count this mover's kept pairs per tile ──────────────────────────
-    {
+    if (!fold) {
         DeviceZoneScopedN("sort_ol_count");
         const uint32_t btid_l1 = get_write_ptr(CB_BATCH + cbo);
         const uint32_t bkeep_l1 = btid_l1 + CNT_BATCH * PAGE_BYTES;
@@ -244,19 +262,34 @@ void kernel_main() {
     auto sem_counted = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(sem_counted_id));
     auto sem_based = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(sem_based_id));
     if (mover == 1) {
-        // Hand the count row to mover 0 and wait for the bases.
-        asm volatile("fence" ::: "memory");
-        noc_semaphore_set(sem_counted, 1u);
+        if (fold) {
+            // BRISC's count row (the K2's row 2 * core_id) for the cursors.
+            const uint32_t h_l1 = get_write_ptr(CB_H + cbo);
+            for (uint32_t q = 0; q < row_pages; q++) {
+                noc_async_read(get_noc_addr(core_id * 2u * row_pages + q, cnt_acc),
+                               h_l1 + q * PAGE_BYTES, PAGE_BYTES);
+            }
+            fill_window();
+            noc_async_read_barrier();
+        } else {
+            // Hand the count row to mover 0.
+            asm volatile("fence" ::: "memory");
+            noc_semaphore_set(sem_counted, 1u);
+        }
+        // Wait for the bases.
         noc_semaphore_wait(sem_based, 1u);
         noc_semaphore_set(sem_based, 0u);  // re-arm for the next launch
         invalidate_l1_cache();
     } else {
-        noc_semaphore_wait(sem_counted, 1u);
-        noc_semaphore_set(sem_counted, 0u);
-        invalidate_l1_cache();
+        if (!fold) {
+            noc_semaphore_wait(sem_counted, 1u);
+            noc_semaphore_set(sem_counted, 0u);
+            invalidate_l1_cache();
+        }
         const uint32_t row_span = row_pages * ELEMS_PER_PAGE;
         const bool coordinator = (core_id == 0u);
-        auto barrier = [&](uint32_t arrive_id, uint32_t release_id) {
+        // fill: fill_window() while waiting (the coordinator after releasing).
+        auto barrier = [&](uint32_t arrive_id, uint32_t release_id, bool fill) {
             DeviceZoneScopedN("sort_ol_barrier");
             noc_async_write_barrier();  // this core's DRAM writes are visible first
             if (coordinator) {
@@ -264,13 +297,15 @@ void kernel_main() {
                 noc_semaphore_wait(arrive, num_cores - 1u);
                 noc_semaphore_set(arrive, 0u);
                 for (uint32_t r = 1; r < num_cores; r++) {
-                    const uint32_t xy = get_arg_val<uint32_t>(27 + r);
+                    const uint32_t xy = get_arg_val<uint32_t>(28 + r);
                     sem_inc(xy & 0xFFFFu, xy >> 16, release_id);
                 }
                 noc_async_atomic_barrier();
+                if (fill) fill_window();
             } else {
                 sem_inc(coord_x, coord_y, arrive_id);
                 noc_async_atomic_barrier();
+                if (fill) fill_window();
                 auto release = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(release_id));
                 noc_semaphore_wait(release, 1u);
                 noc_semaphore_set(release, 0u);
@@ -279,13 +314,16 @@ void kernel_main() {
         };
 
         // ── 1b. the core's count row (both movers) to DRAM ─────────────────
-        for (uint32_t t = 0; t < row_span; t++) rowp[t] = (t < num_tiles) ? h0p[t] + h1p[t] : 0u;
-        asm volatile("fence" ::: "memory");
-        for (uint32_t q = 0; q < row_pages; q++) {
-            noc_async_write(row_l1 + q * PAGE_BYTES, get_noc_addr(core_id * row_pages + q, cnt_acc),
-                            PAGE_BYTES);
+        // (fold: the K2 wrote both movers' rows before this launch)
+        if (!fold) {
+            for (uint32_t t = 0; t < row_span; t++) rowp[t] = (t < num_tiles) ? h0p[t] + h1p[t] : 0u;
+            asm volatile("fence" ::: "memory");
+            for (uint32_t q = 0; q < row_pages; q++) {
+                noc_async_write(row_l1 + q * PAGE_BYTES,
+                                get_noc_addr(core_id * row_pages + q, cnt_acc), PAGE_BYTES);
+            }
+            barrier(sem_arrive1_id, sem_release1_id, false);
         }
-        barrier(sem_arrive1_id, sem_release1_id);
 
         // ── 3. column prefix over cores for the pages this core owns ───────
         {
@@ -297,15 +335,25 @@ void kernel_main() {
             auto bout = reinterpret_cast<volatile uint32_t*>(bst);
             auto tout = reinterpret_cast<volatile uint32_t*>(tst);
             for (uint32_t p = core_id; p < row_pages; p += num_cores) {
+                // Fold: BRISC's row page to cin, NCRISC's to bout (each word
+                // is read once, just before its base overwrites it).
                 for (uint32_t r = 0; r < num_cores; r++) {
-                    noc_async_read(get_noc_addr(r * row_pages + p, cnt_acc), pfx + r * PAGE_BYTES,
-                                   PAGE_BYTES);
+                    if (fold) {
+                        noc_async_read(get_noc_addr(2u * r * row_pages + p, cnt_acc),
+                                       pfx + r * PAGE_BYTES, PAGE_BYTES);
+                        noc_async_read(get_noc_addr((2u * r + 1u) * row_pages + p, cnt_acc),
+                                       bst + r * PAGE_BYTES, PAGE_BYTES);
+                    } else {
+                        noc_async_read(get_noc_addr(r * row_pages + p, cnt_acc),
+                                       pfx + r * PAGE_BYTES, PAGE_BYTES);
+                    }
                 }
                 noc_async_read_barrier();
                 for (uint32_t j = 0; j < ELEMS_PER_PAGE; j++) {
                     uint32_t acc = 0, pad = 0;
                     for (uint32_t r = 0; r < num_cores; r++) {
-                        const uint32_t h = cin[r * ELEMS_PER_PAGE + j];
+                        const uint32_t h =
+                            cin[r * ELEMS_PER_PAGE + j] + (fold ? bout[r * ELEMS_PER_PAGE + j] : 0u);
                         bout[r * ELEMS_PER_PAGE + j] = acc;
                         acc += h;
                         pad += (h + ELEMS_PER_PAGE - 1u) & ~(ELEMS_PER_PAGE - 1u);
@@ -323,7 +371,7 @@ void kernel_main() {
                 noc_async_write_barrier();  // staging is reused by the next page
             }
         }
-        barrier(sem_arrive2_id, sem_release2_id);
+        barrier(sem_arrive2_id, sem_release2_id, fold);
 
         // ── 4. this core's base row (first slot of its records per tile) ───
         for (uint32_t q = 0; q < row_pages; q++) {
@@ -334,8 +382,12 @@ void kernel_main() {
         asm volatile("fence" ::: "memory");
         noc_semaphore_set(sem_based, 1u);
     }
-    // Cursors: BRISC's records first, then NCRISC's, inside the core's chunk.
-    for (uint32_t t = 0; t < num_tiles; t++) curp[t] = rowp[t] + ((mover == 1) ? h0p[t] : 0u);
+    // Cursors: BRISC's records first, then NCRISC's, inside the core's chunk
+    // (fold: NCRISC read BRISC's count row into its own CB_H).
+    {
+        volatile uint32_t* h0 = fold ? hp : h0p;
+        for (uint32_t t = 0; t < num_tiles; t++) curp[t] = rowp[t] + ((mover == 1) ? h0[t] : 0u);
+    }
 
     // ── 5. emit: pack each kept pair's 32B record into its bucket slot ─────
     // Task #124 (one-launch sort v2): #100's emit ported (sort_bin.cpp
@@ -478,19 +530,25 @@ void kernel_main() {
     };
 
     // Batch k: pages [pg_lo + k*PB, +nb). Window batches read their planes in
-    // place; later ones use pair buffer k % 3, issued two batches ahead.
+    // place; later ones use pair buffer k % 3, issued two batches ahead. Fold:
+    // keep is all ones, so every batch's keep plane is the window's first PB
+    // keep pages set to 1 here (no keep page is read).
+    if (fold) {
+        auto ones = reinterpret_cast<volatile uint32_t*>(win_keep);
+        for (uint32_t i = 0; i < PB * ELEMS_PER_PAGE; i++) ones[i] = 1u;
+    }
     struct Planes { volatile int32_t* g; volatile int32_t* t; volatile int32_t* k; };
     auto planes = [&](uint32_t k) -> Planes {
         const uint32_t w = k * PB;
         if (w < nwin) {
             return {reinterpret_cast<volatile int32_t*>(win_gid + w * PAGE_BYTES),
                     reinterpret_cast<volatile int32_t*>(win_tid + w * PAGE_BYTES),
-                    reinterpret_cast<volatile int32_t*>(win_keep + w * PAGE_BYTES)};
+                    reinterpret_cast<volatile int32_t*>(win_keep + (fold ? 0u : w * PAGE_BYTES))};
         }
         const uint32_t o = (k % 3u) * PB * PAGE_BYTES;
         return {reinterpret_cast<volatile int32_t*>(gid_l1 + o),
                 reinterpret_cast<volatile int32_t*>(tid_l1 + o),
-                reinterpret_cast<volatile int32_t*>(keep_l1 + o)};
+                reinterpret_cast<volatile int32_t*>(fold ? win_keep : keep_l1 + o)};
     };
     const uint32_t nbatch = (npages + PB - 1u) / PB;
     auto batch_pages = [&](uint32_t k) { return (npages - k * PB < PB) ? (npages - k * PB) : PB; };
@@ -501,7 +559,10 @@ void kernel_main() {
         for (uint32_t b = 0; b < batch_pages(k); b++) {
             noc_async_read(get_noc_addr(pg0 + b, gids_acc), gid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
             noc_async_read(get_noc_addr(pg0 + b, tids_acc), tid_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
-            noc_async_read(get_noc_addr(pg0 + b, keep_acc), keep_l1 + o + b * PAGE_BYTES, PAGE_BYTES);
+            if (!fold) {
+                noc_async_read(get_noc_addr(pg0 + b, keep_acc), keep_l1 + o + b * PAGE_BYTES,
+                               PAGE_BYTES);
+            }
         }
     };
     // One blendrec page per run of equal kept g (scan_g carries the last kept
