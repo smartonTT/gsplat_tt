@@ -410,7 +410,7 @@ inline void blend_stage_coeffs_q(
     dst_reg[DR_S + S_CG] = unorm16_sfpu(w7 & 0xffffu);
     dst_reg[DR_S + S_CB] = unorm16_sfpu(w7 >> 16);
 }
-// Task #146 (BLEND_RAW_STAGE, host default 1): the same staging as
+// Task #146 (BLEND_RAW_STAGE, host default 0: -0.23 ms, under the 0.3 ms bar): the same staging as
 // blend_stage_coeffs_q, written as raw instructions so the RISC side is
 // shorter: the two SFPLOADI opcode words stay in registers (the compiler
 // rebuilt them with a lui per half), and 1/65535 is loaded into L1 once per

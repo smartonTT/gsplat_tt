@@ -1,0 +1,33 @@
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                   39250.9  3925.089       123.8      12.380    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               39233.6  3923.360       123.8      12.379    10890  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   24652.3  2465.229       230.0      22.997     7271  BRISC
+NCRISC-FW                  23880.0  2387.997       223.3      22.327     7260  NCRISC
+BRISC-KERNEL               23571.3  2357.131       218.1      21.807     7271  BRISC
+NCRISC-KERNEL              23461.6  2346.162       219.4      21.943     7260  NCRISC
+tile_blend_sfpu            19087.6  1908.765        58.9       5.890     3630  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              11468.8  1146.880        39.5       3.946     3630  TRISC_0,TRISC_1,TRISC_2
+pfwc                        8676.5   867.649        26.8       2.680     3630  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                8547.7   854.769        40.4       4.035     2420  BRISC,NCRISC
+proj_scatter                7485.9   748.589        35.6       3.560     2420  BRISC,NCRISC
+sort_subchunk_mat           7080.7   708.065        39.5       3.946     2420  BRISC,NCRISC
+tile_blend_load             6039.1   603.913        55.6       5.563     1210  NCRISC
+rd_l1_bulk                  5908.3   590.832        54.7       5.473    12452  NCRISC
+rd_bulk_wait                5808.9   580.890        54.2       5.416    12452  NCRISC
+wr_wait_out                 5648.1   564.814        53.6       5.356    11264  BRISC
+ta_bucket_scatter           3274.0   327.399        15.5       1.548     2420  BRISC,NCRISC
+sort_ol_count               1515.4   151.542        10.2       1.024     2420  BRISC,NCRISC
+cmp_emit                     824.5    82.451         9.3       0.935    33792  TRISC_0,TRISC_1,TRISC_2
+wr_pack                      740.8    74.083         7.7       0.765    11264  BRISC
+sort_ol_barrier              309.8    30.983         4.9       0.491     2420  BRISC
+rd_meta                       30.3     3.029         0.8       0.076    22528  NCRISC
+sort_ol_prefix                26.5     2.655         0.5       0.047     1210  BRISC
+rd_tid                        20.8     2.079         0.6       0.055    11264  NCRISC
+rd_dir                        20.1     2.014         0.4       0.045    12452  NCRISC
+cmp_init                       9.9     0.991         0.1       0.005    33792  TRISC_0,TRISC_1,TRISC_2
+proj_vis_scan                  4.4     0.438         4.4       0.438       11  BRISC
+cmp_wait_cnt                   0.8     0.083         0.0       0.000    37356  TRISC_0,TRISC_1,TRISC_2
+cmp_bulk_wait                  0.7     0.069         0.0       0.000    37356  TRISC_0,TRISC_1,TRISC_2
+rd_claim                       0.4     0.041         0.0       0.000    12474  NCRISC

@@ -295,9 +295,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         compute_defines["BLEND_SFPU_UNORM"] = env_or("GSPLAT_TT_BLEND_SFPU_UNORM", "1");
         // Task #146 (bit-identical TRISC1 diet; 0 = the previous form, for A/B):
         // per-subchunk constants for the bodies' exp and clamp, raw-instruction
-        // coefficient staging, and the range-compare T-saturation reduce.
+        // coefficient staging (default 0: only -0.23 ms), and the range-compare
+        // T-saturation reduce.
         compute_defines["BLEND_CONST_HOIST"] = env_or("GSPLAT_TT_BLEND_CONST_HOIST", "1");
-        compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "1");
+        compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "0");
         compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "1");
     }
     ctx.compute = CreateKernel(
