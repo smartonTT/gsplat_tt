@@ -924,6 +924,26 @@ static uint32_t sort_emit_split_permille() {
     return v;
 }
 
+// Task #166: GSPLAT_TT_OL_SPLIT_ROWS="<row0>/<row1>/..." sets BRISC's share
+// (permille) of a one-launch core's pair pages per logical core row (rows past
+// the list: GSPLAT_TT_SORT_EMIT_SPLIT). Default kOlSplitRowsDefault; "" = no
+// per-row split. Same output for any split. Read once.
+static constexpr const char* kOlSplitRowsDefault = "";
+static const std::vector<uint32_t>& ol_split_rows() {
+    static const std::vector<uint32_t> v = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_SPLIT_ROWS");
+        std::vector<uint32_t> rows;
+        if (!gsplat_tt::sort_split::parse_row_permille(e != nullptr ? e : kOlSplitRowsDefault, &rows)) {
+            std::cerr << "[gsplat_tt::sort] GSPLAT_TT_OL_SPLIT_ROWS=\"" << e
+                      << "\" is not a '/'-separated list of integers in [0, 1000]; using \""
+                      << kOlSplitRowsDefault << "\"\n";
+            gsplat_tt::sort_split::parse_row_permille(kOlSplitRowsDefault, &rows);
+        }
+        return rows;
+    }();
+    return v;
+}
+
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -2081,8 +2101,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
                 const uint32_t lo = ws.start[c];
                 const uint32_t hi = ws.start[c] + ws.count[c];
-                const uint32_t mid = lo + static_cast<uint32_t>(
-                    static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
+                const uint32_t mid = lo + gsplat_tt::sort_split::split_pages(
+                    ws.count[c], gsplat_tt::sort_split::row_permille(ol_split_rows(), c / ctx->grid.x,
+                                                          sort_emit_split_permille()));
                 std::vector<uint32_t> a = {
                     static_cast<uint32_t>(bgid->address()),
                     static_cast<uint32_t>(btid->address()),

@@ -17,7 +17,10 @@
 //    every write inside one 2 KB record page;
 //  - build_mat_worklist(onelaunch, ol_select) splits every over-cap subchunk
 //    into kOlMatPartRecs parts covering it exactly, keeps them NCRISC-only,
-//    and its largest item is <= 1.5x the mean slot on a heavy-tailed frame.
+//    and its largest item is <= 1.5x the mean slot on a heavy-tailed frame;
+//  - task #166: parse_row_permille accepts '/' or ',' lists in [0, 1000] and
+//    rejects anything else, and the bucket image of a core does not depend on
+//    where its pair pages split between BRISC and NCRISC (split_pages).
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -33,6 +36,9 @@
 using gsplat_tt::sort_split::build_mat_worklist;
 using gsplat_tt::sort_split::kMatMover0Cap;
 using gsplat_tt::sort_split::kOlMatPartRecs;
+using gsplat_tt::sort_split::parse_row_permille;
+using gsplat_tt::sort_split::row_permille;
+using gsplat_tt::sort_split::split_pages;
 
 namespace {
 
@@ -204,6 +210,53 @@ void test_ring() {
     }
 }
 
+// ── task #166: per-row BRISC/NCRISC page split ────────────────────────────
+void test_row_split() {
+    std::vector<uint32_t> v;
+    CHECK(parse_row_permille(nullptr, &v) && v.empty(), "null spec");
+    CHECK(parse_row_permille("", &v) && v.empty(), "empty spec");
+    CHECK(parse_row_permille("430/460", &v) && v == std::vector<uint32_t>({430u, 460u}), "430/460");
+    CHECK(parse_row_permille("0,1000,500", &v) && v == std::vector<uint32_t>({0u, 1000u, 500u}),
+          "0,1000,500");
+    for (const char* bad : {"1001", "-1", "4x0", "430/", "/430", "430//460", "abc", "430 460"}) {
+        CHECK(!parse_row_permille(bad, &v) && v.empty(), "accepted \"%s\"", bad);
+    }
+    parse_row_permille("430/460", &v);
+    CHECK(row_permille(v, 0, 500) == 430u && row_permille(v, 1, 500) == 460u &&
+              row_permille(v, 2, 500) == 500u,
+          "row_permille");
+    CHECK(split_pages(1000, 430) == 430u && split_pages(7, 500) == 3u && split_pages(0, 430) == 0u &&
+              split_pages(4000000000u, 1000) == 4000000000u,
+          "split_pages");
+
+    // One core: records of its pair pages (page = 16 records, tile per record).
+    // BRISC packs pages [0, mid), NCRISC [mid, n); NCRISC's cursor of tile t
+    // starts after BRISC's records of t (the kernel's h0p). Same image for any mid.
+    std::mt19937 rng(166);
+    for (int trial = 0; trial < 30; ++trial) {
+        const uint32_t T = 1u + rng() % 30u, cap = REC_PAGE_RECS * 2u, npages = rng() % 60u;
+        std::vector<std::pair<uint32_t, uint32_t>> recs;
+        for (uint32_t i = 0; i < npages * 16u; ++i) {
+            if (rng() % 3u == 0u) continue;  // keep == 0
+            recs.push_back({(rng() % 4u == 0u) ? rng() % T : rng() % std::min(T, 3u), i});
+        }
+        std::vector<uint32_t> ref;
+        for (const uint32_t pm : {500u, 0u, 300u, 430u, 460u, 1000u}) {
+            const uint32_t mid_el = split_pages(npages, pm) * 16u;
+            std::vector<std::pair<uint32_t, uint32_t>> r0, r1;
+            for (const auto& r : recs) (r.second < mid_el ? r0 : r1).push_back(r);
+            std::vector<uint32_t> c0(T, 0), c1(T, 0);
+            for (const auto& r : r0) c1[r.first]++;
+            std::vector<uint32_t> img(T * cap, 0u);
+            std::vector<Write> log;
+            emit(r0, c0, cap, 8u, img, log);
+            emit(r1, c1, cap, 8u, img, log);
+            if (pm == 500u) ref = img;
+            CHECK(img == ref, "trial %d: split %u permille changes the bucket image", trial, pm);
+        }
+    }
+}
+
 // ── work items ────────────────────────────────────────────────────────────
 void test_worklist() {
     // Bicycle-like frame: 39 x 26 tiles, a few huge, heavy tail.
@@ -264,6 +317,7 @@ void test_worklist() {
 int main() {
     test_select();
     test_ring();
+    test_row_split();
     test_worklist();
     if (g_fail != 0) {
         std::printf("%d check(s) failed\n", g_fail);
