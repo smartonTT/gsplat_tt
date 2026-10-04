@@ -75,6 +75,14 @@ def orphan_rows(lines, ts):
     return orphan
 
 
+def kept_rows(path):
+    """-> split rows of a device CSV with orphan zone markers (see orphan_rows) dropped,
+    for zone aggregators (analyze_zones, deep_zones) that pair START/END themselves."""
+    _, lines, ts = read_csv(path)
+    orphan = orphan_rows(lines, ts)
+    return [ln.rstrip("\n").split(",") for ln, o in zip(lines, orphan) if not o]
+
+
 def segment_frames(lines, ts, anchor=ANCHOR):
     """Assign every row a frame index (-1: orphan marker, see orphan_rows).
     Returns (frame_of_row int[], n_frames, cores/frame)."""

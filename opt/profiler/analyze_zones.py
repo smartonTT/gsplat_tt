@@ -14,6 +14,10 @@ recursion), sums durations, and reports per-zone:
 Usage: analyze_zones.py <profile_log_device.csv> [n_views]
 """
 import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from stitch_device_csv import kept_rows  # noqa: E402
 from collections import defaultdict
 
 CHIP_FREQ_MHZ = 1350.0          # from CSV header line 1
@@ -31,11 +35,8 @@ def main():
     per_core_cyc = defaultdict(lambda: defaultdict(int))  # zone -> (core,risc) -> cyc
     riscs = defaultdict(set)            # zone -> {risc}
 
-    with open(path) as f:
-        f.readline()  # ARCH header
-        f.readline()  # column header
-        for line in f:
-            parts = line.rstrip("\n").split(",")
+    if True:  # orphan START/END markers dropped (stale NCRISC-KERNEL START in t142-pc)
+        for parts in kept_rows(path):
             if len(parts) < 12:
                 continue
             cx, cy, risc = parts[1], parts[2], parts[3]

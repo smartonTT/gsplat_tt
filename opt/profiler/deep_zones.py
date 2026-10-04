@@ -11,6 +11,10 @@ Reports, for the whole capture (all views) and per-view:
 Usage: deep_zones.py <csv> [n_views]
 """
 import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from stitch_device_csv import kept_rows  # noqa: E402
 from collections import defaultdict
 
 FREQ_MHZ = 1350.0
@@ -29,10 +33,8 @@ core_first = {}                      # (cx,cy,risc) -> min start
 core_last = {}                       # (cx,cy,risc) -> max end
 risc_types = set()
 
-with open(path) as f:
-    f.readline(); f.readline()
-    for line in f:
-        p = line.rstrip("\n").split(",")
+if True:  # orphan START/END markers dropped (stale NCRISC-KERNEL START in t142-pc)
+    for p in kept_rows(path):
         if len(p) < 12:
             continue
         cx, cy, risc = p[1], p[2], p[3]

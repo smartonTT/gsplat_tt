@@ -105,3 +105,21 @@ def test_t142_precull_orphan_kernel_markers(tmp_path):
                                   + [["15", "9", t] for t in ("ZONE_START", "ZONE_END")])
     # no kept NCRISC-KERNEL span is longer than a frame (was 341 ms with the stale START)
     assert ts[frame >= 0].max() - ts[frame >= 0].min() < 11 * 200 * 1350 * 1000
+
+
+def test_kept_rows_drops_orphans_for_zone_aggregators(tmp_path):
+    """analyze_zones/deep_zones read via kept_rows: the stale t142-pc NCRISC-KERNEL
+    markers must not reach them, and deep_zones' NCRISC wall span stays under a frame."""
+    import gzip
+    from stitch_device_csv import kept_rows
+    p = tmp_path / "pc.csv"
+    p.write_bytes(gzip.decompress((ROOT / "tests/fixtures/profiler/t142_pc_3cores.csv.gz").read_bytes()))
+    _, lines, _ = read_csv(p)
+    kept = kept_rows(p)
+    assert len(kept) == len(lines) - 6
+    out = subprocess.run([sys.executable, str(ROOT / "opt/profiler/deep_zones.py"), str(p), "11"],
+                         capture_output=True, text=True, check=True).stdout
+    span = next(l for l in out.splitlines() if l.startswith("NCRISC ")).split()[2]
+    assert float(span) < 250.0  # per-view ms; 313 with the stale NCRISC-KERNEL START
+    subprocess.run([sys.executable, str(ROOT / "opt/profiler/analyze_zones.py"), str(p), "11"],
+                   capture_output=True, text=True, check=True)
