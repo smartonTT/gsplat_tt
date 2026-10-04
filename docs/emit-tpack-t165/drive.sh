@@ -14,7 +14,7 @@ if [[ $STEPS == *sync* ]]; then
   [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 fi
 if [[ $STEPS == *smoke* ]]; then
-  ttp lock p100 -- $DEVRUN --host $H --no-verify --timeout 400 --tag t165-smoke -- \
+  ttp lock p100 -- $DEVRUN --host $H --no-verify --timeout 280 --tag t165-smoke -- \
     "bash $T/docs/emit-tpack-t165/remote_time.sh 0 tp:GSPLAT_TT_OL_EMIT_TPACK=1"
   echo "SMOKE_RC=$?"
 fi

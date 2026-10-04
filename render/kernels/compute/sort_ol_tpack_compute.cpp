@@ -6,8 +6,8 @@
 // emit on the 3 TRISCs. Each TRISC packs its third of every segment both movers
 // publish (protocol: ../dataflow/sort_ol_tpack.h): the same 32 B records as the
 // mover's fast loop (sort_bin_onelaunch.cpp), into the mover's ring. L1 only:
-// no LLK, no CB traffic. UNPACK sends the two mailbox addresses to MATH, whose
-// CB interfaces are not set up.
+// no LLK, no CB traffic. UNPACK sends the two mailbox addresses to MATH and
+// PACK (MATH has no CB interfaces, PACK no read pointers).
 
 #include <cstdint>
 
@@ -100,6 +100,8 @@ void kernel_main() {
         a1 = get_local_cb_interface(CB_TPK).fifo_rd_ptr << 4;        // mover 1 (NCRISC)
         ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, a0);
         ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, a1);
+        ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, a0);
+        ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, a1);
     }));
     MATH(({
         me = 1u;
@@ -108,8 +110,8 @@ void kernel_main() {
     }));
     PACK(({
         me = 2u;
-        a0 = get_local_cb_interface(CB_TPK + 16u).fifo_rd_ptr << 4;
-        a1 = get_local_cb_interface(CB_TPK).fifo_rd_ptr << 4;
+        a0 = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
+        a1 = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
     }));
     volatile uint32_t* mbs[2] = {reinterpret_cast<volatile uint32_t*>(a0), reinterpret_cast<volatile uint32_t*>(a1)};
     uint32_t expect[2] = {1u, 1u};
