@@ -1,0 +1,42 @@
+total all-core idle between programs: 1.586 ms/view
+--- zones
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                   40873.0  4087.300       130.1      13.010    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               40855.8  4085.582       130.1      13.008    10890  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   21098.4  2109.842       197.9      19.793     6050  BRISC
+BRISC-KERNEL               20562.2  2056.223       189.4      18.943     6050  BRISC
+NCRISC-FW                  20264.2  2026.417       190.4      19.036     6050  NCRISC
+NCRISC-KERNEL              20260.3  2026.032       190.3      19.033     6050  NCRISC
+tile_blend_sfpu            19867.9  1986.786        61.6       6.157     3630  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              11482.3  1148.233        39.5       3.952     3630  TRISC_0,TRISC_1,TRISC_2
+pfwc                        9505.0   950.499        31.0       3.097     3630  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                8540.4   854.037        40.9       4.086     2420  BRISC,NCRISC
+sort_subchunk_mat           7090.2   709.018        39.5       3.952     2420  BRISC,NCRISC
+tile_blend_load             6290.1   629.012        57.8       5.781     1210  NCRISC
+rd_l1_bulk                  6162.8   616.275        57.0       5.704    12452  NCRISC
+mat_ol_sort                 3697.3   369.726        20.8       2.075    11521  BRISC,NCRISC
+mat_ol_perm                 2764.6   276.459        17.2       1.717    12068  BRISC,NCRISC
+mat_cull                    1995.6   199.559        11.4       1.137    12452  BRISC,NCRISC
+sort_ol_count               1514.6   151.458        10.3       1.027     2420  BRISC,NCRISC
+sort_ol_barrier              314.3    31.434         4.9       0.494     2420  BRISC
+mat_ol_rd                    190.3    19.033         2.4       0.245    11137  BRISC,NCRISC
+mat_ol_keys                  116.5    11.652         4.1       0.410      384  NCRISC
+mat_ol_gather                115.3    11.533         4.5       0.445      384  NCRISC
+mat_ol_wr                     33.4     3.336         0.3       0.026    12452  BRISC,NCRISC
+sort_ol_prefix                26.5     2.653         0.5       0.047     1210  BRISC
+mat_meta                      13.6     1.358         0.1       0.011    34563  BRISC,NCRISC
+--- deep (sort_ol / mat_ol)
+sort_ol_emit                              8540.4   284.68     1.36     80.7  BRISC,NCRISC
+mat_ol_sort                               3697.3   123.24     0.69    384.0  BRISC,NCRISC
+mat_ol_perm                               2764.6    92.15     0.57    402.3  BRISC,NCRISC
+sort_ol_count                             1514.6    50.49     0.34     80.7  BRISC,NCRISC
+sort_ol_barrier                            314.3    10.48     0.16     80.7  BRISC
+mat_ol_gather                              115.3     3.84     0.15     12.8  NCRISC
+mat_ol_keys                                116.5     3.88     0.14     12.8  NCRISC
+mat_ol_rd                                  190.3     6.34     0.08    371.2  BRISC,NCRISC
+sort_ol_prefix                              26.5     0.88     0.02     40.3  BRISC
+mat_ol_wr                                   33.4     1.11     0.01    415.1  BRISC,NCRISC
+-rw-r--r--@ 1 smarton  staff    50825 Oct  4 13:17 tmp/t144-cap-dump.txt.gz
+-rw-r--r--@ 1 smarton  staff  3160432 Oct  4 13:17 tmp/t144-cap.csv.gz

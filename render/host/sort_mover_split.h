@@ -54,41 +54,51 @@ struct MatWorkAssignment {
     uint32_t movers = 1;
 };
 
-// Task #144: measured materialize item cost (us) = a + b * records, per item
-// kind (k: 0 = whole tile, 1 = one-launch big-tile subchunk; records = tile
-// count for both) and per mover (r: 0 = NCRISC, 1 = BRISC; big items run on
-// NCRISC only). Used for the one-launch, select-off LPT; off = the legacy
-// record-count costs. GSPLAT_TT_MAT_COST="aW_N,bW_N,aW_B,bW_B,aB_N,bB_N"
-// overrides the fit, GSPLAT_TT_MAT_COST=0 turns it off.
+// Task #144: measured one-launch materialize item cost (us), fitted from the
+// mat_* zones of a GSPLAT_TT_MATCULL_PROF=1 capture (yyzo-bh-07 p100a, bicycle
+// views 0:10, docs/mat-lpt-t144): a whole-tile item of n records costs
+// aw + bw * n on NCRISC (n <= m0_cap; rms 4 us), awb + bwb * n on BRISC (rms
+// 24 us) and awl + bwl * n on NCRISC above m0_cap (rms 109 us; BRISC cannot
+// take those); a big-tile subchunk item (NCRISC only) ab + bb * n + cb * l_sub
+// (rms 351 us). The legacy costs (n, and n + l_sub for a big item) priced a big
+// item ~1.7x a whole tile of the same records, which left NCRISC slots holding
+// one underloaded while others carried 1.2-1.4x the mean. Used for the
+// one-launch, select-off LPT. GSPLAT_TT_MAT_COST="aw,bw,awb,bwb,awl,bwl,ab,bb,cb"
+// overrides the fit, GSPLAT_TT_MAT_COST=0 restores the record-count costs.
 struct MatCostModel {
     bool on = false;
-    double a[2][2] = {{0, 0}, {0, 0}};
-    double b[2][2] = {{0, 0}, {0, 0}};
-    // Cost in ns of a kind-k item of n records on mover r.
-    uint64_t ns(int k, int r, uint32_t n) const {
-        const double us = a[k][r] + b[k][r] * static_cast<double>(n);
+    double aw = 0, bw = 0, awb = 0, bwb = 0, awl = 0, bwl = 0, ab = 0, bb = 0, cb = 0;
+    static uint64_t to_ns(double us) {
         return static_cast<uint64_t>(us > 0.0 ? us * 1000.0 + 0.5 : 0.0);
+    }
+    // Whole-tile item of n records on NCRISC (r = 0) or BRISC (r = 1).
+    uint64_t whole_ns(int r, uint32_t n, uint32_t m0_cap) const {
+        const double x = static_cast<double>(n);
+        if (r == 1) return to_ns(awb + bwb * x);
+        return to_ns(n > m0_cap ? awl + bwl * x : aw + bw * x);
+    }
+    uint64_t big_ns(uint32_t n, uint32_t l_sub) const {
+        return to_ns(ab + bb * static_cast<double>(n) + cb * static_cast<double>(l_sub));
     }
 };
 
 inline MatCostModel parse_mat_cost(const char* e) {
     MatCostModel m;
     if (e == nullptr || e[0] == '\0' || (e[0] == '0' && e[1] == '\0')) return m;
-    double v[6];
-    if (std::sscanf(e, "%lf,%lf,%lf,%lf,%lf,%lf", &v[0], &v[1], &v[2], &v[3], &v[4],
-                    &v[5]) != 6) {
+    double v[9];
+    if (std::sscanf(e, "%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf,%lf", &v[0], &v[1], &v[2], &v[3],
+                    &v[4], &v[5], &v[6], &v[7], &v[8]) != 9) {
         std::fprintf(stderr, "[MAT_COST] bad GSPLAT_TT_MAT_COST '%s', using record counts\n", e);
         return m;
     }
     m.on = true;
-    m.a[0][0] = v[0]; m.b[0][0] = v[1];
-    m.a[0][1] = v[2]; m.b[0][1] = v[3];
-    m.a[1][0] = v[4]; m.b[1][0] = v[5];
-    m.a[1][1] = v[4]; m.b[1][1] = v[5];
+    m.aw = v[0]; m.bw = v[1]; m.awb = v[2]; m.bwb = v[3];
+    m.awl = v[4]; m.bwl = v[5]; m.ab = v[6]; m.bb = v[7]; m.cb = v[8];
     return m;
 }
 
-inline constexpr const char* kMatCostDefault = "0";
+inline constexpr const char* kMatCostDefault =
+    "5.5,0.197,16.1,0.187,-282,0.2226,0,0.1083,0.1267";
 
 inline const MatCostModel& mat_cost_model_env() {
     static const MatCostModel m = [] {
@@ -175,11 +185,12 @@ inline MatWorkAssignment build_mat_worklist(
     }
     const bool calib = cm.on && onelaunch && !ol_select;
     for (auto& it : items) {
-        if (calib && (it.kind == 'w' || it.kind == 'b')) {
-            const int k = (it.kind == 'b') ? 1 : 0;
-            const uint32_t n = static_cast<uint32_t>(counts[it.tile]);
-            it.cost = cm.ns(k, 0, n);
-            it.cost_b = cm.ns(k, 1, n);
+        const uint32_t n = static_cast<uint32_t>(counts[it.tile]);
+        if (calib && it.kind == 'w') {
+            it.cost = cm.whole_ns(0, n, m0_cap);
+            it.cost_b = cm.whole_ns(1, n, m0_cap);
+        } else if (calib && it.kind == 'b') {
+            it.cost = it.cost_b = cm.big_ns(n, it.recs);
         } else {
             it.cost_b = it.cost;
         }

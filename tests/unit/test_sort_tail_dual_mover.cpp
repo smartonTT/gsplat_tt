@@ -170,6 +170,72 @@ int check_radix(std::mt19937& rng, const std::vector<int64_t>& counts) {
     return bad;
 }
 
+// Task #144: the calibrated one-launch LPT (select off) keeps the legacy item
+// set and the BRISC cap, and under its own cost model is no busier than the
+// record-count assignment (never busier per scene, lighter summed over scenes:
+// in many scenes one big item sets both).
+uint64_t g_calib_sum = 0, g_legacy_sum = 0;
+
+uint64_t model_cost(const MatCostModel& cm, const std::vector<int64_t>& counts, uint32_t t,
+                    uint32_t w, int r) {
+    const uint32_t cnt = static_cast<uint32_t>(counts[t]);
+    if (cnt <= render_config::kOverflowL1Cap) return cm.whole_ns(r, cnt, kMatMover0Cap);
+    const uint32_t l_sub = std::min(kBucketFit, cnt - (w & 0xFFu) * kBucketFit);
+    return cm.big_ns(cnt, l_sub);
+}
+
+int check_mat_calib(const std::vector<int64_t>& counts) {
+    const MatCostModel cm = parse_mat_cost(kMatCostDefault);
+    const MatCostModel off = parse_mat_cost("0");
+    const auto leg = build_mat_worklist(counts, kTiles, kCores, kBucketFit, 2, kMatMover0Cap,
+                                        true, false, off);
+    const auto cal = build_mat_worklist(counts, kTiles, kCores, kBucketFit, 2, kMatMover0Cap,
+                                        true, false, cm);
+    int bad = 0;
+    if (items_of(leg) != items_of(cal)) {
+        std::printf("calib: item sets differ\n");
+        ++bad;
+    }
+    auto busiest = [&](const MatWorkAssignment& a) {
+        uint64_t mx = 0;
+        for (uint32_t s = 0; s < 2 * kCores; ++s) {
+            uint64_t l = 0;
+            for (uint32_t i = 0; i < a.per_core_count[s]; ++i) {
+                const uint32_t j = 2 * (a.per_core_offset[s] + i);
+                const uint32_t cnt = static_cast<uint32_t>(counts[a.flat[j]]);
+                if ((s & 1u) && (cnt > kMatMover0Cap)) {
+                    std::printf("calib: BRISC slot %u got a %u-record item\n", s, cnt);
+                    ++bad;
+                }
+                l += model_cost(cm, counts, a.flat[j], a.flat[j + 1], static_cast<int>(s & 1u));
+            }
+            mx = std::max(mx, l);
+        }
+        return mx;
+    };
+    const uint64_t ml = busiest(leg), mc = busiest(cal);
+    g_calib_sum += mc;
+    g_legacy_sum += ml;
+    if (mc > ml) {
+        std::printf("calib: busiest %llu above legacy %llu\n", (unsigned long long)mc,
+                    (unsigned long long)ml);
+        ++bad;
+    }
+    return bad;
+}
+
+int check_cost_parse() {
+    int bad = 0;
+    if (parse_mat_cost("0").on || parse_mat_cost("").on || parse_mat_cost(nullptr).on) ++bad;
+    if (!parse_mat_cost(kMatCostDefault).on) ++bad;
+    const MatCostModel m = parse_mat_cost("1,2,3,4,5,6,7,8,9");
+    if (!m.on || m.whole_ns(0, 10, 6144) != 21000u || m.whole_ns(1, 10, 6144) != 43000u ||
+        m.whole_ns(0, 7000, 6144) != 42005000u || m.big_ns(2, 1) != 32000u)
+        ++bad;
+    if (bad) std::printf("cost parse: %d failures\n", bad);
+    return bad;
+}
+
 }  // namespace
 
 int main() {
@@ -179,7 +245,14 @@ int main() {
         const auto counts = random_counts(rng);
         bad += check_mat(counts);
         bad += check_radix(rng, counts);
+        bad += check_mat_calib(counts);
         ++cases;
+    }
+    bad += check_cost_parse();
+    if (!(g_calib_sum < g_legacy_sum)) {
+        std::printf("calib: summed busiest %llu not below legacy %llu\n",
+                    (unsigned long long)g_calib_sum, (unsigned long long)g_legacy_sum);
+        ++bad;
     }
     std::printf("%s: %d random scenes, %d failures\n", bad ? "FAIL" : "PASS", cases, bad);
     return bad ? 1 : 0;
