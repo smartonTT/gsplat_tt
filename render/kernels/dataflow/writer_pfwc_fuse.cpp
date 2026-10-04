@@ -123,8 +123,8 @@ void kernel_main() {
     auto p_cr = reinterpret_cast<volatile uint32_t*>(l1_cr);
     auto p_cg = reinterpret_cast<volatile uint32_t*>(l1_cg);
     auto p_cb = reinterpret_cast<volatile uint32_t*>(l1_cb);
-    auto q01 = reinterpret_cast<volatile uint32_t*>(l1_q01);
-    auto q23 = reinterpret_cast<volatile uint32_t*>(l1_q23);
+    [[maybe_unused]] auto q01 = reinterpret_cast<volatile uint32_t*>(l1_q01);
+    [[maybe_unused]] auto q23 = reinterpret_cast<volatile uint32_t*>(l1_q23);
     auto w_rec = reinterpret_cast<volatile uint32_t*>(l1_rec);
     auto w_dep = reinterpret_cast<volatile uint32_t*>(l1_dep);
     auto w_offs = reinterpret_cast<volatile uint32_t*>(l1_offs);

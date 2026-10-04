@@ -45,12 +45,14 @@ inline int sfpu_vis_mode() {
 // Lever B (task #125, GSPLAT_TT_PFWC_FUSE): 1 = the pfwc writer also compacts
 // the visible gaussians into per-core segments (writer_pfwc_fuse.cpp) and the
 // tile_assign segment K2 builds the pairs from them; the gather scan / scatter
-// and the TA vis K2 do not run. 0 (default) = kill switch, lever 2 path. Needs
-// GSPLAT_TT_SFPU_VIS != 0.
+// and the TA vis K2 do not run. 0 = kill switch, lever 2 path. Needs
+// GSPLAT_TT_SFPU_VIS != 0. Default 1 since task #122 (bicycle 30 views on
+// yyzo-bh-07 p100a: 26.2-26.3 against 29.6-29.7 ms/view, md5-identical), but
+// only with GSPLAT_TT_SFPU_VIS=1: the =2 cross-check keeps the lever 2 path.
 inline int pfwc_fuse_mode() {
     static const int v = [] {
         const char* e = std::getenv("GSPLAT_TT_PFWC_FUSE");
-        if (e == nullptr || *e == '\0') return 0;
+        if (e == nullptr || *e == '\0') return sfpu_vis_mode() == 1 ? 1 : 0;
         const int x = std::atoi(e);
         if (x < 0 || x > 1)
             throw std::invalid_argument(std::string("GSPLAT_TT_PFWC_FUSE must be 0 or 1, got '") +
