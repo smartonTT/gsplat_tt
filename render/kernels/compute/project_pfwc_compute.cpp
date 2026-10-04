@@ -919,17 +919,15 @@ void kernel_main() {
         {
             cb_wait_front(CB_OP, 1);
             tile_regs_acquire();
+            // One init: every pfwc CB is Float32 32x32 (pfwc_device.cpp), and
+            // the five redundant inits put the program over the kernel config
+            // buffer on the lever-B tip (task #142).
             copy_tile_to_dst_init_short(CB_TMP_A);
             copy_tile(CB_TMP_A, 0, 0);
-            copy_tile_to_dst_init_short(CB_TMP_B);
             copy_tile(CB_TMP_B, 0, 1);
-            copy_tile_to_dst_init_short(CB_TMP_C);
             copy_tile(CB_TMP_C, 0, 2);
-            copy_tile_to_dst_init_short(CB_OP);
             copy_tile(CB_OP, 0, 3);
-            copy_tile_to_dst_init_short(CB_TMP_RX);
             copy_tile(CB_TMP_RX, 0, 4);
-            copy_tile_to_dst_init_short(CB_TMP_RY);
             copy_tile(CB_TMP_RY, 0, 5);
             cb_pop_front(CB_TMP_RX, 1);
             cb_pop_front(CB_TMP_RY, 1);
@@ -951,17 +949,12 @@ void kernel_main() {
         {
             cb_wait_front(CB_OP, 1);
             tile_regs_acquire();
-            copy_tile_to_dst_init_short(CB_TMP_TZ);
+            copy_tile_to_dst_init_short(CB_TMP_TZ);  // all Float32: one init
             copy_tile(CB_TMP_TZ, 0, 0);
-            copy_tile_to_dst_init_short(CB_OP);
             copy_tile(CB_OP, 0, 1);
-            copy_tile_to_dst_init_short(CB_TMP_MX);
             copy_tile(CB_TMP_MX, 0, 2);
-            copy_tile_to_dst_init_short(CB_TMP_MY);
             copy_tile(CB_TMP_MY, 0, 3);
-            copy_tile_to_dst_init_short(CB_TMP_RX);
             copy_tile(CB_TMP_RX, 0, 4);
-            copy_tile_to_dst_init_short(CB_TMP_RY);
             copy_tile(CB_TMP_RY, 0, 5);
 
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
