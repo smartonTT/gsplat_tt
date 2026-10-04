@@ -489,10 +489,23 @@ inline void blend_stage_floor() {
 // the 16-step mask walk (one nop per taken branch), so a5 - a1 = walk cost.
 // Task #83: fine per-tile zones for floor attribution (host env
 // GSPLAT_TT_BLEND_PROF=1; compiled out by default).
+// Task #172: GSPLAT_TT_BLEND_PROF=2 swaps the (near-zero) wait zones for the
+// per-tile fixed-cost sub-zones (cmp_stage, cmp_trb, cmp_sc_tail; cmp_init and
+// cmp_emit at both levels) so one launch stays inside the 250-marker buffer.
 #if defined(BLEND_PROF) && BLEND_PROF
 #define BLEND_PZ(name) DeviceZoneScopedN(name)
 #else
 #define BLEND_PZ(name) ((void)0)
+#endif
+#if defined(BLEND_PROF) && BLEND_PROF == 1
+#define BLEND_PZ_WAIT(name) DeviceZoneScopedN(name)
+#else
+#define BLEND_PZ_WAIT(name) ((void)0)
+#endif
+#if defined(BLEND_PROF) && BLEND_PROF >= 2
+#define BLEND_PZ_SUB(name) DeviceZoneScopedN(name)
+#else
+#define BLEND_PZ_SUB(name) ((void)0)
 #endif
 
 #ifndef BLEND_ABL
@@ -843,34 +856,68 @@ inline void st_emit() {
 // ---- Per-tile MATH cost (GSPLAT_TT_MB_TILECYC=1, task #147; default OFF) ----
 // Records, live records (mask != 0) and wall-clock cycles (1350 MHz) spent in
 // process_tile_l1_blend per output tile, summed over its subchunks; DPRINTed
-// ("TC rec live cyc") at kernel end. Feeds the fused materialize+blend model.
+// ("TC rec live cyc ...") at kernel end. Feeds the fused materialize+blend model.
+// Task #172 appends the per-tile fixed-cost split (all MATH-thread wall cycles):
+//   disp  microblock dispatches (popcount of every dispatched mask)
+//   ntrb  T readbacks, trb their cycles (inside cyc)
+//   stage per-subchunk SFPU start + floor/inv/hoist staging (inside cyc)
+//   tail  per-subchunk SFPU done + MATH->UNPACK ack + slab pop
+//   init  DEST acquire + fill R/G/B/T + ramp copies (acquire waits on the
+//         previous tile's pack)
+//   emit  commit + R/G/B pack issue
+//   wall  tile start (first counts wait) -> emit end
+// Line: "TC rec live cyc disp ntrb trb stage tail init emit wall".
 #if defined(GSPLAT_TT_MB_TILECYC) && defined(TRISC_MATH)
 struct TileCyc {
-    uint32_t rec, live, cyc;
+    uint32_t rec, live, cyc, disp, ntrb, trb, stage, tail, init, emit, wall;
 };
-constexpr uint32_t kTcMax = 192;
+constexpr uint32_t kTcMax = 48;
 TileCyc g_tc[kTcMax];
 uint32_t g_tc_n = 0;
+uint32_t g_tc_drop = 0;
 TileCyc g_tc_cur{};
 uint32_t g_tc_t0 = 0;
+uint32_t g_tc_tp = 0;  // start of the current part
+uint32_t g_tc_tw = 0;  // start of the current tile
 inline uint32_t tc_now() {
     return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0];
 }
+inline uint32_t tc_popc(uint32_t v) {
+    uint32_t n = 0;
+    while (v != 0u) {
+        v &= v - 1u;
+        ++n;
+    }
+    return n;
+}
 inline void tc_dump() {
     for (uint32_t i = 0; i < g_tc_n; ++i) {
-        DPRINT << "TC " << g_tc[i].rec << " " << g_tc[i].live << " " << g_tc[i].cyc << ENDL();
+        const TileCyc& c = g_tc[i];
+        DPRINT << "TC " << c.rec << " " << c.live << " " << c.cyc << " " << c.disp << " " << c.ntrb
+               << " " << c.trb << " " << c.stage << " " << c.tail << " " << c.init << " " << c.emit
+               << " " << c.wall << ENDL();
     }
-    DPRINT << "TCEND " << g_tc_n << ENDL();
+    DPRINT << "TCEND " << g_tc_n << " " << g_tc_drop << ENDL();
 }
 #define TC_BEGIN() MATH((g_tc_t0 = tc_now()))
-#define TC_LIVE() MATH((++g_tc_cur.live))
+#define TC_LIVE(mask) MATH((++g_tc_cur.live, g_tc_cur.disp += tc_popc(mask)))
 #define TC_END(n) MATH((g_tc_cur.cyc += tc_now() - g_tc_t0, g_tc_cur.rec += (n)))
-#define TC_EMIT() MATH((g_tc_n < kTcMax ? (void)(g_tc[g_tc_n++] = g_tc_cur) : (void)0, g_tc_cur = TileCyc{}))
+#define TC_PART0() MATH((g_tc_tp = tc_now()))
+#define TC_PART1(field) MATH((g_tc_cur.field += tc_now() - g_tc_tp))
+#define TC_TRB() MATH((++g_tc_cur.ntrb))
+#define TC_TILE0() MATH((g_tc_tw = tc_now()))
+#define TC_EMIT() \
+    MATH((g_tc_cur.wall = tc_now() - g_tc_tw, \
+          g_tc_n < kTcMax ? (void)(g_tc[g_tc_n++] = g_tc_cur) : (void)++g_tc_drop, g_tc_cur = TileCyc{}))
 #define TC_DUMP() MATH((tc_dump()))
 #else
 #define TC_BEGIN()
-#define TC_LIVE()
+#define TC_LIVE(mask)
 #define TC_END(n)
+#define TC_PART0()
+#define TC_PART1(field)
+#define TC_TRB()
+#define TC_TILE0()
 #define TC_EMIT()
 #define TC_DUMP()
 #endif
@@ -884,22 +931,26 @@ inline void process_tile_l1_blend(
         return;
     }
     {
-        BLEND_PZ("cmp_bulk_wait");
+        BLEND_PZ_WAIT("cmp_bulk_wait");
         cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
     }
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
     TC_BEGIN();
-
-    MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+    TC_PART0();
+    {
+        BLEND_PZ_SUB("cmp_stage");
+        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
 #if BLEND_COEF_DEST && defined(BLEND_PIXEL_FLOOR)
-    MATH((blend_stage_floor()));
+        MATH((blend_stage_floor()));
 #endif
 #if BLEND_COEF_DEST && BLEND_SFPU_UNORM
-    MATH((blend_stage_inv()));
+        MATH((blend_stage_inv()));
 #endif
 #if BLEND_CONST_HOIST && BLEND_COEF_DEST
-    MATH((blend_stage_hoist()));
+        MATH((blend_stage_hoist()));
 #endif
+    }
+    TC_PART1(stage);
 #if BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_USE_RAW_STAGE
     // SFPLOADI L0 USHORT, L0 HI16_ONLY, L2 USHORT opcode words, kept in registers.
     uint32_t raw_klo = 0x71020000u, raw_khi = 0x71080000u, raw_klo2 = 0x71220000u;
@@ -913,7 +964,11 @@ inline void process_tile_l1_blend(
         // Periodic transmittance readback (per-tile gaussian count, across
         // subchunks). period 0 => disabled (compiles out to the baseline path).
         if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+            BLEND_PZ_SUB("cmp_trb");
+            TC_PART0();
             blend_t_readback(live_mb_mask);
+            TC_PART1(trb);
+            TC_TRB();
         }
         ++g_seen;
         const uint32_t* rec = l1_splat_words(buck, g);
@@ -941,7 +996,7 @@ inline void process_tile_l1_blend(
 #else
         if (mask != 0u) {
 #endif
-            TC_LIVE();
+            TC_LIVE(mask);
             // UNORM16 op/color -> fp32 bits, integer bit-exact (TRISC scalar code
             // has no FPU; the float form was 8 libgcc calls per record, task #39).
             const uint32_t w6 = rec[6], w7 = rec[7];
@@ -977,6 +1032,8 @@ inline void process_tile_l1_blend(
 #endif
         }
     }
+    TC_PART0();
+    BLEND_PZ_SUB("cmp_sc_tail");
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
     TC_END(num_g);
     // MATH->UNPACK back-pressure ack (mirrors process_tile_gaussians): UNPACK runs
@@ -988,6 +1045,7 @@ inline void process_tile_l1_blend(
     MATH((ckernel::mailbox_write(ckernel::ThreadId::UnpackThreadId, num_g + 1u)));
     UNPACK((void)ckernel::mailbox_read(ckernel::ThreadId::MathThreadId));
     cb_pop_front(CB_BUCKET_BULK, BULK_REC_SLOT);
+    TC_PART1(tail);
 }
 
 }  // namespace
@@ -1043,9 +1101,10 @@ void kernel_main() {
         // Per-tile early-out state (persists across this tile's subchunks).
         uint32_t live_mb_mask = 0xFFFFFFFFu;
         uint32_t g_seen = 0u;
+        TC_TILE0();
         while (!tile_done) {
             {
-                BLEND_PZ("cmp_wait_cnt");
+                BLEND_PZ_WAIT("cmp_wait_cnt");
                 cb_wait_front(CB_MB_COUNTS, 1);
             }
             uint32_t num_g;
@@ -1061,6 +1120,7 @@ void kernel_main() {
 
             if (!continue_blend) {
                 BLEND_PZ("cmp_init");
+                TC_PART0();
                 tile_regs_acquire();
                 tile_regs_held = true;
 
@@ -1073,6 +1133,7 @@ void kernel_main() {
                 copy_tile(CB_XRAMP, 0, 4);
                 copy_tile_to_dst_init_short(CB_YRAMP);
                 copy_tile(CB_YRAMP, 0, 5);
+                TC_PART1(init);
             }
 
             // M1: ALL tiles (single + fat) consume the materialized L1 slab.
@@ -1082,6 +1143,7 @@ void kernel_main() {
 
             if (emit_tile) {
                 BLEND_PZ("cmp_emit");
+                TC_PART0();
                 tile_regs_commit();
                 tile_regs_wait();
                 cb_reserve_back(CB_COLOR_OUT, 3);
@@ -1092,6 +1154,7 @@ void kernel_main() {
                 tile_regs_release();
                 tile_regs_held = false;
                 tile_done = true;
+                TC_PART1(emit);
                 TC_EMIT();
             }
 
