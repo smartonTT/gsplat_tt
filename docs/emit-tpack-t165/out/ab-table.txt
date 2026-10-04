@@ -1,0 +1,8 @@
+r1 base ms_view=18.592 stage_sort=4.442 stage_sort_bin_emit=4.027 stage_blend=9.269 stage_project=4.646 
+r1 tp ms_view=18.729 stage_sort=4.480 stage_sort_bin_emit=4.044 stage_blend=9.310 stage_project=4.673 
+r2 base ms_view=18.703 stage_sort=4.443 stage_sort_bin_emit=4.004 stage_blend=9.293 stage_project=4.650 
+r2 tp ms_view=18.575 stage_sort=4.410 stage_sort_bin_emit=4.018 stage_blend=9.268 stage_project=4.650 
+r3 base ms_view=18.604 stage_sort=4.341 stage_sort_bin_emit=3.997 stage_blend=9.299 stage_project=4.654 
+r3 tp ms_view=18.620 stage_sort=4.432 stage_sort_bin_emit=4.011 stage_blend=9.279 stage_project=4.651 
+r4 base ms_view=18.469 stage_sort=4.326 stage_sort_bin_emit=3.976 stage_blend=9.280 stage_project=4.639 
+r4 tp ms_view=18.669 stage_sort=4.445 stage_sort_bin_emit=4.022 stage_blend=9.307 stage_project=4.663 
