@@ -263,6 +263,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             compute_defines["GSPLAT_TT_MB_STATS_INV_FLOOR"] = std::string(f) + ".0f";
         }
     }
+    // Task #147: GSPLAT_TT_MB_TILECYC=1 DPRINTs per-tile MATH cycles (default OFF).
+    if (const char* tc = std::getenv("GSPLAT_TT_MB_TILECYC"); tc != nullptr && tc[0] == '1') {
+        compute_defines["GSPLAT_TT_MB_TILECYC"] = "1";
+    }
     // Task #41: per-pixel contribution floor (alpha < contrib_floor -> 0, the GPU
     // 3DGS rule) in the blend. Default ON (needed for a seam-free 1/255 floor);
     // GSPLAT_TT_BLEND_PIXEL_FLOOR=0 restores the mask-only blend.

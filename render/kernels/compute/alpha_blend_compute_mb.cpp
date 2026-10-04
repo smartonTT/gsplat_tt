@@ -54,7 +54,7 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 #endif
 
-#ifdef GSPLAT_TT_MB_STATS
+#if defined(GSPLAT_TT_MB_STATS) || defined(GSPLAT_TT_MB_TILECYC)
 #include "api/debug/dprint.h"
 #endif
 
@@ -810,6 +810,41 @@ inline void st_emit() {
 #define MB_STATS_EMIT()
 #endif
 
+// ---- Per-tile MATH cost (GSPLAT_TT_MB_TILECYC=1, task #147; default OFF) ----
+// Records, live records (mask != 0) and wall-clock cycles (1350 MHz) spent in
+// process_tile_l1_blend per output tile, summed over its subchunks; DPRINTed
+// ("TC rec live cyc") at kernel end. Feeds the fused materialize+blend model.
+#if defined(GSPLAT_TT_MB_TILECYC) && defined(TRISC_MATH)
+struct TileCyc {
+    uint32_t rec, live, cyc;
+};
+constexpr uint32_t kTcMax = 192;
+TileCyc g_tc[kTcMax];
+uint32_t g_tc_n = 0;
+TileCyc g_tc_cur{};
+uint32_t g_tc_t0 = 0;
+inline uint32_t tc_now() {
+    return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0];
+}
+inline void tc_dump() {
+    for (uint32_t i = 0; i < g_tc_n; ++i) {
+        DPRINT << "TC " << g_tc[i].rec << " " << g_tc[i].live << " " << g_tc[i].cyc << ENDL();
+    }
+    DPRINT << "TCEND " << g_tc_n << ENDL();
+}
+#define TC_BEGIN() MATH((g_tc_t0 = tc_now()))
+#define TC_LIVE() MATH((++g_tc_cur.live))
+#define TC_END(n) MATH((g_tc_cur.cyc += tc_now() - g_tc_t0, g_tc_cur.rec += (n)))
+#define TC_EMIT() MATH((g_tc_n < kTcMax ? (void)(g_tc[g_tc_n++] = g_tc_cur) : (void)0, g_tc_cur = TileCyc{}))
+#define TC_DUMP() MATH((tc_dump()))
+#else
+#define TC_BEGIN()
+#define TC_LIVE()
+#define TC_END(n)
+#define TC_EMIT()
+#define TC_DUMP()
+#endif
+
 // Blend one subchunk whose PACK2 records + masks sit in CB_BUCKET_BULK /
 // CB_BMASK_BULK (iter 49/50). Separate from in-budget CB_BUCKET/CB_BMASK so
 // bulk reserve does not deadlock against coeff-stream scratch.
@@ -823,6 +858,7 @@ inline void process_tile_l1_blend(
         cb_wait_front(CB_BUCKET_BULK, BULK_REC_SLOT);
     }
     const uint32_t buck = get_tile_address(CB_BUCKET_BULK, 0);
+    TC_BEGIN();
 
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
 #if BLEND_COEF_DEST && defined(BLEND_PIXEL_FLOOR)
@@ -866,6 +902,7 @@ inline void process_tile_l1_blend(
 #else
         if (mask != 0u) {
 #endif
+            TC_LIVE();
             // UNORM16 op/color -> fp32 bits, integer bit-exact (TRISC scalar code
             // has no FPU; the float form was 8 libgcc calls per record, task #39).
             const uint32_t w6 = rec[6], w7 = rec[7];
@@ -902,6 +939,7 @@ inline void process_tile_l1_blend(
         }
     }
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
+    TC_END(num_g);
     // MATH->UNPACK back-pressure ack (mirrors process_tile_gaussians): UNPACK runs
     // cb_pop_front and would otherwise free this CB_BUCKET_BULK slot the instant it
     // mailboxed MATH the address — letting a FAST producer (the bulk payload DMA)
@@ -1015,6 +1053,7 @@ void kernel_main() {
                 tile_regs_release();
                 tile_regs_held = false;
                 tile_done = true;
+                TC_EMIT();
             }
 
             cb_pop_front(CB_MB_COUNTS, 1);
@@ -1025,4 +1064,5 @@ void kernel_main() {
     cb_pop_front(CB_XRAMP, 1);
     cb_pop_front(CB_YRAMP, 1);
     MB_STATS_EMIT();
+    TC_DUMP();
 }
