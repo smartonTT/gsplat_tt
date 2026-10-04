@@ -18,8 +18,8 @@
 //   12   : PFWC_VIS only: tile stride (1: tiles chunk_start + k, the legacy
 //          contiguous range; num_cores: the strided deal of the lever B fused
 //          writer, task #125)
-//   13, 14: PFWC_TILE_LIST only (task #169 chunk cull): tile-list buffer address
-//          and page bytes; page chunk_start (= the core) holds the tile ids
+//   13, 14: PFWC_TILE_LIST only (task #169 chunk cull): DRAM bank-0 offset of
+//          this core's tile ids and their page bytes (pushed to CB 38 for the writer)
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8
 // (10 with PFWC_VIS, the opacity last).
@@ -90,13 +90,15 @@ void kernel_main() {
     }
 
 #ifdef PFWC_TILE_LIST
-    constexpr uint32_t CB_TLIST = 38;  // first page: this kernel's copy
-    const uint32_t tl_page = get_arg_val<uint32_t>(14);
-    const InterleavedAddrGen<true> tl_gen{get_arg_val<uint32_t>(13), tl_page};
-    volatile tt_l1_ptr uint32_t* tl =
-        reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_write_ptr(CB_TLIST));
-    noc_async_read(get_noc_addr(chunk_start, tl_gen), get_write_ptr(CB_TLIST), tl_page);
+    // Task #169: this core's tile list (one page in DRAM bank 0) to L1 once;
+    // the fused writer on this core reads the same copy after the push.
+    constexpr uint32_t CB_TLIST = 38;
+    const uint32_t tl_l1 = get_write_ptr(CB_TLIST);
+    noc_async_read(get_noc_addr_from_bank_id<true>(0, get_arg_val<uint32_t>(13)), tl_l1,
+                   get_arg_val<uint32_t>(14));
     noc_async_read_barrier();
+    cb_push_back(CB_TLIST, 1);
+    volatile tt_l1_ptr uint32_t* tl = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(tl_l1);
 #endif
     for (uint32_t k = 0; k < num_chunks; k++) {
 #ifdef PFWC_TILE_LIST

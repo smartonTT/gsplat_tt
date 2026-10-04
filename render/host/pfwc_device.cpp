@@ -116,8 +116,9 @@ constexpr uint32_t CB_AABB   = 36;
 constexpr uint32_t CB_VMASK  = 37;  // 128 B mask staging
 constexpr uint32_t CB_VCNT   = 38;  // per-tile counts staging
 constexpr uint32_t CB_VOP    = 39;  // opacity tile for RECHECK
-// Task #169 tile list (fused only, reuses the CB_VCNT index): the reader's page,
-// then the writer's. Runtime args would overflow the kernel config buffer.
+// Task #169 tile list (fused only, reuses the CB_VCNT index): the reader reads it
+// once and pushes it to the writer. Runtime args, or a second NoC read in the
+// writer, overflow the 69 KB kernel config buffer.
 constexpr uint32_t CB_TLIST = 38;
 constexpr uint32_t TLIST_MAX_PAGE = 1024;  // <= 256 tiles per core
 constexpr uint32_t VIS_MASK_BYTES = 128;
@@ -461,7 +462,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (!fuse) cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
         cb_raw(CB_VOP, TILE_BYTES_FP32);
         if (fuse) cb_raw(CB_FUSE, FUSE_CB_BYTES);
-        if (fuse && chunk_cull_mode() != 0) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
+        if (fuse && chunk_cull_mode() != 0) cb_raw(CB_TLIST, TLIST_MAX_PAGE);
     }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
@@ -472,7 +473,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     for (int i = 0; i < (vis ? 10 : 9); ++i) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
-    // Task #169: tile ids from runtime args 13.. (reader) / 25.. (fused writer).
+    // Task #169: tile ids from a DRAM page (reader args 13, 14), shared via CB 38.
     std::map<std::string, std::string> reader_defines = vis_defines;
     if (fuse && chunk_cull_mode() != 0) reader_defines["PFWC_TILE_LIST"] = "1";
     const KernelHandle reader = CreateKernel(
@@ -908,14 +909,15 @@ double pfwc_tt(
         const uint32_t S = static_cast<uint32_t>(surv.size());
         return c < S ? (S - 1 - c) / num_cores + 1 : 0u;
     };
-    // One DRAM page per core (page c = core c's tiles), read to L1 by both kernels.
+    // One single-page DRAM buffer (all in bank 0), core c's ids at c * page; the
+    // reader reads them to L1 and pushes them to the writer.
     if (tile_list) {
         const uint32_t page = (list_cap * 4u + 63u) & ~63u;
         if (page > TLIST_MAX_PAGE)
             throw std::runtime_error("[gsplat_tt::pfwc] chunk cull: " + std::to_string(list_cap) +
                                      " tiles per core, over the tile-list page");
         if (!ctx->buf_tlist || ctx->tlist_page != page) {
-            distributed::DeviceLocalBufferConfig cfg{.page_size = page,
+            distributed::DeviceLocalBufferConfig cfg{.page_size = page * num_cores,
                                                      .buffer_type = BufferType::DRAM};
             distributed::ReplicatedBufferConfig rep{.size = std::size_t{page} * num_cores};
             ctx->buf_tlist = distributed::MeshBuffer::create(rep, cfg, ctx->mesh_device.get());
@@ -928,8 +930,8 @@ double pfwc_tt(
         distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tlist, ctx->tlist_host,
                                             /*blocking=*/false);
     }
-    auto push_list = [&](std::vector<uint32_t>& a) {
-        a.push_back(static_cast<uint32_t>(ctx->buf_tlist->address()));
+    auto push_list = [&](std::vector<uint32_t>& a, uint32_t c) {
+        a.push_back(static_cast<uint32_t>(ctx->buf_tlist->address()) + c * ctx->tlist_page);
         a.push_back(ctx->tlist_page);
     };
     auto fbuf = [](const char* name) {
@@ -1011,7 +1013,7 @@ double pfwc_tt(
         if (vis_on) {
             reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
             reader_args.push_back(fuse_on ? num_cores : 1u);  // arg 12: tile stride
-            if (tile_list) push_list(reader_args);             // args 13, 14
+            if (tile_list) push_list(reader_args, c);          // args 13, 14
         }
         SetRuntimeArgs(program, k_reader, core, reader_args);
 
@@ -1048,7 +1050,6 @@ double pfwc_tt(
             fw.push_back(c);
             fw.push_back(fuse_pub[0]);  // scene_puboc01 (0 = pack on device)
             fw.push_back(fuse_pub[1]);  // scene_puboc23
-            if (tile_list) push_list(fw);  // args 25, 26 (task #169)
             SetRuntimeArgs(program, k_writer, core, fw);
             continue;
         }

@@ -20,7 +20,13 @@ step() {
 }
 echo "##### sync $(date +%H:%M:%S)"
 opt/sync_remote.sh $H $D $REV || { echo SYNC_FAIL; exit 1; }
-step smoke "VIEWS=0:2 TMO=600 $J 0 on:GSPLAT_TT_CHUNK_CULL=1,GSPLAT_TT_CHUNK_LOG=1"
+echo "##### smoke $(date +%H:%M:%S)"
+if ! r "VIEWS=0:2 TMO=600 $J 0 on:GSPLAT_TT_CHUNK_CULL=1,GSPLAT_TT_CHUNK_LOG=1"; then
+  # Kernel config buffer overflow hunt: text/data sizes of the pfwc kernel ELFs.
+  r "SZ=\$(ls /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/*-size | head -1);
+     find /localdev/smarton/.cache/ttmc-gstt2-t169 -name '*.elf' -mmin -60 | grep -E 'pfwc' | xargs -r \$SZ"
+  echo "STOP at smoke"; exit 10
+fi
 r "grep -m3 'chunk cull' $D/tmp/t169-run-t169r0-on.log"
 step r1 "$J 1 $OFF $ON"
 step r2 "$J 2 $ON $OFF"
