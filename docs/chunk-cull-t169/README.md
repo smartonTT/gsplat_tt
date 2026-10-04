@@ -60,4 +60,30 @@ ceil of the radius and the rounding. Non-finite members mark a tile "never skip"
 
 ## Device A/B
 
-`drive.sh` + `remote_job.sh` (see results below).
+`drive.sh` + `remote_job.sh`, yyzo-bh-07 (Blackhole p100a, not a p150), commit
+5b1191f, 30 timed views per round, off/on alternated. ms/view:
+
+| round | off frame | on frame | off project | on project | off sort | on sort |
+|---|---|---|---|---|---|---|
+| r1 | 18.424 | 18.506 | 4.656 | 4.531 | 4.305 | 4.424 |
+| r2 | 18.476 | 18.473 | 4.650 | 4.537 | 4.340 | 4.447 |
+| r3 | 18.563 | 18.521 | 4.654 | 4.538 | 4.399 | 4.493 |
+| mean | 18.488 | 18.500 | 4.653 | 4.535 | 4.348 | 4.455 |
+
+- Frame: +0.012 ms/view (no gain; gate is -0.3).
+- Project -0.12: pfwc gather_wait drops ~0.22, host chunk cull/setup adds ~0.11.
+- Sort +0.11: bin_emit is slower on Morton-ordered gids.
+- `CHUNK_SKIP=0` (reorder + -Os reader, no skip): project 5.517 (+0.86), frame 19.55.
+  The reorder and the -Os reader cost almost all of what the skip saves.
+- Kept tiles on the hero view: 3704 / 5989.
+- Image: PSNR min 72.47 dB, max 19 LSB. Not md5-identical and fails the
+  1 LSB gate: the reorder does not keep the original gid, so depth-tie order
+  in the sort changes.
+- `drive2.sh` (reorder only, O2 kernels, `GSPLAT_TT_CHUNK_REORDER=1`) splits the
+  reorder cost from the -Os cost; it was still running at hand-off (log
+  `t169p2.log` in run 459).
+
+Decision: not landed. Stays default-off (`GSPLAT_TT_CHUNK_CULL=0`).
+What would make it pay: keep the original gid through sort (tie order and
+bin_emit locality), free kernel config space so the reader stays O2, and move
+the per-view cull to the device.
