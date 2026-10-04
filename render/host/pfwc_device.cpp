@@ -334,8 +334,10 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     std::map<std::string, std::string> vis_defines;
     if (vis) {
         vis_defines["PFWC_VIS"] = "1";
-        if (gsplat_tt::precull_mode() == 1 && gsplat_tt::sfpu_vis_mode() == 1)
+        if (gsplat_tt::precull_mode() >= 1 && gsplat_tt::sfpu_vis_mode() == 1)
             vis_defines["PFWC_PRECULL"] = "1";  // lever C (task #140), args 65..66
+        if (gsplat_tt::precull_mode() == 2 && gsplat_tt::sfpu_vis_mode() == 1)
+            vis_defines["PRECULL_PC"] = "1";  // pixel-centre rect (task #157)
         cb_fp32(CB_OP, 2);
         cb_fp32(CB_TMP_MX, 2);     cb_fp32(CB_TMP_MY, 2);
         cb_fp32(CB_TMP_RX, 2);     cb_fp32(CB_TMP_RY, 2);

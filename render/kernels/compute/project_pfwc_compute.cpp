@@ -59,6 +59,12 @@
 // radius limit (arg 66, min(max_radius, 4096)), so the max_radius test is
 // unchanged. CB_RX / CB_RY (the radii outputs) keep the 3-sigma values.
 // tests/unit/test_precull.cpp models the lane math against the band cull.
+// PRECULL_PC (task #157, GSPLAT_TT_PRECULL=2): the pixel-centre rect, r' =
+// max(sqrt(t cov) - 3/8, 1/8) (not an integer). A tile's pixel centres meet
+// [m - e, m + e] iff the tile meets [m - (e - 1/2), m + (e - 1/2)], so this
+// keeps the same tiles with a 1/8 px slack where the integer rect keeps 1.5 to
+// 2.5 px more on each side: bicycle host model, 14.0% of the records dropped vs
+// 3.9% (docs/precull-t157).
 
 #include <cstdint>
 
@@ -417,12 +423,19 @@ sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
 // r = an integer >= sqrt(t * cov) + 1 (the 1 px slack covers the sqrt and the
 // band cull's fp32 conic error): q = sqrt(t * cov) + 2 rounded to an integer
 // by the 2^23 trick, any faithful rounding (no ceil fix-up: task #142 code
-// size; at most 1 px more than the ceil). r replaces the radius slot when
-// r < radius (the caller's v_if holds the shrink-ok lanes).
+// size; at most 1 px more than the ceil). PRECULL_PC: r = max(q - 3/8, 1/8)
+// with q = sqrt(t * cov) (pixel-centre rect, see the top). r replaces the
+// radius slot when r < radius (the caller's v_if holds the shrink-ok lanes).
 sfpi_inline void precull_axis(uint32_t cov_slot, uint32_t r_slot) {
     using namespace sfpi;
     vFloat q = precull_sqrt(vFloat(dst_reg[PC_T]) * vFloat(dst_reg[cov_slot]));
+#ifdef PRECULL_PC
+    vFloat lo = 0.125f;
+    vFloat r = q - 0.375f;
+    vec_min_max(lo, r);  // r = max(r, 1/8)
+#else
     vFloat r = (q + 8388610.0f) - 8388608.0f;
+#endif
     v_if(r < vFloat(dst_reg[r_slot])) { dst_reg[r_slot] = r; }
     v_endif;
 }
