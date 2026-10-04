@@ -111,7 +111,7 @@ inline bool emit_puboc() {
     return v;
 }
 
-// Task #124 one-launch sort v2 knobs (GSPLAT_TT_SORT_ONELAUNCH=1 only; see
+// Task #124 one-launch sort v2 knobs (GSPLAT_TT_SORT_ONELAUNCH on, the default; see
 // sort_bin_onelaunch.cpp and docs/sort-onelaunch-v2-t124.md). Kill switch for
 // the v1 one-launch: GSPLAT_TT_OL_PB=1 GSPLAT_TT_OL_RING=0 GSPLAT_TT_OL_MAT_SELECT=0.
 // Emit pair pages per batch: 1, 2, 4, 8 or 16. Default 8 (#100's EMIT_PB).

@@ -275,7 +275,7 @@ struct SortDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_mat_work;
     std::size_t cap_mat_work_bytes = 0;
 
-    // Task #106: one-launch sort (sort_bin_onelaunch.cpp, GSPLAT_TT_SORT_ONELAUNCH=1).
+    // Task #106: one-launch sort (sort_bin_onelaunch.cpp, GSPLAT_TT_SORT_ONELAUNCH, default on).
     distributed::MeshWorkload wl_onelaunch;
     KernelHandle kol{};   // NCRISC (mover 1)
     KernelHandle kol0{};  // BRISC (mover 0)
@@ -323,13 +323,15 @@ static uint32_t sort_mat_movers() {
     static const uint32_t v = env_movers("GSPLAT_TT_SORT_MAT_MOVERS");
     return v;
 }
-// Task #106 (lever 1): GSPLAT_TT_SORT_ONELAUNCH=1 replaces count + hist D2H +
+// Task #106 (lever 1): GSPLAT_TT_SORT_ONELAUNCH replaces count + hist D2H +
 // host layout + emit + radix + publish with one launch (sort_bin_onelaunch.cpp)
-// and lets the materialize sort the tile buckets. Default off. Read once.
+// and lets the materialize sort the tile buckets. Task #121: default on (v2,
+// 29.55 -> 24.60 ms/view on yyzo-bh-07); GSPLAT_TT_SORT_ONELAUNCH=0 is the kill
+// switch back to the legacy multi-launch sort. Read once.
 static bool sort_onelaunch_enabled() {
     static const bool v = [] {
         const char* e = std::getenv("GSPLAT_TT_SORT_ONELAUNCH");
-        return e != nullptr && e[0] == '1';
+        return e == nullptr || e[0] != '0';
     }();
     return v;
 }
@@ -2014,7 +2016,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         }
 
         // ── Task #106 (lever 1): one-launch device sort ─────────────────────
-        // GSPLAT_TT_SORT_ONELAUNCH=1: sort_bin_onelaunch.cpp counts, lays out
+        // GSPLAT_TT_SORT_ONELAUNCH (default on): sort_bin_onelaunch.cpp counts, lays out
         // (device prefix sum over cores between two semaphore barriers) and
         // emits every record into its tile's fixed-capacity bucket in ONE
         // launch; the materialize sorts each bucket (canonical order, stable
