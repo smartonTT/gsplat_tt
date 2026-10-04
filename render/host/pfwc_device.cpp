@@ -216,6 +216,10 @@ static int chunk_cull_mode() {
     static const int m = static_cast<int>(vis_env_u32("GSPLAT_TT_CHUNK_CULL", 0));
     return m;
 }
+static uint32_t chunk_os() {
+    static const uint32_t m = vis_env_u32("GSPLAT_TT_CHUNK_OS", 1);
+    return m;
+}
 
 struct ChunkTable {
     const float* means = nullptr;
@@ -485,6 +489,13 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
             .defines = reader_defines,
+            // Task #169: the fused program is ~40 B under the 69 KB kernel config
+            // buffer; the tile-list read (+~430 B text) only fits with the reader
+            // (DMA-issue bound, not the critical RISC) built for size.
+            // GSPLAT_TT_CHUNK_OS bit 0: reader -Os (default), bit 1: fused writer -Os.
+            .opt_level = reader_defines.count("PFWC_TILE_LIST") != 0 && (chunk_os() & 1u)
+                             ? KernelBuildOptLevel::Os
+                             : KernelBuildOptLevel::O2,
         });
 
     // tt-007 fp32 unpack-to-DEST for every FP32 CB the compute kernel reads
@@ -548,6 +559,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
             .defines = writer_defines,
+            .opt_level = writer_defines.count("PFWC_TILE_LIST") != 0 && (chunk_os() & 2u)
+                             ? KernelBuildOptLevel::Os
+                             : KernelBuildOptLevel::O2,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
