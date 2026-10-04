@@ -1,0 +1,30 @@
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                   45686.6  4568.661       145.4      14.542    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               45669.4  4566.940       145.4      14.540    10890  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   26802.4  2680.240       250.7      25.072     7271  BRISC
+NCRISC-FW                  25967.6  2596.761       243.0      24.304     7260  NCRISC
+BRISC-KERNEL               25626.6  2562.661       238.9      23.892     7271  BRISC
+NCRISC-KERNEL              25551.7  2555.170       239.2      23.923     7260  NCRISC
+tile_blend_sfpu            25270.1  2527.006        78.6       7.860     3630  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              11722.1  1172.208        41.5       4.145     3630  TRISC_0,TRISC_1,TRISC_2
+pfwc                        8676.6   867.659        26.9       2.686     3630  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                8546.5   854.647        40.3       4.027     2420  BRISC,NCRISC
+tile_blend_load             8025.6   802.562        74.4       7.440     1210  NCRISC
+rd_l1_bulk                  7896.9   789.695        73.0       7.300    12452  NCRISC
+proj_scatter                7485.4   748.543        35.6       3.565     2420  BRISC,NCRISC
+sort_subchunk_mat           7164.0   716.402        41.5       4.145     2420  BRISC,NCRISC
+mat_ol_sort                 3752.0   375.198        21.0       2.103    11800  BRISC,NCRISC
+ta_bucket_scatter           3273.8   327.384        15.5       1.547     2420  BRISC,NCRISC
+mat_ol_perm                 2730.0   272.995        18.2       1.816    12068  BRISC,NCRISC
+mat_cull                    1968.5   196.853        12.0       1.202    12731  BRISC,NCRISC
+sort_ol_count               1517.8   151.775        10.3       1.031     2420  BRISC,NCRISC
+sort_ol_barrier              316.9    31.694         4.9       0.490     2420  BRISC
+mat_ol_keys                  206.7    20.666         4.3       0.428      663  NCRISC
+mat_ol_rd                    163.1    16.311         2.7       0.268    11137  BRISC,NCRISC
+mat_ol_gather                121.6    12.156         2.4       0.238      663  NCRISC
+mat_ol_wr                     31.8     3.183         0.2       0.022    12731  BRISC,NCRISC
+sort_ol_prefix                26.5     2.655         0.5       0.047     1210  BRISC
+mat_meta                      13.8     1.380         0.1       0.011    35400  BRISC,NCRISC
+proj_vis_scan                  4.4     0.436         4.4       0.436       11  BRISC

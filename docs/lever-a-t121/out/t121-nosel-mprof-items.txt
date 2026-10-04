@@ -1,0 +1,26 @@
+sel   items/run=   34.9 mean_us=  2529.4 max_us=  3328.6 total_ms/run=  88.30
+      mat_cull       mean_us=   350.3 max_us=   513.6
+      mat_meta       mean_us=     1.2 max_us=     1.5
+      mat_ol_gather  mean_us=   300.4 max_us=   426.6
+      mat_ol_keys    mean_us=   303.0 max_us=   420.6
+      mat_ol_sort    mean_us=  1514.3 max_us=  2089.3
+      mat_ol_wr      mean_us=     4.8 max_us=    17.1
+whole items/run= 1012.5 mean_us=   549.3 max_us=  3307.2 total_ms/run= 556.15
+      mat_cull       mean_us=   167.1 max_us=   996.3
+      mat_meta       mean_us=     1.2 max_us=    11.2
+      mat_ol_perm    mean_us=   248.3 max_us=  1480.3
+      mat_ol_rd      mean_us=    17.0 max_us=   232.2
+      mat_ol_sort    mean_us=   279.7 max_us=  1626.3
+      mat_ol_wr      mean_us=     2.8 max_us=    32.9
+per frame: busiest mover (us), its select-part us, mean mover us
+  frame 0: busiest   4255.8 (select     0.0, NCRISC core 14,5) mean   3214.3 | NCRISC mean  3443.6 max  4255.8 | BRISC mean  2985.0 max  3114.2
+  frame 1: busiest   4246.4 (select     0.0, NCRISC core 14,5) mean   3215.6 | NCRISC mean  3443.8 max  4246.4 | BRISC mean  2987.4 max  3112.0
+  frame 2: busiest   2998.4 (select     0.0, NCRISC core 6,4) mean   2337.9 | NCRISC mean  2482.1 max  2998.4 | BRISC mean  2193.7 max  2309.0
+  frame 3: busiest   3046.2 (select     0.0, NCRISC core 6,4) mean   2406.3 | NCRISC mean  2545.9 max  3046.2 | BRISC mean  2266.7 max  2370.8
+  frame 4: busiest   3034.3 (select     0.0, NCRISC core 1,5) mean   2531.0 | NCRISC mean  2634.2 max  3034.3 | BRISC mean  2427.8 max  2511.1
+  frame 5: busiest   3375.9 (select     0.0, NCRISC core 14,8) mean   2681.9 | NCRISC mean  2786.5 max  3375.9 | BRISC mean  2577.3 max  2657.8
+  frame 6: busiest   3508.3 (select     0.0, NCRISC core 5,8) mean   2828.0 | NCRISC mean  2916.1 max  3508.3 | BRISC mean  2739.9 max  2851.2
+  frame 7: busiest   3563.3 (select     0.0, NCRISC core 15,7) mean   2980.6 | NCRISC mean  3078.3 max  3563.3 | BRISC mean  2882.9 max  3024.8
+  frame 8: busiest   3978.8 (select     0.0, NCRISC core 14,5) mean   3164.2 | NCRISC mean  3275.7 max  3978.8 | BRISC mean  3052.7 max  3158.9
+  frame 9: busiest   4799.1 (select     0.0, NCRISC core 15,10) mean   3385.7 | NCRISC mean  3635.6 max  4799.1 | BRISC mean  3135.8 max  3243.9
+  frame 10: busiest   4984.2 (select     0.0, NCRISC core 14,8) mean   3476.8 | NCRISC mean  3681.7 max  4984.2 | BRISC mean  3272.0 max  3393.0
