@@ -306,7 +306,9 @@ def main():
     # Task #169 (GSPLAT_TT_CHUNK_CULL, 0 = kill switch): per-scene Morton
     # reorder so each 1024-gaussian pfwc tile is spatially compact; pfwc then
     # skips the tiles whose bounds are outside the view (pfwc_device.cpp).
-    if os.environ.get("GSPLAT_TT_CHUNK_CULL", "0") not in ("", "0"):
+    # GSPLAT_TT_CHUNK_REORDER=1 with CHUNK_CULL=0: reorder only (diagnostic).
+    if os.environ.get("GSPLAT_TT_CHUNK_REORDER",
+                      os.environ.get("GSPLAT_TT_CHUNK_CULL", "0")) not in ("", "0"):
         gauss = morton_reorder(gauss)
 
     out_dir = REPO_ROOT / "tmp" / args.iter_dir
