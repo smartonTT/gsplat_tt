@@ -79,6 +79,18 @@ inline MatWorkAssignment build_mat_worklist(
     // SINGLE work item (sc==0, processes every subchunk internally) — like the
     // in-budget permute, ~1x per record (NOT the GATHER_WEIGHT random gather).
     const uint32_t ov_cap = render_config::kOverflowL1Cap;
+    // Task #176: GSPLAT_TT_MAT_DUMP=<file> appends this call's per-tile record
+    // counts ("tile:count" for non-empty tiles), one line per call.
+    if (const char* dump = std::getenv("GSPLAT_TT_MAT_DUMP")) {
+        if (FILE* f = std::fopen(dump, "a")) {
+            std::fprintf(f, "MATCOUNTS ol=%d tiles=%u", onelaunch ? 1 : 0, num_tiles);
+            for (uint32_t t = 0; t < num_tiles; ++t) {
+                if (counts[t] > 0) std::fprintf(f, " %u:%lld", t, (long long)counts[t]);
+            }
+            std::fputc('\n', f);
+            std::fclose(f);
+        }
+    }
     struct Item { uint32_t tile; uint32_t sc; uint64_t cost; bool big; };
     std::vector<Item> items;
     items.reserve(static_cast<std::size_t>(num_tiles) + 256u);
