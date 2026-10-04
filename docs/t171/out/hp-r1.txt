@@ -1,0 +1,91 @@
+HPPY c2w_ms=0.397 to_image_ms=0.009
+HPGAP b=1 gap=0.780 d2h=0.276 unpack=0.000 tail=0.013 py=0.390 head=0.014 pfwc_disp=0.087
+HPPY c2w_ms=0.235 to_image_ms=0.002
+VIEW_STAGES i=0 name=hero wall=19.86 project=4.93 sort=4.94 blend=9.69 d2h=0.24 view_total=19.82 sort_bin_layout=0.14 sort_bin_emit=4.45 sort_publish_host=0.23 sort_mat=0.06 project_pfwc_rtargs=0.05 project_gather_wait=4.70 project_gather_result=0.12
+HPGAP b=2 gap=225.542 d2h=0.244 unpack=0.000 tail=0.003 py=225.229 head=0.007 pfwc_disp=0.060
+HPPY c2w_ms=0.110 to_image_ms=0.002
+VIEW_STAGES i=1 name=orb_00 wall=15.62 project=4.10 sort=3.39 blend=7.91 d2h=0.18 view_total=15.59 sort_bin_layout=0.09 sort_bin_emit=3.04 sort_publish_host=0.15 project_gather_wait=3.95 project_gather_result=0.08
+HPGAP b=3 gap=229.260 d2h=0.179 unpack=0.000 tail=0.003 py=229.013 head=0.007 pfwc_disp=0.058
+HPPY c2w_ms=0.098 to_image_ms=0.002
+VIEW_STAGES i=2 name=orb_01 wall=16.07 project=4.15 sort=3.58 blend=8.13 d2h=0.18 view_total=16.05 sort_bin_layout=0.09 sort_bin_emit=3.24 sort_publish_host=0.16 project_gather_wait=3.99 project_gather_result=0.09
+HPGAP b=4 gap=226.909 d2h=0.180 unpack=0.000 tail=0.003 py=226.672 head=0.005 pfwc_disp=0.049
+HPPY c2w_ms=0.073 to_image_ms=0.001
+VIEW_STAGES i=3 name=orb_02 wall=16.53 project=4.22 sort=3.87 blend=8.23 d2h=0.18 view_total=16.50 sort_bin_layout=0.09 sort_bin_emit=3.54 sort_publish_host=0.16 project_gather_wait=4.07 project_gather_result=0.09
+HPGAP b=5 gap=225.208 d2h=0.178 unpack=0.000 tail=0.003 py=224.924 head=0.013 pfwc_disp=0.090
+HPPY c2w_ms=0.185 to_image_ms=0.004
+VIEW_STAGES i=4 name=orb_03 wall=17.64 project=4.38 sort=4.35 blend=8.61 d2h=0.25 view_total=17.59 sort_bin_layout=0.15 sort_bin_emit=3.87 sort_publish_host=0.19 sort_mat=0.07 project_pfwc_enqueue=0.06 project_gather_wait=4.18 project_gather_result=0.09
+HPGAP b=6 gap=224.058 d2h=0.246 unpack=0.000 tail=0.006 py=223.728 head=0.009 pfwc_disp=0.069
+HPPY c2w_ms=0.144 to_image_ms=0.003
+VIEW_STAGES i=5 name=orb_04 wall=18.15 project=4.49 sort=4.57 blend=8.82 d2h=0.22 view_total=18.11 sort_bin_layout=0.15 sort_bin_emit=4.03 sort_publish_host=0.24 sort_mat=0.07 project_gather_wait=4.31 project_gather_result=0.10
+HPGAP b=7 gap=218.416 d2h=0.225 unpack=0.000 tail=0.006 py=218.127 head=0.006 pfwc_disp=0.053
+HPPY c2w_ms=0.089 to_image_ms=0.003
+VIEW_STAGES i=6 name=orb_05 wall=18.56 project=4.66 sort=4.45 blend=9.20 d2h=0.22 view_total=18.53 sort_bin_layout=0.15 sort_bin_emit=3.98 sort_publish_host=0.21 project_gather_wait=4.49 project_gather_result=0.11
+HPGAP b=8 gap=214.117 d2h=0.216 unpack=0.000 tail=0.005 py=213.828 head=0.007 pfwc_disp=0.061
+HPPY c2w_ms=0.112 to_image_ms=0.002
+VIEW_STAGES i=7 name=orb_06 wall=19.96 project=4.85 sort=5.18 blend=9.69 d2h=0.20 view_total=19.92 sort_bin_layout=0.15 sort_bin_emit=4.63 sort_publish_host=0.25 sort_mat=0.06 project_gather_wait=4.66 project_gather_result=0.12
+HPGAP b=9 gap=210.804 d2h=0.200 unpack=0.000 tail=0.005 py=210.537 head=0.006 pfwc_disp=0.056
+HPPY c2w_ms=0.097 to_image_ms=0.002
+VIEW_STAGES i=8 name=orb_07 wall=21.18 project=5.05 sort=4.98 blend=10.89 d2h=0.20 view_total=21.15 sort_bin_layout=0.14 sort_bin_emit=4.48 sort_publish_host=0.24 sort_mat=0.06 project_gather_wait=4.86 project_gather_result=0.12
+HPGAP b=10 gap=209.738 d2h=0.203 unpack=0.000 tail=0.004 py=209.452 head=0.009 pfwc_disp=0.070
+HPPY c2w_ms=0.123 to_image_ms=0.002
+VIEW_STAGES i=9 name=orb_08 wall=22.20 project=5.18 sort=5.41 blend=11.32 d2h=0.21 view_total=22.16 sort_bin_layout=0.10 sort_bin_emit=5.03 sort_publish_host=0.17 project_gather_wait=4.97 project_gather_result=0.13
+HPGAP b=11 gap=211.230 d2h=0.214 unpack=0.000 tail=0.004 py=210.952 head=0.006 pfwc_disp=0.054
+HPPY c2w_ms=0.089 to_image_ms=0.003
+VIEW_STAGES i=10 name=orb_09 wall=22.12 project=5.22 sort=5.50 blend=11.11 d2h=0.23 view_total=22.09 sort_bin_layout=0.15 sort_bin_emit=5.00 sort_publish_host=0.23 sort_mat=0.06 project_gather_wait=5.03 project_gather_result=0.13
+HPGAP b=12 gap=214.262 d2h=0.229 unpack=0.000 tail=0.005 py=213.965 head=0.006 pfwc_disp=0.057
+HPPY c2w_ms=0.087 to_image_ms=0.002
+VIEW_STAGES i=11 name=orb_10 wall=22.14 project=5.18 sort=5.39 blend=11.32 d2h=0.21 view_total=22.11 sort_bin_layout=0.15 sort_bin_emit=4.94 sort_publish_host=0.20 project_gather_wait=4.99 project_gather_result=0.13
+HPGAP b=13 gap=217.464 d2h=0.208 unpack=0.000 tail=0.006 py=217.193 head=0.005 pfwc_disp=0.052
+HPPY c2w_ms=0.081 to_image_ms=0.002
+VIEW_STAGES i=12 name=orb_11 wall=20.60 project=5.09 sort=4.90 blend=10.34 d2h=0.23 view_total=20.57 sort_bin_layout=0.10 sort_bin_emit=4.55 sort_publish_host=0.15 project_gather_wait=4.91 project_gather_result=0.13
+HPGAP b=14 gap=220.106 d2h=0.225 unpack=0.000 tail=0.006 py=219.791 head=0.009 pfwc_disp=0.075
+HPPY c2w_ms=0.134 to_image_ms=0.003
+VIEW_STAGES i=13 name=orb_12 wall=19.76 project=5.00 sort=4.73 blend=9.76 d2h=0.23 view_total=19.72 sort_bin_layout=0.10 sort_bin_emit=4.36 sort_publish_host=0.16 project_gather_wait=4.78 project_gather_result=0.12
+HPGAP b=15 gap=222.148 d2h=0.230 unpack=0.000 tail=0.006 py=221.854 head=0.006 pfwc_disp=0.053
+HPPY c2w_ms=0.088 to_image_ms=0.002
+VIEW_STAGES i=14 name=orb_13 wall=19.63 project=4.87 sort=4.98 blend=9.55 d2h=0.19 view_total=19.60 sort_bin_layout=0.15 sort_bin_emit=4.46 sort_publish_host=0.23 sort_mat=0.06 project_gather_wait=4.69 project_gather_result=0.12
+HPGAP b=16 gap=224.324 d2h=0.192 unpack=0.000 tail=0.004 py=224.073 head=0.005 pfwc_disp=0.050
+HPPY c2w_ms=0.078 to_image_ms=0.002
+VIEW_STAGES i=15 name=orb_14 wall=19.03 project=4.78 sort=4.69 blend=9.30 d2h=0.22 view_total=19.00 sort_bin_layout=0.14 sort_bin_emit=4.17 sort_publish_host=0.23 sort_mat=0.06 project_gather_wait=4.61 project_gather_result=0.11
+HPGAP b=17 gap=224.792 d2h=0.223 unpack=0.000 tail=0.005 py=224.505 head=0.006 pfwc_disp=0.053
+HPPY c2w_ms=0.085 to_image_ms=0.003
+VIEW_STAGES i=16 name=orb_15 wall=18.75 project=4.75 sort=4.51 blend=9.23 d2h=0.22 view_total=18.72 sort_bin_layout=0.10 sort_bin_emit=4.10 sort_publish_host=0.19 sort_mat=0.06 project_gather_wait=4.58 project_gather_result=0.11
+HPGAP b=18 gap=224.811 d2h=0.224 unpack=0.000 tail=0.005 py=224.503 head=0.009 pfwc_disp=0.071
+HPPY c2w_ms=0.131 to_image_ms=0.003
+VIEW_STAGES i=17 name=orb_16 wall=18.71 project=4.74 sort=4.52 blend=9.17 d2h=0.23 view_total=18.67 sort_bin_layout=0.10 sort_bin_emit=4.14 sort_publish_host=0.16 project_gather_wait=4.55 project_gather_result=0.11
+HPGAP b=19 gap=224.456 d2h=0.227 unpack=0.000 tail=0.006 py=224.163 head=0.006 pfwc_disp=0.054
+HPPY c2w_ms=0.090 to_image_ms=0.002
+VIEW_STAGES i=18 name=orb_17 wall=18.76 project=4.74 sort=4.60 blend=9.20 d2h=0.19 view_total=18.73 sort_bin_layout=0.14 sort_bin_emit=4.08 sort_publish_host=0.24 sort_mat=0.06 project_gather_wait=4.57 project_gather_result=0.11
+HPGAP b=20 gap=225.608 d2h=0.189 unpack=0.000 tail=0.004 py=225.330 head=0.009 pfwc_disp=0.076
+HPPY c2w_ms=0.136 to_image_ms=0.003
+VIEW_STAGES i=19 name=orb_18 wall=19.05 project=4.79 sort=4.72 blend=9.25 d2h=0.24 view_total=19.01 sort_bin_layout=0.15 sort_bin_emit=4.19 sort_publish_host=0.23 sort_mat=0.07 project_gather_wait=4.59 project_gather_result=0.11
+HPGAP b=21 gap=226.437 d2h=0.239 unpack=0.000 tail=0.006 py=226.136 head=0.006 pfwc_disp=0.050
+HPPY c2w_ms=0.087 to_image_ms=0.002
+VIEW_STAGES i=20 name=orb_19 wall=18.75 project=4.78 sort=4.43 blend=9.31 d2h=0.20 view_total=18.72 sort_bin_layout=0.10 sort_bin_emit=4.07 sort_publish_host=0.15 project_gather_wait=4.60 project_gather_result=0.11
+HPGAP b=22 gap=230.691 d2h=0.196 unpack=0.000 tail=0.005 py=230.340 head=0.017 pfwc_disp=0.133
+HPPY c2w_ms=0.267 to_image_ms=0.007
+VIEW_STAGES i=21 name=orb_20 wall=19.31 project=4.87 sort=4.71 blend=9.34 d2h=0.29 view_total=19.23 sort_bin_layout=0.15 sort_bin_emit=4.17 sort_publish_host=0.25 sort_mat=0.07 project_pfwc_enqueue=0.09 project_gather_wait=4.59 project_gather_result=0.13
+HPGAP b=23 gap=260.706 d2h=0.292 unpack=0.000 tail=0.007 py=260.277 head=0.015 pfwc_disp=0.116
+HPPY c2w_ms=0.232 to_image_ms=0.004
+VIEW_STAGES i=22 name=orb_21 wall=18.97 project=4.83 sort=4.48 blend=9.30 d2h=0.29 view_total=18.91 sort_bin_layout=0.11 sort_bin_emit=4.09 sort_publish_host=0.16 sort_mat=0.06 project_pfwc_enqueue=0.08 project_gather_wait=4.58 project_gather_result=0.12
+HPGAP b=24 gap=229.567 d2h=0.285 unpack=0.000 tail=0.005 py=229.218 head=0.006 pfwc_disp=0.053
+HPPY c2w_ms=0.094 to_image_ms=0.002
+VIEW_STAGES i=23 name=orb_22 wall=17.96 project=4.68 sort=4.17 blend=8.89 d2h=0.18 view_total=17.93 sort_bin_layout=0.09 sort_bin_emit=3.85 sort_publish_host=0.15 project_gather_wait=4.52 project_gather_result=0.10
+HPGAP b=25 gap=229.036 d2h=0.178 unpack=0.000 tail=0.003 py=228.797 head=0.006 pfwc_disp=0.052
+HPPY c2w_ms=0.082 to_image_ms=0.002
+VIEW_STAGES i=24 name=orb_23 wall=18.07 project=4.55 sort=4.20 blend=9.09 d2h=0.19 view_total=18.04 sort_bin_layout=0.09 sort_bin_emit=3.76 sort_publish_host=0.24 sort_mat=0.06 project_gather_wait=4.40 project_gather_result=0.10
+HPGAP b=26 gap=230.205 d2h=0.188 unpack=0.000 tail=0.003 py=229.927 head=0.010 pfwc_disp=0.077
+HPPY c2w_ms=0.132 to_image_ms=0.002
+VIEW_STAGES i=25 name=orb_24 wall=17.14 project=4.40 sort=3.81 blend=8.67 d2h=0.21 view_total=17.10 sort_bin_layout=0.10 sort_bin_emit=3.47 sort_publish_host=0.15 project_gather_wait=4.21 project_gather_result=0.09
+HPGAP b=27 gap=230.057 d2h=0.210 unpack=0.000 tail=0.003 py=229.786 head=0.005 pfwc_disp=0.051
+HPPY c2w_ms=0.083 to_image_ms=0.002
+VIEW_STAGES i=26 name=orb_25 wall=16.15 project=4.23 sort=3.59 blend=8.13 d2h=0.17 view_total=16.13 sort_bin_layout=0.10 sort_bin_emit=3.24 sort_publish_host=0.16 project_gather_wait=4.09 project_gather_result=0.08
+HPGAP b=28 gap=255.341 d2h=0.172 unpack=0.000 tail=0.003 py=255.078 head=0.008 pfwc_disp=0.079
+HPPY c2w_ms=0.107 to_image_ms=0.002
+VIEW_STAGES i=27 name=orb_26 wall=16.05 project=4.17 sort=3.59 blend=8.04 d2h=0.20 view_total=16.01 sort_bin_layout=0.13 sort_bin_emit=3.09 sort_publish_host=0.24 sort_mat=0.06 project_gather_wait=3.99 project_gather_result=0.08
+HPGAP b=29 gap=275.927 d2h=0.198 unpack=0.000 tail=0.004 py=275.645 head=0.007 pfwc_disp=0.074
+HPPY c2w_ms=0.095 to_image_ms=0.002
+VIEW_STAGES i=28 name=orb_27 wall=15.70 project=4.11 sort=3.60 blend=7.78 d2h=0.18 view_total=15.67 sort_bin_layout=0.12 sort_bin_emit=3.11 sort_publish_host=0.23 sort_mat=0.06 project_gather_wait=3.94 project_gather_result=0.08
+HPGAP b=30 gap=257.722 d2h=0.183 unpack=0.000 tail=0.004 py=257.453 head=0.009 pfwc_disp=0.073
+HPPY c2w_ms=0.125 to_image_ms=0.002
+VIEW_STAGES i=29 name=orb_28 wall=15.95 project=4.10 sort=3.36 blend=8.24 d2h=0.21 view_total=15.92 sort_bin_layout=0.10 sort_bin_emit=3.01 sort_publish_host=0.15 project_gather_wait=3.93 project_gather_result=0.08
