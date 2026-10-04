@@ -1,0 +1,37 @@
+n_views=30  RISC types=['BRISC', 'NCRISC', 'TRISC_0', 'TRISC_1', 'TRISC_2']
+
+=== ZONES by per-view MAKESPAN (busiest core / nviews) ===
+zone                                      tot_ms   pv_tot  pv_make  pairs/v  riscs
+BRISC-FW                                 20728.3   690.94     6.36    201.7  BRISC
+BRISC-KERNEL                             20389.7   679.66     6.27    201.7  BRISC
+NCRISC-FW                                19941.7   664.72     6.19    201.7  NCRISC
+NCRISC-KERNEL                            19937.9   664.60     6.18    201.7  NCRISC
+TRISC-FW                                 40388.1  1346.27     4.19    363.0  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL                             40366.8  1345.56     4.19    363.0  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu                          19806.7   660.22     2.03    121.0  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load                           6270.8   209.03     1.93     40.3  NCRISC
+rd_l1_bulk                                6142.8   204.76     1.90    411.1  NCRISC
+sort_ol_emit                              8300.8   276.69     1.31     80.7  BRISC,NCRISC
+mat_cull_mask                            10603.1   353.44     1.13    121.0  TRISC_0,TRISC_1,TRISC_2
+sort_subchunk_mat                         6720.8   224.03     1.13     80.7  BRISC,NCRISC
+pfwc                                      9956.4   331.88     1.07    121.0  TRISC_0,TRISC_1,TRISC_2
+sort_ol_count                             1458.1    48.60     0.33     80.7  BRISC,NCRISC
+sort_ol_barrier                            299.8     9.99     0.16     80.7  BRISC
+sort_ol_prefix                              26.5     0.88     0.02     40.3  BRISC
+
+=== per-RISC-TYPE occupancy (busy vs wall span) ===
+risc        busy_pv_ms  wallspan_pv_ms  occupancy
+BRISC          1653.90          263.11       5.7%  (cores=110)
+NCRISC         2020.01          263.10       7.0%  (cores=110)
+TRISC_0        1345.49          263.11       4.6%  (cores=110)
+TRISC_1        1346.40          263.11       4.7%  (cores=110)
+TRISC_2        1345.48          263.11       4.6%  (cores=110)
+
+=== coarse STAGE grouping (by zone substring) ===
+stage       pv_make_sum_ms   pv_tot_ms
+proj                  0.00        0.00
+ta/tile               0.00        0.00
+sort                  4.07      913.64
+cull                  0.00        0.00
+blend                 3.96      869.25
+other                36.34     5928.39

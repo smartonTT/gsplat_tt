@@ -1,0 +1,7 @@
+off   rounds=3 view=19.674+-0.022 (50.8 FPS) project=4.581 sort=5.171 blend=9.701 md5_vs_golden=['VIEWS DIFFER']
+base  rounds=3 view=19.142+-0.031 (52.2 FPS) project=4.648 sort=5.001 blend=9.284 md5_vs_golden=['ALL_VIEWS_IDENTICAL']
+pc    rounds=3 view=18.384+-0.035 (54.4 FPS) project=4.595 sort=4.653 blend=8.890 md5_vs_golden=['VIEWS DIFFER']
+paired pc-base ms/view: -0.799 -0.724 -0.749 mean -0.757
+paired off-base ms/view: +0.521 +0.501 +0.574 mean +0.532
+psnr pc vs base: n=90 min=74.24 max=77.81 max_abs_diff=1
+psnr off vs base: n=90 min=74.89 max=78.24 max_abs_diff=1
