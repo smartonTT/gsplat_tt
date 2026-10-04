@@ -1,0 +1,18 @@
+ttp lock: waiting for p100 (held by task #174 (run 467) since 15:45)
+ttp lock: waiting for p100 (held by task #174 (run 467) since 15:45)
+ttp lock: got p100 after 2.2 min (not counted toward the run's wall clock)
+##### sync 15:47:51
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=9ef7c0afbfd0d561bbfb0977524861bcc0200cef so_md5=6276682e77e4d67803d4d055ea89215f 
+##### job 15:48:29
+base rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.5 p50_ms=18.6 min_ms=15.7 max_ms=22.0 n_views=30 warmup_s=14.9 out=/localdev/smarton/gstt2-t148/tmp/t148-base
+STAGES n=30 head=0.002 project=4.630 tile_assign=0.003 sort=4.293 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.297 d2h=0.229 assemble=0.000 tail=0.002 | sum=18.456 view_total=18.457 resid_in_view=+0.001 avg_frame_ms=18.481 resid_vs_frame=+0.025
+SORT_STAGES n=30 pread=0.025 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.097 upload=0.000 bin_emit=3.944 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.159 publish_wait=0.000 mat=0.036 | sum=4.261 sort=4.293 resid=+0.033
+stats rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=768.6 p50_ms=771.8 min_ms=629.0 max_ms=928.6 n_views=30 warmup_s=24.6 out=/localdev/smarton/gstt2-t148/tmp/t148-stats
+STAGES n=30 head=0.003 project=4.684 tile_assign=0.006 sort=4.354 blend_setup=0.000 mat=0.000 cull=0.000 blend=759.238 d2h=0.249 assemble=0.000 tail=0.005 | sum=768.540 view_total=768.542 resid_in_view=+0.002 avg_frame_ms=768.600 resid_vs_frame=+0.060
+MBSTATS lines: 3410
+##### job rc=0 15:49:36

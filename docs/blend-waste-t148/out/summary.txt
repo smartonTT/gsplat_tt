@@ -1,0 +1,37 @@
+lines=3410 launches=31 lines/launch=110.0
+  rec                 2954079 /frame
+  rec_live            2465815 /frame
+  mb_kept             7490189 /frame
+  mb_sat              1370053 /frame
+  mb_disp             6120136 /frame
+  pairops             4800072 /frame
+  mb_useful           6021544 /frame
+  px_live            63570458 /frame
+  rec_disp            2131974 /frame
+  mb_dsat              331932 /frame
+  mb_waste             425841 /frame
+  pair_waste           288921 /frame
+  rec_waste             93813 /frame
+ratios:
+  rec_live / rec (pair survives)    0.8347
+  mb_kept / (32*rec)                0.0792
+  mb_disp / (32*rec)                0.0647
+  mb_useful / mb_disp               0.9839
+  px_live / (32*mb_disp)            0.3246
+  px_live / (1024*rec)              0.0210
+  mb_disp / pairops (ILP pairing)   1.2750
+  mean mb_disp per live rec           2.48
+waste (task #148):
+  dead records (no dispatch) / rec        0.2783
+  ... of which mask 0 after cull          0.1653
+  dispatches into saturated mb / disp     0.0542
+  dispatches, no live px / disp           0.0161
+  wasted dispatches (union) / disp        0.0696
+  pair-ops fully wasted / pairops         0.0602
+  dispatching recs fully wasted / disp    0.0440
+ms/frame (mean core, 110.0 active cores/launch, 1.35 GHz):
+  dead records x cyc_rec               0.244
+  no-live-px dispatches x cyc_mb       0.043
+  saturated dispatches x cyc_mb        0.145
+  union wasted dispatches x cyc_mb     0.186
+  TOTAL (dead rec + union disp)        0.430
