@@ -474,15 +474,6 @@ __attribute__((noinline)) void pfwc_precull_tile(uint32_t c0_bits, uint32_t rlim
 #endif  // PFWC_PRECULL
 #endif  // TRISC_MATH
 
-#ifdef PFWC_PRECULL
-// Step 11.6 loads, out of line: six inlined init+copy pairs put the program
-// 224 B over the kernel config buffer on top of lever B (task #142).
-__attribute__((noinline)) void pc_load(uint32_t cb, uint32_t idst) {
-    copy_tile_to_dst_init_short(cb);
-    copy_tile(cb, 0, idst);
-}
-#endif
-
 template <uint32_t V>
 inline void pfwc_vis_unroll() {
     if constexpr (V < 16) {
@@ -928,12 +919,18 @@ void kernel_main() {
         {
             cb_wait_front(CB_OP, 1);
             tile_regs_acquire();
-            pc_load(CB_TMP_A, 0);
-            pc_load(CB_TMP_B, 1);
-            pc_load(CB_TMP_C, 2);
-            pc_load(CB_OP, 3);
-            pc_load(CB_TMP_RX, 4);
-            pc_load(CB_TMP_RY, 5);
+            copy_tile_to_dst_init_short(CB_TMP_A);
+            copy_tile(CB_TMP_A, 0, 0);
+            copy_tile_to_dst_init_short(CB_TMP_B);
+            copy_tile(CB_TMP_B, 0, 1);
+            copy_tile_to_dst_init_short(CB_TMP_C);
+            copy_tile(CB_TMP_C, 0, 2);
+            copy_tile_to_dst_init_short(CB_OP);
+            copy_tile(CB_OP, 0, 3);
+            copy_tile_to_dst_init_short(CB_TMP_RX);
+            copy_tile(CB_TMP_RX, 0, 4);
+            copy_tile_to_dst_init_short(CB_TMP_RY);
+            copy_tile(CB_TMP_RY, 0, 5);
             cb_pop_front(CB_TMP_RX, 1);
             cb_pop_front(CB_TMP_RY, 1);
 
