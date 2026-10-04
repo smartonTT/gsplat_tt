@@ -60,6 +60,25 @@ inline int pfwc_fuse_mode() {
     return v;
 }
 
+// Lever C (task #140, GSPLAT_TT_PRECULL): 1 = pfwc (PFWC_PRECULL) shrinks the
+// tile rectangle to the opacity-aware extent the microblock band cull can keep
+// (project_pfwc_compute.cpp step 11.6), so dead (gaussian, tile) records are
+// never made. Same image. 0 (default) = kill switch. Only with
+// GSPLAT_TT_SFPU_VIS=1 (mode 2 cross-checks the rectangle against the legacy
+// path) and with the band cull on.
+inline int precull_mode() {
+    static const int v = [] {
+        const char* e = std::getenv("GSPLAT_TT_PRECULL");
+        if (e == nullptr || *e == '\0') return 0;
+        const int x = std::atoi(e);
+        if (x < 0 || x > 1)
+            throw std::invalid_argument(std::string("GSPLAT_TT_PRECULL must be 0 or 1, got '") +
+                                        e + "'");
+        return x;
+    }();
+    return v;
+}
+
 inline unsigned vis_env_u32(const char* name, unsigned dflt) {
     const char* e = std::getenv(name);
     return (e != nullptr && *e != '\0') ? static_cast<unsigned>(std::atoi(e)) : dflt;

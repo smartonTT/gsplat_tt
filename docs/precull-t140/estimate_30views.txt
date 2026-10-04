@@ -1,0 +1,151 @@
+view hero: visible 1883813 records 3375678 live 2713285 dead 662393 (0.1962)
+  shrinkable gaussians (k_e < 3): 0.6245; ill-conditioned (kept 3 sigma): 0.0043
+  pre-cull rect: records 3168884 removed 206794 (0.0613 of all, 0.3122 of dead); live records lost 0
+  + sheared row band: removed 327712 (0.0971); live lost 0
+  max tile 25706 -> 24595; tiles > 8192: 110 -> 99; > 16384: 13 -> 6
+view orb_00: visible 1313104 records 2435974 live 1940986 dead 494988 (0.2032)
+  shrinkable gaussians (k_e < 3): 0.6046; ill-conditioned (kept 3 sigma): 0.0059
+  pre-cull rect: records 2284070 removed 151904 (0.0624 of all, 0.3069 of dead); live records lost 0
+  + sheared row band: removed 256061 (0.1051); live lost 0
+  max tile 21694 -> 20735; tiles > 8192: 82 -> 75; > 16384: 9 -> 7
+view orb_01: visible 1361850 records 2513634 live 2008892 dead 504742 (0.2008)
+  shrinkable gaussians (k_e < 3): 0.6041; ill-conditioned (kept 3 sigma): 0.0058
+  pre-cull rect: records 2359783 removed 153851 (0.0612 of all, 0.3048 of dead); live records lost 0
+  + sheared row band: removed 258915 (0.1030); live lost 0
+  max tile 21307 -> 20297; tiles > 8192: 82 -> 73; > 16384: 9 -> 7
+view orb_02: visible 1433628 records 2615913 live 2099057 dead 516856 (0.1976)
+  shrinkable gaussians (k_e < 3): 0.6054; ill-conditioned (kept 3 sigma): 0.0055
+  pre-cull rect: records 2455936 removed 159977 (0.0612 of all, 0.3095 of dead); live records lost 0
+  + sheared row band: removed 267279 (0.1022); live lost 0
+  max tile 21556 -> 20452; tiles > 8192: 79 -> 73; > 16384: 11 -> 7
+view orb_03: visible 1517402 records 2755824 live 2213003 dead 542821 (0.1970)
+  shrinkable gaussians (k_e < 3): 0.6067; ill-conditioned (kept 3 sigma): 0.0053
+  pre-cull rect: records 2587997 removed 167827 (0.0609 of all, 0.3092 of dead); live records lost 0
+  + sheared row band: removed 277622 (0.1007); live lost 0
+  max tile 20493 -> 19347; tiles > 8192: 84 -> 73; > 16384: 13 -> 9
+view orb_04: visible 1619653 records 2925765 live 2356171 dead 569594 (0.1947)
+  shrinkable gaussians (k_e < 3): 0.6089; ill-conditioned (kept 3 sigma): 0.0049
+  pre-cull rect: records 2747591 removed 178174 (0.0609 of all, 0.3128 of dead); live records lost 0
+  + sheared row band: removed 289965 (0.0991); live lost 0
+  max tile 23216 -> 22162; tiles > 8192: 85 -> 77; > 16384: 13 -> 6
+view orb_05: visible 1741552 records 3179464 live 2539884 dead 639580 (0.2012)
+  shrinkable gaussians (k_e < 3): 0.6133; ill-conditioned (kept 3 sigma): 0.0046
+  pre-cull rect: records 2981531 removed 197933 (0.0623 of all, 0.3095 of dead); live records lost 0
+  + sheared row band: removed 320675 (0.1009); live lost 0
+  max tile 24735 -> 23851; tiles > 8192: 98 -> 89; > 16384: 7 -> 4
+view orb_06: visible 1870972 records 3365800 live 2710023 dead 655777 (0.1948)
+  shrinkable gaussians (k_e < 3): 0.6149; ill-conditioned (kept 3 sigma): 0.0044
+  pre-cull rect: records 3159779 removed 206021 (0.0612 of all, 0.3142 of dead); live records lost 0
+  + sheared row band: removed 331166 (0.0984); live lost 0
+  max tile 24107 -> 22937; tiles > 8192: 110 -> 96; > 16384: 10 -> 7
+view orb_07: visible 1989866 records 3590039 live 2881619 dead 708420 (0.1973)
+  shrinkable gaussians (k_e < 3): 0.6175; ill-conditioned (kept 3 sigma): 0.0043
+  pre-cull rect: records 3373041 removed 216998 (0.0604 of all, 0.3063 of dead); live records lost 0
+  + sheared row band: removed 346498 (0.0965); live lost 0
+  max tile 24138 -> 23011; tiles > 8192: 108 -> 96; > 16384: 13 -> 10
+view orb_08: visible 2064553 records 3649648 live 2958448 dead 691200 (0.1894)
+  shrinkable gaussians (k_e < 3): 0.6174; ill-conditioned (kept 3 sigma): 0.0042
+  pre-cull rect: records 3437326 removed 212322 (0.0582 of all, 0.3072 of dead); live records lost 0
+  + sheared row band: removed 335882 (0.0920); live lost 0
+  max tile 21068 -> 20310; tiles > 8192: 110 -> 98; > 16384: 16 -> 11
+view orb_09: visible 2095725 records 3684969 live 2990665 dead 694304 (0.1884)
+  shrinkable gaussians (k_e < 3): 0.6179; ill-conditioned (kept 3 sigma): 0.0042
+  pre-cull rect: records 3469700 removed 215269 (0.0584 of all, 0.3101 of dead); live records lost 0
+  + sheared row band: removed 339881 (0.0922); live lost 0
+  max tile 21616 -> 20781; tiles > 8192: 113 -> 98; > 16384: 14 -> 10
+view orb_10: visible 2074950 records 3706378 live 2988612 dead 717766 (0.1937)
+  shrinkable gaussians (k_e < 3): 0.6192; ill-conditioned (kept 3 sigma): 0.0043
+  pre-cull rect: records 3488353 removed 218025 (0.0588 of all, 0.3038 of dead); live records lost 0
+  + sheared row band: removed 348028 (0.0939); live lost 0
+  max tile 21385 -> 20780; tiles > 8192: 110 -> 97; > 16384: 18 -> 9
+view orb_11: visible 2017044 records 3617845 live 2907431 dead 710414 (0.1964)
+  shrinkable gaussians (k_e < 3): 0.6211; ill-conditioned (kept 3 sigma): 0.0045
+  pre-cull rect: records 3398870 removed 218975 (0.0605 of all, 0.3082 of dead); live records lost 0
+  + sheared row band: removed 350086 (0.0968); live lost 0
+  max tile 22252 -> 21387; tiles > 8192: 113 -> 99; > 16384: 9 -> 6
+view orb_12: visible 1947725 records 3464289 live 2798290 dead 665999 (0.1922)
+  shrinkable gaussians (k_e < 3): 0.6225; ill-conditioned (kept 3 sigma): 0.0047
+  pre-cull rect: records 3258970 removed 205319 (0.0593 of all, 0.3083 of dead); live records lost 0
+  + sheared row band: removed 327117 (0.0944); live lost 0
+  max tile 22271 -> 21680; tiles > 8192: 100 -> 94; > 16384: 9 -> 5
+view orb_13: visible 1876614 records 3355386 live 2702708 dead 652678 (0.1945)
+  shrinkable gaussians (k_e < 3): 0.6229; ill-conditioned (kept 3 sigma): 0.0049
+  pre-cull rect: records 3155284 removed 200102 (0.0596 of all, 0.3066 of dead); live records lost 0
+  + sheared row band: removed 323087 (0.0963); live lost 0
+  max tile 22747 -> 22139; tiles > 8192: 102 -> 92; > 16384: 7 -> 4
+view orb_14: visible 1822891 records 3289980 live 2635336 dead 654644 (0.1990)
+  shrinkable gaussians (k_e < 3): 0.6236; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 3090186 removed 199794 (0.0607 of all, 0.3052 of dead); live records lost 0
+  + sheared row band: removed 322553 (0.0980); live lost 0
+  max tile 23890 -> 23178; tiles > 8192: 100 -> 87; > 16384: 5 -> 2
+view orb_15: visible 1786282 records 3223535 live 2580783 dead 642752 (0.1994)
+  shrinkable gaussians (k_e < 3): 0.6261; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 3027892 removed 195643 (0.0607 of all, 0.3044 of dead); live records lost 0
+  + sheared row band: removed 316425 (0.0982); live lost 0
+  max tile 21678 -> 20970; tiles > 8192: 100 -> 91; > 16384: 5 -> 5
+view orb_16: visible 1762728 records 3175534 live 2543174 dead 632360 (0.1991)
+  shrinkable gaussians (k_e < 3): 0.6294; ill-conditioned (kept 3 sigma): 0.0049
+  pre-cull rect: records 2981839 removed 193695 (0.0610 of all, 0.3063 of dead); live records lost 0
+  + sheared row band: removed 310937 (0.0979); live lost 0
+  max tile 22313 -> 21619; tiles > 8192: 101 -> 91; > 16384: 6 -> 5
+view orb_17: visible 1763435 records 3170003 live 2541957 dead 628046 (0.1981)
+  shrinkable gaussians (k_e < 3): 0.6322; ill-conditioned (kept 3 sigma): 0.0049
+  pre-cull rect: records 2977570 removed 192433 (0.0607 of all, 0.3064 of dead); live records lost 0
+  + sheared row band: removed 309499 (0.0976); live lost 0
+  max tile 20758 -> 19921; tiles > 8192: 103 -> 92; > 16384: 9 -> 6
+view orb_18: visible 1774604 records 3190591 live 2558870 dead 631721 (0.1980)
+  shrinkable gaussians (k_e < 3): 0.6334; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 2994873 removed 195718 (0.0613 of all, 0.3098 of dead); live records lost 0
+  + sheared row band: removed 313434 (0.0982); live lost 0
+  max tile 20418 -> 19536; tiles > 8192: 97 -> 92; > 16384: 10 -> 6
+view orb_19: visible 1766683 records 3187599 live 2552976 dead 634623 (0.1991)
+  shrinkable gaussians (k_e < 3): 0.6319; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 2989296 removed 198303 (0.0622 of all, 0.3125 of dead); live records lost 0
+  + sheared row band: removed 315258 (0.0989); live lost 0
+  max tile 21234 -> 20203; tiles > 8192: 97 -> 88; > 16384: 13 -> 6
+view orb_20: visible 1759536 records 3162977 live 2540802 dead 622175 (0.1967)
+  shrinkable gaussians (k_e < 3): 0.6299; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 2967195 removed 195782 (0.0619 of all, 0.3147 of dead); live records lost 0
+  + sheared row band: removed 311620 (0.0985); live lost 0
+  max tile 20636 -> 19602; tiles > 8192: 101 -> 99; > 16384: 8 -> 6
+view orb_21: visible 1731240 records 3131081 live 2509493 dead 621588 (0.1985)
+  shrinkable gaussians (k_e < 3): 0.6279; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 2935738 removed 195343 (0.0624 of all, 0.3143 of dead); live records lost 0
+  + sheared row band: removed 312992 (0.1000); live lost 0
+  max tile 24857 -> 23863; tiles > 8192: 107 -> 96; > 16384: 11 -> 5
+view orb_22: visible 1676798 records 3040268 live 2434822 dead 605446 (0.1991)
+  shrinkable gaussians (k_e < 3): 0.6264; ill-conditioned (kept 3 sigma): 0.0048
+  pre-cull rect: records 2847648 removed 192620 (0.0634 of all, 0.3181 of dead); live records lost 0
+  + sheared row band: removed 306588 (0.1008); live lost 0
+  max tile 20672 -> 19831; tiles > 8192: 99 -> 95; > 16384: 9 -> 5
+view orb_23: visible 1594854 records 2921361 live 2335003 dead 586358 (0.2007)
+  shrinkable gaussians (k_e < 3): 0.6239; ill-conditioned (kept 3 sigma): 0.0050
+  pre-cull rect: records 2735452 removed 185909 (0.0636 of all, 0.3171 of dead); live records lost 0
+  + sheared row band: removed 298182 (0.1021); live lost 0
+  max tile 23048 -> 22009; tiles > 8192: 96 -> 89; > 16384: 9 -> 7
+view orb_24: visible 1475939 records 2714935 live 2166906 dead 548029 (0.2019)
+  shrinkable gaussians (k_e < 3): 0.6213; ill-conditioned (kept 3 sigma): 0.0054
+  pre-cull rect: records 2538441 removed 176494 (0.0650 of all, 0.3221 of dead); live records lost 0
+  + sheared row band: removed 285440 (0.1051); live lost 0
+  max tile 22510 -> 21130; tiles > 8192: 89 -> 86; > 16384: 9 -> 7
+view orb_25: visible 1376808 records 2554158 live 2035519 dead 518639 (0.2031)
+  shrinkable gaussians (k_e < 3): 0.6162; ill-conditioned (kept 3 sigma): 0.0055
+  pre-cull rect: records 2387746 removed 166412 (0.0652 of all, 0.3209 of dead); live records lost 0
+  + sheared row band: removed 273212 (0.1070); live lost 0
+  max tile 23918 -> 22838; tiles > 8192: 88 -> 79; > 16384: 9 -> 4
+view orb_26: visible 1310617 records 2452002 live 1949657 dead 502345 (0.2049)
+  shrinkable gaussians (k_e < 3): 0.6119; ill-conditioned (kept 3 sigma): 0.0059
+  pre-cull rect: records 2293676 removed 158326 (0.0646 of all, 0.3152 of dead); live records lost 0
+  + sheared row band: removed 263806 (0.1076); live lost 0
+  max tile 24683 -> 23337; tiles > 8192: 82 -> 73; > 16384: 6 -> 5
+view orb_27: visible 1274524 records 2394375 live 1902390 dead 491985 (0.2055)
+  shrinkable gaussians (k_e < 3): 0.6088; ill-conditioned (kept 3 sigma): 0.0061
+  pre-cull rect: records 2241256 removed 153119 (0.0639 of all, 0.3112 of dead); live records lost 0
+  + sheared row band: removed 258249 (0.1079); live lost 0
+  max tile 24446 -> 23387; tiles > 8192: 82 -> 75; > 16384: 7 -> 4
+view orb_28: visible 1282259 records 2385351 live 1902349 dead 483002 (0.2025)
+  shrinkable gaussians (k_e < 3): 0.6065; ill-conditioned (kept 3 sigma): 0.0061
+  pre-cull rect: records 2236250 removed 149101 (0.0625 of all, 0.3087 of dead); live records lost 0
+  + sheared row band: removed 251864 (0.1056); live lost 0
+  max tile 22996 -> 21997; tiles > 8192: 78 -> 71; > 16384: 10 -> 6
+ALL 30 views: records 92230356 dead 0.1977 rect removes 0.0613 rect+shear removes 0.0992
