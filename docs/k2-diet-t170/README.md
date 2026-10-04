@@ -91,10 +91,26 @@ kill switches restore the old paths.
   so it is not range imbalance. A difference array updated once per
   rectangle row, plus one prefix pass over the screen tiles, would remove
   most of it.
-- **sort_ol_prefix grows from 0.037 to 0.373 ms.** With the fold, the prefix
-  is the first zone in the sort program, so its makespan may include launch
-  skew that the count pass used to absorb. This needs a look at each core's
-  start time before anyone works on it.
+- **sort_ol_prefix grows from 0.037 to 0.373 ms. This is now explained.**
+  - Per-core prefix time under the fold is 180 us median and 372 us max (nf:
+    28 and 37 us). Launch skew is only 0.2 us. Source:
+    `t170-on`/`t170-nf` `dev30.csv`, script `out/pfx.py`.
+  - Under the fold, NCRISC fills the sort's 1024-page gid/tid window as soon
+    as the kernel starts. So do the BRISCs that own no prefix page, in
+    barrier 2. That is about 26 MB of 64 B reads in total, and each core's
+    220 row-page reads for the prefix wait behind them.
+  - The window is still worth having. Probe of `GSPLAT_TT_OL_WIN_PAGES`, all
+    arms md5-identical (view_total, ms/view):
+
+    | round | base | 1536 | 1280 | 512 | 256 | 128 | 64 |
+    |---|---:|---:|---:|---:|---:|---:|---:|
+    | r8 | 17.282 | | | 17.437 | 17.780 | 17.923 | 18.218 |
+    | r9 | 17.360 | 17.287 | 17.344 | | | | |
+
+  - Smaller windows lose 0.16 to 0.94 ms. Larger ones gain at most 0.07,
+    which is noise. So the time until the emit starts is set by the window
+    fill, not by the prefix. A real fix needs fewer or larger reads in that
+    fill. Measure the fill first, with a zone around it.
 
 ## Files
 
@@ -103,3 +119,4 @@ kill switches restore the old paths.
 - `out/run-rN-<arm>.log`, `out/md5-rN-<arm>.txt`: the timing runs.
 - `out/tracy2-<arm>-{zones,gaps}.txt`: Tracy captures on the rebased tip.
 - `out/tracy-*`: Tracy captures before the rebase.
+- `out/run-r8-*`, `out/run-r9-*`: the window-size probe.
