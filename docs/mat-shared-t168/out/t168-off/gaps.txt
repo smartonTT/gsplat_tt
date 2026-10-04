@@ -1,0 +1,8 @@
+views=30 segments/view=[5]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.980   2.980      0.000   110  pfwc
+ 1    2.986    4.467   1.481      0.006   110  <unnamed 110 cores>
+ 2    4.984    8.870   3.886      0.517   110  sort_ol_count+sort_ol_barrier+sort_ol_prefix+sort_ol_emit
+ 3    9.186   12.562   3.376      0.316   110  sort_subchunk_mat+mat_cull_mask
+ 4   12.568   18.464   5.896      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.845 ms/view
