@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "pfwc_fuse.h"
+#include "render/host/sort_mover_split.h"
 
 namespace {
 
@@ -218,10 +219,19 @@ struct ModelIo {
 // emit_pairs_diet per (K2 core, mover) must give emit_pairs' pages (gid, tid)
 // and, with COUNT, the per-tile pair counts of its range.
 uint32_t max_search_waits = 0;
+// speed (2 K entries, task #170 fold): ranges from k2_range_speed, which must
+// equal the one-launch sort's sort_split::speed_bounds.
 template <bool COUNT>
 void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab, uint32_t C,
                 uint32_t K, uint32_t dual, uint32_t permille, uint32_t P_pub,
-                const std::vector<uint32_t>& gid, const std::vector<uint32_t>& tid) {
+                const std::vector<uint32_t>& gid, const std::vector<uint32_t>& tid,
+                const std::vector<uint32_t>* speed = nullptr) {
+    std::vector<uint32_t> acc, sb;
+    if (speed != nullptr) {
+        acc.assign(speed->size() + 1u, 0u);
+        for (std::size_t k = 0; k < speed->size(); k++) acc[k + 1] = acc[k] + (*speed)[k];
+        sb = gsplat_tt::sort_split::speed_bounds((P_pub + 15) / 16, *speed);
+    }
     const uint32_t pages = (P_pub + 15) / 16;
     std::vector<uint32_t> dg(pages * 16, 0xFFFFFFFFu), dt(pages * 16, 0xFFFFFFFFu);
     std::vector<uint32_t> written(pages, 0);
@@ -229,7 +239,14 @@ void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab
     for (uint32_t k = 0; k < K; k++)
         for (uint32_t mv = 0; mv < 2; mv++) {
             uint32_t pg0 = 0, npg = 0;
-            pfwc_fuse::k2_range(P_pub, K, k, mv, dual, permille, &pg0, &npg);
+            if (speed == nullptr) {
+                pfwc_fuse::k2_range(P_pub, K, k, mv, dual, permille, &pg0, &npg);
+            } else {
+                pfwc_fuse::k2_range_speed(P_pub, acc[2 * k + mv], acc[2 * k + mv + 1], acc.back(),
+                                          &pg0, &npg);
+                if (pg0 != sb[2 * k + mv] || pg0 + npg != sb[2 * k + mv + 1])
+                    fail("speed range != speed_bounds", 2 * k + mv, pg0);
+            }
             ModelIo io;
             io.lofs = &f.lofs;
             io.box = &f.box;
@@ -311,6 +328,10 @@ void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint
     }
     check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid);
     check_diet<false>(s, f, tab, C, K, dual, permille, P_pub, gid, tid);
+    // Speed-proportional ranges (p150 table span 700..1100; some cores slow).
+    std::vector<uint32_t> speed(2u * K);
+    for (uint32_t k = 0; k < 2u * K; k++) speed[k] = 650u + (k * 2654435761u >> 7) % 500u;
+    check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, &speed);
 }
 
 }  // namespace

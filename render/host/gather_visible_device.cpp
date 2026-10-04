@@ -1103,7 +1103,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             {
                 stagetimers::Span w(st_acc.project_gather_wait);
                 if (!tile_assign_fused_k2(fuse_info.num_cores, num_tiles, fuse_info.tiles_x,
-                                          &Mf, &Pf))
+                                          fuse_info.screen_tiles, &Mf, &Pf))
                     throw std::runtime_error("tile_assign_fused_k2 failed");
             }
             M = Mf;
