@@ -54,6 +54,50 @@ struct MatWorkAssignment {
     uint32_t movers = 1;
 };
 
+// Task #144: measured materialize item cost (us) = a + b * records, per item
+// kind (k: 0 = whole tile, 1 = one-launch big-tile subchunk; records = tile
+// count for both) and per mover (r: 0 = NCRISC, 1 = BRISC; big items run on
+// NCRISC only). Used for the one-launch, select-off LPT; off = the legacy
+// record-count costs. GSPLAT_TT_MAT_COST="aW_N,bW_N,aW_B,bW_B,aB_N,bB_N"
+// overrides the fit, GSPLAT_TT_MAT_COST=0 turns it off.
+struct MatCostModel {
+    bool on = false;
+    double a[2][2] = {{0, 0}, {0, 0}};
+    double b[2][2] = {{0, 0}, {0, 0}};
+    // Cost in ns of a kind-k item of n records on mover r.
+    uint64_t ns(int k, int r, uint32_t n) const {
+        const double us = a[k][r] + b[k][r] * static_cast<double>(n);
+        return static_cast<uint64_t>(us > 0.0 ? us * 1000.0 + 0.5 : 0.0);
+    }
+};
+
+inline MatCostModel parse_mat_cost(const char* e) {
+    MatCostModel m;
+    if (e == nullptr || e[0] == '\0' || (e[0] == '0' && e[1] == '\0')) return m;
+    double v[6];
+    if (std::sscanf(e, "%lf,%lf,%lf,%lf,%lf,%lf", &v[0], &v[1], &v[2], &v[3], &v[4],
+                    &v[5]) != 6) {
+        std::fprintf(stderr, "[MAT_COST] bad GSPLAT_TT_MAT_COST '%s', using record counts\n", e);
+        return m;
+    }
+    m.on = true;
+    m.a[0][0] = v[0]; m.b[0][0] = v[1];
+    m.a[0][1] = v[2]; m.b[0][1] = v[3];
+    m.a[1][0] = v[4]; m.b[1][0] = v[5];
+    m.a[1][1] = v[4]; m.b[1][1] = v[5];
+    return m;
+}
+
+inline constexpr const char* kMatCostDefault = "0";
+
+inline const MatCostModel& mat_cost_model_env() {
+    static const MatCostModel m = [] {
+        const char* e = std::getenv("GSPLAT_TT_MAT_COST");
+        return parse_mat_cost(e != nullptr ? e : kMatCostDefault);
+    }();
+    return m;
+}
+
 inline MatWorkAssignment build_mat_worklist(
     const std::vector<int64_t>& counts,
     uint32_t num_tiles,
@@ -62,7 +106,8 @@ inline MatWorkAssignment build_mat_worklist(
     uint32_t movers = 1,
     uint32_t m0_cap = 0,
     bool onelaunch = false,
-    bool ol_select = false) {
+    bool ol_select = false,
+    const MatCostModel& cm = mat_cost_model_env()) {
     // Cost of a gather record relative to a whole-tile (coalesced + L1 radix)
     // record. iter 130 assumed 8; task #35 measured (yyzo-bh-07, bicycle 30
     // views, dual mover) blend stage 60.74 / 59.74 / 58.48 / 57.95 / 57.78 ms
@@ -79,7 +124,11 @@ inline MatWorkAssignment build_mat_worklist(
     // SINGLE work item (sc==0, processes every subchunk internally) — like the
     // in-budget permute, ~1x per record (NOT the GATHER_WEIGHT random gather).
     const uint32_t ov_cap = render_config::kOverflowL1Cap;
-    struct Item { uint32_t tile; uint32_t sc; uint64_t cost; bool big; };
+    // kind (for GSPLAT_TT_MAT_DUMP): 'w' whole tile, 'b' one-launch big-tile
+    // subchunk, 's' one-launch select part, 'g' gather part.
+    // cost: NCRISC (or only) slot cost, cost_b: BRISC slot cost.
+    struct Item { uint32_t tile; uint32_t sc; uint64_t cost; bool big; char kind; uint32_t recs;
+                  uint64_t cost_b = 0; };
     std::vector<Item> items;
     items.reserve(static_cast<std::size_t>(num_tiles) + 256u);
     for (uint32_t t = 0; t < num_tiles; ++t) {
@@ -89,7 +138,7 @@ inline MatWorkAssignment build_mat_worklist(
         const bool prepack_ov = (cnt > bucket_fit && cnt <= ov_cap);
         if (inbudget || prepack_ov) {
             // ONE whole-tile item: coalesced bucket read + L1 depth permute.
-            items.push_back({t, 0u, static_cast<uint64_t>(cnt), cnt > m0_cap});
+            items.push_back({t, 0u, static_cast<uint64_t>(cnt), cnt > m0_cap, 'w', cnt});
             continue;
         }
         // Over-cap overflow tile: legacy per-subchunk blendrec gather.
@@ -106,7 +155,7 @@ inline MatWorkAssignment build_mat_worklist(
                 for (uint32_t p0 = 0, part = 0; p0 < l_sub; p0 += kOlMatPartRecs, ++part) {
                     const uint32_t recs = std::min(kOlMatPartRecs, l_sub - p0);
                     items.push_back({t, sc | (part << 8),
-                                     static_cast<uint64_t>(cnt) / 4u + 2u * recs, true});
+                                     static_cast<uint64_t>(cnt) / 4u + 2u * recs, true, 's', recs});
                 }
                 continue;
             }
@@ -114,14 +163,25 @@ inline MatWorkAssignment build_mat_worklist(
                 // Task #106 one-launch sort: the whole tile is in its bucket.
                 // One item per subchunk sorts the tile's keys and fills only
                 // its own subchunk; NCRISC only (BRISC's buffers are too small).
-                items.push_back({t, sc, static_cast<uint64_t>(cnt) + l_sub, true});
+                items.push_back({t, sc, static_cast<uint64_t>(cnt) + l_sub, true, 'b', l_sub});
                 continue;
             }
             for (uint32_t p0 = 0, part = 0; p0 < l_sub; p0 += kGatherPartRecs, ++part) {
                 const uint32_t recs = std::min(kGatherPartRecs, l_sub - p0);
                 items.push_back({t, sc | (part << 8),
-                                 static_cast<uint64_t>(recs) * GATHER_WEIGHT, false});
+                                 static_cast<uint64_t>(recs) * GATHER_WEIGHT, false, 'g', recs});
             }
+        }
+    }
+    const bool calib = cm.on && onelaunch && !ol_select;
+    for (auto& it : items) {
+        if (calib && (it.kind == 'w' || it.kind == 'b')) {
+            const int k = (it.kind == 'b') ? 1 : 0;
+            const uint32_t n = static_cast<uint32_t>(counts[it.tile]);
+            it.cost = cm.ns(k, 0, n);
+            it.cost_b = cm.ns(k, 1, n);
+        } else {
+            it.cost_b = it.cost;
         }
     }
     std::sort(items.begin(), items.end(),
@@ -130,15 +190,21 @@ inline MatWorkAssignment build_mat_worklist(
     std::vector<std::vector<std::pair<uint32_t, uint32_t>>> per_core(slots);
     std::vector<uint64_t> load(slots, 0);
     for (const auto& it : items) {
-        // Least-loaded eligible slot, ties -> lowest index (single mover: the
-        // same choice as std::min_element over cores).
+        // Eligible slot that finishes the item first, ties -> lowest index.
+        // With equal NCRISC/BRISC costs that is the least-loaded slot (single
+        // mover: the same choice as std::min_element over cores).
         const uint32_t step = (movers == 2 && it.big) ? 2u : 1u;
+        auto cost_on = [&](uint32_t k) {
+            return (movers == 2 && (k & 1u)) ? it.cost_b : it.cost;
+        };
         uint32_t c = 0;
+        uint64_t best = load[0] + cost_on(0);
         for (uint32_t k = step; k < slots; k += step) {
-            if (load[k] < load[c]) c = k;
+            const uint64_t f = load[k] + cost_on(k);
+            if (f < best) { best = f; c = k; }
         }
         per_core[c].emplace_back(it.tile, it.sc);
-        load[c] += it.cost;
+        load[c] = best;
     }
     if (std::getenv("GSPLAT_TT_MAT_STATS") != nullptr) {
         uint64_t tot = 0, big = 0, gather = 0, mx[2] = {0, 0};
@@ -160,6 +226,25 @@ inline MatWorkAssignment build_mat_worklist(
                      (unsigned long long)(items.empty() ? 0 : items[0].cost),
                      (unsigned long long)(tot / std::max(slots, 1u)),
                      (unsigned long long)mx[0], (unsigned long long)mx[1]);
+    }
+    if (const char* dp = std::getenv("GSPLAT_TT_MAT_DUMP")) {
+        // Task #144: per-slot item lists for the LPT cost fit
+        // (docs/mat-lpt-t144/mat_fit.py). One "F" block per call; slot 2c =
+        // NCRISC, 2c+1 = BRISC of logical core c (dual mover).
+        static uint32_t frame = 0;
+        if (std::FILE* f = std::fopen(dp, "a")) {
+            std::fprintf(f, "F %u slots %u movers %u\n", frame, slots, movers);
+            for (uint32_t k = 0; k < slots; ++k) {
+                std::fprintf(f, "S %u %zu", k, per_core[k].size());
+                for (const auto& pr : per_core[k]) {
+                    const uint32_t cnt = static_cast<uint32_t>(counts[pr.first]);
+                    std::fprintf(f, " %u:%u:%u", pr.first, pr.second, cnt);
+                }
+                std::fputc('\n', f);
+            }
+            std::fclose(f);
+        }
+        ++frame;
     }
     MatWorkAssignment a;
     a.movers = movers;
