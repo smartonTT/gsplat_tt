@@ -6,7 +6,8 @@ T=${T150_TREE:-/localdev/smarton/gstt2-t150}; cd "$T" || exit 1; source .venv/bi
 export TTW_DEVRUN=1 GSTT2_REPO=$T TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t150-prof
 tag=${1:-t150-tip}
 echo "=== tracy $tag $(cut -c1-7 SHA) $(date +%T)"
-timeout 450 bash opt/profiler/capture_tracy.sh $tag 2>&1 | grep -E 'capture_tracy\] (OK|FAIL|DONE|device profiler CSV)|^SUMMARY|^STAGES|^SORT_STAGES|Traceback' | head -20
+mkdir -p opt/profiler/$tag; timeout 450 bash opt/profiler/capture_tracy.sh $tag 2>&1 | tee opt/profiler/$tag/capture.log | grep -E 'capture_tracy\] (OK|FAIL|DONE|device profiler CSV)|^SUMMARY|^STAGES|^SORT_STAGES|Traceback' | head -20
+grep -B2 -A25 Traceback opt/profiler/$tag/capture.log | head -60
 D=opt/profiler/$tag
 python3 opt/profiler/stitch_device_csv.py -o $D/dev30.csv $D/profile_log_device.csv 2>&1 | tail -3
 python3 opt/profiler/zone_occupancy.py $D/dev30.csv > $D/zone_occupancy.txt 2>&1; echo "zone_occ rc=$?"
