@@ -712,7 +712,9 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
             // all-ones keep mask must already be resident (cull off).
             bool early = false;
             if (pass == 0 && ctx->buf_keep_all_ones && sort_onelaunch_early_enabled()) {
-                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, false);
+                // Non-blocking: ReadShard (EnqueueReadMeshBuffer TT_FATALs on
+                // blocking=false). Single-device mesh: shard (0, 0).
+                distributed::ReadShard(*ctx->cq, mread, projM, distributed::MeshCoordinate(0, 0), false);
                 auto ev = ctx->cq->enqueue_record_event_to_host();
                 early = sort_onelaunch_enqueue_early(
                     num_tiles, tiles_x, static_cast<uint32_t>(ctx->buf_gids->address()),

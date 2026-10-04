@@ -2018,7 +2018,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         if (ol_early) {
             // pbuf lands before the totals (in-order completion queue); the
             // totals read is the one-launch wait.
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, false);
+            // Non-blocking reads must go through ReadShard (EnqueueReadMeshBuffer
+            // TT_FATALs on blocking=false). Single-device mesh: shard (0, 0).
+            distributed::ReadShard(*ctx->cq, pbuf, bP, distributed::MeshCoordinate(0, 0), false);
             T.pread_ms =
                 std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
             const auto t_w0 = clk::now();
