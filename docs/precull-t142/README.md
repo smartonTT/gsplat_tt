@@ -32,3 +32,20 @@ Correctness: not byte-identical. Every differing pixel is off by exactly 1 LSB,
 reads T back every 512 records, dead ones included, so fewer dead records move
 where a microblock stops. With the early-out off (BLEND_T_PERIOD=0) both arms
 are byte-identical over 5 views (`out/oldtip-t0.log`): no live record is lost.
+
+## Fitting the lever-B tip's kernel config buffer (70656 B)
+
+On the lever-B tip the PFWC_PRECULL program did not fit: 70880 B, then 76096 B
+with an out-of-line load helper (runtime CB ids; reverted), 71344 B with one
+copy init per load group (rebased on iter-180). Two trims:
+
+1. 5e98244: step 11.6 runs inside step 11.5's DEST acquire (cov a, b in slots
+   6 / 7, cov c in slot 0, before the TZ / MX / MY loads): no radii repack, no
+   second acquire, 9 tile loads instead of 12. 70768 B (-576 B), still 112 B over.
+2. 795cd44: t = 2 ln(op) + c0 from an upper bound of log2(op) read off the
+   opacity bits (log2(2^e m) <= e + (m - 1) + 0.0860713; 9 low mantissa bits
+   truncated, + 2^-14) instead of the SFPU log, constants folded into arg 65
+   on the host; the shrink-ok flag slot became nested v_ifs. t can only be
+   larger (by <= 0.12), so the pre-cull keeps slightly more records; the host
+   model (test_precull.cpp) still loses 0 kept tiles and shrinks 61938 of
+   150000 lanes.
