@@ -2171,7 +2171,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 if (ctx->ol_early_tiles != num_tiles ||
                     !std::equal(want, want + 6, ctx->ol_early_addr)) {
                     std::cerr << "[gsplat_tt::sort] early one-launch ran on other buffers "
-                                 "or another tile count — hard fail\n";
+                                 "or another tile count — hard fail: tiles "
+                              << ctx->ol_early_tiles << "/" << num_tiles;
+                    for (int i = 0; i < 6; i++)
+                        std::cerr << " " << ctx->ol_early_addr[i] << "/" << want[i];
+                    std::cerr << "\n";
                     return fail();
                 }
                 tot = std::move(ol_early_tot);
