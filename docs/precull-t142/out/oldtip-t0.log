@@ -1,0 +1,33 @@
+ttp lock: waiting for p100 (held by task #142 (run 393) since 12:00; 1 ahead in queue)
+ttp lock: got p100 after 0.5 min (not counted toward the run's wall clock)
+##### sync 12:00:59
+[sync_remote] sha=cc139c26778df2794a4675fbb2654a68b02ec8d3 so_md5=753be95f46fe449bdcbce98a5652240b 
+##### t0 12:01:25
+=== t124rt0-b0 cc139c2 BLEND_T_PERIOD=0 views=0:5
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.26dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=22.5 p50_ms=21.8 min_ms=20.6 max_ms=26.7 n_views=5 warmup_s=6.8 out=/localdev/smarton/gstt2-t142/tmp/t124-t124rt0-b0
+STAGES n=5 head=0.004 project=6.103 tile_assign=1.277 sort=4.632 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.186 d2h=0.239 assemble=0.000 tail=0.003 | sum=22.444 view_total=22.445 resid_in_view=+0.001 avg_frame_ms=22.495 resid_vs_frame=+0.051
+SORT_STAGES n=5 pread=0.015 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.100 upload=0.000 bin_emit=4.281 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.144 publish_wait=0.000 mat=0.052 | sum=4.592 sort=4.632 resid=+0.040
+PROJECT_STAGES n=5 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.040 pfwc_enqueue=0.061 pfwc_finish=2.472 gather_setup=0.004 gather_rtargs=0.018 gather_enqueue=0.026 gather_wait=3.375 gather_result=0.101 | sum=6.100 project=6.103 resid=+0.003
+TILE_ASSIGN_STAGES n=5 setup=0.003 rtargs=0.020 enqueue=0.014 scan_finish=0.000 p_d2h=0.000 k2_finish=1.238 publish=0.001 | sum=1.276 tile_assign=1.277 resid=+0.001
+ONELAUNCH n=6 onelaunch=4.785 layout=0.102 pub_host=0.142 total=5.097
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (5 differ, 0 not in ref, of 5)
+=== t124rt0-p0 cc139c2 BLEND_T_PERIOD=0 GSPLAT_TT_PRECULL=1 views=0:5
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.26dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=22.3 p50_ms=21.8 min_ms=20.7 max_ms=25.3 n_views=5 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124rt0-p0
+STAGES n=5 head=0.003 project=6.334 tile_assign=1.230 sort=4.430 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.045 d2h=0.199 assemble=0.000 tail=0.002 | sum=22.244 view_total=22.245 resid_in_view=+0.001 avg_frame_ms=22.284 resid_vs_frame=+0.040
+SORT_STAGES n=5 pread=0.014 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.096 upload=0.000 bin_emit=4.088 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.147 publish_wait=0.000 mat=0.046 | sum=4.391 sort=4.430 resid=+0.039
+PROJECT_STAGES n=5 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.041 pfwc_enqueue=0.033 pfwc_finish=2.740 gather_setup=0.002 gather_rtargs=0.014 gather_enqueue=0.020 gather_wait=3.383 gather_result=0.100 | sum=6.333 project=6.334 resid=+0.001
+TILE_ASSIGN_STAGES n=5 setup=0.001 rtargs=0.014 enqueue=0.013 scan_finish=0.000 p_d2h=0.000 k2_finish=1.200 publish=0.001 | sum=1.229 tile_assign=1.230 resid=+0.001
+ONELAUNCH n=6 onelaunch=4.543 layout=0.097 pub_host=0.147 total=4.845
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (5 differ, 0 not in ref, of 5)
+=== done round t0
+##### t0 rc=0
+t0 view00_hero.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 view01_orb_00.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 view02_orb_01.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 view03_orb_02.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 view04_orb_03.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+ALLDONE

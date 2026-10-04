@@ -1,0 +1,351 @@
+ttp lock: waiting for p100 (held by task #122 (run 377) since 12:00; 1 ahead in queue)
+ttp lock: got p100 after 1.0 min (not counted toward the run's wall clock)
+##### sync 12:01:44
+[sync_remote] sha=cc139c26778df2794a4675fbb2654a68b02ec8d3 so_md5=753be95f46fe449bdcbce98a5652240b 
+##### r1 12:02:11
+=== t124r1-base cc139c2  
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.7 p50_ms=25.0 min_ms=20.4 max_ms=29.4 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r1-base
+STAGES n=30 head=0.003 project=6.451 tile_assign=1.437 sort=5.115 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.279 d2h=0.350 assemble=0.000 tail=0.002 | sum=24.637 view_total=24.638 resid_in_view=+0.001 avg_frame_ms=24.673 resid_vs_frame=+0.036
+SORT_STAGES n=30 pread=0.014 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.102 upload=0.000 bin_emit=4.762 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.151 publish_wait=0.000 mat=0.046 | sum=5.076 sort=5.115 resid=+0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.032 pfwc_enqueue=0.030 pfwc_finish=2.476 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.024 gather_wait=3.755 gather_result=0.113 | sum=6.449 project=6.451 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.016 enqueue=0.015 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.436 tile_assign=1.437 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.835 layout=0.102 pub_host=0.151 total=5.118
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== t124r1-pc cc139c2 GSPLAT_TT_PRECULL=1 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.0 p50_ms=24.3 min_ms=20.3 max_ms=28.0 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r1-pc
+STAGES n=30 head=0.002 project=6.696 tile_assign=1.388 sort=4.899 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.705 d2h=0.276 assemble=0.000 tail=0.002 | sum=23.968 view_total=23.969 resid_in_view=+0.001 avg_frame_ms=23.996 resid_vs_frame=+0.028
+SORT_STAGES n=30 pread=0.014 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.102 upload=0.000 bin_emit=4.562 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.149 publish_wait=0.000 mat=0.039 | sum=4.865 sort=4.899 resid=+0.034
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.027 pfwc_enqueue=0.026 pfwc_finish=2.746 gather_setup=0.001 gather_rtargs=0.013 gather_enqueue=0.022 gather_wait=3.755 gather_result=0.103 | sum=6.695 project=6.696 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.011 enqueue=0.014 scan_finish=0.000 p_d2h=0.000 k2_finish=1.358 publish=0.001 | sum=1.387 tile_assign=1.388 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.633 layout=0.101 pub_host=0.148 total=4.906
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== done round 1
+##### r1 rc=0
+##### r2 12:02:36
+=== t124r2-pc cc139c2 GSPLAT_TT_PRECULL=1 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.1 p50_ms=24.5 min_ms=20.7 max_ms=28.0 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r2-pc
+STAGES n=30 head=0.003 project=6.710 tile_assign=1.400 sort=4.975 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.754 d2h=0.199 assemble=0.000 tail=0.002 | sum=24.044 view_total=24.045 resid_in_view=+0.001 avg_frame_ms=24.078 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.018 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.115 upload=0.000 bin_emit=4.584 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.171 publish_wait=0.000 mat=0.049 | sum=4.937 sort=4.975 resid=+0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.030 pfwc_enqueue=0.031 pfwc_finish=2.749 gather_setup=0.002 gather_rtargs=0.017 gather_enqueue=0.027 gather_wait=3.754 gather_result=0.097 | sum=6.708 project=6.710 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.015 enqueue=0.019 scan_finish=0.000 p_d2h=0.000 k2_finish=1.360 publish=0.001 | sum=1.399 tile_assign=1.400 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.654 layout=0.115 pub_host=0.170 total=4.969
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== t124r2-base cc139c2  
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.6 p50_ms=24.8 min_ms=20.5 max_ms=29.0 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r2-base
+STAGES n=30 head=0.002 project=6.433 tile_assign=1.432 sort=5.111 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.283 d2h=0.259 assemble=0.000 tail=0.002 | sum=24.522 view_total=24.523 resid_in_view=+0.001 avg_frame_ms=24.555 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.015 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.104 upload=0.000 bin_emit=4.755 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.156 publish_wait=0.000 mat=0.045 | sum=5.074 sort=5.111 resid=+0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.029 pfwc_finish=2.477 gather_setup=0.002 gather_rtargs=0.014 gather_enqueue=0.023 gather_wait=3.755 gather_result=0.102 | sum=6.432 project=6.433 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.012 enqueue=0.015 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.431 tile_assign=1.432 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.827 layout=0.103 pub_host=0.155 total=5.112
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 2
+##### r2 rc=0
+##### r3 12:03:00
+=== t124r3-base cc139c2  
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.4 p50_ms=24.7 min_ms=20.5 max_ms=29.0 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r3-base
+STAGES n=30 head=0.003 project=6.433 tile_assign=1.429 sort=5.075 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.241 d2h=0.191 assemble=0.000 tail=0.002 | sum=24.374 view_total=24.375 resid_in_view=+0.001 avg_frame_ms=24.406 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.012 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.096 upload=0.000 bin_emit=4.748 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.143 publish_wait=0.000 mat=0.041 | sum=5.040 sort=5.075 resid=+0.035
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.029 pfwc_enqueue=0.032 pfwc_finish=2.473 gather_setup=0.002 gather_rtargs=0.014 gather_enqueue=0.020 gather_wait=3.755 gather_result=0.105 | sum=6.432 project=6.433 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.012 enqueue=0.012 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.428 tile_assign=1.429 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.834 layout=0.095 pub_host=0.144 total=5.096
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== t124r3-pc cc139c2 GSPLAT_TT_PRECULL=1 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.2 p50_ms=24.5 min_ms=20.6 max_ms=28.5 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r3-pc
+STAGES n=30 head=0.002 project=6.723 tile_assign=1.411 sort=5.012 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.759 d2h=0.289 assemble=0.000 tail=0.003 | sum=24.199 view_total=24.200 resid_in_view=+0.001 avg_frame_ms=24.231 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.023 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.130 upload=0.000 bin_emit=4.587 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.183 publish_wait=0.000 mat=0.049 | sum=4.972 sort=5.012 resid=+0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.027 pfwc_finish=2.753 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.034 gather_wait=3.758 gather_result=0.101 | sum=6.722 project=6.723 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.017 enqueue=0.025 scan_finish=0.000 p_d2h=0.000 k2_finish=1.362 publish=0.001 | sum=1.409 tile_assign=1.411 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.676 layout=0.129 pub_host=0.181 total=5.018
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== done round 3
+##### r3 rc=0
+##### r4 12:03:25
+=== t124r4-pc cc139c2 GSPLAT_TT_PRECULL=1 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.1 p50_ms=24.5 min_ms=20.4 max_ms=27.9 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r4-pc
+STAGES n=30 head=0.003 project=6.724 tile_assign=1.403 sort=4.986 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.719 d2h=0.210 assemble=0.000 tail=0.002 | sum=24.047 view_total=24.048 resid_in_view=+0.001 avg_frame_ms=24.084 resid_vs_frame=+0.036
+SORT_STAGES n=30 pread=0.019 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.117 upload=0.000 bin_emit=4.588 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.170 publish_wait=0.000 mat=0.051 | sum=4.945 sort=4.986 resid=+0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.030 pfwc_enqueue=0.033 pfwc_finish=2.750 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.030 gather_wait=3.756 gather_result=0.103 | sum=6.722 project=6.724 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.016 enqueue=0.022 scan_finish=0.000 p_d2h=0.000 k2_finish=1.360 publish=0.001 | sum=1.402 tile_assign=1.403 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.670 layout=0.116 pub_host=0.168 total=4.985
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== t124r4-base cc139c2  
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.4 p50_ms=24.7 min_ms=20.3 max_ms=29.1 n_views=30 warmup_s=2.3 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r4-base
+STAGES n=30 head=0.003 project=6.426 tile_assign=1.430 sort=5.079 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.258 d2h=0.189 assemble=0.000 tail=0.002 | sum=24.386 view_total=24.387 resid_in_view=+0.001 avg_frame_ms=24.418 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.012 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.094 upload=0.000 bin_emit=4.754 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.141 publish_wait=0.000 mat=0.039 | sum=5.040 sort=5.079 resid=+0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.031 pfwc_finish=2.474 gather_setup=0.002 gather_rtargs=0.014 gather_enqueue=0.020 gather_wait=3.755 gather_result=0.099 | sum=6.424 project=6.426 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.014 enqueue=0.012 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.429 tile_assign=1.430 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.841 layout=0.093 pub_host=0.142 total=5.098
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 4
+##### r4 rc=0
+r1 view00_hero.png: psnr=75.78 diff_px=4660 max=1 tiles=876 hist(1..)=[4660, 0, 0]
+r1 view01_orb_00.png: psnr=77.56 diff_px=3161 max=1 tiles=693 hist(1..)=[3161, 0, 0]
+r1 view02_orb_01.png: psnr=76.85 diff_px=3663 max=1 tiles=682 hist(1..)=[3663, 0, 0]
+r1 view03_orb_02.png: psnr=76.34 diff_px=4082 max=1 tiles=748 hist(1..)=[4082, 0, 0]
+r1 view04_orb_03.png: psnr=75.99 diff_px=4307 max=1 tiles=802 hist(1..)=[4307, 0, 0]
+r1 view05_orb_04.png: psnr=74.48 diff_px=6028 max=1 tiles=928 hist(1..)=[6028, 0, 0]
+r1 view06_orb_05.png: psnr=74.80 diff_px=5609 max=1 tiles=950 hist(1..)=[5609, 0, 0]
+r1 view07_orb_06.png: psnr=75.46 diff_px=4933 max=1 tiles=982 hist(1..)=[4933, 0, 0]
+r1 view08_orb_07.png: psnr=74.96 diff_px=5460 max=1 tiles=1034 hist(1..)=[5460, 0, 0]
+r1 view09_orb_08.png: psnr=74.65 diff_px=5919 max=1 tiles=1129 hist(1..)=[5919, 0, 0]
+r1 view10_orb_09.png: psnr=75.31 diff_px=5203 max=1 tiles=1059 hist(1..)=[5203, 0, 0]
+r1 view11_orb_10.png: psnr=75.22 diff_px=5223 max=1 tiles=1056 hist(1..)=[5223, 0, 0]
+r1 view12_orb_11.png: psnr=75.05 diff_px=5318 max=1 tiles=1048 hist(1..)=[5318, 0, 0]
+r1 view13_orb_12.png: psnr=74.49 diff_px=6010 max=1 tiles=1047 hist(1..)=[6010, 0, 0]
+r1 view14_orb_13.png: psnr=75.58 diff_px=4816 max=1 tiles=971 hist(1..)=[4816, 0, 0]
+r1 view15_orb_14.png: psnr=75.68 diff_px=4731 max=1 tiles=908 hist(1..)=[4731, 0, 0]
+r1 view16_orb_15.png: psnr=75.60 diff_px=4760 max=1 tiles=893 hist(1..)=[4760, 0, 0]
+r1 view17_orb_16.png: psnr=75.14 diff_px=5220 max=1 tiles=880 hist(1..)=[5220, 0, 0]
+r1 view18_orb_17.png: psnr=75.69 diff_px=4625 max=1 tiles=801 hist(1..)=[4625, 0, 0]
+r1 view19_orb_18.png: psnr=76.56 diff_px=3931 max=1 tiles=791 hist(1..)=[3931, 0, 0]
+r1 view20_orb_19.png: psnr=76.72 diff_px=3754 max=1 tiles=767 hist(1..)=[3754, 0, 0]
+r1 view21_orb_20.png: psnr=76.79 diff_px=3734 max=1 tiles=808 hist(1..)=[3734, 0, 0]
+r1 view22_orb_21.png: psnr=76.96 diff_px=3637 max=1 tiles=781 hist(1..)=[3637, 0, 0]
+r1 view23_orb_22.png: psnr=77.76 diff_px=3055 max=1 tiles=713 hist(1..)=[3055, 0, 0]
+r1 view24_orb_23.png: psnr=77.95 diff_px=2971 max=1 tiles=706 hist(1..)=[2971, 0, 0]
+r1 view25_orb_24.png: psnr=77.85 diff_px=3070 max=1 tiles=701 hist(1..)=[3070, 0, 0]
+r1 view26_orb_25.png: psnr=77.83 diff_px=3017 max=1 tiles=651 hist(1..)=[3017, 0, 0]
+r1 view27_orb_26.png: psnr=77.87 diff_px=2963 max=1 tiles=655 hist(1..)=[2963, 0, 0]
+r1 view28_orb_27.png: psnr=77.88 diff_px=2971 max=1 tiles=633 hist(1..)=[2971, 0, 0]
+r1 view29_orb_28.png: psnr=77.59 diff_px=3119 max=1 tiles=662 hist(1..)=[3119, 0, 0]
+r2 view00_hero.png: psnr=75.78 diff_px=4660 max=1 tiles=876 hist(1..)=[4660, 0, 0]
+r2 view01_orb_00.png: psnr=77.56 diff_px=3161 max=1 tiles=693 hist(1..)=[3161, 0, 0]
+r2 view02_orb_01.png: psnr=76.85 diff_px=3663 max=1 tiles=682 hist(1..)=[3663, 0, 0]
+r2 view03_orb_02.png: psnr=76.34 diff_px=4082 max=1 tiles=748 hist(1..)=[4082, 0, 0]
+r2 view04_orb_03.png: psnr=75.99 diff_px=4307 max=1 tiles=802 hist(1..)=[4307, 0, 0]
+r2 view05_orb_04.png: psnr=74.48 diff_px=6028 max=1 tiles=928 hist(1..)=[6028, 0, 0]
+r2 view06_orb_05.png: psnr=74.80 diff_px=5609 max=1 tiles=950 hist(1..)=[5609, 0, 0]
+r2 view07_orb_06.png: psnr=75.46 diff_px=4933 max=1 tiles=982 hist(1..)=[4933, 0, 0]
+r2 view08_orb_07.png: psnr=74.96 diff_px=5460 max=1 tiles=1034 hist(1..)=[5460, 0, 0]
+r2 view09_orb_08.png: psnr=74.65 diff_px=5919 max=1 tiles=1129 hist(1..)=[5919, 0, 0]
+r2 view10_orb_09.png: psnr=75.31 diff_px=5203 max=1 tiles=1059 hist(1..)=[5203, 0, 0]
+r2 view11_orb_10.png: psnr=75.22 diff_px=5223 max=1 tiles=1056 hist(1..)=[5223, 0, 0]
+r2 view12_orb_11.png: psnr=75.05 diff_px=5318 max=1 tiles=1048 hist(1..)=[5318, 0, 0]
+r2 view13_orb_12.png: psnr=74.49 diff_px=6010 max=1 tiles=1047 hist(1..)=[6010, 0, 0]
+r2 view14_orb_13.png: psnr=75.58 diff_px=4816 max=1 tiles=971 hist(1..)=[4816, 0, 0]
+r2 view15_orb_14.png: psnr=75.68 diff_px=4731 max=1 tiles=908 hist(1..)=[4731, 0, 0]
+r2 view16_orb_15.png: psnr=75.60 diff_px=4760 max=1 tiles=893 hist(1..)=[4760, 0, 0]
+r2 view17_orb_16.png: psnr=75.14 diff_px=5220 max=1 tiles=880 hist(1..)=[5220, 0, 0]
+r2 view18_orb_17.png: psnr=75.69 diff_px=4625 max=1 tiles=801 hist(1..)=[4625, 0, 0]
+r2 view19_orb_18.png: psnr=76.56 diff_px=3931 max=1 tiles=791 hist(1..)=[3931, 0, 0]
+r2 view20_orb_19.png: psnr=76.72 diff_px=3754 max=1 tiles=767 hist(1..)=[3754, 0, 0]
+r2 view21_orb_20.png: psnr=76.79 diff_px=3734 max=1 tiles=808 hist(1..)=[3734, 0, 0]
+r2 view22_orb_21.png: psnr=76.96 diff_px=3637 max=1 tiles=781 hist(1..)=[3637, 0, 0]
+r2 view23_orb_22.png: psnr=77.76 diff_px=3055 max=1 tiles=713 hist(1..)=[3055, 0, 0]
+r2 view24_orb_23.png: psnr=77.95 diff_px=2971 max=1 tiles=706 hist(1..)=[2971, 0, 0]
+r2 view25_orb_24.png: psnr=77.85 diff_px=3070 max=1 tiles=701 hist(1..)=[3070, 0, 0]
+r2 view26_orb_25.png: psnr=77.83 diff_px=3017 max=1 tiles=651 hist(1..)=[3017, 0, 0]
+r2 view27_orb_26.png: psnr=77.87 diff_px=2963 max=1 tiles=655 hist(1..)=[2963, 0, 0]
+r2 view28_orb_27.png: psnr=77.88 diff_px=2971 max=1 tiles=633 hist(1..)=[2971, 0, 0]
+r2 view29_orb_28.png: psnr=77.59 diff_px=3119 max=1 tiles=662 hist(1..)=[3119, 0, 0]
+r3 view00_hero.png: psnr=75.78 diff_px=4660 max=1 tiles=876 hist(1..)=[4660, 0, 0]
+r3 view01_orb_00.png: psnr=77.56 diff_px=3161 max=1 tiles=693 hist(1..)=[3161, 0, 0]
+r3 view02_orb_01.png: psnr=76.85 diff_px=3663 max=1 tiles=682 hist(1..)=[3663, 0, 0]
+r3 view03_orb_02.png: psnr=76.34 diff_px=4082 max=1 tiles=748 hist(1..)=[4082, 0, 0]
+r3 view04_orb_03.png: psnr=75.99 diff_px=4307 max=1 tiles=802 hist(1..)=[4307, 0, 0]
+r3 view05_orb_04.png: psnr=74.48 diff_px=6028 max=1 tiles=928 hist(1..)=[6028, 0, 0]
+r3 view06_orb_05.png: psnr=74.80 diff_px=5609 max=1 tiles=950 hist(1..)=[5609, 0, 0]
+r3 view07_orb_06.png: psnr=75.46 diff_px=4933 max=1 tiles=982 hist(1..)=[4933, 0, 0]
+r3 view08_orb_07.png: psnr=74.96 diff_px=5460 max=1 tiles=1034 hist(1..)=[5460, 0, 0]
+r3 view09_orb_08.png: psnr=74.65 diff_px=5919 max=1 tiles=1129 hist(1..)=[5919, 0, 0]
+r3 view10_orb_09.png: psnr=75.31 diff_px=5203 max=1 tiles=1059 hist(1..)=[5203, 0, 0]
+r3 view11_orb_10.png: psnr=75.22 diff_px=5223 max=1 tiles=1056 hist(1..)=[5223, 0, 0]
+r3 view12_orb_11.png: psnr=75.05 diff_px=5318 max=1 tiles=1048 hist(1..)=[5318, 0, 0]
+r3 view13_orb_12.png: psnr=74.49 diff_px=6010 max=1 tiles=1047 hist(1..)=[6010, 0, 0]
+r3 view14_orb_13.png: psnr=75.58 diff_px=4816 max=1 tiles=971 hist(1..)=[4816, 0, 0]
+r3 view15_orb_14.png: psnr=75.68 diff_px=4731 max=1 tiles=908 hist(1..)=[4731, 0, 0]
+r3 view16_orb_15.png: psnr=75.60 diff_px=4760 max=1 tiles=893 hist(1..)=[4760, 0, 0]
+r3 view17_orb_16.png: psnr=75.14 diff_px=5220 max=1 tiles=880 hist(1..)=[5220, 0, 0]
+r3 view18_orb_17.png: psnr=75.69 diff_px=4625 max=1 tiles=801 hist(1..)=[4625, 0, 0]
+r3 view19_orb_18.png: psnr=76.56 diff_px=3931 max=1 tiles=791 hist(1..)=[3931, 0, 0]
+r3 view20_orb_19.png: psnr=76.72 diff_px=3754 max=1 tiles=767 hist(1..)=[3754, 0, 0]
+r3 view21_orb_20.png: psnr=76.79 diff_px=3734 max=1 tiles=808 hist(1..)=[3734, 0, 0]
+r3 view22_orb_21.png: psnr=76.96 diff_px=3637 max=1 tiles=781 hist(1..)=[3637, 0, 0]
+r3 view23_orb_22.png: psnr=77.76 diff_px=3055 max=1 tiles=713 hist(1..)=[3055, 0, 0]
+r3 view24_orb_23.png: psnr=77.95 diff_px=2971 max=1 tiles=706 hist(1..)=[2971, 0, 0]
+r3 view25_orb_24.png: psnr=77.85 diff_px=3070 max=1 tiles=701 hist(1..)=[3070, 0, 0]
+r3 view26_orb_25.png: psnr=77.83 diff_px=3017 max=1 tiles=651 hist(1..)=[3017, 0, 0]
+r3 view27_orb_26.png: psnr=77.87 diff_px=2963 max=1 tiles=655 hist(1..)=[2963, 0, 0]
+r3 view28_orb_27.png: psnr=77.88 diff_px=2971 max=1 tiles=633 hist(1..)=[2971, 0, 0]
+r3 view29_orb_28.png: psnr=77.59 diff_px=3119 max=1 tiles=662 hist(1..)=[3119, 0, 0]
+r4 view00_hero.png: psnr=75.78 diff_px=4660 max=1 tiles=876 hist(1..)=[4660, 0, 0]
+r4 view01_orb_00.png: psnr=77.56 diff_px=3161 max=1 tiles=693 hist(1..)=[3161, 0, 0]
+r4 view02_orb_01.png: psnr=76.85 diff_px=3663 max=1 tiles=682 hist(1..)=[3663, 0, 0]
+r4 view03_orb_02.png: psnr=76.34 diff_px=4082 max=1 tiles=748 hist(1..)=[4082, 0, 0]
+r4 view04_orb_03.png: psnr=75.99 diff_px=4307 max=1 tiles=802 hist(1..)=[4307, 0, 0]
+r4 view05_orb_04.png: psnr=74.48 diff_px=6028 max=1 tiles=928 hist(1..)=[6028, 0, 0]
+r4 view06_orb_05.png: psnr=74.80 diff_px=5609 max=1 tiles=950 hist(1..)=[5609, 0, 0]
+r4 view07_orb_06.png: psnr=75.46 diff_px=4933 max=1 tiles=982 hist(1..)=[4933, 0, 0]
+r4 view08_orb_07.png: psnr=74.96 diff_px=5460 max=1 tiles=1034 hist(1..)=[5460, 0, 0]
+r4 view09_orb_08.png: psnr=74.65 diff_px=5919 max=1 tiles=1129 hist(1..)=[5919, 0, 0]
+r4 view10_orb_09.png: psnr=75.31 diff_px=5203 max=1 tiles=1059 hist(1..)=[5203, 0, 0]
+r4 view11_orb_10.png: psnr=75.22 diff_px=5223 max=1 tiles=1056 hist(1..)=[5223, 0, 0]
+r4 view12_orb_11.png: psnr=75.05 diff_px=5318 max=1 tiles=1048 hist(1..)=[5318, 0, 0]
+r4 view13_orb_12.png: psnr=74.49 diff_px=6010 max=1 tiles=1047 hist(1..)=[6010, 0, 0]
+r4 view14_orb_13.png: psnr=75.58 diff_px=4816 max=1 tiles=971 hist(1..)=[4816, 0, 0]
+r4 view15_orb_14.png: psnr=75.68 diff_px=4731 max=1 tiles=908 hist(1..)=[4731, 0, 0]
+r4 view16_orb_15.png: psnr=75.60 diff_px=4760 max=1 tiles=893 hist(1..)=[4760, 0, 0]
+r4 view17_orb_16.png: psnr=75.14 diff_px=5220 max=1 tiles=880 hist(1..)=[5220, 0, 0]
+r4 view18_orb_17.png: psnr=75.69 diff_px=4625 max=1 tiles=801 hist(1..)=[4625, 0, 0]
+r4 view19_orb_18.png: psnr=76.56 diff_px=3931 max=1 tiles=791 hist(1..)=[3931, 0, 0]
+r4 view20_orb_19.png: psnr=76.72 diff_px=3754 max=1 tiles=767 hist(1..)=[3754, 0, 0]
+r4 view21_orb_20.png: psnr=76.79 diff_px=3734 max=1 tiles=808 hist(1..)=[3734, 0, 0]
+r4 view22_orb_21.png: psnr=76.96 diff_px=3637 max=1 tiles=781 hist(1..)=[3637, 0, 0]
+r4 view23_orb_22.png: psnr=77.76 diff_px=3055 max=1 tiles=713 hist(1..)=[3055, 0, 0]
+r4 view24_orb_23.png: psnr=77.95 diff_px=2971 max=1 tiles=706 hist(1..)=[2971, 0, 0]
+r4 view25_orb_24.png: psnr=77.85 diff_px=3070 max=1 tiles=701 hist(1..)=[3070, 0, 0]
+r4 view26_orb_25.png: psnr=77.83 diff_px=3017 max=1 tiles=651 hist(1..)=[3017, 0, 0]
+r4 view27_orb_26.png: psnr=77.87 diff_px=2963 max=1 tiles=655 hist(1..)=[2963, 0, 0]
+r4 view28_orb_27.png: psnr=77.88 diff_px=2971 max=1 tiles=633 hist(1..)=[2971, 0, 0]
+r4 view29_orb_28.png: psnr=77.59 diff_px=3119 max=1 tiles=662 hist(1..)=[3119, 0, 0]
+##### dc 12:03:57
+=== r5-dc cc139c2 GSPLAT_TT_DUMP_CULL=/localdev/smarton/gstt2-t142/tmp/t115/dumpcull 19:03:58
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.5 p50_ms=24.8 min_ms=20.4 max_ms=29.2 n_views=30 warmup_s=11.7 out=/localdev/smarton/gstt2-t142/tmp/t115-r5-dc
+STAGES n=30 head=0.003 project=6.446 tile_assign=1.431 sort=5.096 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.256 d2h=0.235 assemble=0.000 tail=0.002 | sum=24.468 view_total=24.469 resid_in_view=+0.001 avg_frame_ms=24.504 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.013 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.098 upload=0.000 bin_emit=4.759 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.144 publish_wait=0.000 mat=0.046 | sum=5.059 sort=5.096 resid=+0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.031 pfwc_enqueue=0.033 pfwc_finish=2.475 gather_setup=0.002 gather_rtargs=0.014 gather_enqueue=0.021 gather_wait=3.754 gather_result=0.113 | sum=6.445 project=6.446 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.013 enqueue=0.014 scan_finish=0.000 p_d2h=0.000 k2_finish=1.399 publish=0.001 | sum=1.430 tile_assign=1.431 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+records 3369033 dead(mask=0) 664773 share 0.1973 floor 0.00392156886
+records in tiles > 8192: 1355356 (0.4023); dead there 0.1845
+tiles with records 1024 max/tile 25699 mean/tile(nonempty) 3290.1
+mask popcount histogram (0..32): 416703 454421 476431 203861 178949 81110 58968 38934 33853 11679 9064 6815 5868 3163 2733 1926 2506 1057 1014 908 1076 678 744 614 845 378 473 371 612 383 376 549 2938
+mean microblocks per live record 3.06
+=== done round 5 19:04:20
+=== r6-dc cc139c2 GSPLAT_TT_DUMP_CULL=/localdev/smarton/gstt2-t142/tmp/t115/dumpcull 19:04:20
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.2 p50_ms=24.3 min_ms=20.4 max_ms=28.2 n_views=30 warmup_s=4.7 out=/localdev/smarton/gstt2-t142/tmp/t115-r6-dc
+STAGES n=30 head=0.002 project=6.708 tile_assign=1.395 sort=4.949 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.762 d2h=0.336 assemble=0.000 tail=0.002 | sum=24.154 view_total=24.155 resid_in_view=+0.001 avg_frame_ms=24.185 resid_vs_frame=+0.031
+SORT_STAGES n=30 pread=0.017 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.108 upload=0.000 bin_emit=4.579 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.161 publish_wait=0.000 mat=0.046 | sum=4.911 sort=4.949 resid=+0.038
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.029 pfwc_enqueue=0.032 pfwc_finish=2.746 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.024 gather_wait=3.756 gather_result=0.101 | sum=6.707 project=6.708 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.013 enqueue=0.016 scan_finish=0.000 p_d2h=0.000 k2_finish=1.360 publish=0.001 | sum=1.394 tile_assign=1.395 resid=+0.001
+VIEWS DIFFER (30 of 30)
+records 3207709 dead(mask=0) 503449 share 0.1569 floor 0.00392156886
+records in tiles > 8192: 1212090 (0.3779); dead there 0.1428
+tiles with records 1024 max/tile 24880 mean/tile(nonempty) 3132.5
+mask popcount histogram (0..32): 317333 486315 509465 214601 189432 85214 61610 40745 35182 12313 9501 7195 6166 3324 2880 2059 2679 1121 1098 968 1158 721 788 675 920 409 512 413 664 416 397 595 3131
+mean microblocks per live record 3.05
+=== done round 6 19:04:35
+##### dc rc=0
+##### tracy-t142-base 12:04:35
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=40.4 p50_ms=41.3 min_ms=36.8 max_ms=43.5 n_views=10 warmup_s=13.7 out=/localdev/smarton/gstt2-t142/tmp/t142-base
+STAGES n=10 head=0.004 project=7.029 tile_assign=1.456 sort=5.100 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.328 d2h=0.241 assemble=0.000 tail=15.130 | sum=40.287 view_total=40.288 resid_in_view=+0.002 avg_frame_ms=40.353 resid_vs_frame=+0.067
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 3254736 Oct  4 19:04 /localdev/smarton/gstt2-t142/opt/profiler/t142-base/chunks/0-10/render.tracy
+[capture_tracy] device profiler CSV data rows: 182271 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t142/opt/profiler/t142-base/chunks/0-10/render.tracy
+-rw-r--r-- 1 smarton group_1211416483 25572418 Oct  4 19:04 opt/profiler/t142-base/chunks/0-10/profile_log_device.csv
+-rw-r--r-- 1 smarton group_1211416483  3254736 Oct  4 19:04 opt/profiler/t142-base/chunks/0-10/render.tracy
+--- gaps
+views=10 segments/view=[6]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.465   2.465      0.000   110  pfwc
+ 1    2.507    6.207   3.700      0.041   110  proj_vis_scan+proj_scatter
+ 2    6.991    8.395   1.403      0.784   110  ta_bucket_scatter
+ 3    8.489   13.163   4.674      0.094   110  sort_ol_count+sort_ol_barrier+sort_ol_prefix+sort_ol_emit
+ 4   13.477   17.232   3.755      0.314   110  sort_subchunk_mat+mat_cull_mask
+ 5   17.239   24.821   7.583      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 1.241 ms/view
+--- zones
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                   45432.6  4543.262       142.5      14.250    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               45415.3  4541.534       142.5      14.248    10890  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   26717.7  2671.770       248.3      24.835     7271  BRISC
+NCRISC-FW                  25869.1  2586.914       241.8      24.181     7260  NCRISC
+BRISC-KERNEL               25637.2  2563.724       236.6      23.664     7271  BRISC
+NCRISC-KERNEL              25451.8  2545.182       238.0      23.798     7260  NCRISC
+tile_blend_sfpu            25270.5  2527.049        78.2       7.821     3630  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              11467.3  1146.725        39.5       3.950     3630  TRISC_0,TRISC_1,TRISC_2
+pfwc                        8676.9   867.693        26.8       2.685     3630  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                8547.8   854.778        40.3       4.032     2420  BRISC,NCRISC
+tile_blend_load             8024.1   802.412        74.0       7.401     1210  NCRISC
+rd_l1_bulk                  7895.7   789.569        73.0       7.302    12452  NCRISC
+proj_scatter                7490.7   749.073        35.6       3.560     2420  BRISC,NCRISC
+sort_subchunk_mat           7080.2   708.020        39.5       3.949     2420  BRISC,NCRISC
+ta_bucket_scatter           3274.0   327.397        15.5       1.548     2420  BRISC,NCRISC
+sort_ol_count               1515.6   151.561        10.2       1.024     2420  BRISC,NCRISC
+sort_ol_barrier              311.9    31.188         4.9       0.490     2420  BRISC
+sort_ol_prefix                26.5     2.654         0.5       0.047     1210  BRISC
+proj_vis_scan                  4.4     0.436         4.4       0.436       11  BRISC
+--- deep (sort_ol / mat_ol)
+sort_ol_emit                              8547.8   284.93     1.34     80.7  BRISC,NCRISC
+sort_ol_count                             1515.6    50.52     0.34     80.7  BRISC,NCRISC
+sort_ol_barrier                            311.9    10.40     0.16     80.7  BRISC
+sort_ol_prefix                              26.5     0.88     0.02     40.3  BRISC
+##### tracy-t142-base rc=0
+##### tracy-t142-pc 12:05:00
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=39.1 p50_ms=38.4 min_ms=35.4 max_ms=42.3 n_views=10 warmup_s=6.2 out=/localdev/smarton/gstt2-t142/tmp/t142-pc
+STAGES n=10 head=0.002 project=7.315 tile_assign=1.410 sort=4.918 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.784 d2h=0.261 assemble=0.000 tail=14.407 | sum=39.097 view_total=39.098 resid_in_view=+0.001 avg_frame_ms=39.143 resid_vs_frame=+0.046
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 3207651 Oct  4 19:05 /localdev/smarton/gstt2-t142/opt/profiler/t142-pc/chunks/0-10/render.tracy
+[capture_tracy] device profiler CSV data rows: 181997 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t142/opt/profiler/t142-pc/chunks/0-10/render.tracy
+-rw-r--r-- 1 smarton group_1211416483 25530846 Oct  4 19:05 opt/profiler/t142-pc/chunks/0-10/profile_log_device.csv
+-rw-r--r-- 1 smarton group_1211416483  3207651 Oct  4 19:05 opt/profiler/t142-pc/chunks/0-10/render.tracy
+--- gaps
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t142/opt/profiler/program_gaps.py", line 103, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t142/opt/profiler/program_gaps.py", line 38, in main
+    frame, n_frames, _ = segment_frames(lines, ts)
+  File "/localdev/smarton/gstt2-t142/opt/profiler/stitch_device_csv.py", line 57, in segment_frames
+    return segment_frames(lines, ts, anchor="pfwc")
+  File "/localdev/smarton/gstt2-t142/opt/profiler/stitch_device_csv.py", line 83, in segment_frames
+    raise ValueError(f"zones straddle frame boundaries (frame, zone, START-END): {bad[:8]}")
+ValueError: zones straddle frame boundaries (frame, zone, START-END): [(0, 'NCRISC-KERNEL', 3), (4, 'NCRISC-KERNEL', -3)]
+--- zones
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                   45176.3  4517.628       139.5      13.953    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               45159.0  4515.903       139.5      13.952    10890  TRISC_0,TRISC_1,TRISC_2
+NCRISC-KERNEL              34693.2  3469.316      3413.5     341.354     7260  NCRISC
+BRISC-FW                   26394.3  2639.434       243.7      24.366     7271  BRISC
+NCRISC-FW                  25567.6  2556.762       236.3      23.628     7260  NCRISC
+BRISC-KERNEL               25538.6  2553.858       236.1      23.614     7271  BRISC
+tile_blend_sfpu            25007.9  2500.787        77.5       7.753     3630  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              10470.1  1047.015        33.4       3.340     3630  TRISC_0,TRISC_1,TRISC_2
+pfwc                        9680.4   968.036        29.8       2.985     3630  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                8277.3   827.729        39.1       3.906     2420  BRISC,NCRISC
+tile_blend_load             7940.9   794.093        73.2       7.322     1210  NCRISC
+rd_l1_bulk                  7813.2   781.323        72.5       7.255    12315  NCRISC
+proj_scatter                7484.3   748.435        35.7       3.566     2420  BRISC,NCRISC
+sort_subchunk_mat           6657.4   665.741        33.4       3.340     2420  BRISC,NCRISC
+ta_bucket_scatter           3192.6   319.258        15.0       1.500     2420  BRISC,NCRISC
+sort_ol_count               1444.7   144.474         9.8       0.976     2420  BRISC,NCRISC
+sort_ol_barrier              297.9    29.789         4.7       0.466     2420  BRISC
+sort_ol_prefix                26.6     2.656         0.5       0.047     1210  BRISC
+proj_vis_scan                  4.4     0.436         4.4       0.436       11  BRISC
+--- deep (sort_ol / mat_ol)
+sort_ol_emit                              8277.3   275.91     1.30     80.7  BRISC,NCRISC
+sort_ol_count                             1444.7    48.16     0.33     80.7  BRISC,NCRISC
+sort_ol_barrier                            297.9     9.93     0.16     80.7  BRISC
+sort_ol_prefix                              26.6     0.89     0.02     40.3  BRISC
+##### tracy-t142-pc rc=0
+-rw-r--r-- 1 smarton group_1211416483   627996 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/16096680940204342406/trisc2/trisc2.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483   637404 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/reader_pfwc/7006084080826093311/ncrisc/ncrisc.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483   637408 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/reader_pfwc/17307119709369331073/ncrisc/ncrisc.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483   665164 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/957711225052691753/trisc2/trisc2.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483   908288 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/957711225052691753/trisc0/trisc0.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483   918156 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/16096680940204342406/trisc0/trisc0.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483  1270084 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/writer_pfwc_vis/13910060216882551608/brisc/brisc.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483 12286400 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/16096680940204342406/trisc1/trisc1.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483 12647544 Oct  4 19:03 /localdev/smarton/.cache/ttmc-gstt2-t142/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/957711225052691753/trisc1/trisc1.elf.xip.elf
+ALLDONE
