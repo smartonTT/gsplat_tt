@@ -94,9 +94,9 @@ Bicycle, 30 views, 1024x1024, untraced, on yyzo-bh-07 (Blackhole p100a, not a p1
 
 As written in #125 the fused path was slower: 30.9 against 29.65 ms/view. Tracy showed the fused
 pfwc at 7.45 ms and bound by the writer. Compile-time ablations (`GSPLAT_TT_FUSE_ABL`, bits 1 /
-2 / 4 / 8 skip the record NoC writes, the record copies, the color tile reads, or replace the
-UNORM16 packs with plain copies) put about 3.7 ms on the per-gaussian UNORM16 packs and about
-0.7 ms on the per-record NoC writes. With all record work skipped, pfwc + segment K2 takes
+2 / 4 skip the record NoC writes, the record copies or the color tile reads; the #125 build
+also had a bit that replaced the UNORM16 packs with plain copies, since removed) put about 3.7 ms
+on the per-gaussian UNORM16 packs and about 0.7 ms on the per-record NoC writes. With all record work skipped, pfwc + segment K2 takes
 4.07 ms.
 
 Three fixes, with pfwc + segment K2 (`PROJECT_STAGES gather_wait`) after each:
@@ -104,9 +104,9 @@ Three fixes, with pfwc + segment K2 (`PROJECT_STAGES gather_wait`) after each:
 | step | commit | pfwc + K2 ms |
 |---|---|---|
 | #125 code as written (device packs) | | 9.71 |
-| UNORM16 op/color packs built once per scene on the host (`GSPLAT_TT_PUBOC_PRE`, default 1, 0 = kill switch; a scene with a NaN keeps the device path). The legacy scatter copies them too (legacy gather 3.89 -> 3.64 ms). | 568cb79 | 5.77 |
-| copy loop loads ahead of its stores | 27b8d52 | 4.91 |
-| records staged bank-major, one NoC write per DRAM bank per 16 records (bank count found at run time, per-page fallback) | 06dc8af | 4.44 |
+| UNORM16 op/color packs built once per scene on the host (`GSPLAT_TT_PUBOC_PRE`, default 1, 0 = kill switch; a scene with a NaN keeps the device path). The legacy scatter copies them too (legacy gather 3.89 -> 3.64 ms). | 99467e6 | 5.77 |
+| copy loop loads ahead of its stores | 40b5d41 | 4.91 |
+| records staged bank-major, one NoC write per DRAM bank per 16 records (bank count found at run time, per-page fallback) | f844998 | 4.44 |
 
 Frame time, ms/view:
 
@@ -115,13 +115,13 @@ Frame time, ms/view:
 | lever 2 (before lever A), round 11 | 29.52 | 26.23 | 3.29 |
 | lever 2 (before lever A), round 12 | 29.31 | 26.29 | 3.02 |
 | lever 2, default flipped, round 13 | 29.57 | 26.53 | 3.05 |
-| lever A tip, rebased (2b406a0), round 14a | 24.36 | 21.22 | 3.14 |
-| lever A tip, rebased (2b406a0), round 14b | 24.62 | 21.27 | 3.34 |
+| lever A tip, rebased, round 14a | 24.36 | 21.22 | 3.14 |
+| lever A tip, rebased, round 14b | 24.62 | 21.27 | 3.34 |
 
 The median gain is 3.14 ms/view, which passes the 3 ms gate. On the combined tip, the time goes
 from 24.49 to 21.25 ms/view (-13.2%, 47.1 FPS). `project` goes from 6.32 to 4.58 ms and
 `tile_assign` from 1.44 to 0.01 ms; sort (5.17) and blend (11.24) do not change.
-`GSPLAT_TT_PFWC_FUSE` now defaults to 1 (2b406a0).
+`GSPLAT_TT_PFWC_FUSE` now defaults to 1 (9a19437).
 
 Left over: pfwc + K2 is 4.44 ms against the 4.07 ms floor, so about 0.4 ms of record work
 remains. The legacy scatter (the kill-switch path) still uses the old copy loop and

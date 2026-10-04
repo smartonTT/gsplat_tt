@@ -26,6 +26,8 @@ chk "sort_subchunk_materialize.cpp OL_MAT_SELECT" $DF -DSORT_ONELAUNCH=1 -DOL_MA
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT FUSE_CULL" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DFUSE_CULL=1 -DFUSE_CULL_DEPTH=2 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "writer_pfwc_fuse.cpp" $DF render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_fuse.cpp
+chk "writer_pfwc_fuse.cpp FUSE_ABL=7" $DF -DFUSE_ABL=7u render/kernels/dataflow/writer_pfwc_fuse.cpp
+chk "gather_vis_scatter.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/gather_vis_scatter.cpp
 chk "tile_assign_scatter_seg.cpp" $DF render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "tile_assign_scatter_seg.cpp TA_CB_OFFSET" $DF -DTA_CB_OFFSET=16 render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "reader_pfwc.cpp PFWC_VIS" $DF -DPFWC_VIS=1 render/kernels/dataflow/reader_pfwc.cpp
