@@ -25,7 +25,9 @@
 //    NCRISC) order, within one page of the speed-proportional share, and the
 //    bucket image of the whole grid is the same as for the even split;
 //  - task #177: parse_mover_speed reads the kMoverSpeedP150 initializer lines
-//    back exactly, skips other lines and rejects out-of-range entries.
+//    back exactly, skips other lines and rejects out-of-range entries, and
+//    kMoverSpeedP150 is keyed by translated NoC x (1..7, 10..13 on the p150
+//    11x10 grid), one entry per worker core.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -387,6 +389,22 @@ void test_parse_mover_speed() {
         CHECK(!parse_mover_speed(bad, &v) && v.empty(), "accepted \"%s\"", bad);
 }
 
+// The host matches the table against worker_core_from_logical_core (translated
+// x 1..7, 10..13), not Tracy's core x (1..6, 11..15): a row at x 14 or 15
+// matches no core and rows at 11..13 hit the wrong column (#174 table).
+void test_mover_speed_keys() {
+    using gsplat_tt::sort_split::kMoverSpeedP150;
+    bool seen[16][12] = {};
+    bool ok = std::size(kMoverSpeedP150) == 110u;
+    for (const auto& m : kMoverSpeedP150) {
+        const bool x_ok = (m.x >= 1u && m.x <= 7u) || (m.x >= 10u && m.x <= 13u);
+        CHECK(x_ok && m.y >= 2u && m.y <= 11u && !seen[m.x][m.y], "table core (%u, %u) is no translated worker",
+              m.x, m.y);
+        if (x_ok && m.y >= 2u && m.y <= 11u) seen[m.x][m.y] = true;
+    }
+    CHECK(ok, "table has %zu entries, want 110", std::size(kMoverSpeedP150));
+}
+
 }  // namespace
 
 int main() {
@@ -395,6 +413,7 @@ int main() {
     test_row_split();
     test_speed_bounds();
     test_parse_mover_speed();
+    test_mover_speed_keys();
     test_worklist();
     if (g_fail != 0) {
         std::printf("%d check(s) failed\n", g_fail);
