@@ -47,7 +47,7 @@ Two causes (docs/sort-onelaunch-t114/results.md):
     `[SORT] ONELAUNCH v2 OL_PB=.. OL_RING=.. OL_WIN_PAGES=.. OL_MAT_SELECT=.. cb_bytes/mover=.. shared=..`.
 
 ## Risks to check on device
-- **L1.** PB=8, RING=8, WIN=1024 is ~493 KB of CBs per mover (the window, 192 KB,
+- **L1.** PB=8, RING=8, WIN=1024 is ~493 KB of CBs per mover, so ~1.0 MB per core for 2 movers plus the shared CBs (the window, 192 KB,
   and the ring, 260 KB, are most of it). This has not been checked against the real L1 limit.
   - An overflow fails loudly at program creation (CB/L1 clash).
   - Fallbacks, in order: `GSPLAT_TT_OL_WIN_PAGES=768`, then `512`, then

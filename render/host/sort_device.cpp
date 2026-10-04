@@ -814,8 +814,6 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
                      pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, mover_bytes,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
-    cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
-    cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
     for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
     std::vector<uint32_t> ct;
     for (int i = 0; i < 9; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
