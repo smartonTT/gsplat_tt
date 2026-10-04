@@ -165,7 +165,7 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
             vis_params.edge_tau = edge_tau;
             // Lever B (task #125, GSPLAT_TT_PFWC_FUSE, default 1 since #122, 0 = kill switch).
             vis_params.fuse = gsplat_tt::pfwc_fuse_mode() == 1;
-            // Lever C (task #140, GSPLAT_TT_PRECULL=1): only with the band cull on.
+            // Lever C (task #140, GSPLAT_TT_PRECULL, default 1 since #156, 0 = kill switch): only with the band cull on.
             if (gsplat_tt::precull_mode() == 1 && !cull_disabled)
                 vis_params.precull_floor = mb_contrib_floor;
             vis = &vis_params;

@@ -86,13 +86,14 @@ inline int puboc_pre_mode() {
 // (project_pfwc_compute.cpp step 11.6), so dead (gaussian, tile) records are
 // never made. Bit-identical with BLEND_T_PERIOD=0; at the default period the
 // T-saturation checkpoints shift, so <=1 LSB on ~0.3-0.5% of pixels (#142,
-// 74.9-78.2 dB). 0 (default) = off; opt-in until reviewed. Only with
-// GSPLAT_TT_SFPU_VIS=1 (mode 2 cross-checks the rectangle against the legacy
-// path) and with the band cull on.
+// 74.9-78.2 dB). Default 1 since task #156 (reviewed; 1 LSB accepted);
+// 0 = kill switch (the pre-#156 output). Only with GSPLAT_TT_SFPU_VIS=1 (mode
+// 2 cross-checks the rectangle against the legacy path) and with the band
+// cull on.
 inline int precull_mode() {
     static const int v = [] {
         const char* e = std::getenv("GSPLAT_TT_PRECULL");
-        if (e == nullptr || *e == '\0') return 0;
+        if (e == nullptr || *e == '\0') return 1;
         const int x = std::atoi(e);
         if (x < 0 || x > 1)
             throw std::invalid_argument(std::string("GSPLAT_TT_PRECULL must be 0 or 1, got '") +
