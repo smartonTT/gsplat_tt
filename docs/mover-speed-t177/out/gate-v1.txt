@@ -1,0 +1,22 @@
+STAGES n=30 head=0.003 project=4.982 tile_assign=0.006 sort=4.415 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.871 d2h=0.325 assemble=0.000 tail=16.748 | sum=35.349 view_total=35.351 resid_in_view=+0.002 avg_frame_ms=35.405 resid_vs_frame=+0.056
+=== t162r0-v1 80793c0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v1.txt views=0:2
+STAGES n=2 head=0.005 project=4.512 tile_assign=0.005 sort=4.468 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.586 d2h=0.254 assemble=0.000 tail=0.003 | sum=17.832 view_total=17.833 resid_in_view=+0.001 avg_frame_ms=17.884 resid_vs_frame=+0.053
+=== t162r1-base 80793c0  
+STAGES n=30 head=0.004 project=4.638 tile_assign=0.007 sort=4.580 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.920 d2h=0.239 assemble=0.000 tail=0.003 | sum=18.392 view_total=18.393 resid_in_view=+0.001 avg_frame_ms=18.446 resid_vs_frame=+0.055
+=== t162r1-v1 80793c0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v1.txt 
+STAGES n=30 head=0.005 project=4.652 tile_assign=0.007 sort=4.707 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.879 d2h=0.243 assemble=0.000 tail=0.003 | sum=18.495 view_total=18.496 resid_in_view=+0.001 avg_frame_ms=18.550 resid_vs_frame=+0.056
+=== t162r2-v1 80793c0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v1.txt 
+STAGES n=30 head=0.003 project=4.588 tile_assign=0.004 sort=4.654 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.874 d2h=0.203 assemble=0.000 tail=0.002 | sum=18.327 view_total=18.328 resid_in_view=+0.001 avg_frame_ms=18.361 resid_vs_frame=+0.034
+=== t162r2-base 80793c0  
+STAGES n=30 head=0.003 project=4.590 tile_assign=0.004 sort=4.470 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.896 d2h=0.324 assemble=0.000 tail=0.002 | sum=18.288 view_total=18.289 resid_in_view=+0.001 avg_frame_ms=18.321 resid_vs_frame=+0.033
+=== t162r3-base 80793c0  
+STAGES n=30 head=0.002 project=4.586 tile_assign=0.004 sort=4.498 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.894 d2h=0.302 assemble=0.000 tail=0.002 | sum=18.288 view_total=18.289 resid_in_view=+0.001 avg_frame_ms=18.318 resid_vs_frame=+0.030
+=== t162r3-v1 80793c0 GSPLAT_TT_OL_MOVER_SPEED_FILE=/localdev/smarton/gstt2-t166/docs/mover-speed-t177/tables/v1.txt 
+STAGES n=30 head=0.002 project=4.590 tile_assign=0.004 sort=4.628 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.883 d2h=0.326 assemble=0.000 tail=0.002 | sum=18.436 view_total=18.437 resid_in_view=+0.001 avg_frame_ms=18.468 resid_vs_frame=+0.032
+[sync_remote] sha=80793c0440b1f33e2c4a8bd47a26879b891854aa so_md5=bbe76bf5f86c6e0ac9651ad77006b41d 
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r1-base.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r2-base.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r3-base.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r1-v1.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r2-v1.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t162r3-v1.txt
