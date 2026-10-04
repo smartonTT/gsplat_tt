@@ -84,7 +84,9 @@ inline int puboc_pre_mode() {
 // Lever C (task #140, GSPLAT_TT_PRECULL): 1 = pfwc (PFWC_PRECULL) shrinks the
 // tile rectangle to the opacity-aware extent the microblock band cull can keep
 // (project_pfwc_compute.cpp step 11.6), so dead (gaussian, tile) records are
-// never made. Same image. 0 (default) = kill switch. Only with
+// never made. Bit-identical with BLEND_T_PERIOD=0; at the default period the
+// T-saturation checkpoints shift, so <=1 LSB on ~0.3-0.5% of pixels (#142,
+// 74.9-78.2 dB). 0 (default) = off; opt-in until reviewed. Only with
 // GSPLAT_TT_SFPU_VIS=1 (mode 2 cross-checks the rectangle against the legacy
 // path) and with the band cull on.
 inline int precull_mode() {

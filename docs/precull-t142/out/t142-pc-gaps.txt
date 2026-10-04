@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t142/opt/profiler/program_gaps.py", line 103, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t142/opt/profiler/program_gaps.py", line 38, in main
+    frame, n_frames, _ = segment_frames(lines, ts)
+  File "/localdev/smarton/gstt2-t142/opt/profiler/stitch_device_csv.py", line 57, in segment_frames
+    return segment_frames(lines, ts, anchor="pfwc")
+  File "/localdev/smarton/gstt2-t142/opt/profiler/stitch_device_csv.py", line 83, in segment_frames
+    raise ValueError(f"zones straddle frame boundaries (frame, zone, START-END): {bad[:8]}")
+ValueError: zones straddle frame boundaries (frame, zone, START-END): [(0, 'NCRISC-KERNEL', 3), (4, 'NCRISC-KERNEL', -3)]
