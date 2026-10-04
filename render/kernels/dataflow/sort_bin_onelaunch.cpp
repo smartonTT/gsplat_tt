@@ -78,6 +78,11 @@
 #ifndef OL_RING_TILES
 #define OL_RING_TILES 1024u  // tiles with a ring (CB_RING size); more: rings off
 #endif
+// Task #181 (host knob GSPLAT_TT_OL_FILL_BULK=0 turns it off): the fold's
+// window fill reads one run per DRAM bank, see fill_window below.
+#ifndef OL_FILL_BULK
+#define OL_FILL_BULK 1
+#endif
 #ifndef OL_WIN_PAGES
 #define OL_WIN_PAGES 1536u  // == sort_device.cpp onelaunch window
 #endif
@@ -213,11 +218,66 @@ void kernel_main() {
     const uint32_t win_tid = win_gid + WIN_PAGES * PAGE_BYTES;
     const uint32_t win_keep = win_tid + WIN_PAGES * PAGE_BYTES;
     // Fold: the window's gid and tid planes, read while this mover waits.
-    auto fill_window = [&]() {
+    auto fill_window_pages = [&]() {
         for (uint32_t w = 0; w < nwin; w++) {
             noc_async_read(get_noc_addr(pg_lo + w, gids_acc), win_gid + w * PAGE_BYTES, PAGE_BYTES);
             noc_async_read(get_noc_addr(pg_lo + w, tids_acc), win_tid + w * PAGE_BYTES, PAGE_BYTES);
         }
+    };
+    // OL_FILL_BULK (task #181): an interleaved buffer puts page p + nb right
+    // after page p in the same DRAM bank (nb = bank count). So the window is nb
+    // runs (pages r, r + nb, r + 2 nb, ...), one read each per plane instead of
+    // one 64 B read per page. The runs land bank-major in a staging plane and a
+    // copy puts each page at its window slot. Staging: the gid runs go to the
+    // tid plane and the tid runs to the keep plane (the fold reads no keep
+    // pages; the emit sets its first PB keep pages to ones afterwards), so gid
+    // is unpacked first, then tid. Blocking: the read barrier is inside.
+    // Returns false (nothing read) when no stride nb <= 16 matches.
+    auto fill_window_bulk = [&]() -> bool {
+        const uint64_t a0g = get_noc_addr(pg_lo, gids_acc);
+        const uint64_t a0t = get_noc_addr(pg_lo, tids_acc);
+        uint32_t nb = 0;
+        for (uint32_t q = 1; q <= 16u; q++) {
+            if (get_noc_addr(pg_lo + q, gids_acc) == a0g + PAGE_BYTES &&
+                get_noc_addr(pg_lo + q, tids_acc) == a0t + PAGE_BYTES) {
+                nb = q;
+                break;
+            }
+        }
+        if (nb == 0u || nwin < nb) return false;
+        uint32_t s = 0;
+        for (uint32_t r = 0; r < nb; r++) {
+            const uint32_t c = (nwin - r + nb - 1u) / nb;
+            noc_async_read(get_noc_addr(pg_lo + r, gids_acc), win_tid + s * PAGE_BYTES, c * PAGE_BYTES);
+            noc_async_read(get_noc_addr(pg_lo + r, tids_acc), win_keep + s * PAGE_BYTES, c * PAGE_BYTES);
+            s += c;
+        }
+        noc_async_read_barrier();
+        auto unpack = [&](uint32_t src, uint32_t dst) {
+            auto sp = reinterpret_cast<volatile uint32_t*>(src);
+            uint32_t i = 0;
+            for (uint32_t r = 0; r < nb; r++) {
+                for (uint32_t w = r; w < nwin; w += nb, i++) {
+                    auto dp = reinterpret_cast<volatile uint32_t*>(dst + w * PAGE_BYTES);
+                    const volatile uint32_t* q = sp + i * ELEMS_PER_PAGE;
+                    const uint32_t v0 = q[0], v1 = q[1], v2 = q[2], v3 = q[3], v4 = q[4], v5 = q[5],
+                                   v6 = q[6], v7 = q[7];
+                    dp[0] = v0; dp[1] = v1; dp[2] = v2; dp[3] = v3;
+                    dp[4] = v4; dp[5] = v5; dp[6] = v6; dp[7] = v7;
+                    const uint32_t u0 = q[8], u1 = q[9], u2 = q[10], u3 = q[11], u4 = q[12], u5 = q[13],
+                                   u6 = q[14], u7 = q[15];
+                    dp[8] = u0; dp[9] = u1; dp[10] = u2; dp[11] = u3;
+                    dp[12] = u4; dp[13] = u5; dp[14] = u6; dp[15] = u7;
+                }
+            }
+        };
+        unpack(win_tid, win_gid);
+        unpack(win_keep, win_tid);
+        return true;
+    };
+    auto fill_window = [&]() {
+        if (OL_FILL_BULK && fill_window_bulk()) return;
+        fill_window_pages();
     };
 
     // ── 1. count this mover's kept pairs per tile ──────────────────────────
@@ -269,6 +329,7 @@ void kernel_main() {
                 noc_async_read(get_noc_addr(core_id * 2u * row_pages + q, cnt_acc),
                                h_l1 + q * PAGE_BYTES, PAGE_BYTES);
             }
+            DeviceZoneScopedN("sort_ol_fill");  // task #181: fill time and GB/s
             fill_window();
             noc_async_read_barrier();
         } else {
@@ -289,6 +350,17 @@ void kernel_main() {
         const uint32_t row_span = row_pages * ELEMS_PER_PAGE;
         const bool coordinator = (core_id == 0u);
         // fill: fill_window() while waiting (the coordinator after releasing).
+        // Profiler builds (task #181): BRISC's fill in its own zone, read
+        // barrier included (else step 4's read barrier waits for it).
+        auto fill_b = [&]() {
+#if defined(PROFILE_KERNEL)
+            DeviceZoneScopedN("sort_ol_fillb");
+            fill_window();
+            noc_async_read_barrier();
+#else
+            fill_window();
+#endif
+        };
         auto barrier = [&](uint32_t arrive_id, uint32_t release_id, bool fill) {
             DeviceZoneScopedN("sort_ol_barrier");
             noc_async_write_barrier();  // this core's DRAM writes are visible first
@@ -301,11 +373,11 @@ void kernel_main() {
                     sem_inc(xy & 0xFFFFu, xy >> 16, release_id);
                 }
                 noc_async_atomic_barrier();
-                if (fill) fill_window();
+                if (fill) fill_b();
             } else {
                 sem_inc(coord_x, coord_y, arrive_id);
                 noc_async_atomic_barrier();
-                if (fill) fill_window();
+                if (fill) fill_b();
                 auto release = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(get_semaphore(release_id));
                 noc_semaphore_wait(release, 1u);
                 noc_semaphore_set(release, 0u);
