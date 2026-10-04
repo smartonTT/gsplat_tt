@@ -1,0 +1,18 @@
+n_views=30 movers=220 busiest=('15', '8', 'NCRISC') (emit zone 2.881 ms/view)
+part (ms/view)                                       mean mover   mean BRISC  mean NCRISC      busiest
+sort_ol_emit zone                                         2.779        2.780        2.778        2.881
+ep_pro prologue (ring starts, first pair/brec reads)        0.026        0.027        0.025        0.041
+ep_rdw read barrier wait in loop (brec k, pairs k+1)        0.007        0.007        0.008        0.010
+ep_brec issue_brec: keep/gid scan + brec read issue        0.002        0.002        0.002        0.002
+ep_pairs issue_pairs: pair page read issue                0.003        0.003        0.003        0.003
+ep_proc process_batch total                               2.644        2.643        2.645        2.742
+ep_wfl   of which writes_flushed wait (run start)         0.022        0.021        0.022        0.023
+ep_wiss   of which run write issue (flush_run)            0.131        0.130        0.131        0.142
+ep_drain tail drain (partial runs)                        0.095        0.097        0.094        0.082
+ep_wbar final write barrier                               0.001        0.001        0.001        0.000
+pack/key build = proc - wfl - wiss                        2.491        2.491        2.492        2.577
+unattributed = zone - sum(top-level parts)                0.002        0.002        0.002        0.002
+ep_nrec per view                                          13385        13381        13388        13387
+ep_npf per view                                            7718         7719         7716         7946
+ep_nb per view                                              105          105          105          105
+emit cycles per record                                    280.3        280.5        280.1        290.6

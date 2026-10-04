@@ -1,7 +1,7 @@
 #!/bin/bash
-# t164: sync + build, untraced md5/timing (fold on vs GSPLAT_TT_OL_EMIT_FOLD=0, 2 rounds,
+# t164: sync + build, untraced md5/timing (fold on vs GSPLAT_TT_OL_EMIT_FOLD=0, ROUNDS rounds,
 # order swapped), then the emit-part Tracy capture with the fold.
-#   drive.sh [rev] [steps=sync,time,tracy]   (Mac; one ttp lock p100 per device step)
+#   [ROUNDS="1 2"] drive.sh [rev] [steps=sync,time,tracy]   (Mac; one ttp lock p100 per device step)
 set -u
 cd "$(git rev-parse --show-toplevel)"
 DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
@@ -14,12 +14,13 @@ if [[ $STEPS == *sync* ]]; then
   [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 fi
 if [[ $STEPS == *time* ]]; then
-  ttp lock p100 -- $DEVRUN --host $H --no-verify --timeout 560 --tag t164-time1 -- \
-    "bash $T/docs/emit-fold-t164/remote_time.sh 1 base off:GSPLAT_TT_OL_EMIT_FOLD=0"
-  echo "TIME1_RC=$?"
-  ttp lock p100 -- $DEVRUN --host $H --no-verify --timeout 560 --tag t164-time2 -- \
-    "bash $T/docs/emit-fold-t164/remote_time.sh 2 off:GSPLAT_TT_OL_EMIT_FOLD=0 base"
-  echo "TIME2_RC=$?"
+  # ROUNDS (default "1 2"): odd rounds run the fold first, even rounds FOLD=0 first.
+  for r in ${ROUNDS:-1 2}; do
+    if (( r % 2 )); then arms="base off:GSPLAT_TT_OL_EMIT_FOLD=0"; else arms="off:GSPLAT_TT_OL_EMIT_FOLD=0 base"; fi
+    ttp lock p100 -- $DEVRUN --host $H --no-verify --timeout 560 --tag t164-time$r -- \
+      "bash $T/docs/emit-fold-t164/remote_time.sh $r $arms"
+    echo "TIME${r}_RC=$?"
+  done
   scp -q -o BatchMode=yes "$H:$T/tmp/t164/run-r*.log" "$H:$T/tmp/t164/md5-r*.txt" $O/
 fi
 if [[ $STEPS == *tracy* ]]; then
