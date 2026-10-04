@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-04 13:55 PDT · 74 metal + 180 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-04 13:56 PDT · 74 metal + 180 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -108,7 +108,7 @@
 
     <p class='idea-desc'>Task #160: sort_ol_emit pack-loop instruction diet (bit-identical). Fast path for ring+PUBOC+pow2 tiles_x in sort_bin_onelaunch.cpp: register locals in a hand-inlined loop instead of by-reference lambda captures, per-tile cursors in a 4 KB RISC local-memory array instead of L1 read-after-write, sub_int32 always-inline 32-bit path (sub_int_cold fallback, exhaustive fp32 test 0 mismatches), plain plane loads after a compiler barrier, P bound hoisted per batch. GSPLAT_TT_OL_EMIT_FAST=0 is the kill switch.</p><p class='reason'>Swapped A/B on yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, 2 rounds, untraced, code e74a2dc on b54c54e (PRECULL=1 default): FAST=0 19.29/19.11, fast 18.56/18.62 ms/view, paired delta -0.72/-0.49, mean -0.61 ms (-3.2%). Stages: sort 5.02 -> 4.40 (bin_emit 4.61 -> 3.99), project and blend unchanged. All 4 runs md5-identical to md5-r82new.txt over 30 views. Tracy (EMIT_PROF=1): emit zone 2.61 ms/view mean mover (busiest 2.76), issue_brec 0.51, process_batch 1.97 (pack/key build 1.82, write issue 0.13), drain 0.09; 263 cycles/record whole emit. issue_brec scan fold not done (next lever).</p>
     <p class='iter-build'><code>ttp/t160</code></p>
-    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/t160-ep/render.tracy (remote))</p>
+    <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t160/opt/profiler/t160-ep/render.tracy)</p>
   </div>
   <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-184)</span></div>
 </div>
