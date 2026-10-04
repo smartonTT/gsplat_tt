@@ -47,10 +47,13 @@ ceil of the radius and the rounding. Non-finite members mark a tile "never skip"
   - The survivors are dealt strided over the pfwc cores (core c: list[c],
     list[c+C], ...). So each core's count stays <= the full-scene SeqMap count
     and its segment base, which K2 recomputes, still holds.
-- The tile ids go as runtime args, padded to ceil(num_tiles/C), because the
-  argument count cannot change between launches:
-  - `reader_pfwc.cpp` args 13.. under `PFWC_TILE_LIST`;
-  - `writer_pfwc_fuse.cpp` args 25.. under the same define.
+- The tile ids go through one single-page DRAM buffer (bank 0, core c's ids at
+  c x page), written per view before the launch. `reader_pfwc.cpp` (args 13, 14
+  under `PFWC_TILE_LIST`) reads its page to L1 once and pushes it on CB 38;
+  `writer_pfwc_fuse.cpp` waits on CB 38 and reads the same copy.
+- Why: the pfwc program sits at the 69 KB (70656 B) kernel config buffer.
+  Tile ids as runtime args gave 71056 B; a separate NoC read in each kernel
+  (InterleavedAddrGen) gave 71360 B, so most of the overflow is kernel text.
 - `GSPLAT_TT_CHUNK_SKIP=0` keeps all tiles: reorder only, a diagnostic.
 - `GSPLAT_TT_CHUNK_LOG=1` prints the kept count.
 - Host cost is the `project_pfwc_chunkcull` stage timer.
