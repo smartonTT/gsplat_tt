@@ -716,6 +716,12 @@ struct MbStats {
     uint32_t pairops;    // dispatch_blend_pairs calls (pair or single)
     uint32_t mb_useful;  // dispatched microblocks with >= 1 live pixel
     uint32_t px_live;    // live pixels inside dispatched microblocks
+    // Task #148 (true saturation: T read back before EVERY record, eps = BLEND_T_EPS):
+    uint32_t rec_disp;   // records that dispatch >= 1 microblock (mask != 0)
+    uint32_t mb_dsat;    // dispatched microblocks already saturated (max T < eps)
+    uint32_t mb_waste;   // dispatched microblocks with no live pixel OR saturated
+    uint32_t pair_waste; // pair-ops whose every dispatched microblock is waste
+    uint32_t rec_waste;  // dispatching records whose every microblock is waste
 };
 MbStats g_mb_st{};
 
@@ -746,7 +752,23 @@ inline float st_ln(float x) {
     return lnm + static_cast<float>(ex) * 0.69314718f;
 }
 
-inline void st_record(const uint32_t* rec, uint32_t mask) {
+// live_true: bit m set <=> microblock m still has a pixel with T >= eps,
+// from a T readback taken right before this record (task #148).
+inline void st_count_waste(uint32_t mask, uint32_t useful) {
+    const uint32_t waste = mask & ~useful;
+    g_mb_st.mb_waste += st_popc(waste);
+    for (uint32_t j = 0; j < NUM_MB / 2; ++j) {
+        const uint32_t pm = (mask >> (2u * j)) & 3u;
+        if (pm != 0u && ((waste >> (2u * j)) & 3u) == pm) {
+            ++g_mb_st.pair_waste;
+        }
+    }
+    if (waste == mask) {
+        ++g_mb_st.rec_waste;
+    }
+}
+
+inline void st_record(const uint32_t* rec, uint32_t mask, uint32_t live_true) {
     const uint32_t raw = rec[3];
     ++g_mb_st.rec;
     if (raw == 0u) {
@@ -758,6 +780,8 @@ inline void st_record(const uint32_t* rec, uint32_t mask) {
     if (mask == 0u) {
         return;
     }
+    ++g_mb_st.rec_disp;
+    g_mb_st.mb_dsat += st_popc(mask & ~live_true);
     g_mb_st.mb_disp += st_popc(mask);
     for (uint32_t j = 0; j < NUM_MB / 2; ++j) {
         if (((mask >> (2u * j)) & 3u) != 0u) {
@@ -766,8 +790,10 @@ inline void st_record(const uint32_t* rec, uint32_t mask) {
     }
     const float op = static_cast<float>(rec[6] & 0xffffu) * (1.0f / 65535.0f);
     if (op * kStInvFloor < 1.0f) {
+        st_count_waste(mask, 0u);
         return;  // no pixel can reach floor
     }
+    uint32_t useful = 0u;  // dispatched, >= 1 live pixel, not saturated
     const float thr = -st_ln(op * kStInvFloor);
     const float A = st_bits_f(rec[0]), B = st_bits_f(rec[1]), C = st_bits_f(rec[2]);
     const float mx = st_bits_f(rec[4]), my = st_bits_f(rec[5]);
@@ -794,19 +820,23 @@ inline void st_record(const uint32_t* rec, uint32_t mask) {
         g_mb_st.px_live += n;
         if (n != 0u) {
             ++g_mb_st.mb_useful;
+            useful |= 1u << m;
         }
     }
+    st_count_waste(mask, useful & live_true);
 }
 
 inline void st_emit() {
     DPRINT << "MBSTATS " << g_mb_st.rec << " " << g_mb_st.rec_live << " " << g_mb_st.mb_kept << " "
            << g_mb_st.mb_sat << " " << g_mb_st.mb_disp << " " << g_mb_st.pairops << " "
-           << g_mb_st.mb_useful << " " << g_mb_st.px_live << ENDL();
+           << g_mb_st.mb_useful << " " << g_mb_st.px_live << " " << g_mb_st.rec_disp << " "
+           << g_mb_st.mb_dsat << " " << g_mb_st.mb_waste << " " << g_mb_st.pair_waste << " "
+           << g_mb_st.rec_waste << ENDL();
 }
-#define MB_STATS_RECORD(rec, mask) MATH((st_record((rec), (mask))))
+#define MB_STATS_RECORD(rec, mask, live_true) MATH((st_record((rec), (mask), (live_true))))
 #define MB_STATS_EMIT() MATH((st_emit()))
 #else
-#define MB_STATS_RECORD(rec, mask)
+#define MB_STATS_RECORD(rec, mask, live_true)
 #define MB_STATS_EMIT()
 #endif
 
@@ -893,7 +923,16 @@ inline void process_tile_l1_blend(
         // Mask out microblocks whose transmittance already saturated (MATH-only:
         // live_mb_mask stays all-ones on UNPACK/PACK, whose dispatch is a no-op).
         const uint32_t mask = rec[3] & live_mb_mask;
-        MB_STATS_RECORD(rec, mask);
+#if defined(GSPLAT_TT_MB_STATS)
+        // Task #148: true per-microblock saturation before this record (all
+        // threads take part in the readback; the kernel's own live mask and
+        // its period-driven early-out are left untouched).
+        uint32_t st_live_true = 0xFFFFFFFFu;
+        if (g_seen > 1u) {
+            blend_t_readback(st_live_true);
+        }
+        MB_STATS_RECORD(rec, mask, st_live_true);
+#endif
 #if BLEND_ABL == 3
         if (mask == 0xFFFFFFFFu && rec[6] == 0xFFFFFFFFu) {
             asm volatile("nop");  // keep the mask read; never true in practice
