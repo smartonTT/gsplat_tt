@@ -965,6 +965,36 @@ static bool ol_mover_speed() {
     return v;
 }
 
+// Task #177: GSPLAT_TT_OL_MOVER_SPEED_FILE=<path> replaces kMoverSpeedP150 with
+// the table in that file (parse_mover_speed format), to A/B a refit without a
+// rebuild. Unset, unreadable or malformed: the built-in table. Read once.
+static const std::vector<gsplat_tt::sort_split::MoverSpeed>& ol_mover_speed_table() {
+    static const std::vector<gsplat_tt::sort_split::MoverSpeed> v = [] {
+        using gsplat_tt::sort_split::kMoverSpeedP150;
+        std::vector<gsplat_tt::sort_split::MoverSpeed> t(std::begin(kMoverSpeedP150),
+                                                        std::end(kMoverSpeedP150));
+        const char* path = std::getenv("GSPLAT_TT_OL_MOVER_SPEED_FILE");
+        if (path == nullptr || *path == '\0') return t;
+        std::string text;
+        if (FILE* f = std::fopen(path, "rb")) {
+            char buf[4096];
+            std::size_t n;
+            while ((n = std::fread(buf, 1, sizeof buf, f)) > 0) text.append(buf, n);
+            std::fclose(f);
+        }
+        std::vector<gsplat_tt::sort_split::MoverSpeed> parsed;
+        if (!gsplat_tt::sort_split::parse_mover_speed(text, &parsed)) {
+            std::cerr << "[gsplat_tt::sort] GSPLAT_TT_OL_MOVER_SPEED_FILE=\"" << path
+                      << "\" is missing or not a mover speed table; using the built-in table\n";
+            return t;
+        }
+        std::cerr << "[gsplat_tt::sort] mover speed table: " << parsed.size() << " cores from " << path
+                  << "\n";
+        return parsed;
+    }();
+    return v;
+}
+
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
@@ -2122,7 +2152,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             if (ol_mover_speed()) {
                 std::vector<uint32_t> speed(2u * num_cores, 1000u);
                 for (uint32_t c = 0; c < num_cores; c++) {
-                    for (const auto& m : gsplat_tt::sort_split::kMoverSpeedP150) {
+                    for (const auto& m : ol_mover_speed_table()) {
                         if (m.x == (noc_xy[c] & 0xFFFFu) && m.y == (noc_xy[c] >> 16)) {
                             speed[2u * c] = m.brisc;
                             speed[2u * c + 1u] = m.ncrisc;

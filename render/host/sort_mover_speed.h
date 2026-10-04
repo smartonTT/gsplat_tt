@@ -13,7 +13,11 @@
 
 #pragma once
 
+#include <cctype>
 #include <cstdint>
+#include <cstdlib>
+#include <string>
+#include <vector>
 
 namespace gsplat_tt::sort_split {
 
@@ -134,5 +138,39 @@ inline constexpr MoverSpeed kMoverSpeedP150[] = {
     {14, 11, 1048, 977},
     {15, 11, 1046, 984},
 };
+
+// Task #177: parses a mover speed table from text (GSPLAT_TT_OL_MOVER_SPEED_FILE)
+// so a refit can be measured without a rebuild. Every line holding exactly
+// four unsigned integers is one entry {x, y, brisc, ncrisc} (the initializer
+// lines above parse as is); other lines are ignored. False, with *out empty,
+// when there is no entry or one is out of range (x, y < 256, speeds 1..65535).
+inline bool parse_mover_speed(const std::string& text, std::vector<MoverSpeed>* out) {
+    out->clear();
+    std::size_t i = 0;
+    while (i < text.size()) {
+        std::size_t e = text.find('\n', i);
+        if (e == std::string::npos) e = text.size();
+        std::vector<unsigned long> v;
+        for (std::size_t k = i; k < e;) {
+            if (!std::isdigit(static_cast<unsigned char>(text[k]))) {
+                k++;
+                continue;
+            }
+            char* end = nullptr;
+            v.push_back(std::strtoul(text.c_str() + k, &end, 10));
+            k = static_cast<std::size_t>(end - text.c_str());
+        }
+        if (v.size() == 4u) {
+            if (v[0] > 255u || v[1] > 255u || v[2] == 0u || v[2] > 65535u || v[3] == 0u || v[3] > 65535u) {
+                out->clear();
+                return false;
+            }
+            out->push_back({static_cast<uint8_t>(v[0]), static_cast<uint8_t>(v[1]),
+                            static_cast<uint16_t>(v[2]), static_cast<uint16_t>(v[3])});
+        }
+        i = e + 1u;
+    }
+    return !out->empty();
+}
 
 }  // namespace gsplat_tt::sort_split

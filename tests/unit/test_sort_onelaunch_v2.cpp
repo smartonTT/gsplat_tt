@@ -23,7 +23,9 @@
 //    where its pair pages split between BRISC and NCRISC (split_pages);
 //  - task #174: speed_bounds covers the pages exactly once in (core, BRISC,
 //    NCRISC) order, within one page of the speed-proportional share, and the
-//    bucket image of the whole grid is the same as for the even split.
+//    bucket image of the whole grid is the same as for the even split;
+//  - task #177: parse_mover_speed reads the kMoverSpeedP150 initializer lines
+//    back exactly, skips other lines and rejects out-of-range entries.
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -32,8 +34,10 @@
 #include <cstring>
 #include <numeric>
 #include <random>
+#include <string>
 #include <vector>
 
+#include "sort_mover_speed.h"
 #include "sort_mover_split.h"
 #include "sort_onelaunch_algo.h"
 
@@ -358,6 +362,31 @@ void test_worklist() {
     CHECK(v1.flat.size() < a.flat.size(), "select adds parts");
 }
 
+// ── task #177: mover speed table from text (GSPLAT_TT_OL_MOVER_SPEED_FILE) ─
+void test_parse_mover_speed() {
+    using gsplat_tt::sort_split::kMoverSpeedP150;
+    using gsplat_tt::sort_split::MoverSpeed;
+    using gsplat_tt::sort_split::parse_mover_speed;
+    std::string text = "// {x, y, BRISC, NCRISC} relative speed\n";
+    for (const auto& m : kMoverSpeedP150) {
+        char line[64];
+        std::snprintf(line, sizeof line, "    {%u, %u, %u, %u},\n", m.x, m.y, m.brisc, m.ncrisc);
+        text += line;
+    }
+    text += "predicted 2.497 ms; 5 numbers 1 2 3 4 5\n";
+    std::vector<MoverSpeed> v;
+    bool ok = parse_mover_speed(text, &v) && v.size() == std::size(kMoverSpeedP150);
+    for (std::size_t i = 0; ok && i < v.size(); ++i) {
+        const auto& m = kMoverSpeedP150[i];
+        ok = v[i].x == m.x && v[i].y == m.y && v[i].brisc == m.brisc && v[i].ncrisc == m.ncrisc;
+    }
+    CHECK(ok, "built-in table does not round-trip");
+    CHECK(parse_mover_speed("1 2 700 1050\n3 2 600 1100", &v) && v.size() == 2u && v[1].brisc == 600u,
+          "plain lines");
+    for (const char* bad : {"", "no numbers\n", "1 2 0 1000\n", "1 2 700 70000\n", "300 2 700 1000\n"})
+        CHECK(!parse_mover_speed(bad, &v) && v.empty(), "accepted \"%s\"", bad);
+}
+
 }  // namespace
 
 int main() {
@@ -365,6 +394,7 @@ int main() {
     test_ring();
     test_row_split();
     test_speed_bounds();
+    test_parse_mover_speed();
     test_worklist();
     if (g_fail != 0) {
         std::printf("%d check(s) failed\n", g_fail);
