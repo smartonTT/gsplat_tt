@@ -1,0 +1,38 @@
+views=30 cores/frame(anchor)=330 device_frame_span_ms mean=19.71 min=16.34 max=24.96
+zone                 core_ms/v cores  mean_ms   max_ms balance  occ_%  riscs
+--------------------------------------------------------------------------------
+TRISC-FW               3702.82   330   11.221   12.086    0.93   61.3  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL           3701.25   330   11.216   12.085    0.93   61.3  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW               1911.76   110   17.380   18.267    0.95   92.7  BRISC
+BRISC-KERNEL           1856.54   110   16.878   17.454    0.97   88.6  BRISC
+NCRISC-FW              1843.45   110   16.759   17.665    0.95   89.6  NCRISC
+NCRISC-KERNEL          1843.10   110   16.755   17.662    0.95   89.6  NCRISC
+tile_blend_sfpu        1789.53   330    5.423    5.886    0.92   29.9  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask          1036.09   330    3.140    3.749    0.84   18.9  TRISC_0,TRISC_1,TRISC_2
+pfwc                    875.57   330    2.653    2.881    0.92   14.7  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit            773.54   220    3.516    3.697    0.95   18.7  BRISC,NCRISC
+sort_subchunk_mat       637.07   220    2.896    3.748    0.77   18.9  BRISC,NCRISC
+tile_blend_load         568.65   110    5.170    5.481    0.94   27.8  NCRISC
+rd_l1_bulk              556.92   110    5.063    5.395    0.94   27.4  NCRISC
+sort_ol_count           137.74   220    0.626    0.931    0.67    4.7  BRISC,NCRISC
+sort_ol_barrier          28.23   110    0.257    0.449    0.57    2.3  BRISC
+sort_ol_prefix            2.41   110    0.022    0.043    0.52    0.2  BRISC
+
+stage        window_ms/v     min     max  zones
+--------------------------------------------------------------------------------
+project             2.88    2.62    3.13  pfwc+proj_count+proj_scatter
+subchunk_mat        3.75    2.99    5.20  sort_subchunk_mat
+blend               5.89    4.90    6.88  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+
+zone (timeline)      start_ms   end_ms   window  (mean over views)
+------------------------------------------------------------
+pfwc                     0.00     2.88     2.88
+sort_ol_count            4.98     5.91     0.93
+sort_ol_barrier          5.53     5.98     0.45
+sort_ol_prefix           5.93     5.97     0.05
+sort_ol_emit             5.98     9.69     3.70
+sort_subchunk_mat       10.00    13.75     3.75
+mat_cull_mask           10.00    13.75     3.75
+tile_blend_sfpu         13.76    19.64     5.89
+tile_blend_load         13.76    19.24     5.48
+rd_l1_bulk              13.76    19.24     5.48
