@@ -1,7 +1,7 @@
 ttp lock: waiting for p100 (held by task #142 (run 393) since 12:00; 1 ahead in queue)
 ttp lock: got p100 after 0.5 min (not counted toward the run's wall clock)
 ##### sync 12:00:59
-[sync_remote] sha=cc139c26778df2794a4675fbb2654a68b02ec8d3 so_md5=753be95f46fe449bdcbce98a5652240b 
+[sync_remote] sha=cc139c26778df2794a4675fbb2654a68b02ec8d3 so_md5=753be95f46fe449bdcbce98a5652240b
 ##### t0 12:01:25
 === t124rt0-b0 cc139c2 BLEND_T_PERIOD=0 views=0:5
 run rc=0

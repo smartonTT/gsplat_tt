@@ -1,9 +1,9 @@
 ttp lock: waiting for p100 (held by task #122 (run 377) since 12:00; 1 ahead in queue)
 ttp lock: got p100 after 1.0 min (not counted toward the run's wall clock)
 ##### sync 12:01:44
-[sync_remote] sha=cc139c26778df2794a4675fbb2654a68b02ec8d3 so_md5=753be95f46fe449bdcbce98a5652240b 
+[sync_remote] sha=cc139c26778df2794a4675fbb2654a68b02ec8d3 so_md5=753be95f46fe449bdcbce98a5652240b
 ##### r1 12:02:11
-=== t124r1-base cc139c2  
+=== t124r1-base cc139c2
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.7 p50_ms=25.0 min_ms=20.4 max_ms=29.4 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r1-base
 STAGES n=30 head=0.003 project=6.451 tile_assign=1.437 sort=5.115 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.279 d2h=0.350 assemble=0.000 tail=0.002 | sum=24.637 view_total=24.638 resid_in_view=+0.001 avg_frame_ms=24.673 resid_vs_frame=+0.036
@@ -13,7 +13,7 @@ TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.016 enqueue=0.015 scan_finish=0.000
 ONELAUNCH n=31 onelaunch=4.835 layout=0.102 pub_host=0.151 total=5.118
 [SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
 ALL_VIEWS_IDENTICAL (30 views)
-=== t124r1-pc cc139c2 GSPLAT_TT_PRECULL=1 
+=== t124r1-pc cc139c2 GSPLAT_TT_PRECULL=1
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.0 p50_ms=24.3 min_ms=20.3 max_ms=28.0 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r1-pc
 STAGES n=30 head=0.002 project=6.696 tile_assign=1.388 sort=4.899 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.705 d2h=0.276 assemble=0.000 tail=0.002 | sum=23.968 view_total=23.969 resid_in_view=+0.001 avg_frame_ms=23.996 resid_vs_frame=+0.028
@@ -26,7 +26,7 @@ VIEWS DIFFER (30 differ, 0 not in ref, of 30)
 === done round 1
 ##### r1 rc=0
 ##### r2 12:02:36
-=== t124r2-pc cc139c2 GSPLAT_TT_PRECULL=1 
+=== t124r2-pc cc139c2 GSPLAT_TT_PRECULL=1
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.1 p50_ms=24.5 min_ms=20.7 max_ms=28.0 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r2-pc
 STAGES n=30 head=0.003 project=6.710 tile_assign=1.400 sort=4.975 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.754 d2h=0.199 assemble=0.000 tail=0.002 | sum=24.044 view_total=24.045 resid_in_view=+0.001 avg_frame_ms=24.078 resid_vs_frame=+0.035
@@ -36,7 +36,7 @@ TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.015 enqueue=0.019 scan_finish=0.000
 ONELAUNCH n=31 onelaunch=4.654 layout=0.115 pub_host=0.170 total=4.969
 [SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
 VIEWS DIFFER (30 differ, 0 not in ref, of 30)
-=== t124r2-base cc139c2  
+=== t124r2-base cc139c2
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.6 p50_ms=24.8 min_ms=20.5 max_ms=29.0 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r2-base
 STAGES n=30 head=0.002 project=6.433 tile_assign=1.432 sort=5.111 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.283 d2h=0.259 assemble=0.000 tail=0.002 | sum=24.522 view_total=24.523 resid_in_view=+0.001 avg_frame_ms=24.555 resid_vs_frame=+0.032
@@ -49,7 +49,7 @@ ALL_VIEWS_IDENTICAL (30 views)
 === done round 2
 ##### r2 rc=0
 ##### r3 12:03:00
-=== t124r3-base cc139c2  
+=== t124r3-base cc139c2
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.4 p50_ms=24.7 min_ms=20.5 max_ms=29.0 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r3-base
 STAGES n=30 head=0.003 project=6.433 tile_assign=1.429 sort=5.075 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.241 d2h=0.191 assemble=0.000 tail=0.002 | sum=24.374 view_total=24.375 resid_in_view=+0.001 avg_frame_ms=24.406 resid_vs_frame=+0.032
@@ -59,7 +59,7 @@ TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.012 enqueue=0.012 scan_finish=0.000
 ONELAUNCH n=31 onelaunch=4.834 layout=0.095 pub_host=0.144 total=5.096
 [SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
 ALL_VIEWS_IDENTICAL (30 views)
-=== t124r3-pc cc139c2 GSPLAT_TT_PRECULL=1 
+=== t124r3-pc cc139c2 GSPLAT_TT_PRECULL=1
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.2 p50_ms=24.5 min_ms=20.6 max_ms=28.5 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r3-pc
 STAGES n=30 head=0.002 project=6.723 tile_assign=1.411 sort=5.012 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.759 d2h=0.289 assemble=0.000 tail=0.003 | sum=24.199 view_total=24.200 resid_in_view=+0.001 avg_frame_ms=24.231 resid_vs_frame=+0.032
@@ -72,7 +72,7 @@ VIEWS DIFFER (30 differ, 0 not in ref, of 30)
 === done round 3
 ##### r3 rc=0
 ##### r4 12:03:25
-=== t124r4-pc cc139c2 GSPLAT_TT_PRECULL=1 
+=== t124r4-pc cc139c2 GSPLAT_TT_PRECULL=1
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.78dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.1 p50_ms=24.5 min_ms=20.4 max_ms=27.9 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r4-pc
 STAGES n=30 head=0.003 project=6.724 tile_assign=1.403 sort=4.986 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.719 d2h=0.210 assemble=0.000 tail=0.002 | sum=24.047 view_total=24.048 resid_in_view=+0.001 avg_frame_ms=24.084 resid_vs_frame=+0.036
@@ -82,7 +82,7 @@ TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.016 enqueue=0.022 scan_finish=0.000
 ONELAUNCH n=31 onelaunch=4.670 layout=0.116 pub_host=0.168 total=4.985
 [SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
 VIEWS DIFFER (30 differ, 0 not in ref, of 30)
-=== t124r4-base cc139c2  
+=== t124r4-base cc139c2
 run rc=0
 SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=24.4 p50_ms=24.7 min_ms=20.3 max_ms=29.1 n_views=30 warmup_s=2.3 out=/localdev/smarton/gstt2-t142/tmp/t124-t124r4-base
 STAGES n=30 head=0.003 project=6.426 tile_assign=1.430 sort=5.079 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.258 d2h=0.189 assemble=0.000 tail=0.002 | sum=24.386 view_total=24.387 resid_in_view=+0.001 avg_frame_ms=24.418 resid_vs_frame=+0.032
