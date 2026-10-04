@@ -637,9 +637,9 @@ void kernel_main() {
                 uint32_t cov0 = f_cov0, cov1 = f_cov1, cov2 = f_cov2, dep = f_dep, mxb = f_mx, myb = f_my;
                 uint32_t opr = f_opr, cgb = f_cgb, ty_c = f_ty, myt = f_myt;
                 // Fold (task #164): issue_brec's scan of batch k+1 (its planes
-                // sit in the window), two elements per pack iteration so the
-                // last read is issued halfway through this batch. Same reads,
-                // same order, same ring slots as issue_brec.
+                // sit in the window), one page (16 elements) per 8 pack
+                // elements so the last read is issued halfway through this
+                // batch. Same reads, same order, same ring slots as issue_brec.
                 uint32_t n_sc = 0;
                 const int32_t* skp = kp;
                 const int32_t* sgp = gp;
@@ -657,9 +657,9 @@ void kernel_main() {
 #if OL_EMIT_PROF
                 const uint32_t s_dst0 = s_dst;
 #endif
-                for (uint32_t j = 0; j < n_el; j++) {
+                for (uint32_t jb = 0; jb < n_el; jb += 8u) {
                     if (sj < n_sc) {
-                        const uint32_t se = (sj + 2u < n_sc) ? sj + 2u : n_sc;
+                        const uint32_t se = (sj + ELEMS_PER_PAGE < n_sc) ? sj + ELEMS_PER_PAGE : n_sc;
                         for (; sj < se; sj++) {
                             if (skp[sj] == 0) continue;
                             const int32_t sg = sgp[sj];
@@ -670,55 +670,58 @@ void kernel_main() {
                             }
                         }
                     }
-                    if (kp[j] == 0) continue;
-                    const int32_t g = gp[j];
-                    const uint32_t t = tp[j];
-                    if (g != g_c) {
-                        g_c = g;
-                        const uint32_t* cp = reinterpret_cast<const uint32_t*>(bp);
-                        bp += PAGE_BYTES;
-                        cov0 = cp[0];
-                        cov1 = cp[1];
-                        cov2 = cp[2];
-                        mxb = cp[3];
-                        myb = cp[4];
-                        opr = cp[10];
-                        cgb = cp[11];
-                        dep = cp[12];
-                        ty_c = 0xFFFFFFFFu;
-                    }
-                    const uint32_t c = cur_lm[t];
-                    cur_lm[t] = c + 1u;
-                    EP_CNT(ep_nrec, 1u);
-                    if (c >= cap) continue;  // past capacity: dropped, host fails the frame
-                    const uint32_t ri = c & (R - 1u);
-                    if (ri == 0u) {
-                        EP_T0(ep_t);
-                        noc_async_writes_flushed();
-                        EP_ADD(ep_wfl, ep_t);
-                    }
-                    const uint32_t kx = (t & msk) * L1_TILE_SIZE;
-                    uint32_t mx;
-                    if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) mx = sub_int_cold(mxb, kx);
-                    const uint32_t tyi = t >> sh;
-                    if (tyi != ty_c) {
-                        ty_c = tyi;
-                        const uint32_t ky = tyi * L1_TILE_SIZE;
-                        if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) myt = sub_int_cold(myb, ky);
-                    }
-                    auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * R + ri) * REC_BYTES);
-                    d[0] = cov0;
-                    d[1] = cov1;
-                    d[2] = cov2;
-                    d[3] = dep;
-                    d[4] = mx;
-                    d[5] = myt;
-                    d[6] = opr;
-                    d[7] = cgb;
-                    if (ri == R - 1u) {
-                        EP_T0(ep_t);
-                        flush_run(t, c);
-                        EP_ADD(ep_wiss, ep_t);
+                    const uint32_t je = (jb + 8u < n_el) ? jb + 8u : n_el;
+                    for (uint32_t j = jb; j < je; j++) {
+                        if (kp[j] == 0) continue;
+                        const int32_t g = gp[j];
+                        const uint32_t t = tp[j];
+                        if (g != g_c) {
+                            g_c = g;
+                            const uint32_t* cp = reinterpret_cast<const uint32_t*>(bp);
+                            bp += PAGE_BYTES;
+                            cov0 = cp[0];
+                            cov1 = cp[1];
+                            cov2 = cp[2];
+                            mxb = cp[3];
+                            myb = cp[4];
+                            opr = cp[10];
+                            cgb = cp[11];
+                            dep = cp[12];
+                            ty_c = 0xFFFFFFFFu;
+                        }
+                        const uint32_t c = cur_lm[t];
+                        cur_lm[t] = c + 1u;
+                        EP_CNT(ep_nrec, 1u);
+                        if (c >= cap) continue;  // past capacity: dropped, host fails the frame
+                        const uint32_t ri = c & (R - 1u);
+                        if (ri == 0u) {
+                            EP_T0(ep_t);
+                            noc_async_writes_flushed();
+                            EP_ADD(ep_wfl, ep_t);
+                        }
+                        const uint32_t kx = (t & msk) * L1_TILE_SIZE;
+                        uint32_t mx;
+                        if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) mx = sub_int_cold(mxb, kx);
+                        const uint32_t tyi = t >> sh;
+                        if (tyi != ty_c) {
+                            ty_c = tyi;
+                            const uint32_t ky = tyi * L1_TILE_SIZE;
+                            if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) myt = sub_int_cold(myb, ky);
+                        }
+                        auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * R + ri) * REC_BYTES);
+                        d[0] = cov0;
+                        d[1] = cov1;
+                        d[2] = cov2;
+                        d[3] = dep;
+                        d[4] = mx;
+                        d[5] = myt;
+                        d[6] = opr;
+                        d[7] = cgb;
+                        if (ri == R - 1u) {
+                            EP_T0(ep_t);
+                            flush_run(t, c);
+                            EP_ADD(ep_wiss, ep_t);
+                        }
                     }
                 }
                 for (; sj < n_sc; sj++) {  // only if batch k is shorter than half of k+1
