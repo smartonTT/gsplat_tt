@@ -93,10 +93,11 @@
 #ifndef OL_EMIT_FAST
 #define OL_EMIT_FAST 1
 #endif
-// Task #164 (host knob GSPLAT_TT_OL_EMIT_FOLD=0 turns it off): the fast emit
-// scans batch k+1 for its blendrec reads inside batch k's pack loop.
+// Task #164 (host knob GSPLAT_TT_OL_EMIT_FOLD=1, default off since it hangs
+// with the K2 count fold, task #177): the fast emit scans batch k+1 for its
+// blendrec reads inside batch k's pack loop.
 #ifndef OL_EMIT_FOLD
-#define OL_EMIT_FOLD 1
+#define OL_EMIT_FOLD 0
 #endif
 #if OL_EMIT_PROF
 #define EP_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
