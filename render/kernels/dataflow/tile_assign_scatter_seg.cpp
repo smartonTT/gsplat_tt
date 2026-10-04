@@ -24,8 +24,10 @@
 // is this one) the mover also counts its pairs per tile in its local memory
 // (an L1 counter is loaded right after its store, task #26) and writes them as
 // row 2 * k + mover of the count-rows buffer (row_pages 64 B pages, zero past
-// num_tiles): the one-launch sort's per-mover count of the same pages, so the
-// sort skips its count pass and first barrier (sort_bin_onelaunch.cpp fold).
+// the screen tiles): the one-launch sort's per-mover count of the same pages,
+// so the sort skips its count pass and first barrier (sort_bin_onelaunch.cpp
+// fold). With arg 20 != 0 the mover takes the sort's speed-proportional range
+// (task #174, pfwc_fuse::k2_range_speed) instead of k2_range.
 //
 // RUNTIME ARGS
 //   0: proj_m_offs (segment-local)   1: proj_m_aabb   2: counts table
@@ -34,6 +36,7 @@
 //   11: mover (0 BRISC, 1 NCRISC)   12: dual   13: BRISC permille
 //   14: p_cap (pair buffer capacity, elements)   15: tiles_x
 //   16: count rows (K2_DIET)   17: row_pages (0: no count rows)
+//   18, 19: speed sums before / after this mover   20: speed total (0: k2_range)
 //
 // COMPILE-TIME ARGS: 8 TensorAccessorArgs in runtime-arg order 0..6, 16.
 // CB: one raw scratch CB per mover (id 0 on NCRISC, TA_CB_OFFSET on BRISC):
@@ -162,6 +165,10 @@ void kernel_main() {
     pfwc_fuse::k2_range(P_pub, ncores, kc, mover, dual, permille, &pg0, &npg);
 #if K2_DIET
     const uint32_t row_pages = get_arg_val<uint32_t>(17);
+    const uint32_t sp_tot = get_arg_val<uint32_t>(20);  // fold under the sort's speed split
+    if (sp_tot != 0)
+        pfwc_fuse::k2_range_speed(P_pub, get_arg_val<uint32_t>(18), get_arg_val<uint32_t>(19),
+                                  sp_tot, &pg0, &npg);
     constexpr auto a7 = TensorAccessorArgs<a6.next_compile_time_args_offset()>();
     const auto row_acc = TensorAccessor(a7, get_arg_val<uint32_t>(16), PB);
     constexpr uint32_t RS = pfwc_fuse::RA_SLOTS, OS = pfwc_fuse::OUT_SLOTS;
@@ -172,17 +179,17 @@ void kernel_main() {
     const uint32_t l1_row = l1_st_tid + OS * PB;
     const DietIo<decltype(lofs_acc), decltype(box_acc), decltype(gids_acc), decltype(tids_acc)> io{
         lofs_acc, box_acc, gids_acc, tids_acc, l1_ra_lofs, l1_ra_box, l1_st_gid, l1_st_tid};
-    if (row_pages != 0 && num_tiles <= K2_FOLD_TILES) {
+    const uint32_t span = row_pages * PW;  // >= screen tiles
+    if (row_pages != 0 && span <= K2_FOLD_TILES) {
         uint32_t cnt[K2_FOLD_TILES];
-        for (uint32_t t = 0; t < num_tiles; t++) cnt[t] = 0;
+        for (uint32_t t = 0; t < span; t++) cnt[t] = 0;
         {
             DeviceZoneScopedN("k2_pairs");
             pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
         }
         DeviceZoneScopedN("k2_rows");
         auto rowp = reinterpret_cast<volatile uint32_t*>(l1_row);
-        const uint32_t span = row_pages * PW;
-        for (uint32_t t = 0; t < span; t++) rowp[t] = (t < num_tiles) ? cnt[t] : 0u;
+        for (uint32_t t = 0; t < span; t++) rowp[t] = cnt[t];
         asm volatile("fence" ::: "memory");
         const uint32_t r0 = (kc * 2u + mover) * row_pages;
         for (uint32_t q = 0; q < row_pages; q++)

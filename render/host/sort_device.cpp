@@ -957,14 +957,7 @@ static const std::vector<uint32_t>& ol_split_rows() {
 // the emit time. The ranges stay contiguous in (core, BRISC, NCRISC) order, so
 // the output is the same for any speeds. Default 1 with GSPLAT_TT_PRECULL=2,
 // else 0. Overrides GSPLAT_TT_OL_SPLIT_ROWS / GSPLAT_TT_SORT_EMIT_SPLIT.
-static bool ol_mover_speed() {
-    static const bool v = [] {
-        const char* e = std::getenv("GSPLAT_TT_OL_MOVER_SPEED");
-        if (e == nullptr || *e == '\0') return gsplat_tt::precull_mode() == 2;
-        return std::atoi(e) != 0;
-    }();
-    return v;
-}
+static bool ol_mover_speed() { return gsplat_tt::sort_split::ol_mover_speed_enabled(); }
 
 static void build_program_bin(SortDeviceContext& ctx) {
     Program program = CreateProgram();
@@ -2115,48 +2108,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->cap_ol_totals_bytes = totals_bytes;
             }
 
-            // Fold only if the K2 counted exactly this launch's page split:
-            // per core, BRISC [lo, mid) is the K2's mover 0 range, NCRISC
-            // [mid, hi) its mover 1 range (pfwc_fuse::k2_range, dual).
-            // why: 0 folded, 1 rows absent, 2 cores, 3 row pages, 4 tiles, 5 P,
-            // 6 permille, 7 a core's page range (logged when it changes).
-            int why = !have_k2rows                                    ? 1
-                      : k2rows.num_cores != num_cores                 ? 2
-                      : k2rows.row_pages != row_pages                 ? 3
-                      : k2rows.num_tiles != num_tiles                 ? 4
-                      : k2rows.P_pub != P_full                        ? 5
-                      : k2rows.permille != sort_emit_split_permille() ? 6
-                                                                      : 0;
-            bool fold = why == 0;
-            for (uint32_t c = 0; fold && c < num_cores; c++) {
-                const uint32_t lo = ws.start[c];
-                const uint32_t mid = lo + static_cast<uint32_t>(
-                    static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
-                uint32_t s0 = 0, n0 = 0, s1 = 0, n1 = 0;
-                pfwc_fuse::k2_range(k2rows.P_pub, num_cores, c, 0u, 1u, k2rows.permille, &s0, &n0);
-                pfwc_fuse::k2_range(k2rows.P_pub, num_cores, c, 1u, 1u, k2rows.permille, &s1, &n1);
-                fold = s0 == lo && s0 + n0 == mid && s1 == mid && s1 + n1 == ws.start[c] + ws.count[c];
-                if (!fold) why = 7;
-            }
-            {
-                static int logged = -1;
-                if (logged != why) {
-                    logged = why;
-                    std::fprintf(stderr,
-                                 "[SORT] ONELAUNCH k2_fold=%d why=%d (K2 rows %s: cores %u/%u "
-                                 "row_pages %u/%u tiles %u/%u P %u/%u permille %u/%u)\n",
-                                 static_cast<int>(fold), why, have_k2rows ? "published" : "absent",
-                                 k2rows.num_cores, num_cores, k2rows.row_pages, row_pages,
-                                 k2rows.num_tiles, num_tiles, k2rows.P_pub, P_full,
-                                 k2rows.permille, sort_emit_split_permille());
-                }
-            }
-            const uint32_t cnt_rows_addr = fold
-                ? static_cast<uint32_t>(k2rows.buf->address())
-                : static_cast<uint32_t>(ctx->buf_ol_counts->address());
-
-            const auto t_e0 = clk::now();
-            Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+            // This launch's mover page ranges: core c's BRISC [lo, mid), NCRISC
+            // [mid, hi); task #174 speed-proportional when ol_mover_speed().
             std::vector<uint32_t> noc_xy(num_cores, 0u);
             for (uint32_t c = 0; c < num_cores; c++) {
                 const CoreCoord v = ctx->mesh_device->worker_core_from_logical_core(
@@ -2165,29 +2118,60 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             }
             std::vector<uint32_t> sb;  // task #174: speed-proportional mover ranges
             if (ol_mover_speed()) {
-                std::vector<uint32_t> speed(2u * num_cores, 1000u);
-                for (uint32_t c = 0; c < num_cores; c++) {
-                    for (const auto& m : gsplat_tt::sort_split::kMoverSpeedP150) {
-                        if (m.x == (noc_xy[c] & 0xFFFFu) && m.y == (noc_xy[c] >> 16)) {
-                            speed[2u * c] = m.brisc;
-                            speed[2u * c + 1u] = m.ncrisc;
-                        }
-                    }
-                }
-                sb = gsplat_tt::sort_split::speed_bounds(total_p_pages, speed);
+                sb = gsplat_tt::sort_split::speed_bounds(
+                    total_p_pages, gsplat_tt::sort_split::mover_speeds(noc_xy));
             }
+            std::vector<uint32_t> r_lo(num_cores), r_mid(num_cores), r_hi(num_cores);
             for (uint32_t c = 0; c < num_cores; c++) {
-                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-                uint32_t lo = ws.start[c];
-                uint32_t hi = ws.start[c] + ws.count[c];
-                uint32_t mid = lo + gsplat_tt::sort_split::split_pages(
+                r_lo[c] = ws.start[c];
+                r_hi[c] = ws.start[c] + ws.count[c];
+                r_mid[c] = r_lo[c] + gsplat_tt::sort_split::split_pages(
                     ws.count[c], gsplat_tt::sort_split::row_permille(ol_split_rows(), c / ctx->grid.x,
                                                           sort_emit_split_permille()));
                 if (!sb.empty()) {
-                    lo = sb[2u * c];
-                    mid = sb[2u * c + 1u];
-                    hi = sb[2u * c + 2u];
+                    r_lo[c] = sb[2u * c];
+                    r_mid[c] = sb[2u * c + 1u];
+                    r_hi[c] = sb[2u * c + 2u];
                 }
+            }
+            // Fold only if the K2 counted exactly these ranges. why: 0 folded,
+            // 1 rows absent, 2 cores, 3 row pages, 4 tiles, 5 P, 7 a core's
+            // page range (logged when it changes).
+            int why = !have_k2rows                                    ? 1
+                      : k2rows.num_cores != num_cores                 ? 2
+                      : k2rows.row_pages != row_pages                 ? 3
+                      : k2rows.num_tiles != num_tiles                 ? 4
+                      : k2rows.P_pub != P_full                        ? 5
+                      : k2rows.bounds.size() != 2u * num_cores + 1u   ? 7
+                                                                      : 0;
+            for (uint32_t c = 0; why == 0 && c < num_cores; c++) {
+                if (k2rows.bounds[2u * c] != r_lo[c] || k2rows.bounds[2u * c + 1u] != r_mid[c] ||
+                    k2rows.bounds[2u * c + 2u] != r_hi[c])
+                    why = 7;
+            }
+            const bool fold = why == 0;
+            {
+                static int logged = -1;
+                if (logged != why) {
+                    logged = why;
+                    std::fprintf(stderr,
+                                 "[SORT] ONELAUNCH k2_fold=%d why=%d (K2 rows %s: cores %u/%u "
+                                 "row_pages %u/%u tiles %u/%u P %u/%u speed_split %d)\n",
+                                 static_cast<int>(fold), why, have_k2rows ? "published" : "absent",
+                                 k2rows.num_cores, num_cores, k2rows.row_pages, row_pages,
+                                 k2rows.num_tiles, num_tiles, k2rows.P_pub, P_full,
+                                 static_cast<int>(!sb.empty()));
+                }
+            }
+            const uint32_t cnt_rows_addr = fold
+                ? static_cast<uint32_t>(k2rows.buf->address())
+                : static_cast<uint32_t>(ctx->buf_ol_counts->address());
+
+            const auto t_e0 = clk::now();
+            Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+            for (uint32_t c = 0; c < num_cores; c++) {
+                CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+                const uint32_t lo = r_lo[c], mid = r_mid[c], hi = r_hi[c];
                 std::vector<uint32_t> a = {
                     static_cast<uint32_t>(bgid->address()),
                     static_cast<uint32_t>(btid->address()),

@@ -80,6 +80,19 @@ inline void k2_range(uint32_t P_pub, uint32_t ncores, uint32_t k, uint32_t mover
     }
 }
 
+// Task #170 fold: page range [pages * acc_lo / tot, pages * acc_hi / tot) of
+// a mover whose running speed sums before and after it are acc_lo and acc_hi
+// (sum of all = tot). Equals sort_split::speed_bounds (task #174), so the K2
+// counts exactly the one-launch sort's emit range of that mover.
+inline void k2_range_speed(uint32_t P_pub, uint32_t acc_lo, uint32_t acc_hi, uint32_t tot,
+                           uint32_t* start, uint32_t* count) {
+    const uint64_t pages = (P_pub + PAGE_WORDS - 1) / PAGE_WORDS;
+    const uint32_t lo = static_cast<uint32_t>(pages * acc_lo / tot);
+    const uint32_t hi = static_cast<uint32_t>(pages * acc_hi / tot);
+    *start = lo;
+    *count = hi - lo;
+}
+
 // Pairs [p_start, p_end) of the gaussian-major pair list, legacy K2 order.
 // read_lofs(s): segment-local exclusive offset of storage index s;
 // read_box(s): packed rectangle (vis_tile::aabb_pack) of s;

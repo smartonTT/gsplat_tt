@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace tt {
 namespace tt_metal {
@@ -76,7 +77,9 @@ struct K2CountRows {
     uint32_t row_pages = 0;
     uint32_t num_tiles = 0;
     uint32_t P_pub = 0;
-    uint32_t permille = 0;
+    // Page ranges the K2 counted: core c's mover 0 [b[2c], b[2c+1]), mover 1
+    // [b[2c+1], b[2c+2]).
+    std::vector<uint32_t> bounds;
     std::size_t bytes = 0;  // allocated size of buf
 };
 void set_k2_count_rows(const K2CountRows& rows);

@@ -14,6 +14,10 @@
 #pragma once
 
 #include <cstdint>
+#include <cstdlib>
+#include <vector>
+
+#include "vis_mode.h"
 
 namespace gsplat_tt::sort_split {
 
@@ -134,5 +138,32 @@ inline constexpr MoverSpeed kMoverSpeedP150[] = {
     {14, 11, 1048, 977},
     {15, 11, 1046, 984},
 };
+
+// GSPLAT_TT_OL_MOVER_SPEED: the one-launch sort takes speed-proportional
+// mover ranges (default 1 with GSPLAT_TT_PRECULL=2, else 0). Read once; the
+// segment K2 reads it too, to count the same ranges (task #170 fold).
+inline bool ol_mover_speed_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_MOVER_SPEED");
+        if (e == nullptr || *e == '\0') return gsplat_tt::precull_mode() == 2;
+        return std::atoi(e) != 0;
+    }();
+    return v;
+}
+
+// Mover speeds (BRISC, NCRISC per core, core order) of the cores at NoC
+// x | y << 16; cores missing from the table count as 1000.
+inline std::vector<uint32_t> mover_speeds(const std::vector<uint32_t>& noc_xy) {
+    std::vector<uint32_t> speed(2u * noc_xy.size(), 1000u);
+    for (std::size_t c = 0; c < noc_xy.size(); c++) {
+        for (const auto& m : kMoverSpeedP150) {
+            if (m.x == (noc_xy[c] & 0xFFFFu) && m.y == (noc_xy[c] >> 16)) {
+                speed[2u * c] = m.brisc;
+                speed[2u * c + 1u] = m.ncrisc;
+            }
+        }
+    }
+    return speed;
+}
 
 }  // namespace gsplat_tt::sort_split

@@ -110,6 +110,7 @@ struct PfwcFuseInfo {
     uint32_t num_cores = 0;  // pfwc cores = segments
     uint32_t num_tiles = 0;
     uint32_t tiles_x = 0;
+    uint32_t screen_tiles = 0;  // tiles_x * tiles_y
 };
 bool pfwc_ran_fused(PfwcFuseInfo* info = nullptr);
 

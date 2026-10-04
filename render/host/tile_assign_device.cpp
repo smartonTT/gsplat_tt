@@ -22,6 +22,7 @@
 #include "stage_timers.h"
 #include "gather_visible.h"
 #include "vis_mode.h"
+#include "sort_mover_speed.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/vis_tile.h"
 #include "gsplat_cpu/thread_pool.h"
@@ -687,8 +688,8 @@ static void vis_check_legacy(
 
 }  // namespace
 
-bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t* M,
-                          uint32_t* P) {
+bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
+                          uint32_t screen_tiles, uint32_t* M, uint32_t* P) {
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     ctx->fused_ready = false;
@@ -710,16 +711,35 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
         const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
         const uint32_t permille = ta_split_permille();
         // Task #170 fold: count rows for the one-launch sort (both movers, one
-        // local-memory row per mover).
-        const bool fold = k2_fold_enabled() && ctx->dual && num_tiles <= K2_FOLD_TILES;
-        const uint32_t row_pages = fold ? (num_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE : 0u;
+        // local-memory row per mover). num_tiles counts gaussian tiles (the
+        // segment table); the rows are per screen tile.
+        const bool fold = k2_fold_enabled() && ctx->dual && screen_tiles != 0 &&
+                          screen_tiles <= K2_FOLD_TILES;
+        const uint32_t row_pages =
+            fold ? (screen_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE : 0u;
+        // Under the sort's speed-proportional split (task #174) each mover
+        // takes that range: running speed sums acc[2c + mover], acc[... + 1].
+        std::vector<uint64_t> acc;
+        if (fold && gsplat_tt::sort_split::ol_mover_speed_enabled()) {
+            std::vector<uint32_t> noc_xy(num_cores);
+            for (uint32_t c = 0; c < num_cores; c++) {
+                const CoreCoord v = ctx->mesh_device->worker_core_from_logical_core(
+                    CoreCoord{c % ctx->grid.x, c / ctx->grid.x});
+                noc_xy[c] = static_cast<uint32_t>(v.x) | (static_cast<uint32_t>(v.y) << 16);
+            }
+            const std::vector<uint32_t> speed = gsplat_tt::sort_split::mover_speeds(noc_xy);
+            acc.assign(speed.size() + 1u, 0u);
+            for (std::size_t k = 0; k < speed.size(); k++) acc[k + 1] = acc[k] + speed[k];
+        }
         {
             static int logged = -1;
             if (logged != static_cast<int>(fold)) {
                 logged = static_cast<int>(fold);
-                std::fprintf(stderr, "[TA] K2 fold=%d (enabled %d dual %d tiles %u)\n",
+                std::fprintf(stderr,
+                             "[TA] K2 fold=%d (enabled %d dual %d screen tiles %u speed split %d)\n",
                              static_cast<int>(fold), static_cast<int>(k2_fold_enabled()),
-                             static_cast<int>(ctx->dual), num_tiles);
+                             static_cast<int>(ctx->dual), screen_tiles,
+                             static_cast<int>(!acc.empty()));
             }
         }
         if (fold) {
@@ -756,6 +776,9 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
                         static_cast<uint32_t>(projM->address()),
                         nseg, num_tiles, c, num_cores, mover, ctx->dual ? 1u : 0u, permille,
                         p_cap, tiles_x, rows_addr, row_pages,
+                        acc.empty() ? 0u : static_cast<uint32_t>(acc[2u * c + mover]),
+                        acc.empty() ? 0u : static_cast<uint32_t>(acc[2u * c + mover + 1u]),
+                        acc.empty() ? 0u : static_cast<uint32_t>(acc.back()),
                     };
                 };
                 SetRuntimeArgs(prog, ctx->k2s, core, args(1));
@@ -778,7 +801,22 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
             rows.row_pages = row_pages;
             rows.num_tiles = num_tiles;
             rows.P_pub = std::min(mread[1], p_cap);
-            rows.permille = permille;
+            // The ranges the kernel took (pfwc_fuse::k2_range[_speed]).
+            rows.bounds.assign(2u * num_cores + 1u, 0u);
+            for (uint32_t c = 0; c < num_cores; c++) {
+                for (uint32_t mover = 0; mover < 2u; mover++) {
+                    uint32_t s0 = 0, n0 = 0;
+                    if (acc.empty())
+                        pfwc_fuse::k2_range(rows.P_pub, num_cores, c, mover, 1u, permille, &s0, &n0);
+                    else
+                        pfwc_fuse::k2_range_speed(rows.P_pub,
+                                                  static_cast<uint32_t>(acc[2u * c + mover]),
+                                                  static_cast<uint32_t>(acc[2u * c + mover + 1u]),
+                                                  static_cast<uint32_t>(acc.back()), &s0, &n0);
+                    rows.bounds[2u * c + mover] = s0;
+                    rows.bounds[2u * c + mover + 1u] = s0 + n0;
+                }
+            }
             rows.bytes = ctx->cap_k2_rows_bytes;
             device_state::set_k2_count_rows(rows);
         }
