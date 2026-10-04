@@ -1,8 +1,8 @@
-Traceback (most recent call last):
-  File "/localdev/smarton/gstt2-t150/opt/profiler/program_gaps.py", line 103, in <module>
-    main()
-  File "/localdev/smarton/gstt2-t150/opt/profiler/program_gaps.py", line 37, in main
-    _, lines, ts = read_csv(args.csv)
-  File "/localdev/smarton/gstt2-t150/opt/profiler/stitch_device_csv.py", line 40, in read_csv
-    with open(path) as f:
-FileNotFoundError: [Errno 2] No such file or directory: 'opt/profiler/t150-tip/dev30.csv'
+views=30 segments/view=[5]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.928   2.928      0.000   110  pfwc
+ 1    2.934    4.447   1.512      0.006   110  <unnamed 110 cores>
+ 2    5.001    9.705   4.704      0.554   110  sort_ol_count+sort_ol_barrier+sort_ol_prefix+sort_ol_emit
+ 3   10.019   13.770   3.750      0.314   110  sort_subchunk_mat+mat_cull_mask
+ 4   13.776   21.365   7.589      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.880 ms/view

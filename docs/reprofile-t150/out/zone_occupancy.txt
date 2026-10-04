@@ -1,8 +1,38 @@
-Traceback (most recent call last):
-  File "/localdev/smarton/gstt2-t150/opt/profiler/zone_occupancy.py", line 139, in <module>
-    main()
-  File "/localdev/smarton/gstt2-t150/opt/profiler/zone_occupancy.py", line 50, in main
-    _, lines, ts = read_csv(args.csv)
-  File "/localdev/smarton/gstt2-t150/opt/profiler/stitch_device_csv.py", line 40, in read_csv
-    with open(path) as f:
-FileNotFoundError: [Errno 2] No such file or directory: 'opt/profiler/t150-tip/dev30.csv'
+views=30 cores/frame(anchor)=330 device_frame_span_ms mean=21.37 min=17.50 max=27.30
+zone                 core_ms/v cores  mean_ms   max_ms balance  occ_%  riscs
+--------------------------------------------------------------------------------
+TRISC-FW               4190.90   330   12.700   13.666    0.93   64.0  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL           4189.33   330   12.695   13.664    0.93   64.0  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu        2277.45   330    6.901    7.520    0.92   35.2  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW               2074.57   110   18.860   19.833    0.95   92.9  BRISC
+BRISC-KERNEL           2019.30   110   18.357   19.040    0.96   89.2  BRISC
+NCRISC-FW              2000.79   110   18.189   19.117    0.95   89.5  NCRISC
+NCRISC-KERNEL          2000.45   110   18.186   19.114    0.95   89.5  NCRISC
+mat_cull_mask          1036.17   330    3.140    3.749    0.84   17.5  TRISC_0,TRISC_1,TRISC_2
+pfwc                    875.66   330    2.654    2.880    0.92   13.6  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit            773.28   220    3.515    3.687    0.95   17.2  BRISC,NCRISC
+tile_blend_load         725.61   110    6.596    7.002    0.94   32.8  NCRISC
+rd_l1_bulk              713.89   110    6.490    6.908    0.94   32.4  NCRISC
+sort_subchunk_mat       637.12   220    2.896    3.749    0.77   17.5  BRISC,NCRISC
+sort_ol_count           137.68   220    0.626    0.935    0.67    4.4  BRISC,NCRISC
+sort_ol_barrier          28.62   110    0.260    0.453    0.57    2.1  BRISC
+sort_ol_prefix            2.41   110    0.022    0.043    0.52    0.2  BRISC
+
+stage        window_ms/v     min     max  zones
+--------------------------------------------------------------------------------
+project             2.88    2.63    3.21  pfwc+proj_count+proj_scatter
+subchunk_mat        3.75    3.00    5.18  sort_subchunk_mat
+blend               7.52    6.09    9.06  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+
+zone (timeline)      start_ms   end_ms   window  (mean over views)
+------------------------------------------------------------
+pfwc                     0.00     2.88     2.88
+sort_ol_count            5.00     5.94     0.94
+sort_ol_barrier          5.55     6.01     0.46
+sort_ol_prefix           5.95     6.00     0.05
+sort_ol_emit             6.01     9.70     3.69
+sort_subchunk_mat       10.02    13.77     3.75
+mat_cull_mask           10.02    13.77     3.75
+tile_blend_sfpu         13.78    21.30     7.52
+tile_blend_load         13.78    20.78     7.00
+rd_l1_bulk              13.78    20.78     7.00

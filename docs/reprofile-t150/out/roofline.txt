@@ -1,8 +1,39 @@
-Traceback (most recent call last):
-  File "/localdev/smarton/gstt2-t150/opt/profiler/risc_roofline.py", line 159, in <module>
-    main()
-  File "/localdev/smarton/gstt2-t150/opt/profiler/risc_roofline.py", line 40, in main
-    _, lines, ts = read_csv(args.csv)
-  File "/localdev/smarton/gstt2-t150/opt/profiler/stitch_device_csv.py", line 40, in read_csv
-    with open(path) as f:
-FileNotFoundError: [Errno 2] No such file or directory: 'opt/profiler/t150-tip/dev30.csv'
+views=30 programs/view=[5] device_span_ms mean=21.365 min=17.505 max=27.299
+
+Per program (mean over views). Per RISC: mean core kernel ms / busiest core ms [busiest / window].
+ #   start  window    gap                BRISC               NCRISC              TRISC_0              TRISC_1              TRISC_2
+ 0   0.000   2.928  0.000   2.701/ 2.927[1.00]   2.558/ 2.774[0.95]   2.651/ 2.873[0.98]   2.659/ 2.880[0.98]   2.651/ 2.872[0.98]
+                          zone pfwc                     TRISC_0  mean  2.651 max  2.872 imb  0.221 cores 110
+                          zone pfwc                     TRISC_1  mean  2.659 max  2.880 imb  0.221 cores 110
+                          zone pfwc                     TRISC_2  mean  2.651 max  2.872 imb  0.221 cores 110
+ 1   2.934   1.512  0.006   1.423/ 1.499[0.99]   1.435/ 1.510[1.00]                    -                    -                    -
+ 2   5.001   4.704  0.554   4.543/ 4.697[1.00]   4.523/ 4.628[0.98]                    -                    -                    -
+                          zone sort_ol_barrier          BRISC    mean  0.260 max  0.453 imb  0.193 cores 110
+                          zone sort_ol_count            BRISC    mean  0.626 max  0.935 imb  0.309 cores 110
+                          zone sort_ol_count            NCRISC   mean  0.626 max  0.883 imb  0.257 cores 110
+                          zone sort_ol_emit             BRISC    mean  3.527 max  3.682 imb  0.155 cores 110
+                          zone sort_ol_emit             NCRISC   mean  3.503 max  3.606 imb  0.103 cores 110
+                          zone sort_ol_prefix           BRISC    mean  0.022 max  0.043 imb  0.021 cores 110
+ 3  10.019   3.750  0.314   2.719/ 2.830[0.75]   3.073/ 3.749[1.00]   3.140/ 3.749[1.00]   3.140/ 3.749[1.00]   3.140/ 3.749[1.00]
+                          zone mat_cull_mask            TRISC_0  mean  3.140 max  3.749 imb  0.609 cores 110
+                          zone mat_cull_mask            TRISC_1  mean  3.140 max  3.749 imb  0.609 cores 110
+                          zone mat_cull_mask            TRISC_2  mean  3.140 max  3.749 imb  0.609 cores 110
+                          zone sort_subchunk_mat        BRISC    mean  2.719 max  2.830 imb  0.111 cores 110
+                          zone sort_subchunk_mat        NCRISC   mean  3.073 max  3.749 imb  0.676 cores 110
+ 4  13.776   7.589  0.006   6.971/ 7.588[1.00]   6.597/ 7.002[0.92]   6.901/ 7.520[0.99]   6.901/ 7.520[0.99]   6.901/ 7.520[0.99]
+                          zone rd_l1_bulk               NCRISC   mean  6.490 max  6.908 imb  0.418 cores 110
+                          zone tile_blend_load          NCRISC   mean  6.596 max  7.002 imb  0.405 cores 110
+                          zone tile_blend_sfpu          TRISC_0  mean  6.901 max  7.520 imb  0.619 cores 110
+                          zone tile_blend_sfpu          TRISC_1  mean  6.901 max  7.520 imb  0.619 cores 110
+                          zone tile_blend_sfpu          TRISC_2  mean  6.901 max  7.520 imb  0.619 cores 110
+
+sum of program windows 20.485 ms + idle between programs 0.880 ms
+
+Per frame, per-core kernel time summed over all programs (mean over views):
+RISC      mean core  busiest core
+BRISC        18.357        19.040
+NCRISC       18.186        19.114
+TRISC_0      12.692        13.656
+TRISC_1      12.700        13.664
+TRISC_2      12.692        13.656
+overlap bound (busiest RISC, busiest core): 19.114 ms vs device span 21.365 ms
