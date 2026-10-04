@@ -25,6 +25,7 @@
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
 #include "device_state.h"
+#include "../kernels/dataflow/pfwc_fuse.h"
 #include "host_tracy.hpp"
 #include "stage_timers.h"
 #include "vis_mode.h"
@@ -2076,6 +2077,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // host reads the totals rows (8 KB) instead of the histogram, uploads
         // no layout and launches no radix or publish.
         ctx->ol_frame = false;
+        // Task #170 fold: the segment K2's per-mover count rows (taken every
+        // frame so a row set never outlives its pairs).
+        device_state::K2CountRows k2rows;
+        const bool have_k2rows = device_state::take_k2_count_rows(&k2rows);
         if (sort_onelaunch_enabled() && tile_bucket && !need_host_sorted_ids &&
             resident_blend_chain_enabled() && sort_device_publish_enabled()) {
             using ms_t = std::chrono::duration<double, std::milli>;
@@ -2109,6 +2114,33 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ctx->buf_ol_totals = make_dram(dev, totals_bytes);
                 ctx->cap_ol_totals_bytes = totals_bytes;
             }
+
+            // Fold only if the K2 counted exactly this launch's page split:
+            // per core, BRISC [lo, mid) is the K2's mover 0 range, NCRISC
+            // [mid, hi) its mover 1 range (pfwc_fuse::k2_range, dual).
+            bool fold = have_k2rows && k2rows.num_cores == num_cores &&
+                        k2rows.row_pages == row_pages && k2rows.num_tiles == num_tiles &&
+                        k2rows.P_pub == P_full && k2rows.permille == sort_emit_split_permille();
+            for (uint32_t c = 0; fold && c < num_cores; c++) {
+                const uint32_t lo = ws.start[c];
+                const uint32_t mid = lo + static_cast<uint32_t>(
+                    static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
+                uint32_t s0 = 0, n0 = 0, s1 = 0, n1 = 0;
+                pfwc_fuse::k2_range(k2rows.P_pub, num_cores, c, 0u, 1u, k2rows.permille, &s0, &n0);
+                pfwc_fuse::k2_range(k2rows.P_pub, num_cores, c, 1u, 1u, k2rows.permille, &s1, &n1);
+                fold = s0 == lo && s0 + n0 == mid && s1 == mid && s1 + n1 == ws.start[c] + ws.count[c];
+            }
+            {
+                static int logged = -1;
+                if (logged != static_cast<int>(fold)) {
+                    logged = static_cast<int>(fold);
+                    std::fprintf(stderr, "[SORT] ONELAUNCH k2_fold=%d (K2 rows %s)\n",
+                                 static_cast<int>(fold), have_k2rows ? "published" : "absent");
+                }
+            }
+            const uint32_t cnt_rows_addr = fold
+                ? static_cast<uint32_t>(k2rows.buf->address())
+                : static_cast<uint32_t>(ctx->buf_ol_counts->address());
 
             const auto t_e0 = clk::now();
             Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
@@ -2150,14 +2182,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     static_cast<uint32_t>(bdep->address()),
                     blendrec_addr,
                     static_cast<uint32_t>(ctx->buf_ol_bucket->address()),
-                    static_cast<uint32_t>(ctx->buf_ol_counts->address()),
+                    cnt_rows_addr,
                     static_cast<uint32_t>(ctx->buf_ol_bases->address()),
                     static_cast<uint32_t>(ctx->buf_ol_totals->address()),
                     mid, hi, P_full, num_tiles, row_pages, c, num_cores, cap,
                     static_cast<uint32_t>(tiles_x), 1u,
                     ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
                     ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
-                    noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16,
+                    noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u,
                 };
                 SetRuntimeArgs(oprog, ctx->kol, core, a);
                 a[9] = lo;
@@ -2184,7 +2216,19 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             if (ol_check) {
                 std::vector<uint32_t> crow(ctx->cap_ol_rows_bytes / 4, 0u);
                 std::vector<uint32_t> brow(ctx->cap_ol_rows_bytes / 4, 0u);
-                distributed::EnqueueReadMeshBuffer(*ctx->cq, crow, ctx->buf_ol_counts, true);
+                if (fold) {
+                    // Per-core rows = the sum of the K2's two mover rows.
+                    std::vector<uint32_t> krow(k2rows.bytes / 4, 0u);
+                    distributed::EnqueueReadMeshBuffer(*ctx->cq, krow, k2rows.buf, true);
+                    for (uint32_t c = 0; c < num_cores; c++) {
+                        for (uint32_t t = 0; t < stride; t++) {
+                            crow[c * stride + t] =
+                                krow[(2u * c) * stride + t] + krow[(2u * c + 1u) * stride + t];
+                        }
+                    }
+                } else {
+                    distributed::EnqueueReadMeshBuffer(*ctx->cq, crow, ctx->buf_ol_counts, true);
+                }
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, brow, ctx->buf_ol_bases, true);
                 const uint32_t bad = sort_onelaunch::check_prefix(crow, brow, tot, num_cores,
                                                                   stride, num_tiles);

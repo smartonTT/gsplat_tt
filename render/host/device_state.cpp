@@ -41,6 +41,8 @@ struct State {
     int chunk_fusion_tiles_x = 0;
     int chunk_fusion_tiles_y = 0;
     int chunk_fusion_tile_size = 0;
+    bool k2_rows_valid = false;
+    K2CountRows k2_rows;
 };
 
 State& state() {
@@ -140,6 +142,8 @@ void clear_buffers() {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     s.buffers.clear();
+    s.k2_rows_valid = false;
+    s.k2_rows = K2CountRows{};
 }
 
 void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems) {
@@ -148,6 +152,30 @@ void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems) {
     s.sort_pipe_scalars_valid = true;
     s.sort_pipe_p_kept = p_kept;
     s.sort_pipe_mask_elems = mask_elems;
+}
+
+void set_k2_count_rows(const K2CountRows& rows) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.k2_rows = rows;
+    s.k2_rows_valid = true;
+}
+
+bool take_k2_count_rows(K2CountRows* rows) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!s.k2_rows_valid) return false;
+    if (rows) *rows = s.k2_rows;
+    s.k2_rows_valid = false;
+    s.k2_rows = K2CountRows{};
+    return true;
+}
+
+void clear_k2_count_rows() {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.k2_rows_valid = false;
+    s.k2_rows = K2CountRows{};
 }
 
 bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems) {

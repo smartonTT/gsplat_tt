@@ -30,6 +30,8 @@ chk "writer_pfwc_fuse.cpp FUSE_ABL=7" $DF -DFUSE_ABL=7u render/kernels/dataflow/
 chk "gather_vis_scatter.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/gather_vis_scatter.cpp
 chk "tile_assign_scatter_seg.cpp" $DF render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "tile_assign_scatter_seg.cpp TA_CB_OFFSET" $DF -DTA_CB_OFFSET=16 render/kernels/dataflow/tile_assign_scatter_seg.cpp
+chk "tile_assign_scatter_seg.cpp K2_DIET" $DF -DK2_DIET=1 render/kernels/dataflow/tile_assign_scatter_seg.cpp
+chk "tile_assign_scatter_seg.cpp K2_DIET TA_CB_OFFSET" $DF -DK2_DIET=1 -DTA_CB_OFFSET=16 render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "reader_pfwc.cpp PFWC_VIS" $DF -DPFWC_VIS=1 render/kernels/dataflow/reader_pfwc.cpp
 CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
 chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp

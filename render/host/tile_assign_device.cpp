@@ -114,6 +114,9 @@ struct TileAssignDeviceContext {
     KernelHandle k2sb{};
     bool fused_ready = false;
     uint32_t fused_P = 0;
+    // Task #170 K2 fold: per-mover per-tile count rows (2 per core).
+    std::shared_ptr<distributed::MeshBuffer> buf_k2_rows;
+    std::size_t cap_k2_rows_bytes = 0;
 
     // Cached DRAM buffers (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -184,6 +187,26 @@ static uint32_t ta_split_permille() {
         const char* e = std::getenv("GSPLAT_TT_TA_SPLIT");
         const int x = (e != nullptr) ? std::atoi(e) : 500;
         return static_cast<uint32_t>(std::clamp(x, 0, 1000));
+    }();
+    return v;
+}
+
+// Task #170 (pair stage diet). GSPLAT_TT_K2_DIET=0 is the kill switch of the
+// segment K2's diet loop (tile_assign_scatter_seg.cpp K2_DIET, default on).
+// GSPLAT_TT_K2_FOLD=0 keeps the diet but not its per-tile count rows, so the
+// one-launch sort runs its own count pass again. Read once.
+constexpr uint32_t K2_FOLD_TILES = 1024;  // == tile_assign_scatter_seg.cpp
+static bool k2_diet_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_K2_DIET");
+        return !(e != nullptr && std::atoi(e) == 0);
+    }();
+    return v;
+}
+static bool k2_fold_enabled() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_K2_FOLD");
+        return k2_diet_enabled() && !(e != nullptr && std::atoi(e) == 0);
     }();
     return v;
 }
@@ -448,11 +471,17 @@ static void ensure_pair_buffers(TileAssignDeviceContext& ctx, std::size_t p_byte
 
 // Lever B (task #125): K2 over the fused pfwc writer's segments
 // (tile_assign_scatter_seg.cpp), NCRISC + BRISC like build_program_k2. One raw
-// scratch CB per mover: the nseg-page segment table + 5 pages (+ alignment).
+// scratch CB per mover: the nseg-page segment table + 5 pages (+ alignment);
+// K2_DIET (task #170) adds the read-ahead ring, the pair staging and a count
+// row.
 static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
-    const uint32_t cb_bytes = (nseg + 6) * PAGE_BYTES;
+    const bool diet = k2_diet_enabled();
+    const uint32_t diet_pages =
+        diet ? 2u * pfwc_fuse::RA_SLOTS + 2u * pfwc_fuse::OUT_SLOTS + K2_FOLD_TILES / ELEMS_PER_PAGE
+             : 0u;
+    const uint32_t cb_bytes = (nseg + 6 + diet_pages) * PAGE_BYTES;
     auto raw_cb = [&](uint32_t id) {
         CircularBufferConfig c(cb_bytes, {{id, DataFormat::UInt32}});
         c.set_page_size(id, cb_bytes);
@@ -461,7 +490,9 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
     raw_cb(0);
     if (ctx.dual) raw_cb(TA_MOVER0_CB_OFFSET);
     std::vector<uint32_t> ct;
-    for (int i = 0; i < 7; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    for (int i = 0; i < 8; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    std::map<std::string, std::string> defines;
+    if (diet) defines["K2_DIET"] = "1";
     ctx.k2s = CreateKernel(program,
                            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter_seg.cpp",
                            cores,
@@ -469,15 +500,18 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
                                .processor = DataMovementProcessor::RISCV_1,
                                .noc = NOC::RISCV_1_default,
                                .compile_args = ct,
+                               .defines = defines,
                            });
     if (ctx.dual) {
+        std::map<std::string, std::string> defines0 = defines;
+        defines0["TA_CB_OFFSET"] = std::to_string(TA_MOVER0_CB_OFFSET);
         ctx.k2sb = CreateKernel(
             program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter_seg.cpp", cores,
             DataMovementConfig{
                 .processor = DataMovementProcessor::RISCV_0,
                 .noc = NOC::RISCV_0_default,
                 .compile_args = ct,
-                .defines = {{"TA_CB_OFFSET", std::to_string(TA_MOVER0_CB_OFFSET)}},
+                .defines = defines0,
             });
     }
     ctx.wl_k2seg = distributed::MeshWorkload();
@@ -658,6 +692,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     ctx->fused_ready = false;
+    device_state::clear_k2_count_rows();
     try {
         if (nseg == 0 || nseg > pfwc_fuse::MAX_SEG)
             throw std::runtime_error("segment count " + std::to_string(nseg) + " out of range");
@@ -674,6 +709,20 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
         ensure_pair_buffers(*ctx, 0);
         const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
         const uint32_t permille = ta_split_permille();
+        // Task #170 fold: count rows for the one-launch sort (both movers, one
+        // local-memory row per mover).
+        const bool fold = k2_fold_enabled() && ctx->dual && num_tiles <= K2_FOLD_TILES;
+        const uint32_t row_pages = fold ? (num_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE : 0u;
+        if (fold) {
+            const std::size_t rows_bytes =
+                static_cast<std::size_t>(num_cores) * 2u * row_pages * PAGE_BYTES;
+            if (!ctx->buf_k2_rows || ctx->cap_k2_rows_bytes < rows_bytes) {
+                ctx->buf_k2_rows = make_dram(ctx->mesh_device.get(), rows_bytes);
+                ctx->cap_k2_rows_bytes = rows_bytes;
+            }
+        }
+        const uint32_t rows_addr = fold ? static_cast<uint32_t>(ctx->buf_k2_rows->address()) : 0u;
+        uint32_t p_cap = 0;
         std::vector<uint32_t> mread(ELEMS_PER_PAGE, 0);
         // Normally one pass; a P over the pair capacity publishes overflow,
         // then the buffers grow and the K2 reruns (the segments are intact).
@@ -681,10 +730,9 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
             // Host-free P (S5.3): clamp to the static pair ceiling like the
             // legacy scan; an overflow stays published and sort hard-fails.
             const bool host_free = env_config::host_free_mp_enabled();
-            const uint32_t p_cap =
-                host_free ? std::min<uint32_t>(env_config::pair_ceiling(),
-                                               static_cast<uint32_t>(ctx->cap_p_bytes / 4))
-                          : static_cast<uint32_t>(ctx->cap_p_bytes / 4);
+            p_cap = host_free ? std::min<uint32_t>(env_config::pair_ceiling(),
+                                                   static_cast<uint32_t>(ctx->cap_p_bytes / 4))
+                              : static_cast<uint32_t>(ctx->cap_p_bytes / 4);
             Program& prog = ctx->wl_k2seg.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 const CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -698,7 +746,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
                         static_cast<uint32_t>(ctx->buf_pairs_P->address()),
                         static_cast<uint32_t>(projM->address()),
                         nseg, num_tiles, c, num_cores, mover, ctx->dual ? 1u : 0u, permille,
-                        p_cap, tiles_x,
+                        p_cap, tiles_x, rows_addr, row_pages,
                     };
                 };
                 SetRuntimeArgs(prog, ctx->k2s, core, args(1));
@@ -714,6 +762,17 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
         *P = mread[1];
         ctx->fused_P = mread[1];
         ctx->fused_ready = true;
+        if (fold) {
+            device_state::K2CountRows rows;
+            rows.buf = ctx->buf_k2_rows;
+            rows.num_cores = num_cores;
+            rows.row_pages = row_pages;
+            rows.num_tiles = num_tiles;
+            rows.P_pub = std::min(mread[1], p_cap);
+            rows.permille = permille;
+            rows.bytes = ctx->cap_k2_rows_bytes;
+            device_state::set_k2_count_rows(rows);
+        }
         return true;
     } catch (const std::exception& e) {
         std::cerr << "[gsplat_tt::tile_assign] fused K2 failed: " << e.what() << "\n";
@@ -984,6 +1043,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // are already in buf_gids / buf_tids and ta_pairs_P is published.
         const bool fused_k2 = ctx->fused_ready;
         ctx->fused_ready = false;
+        if (!fused_k2) device_state::clear_k2_count_rows();  // rows of an older frame
         if (fused_k2 && (!vis_path || vis_P != ctx->fused_P)) {
             std::cerr << "[gsplat_tt::tile_assign] PFWC_FUSE: pairs of the fused K2 not usable\n";
             return set_fail();
@@ -1466,6 +1526,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             // per-pair 0/1 values, so the cached "all-ones" invariant no longer
             // holds (defensive: production is cull-off and never reaches here).
             ctx->buf_keep_all_ones = false;
+            device_state::clear_k2_count_rows();  // the K2's rows count culled pairs
             Program& progc = ctx->wl_cull.get_programs().begin()->second;
             for (uint32_t cc = 0; cc < num_cores; cc++) {
                 CoreCoord core{cc % ctx->grid.x, cc / ctx->grid.x};
