@@ -79,8 +79,10 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 // counts table. It publishes proj_M = [M, P, overflow] and ta_pairs_P and fills
 // the pair buffers; one blocking read of proj_M returns M and P (overflow grows
 // the pair buffers and reruns). The next tile_assign_tt call then skips its K2.
-bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t* M,
-                          uint32_t* P);
+// img_tiles = tiles_x * tiles_y image tiles (the early one-launch sort's bins);
+// num_tiles counts gaussian tiles.
+bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t img_tiles,
+                          uint32_t* M, uint32_t* P);
 
 bool tile_assign_device_ready();
 

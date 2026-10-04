@@ -654,8 +654,8 @@ static void vis_check_legacy(
 
 }  // namespace
 
-bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t* M,
-                          uint32_t* P) {
+bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, uint32_t img_tiles,
+                          uint32_t* M, uint32_t* P) {
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     ctx->fused_ready = false;
@@ -718,7 +718,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
                 auto ev = ctx->cq->enqueue_record_event_to_host();
                 const auto t_e0 = std::chrono::steady_clock::now();
                 early = sort_onelaunch_enqueue_early(
-                    num_tiles, tiles_x, static_cast<uint32_t>(ctx->buf_gids->address()),
+                    img_tiles, tiles_x, static_cast<uint32_t>(ctx->buf_gids->address()),
                     static_cast<uint32_t>(ctx->buf_tids->address()),
                     static_cast<uint32_t>(ctx->buf_keep->address()),
                     static_cast<uint32_t>(ctx->buf_pairs_P->address()));

@@ -930,6 +930,7 @@ double pfwc_tt(
         g_fuse_info.num_cores = num_cores;
         g_fuse_info.num_tiles = num_tiles;
         g_fuse_info.tiles_x = static_cast<uint32_t>(vis->tiles_x);
+        g_fuse_info.tiles_y = static_cast<uint32_t>(vis->tiles_y);
         T.launch_ms = std::chrono::duration<double, std::milli>(t_launch1 - t_launch0).count();
         T.compute_ms = 0.0;
         T.download_ms = 0.0;

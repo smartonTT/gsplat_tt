@@ -3187,7 +3187,8 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
                      sort_onelaunch_enabled(), tile_bucket_enabled(), resident_blend_chain_enabled(),
                      sort_device_publish_enabled(), num_tiles, pairs_P_addr);
     if (!sort_onelaunch_early_enabled() || !sort_onelaunch_enabled() || !tile_bucket_enabled() ||
-        !resident_blend_chain_enabled() || !sort_device_publish_enabled() || pairs_P_addr == 0)
+        !resident_blend_chain_enabled() || !sort_device_publish_enabled() || num_tiles == 0 ||
+        num_tiles > MAX_BIN_TILES || pairs_P_addr == 0)
         return false;
     auto bdep = device_state::get_buffer("proj_m_depth");
     auto bbrec = device_state::get_buffer("proj_m_blendrec");

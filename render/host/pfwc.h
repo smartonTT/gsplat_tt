@@ -110,6 +110,7 @@ struct PfwcFuseInfo {
     uint32_t num_cores = 0;  // pfwc cores = segments
     uint32_t num_tiles = 0;
     uint32_t tiles_x = 0;
+    uint32_t tiles_y = 0;  // image tiles (num_tiles above counts gaussian tiles)
 };
 bool pfwc_ran_fused(PfwcFuseInfo* info = nullptr);
 
