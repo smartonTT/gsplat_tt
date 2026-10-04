@@ -117,6 +117,19 @@ inline void sem_inc(uint32_t x, uint32_t y, uint32_t sem_id) {
     noc_semaphore_inc(get_noc_addr(x, y, get_semaphore(sem_id)), 1u);
 }
 
+// pack_rec's tile-local mean when sub_int32 can't answer: sub_int's 64-bit
+// path, else the float expression. Out of line: rare on real frames.
+__attribute__((noinline)) uint32_t sub_int_cold(uint32_t abits, uint32_t k) {
+    uint32_t out;
+    if (!sort_bin_fp32::sub_int(abits, k, &out)) {
+        float a;
+        __builtin_memcpy(&a, &abits, 4);
+        const float r = a - static_cast<float>(k);
+        __builtin_memcpy(&out, &r, 4);
+    }
+    return out;
+}
+
 }  // namespace
 
 void kernel_main() {
@@ -388,8 +401,18 @@ void kernel_main() {
     // this mover in startp[t].
     const uint32_t ring_l1 = (R != 0u) ? get_write_ptr(CB_RING + cbo) : 0u;
     auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + OL_RING_TILES * R * REC_BYTES);
+    // Task #160 fast emit (the default: rings, PUBOC, tiles_x a power of two):
+    // one loop with register locals, the per-tile cursors in the RISC's local
+    // memory (an L1 cursor is loaded right after its store, task #26) and the
+    // sub_int fast path inlined. Same records, same slots, same writes.
+    constexpr bool FAST_OK = PUBOC && R != 0u;
+    const bool fast = FAST_OK && ring_on && tx_is_pow2;
+    uint32_t cur_lm[FAST_OK ? OL_RING_TILES : 1u];
     if (ring_on) {
         for (uint32_t t = 0; t < num_tiles; t++) startp[t] = curp[t];
+        if (fast) {
+            for (uint32_t t = 0; t < num_tiles; t++) cur_lm[t] = curp[t];
+        }
     }
     const uint32_t tile_pages = tile_cap / REC_PAGE_RECS;
     auto flush_run = [&](uint32_t t, uint32_t last) {
@@ -559,6 +582,10 @@ void kernel_main() {
         }
     };
 
+    // Fast-path state, carried across batches (a run of equal g can span two).
+    int32_t f_g = -1;
+    uint32_t f_cov0 = 0, f_cov1 = 0, f_cov2 = 0, f_dep = 0, f_mx = 0, f_my = 0, f_opr = 0, f_cgb = 0;
+    uint32_t f_ty = 0xFFFFFFFFu, f_myt = 0;
     if (nbatch > 0) {
         issue_pairs(0);
         noc_async_read_barrier();
@@ -579,7 +606,80 @@ void kernel_main() {
                 EP_ADD(ep_pairs, ep_t3);
             }
             EP_T0(ep_t4);
-            process_batch(k, h);
+            if (!fast) {
+                process_batch(k, h);
+            } else {
+                // The planes and blendrec pages are complete (read barrier
+                // above); plain loads from here may be scheduled freely.
+                asm volatile("" ::: "memory");
+                const Planes pl = planes(k);
+                const int32_t* kp = const_cast<const int32_t*>(pl.k);
+                const int32_t* gp = const_cast<const int32_t*>(pl.g);
+                const uint32_t* tp = reinterpret_cast<const uint32_t*>(const_cast<const int32_t*>(pl.t));
+                const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+                uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
+                if (p0 + n_el > P) n_el = (P > p0) ? P - p0 : 0u;
+                const uint8_t* bp = reinterpret_cast<const uint8_t*>(rec_cache_l1 + h * BATCH_ELEMS * PAGE_BYTES);
+                const uint32_t cap = tile_cap, msk = tx_mask, sh = tx_shift, ring = ring_l1;
+                int32_t g_c = f_g;
+                uint32_t cov0 = f_cov0, cov1 = f_cov1, cov2 = f_cov2, dep = f_dep, mxb = f_mx, myb = f_my;
+                uint32_t opr = f_opr, cgb = f_cgb, ty_c = f_ty, myt = f_myt;
+                for (uint32_t j = 0; j < n_el; j++) {
+                    if (kp[j] == 0) continue;
+                    const int32_t g = gp[j];
+                    const uint32_t t = tp[j];
+                    if (g != g_c) {
+                        g_c = g;
+                        const uint32_t* cp = reinterpret_cast<const uint32_t*>(bp);
+                        bp += PAGE_BYTES;
+                        cov0 = cp[0];
+                        cov1 = cp[1];
+                        cov2 = cp[2];
+                        mxb = cp[3];
+                        myb = cp[4];
+                        opr = cp[10];
+                        cgb = cp[11];
+                        dep = cp[12];
+                        ty_c = 0xFFFFFFFFu;
+                    }
+                    const uint32_t c = cur_lm[t];
+                    cur_lm[t] = c + 1u;
+                    EP_CNT(ep_nrec, 1u);
+                    if (c >= cap) continue;  // past capacity: dropped, host fails the frame
+                    const uint32_t ri = c & (R - 1u);
+                    if (ri == 0u) {
+                        EP_T0(ep_t);
+                        noc_async_writes_flushed();
+                        EP_ADD(ep_wfl, ep_t);
+                    }
+                    const uint32_t kx = (t & msk) * L1_TILE_SIZE;
+                    uint32_t mx;
+                    if (!sort_bin_fp32::sub_int32(mxb, kx, &mx)) mx = sub_int_cold(mxb, kx);
+                    const uint32_t tyi = t >> sh;
+                    if (tyi != ty_c) {
+                        ty_c = tyi;
+                        const uint32_t ky = tyi * L1_TILE_SIZE;
+                        if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) myt = sub_int_cold(myb, ky);
+                    }
+                    auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * R + ri) * REC_BYTES);
+                    d[0] = cov0;
+                    d[1] = cov1;
+                    d[2] = cov2;
+                    d[3] = dep;
+                    d[4] = mx;
+                    d[5] = myt;
+                    d[6] = opr;
+                    d[7] = cgb;
+                    if (ri == R - 1u) {
+                        EP_T0(ep_t);
+                        flush_run(t, c);
+                        EP_ADD(ep_wiss, ep_t);
+                    }
+                }
+                f_g = g_c;
+                f_cov0 = cov0; f_cov1 = cov1; f_cov2 = cov2; f_dep = dep; f_mx = mxb; f_my = myb;
+                f_opr = opr; f_cgb = cgb; f_ty = ty_c; f_myt = myt;
+            }
             EP_ADD(ep_proc, ep_t4);
             h ^= 1u;
         }
@@ -591,7 +691,8 @@ void kernel_main() {
         // Each tile's partial final run (full runs were written in the loop).
         for (uint32_t t = 0; t < num_tiles; t++) {
             uint32_t last;
-            if (sort_ol::ring_drain(startp[t], curp[t], tile_cap, R, &last)) flush_run(t, last);
+            const uint32_t end = fast ? cur_lm[t] : curp[t];
+            if (sort_ol::ring_drain(startp[t], end, tile_cap, R, &last)) flush_run(t, last);
         }
     }
     EP_ADD(ep_drain, ep_t_drain);

@@ -83,16 +83,19 @@ inline bool unorm16(uint32_t bits, uint32_t* out) {
     return true;
 }
 
-// Bit-exact fp32 bits of fl(a - (float)k) for an integer k < 2^23 (exact in
-// fp32). Fast range: a normal with 2^-17 <= |a| < 2^24. Returns false outside.
-inline bool sub_int(uint32_t abits, uint32_t k, uint32_t* out) {
+// sub_int's k == 0 and 32-bit paths only, always inlined (task #160: the
+// sort emit's per-record call was ~30 instructions plus the call). Same bits as
+// sub_int when it returns true; false when sub_int needs its 64-bit path or
+// returns false itself.
+__attribute__((always_inline)) inline bool sub_int32(uint32_t abits, uint32_t k, uint32_t* out) {
     const uint32_t ea = (abits >> 23) & 0xFFu;
     if (ea < 110u || ea > 150u) return false;
     const uint32_t lsh = 150u - ea;  // a's ulp is 2^-lsh, lsh in [0,40]
     if (k == 0u) { *out = abits; return true; }  // a - 0 = a
     // 32-bit path: |D| < 2^24 + (k << lsh) <= 2^31. Holds for |a| >= 4 and every
     // tile origin k <= 1016 (a 1024 px frame); the rest takes the 64-bit path.
-    if (lsh <= 21u && k <= (0x7F000000u >> lsh)) {
+    if (lsh > 21u || k > (0x7F000000u >> lsh)) return false;
+    {
         const int32_t A32 = static_cast<int32_t>((abits & 0x7FFFFFu) | 0x800000u);
         const int32_t D32 = ((abits >> 31) ? -A32 : A32) - static_cast<int32_t>(k << lsh);
         if (D32 == 0) { *out = 0u; return true; }
@@ -111,6 +114,15 @@ inline bool sub_int(uint32_t abits, uint32_t k, uint32_t* out) {
         *out = sign | (E << 23) | (r & 0x7FFFFFu);
         return true;
     }
+}
+
+// Bit-exact fp32 bits of fl(a - (float)k) for an integer k < 2^23 (exact in
+// fp32). Fast range: a normal with 2^-17 <= |a| < 2^24. Returns false outside.
+inline bool sub_int(uint32_t abits, uint32_t k, uint32_t* out) {
+    if (sub_int32(abits, k, out)) return true;
+    const uint32_t ea = (abits >> 23) & 0xFFu;
+    if (ea < 110u || ea > 150u) return false;
+    const uint32_t lsh = 150u - ea;
     const int64_t A = static_cast<int64_t>((abits & 0x7FFFFFu) | 0x800000u);
     const int64_t D = ((abits >> 31) ? -A : A) - (static_cast<int64_t>(k) << lsh);
     if (D == 0) { *out = 0u; return true; }  // x - x = +0 under RNE
