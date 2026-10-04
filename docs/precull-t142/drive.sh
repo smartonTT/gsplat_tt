@@ -4,7 +4,7 @@
 # chain on failure). Uses the t124 remote_job.sh / remote_tracy.sh and the t115
 # remote_time.sh (dead-pair count) on a t142 tree.
 #   ttp lock p100 -- bash docs/precull-t142/drive.sh <rev> [phase ...]
-#   phases: smoke ab dc tracy size (default: all)
+#   phases: smoke ab psnr dc tracy size (default: all but psnr)
 set -o pipefail
 REV=${1:?rev}; shift; PHASES=${*:-smoke ab dc tracy size}
 H=yyzo-bh-07; D=/localdev/smarton/gstt2-t142
@@ -43,6 +43,12 @@ tracy)
     for f in gaps zones deep; do
       scp -q -o BatchMode=yes $H:$D/opt/profiler/$t/$f.txt "$OUT/$t-$f.txt" || echo "no $t/$f.txt"
     done
+  done
+  ;;
+psnr)  # pre-cull vs base pixel diff of each ab round (smoke showed max 1 LSB diffs)
+  for k in 1 2 3 4; do
+    r "cd $D && source .venv/bin/activate && python3 docs/precull-t142/imgdiff.py tmp/t124-dump-t124r$k-base tmp/t124-dump-t124r$k-pc" \
+      | awk -v k=$k '{print "r" k " " $0}'
   done
   ;;
 size)  # PFWC_VIS was ~66 KB of the 70.6 KB kernel config buffer
