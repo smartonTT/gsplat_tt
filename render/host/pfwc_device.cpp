@@ -803,13 +803,16 @@ double pfwc_tt(
             fp32_bits(static_cast<float>(vis->tiles_y - 1)),
             fp32_bits(vis->edge_tau),
         };
-        // Lever C (task #140): args 65 (c0 = 2 ln(1 / floor) + margin) and 66
-        // (radius limit; -1 = no shrink on any lane). Read only by PFWC_PRECULL.
+        // Lever C (task #140): args 65 (c0 = 2 ln(1 / floor) + margin, plus
+        // 2 ln 2 (0.0860713 + 2^-14 - 127), the constant of the kernel's log2
+        // upper bound (task #142; tests/unit/test_precull.cpp)) and 66 (radius
+        // limit; -1 = no shrink on any lane). Read only by PFWC_PRECULL.
         constexpr float PRECULL_T_MARGIN = 0.25f;  // vs the band cull's 0.05
         constexpr float PRECULL_RMAX = 4096.0f;
         const bool pc = vis->precull_floor > 0.0f && vis->precull_floor < 1.0f;
-        vis_bits.push_back(fp32_bits(
-            pc ? 2.0f * std::log(1.0f / vis->precull_floor) + PRECULL_T_MARGIN : 0.0f));
+        const double c0 = 2.0 * std::log(1.0 / vis->precull_floor) + PRECULL_T_MARGIN +
+                          2.0 * std::log(2.0) * (0.0860713 + 1.0 / 16384.0 - 127.0);
+        vis_bits.push_back(fp32_bits(pc ? static_cast<float>(c0) : 0.0f));
         vis_bits.push_back(fp32_bits(pc ? std::min(vis->max_radius, PRECULL_RMAX) : -1.0f));
     }
 

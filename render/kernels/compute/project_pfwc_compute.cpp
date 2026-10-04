@@ -51,7 +51,8 @@
 // PFWC_PRECULL (task #140, lever C, GSPLAT_TT_PRECULL=1, needs PFWC_VIS): step
 // 11.6 (inside step 11.5's DEST acquire) shrinks the radii that step 11.5 turns into the tile rectangle to the
 // opacity-aware extent ceil(sqrt(max(2 ln(op) + c0, 0) * a) + 1), with c0 =
-// 2 ln(1 / floor) + margin (runtime arg 65, the microblock band cull's floor).
+// 2 ln(1 / floor) + margin (the microblock band cull's floor; runtime arg 65
+// holds it with the constants of the log2 upper bound folded in).
 // The band cull keeps nothing outside that extent, so the records it drops
 // are dead ones (mask 0) and the image is unchanged. The radius stays as is
 // when the lane is ill-conditioned (64 det < a c), non-finite or over the
@@ -79,9 +80,6 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 #ifdef PFWC_VIS
 #include "sfpu/ckernel_sfpu_converter.h"
-#endif
-#ifdef PFWC_PRECULL
-#include "sfpu/ckernel_sfpu_log.h"
 #endif
 #endif
 
@@ -399,7 +397,7 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
 // program over the 70.6 KB kernel config buffer). DEST slots: 6 cov a, 7 cov
 // b, 0 cov c, 1 opacity, 4 rx, 5 ry (11.5's layout); rx / ry are replaced in
 // place. One loop over the 32 vectors (not 32 instantiations, task #102).
-// Intermediates (8 registers, no spill): t -> slot 2, shrink-ok flag -> slot 7.
+// Intermediate (8 registers, no spill): t -> slot 2.
 constexpr uint32_t PC_A = 6 * 32, PC_B = 7 * 32, PC_C = 0 * 32, PC_OP = 1 * 32, PC_T = 2 * 32,
                    PC_RX = 4 * 32, PC_RY = 5 * 32;
 
@@ -417,58 +415,64 @@ sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
 }
 
 // r = ceil(sqrt(t * cov) + 1) (the 1 px slack covers the sqrt and the band
-// cull's fp32 conic error); r replaces the radius slot when ok and r < radius.
-// ceil via the 2^23 trick (q < 2^22 whenever r < radius <= 4096 matters).
+// cull's fp32 conic error); r replaces the radius slot when r < radius (the
+// caller's v_if holds the shrink-ok lanes). ceil via the 2^23 trick (q < 2^22
+// whenever r < radius <= 4096 matters).
 sfpi_inline void precull_axis(uint32_t cov_slot, uint32_t r_slot) {
     using namespace sfpi;
     vFloat q = precull_sqrt(vFloat(dst_reg[PC_T]) * vFloat(dst_reg[cov_slot])) + 1.0f;
     vFloat r = (q + 8388608.0f) - 8388608.0f;
     v_if(r < q) { r = r + 1.0f; }
     v_endif;
-    v_if(vFloat(dst_reg[PC_B]) > 0.0f) {
-        v_if(r < vFloat(dst_reg[r_slot])) { dst_reg[r_slot] = r; }
-        v_endif;
-    }
+    v_if(r < vFloat(dst_reg[r_slot])) { dst_reg[r_slot] = r; }
     v_endif;
 }
+
+// 2 ln 2 / 2^14: t's slope in the top 23 bits of the opacity (step 1).
+constexpr float PC_K = 1.3862944f / 16384.0f;
 
 __attribute__((noinline)) void pfwc_precull_tile(uint32_t c0_bits, uint32_t rlim_bits) {
     using namespace sfpi;
     using ckernel::sfpu::Converter;
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {
-        // 1. ok = finite a, b, c, 64 (a c - b^2) >= a c, rx and ry <= rlim.
+        // 1. t = max(2 ln(op) + c0, 0) with an upper bound of log2(op) (no SFPU
+        //    log: task #142 needed the code size): for op = 2^e m, m in [1, 2),
+        //    log2(op) <= e + (m - 1) + 0.0860713, and (m - 1) is read from the
+        //    bits with 9 low bits truncated (+ 2^-14). Too large a t only keeps
+        //    more records. The host folds the constants into arg 65; op = 0
+        //    gives t < 0 -> 0.
         {
-            vInt nf = exexp(vFloat(dst_reg[PC_A])) + 128;
-            nf = nf | (exexp(vFloat(dst_reg[PC_B])) + 128);
-            nf = nf | (exexp(vFloat(dst_reg[PC_C])) + 128);
-            vFloat a = dst_reg[PC_A];
-            vFloat c = dst_reg[PC_C];
-            vFloat b = dst_reg[PC_B];
-            vFloat ac = a * c;
-            vFloat cond = (ac - b * b) * 64.0f - ac;
-            vFloat ok = 1.0f;
-            v_if(nf >= 256) { ok = 0.0f; }
-            v_endif;
-            v_if(cond < 0.0f) { ok = 0.0f; }
-            v_endif;
-            vFloat rlim = Converter::as_float(rlim_bits);
-            v_if(vFloat(dst_reg[PC_RX]) - rlim > 0.0f) { ok = 0.0f; }
-            v_endif;
-            v_if(vFloat(dst_reg[PC_RY]) - rlim > 0.0f) { ok = 0.0f; }
-            v_endif;
-            dst_reg[PC_B] = ok;
-        }
-        // 2. t = max(2 ln(op) + c0, 0); op = 0 gives ln = -inf, t = 0.
-        {
-            vFloat lnr = ckernel::sfpu::_calculate_log_body_no_init_(vFloat(dst_reg[PC_OP]));
-            vFloat t = lnr + lnr + Converter::as_float(c0_bits);
+            vInt i = reinterpret<vInt>(reinterpret<vUInt>(vFloat(dst_reg[PC_OP])) >> 9) |
+                     vInt(0x4B000000);
+            vFloat t = (reinterpret<vFloat>(i) - 8388608.0f) * PC_K + Converter::as_float(c0_bits);
             vFloat z = 0.0f;
             vec_min_max(z, t);  // t = max(t, 0)
             dst_reg[PC_T] = t;
         }
-        precull_axis(PC_A, PC_RX);
-        precull_axis(PC_C, PC_RY);
+        // 2. Shrink only when a, b, c are finite, 64 (a c - b^2) >= a c and
+        //    rx, ry <= rlim (nested v_ifs: no flag slot).
+        vInt nf = exexp(vFloat(dst_reg[PC_A])) + 128;
+        nf = nf | (exexp(vFloat(dst_reg[PC_B])) + 128);
+        nf = nf | (exexp(vFloat(dst_reg[PC_C])) + 128);
+        vFloat ac = vFloat(dst_reg[PC_A]) * vFloat(dst_reg[PC_C]);
+        vFloat b = dst_reg[PC_B];
+        vFloat cond = (ac - b * b) * 64.0f - ac;
+        vFloat rlim = Converter::as_float(rlim_bits);
+        v_if(nf < 256) {
+            v_if(cond >= 0.0f) {
+                v_if(vFloat(dst_reg[PC_RX]) - rlim <= 0.0f) {
+                    v_if(vFloat(dst_reg[PC_RY]) - rlim <= 0.0f) {
+                        precull_axis(PC_A, PC_RX);
+                        precull_axis(PC_C, PC_RY);
+                    }
+                    v_endif;
+                }
+                v_endif;
+            }
+            v_endif;
+        }
+        v_endif;
         dst_reg++;
     }
 }

@@ -4,7 +4,7 @@
 //   tests/unit/run_cpp.sh tests/unit/test_precull.cpp
 //
 // precull_model() is the lane sequence of pfwc_precull_tile in host fp32, with
-// the SFPU log and sqrt pushed to the low side of their error (smaller radius
+// t and the SFPU sqrt pushed to the low side of their error (smaller radius
 // = the risky direction). band_keep() is the microblock band cull's keep test
 // (microblock_band_cull_compute.cpp: conic from the cov2d, opacity quantized to
 // q / 65535, t = 2 ln(op / floor) + 0.05, ellipse vs the microblock's pixel-
@@ -19,6 +19,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <limits>
 #include <random>
 
@@ -28,7 +29,8 @@ constexpr float kFloor = 0.00392156862745098f;  // contrib_floor (1 / 255)
 constexpr float kMargin = 0.25f;                // PRECULL_T_MARGIN (pfwc_device.cpp)
 constexpr float kRmax = 4096.0f;                // PRECULL_RMAX
 constexpr int kTile = 32, kW = 1024, kH = 1024;
-constexpr float kLogErr = 0.0035f;              // SFPU log, worst case low
+constexpr float kK = 1.3862944f / 16384.0f;     // PC_K (2 ln 2 / 2^14)
+constexpr float kTErr = 1e-4f;                  // t rounding, worst case low
 constexpr float kSqrtErr = 1.0f - 4.0f * 1.2e-7f;  // ~23-bit sqrt, low side
 
 struct G { float a, b, c, op, mx, my; };
@@ -44,13 +46,17 @@ float precull_axis(float t, float cov, float r, bool ok, float slack) {
 
 void precull_model(const G& g, float rx, float ry, float rlim, float margin, float slack,
                    float* rpx, float* rpy) {
-    const float c0 = 2.0f * std::log(1.0f / kFloor) + margin;
+    // Kernel step 1: t from the log2 upper bound on the opacity bits (arg 65
+    // folds the constants, pfwc_device.cpp); kTErr covers SFPMAD rounding.
+    const float c0 = static_cast<float>(2.0 * std::log(1.0 / kFloor) + margin +
+                                        2.0 * std::log(2.0) * (0.0860713 + 1.0 / 16384.0 - 127.0));
     const float ac = g.a * g.c;
     const float cond = (ac - g.b * g.b) * 64.0f - ac;
     const bool ok = std::isfinite(g.a) && std::isfinite(g.b) && std::isfinite(g.c) &&
                     !(cond < 0.0f) && !(rx - rlim > 0.0f) && !(ry - rlim > 0.0f);
-    const float lnr = std::log(g.op) - kLogErr;
-    const float t = std::max(lnr + lnr + c0, 0.0f);
+    uint32_t bits;
+    std::memcpy(&bits, &g.op, sizeof bits);
+    const float t = std::max(static_cast<float>(bits >> 9) * kK + c0 - kTErr, 0.0f);
     *rpx = precull_axis(t, g.a, rx, ok, slack);
     *rpy = precull_axis(t, g.c, ry, ok, slack);
 }
