@@ -33,3 +33,10 @@ Unit test: `test_sort_onelaunch_v2` all ok on the remote host.
 Open issue: fold + GSPLAT_TT_OL_EMIT_PROF=1 hangs on device (Tracy t177-cand stuck after the first
 one-launch; untraced runs are fine). No Tracy of the combined build yet.
 Logs: out/gate-v1.txt, out/gate-v2.txt, out/gate-cand.txt.
+
+## After the rebase onto t170 (K2 diet + count fold, iter 186)
+Rebased as a56e86b. The combined gate stopped at the smoke run: cand (fold on) hung on the first
+view (`timeout` rc=124; log ends after `[SORT] ONELAUNCH k2_fold=1`). With the earlier
+EMIT_PROF hang, the fold is timing-sensitive and not safe to land. a6da4e4 makes it opt-in
+(GSPLAT_TT_OL_EMIT_FOLD=1, default off) and drive3.sh gates the v2 table alone against the tip
+(#174 table via file), two arms, 3 rounds, 30 views. Gate for v2 alone: >= 0.3 ms/view.
