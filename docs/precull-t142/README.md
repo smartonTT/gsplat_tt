@@ -48,4 +48,7 @@ copy init per load group (rebased on iter-180). Two trims:
    on the host; the shrink-ok flag slot became nested v_ifs. t can only be
    larger (by <= 0.12), so the pre-cull keeps slightly more records; the host
    model (test_precull.cpp) still loses 0 kept tiles and shrinks 61938 of
-   150000 lanes.
+   150000 lanes. 70672 B, still 16 B over.
+3. b47574d: the six pre-cull loads in a loop (slot k <- PC_CB[k]) and the
+   radius rounded from sqrt + 2 with any faithful rounding (no ceil fix-up,
+   at most 1 px more than the ceil).
