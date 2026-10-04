@@ -128,7 +128,8 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
                                       const float* opacities, float min_opacity,
                                       std::size_t N, int image_height,
                                       int image_width, int max_radius,
-                                      int tile_size) {
+                                      int tile_size, float mb_contrib_floor,
+                                      bool cull_disabled) {
     // 1a+1b. FUSED project(means_cam)+pfwc (iter-133): one device program runs
     //     the world→camera means transform in L1 and then mean_2d / depth /
     //     cov2d(a,b,c) / radii, all resident (null host outputs => nothing read
@@ -164,6 +165,9 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
             vis_params.edge_tau = edge_tau;
             // Lever B (task #125, GSPLAT_TT_PFWC_FUSE, default 1 since #122, 0 = kill switch).
             vis_params.fuse = gsplat_tt::pfwc_fuse_mode() == 1;
+            // Lever C (task #140, GSPLAT_TT_PRECULL=1): only with the band cull on.
+            if (gsplat_tt::precull_mode() == 1 && !cull_disabled)
+                vis_params.precull_floor = mb_contrib_floor;
             vis = &vis_params;
         }
     }
@@ -245,7 +249,8 @@ py::tuple render_view(
         st::Span s(st::acc().project);
         proj = run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
                            opacities_ptr, min_opacity, N, image_height,
-                           image_width, max_radius, tile_size);
+                           image_width, max_radius, tile_size, mb_contrib_floor,
+                           cull_disabled);
     }
     const std::size_t M = proj.depths.size();
 

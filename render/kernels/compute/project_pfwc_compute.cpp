@@ -47,6 +47,17 @@
 // reader stream CB_OP) and mean_x/mean_y/rx/ry, which steps 4/5/10/11 also pack
 // into scratch CBs. tests/unit/test_vis_lever2.cpp models pfwc_vis_one lane by
 // lane and checks it against gather_visible_pred.h + tile_assign_bbox.cpp.
+//
+// PFWC_PRECULL (task #140, lever C, GSPLAT_TT_PRECULL=1, needs PFWC_VIS): step
+// 11.6 shrinks the radii that step 11.5 turns into the tile rectangle to the
+// opacity-aware extent ceil(sqrt(max(2 ln(op) + c0, 0) * a) + 1), with c0 =
+// 2 ln(1 / floor) + margin (runtime arg 65, the microblock band cull's floor).
+// The band cull keeps nothing outside that extent, so the records it drops
+// are dead ones (mask 0) and the image is unchanged. The radius stays as is
+// when the lane is ill-conditioned (64 det < a c), non-finite or over the
+// radius limit (arg 66, min(max_radius, 4096)), so the max_radius test is
+// unchanged. CB_RX / CB_RY (the radii outputs) keep the 3-sigma values.
+// tests/unit/test_precull.cpp models the lane math against the band cull.
 
 #include <cstdint>
 
@@ -68,6 +79,9 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 #ifdef PFWC_VIS
 #include "sfpu/ckernel_sfpu_converter.h"
+#endif
+#ifdef PFWC_PRECULL
+#include "sfpu/ckernel_sfpu_log.h"
 #endif
 #endif
 
@@ -379,6 +393,85 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
         dst_reg[TZ] = tw;  // output slot 0: tpg word
     }
 }
+#ifdef PFWC_PRECULL
+// Lever C (task #140). DEST slots: 0 cov a, 1 cov b, 2 cov c, 3 opacity,
+// 4 rx, 5 ry; rx / ry are replaced in place. One loop over the 32 vectors
+// (not 32 instantiations: the PFWC_VIS program is near the 70.6 KB kernel
+// config limit, task #102). Consumed slots hold intermediates (8 registers,
+// no spill): t -> slot 3, shrink-ok flag -> slot 1.
+constexpr uint32_t PC_A = 0 * 32, PC_B = 1 * 32, PC_C = 2 * 32, PC_OP = 3 * 32, PC_RX = 4 * 32,
+                   PC_RY = 5 * 32;
+
+// sqrt(x), x >= 0, ~23-bit (microblock_band_cull_compute.cpp band_sqrt).
+sfpi_inline sfpi::vFloat precull_sqrt(sfpi::vFloat x) {
+    using namespace sfpi;
+    vInt i = reinterpret<vInt>(reinterpret<vUInt>(x) >> 1);
+    vFloat y = reinterpret<vFloat>(vInt(0x5f1110a0) - i);
+    vFloat xy = x * y;
+    vFloat c = (-y) * xy;
+    y = y * (vFloat(2.2825186f) + c * (vFloat(2.2533049f) + c));
+    xy = x * y;
+    vFloat one_minus_xyy = vFloat(1.0f) - y * xy;
+    return one_minus_xyy * (xy * 0.5f) + xy;
+}
+
+// r = ceil(sqrt(t * cov) + 1) (the 1 px slack covers the sqrt and the band
+// cull's fp32 conic error); r replaces the radius slot when ok and r < radius.
+// ceil via the 2^23 trick (q < 2^22 whenever r < radius <= 4096 matters).
+sfpi_inline void precull_axis(uint32_t cov_slot, uint32_t r_slot) {
+    using namespace sfpi;
+    vFloat q = precull_sqrt(vFloat(dst_reg[PC_OP]) * vFloat(dst_reg[cov_slot])) + 1.0f;
+    vFloat r = (q + 8388608.0f) - 8388608.0f;
+    v_if(r < q) { r = r + 1.0f; }
+    v_endif;
+    v_if(vFloat(dst_reg[PC_B]) > 0.0f) {
+        v_if(r < vFloat(dst_reg[r_slot])) { dst_reg[r_slot] = r; }
+        v_endif;
+    }
+    v_endif;
+}
+
+__attribute__((noinline)) void pfwc_precull_tile(uint32_t c0_bits, uint32_t rlim_bits) {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+#pragma GCC unroll 0
+    for (uint32_t v = 0; v < 32; v++) {
+        // 1. ok = finite a, b, c, 64 (a c - b^2) >= a c, rx and ry <= rlim.
+        {
+            vInt nf = exexp(vFloat(dst_reg[PC_A])) + 128;
+            nf = nf | (exexp(vFloat(dst_reg[PC_B])) + 128);
+            nf = nf | (exexp(vFloat(dst_reg[PC_C])) + 128);
+            vFloat a = dst_reg[PC_A];
+            vFloat c = dst_reg[PC_C];
+            vFloat b = dst_reg[PC_B];
+            vFloat ac = a * c;
+            vFloat cond = (ac - b * b) * 64.0f - ac;
+            vFloat ok = 1.0f;
+            v_if(nf >= 256) { ok = 0.0f; }
+            v_endif;
+            v_if(cond < 0.0f) { ok = 0.0f; }
+            v_endif;
+            vFloat rlim = Converter::as_float(rlim_bits);
+            v_if(vFloat(dst_reg[PC_RX]) - rlim > 0.0f) { ok = 0.0f; }
+            v_endif;
+            v_if(vFloat(dst_reg[PC_RY]) - rlim > 0.0f) { ok = 0.0f; }
+            v_endif;
+            dst_reg[PC_B] = ok;
+        }
+        // 2. t = max(2 ln(op) + c0, 0); op = 0 gives ln = -inf, t = 0.
+        {
+            vFloat lnr = ckernel::sfpu::_calculate_log_body_no_init_(vFloat(dst_reg[PC_OP]));
+            vFloat t = lnr + lnr + Converter::as_float(c0_bits);
+            vFloat z = 0.0f;
+            vec_min_max(z, t);  // t = max(t, 0)
+            dst_reg[PC_OP] = t;
+        }
+        precull_axis(PC_A, PC_RX);
+        precull_axis(PC_C, PC_RY);
+        dst_reg++;
+    }
+}
+#endif  // PFWC_PRECULL
 #endif  // TRISC_MATH
 
 template <uint32_t V>
@@ -416,6 +509,10 @@ void kernel_main() {
 #ifdef PFWC_VIS
     uint32_t vis_bits[VIS_PARAMS];
     for (uint32_t k = 0; k < VIS_PARAMS; k++) vis_bits[k] = get_arg_val<uint32_t>(56 + k);
+#endif
+#ifdef PFWC_PRECULL
+    const uint32_t precull_c0_bits = get_arg_val<uint32_t>(65);
+    const uint32_t precull_rlim_bits = get_arg_val<uint32_t>(66);
 #endif
 
     init_sfpu(CB_MX, CB_M2X);
@@ -815,6 +912,39 @@ void kernel_main() {
 #endif
             tile_regs_release();
         }
+
+#ifdef PFWC_PRECULL
+        // ── 11.6 (task #140, lever C). Opacity-aware radii for the rectangle:
+        //    TMP_RX / TMP_RY are replaced (pop, then repack; 2-tile CBs).
+        {
+            cb_wait_front(CB_OP, 1);
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_TMP_A);
+            copy_tile(CB_TMP_A, 0, 0);
+            copy_tile_to_dst_init_short(CB_TMP_B);
+            copy_tile(CB_TMP_B, 0, 1);
+            copy_tile_to_dst_init_short(CB_TMP_C);
+            copy_tile(CB_TMP_C, 0, 2);
+            copy_tile_to_dst_init_short(CB_OP);
+            copy_tile(CB_OP, 0, 3);
+            copy_tile_to_dst_init_short(CB_TMP_RX);
+            copy_tile(CB_TMP_RX, 0, 4);
+            copy_tile_to_dst_init_short(CB_TMP_RY);
+            copy_tile(CB_TMP_RY, 0, 5);
+            cb_pop_front(CB_TMP_RX, 1);
+            cb_pop_front(CB_TMP_RY, 1);
+
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_precull_tile(precull_c0_bits, precull_rlim_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_scratch(4, CB_TMP_RX);
+            emit_scratch(5, CB_TMP_RY);
+            tile_regs_release();
+        }
+#endif
 
 #ifdef PFWC_VIS
         // ── 11.5 (task #99). Visibility predicate + tile rectangle on the SFPU.
