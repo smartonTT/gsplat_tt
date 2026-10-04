@@ -204,4 +204,34 @@ inline uint32_t radix_split_point(
     return best_k;
 }
 
+// Task #166: BRISC's share (permille) of a one-launch sort core's pair pages,
+// per logical core row. BRISC moves on NOC0, whose top rows congest under the
+// fast emit (yyzo-bh-07 p100a, PRECULL=2: rows 0-1 BRISC 3.2/2.8 ms vs 2.4 ms
+// elsewhere, all in NoC read/write issue), so those rows give BRISC less.
+// Moving the split point only changes which mover packs which pages; the
+// cursors keep BRISC's records first, so the bucket image is the same.
+// Spec: permille values separated by '/' or ',', row 0 first; rows past the
+// list use dflt. Returns false (and leaves *out empty) on a malformed list.
+inline bool parse_row_permille(const char* s, std::vector<uint32_t>* out) {
+    out->clear();
+    if (s == nullptr || *s == '\0') return true;
+    const char* p = s;
+    while (true) {
+        char* end = nullptr;
+        const long x = std::strtol(p, &end, 10);
+        if (end == p || x < 0 || x > 1000) { out->clear(); return false; }
+        out->push_back(static_cast<uint32_t>(x));
+        if (*end == '\0') return true;
+        if (*end != '/' && *end != ',') { out->clear(); return false; }
+        p = end + 1;
+    }
+}
+inline uint32_t row_permille(const std::vector<uint32_t>& rows, uint32_t row, uint32_t dflt) {
+    return row < rows.size() ? rows[row] : dflt;
+}
+// BRISC's pages of a core with count pages: [lo, lo + split_pages).
+inline uint32_t split_pages(uint32_t count, uint32_t permille) {
+    return static_cast<uint32_t>(static_cast<uint64_t>(count) * permille / 1000u);
+}
+
 }  // namespace gsplat_tt::sort_split

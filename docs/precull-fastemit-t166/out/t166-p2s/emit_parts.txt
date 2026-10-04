@@ -1,0 +1,20 @@
+n_views=30 movers=220 busiest=('3', '4', 'BRISC') (emit zone 3.307 ms/view)
+part (ms/view)                                       mean mover   mean BRISC  mean NCRISC      busiest
+sort_ol_emit zone                                         3.213        3.214        3.211        3.307
+ep_pro prologue (ring starts, first pair/brec reads)        0.021        0.022        0.021        0.039
+ep_rdw read barrier wait in loop (brec k, pairs k+1)        0.007        0.007        0.008        0.005
+ep_brec issue_brec: keep/gid scan + brec read issue        0.462        0.462        0.461        0.480
+ep_pairs issue_pairs: pair page read issue                0.002        0.002        0.002        0.002
+ep_proc process_batch total                               2.646        2.646        2.646        2.706
+ep_wfl   of which writes_flushed wait (run start)         0.018        0.018        0.018        0.021
+ep_wiss   of which run write issue (flush_run)            0.092        0.092        0.092        0.114
+ep_drain tail drain (partial runs)                        0.071        0.072        0.071        0.073
+ep_wbar final write barrier                               0.001        0.001        0.001        0.000
+pack/key build = proc - wfl - wiss                        2.536        2.536        2.536        2.571
+unattributed = zone - sum(top-level parts)                0.002        0.002        0.002        0.002
+ep_nrec per view                                          12001        11997        12005        12001
+ep_npf per view                                            7703         7707         7700         7986
+ep_nb per view                                               94           94           94           94
+ep_ncold per view                                             0            0            0            0
+ep_nrun per view                                              0            0            0            0
+emit cycles per record                                    361.4        361.7        361.1        372.0
