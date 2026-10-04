@@ -2,7 +2,7 @@
 [sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
 [sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
 [sync_remote] built _gsplat_cpu
-[sync_remote] sha=6a00513397989408f9669849f647777680d62d02 so_md5=555b0183eba500f63e79aa0cab5bfc6d 
+[sync_remote] sha=6a00513397989408f9669849f647777680d62d02 so_md5=555b0183eba500f63e79aa0cab5bfc6d
 ##### smoke 13:42:53
 === t161r0-base 6a00513  views=0:3
 run rc=0
