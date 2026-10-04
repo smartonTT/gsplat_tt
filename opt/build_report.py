@@ -1702,6 +1702,9 @@ def build_html(rows: list[dict]) -> str:
 
 
 def write_reports(html: str) -> None:
+    # No trailing whitespace (empty template slots leave indented blank lines):
+    # `ttp push` runs `git diff --check` and refuses them.
+    html = "\n".join(line.rstrip() for line in html.split("\n"))
     REPORT_HTML.write_text(html)
     REPORT_HTML_TTW.parent.mkdir(parents=True, exist_ok=True)
     REPORT_HTML_TTW.write_text(html)
