@@ -132,9 +132,11 @@ inline unsigned int ol_ring() {
     return v;
 }
 // Big-tile materialize items sort only the depth bins holding their own ranks
-// (sort_onelaunch_algo.h select_ranks), not the whole tile. Default on.
+// (sort_onelaunch_algo.h select_ranks), not the whole tile. Default off: task
+// #121 measured it 0.15 ms/view slower on bicycle (24.69 vs 24.55, 3 rounds,
+// yyzo-bh-07); select_ranks costs ~1.0 ms per 4096-record part.
 inline bool ol_mat_select() {
-    static const bool v = env_uint("GSPLAT_TT_OL_MAT_SELECT", 1u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_OL_MAT_SELECT", 0u) != 0u;
     return v;
 }
 // Pair pages per mover kept in L1 from count to emit, a multiple of 32. Default

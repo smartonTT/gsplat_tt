@@ -38,7 +38,7 @@ Two causes (docs/sort-onelaunch-t114/results.md):
 - **Knobs (render/host/env_config.h).**
   - `GSPLAT_TT_OL_PB`: 1/2/4/8/16, default 8.
   - `GSPLAT_TT_OL_RING`: 0/2/4/8, default 8.
-  - `GSPLAT_TT_OL_MAT_SELECT`: default 1.
+  - `GSPLAT_TT_OL_MAT_SELECT`: default 0 since task #121 (select was 0.15 ms/view slower on bicycle; see docs/lever-a-t121/results.md).
   - `GSPLAT_TT_OL_WIN_PAGES`: 32..2048 in steps of 32. Default 1024 with the ring,
     else 1536 (as in v1).
   - **Kill switch back to v1:** `GSPLAT_TT_OL_PB=1 GSPLAT_TT_OL_RING=0 GSPLAT_TT_OL_MAT_SELECT=0`.
