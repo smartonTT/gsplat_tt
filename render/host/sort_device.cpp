@@ -2118,9 +2118,16 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             // Fold only if the K2 counted exactly this launch's page split:
             // per core, BRISC [lo, mid) is the K2's mover 0 range, NCRISC
             // [mid, hi) its mover 1 range (pfwc_fuse::k2_range, dual).
-            bool fold = have_k2rows && k2rows.num_cores == num_cores &&
-                        k2rows.row_pages == row_pages && k2rows.num_tiles == num_tiles &&
-                        k2rows.P_pub == P_full && k2rows.permille == sort_emit_split_permille();
+            // why: 0 folded, 1 rows absent, 2 cores, 3 row pages, 4 tiles, 5 P,
+            // 6 permille, 7 a core's page range (logged when it changes).
+            int why = !have_k2rows                                    ? 1
+                      : k2rows.num_cores != num_cores                 ? 2
+                      : k2rows.row_pages != row_pages                 ? 3
+                      : k2rows.num_tiles != num_tiles                 ? 4
+                      : k2rows.P_pub != P_full                        ? 5
+                      : k2rows.permille != sort_emit_split_permille() ? 6
+                                                                      : 0;
+            bool fold = why == 0;
             for (uint32_t c = 0; fold && c < num_cores; c++) {
                 const uint32_t lo = ws.start[c];
                 const uint32_t mid = lo + static_cast<uint32_t>(
@@ -2129,13 +2136,19 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 pfwc_fuse::k2_range(k2rows.P_pub, num_cores, c, 0u, 1u, k2rows.permille, &s0, &n0);
                 pfwc_fuse::k2_range(k2rows.P_pub, num_cores, c, 1u, 1u, k2rows.permille, &s1, &n1);
                 fold = s0 == lo && s0 + n0 == mid && s1 == mid && s1 + n1 == ws.start[c] + ws.count[c];
+                if (!fold) why = 7;
             }
             {
                 static int logged = -1;
-                if (logged != static_cast<int>(fold)) {
-                    logged = static_cast<int>(fold);
-                    std::fprintf(stderr, "[SORT] ONELAUNCH k2_fold=%d (K2 rows %s)\n",
-                                 static_cast<int>(fold), have_k2rows ? "published" : "absent");
+                if (logged != why) {
+                    logged = why;
+                    std::fprintf(stderr,
+                                 "[SORT] ONELAUNCH k2_fold=%d why=%d (K2 rows %s: cores %u/%u "
+                                 "row_pages %u/%u tiles %u/%u P %u/%u permille %u/%u)\n",
+                                 static_cast<int>(fold), why, have_k2rows ? "published" : "absent",
+                                 k2rows.num_cores, num_cores, k2rows.row_pages, row_pages,
+                                 k2rows.num_tiles, num_tiles, k2rows.P_pub, P_full,
+                                 k2rows.permille, sort_emit_split_permille());
                 }
             }
             const uint32_t cnt_rows_addr = fold

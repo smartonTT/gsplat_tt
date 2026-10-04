@@ -692,7 +692,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
     ctx->fused_ready = false;
-    device_state::clear_k2_count_rows();
+    device_state::clear_k2_count_rows("fused_k2");
     try {
         if (nseg == 0 || nseg > pfwc_fuse::MAX_SEG)
             throw std::runtime_error("segment count " + std::to_string(nseg) + " out of range");
@@ -713,6 +713,15 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
         // local-memory row per mover).
         const bool fold = k2_fold_enabled() && ctx->dual && num_tiles <= K2_FOLD_TILES;
         const uint32_t row_pages = fold ? (num_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE : 0u;
+        {
+            static int logged = -1;
+            if (logged != static_cast<int>(fold)) {
+                logged = static_cast<int>(fold);
+                std::fprintf(stderr, "[TA] K2 fold=%d (enabled %d dual %d tiles %u)\n",
+                             static_cast<int>(fold), static_cast<int>(k2_fold_enabled()),
+                             static_cast<int>(ctx->dual), num_tiles);
+            }
+        }
         if (fold) {
             const std::size_t rows_bytes =
                 static_cast<std::size_t>(num_cores) * 2u * row_pages * PAGE_BYTES;
@@ -1043,7 +1052,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
         // are already in buf_gids / buf_tids and ta_pairs_P is published.
         const bool fused_k2 = ctx->fused_ready;
         ctx->fused_ready = false;
-        if (!fused_k2) device_state::clear_k2_count_rows();  // rows of an older frame
+        if (!fused_k2) device_state::clear_k2_count_rows("ta_unfused");  // rows of an older frame
         if (fused_k2 && (!vis_path || vis_P != ctx->fused_P)) {
             std::cerr << "[gsplat_tt::tile_assign] PFWC_FUSE: pairs of the fused K2 not usable\n";
             return set_fail();
@@ -1526,7 +1535,7 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
             // per-pair 0/1 values, so the cached "all-ones" invariant no longer
             // holds (defensive: production is cull-off and never reaches here).
             ctx->buf_keep_all_ones = false;
-            device_state::clear_k2_count_rows();  // the K2's rows count culled pairs
+            device_state::clear_k2_count_rows("ta_k4");  // the K2's rows count culled pairs
             Program& progc = ctx->wl_cull.get_programs().begin()->second;
             for (uint32_t cc = 0; cc < num_cores; cc++) {
                 CoreCoord core{cc % ctx->grid.x, cc / ctx->grid.x};

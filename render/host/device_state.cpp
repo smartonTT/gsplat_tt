@@ -4,6 +4,7 @@
 
 #include "device_state.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <mutex>
 #include <unordered_map>
@@ -171,9 +172,15 @@ bool take_k2_count_rows(K2CountRows* rows) {
     return true;
 }
 
-void clear_k2_count_rows() {
+void clear_k2_count_rows(const char* who) {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
+    static int dropped = 0;
+    if (s.k2_rows_valid && dropped < 3) {
+        dropped++;
+        std::fprintf(stderr, "[device_state] K2 count rows dropped unused (%s)\n",
+                     who ? who : "?");
+    }
     s.k2_rows_valid = false;
     s.k2_rows = K2CountRows{};
 }
