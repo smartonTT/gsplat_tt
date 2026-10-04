@@ -28,7 +28,7 @@
 //   23: ablation bits, targeted profiling only (GSPLAT_TT_FUSE_ABL, task #122;
 //       0 = off; any other value writes wrong records): 1 = skip the record
 //       NoC writes, 2 = skip the record field copies, 4 = skip the opacity /
-//       color tile reads
+//       color tile reads, 8 = plain copies in place of the UNORM16 packs
 //
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs in runtime-arg order 0..8.
 
@@ -187,10 +187,15 @@ void kernel_main() {
                 r[7] = p_cg[il];
                 r[8] = p_cb[il];
 #if EMIT_PUBOC
+                if (abl & 8u) {  // profiling: plain copies in place of the UNORM16 packs
+                    r[10] = opw[il];
+                    r[11] = p_cg[il];
+                } else {
                 r[10] = sort_bin_fp32::to_unorm16(opw[il]) |
                         (sort_bin_fp32::to_unorm16(p_cr[il]) << 16);
                 r[11] = sort_bin_fp32::to_unorm16(p_cg[il]) |
                         (sort_bin_fp32::to_unorm16(p_cb[il]) << 16);
+                }
                 r[12] = p_dep[il];
 #endif
                 }
