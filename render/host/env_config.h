@@ -139,6 +139,14 @@ inline bool ol_mat_select() {
     static const bool v = env_uint("GSPLAT_TT_OL_MAT_SELECT", 0u) != 0u;
     return v;
 }
+// Task #168: each big tile (> kOverflowL1Cap records) is sorted once by one
+// materialize item that publishes its sorted ids; per-subchunk gather items
+// wait for them (was: every subchunk item re-sorted the whole tile). Default
+// on; GSPLAT_TT_OL_MAT_SHARED=0 is the kill switch. Ignored with OL_MAT_SELECT.
+inline bool ol_mat_shared() {
+    static const bool v = env_uint("GSPLAT_TT_OL_MAT_SHARED", 1u) != 0u && !ol_mat_select();
+    return v;
+}
 // Pair pages per mover kept in L1 from count to emit, a multiple of 32. Default
 // 1536 (v1); 1024 with the emit rings, whose ~260 KB per mover must fit too.
 inline unsigned int ol_win_pages() {

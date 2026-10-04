@@ -32,7 +32,10 @@
 
 using gsplat_tt::sort_split::build_mat_worklist;
 using gsplat_tt::sort_split::kMatMover0Cap;
+using gsplat_tt::sort_split::kOlKindGather;
+using gsplat_tt::sort_split::kOlKindSort;
 using gsplat_tt::sort_split::kOlMatPartRecs;
+using gsplat_tt::sort_split::kOlSharedSlots;
 
 namespace {
 
@@ -259,12 +262,70 @@ void test_worklist() {
     CHECK(v1.flat.size() < a.flat.size(), "select adds parts");
 }
 
+
+// Task #168 (OL_MAT_SHARED): one sort item per big tile (up to kOlSharedSlots
+// tiles, the rest keep per-subchunk re-sort items), one gather item per
+// subchunk, NCRISC slots only, and each mover runs sorts < plain < gathers.
+void test_worklist_shared() {
+    const uint32_t T = 300, cores = 110, fit = 8192;
+    std::vector<int64_t> counts(T, 3000);
+    for (uint32_t t = 0; t < 70; ++t) counts[t] = 16385 + t * 211;  // 70 big tiles
+    counts[0] = 32768;
+    const auto a = build_mat_worklist(counts, T, cores, fit, 2, kMatMover0Cap, true, false, true);
+    std::vector<int> sort_slot(T, -1);
+    std::vector<std::vector<uint32_t>> sc_seen(T);
+    std::vector<uint32_t> slot_used(kOlSharedSlots, 0u);
+    uint32_t legacy_big = 0;
+    for (uint32_t m = 0; m < cores * 2u; ++m) {
+        int last_rank = 0;
+        for (uint32_t i = 0; i < a.per_core_count[m]; ++i) {
+            const uint32_t t = a.flat[2u * (a.per_core_offset[m] + i)];
+            const uint32_t w1 = a.flat[2u * (a.per_core_offset[m] + i) + 1u];
+            const uint32_t kind = (w1 >> 16) & 3u, slot = w1 >> 18, sc = w1 & 0xFFu;
+            const bool big = counts[t] > static_cast<int64_t>(render_config::kOverflowL1Cap);
+            const int rank = kind == kOlKindSort ? 0 : (kind == kOlKindGather ? 2 : 1);
+            CHECK(rank >= last_rank, "mover %u: item kind %u after rank %d", m, kind, last_rank);
+            last_rank = rank;
+            if (big) CHECK((m & 1u) == 0u, "big item on BRISC");
+            if (kind == kOlKindSort) {
+                CHECK(sort_slot[t] < 0, "tile %u sorted twice", t);
+                CHECK(slot < kOlSharedSlots && slot_used[slot]++ == 0u, "slot %u reused", slot);
+                sort_slot[t] = static_cast<int>(slot);
+            } else if (big) {
+                if (kind == kOlKindGather) CHECK(sort_slot[t] < 0 || sort_slot[t] == int(slot), "slot");
+                else ++legacy_big;
+                sc_seen[t].push_back(sc | (kind << 16) | (slot << 18));
+            }
+        }
+    }
+    uint32_t shared = 0;
+    for (uint32_t t = 0; t < T; ++t) {
+        const uint32_t cnt = static_cast<uint32_t>(counts[t]);
+        if (cnt <= render_config::kOverflowL1Cap) continue;
+        const uint32_t num_sc = (cnt + fit - 1u) / fit;
+        std::vector<uint32_t> n(num_sc, 0u);
+        for (const uint32_t w : sc_seen[t]) {
+            CHECK((w & 0xFFu) < num_sc, "tile %u: sc out of range", t);
+            if ((w & 0xFFu) < num_sc) n[w & 0xFFu]++;
+            if (sort_slot[t] >= 0) CHECK(((w >> 16) & 3u) == kOlKindGather && (w >> 18) == uint32_t(sort_slot[t]),
+                                         "tile %u: non-gather item next to its sort", t);
+        }
+        for (uint32_t s = 0; s < num_sc; ++s) CHECK(n[s] == 1u, "tile %u sc %u: %u items", t, s, n[s]);
+        shared += sort_slot[t] >= 0;
+    }
+    CHECK(shared == kOlSharedSlots, "%u shared tiles, want %u", shared, kOlSharedSlots);
+    uint32_t want_legacy = 0;
+    for (uint32_t t = kOlSharedSlots; t < 70u; ++t) want_legacy += (uint32_t(counts[t]) + fit - 1u) / fit;
+    CHECK(legacy_big == want_legacy, "%u legacy big items, want %u", legacy_big, want_legacy);
+}
+
 }  // namespace
 
 int main() {
     test_select();
     test_ring();
     test_worklist();
+    test_worklist_shared();
     if (g_fail != 0) {
         std::printf("%d check(s) failed\n", g_fail);
         return 1;

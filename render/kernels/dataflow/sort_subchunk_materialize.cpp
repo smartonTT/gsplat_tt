@@ -309,6 +309,12 @@ void kernel_main() {
     const uint32_t ol_tile_cap    = get_arg_val<uint32_t>(16);
     const uint32_t ol_whole_cap   = get_arg_val<uint32_t>(17);
 #endif
+#if defined(OL_MAT_SHARED) && OL_MAT_SHARED
+    // Task #168: shared-sort ids buffer (2 KB pages: OL_SHARED_SLOTS slots of
+    // OL_SLOT_PAGES pages, then one flag page per slot) and this launch's epoch.
+    const uint32_t perm_addr      = get_arg_val<uint32_t>(18);
+    const uint32_t epoch          = get_arg_val<uint32_t>(19);
+#endif
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -333,6 +339,11 @@ void kernel_main() {
     const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
     const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  REC_PAGE_BYTES);
     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
+#if defined(OL_MAT_SHARED) && OL_MAT_SHARED
+    constexpr auto perm_args = TensorAccessorArgs<ov_base_args.next_compile_time_args_offset()>();
+    const auto perm_acc     = TensorAccessor(perm_args,     perm_addr,     SLAB_PAGE_BYTES);
+    constexpr uint32_t PERM_PAGE_IDS = SLAB_PAGE_BYTES / 4u;  // 512 ids per page
+#endif
 
     if (work_count == 0) {
 #if defined(FUSE_CULL) && FUSE_CULL
@@ -359,6 +370,7 @@ void kernel_main() {
         // The work buffer is a flat u32 array; item i = {tile_id at 2i,
         // sc | part << 8 at 2i+1}, both in the same 64 B page (2i is even).
         uint32_t tile_id, sc, part;
+        uint32_t kind = 0u, slot = 0u;  // task #168 shared sort (0 = plain item)
         {
             MAT_PZ("mat_meta");
             const uint32_t u = (work_start + wi) * 2u;
@@ -368,7 +380,11 @@ void kernel_main() {
             const uint32_t w1 = scrp[u % ELEMS_PER_PAGE + 1u];
             sc = w1 & 0xFFu;
             part = (w1 >> 8) & 0xFFu;
+            kind = (w1 >> 16) & 3u;
+            slot = (w1 >> 18) & 0xFFu;
         }
+        (void)kind;
+        (void)slot;
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
@@ -480,6 +496,36 @@ void kernel_main() {
             // CB_BSORT; v / k2 / v2 in CB_BUCKET until the chunk re-reads.
             const uint32_t N = count;
             uint32_t* k = reinterpret_cast<uint32_t*>(bs);
+#if defined(OL_MAT_SHARED) && OL_MAT_SHARED
+            const uint32_t slot_page0 = slot * OL_SLOT_PAGES;
+            const uint32_t flag_page = OL_SHARED_SLOTS * OL_SLOT_PAGES + slot;
+            if (kind == 2u) {
+                // Gather item: wait for the sort item's ids, then read this
+                // subchunk's ranks [sc_off, sc_off + L_sub) (page-aligned:
+                // bucket_fit is a multiple of PERM_PAGE_IDS).
+                {
+                    MAT_PZ("mat_ol_wait");
+                    for (;;) {
+                        noc_async_read(get_noc_addr(flag_page, perm_acc), scr, PAGE_BYTES);
+                        noc_async_read_barrier();
+                        invalidate_l1_cache();
+                        if (scrp[0] == epoch) break;
+                    }
+                }
+                {
+                    MAT_PZ("mat_ol_ids");
+                    const uint32_t p0 = slot_page0 + sc_off / PERM_PAGE_IDS;
+                    const uint32_t npg = (L_sub + PERM_PAGE_IDS - 1u) / PERM_PAGE_IDS;
+                    for (uint32_t q = 0; q < npg; ++q) {
+                        const uint32_t ids = (q + 1u < npg) ? PERM_PAGE_IDS : (L_sub - q * PERM_PAGE_IDS);
+                        noc_async_read(get_noc_addr(p0 + q, perm_acc), bs + q * SLAB_PAGE_BYTES, ids * 4u);
+                    }
+                    noc_async_read_barrier();
+                    invalidate_l1_cache();
+                }
+            }
+            if (kind != 2u)
+#endif
             {
                 MAT_PZ("mat_ol_keys");
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
@@ -507,14 +553,43 @@ void kernel_main() {
 #else
             const uint32_t po = 0u;
             const uint32_t L_item = L_sub;
+#if defined(OL_MAT_SHARED) && OL_MAT_SHARED
+            if (kind != 2u)
+#endif
+            {
             uint32_t* v = reinterpret_cast<uint32_t*>(buck);
             uint32_t* k2 = v + N;
             uint32_t* v2 = k2 + N;
             for (uint32_t i = 0; i < N; ++i) v[i] = i;
+            const uint32_t* res;
             {
                 MAT_PZ("mat_ol_sort");
-                const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
-                for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
+                res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
+            }
+#if defined(OL_MAT_SHARED) && OL_MAT_SHARED
+            if (kind == 1u) {
+                // Sort item: publish all N ids, then the slot's flag.
+                MAT_PZ("mat_ol_pub");
+                const uint32_t npg = (N + PERM_PAGE_IDS - 1u) / PERM_PAGE_IDS;
+                uint32_t res_l1 = reinterpret_cast<uint32_t>(res);
+                if ((res_l1 & 63u) != 0u) {  // v2 = buck + 8N: keep NoC sources aligned
+                    for (uint32_t i = 0; i < N; ++i) k[i] = res[i];
+                    res_l1 = bs;
+                }
+                for (uint32_t q = 0; q < npg; ++q) {
+                    const uint32_t ids = (q + 1u < npg) ? PERM_PAGE_IDS : (N - q * PERM_PAGE_IDS);
+                    noc_async_write(res_l1 + q * SLAB_PAGE_BYTES,
+                                    get_noc_addr(slot_page0 + q, perm_acc), ids * 4u);
+                }
+                noc_async_write_barrier();  // the ids are in DRAM before the flag
+                scrp[0] = epoch;
+                asm volatile("fence" ::: "memory");
+                noc_async_write(scr, get_noc_addr(flag_page, perm_acc), PAGE_BYTES);
+                noc_async_write_barrier();
+                continue;
+            }
+#endif
+            for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
 #endif
             {

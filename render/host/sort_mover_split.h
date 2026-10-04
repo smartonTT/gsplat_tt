@@ -30,6 +30,13 @@ inline constexpr uint32_t kGatherPartRecs = 2048;
 // records of its subchunk (second word sc | part << 8, like a gather part).
 // == sort_subchunk_materialize.cpp OL_MAT_PART.
 inline constexpr uint32_t kOlMatPartRecs = 4096;
+// Task #168 (OL_MAT_SHARED): a big tile (one-launch, > kOverflowL1Cap records)
+// is sorted ONCE by a sort item, which publishes its sorted ids to slot `slot`
+// of the shared-sort buffer; one gather item per subchunk waits for that slot
+// and gathers its ranks. Second work word: sc | part << 8 | kind << 16 |
+// slot << 18. Big tiles past kOlSharedSlots keep the per-subchunk re-sort.
+inline constexpr uint32_t kOlSharedSlots = 64;
+inline constexpr uint32_t kOlKindSort = 1u, kOlKindGather = 2u;
 
 // iter 130: materialize work-item assignment — balance at (tile, subchunk)
 // granularity. iter-130 MEASURED the dominant materialize cost as the OVERFLOW
@@ -62,7 +69,8 @@ inline MatWorkAssignment build_mat_worklist(
     uint32_t movers = 1,
     uint32_t m0_cap = 0,
     bool onelaunch = false,
-    bool ol_select = false) {
+    bool ol_select = false,
+    bool ol_shared = false) {
     // Cost of a gather record relative to a whole-tile (coalesced + L1 radix)
     // record. iter 130 assumed 8; task #35 measured (yyzo-bh-07, bicycle 30
     // views, dual mover) blend stage 60.74 / 59.74 / 58.48 / 57.95 / 57.78 ms
@@ -80,6 +88,7 @@ inline MatWorkAssignment build_mat_worklist(
     // in-budget permute, ~1x per record (NOT the GATHER_WEIGHT random gather).
     const uint32_t ov_cap = render_config::kOverflowL1Cap;
     struct Item { uint32_t tile; uint32_t sc; uint64_t cost; bool big; };
+    uint32_t shared_slots = 0;
     std::vector<Item> items;
     items.reserve(static_cast<std::size_t>(num_tiles) + 256u);
     for (uint32_t t = 0; t < num_tiles; ++t) {
@@ -94,6 +103,22 @@ inline MatWorkAssignment build_mat_worklist(
         }
         // Over-cap overflow tile: legacy per-subchunk blendrec gather.
         const uint32_t num_sc = (cnt + bucket_fit - 1u) / bucket_fit;
+        if (onelaunch && ol_shared && !ol_select && shared_slots < kOlSharedSlots) {
+            // Task #168: one sort item, then one gather item per subchunk.
+            // Costs in whole-tile record units (NCRISC ~0.197 us/record, t144):
+            // key read + sort 0.12 us/record (t147 fit 0.1083 + key read);
+            // gather 0.012 us per tile record (one pass over the tile) plus
+            // 0.127 us per own record (copy, cull, write).
+            const uint32_t slot = shared_slots++;
+            items.push_back({t, (kOlKindSort << 16) | (slot << 18),
+                             static_cast<uint64_t>(cnt) * 61u / 100u, true});
+            for (uint32_t sc = 0; sc < num_sc; ++sc) {
+                const uint32_t l_sub = std::min(bucket_fit, cnt - sc * bucket_fit);
+                items.push_back({t, sc | (kOlKindGather << 16) | (slot << 18),
+                                 (static_cast<uint64_t>(cnt) * 6u + l_sub * 64u) / 100u, true});
+            }
+            continue;
+        }
         for (uint32_t sc = 0; sc < num_sc; ++sc) {
             const uint32_t sc_off = sc * bucket_fit;
             const uint32_t l_sub = (sc_off >= cnt) ? 0u
@@ -139,6 +164,20 @@ inline MatWorkAssignment build_mat_worklist(
         }
         per_core[c].emplace_back(it.tile, it.sc);
         load[c] += it.cost;
+    }
+    if (shared_slots != 0u) {
+        // A gather item waits for its tile's sort item. Each mover runs its
+        // sort items first and its gather items last, so a sort never waits
+        // and every gather starts as late as its mover allows (no deadlock).
+        auto rank = [](const std::pair<uint32_t, uint32_t>& w) {
+            const uint32_t kind = (w.second >> 16) & 3u;
+            return kind == kOlKindSort ? 0 : (kind == kOlKindGather ? 2 : 1);
+        };
+        for (auto& v : per_core) {
+            std::stable_sort(v.begin(), v.end(), [&](const auto& x, const auto& y) {
+                return rank(x) < rank(y);
+            });
+        }
     }
     if (std::getenv("GSPLAT_TT_MAT_STATS") != nullptr) {
         uint64_t tot = 0, big = 0, gather = 0, mx[2] = {0, 0};

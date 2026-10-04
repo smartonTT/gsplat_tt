@@ -289,6 +289,11 @@ struct SortDeviceContext {
     std::size_t cap_ol_rows_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_ol_totals;  // totals row, padded-totals row
     std::size_t cap_ol_totals_bytes = 0;
+    // Task #168 (OL_MAT_SHARED): big-tile sorted ids, kOlSharedSlots slots of
+    // kOneLaunchTileCap u32, then one flag page per slot (= the launch epoch
+    // once the slot's ids are in DRAM). 2 KB pages; flags zeroed at creation.
+    std::shared_ptr<distributed::MeshBuffer> buf_mat_perm;
+    uint32_t mat_epoch = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -564,6 +569,12 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
             mat_defines["OL_MAT_SELECT"] = "1";
             mat_defines["OL_MAT_PART"] = std::to_string(gsplat_tt::sort_split::kOlMatPartRecs) + "u";
         }
+        // Task #168: big tiles sorted once, gather items wait for the ids.
+        if (gsplat_tt::env_config::ol_mat_shared()) {
+            mat_defines["OL_MAT_SHARED"] = "1";
+            mat_defines["OL_SHARED_SLOTS"] = std::to_string(gsplat_tt::sort_split::kOlSharedSlots) + "u";
+            mat_defines["OL_SLOT_PAGES"] = std::to_string(kOneLaunchTileCap * 4u / SLAB_PAGE_BYTES) + "u";
+        }
     }
     std::map<std::string, std::string> mat_defines_m0 = mat_defines;
     mat_defines_m0["MAT_CB_BASE"] = "16";
@@ -574,8 +585,9 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     mat_defines_m0["GATHER_PART_RECS_HOST"] = mat_defines["GATHER_PART_RECS_HOST"];
     mat_defines_m0["MAT_M0_CAP"] = mat_defines["MAT_M0_CAP"];
     std::vector<uint32_t> ct;
-    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
-    for (int i = 0; i < 11; i++) {
+    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}
+    // + task #168 shared-sort ids.
+    for (int i = 0; i < 12; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     }
     ctx.ksubchunk = CreateKernel(
@@ -723,6 +735,19 @@ static bool launch_subchunk_materialize(
     // Task #106: a one-launch frame's records are in the tile buckets.
     const uint32_t l1_addr = ctx->ol_frame ? static_cast<uint32_t>(ctx->buf_ol_bucket->address())
                                            : static_cast<uint32_t>(bl1->address());
+    if (sort_onelaunch_enabled() && gsplat_tt::env_config::ol_mat_shared()) {
+        if (!ctx->buf_mat_perm) {
+            constexpr std::size_t slot_pages = kOneLaunchTileCap * 4u / SLAB_PAGE_BYTES;
+            constexpr std::size_t bytes =
+                (gsplat_tt::sort_split::kOlSharedSlots * (slot_pages + 1u)) * SLAB_PAGE_BYTES;
+            ctx->buf_mat_perm = make_dram_paged(ctx->mesh_device.get(), bytes, SLAB_PAGE_BYTES);
+            std::vector<uint32_t> zeros(bytes / 4u, 0u);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mat_perm, zeros, true);
+        }
+        // A fresh non-zero value per launch: a flag equal to it was written
+        // by this launch's sort item.
+        if (++ctx->mat_epoch == 0u) ctx->mat_epoch = 1u;
+    }
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -754,6 +779,10 @@ static bool launch_subchunk_materialize(
                 // and this mover's whole-tile sort capacity.
                 args.push_back(ctx->ol_frame ? kOneLaunchTileCap : 0u);
                 args.push_back(ncrisc ? render_config::kOverflowL1Cap : kMatMover0Cap);
+                if (gsplat_tt::env_config::ol_mat_shared()) {
+                    args.push_back(static_cast<uint32_t>(ctx->buf_mat_perm->address()));
+                    args.push_back(ctx->mat_epoch);
+                }
             }
             SetRuntimeArgs(prog, ncrisc ? ctx->ksubchunk : ctx->ksubchunk_m0, core, args);
         }
@@ -2191,7 +2220,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             const MatWorkAssignment ol_work =
                 build_mat_worklist(counts, num_tiles, num_cores, render_config::kBucketFit,
                                    sort_mat_movers(), kMatMover0Cap, /*onelaunch=*/true,
-                                   gsplat_tt::env_config::ol_mat_select());
+                                   gsplat_tt::env_config::ol_mat_select(),
+                                   gsplat_tt::env_config::ol_mat_shared());
             if (ol_work.max_items_per_core > 1024u) {
                 std::cerr << "[gsplat_tt::sort] materialize work items/core "
                           << ol_work.max_items_per_core << " > MAX_WORK=1024\n";
