@@ -140,6 +140,126 @@ Fused fused_writer(const Scene& s, uint32_t C) {
     return f;
 }
 
+// Task #170: emit_pairs_diet's Io as the device behaves at its worst. An issued
+// read poisons its ring slot and lands only at wait_reads(); a write copies its
+// staging page out only at writes_flushed() (or the kernel's final barrier), so
+// reading a slot before its wait or restaging a page before its flush changes
+// the output.
+struct ModelIo {
+    const std::vector<uint32_t>* lofs = nullptr;
+    const std::vector<uint32_t>* box = nullptr;
+    std::vector<uint32_t>* gid = nullptr;
+    std::vector<uint32_t>* tid = nullptr;
+    std::vector<uint32_t>* written = nullptr;  // per pair page
+    uint32_t ra_l[pfwc_fuse::RA_SLOTS * 16], ra_b[pfwc_fuse::RA_SLOTS * 16];
+    uint32_t st_g[pfwc_fuse::OUT_SLOTS * 16], st_t[pfwc_fuse::OUT_SLOTS * 16];
+    struct Rd {
+        uint32_t page, slot;
+        bool is_box;
+    };
+    struct Wr {
+        uint32_t page, o;
+    };
+    std::vector<Rd> rd;
+    std::vector<Wr> wr;
+    uint32_t reads = 0, waits = 0, first_issue_wait = 0;
+    bool streaming = false;
+
+    void issue_lofs(uint32_t page, uint32_t slot) { push(page, slot, false); }
+    void issue(uint32_t page, uint32_t slot) {
+        if (!streaming) first_issue_wait = waits;  // search rounds before the stream
+        streaming = true;
+        push(page, slot, false);
+        push(page, slot, true);
+    }
+    void push(uint32_t page, uint32_t slot, bool is_box) {
+        if (slot >= pfwc_fuse::RA_SLOTS) fail("ring slot", slot, pfwc_fuse::RA_SLOTS);
+        if ((page + 1) * 16 > lofs->size()) fail("read past the stream", page, lofs->size() / 16);
+        uint32_t* d = (is_box ? ra_b : ra_l) + (slot % pfwc_fuse::RA_SLOTS) * 16;
+        for (uint32_t w = 0; w < 16; w++) d[w] = 0xA5A5A5A5u;
+        rd.push_back({page, slot % pfwc_fuse::RA_SLOTS, is_box});
+        reads++;
+    }
+    void wait_reads() {
+        for (const Rd& r : rd) {
+            const std::vector<uint32_t>& src = r.is_box ? *box : *lofs;
+            uint32_t* d = (r.is_box ? ra_b : ra_l) + r.slot * 16;
+            for (uint32_t w = 0; w < 16; w++) d[w] = src[r.page * 16 + w];
+        }
+        rd.clear();
+        waits++;
+    }
+    const uint32_t* lofs_slot(uint32_t s) const { return ra_l + s * 16; }
+    const uint32_t* box_slot(uint32_t s) const { return ra_b + s * 16; }
+    uint32_t* gid_slot(uint32_t o) { return st_g + o * 16; }
+    uint32_t* tid_slot(uint32_t o) { return st_t + o * 16; }
+    void write_page(uint32_t page, uint32_t o) {
+        if (o >= pfwc_fuse::OUT_SLOTS) fail("staging slot", o, pfwc_fuse::OUT_SLOTS);
+        for (const Wr& x : wr)
+            if (x.o == o) fail("staging page rewritten before its flush", o, page);
+        wr.push_back({page, o % pfwc_fuse::OUT_SLOTS});
+    }
+    void writes_flushed() {
+        for (const Wr& x : wr) {
+            if (x.page >= written->size()) {
+                fail("write past the pair pages", x.page, written->size());
+                continue;
+            }
+            (*written)[x.page]++;
+            for (uint32_t w = 0; w < 16; w++) {
+                (*gid)[x.page * 16 + w] = st_g[x.o * 16 + w];
+                (*tid)[x.page * 16 + w] = st_t[x.o * 16 + w];
+            }
+        }
+        wr.clear();
+    }
+};
+
+// emit_pairs_diet per (K2 core, mover) must give emit_pairs' pages (gid, tid)
+// and, with COUNT, the per-tile pair counts of its range.
+uint32_t max_search_waits = 0;
+template <bool COUNT>
+void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab, uint32_t C,
+                uint32_t K, uint32_t dual, uint32_t permille, uint32_t P_pub,
+                const std::vector<uint32_t>& gid, const std::vector<uint32_t>& tid) {
+    const uint32_t pages = (P_pub + 15) / 16;
+    std::vector<uint32_t> dg(pages * 16, 0xFFFFFFFFu), dt(pages * 16, 0xFFFFFFFFu);
+    std::vector<uint32_t> written(pages, 0);
+    std::vector<uint32_t> cnt(1u << 20), ref_cnt(1u << 20);
+    for (uint32_t k = 0; k < K; k++)
+        for (uint32_t mv = 0; mv < 2; mv++) {
+            uint32_t pg0 = 0, npg = 0;
+            pfwc_fuse::k2_range(P_pub, K, k, mv, dual, permille, &pg0, &npg);
+            ModelIo io;
+            io.lofs = &f.lofs;
+            io.box = &f.box;
+            io.gid = &dg;
+            io.tid = &dt;
+            io.written = &written;
+            std::fill(cnt.begin(), cnt.end(), 0u);
+            pfwc_fuse::emit_pairs_diet<COUNT>(tab.data(), C, P_pub, s.tiles_x, pg0, npg, io,
+                                              COUNT ? cnt.data() : nullptr);
+            if (!io.rd.empty()) fail("reads in flight at the end", k, io.rd.size());
+            io.writes_flushed();  // the kernel's final write barrier
+            if (io.streaming && io.first_issue_wait > max_search_waits)
+                max_search_waits = io.first_issue_wait;
+            if (!COUNT) continue;
+            std::fill(ref_cnt.begin(), ref_cnt.end(), 0u);
+            for (uint32_t p = pg0 * 16; p < (pg0 + npg) * 16 && p < P_pub; p++) ref_cnt[tid[p]]++;
+            for (uint32_t t = 0; t < cnt.size(); t++)
+                if (cnt[t] != ref_cnt[t]) {
+                    fail("diet tile count", t, cnt[t]);
+                    break;
+                }
+        }
+    for (uint32_t pg = 0; pg < pages; pg++)
+        if (written[pg] != 1) fail("diet pair page written", pg, written[pg]);
+    for (uint32_t p = 0; p < pages * 16; p++) {
+        if (dg[p] != gid[p]) fail("diet gid", p, dg[p]);
+        if (dt[p] != tid[p]) fail("diet tid", p, dt[p]);
+    }
+}
+
 // tile_assign_scatter_seg.cpp over all (K2 core, mover) slots.
 void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint32_t K,
               uint32_t dual, uint32_t permille, uint32_t p_cap) {
@@ -189,6 +309,8 @@ void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint
         if (tid[p] != ref.tid[p]) fail("pair tid", p, ref.tid[p]);
         if (f.depth[st] != s.depth[ref.src[ref.gid[p]]]) fail("depth by gid", p, st);
     }
+    check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid);
+    check_diet<false>(s, f, tab, C, K, dual, permille, P_pub, gid, tid);
 }
 
 }  // namespace
@@ -225,6 +347,7 @@ int main() {
         std::fprintf(stderr, "test_pfwc_fuse: %d failures in %d cases\n", failures, cases);
         return 1;
     }
-    std::printf("test_pfwc_fuse: %d cases OK\n", cases);
+    std::printf("test_pfwc_fuse: %d cases OK (diet start search: <= %u read rounds)\n", cases,
+                max_search_waits);
     return 0;
 }
