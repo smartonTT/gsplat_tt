@@ -16,6 +16,7 @@
 #include "tile_assign.h"
 
 #include <tt-metalium/distributed.hpp>
+#include <tt-metalium/hal.hpp>
 
 namespace gsplat_tt {
 namespace device_state {
@@ -78,7 +79,20 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
     std::lock_guard<std::mutex> lock(s.mu);
     if (!s.mesh_device) {
         constexpr int device_id = 0;
-        s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
+        // GSPLAT_TT_KCFG_EXTRA_KB=N grows the Tensix kernel config ring buffer by N KB (default
+        // 69 KB) by shrinking the worker L1 allocator. Profiling only: with the device profiler on,
+        // the fused pfwc program is 71216 B and overflows the default 70656 B buffer.
+        const char* kx = std::getenv("GSPLAT_TT_KCFG_EXTRA_KB");
+        const long extra_kb = kx ? std::atol(kx) : 0;
+        if (extra_kb > 0) {
+            const size_t kcfg = (69 + static_cast<size_t>(extra_kb)) * 1024;
+            const size_t worker_l1 = tt::tt_metal::hal::get_max_worker_l1_unreserved_size() - kcfg;
+            s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(
+                device_id, DEFAULT_L1_SMALL_SIZE, DEFAULT_TRACE_REGION_SIZE, 1,
+                tt::tt_metal::DispatchCoreConfig{}, {}, worker_l1);
+        } else {
+            s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
+        }
     }
     return s.mesh_device;
 }
