@@ -716,12 +716,21 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x, u
                 // blocking=false). Single-device mesh: shard (0, 0).
                 distributed::ReadShard(*ctx->cq, mread, projM, distributed::MeshCoordinate(0, 0), false);
                 auto ev = ctx->cq->enqueue_record_event_to_host();
+                const auto t_e0 = std::chrono::steady_clock::now();
                 early = sort_onelaunch_enqueue_early(
                     num_tiles, tiles_x, static_cast<uint32_t>(ctx->buf_gids->address()),
                     static_cast<uint32_t>(ctx->buf_tids->address()),
                     static_cast<uint32_t>(ctx->buf_keep->address()),
                     static_cast<uint32_t>(ctx->buf_pairs_P->address()));
+                const auto t_e1 = std::chrono::steady_clock::now();
                 distributed::EventSynchronize(ev);
+                static const bool ol_log = std::getenv("GSPLAT_TT_SORT_OL_EARLY_LOG") != nullptr;
+                if (ol_log) {
+                    using ms = std::chrono::duration<double, std::milli>;
+                    std::fprintf(stderr, "OLEARLY fired=%d enq_ms=%.3f wait_ms=%.3f\n", early ? 1 : 0,
+                                 ms(t_e1 - t_e0).count(),
+                                 ms(std::chrono::steady_clock::now() - t_e1).count());
+                }
             } else {
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, true);
             }
