@@ -78,6 +78,11 @@
 #ifndef OL_EMIT_PROF
 #define OL_EMIT_PROF 0
 #endif
+// Task #160 (host knob GSPLAT_TT_OL_EMIT_FAST=0 turns it off): the fast emit
+// loop, see FAST_OK below.
+#ifndef OL_EMIT_FAST
+#define OL_EMIT_FAST 1
+#endif
 #if OL_EMIT_PROF
 #define EP_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define EP_T0(v) const uint32_t v = EP_NOW()
@@ -405,7 +410,7 @@ void kernel_main() {
     // one loop with register locals, the per-tile cursors in the RISC's local
     // memory (an L1 cursor is loaded right after its store, task #26) and the
     // sub_int fast path inlined. Same records, same slots, same writes.
-    constexpr bool FAST_OK = PUBOC && R != 0u;
+    constexpr bool FAST_OK = OL_EMIT_FAST && PUBOC && R != 0u;
     const bool fast = FAST_OK && ring_on && tx_is_pow2;
     uint32_t cur_lm[FAST_OK ? OL_RING_TILES : 1u];
     if (ring_on) {
