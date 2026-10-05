@@ -2,11 +2,11 @@
 # t221: device A/B of the t207 pfwc writer split (GSPLAT_TT_PFWC_WRITER_SPLIT), alone and on
 # top of t206 COVCAM_SFPU (cherry-picked for this run only). Mac side, one ttp lock p100 per step.
 #   drive.sh [rev] [steps]   steps: any of sync smoke size 1 2 3 4 c1 c2 c3 pk0 pws pboth
-#   smoke: 30 views split=1 with the default device open (auto +8 KB), md5-gated; on a
-#          "too large" TT_FATAL retry at KX=16. Then 30 views cov+split at KXC (16, else 24).
-#   1-4:   swapped untraced 30-view rounds base/split, both arms KX (8) KB extra.
+#   smoke: 30 views split=1 with the default device open (auto +8 KB) when KX=8, md5-gated; on a
+#          "too large" TT_FATAL retry at KX=24. Then 30 views cov+split at KXC (24, else 32).
+#   1-4:   swapped untraced 30-view rounds base/split, both arms KX KB extra (run as KX=24).
 #   c1-c3: rotated rounds base/cov/both (cov = COVCAM_SFPU=1, both = cov + split), KXC.
-#   pk0 pws pboth: Tracy STEPCYC=1 STEPRISC=9 views 0:4, KX 16 (pboth KXC), pfwc_p* / pfwc_ws.
+#   pk0 pws pboth: Tracy STEPCYC=1 STEPRISC=9 views 0:4, KX 24 (+8 on a too-large TT_FATAL), pfwc_p* / pfwc_ws.
 set -u
 cd "$(git rev-parse --show-toplevel)"
 DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
@@ -17,7 +17,7 @@ P=docs/pfwc-writer-split-t207/dev-t221
 O=$P/out; mkdir -p $O
 WS=GSPLAT_TT_PFWC_WRITER_SPLIT=1
 CV=GSPLAT_TT_PFWC_COVCAM_SFPU=1
-KX=${KX:-8}; KXC=${KXC:-16}
+KX=${KX:-8}; KXC=${KXC:-24}
 lk() { ttp lock p100 -- "$@"; local rc=$?; [ $rc -eq 75 ] && { echo LOCK_BUSY; echo CHAIN_DONE; exit 75; }; return $rc; }
 fetch() { scp -q -o BatchMode=yes "$H:$T/tmp/t221/run-r$1-$2.log" "$H:$T/tmp/t221/md5-r$1-$2.txt" $O/ 2>/dev/null; }
 md5ok() { ssh -o BatchMode=yes $H "diff -q $REF $T/tmp/t221/md5-r$1-$2.txt" >/dev/null; }
@@ -42,18 +42,20 @@ if has sync; then
   lk opt/sync_remote.sh $H $T "${1:-HEAD}"; rc=$?; echo "SYNC_RC=$rc"; [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 fi
 if has smoke; then
-  RT=240 tm s 400 split:$WS
-  fetch s split
-  if md5ok s split; then echo "MD5_OK s-split (default open, auto +8 KB)"
-  elif big s split; then
-    echo "SPLIT_TOO_LARGE at default open: retry KX=16"; KX=16
-    tm s 400 split16:$WS,GSPLAT_TT_KCFG_EXTRA_KB=16; gate s split16
-  else echo "MD5_GATE_FAIL s-split"; echo CHAIN_DONE; exit 4; fi
+  # t221 run 1: the default open (+8 KB) and KX=16 both hit "Program size (92496) too large
+  # for kernel config buffer" (78848 / 87040 B), so KX=24 (95232 B) is the smallest that fits.
+  if [ $KX = 8 ]; then
+    RT=240 tm s 400 split:$WS; fetch s split
+    if md5ok s split; then echo "MD5_OK s-split (default open, auto +8 KB)"
+    elif big s split; then echo "SPLIT_TOO_LARGE at default open: retry KX=24"; KX=24
+    else echo "MD5_GATE_FAIL s-split"; echo CHAIN_DONE; exit 4; fi
+  fi
+  if [ $KX != 8 ]; then RT=240 tm s 400 split$KX:$WS,GSPLAT_TT_KCFG_EXTRA_KB=$KX; gate s split$KX; fi
   tm s 400 both$KXC:$CV,$WS,GSPLAT_TT_KCFG_EXTRA_KB=$KXC
   fetch s both$KXC
   if md5ok s both$KXC; then echo "MD5_OK s-both$KXC"
   elif big s both$KXC; then
-    KXC=24; echo "BOTH_TOO_LARGE: retry KXC=$KXC"
+    KXC=$((KXC + 8)); echo "BOTH_TOO_LARGE: retry KXC=$KXC"
     tm s 400 both$KXC:$CV,$WS,GSPLAT_TT_KCFG_EXTRA_KB=$KXC; fetch s both$KXC
     md5ok s both$KXC && echo "MD5_OK s-both$KXC" || { echo "BOTH_FAIL: combo steps skipped"; COMBO=0; }
   else echo "BOTH_MD5_FAIL: combo steps skipped"; COMBO=0; fi
@@ -84,11 +86,11 @@ prof() {  # name kx env...
   local D=$T/opt/profiler/t221-$n
   for x in capture.log pc_split.txt dev.csv.gz; do scp -q -o BatchMode=yes "$H:$D/$x" $O/prof-$n-$x 2>/dev/null; done
   cat $O/prof-$n-pc_split.txt 2>/dev/null
-  if [ $kx -lt 24 ] && grep -qE "too large|Program size" $O/prof-$n-capture.log 2>/dev/null; then
+  if [ $kx -lt 40 ] && grep -qE "too large|Program size" $O/prof-$n-capture.log 2>/dev/null; then
     echo "PROF_${n}_TOO_LARGE at KX=$kx: retry at $((kx + 8))"; prof $n $((kx + 8)) "$@"
   fi
 }
-has pk0 && prof k0 16 GSPLAT_TT_PFWC_WRITER_SPLIT=0
-has pws && prof ws 16 $WS
-[ $COMBO = 1 ] && has pboth && prof both $(( KXC > 16 ? KXC : 16 )) $CV $WS
+has pk0 && prof k0 24 GSPLAT_TT_PFWC_WRITER_SPLIT=0
+has pws && prof ws 24 $WS
+[ $COMBO = 1 ] && has pboth && prof both 24 $CV $WS
 echo CHAIN_DONE
