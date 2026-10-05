@@ -54,7 +54,7 @@
 #include "llk_math_eltwise_unary_sfpu.h"
 #endif
 
-#if defined(GSPLAT_TT_MB_STATS) || defined(GSPLAT_TT_MB_TILECYC)
+#if defined(GSPLAT_TT_MB_STATS) || defined(GSPLAT_TT_MB_TILECYC) || (defined(BLEND_U2_PROBE) && BLEND_U2_PROBE)
 #include "api/debug/dprint.h"
 #endif
 
@@ -932,6 +932,16 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #undef BLEND_DECODE_AHEAD
 #define BLEND_DECODE_AHEAD 0
 #endif
+#ifndef BLEND_UNPACK_STAGE
+#define BLEND_UNPACK_STAGE 0  // task #252, see the unpacker staging block below
+#endif
+#if BLEND_UNPACK_STAGE && BLEND_DECODE_AHEAD != 2
+#undef BLEND_UNPACK_STAGE
+#define BLEND_UNPACK_STAGE 0
+#endif
+#ifndef BLEND_U2_PROBE
+#define BLEND_U2_PROBE 0
+#endif
 #ifndef BLEND_T_EPS
 #define BLEND_T_EPS 0.00390625f
 #endif
@@ -1182,6 +1192,210 @@ inline void da_stage(const volatile uint32_t* s) {
     TTI_SFPSTORE(2, 0, 7, A0 + 2u * S_CB);
 }
 #endif  // TRISC_MATH
+
+// ---- Unpacker-staged coefficients (task #252, GSPLAT_TT_BLEND_UNPACK_STAGE) --
+// Decode-ahead left TRISC1 pushing 14 SFPLOADI words per live record. Here
+// TRISC0 writes the record's 9 values as fp32 rows in L1 and unpacks them into
+// DEST slot 7 (unused), each row repeated 4 times so one SFPLOAD gets a value in
+// all 32 lanes: row pair q holds two values, even columns and odd columns, at
+// SFPU addresses U2_DROW + 4q and + 4q + 2. TRISC1 copies them into the
+// coefficient slot with SFPLOAD/SFPSTORE; the UNORM16 halves arrive as 2^23 + q
+// (exact), so SFPADDI -2^23 and the multiply by 1/65535 give the same bits as
+// SFPCAST + multiply. The ring carries only the mask and the markers. TRISC0 and
+// TRISC1 hand DEST over with the UNPACK_TO_DEST semaphore, as copy_tile does.
+// L1: U2_BUFS buffers of 5 rows after the ring; the source row counter (ch0 z,
+// one row per step with Tile_x_dim 16) walks them and resets at buffer 0.
+#if BLEND_UNPACK_STAGE
+constexpr uint32_t U2_BUFS = 8;   // mirrors blend_device.cpp (40 pages of 64 B)
+constexpr uint32_t U2_ROWS = 5;
+constexpr uint32_t U2_DROW = 7u * 64u;      // DEST row (= SFPU address) of the staging rows
+constexpr uint32_t U2_UNORM = 0x4B000000u;  // fp32 2^23
+#ifdef TRISC_UNPACK
+uint32_t g_u2_buf = 0;  // byte address of buffer 0
+uint32_t g_u2_n = 0;    // records staged since the walk started
+uint32_t g_u2_zs = 0, g_u2_xd = 0;  // saved unpacker A config
+#if BLEND_U2_PROBE
+uint32_t g_u2_inject = 0;
+#endif
+
+// Walk start. The pipe is drained first (the ramp copies use the same unpacker),
+// so the RISC writes the config directly.
+inline void u2_setup() {
+    g_u2_buf = g_da_ring + DA_HDR_BYTES + DA_SLOTS * DA_SLOT_BYTES;
+    g_u2_n = 0;
+    ckernel::tensix_sync();
+    volatile uint32_t tt_reg_ptr* cfg = get_cfg_pointer();
+    g_u2_zs = cfg[UNP0_ADDR_CTRL_ZW_REG_1_Zstride_ADDR32];
+    g_u2_xd = cfg[THCON_SEC0_REG5_Tile_x_dim_cntx0_ADDR32];
+    cfg[UNP0_ADDR_CTRL_ZW_REG_1_Zstride_ADDR32] = 64u;  // DEST: one fp32 row per z step
+    cfg[THCON_SEC0_REG5_Tile_x_dim_cntx0_ADDR32] = 16u | (16u << 16);  // L1: one row per z step
+    cfg[THCON_SEC0_REG3_Base_address_ADDR32] = (g_u2_buf >> 4) - 1u;
+    cfg[THCON_SEC0_REG3_Base_cntx1_address_ADDR32] = (g_u2_buf >> 4) - 1u;
+    uint32_t w = cfg[THCON_SEC0_REG2_Unpack_if_sel_cntx0_ADDR32];
+    w = (w & ~THCON_SEC0_REG2_Unpack_if_sel_cntx0_MASK) | (1u << THCON_SEC0_REG2_Unpack_if_sel_cntx0_SHAMT);
+    w = (w & ~THCON_SEC0_REG2_Unpack_if_sel_cntx1_MASK) | (1u << THCON_SEC0_REG2_Unpack_if_sel_cntx1_SHAMT);
+    cfg[THCON_SEC0_REG2_Unpack_if_sel_cntx0_ADDR32] = w;
+    constexpr uint32_t dst = 16u * (4u + U2_DROW);
+    w = cfg[THCON_SEC0_REG5_Dest_cntx0_address_ADDR32];
+    w = (w & ~THCON_SEC0_REG5_Dest_cntx0_address_MASK) | (dst << THCON_SEC0_REG5_Dest_cntx0_address_SHAMT);
+    w = (w & ~THCON_SEC0_REG5_Dest_cntx1_address_MASK) | (dst << THCON_SEC0_REG5_Dest_cntx1_address_SHAMT);
+    cfg[THCON_SEC0_REG5_Dest_cntx0_address_ADDR32] = w;
+    TTI_SETC16(SRCA_SET_Base_ADDR32, 0x0);  // no address swizzle
+    TTI_SETADCXX(p_setadc::UNP_A, 16u - 1u, 0x0);  // one row per UNPACR
+    TTI_STALLWAIT(p_stall::STALL_UNPACK, p_stall::TRISC_CFG);
+#if BLEND_U2_PROBE
+    g_u2_inject = 1u;
+#endif
+}
+
+// Walk end: back to the copy_tile config (the next ramp copy sets the rest).
+inline void u2_restore() {
+    TTI_STALLWAIT(p_stall::STALL_CFG, p_stall::UNPACK0);
+    cfg_reg_rmw_tensix<UNP0_ADDR_CTRL_ZW_REG_1_Zstride_ADDR32, 0, 0xffffffffu>(g_u2_zs);
+    cfg_reg_rmw_tensix<THCON_SEC0_REG5_Tile_x_dim_cntx0_ADDR32, 0, 0xffffffffu>(g_u2_xd);
+    cfg_reg_rmw_tensix<THCON_SEC0_REG2_Unpack_if_sel_cntx0_RMW>(0);
+    cfg_reg_rmw_tensix<THCON_SEC0_REG2_Unpack_if_sel_cntx1_RMW>(0);
+    cfg_reg_rmw_tensix<THCON_SEC0_REG5_Dest_cntx0_address_RMW>(4 * 16);
+    cfg_reg_rmw_tensix<THCON_SEC0_REG5_Dest_cntx1_address_RMW>(4 * 16);
+    TTI_SETC16(SRCA_SET_Base_ADDR32, 0x4);
+}
+
+inline void u2_put_rec(const uint32_t* rec, uint32_t mask) {
+#if BLEND_U2_PROBE
+    // Stage 0: the first record of each walk carries edge values through both paths.
+    uint32_t t[8];
+    for (uint32_t i = 0; i < 8u; ++i) {
+        t[i] = rec[i];
+    }
+    if (g_u2_inject) {
+        g_u2_inject = 0u;
+        t[4] = 0x80000000u;  // MX = -0
+        t[5] = 0x00000001u;  // MY = smallest denormal
+        t[0] = 0x007FFFFFu;  // A = largest denormal
+        t[1] = 0x3F800000u;
+        t[2] = 0xC0490FDBu;
+        t[6] = 0u | (1u << 16);           // OP q = 0, CR q = 1
+        t[7] = 0xFFFFu | (0x8000u << 16);  // CG q = 65535, CB q = 32768
+    }
+    rec = t;
+#endif
+    const uint32_t mx = rec[4], my = rec[5], a = rec[0], b = rec[1], c = rec[2];
+    const uint32_t op = U2_UNORM | (rec[6] & 0xffffu), cr = U2_UNORM | (rec[6] >> 16);
+    const uint32_t cg = U2_UNORM | (rec[7] & 0xffffu), cb = U2_UNORM | (rec[7] >> 16);
+    const uint32_t bi = g_u2_n & (U2_BUFS - 1u);
+    volatile uint32_t* r = reinterpret_cast<volatile uint32_t*>(g_u2_buf + bi * (U2_ROWS * 64u));
+#pragma GCC unroll 8
+    for (uint32_t k = 0; k < 16u; k += 2u) {
+        r[k] = mx;
+        r[k + 1u] = my;
+        r[16u + k] = a;
+        r[17u + k] = b;
+        r[32u + k] = c;
+        r[33u + k] = op;
+        r[48u + k] = cr;
+        r[49u + k] = cg;
+        r[64u + k] = cb;
+    }
+    asm volatile("fence" ::: "memory");  // rows land before the unpacker reads them
+    ckernel::t6_semaphore_wait_on_max<p_stall::STALL_UNPACK>(ckernel::semaphore::UNPACK_TO_DEST);
+    if (bi == 0u) {
+        TTI_SETADCZW(p_setadc::UNP_A, 0, 0, 0, 0, 0b0101);  // dest row 0, L1 row 0
+    } else {
+        TTI_SETADCZW(p_setadc::UNP_A, 0, 0, 0, 0, 0b0100);  // dest row 0
+    }
+#pragma GCC unroll 5
+    for (uint32_t q = 0; q < U2_ROWS; ++q) {
+        // 3x: next DEST row, same L1 row; 1x: both advance.
+        TTI_UNPACR(SrcA, 0b00010000, 0, 0, 0, 1, 0, p_unpacr::RAREFYB_DISABLE, 0, 0, 0, 0, 1);
+        TTI_UNPACR(SrcA, 0b00010000, 0, 0, 0, 1, 0, p_unpacr::RAREFYB_DISABLE, 0, 0, 0, 0, 1);
+        TTI_UNPACR(SrcA, 0b00010000, 0, 0, 0, 1, 0, p_unpacr::RAREFYB_DISABLE, 0, 0, 0, 0, 1);
+        TTI_UNPACR(SrcA, 0b00010001, 0, 0, 0, 1, 0, p_unpacr::RAREFYB_DISABLE, 0, 0, 0, 0, 1);
+    }
+    ckernel::t6_semaphore_post<p_stall::UNPACK0>(ckernel::semaphore::UNPACK_TO_DEST);
+    ++g_u2_n;
+#if BLEND_U2_PROBE
+    da_put_rec(rec, mask);  // the probe runs the old path too
+#else
+    da_wait_space();
+    da_slot(g_da_idx)[14] = mask;
+    da_publish();
+#endif
+}
+#endif  // TRISC_UNPACK
+
+#ifdef TRISC_MATH
+// The staged values into the coefficient block at SFPU address D (A0 normally).
+template <uint32_t D>
+inline void u2_stage() {
+    constexpr uint32_t A0 = (DR_S) * 2u, U = U2_DROW;
+    ckernel::t6_semaphore_wait_on_zero<p_stall::STALL_SFPU | p_stall::STALL_SYNC>(ckernel::semaphore::UNPACK_TO_DEST);
+    TTI_SFPLOAD(1, 0, 7, A0 + 2u * S_INV);
+    TTI_SFPLOAD(0, 0, 7, U + 0u);
+    TTI_SFPLOAD(2, 0, 7, U + 2u);
+    TTI_SFPSTORE(0, 0, 7, D + 2u * S_MX);
+    TTI_SFPSTORE(2, 0, 7, D + 2u * S_MY);
+    TTI_SFPLOAD(0, 0, 7, U + 4u);
+    TTI_SFPLOAD(2, 0, 7, U + 6u);
+    TTI_SFPSTORE(0, 0, 7, D + 2u * S_A);
+    TTI_SFPSTORE(2, 0, 7, D + 2u * S_B);
+    TTI_SFPLOAD(0, 0, 7, U + 8u);
+    TTI_SFPLOAD(2, 0, 7, U + 10u);
+    TTI_SFPSTORE(0, 0, 7, D + 2u * S_C);
+    TTI_SFPADDI(0xCB00, 2, 0);  // - 2^23
+    TTI_SFPLOAD(0, 0, 7, U + 12u);
+    TTI_SFPMUL(2, 1, 9, 2, 0);
+    TTI_SFPADDI(0xCB00, 0, 0);
+    TTI_SFPSTORE(2, 0, 7, D + 2u * S_OP);
+    TTI_SFPMUL(0, 1, 9, 0, 0);
+    TTI_SFPLOAD(2, 0, 7, U + 14u);
+    TTI_SFPSTORE(0, 0, 7, D + 2u * S_CR);
+    TTI_SFPADDI(0xCB00, 2, 0);
+    TTI_SFPLOAD(0, 0, 7, U + 16u);
+    TTI_SFPMUL(2, 1, 9, 2, 0);
+    TTI_SFPADDI(0xCB00, 0, 0);
+    TTI_SFPSTORE(2, 0, 7, D + 2u * S_CG);
+    TTI_SFPMUL(0, 1, 9, 0, 0);
+    TTI_SFPNOP;
+    TTI_SFPSTORE(0, 0, 7, D + 2u * S_CB);
+    ckernel::t6_semaphore_get<p_stall::WAIT_SFPU>(ckernel::semaphore::UNPACK_TO_DEST);
+}
+
+#if BLEND_U2_PROBE
+// Stage 0: after da_stage (old path into slot 6) and u2_stage<U2_PDST> (rows
+// 480+), compare the two blocks and the staged rows bit for bit on the RISC.
+constexpr uint32_t U2_PDST = 7u * 64u + 32u;
+uint32_t g_u2p_n = 0, g_u2p_bad = 0, g_u2p_raw = 0, g_u2p_first = 0, g_u2p_old = 0, g_u2p_new = 0, g_u2p_walk = 0;
+inline void u2_probe_check() {
+    ckernel::tensix_sync();
+    const volatile uint32_t* dest = reinterpret_cast<const volatile uint32_t*>(0xFFBD8000u);
+    ++g_u2p_n;
+    for (uint32_t row = 0; row < 20u; ++row) {
+        for (uint32_t col = 0; col < 16u; ++col) {
+            const uint32_t o = dest[(DR_S * 2u + row) * 16u + col], n = dest[(U2_PDST + row) * 16u + col];
+            if (o != n) {
+                if (g_u2p_bad == 0u) {
+                    g_u2p_first = (g_u2p_n << 16) | (row << 8) | col;
+                    g_u2p_old = o;
+                    g_u2p_new = n;
+                }
+                ++g_u2p_bad;
+            }
+        }
+    }
+    // Staged rows: each row pair q repeats one L1 row 4 times.
+    for (uint32_t q = 0; q < U2_ROWS; ++q) {
+        for (uint32_t k = 1; k < 4u; ++k) {
+            for (uint32_t col = 0; col < 16u; ++col) {
+                if (dest[(U2_DROW + 4u * q + k) * 16u + col] != dest[(U2_DROW + 4u * q) * 16u + col]) {
+                    ++g_u2p_raw;
+                }
+            }
+        }
+    }
+}
+#endif
+#endif  // TRISC_MATH
+#endif  // BLEND_UNPACK_STAGE
 #endif  // BLEND_DECODE_AHEAD
 
 // ---- Sub-tile waste instrumentation (GSPLAT_TT_MB_STATS, default OFF) -------
@@ -1404,6 +1618,9 @@ inline void tc_dump() {
 inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask, uint32_t& g_seen) {
 #if defined(TRISC_UNPACK)
     mb_cb_consume_fence();  // first read of this slab on this thread
+#if BLEND_UNPACK_STAGE
+    u2_setup();
+#endif
     for (uint32_t g = 0; g < num_g; g++) {
         if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
             BLEND_PZ_SUB("cmp_trb");
@@ -1416,11 +1633,18 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
         const uint32_t* rec = l1_splat_words(buck, g);
         const uint32_t mask = rec[3] & live_mb_mask;
         if (mask != 0u) {
+#if BLEND_UNPACK_STAGE
+            u2_put_rec(rec, mask);
+#else
             da_put_rec(rec, mask);
+#endif
         }
     }
 #if BLEND_DECODE_AHEAD == 2
     da_put_mark(DA_MARK_END);
+#endif
+#if BLEND_UNPACK_STAGE
+    u2_restore();
 #endif
 #elif defined(TRISC_MATH) && BLEND_DECODE_AHEAD == 1
     for (uint32_t g = 0; g < num_g; g++) {
@@ -1444,6 +1668,9 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
 #elif defined(TRISC_MATH)
     (void)buck;
     g_seen += num_g;  // unused here: the markers carry the readback positions
+#if BLEND_UNPACK_STAGE && BLEND_U2_PROBE
+    g_u2p_walk = 0u;
+#endif
     for (;;) {
         const volatile uint32_t* s = da_wait_slot();
         const uint32_t mask = s[14];
@@ -1461,7 +1688,20 @@ inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask,
             continue;
         }
         TC_LIVE(mask);
+#if BLEND_UNPACK_STAGE && BLEND_U2_PROBE
         da_stage(s);
+        u2_stage<U2_PDST>();
+        TTI_SFPLOAD(0, 0, 7, (DR_S) * 2u + 2u * S_FL);  // shares rows with S_OP/S_CR
+        TTI_SFPSTORE(0, 0, 7, U2_PDST + 2u * S_FL);
+        if (g_u2p_walk < 2u) {
+            ++g_u2p_walk;
+            u2_probe_check();
+        }
+#elif BLEND_UNPACK_STAGE
+        u2_stage<(DR_S) * 2u>();
+#else
+        da_stage(s);
+#endif
         da_consumed();
         dispatch_blend_jump(mask);
     }
@@ -1739,4 +1979,8 @@ void kernel_main() {
     cb_pop_front(CB_YRAMP, 1);
     MB_STATS_EMIT();
     TC_DUMP();
+#if BLEND_UNPACK_STAGE && BLEND_U2_PROBE && defined(TRISC_MATH)
+    DPRINT << "U2P n=" << g_u2p_n << " bad=" << g_u2p_bad << " raw_bad=" << g_u2p_raw << " first=" << HEX()
+           << g_u2p_first << " old=" << g_u2p_old << " new=" << g_u2p_new << DEC() << ENDL();
+#endif
 }

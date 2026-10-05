@@ -217,9 +217,19 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     const char* blend_da_env = std::getenv("GSPLAT_TT_BLEND_DECODE_AHEAD");
     const std::string blend_da =
         (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("2");
+    // Task #252: GSPLAT_TT_BLEND_UNPACK_STAGE (default 0; needs decode-ahead 2):
+    // TRISC0 unpacks the record values into DEST slot 7 from 8 staging buffers of
+    // 5 x 64 B rows placed after the ring (U2_BUFS in the kernel).
+    // GSPLAT_TT_U2_PROBE=1 checks the staged values against the ring path (output wrong).
+    auto env_def = [](const char* key, const char* def) -> std::string {
+        const char* v = std::getenv(key);
+        return (v != nullptr && v[0] != '\0') ? std::string(v) : std::string(def);
+    };
+    const std::string blend_u2 = env_def("GSPLAT_TT_BLEND_UNPACK_STAGE", "0");
+    const std::string blend_u2_probe = env_def("GSPLAT_TT_U2_PROBE", "0");
     if (blend_da != "0") {
         constexpr uint32_t CB_DA_RING = 10;
-        cb_cfg(CB_DA_RING, 64, 1u + 64u, DataFormat::UInt32);
+        cb_cfg(CB_DA_RING, 64, 1u + 64u + (blend_u2 != "0" ? 40u : 0u), DataFormat::UInt32);
     }
 
     // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
@@ -327,6 +337,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "0");
         compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "1");
         compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
+        compute_defines["BLEND_UNPACK_STAGE"] = blend_u2;
+        compute_defines["BLEND_U2_PROBE"] = blend_u2_probe;
     }
     ctx.compute = CreateKernel(
         program,
