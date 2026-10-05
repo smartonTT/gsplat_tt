@@ -12,6 +12,9 @@ REF=/localdev/smarton/t82_scripts/md5-r82new.txt
 P=docs/covcam-sfpu-t206
 O=$P/out; mkdir -p $O
 KN=GSPLAT_TT_PFWC_COVCAM_SFPU
+# The knob=1 program is 71184 B > the 70656 B kernel config buffer: every arm runs with
+# KX (default 4) KB more config buffer so both arms are equal. KX=0 = default device open.
+KX=${KX:-4}; XK=GSPLAT_TT_KCFG_EXTRA_KB=$KX
 lk() { ttp lock p100 -- "$@"; local rc=$?; [ $rc -eq 75 ] && { echo LOCK_BUSY; echo CHAIN_DONE; exit 75; }; return $rc; }
 gate() {  # round arm...: fetch logs, fail the chain on any md5 mismatch
   local r=$1; shift; local bad=0
@@ -28,7 +31,7 @@ if has sync; then
   lk opt/sync_remote.sh $H $T "${1:-HEAD}"; rc=$?; echo "SYNC_RC=$rc"; [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 fi
 if has smoke; then
-  lk $DEVRUN --host $H --no-verify --timeout 400 --tag t218-smoke -- "bash $T/$P/remote_smoke.sh sfpu $KN=1"
+  lk $DEVRUN --host $H --no-verify --timeout 400 --tag t218-smoke -- "bash $T/$P/remote_smoke.sh sfpu $KN=1 $XK"
   rc=$?; echo "SMOKE_RC=$rc"
   scp -q -o BatchMode=yes "$H:$T/tmp/t218/run-sfpu.log" $O/smoke-sfpu.log 2>/dev/null
   [ $rc -eq 0 ] || { echo CHAIN_DONE; exit 5; }
@@ -40,13 +43,17 @@ for k in 0 1; do
   D=$T/opt/profiler/t218-pc2-k$k
   for x in capture.log pc_split.txt dev.csv.gz; do scp -q -o BatchMode=yes "$H:$D/$x" $O/pc2-k$k-$x 2>/dev/null; done
 done
-ord=("base sfpu:$KN=1" "sfpu:$KN=1 base" "base sfpu:$KN=1")
+B=base:$XK; F=sfpu:$KN=1,$XK
+ord=("$B $F" "$F $B" "$B $F")
 for r in 1 2 3; do
   has $r || continue
   lk $DEVRUN --host $H --no-verify --timeout 300 --tag t218-time$r -- \
     "RUN_TO=130 bash $T/$P/remote_time.sh $r ${ord[$((r-1))]}"
   echo "TIME${r}_RC=$?"; gate $r base sfpu
 done
+if has size; then  # fused pfwc ELF sizes in the knob=1 cache
+  lk ssh -o BatchMode=yes $H "find /localdev/smarton/.cache/ttmc-gstt2-t218 -name '*.elf' -path '*pfwc*' | xargs -r ls -l | sort -k5 -n | tail -12"
+fi
 if has dflt; then
   lk $DEVRUN --host $H --no-verify --timeout 300 --tag t218-dflt -- \
     "RUN_TO=130 bash $T/$P/remote_time.sh d base off:$KN=0"
