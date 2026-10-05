@@ -1,0 +1,3 @@
+compiled single body (microblock 2): 60 ops, 11 MAD->use stalls
+F schedule: 60 SFPU ops, 0 MAD->use stalls, DEST writes [4, 68, 132, 196], identical to compiled: True
+A2 split: 60 SFPU ops, 0 MAD->use stalls, DEST writes [4, 68, 132, 196], identical to compiled: True
