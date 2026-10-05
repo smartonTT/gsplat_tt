@@ -55,3 +55,20 @@ start and back at the end. All 6 runs ALL_VIEWS_IDENTICAL and md5-identical to m
 Verdict: the fold hang was the stack overrun; with cur_lm off the stack the fold runs traced and
 untraced. Single unpaired f run vs b mean: -0.13 ms/view (v2 table + fold over the fix); the
 paired fold + v2 gate is in GATE.md.
+
+### Gate: t177 v2 mover table + t164 fold vs the new tip (shelved)
+
+Driver `gate.sh` (task run 521). t = tip dfc7548 (fix landed), c = a8f7d19 (tip + t177 v2 table +
+t164 fold, `GSPLAT_TT_OL_EMIT_FOLD=1`). Untraced, 30 views, avg_frame_ms.
+
+| round (order) | t | c | c - t | t bin_emit | c bin_emit |
+|---|---|---|---|---|---|
+| g1 (c, t) | 16.591 | 16.524 | -0.067 | 3.386 | 3.233 |
+| g2 (t, c) | 16.704 | 16.422 | -0.282 | 3.370 | 3.210 |
+| g3 (c, t) | 16.688 | 16.449 | -0.239 | 3.439 | 3.212 |
+| mean | 16.661 | 16.465 | **-0.196** | 3.398 | 3.218 |
+
+All 6 runs ALL_VIEWS_IDENTICAL and md5-identical to md5-r82new.txt (46a725ab). The fold no longer
+hangs. Mean -0.196 ms/view misses the -0.3 gate (about the same as #177's v2 table alone, -0.200),
+so the fold adds nothing measurable once the fix is in. **Shelved, not landed.** Branch
+ttp/t187-fold-gate keeps the code; the fold stays opt-in.
