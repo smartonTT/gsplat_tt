@@ -92,7 +92,10 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         // Task #207/#221: the split pfwc writer adds the writer code to the NCRISC kernel
         // (92496 B program, too large at +8 and +16 KB); SFPU cov_cam alone needs ~4 KB.
         // The split only builds with the fused writer (pfwc_fuse_mode() == 1).
-        if (kx == nullptr && env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1) extra_kb = 24;
+        // Task #232: with the BRISC reader (GSPLAT_TT_PFWC_RD_*) the program is 96288 B with P2
+        // and 98000 B without, too large at +24 KB.
+        if (kx == nullptr && env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1)
+            extra_kb = env_config::pfwc_rd_brisc() ? 32 : 24;
         else if (kx == nullptr && env_config::pfwc_covcam_sfpu()) extra_kb = 8;
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;

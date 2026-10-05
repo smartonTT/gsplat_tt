@@ -1,0 +1,5 @@
+cores=110 launches/core=5..5 series=550
+
+BRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 2.218, wait 1.112, cls 0.404, pfx 0.003, rec 0.655, opn 0.032, tail 0.013, rd 0.000, fl 0.092
+  max core: wall 2.369, wait 0.822, cls 0.420, pfx 0.011, rec 0.813, opn 0.290, tail 0.013, rd 0.000, fl 0.106  (n=28)
