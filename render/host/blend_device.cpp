@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <chrono>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -841,6 +842,190 @@ static DeviceContext init_device_context() {
     return ctx;
 }
 
+// ---------------------------------------------------------------------------
+// SUB-TILE CULL INSTRUMENTATION (GSPLAT_TT_CULL_STATS=1)
+//
+// Quantifies how much of the nominal 32x sub-tile processing waste the current
+// microblock cull already recovers, and how much is left BELOW the microblock.
+//
+// Entirely OFF by default: guarded on the env flag, reads only already-resident
+// DRAM buffers AFTER the cull writer has published the masks, and touches no
+// kernel, no runtime arg and no buffer contents. With the flag unset not a
+// single extra instruction runs on the perf path.
+//
+// Definitions (all per view, units are (gaussian,tile) pairs unless noted):
+//   considered   candidates entering the cull = post-AABB (gaussian,tile) pairs
+//                that survived tile_assign + sort (== sort P_kept)
+//   kept         pairs whose 32-bit microblock mask is non-zero (blend loads
+//                the record and runs >=1 microblock for these)
+//   mb_proc      SUM popcount(mask) — the (pair,microblock) work units the
+//                blend SFPU actually evaluates
+//   mb_true      (pair,microblock) units where >=1 PIXEL CENTER of the 8x4
+//                microblock really has alpha = op*exp(-m2/2) >= contrib_floor
+//   px_true      pixel-level ground truth inside the PROCESSED microblocks
+//
+// The pixel test uses exactly the blend kernel's algebra: alpha >= floor
+// <=> m2 = ci_a*dx^2 + 2*ci_b*dx*dy + ci_c*dy^2 <= thr = 2*ln(op/floor), with
+// ci_a=-2A, ci_b=-B, ci_c=-2C (the pre-folded conic in proj_m_a/b/c) and pixel
+// centers dx = ox+i+0.5-mlx, dy = oy+j+0.5-mly (blend XRAMP/YRAMP convention).
+// The cull's box test is the CONTINUOUS min over [ox,ox+8]x[oy,oy+4], which is
+// a half-pixel larger than the pixel-centre hull in every direction, hence
+// conservative: mb_true <= mb_proc is expected, never the reverse.
+struct CullStatsAcc {
+    uint64_t views = 0;
+    uint64_t considered = 0;
+    uint64_t kept = 0;
+    uint64_t mb_proc = 0;
+    uint64_t mb_true = 0;           // contributing, inside the kept mask
+    uint64_t mb_true_all = 0;       // contributing anywhere in the 32 microblocks
+    uint64_t px_true = 0;           // contributing pixels inside processed mbs
+    uint64_t pairs_true = 0;        // pairs with >=1 contributing pixel anywhere
+};
+static CullStatsAcc g_cull_stats;
+
+static bool cull_stats_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_CULL_STATS");
+        return e && e[0] && e[0] != '0';
+    }();
+    return on;
+}
+
+// Number of pixel centres of microblock (ox,oy) with m2 <= thr, evaluated by
+// second-difference recurrence along each of the 4 rows (3 flops/pixel).
+static inline uint32_t mb_contrib_pixels(
+    float ci_a, float ci_b, float ci_c, float thr,
+    float ox, float oy, float mlx, float mly) {
+    uint32_t n = 0;
+    const float dx0 = ox + 0.5f - mlx;
+    const float dd = 2.0f * ci_a;  // second difference along x
+    for (uint32_t j = 0; j < 4; ++j) {
+        const float dy = oy + static_cast<float>(j) + 0.5f - mly;
+        float val = ci_a * dx0 * dx0 + 2.0f * ci_b * dx0 * dy + ci_c * dy * dy;
+        float delta = ci_a + 2.0f * ci_a * dx0 + 2.0f * ci_b * dy;
+        for (uint32_t i = 0; i < 8; ++i) {
+            if (val <= thr) ++n;
+            val += delta;
+            delta += dd;
+        }
+    }
+    return n;
+}
+
+static void collect_cull_stats(
+    DeviceContext& ctx,
+    float contrib_floor,
+    uint32_t num_tiles,
+    uint32_t tiles_x,
+    uint64_t total_candidates,
+    uint64_t total_mask_elems) {
+    namespace ds = gsplat_tt::device_state;
+    auto rd_u32 = [&](std::shared_ptr<distributed::MeshBuffer> b) {
+        std::vector<uint32_t> v(b->size() / 4, 0u);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, true);
+        return v;
+    };
+    auto rd_f32 = [&](std::shared_ptr<distributed::MeshBuffer> b) {
+        std::vector<float> v(b->size() / 4, 0.0f);
+        distributed::EnqueueReadMeshBuffer(*ctx.cq, v, b, true);
+        return v;
+    };
+
+    auto buf_masks = ds::get_buffer("cull_masks");
+    auto buf_base = ds::get_buffer("cull_mask_base");
+    auto buf_rng = ds::get_buffer("sort_tile_ranges");
+    auto buf_ids = ds::get_buffer("sort_sorted_ids");
+    if (!buf_masks || !buf_base || !buf_rng || !buf_ids) return;
+
+    const std::vector<uint32_t> masks = rd_u32(buf_masks);
+    const std::vector<uint32_t> base = rd_u32(buf_base);
+    const std::vector<uint32_t> ranges = rd_u32(buf_rng);
+    const std::vector<uint32_t> ids = rd_u32(buf_ids);
+    const std::vector<float> ca = rd_f32(ds::get_buffer("proj_m_a"));
+    const std::vector<float> cb = rd_f32(ds::get_buffer("proj_m_b"));
+    const std::vector<float> cc = rd_f32(ds::get_buffer("proj_m_c"));
+    const std::vector<float> cpx = rd_f32(ds::get_buffer("proj_m_px"));
+    const std::vector<float> cpy = rd_f32(ds::get_buffer("proj_m_py"));
+    const std::vector<float> cop = rd_f32(ds::get_buffer("proj_m_opacity"));
+
+    const float inv_floor = 1.0f / contrib_floor;
+    CullStatsAcc v;  // this view
+    v.views = 1;
+    v.considered = total_candidates;
+
+    for (uint32_t t = 0; t < num_tiles; ++t) {
+        if (2u * t + 1u >= ranges.size() || t >= base.size()) break;
+        const uint32_t id_start = ranges[2u * t + 0u];
+        const uint32_t id_end = ranges[2u * t + 1u];
+        if (id_end <= id_start) continue;
+        const uint32_t L = id_end - id_start;
+        const uint32_t mb = base[t];
+        const float txf = static_cast<float>((t % tiles_x) * 32u);
+        const float tyf = static_cast<float>((t / tiles_x) * 32u);
+
+        for (uint32_t j = 0; j < L; ++j) {
+            const uint64_t mi = static_cast<uint64_t>(mb) + j;
+            if (mi >= masks.size() || (id_start + j) >= ids.size()) break;
+            const uint32_t mask = masks[mi];
+            const uint32_t gid = ids[id_start + j];
+            if (gid >= ca.size()) continue;
+            if (mask != 0u) {
+                ++v.kept;
+                v.mb_proc += static_cast<uint64_t>(__builtin_popcount(mask));
+            }
+            const float op = cop[gid];
+            if (!(op > contrib_floor)) continue;  // thr <= 0 => nothing contributes
+            const float thr = 2.0f * std::log(op * inv_floor);
+            const float ci_a = -2.0f * ca[gid];
+            const float ci_b = -1.0f * cb[gid];
+            const float ci_c = -2.0f * cc[gid];
+            const float mlx = cpx[gid] - txf;
+            const float mly = cpy[gid] - tyf;
+            bool any = false;
+            for (uint32_t m = 0; m < 32u; ++m) {
+                const float ox = static_cast<float>((m & 3u) * 8u);
+                const float oy = static_cast<float>((m >> 2) * 4u);
+                const uint32_t np = mb_contrib_pixels(ci_a, ci_b, ci_c, thr, ox, oy, mlx, mly);
+                if (np == 0u) continue;
+                any = true;
+                ++v.mb_true_all;
+                if (mask & (1u << m)) {
+                    ++v.mb_true;
+                    v.px_true += np;
+                }
+            }
+            if (any) ++v.pairs_true;
+        }
+    }
+
+    g_cull_stats.views += 1;
+    g_cull_stats.considered += v.considered;
+    g_cull_stats.kept += v.kept;
+    g_cull_stats.mb_proc += v.mb_proc;
+    g_cull_stats.mb_true += v.mb_true;
+    g_cull_stats.mb_true_all += v.mb_true_all;
+    g_cull_stats.px_true += v.px_true;
+    g_cull_stats.pairs_true += v.pairs_true;
+
+    const auto& a = g_cull_stats;
+    std::printf(
+        "CULL_STATS view=%llu floor=%.6f considered=%llu kept=%llu mb_proc=%llu "
+        "mb_true=%llu mb_true_all=%llu px_true=%llu pairs_true=%llu "
+        "| CUM views=%llu considered=%llu kept=%llu mb_proc=%llu mb_true=%llu "
+        "mb_true_all=%llu px_true=%llu pairs_true=%llu mask_elems=%llu\n",
+        (unsigned long long)a.views, contrib_floor,
+        (unsigned long long)v.considered, (unsigned long long)v.kept,
+        (unsigned long long)v.mb_proc, (unsigned long long)v.mb_true,
+        (unsigned long long)v.mb_true_all, (unsigned long long)v.px_true,
+        (unsigned long long)v.pairs_true,
+        (unsigned long long)a.views, (unsigned long long)a.considered,
+        (unsigned long long)a.kept, (unsigned long long)a.mb_proc,
+        (unsigned long long)a.mb_true, (unsigned long long)a.mb_true_all,
+        (unsigned long long)a.px_true, (unsigned long long)a.pairs_true,
+        (unsigned long long)total_mask_elems);
+    std::fflush(stdout);
+}
+
 // Run the SFPU cull pass over all candidates and register the resident
 // cull_masks buffer in device_state. Returns elapsed ms (or 0 if a required
 // resident buffer is missing, leaving *ok=false).
@@ -981,6 +1166,14 @@ static double process_frame(
         distributed::Finish(*ctx.cq);
     }
     const auto t_end = std::chrono::steady_clock::now();
+
+    // Instrumentation only (GSPLAT_TT_CULL_STATS=1): read the just-published
+    // masks back on the same in-order CQ and measure sub-tile culling waste.
+    // Deliberately AFTER t_end so it can never enter the reported cull ms.
+    if (cull_stats_enabled()) {
+        collect_cull_stats(
+            ctx, contrib_floor, num_tiles, tiles_x, total_candidates, total_mask_elems);
+    }
 
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
