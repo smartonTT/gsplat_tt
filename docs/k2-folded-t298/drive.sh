@@ -13,6 +13,10 @@ for i in 0 1 2 3; do
     if [ $a = fold ]; then bash $D/run.sh $r fold; else bash $D/run.sh $r off GSPLAT_TT_K2_FOLDED=0; fi
     rc=$?
     if [ $rc != 0 ]; then echo "STOP r$r-$a rc=$rc"; exit $rc; fi
+    O=$D/out
+    if [ $a = fold ] && ! grep -q "K2 folded into sort=1" $O/run-r$r-$a.log; then echo "STOP fold not engaged"; exit 7; fi
+    sw=$(md5 -q $O/md5-r$r-$a.txt 2>/dev/null)
+    if [ "$sw" != 906e04357f6a88511dafb470dd211d32 ]; then echo "STOP r$r-$a sweep md5 $sw != golden"; exit 8; fi
   done
 done
 echo "=== t298 drive done $(date +%T)"
