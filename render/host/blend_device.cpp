@@ -1404,6 +1404,25 @@ double blend_mb_devcull_resident(
         f << "num_tiles " << num_tiles << "\ntiles_x " << tiles_x << "\nfloor "
           << std::setprecision(9) << contrib_floor << "\n";
     }
+    // Debug (task #260): GSPLAT_TT_DUMP_PROJ=<dir> dumps the first frame's resident
+    // projection outputs (blend records: conic a/b/c, mean x/y, opacity, colours,
+    // depth; plus depth, tile rect, fuse counts, M) as raw u32 files, to compare the
+    // device pfwc against the CPU project. Default OFF; first frame only.
+    static bool dumped_proj = false;
+    if (const char* dd = std::getenv("GSPLAT_TT_DUMP_PROJ"); dd && dd[0] && !dumped_proj) {
+        dumped_proj = true;
+        namespace ds = gsplat_tt::device_state;
+        distributed::Finish(*g_ctx_mb->cq);
+        for (const char* name : {"proj_m_blendrec", "proj_m_depth", "proj_m_aabb",
+                                 "pfwc_fuse_counts", "proj_M"}) {
+            auto b = ds::get_buffer(name);
+            if (!b) continue;
+            std::vector<uint32_t> v(b->size() / 4, 0);
+            distributed::EnqueueReadMeshBuffer(*g_ctx_mb->cq, v, b, true);
+            std::ofstream f(std::string(dd) + "/" + name + ".u32", std::ios::binary);
+            f.write(reinterpret_cast<const char*>(v.data()), v.size() * 4);
+        }
+    }
     {
         auto& st = gsplat_tt::stagetimers::acc();
         st.cull += cull_ms;
