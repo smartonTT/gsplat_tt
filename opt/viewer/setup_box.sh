@@ -3,7 +3,9 @@
 # Builds tt-metal at the commit the ledger box uses, makes the project venv and
 # the scenes dir that opt/sync_remote.sh links into each deploy dir. Idempotent:
 # finished steps are skipped. Writes $ROOT/viewer/setup.rc (0 = ok) at the end.
-#   ssh <box> 'setsid nohup bash -s > /localdev/$USER/viewer/setup.log 2>&1 &' < opt/viewer/setup_box.sh
+#   ssh <box> 'cat > /localdev/$USER/viewer/setup_box.sh' < opt/viewer/setup_box.sh
+#   ssh <box> '(setsid nohup bash /localdev/$USER/viewer/setup_box.sh > /localdev/$USER/viewer/setup.log 2>&1 < /dev/null &)'
+# (A backgrounded `bash -s` reads /dev/null, not the piped script.)
 set -uo pipefail
 # The ledger box (yyzo-bh-07) runs tt-metal e77780fe, a local commit that is not
 # on GitHub; it pins sfpi 7.49.0. 437bc366 (2026-05-15) is the parent of
