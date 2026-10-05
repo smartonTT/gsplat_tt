@@ -75,4 +75,4 @@ Reading:
   write the source id into the record.
 - Fix direction: one Newton step on the device 1/z (and the conic inverse) in pfwc. Expected
   gain cannot exceed the ~47 dB term, i.e. ~+0.2 dB on the default (41.16) and
-  ~+0.9 dB on the 1/1024 arm (45.83), at a small pfwc cost.
+  ~+0.9 dB on the 1/1024 arm (45.83), at a small pfwc cost (rough bound, not measured).
