@@ -551,7 +551,7 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     // Task #86: GSPLAT_TT_MATCULL_PROF=1 compiles fine per-item Tracy zones
     // into the materialize kernel (attribution). Default OFF.
     const char* mc_prof = std::getenv("GSPLAT_TT_MATCULL_PROF");
-    std::map<std::string, std::string> mat_defines;
+    mat_defines.clear();
     if (mc_prof != nullptr && mc_prof[0] == '1') mat_defines["MATCULL_PROF"] = "1";
     // Task #90: fused SFPU cull. Per mover a coefficient and a mask CB of
     // mat_cull_depth() fp32 tiles at id 8 / 9 (+16 on BRISC), served by one
