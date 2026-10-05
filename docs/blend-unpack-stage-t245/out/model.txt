@@ -1,0 +1,62 @@
+== Step 1: re-fit to t231 (ms/view saved vs A2: RAW 0.206, S2a 0.357, S2 0.707)
+t230 assumed sr 77 -> 60 (RAW), 77 -> 20 (S2a), scan 27.2 -> 8 (S2)
+fit                                     A2 cyc  sr_raw   sr_da   scan2  S2 cyc
+H3 stall is push cost d=16               303.4    64.0    54.4     5.0   258.6
+H1 stall is RISC (jumps, load- d=32      294.5    64.0    54.4     3.4   249.8
+H4 stall is MAD latency (count d=32      268.0    64.0    54.4    n/a    n/a
+H3 stall is push cost d=8                311.9    64.0    54.4     5.0   267.2
+
+== Step 2: designs on top of the fitted S2 point
+cycles per live record; dms = ms/view saved vs S2 tip; gate 0.30
+
+-- H3 stall is push cost, d=16  (sr_da 54.4, scan2 5.0)
+   S2 tip (iter 198, fitted)                                   258.6  dms +0.00   SFPU-bound  209.7
+   U2  staging area in DEST, 27 copy ops pushed, RISC 12       215.0  dms +0.69   SFPU-bound  207.7
+   U2  same, RISC 20 (slow mask/ring loads)                    221.8  dms +0.58   SFPU-bound  207.7
+   U2  same, RISC 30 (ring poll as costly as today)            231.8  dms +0.42   SFPU-bound  207.7
+   U2m 27 copy ops in one MOP push, RISC 12                    207.9  dms +0.80   SFPU-bound  207.7
+   U3  unpack straight into slot 6, exposed latency 10         186.2  dms +1.14   SFPU-bound  181.7
+   U3  same, exposed latency 40                                216.2  dms +0.67   SFPU-bound  181.7
+   U1  ideal bound: 2 handshake ops, RISC 4                    180.9  dms +1.23   SFPU-bound  180.7
+   X   keep ring loads, 31 staging ops in one push             237.4  dms +0.33   SFPU-bound  209.7
+
+-- H1 stall is RISC (jumps, load-use), d=32  (sr_da 54.4, scan2 3.4)
+   S2 tip (iter 198, fitted)                                   249.8  dms +0.00   SFPU-bound  209.7
+   U2  staging area in DEST, 27 copy ops pushed, RISC 12       211.8  dms +0.60   SFPU-bound  207.7
+   U2  same, RISC 20 (slow mask/ring loads)                    216.6  dms +0.52   SFPU-bound  207.7
+   U2  same, RISC 30 (ring poll as costly as today)            225.1  dms +0.39   SFPU-bound  207.7
+   U2m 27 copy ops in one MOP push, RISC 12                    207.9  dms +0.66   SFPU-bound  207.7
+   U3  unpack straight into slot 6, exposed latency 10         184.8  dms +1.03   SFPU-bound  181.7
+   U3  same, exposed latency 40                                211.8  dms +0.60   SFPU-bound  181.7
+   U1  ideal bound: 2 handshake ops, RISC 4                    181.0  dms +1.09   SFPU-bound  180.7
+   X   keep ring loads, 31 staging ops in one push             218.4  dms +0.50   SFPU-bound  209.7
+
+-- H3 stall is push cost, d=8  (sr_da 54.4, scan2 5.0)
+   S2 tip (iter 198, fitted)                                   267.2  dms +0.00   SFPU-bound  209.7
+   U2  staging area in DEST, 27 copy ops pushed, RISC 12       227.1  dms +0.63   SFPU-bound  207.7
+   U2  same, RISC 20 (slow mask/ring loads)                    232.6  dms +0.55   SFPU-bound  207.7
+   U2  same, RISC 30 (ring poll as costly as today)            240.3  dms +0.42   SFPU-bound  207.7
+   U2m 27 copy ops in one MOP push, RISC 12                    207.9  dms +0.94   SFPU-bound  207.7
+   U3  unpack straight into slot 6, exposed latency 10         194.8  dms +1.14   SFPU-bound  181.7
+   U3  same, exposed latency 40                                224.8  dms +0.67   SFPU-bound  181.7
+   U1  ideal bound: 2 handshake ops, RISC 4                    181.6  dms +1.35   SFPU-bound  180.7
+   X   keep ring loads, 31 staging ops in one push             247.1  dms +0.32   SFPU-bound  209.7
+
+== Summary over fits (min .. max dms vs S2 tip)
+   S2 tip (iter 198, fitted)                                  +0.00 .. +0.00
+   U2  staging area in DEST, 27 copy ops pushed, RISC 12      +0.60 .. +0.69
+   U2  same, RISC 20 (slow mask/ring loads)                   +0.52 .. +0.58
+   U2  same, RISC 30 (ring poll as costly as today)           +0.39 .. +0.42
+   U2m 27 copy ops in one MOP push, RISC 12                   +0.66 .. +0.94
+   U3  unpack straight into slot 6, exposed latency 10        +1.03 .. +1.14
+   U3  same, exposed latency 40                               +0.60 .. +0.67
+   U1  ideal bound: 2 handshake ops, RISC 4                   +1.09 .. +1.35
+   X   keep ring loads, 31 staging ops in one push            +0.32 .. +0.50
+
+== Step 3: TRISC0 producer load per live record (instructions, ~1 cycle each)
+TRISC1 pace at S2 is ~255 cycles per live record (t231); TRISC0 also walks dead records
+   S2 today (14 SFPLOADI words + mask into the ring)             55
+   U2 9 values x 8 words + 4 ORs + unpack/sem                   129
+   U2 if rows cannot be repeated (4x the stores)                345
+   U3 with UNORM fully decoded on TRISC0 (soft RNE mul)         245
+   dead-record walk on TRISC0, per live record (t205 SCAN)       27
