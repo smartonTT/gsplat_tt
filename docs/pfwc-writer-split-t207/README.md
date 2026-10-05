@@ -95,23 +95,43 @@ run yet**: md5, timing and the kernel binary size are unmeasured.
 Per view on bicycle, today ~54 chunks per core: compute (TRISC1) ~2.5 ms is the floor, the
 writer ~2.0 ms mean and ~2.2 ms on the heaviest core (views 1-3). pfwc makespan ~2.75 ms.
 
+`timeline_model.py` (output in `timeline_model.txt`) replays one core's chunk timeline:
+classify 13.4 µs + records 23.3 µs per chunk (CV 0.5), compute emitting one chunk every P µs,
+the split's PREFIX chain and OPEN ordering, and 2 µs per odd chunk for NCRISC's reader polls.
+P = 46 µs is today's compute; P = 20 µs is compute after the SFPU fusion (t197: ~1.65 ms of
+math becomes ~0.2-0.3).
+
+| core | P | single writer | split | saving |
+|---|---:|---:|---:|---:|
+| mean | 46 µs | 2.524 | 2.522 | 0.002 |
+| heavy (records ×1.2) | 46 µs | 2.549 | 2.528 | 0.021 |
+| heavy (records ×1.4) | 46 µs | 2.652 | 2.533 | 0.119 |
+| mean | 20 µs | 1.997 | 1.158 | 0.839 |
+| heavy (records ×1.2) | 20 µs | 2.320 | 1.303 | 1.017 |
+| heavy (records ×1.4) | 20 µs | 2.571 | 1.441 | 1.130 |
+
+The slowest core sets the pfwc makespan, so the heavy rows count:
+
 | case | pfwc ms/view | saving vs today |
 |---|---:|---:|
 | today | ~2.75 | — |
-| split alone | ~2.55-2.65 | ~0.1-0.2 (only the heavy-core writer back-pressure, 0.09-0.23 ms in t197; compute stays the floor) |
-| SFPU cov2d/conic/radii fusion alone (t197 lever 2) | ~2.2-2.3 | ~0.5-0.6 (capped by the single writer) |
-| fusion + split | ~1.3-1.45 | ~1.3-1.45 (writer halves to ~1.1-1.3 per RISC on the heaviest core; compute ~1.0-1.2) |
+| split alone | ~2.6-2.7 | ~0.02-0.12 (only the heavy cores' writer back-pressure; t197 measured 0.09-0.23 ms of it) |
+| SFPU cov2d/conic/radii fusion alone (t197 lever 2) | ~2.2-2.4 | ~0.4-0.55 (capped by the single writer) |
+| fusion + split | ~1.3-1.45 | ~1.3-1.45 |
 
 So the split alone falls under the 0.3 ms/view gate. Its value is removing the writer cap
-once compute drops: on top of the fusion it is worth ~0.8-0.9 ms/view. Together that is
+once compute drops: on top of the fusion it is worth ~0.8-1.1 ms/view. Together that is
 ~15.2 → ~13.8-13.9 ms/view (~72 FPS) on the tip, if the rest of the pipeline is unchanged.
+In the model the OPEN ordering costs nothing (a variant that merges the shared page later
+gives the same times), so there is no need to decouple it further.
 
 ## Device test plan (follow-up, under `ttp lock p100`)
 
 1. Bicycle 30 views with `GSPLAT_TT_PFWC_WRITER_SPLIT=1`: md5 must equal `46a725ab`
    (`md5-r82new.txt`, all 30 views); look for kernel-config TT_FATALs or hangs first.
-2. Paired untraced A/B, knob 0 vs 1, `docs/tip-t199` drivers. Expect ≤ 0.2 ms/view. Keep
-   the default at 0 unless it clears the gate.
+2. Paired untraced A/B, knob 0 vs 1, `docs/tip-t199` drivers, both arms with
+   `GSPLAT_TT_KCFG_EXTRA_KB=8` so only the knob differs. Expect ≤ 0.12 ms/view. Keep the
+   default at 0 unless it clears the gate.
 3. Tracy with `GSPLAT_TT_PFWC_STEPCYC=1 GSPLAT_TT_KCFG_EXTRA_KB=16`: `pfwc_ws` per role
    gives `n wall wait cls pfx rec opn tail rd`. Check the per-RISC writer busy time
    (cls + rec, expect ~1.0-1.1 ms each) and that pfx/opn waits are small.
