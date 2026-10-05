@@ -113,7 +113,7 @@ Cost/risk: medium-high code (3-RISC + 2-mover protocol, new TRISC kernel path in
 program, Tracy hang history). It is the largest lever left in the emit. The pack loop is
 1.90 ms of the 2.49 ms sort_ol program, and no single-RISC diet has found more than ~0.6 ms.
 
-## t202 build (GSPLAT_TT_OL_EMIT_TOWN=1, default off until gated)
+## t202 build (GSPLAT_TT_OL_EMIT_TOWN, on by default after the gate; =0 turns it off)
 
 Code: `render/kernels/dataflow/sort_ol_town.h` (protocol, mailbox layout),
 `render/kernels/compute/sort_ol_town_compute.cpp` (TRISCs), the `#if OL_EMIT_TOWN` path in
@@ -141,3 +141,29 @@ bucket image == sequential emit; dropping the run-free wait or loosening the slo
   ep_nrun = runs from the queues, ep_nrec = 0 (records: TRISC counter rec).
 - Drivers: `drive.sh` (sync, 2-view smoke, Tracy 0:10 town/base, 3 A/B rounds),
   `town_parts.py` (TRISC counters, gate metric (proc - wfl - wq) / rec).
+
+## t202 results: KEEP, on by default
+
+Board yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 1024x1024. All runs md5-identical to
+md5-r82new.txt (46a725ab): 2-view smoke, 6 A/B runs, 2 default-check runs.
+
+- **Gate (Tracy views 0:10, `GSPLAT_TT_OL_EMIT_PROF=1`, rev 626de7b): PASS.** TRISC cycles per
+  owned record 178.8 (gate <= 270; 189.7 with waits; the three TRISCs within 0.5 cycles of each
+  other). Emit zone makespan 2.312 -> 1.328 ms/view (mover zone; the TRISC zone `sort_ol_town`
+  is 1.228), gate >= 0.3 drop. sort_ol program busy 2.497 -> 1.478 ms/view; traced view span
+  15.037 -> 14.027. pfwc, K2, mat and blend busy unchanged (+-0.01). Files:
+  `out/tracy-{base,town}-*.txt`, `out/smoke-town.log`.
+- **A/B (untraced, 30 views, 3 rounds, order swapped in round 2, rev 626de7b): KEEP.**
+  view_total base/town: r1 15.177/14.235, r2 15.165/14.224, r3 15.241/14.247; mean
+  15.194 -> 14.235 ms/view, paired -0.942/-0.941/-0.994, mean -0.959 (-6.3%), 65.8 -> 70.2 FPS.
+  (avg_frame_ms 15.228 -> 14.267.) The host sort stage ends at enqueue, so the gain shows in the
+  blend stage, which absorbs the device sort time: 10.103 -> 9.145. Files: `out/ab.txt`,
+  `out/run-r{1,2,3}-*.log`, `out/md5-r*`.
+- **Default flip (rev a37ad1e, on the smarton/tt-project-opt tip):** default env logs
+  `OL_EMIT_TOWN=1`, view_total 14.226 ms/view; `GSPLAT_TT_OL_EMIT_TOWN=0` 15.207. Files:
+  `out/run-rd-{base,off}.log`.
+- The measured gain (-0.96) beats the t200 model (-0.63 nominal) because the TRISC loop runs
+  at 179 cycles/record against the mover's 216 and the movers' list build overlaps it; the
+  movers now mostly wait (ep_wfl slot waits 0.55 ms) and issue runs (ep_wiss 0.29 ms).
+- Cost: +46.4 KB L1 per mover (cb_bytes/mover 521280 -> 567680: 2 more blendrec slots plus
+  the 13.3 KB mailbox), and the sort_ol program now uses the TRISCs.
