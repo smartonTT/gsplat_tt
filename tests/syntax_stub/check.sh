@@ -31,6 +31,9 @@ chk "sort_subchunk_materialize.cpp OL_MAT_SELECT FUSE_CULL" $DF -DSORT_ONELAUNCH
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH MATBLEND_FUSE" $DF -DSORT_ONELAUNCH=1 -DMATBLEND_FUSE=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "reader_alpha_blend_mb_devcull.cpp MATBLEND_FUSE" $DF -DMB_BUCKET_FIT=8192u -DMATBLEND_FUSE=1 -DBLEND_CB_BASE=32 -DBLEND_CTA_BASE=12 render/kernels/dataflow/reader_alpha_blend_mb_devcull.cpp
 chk "writer_alpha_blend.cpp BLEND_CB_BASE" $DF -DBLEND_CB_BASE=32 -DBLEND_CTA_BASE=12 render/kernels/dataflow/writer_alpha_blend.cpp
+FZ="-DSORT_ONELAUNCH=1 -DFUSE_CULL=1 -DFUSE_CULL_DEPTH=2u -DMATCULL_FOLD=0 -DMATBLEND_FUSE=1 -DBLEND_CB_BASE=32 -DBLEND_CTA_BASE=24"
+chk "matblend_ncrisc.cpp" $DF $FZ -DMB_BUCKET_FIT=8192u -DMB_TILE_L1_MASKS=1 render/kernels/dataflow/matblend_ncrisc.cpp
+chk "matblend_brisc.cpp" $DF $FZ -DMAT_CB_BASE=16 render/kernels/dataflow/matblend_brisc.cpp
 chk "writer_pfwc_fuse.cpp" $DF render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp FUSE_ABL=7" $DF -DFUSE_ABL=7u render/kernels/dataflow/writer_pfwc_fuse.cpp
@@ -63,6 +66,8 @@ for tr in TRISC_UNPACK TRISC_MATH TRISC_PACK; do
   chk "project_pfwc_compute.cpp $tr PFWC_COV2D_SFPU" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DPFWC_COV2D_SFPU=1 -DPFWC_COVCAM_SFPU=1 render/kernels/compute/project_pfwc_compute.cpp
   chk "project_pfwc_compute.cpp $tr PFWC_COV2D_SFPU PFWC_VIS PFWC_PRECULL PFWC_WSPLIT STEPCYC" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DPFWC_COV2D_SFPU=1 -DPFWC_COVCAM_SFPU=1 -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 -DPFWC_STEPCYC=1 -DPFWC_STEPRISC=9 render/kernels/compute/project_pfwc_compute.cpp
 done
+# matblend_compute.cpp is not stub-checked: the stubs lack the blend compute
+# headers (fill.h, sfpu exp), as for alpha_blend_compute_mb.cpp; the device build checks it.
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
 for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
 PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)
