@@ -42,7 +42,11 @@ steps() {
   # render +1.6 ms/frame; task #257).
   "$BASE/.venv/bin/python" -c "import cv2" 2>/dev/null || \
     "$BASE/.venv/bin/pip" install -q --no-deps opencv-python-headless==5.0.0.93
-  "$BASE/.venv/bin/python" -c "import torch, viser, nerfview, pybind11, cv2; print('venv ok')"
+  # The sender thread encodes with simplejpeg (bundled libjpeg-turbo, releases the GIL) when it
+  # is importable; see gsplat/nerfview_viewer.py and docs/viewer-encode-t271 (task #271).
+  "$BASE/.venv/bin/python" -c "import simplejpeg" 2>/dev/null || \
+    "$BASE/.venv/bin/pip" install -q --no-deps simplejpeg==1.9.0
+  "$BASE/.venv/bin/python" -c "import torch, viser, nerfview, pybind11, cv2, simplejpeg; print('venv ok')"
 }
 ( steps ); rc=$?
 echo "$rc" > "$VDIR/setup.rc"

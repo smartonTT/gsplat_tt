@@ -8,13 +8,14 @@ viewer_clean.py does (on a private port), then times at the bicycle hero view:
   render_slider  pipeline.render at the old slider floor (1/16384)
   render_fn      the viewer's render callback (render + letterbox + stats)
   render_fn_tr   the same under nerfview's per-line sys.settrace hook (old loop)
-  jpeg_q40/q70   viser's JPEG encode of the frame
+  jpeg_q40/q70   viser's JPEG encode of the frame; jpeg <enc> q40 per --jpeg encoder
   loop_old       old nerfview loop per frame: lock + settrace + render_fn, then encode
   loop_new       FastRenderer: render_fn, encode on the sender thread (overlapped), per
-                 GIL switch interval in --switch-ms
+                 GIL switch interval in --switch-ms, then per sender encoder in --jpeg
 
 and prints md5s of the hero frame from pipeline.render and from render_fn.
   .venv/bin/python opt/viewer/viewer_probe.py [--n 30] [--bench-hero tmp/x/hero_clean.png]
+      [--jpeg viser,cv2,simplejpeg]
 """
 from __future__ import annotations
 
@@ -63,6 +64,8 @@ def main():
     ap.add_argument("--port", type=int, default=8097)
     ap.add_argument("--bench-hero", default=None, help="bench hero_clean.png to md5-compare")
     ap.add_argument("--switch-ms", default="5", help="GIL switch intervals (ms, comma list) for loop_new")
+    ap.add_argument("--jpeg", default="viser,cv2,simplejpeg",
+                    help="sender JPEG encoders (comma list, gsplat.nerfview_viewer.JPEG_ENCODERS) for loop_new")
     args = ap.parse_args()
 
     from viewer_clean import _load_run_py
@@ -74,7 +77,7 @@ def main():
     from nerfview._renderer import RenderTask, set_trace_context
     from viser._scene_api import _encode_image_binary
     from gsplat.loading_gaussians import load_ply
-    from gsplat.nerfview_viewer import FastRenderer
+    from gsplat.nerfview_viewer import FastRenderer, make_jpeg_encoder
     from gsplat.utils import c2w_to_w2c
     from gsplat.viewer import GaussianViewer
 
@@ -139,6 +142,10 @@ def main():
     rows.append(("render_fn under settrace", timed(fn_traced, args.n)))
     rows.append(("jpeg_q40", timed(lambda: _encode_image_binary(fn_img, "jpeg", jpeg_quality=40), args.n)))
     rows.append(("jpeg_q70", timed(lambda: _encode_image_binary(fn_img, "jpeg", jpeg_quality=70), args.n)))
+    jpegs = [j for j in args.jpeg.split(",") if j]
+    for j in jpegs:
+        enc = make_jpeg_encoder(j)
+        rows.append((f"jpeg {j} q40", timed(lambda: enc(fn_img, 40), args.n)))
 
     def loop_old():
         img = fn_traced()
@@ -148,7 +155,13 @@ def main():
     # FastRenderer with a client stub whose send is viser's real JPEG encode.
     send_mode = ["encode"]
 
+    class _Ws:
+        def queue_message(self, msg):
+            pass
+
     class _Scene:
+        _websock_interface = _Ws()
+
         def set_background_image(self, img, format, jpeg_quality, depth=None):
             if send_mode[0] == "sleep":
                 time.sleep(0.005)  # same wall as the encode, no CPU or GIL use
@@ -159,9 +172,11 @@ def main():
         scene = _Scene()
         client_id = -1
 
-    def loop_new(switch_ms: float, mode: str = "encode") -> None:
+    def loop_new(switch_ms: float, mode: str = "encode", jpeg: str = "viser") -> None:
         send_mode[0] = mode
-        tag = f"switch {switch_ms:g} ms" + ("" if mode == "encode" else f", {mode} send")
+        os.environ["GSPLAT_VIEWER_JPEG"] = jpeg
+        tag = f"switch {switch_ms:g} ms" + ("" if mode == "encode" else f", {mode} send") + \
+            (f", {jpeg}" if mode == "encode" else "")
         rec_key[0] = "loop_new " + tag
         sent: list[tuple[float, float, float]] = []
         done = threading.Event()
@@ -191,6 +206,9 @@ def main():
     for sw in args.switch_ms.split(","):
         loop_new(float(sw))
     loop_new(5.0, "sleep")
+    for j in jpegs:
+        if j != "viser":
+            loop_new(5.0, jpeg=j)
     for key, recs in stage_rec.items():
         recs = recs[3:] if key.startswith("loop_new") else recs
         cols = " ".join(f"{k}={statistics.median(r[k] for r in recs):.2f}" for k in recs[0])

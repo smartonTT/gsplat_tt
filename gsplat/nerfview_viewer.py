@@ -9,24 +9,84 @@ from pathlib import Path
 from typing import Callable, Optional
 
 import nerfview
+import numpy as np
 import viser
 from nerfview._renderer import Renderer, RenderTask
+from viser._messages import BackgroundImageMessage
 from nerfview.render_panel import RenderTabState, populate_general_render_tab
 
 # Keep rendering for 1 s after any UI action so the FPS readout settles.
 _UI_BURST_SEC = 1.0
 _UI_BURST_POLL_SEC = 0.016
 
+# JPEG encoders for the sender thread, in auto order. All but "viser" release the GIL for the
+# whole encode, so the render thread keeps running. "viser" is viser's own encode (cv2 with a
+# numpy channel swap, ~10 ms for 1024^2 on bh-35; task #271).
+JPEG_ENCODERS = ("simplejpeg", "turbojpeg", "cv2", "viser")
+
+
+def make_jpeg_encoder(name: str) -> Callable[[np.ndarray, int], bytes]:
+    """Return ``encode(rgb_uint8_hwc, quality) -> jpeg bytes``; ImportError if unusable."""
+    if name == "simplejpeg":
+        import simplejpeg
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            return simplejpeg.encode_jpeg(img, quality=quality, colorspace="RGB",
+                                          colorsubsampling="420", fastdct=True)
+        return encode
+    if name == "turbojpeg":
+        try:
+            import turbojpeg
+            tj = turbojpeg.TurboJPEG()  # loads libturbojpeg.so
+        except (OSError, RuntimeError) as e:
+            raise ImportError(f"libturbojpeg: {e}") from e
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            return tj.encode(img, quality=quality, pixel_format=turbojpeg.TJPF_RGB,
+                             jpeg_subsample=turbojpeg.TJSAMP_420)
+        return encode
+    if name == "cv2":
+        import cv2
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # SIMD swap, not viser's numpy gather
+            ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            if not ok:
+                raise RuntimeError("cv2.imencode failed")
+            return buf.tobytes()
+        return encode
+    if name == "viser":
+        from viser._scene_api import _encode_image_binary
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            return _encode_image_binary(img, "jpeg", jpeg_quality=quality)[1]
+        return encode
+    raise ValueError(f"unknown JPEG encoder {name!r}; choose from {JPEG_ENCODERS}")
+
+
+def pick_jpeg_encoder(name: Optional[str] = None) -> tuple[str, Callable[[np.ndarray, int], bytes]]:
+    """``name`` (default: env GSPLAT_VIEWER_JPEG, else "auto"): first usable in auto order."""
+    name = name or os.environ.get("GSPLAT_VIEWER_JPEG", "auto")
+    for cand in (JPEG_ENCODERS if name == "auto" else (name,)):
+        try:
+            return cand, make_jpeg_encoder(cand)
+        except ImportError:
+            if name != "auto":
+                raise
+    raise AssertionError("viser encoder is always importable")
+
 
 class FastRenderer(Renderer):
     """nerfview's Renderer without its two serial costs on every frame.
 
-    * No ``sys.settrace`` line hook around the render. It only served the
-      mid-render interrupt, which ``viser_patches`` disables anyway, and it
-      taxed every Python line of the render path.
+    * No ``sys.settrace`` line hook around the render, so nerfview's mid-render
+      interrupt never fires: the TT backend must not be interrupted while it
+      reads a frame from its daemon pipe (stale bytes would break every later
+      frame). The hook also taxed every Python line of the render path.
     * JPEG encode + websocket send run on a sender thread, so frame N+1
       renders on the device while frame N is encoded. Latest frame wins: an
-      unsent older frame is dropped.
+      unsent older frame is dropped. The encode is a GIL-free call
+      (``pick_jpeg_encoder``) so it does not slow the render thread.
     * During the 1 s UI burst it renders back to back rather than at the
       burst thread's 16 ms tick, so the FPS readout shows the device speed.
 
@@ -38,6 +98,7 @@ class FastRenderer(Renderer):
                  **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.on_frame_sent = on_frame_sent
+        self.jpeg_encoder_name, self._encode_jpeg = pick_jpeg_encoder()
         self._out = None
         self._out_cv = threading.Condition()
         self._sender = threading.Thread(target=self._send_loop, name="gsplat-send", daemon=True)
@@ -92,8 +153,14 @@ class FastRenderer(Renderer):
                 img, depth, quality, t0, t1 = self._out
                 self._out = None
             try:
-                self.client.scene.set_background_image(
-                    img, format="jpeg", jpeg_quality=quality, depth=depth)
+                if depth is None and img.dtype == np.uint8 and self.jpeg_encoder_name != "viser":
+                    # set_background_image minus viser's encode: same message.
+                    data = self._encode_jpeg(np.ascontiguousarray(img), quality)
+                    self.client.scene._websock_interface.queue_message(
+                        BackgroundImageMessage(format="jpeg", rgb_data=data, depth_data=None))
+                else:
+                    self.client.scene.set_background_image(
+                        img, format="jpeg", jpeg_quality=quality, depth=depth)
             except Exception:
                 traceback.print_exc()
                 continue

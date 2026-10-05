@@ -1,28 +1,20 @@
 """Compatibility shims for viser + nerfview internals.
 
-We import this for its side effects from ``gsplat.viewer``. Two upstream
-quirks bite us hard during interactive use; both are patched here so the
-actual viewer code stays clean:
+We import this for its side effects from ``gsplat.viewer``.
 
-1. **viser ``CameraHandle._update_wxyz`` divides by zero at the pole.**
-   When the camera's forward direction becomes parallel to
-   ``up_direction``, viser's Gram-Schmidt step yields a zero-length lateral
-   vector and emits ``RuntimeWarning: invalid value encountered in
-   divide``. The resulting NaN view matrix paints the browser black and
-   pins drag rotation to a half-circle. We replace the routine with a
-   gimbal-safe version that picks an alternate basis through the
-   singularity so the orbit keeps spinning.
+**viser ``CameraHandle._update_wxyz`` divides by zero at the pole.**
+When the camera's forward direction becomes parallel to ``up_direction``,
+viser's Gram-Schmidt step yields a zero-length lateral vector and emits
+``RuntimeWarning: invalid value encountered in divide``. The resulting NaN
+view matrix paints the browser black and pins drag rotation to a
+half-circle. We replace the routine with a gimbal-safe version that picks an
+alternate basis through the singularity so the orbit keeps spinning.
 
-2. **nerfview's ``Renderer.submit`` interrupts the in-flight render.**
-   When a new "move" task arrives mid-render, nerfview sets
-   ``_may_interrupt_render = True`` and uses ``sys.settrace`` to raise
-   ``InterruptRenderException`` from inside the render path. Our TT
-   backend talks to a separate daemon over stdin/stdout; if the
-   exception fires while we're partway through reading a frame's binary
-   response, the daemon's pipe is left holding the rest of that response
-   and the next frame's read sees stale bytes — every subsequent frame
-   fails. We disable the interrupt; the only cost is a slightly later
-   frame on rapid input bursts.
+nerfview's mid-render interrupt (``Renderer.submit`` + a ``sys.settrace``
+hook) is not patched here: ``gsplat.nerfview_viewer.FastRenderer`` renders
+without the trace hook, so the interrupt can never fire (task #271 removed a
+patch that set ``_may_interrupt_render = False`` before the original submit,
+which set it straight back).
 """
 from __future__ import annotations
 
@@ -73,21 +65,8 @@ def _patch_viser_camera_handle_gimbal() -> None:
     viser_internals.CameraHandle._update_wxyz = _safe_update_wxyz  # type: ignore[assignment]
 
 
-def _patch_nerfview_no_interrupt() -> None:
-    import nerfview._renderer as nv_renderer  # type: ignore[attr-defined]
-
-    original_submit = nv_renderer.Renderer.submit
-
-    def _no_interrupt_submit(self, task):  # type: ignore[no-untyped-def]
-        self._may_interrupt_render = False
-        return original_submit(self, task)
-
-    nv_renderer.Renderer.submit = _no_interrupt_submit  # type: ignore[assignment]
-
-
 def install_all() -> None:
     _patch_viser_camera_handle_gimbal()
-    _patch_nerfview_no_interrupt()
 
 
 install_all()
