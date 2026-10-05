@@ -7,4 +7,4 @@ REV=${1:-HEAD}; ONLY=${2:-}
 opt/sync_remote.sh yyzo-bh-07 /localdev/smarton/gstt2-t292 "$REV"
 ssh -o BatchMode=yes yyzo-bh-07 'test -e /localdev/smarton/gstt2-t290/render/render_clean.cpython-310-x86_64-linux-gnu.so && cut -c1-7 /localdev/smarton/gstt2-t290/SHA'
 scp -o BatchMode=yes docs/overflow-exit-t292/remote_t292.sh yyzo-bh-07:/localdev/smarton/gstt2-t292/remote_t292.sh
-ssh -o BatchMode=yes yyzo-bh-07 'bash /localdev/smarton/gstt2-t292/remote_t292.sh $ONLY'
+ssh -o BatchMode=yes yyzo-bh-07 "bash /localdev/smarton/gstt2-t292/remote_t292.sh $ONLY"
