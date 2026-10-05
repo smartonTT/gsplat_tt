@@ -121,7 +121,8 @@ The slowest core sets the pfwc makespan, so the heavy rows count:
 
 So the split alone falls under the 0.3 ms/view gate. Its value is removing the writer cap
 once compute drops: on top of the fusion it is worth ~0.8-1.1 ms/view. Together that is
-~15.2 → ~13.8-13.9 ms/view (~72 FPS) on the tip, if the rest of the pipeline is unchanged.
+14.235 → ~12.8-12.9 ms/view (70.2 → ~77-78 FPS) from the iter 194 tip (t202), if the rest
+of the pipeline is unchanged (t202 changed sort_ol's emit, not pfwc).
 In the model the OPEN ordering costs nothing (a variant that merges the shared page later
 gives the same times), so there is no need to decouple it further.
 
