@@ -1,0 +1,29 @@
+[ttw 2026-10-05T15:38:23-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T15:38:23-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-05T15:38:23-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T15:38:23-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T15:38:23-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T15:38:23-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T15:38:23-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T15:38:23-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T15:38:23-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T15:38:23-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T15:38:23-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T15:38:23-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t274-ab1  timeout=560s  worry=448s  ts=2026-10-05T15:38:24-0400
+cmd: bash /localdev/smarton/gstt2-t274/docs/k2-split-t274/remote_ab.sh 1 B:GSPLAT_TT_K2_TRISC=1 A
+-----------------------------------------
+=== r1-B d71d9b6 GSPLAT_TT_K2_TRISC=1 19:38:24
+run rc=0
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.5 p50_ms=11.6 min_ms=9.9 max_ms=13.2 n_views=30 warmup_s=18.4 out=/localdev/smarton/gstt2-t274/tmp/t274-r1-B
+SWEEP_MD5=46a725ab VIEWS=30 ALL_VIEWS_IDENTICAL_TO_GOLDEN
+=== r1-A d71d9b6  19:38:53
+run rc=0
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.7 p50_ms=11.8 min_ms=10.0 max_ms=13.3 n_views=30 warmup_s=2.7 out=/localdev/smarton/gstt2-t274/tmp/t274-r1-A
+SWEEP_MD5=46a725ab VIEWS=30 ALL_VIEWS_IDENTICAL_TO_GOLDEN
+=== done round 1 19:39:06
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t274/.ttw/logs/t274-ab1-20261005-153823.log
