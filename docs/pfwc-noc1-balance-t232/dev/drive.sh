@@ -9,7 +9,8 @@
 #          pf = P2 + MASK, p0 = P2 alone, pb = default, pa = P2 + all columns,
 #          pm<hex> = P2 + that mask (e.g. pmE000).
 #   1-4:   swapped untraced 30-view rounds base (default) / fix (P2 + MASK) [/ rdb (MASK alone)
-#          with ARM3=1]; hero_clean.png of each fix arm is fetched (device screenshot).
+#          with ARM3=1; the host opens +32 KB kcfg for it]; hero_clean.png of each arm is fetched
+#          (device screenshot).
 set -u
 cd "$(git rev-parse --show-toplevel)"
 DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
