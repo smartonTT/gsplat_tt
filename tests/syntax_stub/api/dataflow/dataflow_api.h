@@ -15,6 +15,7 @@ template <uint32_t Base> struct TensorAccessorArgs {
 };
 template <class A> struct TensorAccessor {
     TensorAccessor(const A&, uint32_t, uint32_t) {}
+    uint64_t get_noc_addr(uint32_t page, uint32_t off = 0) const;  // task #280 (writer_alpha_blend)
 };
 template <class A> TensorAccessor(const A&, uint32_t, uint32_t) -> TensorAccessor<A>;
 template <bool D> struct InterleavedAddrGen { uint32_t bank_base_address; uint32_t page_size; };
@@ -56,3 +57,8 @@ uint32_t NOC_CMD_BUF_READ_REG(uint32_t noc, uint32_t buf, uint32_t addr);
 #ifndef NOC_NODE_ID_MASK
 #define NOC_NODE_ID_MASK ((((uint64_t)0x1) << 6) - 1)
 #endif
+// NoC atomic claim counter (task #280: reader_alpha_blend_mb_devcull).
+constexpr uint32_t noc_mode = 0, write_at_cmd_buf = 0, NOC_UNICAST_WRITE_VC = 1;
+template <uint32_t Mode, bool RetAddr>
+void noc_fast_atomic_increment(uint8_t noc, uint32_t cmd_buf, uint64_t addr, uint32_t vc, uint32_t incr,
+                               uint32_t wrap, bool linked, bool posted, uint32_t ret_addr);

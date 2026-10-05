@@ -29,6 +29,7 @@
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/sort_ol_town.h"
 #include "host_tracy.hpp"
+#include "matblend_fuse.h"
 #include "stage_timers.h"
 #include "vis_mode.h"
 
@@ -313,6 +314,12 @@ struct SortDeviceContext {
     // (sort_onelaunch_enqueue_early); sort_resident_pairs checks it.
     uint32_t ol_early_tiles = 0;
     uint32_t ol_early_tiles_x = 0;
+    // Task #285 (GSPLAT_TT_MATBLEND_FUSE): mat -> blend ready flags, one 64 B
+    // page per (tile, subchunk) at tile*8+sc holding the launch epoch (grow-only,
+    // zero-filled at allocation; epochs start at 1 so stale pages never match).
+    std::shared_ptr<distributed::MeshBuffer> buf_ready;
+    std::size_t cap_ready_bytes = 0;
+    uint32_t ready_epoch = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -501,9 +508,13 @@ static void log_subchunk_layout_stats(const SubchunkLayout& layout) {
         static_cast<unsigned long long>(layout.total_payload_pages));
 }
 
-static void build_program_subchunk(SortDeviceContext& ctx) {
-    Program program = CreateProgram();
-    const CoreRangeSet& cores = ctx.all_cores;
+// The materialize program's CBs and kernel defines. Task #285: `fused` (the
+// fused mat+blend program, matblend_fuse.h) makes CB 4 a two-index CB that is
+// also the blend reader's CB_BUCKET_BULK (both 512 KB; NCRISC runs mat, then
+// blend) and adds the 64 B ready-flag source CBs 10 / 26.
+static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores, bool fused,
+                                    std::map<std::string, std::string>& mat_defines,
+                                    std::map<std::string, std::string>& mat_defines_m0) {
     const uint32_t bucket_fit = render_config::kBucketFit;
     auto page_cb = [&](uint32_t id, uint32_t bytes) {
         CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}});
@@ -518,16 +529,56 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     // (2*cap+256) u32 to index cap records. CB_SLAB stays bucket_fit-sized: the
     // sorted slab is streamed to DRAM ONE subchunk (<=bucket_fit recs) at a time.
     const uint32_t ov_cap = render_config::kOverflowL1Cap;
+    // Task #289: the fused program (mat + resident blend in one L1) is ~21 KB over the
+    // static CB budget, so four blend CBs share storage with mat CBs. Only DM-only mat
+    // CBs of the mover that runs on the same RISC as the blend CB's first producer
+    // (NCRISC: 2, 5, 6; BRISC: 20): the blend side starts on that RISC only after its
+    // mat body returned and drained its writes, and compute (packing CB_OUT) only after
+    // the NCRISC reader fed it. Each pair is one multi-index config (shared base).
+    namespace mf = gsplat_tt::matblend_fuse;
+    auto alias_cb = [&](uint32_t id, uint32_t bytes, uint32_t blend_id, uint32_t blend_page,
+                        DataFormat blend_fmt) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}, {blend_id, blend_fmt}});
+        c.set_page_size(id, bytes);
+        c.set_page_size(blend_id, blend_page);
+        CreateCircularBuffer(program, cores, c);
+    };
     page_cb(0, PAGE_BYTES);
     page_cb(1, PAGE_BYTES);
-    page_cb(2, 32u * PAGE_BYTES);  // REC_BATCH=32 blendrec gather ring (iter 76)
+    if (fused) {  // REC_BATCH ring + blend CB_SCR_ATTR (32 x 64 B)
+        alias_cb(2, 32u * PAGE_BYTES, mf::kBlendCbBase + mf::kAliasScrAttr, 64u, DataFormat::Float32);
+    } else {
+        page_cb(2, 32u * PAGE_BYTES);  // REC_BATCH=32 blendrec gather ring (iter 76)
+    }
     page_cb(3, 32u);
-    page_cb(4, std::max(bucket_fit * 64u, ov_cap * 32u));  // CB_BUCKET (holds cap recs)
-    page_cb(5, (2u * ov_cap + 256u) * 4u);                 // CB_BSORT (radix over cap recs)
+    if (fused) {
+        constexpr uint32_t kBulkId = gsplat_tt::matblend_fuse::kBlendCbBase + 12u;
+        constexpr uint32_t kBulkBytes = 8192u * 64u;  // blend CB_BUCKET_BULK (kBucketFit recs)
+        const uint32_t bytes = std::max({bucket_fit * 64u, ov_cap * 32u, kBulkBytes});
+        CircularBufferConfig c(bytes, {{4u, DataFormat::UInt32}, {kBulkId, DataFormat::Float32}});
+        c.set_page_size(4u, bytes);
+        c.set_page_size(kBulkId, 64u);
+        CreateCircularBuffer(program, cores, c);
+        page_cb(10, PAGE_BYTES);  // ready-flag source page (mover 1)
+        page_cb(26, PAGE_BYTES);  // (mover 0)
+    } else {
+        page_cb(4, std::max(bucket_fit * 64u, ov_cap * 32u));  // CB_BUCKET (holds cap recs)
+    }
     // iter 113 (sort Stage 1): CB_SLAB — contiguous L1 scratch the in-budget
     // depth permutation lands in (bucket_fit * 32B records) so the slab is
     // emitted in coalesced SLAB_PAGE_BYTES writes, not per-record DRAM scatter.
-    page_cb(6, bucket_fit * 32u);
+    if (fused) {
+        // CB_BSORT + blend CB_MB_COUNTS (128 B pages); CB_SLAB + blend CB_OUT (bf16 tiles,
+        // the writer waits 3 contiguous pages, so the size is rounded to 3-page groups).
+        alias_cb(5, (2u * ov_cap + 256u) * 4u, mf::kBlendCbBase + mf::kAliasMbCounts, 128u,
+                 DataFormat::UInt32);
+        constexpr uint32_t kOutGroup = 3u * mf::kOutPageBytes;
+        alias_cb(6, (bucket_fit * 32u + kOutGroup - 1u) / kOutGroup * kOutGroup,
+                 mf::kBlendCbBase + mf::kAliasOut, mf::kOutPageBytes, DataFormat::Float16_b);
+    } else {
+        page_cb(5, (2u * ov_cap + 256u) * 4u);  // CB_BSORT (radix over cap recs)
+        page_cb(6, bucket_fit * 32u);
+    }
     // Dual mover: BRISC's copies (id + 16) sized for kMatMover0Cap records —
     // NCRISC's ~900 KB set does not fit twice in L1. build_mat_worklist gives
     // BRISC only whole-tile items of <= kMatMover0Cap records and gather items.
@@ -536,14 +587,19 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
     page_cb(17, PAGE_BYTES);
     page_cb(18, 32u * PAGE_BYTES);
     page_cb(19, 32u);
-    page_cb(20, m0_cap * 32u);           // CB_BUCKET (PACK2, m0_cap recs)
+    if (fused) {  // CB_BUCKET + the BRISC writer's private CB_IMG_U8 (32 x 96 B)
+        alias_cb(20, m0_cap * 32u, mf::kBlendCbBase + mf::kAliasImgU8, mf::kImgU8Bytes,
+                 DataFormat::UInt8);
+    } else {
+        page_cb(20, m0_cap * 32u);       // CB_BUCKET (PACK2, m0_cap recs)
+    }
     page_cb(21, (2u * m0_cap + 256u) * 4u);  // CB_BSORT
     page_cb(22, m0_cap * 32u);           // CB_SLAB
 
     // Task #86: GSPLAT_TT_MATCULL_PROF=1 compiles fine per-item Tracy zones
     // into the materialize kernel (attribution). Default OFF.
     const char* mc_prof = std::getenv("GSPLAT_TT_MATCULL_PROF");
-    std::map<std::string, std::string> mat_defines;
+    mat_defines.clear();
     if (mc_prof != nullptr && mc_prof[0] == '1') mat_defines["MATCULL_PROF"] = "1";
     // Task #90: fused SFPU cull. Per mover a coefficient and a mask CB of
     // mat_cull_depth() fp32 tiles at id 8 / 9 (+16 on BRISC), served by one
@@ -565,6 +621,43 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
         // (permute_cull) instead of a second pass over the slab (cull_slab).
         const char* fold = std::getenv("GSPLAT_TT_MATCULL_FOLD");
         mat_defines["MATCULL_FOLD"] = (fold != nullptr && fold[0] == '1') ? "1" : "0";
+    }
+    // Task #106: the one-launch bucket branch (args 16, 17).
+    if (sort_onelaunch_enabled()) {
+        mat_defines["SORT_ONELAUNCH"] = "1";
+        // Task #124: big-tile items sort only their own ranks' depth bins.
+        if (gsplat_tt::env_config::ol_mat_select()) {
+            mat_defines["OL_MAT_SELECT"] = "1";
+            mat_defines["OL_MAT_PART"] = std::to_string(gsplat_tt::sort_split::kOlMatPartRecs) + "u";
+        }
+    }
+    if (fused) mat_defines["MATBLEND_FUSE"] = "1";
+    mat_defines_m0 = mat_defines;
+    mat_defines_m0["MAT_CB_BASE"] = "16";
+    // A gather part is staged whole in the mover's slab (BRISC: kMatMover0Cap).
+    static_assert(kGatherPartRecs <= kMatMover0Cap);
+    mat_defines["GATHER_PART_RECS_HOST"] = std::to_string(kGatherPartRecs) + "u";
+    mat_defines["MAT_M0_CAP"] = std::to_string(kMatMover0Cap) + "u";
+    mat_defines_m0["GATHER_PART_RECS_HOST"] = mat_defines["GATHER_PART_RECS_HOST"];
+    mat_defines_m0["MAT_M0_CAP"] = mat_defines["MAT_M0_CAP"];
+}
+
+// Materialize compile-time args: 9 base accessors + iter-138 {overflow region,
+// per-tile overflow base} (+ task #285 ready flags when fused).
+static std::vector<uint32_t> mat_compile_args(bool fused) {
+    std::vector<uint32_t> ct;
+    for (int i = 0; i < (fused ? 12 : 11); i++) {
+        TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+    }
+    return ct;
+}
+
+static void build_program_subchunk(SortDeviceContext& ctx) {
+    Program program = CreateProgram();
+    const CoreRangeSet& cores = ctx.all_cores;
+    std::map<std::string, std::string> mat_defines, mat_defines_m0;
+    add_mat_cbs_and_defines(program, cores, /*fused=*/false, mat_defines, mat_defines_m0);
+    if (sort_matcull_fused()) {
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[8] = UnpackToDestMode::UnpackToDestFp32;
         u2d[24] = UnpackToDestMode::UnpackToDestFp32;
@@ -580,28 +673,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
                 .math_approx_mode = false,
             });
     }
-    // Task #106: the one-launch bucket branch (args 16, 17).
-    if (sort_onelaunch_enabled()) {
-        mat_defines["SORT_ONELAUNCH"] = "1";
-        // Task #124: big-tile items sort only their own ranks' depth bins.
-        if (gsplat_tt::env_config::ol_mat_select()) {
-            mat_defines["OL_MAT_SELECT"] = "1";
-            mat_defines["OL_MAT_PART"] = std::to_string(gsplat_tt::sort_split::kOlMatPartRecs) + "u";
-        }
-    }
-    std::map<std::string, std::string> mat_defines_m0 = mat_defines;
-    mat_defines_m0["MAT_CB_BASE"] = "16";
-    // A gather part is staged whole in the mover's slab (BRISC: kMatMover0Cap).
-    static_assert(kGatherPartRecs <= kMatMover0Cap);
-    mat_defines["GATHER_PART_RECS_HOST"] = std::to_string(kGatherPartRecs) + "u";
-    mat_defines["MAT_M0_CAP"] = std::to_string(kMatMover0Cap) + "u";
-    mat_defines_m0["GATHER_PART_RECS_HOST"] = mat_defines["GATHER_PART_RECS_HOST"];
-    mat_defines_m0["MAT_M0_CAP"] = mat_defines["MAT_M0_CAP"];
-    std::vector<uint32_t> ct;
-    // 9 base accessors + iter-138 {overflow region, per-tile overflow base}.
-    for (int i = 0; i < 11; i++) {
-        TensorAccessorArgs::create_dram_interleaved().append_to(ct);
-    }
+    const std::vector<uint32_t> ct = mat_compile_args(/*fused=*/false);
     ctx.ksubchunk = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/sort_subchunk_materialize.cpp",
@@ -753,6 +825,40 @@ static bool launch_subchunk_materialize(
     // Task #106: a one-launch frame's records are in the tile buckets.
     const uint32_t l1_addr = ctx->ol_frame ? static_cast<uint32_t>(ctx->buf_ol_bucket->address())
                                            : static_cast<uint32_t>(bl1->address());
+    // Task #285: park the args for the fused mat+blend program the continuation
+    // enqueues (matblend_fuse.h) instead of enqueueing the materialize here.
+    namespace mbf = gsplat_tt::matblend_fuse;
+    const bool fused = mbf::enabled() && ctx->ol_frame && cont != nullptr &&
+                       cont->image_out != nullptr && !stagetimers::split_blend() &&
+                       sort_matcull_fused() && sort_onelaunch_enabled() &&
+                       !gsplat_tt::env_config::ol_mat_select();
+    mbf::Pending& pend = mbf::pending();
+    pend.run_fallback();  // never drop a parked launch
+    if (fused) {
+        // blend_subchunk_meta holds 8 B per tile: 8 flag pages per tile.
+        const std::size_t ready_bytes = ctx->cap_blend_subchunk_meta_bytes * PAGE_BYTES;
+        if (!ctx->buf_ready || ctx->cap_ready_bytes < ready_bytes) {
+            ctx->buf_ready = make_dram(ctx->mesh_device.get(), ready_bytes);
+            ctx->cap_ready_bytes = ready_bytes;
+            ctx->ready_epoch = 0;
+            std::vector<uint32_t> zeros(ready_bytes / 4, 0u);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_ready, zeros, false);
+        }
+        pend.active = true;
+        pend.flags_addr = static_cast<uint32_t>(ctx->buf_ready->address());
+        pend.epoch = ++ctx->ready_epoch;
+        distributed::MeshCommandQueue* q = ctx->cq;
+        pend.fallback = [ctx, q](const mbf::Pending::Cores& cores) {
+            Program& p = ctx->wl_subchunk.get_programs().begin()->second;
+            for (const auto& [key, a] : cores) {
+                const CoreCoord core{key >> 16, key & 0xffffu};
+                SetRuntimeArgs(p, ctx->ksubchunk, core, a.n);
+                SetRuntimeArgs(p, ctx->ksubchunk_m0, core, a.m0);
+                SetRuntimeArgs(p, ctx->kmatcull, core, a.cp);
+            }
+            distributed::EnqueueMeshWorkload(*q, ctx->wl_subchunk, false);
+        };
+    }
     Program& prog = ctx->wl_subchunk.get_programs().begin()->second;
     for (uint32_t c = 0; c < num_cores; c++) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -785,9 +891,16 @@ static bool launch_subchunk_materialize(
                 args.push_back(ctx->ol_frame ? kOneLaunchTileCap : 0u);
                 args.push_back(ncrisc ? render_config::kOverflowL1Cap : kMatMover0Cap);
             }
+            if (fused) {
+                mbf::CoreArgs& ca = pend.cores[mbf::core_key(core.x, core.y)];
+                (ncrisc ? ca.n : ca.m0) = std::move(args);
+                continue;
+            }
             SetRuntimeArgs(prog, ncrisc ? ctx->ksubchunk : ctx->ksubchunk_m0, core, args);
         }
-        if (sort_matcull_fused()) {
+        if (fused) {
+            pend.cores[mbf::core_key(core.x, core.y)].cp = {floor_bits, cull_disabled, 3u};
+        } else if (sort_matcull_fused()) {
             // Both movers always end their stream (idle ones at once): live = 3.
             SetRuntimeArgs(prog, ctx->kmatcull, core, {floor_bits, cull_disabled, 3u});
         }
@@ -796,6 +909,7 @@ static bool launch_subchunk_materialize(
         GSPLAT_HOST_ZONE("host_finish_cq1_bridge");
         distributed::Finish(*bridge_cq);
     }
+    if (fused) return true;  // the blend continuation enqueues mat with blend
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
     return true;
 }
@@ -2511,6 +2625,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 return fail();
             }
             maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
+            // Task #285: a parked mat launch the blend did not take still runs.
+            gsplat_tt::matblend_fuse::pending().run_fallback();
             return result;
         }
 
@@ -3289,6 +3405,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
 }
 
 }  // namespace
+
+// Task #285: the mat half of the fused mat+blend program (matblend_fuse.h).
+matblend_fuse::MatPart matblend_fuse::add_mat_part(Program& program, const CoreRangeSet& cores) {
+    MatPart part;
+    add_mat_cbs_and_defines(program, cores, /*fused=*/true, part.defines_n, part.defines_m0);
+    part.ct = mat_compile_args(/*fused=*/true);
+    return part;
+}
 
 bool sort_device_ready() { return ensure_context() != nullptr; }
 
