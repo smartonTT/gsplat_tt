@@ -18,6 +18,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
+# numpy madvises big arrays for transparent huge pages; on a host with fragmented memory
+# (bh-35) every such page fault runs direct compaction and a 144 MB alloc takes >100 s
+# instead of 0.1 s (task #257). Must be set before numpy is imported.
+os.environ.setdefault("NUMPY_MADVISE_HUGEPAGE", "0")
 # render_clean JIT kernels get their own cache (as in render/run.py).
 os.environ.setdefault(
     "TT_METAL_CACHE", f"/localdev/{os.environ.get('USER', 'smarton')}/.cache/tt-metal-cache-viewer")
@@ -55,7 +59,10 @@ def main():
     gauss = load_ply(args.ply_path)
     viewer = GaussianViewer(gauss, host=args.host, port=args.port, backend="tt_clean",
                             render_width=W, render_height=H, verbose=args.verbose,
-                            scene_path=args.ply_path)
+                            scene_path=args.ply_path,
+                            # Same contribution floor as the bench (1/255), not the
+                            # slider's 1/16384: that kept more pairs (slower, other image).
+                            contrib_floor=float(cam["contrib_floor"]))
 
     if args.selftest > 0:
         # Same call the viewer makes per frame (pipeline.render), hero view of
