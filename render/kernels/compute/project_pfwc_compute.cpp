@@ -81,7 +81,12 @@
 #include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/eltwise_unary/rounding.h"
 
-#ifdef PFWC_STEPCYC
+// Task #197: PFWC_STEPRISC (0 unpack, 1 math, 2 pack) picks the one TRISC that
+// carries the counters; instrumenting all three overflows the kernel config buffer.
+#if defined(PFWC_STEPCYC) && ((PFWC_STEPRISC == 0 && defined(TRISC_UNPACK)) || \
+                              (PFWC_STEPRISC == 1 && defined(TRISC_MATH)) ||   \
+                              (PFWC_STEPRISC == 2 && defined(TRISC_PACK)))
+#define PFWC_SC_ON 1
 #include "api/debug/dprint.h"
 #endif
 
@@ -154,7 +159,7 @@ constexpr uint32_t CB_AABB   = 36;
 // 11 radii y, 12 vis + pops. =2 also splits step 5 (cov_cam: 36 copies, 36
 // mul_unary, 30 add_binary, 6 packs) by call type on each thread:
 // "PO copy mulu addb acq pack".
-#ifdef PFWC_STEPCYC
+#ifdef PFWC_SC_ON
 constexpr uint32_t PC_N = 13;
 uint32_t g_pc[PC_N];
 uint32_t g_pc_t = 0;
@@ -537,7 +542,7 @@ inline void pfwc_vis_unroll() {
 
 void kernel_main() {
     DeviceZoneScopedN("pfwc");  // Tracy stage label (fused project+pfwc compute)
-#ifdef PFWC_STEPCYC
+#ifdef PFWC_SC_ON
     const uint32_t pc_w0 = pc_now();
 #endif
     const uint32_t num_chunks = get_arg_val<uint32_t>(0);
@@ -579,7 +584,7 @@ void kernel_main() {
     if (num_chunks == 0) {
         return;
     }
-#ifdef PFWC_STEPCYC
+#ifdef PFWC_SC_ON
     for (uint32_t i = 0; i < PC_N; i++) g_pc[i] = 0;
     for (uint32_t i = 0; i < 5; i++) g_po[i] = 0;
     g_pc_t = pc_now();
@@ -1051,7 +1056,7 @@ void kernel_main() {
         cb_pop_front(CB_TMP_C, 1);
         PC_MARK(12);
     }
-#ifdef PFWC_STEPCYC
+#ifdef PFWC_SC_ON
     {
         const uint32_t wall = pc_now() - pc_w0;
         DPRINT << "PC " << num_chunks << " " << wall << " " << pc_init;

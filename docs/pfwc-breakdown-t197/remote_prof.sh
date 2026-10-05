@@ -9,8 +9,9 @@ T=/localdev/smarton/gstt2-t197; cd "$T" || exit 1; source .venv/bin/activate
 S=$T/tmp/t197; mkdir -p $S
 L=${1:-1}; shift; for R in "${@:-TR1}"; do
 O=$S/pc$L-$R.dprint; rm -f $O
+case $R in TR0) SR=0;; TR1) SR=1;; TR2) SR=2;; NC) SR=3;; BR) SR=4;; esac
 echo "=== stepcyc=$L risc=$R $(cut -c1-7 SHA) $(date +%T)"
-env TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t197-pc$L-$R GSPLAT_TT_PFWC_STEPCYC=$L \
+env TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t197-pc$L-$R GSPLAT_TT_PFWC_STEPCYC=$L GSPLAT_TT_PFWC_STEPRISC=$SR \
   TT_METAL_DPRINT_CORES=all TT_METAL_DPRINT_RISCVS=$R TT_METAL_DPRINT_FILE=$O \
   timeout 500 python3 render/run.py --no-ref --view-range 0:2 --iter-dir t197-pc$L-$R > $S/pc$L-$R.log 2>&1
 echo "rc=$?"; grep -E "^(STAGES|SUMMARY)|Traceback|TT_THROW|TT_FATAL|exceeds|too large" $S/pc$L-$R.log | head -6
