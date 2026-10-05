@@ -277,6 +277,99 @@ void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab
     }
 }
 
+// Task #298 (lever B, K2 folded into the one-launch sort):
+//  - the count-only K2 (MODE_DIFF + diff_to_counts) must give each mover's
+//    count row exactly as the per-pair count (the fold's rows);
+//  - the sort's window walk (MODE_PAIRS, sort_bin_onelaunch.cpp WinIo: the
+//    first nwin pages of the range straight into the L1 window, the rest
+//    through the staging to the pair pages) must give emit_pairs' (gid, tid)
+//    for every page, so every pair lands in the same (tile, slot).
+struct WinIo : ModelIo {
+    std::vector<uint32_t>* wg = nullptr;  // window planes, nwin pages each
+    std::vector<uint32_t>* wt = nullptr;
+    uint32_t pg_lo = 0, nwin = 0, cur = 0;
+    bool in_win() const { return cur - pg_lo < nwin; }
+    uint32_t* gid_slot(uint32_t o) {
+        return in_win() ? wg->data() + (cur - pg_lo) * 16 : ModelIo::gid_slot(o);
+    }
+    uint32_t* tid_slot(uint32_t o) {
+        return in_win() ? wt->data() + (cur - pg_lo) * 16 : ModelIo::tid_slot(o);
+    }
+    void write_page(uint32_t page, uint32_t o) {
+        if (page != cur) fail("window walk page order", page, cur);
+        if (page - pg_lo >= nwin) ModelIo::write_page(page, o);
+        cur = page + 1;
+    }
+};
+
+void check_fold298(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab, uint32_t C,
+                   uint32_t K, uint32_t P_pub, const std::vector<uint32_t>& gid,
+                   const std::vector<uint32_t>& tid, const std::vector<uint32_t>& speed,
+                   uint32_t win_pages) {
+    std::vector<uint32_t> acc(speed.size() + 1u, 0u);
+    for (std::size_t k = 0; k < speed.size(); k++) acc[k + 1] = acc[k] + speed[k];
+    const uint32_t screen = s.tiles_x * 50u;  // make_scene: rectangles end above row 50
+    const uint32_t span = (screen + 15u) / 16u * 16u;
+    const uint32_t pages = (P_pub + 15) / 16;
+    std::vector<uint32_t> dg(pages * 16, 0xFFFFFFFFu), dt(pages * 16, 0xFFFFFFFFu);
+    std::vector<uint32_t> written(pages, 0);
+    std::vector<uint32_t> diff(pfwc_fuse::diff_words(screen, s.tiles_x)), row(span), ref(span);
+    for (uint32_t k = 0; k < K; k++)
+        for (uint32_t mv = 0; mv < 2; mv++) {
+            uint32_t pg0 = 0, npg = 0;
+            pfwc_fuse::k2_range_speed(P_pub, acc[2 * k + mv], acc[2 * k + mv + 1], acc.back(),
+                                      &pg0, &npg);
+            // Count-only K2.
+            ModelIo cio;
+            cio.lofs = &f.lofs;
+            cio.box = &f.box;
+            std::fill(diff.begin(), diff.end(), 0u);
+            pfwc_fuse::emit_pairs_diet_m<pfwc_fuse::MODE_DIFF>(tab.data(), C, P_pub, s.tiles_x,
+                                                               pg0, npg, cio, diff.data());
+            if (!cio.rd.empty()) fail("diff: reads in flight at the end", k, cio.rd.size());
+            if (!cio.wr.empty()) fail("diff: pair writes", k, cio.wr.size());
+            pfwc_fuse::diff_to_counts(diff.data(), screen, s.tiles_x, span, row.data());
+            std::fill(ref.begin(), ref.end(), 0u);
+            for (uint32_t p = pg0 * 16; p < (pg0 + npg) * 16 && p < P_pub; p++) ref[tid[p]]++;
+            for (uint32_t t = 0; t < span; t++)
+                if (row[t] != ref[t]) {
+                    fail("diff count row", t, row[t]);
+                    break;
+                }
+            // The sort's window walk of the same range.
+            const uint32_t nwin = npg < win_pages ? npg : win_pages;
+            std::vector<uint32_t> wg(nwin * 16, 0xFFFFFFFFu), wt(nwin * 16, 0xFFFFFFFFu);
+            WinIo io;
+            io.lofs = &f.lofs;
+            io.box = &f.box;
+            io.gid = &dg;
+            io.tid = &dt;
+            io.written = &written;
+            io.wg = &wg;
+            io.wt = &wt;
+            io.pg_lo = pg0;
+            io.nwin = nwin;
+            io.cur = pg0;
+            pfwc_fuse::emit_pairs_diet_m<pfwc_fuse::MODE_PAIRS>(tab.data(), C, P_pub, s.tiles_x,
+                                                                pg0, npg, io, nullptr);
+            io.writes_flushed();
+            if (npg != 0 && io.cur != pg0 + npg) fail("window walk end page", io.cur, pg0 + npg);
+            for (uint32_t w = 0; w < nwin; w++) {
+                written[pg0 + w]++;
+                for (uint32_t e = 0; e < 16; e++) {
+                    dg[(pg0 + w) * 16 + e] = wg[w * 16 + e];
+                    dt[(pg0 + w) * 16 + e] = wt[w * 16 + e];
+                }
+            }
+        }
+    for (uint32_t pg = 0; pg < pages; pg++)
+        if (written[pg] != 1) fail("window walk page written", pg, written[pg]);
+    for (uint32_t p = 0; p < pages * 16; p++) {
+        if (dg[p] != gid[p]) fail("window walk gid", p, dg[p]);
+        if (dt[p] != tid[p]) fail("window walk tid", p, dt[p]);
+    }
+}
+
 // tile_assign_scatter_seg.cpp over all (K2 core, mover) slots.
 void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint32_t K,
               uint32_t dual, uint32_t permille, uint32_t p_cap) {
@@ -332,6 +425,8 @@ void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint
     std::vector<uint32_t> speed(2u * K);
     for (uint32_t k = 0; k < 2u * K; k++) speed[k] = 650u + (k * 2654435761u >> 7) % 500u;
     check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, &speed);
+    check_fold298(s, f, tab, C, K, P_pub, gid, tid, speed, 1536u);  // all in the window
+    check_fold298(s, f, tab, C, K, P_pub, gid, tid, speed, 3u);     // most pages spill
 }
 
 }  // namespace
