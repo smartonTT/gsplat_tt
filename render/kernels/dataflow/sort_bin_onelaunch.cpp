@@ -559,17 +559,15 @@ void kernel_main() {
     const uint32_t ring_l1 = (R != 0u) ? get_write_ptr(CB_RING + cbo) : 0u;
     auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + OL_RING_TILES * R * REC_BYTES);
     // Task #160 fast emit (the default: rings, PUBOC, tiles_x a power of two):
-    // one loop with register locals, the per-tile cursors in the RISC's local
-    // memory (an L1 cursor is loaded right after its store, task #26) and the
-    // sub_int fast path inlined. Same records, same slots, same writes.
+    // one loop with register locals and the sub_int fast path inlined. Same
+    // records, same slots, same writes. Its per-tile cursors are curp itself
+    // (CB_CUR, L1), through a plain pointer: a 4 KB stack copy left kernel_main
+    // ~0 B of stack margin (task #186), task #187 moved it here.
     constexpr bool FAST_OK = OL_EMIT_FAST && PUBOC && R != 0u;
     const bool fast = FAST_OK && ring_on && tx_is_pow2;
-    uint32_t cur_lm[FAST_OK ? OL_RING_TILES : 1u];
+    uint32_t* const cur_lm = reinterpret_cast<uint32_t*>(get_write_ptr(CB_CUR + cbo));
     if (ring_on) {
         for (uint32_t t = 0; t < num_tiles; t++) startp[t] = curp[t];
-        if (fast) {
-            for (uint32_t t = 0; t < num_tiles; t++) cur_lm[t] = curp[t];
-        }
     }
     const uint32_t tile_pages = tile_cap / REC_PAGE_RECS;
     auto flush_run = [&](uint32_t t, uint32_t last) {
@@ -864,7 +862,7 @@ void kernel_main() {
         // Each tile's partial final run (full runs were written in the loop).
         for (uint32_t t = 0; t < num_tiles; t++) {
             uint32_t last;
-            const uint32_t end = fast ? cur_lm[t] : curp[t];
+            const uint32_t end = curp[t];
             if (sort_ol::ring_drain(startp[t], end, tile_cap, R, &last)) flush_run(t, last);
         }
     }
