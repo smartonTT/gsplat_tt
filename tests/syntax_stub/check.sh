@@ -28,6 +28,9 @@ chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_ma
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DOL_MAT_PART=4096u render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT FUSE_CULL" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DFUSE_CULL=1 -DFUSE_CULL_DEPTH=2 render/kernels/dataflow/sort_subchunk_materialize.cpp
+chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH MATBLEND_FUSE" $DF -DSORT_ONELAUNCH=1 -DMATBLEND_FUSE=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
+chk "reader_alpha_blend_mb_devcull.cpp MATBLEND_FUSE" $DF -DMB_BUCKET_FIT=8192u -DMATBLEND_FUSE=1 -DBLEND_CB_BASE=32 -DBLEND_CTA_BASE=12 render/kernels/dataflow/reader_alpha_blend_mb_devcull.cpp
+chk "writer_alpha_blend.cpp BLEND_CB_BASE" $DF -DBLEND_CB_BASE=32 -DBLEND_CTA_BASE=12 render/kernels/dataflow/writer_alpha_blend.cpp
 chk "writer_pfwc_fuse.cpp" $DF render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp FUSE_ABL=7" $DF -DFUSE_ABL=7u render/kernels/dataflow/writer_pfwc_fuse.cpp
