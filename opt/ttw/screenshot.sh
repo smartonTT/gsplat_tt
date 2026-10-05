@@ -7,7 +7,7 @@
 # the output dir under opt/metal-screenshots/), FILE (hero.png), NO_SYNC=1 (reuse tree).
 # Output: opt/metal-screenshots/<NAME>/<FILE>, <FILE stem>_diff10.png (|hero - ref| * 10,
 # ref = benchmarks/reference_v2/hero.png), and a SHOT line with the sweep md5 (8 chars of
-# md5 of the sorted per-view md5 list; 46a725ab = the bicycle default since iter 82), the
+# md5 of the sorted per-view md5 list; 906e0435 = the bicycle default since iter 205, PFWC_RECIP_NEWTON on; 46a725ab before), the
 # PSNR vs reference_v2 (the same reference as the diff: device_screenshot.psnr_vs_ref) and
 # the golden match vs tests/fixtures/hero/hero_golden_8bit.png (golden_match, a badge only).
 # Still LOOK at the hero and the diff (tile seams, blocky/empty tiles) before attaching it.
