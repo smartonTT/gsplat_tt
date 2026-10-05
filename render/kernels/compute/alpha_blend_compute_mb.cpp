@@ -46,6 +46,7 @@
 #include "api/compute/eltwise_unary/fill.h"
 #include "../dataflow/dm_fp32.h"
 #include "blend_t_live.h"
+#include "blend_chain_walk.h"
 
 #ifdef TRISC_MATH
 #include "sfpi.h"
@@ -570,7 +571,7 @@ inline void dispatch_blend_pairs(
 #if BLEND_JUMP_WALK && BLEND_COEF_DEST && BLEND_ABL == 0 && defined(TRISC_MATH)
 #define BLEND_USE_JUMP_WALK 1
 template <uint32_t J, uint32_t PM>
-__attribute__((noinline)) void blend_pair_body() {
+inline void blend_pair_body_math() {
     if constexpr (PM == 3u) {
         blend_pair_gaussian_math<2u * J, 2u * J + 1u>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     } else if constexpr (PM == 1u) {
@@ -578,6 +579,10 @@ __attribute__((noinline)) void blend_pair_body() {
     } else {
         blend_one_gaussian_math<2u * J + 1u>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     }
+}
+template <uint32_t J, uint32_t PM>
+__attribute__((noinline)) void blend_pair_body() {
+    blend_pair_body_math<J, PM>();
 }
 using BlendBodyFn = void (*)();
 // Index 4 * pair + (2-bit pair mask); entry 0 of each pair is never called.
@@ -603,6 +608,60 @@ inline void dispatch_blend_jump(uint32_t mask) {
 }
 #else
 #define BLEND_USE_JUMP_WALK 0
+#endif
+
+// Task #190: tail-chained mask walk (host env GSPLAT_TT_BLEND_CHAIN_WALK,
+// default 0; needs the jump walk). The call site calls the first body; each
+// body looks up its successor before its SFPU math (the table load hides under
+// the SFPU issue) and ends in a sibling call to it (`jr`), so a body costs one
+// taken jump instead of jalr + ret + loop branch. Index math and the end slot:
+// blend_chain_walk.h. Same bodies, same ascending order -> bit-identical.
+//   1 = the last body (no live pair after it) branches to its own copy of the
+//       math and returns: fewer instructions, twice the body code.
+//   2 = no branch: the last body chains to the end stub, which returns. One
+//       math copy per body; the record pays one more jump (stub's ret).
+#ifndef BLEND_CHAIN_WALK
+#define BLEND_CHAIN_WALK 0
+#endif
+#if BLEND_USE_JUMP_WALK && BLEND_CHAIN_WALK
+#define BLEND_USE_CHAIN_WALK 1
+// The table is passed along, so no body rebuilds its address.
+struct BlendChainEntry {
+    void (*fn)(uint32_t mask, const BlendChainEntry* tbl);
+};
+template <uint32_t J, uint32_t PM>
+__attribute__((noinline)) void blend_chain_body(uint32_t mask, const BlendChainEntry* tbl) {
+    if constexpr (J + 1u < NUM_MB / 2u) {
+        const uint32_t rest = mask >> (2u * J + 2u);  // the pairs after this one
+#if BLEND_CHAIN_WALK == 1
+        if (__builtin_expect(rest == 0u, 0)) {
+            blend_pair_body_math<J, PM>();
+            return;
+        }
+#endif
+        const auto next = tbl[blend_chain_index(rest, J + 1u)].fn;
+        blend_pair_body_math<J, PM>();
+        return next(mask, tbl);
+    } else {
+        blend_pair_body_math<J, PM>();  // pair 15 is always the last
+    }
+}
+__attribute__((noinline)) void blend_chain_end(uint32_t, const BlendChainEntry*) {}
+// Same layout as g_blend_bodies, slot 4 * pair + 0 = blend_chain_end.
+BlendChainEntry g_blend_chain[64];
+template <uint32_t I>
+inline void blend_chain_init() {
+    if constexpr (I < 64u) {
+        if constexpr ((I & 3u) != 0u) {
+            g_blend_chain[I].fn = &blend_chain_body<I / 4u, I & 3u>;
+        } else {
+            g_blend_chain[I].fn = &blend_chain_end;
+        }
+        blend_chain_init<I + 1u>();
+    }
+}
+#else
+#define BLEND_USE_CHAIN_WALK 0
 #endif
 
 // PACK2 (iter 50): two 32B splats per 64B page in CB_BUCKET_BULK; splat g at
@@ -1000,6 +1059,10 @@ inline void process_tile_l1_blend(
             // UNORM16 op/color -> fp32 bits, integer bit-exact (TRISC scalar code
             // has no FPU; the float form was 8 libgcc calls per record, task #39).
             const uint32_t w6 = rec[6], w7 = rec[7];
+#if BLEND_USE_CHAIN_WALK
+            // Looked up before the staging: the table load hides under its SFPU ops.
+            const auto chain_first = g_blend_chain[blend_chain_index(mask, 0u)].fn;
+#endif
 #if BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1
             // Decoded on the SFPU; the dispatch reads the staged values, not these.
             const uint32_t op = 0u, cr = 0u, cg = 0u, cbv = 0u;
@@ -1024,7 +1087,9 @@ inline void process_tile_l1_blend(
 #endif
 #endif
 #endif
-#if BLEND_USE_JUMP_WALK
+#if BLEND_USE_CHAIN_WALK
+            chain_first(mask, g_blend_chain);
+#elif BLEND_USE_JUMP_WALK
             dispatch_blend_jump(mask);
 #else
             dispatch_blend_pairs<0>(mask, rec[0], rec[1], rec[2], rec[4], rec[5], 0u,
@@ -1070,7 +1135,9 @@ void kernel_main() {
 
     init_sfpu(CB_XRAMP, CB_COLOR_OUT);
     fill_tile_init();
-#if BLEND_USE_JUMP_WALK
+#if BLEND_USE_CHAIN_WALK
+    blend_chain_init<0>();
+#elif BLEND_USE_JUMP_WALK
     blend_bodies_init<0>();
 #endif
 
