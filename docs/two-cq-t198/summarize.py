@@ -7,8 +7,8 @@ KEYS = {"STAGES": ("view_total", "project", "sort", "blend", "d2h"),
         "SORT_STAGES": ("pread", "bin_layout", "bin_emit", "publish_host", "mat", "resid"),
         "PROJECT_STAGES": ("gather_wait", "gather_result")}
 runs = {}
-for f in sorted(glob.glob(os.path.join(O, "run-r[0-9]*-*.log"))):
-    m = re.match(r"run-r(\d+)-(\w+)\.log", os.path.basename(f))
+for f in sorted(glob.glob(os.path.join(O, "run-r*-*.log"))):
+    m = re.match(r"run-rt?(\d+)-(\w+)\.log", os.path.basename(f))  # rt<n>: tip confirm
     if not m or m.group(2) not in ARMS: continue
     v = {}
     for line in open(f, errors="replace"):

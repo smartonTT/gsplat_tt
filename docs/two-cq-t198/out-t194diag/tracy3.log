@@ -1,0 +1,127 @@
+[ttw 2026-10-04T20:00:01-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=420s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-04T20:00:01-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 420s.
+[ttw 2026-10-04T20:00:01-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-04T20:00:01-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-04T20:00:01-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-04T20:00:01-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-04T20:00:02-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-04T20:00:02-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-04T20:00:02-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-04T20:00:02-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-04T20:00:02-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-04T20:00:02-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t198-tracy3  timeout=420s  worry=336s  ts=2026-10-04T20:00:03-0700
+cmd: bash /localdev/smarton/gstt2-t198/docs/two-cq-t198/remote_tracy.sh t198-dbase; bash /localdev/smarton/gstt2-t198/docs/two-cq-t198/remote_tracy.sh t198-dearly GSPLAT_TT_SORT_OL_EARLY=1; bash /localdev/smarton/gstt2-t198/docs/two-cq-t198/remote_tracy.sh t198-dboth GSPLAT_TT_SORT_OL_EARLY=1 GSPLAT_TT_MAT_CQ1=1
+-----------------------------------------
+=== tracy t198-dbase b95f7cc env:  03:00:03
+[DEV] command queues 1, compute grid 11x10
+[SORT] ONELAUNCH k2_fold=1 why=0 (K2 rows published: cores 110/110 row_pages 64/64 tiles 1024/1024 P 2895701/2895701 speed_split 1)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=31.1 p50_ms=30.6 min_ms=27.4 max_ms=43.8 n_views=30 warmup_s=20.1 out=/localdev/smarton/gstt2-t198/tmp/t198-dbase
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 7604476 Oct  5 03:00 /localdev/smarton/gstt2-t198/opt/profiler/t198-dbase/render.tracy
+[capture_tracy] device profiler CSV data rows: 477573 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t198/opt/profiler/t198-dbase/render.tracy
+chunk opt/profiler/t198-dbase/profile_log_device.csv: rows=477572 frames=31 (warmup rows=15426) kept_rows=462146 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t198-dbase/dev30.csv: rows=462146 frames=30 rows/frame=15405
+zones rc=0
+gaps rc=0
+views=30 segments/view=[5]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.981   2.981      0.000   110  pfwc
+ 1    2.987    3.973   0.986      0.006   110  k2_pairs+k2_rows
+ 2    4.399    7.371   2.973      0.426   110  sort_ol_prefix+sort_ol_barrier+sort_ol_fillb+sort_ol_fill+sort_ol_emit
+ 3    7.647   10.656   3.008      0.276   110  sort_subchunk_mat+mat_cull_mask
+ 4   10.662   16.198   5.537      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.715 ms/view
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+sort_ol_emit               16365.5   545.516        82.0       2.735     6600  BRISC,NCRISC
+k2_pairs                    5692.7   189.755        27.7       0.922     6600  BRISC,NCRISC
+sort_ol_fill                 275.7     9.190         2.9       0.097     3300  NCRISC
+sort_ol_barrier              252.8     8.426         2.9       0.097     3300  BRISC
+sort_ol_fillb                242.7     8.090         2.9       0.095     3300  BRISC
+sort_ol_prefix               139.3     4.642         2.5       0.084     3300  BRISC
+k2_rows                       38.3     1.277         0.2       0.006     6600  BRISC,NCRISC
+sort_ol_fill     riscs 110 views 29 makespan us mean   134.2  per-core dur us med   83.9 max  126.9
+  P mean 2631404: fill bytes <= 21.1 MB/view
+sort_ol_fillb    riscs 110 views 29 makespan us mean   148.3  per-core dur us med   73.0 max  115.2
+sort_ol_prefix   riscs 110 views 29 makespan us mean    84.4  per-core dur us med   62.2 max   90.8
+sort_ol_barrier  riscs 110 views 29 makespan us mean   148.6  per-core dur us med   80.7 max  115.6
+sort_ol_emit     riscs 220 views 29 makespan us mean  2858.3  per-core dur us med 2528.0 max 3583.0
+fill union makespan us 148.3; 142.0 GB/s (8 B/pair, P 2631404)
+=== tracy done 03:00:39
+=== tracy t198-dearly b95f7cc env: GSPLAT_TT_SORT_OL_EARLY=1 03:00:39
+[DEV] command queues 1, compute grid 11x10
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=0 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=31.7 p50_ms=31.0 min_ms=27.7 max_ms=44.8 n_views=30 warmup_s=4.0 out=/localdev/smarton/gstt2-t198/tmp/t198-dearly
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 7644177 Oct  5 03:00 /localdev/smarton/gstt2-t198/opt/profiler/t198-dearly/render.tracy
+[capture_tracy] device profiler CSV data rows: 477573 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t198/opt/profiler/t198-dearly/render.tracy
+chunk opt/profiler/t198-dearly/profile_log_device.csv: rows=477572 frames=31 (warmup rows=15426) kept_rows=462146 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t198-dearly/dev30.csv: rows=462146 frames=30 rows/frame=15405
+zones rc=0
+gaps rc=0
+views=30 segments/view=[5]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.981   2.981      0.000   110  pfwc
+ 1    2.987    3.972   0.985      0.006   110  k2_pairs+k2_rows
+ 2    3.983    7.084   3.101      0.011   110  sort_ol_prefix+sort_ol_barrier+sort_ol_fillb+sort_ol_fill+sort_ol_emit
+ 3    7.395   10.403   3.007      0.311   110  sort_subchunk_mat+mat_cull_mask
+ 4   10.409   15.953   5.544      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.335 ms/view
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+sort_ol_emit               16512.5   550.416        85.9       2.864     6600  BRISC,NCRISC
+k2_pairs                    5692.4   189.747        27.7       0.922     6600  BRISC,NCRISC
+sort_ol_fill                 276.4     9.213         2.9       0.098     3300  NCRISC
+sort_ol_barrier              252.0     8.400         2.8       0.095     3300  BRISC
+sort_ol_fillb                239.8     7.992         2.8       0.093     3300  BRISC
+sort_ol_prefix               137.7     4.589         2.5       0.083     3300  BRISC
+k2_rows                       38.3     1.277         0.2       0.006     6600  BRISC,NCRISC
+sort_ol_fill     riscs 110 views 29 makespan us mean   134.8  per-core dur us med   83.9 max  150.8
+  P mean 2631404: fill bytes <= 21.1 MB/view
+sort_ol_fillb    riscs 110 views 29 makespan us mean   148.1  per-core dur us med   72.5 max  114.3
+sort_ol_prefix   riscs 110 views 29 makespan us mean    84.5  per-core dur us med   61.2 max   90.4
+sort_ol_barrier  riscs 110 views 29 makespan us mean   148.5  per-core dur us med   80.4 max  114.8
+sort_ol_emit     riscs 220 views 29 makespan us mean  2983.2  per-core dur us med 2534.9 max 3850.8
+fill union makespan us 148.1; 142.1 GB/s (8 B/pair, P 2631404)
+=== tracy done 03:00:58
+=== tracy t198-dboth b95f7cc env: GSPLAT_TT_SORT_OL_EARLY=1 GSPLAT_TT_MAT_CQ1=1 03:00:58
+[DEV] command queues 2, compute grid 11x10
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=31.2 p50_ms=30.5 min_ms=27.2 max_ms=49.1 n_views=30 warmup_s=3.9 out=/localdev/smarton/gstt2-t198/tmp/t198-dboth
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 7577959 Oct  5 03:01 /localdev/smarton/gstt2-t198/opt/profiler/t198-dboth/render.tracy
+[capture_tracy] device profiler CSV data rows: 477573 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t198/opt/profiler/t198-dboth/render.tracy
+chunk opt/profiler/t198-dboth/profile_log_device.csv: rows=477572 frames=31 (warmup rows=15426) kept_rows=462146 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t198-dboth/dev30.csv: rows=462146 frames=30 rows/frame=15405
+zones rc=0
+gaps rc=0
+views=30 segments/view=[5]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.981   2.981      0.000   110  pfwc
+ 1    2.987    3.972   0.985      0.006   110  k2_pairs+k2_rows
+ 2    3.982    7.281   3.299      0.010   110  sort_ol_prefix+sort_ol_barrier+sort_ol_fillb+sort_ol_fill+sort_ol_emit
+ 3    7.288   10.295   3.008      0.007   110  sort_subchunk_mat+mat_cull_mask
+ 4   10.302   15.851   5.549      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.029 ms/view
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+sort_ol_emit               16633.7   554.458        94.2       3.139     6600  BRISC,NCRISC
+k2_pairs                    5692.1   189.737        27.7       0.922     6600  BRISC,NCRISC
+sort_ol_fill                 276.8     9.228         3.1       0.103     3300  NCRISC
+sort_ol_barrier              251.7     8.389         2.8       0.095     3300  BRISC
+sort_ol_fillb                239.5     7.982         2.8       0.092     3300  BRISC
+sort_ol_prefix               137.5     4.585         2.5       0.083     3300  BRISC
+k2_rows                       38.3     1.277         0.2       0.006     6600  BRISC,NCRISC
+sort_ol_fill     riscs 110 views 29 makespan us mean   133.7  per-core dur us med   84.2 max  147.6
+  P mean 2631404: fill bytes <= 21.1 MB/view
+sort_ol_fillb    riscs 110 views 29 makespan us mean   148.1  per-core dur us med   72.8 max  115.3
+sort_ol_prefix   riscs 110 views 29 makespan us mean    84.2  per-core dur us med   61.1 max   90.0
+sort_ol_barrier  riscs 110 views 29 makespan us mean   148.5  per-core dur us med   80.8 max  115.7
+sort_ol_emit     riscs 220 views 29 makespan us mean  3192.2  per-core dur us med 2542.9 max 3878.4
+fill union makespan us 148.1; 142.1 GB/s (8 B/pair, P 2631404)
+=== tracy done 03:01:18
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t198/.ttw/logs/t198-tracy3-20261004-200002.log
