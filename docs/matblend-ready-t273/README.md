@@ -99,3 +99,22 @@ debug rounds.
   | mean | 11.75 | 11.13 |
 
   Gain ~0.62 ms/view, above the 0.3 ms keep gate. Logs: `t289/out/`.
+
+## Step 3 (t293): Tracy check, default flip, iter 206
+
+- Default flip: `GSPLAT_TT_MATBLEND_FUSE` unset = on, `=0` = off (`render/host/matblend_fuse.h`),
+  on top of iter 205 (PFWC_RECIP_NEWTON on).
+- Tracy (`t289/out/tracy-t293-ns-cores.txt`, 29 views, `opt/profiler/matblend_cores.py`):
+  mat->blend wait 0.000 ms (was 0.489 in #267); blend_end_max 6.261 ms vs 6.815 measured /
+  6.895 in #267 for the separate programs (-0.55 to -0.63 ms traced). Model predicted 6.173.
+  Each core starts blend right after its own mat (blend_start = mat_end, 2.243..2.987 ms).
+- Tracy caveat: under the profiler the auto kcfg grows by 32 KB and the fused program's CBs
+  then overflow L1 by 5888 B (`tracy-t293-fuse-capture.log`). `GSPLAT_TT_KCFG_EXTRA_KB=26`
+  makes pfwc's program too large for kcfg (97536 > 97280 B, `tracy-t293-k26-capture.log`).
+  The capture that worked used `GSPLAT_TT_PFWC_WRITER_SPLIT=0` (pfwc only; mat/blend code
+  unchanged). Default (untraced) runs are not affected.
+- md5 with Newton on: FUSE on and FUSE=0 both 906e0435 on 30/30 views (round r6); the device
+  screenshot hero is bit-identical to iter 205 (md5 86524912, golden max diff 0).
+- Untraced r6 (order nofuse, base): fuse on 11.129, off 11.653 ms/view (-0.52). Screenshot run
+  at defaults: 11.105. Round r5 failed at device init (FW init timeout on core 11-9 right after
+  the Tracy captures); r6 ran clean on the same reservation.
