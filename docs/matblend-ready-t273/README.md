@@ -80,3 +80,22 @@ above plus `reader_alpha_blend_mb_devcull.cpp` (claim ~187-292) and
 `sort_subchunk_materialize.cpp` (flag write), `tests/syntax_stub/check.sh` (new wrappers).
 Size: ~3.1k lines of kernel code across three RISCs get wrapped; expect several device
 debug rounds.
+
+## t289: device build and A/B (2026-10-05, yyzo-bh-07 p100a)
+
+- Compile fixes: `mat_defines` shadowed the out-parameter in `add_mat_cbs_and_defines`
+  (syntax stub); the fused program's static CBs were 21248 B over the 1572864 B L1
+  (`TT_THROW ... grow to 1594112 B`). Fixed by giving four blend CBs the storage of mat CBs
+  that are idle by the time the blend side first touches them: CB_SCR_ATTR on mat CB 2,
+  CB_MB_COUNTS on CB 5, CB_OUT on CB 6 (rounded up to 3-tile groups), CB_IMG_U8 on BRISC
+  CB 20. Saves ~23.5 KB. No kcfg change was needed.
+- md5: FUSE=1 gives 46a725ab on 30/30 views (rounds r2, r3, r4); FUSE=0 also 46a725ab.
+- Untraced A/B (`render/run.py` avg_frame_ms, 30 views, same tree e3b4346):
+
+  | round / order | base | fuse |
+  |---|---|---|
+  | r3: base fuse base fuse | 11.6, 11.9 | 11.1, 11.1 |
+  | r4: fuse base fuse base | 11.8, 11.7 | 11.1, 11.2 |
+  | mean | 11.75 | 11.13 |
+
+  Gain ~0.62 ms/view, above the 0.3 ms keep gate. Logs: `t289/out/`.
