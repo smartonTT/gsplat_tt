@@ -25,6 +25,11 @@ Checks
      PSNR (0 < psnr < 200) and positive numeric stage timings; metric-less reject
      rows are allowed to show FAIL but must still carry idea + reason + timestamp.
 
+  8. Device screenshot: every ttw iter > 197 has a complete device_screenshot
+     (hero + diff files on disk, PSNR, md5, commit/config, visual-check note);
+     legacy iters 160-197 may instead be screenshot_backfill_pending and must
+     render as a red placeholder (opt/ttw/ITERATION_CHECKLIST.md).
+
 Usage:  python3 opt/validate_report.py   (exit 0 = valid, non-zero = invalid)
 """
 from __future__ import annotations
@@ -47,6 +52,7 @@ INPUT_JSONLS = [
 ]
 
 EMPTY_DESC_MARKER = "no description recorded"
+SHOT_PENDING_MARKER = "screenshot missing - backfill pending"
 PSNR_MIN, PSNR_MAX = 0.0, 200.0
 
 
@@ -57,6 +63,24 @@ class Invalid(Exception):
 def _max_ttw_iter(rows: list[dict]) -> int | None:
     nums = [int(r["iter"]) for r in rows if isinstance(r.get("iter"), int)]
     return max(nums) if nums else None
+
+
+_IMG_SRC_RE = re.compile(r'<img\b[^>]*?\bsrc="([^"]+)"')
+
+
+def broken_img_srcs(paths: tuple[Path, ...] = (REPORT_HTML, br.REPORT_HTML_TTW)) -> list[str]:
+    """'<file>: <src>' for every relative img src that does not resolve to a file."""
+    out = []
+    for p in paths:
+        if not p.exists():
+            out.append(f"{p}: file missing")
+            continue
+        for src in _IMG_SRC_RE.findall(p.read_text(errors="replace")):
+            if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", src):  # data:, http:, ...
+                continue
+            if not (p.parent / src.split("#")[0].split("?")[0]).is_file():
+                out.append(f"{p.parent.name}/{p.name}: {src}")
+    return out
 
 
 def main() -> int:
@@ -252,6 +276,36 @@ def main() -> int:
                 f"newest kept iter {newest_keep.get('iter')} has a Tracy trace or written waiver "
                 f"(forward-enforced)"
             )
+
+        # --- 8. Device screenshot on every iteration (user, 2026-10-05) -----
+        # Iters > br.SCREENSHOT_REQUIRED_AFTER need a complete device_screenshot
+        # (hero + diff files, PSNR, md5, commit/config, visual-check note).
+        # Legacy iters may carry screenshot_backfill_pending, which must render
+        # as a red placeholder, never silently.
+        errors, pending = br.check_device_screenshots(ttw_rows)
+        if errors:
+            raise Invalid(
+                f"{len(errors)} device screenshot problem(s) "
+                f"(opt/ttw/ITERATION_CHECKLIST.md): " + "; ".join(errors)
+            )
+        if pending and html.count(SHOT_PENDING_MARKER) < len(pending):
+            raise Invalid(
+                f"{len(pending)} iters are screenshot_backfill_pending but REPORT.html "
+                f"shows only {html.count(SHOT_PENDING_MARKER)} '{SHOT_PENDING_MARKER}' "
+                f"placeholders"
+            )
+        if pending:
+            print(f"  [WARN] {len(pending)} legacy iters still screenshot_backfill_pending: {pending}")
+        checks.append(
+            f"every ttw iter > {br.SCREENSHOT_REQUIRED_AFTER} has a device screenshot + visual check; "
+            f"{len(pending)} legacy iters shown as backfill pending"
+        )
+
+        # 6. Every <img src> in both REPORT.html and the opt/ttw/ mirror resolves.
+        broken = broken_img_srcs()
+        if broken:
+            raise Invalid(f"{len(broken)} img src(s) do not resolve to a file: " + "; ".join(broken[:10]))
+        checks.append("every img src in REPORT.html and ttw/REPORT.html resolves to a file")
 
     except Invalid as e:
         for c in checks:

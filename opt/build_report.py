@@ -16,7 +16,10 @@ import argparse
 import base64
 import io
 import json
+import re
 import statistics
+import sys
+from html import escape as html_escape
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -171,6 +174,9 @@ def normalize_ttw_row(r: dict) -> dict:
         "validator_reasoning": r.get("reason") or "",
         "buildid": r.get("buildid"),
         "tracy": r.get("tracy") or "",
+        "iter": n,
+        "device_screenshot": r.get("device_screenshot"),
+        "screenshot_backfill_pending": r.get("screenshot_backfill_pending"),
     }
 
 
@@ -220,8 +226,10 @@ def normalize_in_flight_row(row: dict) -> dict:
     }
 
 
-def img_link(src: str, cls: str = "thumb") -> str:
-    return f'<a href="{src}" target="_blank" rel="noopener"><img src="{src}" class="{cls}" alt=""></a>'
+def img_link(src: str, cls: str = "thumb", title: str = "") -> str:
+    t = f' title="{title}"' if title else ""
+    return (f'<a href="{src}" class="zoom" target="_blank" rel="noopener"{t}>'
+            f'<img src="{src}" class="{cls}" alt="{title}"></a>')
 
 
 def _read_timing_jsonl(path: Path) -> dict[str, float]:
@@ -337,6 +345,103 @@ def ensure_hero_diff10(iter_dir: str) -> None:
             continue
         amp = np.clip(np.abs(ref_rgb - cand_rgb) * 10.0, 0.0, 1.0)
         Image.fromarray((amp * 255.0).astype(np.uint8)).save(out)
+
+
+# --- Device screenshot requirement (user, 2026-10-05) -------------------------
+# Every ttw iteration carries a `device_screenshot` object (see
+# opt/ttw/ITERATION_CHECKLIST.md): the bicycle hero rendered ON DEVICE at the
+# iteration's commit/config, a diff vs the reference, PSNR, md5 and a written
+# visual check for tile artifacts. Iters > SCREENSHOT_REQUIRED_AFTER must have
+# it. Legacy iters SCREENSHOT_LEGACY_FROM..SCREENSHOT_REQUIRED_AFTER that never
+# got one may instead carry "screenshot_backfill_pending": true, which the
+# report shows as a red placeholder. Older iters use the legacy
+# screenshot/screenshot_diff fields and are not checked here.
+SCREENSHOT_REQUIRED_AFTER = 197
+SCREENSHOT_LEGACY_FROM = 160
+SCREENSHOT_FIELDS = ("hero", "diff", "psnr_vs_ref", "md5", "commit", "config", "visual_check")
+REPO_ROOT = OPT_DIR.parent
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _shot_file_problem(rel: str, root: Path) -> str:
+    p = root / rel
+    if not p.is_file():
+        return f"file {rel} does not exist"
+    with p.open("rb") as f:
+        if f.read(8) != PNG_MAGIC:
+            return f"file {rel} is not a PNG"
+    return ""
+
+
+def device_screenshot_problems(r: dict, root: Path | None = None) -> list[str]:
+    """Problems with a row's `device_screenshot` object ([] = valid)."""
+    root = root or REPO_ROOT
+    shot = r.get("device_screenshot")
+    if not isinstance(shot, dict):
+        return ["no device_screenshot object"]
+    probs = []
+    for k in SCREENSHOT_FIELDS:
+        v = shot.get(k)
+        if k == "psnr_vs_ref":
+            ok = (isinstance(v, (int, float)) and v == v and v > 0) or v == "inf"
+        else:
+            ok = isinstance(v, str) and v.strip() != ""
+        if not ok:
+            probs.append(f"device_screenshot.{k} missing or empty")
+    vc = str(shot.get("visual_check") or "").strip()
+    if vc and len(vc) < 8:
+        probs.append("device_screenshot.visual_check is too short to be a real note")
+    for k in ("hero", "diff"):
+        rel = str(shot.get(k) or "").strip()
+        if rel:
+            fp = _shot_file_problem(rel, root)
+            if fp:
+                probs.append(f"device_screenshot.{k}: {fp}")
+    hero = str(shot.get("hero") or "")
+    ref_rel = "benchmarks/reference_v2/hero.png"
+    if hero == ref_rel or any(part.startswith("cpu") for part in Path(hero).parts[:-1]):
+        probs.append(f"device_screenshot.hero {hero} is a CPU/reference image, not a device render")
+    return probs
+
+
+def screenshot_status(r: dict, root: Path | None = None) -> tuple[str, list[str]]:
+    """('ok' | 'pending' | 'missing' | 'legacy', problems) for a ttw row."""
+    it = r.get("iter")
+    has_shot = r.get("device_screenshot") is not None
+    if not isinstance(it, int) or (it < SCREENSHOT_LEGACY_FROM and not has_shot):
+        return "legacy", []
+    if has_shot:
+        probs = device_screenshot_problems(r, root)
+        return ("missing" if probs else "ok"), probs
+    if r.get("screenshot_backfill_pending") is True:
+        if it > SCREENSHOT_REQUIRED_AFTER:
+            return "missing", [
+                f"screenshot_backfill_pending is only allowed for legacy iters "
+                f"{SCREENSHOT_LEGACY_FROM}-{SCREENSHOT_REQUIRED_AFTER}"
+            ]
+        return "pending", []
+    return "missing", ["no device_screenshot object (and no screenshot_backfill_pending flag)"]
+
+
+def check_device_screenshots(rows: list[dict], root: Path | None = None) -> tuple[list[str], list[int]]:
+    """(errors, backfill-pending iters) over all ttw rows."""
+    errors: list[str] = []
+    pending: list[int] = []
+    for r in rows:
+        status, probs = screenshot_status(r, root)
+        if status == "pending":
+            pending.append(r["iter"])
+        elif status == "missing":
+            errors.extend(f"ttw iter {r.get('iter')}: {p}" for p in probs)
+        if status == "ok" and r.get("screenshot_backfill_pending"):
+            print(f"  [WARN] ttw iter {r.get('iter')} has a valid device_screenshot; "
+                  f"drop its stale screenshot_backfill_pending flag")
+    return errors, pending
+
+
+def _opt_href(rel: str) -> str:
+    """Repo-relative path -> href relative to opt/REPORT.html."""
+    return rel[4:] if rel.startswith("opt/") else "../" + rel
 
 
 def load_metal_iters() -> list[dict]:
@@ -1040,6 +1145,33 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
             f"(run verify with --iter-dir {iter_dir})</span>"
         )
 
+    shot_html = ""
+    if r.get("_source") == "ttw":
+        status, probs = screenshot_status(r)
+        shot = r.get("device_screenshot") or {}
+        if status == "ok":
+            psnr = shot["psnr_vs_ref"]
+            psnr_txt = "∞" if psnr == "inf" else f"{float(psnr):.2f}"
+            thumb_html = (
+                img_link(_opt_href(shot["hero"]), title="device hero (click to enlarge)")
+                + img_link(_opt_href(shot["diff"]), title="diff vs reference (click to enlarge)")
+                + f"<p class='shot-cap'>device hero · diff vs ref · PSNR {psnr_txt} dB</p>"
+            )
+            device = f" on {html_escape(shot['device'])}" if shot.get("device") else ""
+            shot_html = (
+                f"<p class='shot-meta'>device screenshot{device}: "
+                f"<code>{html_escape(shot['commit'])}</code> {html_escape(shot['config'])} · "
+                f"md5 <code>{html_escape(shot['md5'])}</code> · PSNR {psnr_txt} dB<br>"
+                f"visual check: {html_escape(shot['visual_check'])}</p>"
+            )
+        elif status == "pending":
+            thumb_html = "<div class='shot-missing'>screenshot missing - backfill pending</div>"
+        elif status == "missing":
+            thumb_html = (
+                "<div class='shot-missing'>device screenshot MISSING - required<br>"
+                f"<small>{html_escape('; '.join(probs))}</small></div>"
+            )
+
     # Description: the `action` (the idea/what-was-tried) is the primary
     # human-readable line. For metal rows action is a slug + a descriptive
     # `note`/commit message; for ttw rows action IS the full idea and the
@@ -1130,6 +1262,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
     {caveat_html}
     {desc_html}
     {build_html}
+    {shot_html}
     {tracy_html}
   </div>
   <div class='backburner-thumbs'>{thumb_html}</div>
@@ -1698,7 +1831,27 @@ def build_html(rows: list[dict]) -> str:
   .in-flight-row { background: #fffdf5; border-left: 4px solid #e9c46a; padding-left: 12px; }
   .reason { color: #555; font-size: 12px; }
   code { background: #f1faee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+  .shot-missing { background: #fde2e1; border: 2px solid #c44536; color: #c44536; font-weight: 700; font-size: 12px; padding: 10px 12px; border-radius: 4px; max-width: 260px; }
+  .shot-missing small { font-weight: 400; }
+  .shot-cap { color: #555; font-size: 11px; margin: 2px 0 0; }
+  .shot-meta { color: #555; font-size: 11px; margin: 4px 0 0; }
+  #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; cursor: zoom-out; align-items: center; justify-content: center; }
+  #lightbox img { max-width: 96vw; max-height: 96vh; }
 </style>
+<script>
+document.addEventListener('click', function (e) {
+  var lb = document.getElementById('lightbox');
+  if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
+  var a = e.target.closest('a.zoom');
+  if (!a || !lb) return;
+  e.preventDefault();
+  lb.querySelector('img').src = a.getAttribute('href');
+  lb.style.display = 'flex';
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none'; }
+});
+</script>
 """
     n_metal = len(load_metal_iters())
     n_ttw = len(load_ttw_iters())
@@ -1723,6 +1876,7 @@ def build_html(rows: list[dict]) -> str:
 {gpu_reference_section()}
 {ledger_section(rows)}
 {algorithm_snapshot(rows)}
+<div id='lightbox'><img src='' alt='enlarged screenshot'></div>
 </body>
 </html>
 """
@@ -1734,7 +1888,15 @@ def write_reports(html: str) -> None:
     html = "\n".join(line.rstrip() for line in html.split("\n"))
     REPORT_HTML.write_text(html)
     REPORT_HTML_TTW.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_HTML_TTW.write_text(html)
+    REPORT_HTML_TTW.write_text(rebase_for_ttw(html))
+
+
+_REL_ATTR_RE = re.compile(r'(\b(?:src|href)=")(?![a-zA-Z][a-zA-Z0-9+.-]*:|/|#)([^"]+")')
+
+
+def rebase_for_ttw(html: str) -> str:
+    """Prefix relative src/href paths with ../ so the opt/ttw/ mirror resolves them."""
+    return _REL_ATTR_RE.sub(r"\1../\2", html)
 
 
 def main() -> None:
@@ -1743,7 +1905,16 @@ def main() -> None:
     write_reports(html)
     n_ledger = len(load_metal_iters()) + len(load_ttw_iters())
     print(f"wrote {REPORT_HTML}  ({n_ledger} ledger rows, {len(rows)} cpu iters)")
-    print(f"wrote {REPORT_HTML_TTW}  (identical mirror)")
+    print(f"wrote {REPORT_HTML_TTW}  (mirror, relative paths rebased to ../)")
+    errors, pending = check_device_screenshots(load_ttw_iters())
+    if pending:
+        print(f"  [WARN] {len(pending)} legacy iters flagged screenshot_backfill_pending: {pending}")
+    if errors:
+        for e in errors:
+            print(f"SCREENSHOT MISSING: {e}")
+        print("REPORT INVALID: device screenshot requirement not met "
+              "(see opt/ttw/ITERATION_CHECKLIST.md)")
+        sys.exit(2)
 
 
 if __name__ == "__main__":

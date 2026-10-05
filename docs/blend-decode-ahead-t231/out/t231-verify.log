@@ -1,0 +1,116 @@
+[sync_remote] sha=096d892c13889023923cce12726e42c29c2ea651 so_md5=af735c7bd959af6a46c8a2933cbdffb6 
+SYNC_RC=0
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t231-v1  timeout=360s  worry=288s  ts=2026-10-05T11:50:44-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t231/docs/blend-decode-ahead-t231/remote_time.sh v1 def:GSPLAT_TT_DUMMY=0 D0:GSPLAT_TT_BLEND_DECODE_AHEAD=0
+-----------------------------------------
+=== rv1-def 096d892 GSPLAT_TT_DUMMY=0 15:50:44
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.9 p50_ms=12.0 min_ms=10.5 max_ms=13.3 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t231/tmp/t231-rv1-def
+      1 STAGES n=30 head=0.002 project=3.341 tile_assign=0.004 sort=0.880 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.464 d2h=0.206 assemble=0.000 tail=0.002 | sum=11.900 view_total=11.901 resid_in_view=+0.001 avg_frame_ms=11.931 resid_vs_frame=+0.031
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.050 upload=0.000 bin_emit=0.568 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.164 publish_wait=0.000 mat=0.062 | sum=0.844 sort=0.880 resid=+0.036
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.034 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.272 gather_result=0.000 | sum=3.340 project=3.341 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv1-D0 096d892 GSPLAT_TT_BLEND_DECODE_AHEAD=0 15:50:56
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000 | sum=0.003 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=12.6 p50_ms=12.7 min_ms=11.0 max_ms=14.2 n_views=30 warmup_s=2.3 out=/localdev/smarton/gstt2-t231/tmp/t231-rv1-D0
+      1 STAGES n=30 head=0.003 project=3.346 tile_assign=0.004 sort=0.846 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.164 d2h=0.214 assemble=0.000 tail=0.002 | sum=12.578 view_total=12.579 resid_in_view=+0.001 avg_frame_ms=12.612 resid_vs_frame=+0.034
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.043 upload=0.000 bin_emit=0.555 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.151 publish_wait=0.000 mat=0.060 | sum=0.810 sort=0.846 resid=+0.036
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.040 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.267 gather_result=0.000 | sum=3.345 project=3.346 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round v1 15:51:07
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t231/.ttw/logs/t231-v1-20261005-115044.log
+TIME_v1_RC=0
+MD5_OK rv1-def
+MD5_OK rv1-D0
+ttp lock: waiting for p100 (held by task #232 (run 635) since 11:51; 1 ahead in queue)
+ttp lock: got p100 after 0.3 min (not counted toward the run's wall clock)
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t231-v2  timeout=360s  worry=288s  ts=2026-10-05T11:51:26-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t231/docs/blend-decode-ahead-t231/remote_time.sh v2 D0:GSPLAT_TT_BLEND_DECODE_AHEAD=0 def:GSPLAT_TT_DUMMY=0
+-----------------------------------------
+=== rv2-D0 096d892 GSPLAT_TT_BLEND_DECODE_AHEAD=0 15:51:27
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=12.6 p50_ms=12.8 min_ms=11.1 max_ms=14.2 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t231/tmp/t231-rv2-D0
+      1 STAGES n=30 head=0.003 project=3.351 tile_assign=0.004 sort=0.853 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.159 d2h=0.230 assemble=0.000 tail=0.002 | sum=12.602 view_total=12.603 resid_in_view=+0.001 avg_frame_ms=12.639 resid_vs_frame=+0.037
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.045 upload=0.000 bin_emit=0.558 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.153 publish_wait=0.000 mat=0.061 | sum=0.817 sort=0.853 resid=+0.035
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.040 pfwc_enqueue=0.038 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.266 gather_result=0.000 | sum=3.350 project=3.351 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv2-def 096d892 GSPLAT_TT_DUMMY=0 15:51:37
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.9 p50_ms=12.0 min_ms=10.5 max_ms=13.4 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t231/tmp/t231-rv2-def
+      1 STAGES n=30 head=0.003 project=3.349 tile_assign=0.005 sort=0.865 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.481 d2h=0.206 assemble=0.000 tail=0.002 | sum=11.910 view_total=11.911 resid_in_view=+0.001 avg_frame_ms=11.946 resid_vs_frame=+0.035
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.048 upload=0.000 bin_emit=0.561 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.159 publish_wait=0.000 mat=0.061 | sum=0.830 sort=0.865 resid=+0.036
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.038 pfwc_enqueue=0.035 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.269 gather_result=0.000 | sum=3.348 project=3.349 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round v2 15:51:48
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t231/.ttw/logs/t231-v2-20261005-115126.log
+TIME_v2_RC=0
+MD5_OK rv2-def
+MD5_OK rv2-D0
+ttp lock: waiting for p100 (held by task #232 (run 635) since 11:51)
+ttp lock: got p100 after 0.2 min (not counted toward the run's wall clock)
+[ttw 2026-10-05T11:52:01-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:52:01-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-05T11:52:01-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:52:01-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:52:01-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:52:01-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:52:01-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:52:01-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:52:01-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:52:01-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:52:01-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:52:01-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t231-def  timeout=560s  worry=448s  ts=2026-10-05T11:52:01-0400
+cmd: bash /localdev/smarton/gstt2-t231/docs/blend-decode-ahead-t231/remote_tracy.sh t231-def GSPLAT_TT_KCFG_EXTRA_KB=32
+-----------------------------------------
+=== tracy t231-def 096d892 env: GSPLAT_TT_KCFG_EXTRA_KB=32 15:52:02
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=27.8 p50_ms=27.5 min_ms=25.6 max_ms=42.1 n_views=30 warmup_s=20.3 out=/localdev/smarton/gstt2-t231/tmp/t231-def
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 8475103 Oct  5 15:52 /localdev/smarton/gstt2-t231/opt/profiler/t231-def/render.tracy
+[capture_tracy] device profiler CSV data rows: 538953 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t231/opt/profiler/t231-def/render.tracy
+chunk opt/profiler/t231-def/profile_log_device.csv: rows=538952 frames=31 (warmup rows=17406) kept_rows=521546 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t231-def/dev30.csv: rows=521546 frames=30 rows/frame=17385
+zones rc=0
+gaps rc=0
+roofline rc=0
+views=30 segments/view=[4]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.331   2.331      0.000   110  pfwc
+ 1    2.337    3.322   0.985      0.006   110  k2_pairs+k2_rows
+ 2    3.332    4.766   1.434      0.010   110  sort_ol_prefix+sort_ol_barrier+sort_ol_fillb+sort_ol_fill+sort_ol_emit+sort_ol_town
+ 3    4.773   11.686   6.913      0.007   110  sort_subchunk_mat+mat_cull_mask+tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.023 ms/view
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+tile_blend_sfpu            37048.6  1234.954       112.8       3.760     9900  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            12125.7   404.191       110.5       3.684     3300  NCRISC
+=== tracy done 15:52:40
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t231/.ttw/logs/t231-def-20261005-115201.log
+PROF_RC=0
+views=30 segments/view=[4]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.331   2.331      0.000   110  pfwc
+ 1    2.337    3.322   0.985      0.006   110  k2_pairs+k2_rows
+ 2    3.332    4.766   1.434      0.010   110  sort_ol_prefix+sort_ol_barrier+sort_ol_fillb+sort_ol_fill+sort_ol_emit+sort_ol_town
+ 3    4.773   11.686   6.913      0.007   110  sort_subchunk_mat+mat_cull_mask+tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 0.023 ms/view
+CHAIN_DONE

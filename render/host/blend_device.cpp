@@ -210,6 +210,17 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // mask travels in slab word3, so there is no separate CB_BMASK_BULK.
     const uint32_t bulk_rec_depth = kBucketFit;
     cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
+    // Task #231: GSPLAT_TT_BLEND_DECODE_AHEAD (2 = S2, default; 1 = S2a; 0 = off): TRISC0
+    // decodes the live records' SFPLOADI words into an L1 ring that TRISC1 reads.
+    // The ring CB exists only when the knob is on: 64 B header + 64 slots of 64 B
+    // (DA_SLOTS / DA_SLOT_BYTES in alpha_blend_compute_mb.cpp).
+    const char* blend_da_env = std::getenv("GSPLAT_TT_BLEND_DECODE_AHEAD");
+    const std::string blend_da =
+        (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("2");
+    if (blend_da != "0") {
+        constexpr uint32_t CB_DA_RING = 10;
+        cb_cfg(CB_DA_RING, 64, 1u + 64u, DataFormat::UInt32);
+    }
 
     // The resident devcull reader binds 20 DRAM-interleaved accessors: proj_m
     // a/b/c/px/py/opacity/colors (7) + sort_sorted_ids + sort_tile_ranges +
@@ -315,6 +326,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         compute_defines["BLEND_CONST_HOIST"] = env_or("GSPLAT_TT_BLEND_CONST_HOIST", "1");
         compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "0");
         compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "1");
+        compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
     }
     ctx.compute = CreateKernel(
         program,

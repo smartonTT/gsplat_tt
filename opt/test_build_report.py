@@ -25,3 +25,14 @@ ms, label = b.tt_anchor()
 b.load_ttw_iters = _orig
 assert ms == 14.5 and "bh-x p100a" in label and "iter-7" in label, (ms, label)
 print("ok")
+
+
+def test_rebase_for_ttw_prefixes_relative_paths_only():
+    import build_report as br
+    html = ('<img src="metal-screenshots/ttw-1/hero.png"><img src="data:image/png;base64,AA">'
+            '<a href="../docs/x.md"></a><a href="https://x"></a><a href="#top"></a>')
+    out = br.rebase_for_ttw(html)
+    assert 'src="../metal-screenshots/ttw-1/hero.png"' in out
+    assert 'src="data:image/png;base64,AA"' in out
+    assert 'href="../../docs/x.md"' in out
+    assert 'href="https://x"' in out and 'href="#top"' in out
