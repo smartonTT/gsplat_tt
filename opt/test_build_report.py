@@ -24,6 +24,21 @@ b.load_ttw_iters = lambda: [
 ms, label = b.tt_anchor()
 b.load_ttw_iters = _orig
 assert ms == 14.5 and "bh-x p100a" in label and "iter-7" in label, (ms, label)
+
+# Throughput (task #275) is a separate, labeled secondary table; empty without rows.
+_orig = b._read_jsonl
+b._read_jsonl = lambda p: [] if p == b.THROUGHPUT_JSONL else _orig(p)
+assert b.throughput_section() == ""
+b._read_jsonl = lambda p: [{"ts": "2026-10-05T14:58:00-0400", "iter_ref": 199,
+    "commit": "abc1234", "board": "bh-x p100a", "b2b_ms_frame": 11.618,
+    "b2b_ms_frame_rounds": [11.6, 11.62], "b2b_drop_ms_frame": 11.59,
+    "latency_ms_view": 11.639, "md5": "46a725ab", "golden_match": True,
+    "source": "docs/throughput-t275.md"}] if p == b.THROUGHPUT_JSONL else _orig(p)
+sec = b.throughput_section()
+b._read_jsonl = _orig
+assert "Throughput, back-to-back" in sec and "SECONDARY METRIC" in sec, sec
+assert "11.618" in sec and "86.1 FPS" in sec and "11.639" in sec and "46a725ab" in sec, sec
+assert "href='../docs/throughput-t275.md'" in sec, sec
 print("ok")
 
 

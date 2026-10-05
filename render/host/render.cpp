@@ -239,13 +239,17 @@ py::tuple render_view(
     const std::size_t image_bytes = static_cast<std::size_t>(image_height) *
                                     static_cast<std::size_t>(image_width) * 3;
 
-    // One-shot JIT compile of all device programs at scene open.
-    gsplat_tt::jit_warmup_ideal_path();
-    head_span.stop();
-
-    // Stage 1: project.
+    // The device stages below touch no Python objects, so they run with the
+    // GIL released: a viewer's JPEG/send thread then overlaps the render
+    // (task #257). The bench is single-threaded, so this costs it nothing.
     gsplat_cpu::ProjectResult proj;
     {
+        py::gil_scoped_release nogil;
+        // One-shot JIT compile of all device programs at scene open.
+        gsplat_tt::jit_warmup_ideal_path();
+        head_span.stop();
+
+        // Stage 1: project.
         st::Span s(st::acc().project);
         proj = run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
                            opacities_ptr, min_opacity, N, image_height,
@@ -267,6 +271,7 @@ py::tuple render_view(
     bool ta_ok = false;
     gsplat_cpu::TileAssignResult ta;
     {
+        py::gil_scoped_release nogil;
         st::Span s(st::acc().tile_assign);
         ta = gsplat_tt::tile_assign_tt(
             /*means_2d=*/nullptr, /*radii=*/nullptr, M, image_height,
@@ -305,6 +310,7 @@ py::tuple render_view(
     gsplat_cpu::SortResult sr;
     gsplat_tt::SortCallTimings sort_t;
     {
+        py::gil_scoped_release nogil;
         st::Span s(st::acc().sort);
         sr = gsplat_tt::sort_and_bin_tt(
             ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),

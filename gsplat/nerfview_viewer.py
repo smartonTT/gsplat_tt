@@ -1,18 +1,171 @@
 """Gsplat-specific nerfview integration."""
 from __future__ import annotations
 
+import os
 import threading
 import time
+import traceback
 from pathlib import Path
+from typing import Callable, Optional
 
 import nerfview
+import numpy as np
 import viser
 from nerfview._renderer import Renderer, RenderTask
+from viser._messages import BackgroundImageMessage
 from nerfview.render_panel import RenderTabState, populate_general_render_tab
 
 # Keep rendering for 1 s after any UI action so the FPS readout settles.
 _UI_BURST_SEC = 1.0
 _UI_BURST_POLL_SEC = 0.016
+
+# JPEG encoders for the sender thread, in auto order. All but "viser" release the GIL for the
+# whole encode, so the render thread keeps running. "viser" is viser's own encode (cv2 with a
+# numpy channel swap, ~10 ms for 1024^2 on bh-35; task #271).
+JPEG_ENCODERS = ("simplejpeg", "turbojpeg", "cv2", "viser")
+
+
+def make_jpeg_encoder(name: str) -> Callable[[np.ndarray, int], bytes]:
+    """Return ``encode(rgb_uint8_hwc, quality) -> jpeg bytes``; ImportError if unusable."""
+    if name == "simplejpeg":
+        import simplejpeg
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            return simplejpeg.encode_jpeg(img, quality=quality, colorspace="RGB",
+                                          colorsubsampling="420", fastdct=True)
+        return encode
+    if name == "turbojpeg":
+        try:
+            import turbojpeg
+            tj = turbojpeg.TurboJPEG()  # loads libturbojpeg.so
+        except (OSError, RuntimeError) as e:
+            raise ImportError(f"libturbojpeg: {e}") from e
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            return tj.encode(img, quality=quality, pixel_format=turbojpeg.TJPF_RGB,
+                             jpeg_subsample=turbojpeg.TJSAMP_420)
+        return encode
+    if name == "cv2":
+        import cv2
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            bgr = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)  # SIMD swap, not viser's numpy gather
+            ok, buf = cv2.imencode(".jpg", bgr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+            if not ok:
+                raise RuntimeError("cv2.imencode failed")
+            return buf.tobytes()
+        return encode
+    if name == "viser":
+        from viser._scene_api import _encode_image_binary
+
+        def encode(img: np.ndarray, quality: int) -> bytes:
+            return _encode_image_binary(img, "jpeg", jpeg_quality=quality)[1]
+        return encode
+    raise ValueError(f"unknown JPEG encoder {name!r}; choose from {JPEG_ENCODERS}")
+
+
+def pick_jpeg_encoder(name: Optional[str] = None) -> tuple[str, Callable[[np.ndarray, int], bytes]]:
+    """``name`` (default: env GSPLAT_VIEWER_JPEG, else "auto"): first usable in auto order."""
+    name = name or os.environ.get("GSPLAT_VIEWER_JPEG", "auto")
+    for cand in (JPEG_ENCODERS if name == "auto" else (name,)):
+        try:
+            return cand, make_jpeg_encoder(cand)
+        except ImportError:
+            if name != "auto":
+                raise
+    raise AssertionError("viser encoder is always importable")
+
+
+class FastRenderer(Renderer):
+    """nerfview's Renderer without its two serial costs on every frame.
+
+    * No ``sys.settrace`` line hook around the render, so nerfview's mid-render
+      interrupt never fires: the TT backend must not be interrupted while it
+      reads a frame from its daemon pipe (stale bytes would break every later
+      frame). The hook also taxed every Python line of the render path.
+    * JPEG encode + websocket send run on a sender thread, so frame N+1
+      renders on the device while frame N is encoded. Latest frame wins: an
+      unsent older frame is dropped. The encode is a GIL-free call
+      (``pick_jpeg_encoder``) so it does not slow the render thread.
+    * During the 1 s UI burst it renders back to back rather than at the
+      burst thread's 16 ms tick, so the FPS readout shows the device speed.
+
+    ``on_frame_sent(t_render_start, t_render_end, t_sent)`` (perf_counter
+    seconds) is called after each send, for the viewer's on-screen stats.
+    """
+
+    def __init__(self, *args, on_frame_sent: Optional[Callable[[float, float, float], None]] = None,
+                 **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self.on_frame_sent = on_frame_sent
+        self.jpeg_encoder_name, self._encode_jpeg = pick_jpeg_encoder()
+        self._out = None
+        self._out_cv = threading.Condition()
+        self._sender = threading.Thread(target=self._send_loop, name="gsplat-send", daemon=True)
+        self._sender.start()
+
+    def run(self) -> None:
+        while self.running:
+            while not self.is_prepared_fn():
+                time.sleep(0.1)
+            if time.time() < self.viewer._ui_active_deadline:
+                # UI burst: render back to back at device speed instead of
+                # waiting for the next 16 ms burst tick (that capped ~60 FPS).
+                if not self._render_event.is_set():
+                    self.submit(RenderTask("rerender", self.viewer.get_camera_state(self.client)))
+            elif not self._render_event.wait(0.2):
+                self.submit(RenderTask("static", self.viewer.get_camera_state(self.client)))
+            self._render_event.clear()
+            task = self._task
+            assert task is not None
+            if self._state == "high" and task.action == "static":
+                continue
+            self._state = self.transitions[self._state][task.action]
+            assert task.camera_state is not None
+            try:
+                self.render_once(task)
+            except Exception:
+                traceback.print_exc()
+                os._exit(1)
+
+    def render_once(self, task: RenderTask) -> None:
+        """Render one task under the viewer lock and queue it for sending."""
+        with self.lock:
+            t0 = time.perf_counter()
+            W, H = self._get_img_wh(task.camera_state.aspect)
+            self.viewer.render_tab_state.viewer_width = W
+            self.viewer.render_tab_state.viewer_height = H
+            rendered = self.viewer.render_fn(task.camera_state, self.viewer.render_tab_state)
+            self.viewer._after_render()
+            t1 = time.perf_counter()
+            self.viewer.render_tab_state.num_view_rays_per_sec = (W * H) / max(t1 - t0, 1e-10)
+        img, depth = rendered if isinstance(rendered, tuple) else (rendered, None)
+        quality = 70 if task.action in ("static", "update") else 40
+        with self._out_cv:
+            self._out = (img, depth, quality, t0, t1)
+            self._out_cv.notify()
+
+    def _send_loop(self) -> None:
+        while self.running:
+            with self._out_cv:
+                while self._out is None:
+                    self._out_cv.wait()
+                img, depth, quality, t0, t1 = self._out
+                self._out = None
+            try:
+                if depth is None and img.dtype == np.uint8 and self.jpeg_encoder_name != "viser":
+                    # set_background_image minus viser's encode: same message.
+                    data = self._encode_jpeg(np.ascontiguousarray(img), quality)
+                    self.client.scene._websock_interface.queue_message(
+                        BackgroundImageMessage(format="jpeg", rgb_data=data, depth_data=None))
+                else:
+                    self.client.scene.set_background_image(
+                        img, format="jpeg", jpeg_quality=quality, depth=depth)
+            except Exception:
+                traceback.print_exc()
+                continue
+            if self.on_frame_sent is not None:
+                self.on_frame_sent(t0, t1, time.perf_counter())
 
 
 class GsplatViewer(nerfview.Viewer):
@@ -27,8 +180,10 @@ class GsplatViewer(nerfview.Viewer):
         *,
         default_render_width: int = 1024,
         default_render_height: int = 1024,
+        on_frame_sent: Optional[Callable[[float, float, float], None]] = None,
         **kwargs,
     ) -> None:
+        self._on_frame_sent = on_frame_sent
         self._default_render_width = default_render_width
         self._default_render_height = default_render_height
         self._ui_active_deadline = 0.0
@@ -56,8 +211,8 @@ class GsplatViewer(nerfview.Viewer):
 
     def _connect_client(self, client: viser.ClientHandle) -> None:
         client_id = client.client_id
-        self._renderers[client_id] = Renderer(
-            viewer=self, client=client, lock=self.lock,
+        self._renderers[client_id] = FastRenderer(
+            viewer=self, client=client, lock=self.lock, on_frame_sent=self._on_frame_sent,
         )
         self._renderers[client_id].start()
 

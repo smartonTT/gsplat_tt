@@ -260,6 +260,9 @@ class GaussianViewer:
         force_square: int | None = None,
         verbose: bool = False,
         scene_path: str | None = None,
+        # Initial contribution floor (Render tuning slider = 1/floor). None keeps
+        # the slider default 1/16384; the TT viewer passes the bench's 1/255.
+        contrib_floor: float | None = None,
         # Back-compat alias: if passed, overrides render_width/height.
         max_resolution: int | None = None,
     ):
@@ -288,6 +291,12 @@ class GaussianViewer:
 
         self._frame_samples: list[_FrameSample] = []
         self._fps_samples: deque[float] = deque(maxlen=_FPS_WINDOW)
+        # Per sent frame: render ms (pipeline.render wall, = bench ms/view),
+        # end-to-end ms (render start -> JPEG sent) and frame interval ms.
+        self._render_ms: deque[float] = deque(maxlen=30)
+        self._e2e_ms: deque[float] = deque(maxlen=30)
+        self._interval_ms: deque[float] = deque(maxlen=30)
+        self._last_sent = 0.0
         self._session_start = datetime.now()
         self._camera_controllers: dict[int, ClientCameraController] = {}
 
@@ -425,7 +434,8 @@ class GaussianViewer:
                 min=1.0,
                 max=65536.0,
                 step=1.0,
-                initial_value=16384.0,
+                initial_value=(16384.0 if contrib_floor is None
+                               else float(round(1.0 / contrib_floor))),
                 hint=(
                     "Mahalanobis keep threshold: keep pair iff peak "
                     "ω·exp(−½m²) ≥ 1/N. Higher N = tighter cull."
@@ -491,6 +501,7 @@ class GaussianViewer:
             mode="rendering",
             default_render_width=render_width,
             default_render_height=render_height,
+            on_frame_sent=self._on_frame_sent,
         )
         _sync_sliders_to_pipeline()
         self._request_rerender()
@@ -729,7 +740,9 @@ class GaussianViewer:
         intrinsics = torch.tensor(
             camera_state.get_K((W, H)), dtype=torch.float32,
         )
-        extrinsics = c2w_to_w2c(render_c2w)
+        # Invert in float32 torch exactly as the bench (render/run.py) does, so a
+        # viewer frame is bit-identical to the bench's for the same camera.
+        extrinsics = c2w_to_w2c(torch.from_numpy(np.asarray(render_c2w, dtype=np.float32)))
 
         try:
             result = self.pipeline.render(
@@ -739,6 +752,7 @@ class GaussianViewer:
             traceback.print_exc()
             return _failure_pattern(W, H)
 
+        self._render_ms.append(result.timings.get("total", 0.0))
         if result.image is None:
             image_np = np.zeros((H, W, 3), dtype=np.uint8)
         else:
@@ -777,6 +791,14 @@ class GaussianViewer:
         print(format_timings(result), flush=True)
         print(f"[wall]  {wall_elapsed * 1000:6.1f} ms", flush=True)
 
+    def _on_frame_sent(self, t_start: float, t_rendered: float, t_sent: float) -> None:
+        """FastRenderer callback after a frame's JPEG went out (perf_counter s)."""
+        self._e2e_ms.append((t_sent - t_start) * 1000.0)
+        gap = t_sent - self._last_sent
+        if gap < 0.25:  # continuous frames only, not the idle gap before them
+            self._interval_ms.append(gap * 1000.0)
+        self._last_sent = t_sent
+
     def _update_stats(
         self, elapsed: float, width: int, height: int, num_visible: int,
     ) -> None:
@@ -789,10 +811,16 @@ class GaussianViewer:
             smoothed_fps = sum(self._fps_samples) / len(self._fps_samples)
         else:
             smoothed_fps = instant_fps
+        def med(d: deque[float]) -> str:
+            return f"{statistics.median(d):.2f}" if d else "--"
+        if self._interval_ms:  # sent frames per second (render overlaps encode)
+            smoothed_fps = 1000.0 / statistics.median(self._interval_ms)
         self._stats_display.content = (
             f"**FPS:** {smoothed_fps:.1f} | "
             f"**Render:** {width}x{height} | "
-            f"**Visible:** {num_visible:,}"
+            f"**Visible:** {num_visible:,}  \n"
+            f"**Device render:** {med(self._render_ms)} ms | "
+            f"**End-to-end frame:** {med(self._e2e_ms)} ms"
         )
 
     @property

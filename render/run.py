@@ -240,6 +240,71 @@ def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
     return img, wall_ms
 
 
+def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
+                  hero_clean, dump_dir, out_dir):
+    """Throughput mode: render `order` back to back, 1 + args.b2b_passes times.
+
+    The timed window of a pass holds only pipeline.render() + _to_image() per
+    view (extrinsics are built before it). Pass 0 is the check pass: its frames
+    are md5'd after the pass and written to --dump-views with the latency
+    mode's file names, so the sweep md5 is computed the same way. Passes 1..N
+    are the measured ones (ms_frame = their mean): by default they keep their
+    frames and must match pass 0 byte for byte; --b2b-drop drops each frame as
+    soon as render() returns, like a viewer (no compare). Returns the exit code
+    (5 when a measured pass differs from the check pass)."""
+    import hashlib
+    extrs = [c2w_to_w2c(torch.from_numpy(np.asarray(cam["views"][n]["c2w"],
+                                                     dtype=np.float32)))
+             for n in order]
+    pass_ms = []
+    digests0 = None
+    identical = True
+    for p in range(1 + max(0, args.b2b_passes)):
+        keep = p == 0 or not args.b2b_drop
+        imgs = []
+        t0 = time.perf_counter()
+        if keep:
+            for extr in extrs:
+                imgs.append(_to_image(pipeline.render(gauss, extr, K, H, W)))
+        else:
+            for extr in extrs:
+                _to_image(pipeline.render(gauss, extr, K, H, W))
+        wall_ms = (time.perf_counter() - t0) * 1000.0
+        pass_ms.append(wall_ms / len(order))
+        if keep:
+            digests = [hashlib.md5(_to_u8(im).tobytes()).hexdigest() for im in imgs]
+        if p == 0:
+            digests0 = digests
+            for i, (name, img) in enumerate(zip(order, imgs)):
+                if name == hero_name:
+                    hero_clean = img
+                if dump_dir is not None:
+                    Image.fromarray(_to_u8(img)).save(dump_dir / f"view{i:02d}_{name}.png")
+        elif keep and digests != digests0:
+            identical = False
+            bad = [order[i] for i, (a, b) in enumerate(zip(digests, digests0)) if a != b]
+            print(f"[run] B2B pass {p}: {len(bad)} views differ from pass 0: {bad[:5]}",
+                  file=sys.stderr, flush=True)
+        print(f"[run] B2B pass {p}{' (check)' if p == 0 else ''}"
+              f"{'' if keep else ' (drop)'}: {wall_ms:.1f} ms for {len(order)} views "
+              f"= {pass_ms[-1]:.3f} ms/frame", flush=True)
+        del imgs
+    Image.fromarray(_to_u8(hero_clean)).save(out_dir / "hero_clean.png")
+    timed = pass_ms[1:] or pass_ms
+    ms_frame = statistics.mean(timed)
+    raw_md5 = hashlib.md5("".join(digests0).encode()).hexdigest()[:8]
+    print(f"B2B scene={args.scene} n_views={len(order)} passes={len(timed)} "
+          f"drop={'yes' if args.b2b_drop else 'no'} "
+          f"ms_frame={ms_frame:.3f} fps={1000.0 / ms_frame:.2f} "
+          f"pass_ms_frame={','.join(f'{x:.3f}' for x in timed)} "
+          f"check_pass_ms_frame={pass_ms[0]:.3f} raw_md5={raw_md5} "
+          f"identical_across_passes="
+          f"{('yes' if identical else 'NO') if not args.b2b_drop else 'unchecked'} "
+          f"out={out_dir}", flush=True)
+    print(f"TTW_TIMING b2b_ms_frame={ms_frame:.3f}", flush=True)
+    return 0 if identical else 5
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", default="bicycle")
@@ -255,6 +320,17 @@ def main():
                     help="time only order[START:END] (python slice). Used by the "
                          "chunked Tracy capture so each devrun job fits the 600 s "
                          "ceiling. The warmup still renders the hero view.")
+    ap.add_argument("--back-to-back", action="store_true",
+                    help="throughput mode (task #275): render the sweep continuously, "
+                         "no per-view host work beyond render() (no prints, PNG saves "
+                         "or hashing inside the timed window), and report wall / views "
+                         "as ms/frame. Secondary metric; ms_view latency stays primary.")
+    ap.add_argument("--b2b-passes", type=int, default=3,
+                    help="measured back-to-back passes over the sweep, after one "
+                         "check pass (each timed separately)")
+    ap.add_argument("--b2b-drop", action="store_true",
+                    help="measured passes drop each frame when render() returns "
+                         "(viewer-like; no compare against the check pass)")
     ap.add_argument("--ref-only", nargs=1, metavar="OUT_NPY",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
@@ -335,6 +411,12 @@ def main():
     pv_stages = (os.environ.get("GSPLAT_PER_VIEW_STAGES") == "1"
                  and hasattr(clean_backend._clean, "stage_timings"))
     st_prev = clean_backend._clean.stage_timings() if pv_stages else None
+    if args.back_to_back:
+        rc = _back_to_back(args, clean_pipeline, gauss, cam, order, K, H, W,
+                           hero_name, hero_clean, dump_dir, out_dir)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(rc)
     for i, name in enumerate(order):
         img, wall_ms = render_clean_view_timed(
             clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
