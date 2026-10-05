@@ -160,8 +160,16 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     mbf::MatPart mat;
     if (fused) mat = mbf::add_mat_part(program, cores);
     const uint32_t cb_base = fused ? mbf::kBlendCbBase : 0u;
+    static_assert(CB_MB_COUNTS == mbf::kAliasMbCounts && CB_IMG_U8 == mbf::kAliasImgU8 &&
+                  CB_OUT == mbf::kAliasOut && TILE_BYTES_BF16 == mbf::kOutPageBytes &&
+                  IMG_ROW_BYTES * TILE_H == mbf::kImgU8Bytes);
 
     auto cb_cfg = [&](uint32_t id0, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+        // Task #289: these share a mat CB's storage (add_mat_part creates them).
+        if (fused && (id0 == mbf::kAliasMbCounts || id0 == mbf::kAliasScrAttr ||
+                      id0 == mbf::kAliasImgU8 || id0 == mbf::kAliasOut)) {
+            return;
+        }
         const uint32_t id = id0 + cb_base;
         CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
         c.set_page_size(id, page_bytes);
@@ -196,6 +204,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     // Resident devcull reader scratch CBs.
     constexpr uint32_t CB_SCR_IDS = 4;
     constexpr uint32_t CB_SCR_ATTR = 5;
+    static_assert(CB_SCR_ATTR == mbf::kAliasScrAttr);
     constexpr uint32_t CB_SCR_MASK = 6;
     constexpr uint32_t CB_CORE_TILES = 7;
     cb_cfg(CB_SCR_IDS, 64, 2, DataFormat::UInt32);

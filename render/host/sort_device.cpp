@@ -514,9 +514,27 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     // (2*cap+256) u32 to index cap records. CB_SLAB stays bucket_fit-sized: the
     // sorted slab is streamed to DRAM ONE subchunk (<=bucket_fit recs) at a time.
     const uint32_t ov_cap = render_config::kOverflowL1Cap;
+    // Task #289: the fused program (mat + resident blend in one L1) is ~21 KB over the
+    // static CB budget, so four blend CBs share storage with mat CBs. Only DM-only mat
+    // CBs of the mover that runs on the same RISC as the blend CB's first producer
+    // (NCRISC: 2, 5, 6; BRISC: 20): the blend side starts on that RISC only after its
+    // mat body returned and drained its writes, and compute (packing CB_OUT) only after
+    // the NCRISC reader fed it. Each pair is one multi-index config (shared base).
+    namespace mf = gsplat_tt::matblend_fuse;
+    auto alias_cb = [&](uint32_t id, uint32_t bytes, uint32_t blend_id, uint32_t blend_page,
+                        DataFormat blend_fmt) {
+        CircularBufferConfig c(bytes, {{id, DataFormat::UInt32}, {blend_id, blend_fmt}});
+        c.set_page_size(id, bytes);
+        c.set_page_size(blend_id, blend_page);
+        CreateCircularBuffer(program, cores, c);
+    };
     page_cb(0, PAGE_BYTES);
     page_cb(1, PAGE_BYTES);
-    page_cb(2, 32u * PAGE_BYTES);  // REC_BATCH=32 blendrec gather ring (iter 76)
+    if (fused) {  // REC_BATCH ring + blend CB_SCR_ATTR (32 x 64 B)
+        alias_cb(2, 32u * PAGE_BYTES, mf::kBlendCbBase + mf::kAliasScrAttr, 64u, DataFormat::Float32);
+    } else {
+        page_cb(2, 32u * PAGE_BYTES);  // REC_BATCH=32 blendrec gather ring (iter 76)
+    }
     page_cb(3, 32u);
     if (fused) {
         constexpr uint32_t kBulkId = gsplat_tt::matblend_fuse::kBlendCbBase + 12u;
@@ -531,11 +549,21 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     } else {
         page_cb(4, std::max(bucket_fit * 64u, ov_cap * 32u));  // CB_BUCKET (holds cap recs)
     }
-    page_cb(5, (2u * ov_cap + 256u) * 4u);                 // CB_BSORT (radix over cap recs)
     // iter 113 (sort Stage 1): CB_SLAB — contiguous L1 scratch the in-budget
     // depth permutation lands in (bucket_fit * 32B records) so the slab is
     // emitted in coalesced SLAB_PAGE_BYTES writes, not per-record DRAM scatter.
-    page_cb(6, bucket_fit * 32u);
+    if (fused) {
+        // CB_BSORT + blend CB_MB_COUNTS (128 B pages); CB_SLAB + blend CB_OUT (bf16 tiles,
+        // the writer waits 3 contiguous pages, so the size is rounded to 3-page groups).
+        alias_cb(5, (2u * ov_cap + 256u) * 4u, mf::kBlendCbBase + mf::kAliasMbCounts, 128u,
+                 DataFormat::UInt32);
+        constexpr uint32_t kOutGroup = 3u * mf::kOutPageBytes;
+        alias_cb(6, (bucket_fit * 32u + kOutGroup - 1u) / kOutGroup * kOutGroup,
+                 mf::kBlendCbBase + mf::kAliasOut, mf::kOutPageBytes, DataFormat::Float16_b);
+    } else {
+        page_cb(5, (2u * ov_cap + 256u) * 4u);  // CB_BSORT (radix over cap recs)
+        page_cb(6, bucket_fit * 32u);
+    }
     // Dual mover: BRISC's copies (id + 16) sized for kMatMover0Cap records —
     // NCRISC's ~900 KB set does not fit twice in L1. build_mat_worklist gives
     // BRISC only whole-tile items of <= kMatMover0Cap records and gather items.
@@ -544,7 +572,12 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     page_cb(17, PAGE_BYTES);
     page_cb(18, 32u * PAGE_BYTES);
     page_cb(19, 32u);
-    page_cb(20, m0_cap * 32u);           // CB_BUCKET (PACK2, m0_cap recs)
+    if (fused) {  // CB_BUCKET + the BRISC writer's private CB_IMG_U8 (32 x 96 B)
+        alias_cb(20, m0_cap * 32u, mf::kBlendCbBase + mf::kAliasImgU8, mf::kImgU8Bytes,
+                 DataFormat::UInt8);
+    } else {
+        page_cb(20, m0_cap * 32u);       // CB_BUCKET (PACK2, m0_cap recs)
+    }
     page_cb(21, (2u * m0_cap + 256u) * 4u);  // CB_BSORT
     page_cb(22, m0_cap * 32u);           // CB_SLAB
 

@@ -39,6 +39,15 @@ constexpr uint32_t kBlendCbBase = 32;  // blend CB ids (BH has 64)
 constexpr uint32_t kDmRtaBase = 32;    // blend reader/writer args start (mat uses <= 20)
 constexpr uint32_t kCpRtaBase = 4;     // blend compute args start (mat cull uses 3)
 
+// Task #289: blend CBs (local ids, add kBlendCbBase) whose storage add_mat_part shares
+// with a mat CB; build_program_and_workload_mb skips them when fused.
+constexpr uint32_t kAliasMbCounts = 3;   // on mat CB 5 (CB_BSORT)
+constexpr uint32_t kAliasScrAttr = 5;    // on mat CB 2 (REC_BATCH ring)
+constexpr uint32_t kAliasImgU8 = 8;      // on mat CB 20 (BRISC CB_BUCKET)
+constexpr uint32_t kAliasOut = 16;       // on mat CB 6 (CB_SLAB)
+constexpr uint32_t kOutPageBytes = 32u * 32u * 2u;  // bf16 tile
+constexpr uint32_t kImgU8Bytes = 32u * 32u * 3u;    // 32 rows x 96 B RGB
+
 // Mat half of the fused program: CBs (created by add_mat_part), kernel defines
 // for mover 1 (NCRISC) / mover 0 (BRISC) and the mat compile-time args (the
 // blend accessors are appended after them).
