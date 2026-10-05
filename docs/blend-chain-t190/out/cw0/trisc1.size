@@ -1,0 +1,22 @@
+trisc1.elf  :
+section                        size         addr
+.device_print_strings             0    104857600
+.device_print_strings_info        0    105906176
+.text                         18508        28976
+.data                             4   4289724448
+.bss                            260   4289724452
+.segments                        24            0
+.riscv.attributes                80            0
+.comment                         43            0
+.debug_aranges                   40            0
+.debug_info                  409278            0
+.debug_abbrev                  5468            0
+.debug_line                   69604            0
+.debug_frame                    908            0
+.debug_str                    57292            0
+.debug_loclists               74485            0
+.debug_rnglists                2324            0
+.debug_line_str                3829            0
+Total                        642147
+
+

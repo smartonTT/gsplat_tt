@@ -1,0 +1,24 @@
+== ../blend-dispatch-t189/out/trisc1-default.dis: 48 body paths
+path   shape  pairs  bodies      RISC  SFPU issued taken jumps  insns between lw and jr
+ret    pair   any J      16         1          109           1                        -
+ret    single any J      32         1           60           1                        -
+== out/cw1/trisc1.dis: 48 body paths
+path   shape  pairs  bodies      RISC  SFPU issued taken jumps  insns between lw and jr
+chain  pair   J<15       15      5/10          109           1                      106
+chain  single J<15       30      5/10           60           1                       60
+last   pair   J<15       15         3          109           2                        -
+last   single J<15       30         3           60           2                        -
+ret    pair   J=15        1         1          109           1                        -
+ret    single J=15        2         1           60           1                        -
+SFPU ops of every body path same as the first file: True
+end stub: ret
+== out/cw2/trisc1.dis: 48 body paths
+path   shape  pairs  bodies      RISC  SFPU issued taken jumps  insns between lw and jr
+chain  pair   J<15       15       8/9          109           1                      106
+chain  single J<15       30       8/9           60           1                       60
+last   pair   J<15       15      9/10          109           2                        -
+last   single J<15       30      9/10           60           2                        -
+ret    pair   J=15        1         1          109           1                        -
+ret    single J=15        2         1           60           1                        -
+SFPU ops of every body path same as the first file: True
+end stub: ret
