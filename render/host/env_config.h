@@ -213,4 +213,13 @@ inline bool pfwc_covcam_sfpu() {
     return v;
 }
 
+// Task #228 (P2, docs/pfwc-trisc-model-t226): cov2d a / b / c, the conic fold and the
+// radii (pfwc steps 7-11) in two DEST acquires with two looped SFPU passes
+// (pfwc_cov2d_sfpu.h) instead of six acquires of tile ops. Same rounding order, so
+// bit-identical. Default 0 while building (=1 on).
+inline bool pfwc_cov2d_sfpu() {
+    static const bool v = env_uint("GSPLAT_TT_PFWC_COV2D_SFPU", 0u) != 0u;
+    return v;
+}
+
 }  // namespace gsplat_tt::env_config

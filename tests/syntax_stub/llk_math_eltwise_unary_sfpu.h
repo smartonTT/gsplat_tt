@@ -15,6 +15,7 @@ template <uint32_t... Ops> inline void tti() {}
 #define TTI_SFPSTORE(l, m, a, d) ckernel::tti<(l), (m), (a), (d)>()
 #define TTI_SFPMUL(a, b, c, d, m) ckernel::tti<(a), (b), (c), (d), (m)>()
 #define TTI_SFPADD(a, b, c, d, m) ckernel::tti<(a), (b), (c), (d), (m)>()
+#define TTI_SFPLOADI(l, m, i) ckernel::tti<(l), (m), (i)>()
 #define TT_SFPLOAD(l, m, a, d) (ckernel::instrn_buffer[0] = (l) + (m) + (a) + (d))
 #define TT_SFPSTORE(l, m, a, d) (ckernel::instrn_buffer[0] = (l) + (m) + (a) + (d))
 #define TT_SFPLOADI(l, m, i) (ckernel::instrn_buffer[0] = (l) + (m) + (i))
