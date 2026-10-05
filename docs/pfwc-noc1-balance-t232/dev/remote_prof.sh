@@ -12,6 +12,6 @@ D=opt/profiler/$tag; mkdir -p $D
 timeout 450 bash opt/profiler/capture_tracy.sh $tag $V > $D/capture.log 2>&1; echo "rc=$?"
 grep -E 'capture_tracy\] (OK|FAIL|DONE)|TT_FATAL|too large|Traceback|error' $D/capture.log | head -12
 C=$D/chunks/${V/:/-}/profile_log_device.csv
-python3 docs/pfwc-writer-split-t207/dev-t221/pc_split.py $C | tee $D/pc_split.txt
+python3 docs/pfwc-noc1-balance-t232/dev/pc_split.py $C | tee $D/pc_split.txt
 gzip -c $C > $D/dev.csv.gz
 echo "=== done $(date +%T)"

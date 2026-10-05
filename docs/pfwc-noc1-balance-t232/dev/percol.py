@@ -12,7 +12,7 @@ import numpy as np
 
 MHZ = 1350.0
 FMT = {'pfwc_pc': 'n wall init wait xform recip depth means cov_cam a b c conic radx rady vis+pop'.split(),
-       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd'.split()}
+       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl'.split()}
 ms = lambda c: c / MHZ / 1e3
 
 
@@ -36,6 +36,7 @@ def load(path):
         f = FMT['pfwc_ws' if r in ('BRISC', 'NCRISC') else 'pfwc_pc']
         a = np.array([[d.get(i, 0) for i in range(len(f))] for d in L], float)
         per[(x, y)][r] = dict(zip(f, a.mean(0)))
+        per[(x, y)][r].setdefault('fl', 0.0)  # captures before the fl field
     return per
 
 
@@ -45,13 +46,14 @@ for path in sys.argv[1:]:
     w = np.array(list(wall.values()))
     print(f'== {path}: {len(per)} cores, core wall p50 {ms(np.percentile(w, 50)):.3f} '
           f'p90 {ms(np.percentile(w, 90)):.3f} max {ms(w.max()):.3f} ms')
-    print('  x | wall mean   max | BRISC wall  rec   rd | NCRISC wall  rec   rd | TRISC wall')
+    print('  x | wall mean   max | BRISC wall  rec   rd    fl | NCRISC wall  rec   rd    fl | TRISC wall')
     for x in sorted({c[0] for c in per}):
         cs = [c for c in per if c[0] == x]
         f = lambda r, k: ms(np.mean([per[c][r][k] for c in cs if r in per[c]] or [0]))
         tw = ms(np.mean([max(per[c][r]['wall'] for r in per[c] if r.startswith('TRISC')) for c in cs]))
         print(f' {x:2d} | {ms(np.mean([wall[c] for c in cs])):.3f}  {ms(max(wall[c] for c in cs)):.3f} |'
-              f'  {f("BRISC", "wall"):.3f}  {f("BRISC", "rec"):.3f} {f("BRISC", "rd"):.3f} |'
-              f'   {f("NCRISC", "wall"):.3f}  {f("NCRISC", "rec"):.3f} {f("NCRISC", "rd"):.3f} |  {tw:.3f}')
+              f'  {f("BRISC", "wall"):.3f}  {f("BRISC", "rec"):.3f} {f("BRISC", "rd"):.3f} {f("BRISC", "fl"):.3f} |'
+              f'   {f("NCRISC", "wall"):.3f}  {f("NCRISC", "rec"):.3f} {f("NCRISC", "rd"):.3f}'
+              f' {f("NCRISC", "fl"):.3f} |  {tw:.3f}')
     print('  slowest cores: ' + ', '.join(f'{c} {ms(wall[c]):.3f}'
                                           for c in sorted(wall, key=wall.get, reverse=True)[:8]))
