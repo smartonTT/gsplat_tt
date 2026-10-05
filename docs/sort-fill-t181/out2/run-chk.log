@@ -1,0 +1,76 @@
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-05 01:07:04.024 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 01:07:04.024 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 01:07:04.026 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 01:07:04.027 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 01:07:04.027 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 01:07:04.027 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 01:07:04.029 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-05 01:07:04.029 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-05 01:07:04.029 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 01:07:04.029 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 01:07:04.032 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 01:07:04.032 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 01:07:04.032 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 01:07:04.032 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 01:07:04.032 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-05 01:07:04.032 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-05 01:07:04.032 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-05 01:07:04.074 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-05 01:07:04.074 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-05 01:07:04.074 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-05 01:07:04.074 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-05 01:07:04.074 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-05 01:07:04.075 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffffc0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-05 01:07:04.075 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-05 01:07:04.575 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-05 01:07:04.575 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-05 01:07:04.575 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 01:07:04.575 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 01:07:04.576 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 01:07:04.577 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 01:07:04.577 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 01:07:04.577 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 01:07:04.578 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-05 01:07:04.578 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-05 01:07:04.578 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 01:07:04.578 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 01:07:04.578 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-05 01:07:04.578 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 01:07:04.578 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 01:07:04.578 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-05 01:07:04.578 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-05 01:07:04.578 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-05 01:07:04.578 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-05 01:07:04.578 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-05 01:07:04.578 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-05 01:07:04.579 | warning  |           Metal | DPRINT is deprecated and will be removed in a future release. Please migrate to DEVICE_PRINT by:
+  1. Replace #include "api/debug/dprint.h" with #include "api/debug/device_print.h" in your kernels
+  2. Replace DPRINT << ... << ENDL() with DEVICE_PRINT("...\n", args)
+  3. Set TT_METAL_DEVICE_PRINT=1 to enable the new DEVICE_PRINT system
+For more information, see the DEVICE_PRINT documentation. (metal_context.cpp:241)
+2026-10-05 01:07:07.246 | info     |           Metal | DPRINT enabled on device 0, all worker cores. (dprint_server.cpp:851)
+2026-10-05 01:07:07.246 | info     |           Metal | DPRINT Server attached device 0 (dprint_server.cpp:950)
+2026-10-05 01:07:09.734 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_1610498_2300831562_0' (shm_resource_tracker.cpp:265)
+2026-10-05 01:07:09.734 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_1610498' (shm_resource_tracker.cpp:275)
+2026-10-05 01:07:10.776 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349976 GHz, device_time_at_sync=33097715612048 cycles (realtime_profiler_manager.cpp:1075)
+[JIT_WARMUP] ideal-path contexts compiled in 6771.6 ms
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+[SORT] ONELAUNCH k2_fold=1 why=0 (K2 rows published: cores 110/110 row_pages 64/64 tiles 1024/1024 P 2895701/2895701 speed_split 1)

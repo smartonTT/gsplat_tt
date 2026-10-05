@@ -18,7 +18,7 @@ grep -E "^SUMMARY|Traceback|TT_THROW|TT_FATAL" $S/run-$tag.log | head -5
 d=$(find . -maxdepth 3 -type d -name t181-dump-$tag | head -1)
 if [ -n "$d" ]; then
   n=0; ok=0
-  for f in "$d"/*; do n=$((n+1)); grep -q "$(md5sum < "$f" | cut -c1-32)" $REF && ok=$((ok+1)); done
+  for f in "$d"/*; do [ -f "$f" ] || continue; n=$((n+1)); grep -q "$(md5sum < "$f" | cut -c1-32)" $REF && ok=$((ok+1)); done
   echo "MD5 $ok of $n views in md5-r82new.txt"; rm -rf "$d"
 fi
 [ -f $S/dprint-$tag.txt ] && { echo "dprint lines: $(wc -l < $S/dprint-$tag.txt)"; grep -c "bad 0" $S/dprint-$tag.txt; grep -v "bad 0" $S/dprint-$tag.txt | head -20; grep "bad 0" $S/dprint-$tag.txt | head -3; }
