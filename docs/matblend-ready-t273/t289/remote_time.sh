@@ -1,5 +1,6 @@
 #!/bin/bash
-# t289: untraced bicycle 30-view timing, md5 vs md5-r82new.txt (46a725ab).
+# t289: untraced bicycle 30-view timing, md5 vs the current golden list (906e0435, iter 205+;
+# t289/md5-golden-906e0435.txt = round r6 base). Override with REF=<file>.
 #   remote_time.sh <round> <arm> ...   arm: base | fuse | name:ENV=V,ENV=V
 #   (run on yyzo-bh-07 through devrun.sh, under ttp lock p100)
 set -u
@@ -7,7 +8,7 @@ export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/
 export TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TTW_DEVRUN=1
 T=/localdev/smarton/gstt2-t289; cd "$T" || exit 1; source .venv/bin/activate
 S=$T/tmp/t289; mkdir -p $S
-REF=/localdev/smarton/t82_scripts/md5-r82new.txt
+REF=${REF:-$T/docs/matblend-ready-t273/t289/md5-golden-906e0435.txt}
 r=${1:-1}; shift
 run() {  # tag [ENV=V ...]
   local tag=r$r-$1; shift

@@ -108,11 +108,11 @@ debug rounds.
   mat->blend wait 0.000 ms (was 0.489 in #267); blend_end_max 6.261 ms vs 6.815 measured /
   6.895 in #267 for the separate programs (-0.55 to -0.63 ms traced). Model predicted 6.173.
   Each core starts blend right after its own mat (blend_start = mat_end, 2.243..2.987 ms).
-- Tracy caveat: under the profiler the auto kcfg grows by 32 KB and the fused program's CBs
-  then overflow L1 by 5888 B (`tracy-t293-fuse-capture.log`). `GSPLAT_TT_KCFG_EXTRA_KB=26`
-  makes pfwc's program too large for kcfg (97536 > 97280 B, `tracy-t293-k26-capture.log`).
-  The capture that worked used `GSPLAT_TT_PFWC_WRITER_SPLIT=0` (pfwc only; mat/blend code
-  unchanged). Default (untraced) runs are not affected.
+- Tracy at defaults: fixed in #302 (docs/kcfg-profiler-t302). Before it, the profiler kcfg
+  bump was +40 KB and the fused program's CBs overflowed L1 by 5888 B
+  (`tracy-t293-fuse-capture.log`); the t293 capture used a non-default pfwc as a stopgap.
+  With the split pfwc the profiler kcfg is now +32 KB, so Tracy runs at full defaults
+  (`tracy-t302-def-*`). Untraced runs are not affected.
 - md5 with Newton on: FUSE on and FUSE=0 both 906e0435 on 30/30 views (round r6); the device
   screenshot hero is bit-identical to iter 205 (md5 86524912, golden max diff 0).
 - Untraced r6 (order nofuse, base): fuse on 11.129, off 11.653 ms/view (-0.52). Screenshot run
