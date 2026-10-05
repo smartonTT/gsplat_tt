@@ -13,5 +13,5 @@ for c in pick:
     print(f'{c} core wall {ms(wall[c]):.3f}')
     for r in sorted(per[c]):
         f = FMT['pfwc_ws' if r in ('BRISC', 'NCRISC') else 'pfwc_pc']
-        print(f'   {r:7s} ' + ' '.join(f'{k}={ms(per[c][r][k]):.3f}' if k != 'n' else f'n={per[c][r][k]:.0f}'
+        print(f'   {r:7s} ' + ' '.join(f'{k}={ms(per[c][r][k]):.3f}' if k not in ('n', 'm') else f'{k}={per[c][r][k]:.0f}'
                                     for k in f))

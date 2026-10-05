@@ -5,7 +5,7 @@ from collections import defaultdict
 import numpy as np
 MHZ=1350.0
 FMT = {'pfwc_pc': 'n wall init wait xform recip depth means cov_cam a b c conic radx rady vis+pop'.split(),
-       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl'.split()}
+       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl m'.split()}
 def load(path):
     seq = defaultdict(list)
     with gzip.open(path, 'rt') as f:
@@ -32,7 +32,8 @@ for path in sys.argv[1:]:
                       ('BRISC rec', lambda v: v['BRISC']['rec']),
                       ('NCRISC wait', lambda v: v['NCRISC']['wait']),
                       ('BRISC fl', lambda v: v['BRISC'].get('fl', 0)),
-                      ('NCRISC fl', lambda v: v['NCRISC'].get('fl', 0))]:
+                      ('NCRISC fl', lambda v: v['NCRISC'].get('fl', 0)),
+                      ('records B+N (count, not ms)', lambda v: (v['BRISC'].get('m', 0) + v['NCRISC'].get('m', 0)) * MHZ * 1e3)]:
         print(f'== {path.split("/")[-1]} {title} (ms), rows y, cols x')
         print('  y\\x ' + ' '.join(f'{x:6d}' for x in xs))
         for y in ys:

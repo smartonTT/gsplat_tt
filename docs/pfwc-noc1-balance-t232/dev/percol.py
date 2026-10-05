@@ -12,7 +12,7 @@ import numpy as np
 
 MHZ = 1350.0
 FMT = {'pfwc_pc': 'n wall init wait xform recip depth means cov_cam a b c conic radx rady vis+pop'.split(),
-       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl'.split()}
+       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl m'.split()}
 ms = lambda c: c / MHZ / 1e3
 
 
@@ -36,7 +36,8 @@ def load(path):
         f = FMT['pfwc_ws' if r in ('BRISC', 'NCRISC') else 'pfwc_pc']
         a = np.array([[d.get(i, 0) for i in range(len(f))] for d in L], float)
         per[(x, y)][r] = dict(zip(f, a.mean(0)))
-        per[(x, y)][r].setdefault('fl', 0.0)  # captures before the fl field
+        per[(x, y)][r].setdefault('fl', 0.0)  # captures before the fl / m fields
+        per[(x, y)][r].setdefault('m', 0.0)
     return per
 
 
@@ -55,5 +56,11 @@ for path in sys.argv[1:]:
               f'  {f("BRISC", "wall"):.3f}  {f("BRISC", "rec"):.3f} {f("BRISC", "rd"):.3f} {f("BRISC", "fl"):.3f} |'
               f'   {f("NCRISC", "wall"):.3f}  {f("NCRISC", "rec"):.3f} {f("NCRISC", "rd"):.3f}'
               f' {f("NCRISC", "fl"):.3f} |  {tw:.3f}')
+    if any(per[c][r]['m'] for c in per for r in per[c] if r in ('BRISC', 'NCRISC')):
+        m = {c: per[c]['BRISC']['m'] + per[c]['NCRISC']['m'] for c in per}
+        cpr = [(per[c][r]['rec'] - per[c][r].get('fl', 0)) / per[c][r]['m'] for c in per
+               for r in ('BRISC', 'NCRISC') if per[c][r]['m']]
+        print(f'  records/core/launch p50 {np.median(list(m.values())):.0f} max {max(m.values()):.0f}; '
+              f'rec-fl cycles/record p50 {np.median(cpr):.0f} p90 {np.percentile(cpr, 90):.0f}')
     print('  slowest cores: ' + ', '.join(f'{c} {ms(wall[c]):.3f}'
                                           for c in sorted(wall, key=wall.get, reverse=True)[:8]))

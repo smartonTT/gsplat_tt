@@ -1,26 +1,26 @@
 cores=110 launches/core=5..5 series=550
 
 BRISC pfwc_ws: 550 (core, launch) records
-  mean ms : wall 1.794, wait 0.405, cls 0.414, pfx 0.015, rec 0.830, opn 0.117, tail 0.013, rd 0.154
-  max core: wall 2.264, wait 0.249, cls 0.439, pfx 0.022, rec 1.060, opn 0.480, tail 0.013, rd 0.574  (n=28)
-  wall max/mean 2.264/1.794  chunks/launch mean 27.4
+  mean ms : wall 1.796, wait 0.410, cls 0.421, pfx 0.014, rec 0.842, opn 0.097, tail 0.013, rd 0.151, fl 0.020
+  max core: wall 2.305, wait 0.287, cls 0.434, pfx 0.004, rec 1.415, opn 0.152, tail 0.014, rd 0.000, fl 0.113  (n=28)
+  wall max/mean 2.305/1.796  chunks/launch mean 27.4
 
 NCRISC pfwc_ws: 550 (core, launch) records
-  mean ms : wall 1.800, wait 0.399, cls 0.408, pfx 0.014, rec 0.888, opn 0.079, tail 0.012, rd 0.246
-  max core: wall 2.233, wait 0.342, cls 0.410, pfx 0.002, rec 1.402, opn 0.065, tail 0.011, rd 0.000  (n=27)
-  wall max/mean 2.233/1.800  chunks/launch mean 27.0
+  mean ms : wall 1.802, wait 0.402, cls 0.415, pfx 0.019, rec 0.855, opn 0.098, tail 0.012, rd 0.271, fl 0.024
+  max core: wall 2.288, wait 0.288, cls 0.448, pfx 0.062, rec 1.063, opn 0.416, tail 0.012, rd 0.642, fl 0.021  (n=27)
+  wall max/mean 2.288/1.802  chunks/launch mean 27.0
 
 TRISC_0 pfwc_pc: 550 (core, launch) records
-  mean ms : wall 1.766, init 0.000, wait 0.029, xform 0.494, recip 0.044, depth 0.056, means 0.147, cov_cam 0.065, a 0.271, b 0.354, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.305
-  max core: wall 2.193, init 0.000, wait 0.032, xform 0.499, recip 0.045, depth 0.057, means 0.554, cov_cam 0.066, a 0.274, b 0.357, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.308  (n=55)
-  wall max/mean 2.193/1.766  chunks/launch mean 54.4
+  mean ms : wall 1.769, init 0.000, wait 0.029, xform 0.494, recip 0.044, depth 0.056, means 0.148, cov_cam 0.066, a 0.271, b 0.354, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.306
+  max core: wall 2.272, init 0.000, wait 0.046, xform 0.499, recip 0.045, depth 0.057, means 0.618, cov_cam 0.066, a 0.274, b 0.358, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.308  (n=55)
+  wall max/mean 2.272/1.769  chunks/launch mean 54.4
 
 TRISC_1 pfwc_pc: 550 (core, launch) records
-  mean ms : wall 1.774, init 0.000, wait 0.001, xform 0.199, recip 0.047, depth 0.017, means 0.168, cov_cam 0.257, a 0.290, b 0.171, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.621
-  max core: wall 2.201, init 0.000, wait 0.001, xform 0.205, recip 0.047, depth 0.017, means 0.575, cov_cam 0.260, a 0.293, b 0.172, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.628  (n=55)
-  wall max/mean 2.201/1.774  chunks/launch mean 54.4
+  mean ms : wall 1.776, init 0.000, wait 0.001, xform 0.200, recip 0.047, depth 0.017, means 0.169, cov_cam 0.257, a 0.291, b 0.171, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.622
+  max core: wall 2.279, init 0.000, wait 0.001, xform 0.219, recip 0.047, depth 0.017, means 0.639, cov_cam 0.260, a 0.294, b 0.173, c 0.001, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.628  (n=55)
+  wall max/mean 2.279/1.776  chunks/launch mean 54.4
 
 TRISC_2 pfwc_pc: 550 (core, launch) records
-  mean ms : wall 1.762, init 0.000, wait 0.001, xform 0.741, recip 0.057, depth 0.143, means 0.058, cov_cam 0.298, a 0.289, b 0.166, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.007
-  max core: wall 2.189, init 0.000, wait 0.001, xform 0.752, recip 0.057, depth 0.556, means 0.052, cov_cam 0.301, a 0.292, b 0.168, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.008  (n=55)
-  wall max/mean 2.189/1.762  chunks/launch mean 54.4
+  mean ms : wall 1.764, init 0.000, wait 0.001, xform 0.742, recip 0.056, depth 0.144, means 0.058, cov_cam 0.298, a 0.289, b 0.166, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.007
+  max core: wall 2.268, init 0.000, wait 0.001, xform 0.766, recip 0.056, depth 0.618, means 0.056, cov_cam 0.301, a 0.292, b 0.168, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.008  (n=55)
+  wall max/mean 2.268/1.764  chunks/launch mean 54.4

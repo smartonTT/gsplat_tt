@@ -26,7 +26,7 @@ STEPS = 'wait xform recip depth means cov_cam a b c conic radx rady vis+pop'.spl
 FMT = {'pfwc_pc': ['n', 'wall', 'init'] + STEPS + 'copy mul add acq pack'.split(),
        'pfwc_pr': 'n wall reserve barrier'.split(),
        'pfwc_pw': 'n wall wait bar cls rec tail iss m pr'.split(),
-       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl'.split()}
+       'pfwc_ws': 'n wall wait cls pfx rec opn tail rd fl m'.split()}
 NOCYC = ('n', 'm', 'pr')
 seq = defaultdict(list)  # (core, risc, zone) -> list of launches (dict idx -> value)
 with open(sys.argv[1]) as f:

@@ -46,10 +46,11 @@
 
 // GSPLAT_TT_PFWC_STEPCYC: wall cycles per part, recorded at the end (profiler
 // builds) as "pfwc_ws", word i = (role * 16 + i) << 32 | value: "n wall wait cls
-// pfx rec opn tail rd fl" (n = chunks written, wait = the color reads and the 10
+// pfx rec opn tail rd fl m" (n = chunks written, wait = the color reads and the 10
 // compute tiles, pfx = PREFIX wait / send, opn = OPEN wait and head merge,
 // rd = time in rd_poll, on the reader's RISC only, fl = time in the record and
-// page flush waits (noc_async_writes_flushed); rd and fl are included in the other parts).
+// page flushes (write issue and noc_async_writes_flushed); rd and fl are included
+// in the other parts; m = records written).
 #ifdef PFWC_STEPCYC
 #define WS_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define WS_MARK(acc) do { const uint32_t n_ = WS_NOW(); acc += n_ - ws_t; ws_t = n_; } while (0)
@@ -151,10 +152,12 @@ void kernel_main() {
 #ifdef PFWC_STEPCYC
     const uint32_t ws_w0 = WS_NOW();
     uint32_t ws_t = ws_w0, ws_wait = 0, ws_cls = 0, ws_pfx = 0, ws_rec = 0, ws_opn = 0, ws_tail = 0,
-             ws_rd = 0, ws_fl = 0, ws_n = 0;
-#define WS_FLUSHED() do { const uint32_t f_ = WS_NOW(); noc_async_writes_flushed(); ws_fl += WS_NOW() - f_; } while (0)
+             ws_rd = 0, ws_fl = 0, ws_m = 0, ws_n = 0;
+#define WS_FL_BEGIN() const uint32_t f_t0 = WS_NOW()
+#define WS_FL_END() ws_fl += WS_NOW() - f_t0
 #else
-#define WS_FLUSHED() noc_async_writes_flushed()
+#define WS_FL_BEGIN() ((void)0)
+#define WS_FL_END() ((void)0)
 #endif
 
 #if WS_READER
@@ -258,17 +261,21 @@ void kernel_main() {
     rs.init(nb);
     // Staged records [gs, ge) of group G0, one write per bank.
     auto flush_rec = [&](uint32_t G0, uint32_t gs, uint32_t ge) {
+        WS_FL_BEGIN();
         rs.writes(G0, gs, ge, per_page, [&](uint32_t s, uint32_t g, uint32_t n) {
             noc_async_write(l1_rec + s * PB, get_noc_addr(g, o_rec), n * PB);
         });
-        WS_FLUSHED();  // staging reusable; completion at the end
+        noc_async_writes_flushed();  // staging reusable; completion at the end
+        WS_FL_END();
     };
     auto l1a = [](volatile uint32_t* p) { return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p)); };
     auto flush_pg = [&](volatile uint32_t* d, volatile uint32_t* o, volatile uint32_t* a, uint32_t page) {
+        WS_FL_BEGIN();
         noc_async_write(l1a(d), get_noc_addr(page, o_dep), PB);
         noc_async_write(l1a(o), get_noc_addr(page, o_offs), PB);
         noc_async_write(l1a(a), get_noc_addr(page, o_aabb), PB);
-        WS_FLUSHED();
+        noc_async_writes_flushed();
+        WS_FL_END();
     };
     auto write_counts = [&](uint32_t m, uint32_t pr) {
         for (uint32_t w = 0; w < PW; w++) w_cnt[w] = 0;
@@ -434,6 +441,7 @@ void kernel_main() {
         for (uint32_t o = 0; o < 10; o++) cb_pop_front(OUT_CB[o], 1);
 #ifdef PFWC_STEPCYC
         ws_n++;
+        ws_m += vc;
 #endif
         WS_MARK(ws_tail);
     }
@@ -445,7 +453,8 @@ void kernel_main() {
     noc_async_write_barrier();
 #ifdef PFWC_STEPCYC
     WS_MARK(ws_tail);
-    const uint32_t ws_v[10] = {ws_n, WS_NOW() - ws_w0, ws_wait, ws_cls, ws_pfx, ws_rec, ws_opn, ws_tail, ws_rd, ws_fl};
-    for (uint32_t i = 0; i < 10; i++) DeviceTimestampedData("pfwc_ws", (uint64_t(ROLE * 16 + i) << 32) | ws_v[i]);
+    const uint32_t ws_v[11] = {ws_n, WS_NOW() - ws_w0, ws_wait, ws_cls, ws_pfx, ws_rec, ws_opn, ws_tail, ws_rd, ws_fl,
+                               ws_m};
+    for (uint32_t i = 0; i < 11; i++) DeviceTimestampedData("pfwc_ws", (uint64_t(ROLE * 16 + i) << 32) | ws_v[i]);
 #endif
 }
