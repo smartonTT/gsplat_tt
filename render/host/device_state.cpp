@@ -12,6 +12,7 @@
 #include "blend.h"
 #include "env_config.h"
 #include "gather_visible.h"
+#include "kcfg_size.h"
 #include "pfwc.h"
 #include "project.h"
 #include "vis_mode.h"
@@ -85,15 +86,13 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
     if (!s.mesh_device) {
         constexpr int device_id = 0;
         // GSPLAT_TT_KCFG_EXTRA_KB=N grows the Tensix kernel config ring buffer by N KB (default
-        // 69 KB) by shrinking the worker L1 allocator. Profiling only: with the device profiler on,
-        // the fused pfwc program is 71216 B and overflows the default 70656 B buffer.
-        const char* kx = std::getenv("GSPLAT_TT_KCFG_EXTRA_KB");
-        long extra_kb = kx ? std::atol(kx) : 0;
-        // Task #207/#221: the split pfwc writer adds the writer code to the NCRISC kernel
-        // (92496 B program, too large at +8 and +16 KB); SFPU cov_cam alone needs ~4 KB.
-        // The split only builds with the fused writer (pfwc_fuse_mode() == 1).
-        if (kx == nullptr && env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1) extra_kb = 24;
-        else if (kx == nullptr && env_config::pfwc_covcam_sfpu()) extra_kb = 8;
+        // 69 KB) by shrinking the worker L1 allocator. Unset: sized for the pfwc config, plus
+        // 8 KB with the device profiler on (kcfg_size.h). The split only builds with the fused
+        // writer (pfwc_fuse_mode() == 1).
+        const long extra_kb = kcfg_extra_kb(
+            std::getenv("GSPLAT_TT_KCFG_EXTRA_KB"),
+            env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1,
+            env_config::pfwc_covcam_sfpu(), kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")));
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
         if (extra_kb > 0 || num_cqs > 1) {

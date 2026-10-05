@@ -40,9 +40,11 @@ export PYTHONPATH=/localdev/smarton/tt-metal/tools:${PYTHONPATH:-}
 #   --dump-device-data-mid-run -> TT_METAL_PROFILER_MID_RUN_DUMP=1 (push mid-run).
 export TT_METAL_DEVICE_PROFILER=1
 export GSPLAT_TT_PROFILE=1
-# The device profiler grows kernel binaries; the fused pfwc program (iter-179) then overflows the
-# 69 KB Tensix kernel config buffer. Give it 4 KB more (host/device_state.cpp; profiling only).
-export GSPLAT_TT_KCFG_EXTRA_KB=${GSPLAT_TT_KCFG_EXTRA_KB:-4}
+# The device profiler grows kernel binaries. The host sizes the Tensix kernel config buffer for
+# the pfwc config plus 8 KB when TT_METAL_DEVICE_PROFILER is on (render/host/kcfg_size.h), so
+# leave GSPLAT_TT_KCFG_EXTRA_KB unset unless overriding: task #258 found the old default of 4
+# here replaced the +24 KB the default pfwc writer split needs and failed with
+# TT_FATAL state.offset <= max_size.
 
 REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
 cd "$REPO" || { echo "[capture_tracy] FATAL: cannot cd $REPO" >&2; exit 1; }
