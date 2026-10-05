@@ -24,22 +24,23 @@ if [[ $STEPS == *sync* ]]; then
   lk opt/sync_remote.sh $H $T "${1:-HEAD}"; rc=$?; echo "SYNC_RC=$rc"
   [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 fi
+# One devrun per arm (each run.py is capped at 330 s remotely), so each reservation
+# stays under the 600 s devrun ceiling.
+arm() {  # round armspec
+  lk $DEVRUN --host $H --no-verify --timeout 420 --tag t188-r$1-${2%%:*} -- \
+    "bash $T/docs/blend-claim-t188/remote_time.sh $1 $2"
+  echo "TIME_r$1_${2%%:*}_RC=$?"
+}
 if [[ $STEPS == *time* ]]; then
-  lk $DEVRUN --host $H --no-verify --timeout 1100 --tag t188-time1 -- \
-    "bash $T/docs/blend-claim-t188/remote_time.sh 1 $OFF $LATE base"
-  echo "TIME1_RC=$?"; fetch
+  for a in $OFF $LATE base; do arm 1 $a; done; fetch
   for a in off late base; do
     if ! ssh -o BatchMode=yes $H "diff -q $REF $T/tmp/t188/md5-r1-$a.txt" >/dev/null; then
       echo "MD5_GATE_FAIL (r1 $a)"; echo CHAIN_DONE; exit 4
     fi
   done
   echo "MD5_R1_OK"
-  lk $DEVRUN --host $H --no-verify --timeout 1100 --tag t188-time2 -- \
-    "bash $T/docs/blend-claim-t188/remote_time.sh 2 base $OFF $LATE"
-  echo "TIME2_RC=$?"
-  lk $DEVRUN --host $H --no-verify --timeout 1100 --tag t188-time3 -- \
-    "bash $T/docs/blend-claim-t188/remote_time.sh 3 $LATE base $OFF"
-  echo "TIME3_RC=$?"; fetch
+  for a in base $OFF $LATE; do arm 2 $a; done
+  for a in $LATE base $OFF; do arm 3 $a; done; fetch
 fi
 if [[ $STEPS == *tracy* ]]; then
   lk $DEVRUN --host $H --no-verify --timeout 540 --tag t188-tracy-on -- \
