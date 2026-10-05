@@ -1,0 +1,45 @@
+=== t98r2-a3 850fa8d GSPLAT_TT_EMIT_ABLATE=3
+run rc=0
+[gsplat_tt::sort] GSPLAT_TT_EMIT_ABLATE=3: profiling ablation, the rendered output is WRONG
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.57dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=54.5 p50_ms=56.7 min_ms=38.7 max_ms=67.3 n_views=30 warmup_s=2.6 out=/localdev/smarton/gstt2-t98/tmp/t98-t98r2-a3
+STAGES n=30 head=0.002 project=8.651 tile_assign=7.551 sort=12.553 blend_setup=0.000 mat=0.000 cull=0.000 blend=25.395 d2h=0.319 assemble=0.000 tail=0.002 | sum=54.473 view_total=54.474 resid_in_view=+0.001 avg_frame_ms=54.501 resid_vs_frame=+0.028
+SORT_STAGES n=30 pread=0.013 bin_count=0.912 bin_hist_d2h=0.246 bin_layout=0.235 upload=0.064 bin_emit=7.212 kernel=0.022 d2h=0.000 compact=0.000 publish_host=0.177 publish_wait=3.598 mat=0.038 | sum=12.517 sort=12.553 resid=+0.036
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.024 pfwc_enqueue=0.023 pfwc_finish=2.000 gather_setup=0.000 gather_rtargs=0.028 gather_enqueue=0.024 gather_wait=6.448 gather_result=0.103 | sum=8.650 project=8.651 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.002 rtargs=0.039 enqueue=0.039 scan_finish=3.091 p_d2h=0.015 k2_finish=4.362 publish=0.001 | sum=7.550 tile_assign=7.551 resid=+0.001
+VIEWS DIFFER (30 of 30)
+=== t98r2-a8 850fa8d GSPLAT_TT_EMIT_ABLATE=8
+run rc=0
+[gsplat_tt::sort] GSPLAT_TT_EMIT_ABLATE=8: profiling ablation, the rendered output is WRONG
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.06dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=100.3 p50_ms=103.2 min_ms=80.5 max_ms=112.3 n_views=30 warmup_s=2.9 out=/localdev/smarton/gstt2-t98/tmp/t98-t98r2-a8
+STAGES n=30 head=0.002 project=8.661 tile_assign=7.566 sort=13.079 blend_setup=0.000 mat=0.000 cull=0.000 blend=70.702 d2h=0.287 assemble=0.000 tail=0.002 | sum=100.301 view_total=100.301 resid_in_view=+0.001 avg_frame_ms=100.332 resid_vs_frame=+0.031
+SORT_STAGES n=30 pread=0.013 bin_count=0.912 bin_hist_d2h=0.248 bin_layout=0.237 upload=0.065 bin_emit=7.717 kernel=0.024 d2h=0.000 compact=0.000 publish_host=0.178 publish_wait=3.599 mat=0.044 | sum=13.038 sort=13.079 resid=+0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.026 pfwc_enqueue=0.025 pfwc_finish=1.999 gather_setup=0.001 gather_rtargs=0.028 gather_enqueue=0.025 gather_wait=6.457 gather_result=0.100 | sum=8.660 project=8.661 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.042 enqueue=0.043 scan_finish=3.102 p_d2h=0.014 k2_finish=4.361 publish=0.001 | sum=7.565 tile_assign=7.566 resid=+0.001
+VIEWS DIFFER (30 of 30)
+=== t98r2-a16 850fa8d GSPLAT_TT_EMIT_ABLATE=16
+run rc=0
+[gsplat_tt::sort] GSPLAT_TT_EMIT_ABLATE=16: profiling ablation, the rendered output is WRONG
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=17.17dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=40.6 p50_ms=41.4 min_ms=34.4 max_ms=47.0 n_views=30 warmup_s=2.9 out=/localdev/smarton/gstt2-t98/tmp/t98-t98r2-a16
+STAGES n=30 head=0.003 project=8.702 tile_assign=7.574 sort=13.949 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.151 d2h=0.222 assemble=0.000 tail=0.003 | sum=40.603 view_total=40.604 resid_in_view=+0.001 avg_frame_ms=40.646 resid_vs_frame=+0.043
+SORT_STAGES n=30 pread=0.014 bin_count=0.913 bin_hist_d2h=0.248 bin_layout=0.259 upload=0.074 bin_emit=8.546 kernel=0.029 d2h=0.000 compact=0.000 publish_host=0.180 publish_wait=3.594 mat=0.052 | sum=13.908 sort=13.949 resid=+0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.032 pfwc_enqueue=0.036 pfwc_finish=1.998 gather_setup=0.001 gather_rtargs=0.032 gather_enqueue=0.029 gather_wait=6.452 gather_result=0.120 | sum=8.700 project=8.702 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.054 enqueue=0.050 scan_finish=3.097 p_d2h=0.014 k2_finish=4.353 publish=0.001 | sum=7.573 tile_assign=7.574 resid=+0.001
+VIEWS DIFFER (30 of 30)
+=== t98r2-a4 850fa8d GSPLAT_TT_EMIT_ABLATE=4
+run rc=0
+[gsplat_tt::sort] GSPLAT_TT_EMIT_ABLATE=4: profiling ablation, the rendered output is WRONG
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=8.50dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.5 p50_ms=46.0 min_ms=39.2 max_ms=51.6 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t98/tmp/t98-t98r2-a4
+STAGES n=30 head=0.002 project=8.658 tile_assign=7.548 sort=14.545 blend_setup=0.000 mat=0.000 cull=0.000 blend=14.427 d2h=0.251 assemble=0.000 tail=0.002 | sum=45.434 view_total=45.435 resid_in_view=+0.001 avg_frame_ms=45.462 resid_vs_frame=+0.028
+SORT_STAGES n=30 pread=0.013 bin_count=0.908 bin_hist_d2h=0.247 bin_layout=0.229 upload=0.064 bin_emit=9.213 kernel=0.023 d2h=0.000 compact=0.000 publish_host=0.182 publish_wait=3.594 mat=0.037 | sum=14.509 sort=14.545 resid=+0.036
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.024 pfwc_enqueue=0.022 pfwc_finish=1.999 gather_setup=0.000 gather_rtargs=0.028 gather_enqueue=0.023 gather_wait=6.458 gather_result=0.102 | sum=8.657 project=8.658 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.002 rtargs=0.037 enqueue=0.038 scan_finish=3.092 p_d2h=0.014 k2_finish=4.363 publish=0.001 | sum=7.547 tile_assign=7.548 resid=+0.001
+VIEWS DIFFER (30 of 30)
+=== t98r2-base 850fa8d 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=41.5 p50_ms=42.0 min_ms=35.4 max_ms=48.0 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t98/tmp/t98-t98r2-base
+STAGES n=30 head=0.003 project=8.698 tile_assign=7.573 sort=14.248 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.722 d2h=0.214 assemble=0.000 tail=0.003 | sum=41.461 view_total=41.462 resid_in_view=+0.001 avg_frame_ms=41.501 resid_vs_frame=+0.040
+SORT_STAGES n=30 pread=0.017 bin_count=0.917 bin_hist_d2h=0.252 bin_layout=0.264 upload=0.070 bin_emit=8.824 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.201 publish_wait=3.576 mat=0.052 | sum=14.204 sort=14.248 resid=+0.044
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.031 pfwc_enqueue=0.037 pfwc_finish=2.001 gather_setup=0.001 gather_rtargs=0.036 gather_enqueue=0.033 gather_wait=6.449 gather_result=0.108 | sum=8.697 project=8.698 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.056 enqueue=0.054 scan_finish=3.086 p_d2h=0.017 k2_finish=4.355 publish=0.001 | sum=7.571 tile_assign=7.573 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 2

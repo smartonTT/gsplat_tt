@@ -1,0 +1,23 @@
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+BRISC-FW                   44472.0  4447.197       420.5      42.054    16962  BRISC
+NCRISC-FW                  42676.8  4267.679       401.1      40.107    16951  NCRISC
+NCRISC-KERNEL              41851.9  4185.193       396.9      39.692    16951  NCRISC
+BRISC-KERNEL               39111.0  3911.104       378.6      37.859    13321  BRISC
+TRISC-FW                   32865.2  3286.525       106.2      10.618    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               30526.3  3052.634        95.9       9.590    10890  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu            19045.4  1904.536        60.6       6.059     3630  TRISC_0,TRISC_1,TRISC_2
+sort_bucket_emit           18698.9  1869.887        87.6       8.761     2420  BRISC,NCRISC
+ta_bucket_scatter           8142.8   814.284        39.2       3.915     2420  BRISC,NCRISC
+pfwc                        7088.5   708.846        21.8       2.185     3630  TRISC_0,TRISC_1,TRISC_2
+sort_subchunk_mat           6659.2   665.920        36.3       3.625     2420  BRISC,NCRISC
+proj_scatter                6322.6   632.258        41.5       4.153     2420  BRISC,NCRISC
+tile_blend_load             6164.5   616.450        57.6       5.755     1210  NCRISC
+ta_gauss_aabb               6118.3   611.827        27.9       2.791     2420  BRISC,NCRISC
+rd_l1_bulk                  6034.2   603.423        57.2       5.719    12452  NCRISC
+proj_count                  5993.6   599.364        30.3       3.029     2420  BRISC,NCRISC
+sort_tile_depth             5030.7   503.070        26.8       2.677     2420  BRISC,NCRISC
+tile_mb_mask                4391.8   439.179        14.4       1.436     3630  TRISC_0,TRISC_1,TRISC_2
+tile_l1_cull_rd             1460.7   146.072        14.3       1.429     1210  NCRISC
+sort_bin_hist               1039.4   103.943         9.6       0.959     1210  NCRISC

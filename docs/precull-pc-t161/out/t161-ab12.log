@@ -1,0 +1,67 @@
+##### r1 13:43:30
+=== t161r1-off 6a00513 GSPLAT_TT_PRECULL=0
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=76.12dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.7 p50_ms=19.9 min_ms=16.3 max_ms=23.4 n_views=30 warmup_s=4.9 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r1-off
+STAGES n=30 head=0.003 project=4.587 tile_assign=0.005 sort=5.179 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.710 d2h=0.203 assemble=0.000 tail=0.002 | sum=19.689 view_total=19.690 resid_in_view=+0.001 avg_frame_ms=19.724 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.023 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.115 upload=0.000 bin_emit=4.764 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.182 publish_wait=0.000 mat=0.052 | sum=5.137 sort=5.179 resid=+0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.032 pfwc_enqueue=0.034 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.409 gather_result=0.107 | sum=4.586 project=4.587 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.849 layout=0.114 pub_host=0.180 total=5.185
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== t161r1-base 6a00513
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.2 p50_ms=19.5 min_ms=16.3 max_ms=22.7 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r1-base
+STAGES n=30 head=0.002 project=4.647 tile_assign=0.005 sort=5.016 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.296 d2h=0.200 assemble=0.000 tail=0.002 | sum=19.168 view_total=19.169 resid_in_view=+0.001 avg_frame_ms=19.199 resid_vs_frame=+0.031
+SORT_STAGES n=30 pread=0.024 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.115 upload=0.000 bin_emit=4.617 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.177 publish_wait=0.000 mat=0.045 | sum=4.978 sort=5.016 resid=+0.038
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.028 pfwc_enqueue=0.028 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.485 gather_result=0.101 | sum=4.646 project=4.647 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.690 layout=0.115 pub_host=0.175 total=5.014
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== t161r1-pc 6a00513 GSPLAT_TT_PRECULL=2
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.64dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.4 p50_ms=18.6 min_ms=15.9 max_ms=21.0 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r1-pc
+STAGES n=30 head=0.002 project=4.600 tile_assign=0.004 sort=4.647 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.922 d2h=0.191 assemble=0.000 tail=0.002 | sum=18.369 view_total=18.370 resid_in_view=+0.001 avg_frame_ms=18.403 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.021 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.103 upload=0.000 bin_emit=4.276 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.167 publish_wait=0.000 mat=0.044 | sum=4.610 sort=4.647 resid=+0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.032 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.424 gather_result=0.105 | sum=4.599 project=4.600 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+ONELAUNCH n=31 onelaunch=4.350 layout=0.104 pub_host=0.169 total=4.659
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== done round 1
+##### r1 rc=0
+##### r2 13:44:07
+=== t161r2-base 6a00513
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.2 p50_ms=19.3 min_ms=16.4 max_ms=22.6 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r2-base
+STAGES n=30 head=0.002 project=4.652 tile_assign=0.004 sort=5.010 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.281 d2h=0.195 assemble=0.000 tail=0.002 | sum=19.147 view_total=19.148 resid_in_view=+0.001 avg_frame_ms=19.178 resid_vs_frame=+0.031
+SORT_STAGES n=30 pread=0.023 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.114 upload=0.000 bin_emit=4.612 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.176 publish_wait=0.000 mat=0.047 | sum=4.971 sort=5.010 resid=+0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.031 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.480 gather_result=0.104 | sum=4.651 project=4.652 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.003 tile_assign=0.004 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.695 layout=0.114 pub_host=0.175 total=5.015
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== t161r2-pc 6a00513 GSPLAT_TT_PRECULL=2
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.64dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.5 p50_ms=18.6 min_ms=15.9 max_ms=21.2 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r2-pc
+STAGES n=30 head=0.002 project=4.588 tile_assign=0.004 sort=4.659 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.851 d2h=0.318 assemble=0.000 tail=0.002 | sum=18.423 view_total=18.424 resid_in_view=+0.001 avg_frame_ms=18.452 resid_vs_frame=+0.029
+SORT_STAGES n=30 pread=0.019 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.114 upload=0.000 bin_emit=4.258 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.184 publish_wait=0.000 mat=0.045 | sum=4.621 sort=4.659 resid=+0.038
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.028 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.426 gather_result=0.100 | sum=4.587 project=4.588 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+ONELAUNCH n=31 onelaunch=4.334 layout=0.114 pub_host=0.185 total=4.667
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== t161r2-off 6a00513 GSPLAT_TT_PRECULL=0
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=76.12dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.7 p50_ms=19.9 min_ms=16.4 max_ms=23.7 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r2-off
+STAGES n=30 head=0.002 project=4.581 tile_assign=0.004 sort=5.156 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.676 d2h=0.226 assemble=0.000 tail=0.002 | sum=19.648 view_total=19.649 resid_in_view=+0.001 avg_frame_ms=19.679 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.023 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.111 upload=0.000 bin_emit=4.763 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.174 publish_wait=0.000 mat=0.047 | sum=5.117 sort=5.156 resid=+0.039
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.410 gather_result=0.105 | sum=4.579 project=4.581 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.847 layout=0.112 pub_host=0.173 total=5.164
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== done round 2
+##### r2 rc=0
+ALLDONE

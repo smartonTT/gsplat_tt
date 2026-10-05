@@ -1,0 +1,81 @@
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+BRISC-FW                   46537.8  4653.775       439.8      43.983    16962  BRISC
+NCRISC-FW                  44531.1  4453.110       418.4      41.837    16951  NCRISC
+NCRISC-KERNEL              43818.8  4381.877       415.0      41.501    16951  NCRISC
+BRISC-KERNEL               41291.4  4129.143       398.7      39.867    13321  BRISC
+TRISC-FW                   39072.0  3907.204       122.7      12.274    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               37091.1  3709.107       114.7      11.466    10890  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu            25613.6  2561.356        79.2       7.920     3630  TRISC_0,TRISC_1,TRISC_2
+sort_bucket_emit           18701.4  1870.138        87.7       8.769     2420  BRISC,NCRISC
+ta_bucket_scatter           8142.4   814.236        39.1       3.915     2420  BRISC,NCRISC
+tile_blend_load             8138.5   813.855        75.1       7.509     1210  NCRISC
+rd_l1_bulk                  8008.3   800.829        73.9       7.386    12452  NCRISC
+rd_bulk_wait                7908.2   790.816        73.2       7.318    12452  NCRISC
+wr_wait_out                 7828.2   782.824        74.4       7.442    11264  BRISC
+pfwc                        7088.6   708.859        21.8       2.185     3630  TRISC_0,TRISC_1,TRISC_2
+sort_subchunk_mat           6654.7   665.470        36.2       3.622     2420  BRISC,NCRISC
+proj_scatter                6320.2   632.024        41.5       4.153     2420  BRISC,NCRISC
+ta_gauss_aabb               6117.4   611.736        27.9       2.791     2420  BRISC,NCRISC
+proj_count                  5993.6   599.358        30.3       3.029     2420  BRISC,NCRISC
+sort_tile_depth             5030.1   503.015        26.8       2.675     2420  BRISC,NCRISC
+tile_mb_mask                4388.2   438.817        14.3       1.435     3630  TRISC_0,TRISC_1,TRISC_2
+tile_l1_cull_rd             1459.5   145.952        14.3       1.429     1210  NCRISC
+cmp_emit                    1138.0   113.802        13.1       1.314    33792  TRISC_0,TRISC_1,TRISC_2
+sort_bin_hist               1039.7   103.970         9.6       0.960     1210  NCRISC
+wr_pack                      737.0    73.704         7.8       0.785    11264  BRISC
+rd_meta                       31.1     3.112         0.8       0.083    22528  NCRISC
+rd_dir                        20.9     2.088         0.5       0.046    12452  NCRISC
+rd_tid                        18.6     1.862         0.5       0.047    11264  NCRISC
+cmp_init                       9.8     0.985         0.1       0.005    33792  TRISC_0,TRISC_1,TRISC_2
+cmp_wait_cnt                   0.8     0.080         0.0       0.000    37356  TRISC_0,TRISC_1,TRISC_2
+cmp_bulk_wait                  0.7     0.069         0.0       0.000    37356  TRISC_0,TRISC_1,TRISC_2
+rd_claim                       0.4     0.041         0.0       0.000    12474  NCRISC
+
+views=10 segments/view=[10]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    1.989   1.989      0.000   110  pfwc
+ 1    2.049    8.588   6.539      0.060   110  proj_count+proj_scatter
+ 2    9.975   13.050   3.075      1.387   110  ta_gauss_aabb
+ 3   13.100   17.435   4.335      0.050   110  ta_bucket_scatter
+ 4   19.993   20.858   0.865      2.559   110  sort_bin_hist
+ 5   22.235   30.213   7.978      1.377   110  sort_bucket_emit
+ 6   30.252   32.769   2.517      0.039   110  sort_tile_depth
+ 7   32.780   33.924   1.143      0.011   110  <unnamed 110 cores>
+ 8   34.005   38.848   4.843      0.081   110  sort_subchunk_mat+tile_mb_mask+tile_l1_cull_rd
+ 9   38.855   46.542   7.688      0.006   110  tile_blend_sfpu+tile_blend_load+rd_claim+rd_tid+rd_meta+wr_wait_out+rd_dir+rd_l1_bulk+rd_bulk_wait+cmp_wait_cnt+cmp_init+cmp_bulk_wait+cmp_emit+wr_pack
+total all-core idle between programs: 5.570 ms/view
+
+views=10
+group          window_ms gap_before
+subchunk_mat       3.523           
+cull               1.318      0.001
+blend              7.687      0.009
+
+zone                  mean_per_core_ms/view  cores
+tile_blend_sfpu                       7.001    330
+sort_bucket_emit                      7.651    220
+tile_blend_load                       6.667    110
+ta_bucket_scatter                     3.328    220
+rd_l1_bulk                            6.560    110
+rd_bulk_wait                          6.477    110
+wr_wait_out                           6.415    110
+pfwc                                  1.953    330
+sort_subchunk_mat                     2.721    220
+proj_scatter                          2.592    220
+ta_gauss_aabb                         2.500    220
+proj_count                            2.488    220
+sort_tile_depth                       2.063    220
+tile_mb_mask                          1.198    330
+tile_l1_cull_rd                       1.196    110
+cmp_emit                              0.315    330
+sort_bin_hist                         0.850    110
+wr_pack                               0.609    110
+rd_meta                               0.026    110
+rd_dir                                0.017    110
+rd_tid                                0.015    110
+cmp_init                              0.003    330
+cmp_wait_cnt                          0.000    330
+cmp_bulk_wait                         0.000    330
+rd_claim                              0.000    110

@@ -1,7 +1,6 @@
 """Verify cpu_cpp builds report expected SIMD backend."""
 from __future__ import annotations
 
-import importlib.util
 import sys
 from pathlib import Path
 
@@ -9,15 +8,16 @@ import pytest
 
 
 def _load_gsplat_cpu():
-    repo = Path(__file__).resolve().parents[2]
-    so_candidates = sorted((repo / "backends" / "cpu_cpp").glob("_gsplat_cpu*.so"))
-    if not so_candidates:
-        pytest.skip("no _gsplat_cpu extension built")
-    spec = importlib.util.spec_from_file_location("_gsplat_cpu", so_candidates[-1])
-    mod = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(mod)
-    return mod
+    # Plain import: loading the .so a second time under another name makes
+    # pybind11 raise "type already registered" once another test imported it.
+    repo = str(Path(__file__).resolve().parents[2])
+    if repo not in sys.path:
+        sys.path.insert(0, repo)
+    try:
+        from backends.cpu_cpp import _gsplat_cpu
+    except ImportError as e:
+        pytest.skip(f"no _gsplat_cpu extension for this Python: {e}")
+    return _gsplat_cpu
 
 
 def test_simd_backend_is_scalar_when_built_scalar():

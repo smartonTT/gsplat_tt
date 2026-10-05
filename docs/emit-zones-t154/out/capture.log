@@ -1,0 +1,647 @@
+[capture_tracy] render_clean capture (iter-dir=t154-ep views=all) -> /localdev/smarton/gstt2-t154/opt/profiler/t154-ep/render.tracy
+[capture_tracy] CMD: /localdev/smarton/gstt2-t154/.venv/bin/python3 -m tracy -r -p -v --dump-device-data-mid-run -o /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep /localdev/smarton/gstt2-t154/opt/profiler/_capture_inner.sh
+2026-10-04 20:05:24.896 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep
+2026-10-04 20:05:24.897 | INFO     | __main__:main:336 - Using port 8086
+2026-10-04 20:05:24.897 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-10-04 20:05:24.900 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+Connecting to 127.0.0.1:8086...2026-10-04 20:05:24.905 | INFO     | __main__:main:400 - Test process started
+2026-10-04 20:05:25.508 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep
+[capture-inner] python3 render/run.py --no-ref --iter-dir t154-ep  (MID_RUN_DUMP=1 DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TRACY_PORT=8086)
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-04 20:05:28.451 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-04 20:05:28.451 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-04 20:05:28.453 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-04 20:05:28.454 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-04 20:05:28.454 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-04 20:05:28.454 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-04 20:05:28.455 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-04 20:05:28.455 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-04 20:05:28.455 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-04 20:05:28.455 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-04 20:05:28.459 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-04 20:05:28.459 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-04 20:05:28.459 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-04 20:05:28.459 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-04 20:05:28.459 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-04 20:05:28.459 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-04 20:05:28.459 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-04 20:05:28.500 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-04 20:05:28.500 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-04 20:05:28.500 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-04 20:05:28.500 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-04 20:05:28.500 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-04 20:05:28.501 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffffc0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-04 20:05:28.501 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-04 20:05:28.999 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-04 20:05:28.999 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-04 20:05:28.999 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-04 20:05:28.999 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-04 20:05:29.000 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-04 20:05:29.000 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-04 20:05:29.000 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-04 20:05:29.000 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-04 20:05:29.002 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-04 20:05:29.002 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-04 20:05:29.002 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-04 20:05:29.002 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-04 20:05:29.002 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-04 20:05:29.002 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-04 20:05:29.002 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-04 20:05:29.002 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-04 20:05:29.002 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-04 20:05:29.002 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-04 20:05:29.002 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-04 20:05:29.002 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-04 20:05:29.002 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-04 20:05:32.203 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-10-04 20:05:34.855 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_1478963_1089212899_0' (shm_resource_tracker.cpp:265)
+2026-10-04 20:05:34.855 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_1478963' (shm_resource_tracker.cpp:275)
+2026-10-04 20:05:35.910 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349971 GHz, device_time_at_sync=20993934872978 cycles (realtime_profiler_manager.cpp:1075)
+[JIT_WARMUP] ideal-path contexts compiled in 7475.9 ms
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 payload_pages=53145
+[SORT] stage=ONELAUNCH P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=25699 onelaunch=979.18 layout=0.11 pub_host=0.15 total=979.75ms
+2026-10-04 20:05:47.287 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=6397096902ns, avg=6397096902.0ns, max=6397096902ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.287 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[6397096900..6397097900), underflow(<6397096900ns)=0, overflow(>=6397097900ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397096900 ..   6397097000) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097000 ..   6397097100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097100 ..   6397097200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097200 ..   6397097300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097300 ..   6397097400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097400 ..   6397097500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097500 ..   6397097600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097600 ..   6397097700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097700 ..   6397097800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.287 | info     |           Metal |   [  6397097800 ..   6397097900) |                                        |        0 (profiler_analysis.cpp:700)
+[run] timing 30 views (warmup excluded)
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 payload_pages=53145
+[SORT] stage=ONELAUNCH P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=25699 onelaunch=5.31 layout=0.13 pub_host=0.21 total=5.68ms
+2026-10-04 20:05:47.329 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=23126193ns, avg=23126193.0ns, max=23126193ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.329 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[23126100..23127100), underflow(<23126100ns)=0, overflow(>=23127100ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126100 ..     23126200) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126200 ..     23126300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126300 ..     23126400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126400 ..     23126500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126500 ..     23126600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126600 ..     23126700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126700 ..     23126800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126800 ..     23126900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23126900 ..     23127000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.329 | info     |           Metal |   [    23127000 ..     23127100) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=hero 41.5ms
+[SUBCHUNK] tiles_split=82 total_subchunks=1115 max_subchunks_per_tile=3 payload_pages=38472
+[SORT] stage=ONELAUNCH P=2429588 P_kept=2429588 num_tiles=1024 max_tile_n=21688 onelaunch=3.92 layout=0.10 pub_host=0.14 total=4.18ms
+2026-10-04 20:05:47.361 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=16523617ns, avg=16523617.0ns, max=16523617ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.361 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[16523600..16524600), underflow(<16523600ns)=0, overflow(>=16524600ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16523600 ..     16523700) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16523700 ..     16523800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16523800 ..     16523900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16523900 ..     16524000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16524000 ..     16524100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16524100 ..     16524200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16524200 ..     16524300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16524300 ..     16524400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16524400 ..     16524500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.361 | info     |           Metal |   [    16524500 ..     16524600) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_00 31.6ms
+[SUBCHUNK] tiles_split=82 total_subchunks=1115 max_subchunks_per_tile=3 payload_pages=39675
+[SORT] stage=ONELAUNCH P=2507584 P_kept=2507584 num_tiles=1024 max_tile_n=21301 onelaunch=4.01 layout=0.10 pub_host=0.15 total=4.27ms
+2026-10-04 20:05:47.394 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=17652910ns, avg=17652910.0ns, max=17652910ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.394 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[17652900..17653900), underflow(<17652900ns)=0, overflow(>=17653900ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17652900 ..     17653000) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653000 ..     17653100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653100 ..     17653200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653200 ..     17653300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653300 ..     17653400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653400 ..     17653500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653500 ..     17653600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653600 ..     17653700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653700 ..     17653800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.394 | info     |           Metal |   [    17653800 ..     17653900) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_01 32.8ms
+[SUBCHUNK] tiles_split=80 total_subchunks=1115 max_subchunks_per_tile=3 payload_pages=41306
+[SORT] stage=ONELAUNCH P=2610494 P_kept=2610494 num_tiles=1024 max_tile_n=21549 onelaunch=4.15 layout=0.10 pub_host=0.14 total=4.40ms
+2026-10-04 20:05:47.426 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=16940779ns, avg=16940779.0ns, max=16940779ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.426 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[16940700..16941700), underflow(<16940700ns)=0, overflow(>=16941700ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16940700 ..     16940800) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16940800 ..     16940900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16940900 ..     16941000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941000 ..     16941100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941100 ..     16941200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941200 ..     16941300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941300 ..     16941400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941400 ..     16941500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941500 ..     16941600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.426 | info     |           Metal |   [    16941600 ..     16941700) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_02 32.0ms
+[SUBCHUNK] tiles_split=83 total_subchunks=1120 max_subchunks_per_tile=3 payload_pages=43456
+[SORT] stage=ONELAUNCH P=2749237 P_kept=2749237 num_tiles=1024 max_tile_n=20485 onelaunch=4.39 layout=0.10 pub_host=0.15 total=4.65ms
+2026-10-04 20:05:47.460 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=18995526ns, avg=18995526.0ns, max=18995526ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.460 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[18995500..18996500), underflow(<18995500ns)=0, overflow(>=18996500ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18995500 ..     18995600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18995600 ..     18995700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18995700 ..     18995800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18995800 ..     18995900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18995900 ..     18996000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18996000 ..     18996100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18996100 ..     18996200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18996200 ..     18996300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18996300 ..     18996400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.460 | info     |           Metal |   [    18996400 ..     18996500) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_03 33.7ms
+[SUBCHUNK] tiles_split=85 total_subchunks=1122 max_subchunks_per_tile=3 payload_pages=46105
+[SORT] stage=ONELAUNCH P=2918441 P_kept=2918441 num_tiles=1024 max_tile_n=23207 onelaunch=4.65 layout=0.10 pub_host=0.15 total=4.90ms
+2026-10-04 20:05:47.494 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=18834270ns, avg=18834270.0ns, max=18834270ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.494 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[18834200..18835200), underflow(<18834200ns)=0, overflow(>=18835200ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834200 ..     18834300) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834300 ..     18834400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834400 ..     18834500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834500 ..     18834600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834600 ..     18834700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834700 ..     18834800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834800 ..     18834900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18834900 ..     18835000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18835000 ..     18835100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.494 | info     |           Metal |   [    18835100 ..     18835200) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_04 34.0ms
+[SUBCHUNK] tiles_split=98 total_subchunks=1130 max_subchunks_per_tile=4 payload_pages=50099
+[SORT] stage=ONELAUNCH P=3173042 P_kept=3173042 num_tiles=1024 max_tile_n=24727 onelaunch=5.02 layout=0.10 pub_host=0.14 total=5.28ms
+2026-10-04 20:05:47.529 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19560114ns, avg=19560114.0ns, max=19560114ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.529 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19560100..19561100), underflow(<19560100ns)=0, overflow(>=19561100ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560100 ..     19560200) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560200 ..     19560300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560300 ..     19560400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560400 ..     19560500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560500 ..     19560600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560600 ..     19560700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560700 ..     19560800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560800 ..     19560900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19560900 ..     19561000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.529 | info     |           Metal |   [    19561000 ..     19561100) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_05 34.9ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1144 max_subchunks_per_tile=3 payload_pages=52989
+[SORT] stage=ONELAUNCH P=3359322 P_kept=3359322 num_tiles=1024 max_tile_n=24099 onelaunch=5.31 layout=0.10 pub_host=0.14 total=5.57ms
+2026-10-04 20:05:47.566 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=20801035ns, avg=20801035.0ns, max=20801035ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.566 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[20801000..20802000), underflow(<20801000ns)=0, overflow(>=20802000ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801000 ..     20801100) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801100 ..     20801200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801200 ..     20801300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801300 ..     20801400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801400 ..     20801500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801500 ..     20801600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801600 ..     20801700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801700 ..     20801800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801800 ..     20801900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.566 | info     |           Metal |   [    20801900 ..     20802000) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_06 36.1ms
+[SUBCHUNK] tiles_split=108 total_subchunks=1145 max_subchunks_per_tile=3 payload_pages=56497
+[SORT] stage=ONELAUNCH P=3583320 P_kept=3583320 num_tiles=1024 max_tile_n=24129 onelaunch=5.64 layout=0.10 pub_host=0.15 total=5.90ms
+2026-10-04 20:05:47.603 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=22535756ns, avg=22535756.0ns, max=22535756ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.603 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[22535700..22536700), underflow(<22535700ns)=0, overflow(>=22536700ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22535700 ..     22535800) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22535800 ..     22535900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22535900 ..     22536000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536000 ..     22536100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536100 ..     22536200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536200 ..     22536300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536300 ..     22536400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536400 ..     22536500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536500 ..     22536600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.603 | info     |           Metal |   [    22536600 ..     22536700) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_07 37.4ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1150 max_subchunks_per_tile=3 payload_pages=57442
+[SORT] stage=ONELAUNCH P=3643014 P_kept=3643014 num_tiles=1024 max_tile_n=21066 onelaunch=5.73 layout=0.11 pub_host=0.16 total=6.00ms
+2026-10-04 20:05:47.643 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=25074539ns, avg=25074539.0ns, max=25074539ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.643 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[25074500..25075500), underflow(<25074500ns)=0, overflow(>=25075500ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25074500 ..     25074600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25074600 ..     25074700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25074700 ..     25074800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25074800 ..     25074900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25074900 ..     25075000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25075000 ..     25075100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25075100 ..     25075200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25075200 ..     25075300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25075300 ..     25075400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.643 | info     |           Metal |   [    25075400 ..     25075500) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_08 39.9ms
+[SUBCHUNK] tiles_split=113 total_subchunks=1151 max_subchunks_per_tile=3 payload_pages=57968
+[SORT] stage=ONELAUNCH P=3678564 P_kept=3678564 num_tiles=1024 max_tile_n=21599 onelaunch=5.77 layout=0.10 pub_host=0.15 total=6.03ms
+2026-10-04 20:05:47.682 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=23032136ns, avg=23032136.0ns, max=23032136ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.682 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[23032100..23033100), underflow(<23032100ns)=0, overflow(>=23033100ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032100 ..     23032200) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032200 ..     23032300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032300 ..     23032400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032400 ..     23032500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032500 ..     23032600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032600 ..     23032700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032700 ..     23032800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032800 ..     23032900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23032900 ..     23033000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.682 | info     |           Metal |   [    23033000 ..     23033100) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_09 38.2ms
+[SUBCHUNK] tiles_split=110 total_subchunks=1152 max_subchunks_per_tile=3 payload_pages=58319
+[SORT] stage=ONELAUNCH P=3700450 P_kept=3700450 num_tiles=1024 max_tile_n=21371 onelaunch=5.78 layout=0.10 pub_host=0.15 total=6.04ms
+2026-10-04 20:05:47.720 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=23430534ns, avg=23430534.0ns, max=23430534ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.720 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[23430500..23431500), underflow(<23430500ns)=0, overflow(>=23431500ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23430500 ..     23430600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23430600 ..     23430700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23430700 ..     23430800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23430800 ..     23430900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23430900 ..     23431000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23431000 ..     23431100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23431100 ..     23431200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23431200 ..     23431300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23431300 ..     23431400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.720 | info     |           Metal |   [    23431400 ..     23431500) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_10 38.0ms
+[SUBCHUNK] tiles_split=113 total_subchunks=1146 max_subchunks_per_tile=3 payload_pages=56948
+[SORT] stage=ONELAUNCH P=3612086 P_kept=3612086 num_tiles=1024 max_tile_n=22225 onelaunch=5.61 layout=0.10 pub_host=0.14 total=5.86ms
+2026-10-04 20:05:47.757 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=21774437ns, avg=21774437.0ns, max=21774437ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.757 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[21774400..21775400), underflow(<21774400ns)=0, overflow(>=21775400ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21774400 ..     21774500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21774500 ..     21774600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21774600 ..     21774700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21774700 ..     21774800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21774800 ..     21774900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21774900 ..     21775000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21775000 ..     21775100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21775100 ..     21775200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21775200 ..     21775300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.757 | info     |           Metal |   [    21775300 ..     21775400) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_11 36.5ms
+[SUBCHUNK] tiles_split=100 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=54533
+[SORT] stage=ONELAUNCH P=3458291 P_kept=3458291 num_tiles=1024 max_tile_n=22261 onelaunch=5.41 layout=0.10 pub_host=0.14 total=5.66ms
+2026-10-04 20:05:47.793 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=21090689ns, avg=21090689.0ns, max=21090689ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.793 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[21090600..21091600), underflow(<21090600ns)=0, overflow(>=21091600ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21090600 ..     21090700) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21090700 ..     21090800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21090800 ..     21090900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21090900 ..     21091000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21091000 ..     21091100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21091100 ..     21091200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21091200 ..     21091300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21091300 ..     21091400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21091400 ..     21091500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.793 | info     |           Metal |   [    21091500 ..     21091600) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_12 35.6ms
+[SUBCHUNK] tiles_split=102 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=52843
+[SORT] stage=ONELAUNCH P=3349844 P_kept=3349844 num_tiles=1024 max_tile_n=22742 onelaunch=5.22 layout=0.09 pub_host=0.14 total=5.47ms
+2026-10-04 20:05:47.828 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=20313671ns, avg=20313671.0ns, max=20313671ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.828 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[20313600..20314600), underflow(<20313600ns)=0, overflow(>=20314600ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20313600 ..     20313700) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20313700 ..     20313800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20313800 ..     20313900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20313900 ..     20314000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20314000 ..     20314100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20314100 ..     20314200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20314200 ..     20314300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20314300 ..     20314400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20314400 ..     20314500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.828 | info     |           Metal |   [    20314500 ..     20314600) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_13 35.3ms
+[SUBCHUNK] tiles_split=100 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=51811
+[SORT] stage=ONELAUNCH P=3283822 P_kept=3283822 num_tiles=1024 max_tile_n=23880 onelaunch=5.11 layout=0.09 pub_host=0.14 total=5.36ms
+2026-10-04 20:05:47.862 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19793422ns, avg=19793422.0ns, max=19793422ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.862 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19793400..19794400), underflow(<19793400ns)=0, overflow(>=19794400ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19793400 ..     19793500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19793500 ..     19793600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19793600 ..     19793700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19793700 ..     19793800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19793800 ..     19793900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19793900 ..     19794000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19794000 ..     19794100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19794100 ..     19794200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19794200 ..     19794300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.862 | info     |           Metal |   [    19794300 ..     19794400) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_14 34.2ms
+[SUBCHUNK] tiles_split=100 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=50784
+[SORT] stage=ONELAUNCH P=3218037 P_kept=3218037 num_tiles=1024 max_tile_n=21680 onelaunch=5.03 layout=0.10 pub_host=0.14 total=5.28ms
+2026-10-04 20:05:47.897 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19580543ns, avg=19580543.0ns, max=19580543ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.897 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19580500..19581500), underflow(<19580500ns)=0, overflow(>=19581500ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19580500 ..     19580600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19580600 ..     19580700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19580700 ..     19580800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19580800 ..     19580900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19580900 ..     19581000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19581000 ..     19581100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19581100 ..     19581200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19581200 ..     19581300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19581300 ..     19581400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.897 | info     |           Metal |   [    19581400 ..     19581500) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_15 34.4ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1131 max_subchunks_per_tile=3 payload_pages=50029
+[SORT] stage=ONELAUNCH P=3169907 P_kept=3169907 num_tiles=1024 max_tile_n=22324 onelaunch=4.99 layout=0.10 pub_host=0.14 total=5.24ms
+2026-10-04 20:05:47.931 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19374233ns, avg=19374233.0ns, max=19374233ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.931 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19374200..19375200), underflow(<19374200ns)=0, overflow(>=19375200ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374200 ..     19374300) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374300 ..     19374400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374400 ..     19374500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374500 ..     19374600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374600 ..     19374700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374700 ..     19374800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374800 ..     19374900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19374900 ..     19375000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19375000 ..     19375100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.931 | info     |           Metal |   [    19375100 ..     19375200) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_16 34.3ms
+[SUBCHUNK] tiles_split=103 total_subchunks=1136 max_subchunks_per_tile=3 payload_pages=49949
+[SORT] stage=ONELAUNCH P=3164503 P_kept=3164503 num_tiles=1024 max_tile_n=20765 onelaunch=4.95 layout=0.09 pub_host=0.14 total=5.19ms
+2026-10-04 20:05:47.966 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19435489ns, avg=19435489.0ns, max=19435489ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:47.966 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19435400..19436400), underflow(<19435400ns)=0, overflow(>=19436400ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19435400 ..     19435500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19435500 ..     19435600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19435600 ..     19435700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19435700 ..     19435800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19435800 ..     19435900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19435900 ..     19436000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19436000 ..     19436100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19436100 ..     19436200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19436200 ..     19436300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:47.966 | info     |           Metal |   [    19436300 ..     19436400) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_17 34.4ms
+[SUBCHUNK] tiles_split=97 total_subchunks=1131 max_subchunks_per_tile=3 payload_pages=50266
+[SORT] stage=ONELAUNCH P=3184066 P_kept=3184066 num_tiles=1024 max_tile_n=20406 onelaunch=4.96 layout=0.09 pub_host=0.13 total=5.20ms
+2026-10-04 20:05:48.002 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=21194430ns, avg=21194430.0ns, max=21194430ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.002 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[21194400..21195400), underflow(<21194400ns)=0, overflow(>=21195400ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21194400 ..     21194500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21194500 ..     21194600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21194600 ..     21194700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21194700 ..     21194800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21194800 ..     21194900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21194900 ..     21195000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21195000 ..     21195100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21195100 ..     21195200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21195200 ..     21195300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.002 | info     |           Metal |   [    21195300 ..     21195400) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_18 38.3ms
+[SUBCHUNK] tiles_split=96 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=50206
+[SORT] stage=ONELAUNCH P=3180618 P_kept=3180618 num_tiles=1024 max_tile_n=21229 onelaunch=4.99 layout=0.10 pub_host=0.14 total=5.24ms
+2026-10-04 20:05:48.039 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=20353347ns, avg=20353347.0ns, max=20353347ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.039 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[20353300..20354300), underflow(<20353300ns)=0, overflow(>=20354300ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353300 ..     20353400) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353400 ..     20353500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353500 ..     20353600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353600 ..     20353700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353700 ..     20353800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353800 ..     20353900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20353900 ..     20354000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20354000 ..     20354100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20354100 ..     20354200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.039 | info     |           Metal |   [    20354200 ..     20354300) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_19 34.9ms
+[SUBCHUNK] tiles_split=101 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=49825
+[SORT] stage=ONELAUNCH P=3156592 P_kept=3156592 num_tiles=1024 max_tile_n=20632 onelaunch=4.95 layout=0.10 pub_host=0.14 total=5.20ms
+2026-10-04 20:05:48.074 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19662519ns, avg=19662519.0ns, max=19662519ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.074 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19662500..19663500), underflow(<19662500ns)=0, overflow(>=19663500ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19662500 ..     19662600) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19662600 ..     19662700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19662700 ..     19662800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19662800 ..     19662900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19662900 ..     19663000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19663000 ..     19663100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19663100 ..     19663200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19663200 ..     19663300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19663300 ..     19663400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.074 | info     |           Metal |   [    19663400 ..     19663500) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_20 34.3ms
+[SUBCHUNK] tiles_split=107 total_subchunks=1143 max_subchunks_per_tile=4 payload_pages=49308
+[SORT] stage=ONELAUNCH P=3123280 P_kept=3123280 num_tiles=1024 max_tile_n=24850 onelaunch=4.92 layout=0.10 pub_host=0.14 total=5.16ms
+2026-10-04 20:05:48.109 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=20136001ns, avg=20136001.0ns, max=20136001ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.109 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[20136000..20137000), underflow(<20136000ns)=0, overflow(>=20137000ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136000 ..     20136100) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136100 ..     20136200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136200 ..     20136300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136300 ..     20136400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136400 ..     20136500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136500 ..     20136600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136600 ..     20136700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136700 ..     20136800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136800 ..     20136900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.109 | info     |           Metal |   [    20136900 ..     20137000) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_21 34.8ms
+[SUBCHUNK] tiles_split=99 total_subchunks=1131 max_subchunks_per_tile=3 payload_pages=47879
+[SORT] stage=ONELAUNCH P=3032330 P_kept=3032330 num_tiles=1024 max_tile_n=20666 onelaunch=4.79 layout=0.09 pub_host=0.14 total=5.03ms
+2026-10-04 20:05:48.143 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=19026472ns, avg=19026472.0ns, max=19026472ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.143 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[19026400..19027400), underflow(<19026400ns)=0, overflow(>=19027400ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19026400 ..     19026500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19026500 ..     19026600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19026600 ..     19026700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19026700 ..     19026800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19026800 ..     19026900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19026900 ..     19027000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19027000 ..     19027100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19027100 ..     19027200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19027200 ..     19027300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.143 | info     |           Metal |   [    19027300 ..     19027400) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_22 33.8ms
+[SUBCHUNK] tiles_split=96 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=46022
+[SORT] stage=ONELAUNCH P=2913080 P_kept=2913080 num_tiles=1024 max_tile_n=23042 onelaunch=4.60 layout=0.09 pub_host=0.13 total=4.84ms
+2026-10-04 20:05:48.176 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=18593889ns, avg=18593889.0ns, max=18593889ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.176 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[18593800..18594800), underflow(<18593800ns)=0, overflow(>=18594800ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18593800 ..     18593900) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18593900 ..     18594000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594000 ..     18594100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594100 ..     18594200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594200 ..     18594300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594300 ..     18594400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594400 ..     18594500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594500 ..     18594600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594600 ..     18594700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.176 | info     |           Metal |   [    18594700 ..     18594800) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_23 33.5ms
+[SUBCHUNK] tiles_split=89 total_subchunks=1122 max_subchunks_per_tile=3 payload_pages=42797
+[SORT] stage=ONELAUNCH P=2706427 P_kept=2706427 num_tiles=1024 max_tile_n=22503 onelaunch=4.29 layout=0.09 pub_host=0.14 total=4.53ms
+2026-10-04 20:05:48.209 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=17819747ns, avg=17819747.0ns, max=17819747ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.209 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[17819700..17820700), underflow(<17819700ns)=0, overflow(>=17820700ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17819700 ..     17819800) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17819800 ..     17819900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17819900 ..     17820000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820000 ..     17820100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820100 ..     17820200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820200 ..     17820300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820300 ..     17820400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820400 ..     17820500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820500 ..     17820600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.209 | info     |           Metal |   [    17820600 ..     17820700) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_24 32.6ms
+[SUBCHUNK] tiles_split=88 total_subchunks=1121 max_subchunks_per_tile=3 payload_pages=40283
+[SORT] stage=ONELAUNCH P=2545453 P_kept=2545453 num_tiles=1024 max_tile_n=23909 onelaunch=4.07 layout=0.10 pub_host=0.14 total=4.31ms
+2026-10-04 20:05:48.241 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=16841365ns, avg=16841365.0ns, max=16841365ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.241 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[16841300..16842300), underflow(<16841300ns)=0, overflow(>=16842300ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841300 ..     16841400) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841400 ..     16841500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841500 ..     16841600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841600 ..     16841700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841700 ..     16841800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841800 ..     16841900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16841900 ..     16842000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16842000 ..     16842100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16842100 ..     16842200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.241 | info     |           Metal |   [    16842200 ..     16842300) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_25 31.8ms
+[SUBCHUNK] tiles_split=82 total_subchunks=1113 max_subchunks_per_tile=4 payload_pages=38696
+[SORT] stage=ONELAUNCH P=2444382 P_kept=2444382 num_tiles=1024 max_tile_n=24677 onelaunch=3.90 layout=0.10 pub_host=0.14 total=4.15ms
+2026-10-04 20:05:48.272 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=16679409ns, avg=16679409.0ns, max=16679409ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.272 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[16679400..16680400), underflow(<16679400ns)=0, overflow(>=16680400ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16679400 ..     16679500) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16679500 ..     16679600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16679600 ..     16679700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16679700 ..     16679800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16679800 ..     16679900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16679900 ..     16680000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16680000 ..     16680100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16680100 ..     16680200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16680200 ..     16680300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.272 | info     |           Metal |   [    16680300 ..     16680400) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_26 31.1ms
+[SUBCHUNK] tiles_split=82 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=37825
+[SORT] stage=ONELAUNCH P=2387909 P_kept=2387909 num_tiles=1024 max_tile_n=24441 onelaunch=3.80 layout=0.10 pub_host=0.14 total=4.05ms
+2026-10-04 20:05:48.303 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=16079353ns, avg=16079353.0ns, max=16079353ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.303 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[16079300..16080300), underflow(<16079300ns)=0, overflow(>=16080300ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079300 ..     16079400) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079400 ..     16079500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079500 ..     16079600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079600 ..     16079700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079700 ..     16079800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079800 ..     16079900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16079900 ..     16080000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16080000 ..     16080100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16080100 ..     16080200) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.303 | info     |           Metal |   [    16080200 ..     16080300) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_27 30.6ms
+[SUBCHUNK] tiles_split=78 total_subchunks=1112 max_subchunks_per_tile=3 payload_pages=37673
+[SORT] stage=ONELAUNCH P=2378999 P_kept=2378999 num_tiles=1024 max_tile_n=22991 onelaunch=3.81 layout=0.10 pub_host=0.14 total=4.06ms
+2026-10-04 20:05:48.341 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=17473102ns, avg=17473102.0ns, max=17473102ns (profiler_analysis.cpp:645)
+2026-10-04 20:05:48.341 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[17473100..17474100), underflow(<17473100ns)=0, overflow(>=17474100ns)=0) (profiler_analysis.cpp:682)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473100 ..     17473200) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473200 ..     17473300) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473300 ..     17473400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473400 ..     17473500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473500 ..     17473600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473600 ..     17473700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473700 ..     17473800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473800 ..     17473900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17473900 ..     17474000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-04 20:05:48.341 | info     |           Metal |   [    17474000 ..     17474100) |                                        |        0 (profiler_analysis.cpp:700)
+[run]   view=orb_28 37.8ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=34.9 p50_ms=34.4 min_ms=30.6 max_ms=41.5 n_views=30 warmup_s=19.5 out=/localdev/smarton/gstt2-t154/tmp/t154-ep
+TTW_METRIC hero_vs_ref=100.00
+TTW_TIMING ms_view=34.948
+TTW_TIMING blend=34.948
+TTW_TIMING stage_head=0.003
+TTW_TIMING stage_project=4.929
+TTW_TIMING stage_tile_assign=0.005
+TTW_TIMING stage_sort=5.170
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=9.705
+TTW_TIMING stage_d2h=0.244
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=14.846
+TTW_TIMING stage_view_total=34.903
+TTW_TIMING stage_pybind=0.045
+STAGES n=30 head=0.003 project=4.929 tile_assign=0.005 sort=5.170 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.705 d2h=0.244 assemble=0.000 tail=14.846 | sum=34.902 view_total=34.903 resid_in_view=+0.001 avg_frame_ms=34.948 resid_vs_frame=+0.046
+TTW_TIMING stage_sort_pread=0.013
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.098
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=4.836
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.144
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.045
+TTW_TIMING stage_sort_other=0.035
+SORT_STAGES n=30 pread=0.013 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.098 upload=0.000 bin_emit=4.836 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.144 publish_wait=0.000 mat=0.045 | sum=5.136 sort=5.170 resid=+0.035
+TTW_TIMING stage_project_cov3d=0.000
+TTW_TIMING stage_project_pfwc_setup=0.004
+TTW_TIMING stage_project_pfwc_rtargs=0.039
+TTW_TIMING stage_project_pfwc_enqueue=0.031
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.001
+TTW_TIMING stage_project_gather_rtargs=0.000
+TTW_TIMING stage_project_gather_enqueue=0.000
+TTW_TIMING stage_project_gather_wait=4.426
+TTW_TIMING stage_project_gather_result=0.427
+TTW_TIMING stage_project_other=0.001
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.039 pfwc_enqueue=0.031 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.426 gather_result=0.427 | sum=4.928 project=4.929 resid=+0.001
+TTW_TIMING stage_tile_assign_setup=0.004
+TTW_TIMING stage_tile_assign_rtargs=0.000
+TTW_TIMING stage_tile_assign_enqueue=0.000
+TTW_TIMING stage_tile_assign_scan_finish=0.000
+TTW_TIMING stage_tile_assign_p_d2h=0.000
+TTW_TIMING stage_tile_assign_k2_finish=0.000
+TTW_TIMING stage_tile_assign_publish=0.001
+TTW_TIMING stage_tile_assign_other=0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.005 resid=+0.001
+[capture-inner] run.py rc=0
+
+Queue delay: 16 ns
+Timer resolution: 0 ns
+
+Frames: 2
+Time span: 28.56 s
+Zones: 621,315
+Elapsed time: 21.41 s
+Saving trace... done!
+Trace size 7521.83 KB (27.24% ratio)
+2026-10-04 20:05:49.653 | INFO     | tracy:generate_report:154 - Host side ops time report generated at /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep/.logs/tracy_ops_times.csv
+2026-10-04 20:05:49.668 | INFO     | tracy:generate_report:165 - Host side ops data report generated at /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep/.logs/tracy_ops_data.csv
+2026-10-04 20:05:49.668 | INFO     | tracy.process_ops_logs:import_tracy_op_logs:255 - Importing ops logs
+/localdev/smarton/tt-metal/tools/tracy/process_ops_logs.py:360: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
+  df = pd.read_csv(tracyOpTimesLog)
+2026-10-04 20:05:51.013 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1014 - Copying runtime artifacts
+2026-10-04 20:05:51.072 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1020 - Getting device only ops data
+2026-10-04 20:05:53.426 | INFO     | tracy.process_device_log:core_to_device_timeseries:416 - Importing Data For Device Number : 0
+2026-10-04 20:05:56.767 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1032 - Generating device op report ...
+2026-10-04 20:05:56.795 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1210 - Device only OPs csv generated at: /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep/reports/2026_10_04_20_05_51/ops_perf_results_2026_10_04_20_05_51.csv
+2026-10-04 20:05:56.798 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1219 - Device only per core op to op times csv generated at: /localdev/smarton/gstt2-t154/opt/profiler/wrap_out_t154-ep/reports/2026_10_04_20_05_51/per_core_op_to_op_times_2026_10_04_20_05_51.csv
+[capture_tracy] wrapper exited rc=0
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 7704084 Oct  4 20:05 /localdev/smarton/gstt2-t154/opt/profiler/t154-ep/render.tracy
+[capture_tracy] device profiler CSV data rows: 540727 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] per-zone-hash device marker counts (each zone repeats ~30x across views):
+  70146 51428
+  61380 49375
+  61380 17277
+  34100 32535
+  34100 16443
+  34100 13133
+  34100 12391
+  20460 33434
+  20460 22879
+  20460 20647
+  13640 52268
+  13640 37593
+  13640 29465
+  13640 26517
+   6820 6573
+   6820 63276
+   6820 62171
+   6820 53599
+   6820 51842
+   6820 47922
+   6820 3700
+   6820 29118
+   6820 24578
+   6820 21642
+   6820 18479
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t154/opt/profiler/t154-ep/render.tracy

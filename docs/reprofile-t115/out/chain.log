@@ -1,0 +1,201 @@
+SYNC skipped (remote SHA 298139f8cacdeb69da543b294c3569838e85e99a)
+[ttw 2026-10-02T08:56:01-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-02T08:56:01-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-02T08:56:01-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-02T08:56:01-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-02T08:56:01-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-02T08:56:01-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-02T08:56:01-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-02T08:56:01-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-02T08:56:01-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-02T08:56:01-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-02T08:56:01-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-02T08:56:01-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha=
+=========================================
+host=yyzo-bh-07  tag=t115-time-1  timeout=590s  worry=472s  ts=2026-10-02T08:56:03-0700
+cmd: bash /localdev/smarton/gstt2-t115/docs/reprofile-t115/remote_time.sh 1 base hp dc base
+-----------------------------------------
+=== r1-base 298139f  15:56:03
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.7 p50_ms=30.2 min_ms=25.4 max_ms=34.1 n_views=30 warmup_s=18.1 out=/localdev/smarton/gstt2-t115/tmp/t115-r1-base
+STAGES n=30 head=0.002 project=6.473 tile_assign=1.451 sort=10.773 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.686 d2h=0.245 assemble=0.000 tail=0.003 | sum=29.633 view_total=29.634 resid_in_view=+0.001 avg_frame_ms=29.668 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.022 bin_count=0.922 bin_hist_d2h=0.256 bin_layout=0.271 upload=0.071 bin_emit=5.295 kernel=0.041 d2h=0.000 compact=0.000 publish_host=0.248 publish_wait=3.532 mat=0.060 | sum=10.718 sort=10.773 resid=+0.055
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.030 pfwc_enqueue=0.029 pfwc_finish=2.482 gather_setup=0.002 gather_rtargs=0.017 gather_enqueue=0.033 gather_wait=3.769 gather_result=0.107 | sum=6.471 project=6.473 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.019 enqueue=0.023 scan_finish=0.000 p_d2h=0.000 k2_finish=1.403 publish=0.001 | sum=1.450 tile_assign=1.451 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r1-hp 298139f GSPLAT_TT_HOST_PROFILE=1 GSPLAT_PER_VIEW_STAGES=1 15:56:35
+run rc=0
+VIEW_STAGES i=0 name=hero wall=31.81 project=6.78 tile_assign=1.57 sort=11.33 blend=11.83 d2h=0.24 view_total=31.76 sort_bin_count=1.00 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=5.65 sort_publish_host=0.19 sort_publish_wait=3.81 project_pfwc_finish=2.46 project_gather_wait=4.10 project_gather_result=0.11 tile_assign_k2_finish=1.53
+VIEW_STAGES i=1 name=orb_00 wall=25.22 project=5.70 tile_assign=1.12 sort=9.05 blend=9.08 d2h=0.23 view_total=25.19 sort_bin_count=0.73 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.42 sort_publish_host=0.18 sort_publish_wait=3.07 project_pfwc_finish=2.46 project_gather_wait=3.05 project_gather_result=0.08 tile_assign_k2_finish=1.09
+VIEW_STAGES i=2 name=orb_01 wall=26.05 project=5.77 tile_assign=1.17 sort=9.23 blend=9.63 d2h=0.20 view_total=26.01 sort_bin_count=0.76 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.09 sort_bin_emit=4.50 sort_publish_host=0.19 sort_publish_wait=3.07 project_pfwc_finish=2.47 project_gather_wait=3.09 project_gather_result=0.08 tile_assign_k2_finish=1.13
+VIEW_STAGES i=3 name=orb_02 wall=26.60 project=5.92 tile_assign=1.21 sort=9.44 blend=9.73 d2h=0.26 view_total=26.57 sort_bin_count=0.78 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=4.70 sort_publish_host=0.19 sort_publish_wait=3.12 project_pfwc_finish=2.46 project_gather_wait=3.24 project_gather_result=0.08 tile_assign_k2_finish=1.18
+VIEW_STAGES i=4 name=orb_03 wall=27.45 project=6.15 tile_assign=1.29 sort=9.83 blend=9.88 d2h=0.25 view_total=27.40 sort_bin_count=0.85 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=4.89 sort_publish_host=0.19 sort_publish_wait=3.20 project_pfwc_enqueue=0.07 project_pfwc_finish=2.47 project_gather_wait=3.42 project_gather_result=0.09 tile_assign_k2_finish=1.24
+VIEW_STAGES i=5 name=orb_04 wall=28.56 project=6.32 tile_assign=1.39 sort=10.41 blend=10.17 d2h=0.23 view_total=28.52 sort_bin_count=0.88 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.15 sort_kernel=0.06 sort_publish_host=0.28 sort_publish_wait=3.33 sort_mat=0.08 project_pfwc_finish=2.49 project_gather_wait=3.59 project_gather_result=0.09 tile_assign_k2_finish=1.33
+VIEW_STAGES i=6 name=orb_05 wall=29.82 project=6.46 tile_assign=1.47 sort=10.88 blend=10.79 d2h=0.19 view_total=29.79 sort_bin_count=0.94 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.06 sort_bin_emit=5.44 sort_publish_host=0.18 sort_publish_wait=3.68 project_pfwc_finish=2.48 project_gather_wait=3.79 project_gather_result=0.10 tile_assign_k2_finish=1.44
+VIEW_STAGES i=7 name=orb_06 wall=31.53 project=6.74 tile_assign=1.58 sort=11.37 blend=11.55 d2h=0.24 view_total=31.48 sort_bin_count=1.00 sort_bin_hist_d2h=0.25 sort_bin_layout=0.24 sort_upload=0.07 sort_bin_emit=5.74 sort_publish_host=0.19 sort_publish_wait=3.75 project_pfwc_enqueue=0.07 project_pfwc_finish=2.45 project_gather_wait=4.02 project_gather_result=0.11 tile_assign_k2_finish=1.54
+VIEW_STAGES i=8 name=orb_07 wall=33.00 project=6.92 tile_assign=1.69 sort=11.94 blend=12.23 d2h=0.19 view_total=32.97 sort_bin_count=1.04 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.06 sort_publish_host=0.19 sort_publish_wait=3.98 project_pfwc_finish=2.48 project_gather_wait=4.24 project_gather_result=0.12 tile_assign_k2_finish=1.64
+VIEW_STAGES i=9 name=orb_08 wall=33.74 project=7.15 tile_assign=1.72 sort=12.07 blend=12.58 d2h=0.19 view_total=33.72 sort_bin_count=1.07 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.13 sort_publish_host=0.20 sort_publish_wait=4.02 project_pfwc_finish=2.48 project_gather_wait=4.46 project_gather_result=0.12 tile_assign_k2_finish=1.68
+VIEW_STAGES i=10 name=orb_09 wall=33.80 project=7.19 tile_assign=1.75 sort=12.20 blend=12.41 d2h=0.21 view_total=33.77 sort_bin_count=1.08 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.15 sort_publish_host=0.19 sort_publish_wait=4.11 project_pfwc_finish=2.46 project_gather_wait=4.50 project_gather_result=0.12 tile_assign_k2_finish=1.71
+VIEW_STAGES i=11 name=orb_10 wall=33.62 project=7.13 tile_assign=1.73 sort=12.22 blend=12.32 d2h=0.19 view_total=33.59 sort_bin_count=1.10 sort_bin_hist_d2h=0.25 sort_bin_layout=0.23 sort_upload=0.08 sort_bin_emit=6.17 sort_publish_host=0.20 sort_publish_wait=4.07 project_pfwc_finish=2.46 project_gather_wait=4.44 project_gather_result=0.12 tile_assign_k2_finish=1.70
+ALL_VIEWS_IDENTICAL (30 views)
+hp lines: 91
+=== r1-dc 298139f GSPLAT_TT_DUMP_CULL=/localdev/smarton/gstt2-t115/tmp/t115/dumpcull 15:56:49
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.6 p50_ms=30.0 min_ms=25.2 max_ms=33.9 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t115/tmp/t115-r1-dc
+STAGES n=30 head=0.003 project=6.468 tile_assign=1.448 sort=10.719 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.681 d2h=0.212 assemble=0.000 tail=0.003 | sum=29.533 view_total=29.534 resid_in_view=+0.001 avg_frame_ms=29.571 resid_vs_frame=+0.037
+SORT_STAGES n=30 pread=0.019 bin_count=0.921 bin_hist_d2h=0.256 bin_layout=0.238 upload=0.071 bin_emit=5.290 kernel=0.038 d2h=0.000 compact=0.000 publish_host=0.228 publish_wait=3.552 mat=0.056 | sum=10.669 sort=10.719 resid=+0.050
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.029 pfwc_enqueue=0.035 pfwc_finish=2.482 gather_setup=0.002 gather_rtargs=0.018 gather_enqueue=0.032 gather_wait=3.761 gather_result=0.105 | sum=6.466 project=6.468 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.019 enqueue=0.022 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.001 | sum=1.447 tile_assign=1.448 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+records 3369033 dead(mask=0) 664773 share 0.1973 floor 0.00392156886
+records in tiles > 8192: 1355356 (0.4023); dead there 0.1845
+tiles with records 1024 max/tile 25699 mean/tile(nonempty) 3290.1
+mask popcount histogram (0..32): 416703 454421 476431 203861 178949 81110 58968 38934 33853 11679 9064 6815 5868 3163 2733 1926 2506 1057 1014 908 1076 678 744 614 845 378 473 371 612 383 376 549 2938
+mean microblocks per live record 3.06
+=== r1-base 298139f  15:57:05
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.5 p50_ms=29.9 min_ms=25.5 max_ms=33.8 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t115/tmp/t115-r1-base
+STAGES n=30 head=0.002 project=6.459 tile_assign=1.434 sort=10.659 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.664 d2h=0.214 assemble=0.000 tail=0.002 | sum=29.433 view_total=29.434 resid_in_view=+0.001 avg_frame_ms=29.468 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.014 bin_count=0.912 bin_hist_d2h=0.248 bin_layout=0.236 upload=0.066 bin_emit=5.285 kernel=0.029 d2h=0.000 compact=0.000 publish_host=0.186 publish_wait=3.591 mat=0.048 | sum=10.615 sort=10.659 resid=+0.044
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.031 pfwc_enqueue=0.034 pfwc_finish=2.474 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.022 gather_wait=3.766 gather_result=0.110 | sum=6.457 project=6.459 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.014 enqueue=0.014 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.433 tile_assign=1.434 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 1 15:57:19
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t115-gstt2/.ttw/logs/t115-time-1-20261002-085601.log
+TIME_1_RC=0
+[ttw 2026-10-02T08:57:19-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-02T08:57:20-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-02T08:57:20-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-02T08:57:20-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-02T08:57:20-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-02T08:57:20-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-02T08:57:20-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-02T08:57:20-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-02T08:57:20-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-02T08:57:20-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-02T08:57:20-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-02T08:57:20-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha=
+=========================================
+host=yyzo-bh-07  tag=t115-tracy  timeout=500s  worry=400s  ts=2026-10-02T08:57:20-0700
+cmd: bash /localdev/smarton/gstt2-t115/docs/reprofile-t115/remote_tracy.sh t115-tip
+-----------------------------------------
+=== tracy t115-tip 298139f 15:57:21
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=45.9 p50_ms=45.7 min_ms=41.3 max_ms=53.9 n_views=30 warmup_s=22.6 out=/localdev/smarton/gstt2-t115/tmp/t115-tip
+STAGES n=30 head=0.003 project=6.711 tile_assign=1.473 sort=10.664 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.682 d2h=0.247 assemble=0.000 tail=16.113 | sum=45.892 view_total=45.894 resid_in_view=+0.001 avg_frame_ms=45.944 resid_vs_frame=+0.051
+SORT_STAGES n=30 pread=0.014 bin_count=0.912 bin_hist_d2h=0.250 bin_layout=0.240 upload=0.073 bin_emit=5.283 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.188 publish_wait=3.589 mat=0.048 | sum=10.628 sort=10.664 resid=+0.036
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 9341402 Oct  2 15:57 /localdev/smarton/gstt2-t115/opt/profiler/t115-tip/render.tracy
+[capture_tracy] device profiler CSV data rows: 575013 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t115/opt/profiler/t115-tip/render.tracy
+chunk opt/profiler/t115-tip/profile_log_device.csv: rows=575012 frames=31 (warmup rows=18582) kept_rows=556430 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t115-tip/dev30.csv: rows=556430 frames=30 rows/frame=18548
+zone_occ rc=0
+gaps rc=0
+zones rc=0
+roofline rc=0
+views=30 segments/view=[9]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.462   2.462      0.000   110  pfwc
+ 1    2.501    6.260   3.759      0.039   110  proj_vis_scan+proj_scatter
+ 2    6.684    8.106   1.422      0.424   110  ta_bucket_scatter
+ 3    8.161    9.035   0.874      0.055   110  sort_bin_hist
+ 4   10.372   14.880   4.508      1.337   110  sort_bucket_emit
+ 5   14.920   17.505   2.585      0.040   110  sort_tile_depth
+ 6   17.516   18.669   1.153      0.011   110  <unnamed 110 cores>
+ 7   18.752   21.924   3.173      0.082   110  sort_subchunk_mat+mat_cull_mask
+ 8   21.931   29.450   7.519      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 1.995 ms/view
+views=30 programs/view=[9] device_span_ms mean=29.450 min=25.064 max=33.784
+
+Per program (mean over views). Per RISC: mean core kernel ms / busiest core ms [busiest / window].
+ #   start  window    gap                BRISC               NCRISC              TRISC_0              TRISC_1              TRISC_2
+ 0   0.000   2.462  0.000   2.413/ 2.461[1.00]   2.302/ 2.349[0.95]   2.388/ 2.435[0.99]   2.396/ 2.443[0.99]   2.388/ 2.435[0.99]
+                          zone pfwc                     TRISC_0  mean  2.388 max  2.435 imb  0.047 cores 110
+                          zone pfwc                     TRISC_1  mean  2.396 max  2.443 imb  0.047 cores 110
+                          zone pfwc                     TRISC_2  mean  2.387 max  2.435 imb  0.047 cores 110
+ 1   2.501   3.759  0.039   3.112/ 3.599[0.96]   3.087/ 3.336[0.89]                    -                    -                    -
+                          zone proj_scatter             BRISC    mean  3.108 max  3.352 imb  0.244 cores 110
+                          zone proj_scatter             NCRISC   mean  3.087 max  3.336 imb  0.249 cores 110
+                          zone proj_vis_scan            BRISC    mean  0.396 max  0.396 imb  0.000 cores 1
+ 2   6.684   1.422  0.424   1.351/ 1.417[1.00]   1.357/ 1.419[1.00]                    -                    -                    -
+                          zone ta_bucket_scatter        BRISC    mean  1.351 max  1.416 imb  0.066 cores 110
+                          zone ta_bucket_scatter        NCRISC   mean  1.357 max  1.419 imb  0.063 cores 110
+ 3   8.161   0.874  0.055   0.000/ 0.000[0.00]   0.859/ 0.873[1.00]                    -                    -                    -
+                          zone sort_bin_hist            NCRISC   mean  0.859 max  0.873 imb  0.013 cores 110
+ 4  10.372   4.508  1.337   4.296/ 4.506[1.00]   4.304/ 4.504[1.00]                    -                    -                    -
+                          zone sort_bucket_emit         BRISC    mean  4.296 max  4.506 imb  0.210 cores 110
+                          zone sort_bucket_emit         NCRISC   mean  4.304 max  4.503 imb  0.200 cores 110
+ 5  14.920   2.585  0.040   2.215/ 2.547[0.99]   1.945/ 2.434[0.94]                    -                    -                    -
+                          zone sort_tile_depth          BRISC    mean  2.215 max  2.547 imb  0.331 cores 110
+                          zone sort_tile_depth          NCRISC   mean  1.945 max  2.434 imb  0.490 cores 110
+ 6  17.516   1.153  0.011                    -   1.064/ 1.152[1.00]                    -                    -                    -
+ 7  18.752   3.173  0.082   2.833/ 3.031[0.96]   2.796/ 3.154[0.99]   2.902/ 3.171[1.00]   2.902/ 3.172[1.00]   2.902/ 3.172[1.00]
+                          zone mat_cull_mask            TRISC_0  mean  2.902 max  3.171 imb  0.270 cores 110
+                          zone mat_cull_mask            TRISC_1  mean  2.902 max  3.172 imb  0.270 cores 110
+                          zone mat_cull_mask            TRISC_2  mean  2.902 max  3.172 imb  0.270 cores 110
+                          zone sort_subchunk_mat        BRISC    mean  2.832 max  3.031 imb  0.198 cores 110
+                          zone sort_subchunk_mat        NCRISC   mean  2.796 max  3.154 imb  0.357 cores 110
+ 8  21.931   7.519  0.006   6.971/ 7.518[1.00]   6.599/ 6.985[0.93]   6.902/ 7.451[0.99]   6.902/ 7.451[0.99]   6.902/ 7.451[0.99]
+                          zone rd_l1_bulk               NCRISC   mean  6.492 max  6.904 imb  0.412 cores 110
+                          zone tile_blend_load          NCRISC   mean  6.599 max  6.985 imb  0.386 cores 110
+                          zone tile_blend_sfpu          TRISC_0  mean  6.902 max  7.451 imb  0.549 cores 110
+                          zone tile_blend_sfpu          TRISC_1  mean  6.902 max  7.451 imb  0.549 cores 110
+                          zone tile_blend_sfpu          TRISC_2  mean  6.902 max  7.451 imb  0.549 cores 110
+
+sum of program windows 27.455 ms + idle between programs 1.995 ms
+
+Per frame, per-core kernel time summed over all programs (mean over views):
+RISC      mean core  busiest core
+BRISC        23.191        24.116
+NCRISC       24.313        25.408
+TRISC_0      12.192        12.830
+TRISC_1      12.200        12.838
+TRISC_2      12.191        12.830
+overlap bound (busiest RISC, busiest core): 25.408 ms vs device span 29.450 ms
+=== tracy done 15:58:05
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t115-gstt2/.ttw/logs/t115-tracy-20261002-085720.log
+TRACY_RC=0
+[ttw 2026-10-02T08:58:06-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=500s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-02T08:58:06-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 500s.
+[ttw 2026-10-02T08:58:06-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-02T08:58:06-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-02T08:58:06-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-02T08:58:06-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-02T08:58:06-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-02T08:58:06-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-02T08:58:06-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-02T08:58:06-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-02T08:58:06-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-02T08:58:06-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha=
+=========================================
+host=yyzo-bh-07  tag=t115-time-2  timeout=500s  worry=400s  ts=2026-10-02T08:58:06-0700
+cmd: bash /localdev/smarton/gstt2-t115/docs/reprofile-t115/remote_time.sh 2 base base
+-----------------------------------------
+=== r2-base 298139f  15:58:07
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.5 p50_ms=30.0 min_ms=25.2 max_ms=34.0 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t115/tmp/t115-r2-base
+STAGES n=30 head=0.002 project=6.455 tile_assign=1.436 sort=10.667 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.658 d2h=0.278 assemble=0.000 tail=0.002 | sum=29.499 view_total=29.499 resid_in_view=+0.001 avg_frame_ms=29.532 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.017 bin_count=0.912 bin_hist_d2h=0.251 bin_layout=0.232 upload=0.066 bin_emit=5.289 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.211 publish_wait=3.567 mat=0.047 | sum=10.621 sort=10.667 resid=+0.046
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.028 pfwc_enqueue=0.031 pfwc_finish=2.479 gather_setup=0.002 gather_rtargs=0.015 gather_enqueue=0.024 gather_wait=3.770 gather_result=0.102 | sum=6.453 project=6.455 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.015 enqueue=0.016 scan_finish=0.000 p_d2h=0.000 k2_finish=1.400 publish=0.001 | sum=1.435 tile_assign=1.436 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r2-base 298139f  15:58:21
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.5 p50_ms=30.0 min_ms=25.2 max_ms=34.0 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t115/tmp/t115-r2-base
+STAGES n=30 head=0.002 project=6.453 tile_assign=1.436 sort=10.662 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.717 d2h=0.229 assemble=0.000 tail=0.002 | sum=29.501 view_total=29.502 resid_in_view=+0.001 avg_frame_ms=29.535 resid_vs_frame=+0.034
+SORT_STAGES n=30 pread=0.015 bin_count=0.914 bin_hist_d2h=0.249 bin_layout=0.234 upload=0.066 bin_emit=5.289 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.201 publish_wait=3.577 mat=0.044 | sum=10.619 sort=10.662 resid=+0.043
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.032 pfwc_finish=2.477 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.025 gather_wait=3.764 gather_result=0.106 | sum=6.451 project=6.453 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.015 enqueue=0.015 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001 | sum=1.435 tile_assign=1.436 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 2 15:58:34
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t115-gstt2/.ttw/logs/t115-time-2-20261002-085806.log
+TIME_2_RC=0
+CHAIN_DONE

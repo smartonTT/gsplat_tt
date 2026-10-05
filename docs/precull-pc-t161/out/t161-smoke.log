@@ -1,0 +1,41 @@
+##### sync 13:42:02
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=6a00513397989408f9669849f647777680d62d02 so_md5=555b0183eba500f63e79aa0cab5bfc6d
+##### smoke 13:42:53
+=== t161r0-base 6a00513  views=0:3
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=17.9 p50_ms=16.8 min_ms=16.5 max_ms=20.3 n_views=3 warmup_s=15.2 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r0-base
+STAGES n=3 head=0.003 project=4.400 tile_assign=0.003 sort=4.520 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.689 d2h=0.203 assemble=0.000 tail=0.002 | sum=17.820 view_total=17.821 resid_in_view=+0.001 avg_frame_ms=17.857 resid_vs_frame=+0.037
+SORT_STAGES n=3 pread=0.020 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.098 upload=0.000 bin_emit=4.164 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.154 publish_wait=0.000 mat=0.047 | sum=4.482 sort=4.520 resid=+0.038
+PROJECT_STAGES n=3 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.036 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.228 gather_result=0.096 | sum=4.399 project=4.400 resid=+0.001
+TILE_ASSIGN_STAGES n=3 setup=0.002 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.002 tile_assign=0.003 resid=+0.001
+ONELAUNCH n=4 onelaunch=184.670 layout=0.103 pub_host=0.152 total=185.025
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (3 views)
+=== t161r0-pc 6a00513 GSPLAT_TT_PRECULL=2 views=0:3
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.64dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=17.2 p50_ms=16.1 min_ms=16.0 max_ms=19.6 n_views=3 warmup_s=5.0 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r0-pc
+STAGES n=3 head=0.003 project=4.349 tile_assign=0.002 sort=4.190 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.410 d2h=0.238 assemble=0.000 tail=0.002 | sum=17.193 view_total=17.194 resid_in_view=+0.001 avg_frame_ms=17.226 resid_vs_frame=+0.033
+SORT_STAGES n=3 pread=0.014 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.092 upload=0.000 bin_emit=3.860 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.154 publish_wait=0.000 mat=0.036 | sum=4.156 sort=4.190 resid=+0.034
+PROJECT_STAGES n=3 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.033 pfwc_enqueue=0.028 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.186 gather_result=0.095 | sum=4.347 project=4.349 resid=+0.001
+TILE_ASSIGN_STAGES n=3 setup=0.001 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.002 tile_assign=0.002 resid=+0.000
+ONELAUNCH n=4 onelaunch=4.633 layout=0.092 pub_host=0.152 total=4.987
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (3 differ, 0 not in ref, of 3)
+=== done round 0
+##### smoke rc=0
+-rw-r--r-- 1 smarton group_1211416483   637408 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/reader_pfwc/10329841100539096345/ncrisc/ncrisc.elf.xip.elf
+-rwxr-xr-x 1 smarton group_1211416483   637408 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/reader_pfwc/10329841100539096345/ncrisc/ncrisc.elf
+-rw-r--r-- 1 smarton group_1211416483   916640 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/15305657308467334826/trisc0/trisc0.elf.xip.elf
+-rw-r--r-- 1 smarton group_1211416483   916640 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/18951649029886565/trisc0/trisc0.elf.xip.elf
+-rwxr-xr-x 1 smarton group_1211416483   916640 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/15305657308467334826/trisc0/trisc0.elf
+-rwxr-xr-x 1 smarton group_1211416483   916640 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/18951649029886565/trisc0/trisc0.elf
+-rw-r--r-- 1 smarton group_1211416483  1240432 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/writer_pfwc_fuse/12952057268593065459/brisc/brisc.elf.xip.elf
+-rwxr-xr-x 1 smarton group_1211416483  1240432 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/writer_pfwc_fuse/12952057268593065459/brisc/brisc.elf
+-rw-r--r-- 1 smarton group_1211416483 12547576 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/18951649029886565/trisc1/trisc1.elf.xip.elf
+-rwxr-xr-x 1 smarton group_1211416483 12547576 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/18951649029886565/trisc1/trisc1.elf
+-rw-r--r-- 1 smarton group_1211416483 12552792 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/15305657308467334826/trisc1/trisc1.elf.xip.elf
+-rwxr-xr-x 1 smarton group_1211416483 12552792 Oct  4 20:43 /localdev/smarton/.cache/ttmc-gstt2-t161/tt-metal-cache431005707817566179/kernels/project_pfwc_compute/15305657308467334826/trisc1/trisc1.elf
+ALLDONE

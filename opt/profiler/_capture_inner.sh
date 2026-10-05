@@ -14,16 +14,18 @@
 # maybe_dump_device_profiler() (GSPLAT_TT_PROFILE=1) pushes each view's device
 # zones into the live stream under --dump-device-data-mid-run.
 set -uo pipefail
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
 cd "$REPO" || exit 1
 ITER_DIR="${TTW_ITER_DIR:-tracy}"
 # shellcheck source=/dev/null
 source "$REPO/.venv/bin/activate"
-echo "[capture-inner] python3 render/run.py --no-ref --iter-dir $ITER_DIR" \
+RANGE_ARGS=()
+[[ -n "${TTW_VIEW_RANGE:-}" ]] && RANGE_ARGS=(--view-range "$TTW_VIEW_RANGE")
+echo "[capture-inner] python3 render/run.py --no-ref --iter-dir $ITER_DIR ${RANGE_ARGS[*]:-}" \
      "(MID_RUN_DUMP=${TT_METAL_PROFILER_MID_RUN_DUMP:-unset}" \
      "DEVICE_PROFILER=${TT_METAL_DEVICE_PROFILER:-unset}" \
      "GSPLAT_TT_PROFILE=${GSPLAT_TT_PROFILE:-unset} TRACY_PORT=${TRACY_PORT:-unset})"
-python3 render/run.py --no-ref --iter-dir "$ITER_DIR"
+python3 render/run.py --no-ref --iter-dir "$ITER_DIR" "${RANGE_ARGS[@]}"
 echo "[capture-inner] run.py rc=$?"
 # Exit 0 so the wrapper's subprocess.run(check=True) finalizes the capture; the
 # real rc is echoed above and device-zone coverage is verified after.

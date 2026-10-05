@@ -1,0 +1,265 @@
+##### r3 13:44:50
+=== t161r3-pc 6a00513 GSPLAT_TT_PRECULL=2
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.64dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.4 p50_ms=18.5 min_ms=15.9 max_ms=21.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r3-pc
+STAGES n=30 head=0.002 project=4.596 tile_assign=0.004 sort=4.654 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.897 d2h=0.203 assemble=0.000 tail=0.002 | sum=18.359 view_total=18.359 resid_in_view=+0.001 avg_frame_ms=18.390 resid_vs_frame=+0.031
+SORT_STAGES n=30 pread=0.019 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.111 upload=0.000 bin_emit=4.267 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.176 publish_wait=0.000 mat=0.044 | sum=4.617 sort=4.654 resid=+0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.029 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.426 gather_result=0.106 | sum=4.595 project=4.596 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+ONELAUNCH n=31 onelaunch=4.339 layout=0.110 pub_host=0.175 total=4.653
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== t161r3-off 6a00513 GSPLAT_TT_PRECULL=0
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=76.12dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.7 p50_ms=19.9 min_ms=16.4 max_ms=23.5 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r3-off
+STAGES n=30 head=0.002 project=4.576 tile_assign=0.005 sort=5.177 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.718 d2h=0.200 assemble=0.000 tail=0.002 | sum=19.681 view_total=19.682 resid_in_view=+0.001 avg_frame_ms=19.714 resid_vs_frame=+0.033
+SORT_STAGES n=30 pread=0.023 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.116 upload=0.000 bin_emit=4.769 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.180 publish_wait=0.000 mat=0.048 | sum=5.136 sort=5.177 resid=+0.040
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.412 gather_result=0.100 | sum=4.575 project=4.576 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.000
+ONELAUNCH n=31 onelaunch=4.845 layout=0.117 pub_host=0.182 total=5.178
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (30 differ, 0 not in ref, of 30)
+=== t161r3-base 6a00513
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.1 p50_ms=19.2 min_ms=16.2 max_ms=22.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t161/tmp/t161-t161r3-base
+STAGES n=30 head=0.002 project=4.646 tile_assign=0.004 sort=4.978 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.275 d2h=0.200 assemble=0.000 tail=0.002 | sum=19.107 view_total=19.108 resid_in_view=+0.001 avg_frame_ms=19.138 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.016 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.102 upload=0.000 bin_emit=4.608 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.169 publish_wait=0.000 mat=0.044 | sum=4.940 sort=4.978 resid=+0.037
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.030 pfwc_enqueue=0.027 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.478 gather_result=0.105 | sum=4.645 project=4.646 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000 | sum=0.003 tile_assign=0.004 resid=+0.001
+ONELAUNCH n=31 onelaunch=4.684 layout=0.102 pub_host=0.169 total=4.980
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 3
+##### r3 rc=0
+psnr pc r1 view00_hero.png: psnr=75.64 diff_px=4799 max=1 tiles=943 hist(1..)=[4799, 0, 0]
+psnr pc r1 view01_orb_00.png: psnr=76.86 diff_px=3685 max=1 tiles=727 hist(1..)=[3685, 0, 0]
+psnr pc r1 view02_orb_01.png: psnr=76.28 diff_px=4133 max=1 tiles=758 hist(1..)=[4133, 0, 0]
+psnr pc r1 view03_orb_02.png: psnr=76.37 diff_px=4067 max=1 tiles=796 hist(1..)=[4067, 0, 0]
+psnr pc r1 view04_orb_03.png: psnr=75.59 diff_px=4758 max=1 tiles=878 hist(1..)=[4758, 0, 0]
+psnr pc r1 view05_orb_04.png: psnr=74.83 diff_px=5491 max=1 tiles=928 hist(1..)=[5491, 0, 0]
+psnr pc r1 view06_orb_05.png: psnr=74.24 diff_px=6445 max=1 tiles=1047 hist(1..)=[6445, 0, 0]
+psnr pc r1 view07_orb_06.png: psnr=75.03 diff_px=5386 max=1 tiles=1084 hist(1..)=[5386, 0, 0]
+psnr pc r1 view08_orb_07.png: psnr=74.97 diff_px=5485 max=1 tiles=1109 hist(1..)=[5485, 0, 0]
+psnr pc r1 view09_orb_08.png: psnr=74.48 diff_px=6039 max=1 tiles=1144 hist(1..)=[6039, 0, 0]
+psnr pc r1 view10_orb_09.png: psnr=74.79 diff_px=5638 max=1 tiles=1143 hist(1..)=[5638, 0, 0]
+psnr pc r1 view11_orb_10.png: psnr=74.94 diff_px=5502 max=1 tiles=1156 hist(1..)=[5502, 0, 0]
+psnr pc r1 view12_orb_11.png: psnr=74.65 diff_px=5818 max=1 tiles=1130 hist(1..)=[5818, 0, 0]
+psnr pc r1 view13_orb_12.png: psnr=74.74 diff_px=5752 max=1 tiles=1104 hist(1..)=[5752, 0, 0]
+psnr pc r1 view14_orb_13.png: psnr=75.21 diff_px=5172 max=1 tiles=1028 hist(1..)=[5172, 0, 0]
+psnr pc r1 view15_orb_14.png: psnr=75.01 diff_px=5385 max=1 tiles=1007 hist(1..)=[5385, 0, 0]
+psnr pc r1 view16_orb_15.png: psnr=75.08 diff_px=5172 max=1 tiles=978 hist(1..)=[5172, 0, 0]
+psnr pc r1 view17_orb_16.png: psnr=75.75 diff_px=4600 max=1 tiles=876 hist(1..)=[4600, 0, 0]
+psnr pc r1 view18_orb_17.png: psnr=76.12 diff_px=4180 max=1 tiles=889 hist(1..)=[4180, 0, 0]
+psnr pc r1 view19_orb_18.png: psnr=76.70 diff_px=3748 max=1 tiles=799 hist(1..)=[3748, 0, 0]
+psnr pc r1 view20_orb_19.png: psnr=76.52 diff_px=3858 max=1 tiles=816 hist(1..)=[3858, 0, 0]
+psnr pc r1 view21_orb_20.png: psnr=77.01 diff_px=3530 max=1 tiles=802 hist(1..)=[3530, 0, 0]
+psnr pc r1 view22_orb_21.png: psnr=77.23 diff_px=3409 max=1 tiles=789 hist(1..)=[3409, 0, 0]
+psnr pc r1 view23_orb_22.png: psnr=77.81 diff_px=3054 max=1 tiles=745 hist(1..)=[3054, 0, 0]
+psnr pc r1 view24_orb_23.png: psnr=77.73 diff_px=3140 max=1 tiles=757 hist(1..)=[3140, 0, 0]
+psnr pc r1 view25_orb_24.png: psnr=77.52 diff_px=3275 max=1 tiles=716 hist(1..)=[3275, 0, 0]
+psnr pc r1 view26_orb_25.png: psnr=77.80 diff_px=3040 max=1 tiles=684 hist(1..)=[3040, 0, 0]
+psnr pc r1 view27_orb_26.png: psnr=77.76 diff_px=3069 max=1 tiles=684 hist(1..)=[3069, 0, 0]
+psnr pc r1 view28_orb_27.png: psnr=77.28 diff_px=3373 max=1 tiles=701 hist(1..)=[3373, 0, 0]
+psnr pc r1 view29_orb_28.png: psnr=76.80 diff_px=3687 max=1 tiles=722 hist(1..)=[3687, 0, 0]
+psnr off r1 view00_hero.png: psnr=76.12 diff_px=4294 max=1 tiles=854 hist(1..)=[4294, 0, 0]
+psnr off r1 view01_orb_00.png: psnr=77.84 diff_px=2982 max=1 tiles=661 hist(1..)=[2982, 0, 0]
+psnr off r1 view02_orb_01.png: psnr=77.14 diff_px=3420 max=1 tiles=653 hist(1..)=[3420, 0, 0]
+psnr off r1 view03_orb_02.png: psnr=76.72 diff_px=3744 max=1 tiles=700 hist(1..)=[3744, 0, 0]
+psnr off r1 view04_orb_03.png: psnr=76.27 diff_px=4024 max=1 tiles=748 hist(1..)=[4024, 0, 0]
+psnr off r1 view05_orb_04.png: psnr=75.02 diff_px=5381 max=1 tiles=857 hist(1..)=[5381, 0, 0]
+psnr off r1 view06_orb_05.png: psnr=75.18 diff_px=5151 max=1 tiles=903 hist(1..)=[5151, 0, 0]
+psnr off r1 view07_orb_06.png: psnr=75.97 diff_px=4443 max=1 tiles=942 hist(1..)=[4443, 0, 0]
+psnr off r1 view08_orb_07.png: psnr=75.47 diff_px=4912 max=1 tiles=1000 hist(1..)=[4912, 0, 0]
+psnr off r1 view09_orb_08.png: psnr=75.17 diff_px=5261 max=1 tiles=1042 hist(1..)=[5261, 0, 0]
+psnr off r1 view10_orb_09.png: psnr=75.53 diff_px=4974 max=1 tiles=1014 hist(1..)=[4974, 0, 0]
+psnr off r1 view11_orb_10.png: psnr=75.74 diff_px=4717 max=1 tiles=1003 hist(1..)=[4717, 0, 0]
+psnr off r1 view12_orb_11.png: psnr=75.34 diff_px=4979 max=1 tiles=974 hist(1..)=[4979, 0, 0]
+psnr off r1 view13_orb_12.png: psnr=74.89 diff_px=5491 max=1 tiles=982 hist(1..)=[5491, 0, 0]
+psnr off r1 view14_orb_13.png: psnr=75.95 diff_px=4446 max=1 tiles=932 hist(1..)=[4446, 0, 0]
+psnr off r1 view15_orb_14.png: psnr=75.83 diff_px=4571 max=1 tiles=874 hist(1..)=[4571, 0, 0]
+psnr off r1 view16_orb_15.png: psnr=75.65 diff_px=4645 max=1 tiles=866 hist(1..)=[4645, 0, 0]
+psnr off r1 view17_orb_16.png: psnr=75.68 diff_px=4649 max=1 tiles=836 hist(1..)=[4649, 0, 0]
+psnr off r1 view18_orb_17.png: psnr=76.02 diff_px=4270 max=1 tiles=773 hist(1..)=[4270, 0, 0]
+psnr off r1 view19_orb_18.png: psnr=76.85 diff_px=3686 max=1 tiles=757 hist(1..)=[3686, 0, 0]
+psnr off r1 view20_orb_19.png: psnr=76.63 diff_px=3793 max=1 tiles=741 hist(1..)=[3793, 0, 0]
+psnr off r1 view21_orb_20.png: psnr=77.00 diff_px=3564 max=1 tiles=755 hist(1..)=[3564, 0, 0]
+psnr off r1 view22_orb_21.png: psnr=77.33 diff_px=3344 max=1 tiles=742 hist(1..)=[3344, 0, 0]
+psnr off r1 view23_orb_22.png: psnr=77.92 diff_px=2954 max=1 tiles=698 hist(1..)=[2954, 0, 0]
+psnr off r1 view24_orb_23.png: psnr=77.83 diff_px=3047 max=1 tiles=697 hist(1..)=[3047, 0, 0]
+psnr off r1 view25_orb_24.png: psnr=78.11 diff_px=2894 max=1 tiles=679 hist(1..)=[2894, 0, 0]
+psnr off r1 view26_orb_25.png: psnr=77.89 diff_px=2981 max=1 tiles=644 hist(1..)=[2981, 0, 0]
+psnr off r1 view27_orb_26.png: psnr=78.23 diff_px=2735 max=1 tiles=627 hist(1..)=[2735, 0, 0]
+psnr off r1 view28_orb_27.png: psnr=78.24 diff_px=2752 max=1 tiles=600 hist(1..)=[2752, 0, 0]
+psnr off r1 view29_orb_28.png: psnr=77.85 diff_px=2952 max=1 tiles=642 hist(1..)=[2952, 0, 0]
+psnr pc r2 view00_hero.png: psnr=75.64 diff_px=4799 max=1 tiles=943 hist(1..)=[4799, 0, 0]
+psnr pc r2 view01_orb_00.png: psnr=76.86 diff_px=3685 max=1 tiles=727 hist(1..)=[3685, 0, 0]
+psnr pc r2 view02_orb_01.png: psnr=76.28 diff_px=4133 max=1 tiles=758 hist(1..)=[4133, 0, 0]
+psnr pc r2 view03_orb_02.png: psnr=76.37 diff_px=4067 max=1 tiles=796 hist(1..)=[4067, 0, 0]
+psnr pc r2 view04_orb_03.png: psnr=75.59 diff_px=4758 max=1 tiles=878 hist(1..)=[4758, 0, 0]
+psnr pc r2 view05_orb_04.png: psnr=74.83 diff_px=5491 max=1 tiles=928 hist(1..)=[5491, 0, 0]
+psnr pc r2 view06_orb_05.png: psnr=74.24 diff_px=6445 max=1 tiles=1047 hist(1..)=[6445, 0, 0]
+psnr pc r2 view07_orb_06.png: psnr=75.03 diff_px=5386 max=1 tiles=1084 hist(1..)=[5386, 0, 0]
+psnr pc r2 view08_orb_07.png: psnr=74.97 diff_px=5485 max=1 tiles=1109 hist(1..)=[5485, 0, 0]
+psnr pc r2 view09_orb_08.png: psnr=74.48 diff_px=6039 max=1 tiles=1144 hist(1..)=[6039, 0, 0]
+psnr pc r2 view10_orb_09.png: psnr=74.79 diff_px=5638 max=1 tiles=1143 hist(1..)=[5638, 0, 0]
+psnr pc r2 view11_orb_10.png: psnr=74.94 diff_px=5502 max=1 tiles=1156 hist(1..)=[5502, 0, 0]
+psnr pc r2 view12_orb_11.png: psnr=74.65 diff_px=5818 max=1 tiles=1130 hist(1..)=[5818, 0, 0]
+psnr pc r2 view13_orb_12.png: psnr=74.74 diff_px=5752 max=1 tiles=1104 hist(1..)=[5752, 0, 0]
+psnr pc r2 view14_orb_13.png: psnr=75.21 diff_px=5172 max=1 tiles=1028 hist(1..)=[5172, 0, 0]
+psnr pc r2 view15_orb_14.png: psnr=75.01 diff_px=5385 max=1 tiles=1007 hist(1..)=[5385, 0, 0]
+psnr pc r2 view16_orb_15.png: psnr=75.08 diff_px=5172 max=1 tiles=978 hist(1..)=[5172, 0, 0]
+psnr pc r2 view17_orb_16.png: psnr=75.75 diff_px=4600 max=1 tiles=876 hist(1..)=[4600, 0, 0]
+psnr pc r2 view18_orb_17.png: psnr=76.12 diff_px=4180 max=1 tiles=889 hist(1..)=[4180, 0, 0]
+psnr pc r2 view19_orb_18.png: psnr=76.70 diff_px=3748 max=1 tiles=799 hist(1..)=[3748, 0, 0]
+psnr pc r2 view20_orb_19.png: psnr=76.52 diff_px=3858 max=1 tiles=816 hist(1..)=[3858, 0, 0]
+psnr pc r2 view21_orb_20.png: psnr=77.01 diff_px=3530 max=1 tiles=802 hist(1..)=[3530, 0, 0]
+psnr pc r2 view22_orb_21.png: psnr=77.23 diff_px=3409 max=1 tiles=789 hist(1..)=[3409, 0, 0]
+psnr pc r2 view23_orb_22.png: psnr=77.81 diff_px=3054 max=1 tiles=745 hist(1..)=[3054, 0, 0]
+psnr pc r2 view24_orb_23.png: psnr=77.73 diff_px=3140 max=1 tiles=757 hist(1..)=[3140, 0, 0]
+psnr pc r2 view25_orb_24.png: psnr=77.52 diff_px=3275 max=1 tiles=716 hist(1..)=[3275, 0, 0]
+psnr pc r2 view26_orb_25.png: psnr=77.80 diff_px=3040 max=1 tiles=684 hist(1..)=[3040, 0, 0]
+psnr pc r2 view27_orb_26.png: psnr=77.76 diff_px=3069 max=1 tiles=684 hist(1..)=[3069, 0, 0]
+psnr pc r2 view28_orb_27.png: psnr=77.28 diff_px=3373 max=1 tiles=701 hist(1..)=[3373, 0, 0]
+psnr pc r2 view29_orb_28.png: psnr=76.80 diff_px=3687 max=1 tiles=722 hist(1..)=[3687, 0, 0]
+psnr off r2 view00_hero.png: psnr=76.12 diff_px=4294 max=1 tiles=854 hist(1..)=[4294, 0, 0]
+psnr off r2 view01_orb_00.png: psnr=77.84 diff_px=2982 max=1 tiles=661 hist(1..)=[2982, 0, 0]
+psnr off r2 view02_orb_01.png: psnr=77.14 diff_px=3420 max=1 tiles=653 hist(1..)=[3420, 0, 0]
+psnr off r2 view03_orb_02.png: psnr=76.72 diff_px=3744 max=1 tiles=700 hist(1..)=[3744, 0, 0]
+psnr off r2 view04_orb_03.png: psnr=76.27 diff_px=4024 max=1 tiles=748 hist(1..)=[4024, 0, 0]
+psnr off r2 view05_orb_04.png: psnr=75.02 diff_px=5381 max=1 tiles=857 hist(1..)=[5381, 0, 0]
+psnr off r2 view06_orb_05.png: psnr=75.18 diff_px=5151 max=1 tiles=903 hist(1..)=[5151, 0, 0]
+psnr off r2 view07_orb_06.png: psnr=75.97 diff_px=4443 max=1 tiles=942 hist(1..)=[4443, 0, 0]
+psnr off r2 view08_orb_07.png: psnr=75.47 diff_px=4912 max=1 tiles=1000 hist(1..)=[4912, 0, 0]
+psnr off r2 view09_orb_08.png: psnr=75.17 diff_px=5261 max=1 tiles=1042 hist(1..)=[5261, 0, 0]
+psnr off r2 view10_orb_09.png: psnr=75.53 diff_px=4974 max=1 tiles=1014 hist(1..)=[4974, 0, 0]
+psnr off r2 view11_orb_10.png: psnr=75.74 diff_px=4717 max=1 tiles=1003 hist(1..)=[4717, 0, 0]
+psnr off r2 view12_orb_11.png: psnr=75.34 diff_px=4979 max=1 tiles=974 hist(1..)=[4979, 0, 0]
+psnr off r2 view13_orb_12.png: psnr=74.89 diff_px=5491 max=1 tiles=982 hist(1..)=[5491, 0, 0]
+psnr off r2 view14_orb_13.png: psnr=75.95 diff_px=4446 max=1 tiles=932 hist(1..)=[4446, 0, 0]
+psnr off r2 view15_orb_14.png: psnr=75.83 diff_px=4571 max=1 tiles=874 hist(1..)=[4571, 0, 0]
+psnr off r2 view16_orb_15.png: psnr=75.65 diff_px=4645 max=1 tiles=866 hist(1..)=[4645, 0, 0]
+psnr off r2 view17_orb_16.png: psnr=75.68 diff_px=4649 max=1 tiles=836 hist(1..)=[4649, 0, 0]
+psnr off r2 view18_orb_17.png: psnr=76.02 diff_px=4270 max=1 tiles=773 hist(1..)=[4270, 0, 0]
+psnr off r2 view19_orb_18.png: psnr=76.85 diff_px=3686 max=1 tiles=757 hist(1..)=[3686, 0, 0]
+psnr off r2 view20_orb_19.png: psnr=76.63 diff_px=3793 max=1 tiles=741 hist(1..)=[3793, 0, 0]
+psnr off r2 view21_orb_20.png: psnr=77.00 diff_px=3564 max=1 tiles=755 hist(1..)=[3564, 0, 0]
+psnr off r2 view22_orb_21.png: psnr=77.33 diff_px=3344 max=1 tiles=742 hist(1..)=[3344, 0, 0]
+psnr off r2 view23_orb_22.png: psnr=77.92 diff_px=2954 max=1 tiles=698 hist(1..)=[2954, 0, 0]
+psnr off r2 view24_orb_23.png: psnr=77.83 diff_px=3047 max=1 tiles=697 hist(1..)=[3047, 0, 0]
+psnr off r2 view25_orb_24.png: psnr=78.11 diff_px=2894 max=1 tiles=679 hist(1..)=[2894, 0, 0]
+psnr off r2 view26_orb_25.png: psnr=77.89 diff_px=2981 max=1 tiles=644 hist(1..)=[2981, 0, 0]
+psnr off r2 view27_orb_26.png: psnr=78.23 diff_px=2735 max=1 tiles=627 hist(1..)=[2735, 0, 0]
+psnr off r2 view28_orb_27.png: psnr=78.24 diff_px=2752 max=1 tiles=600 hist(1..)=[2752, 0, 0]
+psnr off r2 view29_orb_28.png: psnr=77.85 diff_px=2952 max=1 tiles=642 hist(1..)=[2952, 0, 0]
+psnr pc r3 view00_hero.png: psnr=75.64 diff_px=4799 max=1 tiles=943 hist(1..)=[4799, 0, 0]
+psnr pc r3 view01_orb_00.png: psnr=76.86 diff_px=3685 max=1 tiles=727 hist(1..)=[3685, 0, 0]
+psnr pc r3 view02_orb_01.png: psnr=76.28 diff_px=4133 max=1 tiles=758 hist(1..)=[4133, 0, 0]
+psnr pc r3 view03_orb_02.png: psnr=76.37 diff_px=4067 max=1 tiles=796 hist(1..)=[4067, 0, 0]
+psnr pc r3 view04_orb_03.png: psnr=75.59 diff_px=4758 max=1 tiles=878 hist(1..)=[4758, 0, 0]
+psnr pc r3 view05_orb_04.png: psnr=74.83 diff_px=5491 max=1 tiles=928 hist(1..)=[5491, 0, 0]
+psnr pc r3 view06_orb_05.png: psnr=74.24 diff_px=6445 max=1 tiles=1047 hist(1..)=[6445, 0, 0]
+psnr pc r3 view07_orb_06.png: psnr=75.03 diff_px=5386 max=1 tiles=1084 hist(1..)=[5386, 0, 0]
+psnr pc r3 view08_orb_07.png: psnr=74.97 diff_px=5485 max=1 tiles=1109 hist(1..)=[5485, 0, 0]
+psnr pc r3 view09_orb_08.png: psnr=74.48 diff_px=6039 max=1 tiles=1144 hist(1..)=[6039, 0, 0]
+psnr pc r3 view10_orb_09.png: psnr=74.79 diff_px=5638 max=1 tiles=1143 hist(1..)=[5638, 0, 0]
+psnr pc r3 view11_orb_10.png: psnr=74.94 diff_px=5502 max=1 tiles=1156 hist(1..)=[5502, 0, 0]
+psnr pc r3 view12_orb_11.png: psnr=74.65 diff_px=5818 max=1 tiles=1130 hist(1..)=[5818, 0, 0]
+psnr pc r3 view13_orb_12.png: psnr=74.74 diff_px=5752 max=1 tiles=1104 hist(1..)=[5752, 0, 0]
+psnr pc r3 view14_orb_13.png: psnr=75.21 diff_px=5172 max=1 tiles=1028 hist(1..)=[5172, 0, 0]
+psnr pc r3 view15_orb_14.png: psnr=75.01 diff_px=5385 max=1 tiles=1007 hist(1..)=[5385, 0, 0]
+psnr pc r3 view16_orb_15.png: psnr=75.08 diff_px=5172 max=1 tiles=978 hist(1..)=[5172, 0, 0]
+psnr pc r3 view17_orb_16.png: psnr=75.75 diff_px=4600 max=1 tiles=876 hist(1..)=[4600, 0, 0]
+psnr pc r3 view18_orb_17.png: psnr=76.12 diff_px=4180 max=1 tiles=889 hist(1..)=[4180, 0, 0]
+psnr pc r3 view19_orb_18.png: psnr=76.70 diff_px=3748 max=1 tiles=799 hist(1..)=[3748, 0, 0]
+psnr pc r3 view20_orb_19.png: psnr=76.52 diff_px=3858 max=1 tiles=816 hist(1..)=[3858, 0, 0]
+psnr pc r3 view21_orb_20.png: psnr=77.01 diff_px=3530 max=1 tiles=802 hist(1..)=[3530, 0, 0]
+psnr pc r3 view22_orb_21.png: psnr=77.23 diff_px=3409 max=1 tiles=789 hist(1..)=[3409, 0, 0]
+psnr pc r3 view23_orb_22.png: psnr=77.81 diff_px=3054 max=1 tiles=745 hist(1..)=[3054, 0, 0]
+psnr pc r3 view24_orb_23.png: psnr=77.73 diff_px=3140 max=1 tiles=757 hist(1..)=[3140, 0, 0]
+psnr pc r3 view25_orb_24.png: psnr=77.52 diff_px=3275 max=1 tiles=716 hist(1..)=[3275, 0, 0]
+psnr pc r3 view26_orb_25.png: psnr=77.80 diff_px=3040 max=1 tiles=684 hist(1..)=[3040, 0, 0]
+psnr pc r3 view27_orb_26.png: psnr=77.76 diff_px=3069 max=1 tiles=684 hist(1..)=[3069, 0, 0]
+psnr pc r3 view28_orb_27.png: psnr=77.28 diff_px=3373 max=1 tiles=701 hist(1..)=[3373, 0, 0]
+psnr pc r3 view29_orb_28.png: psnr=76.80 diff_px=3687 max=1 tiles=722 hist(1..)=[3687, 0, 0]
+psnr off r3 view00_hero.png: psnr=76.12 diff_px=4294 max=1 tiles=854 hist(1..)=[4294, 0, 0]
+psnr off r3 view01_orb_00.png: psnr=77.84 diff_px=2982 max=1 tiles=661 hist(1..)=[2982, 0, 0]
+psnr off r3 view02_orb_01.png: psnr=77.14 diff_px=3420 max=1 tiles=653 hist(1..)=[3420, 0, 0]
+psnr off r3 view03_orb_02.png: psnr=76.72 diff_px=3744 max=1 tiles=700 hist(1..)=[3744, 0, 0]
+psnr off r3 view04_orb_03.png: psnr=76.27 diff_px=4024 max=1 tiles=748 hist(1..)=[4024, 0, 0]
+psnr off r3 view05_orb_04.png: psnr=75.02 diff_px=5381 max=1 tiles=857 hist(1..)=[5381, 0, 0]
+psnr off r3 view06_orb_05.png: psnr=75.18 diff_px=5151 max=1 tiles=903 hist(1..)=[5151, 0, 0]
+psnr off r3 view07_orb_06.png: psnr=75.97 diff_px=4443 max=1 tiles=942 hist(1..)=[4443, 0, 0]
+psnr off r3 view08_orb_07.png: psnr=75.47 diff_px=4912 max=1 tiles=1000 hist(1..)=[4912, 0, 0]
+psnr off r3 view09_orb_08.png: psnr=75.17 diff_px=5261 max=1 tiles=1042 hist(1..)=[5261, 0, 0]
+psnr off r3 view10_orb_09.png: psnr=75.53 diff_px=4974 max=1 tiles=1014 hist(1..)=[4974, 0, 0]
+psnr off r3 view11_orb_10.png: psnr=75.74 diff_px=4717 max=1 tiles=1003 hist(1..)=[4717, 0, 0]
+psnr off r3 view12_orb_11.png: psnr=75.34 diff_px=4979 max=1 tiles=974 hist(1..)=[4979, 0, 0]
+psnr off r3 view13_orb_12.png: psnr=74.89 diff_px=5491 max=1 tiles=982 hist(1..)=[5491, 0, 0]
+psnr off r3 view14_orb_13.png: psnr=75.95 diff_px=4446 max=1 tiles=932 hist(1..)=[4446, 0, 0]
+psnr off r3 view15_orb_14.png: psnr=75.83 diff_px=4571 max=1 tiles=874 hist(1..)=[4571, 0, 0]
+psnr off r3 view16_orb_15.png: psnr=75.65 diff_px=4645 max=1 tiles=866 hist(1..)=[4645, 0, 0]
+psnr off r3 view17_orb_16.png: psnr=75.68 diff_px=4649 max=1 tiles=836 hist(1..)=[4649, 0, 0]
+psnr off r3 view18_orb_17.png: psnr=76.02 diff_px=4270 max=1 tiles=773 hist(1..)=[4270, 0, 0]
+psnr off r3 view19_orb_18.png: psnr=76.85 diff_px=3686 max=1 tiles=757 hist(1..)=[3686, 0, 0]
+psnr off r3 view20_orb_19.png: psnr=76.63 diff_px=3793 max=1 tiles=741 hist(1..)=[3793, 0, 0]
+psnr off r3 view21_orb_20.png: psnr=77.00 diff_px=3564 max=1 tiles=755 hist(1..)=[3564, 0, 0]
+psnr off r3 view22_orb_21.png: psnr=77.33 diff_px=3344 max=1 tiles=742 hist(1..)=[3344, 0, 0]
+psnr off r3 view23_orb_22.png: psnr=77.92 diff_px=2954 max=1 tiles=698 hist(1..)=[2954, 0, 0]
+psnr off r3 view24_orb_23.png: psnr=77.83 diff_px=3047 max=1 tiles=697 hist(1..)=[3047, 0, 0]
+psnr off r3 view25_orb_24.png: psnr=78.11 diff_px=2894 max=1 tiles=679 hist(1..)=[2894, 0, 0]
+psnr off r3 view26_orb_25.png: psnr=77.89 diff_px=2981 max=1 tiles=644 hist(1..)=[2981, 0, 0]
+psnr off r3 view27_orb_26.png: psnr=78.23 diff_px=2735 max=1 tiles=627 hist(1..)=[2735, 0, 0]
+psnr off r3 view28_orb_27.png: psnr=78.24 diff_px=2752 max=1 tiles=600 hist(1..)=[2752, 0, 0]
+psnr off r3 view29_orb_28.png: psnr=77.85 diff_px=2952 max=1 tiles=642 hist(1..)=[2952, 0, 0]
+a3beb11d5c3e4b414947bfaf71eb1976  md5-t161r0-pc.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t161r1-pc.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t161r2-pc.txt
+46a725abf4293754fd8d1d4b72c18b3a  md5-t161r3-pc.txt
+7ec6cd5f50f3283306c538b99eb8a41d  md5-t161r0-base.txt
+ee35138a513272c510cf461af350b4b8  md5-t161r1-base.txt
+ee35138a513272c510cf461af350b4b8  md5-t161r2-base.txt
+ee35138a513272c510cf461af350b4b8  md5-t161r3-base.txt
+##### t0 13:45:37
+=== t161rt0-b0 6a00513 BLEND_T_PERIOD=0 views=0:5
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.40dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.4 p50_ms=17.8 min_ms=17.2 max_ms=21.0 n_views=5 warmup_s=3.5 out=/localdev/smarton/gstt2-t161/tmp/t161-t161rt0-b0
+STAGES n=5 head=0.003 project=4.353 tile_assign=0.003 sort=4.478 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.275 d2h=0.208 assemble=0.000 tail=0.002 | sum=18.322 view_total=18.323 resid_in_view=+0.001 avg_frame_ms=18.359 resid_vs_frame=+0.037
+SORT_STAGES n=5 pread=0.015 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.098 upload=0.000 bin_emit=4.121 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.155 publish_wait=0.000 mat=0.052 | sum=4.441 sort=4.478 resid=+0.038
+PROJECT_STAGES n=5 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.034 pfwc_enqueue=0.037 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.180 gather_result=0.094 | sum=4.351 project=4.353 resid=+0.001
+TILE_ASSIGN_STAGES n=5 setup=0.002 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.002 tile_assign=0.003 resid=+0.001
+ONELAUNCH n=6 onelaunch=4.588 layout=0.098 pub_host=0.155 total=4.908
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (5 differ, 0 not in ref, of 5)
+=== t161rt0-p0 6a00513 BLEND_T_PERIOD=0 GSPLAT_TT_PRECULL=2 views=0:5
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.40dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.0 p50_ms=17.4 min_ms=17.1 max_ms=20.5 n_views=5 warmup_s=1.9 out=/localdev/smarton/gstt2-t161/tmp/t161-t161rt0-p0
+STAGES n=5 head=0.003 project=4.298 tile_assign=0.003 sort=4.216 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.251 d2h=0.197 assemble=0.000 tail=0.002 | sum=17.970 view_total=17.970 resid_in_view=+0.001 avg_frame_ms=18.003 resid_vs_frame=+0.033
+SORT_STAGES n=5 pread=0.017 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.112 upload=0.000 bin_emit=3.825 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.181 publish_wait=0.000 mat=0.042 | sum=4.177 sort=4.216 resid=+0.039
+PROJECT_STAGES n=5 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.031 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.143 gather_result=0.088 | sum=4.297 project=4.298 resid=+0.001
+TILE_ASSIGN_STAGES n=5 setup=0.002 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.002 tile_assign=0.003 resid=+0.001
+ONELAUNCH n=6 onelaunch=4.277 layout=0.110 pub_host=0.178 total=4.628
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (5 differ, 0 not in ref, of 5)
+=== t161rt0-o0 6a00513 BLEND_T_PERIOD=0 GSPLAT_TT_PRECULL=0 views=0:5
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.40dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.7 p50_ms=17.9 min_ms=17.2 max_ms=22.1 n_views=5 warmup_s=1.7 out=/localdev/smarton/gstt2-t161/tmp/t161-t161rt0-o0
+STAGES n=5 head=0.003 project=4.240 tile_assign=0.003 sort=4.597 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.538 d2h=0.275 assemble=0.000 tail=0.002 | sum=18.657 view_total=18.658 resid_in_view=+0.001 avg_frame_ms=18.690 resid_vs_frame=+0.032
+SORT_STAGES n=5 pread=0.014 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.104 upload=0.000 bin_emit=4.242 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.164 publish_wait=0.000 mat=0.037 | sum=4.561 sort=4.597 resid=+0.036
+PROJECT_STAGES n=5 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.031 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.088 gather_result=0.086 | sum=4.239 project=4.240 resid=+0.001
+TILE_ASSIGN_STAGES n=5 setup=0.001 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.002 tile_assign=0.003 resid=+0.000
+ONELAUNCH n=6 onelaunch=4.780 layout=0.103 pub_host=0.165 total=5.107
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 cb_bytes/mover=504896 shared=22400
+VIEWS DIFFER (5 differ, 0 not in ref, of 5)
+=== done round t0
+##### t0 rc=0
+t0 p0 view00_hero.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 p0 view01_orb_00.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 p0 view02_orb_01.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 p0 view03_orb_02.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 p0 view04_orb_03.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 o0 view00_hero.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 o0 view01_orb_00.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 o0 view02_orb_01.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 o0 view03_orb_02.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+t0 o0 view04_orb_03.png: psnr=inf diff_px=0 max=0 tiles=0 hist(1..)=[0, 0, 0]
+ALLDONE

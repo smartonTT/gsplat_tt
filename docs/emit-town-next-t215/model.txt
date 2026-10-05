@@ -1,0 +1,18 @@
+TRISC net pack 1.050 ms, overhead around it 0.115 ms, mover busy 0.881 ms, mover idle 0.347 ms
+model zone at x=0: 1.228 (measured 1.228)
+
+A: cursors in TRISC local memory
+ saved cyc/rec   saving mean   saving busiest
+    12            0.070         0.076
+    17            0.100         0.108
+    25            0.147         0.159
+    35            0.205         0.222
+
+B: movers as 4th/5th owners (mover extra cycles per owned record cm)
+ TRISC cyc  cm    x/mover  zone   saving mean  saving busiest
+  178.8   130     1880  1.062   0.166        0.179   B
+  178.8   170     1620  1.085   0.143        0.155   B
+  178.8   200     1468  1.098   0.130        0.140   B
+  161.8   130     1403  1.016   0.212        0.229   A+B
+  161.8   170     1201  1.032   0.196        0.212   A+B
+  161.8   200     1084  1.042   0.186        0.202   A+B

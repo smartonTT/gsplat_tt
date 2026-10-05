@@ -33,6 +33,8 @@
 //   8: tiles_x           tiles per image row (for tile origin)
 //   9: contrib_floor     fp32 (bit-reinterpreted) microblock contrib floor
 //  10: cull_disabled     1 => skip the constrained-min (m2_min := 0 in bbox)
+//  (stale above; see kernel_main for args 0-23)
+//  24: num_cores  25/26: counter core NoC x/y  27: counter semaphore id (task #60)
 //
 // COMPILE-TIME ARGS: 6 TensorAccessorArgs: attrs, ids, ids_off, xramp, yramp,
 // tile_ids. All DRAM-interleaved.
@@ -56,11 +58,13 @@ constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
 constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
 constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
 constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk: bulk L1 slab records (mask in word3)
+constexpr uint32_t CB_TILE_Q = 13;      // task #60: claimed tile ids -> writer
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
 constexpr uint32_t MB_FLAG_CONTINUE = 2u;
 constexpr uint32_t MB_FLAG_L1_BULK = 4u;
+constexpr uint32_t MB_FLAG_DONE = 8u;   // task #60: no more tiles for this core
 
 // PACK2 (iter 50): two 32B splats per 64B record stride; splat g => byte g*32.
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
@@ -93,6 +97,14 @@ inline float bits_to_f(uint32_t b) {
 inline void mb_cb_commit_fence() {
     asm volatile("fence" ::: "memory");
 }
+
+// Task #83: fine per-tile zones for floor attribution (host env
+// GSPLAT_TT_BLEND_PROF=1; compiled out by default).
+#if defined(BLEND_PROF) && BLEND_PROF
+#define BLEND_PZ(name) DeviceZoneScopedN(name)
+#else
+#define BLEND_PZ(name) ((void)0)
+#endif
 
 }  // namespace
 
@@ -172,27 +184,39 @@ void kernel_main() {
     (void)op_acc; (void)col_acc;
     // PACK2: 64B DRAM pages hold two 32B splats (see sort_bin scatter).
     const auto l1_recs_acc = TensorAccessor(l1_recs_args, l1_recs_addr, L1_PACK_PAGE_BYTES);
-    // Host-free LPT: read this core's (start,count) from resident sort_lpt_meta.
-    constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
-    const uint32_t meta_elem0 = core_index * 2u;
-    const uint32_t meta_page0 = meta_elem0 / META_ELEMS_PER_PAGE;
-    const uint32_t meta_ip0   = meta_elem0 % META_ELEMS_PER_PAGE;
-    const uint32_t meta_scratch = get_write_ptr(CB_SCR_IDS);
-    auto meta_ptr = reinterpret_cast<volatile uint32_t*>(meta_scratch);
-    noc_async_read(get_noc_addr(meta_page0, lpt_meta_acc), meta_scratch, 64);
-    noc_async_read_barrier();
-    uint32_t tile_ids_start = meta_ptr[meta_ip0];
-    uint32_t tile_ids_count = 0;
-    if (meta_ip0 + 1u < META_ELEMS_PER_PAGE) {
-        tile_ids_count = meta_ptr[meta_ip0 + 1u];
-    } else {
-        noc_async_read(get_noc_addr(meta_page0 + 1u, lpt_meta_acc), meta_scratch, 64);
+    // Task #60: DYNAMIC tile claiming. The static LPT split (cost = padded pair
+    // count) left the blend tail-bound (balance 0.84): the real per-tile blend
+    // cost depends on the kept microblocks and the transmittance early-out,
+    // which the sort does not know. Every core instead claims the next tile
+    // from one shared counter (a NoC atomic increment-and-get on a semaphore in
+    // counter core's L1), in approximately descending cost order: the sort LPT
+    // lists interleaved by rank (all cores' 1st tile, then all 2nd tiles, ...).
+    // Greedy list scheduling on real durations leaves a tail of at most about
+    // one small tile. Per-tile output does not depend on the core => the image
+    // is byte-identical.
+    const uint32_t num_cores  = get_arg_val<uint32_t>(24);
+    const uint32_t ctr_noc_x  = get_arg_val<uint32_t>(25);
+    const uint32_t ctr_noc_y  = get_arg_val<uint32_t>(26);
+    const uint32_t ctr_sem_id = get_arg_val<uint32_t>(27);
+    // All cores' (offset,count) pairs: num_cores*2 u32 in the (otherwise unused
+    // on this path) CB_SCR_ATTR scratch.
+    const uint32_t meta_l1 = get_write_ptr(CB_SCR_ATTR);
+    auto lpt_meta = reinterpret_cast<volatile uint32_t*>(meta_l1);
+    {
+        constexpr uint32_t META_ELEMS_PER_PAGE = 16u;
+        const uint32_t meta_pages = (num_cores * 2u + META_ELEMS_PER_PAGE - 1u) / META_ELEMS_PER_PAGE;
+        for (uint32_t p = 0; p < meta_pages; ++p) {
+            noc_async_read(get_noc_addr(p, lpt_meta_acc), meta_l1 + p * 64u, 64);
+        }
         noc_async_read_barrier();
-        tile_ids_count = meta_ptr[0];
     }
-    // Host-free: compute reads tile count from this CB instead of a runtime arg.
+    uint32_t total_tiles = 0;
+    for (uint32_t c = 0; c < num_cores; ++c) {
+        total_tiles += lpt_meta[c * 2u + 1u];
+    }
+    // Compute runs until the DONE flag (count value 0xFFFFFFFF = dynamic).
     cb_reserve_back(CB_CORE_TILES, 1);
-    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = tile_ids_count;
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CORE_TILES))[0] = 0xFFFFFFFFu;
     cb_push_back(CB_CORE_TILES, 1);
     // proj_m_blendrec: one 64B AoS record page per gaussian (page index == g).
     const auto blendrec_acc   = TensorAccessor(blendrec_args,   blendrec_addr,   SOA_PAGE_BYTES);
@@ -209,37 +233,6 @@ void kernel_main() {
     // reader-side row suppress (thr<0 sentinel == op<=floor).
     (void)cull_disabled;
 
-    if (tile_ids_count == 0) {
-        return;
-    }
-
-    // Cache this core's tile-ID slice in L1 (private ids scratch CB).
-    constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
-    uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
-    {
-        const uint32_t scratch_addr = get_write_ptr(CB_SCR_IDS);
-        auto scratch_ptr = reinterpret_cast<volatile uint32_t*>(scratch_addr);
-        const uint32_t ids_per_page = 64 / 4;  // 16
-        uint32_t page_idx = tile_ids_start / ids_per_page;
-        uint32_t in_page  = tile_ids_start % ids_per_page;
-        uint32_t remaining = tile_ids_count;
-        uint32_t out_idx = 0;
-        while (remaining > 0) {
-            uint64_t page_noc = get_noc_addr(page_idx, tile_ids_acc);
-            noc_async_read(page_noc, scratch_addr, 64);
-            noc_async_read_barrier();
-            uint32_t take = ids_per_page - in_page;
-            if (take > remaining) take = remaining;
-            for (uint32_t i = 0; i < take; i++) {
-                tile_ids[out_idx + i] = scratch_ptr[in_page + i];
-            }
-            out_idx   += take;
-            remaining -= take;
-            page_idx  += 1;
-            in_page    = 0;
-        }
-    }
-
     // Constant permuted coordinate ramps: identical for every tile. Stream
     // once per core (not once per tile) so compute can reuse the same CB pages
     // across its whole tile loop without redundant 8KB/tile NoC reads.
@@ -252,8 +245,69 @@ void kernel_main() {
     cb_push_back(CB_YRAMP, 1);
 
 
-    for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
-        const uint32_t tile_id = tile_ids[ti];
+    const uint64_t ctr_noc_addr = get_noc_addr(ctr_noc_x, ctr_noc_y, get_semaphore(ctr_sem_id));
+    const uint32_t ret_l1 = get_write_ptr(CB_SCR_MASK);  // atomic return slot
+    volatile uint32_t* ret_ptr = reinterpret_cast<volatile uint32_t*>(ret_l1);
+    const uint32_t tid_scr = get_write_ptr(CB_SCR_MASK) + 64u;
+    // Rank-interleaved order: claim index i -> (rank k, i-th core whose LPT list
+    // has more than k tiles). rank_base = claims taken by ranks < k.
+    uint32_t rank = 0, rank_base = 0, rank_width = num_cores;
+    for (;;) {
+#if defined(BLEND_LATE_CLAIM) && BLEND_LATE_CLAIM
+        // Task #188 late claim: wait for a free bulk ring slot before taking the
+        // next tile, so a core never holds a claimed tile it cannot start (at
+        // most one in compute + one in the ring). cb_reserve_back only waits for
+        // space; the first subchunk's reserve below then returns at once.
+        {
+            BLEND_PZ("rd_bulk_wait");
+            cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+        }
+#endif
+        ret_ptr[0] = 0xFFFFFFFFu;
+        asm volatile("fence" ::: "memory");
+        noc_fast_atomic_increment<noc_mode, /*program_ret_addr=*/true>(
+            noc_index, write_at_cmd_buf, ctr_noc_addr, NOC_UNICAST_WRITE_VC, 1u, 31u,
+            false, false, ret_l1);
+        noc_async_atomic_barrier();
+        uint32_t claim;
+        {
+            BLEND_PZ("rd_claim");
+            do {
+                invalidate_l1_cache();
+                claim = ret_ptr[0];
+            } while (claim == 0xFFFFFFFFu);
+        }
+        if (claim >= total_tiles) {
+            break;
+        }
+        // Advance the rank cursor (claims are monotonically increasing per core).
+        while (claim - rank_base >= rank_width) {
+            rank_base += rank_width;
+            ++rank;
+            rank_width = 0;
+            for (uint32_t c = 0; c < num_cores; ++c) {
+                rank_width += (lpt_meta[c * 2u + 1u] > rank) ? 1u : 0u;
+            }
+        }
+        uint32_t pos = claim - rank_base;
+        uint32_t core_sel = 0;
+        for (uint32_t c = 0; c < num_cores; ++c) {
+            if (lpt_meta[c * 2u + 1u] > rank) {
+                if (pos == 0u) { core_sel = c; break; }
+                --pos;
+            }
+        }
+        const uint32_t flat = lpt_meta[core_sel * 2u] + rank;
+        {
+            BLEND_PZ("rd_tid");
+            noc_async_read_tile(flat >> 4, tile_ids_acc, tid_scr);
+            noc_async_read_barrier();
+        }
+        const uint32_t tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
+        // Hand the tile id to the writer (output address) before its data.
+        cb_reserve_back(CB_TILE_Q, 1);
+        reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = tile_id;
+        cb_push_back(CB_TILE_Q, 1);
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
@@ -267,6 +321,7 @@ void kernel_main() {
         // (start/end into it == ids_off[t]/ids_off[t+1]); empty tiles read
         // (0,0) -> L==0, matching the uploaded path.
         {
+            BLEND_PZ("rd_meta");
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
             const uint32_t elem0 = tile_id * 2u;
             const uint32_t page = elem0 >> 4;
@@ -290,6 +345,7 @@ void kernel_main() {
         uint32_t dir_base = 0;
         uint32_t num_subchunks = 1;
         {
+            BLEND_PZ("rd_meta");
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -314,6 +370,7 @@ void kernel_main() {
             // every tile can consume the materialized slab via process_tile_l1_blend.
             uint32_t payload_page = 0;
             {
+                BLEND_PZ("rd_dir");
                 const uint32_t de = (dir_base + sc) * 4u;
                 const uint32_t dpg = de >> 4;
                 const uint32_t dof = de & 0xF;
@@ -335,7 +392,10 @@ void kernel_main() {
             // ack (the fast payload DMA otherwise raced slot-recycle vs MATH reads)
             // and the bulk CB is slot-aligned (no ring straddle on variable tiles).
             DeviceZoneScopedN("rd_l1_bulk");
-            cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+            {
+                BLEND_PZ("rd_bulk_wait");
+                cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+            }
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
                 const uint32_t page0 = payload_page;
@@ -373,4 +433,14 @@ void kernel_main() {
         cb_push_back(CB_MB_COUNTS, 1);
         }  // end subchunk loop
     }
+    cb_reserve_back(CB_MB_COUNTS, 1);
+    {
+        auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
+        cnt_ptr[0] = 0u;
+        cnt_ptr[1] = MB_FLAG_DONE;
+    }
+    cb_push_back(CB_MB_COUNTS, 1);
+    cb_reserve_back(CB_TILE_Q, 1);
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = 0xFFFFFFFFu;
+    cb_push_back(CB_TILE_Q, 1);
 }

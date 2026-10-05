@@ -12,9 +12,11 @@
 //   3. streams SFPU cull coeff rows {cov, image-space center, opacity, thr}
 //      from the L1 slab copy in slab order (depth-rank k == slab record k).
 //
-// Pairs with microblock_cull_compute + writer_tile_l1_mask; masks land in DRAM
-// cull_masks at cull_base+k, staying aligned with the blend reader (which reads
-// cull_masks[cull_base+k] == depth-rank k == slab record k).
+// Pairs with microblock_band_cull_compute + writer_tile_l1_mask. Task #59: the
+// compute no longer reads the slab; the reader transposes each 128-record batch
+// into one fp32 coefficient tile (one gaussian per SFPU lane, see
+// fill_coeff_tile) and hands the slab slot itself to the writer, which patches
+// the mask into word3 in L1 and writes the slab back.
 
 #include <cstdint>
 
@@ -22,9 +24,7 @@
 
 namespace {
 
-constexpr uint32_t CB_BOX_OX     = 0;
-constexpr uint32_t CB_BOX_OY     = 1;
-constexpr uint32_t CB_CULL_COEFF = 2;
+constexpr uint32_t CB_COEFF      = 2;   // task #59: fp32 coefficient tiles -> compute
 constexpr uint32_t CB_CULL_COUNTS= 3;
 constexpr uint32_t CB_SCR_IDS    = 4;
 constexpr uint32_t CB_SCR_ATTR   = 5;
@@ -56,6 +56,30 @@ constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 // the cull compute drains subchunk N — no ring straddle.
 constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;
 
+// Task #59 band cull: one fp32 coefficient tile per COEFF_BATCH records.
+constexpr uint32_t COEFF_BATCH = 128u;        // 4 groups x 32 SFPU lanes
+constexpr uint32_t OPQ_BIAS = 0x4B000000u;    // fp32 2^23; field = 2^23 + UNORM16 opacity
+
+// Record i of the batch is gaussian i: group g = i/32 (SFPU vectors 6g..6g+5),
+// lane l = i%32. Lane l of vector V is tile word 64*(V>>1) + (V&1) + 2l (the
+// copy_tile / SFPU layout perm() in writer_microblock_cull.cpp describes), so
+// the field pairs (A,B), (C,opq), (mx,my) of a gaussian are adjacent words.
+// Must match the F_* field order in microblock_band_cull_compute.cpp.
+inline void fill_coeff_tile(uint32_t slab, uint32_t base, uint32_t n, uint32_t tile) {
+    for (uint32_t i = 0; i < n; ++i) {
+        auto src = reinterpret_cast<volatile uint32_t*>(slab + (base + i) * L1_SPLAT_BYTES);
+        auto dst = reinterpret_cast<volatile uint32_t*>(tile) + 192u * (i >> 5) + 2u * (i & 31u);
+        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2];
+        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6];
+        dst[0] = w0;                             // A    (vector 6g)
+        dst[1] = w1;                             // B    (6g+1)
+        dst[64] = w2;                            // C    (6g+2)
+        dst[65] = OPQ_BIAS | (w6 & 0xffffu);     // opq  (6g+3)
+        dst[128] = w4;                           // mx   (6g+4)
+        dst[129] = w5;                           // my   (6g+5)
+    }
+}
+
 template <typename Acc>
 inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_addr) {
     const uint32_t page = elem >> 4;
@@ -72,6 +96,14 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
 inline void mb_cb_commit_fence() {
     asm volatile("fence" ::: "memory");
 }
+
+// Task #86: fine per-subchunk zones for attribution (host env
+// GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
+#if defined(MATCULL_PROF) && MATCULL_PROF
+#define CULL_PZ(name) DeviceZoneScopedN(name)
+#else
+#define CULL_PZ(name) ((void)0)
+#endif
 
 }  // namespace
 
@@ -183,13 +215,9 @@ void kernel_main() {
         return;
     }
 
-    cb_reserve_back(CB_BOX_OX, 1);
-    noc_async_read_tile(0, bx_acc, get_write_ptr(CB_BOX_OX));
-    cb_reserve_back(CB_BOX_OY, 1);
-    noc_async_read_tile(0, by_acc, get_write_ptr(CB_BOX_OY));
-    noc_async_read_barrier();
-    cb_push_back(CB_BOX_OX, 1);
-    cb_push_back(CB_BOX_OY, 1);
+    // Task #59: the band cull needs no box-origin ramps (bx/by stay bound for ABI).
+    (void)bx_acc;
+    (void)by_acc;
 
     constexpr uint32_t MAX_TILE_IDS_PER_CORE = 256;
     uint32_t tile_ids[MAX_TILE_IDS_PER_CORE];
@@ -236,6 +264,7 @@ void kernel_main() {
 
         uint32_t id_start, id_end;
         {
+            CULL_PZ("cr_meta");
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
             const uint32_t elem0 = tile_id * 2u;
             const uint32_t page = elem0 >> 4;
@@ -253,6 +282,7 @@ void kernel_main() {
             }
         }
         const uint32_t L = id_end - id_start;
+        CULL_PZ("cr_tile");
         const uint32_t cull_base = read_soa_u32(cull_base_acc, tile_id, get_write_ptr(CB_SCR_IDS));
 
         // blend_subchunk_meta: per-tile (dir_base, num_sc) pair. dir_base indexes
@@ -294,14 +324,12 @@ void kernel_main() {
             }
 
             // iter 109: read the dir entry (dir_base+sc -> payload_page) and
-            // bulk-DMA the already-depth-sorted PACK2 slab into CB_BUCKET, then
-            // HAND THE WHOLE SLOT to the cull compute in ONE push (mirrors the
-            // blend reader's CB_BUCKET_BULK hand-off). The compute reads each
-            // record straight from this L1 slab — no per-record CB_CULL_COEFF
-            // stream (which cost ~3.37M handshakes / ~40 ms vs blend's bulk load).
+            // bulk-DMA the already-depth-sorted PACK2 slab into CB_BUCKET in one
+            // batched read (mirrors the blend reader's CB_BUCKET_BULK hand-off).
             // Depth-rank k == slab record k stays aligned with the blend reader.
             uint32_t payload_page = 0;
             {
+                CULL_PZ("cr_meta");
                 const uint32_t de = (dir_base + sc) * 4u;
                 const uint32_t dpg = de >> 4;
                 const uint32_t dof = de & 0xF;
@@ -313,9 +341,13 @@ void kernel_main() {
 
             const uint32_t rec_pages =
                 (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
-            cb_reserve_back(CB_BUCKET, BULK_REC_SLOT);
+            {
+                CULL_PZ("cr_slot_wait");
+                cb_reserve_back(CB_BUCKET, BULK_REC_SLOT);
+            }
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
+                CULL_PZ("cr_bulk");
                 const uint32_t page0 = payload_page;
                 uint32_t pp = 0;
                 while (pp < rec_pages) {
@@ -329,7 +361,17 @@ void kernel_main() {
                 }
             }
             mb_cb_commit_fence();
+            // Task #59: the slot goes to the writer (mask -> word3, slab write-back);
+            // it only touches word3, the transpose below only reads the others.
             cb_push_back(CB_BUCKET, BULK_REC_SLOT);
+            CULL_PZ("cr_fill");
+            for (uint32_t base = 0; base < L_sub; base += COEFF_BATCH) {
+                const uint32_t n = (L_sub - base < COEFF_BATCH) ? (L_sub - base) : COEFF_BATCH;
+                cb_reserve_back(CB_COEFF, 1);
+                fill_coeff_tile(buck, base, n, get_write_ptr(CB_COEFF));
+                mb_cb_commit_fence();
+                cb_push_back(CB_COEFF, 1);
+            }
 
             // iter-140 Stage-0 OVERLAP PROBE: store-stress on NCRISC. With the
             // just-pushed slot now draining on the SFPU (TRISC), issue store_reps

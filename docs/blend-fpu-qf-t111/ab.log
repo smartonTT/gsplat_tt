@@ -1,0 +1,26 @@
+================ BUILD ID ================
+=========================================
+=== AB round=1 arm=d 23:42:39
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.4 p50_ms=29.9 min_ms=25.5 max_ms=33.9 n_views=30 warmup_s=17.8 out=/localdev/smarton/gstt2-t111/tmp/t111-ab-1-d
+STAGES n=30 head=0.002 project=6.418 tile_assign=1.424 sort=10.614 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.695 d2h=0.256 assemble=0.000 tail=0.002 | sum=29.411 view_total=29.412 resid_in_view=+0.001 avg_frame_ms=29.436 resid_vs_frame=+0.025
+=== AB round=1 arm=p0 23:43:00
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.26dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.3 p50_ms=29.7 min_ms=25.5 max_ms=34.1 n_views=30 warmup_s=45.7 out=/localdev/smarton/gstt2-t111/tmp/t111-ab-1-p0
+STAGES n=30 head=0.002 project=6.418 tile_assign=1.423 sort=10.613 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.630 d2h=0.216 assemble=0.000 tail=0.002 | sum=29.304 view_total=29.305 resid_in_view=+0.001 avg_frame_ms=29.328 resid_vs_frame=+0.023
+=== AB round=1 arm=q0 23:43:49
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=15.56dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=27.5 p50_ms=27.9 min_ms=23.7 max_ms=31.4 n_views=30 warmup_s=17.8 out=/localdev/smarton/gstt2-t111/tmp/t111-ab-1-q0
+STAGES n=30 head=0.002 project=6.457 tile_assign=1.437 sort=10.830 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.578 d2h=0.206 assemble=0.000 tail=0.002 | sum=27.513 view_total=27.514 resid_in_view=+0.001 avg_frame_ms=27.542 resid_vs_frame=+0.029
+=== end 23:44:10
+AB_1_RC=0
+================ BUILD ID ================
+=========================================
+=== AB round=2 arm=d 23:44:12
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.5 p50_ms=29.9 min_ms=25.3 max_ms=33.9 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t111/tmp/t111-ab-2-d
+STAGES n=30 head=0.002 project=6.435 tile_assign=1.429 sort=10.640 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.677 d2h=0.261 assemble=0.000 tail=0.002 | sum=29.447 view_total=29.448 resid_in_view=+0.001 avg_frame_ms=29.475 resid_vs_frame=+0.029
+=== AB round=2 arm=p0 23:44:17
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=74.26dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.6 p50_ms=29.8 min_ms=25.7 max_ms=33.8 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t111/tmp/t111-ab-2-p0
+STAGES n=30 head=0.002 project=6.449 tile_assign=1.437 sort=10.830 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.624 d2h=0.214 assemble=0.000 tail=0.002 | sum=29.560 view_total=29.561 resid_in_view=+0.001 avg_frame_ms=29.590 resid_vs_frame=+0.031
+=== AB round=2 arm=q0 23:44:23
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=15.56dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=27.4 p50_ms=27.7 min_ms=23.5 max_ms=31.4 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t111/tmp/t111-ab-2-q0
+STAGES n=30 head=0.002 project=6.418 tile_assign=1.423 sort=10.608 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.610 d2h=0.277 assemble=0.000 tail=0.002 | sum=27.339 view_total=27.340 resid_in_view=+0.001 avg_frame_ms=27.363 resid_vs_frame=+0.024
+=== end 23:44:28
+AB_2_RC=0

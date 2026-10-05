@@ -1,0 +1,44 @@
+views=10 cores/frame(anchor)=330 device_frame_span_ms mean=32.76 min=27.75 max=36.88
+zone                 core_ms/v cores  mean_ms   max_ms balance  occ_%  riscs
+--------------------------------------------------------------------------------
+TRISC-FW               4022.81   330   12.190   12.825    0.95   39.2  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL           4021.24   330   12.186   12.824    0.95   39.2  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW               3085.37   110   28.049   29.476    0.95   89.9  BRISC
+NCRISC-FW              2931.90   110   26.654   27.958    0.95   85.3  NCRISC
+NCRISC-KERNEL          2890.12   110   26.274   27.575    0.95   84.1  NCRISC
+BRISC-KERNEL           2806.41   110   25.513   26.933    0.95   82.1  BRISC
+tile_blend_sfpu        2279.71   330    6.908    7.458    0.93   22.8  TRISC_0,TRISC_1,TRISC_2
+sort_bucket_emit       1681.66   220    7.644    7.965    0.96   24.2  BRISC,NCRISC
+mat_cull_mask           952.60   330    2.887    3.168    0.91    9.7  TRISC_0,TRISC_1,TRISC_2
+pfwc                    788.87   330    2.391    2.442    0.98    7.5  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load         723.90   110    6.581    6.961    0.95   21.2  NCRISC
+rd_l1_bulk              712.21   110    6.475    6.858    0.94   20.9  NCRISC
+sort_subchunk_mat       615.82   220    2.799    3.168    0.88    9.7  BRISC,NCRISC
+sort_tile_depth         453.94   220    2.063    2.516    0.82    7.7  BRISC,NCRISC
+proj_scatter            430.88   220    1.959    2.918    0.67    8.9  BRISC,NCRISC
+ta_bucket_scatter       294.57   220    1.339    1.403    0.95    4.3  BRISC,NCRISC
+sort_bin_hist            93.58   110    0.851    0.864    0.98    2.6  NCRISC
+proj_vis_scan             0.40     1    0.396    0.396    1.00    1.2  BRISC
+
+stage        window_ms/v     min     max  zones
+--------------------------------------------------------------------------------
+project             5.82    5.36    6.22  pfwc+proj_count+proj_scatter
+tile_assign         1.40    1.11    1.71  ta_gauss_aabb+ta_bucket_scatter
+sort               12.73   10.69   14.90  sort_bin_hist+sort_bucket_emit+sort_tile_depth
+subchunk_mat        3.17    2.86    3.64  sort_subchunk_mat
+blend               7.46    6.23    8.59  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+
+zone (timeline)      start_ms   end_ms   window  (mean over views)
+------------------------------------------------------------
+pfwc                     0.00     2.44     2.44
+proj_vis_scan            2.50     2.90     0.40
+proj_scatter             2.90     5.82     2.92
+ta_bucket_scatter        6.64     8.04     1.40
+sort_bin_hist            8.10     8.96     0.86
+sort_bucket_emit        10.30    18.27     7.97
+sort_tile_depth         18.31    20.83     2.52
+sort_subchunk_mat       22.06    25.23     3.17
+mat_cull_mask           22.06    25.23     3.17
+tile_blend_sfpu         25.24    32.70     7.46
+tile_blend_load         25.24    32.20     6.96
+rd_l1_bulk              25.25    32.20     6.95

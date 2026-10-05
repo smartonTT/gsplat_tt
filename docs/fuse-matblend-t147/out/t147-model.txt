@@ -1,0 +1,14 @@
+== launch 1
+TODAY model: mat 3.747 + gap 0.33 + blend 5.859 = 9.937 ms
+[] FUSED model makespan = 9.880 ms   STATIC LPT (oracle TRISC cost) order=asc: 13.197 ms
+[--dbuf 1] FUSED model makespan = 9.110 ms   STATIC LPT (oracle TRISC cost) order=asc: 8.730 ms
+[--big_free 1 --dbuf 1] FUSED model makespan = 8.683 ms   STATIC LPT (oracle TRISC cost) order=asc: 8.021 ms
+[--cull 0.03] FUSED model makespan = 9.468 ms   STATIC LPT (oracle TRISC cost) order=asc: 13.026 ms
+[--cull 0.03 --big_free 1 --dbuf 1] FUSED model makespan = 8.323 ms   STATIC LPT (oracle TRISC cost) order=asc: 7.221 ms
+== launch 2
+TODAY model: mat 3.325 + gap 0.33 + blend 4.456 = 8.110 ms
+[] FUSED model makespan = 8.218 ms   STATIC LPT (oracle TRISC cost) order=asc: 10.350 ms
+[--dbuf 1] FUSED model makespan = 7.856 ms   STATIC LPT (oracle TRISC cost) order=asc: 7.139 ms
+[--big_free 1 --dbuf 1] FUSED model makespan = 7.128 ms   STATIC LPT (oracle TRISC cost) order=asc: 6.545 ms
+[--cull 0.03] FUSED model makespan = 7.952 ms   STATIC LPT (oracle TRISC cost) order=asc: 10.274 ms
+[--cull 0.03 --big_free 1 --dbuf 1] FUSED model makespan = 6.837 ms   STATIC LPT (oracle TRISC cost) order=asc: 6.152 ms

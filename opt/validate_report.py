@@ -25,9 +25,15 @@ Checks
      PSNR (0 < psnr < 200) and positive numeric stage timings; metric-less reject
      rows are allowed to show FAIL but must still carry idea + reason + timestamp.
 
+  8. Device screenshot: every ttw iter > 197 has a complete device_screenshot
+     (hero + diff files on disk, PSNR, md5, commit/config, visual-check note);
+     legacy iters 160-197 may instead be screenshot_backfill_pending and must
+     render as a red placeholder (opt/ttw/ITERATION_CHECKLIST.md).
+
 Usage:  python3 opt/validate_report.py   (exit 0 = valid, non-zero = invalid)
 """
 from __future__ import annotations
+import re
 
 import sys
 from pathlib import Path
@@ -46,6 +52,7 @@ INPUT_JSONLS = [
 ]
 
 EMPTY_DESC_MARKER = "no description recorded"
+SHOT_PENDING_MARKER = "screenshot missing - backfill pending"
 PSNR_MIN, PSNR_MAX = 0.0, 200.0
 
 
@@ -217,6 +224,10 @@ def main() -> int:
 
         def _has_trace(r: dict) -> bool:
             tr = str(r.get("tracy") or "").strip()
+            # A trace kept on the remote build host ("host:/abs/path...") counts,
+            # as does an explicit written waiver for a row that never had one.
+            if re.match(r"^(remote )?[\w.-]+:/", tr) or str(r.get("tracy_waiver") or "").strip():
+                return True
             if tr and (OPT_DIR.parent / tr).is_file():
                 return True
             idir = str(r.get("iter_dir") or "").strip()
@@ -225,7 +236,10 @@ def main() -> int:
             return bool(idir) and (profiler_root / idir / "render.tracy").is_file()
 
         if kept_rows:
-            newest_keep = max(kept_rows, key=lambda r: str(r.get("ts", "")))
+            # Newest by iter number (ts formats are mixed); rebaseline/diagnostic
+            # rows are not code keeps, so the gate looks at decision == keep.
+            keeps = [r for r in kept_rows if str(r.get("decision") or "").lower() == "keep"] or kept_rows
+            newest_keep = max(keeps, key=lambda r: r["iter"] if isinstance(r.get("iter"), int) else -1)
             if not _has_trace(newest_keep):
                 idir = newest_keep.get("iter_dir") or f"ttw-{int(newest_keep.get('iter', -1)):03d}"
                 raise Invalid(
@@ -241,9 +255,33 @@ def main() -> int:
                     f"Tracy trace (historical, builds gone — unrecoverable): {missing}"
                 )
             checks.append(
-                f"newest kept iter {newest_keep.get('iter')} has a Tracy trace "
+                f"newest kept iter {newest_keep.get('iter')} has a Tracy trace or written waiver "
                 f"(forward-enforced)"
             )
+
+        # --- 8. Device screenshot on every iteration (user, 2026-10-05) -----
+        # Iters > br.SCREENSHOT_REQUIRED_AFTER need a complete device_screenshot
+        # (hero + diff files, PSNR, md5, commit/config, visual-check note).
+        # Legacy iters may carry screenshot_backfill_pending, which must render
+        # as a red placeholder, never silently.
+        errors, pending = br.check_device_screenshots(ttw_rows)
+        if errors:
+            raise Invalid(
+                f"{len(errors)} device screenshot problem(s) "
+                f"(opt/ttw/ITERATION_CHECKLIST.md): " + "; ".join(errors)
+            )
+        if pending and html.count(SHOT_PENDING_MARKER) < len(pending):
+            raise Invalid(
+                f"{len(pending)} iters are screenshot_backfill_pending but REPORT.html "
+                f"shows only {html.count(SHOT_PENDING_MARKER)} '{SHOT_PENDING_MARKER}' "
+                f"placeholders"
+            )
+        if pending:
+            print(f"  [WARN] {len(pending)} legacy iters still screenshot_backfill_pending: {pending}")
+        checks.append(
+            f"every ttw iter > {br.SCREENSHOT_REQUIRED_AFTER} has a device screenshot + visual check; "
+            f"{len(pending)} legacy iters shown as backfill pending"
+        )
 
     except Invalid as e:
         for c in checks:

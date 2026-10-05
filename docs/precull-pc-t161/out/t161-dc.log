@@ -1,0 +1,49 @@
+##### dc0 13:46:08
+=== rdc0-dc 6a00513 GSPLAT_TT_DUMP_CULL=/localdev/smarton/gstt2-t161/tmp/t115/dumpcull 20:46:09
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=76.12dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.7 p50_ms=19.9 min_ms=16.5 max_ms=23.6 n_views=30 warmup_s=10.5 out=/localdev/smarton/gstt2-t161/tmp/t115-rdc0-dc
+STAGES n=30 head=0.002 project=4.578 tile_assign=0.005 sort=5.201 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.687 d2h=0.212 assemble=0.000 tail=0.002 | sum=19.688 view_total=19.689 resid_in_view=+0.001 avg_frame_ms=19.720 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.024 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.125 upload=0.000 bin_emit=4.767 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.193 publish_wait=0.000 mat=0.051 | sum=5.160 sort=5.201 resid=+0.041
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.412 gather_result=0.102 | sum=4.577 project=4.578 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+VIEWS DIFFER (30 of 30)
+records 3369033 dead(mask=0) 664773 share 0.1973 floor 0.00392156886
+records in tiles > 8192: 1355356 (0.4023); dead there 0.1845
+tiles with records 1024 max/tile 25699 mean/tile(nonempty) 3290.1
+mask popcount histogram (0..32): 416703 454421 476431 203861 178949 81110 58968 38934 33853 11679 9064 6815 5868 3163 2733 1926 2506 1057 1014 908 1076 678 744 614 845 378 473 371 612 383 376 549 2938
+mean microblocks per live record 3.06
+=== done round dc0 20:46:29
+##### dc0 rc=0
+##### dc1 13:46:30
+=== rdc1-dc 6a00513 GSPLAT_TT_DUMP_CULL=/localdev/smarton/gstt2-t161/tmp/t115/dumpcull 20:46:30
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=19.2 p50_ms=19.3 min_ms=16.3 max_ms=22.8 n_views=30 warmup_s=4.8 out=/localdev/smarton/gstt2-t161/tmp/t115-rdc1-dc
+STAGES n=30 head=0.003 project=4.660 tile_assign=0.004 sort=4.998 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.283 d2h=0.203 assemble=0.000 tail=0.002 | sum=19.154 view_total=19.155 resid_in_view=+0.001 avg_frame_ms=19.189 resid_vs_frame=+0.036
+SORT_STAGES n=30 pread=0.020 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.104 upload=0.000 bin_emit=4.625 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.165 publish_wait=0.000 mat=0.047 | sum=4.961 sort=4.998 resid=+0.038
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.031 pfwc_enqueue=0.036 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.478 gather_result=0.108 | sum=4.659 project=4.660 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+ALL_VIEWS_IDENTICAL (30 views)
+records 3236947 dead(mask=0) 532687 share 0.1646 floor 0.00392156886
+records in tiles > 8192: 1221398 (0.3773); dead there 0.1493
+tiles with records 1024 max/tile 25019 mean/tile(nonempty) 3161.1
+mask popcount histogram (0..32): 335599 481949 502859 211948 187207 84296 61069 40392 34985 12195 9432 7130 6119 3303 2865 2051 2666 1114 1090 963 1154 721 786 674 915 409 510 411 663 415 396 592 3122
+mean microblocks per live record 3.05
+=== done round dc1 20:46:45
+##### dc1 rc=0
+##### dc2 13:46:45
+=== rdc2-dc 6a00513 GSPLAT_TT_DUMP_CULL=/localdev/smarton/gstt2-t161/tmp/t115/dumpcull 20:46:45
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=75.64dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=18.3 p50_ms=18.6 min_ms=15.8 max_ms=20.9 n_views=30 warmup_s=4.8 out=/localdev/smarton/gstt2-t161/tmp/t115-rdc2-dc
+STAGES n=30 head=0.002 project=4.597 tile_assign=0.004 sort=4.611 blend_setup=0.000 mat=0.000 cull=0.000 blend=8.876 d2h=0.218 assemble=0.000 tail=0.002 | sum=18.310 view_total=18.311 resid_in_view=+0.001 avg_frame_ms=18.342 resid_vs_frame=+0.032
+SORT_STAGES n=30 pread=0.014 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.097 upload=0.000 bin_emit=4.267 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.155 publish_wait=0.000 mat=0.043 | sum=4.576 sort=4.611 resid=+0.034
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.032 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=4.423 gather_result=0.106 | sum=4.596 project=4.597 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+VIEWS DIFFER (30 of 30)
+records 2895701 dead(mask=0) 191441 share 0.0661 floor 0.00392156886
+records in tiles > 8192: 992282 (0.3427); dead there 0.0526
+tiles with records 1024 max/tile 22980 mean/tile(nonempty) 2827.8
+mask popcount histogram (0..32): 127931 551925 584041 232462 207631 90001 64232 42453 36317 12946 9940 7488 6386 3452 3009 2165 2774 1193 1166 1030 1231 765 838 725 980 443 535 443 709 444 419 633 3293
+mean microblocks per live record 2.98
+=== done round dc2 20:47:01
+##### dc2 rc=0
+ALLDONE

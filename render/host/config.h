@@ -52,6 +52,16 @@ inline constexpr uint32_t kBucketFit = 8192;
 // keep the legacy blendrec gather.
 inline constexpr uint32_t kOverflowL1Cap = 2u * kBucketFit;  // 16384
 
+// Task #86: DRAM page of the 32B-record buckets (buf_l1_recs and the overflow
+// region): 64 records per 2 KB page. With 64 B pages (2 records) the
+// materialize bulk read cost one accessor address computation + one NoC
+// transaction per 2 records, ~1.0 ms/view per mover; the emit writes 32 B
+// records either way. kBucketFit is a multiple of kRecsPerPage, so every
+// in-budget tile bucket starts on a page; overflow bases are page-aligned.
+inline constexpr uint32_t kRecPageBytes = 2048;
+inline constexpr uint32_t kRecsPerPage = kRecPageBytes / 32u;  // 64
+static_assert(kBucketFit % kRecsPerPage == 0, "tile buckets must be page-aligned");
+
 // Device microblock blend selector (GSPLAT_TT_BLEND_MODE). 2 == the TT device
 // microblock-major SFPU kernel (the production blend).
 inline constexpr int kBlendMode = 2;

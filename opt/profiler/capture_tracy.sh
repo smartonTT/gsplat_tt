@@ -18,8 +18,14 @@
 # ============================================================================
 set -uo pipefail
 
-ITER_DIR="${1:?usage: capture_tracy.sh <iter-dir>}"
-export TTW_ITER_DIR="$ITER_DIR"
+ITER_DIR="${1:?usage: capture_tracy.sh <iter-dir> [START:END]}"
+# Optional view chunk (python slice of the 30-view order). Each chunk is its own
+# devrun job so a long capture stays under the 600 s ceiling; stitch the chunk
+# CSVs with opt/profiler/stitch_device_csv.py (see capture_tracy_chunked.sh).
+VIEW_RANGE="${2:-}"
+export TTW_ITER_DIR="$ITER_DIR" TTW_VIEW_RANGE="$VIEW_RANGE"
+SUB=""
+[[ -n "$VIEW_RANGE" ]] && SUB="/chunks/${VIEW_RANGE/:/-}"
 
 export TT_METAL_HOME=/localdev/smarton/tt-metal
 export TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal
@@ -34,14 +40,17 @@ export PYTHONPATH=/localdev/smarton/tt-metal/tools:${PYTHONPATH:-}
 #   --dump-device-data-mid-run -> TT_METAL_PROFILER_MID_RUN_DUMP=1 (push mid-run).
 export TT_METAL_DEVICE_PROFILER=1
 export GSPLAT_TT_PROFILE=1
+# The device profiler grows kernel binaries; the fused pfwc program (iter-179) then overflows the
+# 69 KB Tensix kernel config buffer. Give it 4 KB more (host/device_state.cpp; profiling only).
+export GSPLAT_TT_KCFG_EXTRA_KB=${GSPLAT_TT_KCFG_EXTRA_KB:-4}
 
-REPO=/localdev/smarton/gstt2
+REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
 cd "$REPO" || { echo "[capture_tracy] FATAL: cannot cd $REPO" >&2; exit 1; }
-OUTDIR="$REPO/opt/profiler/wrap_out_${ITER_DIR}"
+OUTDIR="$REPO/opt/profiler/wrap_out_${ITER_DIR}${SUB//\//_}"
 TRACY="$OUTDIR/.logs/tracy_profile_log_host.tracy"
 DLOG="$OUTDIR/.logs/profile_log_device.csv"
-DST="$REPO/opt/profiler/${ITER_DIR}/render.tracy"
-DST_CSV="$REPO/opt/profiler/${ITER_DIR}/profile_log_device.csv"
+DST="$REPO/opt/profiler/${ITER_DIR}${SUB}/render.tracy"
+DST_CSV="$REPO/opt/profiler/${ITER_DIR}${SUB}/profile_log_device.csv"
 rm -rf "$OUTDIR"
 mkdir -p "$OUTDIR" "$(dirname "$DST")"
 
@@ -52,7 +61,7 @@ fi
 # shellcheck source=/dev/null
 source "$REPO/.venv/bin/activate"
 
-echo "[capture_tracy] render_clean FULL 30-view capture (iter-dir=$ITER_DIR) -> $DST"
+echo "[capture_tracy] render_clean capture (iter-dir=$ITER_DIR views=${VIEW_RANGE:-all}) -> $DST"
 PY="$REPO/.venv/bin/python3"
 INNER="$REPO/opt/profiler/_capture_inner.sh"
 echo "[capture_tracy] CMD: $PY -m tracy -r -p -v --dump-device-data-mid-run -o $OUTDIR $INNER"
@@ -69,7 +78,7 @@ if [[ -s "$TRACY" ]]; then
   if [[ -f "$DLOG" ]]; then
     cp -f "$DLOG" "$DST_CSV"
     rows=$(($(wc -l < "$DLOG") - 1))
-    echo "[capture_tracy] device profiler CSV data rows: $rows (1-view baseline ~65600; ~30x => full 30-view)"
+    echo "[capture_tracy] device profiler CSV data rows: $rows (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)"
     echo "[capture_tracy] per-zone-hash device marker counts (each zone repeats ~30x across views):"
     awk -F, 'NR>1 {print $5}' "$DLOG" 2>/dev/null | sort | uniq -c | sort -rn | head -25
   else

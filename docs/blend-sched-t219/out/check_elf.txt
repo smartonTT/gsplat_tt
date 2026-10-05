@@ -1,0 +1,49 @@
+== level 0: trisc1-sched0.dis, 48 bodies
+bodies equal to t189 default build: 48/48
+body sizes (instructions before ret): single 60 ops x32, pair 106 ops x16
+ttreplay in bodies: 32 (record mode 16)
+ttreplay outside bodies: _start @0x77c0 0,4,1,1
+ttreplay outside bodies: _start @0x77d4 0,4,0,0
+ttreplay outside bodies: _start @0x77d8 0,4,0,0
+ttreplay outside bodies: _start @0x77dc 0,4,0,0
+ttreplay outside bodies: _start @0x7818 0,4,1,1
+ttreplay outside bodies: _start @0x782c 0,4,0,0
+ttreplay outside bodies: _start @0x7830 0,4,0,0
+ttreplay outside bodies: _start @0x7834 0,4,0,0
+ttreplay outside bodies: _start @0x7870 0,4,1,1
+ttreplay outside bodies: _start @0x7884 0,4,0,0
+ttreplay outside bodies: _start @0x7888 0,4,0,0
+ttreplay outside bodies: _start @0x788c 0,4,0,0
+ttreplay outside bodies: _start @0x78c8 0,4,1,1
+ttreplay outside bodies: _start @0x78dc 0,4,0,0
+ttreplay outside bodies: _start @0x78e0 0,4,0,0
+ttreplay outside bodies: _start @0x78e4 0,4,0,0
+== level 1: trisc1-sched1.dis, 48 bodies
+body sizes (instructions before ret): single 60 ops x32, pair 109 ops x16
+ttreplay in bodies: 0 (record mode 0)
+bodies equal to schedule.py single/pair: 48/48
+ttreplay outside bodies: _start @0x77c0 0,4,1,1
+ttreplay outside bodies: _start @0x77d4 0,4,0,0
+ttreplay outside bodies: _start @0x77d8 0,4,0,0
+ttreplay outside bodies: _start @0x77dc 0,4,0,0
+ttreplay outside bodies: _start @0x7818 0,4,1,1
+ttreplay outside bodies: _start @0x782c 0,4,0,0
+ttreplay outside bodies: _start @0x7830 0,4,0,0
+ttreplay outside bodies: _start @0x7834 0,4,0,0
+ttreplay outside bodies: _start @0x7870 0,4,1,1
+ttreplay outside bodies: _start @0x7884 0,4,0,0
+ttreplay outside bodies: _start @0x7888 0,4,0,0
+ttreplay outside bodies: _start @0x788c 0,4,0,0
+ttreplay outside bodies: _start @0x78c8 0,4,1,1
+ttreplay outside bodies: _start @0x78dc 0,4,0,0
+ttreplay outside bodies: _start @0x78e0 0,4,0,0
+ttreplay outside bodies: _start @0x78e4 0,4,0,0
+== level 2: trisc1-sched2.dis, 48 bodies
+record sites (ttreplay 0,13,0,1): [('_start', '0x76bc')]
+record: slots 0-12 = FRONT, 13-31 = TAIL(T,R,G,B of microblock 0) + SETRWC D=0: True
+body sizes (instructions before ret): single 31 ops x1, single 32 ops x7, single 33 ops x7, single 34 ops x7, single 35 ops x7, single 36 ops x3, pair 63 ops x1, pair 64 ops x3, pair 66 ops x3, pair 67 ops x1, pair 68 ops x3, pair 70 ops x3, pair 71 ops x1, pair 72 ops x1
+ttreplay in bodies: 128 (record mode 0)
+bodies equal to schedule.py a2 after replay: 48/48
+ttreplay outside bodies: _start @0x76bc 0,13,0,1
+ttreplay outside bodies: _start @0x76f4 13,19,0,1
+check_elf: OK

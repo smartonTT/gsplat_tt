@@ -1,0 +1,123 @@
+[sync_remote] sha=f031ba064c6fe8ef3234134c877e1635c5669642 so_md5=0ba502bdc910df88674df6a7ad3c6edc 
+SYNC_RC=0
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t221-v1  timeout=400s  worry=320s  ts=2026-10-05T10:16:00-0400
+cmd: RUN_TO=200 bash /localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh v1 def:GSPLAT_TT_NOOP=0 off:GSPLAT_TT_PFWC_WRITER_SPLIT=0,GSPLAT_TT_PFWC_COVCAM_SFPU=0 cov:GSPLAT_TT_PFWC_WRITER_SPLIT=0
+-----------------------------------------
+=== rv1-def f031ba0 GSPLAT_TT_NOOP=0 14:16:00
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000 | sum=0.004 tile_assign=0.005 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.6 p50_ms=13.8 min_ms=11.8 max_ms=15.4 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t221/tmp/t221-rv1-def
+      1 STAGES n=30 head=0.002 project=3.346 tile_assign=0.005 sort=0.883 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.124 d2h=0.214 assemble=0.000 tail=0.002 | sum=13.577 view_total=13.578 resid_in_view=+0.001 avg_frame_ms=13.609 resid_vs_frame=+0.032
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.048 upload=0.000 bin_emit=0.564 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.171 publish_wait=0.000 mat=0.062 | sum=0.847 sort=0.883 resid=+0.036
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.035 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.275 gather_result=0.000 | sum=3.345 project=3.346 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv1-off f031ba0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_PFWC_COVCAM_SFPU=0 14:16:12
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.003 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.3 p50_ms=14.4 min_ms=12.3 max_ms=16.2 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t221/tmp/t221-rv1-off
+      1 STAGES n=30 head=0.002 project=4.014 tile_assign=0.004 sort=0.848 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.156 d2h=0.202 assemble=0.000 tail=0.002 | sum=14.228 view_total=14.229 resid_in_view=+0.001 avg_frame_ms=14.259 resid_vs_frame=+0.031
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.045 upload=0.000 bin_emit=0.554 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.158 publish_wait=0.000 mat=0.056 | sum=0.814 sort=0.848 resid=+0.034
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.031 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.947 gather_result=0.000 | sum=4.013 project=4.014 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv1-cov f031ba0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 14:16:22
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.003 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.1 p50_ms=14.2 min_ms=12.0 max_ms=16.0 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t221/tmp/t221-rv1-cov
+      1 STAGES n=30 head=0.003 project=3.797 tile_assign=0.004 sort=0.858 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.142 d2h=0.231 assemble=0.000 tail=0.002 | sum=14.037 view_total=14.038 resid_in_view=+0.001 avg_frame_ms=14.074 resid_vs_frame=+0.037
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.045 upload=0.000 bin_emit=0.557 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.160 publish_wait=0.000 mat=0.061 | sum=0.823 sort=0.858 resid=+0.035
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.031 pfwc_enqueue=0.034 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.725 gather_result=0.000 | sum=3.796 project=3.797 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round v1 14:16:34
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t221/.ttw/logs/t221-v1-20261005-101559.log
+TIME_v1_RC=0
+MD5_OK rv1-def
+MD5_OK rv1-off
+MD5_OK rv1-cov
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t221-v2  timeout=400s  worry=320s  ts=2026-10-05T10:16:37-0400
+cmd: RUN_TO=200 bash /localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh v2 off:GSPLAT_TT_PFWC_WRITER_SPLIT=0,GSPLAT_TT_PFWC_COVCAM_SFPU=0 cov:GSPLAT_TT_PFWC_WRITER_SPLIT=0 def:GSPLAT_TT_NOOP=0
+-----------------------------------------
+=== rv2-off f031ba0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_PFWC_COVCAM_SFPU=0 14:16:37
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.005 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.3 p50_ms=14.5 min_ms=12.3 max_ms=16.3 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t221/tmp/t221-rv2-off
+      1 STAGES n=30 head=0.002 project=4.017 tile_assign=0.005 sort=0.892 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.113 d2h=0.235 assemble=0.000 tail=0.002 | sum=14.268 view_total=14.268 resid_in_view=+0.001 avg_frame_ms=14.303 resid_vs_frame=+0.035
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.050 upload=0.000 bin_emit=0.567 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.172 publish_wait=0.000 mat=0.064 | sum=0.855 sort=0.892 resid=+0.037
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.029 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.952 gather_result=0.000 | sum=4.016 project=4.017 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv2-cov f031ba0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 14:16:48
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.0 p50_ms=14.2 min_ms=12.0 max_ms=16.1 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t221/tmp/t221-rv2-cov
+      1 STAGES n=30 head=0.003 project=3.787 tile_assign=0.004 sort=0.855 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.154 d2h=0.204 assemble=0.000 tail=0.002 | sum=14.009 view_total=14.010 resid_in_view=+0.001 avg_frame_ms=14.044 resid_vs_frame=+0.034
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.045 upload=0.000 bin_emit=0.554 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.161 publish_wait=0.000 mat=0.058 | sum=0.819 sort=0.855 resid=+0.037
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.032 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.716 gather_result=0.000 | sum=3.786 project=3.787 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv2-def f031ba0 GSPLAT_TT_NOOP=0 14:16:59
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.6 p50_ms=13.7 min_ms=11.8 max_ms=15.5 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t221/tmp/t221-rv2-def
+      1 STAGES n=30 head=0.003 project=3.360 tile_assign=0.005 sort=0.939 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.068 d2h=0.213 assemble=0.000 tail=0.002 | sum=13.589 view_total=13.590 resid_in_view=+0.001 avg_frame_ms=13.627 resid_vs_frame=+0.037
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.050 upload=0.000 bin_emit=0.576 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.195 publish_wait=0.000 mat=0.073 | sum=0.896 sort=0.939 resid=+0.043
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.046 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.274 gather_result=0.000 | sum=3.358 project=3.360 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round v2 14:17:10
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t221/.ttw/logs/t221-v2-20261005-101637.log
+TIME_v2_RC=0
+MD5_OK rv2-def
+MD5_OK rv2-off
+MD5_OK rv2-cov
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t221-v3  timeout=400s  worry=320s  ts=2026-10-05T10:17:14-0400
+cmd: RUN_TO=200 bash /localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh v3 cov:GSPLAT_TT_PFWC_WRITER_SPLIT=0 def:GSPLAT_TT_NOOP=0 off:GSPLAT_TT_PFWC_WRITER_SPLIT=0,GSPLAT_TT_PFWC_COVCAM_SFPU=0
+-----------------------------------------
+=== rv3-cov f031ba0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 14:17:15
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.1 p50_ms=14.2 min_ms=12.0 max_ms=16.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t221/tmp/t221-rv3-cov
+      1 STAGES n=30 head=0.003 project=3.787 tile_assign=0.004 sort=0.860 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.148 d2h=0.216 assemble=0.000 tail=0.002 | sum=14.020 view_total=14.021 resid_in_view=+0.001 avg_frame_ms=14.057 resid_vs_frame=+0.037
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.044 upload=0.000 bin_emit=0.556 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.161 publish_wait=0.000 mat=0.061 | sum=0.823 sort=0.860 resid=+0.037
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.032 pfwc_enqueue=0.034 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.715 gather_result=0.000 | sum=3.786 project=3.787 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv3-def f031ba0 GSPLAT_TT_NOOP=0 14:17:26
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.7 p50_ms=13.8 min_ms=11.9 max_ms=15.7 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t221/tmp/t221-rv3-def
+      1 STAGES n=30 head=0.003 project=3.355 tile_assign=0.005 sort=0.865 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.134 d2h=0.279 assemble=0.000 tail=0.002 | sum=13.643 view_total=13.643 resid_in_view=+0.001 avg_frame_ms=13.680 resid_vs_frame=+0.037
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.046 upload=0.000 bin_emit=0.557 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.164 publish_wait=0.000 mat=0.060 | sum=0.829 sort=0.865 resid=+0.037
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.038 pfwc_enqueue=0.036 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.274 gather_result=0.000 | sum=3.354 project=3.355 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== rv3-off f031ba0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_PFWC_COVCAM_SFPU=0 14:17:36
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.3 p50_ms=14.5 min_ms=12.3 max_ms=16.3 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t221/tmp/t221-rv3-off
+      1 STAGES n=30 head=0.003 project=4.021 tile_assign=0.005 sort=0.911 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.093 d2h=0.272 assemble=0.000 tail=0.002 | sum=14.306 view_total=14.307 resid_in_view=+0.001 avg_frame_ms=14.341 resid_vs_frame=+0.035
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.053 upload=0.000 bin_emit=0.574 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.181 publish_wait=0.000 mat=0.064 | sum=0.873 sort=0.911 resid=+0.038
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.030 pfwc_enqueue=0.032 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.952 gather_result=0.000 | sum=4.019 project=4.021 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round v3 14:17:47
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t221/.ttw/logs/t221-v3-20261005-101714.log
+TIME_v3_RC=0
+MD5_OK rv3-def
+MD5_OK rv3-off
+MD5_OK rv3-cov
+CHAIN_DONE

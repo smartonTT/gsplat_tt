@@ -32,6 +32,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "gsplat_cpu/sort.h"
 
@@ -47,7 +48,7 @@ namespace gsplat_tt {
 // device sort succeeds, cull+blend run before returning to render_full_py so
 // frame-1 does not pay a separate blend cold-start / host gap after sort.
 struct SortBlendContinuation {
-    float* image_out = nullptr;
+    uint8_t* image_out = nullptr;  // final u8 RGB image, H*W*3
     int image_height = 0;
     int image_width = 0;
     float mb_contrib_floor = 0.0f;
@@ -66,16 +67,29 @@ struct SortBlendContinuation {
     double blend_ms = 0.0;
 };
 
+// On the resident-pairs path (the only one render_clean runs) every "bin" step
+// is a DEVICE kernel except the per-tile layout: bin_ms = bin_count_ms +
+// bin_hist_d2h_ms + bin_layout_ms + bin_emit_ms. The leaf fields below are
+// disjoint wall-clock spans of sort_and_bin_tt (the fused cull/blend
+// continuation excluded); render.cpp books them as stage_sort_* buckets.
 struct SortCallTimings {
-    double bin_ms = 0.0;       // host Pass1+Pass2 binning into aligned layout
-    double upload_ms = 0.0;    // H2D of packed keys/ids
-    double kernel_ms = 0.0;    // device per-tile radix kernel
+    double bin_ms = 0.0;       // count + hist D2H + host layout + emit (aggregate)
+    double upload_ms = 0.0;    // H2D enqueue of the layout outputs + metadata
+    double kernel_ms = 0.0;    // device per-tile radix kernel (enqueue only; drained in publish)
     double d2h_ms = 0.0;       // device->host readback of sorted ids
     double compact_ms = 0.0;   // host Pass4 aligned->contiguous compaction
-    double publish_ms = 0.0;   // H2D of the resident contiguous outputs
+    double publish_ms = 0.0;   // publish_host_ms + publish_wait_ms
     double materialize_ms = 0.0;  // post-radix PACK2 subchunk materialize (step A)
     double total_ms = 0.0;     // wall clock of the whole call
     int stage = -1;            // which staged path ran (0 = S0, 1 = S1)
+    // Leaf split (task #18).
+    double pread_ms = 0.0;         // blocking D2H of tile_assign's P control page
+    double bin_count_ms = 0.0;     // Pass A device histogram kernel: launch + Finish
+    double bin_hist_d2h_ms = 0.0;  // blocking D2H of the per-(core,tile) histogram
+    double bin_layout_ms = 0.0;    // host_bin_layout_from_hist (host CPU only)
+    double bin_emit_ms = 0.0;      // Pass B device scatter/emit kernel: launch + Finish
+    double publish_host_ms = 0.0;  // publish: host prep + enqueues before the drain
+    double publish_wait_ms = 0.0;  // publish: Finish draining radix+publish+directory
 };
 
 // Device sort. Same signature shape as gsplat_cpu::sort_and_bin. On success
@@ -97,6 +111,18 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     // skips it (required for CPU blend_mode=0 in the same process as TT env).
     bool need_host_sorted_ids = false,
     SortBlendContinuation* sort_blend = nullptr);
+
+// Task #198 (GSPLAT_TT_SORT_OL_EARLY): enqueue the one-launch sort on the
+// device's CQ0 right behind the fold K2, before the host knows P. The kernel
+// reads P from ta_pairs_P and takes each mover's K2 page range from the running
+// mover-speed sums acc (2 * cores + 1, as the K2 got them), so the fold holds
+// by construction. The pair buffers are passed in: tile_assign registers them
+// only later. Returns false, with nothing enqueued, when the one-launch config
+// does not hold; the sort then runs at its usual place.
+bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
+                                  uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
+                                  uint32_t keep_addr, uint32_t pairs_P_addr,
+                                  const std::vector<uint64_t>& acc);
 
 // Lazily initializes the device sort context (programs + CBs). Returns true
 // if the device path is operational.

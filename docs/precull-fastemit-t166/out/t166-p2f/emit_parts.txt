@@ -1,0 +1,20 @@
+n_views=30 movers=220 busiest=('3', '2', 'BRISC') (emit zone 3.544 ms/view)
+part (ms/view)                                       mean mover   mean BRISC  mean NCRISC      busiest
+sort_ol_emit zone                                         2.499        2.539        2.460        3.544
+ep_pro prologue (ring starts, first pair/brec reads)        0.031        0.032        0.030        0.078
+ep_rdw read barrier wait in loop (brec k, pairs k+1)        0.012        0.014        0.009        0.026
+ep_brec issue_brec: keep/gid scan + brec read issue        0.547        0.579        0.514        1.368
+ep_pairs issue_pairs: pair page read issue                0.002        0.002        0.002        0.002
+ep_proc process_batch total                               1.819        1.826        1.811        1.995
+ep_wfl   of which writes_flushed wait (run start)         0.019        0.020        0.019        0.034
+ep_wiss   of which run write issue (flush_run)            0.129        0.136        0.122        0.343
+ep_drain tail drain (partial runs)                        0.087        0.083        0.090        0.072
+ep_wbar final write barrier                               0.000        0.000        0.001        0.000
+pack/key build = proc - wfl - wiss                        1.670        1.670        1.671        1.618
+unattributed = zone - sum(top-level parts)                0.002        0.002        0.003        0.002
+ep_nrec per view                                          12001        11997        12005        12003
+ep_npf per view                                            7703         7707         7700         6917
+ep_nb per view                                               94           94           94           94
+ep_ncold per view                                             2            2            2            4
+ep_nrun per view                                           1502         1504         1501         1501
+emit cycles per record                                    281.1        285.7        276.6        398.6

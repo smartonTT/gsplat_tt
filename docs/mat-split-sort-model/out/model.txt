@@ -1,0 +1,108 @@
+### --sched host --mid 0
+merge=0.015 us/rec merge_fix=10.0 us sort=0.0829 us/rec
+mid-tile split threshold: off
+
+view 0: records=3236947 big tiles=[25019, 22700, 20851, 18095, 17973, 17214]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.350  2.997  3.088  2.906    0.000  (64, 'NCRISC') idle=0.000 n_items=2 [('w', 11381), ('w', 6202)]
+  t168           3.513  2.880  2.920  2.840    2.659  (84, 'NCRISC') idle=0.874 n_items=2 [('g', 25019)]
+  split-pair     3.337  2.894  2.919  2.870    1.436  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+  split-any      3.337  2.895  2.913  2.876    1.436  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+  free           3.337  2.821  2.802  2.840    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+
+view 1: records=2326963 big tiles=[21115, 20933, 17605, 17379, 17341, 17024, 16839]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.218  2.200  2.310  2.091    0.000  (21, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  t168           3.317  2.089  2.139  2.040    2.244  (106, 'NCRISC') idle=1.843 n_items=2 [('g', 17341), ('g', 16839)]
+  split-pair     3.218  2.104  2.161  2.047    1.213  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  split-any      3.218  2.105  2.160  2.049    1.213  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  free           3.218  2.027  2.015  2.040    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+
+Deltas vs t168 (ms, window):
+  view 0: off -0.163  split-pair -0.176  split-any -0.176  free -0.176
+  view 1: off -0.099  split-pair -0.099  split-any -0.099  free -0.099
+
+### --sched host --mid 8192
+merge=0.015 us/rec merge_fix=10.0 us sort=0.0829 us/rec
+mid-tile split threshold: 8192
+
+view 0: records=3236947 big tiles=[25019, 22700, 20851, 18095, 17973, 17214]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.350  2.997  3.088  2.906    0.000  (64, 'NCRISC') idle=0.000 n_items=2 [('w', 11381), ('w', 6202)]
+  t168           3.513  2.880  2.920  2.840    2.659  (84, 'NCRISC') idle=0.874 n_items=2 [('g', 25019)]
+  split-pair     3.273  3.005  2.778  3.233    1.980  (36, 'NCRISC') idle=0.618 n_items=4 [('h', 14207), ('g', 25019), ('g', 11911), ('g', 11070)]
+  split-any      4.244  3.012  2.789  3.236    2.898  (99, 'NCRISC') idle=1.749 n_items=5 [('h', 9339), ('g', 11813), ('g', 10408), ('g', 9665)]
+  free           3.337  2.821  2.802  2.840    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+
+view 1: records=2326963 big tiles=[21115, 20933, 17605, 17379, 17341, 17024, 16839]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.218  2.200  2.310  2.091    0.000  (21, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  t168           3.317  2.089  2.139  2.040    2.244  (106, 'NCRISC') idle=1.843 n_items=2 [('g', 17341), ('g', 16839)]
+  split-pair     3.159  2.185  2.006  2.365    1.745  (94, 'NCRISC') idle=1.404 n_items=5 [('g', 9399), ('g', 14121)]
+  split-any      3.442  2.188  2.024  2.352    2.004  (106, 'NCRISC') idle=1.693 n_items=5 [('g', 8351), ('g', 14634)]
+  free           3.218  2.027  2.015  2.040    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+
+Deltas vs t168 (ms, window):
+  view 0: off -0.163  split-pair -0.240  split-any +0.731  free -0.176
+  view 1: off -0.099  split-pair -0.157  split-any +0.126  free -0.099
+
+### --sched dep --mid 0
+merge=0.015 us/rec merge_fix=10.0 us sort=0.0829 us/rec
+mid-tile split threshold: off
+
+view 0: records=3236947 big tiles=[25019, 22700, 20851, 18095, 17973, 17214]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.337  2.997  3.095  2.898    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+  t168           3.529  2.880  2.938  2.823    2.659  (3, 'NCRISC') idle=0.000 n_items=3 [('s', 18095), ('g', 18095), ('g', 25019)]
+  split-pair     3.337  2.893  2.915  2.871    1.436  (6, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+  split-any      3.337  2.893  2.915  2.871    1.436  (6, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+  free           3.337  2.819  2.853  2.786    0.000  (0, 'NCRISC') idle=0.000 n_items=7 [('s', 25019), ('s', 22700), ('s', 20851), ('s', 18095)]
+
+view 1: records=2326963 big tiles=[21115, 20933, 17605, 17379, 17341, 17024, 16839]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.218  2.200  2.322  2.079    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  t168           3.218  2.091  2.267  1.915    2.244  (7, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  split-pair     3.218  2.105  2.208  2.002    1.213  (7, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  split-any      3.218  2.105  2.208  2.002    1.213  (7, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  free           3.218  2.027  2.150  1.904    0.000  (0, 'NCRISC') idle=0.000 n_items=8 [('s', 21115), ('s', 20933), ('s', 17605), ('s', 17379)]
+
+Deltas vs t168 (ms, window):
+  view 0: off -0.192  split-pair -0.192  split-any -0.192  free -0.192
+  view 1: off +0.000  split-pair +0.000  split-any +0.000  free +0.000
+
+### --sched dep --mid 8192
+merge=0.015 us/rec merge_fix=10.0 us sort=0.0829 us/rec
+mid-tile split threshold: 8192
+
+view 0: records=3236947 big tiles=[25019, 22700, 20851, 18095, 17973, 17214]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.337  2.997  3.095  2.898    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 16257)]
+  t168           3.529  2.880  2.938  2.823    2.659  (3, 'NCRISC') idle=0.000 n_items=3 [('s', 18095), ('g', 18095), ('g', 25019)]
+  split-pair     3.081  3.011  3.013  3.009    1.436  (31, 'NCRISC') idle=0.000 n_items=5 [('h', 13397), ('g', 11716), ('g', 10098)]
+  split-any      3.081  3.011  3.013  3.009    1.436  (31, 'NCRISC') idle=0.000 n_items=5 [('h', 13397), ('g', 11716), ('g', 10098)]
+  free           3.337  2.819  2.853  2.786    0.000  (0, 'NCRISC') idle=0.000 n_items=7 [('s', 25019), ('s', 22700), ('s', 20851), ('s', 18095)]
+
+view 1: records=2326963 big tiles=[21115, 20933, 17605, 17379, 17341, 17024, 16839]
+  schedule      window   mean     nc     br lastsort  busiest (core, mover, idle ms, top items)
+  off            3.218  2.200  2.322  2.079    0.000  (0, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  t168           3.218  2.091  2.267  1.915    2.244  (7, 'NCRISC') idle=0.000 n_items=1 [('w', 15722)]
+  split-pair     2.209  2.188  2.185  2.191    1.213  (77, 'BRISC') idle=0.000 n_items=6 [('w', 6098), ('w', 2553)]
+  split-any      2.209  2.188  2.185  2.191    1.213  (77, 'BRISC') idle=0.000 n_items=6 [('w', 6098), ('w', 2553)]
+  free           3.218  2.027  2.150  1.904    0.000  (0, 'NCRISC') idle=0.000 n_items=8 [('s', 21115), ('s', 20933), ('s', 17605), ('s', 17379)]
+
+Deltas vs t168 (ms, window):
+  view 0: off -0.192  split-pair -0.448  split-any -0.448  free -0.192
+  view 1: off +0.000  split-pair -1.009  split-any -1.009  free +0.000
+
+### merge sensitivity
+sched=host merge=0.010 mid=0:  view 0: off -0.163 split-pair -0.176 split-any -0.176 free -0.176  view 1: off -0.099 split-pair -0.099 split-any -0.099 free -0.099 
+sched=host merge=0.010 mid=8192:  view 0: off -0.163 split-pair -0.249 split-any +0.642 free -0.176  view 1: off -0.099 split-pair -0.228 split-any +0.053 free -0.099 
+sched=host merge=0.030 mid=0:  view 0: off -0.163 split-pair -0.176 split-any -0.176 free -0.176  view 1: off -0.099 split-pair -0.099 split-any -0.099 free -0.099 
+sched=host merge=0.030 mid=8192:  view 0: off -0.163 split-pair -0.018 split-any +0.999 free -0.176  view 1: off -0.099 split-pair +0.054 split-any +0.345 free -0.099 
+sched=dep merge=0.010 mid=0:  view 0: off -0.192 split-pair -0.192 split-any -0.192 free -0.192  view 1: off +0.000 split-pair +0.000 split-any +0.000 free +0.000 
+sched=dep merge=0.010 mid=8192:  view 0: off -0.192 split-pair -0.491 split-any -0.491 free -0.192  view 1: off +0.000 split-pair -1.030 split-any -1.030 free +0.000 
+sched=dep merge=0.030 mid=0:  view 0: off -0.192 split-pair -0.192 split-any -0.192 free -0.192  view 1: off +0.000 split-pair +0.000 split-any +0.000 free +0.000 
+sched=dep merge=0.030 mid=8192:  view 0: off -0.192 split-pair -0.351 split-any -0.351 free -0.192  view 1: off +0.000 split-pair -0.928 split-any -0.928 free +0.000 
+### --sched host --mid 10000 (threshold swing)
+  view 0: off -0.163  split-pair +0.069  split-any +0.388  free -0.176
+  view 1: off -0.099  split-pair -0.840  split-any -0.368  free -0.099

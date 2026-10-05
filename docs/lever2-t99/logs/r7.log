@@ -1,0 +1,11 @@
+sync rc=0
+[sync_remote] sha=40c629db7b1e040f59270220d41876aadc1581f6 so_md5=891fae92f5068c0d60ad7756b7cd42ba 
+=== t99r7-default 40c629d 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.7 p50_ms=33.1 min_ms=27.8 max_ms=37.6 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r7-default
+STAGES n=30 head=0.002 project=6.017 tile_assign=1.437 sort=14.227 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.740 d2h=0.194 assemble=0.000 tail=0.002 | sum=32.620 view_total=32.621 resid_in_view=+0.001 avg_frame_ms=32.655 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.016 bin_count=0.916 bin_hist_d2h=0.251 bin_layout=0.233 upload=0.068 bin_emit=8.841 kernel=0.031 d2h=0.000 compact=0.000 publish_host=0.213 publish_wait=3.565 mat=0.051 | sum=14.184 sort=14.227 resid=+0.043
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.033 pfwc_finish=2.480 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.025 gather_wait=3.327 gather_result=0.103 | sum=6.016 project=6.017 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.014 enqueue=0.017 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001 | sum=1.436 tile_assign=1.437 resid=+0.001
+t99r7-default views: 30
+ALL_VIEWS_IDENTICAL

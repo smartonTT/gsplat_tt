@@ -1,0 +1,53 @@
+# task #44 (pixel-centre microblock box + 0.05 thr margin): 30-view Tracy device zones (3 chunks x 10 views, stitched), yyzo-bh-07 (Blackhole p100a), bicycle 1024x1024
+# tree = e49d388 + task #44 cull change. render.tracy here is chunk 0-10.
+# Before (ttw-159): blend window 17.07 ms/view, tile_blend_sfpu mean 14.58 ms. After: see below.
+
+views=30 cores/frame(anchor)=110 device_frame_span_ms mean=88.07 min=71.88 max=112.54
+zone                 core_ms/v cores  mean_ms   max_ms balance  occ_%  riscs
+--------------------------------------------------------------------------------
+TRISC-FW               9921.23   330   30.064   32.397    0.93   36.9  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL           9919.29   330   30.058   32.396    0.93   36.9  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW               8410.59   110   76.460   81.726    0.94   93.0  BRISC
+BRISC-KERNEL           6572.00   110   59.745   63.031    0.95   71.8  BRISC
+NCRISC-FW              6534.14   110   59.401   64.136    0.93   72.9  NCRISC
+NCRISC-KERNEL          6531.49   110   59.377   64.114    0.93   72.8  NCRISC
+tile_mb_mask           4956.21   330   15.019   15.988    0.94   18.2  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu        4318.58   330   13.087   15.363    0.85   17.5  TRISC_0,TRISC_1,TRISC_2
+sort_bucket_emit       1711.73   220    7.781    8.074    0.96    9.2  BRISC,NCRISC
+tile_l1_cull_rd        1621.68   110   14.743   15.715    0.94   17.9  NCRISC
+tile_blend_load        1388.79   110   12.625   14.918    0.85   17.0  NCRISC
+rd_l1_bulk             1379.55   110   12.541   14.801    0.85   16.8  NCRISC
+proj_scatter           1150.97   110   10.463   11.934    0.88   13.7  BRISC
+sort_subchunk_mat      1044.36   110    9.494   11.931    0.80   13.5  NCRISC
+ta_bucket_scatter       738.66   220    3.358    3.590    0.94    4.1  BRISC,NCRISC
+pfwc                    644.42   330    1.953    1.987    0.98    2.3  TRISC_0,TRISC_1,TRISC_2
+proj_count              609.22   110    5.538    6.112    0.91    7.0  BRISC
+ta_gauss_aabb           556.49   220    2.529    2.540    1.00    2.9  BRISC,NCRISC
+sort_tile_depth         417.77   110    3.798    3.979    0.95    4.5  NCRISC
+sort_bin_hist            95.36   110    0.867    0.882    0.98    1.0  NCRISC
+
+stage        window_ms/v     min     max  zones
+--------------------------------------------------------------------------------
+project            20.19   18.40   22.09  pfwc+proj_count+proj_scatter
+tile_assign         7.52    5.68    9.25  ta_gauss_aabb+ta_bucket_scatter
+sort               14.32   11.67   16.84  sort_bin_hist+sort_bucket_emit+sort_tile_depth
+subchunk_mat       11.93    8.86   16.46  sort_subchunk_mat
+cull               15.99   13.10   18.67  tile_mb_mask+tile_l1_cull_rd
+blend              15.36   12.28   18.30  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+
+zone (timeline)      start_ms   end_ms   window  (mean over views)
+------------------------------------------------------------
+pfwc                     0.00     1.99     1.99
+proj_count               2.03     8.15     6.11
+proj_scatter             8.25    20.19    11.93
+ta_gauss_aabb           20.36    22.90     2.54
+ta_bucket_scatter       24.29    27.88     3.59
+sort_bin_hist           29.21    30.09     0.88
+sort_bucket_emit        31.45    39.52     8.07
+sort_tile_depth         39.55    43.53     3.98
+sort_subchunk_mat       44.76    56.69    11.93
+tile_mb_mask            56.70    72.69    15.99
+tile_l1_cull_rd         56.70    72.41    15.72
+tile_blend_sfpu         72.70    88.07    15.36
+tile_blend_load         72.70    87.62    14.92
+rd_l1_bulk              72.71    87.62    14.92

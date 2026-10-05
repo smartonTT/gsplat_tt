@@ -18,6 +18,9 @@ struct ProjectResult {
     // so render_full skips a second parallel scan over all N Gaussians.
     std::vector<float> colors;     // M * 3
     std::vector<float> opacities;  // M
+    // M when the vectors above are left empty (the device's count-only
+    // result, task #198); 0 otherwise, M is then depths.size().
+    std::size_t num_visible{0};
 };
 
 struct ProjectPrepared {

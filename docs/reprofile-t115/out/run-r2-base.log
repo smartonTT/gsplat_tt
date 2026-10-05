@@ -1,0 +1,274 @@
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-02 15:58:24.976 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-02 15:58:24.976 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-02 15:58:24.979 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-02 15:58:24.980 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-02 15:58:24.980 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-02 15:58:24.980 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-02 15:58:24.981 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-02 15:58:24.981 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-02 15:58:24.981 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-02 15:58:24.981 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-02 15:58:24.983 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-02 15:58:24.984 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-02 15:58:24.984 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-02 15:58:24.984 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-02 15:58:24.984 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-02 15:58:24.984 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-02 15:58:24.984 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-02 15:58:25.024 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-02 15:58:25.024 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-02 15:58:25.024 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-02 15:58:25.024 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-02 15:58:25.024 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-02 15:58:25.025 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffffc0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-02 15:58:25.025 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-02 15:58:25.534 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-02 15:58:25.535 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-02 15:58:25.535 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-02 15:58:25.535 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-02 15:58:25.536 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-02 15:58:25.536 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-02 15:58:25.536 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-02 15:58:25.536 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-02 15:58:25.537 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-02 15:58:25.537 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-02 15:58:25.537 | info     |          Fabric |
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-02 15:58:25.537 | info     |          Fabric |
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-02 15:58:25.537 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-02 15:58:25.537 | info     |          Fabric |
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-02 15:58:25.537 | info     |          Fabric |
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-02 15:58:25.537 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-02 15:58:25.537 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-02 15:58:25.537 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-02 15:58:25.537 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-02 15:58:25.537 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-02 15:58:25.537 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-02 15:58:25.583 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_873513_732808937_0' (shm_resource_tracker.cpp:265)
+2026-10-02 15:58:25.583 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_873513' (shm_resource_tracker.cpp:275)
+2026-10-02 15:58:26.161 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349977 GHz, device_time_at_sync=18108155264805 cycles (realtime_profiler_manager.cpp:1075)
+[JIT_WARMUP] ideal-path contexts compiled in 1202.4 ms
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3369033 max_tile=25699 | overflow_tiles=97(prepack)+13(gather) gathered_recs=1355356 = in_cap=1112179 (82.1% prepacked) + over_cap=243177 | ov_region_slots=1114944 (~34.0 MB DRAM)
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 payload_pages=53145
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=9.64 up=0.08 kernel=1.47 d2h=0.00 compact=0.00 publish=4.00 mat=0.00 total=15.25ms | pread=0.02 count=3.44 hist_d2h=0.26 layout=0.28 emit=5.67 pub_host=1.41 pub_wait=2.59
+[SUBCHUNK] materialize_ms=11.27 (piped pre-blend)
+[run] timing 30 views (warmup excluded)
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3369033 max_tile=25699 | overflow_tiles=97(prepack)+13(gather) gathered_recs=1355356 = in_cap=1112179 (82.1% prepacked) + over_cap=243177 | ov_region_slots=1114944 (~34.0 MB DRAM)
+[SUBCHUNK] tiles_split=110 total_subchunks=1148 max_subchunks_per_tile=4 payload_pages=53145
+[SORT] stage=RP P=3369033 P_kept=3369033 num_tiles=1024 max_tile_n=26496 bin=7.13 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=4.01 mat=0.00 total=11.24ms | pread=0.01 count=0.99 hist_d2h=0.25 layout=0.24 emit=5.65 pub_host=0.19 pub_wait=3.83
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=hero 31.5ms saved=view00_hero.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2429588 max_tile=21688 | overflow_tiles=73(prepack)+9(gather) gathered_recs=999167 = in_cap=833528 (83.4% prepacked) + over_cap=165639 | ov_region_slots=835712 (~25.5 MB DRAM)
+[SUBCHUNK] tiles_split=82 total_subchunks=1115 max_subchunks_per_tile=3 payload_pages=38472
+[SORT] stage=RP P=2429588 P_kept=2429588 num_tiles=1024 max_tile_n=22528 bin=5.60 up=0.07 kernel=0.03 d2h=0.00 compact=0.00 publish=3.26 mat=0.00 total=8.97ms | pread=0.02 count=0.73 hist_d2h=0.25 layout=0.23 emit=4.39 pub_host=0.18 pub_wait=3.07
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_00 25.2ms saved=view01_orb_00.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2507584 max_tile=21301 | overflow_tiles=73(prepack)+9(gather) gathered_recs=1003147 = in_cap=837266 (83.5% prepacked) + over_cap=165881 | ov_region_slots=839488 (~25.6 MB DRAM)
+[SUBCHUNK] tiles_split=82 total_subchunks=1115 max_subchunks_per_tile=3 payload_pages=39675
+[SORT] stage=RP P=2507584 P_kept=2507584 num_tiles=1024 max_tile_n=22160 bin=5.73 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.26 mat=0.00 total=9.10ms | pread=0.01 count=0.76 hist_d2h=0.25 layout=0.23 emit=4.49 pub_host=0.19 pub_wait=3.07
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_01 26.1ms saved=view02_orb_01.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2610494 max_tile=21549 | overflow_tiles=69(prepack)+11(gather) gathered_recs=988321 = in_cap=788576 (79.8% prepacked) + over_cap=199745 | ov_region_slots=790912 (~24.1 MB DRAM)
+[SUBCHUNK] tiles_split=80 total_subchunks=1115 max_subchunks_per_tile=3 payload_pages=41306
+[SORT] stage=RP P=2610494 P_kept=2610494 num_tiles=1024 max_tile_n=22368 bin=5.96 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.31 mat=0.00 total=9.38ms | pread=0.01 count=0.78 hist_d2h=0.25 layout=0.23 emit=4.70 pub_host=0.19 pub_wait=3.12
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_02 26.7ms saved=view03_orb_02.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2749237 max_tile=20485 | overflow_tiles=70(prepack)+13(gather) gathered_recs=1021013 = in_cap=785970 (77.0% prepacked) + over_cap=235043 | ov_region_slots=788160 (~24.1 MB DRAM)
+[SUBCHUNK] tiles_split=83 total_subchunks=1120 max_subchunks_per_tile=3 payload_pages=43456
+[SORT] stage=RP P=2749237 P_kept=2749237 num_tiles=1024 max_tile_n=21280 bin=6.18 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.39 mat=0.00 total=9.68ms | pread=0.01 count=0.83 hist_d2h=0.25 layout=0.23 emit=4.88 pub_host=0.18 pub_wait=3.21
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_03 27.2ms saved=view04_orb_03.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2918441 max_tile=23207 | overflow_tiles=72(prepack)+13(gather) gathered_recs=1056677 = in_cap=821092 (77.7% prepacked) + over_cap=235585 | ov_region_slots=823296 (~25.1 MB DRAM)
+[SUBCHUNK] tiles_split=85 total_subchunks=1122 max_subchunks_per_tile=3 payload_pages=46105
+[SORT] stage=RP P=2918441 P_kept=2918441 num_tiles=1024 max_tile_n=24016 bin=6.48 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.61 mat=0.00 total=10.19ms | pread=0.01 count=0.86 hist_d2h=0.25 layout=0.23 emit=5.15 pub_host=0.19 pub_wait=3.41
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_04 28.3ms saved=view05_orb_04.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3173042 max_tile=24727 | overflow_tiles=91(prepack)+7(gather) gathered_recs=1201610 = in_cap=1061515 (88.3% prepacked) + over_cap=140095 | ov_region_slots=1064448 (~32.5 MB DRAM)
+[SUBCHUNK] tiles_split=98 total_subchunks=1130 max_subchunks_per_tile=4 payload_pages=50099
+[SORT] stage=RP P=3173042 P_kept=3173042 num_tiles=1024 max_tile_n=25536 bin=6.88 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.85 mat=0.00 total=10.84ms | pread=0.01 count=0.94 hist_d2h=0.25 layout=0.24 emit=5.46 pub_host=0.18 pub_wait=3.67
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_05 29.9ms saved=view06_orb_05.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3359322 max_tile=24099 | overflow_tiles=100(prepack)+10(gather) gathered_recs=1301248 = in_cap=1110218 (85.3% prepacked) + over_cap=191030 | ov_region_slots=1113344 (~34.0 MB DRAM)
+[SUBCHUNK] tiles_split=110 total_subchunks=1144 max_subchunks_per_tile=3 payload_pages=52989
+[SORT] stage=RP P=3359322 P_kept=3359322 num_tiles=1024 max_tile_n=24864 bin=7.20 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.94 mat=0.00 total=11.24ms | pread=0.01 count=0.98 hist_d2h=0.25 layout=0.23 emit=5.75 pub_host=0.18 pub_wait=3.76
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_06 31.4ms saved=view07_orb_06.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3583320 max_tile=24129 | overflow_tiles=95(prepack)+13(gather) gathered_recs=1342145 = in_cap=1102872 (82.2% prepacked) + over_cap=239273 | ov_region_slots=1105792 (~33.7 MB DRAM)
+[SUBCHUNK] tiles_split=108 total_subchunks=1145 max_subchunks_per_tile=3 payload_pages=56497
+[SORT] stage=RP P=3583320 P_kept=3583320 num_tiles=1024 max_tile_n=24992 bin=7.59 up=0.08 kernel=0.03 d2h=0.00 compact=0.00 publish=4.17 mat=0.00 total=11.88ms | pread=0.01 count=1.06 hist_d2h=0.25 layout=0.23 emit=6.05 pub_host=0.20 pub_wait=3.97
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_07 33.0ms saved=view08_orb_07.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3643014 max_tile=21066 | overflow_tiles=94(prepack)+16(gather) gathered_recs=1347681 = in_cap=1056050 (78.4% prepacked) + over_cap=291631 | ov_region_slots=1059264 (~32.3 MB DRAM)
+[SUBCHUNK] tiles_split=110 total_subchunks=1150 max_subchunks_per_tile=3 payload_pages=57442
+[SORT] stage=RP P=3643014 P_kept=3643014 num_tiles=1024 max_tile_n=21824 bin=7.68 up=0.08 kernel=0.02 d2h=0.00 compact=0.00 publish=4.22 mat=0.00 total=12.01ms | pread=0.02 count=1.07 hist_d2h=0.25 layout=0.23 emit=6.13 pub_host=0.21 pub_wait=4.00
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_08 33.8ms saved=view09_orb_08.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3678564 max_tile=21599 | overflow_tiles=99(prepack)+14(gather) gathered_recs=1366138 = in_cap=1107614 (81.1% prepacked) + over_cap=258524 | ov_region_slots=1110656 (~33.9 MB DRAM)
+[SUBCHUNK] tiles_split=113 total_subchunks=1151 max_subchunks_per_tile=3 payload_pages=57968
+[SORT] stage=RP P=3678564 P_kept=3678564 num_tiles=1024 max_tile_n=22400 bin=7.70 up=0.09 kernel=0.03 d2h=0.00 compact=0.00 publish=4.29 mat=0.00 total=12.13ms | pread=0.01 count=1.08 hist_d2h=0.25 layout=0.24 emit=6.13 pub_host=0.20 pub_wait=4.09
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_09 34.0ms saved=view10_orb_09.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3700450 max_tile=21371 | overflow_tiles=92(prepack)+18(gather) gathered_recs=1349332 = in_cap=1031852 (76.5% prepacked) + over_cap=317480 | ov_region_slots=1034752 (~31.6 MB DRAM)
+[SUBCHUNK] tiles_split=110 total_subchunks=1152 max_subchunks_per_tile=3 payload_pages=58319
+[SORT] stage=RP P=3700450 P_kept=3700450 num_tiles=1024 max_tile_n=22208 bin=7.73 up=0.08 kernel=0.04 d2h=0.00 compact=0.00 publish=4.27 mat=0.00 total=12.15ms | pread=0.02 count=1.09 hist_d2h=0.26 layout=0.23 emit=6.16 pub_host=0.20 pub_wait=4.07
+[SUBCHUNK] materialize_ms=0.08 (piped pre-blend)
+[run]   view=orb_10 34.0ms saved=view11_orb_10.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3612086 max_tile=22225 | overflow_tiles=104(prepack)+9(gather) gathered_recs=1374814 = in_cap=1206747 (87.8% prepacked) + over_cap=168067 | ov_region_slots=1209984 (~36.9 MB DRAM)
+[SUBCHUNK] tiles_split=113 total_subchunks=1146 max_subchunks_per_tile=3 payload_pages=56948
+[SORT] stage=RP P=3612086 P_kept=3612086 num_tiles=1024 max_tile_n=23120 bin=7.60 up=0.07 kernel=0.02 d2h=0.00 compact=0.00 publish=4.19 mat=0.00 total=11.89ms | pread=0.01 count=1.08 hist_d2h=0.25 layout=0.23 emit=6.04 pub_host=0.18 pub_wait=4.01
+[SUBCHUNK] materialize_ms=0.03 (piped pre-blend)
+[run]   view=orb_11 32.8ms saved=view12_orb_11.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3458291 max_tile=22261 | overflow_tiles=91(prepack)+9(gather) gathered_recs=1222819 = in_cap=1058818 (86.6% prepacked) + over_cap=164001 | ov_region_slots=1061440 (~32.4 MB DRAM)
+[SUBCHUNK] tiles_split=100 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=54533
+[SORT] stage=RP P=3458291 P_kept=3458291 num_tiles=1024 max_tile_n=23104 bin=7.32 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=4.06 mat=0.00 total=11.47ms | pread=0.01 count=1.02 hist_d2h=0.25 layout=0.23 emit=5.83 pub_host=0.18 pub_wait=3.88
+[SUBCHUNK] materialize_ms=0.03 (piped pre-blend)
+[run]   view=orb_12 32.2ms saved=view13_orb_12.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3349844 max_tile=22742 | overflow_tiles=95(prepack)+7(gather) gathered_recs=1230441 = in_cap=1098941 (89.3% prepacked) + over_cap=131500 | ov_region_slots=1102080 (~33.6 MB DRAM)
+[SUBCHUNK] tiles_split=102 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=52843
+[SORT] stage=RP P=3349844 P_kept=3349844 num_tiles=1024 max_tile_n=23600 bin=7.18 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.93 mat=0.00 total=11.22ms | pread=0.01 count=0.99 hist_d2h=0.25 layout=0.23 emit=5.72 pub_host=0.18 pub_wait=3.75
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_13 30.9ms saved=view14_orb_13.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3283822 max_tile=23880 | overflow_tiles=95(prepack)+5(gather) gathered_recs=1204232 = in_cap=1109667 (92.1% prepacked) + over_cap=94565 | ov_region_slots=1112384 (~33.9 MB DRAM)
+[SUBCHUNK] tiles_split=100 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=51811
+[SORT] stage=RP P=3283822 P_kept=3283822 num_tiles=1024 max_tile_n=24624 bin=7.04 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=3.89 mat=0.00 total=11.03ms | pread=0.01 count=0.97 hist_d2h=0.25 layout=0.24 emit=5.59 pub_host=0.17 pub_wait=3.71
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_14 30.5ms saved=view15_orb_14.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3218037 max_tile=21680 | overflow_tiles=95(prepack)+5(gather) gathered_recs=1199658 = in_cap=1102780 (91.9% prepacked) + over_cap=96878 | ov_region_slots=1105920 (~33.8 MB DRAM)
+[SUBCHUNK] tiles_split=100 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=50784
+[SORT] stage=RP P=3218037 P_kept=3218037 num_tiles=1024 max_tile_n=22528 bin=6.97 up=0.07 kernel=0.03 d2h=0.00 compact=0.00 publish=3.82 mat=0.00 total=10.92ms | pread=0.02 count=0.96 hist_d2h=0.26 layout=0.23 emit=5.52 pub_host=0.18 pub_wait=3.65
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_15 30.1ms saved=view16_orb_15.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3169907 max_tile=22324 | overflow_tiles=95(prepack)+6(gather) gathered_recs=1206242 = in_cap=1092327 (90.6% prepacked) + over_cap=113915 | ov_region_slots=1095360 (~33.4 MB DRAM)
+[SUBCHUNK] tiles_split=101 total_subchunks=1131 max_subchunks_per_tile=3 payload_pages=50029
+[SORT] stage=RP P=3169907 P_kept=3169907 num_tiles=1024 max_tile_n=23152 bin=6.89 up=0.06 kernel=0.04 d2h=0.00 compact=0.00 publish=3.77 mat=0.00 total=10.80ms | pread=0.02 count=0.95 hist_d2h=0.26 layout=0.23 emit=5.45 pub_host=0.27 pub_wait=3.51
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_16 30.0ms saved=view17_orb_16.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3164503 max_tile=20765 | overflow_tiles=94(prepack)+9(gather) gathered_recs=1236249 = in_cap=1073037 (86.8% prepacked) + over_cap=163212 | ov_region_slots=1076224 (~32.8 MB DRAM)
+[SUBCHUNK] tiles_split=103 total_subchunks=1136 max_subchunks_per_tile=3 payload_pages=49949
+[SORT] stage=RP P=3164503 P_kept=3164503 num_tiles=1024 max_tile_n=21456 bin=6.89 up=0.07 kernel=0.05 d2h=0.00 compact=0.00 publish=3.89 mat=0.00 total=10.93ms | pread=0.02 count=0.97 hist_d2h=0.26 layout=0.26 emit=5.41 pub_host=0.27 pub_wait=3.62
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_17 30.0ms saved=view18_orb_17.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3184066 max_tile=20406 | overflow_tiles=87(prepack)+10(gather) gathered_recs=1203213 = in_cap=1020576 (84.8% prepacked) + over_cap=182637 | ov_region_slots=1023424 (~31.2 MB DRAM)
+[SUBCHUNK] tiles_split=97 total_subchunks=1131 max_subchunks_per_tile=3 payload_pages=50266
+[SORT] stage=RP P=3184066 P_kept=3184066 num_tiles=1024 max_tile_n=21232 bin=6.87 up=0.07 kernel=0.05 d2h=0.00 compact=0.00 publish=3.80 mat=0.00 total=10.82ms | pread=0.02 count=0.95 hist_d2h=0.26 layout=0.23 emit=5.43 pub_host=0.27 pub_wait=3.54
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_18 30.2ms saved=view19_orb_18.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3180618 max_tile=21229 | overflow_tiles=83(prepack)+13(gather) gathered_recs=1205735 = in_cap=970308 (80.5% prepacked) + over_cap=235427 | ov_region_slots=972864 (~29.7 MB DRAM)
+[SUBCHUNK] tiles_split=96 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=50206
+[SORT] stage=RP P=3180618 P_kept=3180618 num_tiles=1024 max_tile_n=22096 bin=6.86 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=3.83 mat=0.00 total=10.78ms | pread=0.01 count=0.95 hist_d2h=0.25 layout=0.23 emit=5.42 pub_host=0.18 pub_wait=3.65
+[SUBCHUNK] materialize_ms=0.03 (piped pre-blend)
+[run]   view=orb_19 30.3ms saved=view20_orb_19.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3156592 max_tile=20632 | overflow_tiles=93(prepack)+8(gather) gathered_recs=1255328 = in_cap=1105272 (88.0% prepacked) + over_cap=150056 | ov_region_slots=1108352 (~33.8 MB DRAM)
+[SUBCHUNK] tiles_split=101 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=49825
+[SORT] stage=RP P=3156592 P_kept=3156592 num_tiles=1024 max_tile_n=21504 bin=6.83 up=0.07 kernel=0.04 d2h=0.00 compact=0.00 publish=3.79 mat=0.00 total=10.74ms | pread=0.01 count=0.95 hist_d2h=0.25 layout=0.24 emit=5.39 pub_host=0.27 pub_wait=3.52
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_20 30.0ms saved=view21_orb_20.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3123280 max_tile=24850 | overflow_tiles=96(prepack)+11(gather) gathered_recs=1298820 = in_cap=1092608 (84.1% prepacked) + over_cap=206212 | ov_region_slots=1095616 (~33.4 MB DRAM)
+[SUBCHUNK] tiles_split=107 total_subchunks=1143 max_subchunks_per_tile=4 payload_pages=49308
+[SORT] stage=RP P=3123280 P_kept=3123280 num_tiles=1024 max_tile_n=25680 bin=6.75 up=0.07 kernel=0.03 d2h=0.00 compact=0.00 publish=3.85 mat=0.00 total=10.72ms | pread=0.01 count=0.92 hist_d2h=0.25 layout=0.23 emit=5.35 pub_host=0.19 pub_wait=3.67
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_21 30.1ms saved=view22_orb_21.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=3032330 max_tile=20666 | overflow_tiles=91(prepack)+8(gather) gathered_recs=1228943 = in_cap=1080369 (87.9% prepacked) + over_cap=148574 | ov_region_slots=1083200 (~33.1 MB DRAM)
+[SUBCHUNK] tiles_split=99 total_subchunks=1131 max_subchunks_per_tile=3 payload_pages=47879
+[SORT] stage=RP P=3032330 P_kept=3032330 num_tiles=1024 max_tile_n=21504 bin=6.58 up=0.06 kernel=0.03 d2h=0.00 compact=0.00 publish=3.79 mat=0.00 total=10.48ms | pread=0.01 count=0.90 hist_d2h=0.25 layout=0.24 emit=5.19 pub_host=0.18 pub_wait=3.61
+[SUBCHUNK] materialize_ms=0.06 (piped pre-blend)
+[run]   view=orb_22 29.4ms saved=view23_orb_22.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2913080 max_tile=23042 | overflow_tiles=87(prepack)+9(gather) gathered_recs=1199527 = in_cap=1032110 (86.0% prepacked) + over_cap=167417 | ov_region_slots=1034688 (~31.6 MB DRAM)
+[SUBCHUNK] tiles_split=96 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=46022
+[SORT] stage=RP P=2913080 P_kept=2913080 num_tiles=1024 max_tile_n=23904 bin=6.42 up=0.06 kernel=0.04 d2h=0.00 compact=0.00 publish=3.67 mat=0.00 total=10.22ms | pread=0.03 count=0.88 hist_d2h=0.25 layout=0.24 emit=5.05 pub_host=0.27 pub_wait=3.40
+[SUBCHUNK] materialize_ms=0.06 (piped pre-blend)
+[run]   view=orb_23 28.3ms saved=view24_orb_23.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2706427 max_tile=22503 | overflow_tiles=80(prepack)+9(gather) gathered_recs=1104111 = in_cap=936971 (84.9% prepacked) + over_cap=167140 | ov_region_slots=939392 (~28.7 MB DRAM)
+[SUBCHUNK] tiles_split=89 total_subchunks=1122 max_subchunks_per_tile=3 payload_pages=42797
+[SORT] stage=RP P=2706427 P_kept=2706427 num_tiles=1024 max_tile_n=23328 bin=6.03 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=3.46 mat=0.00 total=9.59ms | pread=0.01 count=0.80 hist_d2h=0.25 layout=0.23 emit=4.75 pub_host=0.18 pub_wait=3.29
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_24 27.1ms saved=view25_orb_24.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2545453 max_tile=23909 | overflow_tiles=79(prepack)+9(gather) gathered_recs=1074143 = in_cap=905599 (84.3% prepacked) + over_cap=168544 | ov_region_slots=908224 (~27.7 MB DRAM)
+[SUBCHUNK] tiles_split=88 total_subchunks=1121 max_subchunks_per_tile=3 payload_pages=40283
+[SORT] stage=RP P=2545453 P_kept=2545453 num_tiles=1024 max_tile_n=24720 bin=5.80 up=0.06 kernel=0.04 d2h=0.00 compact=0.00 publish=3.53 mat=0.00 total=9.45ms | pread=0.03 count=0.77 hist_d2h=0.25 layout=0.23 emit=4.54 pub_host=0.24 pub_wait=3.29
+[SUBCHUNK] materialize_ms=0.05 (piped pre-blend)
+[run]   view=orb_25 26.5ms saved=view26_orb_25.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2444382 max_tile=24677 | overflow_tiles=76(prepack)+6(gather) gathered_recs=1013402 = in_cap=891346 (88.0% prepacked) + over_cap=122056 | ov_region_slots=893760 (~27.3 MB DRAM)
+[SUBCHUNK] tiles_split=82 total_subchunks=1113 max_subchunks_per_tile=4 payload_pages=38696
+[SORT] stage=RP P=2444382 P_kept=2444382 num_tiles=1024 max_tile_n=25520 bin=5.61 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=3.58 mat=0.00 total=9.28ms | pread=0.01 count=0.74 hist_d2h=0.25 layout=0.23 emit=4.40 pub_host=0.17 pub_wait=3.40
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_26 25.5ms saved=view27_orb_26.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2387909 max_tile=24441 | overflow_tiles=75(prepack)+7(gather) gathered_recs=1004194 = in_cap=867101 (86.3% prepacked) + over_cap=137093 | ov_region_slots=869632 (~26.5 MB DRAM)
+[SUBCHUNK] tiles_split=82 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=37825
+[SORT] stage=RP P=2387909 P_kept=2387909 num_tiles=1024 max_tile_n=25232 bin=5.53 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=3.54 mat=0.00 total=9.17ms | pread=0.02 count=0.73 hist_d2h=0.25 layout=0.23 emit=4.32 pub_host=0.18 pub_wait=3.35
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_27 25.7ms saved=view28_orb_27.png
+[OVERFLOW-DIST] bucket_fit=8192 cap=16384 num_tiles=1024 P_kept=2378999 max_tile=22991 | overflow_tiles=68(prepack)+10(gather) gathered_recs=960757 = in_cap=777444 (80.9% prepacked) + over_cap=183313 | ov_region_slots=779648 (~23.8 MB DRAM)
+[SUBCHUNK] tiles_split=78 total_subchunks=1112 max_subchunks_per_tile=3 payload_pages=37673
+[SORT] stage=RP P=2378999 P_kept=2378999 num_tiles=1024 max_tile_n=23856 bin=5.51 up=0.06 kernel=0.02 d2h=0.00 compact=0.00 publish=3.37 mat=0.00 total=8.98ms | pread=0.01 count=0.73 hist_d2h=0.25 layout=0.23 emit=4.30 pub_host=0.18 pub_wait=3.19
+[SUBCHUNK] materialize_ms=0.04 (piped pre-blend)
+[run]   view=orb_28 25.4ms saved=view29_orb_28.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=29.5 p50_ms=30.0 min_ms=25.2 max_ms=34.0 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t115/tmp/t115-r2-base
+TTW_METRIC hero_vs_ref=100.00
+TTW_TIMING ms_view=29.535
+TTW_TIMING blend=29.535
+TTW_TIMING stage_head=0.002
+TTW_TIMING stage_project=6.453
+TTW_TIMING stage_tile_assign=1.436
+TTW_TIMING stage_sort=10.662
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=10.717
+TTW_TIMING stage_d2h=0.229
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.002
+TTW_TIMING stage_view_total=29.502
+TTW_TIMING stage_pybind=0.033
+STAGES n=30 head=0.002 project=6.453 tile_assign=1.436 sort=10.662 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.717 d2h=0.229 assemble=0.000 tail=0.002 | sum=29.501 view_total=29.502 resid_in_view=+0.001 avg_frame_ms=29.535 resid_vs_frame=+0.034
+TTW_TIMING stage_sort_pread=0.015
+TTW_TIMING stage_sort_bin_count=0.914
+TTW_TIMING stage_sort_bin_hist_d2h=0.249
+TTW_TIMING stage_sort_bin_layout=0.234
+TTW_TIMING stage_sort_upload=0.066
+TTW_TIMING stage_sort_bin_emit=5.289
+TTW_TIMING stage_sort_kernel=0.030
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.201
+TTW_TIMING stage_sort_publish_wait=3.577
+TTW_TIMING stage_sort_mat=0.044
+TTW_TIMING stage_sort_other=0.043
+SORT_STAGES n=30 pread=0.015 bin_count=0.914 bin_hist_d2h=0.249 bin_layout=0.234 upload=0.066 bin_emit=5.289 kernel=0.030 d2h=0.000 compact=0.000 publish_host=0.201 publish_wait=3.577 mat=0.044 | sum=10.619 sort=10.662 resid=+0.043
+TTW_TIMING stage_project_cov3d=0.000
+TTW_TIMING stage_project_pfwc_setup=0.002
+TTW_TIMING stage_project_pfwc_rtargs=0.028
+TTW_TIMING stage_project_pfwc_enqueue=0.032
+TTW_TIMING stage_project_pfwc_finish=2.477
+TTW_TIMING stage_project_gather_setup=0.002
+TTW_TIMING stage_project_gather_rtargs=0.016
+TTW_TIMING stage_project_gather_enqueue=0.025
+TTW_TIMING stage_project_gather_wait=3.764
+TTW_TIMING stage_project_gather_result=0.106
+TTW_TIMING stage_project_other=0.002
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.032 pfwc_finish=2.477 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.025 gather_wait=3.764 gather_result=0.106 | sum=6.451 project=6.453 resid=+0.002
+TTW_TIMING stage_tile_assign_setup=0.004
+TTW_TIMING stage_tile_assign_rtargs=0.015
+TTW_TIMING stage_tile_assign_enqueue=0.015
+TTW_TIMING stage_tile_assign_scan_finish=0.000
+TTW_TIMING stage_tile_assign_p_d2h=0.000
+TTW_TIMING stage_tile_assign_k2_finish=1.401
+TTW_TIMING stage_tile_assign_publish=0.001
+TTW_TIMING stage_tile_assign_other=0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.015 enqueue=0.015 scan_finish=0.000 p_d2h=0.000 k2_finish=1.401 publish=0.001 | sum=1.435 tile_assign=1.436 resid=+0.001

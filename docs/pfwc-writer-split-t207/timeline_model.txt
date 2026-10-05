@@ -1,0 +1,8 @@
+mean core                  P=46 us: single 2.524 ms, split 2.522 ms, saving 0.002 ms (compute alone 2.484; today's compute)
+mean core                  P=20 us: single 1.997 ms, split 1.158 ms, saving 0.839 ms (compute alone 1.080; with SFPU cov2d/conic/radii fusion)
+heavy core, records x1.2   P=46 us: single 2.549 ms, split 2.528 ms, saving 0.021 ms (compute alone 2.484; today's compute)
+heavy core, records x1.2   P=20 us: single 2.320 ms, split 1.303 ms, saving 1.017 ms (compute alone 1.080; with SFPU cov2d/conic/radii fusion)
+heavy core, records x1.4   P=46 us: single 2.652 ms, split 2.533 ms, saving 0.119 ms (compute alone 2.484; today's compute)
+heavy core, records x1.4   P=20 us: single 2.571 ms, split 1.441 ms, saving 1.130 ms (compute alone 1.080; with SFPU cov2d/conic/radii fusion)
+mean core                  P=20 us: split 1.158 ms, split without the OPEN wait 1.157 ms
+heavy core, records x1.4   P=20 us: split 1.441 ms, split without the OPEN wait 1.439 ms

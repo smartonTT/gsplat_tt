@@ -17,6 +17,8 @@ import base64
 import io
 import json
 import statistics
+import sys
+from html import escape as html_escape
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -136,7 +138,15 @@ def normalize_ttw_row(r: dict) -> dict:
             if isinstance(v, (int, float)) and v == v:
                 hero = v
                 break
-    sum_ms = sum(per_stage.values()) * VIEWS_PER_RUN if per_stage else None
+    # Prefer the measured per-view total (includes d2h/head/tail gaps); the
+    # stage sum omits those and reads ~0.25 ms low.
+    view_ms = timings.get("ms_view")
+    if not (isinstance(view_ms, (int, float)) and view_ms == view_ms and view_ms > 0):
+        view_ms = metrics.get("frame_ms_view")
+    if isinstance(view_ms, (int, float)) and view_ms == view_ms and view_ms > 0:
+        sum_ms = float(view_ms) * VIEWS_PER_RUN
+    else:
+        sum_ms = sum(per_stage.values()) * VIEWS_PER_RUN if per_stage else None
     ts = r.get("ts") or r.get("timestamp") or ""
     iter_dir = str(r.get("iter_dir") or "").strip()
     if not iter_dir and n is not None:
@@ -163,6 +173,9 @@ def normalize_ttw_row(r: dict) -> dict:
         "validator_reasoning": r.get("reason") or "",
         "buildid": r.get("buildid"),
         "tracy": r.get("tracy") or "",
+        "iter": n,
+        "device_screenshot": r.get("device_screenshot"),
+        "screenshot_backfill_pending": r.get("screenshot_backfill_pending"),
     }
 
 
@@ -212,8 +225,10 @@ def normalize_in_flight_row(row: dict) -> dict:
     }
 
 
-def img_link(src: str, cls: str = "thumb") -> str:
-    return f'<a href="{src}" target="_blank" rel="noopener"><img src="{src}" class="{cls}" alt=""></a>'
+def img_link(src: str, cls: str = "thumb", title: str = "") -> str:
+    t = f' title="{title}"' if title else ""
+    return (f'<a href="{src}" class="zoom" target="_blank" rel="noopener"{t}>'
+            f'<img src="{src}" class="{cls}" alt="{title}"></a>')
 
 
 def _read_timing_jsonl(path: Path) -> dict[str, float]:
@@ -329,6 +344,103 @@ def ensure_hero_diff10(iter_dir: str) -> None:
             continue
         amp = np.clip(np.abs(ref_rgb - cand_rgb) * 10.0, 0.0, 1.0)
         Image.fromarray((amp * 255.0).astype(np.uint8)).save(out)
+
+
+# --- Device screenshot requirement (user, 2026-10-05) -------------------------
+# Every ttw iteration carries a `device_screenshot` object (see
+# opt/ttw/ITERATION_CHECKLIST.md): the bicycle hero rendered ON DEVICE at the
+# iteration's commit/config, a diff vs the reference, PSNR, md5 and a written
+# visual check for tile artifacts. Iters > SCREENSHOT_REQUIRED_AFTER must have
+# it. Legacy iters SCREENSHOT_LEGACY_FROM..SCREENSHOT_REQUIRED_AFTER that never
+# got one may instead carry "screenshot_backfill_pending": true, which the
+# report shows as a red placeholder. Older iters use the legacy
+# screenshot/screenshot_diff fields and are not checked here.
+SCREENSHOT_REQUIRED_AFTER = 197
+SCREENSHOT_LEGACY_FROM = 160
+SCREENSHOT_FIELDS = ("hero", "diff", "psnr_vs_ref", "md5", "commit", "config", "visual_check")
+REPO_ROOT = OPT_DIR.parent
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _shot_file_problem(rel: str, root: Path) -> str:
+    p = root / rel
+    if not p.is_file():
+        return f"file {rel} does not exist"
+    with p.open("rb") as f:
+        if f.read(8) != PNG_MAGIC:
+            return f"file {rel} is not a PNG"
+    return ""
+
+
+def device_screenshot_problems(r: dict, root: Path | None = None) -> list[str]:
+    """Problems with a row's `device_screenshot` object ([] = valid)."""
+    root = root or REPO_ROOT
+    shot = r.get("device_screenshot")
+    if not isinstance(shot, dict):
+        return ["no device_screenshot object"]
+    probs = []
+    for k in SCREENSHOT_FIELDS:
+        v = shot.get(k)
+        if k == "psnr_vs_ref":
+            ok = (isinstance(v, (int, float)) and v == v and v > 0) or v == "inf"
+        else:
+            ok = isinstance(v, str) and v.strip() != ""
+        if not ok:
+            probs.append(f"device_screenshot.{k} missing or empty")
+    vc = str(shot.get("visual_check") or "").strip()
+    if vc and len(vc) < 8:
+        probs.append("device_screenshot.visual_check is too short to be a real note")
+    for k in ("hero", "diff"):
+        rel = str(shot.get(k) or "").strip()
+        if rel:
+            fp = _shot_file_problem(rel, root)
+            if fp:
+                probs.append(f"device_screenshot.{k}: {fp}")
+    hero = str(shot.get("hero") or "")
+    ref_rel = "benchmarks/reference_v2/hero.png"
+    if hero == ref_rel or any(part.startswith("cpu") for part in Path(hero).parts[:-1]):
+        probs.append(f"device_screenshot.hero {hero} is a CPU/reference image, not a device render")
+    return probs
+
+
+def screenshot_status(r: dict, root: Path | None = None) -> tuple[str, list[str]]:
+    """('ok' | 'pending' | 'missing' | 'legacy', problems) for a ttw row."""
+    it = r.get("iter")
+    has_shot = r.get("device_screenshot") is not None
+    if not isinstance(it, int) or (it < SCREENSHOT_LEGACY_FROM and not has_shot):
+        return "legacy", []
+    if has_shot:
+        probs = device_screenshot_problems(r, root)
+        return ("missing" if probs else "ok"), probs
+    if r.get("screenshot_backfill_pending") is True:
+        if it > SCREENSHOT_REQUIRED_AFTER:
+            return "missing", [
+                f"screenshot_backfill_pending is only allowed for legacy iters "
+                f"{SCREENSHOT_LEGACY_FROM}-{SCREENSHOT_REQUIRED_AFTER}"
+            ]
+        return "pending", []
+    return "missing", ["no device_screenshot object (and no screenshot_backfill_pending flag)"]
+
+
+def check_device_screenshots(rows: list[dict], root: Path | None = None) -> tuple[list[str], list[int]]:
+    """(errors, backfill-pending iters) over all ttw rows."""
+    errors: list[str] = []
+    pending: list[int] = []
+    for r in rows:
+        status, probs = screenshot_status(r, root)
+        if status == "pending":
+            pending.append(r["iter"])
+        elif status == "missing":
+            errors.extend(f"ttw iter {r.get('iter')}: {p}" for p in probs)
+        if status == "ok" and r.get("screenshot_backfill_pending"):
+            print(f"  [WARN] ttw iter {r.get('iter')} has a valid device_screenshot; "
+                  f"drop its stale screenshot_backfill_pending flag")
+    return errors, pending
+
+
+def _opt_href(rel: str) -> str:
+    """Repo-relative path -> href relative to opt/REPORT.html."""
+    return rel[4:] if rel.startswith("opt/") else "../" + rel
 
 
 def load_metal_iters() -> list[dict]:
@@ -1032,6 +1144,33 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
             f"(run verify with --iter-dir {iter_dir})</span>"
         )
 
+    shot_html = ""
+    if r.get("_source") == "ttw":
+        status, probs = screenshot_status(r)
+        shot = r.get("device_screenshot") or {}
+        if status == "ok":
+            psnr = shot["psnr_vs_ref"]
+            psnr_txt = "∞" if psnr == "inf" else f"{float(psnr):.2f}"
+            thumb_html = (
+                img_link(_opt_href(shot["hero"]), title="device hero (click to enlarge)")
+                + img_link(_opt_href(shot["diff"]), title="diff vs reference (click to enlarge)")
+                + f"<p class='shot-cap'>device hero · diff vs ref · PSNR {psnr_txt} dB</p>"
+            )
+            device = f" on {html_escape(shot['device'])}" if shot.get("device") else ""
+            shot_html = (
+                f"<p class='shot-meta'>device screenshot{device}: "
+                f"<code>{html_escape(shot['commit'])}</code> {html_escape(shot['config'])} · "
+                f"md5 <code>{html_escape(shot['md5'])}</code> · PSNR {psnr_txt} dB<br>"
+                f"visual check: {html_escape(shot['visual_check'])}</p>"
+            )
+        elif status == "pending":
+            thumb_html = "<div class='shot-missing'>screenshot missing - backfill pending</div>"
+        elif status == "missing":
+            thumb_html = (
+                "<div class='shot-missing'>device screenshot MISSING - required<br>"
+                f"<small>{html_escape('; '.join(probs))}</small></div>"
+            )
+
     # Description: the `action` (the idea/what-was-tried) is the primary
     # human-readable line. For metal rows action is a slug + a descriptive
     # `note`/commit message; for ttw rows action IS the full idea and the
@@ -1070,7 +1209,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         abs_tracy = OPT_DIR.parent / tracy_rel
         if abs_tracy.is_file():
             href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
-            tracy_cmd = f"tracy {abs_tracy}"
+            tracy_cmd = f"tracy {tracy_rel}"
             tracy_html = (
                 f"<p class='iter-tracy'><a href='{href}' "
                 f"title='open in Tracy profiler'>🔬 Tracy trace</a> "
@@ -1122,6 +1261,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
     {caveat_html}
     {desc_html}
     {build_html}
+    {shot_html}
     {tracy_html}
   </div>
   <div class='backburner-thumbs'>{thumb_html}</div>
@@ -1291,7 +1431,7 @@ def _legacy_table_ledger_unused(rows: list[dict]) -> str:
         tracy_cell = ""
         if tracy_rel and (OPT_DIR.parent / tracy_rel).is_file():
             href = tracy_rel[4:] if tracy_rel.startswith("opt/") else tracy_rel
-            tracy_cmd = f"tracy {OPT_DIR.parent / tracy_rel}"
+            tracy_cmd = f"tracy {tracy_rel}"
             tracy_cell = (f"<br><a href='{href}' title='open in Tracy profiler' "
                           f"style='font-size:11px'>🔬 Tracy</a>"
                           f"<br><code title='copy &amp; run to open in Tracy' "
@@ -1390,10 +1530,224 @@ def cull_tune_section() -> str:
   alpha_blend without microblock cull. Quality floor: PSNR ≥ {PSNR_FLOOR} dB,
   max_abs ≤ 0.05 @ 1024² stitch_doll (+ orbit + close-zoom views).</p>
   <p>Production default: <b>Mahalanobis</b> per-pair and per-microblock cull with
-  <code>contrib_floor=1/16384</code> (~68.6 dB worst vs true GT; ~18 ms/view).</p>
+  <code>contrib_floor=1/255</code> plus the GPU-3DGS per-pixel blend floor
+  (iter-156, <code>BLEND_PIXEL_FLOOR</code> default on). Was 1/16384; that golden is
+  archived under <code>tests/fixtures/hero/archive/</code>. PSNR vs old golden
+  42-43 dB (faint haze dropped); independent review task #43 PASS, no seams.</p>
   <table class='kv'>{head}</table>
   {table}
   <p>Full log: <code>opt/cull_tune.jsonl</code></p>
+</section>
+"""
+
+
+# TT anchor for the GPU ratio: the newest measured tip, i.e. the highest-numbered
+# 'keep' row in opt/ttw/iters.jsonl with a measured 30-view 1024x1024 bicycle
+# timings.ms_view, labelled with its board. Falls back to iter-180 (19.65 ms,
+# docs/blend-diet-t146) only if no such row exists.
+def tt_anchor() -> tuple[float, str]:
+    best = None
+    for r in load_ttw_iters():
+        ms = (r.get("timings") or {}).get("ms_view")
+        if r.get("decision") != "keep" or not isinstance(ms, (int, float)):
+            continue
+        if best is None or int(r.get("iter", -1)) > int(best.get("iter", -1)):
+            best = r
+    if best is None:
+        return 19.65, "Blackhole P100 (yyzo-bh-07), iter-180 blend TRISC1 diet"
+    m = best.get("metrics") if isinstance(best.get("metrics"), dict) else {}
+    board = m.get("board") or "board not recorded"
+    commit = (best.get("buildid") or {}).get("cpp", "")
+    label = f"{board}, iter-{best.get('iter')} measured tip"
+    if commit:
+        label += f" ({commit})"
+    return float(best["timings"]["ms_view"]), label
+
+
+TT_ANCHOR_MS, TT_ANCHOR_LABEL = tt_anchor()
+
+GPU_RESULT_JSON = OPT_DIR / "cpu-vs-tt" / "gpu_result.json"
+
+# --- Published (NOT measured) GPU reference rows -------------------------
+# Every figure below is quoted from its source publication. No number here was
+# measured by this project, on our bench, or on any hardware we control.
+PUBLISHED_GPU_ROWS = [
+    {
+        "id": "G1",
+        "renderer": "INRIA 3DGS (diff-gaussian-rasterization, Kerbl et al. 2023)",
+        "scene": "Mip-NeRF360 bicycle",
+        "gpu": "NVIDIA RTX A6000",
+        "res": "1920&times;1080",
+        "speed": "93 FPS (Fig. 1 teaser, bicycle)",
+        "ms": 10.75,
+        "src": "https://arxiv.org/abs/2308.04079",
+        "src_label": "arXiv:2308.04079",
+    },
+    {
+        "id": "G2",
+        "renderer": "INRIA 3DGS, pixel-normalized to our bench",
+        "scene": "bicycle",
+        "gpu": "NVIDIA RTX A6000",
+        "res": "1024&times;1024 (normalized)",
+        "speed": "183.8 FPS-equivalent",
+        "ms": 5.44,
+        "src": "https://arxiv.org/abs/2308.04079",
+        "src_label": "derived from G1",
+    },
+    {
+        "id": "G3",
+        "renderer": "Kovini&cacute;/Stojkovi&cacute; TT line vs their CUDA reference",
+        "scene": "their test scenes",
+        "gpu": "NVIDIA GTX 4060",
+        "res": "not stated",
+        "speed": "their TT result &asymp; 1.6&times; slower than the 4060",
+        "ms": None,
+        "src": "",
+        "src_label": "Slack DM D0C1CV1AJJV, 2026-09-14",
+    },
+]
+
+
+def published_gpu_section() -> str:
+    """Published-literature GPU rows. Always labelled 'published, not measured'."""
+    doc_link = (
+        "<a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a>"
+        " &sect; Published GPU reference rows"
+    )
+    rows = []
+    for r in PUBLISHED_GPU_ROWS:
+        ms = "&mdash;" if r["ms"] is None else f"{r['ms']:.2f}"
+        ratio = (
+            "&mdash;"
+            if r["ms"] is None
+            else f"GPU <b>{TT_ANCHOR_MS / r['ms']:.1f}&times;</b> faster"
+        )
+        src = (
+            f"<a href='{r['src']}' target='_blank'>{r['src_label']}</a>"
+            if r["src"]
+            else r["src_label"]
+        )
+        rows.append(
+            f"<tr><td>{r['id']}</td><td>{r['renderer']}</td><td>{r['scene']}</td>"
+            f"<td>{r['gpu']}</td><td>{r['res']}</td><td>{r['speed']}</td>"
+            f"<td>{ms}</td><td>{ratio}</td><td>{src}</td></tr>"
+        )
+    body = "\n".join(rows)
+    return f"""
+<section style='background:#fdf3f3;border-left:4px solid #e76f51;padding:12px 16px'>
+  <h2 style='margin-top:0'>GPU reference &mdash;
+    <span style='background:#e76f51;color:#fff;padding:1px 8px;border-radius:10px;
+      font-size:12px;letter-spacing:.5px'>PUBLISHED, NOT MEASURED</span></h2>
+  <p>No CUDA host is reachable from this project, so the rows below are
+  <b>figures quoted from their source publications</b>. They were <b>not</b>
+  measured by this project, not run on our bench, and not run on any hardware we
+  control. They exist only to give the charter's &ldquo;beat the GPU&rdquo;
+  criterion an order-of-magnitude reference.</p>
+  <table class='rows'>
+    <tr><th>#</th><th>Renderer</th><th>Scene</th><th>GPU</th><th>Resolution</th>
+        <th>Published speed</th><th>ms/view</th>
+        <th>vs TT ({TT_ANCHOR_MS} ms/view)</th><th>Source</th></tr>
+    {body}
+  </table>
+  <p><b>Normalization assumption (G2):</b>
+  <code>ms<sub>1024&sup2;</sub> = ms<sub>1080p</sub> &times; (1024&middot;1024)/(1920&middot;1080)
+  = 10.75 &times; 0.5059 = 5.44&nbsp;ms</code>, i.e. rasterization time is assumed
+  <b>linear in pixel count</b> at fixed Gaussian count. Projection, tiling and the
+  depth sort are per-Gaussian and do <i>not</i> shrink with resolution, so G2 is an
+  <b>optimistic (too-fast)</b> normalization and the true 1024&sup2; A6000 number
+  would be higher. Not corrected for: different reconstruction (paper's 30K-iter
+  bicycle vs our 6,131,954-Gaussian <code>bicycle.ply</code>), full SH vs our
+  SH-degree-0 colors, and a different camera set.</p>
+  <p><b>TT anchor:</b> {TT_ANCHOR_MS} ms/view ({1000.0 / TT_ANCHOR_MS:.2f} FPS)
+  &mdash; {TT_ANCHOR_LABEL}. Detail, sources and caveats: {doc_link}.</p>
+</section>
+"""
+
+
+def gpu_reference_section() -> str:
+    """GPU row for the charter's 'beat the GPU' criterion.
+
+    Data-driven: fills in from opt/cpu-vs-tt/gpu_result.json as soon as
+    bench/gpu_reference/run_gpu_bench.py has been run on a CUDA host. Until
+    then it states plainly that no GPU is reachable -- never an estimate.
+    """
+    doc_link = (
+        "<a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a>"
+        " &sect; GPU reference"
+    )
+    if not GPU_RESULT_JSON.exists():
+        return f"""
+<section style='background:#fff8e6;border-left:4px solid #e9c46a;padding:12px 16px'>
+  <h2 style='margin-top:0'>GPU reference &mdash; <span style='color:#b8860b'>not measured</span></h2>
+  <p>The charter's success criterion is beating GPU performance, but
+  <b>no NVIDIA GPU is reachable from this environment</b> (searched 2026-09-30):
+  IRD offers no GPU architecture (<code>grayskull</code> / <code>wormhole</code> /
+  <code>wormhole_b0</code> / <code>blackhole</code> / <code>compute</code> only),
+  all 216 inventory machines report arch <code>blackhole</code>,
+  <code>wormhole_b0</code> or <code>compute</code>, and every one of the 25
+  ssh-reachable bare-metal hosts reports <b>0 NVIDIA PCI devices</b>. No cloud-GPU
+  CLI or credential is present either.</p>
+  <p><b>No number is shown rather than an estimated one.</b> The harness is
+  committed and verified against this repo's camera math and PLY activations
+  (bit-identical) &mdash; see
+  <code>bench/gpu_reference/run_gpu_bench.py</code>. Run it on any CUDA host and
+  this section fills itself in:</p>
+  <p><code>python bench/gpu_reference/run_gpu_bench.py --backend gsplat --repeats 2
+  &amp;&amp; python3 opt/build_report.py</code></p>
+  <p>Unblocking needs a human to supply a GPU host or a cloud-GPU credential.
+  Detail and the full search log: {doc_link}.</p>
+  <table class='kv'>
+    <tr><th>TT anchor for the eventual ratio</th>
+        <td>{TT_ANCHOR_MS} ms/view ({1000.0 / TT_ANCHOR_MS:.2f} FPS) &mdash; {TT_ANCHOR_LABEL}</td></tr>
+  </table>
+</section>
+"""
+
+    r = json.loads(GPU_RESULT_JSON.read_text())
+    gpu = r.get("gpu", {})
+    gpu_name = gpu.get("name", "unknown GPU")
+    avg = float(r["avg_frame_ms"])
+    ratio = TT_ANCHOR_MS / avg
+    verdict = (
+        f"<span style='color:#2a9d8f;font-weight:600'>TT is {1 / ratio:.2f}&times; "
+        f"faster</span>"
+        if avg > TT_ANCHOR_MS
+        else f"<span style='color:#e76f51;font-weight:600'>GPU is {ratio:.2f}&times; "
+        f"faster</span>"
+    )
+    hero = ""
+    hero_png = r.get("hero_png")
+    if hero_png and (OPT_DIR.parent / hero_png).exists():
+        rel = Path(hero_png).name
+        hero = (
+            f"<div style='float:right;margin-left:16px;text-align:center;"
+            f"font-size:11px;color:#777'>"
+            f"<a href='cpu-vs-tt/{rel}' target='_blank'>"
+            f"<img src='cpu-vs-tt/{rel}' style='max-width:220px;border-radius:4px;"
+            f"border:1px solid #ddd'></a><br>GPU hero render</div>"
+        )
+    return f"""
+<section style='background:#f1faee;border-left:4px solid #2a9d8f;padding:12px 16px;overflow:hidden'>
+  {hero}
+  <h2 style='margin-top:0'>GPU reference &mdash; measured</h2>
+  <table class='kv'>
+    <tr><th>GPU</th><td>{gpu_name} &middot; {gpu.get('vram_gb', '?')} GB &middot;
+        sm{gpu.get('sm', '?')} &middot; host {gpu.get('host', '?')}</td></tr>
+    <tr><th>Rasterizer</th><td>{r.get('backend')} {r.get('backend_version', '')}</td></tr>
+    <tr><th>Bench</th><td>{r.get('scene')} &middot; {r.get('n_gaussians', 0):,} gaussians
+        &middot; {r['image_size'][0]}&times;{r['image_size'][1]}
+        &middot; {r.get('n_timed_views')} timed views (hero warmup excluded)</td></tr>
+    <tr><th>GPU frame</th><td><b>{avg} ms/view</b> avg &middot;
+        p50 {r.get('p50_frame_ms')} &middot; min {r.get('min_frame_ms')} &middot;
+        max {r.get('max_frame_ms')} &middot; {r.get('fps_from_avg')} FPS</td></tr>
+    <tr><th>TT frame</th><td>{TT_ANCHOR_MS} ms/view avg &mdash; {TT_ANCHOR_LABEL}</td></tr>
+    <tr><th>TT vs GPU</th><td>{verdict}</td></tr>
+    <tr><th>GPU hero PSNR</th><td>{r.get('hero_psnr_db')} dB vs
+        <code>benchmarks/reference_v2/hero.png</code></td></tr>
+    <tr><th>Measured</th><td>{r.get('timestamp', '')}</td></tr>
+  </table>
+  <p>Raw per-view timings: <code>opt/cpu-vs-tt/gpu_result.json</code>.
+  Bench-identity notes and caveats: {doc_link}.</p>
 </section>
 """
 
@@ -1421,8 +1775,10 @@ def algorithm_snapshot(rows: list[dict]) -> str:
     <li><b>tt</b> (target): same C++ pipeline as cpu_cpp_mb with one stage at a
         time swapped to a TT-metal kernel (plan-amendment-002). PSNR-gated:
         <code>tt</code> hero PSNR &ge; <code>cpu_cpp_mb</code> hero &minus; 0.5 dB.</li>
-    <li><b>contrib_floor</b> = 1/16384 (set in <code>benchmarks/cameras_v2.json</code>;
-        Pipeline default in <code>gsplat/pipeline.py</code>).</li>
+    <li><b>contrib_floor</b> = 1/255 with the per-pixel blend floor (iter-156,
+        <code>BLEND_PIXEL_FLOOR</code> default on). The old 1/16384 golden is archived
+        under <code>tests/fixtures/hero/archive/</code>; PSNR vs old golden 42-43 dB;
+        independent review task #43 PASS, no seams.</li>
     <li><b>Reference views</b>: <code>benchmarks/reference_v2/</code> @ 1024×1024,
         regenerated 2026-05-28 with current code (cpu_cpp_mb @ cf=1/16384). The
         prior cad8f91 snapshot is preserved at
@@ -1474,7 +1830,27 @@ def build_html(rows: list[dict]) -> str:
   .in-flight-row { background: #fffdf5; border-left: 4px solid #e9c46a; padding-left: 12px; }
   .reason { color: #555; font-size: 12px; }
   code { background: #f1faee; padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+  .shot-missing { background: #fde2e1; border: 2px solid #c44536; color: #c44536; font-weight: 700; font-size: 12px; padding: 10px 12px; border-radius: 4px; max-width: 260px; }
+  .shot-missing small { font-weight: 400; }
+  .shot-cap { color: #555; font-size: 11px; margin: 2px 0 0; }
+  .shot-meta { color: #555; font-size: 11px; margin: 4px 0 0; }
+  #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; cursor: zoom-out; align-items: center; justify-content: center; }
+  #lightbox img { max-width: 96vw; max-height: 96vh; }
 </style>
+<script>
+document.addEventListener('click', function (e) {
+  var lb = document.getElementById('lightbox');
+  if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
+  var a = e.target.closest('a.zoom');
+  if (!a || !lb) return;
+  e.preventDefault();
+  lb.querySelector('img').src = a.getAttribute('href');
+  lb.style.display = 'flex';
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') { var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none'; }
+});
+</script>
 """
     n_metal = len(load_metal_iters())
     n_ttw = len(load_ttw_iters())
@@ -1495,14 +1871,20 @@ def build_html(rows: list[dict]) -> str:
 {meta}
 {in_flight_section()}
 {figs_html}
+{published_gpu_section()}
+{gpu_reference_section()}
 {ledger_section(rows)}
 {algorithm_snapshot(rows)}
+<div id='lightbox'><img src='' alt='enlarged screenshot'></div>
 </body>
 </html>
 """
 
 
 def write_reports(html: str) -> None:
+    # No trailing whitespace (empty template slots leave indented blank lines):
+    # `ttp push` runs `git diff --check` and refuses them.
+    html = "\n".join(line.rstrip() for line in html.split("\n"))
     REPORT_HTML.write_text(html)
     REPORT_HTML_TTW.parent.mkdir(parents=True, exist_ok=True)
     REPORT_HTML_TTW.write_text(html)
@@ -1515,6 +1897,15 @@ def main() -> None:
     n_ledger = len(load_metal_iters()) + len(load_ttw_iters())
     print(f"wrote {REPORT_HTML}  ({n_ledger} ledger rows, {len(rows)} cpu iters)")
     print(f"wrote {REPORT_HTML_TTW}  (identical mirror)")
+    errors, pending = check_device_screenshots(load_ttw_iters())
+    if pending:
+        print(f"  [WARN] {len(pending)} legacy iters flagged screenshot_backfill_pending: {pending}")
+    if errors:
+        for e in errors:
+            print(f"SCREENSHOT MISSING: {e}")
+        print("REPORT INVALID: device screenshot requirement not met "
+              "(see opt/ttw/ITERATION_CHECKLIST.md)")
+        sys.exit(2)
 
 
 if __name__ == "__main__":

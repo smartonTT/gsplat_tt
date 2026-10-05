@@ -1,0 +1,4 @@
+bodies: 32 single, 16 pair (from ../blend-dispatch-t189/out/trisc1-default.dis)
+single: 60.0 ops, 11.00 MAD-latency stalls, 5.0 nops
+pair:   109.0 ops, 22.00 MAD-latency stalls, 8.0 nops
+per live record: 30.9 stall cycles = 0.49 ms/view; per microblock 11.0 (t189 unexplained: 14.5)

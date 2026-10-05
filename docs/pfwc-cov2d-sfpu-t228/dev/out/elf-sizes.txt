@@ -1,0 +1,10 @@
+576132 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc2/trisc2.elf
+576132 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc2/trisc2.elf.xip.elf
+686576 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc0/trisc0.elf
+686576 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc0/trisc0.elf.xip.elf
+1455928 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/11134555176326654151/brisc/brisc.elf
+1455928 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/11134555176326654151/brisc/brisc.elf.xip.elf
+1896136 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/10277567180196825995/ncrisc/ncrisc.elf
+1896136 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/10277567180196825995/ncrisc/ncrisc.elf.xip.elf
+12412740 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc1/trisc1.elf
+12412740 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc1/trisc1.elf.xip.elf

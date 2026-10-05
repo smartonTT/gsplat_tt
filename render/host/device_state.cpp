@@ -4,18 +4,22 @@
 
 #include "device_state.h"
 
+#include <cstdio>
 #include <cstdlib>
 #include <mutex>
 #include <unordered_map>
 
 #include "blend.h"
+#include "env_config.h"
 #include "gather_visible.h"
 #include "pfwc.h"
 #include "project.h"
+#include "vis_mode.h"
 #include "sort.h"
 #include "tile_assign.h"
 
 #include <tt-metalium/distributed.hpp>
+#include <tt-metalium/hal.hpp>
 
 namespace gsplat_tt {
 namespace device_state {
@@ -40,6 +44,8 @@ struct State {
     int chunk_fusion_tiles_x = 0;
     int chunk_fusion_tiles_y = 0;
     int chunk_fusion_tile_size = 0;
+    bool k2_rows_valid = false;
+    K2CountRows k2_rows;
 };
 
 State& state() {
@@ -78,7 +84,33 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
     std::lock_guard<std::mutex> lock(s.mu);
     if (!s.mesh_device) {
         constexpr int device_id = 0;
-        s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
+        // GSPLAT_TT_KCFG_EXTRA_KB=N grows the Tensix kernel config ring buffer by N KB (default
+        // 69 KB) by shrinking the worker L1 allocator. Profiling only: with the device profiler on,
+        // the fused pfwc program is 71216 B and overflows the default 70656 B buffer.
+        const char* kx = std::getenv("GSPLAT_TT_KCFG_EXTRA_KB");
+        long extra_kb = kx ? std::atol(kx) : 0;
+        // Task #207/#221: the split pfwc writer adds the writer code to the NCRISC kernel
+        // (92496 B program, too large at +8 and +16 KB); SFPU cov_cam alone needs ~4 KB.
+        // The split only builds with the fused writer (pfwc_fuse_mode() == 1).
+        if (kx == nullptr && env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1) extra_kb = 24;
+        else if (kx == nullptr && env_config::pfwc_covcam_sfpu()) extra_kb = 8;
+        // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
+        const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
+        if (extra_kb > 0 || num_cqs > 1) {
+            size_t worker_l1 = DEFAULT_WORKER_L1_SIZE;
+            if (extra_kb > 0) {
+                const size_t kcfg = (69 + static_cast<size_t>(extra_kb)) * 1024;
+                worker_l1 = tt::tt_metal::hal::get_max_worker_l1_unreserved_size() - kcfg;
+            }
+            s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(
+                device_id, DEFAULT_L1_SMALL_SIZE, DEFAULT_TRACE_REGION_SIZE, num_cqs,
+                tt::tt_metal::DispatchCoreConfig{}, {}, worker_l1);
+        } else {
+            s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
+        }
+        const auto g = s.mesh_device->compute_with_storage_grid_size();
+        std::fprintf(stderr, "[DEV] command queues %u, compute grid %zux%zu\n",
+                     static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y);
     }
     return s.mesh_device;
 }
@@ -92,6 +124,11 @@ bool is_initialized() {
 tt::tt_metal::distributed::MeshCommandQueue* command_queue() {
     auto dev = get_device();
     return &dev->mesh_command_queue();
+}
+
+tt::tt_metal::distributed::MeshCommandQueue* command_queue1() {
+    auto dev = get_device();
+    return dev->num_hw_cqs() > 1 ? &dev->mesh_command_queue(1) : nullptr;
 }
 
 void shutdown() {
@@ -126,6 +163,8 @@ void clear_buffers() {
     auto& s = state();
     std::lock_guard<std::mutex> lock(s.mu);
     s.buffers.clear();
+    s.k2_rows_valid = false;
+    s.k2_rows = K2CountRows{};
 }
 
 void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems) {
@@ -134,6 +173,36 @@ void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems) {
     s.sort_pipe_scalars_valid = true;
     s.sort_pipe_p_kept = p_kept;
     s.sort_pipe_mask_elems = mask_elems;
+}
+
+void set_k2_count_rows(const K2CountRows& rows) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    s.k2_rows = rows;
+    s.k2_rows_valid = true;
+}
+
+bool take_k2_count_rows(K2CountRows* rows) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!s.k2_rows_valid) return false;
+    if (rows) *rows = s.k2_rows;
+    s.k2_rows_valid = false;
+    s.k2_rows = K2CountRows{};
+    return true;
+}
+
+void clear_k2_count_rows(const char* who) {
+    auto& s = state();
+    std::lock_guard<std::mutex> lock(s.mu);
+    static int dropped = 0;
+    if (s.k2_rows_valid && dropped < 3) {
+        dropped++;
+        std::fprintf(stderr, "[device_state] K2 count rows dropped unused (%s)\n",
+                     who ? who : "?");
+    }
+    s.k2_rows_valid = false;
+    s.k2_rows = K2CountRows{};
 }
 
 bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems) {

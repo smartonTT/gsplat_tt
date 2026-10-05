@@ -1,0 +1,16 @@
+589152 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/8704228219592424695/trisc2/trisc2.elf
+589152 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/8704228219592424695/trisc2/trisc2.elf.xip.elf
+592256 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/4462319912576304702/trisc2/trisc2.elf
+592256 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/4462319912576304702/trisc2/trisc2.elf.xip.elf
+934856 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/8704228219592424695/trisc0/trisc0.elf
+934856 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/8704228219592424695/trisc0/trisc0.elf.xip.elf
+956488 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/4462319912576304702/trisc0/trisc0.elf
+956488 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/4462319912576304702/trisc0/trisc0.elf.xip.elf
+1453972 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/3760991240673643261/brisc/brisc.elf
+1453972 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/3760991240673643261/brisc/brisc.elf.xip.elf
+1902732 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/5955507357496693160/ncrisc/ncrisc.elf
+1902732 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/5955507357496693160/ncrisc/ncrisc.elf.xip.elf
+12530992 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/4462319912576304702/trisc1/trisc1.elf
+12530992 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/4462319912576304702/trisc1/trisc1.elf.xip.elf
+12555680 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/8704228219592424695/trisc1/trisc1.elf
+12555680 /localdev/smarton/.cache/ttmc-gstt2-t221/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/8704228219592424695/trisc1/trisc1.elf.xip.elf

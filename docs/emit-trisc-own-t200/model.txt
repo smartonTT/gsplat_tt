@@ -1,0 +1,9 @@
+t196 mean mover: zone 2.162 ms, pack 1.901 ms, 216 cyc/record
+case                               alpha   imb  TRISC  mover   zone  saving
+optimistic (cursors in TRISC local mem)  0.92  0.03  1.313  0.603  1.408   0.754
+nominal (same cost per record)      1.00  0.04  1.440  0.603  1.535   0.627
+TRISC 10% slower                    1.10  0.05  1.607  0.603  1.702   0.460
+TRISC 20% slower                    1.20  0.06  1.776  0.603  1.871   0.291
+TRISC 30% slower                    1.30  0.08  1.964  0.603  2.059   0.103
+alpha at which the saving falls to 0.3 ms/view: 1.25
+t165-style (mover keeps scan+cursor, TRISC only stores): mover stays ~1.90 ms -> saving ~0 (measured +0.056 ms/view frame, +0.02 emit)

@@ -20,6 +20,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 namespace gsplat_tt {
 
@@ -31,6 +32,37 @@ struct PfwcCallTimings {
     double download_ms = 0.0;
     double unpack_ms   = 0.0;
     bool   cache_hit   = false;
+};
+
+// Lever 2 (task #99, GSPLAT_TT_SFPU_VIS): parameters of the visibility
+// predicate (gather_visible) and the tile rectangle (tile_assign K1). When
+// pfwc_tt gets them it runs the PFWC_VIS program, which also reads the resident
+// scene opacities ("scene_opacities", uploaded by gather_visible_upload_scene)
+// and registers "pfwc_tpg", "pfwc_aabb" (word tiles, vis_tile.h),
+// "pfwc_vis_mask" (128 B per tile) and "pfwc_tile_counts" ([visible, pairs]
+// per tile, 1 KB pages).
+struct PfwcVisParams {
+    float k_near = 0.2f;
+    float min_opacity = 0.0f;
+    float image_width = 0.0f;
+    float image_height = 0.0f;
+    float max_radius = 0.0f;  // effective (gather_visible_effective_max_radius)
+    int tile_size = 32;
+    int tiles_x = 1;
+    int tiles_y = 1;
+    // Lanes whose fl(m + r) / tile_size is within edge_tau of an integer are
+    // re-evaluated exactly by the writer (SFPMAD rounding insurance; 0 = off).
+    float edge_tau = 1.0f / 4096.0f;
+    // Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1): run the fused writer, which
+    // writes the compact proj_m_depth / blendrec / offs / aabb segments and the
+    // per-core counts table ("pfwc_fuse_counts") instead of the pfwc tiles.
+    // Only for the resident chain (gather downstream_resident, no verify).
+    bool fuse = false;
+    // Lever C (task #140, GSPLAT_TT_PRECULL=1 or 2): the microblock band cull's
+    // contribution floor; > 0 shrinks the rectangle to the opacity-aware
+    // extent (project_pfwc_compute.cpp step 11.6). 0 = off for this view (band
+    // cull disabled), the PFWC_PRECULL program then keeps the 3-sigma radii.
+    float precull_floor = 0.0f;
 };
 
 // Compute mean_2d, depth, cov2d, radii for N Gaussians using device-resident
@@ -64,7 +96,23 @@ double pfwc_tt(
     float* depth_out,
     float* cov2d_out,
     float* radii_out,
-    PfwcCallTimings* timings_out = nullptr);
+    PfwcCallTimings* timings_out = nullptr,
+    const PfwcVisParams* vis = nullptr);
+
+// True when the last pfwc_tt call ran the PFWC_VIS program (its word tiles,
+// mask and counts are current); gather_visible only takes the SFPU path then.
+bool pfwc_ran_vis();
+
+// Lever B: true when the last pfwc_tt call ran the fused writer. Then the
+// compact segments and the counts table are current, the pfwc tiles are NOT,
+// and gather_visible hands over to tile_assign_fused_k2.
+struct PfwcFuseInfo {
+    uint32_t num_cores = 0;  // pfwc cores = segments
+    uint32_t num_tiles = 0;
+    uint32_t tiles_x = 0;
+    uint32_t screen_tiles = 0;  // tiles_x * tiles_y
+};
+bool pfwc_ran_fused(PfwcFuseInfo* info = nullptr);
 
 bool pfwc_device_ready();
 void pfwc_device_shutdown();

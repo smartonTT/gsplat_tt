@@ -1,0 +1,33 @@
+n_views 30  read 20  last_split 0.50  group_gap 1.5
+variant                          max_end  mean_end      tail d_vs_early
+meas                              5796.3    5357.7     438.6     -191.7
+early                             5988.0    5327.3     660.7        0.0
+late                              5522.8    5327.5     195.3     -465.2
+early_oracle                      5879.3    5327.1     552.2     -108.7
+late_oracle                       5361.6    5327.3      34.4     -626.3
+split8_h0.5_early_ord             5981.5    5333.7     647.8       -6.4
+split8_h0.5_early_oracle          5819.3    5333.5     485.8     -168.6
+split8_h0.5_late_ord              5534.5    5334.0     200.5     -453.4
+split8_h0.5_late_oracle           5367.5    5333.8      33.8     -620.4
+split8_h0.6_early_ord             6020.1    5365.7     654.3       32.1
+split8_h0.6_early_oracle          5834.4    5365.5     468.9     -153.5
+split8_h0.6_late_ord              5567.3    5366.0     201.3     -420.7
+split8_h0.6_late_oracle           5396.1    5365.8      30.3     -591.9
+split16_h0.5_early_ord            5922.3    5339.8     582.6      -65.6
+split16_h0.5_early_oracle         5720.9    5339.6     381.3     -267.0
+split16_h0.5_late_ord             5533.6    5340.0     193.6     -454.3
+split16_h0.5_late_oracle          5386.4    5339.8      46.6     -601.5
+split16_h0.6_early_ord            5969.0    5398.9     570.1      -19.0
+split16_h0.6_early_oracle         5769.1    5398.7     370.4     -218.8
+split16_h0.6_late_ord             5594.6    5399.2     195.4     -393.4
+split16_h0.6_late_oracle          5437.3    5398.9      38.4     -550.6
+split32_h0.5_early_ord            5833.0    5352.7     480.2     -155.0
+split32_h0.5_early_oracle         5595.5    5352.5     242.9     -392.5
+split32_h0.5_late_ord             5535.3    5353.0     182.3     -452.6
+split32_h0.5_late_oracle          5406.8    5352.7      54.0     -581.2
+split32_h0.6_early_ord            5915.3    5459.9     455.5      -72.6
+split32_h0.6_early_oracle         5694.4    5459.7     234.7     -293.5
+split32_h0.6_late_ord             5644.7    5460.1     184.5     -343.3
+split32_h0.6_late_oracle          5510.3    5459.9      50.4     -477.6
+replay(early) per-core sequence == measured: 0.000 of cores
+per-view max_end measured vs replay(early) abs err: mean 212.7 us

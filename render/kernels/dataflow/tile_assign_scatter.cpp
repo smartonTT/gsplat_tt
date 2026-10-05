@@ -40,23 +40,37 @@
 //                    sized to the static p_max ceiling; cores whose entire range
 //                    is >= P early-out, and the p<P guard zero-pads any straddle.
 //
+// TA_K2_AABB (task #99, lever 2, GSPLAT_TT_SFPU_VIS): offs comes from the gather
+// scatter (proj_m_offs) and arg 1 is the packed rectangle proj_m_aabb
+// (vis_tile.h: min_x | min_y << 10 | (w - 1) << 20, computed on the SFPU in
+// pfwc); args 2..4 are unused. One 64 B attribute read per 16 gaussians and no
+// soft-float rectangle per gaussian.
+//
 // COMPILE-TIME ARGS: 7 TensorAccessorArgs (offs, px, py, rx, ry, gids, tids).
 // proj-pair-count P is read via a runtime InterleavedAddrGen (no CT args), S5.3.
 
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "dm_fp32.h"
+#ifdef TA_K2_AABB
+#include "vis_tile.h"
+#endif
 
 namespace {
 
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 
-inline float bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
-}
+// Dual data mover (task #34): the host runs this kernel on NCRISC and BRISC,
+// each over its own half of the core's pair-page range. Every output page is a
+// pure function of its pair indices (offs + AABB), so the split output is
+// byte-identical. The BRISC instance is built with TA_CB_OFFSET=16 and uses its
+// private copy of CBs 0..6 at id + 16.
+#ifndef TA_CB_OFFSET
+#define TA_CB_OFFSET 0
+#endif
+constexpr uint32_t CB_OFFSET = TA_CB_OFFSET;
 
 inline int clampi(int v, int lo, int hi) {
     if (v < lo) v = lo;
@@ -90,6 +104,9 @@ void kernel_main() {
     // `x / tsf`: dividing by a power of two only decrements the exponent (no
     // mantissa rounding, no underflow here), so min_x/min_y/max_x are unchanged.
     const float inv_tsf = 1.0f / tsf;
+    // The AABB tile coords run through dm_fp32 (integer add + shift, no
+    // __addsf3/__mulsf3/__fixsfsi): bit-identical to the float expression.
+    const uint32_t tile_shift = dm_fp32::pow2_shift(get_arg_val<uint32_t>(13));
 
     constexpr auto offs_args = TensorAccessorArgs<0>();
     constexpr auto px_args   = TensorAccessorArgs<offs_args.next_compile_time_args_offset()>();
@@ -112,13 +129,13 @@ void kernel_main() {
     }
 
     // Scratch CBs (declared in tile_assign_device.cpp scatter program).
-    constexpr uint32_t CB_OFFS = 0;
-    constexpr uint32_t CB_PX   = 1;
-    constexpr uint32_t CB_PY   = 2;
-    constexpr uint32_t CB_RX   = 3;
-    constexpr uint32_t CB_RY   = 4;
-    constexpr uint32_t CB_GID  = 5;
-    constexpr uint32_t CB_TID  = 6;
+    constexpr uint32_t CB_OFFS = 0 + CB_OFFSET;
+    constexpr uint32_t CB_PX   = 1 + CB_OFFSET;
+    constexpr uint32_t CB_PY   = 2 + CB_OFFSET;
+    constexpr uint32_t CB_RX   = 3 + CB_OFFSET;
+    constexpr uint32_t CB_RY   = 4 + CB_OFFSET;
+    constexpr uint32_t CB_GID  = 5 + CB_OFFSET;
+    constexpr uint32_t CB_TID  = 6 + CB_OFFSET;
 
     const uint32_t offs_l1 = get_write_ptr(CB_OFFS);
     const uint32_t px_l1   = get_write_ptr(CB_PX);
@@ -175,6 +192,18 @@ void kernel_main() {
     auto load_attrs = [&](int g) {
         const int pg = g / static_cast<int>(ELEMS_PER_PAGE);
         const int ip = g - pg * static_cast<int>(ELEMS_PER_PAGE);
+#ifdef TA_K2_AABB
+        if (pg != attr_cached_page) {
+            noc_async_read(get_noc_addr(static_cast<uint32_t>(pg), px_acc), px_l1, PAGE_BYTES);
+            noc_async_read_barrier();
+            attr_cached_page = pg;
+        }
+        const uint32_t box = pxp[ip];
+        cur_minx = static_cast<int>(vis_tile::aabb_min_x(box));
+        cur_miny = static_cast<int>(vis_tile::aabb_min_y(box));
+        cur_w = static_cast<int>(vis_tile::aabb_w(box));
+        return;
+#endif
         if (pg != attr_cached_page) {
             noc_async_read(get_noc_addr(static_cast<uint32_t>(pg), px_acc), px_l1, PAGE_BYTES);
             noc_async_read(get_noc_addr(static_cast<uint32_t>(pg), py_acc), py_l1, PAGE_BYTES);
@@ -183,13 +212,13 @@ void kernel_main() {
             noc_async_read_barrier();
             attr_cached_page = pg;
         }
-        const float px = bits_to_f(pxp[ip]);
-        const float py = bits_to_f(pyp[ip]);
-        const float rx = bits_to_f(rxp[ip]);
-        const float ry = bits_to_f(ryp[ip]);
-        const int min_x = clampi(static_cast<int>((px - rx) * inv_tsf), 0, tiles_x - 1);
-        const int min_y = clampi(static_cast<int>((py - ry) * inv_tsf), 0, tiles_y - 1);
-        const int max_x = clampi(static_cast<int>((px + rx) * inv_tsf), 0, tiles_x - 1);
+        const uint32_t pxb = pxp[ip];
+        const uint32_t pyb = pyp[ip];
+        const uint32_t rxb = rxp[ip];
+        const uint32_t ryb = ryp[ip];
+        const int min_x = clampi(dm_fp32::add_mul_pow2_to_int(pxb, rxb ^ dm_fp32::SIGN, tile_shift, inv_tsf), 0, tiles_x - 1);
+        const int min_y = clampi(dm_fp32::add_mul_pow2_to_int(pyb, ryb ^ dm_fp32::SIGN, tile_shift, inv_tsf), 0, tiles_y - 1);
+        const int max_x = clampi(dm_fp32::add_mul_pow2_to_int(pxb, rxb, tile_shift, inv_tsf), 0, tiles_x - 1);
         cur_minx = min_x;
         cur_miny = min_y;
         cur_w = max_x - min_x + 1;

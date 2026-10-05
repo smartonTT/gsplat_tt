@@ -54,16 +54,44 @@
 //   32    : t_count     (number of tiles this core owns)
 //   33    : base        (global compact output offset for this core, scatter pass)
 //   34    : is_last     (1 = this core writes the final element; zero-pads tail)
-//   35    : core_id     (slot in the per-core counts buffer)
-//   36    : counts DRAM base (per-core counts, one 64B page per core)
+//   35    : core_id     (count/base slot: 2*core + mover)
+//   36    : counts DRAM base (per-slot counts, one 64B page per slot)
+//   37    : AoS blend-record DRAM base
+//   38    : tile stride
+//   39    : device_scan (read base/is_last from counts_addr page core_id)
+//   40    : mover       (0 = BRISC, 1 = NCRISC; selects the L1 staging copy)
+//   41    : visibility-mask DRAM base (one 128B page = 1024 bits per tile)
+//
+// VISIBILITY MASK (task #75): the count pass evaluates the predicate once per
+// Gaussian and writes a 1024-bit mask per tile (bit il of word il/32 set iff
+// element t*1024+il is visible). The scatter pass reads the mask instead of
+// re-running the soft-float predicate, walks only the set bits, and skips the
+// 12 tile reads of tiles with no visible element. Same elements, same order,
+// so every output byte is unchanged.
+//
+// DUAL DATA MOVER: the host gives each core's (strided) tile list to its two
+// movers as two contiguous halves, BRISC the first, NCRISC the second, and
+// numbers the slots 2*core + mover. The compaction order is the concatenation
+// of the slots' visible elements in slot order, i.e. core 0's first half,
+// core 0's second half, core 1's first half, ... — exactly the single-mover
+// order. So every output byte is unchanged; the page shared by two adjacent
+// slots (same core or not) is handled by the boundary-page rule below.
 //
 // COMPILE-TIME ARGS: 24 TensorAccessorArgs in the order
 //   m2x,m2y,depth,a,b,c,rx,ry, col_r,col_g,col_b,op,
-//   o_px,o_py,o_rx,o_ry,o_a,o_b,o_c,o_depth,o_op, o_colors, o_M, o_counts.
+//   o_px,o_py,o_rx,o_ry,o_a,o_b,o_c,o_depth,o_op, o_colors, o_M, o_counts,
+//   then o_blendrec and the visibility mask.
 
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_bin_fp32.h"
+
+#ifndef EMIT_PUBOC
+#define EMIT_PUBOC 0
+#endif
+#include "dm_fp32.h"
+#include "gather_visible_pred.h"
 
 namespace {
 
@@ -72,12 +100,8 @@ constexpr uint32_t TILE_BYTES = TILE_ELEMS * 4;  // 4096
 constexpr uint32_t PAGE_ELEMS = 16;
 constexpr uint32_t PAGE_BYTES = PAGE_ELEMS * 4;  // 64
 constexpr uint32_t COLOR_GROUP_FLOATS = PAGE_ELEMS * 3;  // 48 floats / 16-Gaussian group
-
-inline float bits_to_f(uint32_t b) {
-    float f;
-    __builtin_memcpy(&f, &b, 4);
-    return f;
-}
+constexpr uint32_t MASK_WORDS = TILE_ELEMS / 32;          // 32 words / tile
+constexpr uint32_t MASK_BYTES = MASK_WORDS * 4;           // 128
 
 inline int clampi(int v, int lo, int hi) {
     if (v < lo) v = lo;
@@ -119,11 +143,12 @@ void kernel_main() {
     const uint32_t o_M_addr      = get_arg_val<uint32_t>(22);
     const uint32_t N          = get_arg_val<uint32_t>(23);
     const uint32_t num_tiles  = get_arg_val<uint32_t>(24);
-    const float min_opacity   = bits_to_f(get_arg_val<uint32_t>(25));
-    const float k_near        = bits_to_f(get_arg_val<uint32_t>(26));
-    const float img_w         = bits_to_f(get_arg_val<uint32_t>(27));
-    const float img_h         = bits_to_f(get_arg_val<uint32_t>(28));
-    const float max_radius    = bits_to_f(get_arg_val<uint32_t>(29));
+    // fp32 bits: compared with dm_fp32 (integer ops), see visible_bits().
+    const uint32_t min_opacity = get_arg_val<uint32_t>(25);
+    const uint32_t k_near      = get_arg_val<uint32_t>(26);
+    const uint32_t img_w       = get_arg_val<uint32_t>(27);
+    const uint32_t img_h       = get_arg_val<uint32_t>(28);
+    const uint32_t max_radius  = get_arg_val<uint32_t>(29);
     const uint32_t t_start    = get_arg_val<uint32_t>(31);
     const uint32_t t_count    = get_arg_val<uint32_t>(32);
     const uint32_t base       = get_arg_val<uint32_t>(33);
@@ -142,6 +167,13 @@ void kernel_main() {
     // (repointed by the host at the device-scan base buffer) page core_id,
     // instead of the host-computed `base`/`is_last` args (which are 0).
     const uint32_t device_scan = get_arg_val<uint32_t>(39);
+    // Dual data mover: 0 = BRISC, 1 = NCRISC. Both run this kernel on the same
+    // core, each on its own slice of the core's tile list with its own count /
+    // base slot (core_id is the (core, mover) slot). Every staging CB is
+    // allocated twice as deep; mover m uses the m-th copy, so the two movers
+    // share no L1.
+    const uint32_t mover = get_arg_val<uint32_t>(40);
+    const uint32_t mask_addr = get_arg_val<uint32_t>(41);
     (void)num_tiles;
     (void)o_M_addr;
 
@@ -170,6 +202,7 @@ void kernel_main() {
     constexpr auto a_oM    = TensorAccessorArgs<a_ocol.next_compile_time_args_offset()>();
     constexpr auto a_counts= TensorAccessorArgs<a_oM.next_compile_time_args_offset()>();
     constexpr auto a_brec  = TensorAccessorArgs<a_counts.next_compile_time_args_offset()>();
+    constexpr auto a_mask  = TensorAccessorArgs<a_brec.next_compile_time_args_offset()>();
     (void)a_oM;
 
     const auto acc_m2x   = TensorAccessor(a_m2x,   m2x_addr,   TILE_BYTES);
@@ -196,6 +229,7 @@ void kernel_main() {
     const auto acc_ocol  = TensorAccessor(a_ocol,  o_colors_addr, PAGE_BYTES);
     const auto acc_counts= TensorAccessor(a_counts, counts_addr,  PAGE_BYTES);
     const auto acc_brec  = TensorAccessor(a_brec,  o_blendrec_addr, PAGE_BYTES);
+    const auto acc_mask  = TensorAccessor(a_mask,  mask_addr, MASK_BYTES);
 
     constexpr uint32_t CB_M2X = 0, CB_M2Y = 1, CB_DEP = 2, CB_A = 3, CB_B = 4,
                        CB_C = 5, CB_RX = 6, CB_RY = 7, CB_CR = 8, CB_CG = 9,
@@ -204,22 +238,24 @@ void kernel_main() {
                        CB_OA = 16, CB_OB = 17, CB_OC = 18, CB_ODEP = 19,
                        CB_OOP = 20, CB_OCOL = 21, CB_OM = 22;
     constexpr uint32_t CB_OREC = 23;  // 16 records x 64B AoS staging
+    constexpr uint32_t CB_MASK = 24;  // 2 x 128B visibility-mask staging
+    const uint32_t l1_mask = get_write_ptr(CB_MASK) + mover * 2 * MASK_BYTES;
     constexpr uint32_t REC_WORDS = 16;  // 64B / 4
-    const uint32_t l1_orec = get_write_ptr(CB_OREC);
+    const uint32_t l1_orec = get_write_ptr(CB_OREC) + mover * PAGE_ELEMS * PAGE_BYTES;
     auto o_rec = reinterpret_cast<volatile uint32_t*>(l1_orec);
 
-    const uint32_t l1_m2x = get_write_ptr(CB_M2X);
-    const uint32_t l1_m2y = get_write_ptr(CB_M2Y);
-    const uint32_t l1_dep = get_write_ptr(CB_DEP);
-    const uint32_t l1_a   = get_write_ptr(CB_A);
-    const uint32_t l1_b   = get_write_ptr(CB_B);
-    const uint32_t l1_c   = get_write_ptr(CB_C);
-    const uint32_t l1_rx  = get_write_ptr(CB_RX);
-    const uint32_t l1_ry  = get_write_ptr(CB_RY);
-    const uint32_t l1_cr  = get_write_ptr(CB_CR);
-    const uint32_t l1_cg  = get_write_ptr(CB_CG);
-    const uint32_t l1_cb  = get_write_ptr(CB_CB);
-    const uint32_t l1_op  = get_write_ptr(CB_OP);
+    const uint32_t l1_m2x = get_write_ptr(CB_M2X) + mover * TILE_BYTES;
+    const uint32_t l1_m2y = get_write_ptr(CB_M2Y) + mover * TILE_BYTES;
+    const uint32_t l1_dep = get_write_ptr(CB_DEP) + mover * TILE_BYTES;
+    const uint32_t l1_a   = get_write_ptr(CB_A) + mover * TILE_BYTES;
+    const uint32_t l1_b   = get_write_ptr(CB_B) + mover * TILE_BYTES;
+    const uint32_t l1_c   = get_write_ptr(CB_C) + mover * TILE_BYTES;
+    const uint32_t l1_rx  = get_write_ptr(CB_RX) + mover * TILE_BYTES;
+    const uint32_t l1_ry  = get_write_ptr(CB_RY) + mover * TILE_BYTES;
+    const uint32_t l1_cr  = get_write_ptr(CB_CR) + mover * TILE_BYTES;
+    const uint32_t l1_cg  = get_write_ptr(CB_CG) + mover * TILE_BYTES;
+    const uint32_t l1_cb  = get_write_ptr(CB_CB) + mover * TILE_BYTES;
+    const uint32_t l1_op  = get_write_ptr(CB_OP) + mover * TILE_BYTES;
 
     auto p_m2x = reinterpret_cast<volatile uint32_t*>(l1_m2x);
     auto p_m2y = reinterpret_cast<volatile uint32_t*>(l1_m2y);
@@ -234,17 +270,17 @@ void kernel_main() {
     auto p_cb  = reinterpret_cast<volatile uint32_t*>(l1_cb);
     auto p_op  = reinterpret_cast<volatile uint32_t*>(l1_op);
 
-    const uint32_t l1_opx = get_write_ptr(CB_OPX);
-    const uint32_t l1_opy = get_write_ptr(CB_OPY);
-    const uint32_t l1_orx = get_write_ptr(CB_ORX);
-    const uint32_t l1_ory = get_write_ptr(CB_ORY);
-    const uint32_t l1_oa  = get_write_ptr(CB_OA);
-    const uint32_t l1_ob  = get_write_ptr(CB_OB);
-    const uint32_t l1_oc  = get_write_ptr(CB_OC);
-    const uint32_t l1_odep= get_write_ptr(CB_ODEP);
-    const uint32_t l1_oop = get_write_ptr(CB_OOP);
-    const uint32_t l1_ocol= get_write_ptr(CB_OCOL);
-    const uint32_t l1_oM  = get_write_ptr(CB_OM);
+    const uint32_t l1_opx = get_write_ptr(CB_OPX) + mover * PAGE_BYTES;
+    const uint32_t l1_opy = get_write_ptr(CB_OPY) + mover * PAGE_BYTES;
+    const uint32_t l1_orx = get_write_ptr(CB_ORX) + mover * PAGE_BYTES;
+    const uint32_t l1_ory = get_write_ptr(CB_ORY) + mover * PAGE_BYTES;
+    const uint32_t l1_oa  = get_write_ptr(CB_OA) + mover * PAGE_BYTES;
+    const uint32_t l1_ob  = get_write_ptr(CB_OB) + mover * PAGE_BYTES;
+    const uint32_t l1_oc  = get_write_ptr(CB_OC) + mover * PAGE_BYTES;
+    const uint32_t l1_odep= get_write_ptr(CB_ODEP) + mover * PAGE_BYTES;
+    const uint32_t l1_oop = get_write_ptr(CB_OOP) + mover * PAGE_BYTES;
+    const uint32_t l1_ocol= get_write_ptr(CB_OCOL) + mover * COLOR_GROUP_FLOATS * 4;
+    const uint32_t l1_oM  = get_write_ptr(CB_OM) + mover * PAGE_BYTES;
 
     auto o_px  = reinterpret_cast<volatile uint32_t*>(l1_opx);
     auto o_py  = reinterpret_cast<volatile uint32_t*>(l1_opy);
@@ -266,33 +302,58 @@ void kernel_main() {
     // ── count_only pass: just tally this core's visible quota ───────────
     if (count_only) {
         DeviceZoneScopedN("proj_count");
+        // Two staging sets: the count pass only needs 6 streams, so the next
+        // tile is prefetched into the a/b/c/col_r/col_g/col_b tiles (unused
+        // here) while the current one is tested.
+        const uint32_t set_m2x[2] = {l1_m2x, l1_a};
+        const uint32_t set_m2y[2] = {l1_m2y, l1_b};
+        const uint32_t set_dep[2] = {l1_dep, l1_c};
+        const uint32_t set_rx[2]  = {l1_rx,  l1_cr};
+        const uint32_t set_ry[2]  = {l1_ry,  l1_cg};
+        const uint32_t set_op[2]  = {l1_op,  l1_cb};
+        auto issue = [&](uint32_t t, uint32_t k) {
+            noc_async_read(get_noc_addr(t, acc_m2x),   set_m2x[k], TILE_BYTES);
+            noc_async_read(get_noc_addr(t, acc_m2y),   set_m2y[k], TILE_BYTES);
+            noc_async_read(get_noc_addr(t, acc_depth), set_dep[k], TILE_BYTES);
+            noc_async_read(get_noc_addr(t, acc_rx),    set_rx[k],  TILE_BYTES);
+            noc_async_read(get_noc_addr(t, acc_ry),    set_ry[k],  TILE_BYTES);
+            noc_async_read(get_noc_addr(t, acc_op),    set_op[k],  TILE_BYTES);
+        };
         uint32_t vcount = 0;
+        if (t_count > 0) issue(t_start, 0);
         for (uint32_t kk = 0, t = t_start; kk < t_count; kk++, t += t_stride) {
-            noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
-            noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
-            noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
-            noc_async_read(get_noc_addr(t, acc_rx),    l1_rx,  TILE_BYTES);
-            noc_async_read(get_noc_addr(t, acc_ry),    l1_ry,  TILE_BYTES);
-            noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
+            const uint32_t k = kk & 1u;
             noc_async_read_barrier();
-
+            if (kk + 1 < t_count) issue(t + t_stride, k ^ 1u);
+            auto q_m2x = reinterpret_cast<volatile uint32_t*>(set_m2x[k]);
+            auto q_m2y = reinterpret_cast<volatile uint32_t*>(set_m2y[k]);
+            auto q_dep = reinterpret_cast<volatile uint32_t*>(set_dep[k]);
+            auto q_rx  = reinterpret_cast<volatile uint32_t*>(set_rx[k]);
+            auto q_ry  = reinterpret_cast<volatile uint32_t*>(set_ry[k]);
+            auto q_op  = reinterpret_cast<volatile uint32_t*>(set_op[k]);
             const uint32_t tbase = t * TILE_ELEMS;
-            for (uint32_t il = 0; il < TILE_ELEMS; il++) {
-                const uint32_t i = tbase + il;
-                if (i >= i_hi) break;
-                const float tz = bits_to_f(p_dep[il]);
-                const float op = bits_to_f(p_op[il]);
-                if (tz <= k_near || op < min_opacity) continue;
-                const float mx = bits_to_f(p_m2x[il]);
-                const float my = bits_to_f(p_m2y[il]);
-                const float rx = bits_to_f(p_rx[il]);
-                const float ry = bits_to_f(p_ry[il]);
-                const bool valid = (mx + rx > 0.0f) && (mx - rx < img_w) &&
-                                   (my + ry > 0.0f) && (my - ry < img_h) &&
-                                   (rx > 0.0f) && (ry > 0.0f) &&
-                                   (rx <= max_radius) && (ry <= max_radius);
-                if (valid) vcount++;
+            const uint32_t n_el = (tbase >= i_hi) ? 0u
+                : (i_hi - tbase < TILE_ELEMS ? i_hi - tbase : TILE_ELEMS);
+            // Build the mask words in registers (no L1 read-after-write), then
+            // store each word once. The mask page of this tile goes out while
+            // the next tile is tested; the other staging copy is reused two
+            // tiles later, after noc_async_writes_flushed.
+            const uint32_t l1_m = l1_mask + k * MASK_BYTES;
+            noc_async_writes_flushed();
+            auto mw = reinterpret_cast<volatile uint32_t*>(l1_m);
+            for (uint32_t w = 0; w < MASK_WORDS; w++) {
+                uint32_t bits = 0;
+                const uint32_t il0 = w * 32;
+                const uint32_t il1 = (il0 + 32 < n_el) ? il0 + 32 : n_el;
+                for (uint32_t il = il0; il < il1; il++) {
+                    if (gather_pred::visible_at(q_dep, q_op, q_m2x, q_m2y, q_rx, q_ry, il,
+                                   k_near, min_opacity, img_w, img_h, max_radius))
+                        bits |= 1u << (il - il0);
+                }
+                vcount += static_cast<uint32_t>(__builtin_popcount(bits));
+                mw[w] = bits;
             }
+            noc_async_write(l1_m, get_noc_addr(t, acc_mask), MASK_BYTES);
         }
         o_Mp[0] = vcount;
         noc_async_write(l1_oM, get_noc_addr(core_id, acc_counts), 4);
@@ -356,7 +417,31 @@ void kernel_main() {
         noc_async_write_barrier();
     };
 
+    // AoS record words 9..15 are always zero and nothing else writes them,
+    // so they are zeroed once here instead of per visible element. iter 132
+    // reverted the iter-131 birth-side UNORM16 pack: op/color are written as
+    // fp32 (keeps the pack off the BRISC proj_scatter long pole); the UNORM16
+    // pack runs once per gaussian on the NCRISC side (sort_bin
+    // pack_invariants), which publishes the packed words into blendrec[10],[11]
+    // for the materialize overflow gather.
+    for (uint32_t s = 0; s < PAGE_ELEMS; ++s) {
+        volatile uint32_t* r = o_rec + s * REC_WORDS;
+        for (uint32_t w = 9; w < REC_WORDS; ++w) r[w] = 0;
+    }
+
+    auto p_mask = reinterpret_cast<volatile uint32_t*>(l1_mask);
     for (uint32_t kk = 0, t = t_start; kk < t_count; kk++, t += t_stride) {
+        // The count pass's mask for this tile; tiles with no visible element
+        // skip the 12 tile reads.
+        noc_async_read(get_noc_addr(t, acc_mask), l1_mask, MASK_BYTES);
+        noc_async_read_barrier();
+        uint32_t mbits[MASK_WORDS];
+        uint32_t any = 0;
+        for (uint32_t w = 0; w < MASK_WORDS; w++) {
+            mbits[w] = p_mask[w];
+            any |= mbits[w];
+        }
+        if (any == 0) continue;
         noc_async_read(get_noc_addr(t, acc_m2x),   l1_m2x, TILE_BYTES);
         noc_async_read(get_noc_addr(t, acc_m2y),   l1_m2y, TILE_BYTES);
         noc_async_read(get_noc_addr(t, acc_depth), l1_dep, TILE_BYTES);
@@ -370,50 +455,38 @@ void kernel_main() {
         noc_async_read(get_noc_addr(t, acc_cb),    l1_cb,  TILE_BYTES);
         noc_async_read(get_noc_addr(t, acc_op),    l1_op,  TILE_BYTES);
         noc_async_read_barrier();
+        for (uint32_t w = 0; w < MASK_WORDS; w++)
+        for (uint32_t bits = mbits[w]; bits != 0; bits &= bits - 1) {
+            const uint32_t il = w * 32 + static_cast<uint32_t>(__builtin_ctz(bits));
+            const uint32_t dep = p_dep[il], op = p_op[il], mx = p_m2x[il];
+            const uint32_t my = p_m2y[il], rx = p_rx[il], ry = p_ry[il];
+            const uint32_t a = p_a[il], b = p_b[il], c = p_c[il];
+            const uint32_t cr = p_cr[il], cg = p_cg[il], cb = p_cb[il];
 
-        const uint32_t tbase = t * TILE_ELEMS;
-        for (uint32_t il = 0; il < TILE_ELEMS; il++) {
-            const uint32_t i = tbase + il;
-            if (i >= i_hi) break;
-
-            const float tz = bits_to_f(p_dep[il]);
-            const float op = bits_to_f(p_op[il]);
-            if (tz <= k_near || op < min_opacity) continue;
-
-            const float mx = bits_to_f(p_m2x[il]);
-            const float my = bits_to_f(p_m2y[il]);
-            const float rx = bits_to_f(p_rx[il]);
-            const float ry = bits_to_f(p_ry[il]);
-            const bool valid = (mx + rx > 0.0f) && (mx - rx < img_w) &&
-                               (my + ry > 0.0f) && (my - ry < img_h) &&
-                               (rx > 0.0f) && (ry > 0.0f) &&
-                               (rx <= max_radius) && (ry <= max_radius);
-            if (!valid) continue;
-
-            o_px[slot]  = p_m2x[il];
-            o_py[slot]  = p_m2y[il];
-            o_rx[slot]  = p_rx[il];
-            o_ry[slot]  = p_ry[il];
-            o_a[slot]   = p_a[il];
-            o_b[slot]   = p_b[il];
-            o_c[slot]   = p_c[il];
-            o_dep[slot] = p_dep[il];
-            o_op[slot]  = p_op[il];
-            o_col[slot * 3 + 0] = p_cr[il];
-            o_col[slot * 3 + 1] = p_cg[il];
-            o_col[slot * 3 + 2] = p_cb[il];
+            o_px[slot]  = mx;
+            o_py[slot]  = my;
+            o_rx[slot]  = rx;
+            o_ry[slot]  = ry;
+            o_a[slot]   = a;
+            o_b[slot]   = b;
+            o_c[slot]   = c;
+            o_dep[slot] = dep;
+            o_op[slot]  = op;
+            o_col[slot * 3 + 0] = cr;
+            o_col[slot * 3 + 1] = cg;
+            o_col[slot * 3 + 2] = cb;
             {
+                // Words 9..15 stay zero from the pre-fill above the loop.
                 volatile uint32_t* r = o_rec + slot * REC_WORDS;
-                r[0] = p_a[il];   r[1] = p_b[il];   r[2] = p_c[il];
-                r[3] = p_m2x[il]; r[4] = p_m2y[il]; r[5] = p_op[il];
-                r[6] = p_cr[il];  r[7] = p_cg[il];  r[8] = p_cb[il];
-                // iter 132: revert the iter-131 birth-side UNORM16 pack. Writing
-                // op/color as fp32 keeps the pack OFF the BRISC proj_scatter long
-                // pole; the UNORM16 pack now runs ONCE per gaussian on the NCRISC
-                // side (sort_bin pack_invariants), which publishes the two packed
-                // words into blendrec[10],[11] for the materialize overflow gather.
-                r[9] = 0; r[10] = 0; r[11] = 0; r[12] = 0;
-                r[13] = 0; r[14] = 0; r[15] = 0;
+                r[0] = a;  r[1] = b;  r[2] = c;
+                r[3] = mx; r[4] = my; r[5] = op;
+                r[6] = cr; r[7] = cg; r[8] = cb;
+#if EMIT_PUBOC
+                // Task #100: see gather_vis_scatter.cpp.
+                r[10] = sort_bin_fp32::to_unorm16(op) | (sort_bin_fp32::to_unorm16(cr) << 16);
+                r[11] = sort_bin_fp32::to_unorm16(cg) | (sort_bin_fp32::to_unorm16(cb) << 16);
+                r[12] = dep;
+#endif
             }
 
             slot++;

@@ -37,6 +37,7 @@
 #include "env_config.h"
 #include "host_profile.h"
 #include "host_tracy.hpp"
+#include "stage_timers.h"
 
 #include "alpha_blend_host.h"
 #include "blend.h"
@@ -50,15 +51,6 @@ using namespace gsplat;
 #ifndef OVERRIDE_KERNEL_PREFIX
 #define OVERRIDE_KERNEL_PREFIX ""
 #endif
-
-static std::vector<float> bf16_tile_to_fp32(const uint16_t* src) {
-    std::vector<float> dst(TILE_H * TILE_W);
-    for (size_t i = 0; i < TILE_H * TILE_W; i++) {
-        uint32_t u = static_cast<uint32_t>(src[i]) << 16;
-        std::memcpy(&dst[i], &u, 4);
-    }
-    return dst;
-}
 
 // ---------------------------------------------------------------------------
 // Device + program reusable context
@@ -77,6 +69,7 @@ struct DeviceContext {
     // slice per core via SetRuntimeArgs.
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
+    uint32_t claim_sem = 0;  // task #60: blend tile-claim counter semaphore id
 
     // RESIDENT blend scratch (GSPLAT_TT_RESIDENT_BLEND): persistent per-context
     // DRAM buffers reused across frames (the render intermediates themselves —
@@ -88,9 +81,12 @@ struct DeviceContext {
     // NCRISC store-stress in reader_tile_l1_cull (never read; allocated only when
     // GSPLAT_TT_OVERLAP_PROBE is set).
     std::shared_ptr<distributed::MeshBuffer> res_scratch;
+    // Final u8 RGB image, one page per image row (task #61: packed on device).
     std::shared_ptr<distributed::MeshBuffer> res_out;
     std::shared_ptr<distributed::MeshBuffer> res_tile_ids;
-    uint32_t res_out_tiles = 0;
+    size_t res_out_bytes = 0;
+    // Host bounce buffer, only used when the device row pitch != W*3.
+    std::vector<uint8_t> res_out_host;
     size_t res_tile_ids_bytes = 0;
     bool res_ramp_uploaded = false;
 
@@ -123,6 +119,14 @@ constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp
 constexpr uint32_t CB_T_RB      = 2;   // iter 107: mid-accumulation T readback (bf16, 1 tile)
 constexpr uint32_t CB_MB_COUNTS = 3;   // 128B = 32 uint32 per tile
 constexpr uint32_t CB_OUT       = 16;  // 3 bf16 color tiles per screen tile
+constexpr uint32_t CB_IMG_U8    = 8;   // writer: u8 RGB staging (32 x 96 B)
+constexpr uint32_t IMG_ROW_BYTES = TILE_W * 3;  // one screen-tile row of u8 RGB
+
+// Device image buffer row pitch: whole tile rows, padded to the 64 B Blackhole
+// DRAM alignment so the interleaved page stride is the same on host and device.
+static uint32_t image_pitch_bytes(uint32_t tiles_x) {
+    return (tiles_x * IMG_ROW_BYTES + 63u) & ~63u;
+}
 
 // (The M2 §6 tail-skip CB_HS handshake region is dropped: the production blend
 // never raises the whole-tile saturation early-out.)
@@ -163,6 +167,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // reader bulk path can push counts faster than compute pops.
     cb_cfg(CB_MB_COUNTS, COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(CB_OUT, TILE_BYTES_BF16, 6, DataFormat::Float16_b);
+    // Writer-private staging for the on-device u8 image pack (task #61):
+    // one screen tile as 32 rows x 96 B RGB.
+    cb_cfg(CB_IMG_U8, IMG_ROW_BYTES * TILE_H, 1, DataFormat::UInt8);
     // iter 107: scratch CB the compute packs the running T slot into for the
     // mid-accumulation transmittance readback (bf16, same fmt as CB_OUT so the
     // packer needs no reconfig). Never pushed/popped — pure read-back scratch.
@@ -184,6 +191,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // 64B = 256B): each <=16-gaussian chunk's masks span at most two 64B pages.
     cb_cfg(CB_SCR_MASK, 256, 1, DataFormat::UInt32);
     cb_cfg(CB_CORE_TILES, 64, 1, DataFormat::UInt32);
+    // Task #60: reader -> writer queue of dynamically claimed tile ids, and the
+    // shared claim counter (a semaphore; the copy on the first core is used).
+    constexpr uint32_t CB_TILE_Q = 13;
+    cb_cfg(CB_TILE_Q, 16, 16, DataFormat::UInt32);
+    ctx.claim_sem = CreateSemaphore(program, cores, 0);
 
     // CB_BUCKET/CB_BMASK: in-budget sort+emit scratch (push deferred until after
     // coeff stream). CB_BUCKET_BULK/CB_BMASK_BULK: overflow bulk L1 (iter 49) —
@@ -210,6 +222,22 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         {"MB_BUCKET_FIT", "8192u"},
         {"MB_TILE_L1_MASKS", "1"},
     };
+    // Task #83: GSPLAT_TT_BLEND_PROF=1 compiles fine per-tile Tracy zones into
+    // the blend reader, compute and writer (floor attribution). Default OFF.
+    const char* blend_prof = std::getenv("GSPLAT_TT_BLEND_PROF");
+    // Task #172: =2 swaps the compute wait zones for per-tile fixed-cost sub-zones.
+    const bool blend_prof_on = blend_prof != nullptr && (blend_prof[0] == '1' || blend_prof[0] == '2');
+    const std::string blend_prof_level = blend_prof_on ? std::string(1, blend_prof[0]) : "0";
+    std::map<std::string, std::string> writer_defines;
+    if (blend_prof_on) {
+        reader_defines["BLEND_PROF"] = "1";
+        writer_defines["BLEND_PROF"] = "1";
+    }
+    // Task #188: claim the next tile only once a bulk ring slot is free
+    // (GSPLAT_TT_BLEND_LATE_CLAIM, default 1).
+    if (gsplat_tt::env_config::blend_late_claim()) {
+        reader_defines["BLEND_LATE_CLAIM"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
@@ -229,12 +257,28 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
     u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
 
-    // Optional compile probe: MB_FUSE_TILE_L1_CULL=1 pulls fuse SFPU into the
-    // blend compute TU for LRA margin measurement (iter 71); default OFF.
     std::map<std::string, std::string> compute_defines;
-    if (const char* fuse = std::getenv("MB_FUSE_TILE_L1_CULL");
-        fuse != nullptr && fuse[0] == '1') {
-        compute_defines["MB_FUSE_TILE_L1_CULL"] = "1";
+    if (blend_prof_on) {
+        compute_defines["BLEND_PROF"] = blend_prof_level;
+    }
+    // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
+    // per-core record/microblock/pixel counters into the blend compute kernel
+    // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.
+    if (const char* st = std::getenv("GSPLAT_TT_MB_STATS"); st != nullptr && st[0] == '1') {
+        compute_defines["GSPLAT_TT_MB_STATS"] = "1";
+        if (const char* f = std::getenv("GSPLAT_TT_MB_STATS_INV_FLOOR"); f != nullptr && f[0] != '\0') {
+            compute_defines["GSPLAT_TT_MB_STATS_INV_FLOOR"] = std::string(f) + ".0f";
+        }
+    }
+    // Task #147: GSPLAT_TT_MB_TILECYC=1 DPRINTs per-tile MATH cycles (default OFF).
+    if (const char* tc = std::getenv("GSPLAT_TT_MB_TILECYC"); tc != nullptr && tc[0] == '1') {
+        compute_defines["GSPLAT_TT_MB_TILECYC"] = "1";
+    }
+    // Task #41: per-pixel contribution floor (alpha < contrib_floor -> 0, the GPU
+    // 3DGS rule) in the blend. Default ON (needed for a seam-free 1/255 floor);
+    // GSPLAT_TT_BLEND_PIXEL_FLOOR=0 restores the mask-only blend.
+    if (const char* pf = std::getenv("GSPLAT_TT_BLEND_PIXEL_FLOOR"); pf == nullptr || pf[0] != '0') {
+        compute_defines["BLEND_PIXEL_FLOOR"] = "1";
     }
     // iter 107: transmittance saturation early-out knobs (runtime via env, no
     // .so rebuild to sweep — they are kernel compile-defines resolved per python
@@ -249,6 +293,28 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         // / net slower — 512 is the measured green+faster operating point).
         compute_defines["BLEND_T_EPS"] = env_or("BLEND_T_EPS", "0.00390625f");
         compute_defines["BLEND_T_PERIOD"] = env_or("BLEND_T_PERIOD", "512u");
+        // Task #68: stage per-gaussian coefficients in DEST (1 = on, 0 = old
+        // per-dispatch SFPLOADI form, kept for A/B).
+        compute_defines["BLEND_COEF_DEST"] = env_or("GSPLAT_TT_BLEND_COEF_DEST", "1");
+        // Task #78: timing-only ablation (1 = skip SFPU bodies, 2 = NOP padding).
+        compute_defines["BLEND_ABL"] = env_or("GSPLAT_TT_BLEND_ABL", "0");
+        // Task #111: SFPU-side bound of an FPU quadratic form (timing only).
+        compute_defines["BLEND_FPU_QF_ABL"] = env_or("GSPLAT_TT_BLEND_FPU_QF_ABL", "0");
+        // Task #80: visit only the set mask pairs via a body table (0 = old walk).
+        compute_defines["BLEND_JUMP_WALK"] = env_or("GSPLAT_TT_BLEND_JUMP_WALK", "1");
+        // Task #219 (#205 model): hand-scheduled jump-walk bodies, bit-identical
+        // (0 = compiled bodies, 1 = raw-TTI stall-free bodies, 2 = 1 + replay).
+        // Task #229: 2 by default (-1.0 ms/view vs 0, md5-identical).
+        compute_defines["BLEND_SCHED"] = env_or("GSPLAT_TT_BLEND_SCHED", "2");
+        // Task #80: decode UNORM16 op/colour on the SFPU (0 = RISC, 2 = check mode).
+        compute_defines["BLEND_SFPU_UNORM"] = env_or("GSPLAT_TT_BLEND_SFPU_UNORM", "1");
+        // Task #146 (bit-identical TRISC1 diet; 0 = the previous form, for A/B):
+        // per-subchunk constants for the bodies' exp and clamp, raw-instruction
+        // coefficient staging (default 0: only -0.23 ms), and the range-compare
+        // T-saturation reduce.
+        compute_defines["BLEND_CONST_HOIST"] = env_or("GSPLAT_TT_BLEND_CONST_HOIST", "1");
+        compute_defines["BLEND_RAW_STAGE"] = env_or("GSPLAT_TT_BLEND_RAW_STAGE", "0");
+        compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "1");
     }
     ctx.compute = CreateKernel(
         program,
@@ -275,6 +341,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
+            .defines = writer_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
@@ -360,65 +427,6 @@ static std::vector<uint32_t> make_ramp(bool is_x) {
     return r;
 }
 
-// Microblock-permuted variant of tiles_to_image: scatters each device tile-
-// local raster slot back to its true microblock raster position via the fixed
-// permutation, then places the tile into the full image.
-static std::vector<float> tiles_to_image_mb(
-    const std::vector<uint16_t>& result_bf16,
-    uint32_t num_tiles,
-    uint32_t tiles_x,
-    uint32_t image_h,
-    uint32_t image_w) {
-    const auto& tbl = mb_perm_img_of_dev();
-    std::vector<float> img(static_cast<size_t>(image_h) * image_w * 3, 0.0f);
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        const uint32_t ty = t / tiles_x;
-        const uint32_t tx = t % tiles_x;
-        for (uint32_t ch = 0; ch < 3; ch++) {
-            const auto fp = bf16_tile_to_fp32(&result_bf16[(3 * t + ch) * TILE_H * TILE_W]);
-            for (uint32_t dev = 0; dev < TILE_H * TILE_W; dev++) {
-                const uint32_t imgpos = tbl[dev];
-                const uint32_t i = imgpos / TILE_W;
-                const uint32_t j = imgpos % TILE_W;
-                const uint32_t y = ty * TILE_H + i;
-                const uint32_t x = tx * TILE_W + j;
-                if (y < image_h && x < image_w) {
-                    img[(static_cast<size_t>(y) * image_w + x) * 3 + ch] = fp[dev];
-                }
-            }
-        }
-    }
-    return img;
-}
-
-static void tiles_to_image_mb_into(
-    const std::vector<uint16_t>& result_bf16,
-    uint32_t num_tiles,
-    uint32_t tiles_x,
-    uint32_t image_h,
-    uint32_t image_w,
-    float* image_out) {
-    const auto& tbl = mb_perm_img_of_dev();
-    for (uint32_t t = 0; t < num_tiles; t++) {
-        const uint32_t ty = t / tiles_x;
-        const uint32_t tx = t % tiles_x;
-        for (uint32_t ch = 0; ch < 3; ch++) {
-            const auto fp = bf16_tile_to_fp32(&result_bf16[(3 * t + ch) * TILE_H * TILE_W]);
-            for (uint32_t dev = 0; dev < TILE_H * TILE_W; dev++) {
-                const uint32_t imgpos = tbl[dev];
-                const uint32_t i = imgpos / TILE_W;
-                const uint32_t j = imgpos % TILE_W;
-                const uint32_t y = ty * TILE_H + i;
-                const uint32_t x = tx * TILE_W + j;
-                if (y < image_h && x < image_w) {
-                    image_out[(static_cast<size_t>(y) * image_w + x) * 3 + ch] = fp[dev];
-                }
-            }
-        }
-    }
-}
-
-
 namespace {
 
 constexpr uint32_t SORT_META_ELEMS_PER_PAGE = 16;
@@ -486,7 +494,7 @@ static double process_frame_mb_devcull_resident(
     uint32_t tiles_x,
     uint32_t image_h,
     uint32_t image_w,
-    float* image_out,
+    uint8_t* image_out,
     bool* ok,
     float transmittance_threshold = 0.0f,
     ResidentBlendPhase phase = ResidentBlendPhase::Complete) {
@@ -582,9 +590,12 @@ static double process_frame_mb_devcull_resident(
         ctx.res_yramp = make_dram(mb::RAMP_TILE_BYTES, mb::RAMP_TILE_BYTES);
         ctx.res_ramp_uploaded = false;
     }
-    if (!ctx.res_out || ctx.res_out_tiles < num_tiles) {
-        ctx.res_out = make_dram(static_cast<size_t>(num_tiles) * 3 * TILE_BYTES_BF16, TILE_BYTES_BF16);
-        ctx.res_out_tiles = num_tiles;
+    const uint32_t pitch = image_pitch_bytes(tiles_x);
+    const size_t out_bytes =
+        static_cast<size_t>((num_tiles + tiles_x - 1) / tiles_x) * TILE_H * pitch;
+    if (!ctx.res_out || ctx.res_out_bytes != out_bytes) {
+        ctx.res_out = make_dram(out_bytes, pitch);
+        ctx.res_out_bytes = out_bytes;
     }
 
     Program& program = get_program_for_workload(ctx);
@@ -604,6 +615,10 @@ static double process_frame_mb_devcull_resident(
     const uint32_t out_addr   = static_cast<uint32_t>(ctx.res_out->address());
     uint32_t floor_bits;
     std::memcpy(&floor_bits, &contrib_floor, 4);
+    // Task #60: dynamic tile claiming. Counter = claim_sem on the first core.
+    const uint32_t num_cores = static_cast<uint32_t>(ctx.all_cores.num_cores());
+    const CoreCoord ctr_core =
+        ctx.mesh_device->worker_core_from_logical_core(ctx.all_cores.ranges()[0].start_coord);
     {
         GSPLAT_HOST_ZONE("host_blend_setup");
         for (const auto& range : ctx.all_cores.ranges()) {
@@ -636,10 +651,15 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(subchunk_meta_addr);       // arg 21
                     reader_args.push_back(subchunk_payload_addr);   // arg 22
                     reader_args.push_back(subchunk_dir_addr);       // arg 23
+                    reader_args.push_back(num_cores);                // arg 24
+                    reader_args.push_back(static_cast<uint32_t>(ctr_core.x));  // arg 25
+                    reader_args.push_back(static_cast<uint32_t>(ctr_core.y));  // arg 26
+                    reader_args.push_back(ctx.claim_sem);            // arg 27
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
-                    SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits});
+                    SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
                     SetRuntimeArgs(program, ctx.writer, core, {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
+                        tiles_x, pitch,
                     });
                     core_index++;
                 }
@@ -658,11 +678,7 @@ static double process_frame_mb_devcull_resident(
     }
 
     const auto t_start = std::chrono::steady_clock::now();
-    // Writer overwrites every LPT tile in res_out; skip the per-frame zero H2D.
-    if (!gsplat_tt::env_config::blend_skip_zero_out_enabled()) {
-        std::vector<uint16_t> output_zero(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W, 0);
-        distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_out, output_zero);
-    }
+    // Writer overwrites every LPT tile in res_out; no per-frame zero H2D.
     // Constant ramps: upload once, then reuse the resident copy every frame.
     if (!ctx.res_ramp_uploaded) {
         auto xramp = make_ramp(/*is_x=*/true);
@@ -678,12 +694,34 @@ static double process_frame_mb_devcull_resident(
     }
     gsplat_tt::hostprof::on_blend_device_done();
     gsplat_tt::device_state::clear_sort_publish_pending();
-    std::vector<uint16_t> result_bf16(static_cast<size_t>(num_tiles) * 3 * TILE_H * TILE_W);
-    distributed::EnqueueReadMeshBuffer(*ctx.cq, result_bf16, ctx.res_out, /*blocking=*/true);
+    // Per-stage attribution (stage_timers.h): the D2H readback and the host
+    // assemble are separate buckets; the caller derives the pure device blend
+    // window as (returned ms - d2h). The writer already packed the final u8
+    // image (task #61), so when the device row pitch is W*3 the D2H lands
+    // straight in image_out and there is no assemble at all.
+    const uint32_t out_pitch = image_pitch_bytes(tiles_x);
+    const size_t row_bytes = static_cast<size_t>(image_w) * 3;
+    const bool direct = (out_pitch == row_bytes) &&
+                        (ctx.res_out_bytes == static_cast<size_t>(image_h) * row_bytes);
+    gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
+    if (direct) {
+        ctx.cq->enqueue_read_mesh_buffer(image_out, ctx.res_out, /*blocking=*/true);
+    } else {
+        ctx.res_out_host.resize(ctx.res_out_bytes);
+        ctx.cq->enqueue_read_mesh_buffer(ctx.res_out_host.data(), ctx.res_out, /*blocking=*/true);
+    }
     const auto t_end = std::chrono::steady_clock::now();
+    d2h_span.stop();
     gsplat_tt::hostprof::on_blend_readback_done();
 
-    tiles_to_image_mb_into(result_bf16, num_tiles, tiles_x, image_h, image_w, image_out);
+    if (!direct) {
+        gsplat_tt::stagetimers::Span assemble_span(
+            gsplat_tt::stagetimers::acc().assemble);
+        for (uint32_t y = 0; y < image_h; y++) {
+            std::memcpy(image_out + y * row_bytes,
+                        ctx.res_out_host.data() + static_cast<size_t>(y) * out_pitch, row_bytes);
+        }
+    }
     gsplat_tt::hostprof::on_blend_unpack_done();
     return std::chrono::duration<double, std::milli>(t_end - t_start).count();
 }
@@ -736,8 +774,9 @@ std::vector<uint32_t> make_box_ramp(bool is_x) {
     for (uint32_t g = 0; g < 32; ++g) {
         for (uint32_t m = 0; m < 32; ++m) {
             const uint32_t dev = perm(g, m);
-            const float v = is_x ? static_cast<float>((m & 3u) * 8u)
-                                 : static_cast<float>((m >> 2) * 4u);
+            // Task #44: pixel-centre box origin (+0.5); extent 7x3 in the kernel.
+            const float v = is_x ? static_cast<float>((m & 3u) * 8u) + 0.5f
+                                 : static_cast<float>((m >> 2) * 4u) + 0.5f;
             uint32_t bits;
             std::memcpy(&bits, &v, 4);
             r[dev] = bits;
@@ -994,15 +1033,17 @@ static void build_program_and_workload(DeviceContext& ctx) {
         CreateCircularBuffer(program, cores, c);
     };
 
-    cb_cfg(cull::CB_BOX_OX, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
-    cb_cfg(cull::CB_BOX_OY, mb::RAMP_TILE_BYTES, 1, DataFormat::Float32);
-    cb_cfg(cull::CB_CULL_COEFF, cull::COEFF_ROW_BYTES, 32, DataFormat::Float32);
+    // Task #59 band cull: the reader transposes each 128-record batch into one
+    // fp32 coefficient tile (CB 2, unpacked to DEST as fp32); the compute packs
+    // one fp32 mask tile per batch into CB_KEEP. The slab slot (CB_BUCKET) is
+    // produced by the reader and consumed by the writer (mask -> word3 in L1,
+    // then the slab is written back). No box-origin ramps.
+    constexpr uint32_t CB_COEFF = cull::CB_CULL_COEFF;
+    cb_cfg(CB_COEFF, mb::RAMP_TILE_BYTES, 2, DataFormat::Float32);
     cb_cfg(cull::CB_CULL_COUNTS, cull::COUNTS_PAGE_BYTES, 64, DataFormat::UInt32);
     cb_cfg(cull::CB_SCR_IDS, 64, 2, DataFormat::UInt32);
     cb_cfg(cull::CB_SCR_ATTR, 64, 2u * 16u, DataFormat::Float32);
-    // M3 writer: word3 mask write-back is an aligned per-batch 64B page RMW, so
-    // CB_MASK_SCR holds a full BATCH (32 records == 16 pages == 1024B).
-    cb_cfg(cull::CB_MASK_SCR, 64, 16, DataFormat::UInt32);
+    cb_cfg(cull::CB_MASK_SCR, 64, 16, DataFormat::UInt32);  // writer metadata scratch
     cb_cfg(cull::CB_KEEP, mb::RAMP_TILE_BYTES, 4, DataFormat::Float32);
     cb_cfg(cull::CB_CORE_TILES, 64, 1, DataFormat::UInt32);
     constexpr uint32_t CB_BUCKET = 8;
@@ -1010,6 +1051,12 @@ static void build_program_and_workload(DeviceContext& ctx) {
 
     // M2: +2 accessors for the depth-sorted slab (sort_subchunk_payload) and its
     // per-subchunk dir (sort_subchunk_dir) so cull bulk-loads the slab from L1.
+    // Task #86: GSPLAT_TT_MATCULL_PROF=1 compiles fine per-subchunk Tracy zones
+    // into the cull reader and writer (attribution). Default OFF.
+    std::map<std::string, std::string> cull_dm_defines = {{"MB_BUCKET_FIT", "8192u"}};
+    if (const char* mcp = std::getenv("GSPLAT_TT_MATCULL_PROF"); mcp != nullptr && mcp[0] == '1') {
+        cull_dm_defines["MATCULL_PROF"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     // iter-140 OVERLAP PROBE: 14th accessor = throwaway DRAM scratch ring (the
     // gated store-stress target; inert when store_reps==0).
@@ -1024,15 +1071,14 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
-            .defines = {{"MB_BUCKET_FIT", "8192u"}},
+            .defines = cull_dm_defines,
         });
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
-    u2d[cull::CB_BOX_OX] = UnpackToDestMode::UnpackToDestFp32;
-    u2d[cull::CB_BOX_OY] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[CB_COEFF] = UnpackToDestMode::UnpackToDestFp32;
     ctx.compute = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_cull_compute.cpp",
+        OVERRIDE_KERNEL_PREFIX "kernels/compute/microblock_band_cull_compute.cpp",
         cores,
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi3,
@@ -1040,7 +1086,6 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .dst_full_sync_en = true,
             .unpack_to_dest_mode = u2d,
             .math_approx_mode = false,
-            .defines = {{"TILE_L1_CULL", "1"}},
         });
 
     std::vector<uint32_t> writer_ct;
@@ -1056,7 +1101,7 @@ static void build_program_and_workload(DeviceContext& ctx) {
             .processor = DataMovementProcessor::RISCV_0,
             .noc = NOC::RISCV_0_default,
             .compile_args = writer_ct,
-            .defines = {{"MB_BUCKET_FIT", "8192u"}},
+            .defines = cull_dm_defines,
         });
 
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
@@ -1203,7 +1248,8 @@ static double process_frame(
 
     // iter-140 OVERLAP PROBE forces a clean Finish (pipeline off) so cull_ms below
     // is the true SFPU-cull+store program makespan, not the deferred enqueue time.
-    const bool pipeline = kProbe
+    // GSPLAT_TT_SPLIT_BLEND=1 does the same so stage `cull` is the cull window.
+    const bool pipeline = (kProbe || gsplat_tt::stagetimers::split_blend())
         ? false
         : (defer_cq_finish || gsplat_tt::env_config::cull_pipeline_enabled());
     const auto t_start = std::chrono::steady_clock::now();
@@ -1258,7 +1304,7 @@ double blend_mb_devcull_resident(
     int tiles_x,
     int image_height,
     int image_width,
-    float* image_out,
+    uint8_t* image_out,
     bool* device_ok,
     double* cull_ms_out,
     double* blend_ms_out,
@@ -1272,7 +1318,9 @@ double blend_mb_devcull_resident(
 
     // Tile-local L1 cull (step D): SFPU masks on loaded subchunks into L1 buffer.
     double cull_ms = 0.0;
-    const bool sfpu_cull = true;
+    // Task #90: with the cull fused into sort_subchunk_mat the masks are already
+    // in slab word3 when the blend launches.
+    const bool sfpu_cull = !gsplat_tt::sort_matcull_fused();
     const bool chain_cull_blend = sfpu_cull && gsplat_tt::env_config::cull_pipeline_enabled();
     if (sfpu_cull) {
         if (!g_ctx_cull) {
@@ -1282,6 +1330,8 @@ double blend_mb_devcull_resident(
         if (chain_cull_blend) {
             {
                 GSPLAT_HOST_ZONE("host_blend_setup");
+                gsplat_tt::stagetimers::Span setup_span(
+                    gsplat_tt::stagetimers::acc().blend_setup);
                 ::mb::process_frame_mb_devcull_resident(
                     *g_ctx_mb, contrib_floor, cull_disabled,
                     static_cast<uint32_t>(num_tiles), static_cast<uint32_t>(tiles_x),
@@ -1303,6 +1353,9 @@ double blend_mb_devcull_resident(
             return 0.0;
         }
     }
+    // d2h/assemble are booked by process_frame_mb_devcull_resident itself; snapshot
+    // d2h so the blend bucket below is the pure device window (enqueue + Finish).
+    const double d2h_before = gsplat_tt::stagetimers::acc().d2h;
     const double blend_ms = chain_cull_blend
         ? ::mb::process_frame_mb_devcull_resident(
               *g_ctx_mb, contrib_floor, cull_disabled,
@@ -1317,6 +1370,33 @@ double blend_mb_devcull_resident(
               image_out, device_ok, transmittance_threshold);
     if (cull_ms_out) *cull_ms_out = cull_ms;
     if (blend_ms_out) *blend_ms_out = blend_ms;
+    // Debug (task #41): GSPLAT_TT_DUMP_CULL=<dir> dumps the first frame's cull
+    // inputs/outputs (slab records carry the conic, mean, opacity and the
+    // word3 mask) as raw u32 files for an offline exact-cull comparison.
+    // Default OFF; one Finish + four readbacks, first frame only.
+    static bool dumped = false;
+    if (const char* dd = std::getenv("GSPLAT_TT_DUMP_CULL"); dd && dd[0] && !dumped) {
+        dumped = true;
+        namespace ds = gsplat_tt::device_state;
+        distributed::Finish(*g_ctx_mb->cq);
+        for (const char* name : {"sort_tile_ranges", "blend_subchunk_meta",
+                                 "sort_subchunk_dir", "sort_subchunk_payload"}) {
+            auto b = ds::get_buffer(name);
+            if (!b) continue;
+            std::vector<uint32_t> v(b->size() / 4, 0);
+            distributed::EnqueueReadMeshBuffer(*g_ctx_mb->cq, v, b, true);
+            std::ofstream f(std::string(dd) + "/" + name + ".u32", std::ios::binary);
+            f.write(reinterpret_cast<const char*>(v.data()), v.size() * 4);
+        }
+        std::ofstream f(std::string(dd) + "/meta.txt");
+        f << "num_tiles " << num_tiles << "\ntiles_x " << tiles_x << "\nfloor "
+          << std::setprecision(9) << contrib_floor << "\n";
+    }
+    {
+        auto& st = gsplat_tt::stagetimers::acc();
+        st.cull += cull_ms;
+        st.blend += blend_ms - (st.d2h - d2h_before);
+    }
     return cull_ms + blend_ms;
 }
 

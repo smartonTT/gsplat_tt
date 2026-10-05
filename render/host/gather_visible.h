@@ -41,6 +41,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include "gsplat_cpu/project.h"
 #include "gsplat_cpu/thread_pool.h"
@@ -101,6 +102,27 @@ gsplat_cpu::ProjectResult gather_visible_tt(
 // Returns false if the pfwc_* buffers are not registered.
 bool readback_pfwc_resident(
     std::size_t N, float* mean_2d, float* depth, float* cov2d, float* radii);
+
+// Lever 2 (task #99, GSPLAT_TT_SFPU_VIS): upload / cache the scene colors and
+// opacities before pfwc runs (the PFWC_VIS program reads "scene_opacities").
+// Returns false on device failure.
+bool gather_visible_upload_scene(const float* scene_colors, const float* scene_opacities,
+                                 std::size_t N);
+
+// Effective max_radius of the visibility predicate (project_finish semantics).
+float gather_visible_effective_max_radius(int max_radius_param, int image_height,
+                                          int image_width);
+
+// Lever 2: pair count P of the last gather_visible_tt call when it ran the SFPU
+// visibility path (proj_m_offs / proj_m_aabb are then resident for tile_assign
+// K2). Returns false when the last call used the legacy path.
+bool gather_visible_last_pairs(uint32_t* P);
+
+// Lever B (task #125, GSPLAT_TT_PFWC_FUSE=1): make the compact outputs the
+// fused pfwc writer fills (proj_m_depth / blendrec / offs / aabb at padded_n
+// capacity, proj_M) and the per-core counts table "pfwc_fuse_counts"
+// (num_cores 64 B pages) resident and registered. Returns false on failure.
+bool gather_visible_fuse_prepare(std::size_t N, uint32_t num_cores);
 
 bool gather_visible_device_ready();
 void gather_visible_device_shutdown();

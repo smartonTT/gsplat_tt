@@ -1,0 +1,28 @@
+# task #30 soft-float audit: 30-view Tracy device zones, yyzo-bh-07 (Blackhole p100a), bicycle 1024x1024
+# ttw-151 = 7df44de + dm_fp32 integer fp32 in gather/tile_assign/materialize. Base zones: opt/profiler/ttw-149/zones.txt (same kernels for these zones).
+# pv_makespan = busiest (core, RISC) summed zone time per view (profiler on; perturbs timing).
+
+=== ttw-151
+n_views=30  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                  493109.5 16436.985      1555.2      51.841    30690  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL              493037.9 16434.596      1555.2      51.840    30690  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                  353323.8 11777.459      3368.8     112.292    47802  BRISC
+NCRISC-FW                 294083.5  9802.784      2810.6      93.688    40951  NCRISC
+NCRISC-KERNEL             293991.8  9799.727      2810.3      93.678    40951  NCRISC
+tile_blend_sfpu           264211.1  8807.038       863.8      28.793    10230  TRISC_0,TRISC_1,TRISC_2
+BRISC-KERNEL              246228.8  8207.628      2335.8      77.861    23901  BRISC
+tile_mb_mask              208845.6  6961.520       671.5      22.382    10230  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            85531.0  2851.033       841.8      28.061     3410  NCRISC
+rd_l1_bulk                 85243.8  2841.461       836.9      27.898    35073  NCRISC
+tile_l1_cull_rd            68320.3  2277.344       659.4      21.980     3410  NCRISC
+sort_bucket_emit           54320.6  1810.687       253.0       8.434     6820  BRISC,NCRISC
+proj_scatter               35750.3  1191.676       370.8      12.359     3410  BRISC
+sort_subchunk_mat          32455.5  1081.850       371.3      12.375     3410  NCRISC
+sort_tile_depth            23086.9   769.563       214.7       7.155     3410  NCRISC
+ta_bucket_scatter          22927.2   764.240       215.4       7.179     3410  NCRISC
+pfwc                       19978.9   665.962        61.6       2.052    10230  TRISC_0,TRISC_1,TRISC_2
+proj_count                 18903.7   630.124       189.7       6.322     3410  BRISC
+ta_gauss_aabb              17275.7   575.858       157.3       5.245     3410  NCRISC
+sort_bin_hist               2953.9    98.463        27.3       0.909     3410  NCRISC

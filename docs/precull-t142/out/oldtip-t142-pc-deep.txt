@@ -1,0 +1,40 @@
+n_views=30  RISC types=['BRISC', 'NCRISC', 'TRISC_0', 'TRISC_1', 'TRISC_2']
+
+=== ZONES by per-view MAKESPAN (busiest core / nviews) ===
+zone                                      tot_ms   pv_tot  pv_make  pairs/v  riscs
+NCRISC-KERNEL                            34693.2  1156.44   113.78    242.0  NCRISC
+BRISC-FW                                 26394.3   879.81     8.12    242.4  BRISC
+NCRISC-FW                                25567.6   852.25     7.88    242.0  NCRISC
+BRISC-KERNEL                             25538.6   851.29     7.87    242.4  BRISC
+TRISC-FW                                 45176.3  1505.88     4.65    363.0  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL                             45159.0  1505.30     4.65    363.0  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu                          25007.9   833.60     2.58    121.0  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load                           7940.9   264.70     2.44     40.3  NCRISC
+rd_l1_bulk                                7813.2   260.44     2.42    410.5  NCRISC
+sort_ol_emit                              8277.3   275.91     1.30     80.7  BRISC,NCRISC
+proj_scatter                              7484.3   249.48     1.19     80.7  BRISC,NCRISC
+mat_cull_mask                            10470.1   349.00     1.11    121.0  TRISC_0,TRISC_1,TRISC_2
+sort_subchunk_mat                         6657.4   221.91     1.11     80.7  BRISC,NCRISC
+pfwc                                      9680.4   322.68     0.99    121.0  TRISC_0,TRISC_1,TRISC_2
+ta_bucket_scatter                         3192.6   106.42     0.50     80.7  BRISC,NCRISC
+sort_ol_count                             1444.7    48.16     0.33     80.7  BRISC,NCRISC
+sort_ol_barrier                            297.9     9.93     0.16     80.7  BRISC
+proj_vis_scan                                4.4     0.15     0.15      0.4  BRISC
+sort_ol_prefix                              26.6     0.89     0.02     40.3  BRISC
+
+=== per-RISC-TYPE occupancy (busy vs wall span) ===
+risc        busy_pv_ms  wallspan_pv_ms  occupancy
+BRISC          2189.05           72.69      27.4%  (cores=110)
+NCRISC         2988.71          114.81      23.7%  (cores=110)
+TRISC_0        1505.10           72.69      18.8%  (cores=110)
+TRISC_1        1506.01           72.69      18.8%  (cores=110)
+TRISC_2        1505.35           72.69      18.8%  (cores=110)
+
+=== coarse STAGE grouping (by zone substring) ===
+stage       pv_make_sum_ms   pv_tot_ms
+proj                  1.33      249.62
+ta/tile               0.50      106.42
+sort                  4.02      905.80
+cull                  0.00        0.00
+blend                 5.03     1098.29
+other               150.37     7334.09

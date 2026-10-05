@@ -1,0 +1,19 @@
+n_views=30  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                  105413.6  3513.786       331.9      11.062    29700  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL              105355.3  3511.844       331.8      11.061    29700  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu            53042.6  1768.085       164.5       5.483     9900  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   51589.0  1719.634       506.9      16.896    16500  BRISC
+BRISC-KERNEL               50801.0  1693.368       488.7      16.291    16500  BRISC
+NCRISC-FW                  49427.6  1647.585       462.4      15.413    16500  NCRISC
+NCRISC-KERNEL              49417.1  1647.236       462.3      15.409    16500  NCRISC
+pfwc                       27373.0   912.435        88.5       2.949     9900  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              24938.0   831.266        85.0       2.835     9900  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            16845.4   561.515       155.3       5.178     3300  NCRISC
+rd_l1_bulk                 16504.9   550.162       153.8       5.127    33073  NCRISC
+sort_ol_emit               16495.1   549.837       106.3       3.544     6600  BRISC,NCRISC
+sort_subchunk_mat          16107.0   536.901        83.5       2.783     6600  BRISC,NCRISC
+sort_ol_count               3569.1   118.970        24.0       0.800     6600  BRISC,NCRISC
+sort_ol_barrier              740.5    24.685        11.7       0.389     6600  BRISC
+sort_ol_prefix                72.5     2.417         1.3       0.043     3300  BRISC

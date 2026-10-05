@@ -27,8 +27,11 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace tt {
 namespace tt_metal {
@@ -48,6 +51,9 @@ bool is_initialized();
 void shutdown();
 
 tt::tt_metal::distributed::MeshCommandQueue* command_queue();
+// Task #198 (env_config::mat_cq1): the second command queue, nullptr when the
+// device has one.
+tt::tt_metal::distributed::MeshCommandQueue* command_queue1();
 
 void register_buffer(
     const std::string& key,
@@ -61,6 +67,34 @@ void clear_buffers();
 // buffers without a blocking D2H of sort_P_kept between stages.
 void set_sort_blend_pipe_scalars(uint32_t p_kept, uint32_t mask_elems);
 bool get_sort_blend_pipe_scalars(uint32_t* p_kept, uint32_t* mask_elems);
+
+// Task #170 (K2 fold): the fused K2 (tile_assign_fused_k2) counted each
+// mover's pairs per tile into row 2 * core + mover of `buf` (row_pages 64 B
+// pages per row) for the page split it took (P_pub pairs over num_cores cores,
+// BRISC's share `permille`). The one-launch sort takes the record (take
+// clears it) and skips its count pass when the split is its own. Cleared by
+// every tile_assign frame that did not write the rows.
+struct K2CountRows {
+    std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> buf;
+    uint32_t num_cores = 0;
+    uint32_t row_pages = 0;
+    uint32_t num_tiles = 0;
+    uint32_t P_pub = 0;
+    // Page ranges the K2 counted: core c's mover 0 [b[2c], b[2c+1]), mover 1
+    // [b[2c+1], b[2c+2]).
+    std::vector<uint32_t> bounds;
+    std::size_t bytes = 0;  // allocated size of buf
+    // Task #198: the K2's proj_M (P_true, overflow); early = the one-launch
+    // sort for these rows is already enqueued (sort_onelaunch_enqueue_early);
+    // cq1 = command_queue1() waited for the K2, so its reads see the rows.
+    uint32_t P_true = 0;
+    uint32_t overflow = 0;
+    bool early = false;
+    bool cq1 = false;
+};
+void set_k2_count_rows(const K2CountRows& rows);
+bool take_k2_count_rows(K2CountRows* rows);
+void clear_k2_count_rows(const char* who = nullptr);  // logs the first drops of live rows
 
 // ROUTE C (GSPLAT_TT_BUCKET_MASK): the microblock-cull contrib_floor + the
 // cull_disabled flag, published by render_full_py before the sort call so the

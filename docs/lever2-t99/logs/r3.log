@@ -1,0 +1,18 @@
+=== t99r3-base 08f9200 
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=41.4 p50_ms=41.9 min_ms=35.0 max_ms=47.9 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t99b/tmp/t99-t99r3-base
+STAGES n=30 head=0.003 project=8.690 tile_assign=7.567 sort=14.217 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.688 d2h=0.218 assemble=0.000 tail=0.002 | sum=41.385 view_total=41.385 resid_in_view=+0.001 avg_frame_ms=41.418 resid_vs_frame=+0.034
+SORT_STAGES n=30 pread=0.016 bin_count=0.915 bin_hist_d2h=0.251 bin_layout=0.234 upload=0.067 bin_emit=8.828 kernel=0.032 d2h=0.000 compact=0.000 publish_host=0.200 publish_wait=3.578 mat=0.052 | sum=14.173 sort=14.217 resid=+0.044
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.001 pfwc_rtargs=0.030 pfwc_enqueue=0.030 pfwc_finish=2.001 gather_setup=0.001 gather_rtargs=0.031 gather_enqueue=0.029 gather_wait=6.462 gather_result=0.103 | sum=8.689 project=8.690 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.048 enqueue=0.050 scan_finish=3.088 p_d2h=0.016 k2_finish=4.359 publish=0.001 | sum=7.565 tile_assign=7.567 resid=+0.002
+t99r3-base views: 30
+ALL_VIEWS_IDENTICAL
+=== t99r3-vis ec1d90c GSPLAT_TT_SFPU_VIS=1
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=32.7 p50_ms=33.1 min_ms=27.6 max_ms=37.7 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t99/tmp/t99-t99r3-vis
+STAGES n=30 head=0.003 project=6.016 tile_assign=1.444 sort=14.253 blend_setup=0.000 mat=0.000 cull=0.000 blend=10.693 d2h=0.212 assemble=0.000 tail=0.002 | sum=32.623 view_total=32.624 resid_in_view=+0.001 avg_frame_ms=32.658 resid_vs_frame=+0.035
+SORT_STAGES n=30 pread=0.019 bin_count=0.919 bin_hist_d2h=0.254 bin_layout=0.234 upload=0.068 bin_emit=8.843 kernel=0.033 d2h=0.000 compact=0.000 publish_host=0.200 publish_wait=3.581 mat=0.057 | sum=14.207 sort=14.253 resid=+0.045
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.002 pfwc_rtargs=0.028 pfwc_enqueue=0.032 pfwc_finish=2.480 gather_setup=0.002 gather_rtargs=0.016 gather_enqueue=0.029 gather_wait=3.328 gather_result=0.097 | sum=6.014 project=6.016 resid=+0.002
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.017 enqueue=0.020 scan_finish=0.000 p_d2h=0.000 k2_finish=1.402 publish=0.001 | sum=1.443 tile_assign=1.444 resid=+0.001
+t99r3-vis views: 30
+ALL_VIEWS_IDENTICAL

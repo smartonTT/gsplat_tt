@@ -17,6 +17,11 @@
 #include "device_state.h"
 #include "env_config.h"
 #include "host_tracy.hpp"
+#include "stage_timers.h"
+#include "pfwc.h"
+#include "tile_assign.h"
+#include "vis_mode.h"
+#include "../kernels/dataflow/sort_bin_fp32.h"
 
 #include <algorithm>
 #include <chrono>
@@ -30,6 +35,8 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <stdexcept>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -56,6 +63,7 @@ constexpr uint32_t TILE_BYTES = TILE_ELEMS * 4;   // 4096
 constexpr uint32_t PAGE_ELEMS = 16;
 constexpr uint32_t PAGE_BYTES = PAGE_ELEMS * 4;   // 64
 constexpr uint32_t COLOR_ACC_BYTES = PAGE_ELEMS * 3 * 4;  // 192
+constexpr uint32_t MASK_BYTES = TILE_ELEMS / 8;  // 128: 1 visibility bit per element
 
 inline uint32_t round_up(uint32_t v, uint32_t m) { return ((v + m - 1) / m) * m; }
 
@@ -97,6 +105,37 @@ inline bool proj_balance_enabled() { return true; }  // PROJ_BALANCE default-on
 // the shared production stage — proj 32.4->28.3 ms, ms/view 173.2->169.6 @8v,
 // 63.85 dB bit-identical); disable with GSPLAT_TT_PROJ_DEVICE_SCAN=0.
 inline bool proj_device_scan_enabled() { return true; }  // PROJ_DEVICE_SCAN=1
+
+// Dual data mover (task #33, the T-C pattern on the gather): the count and
+// scatter kernels run on BRISC and NCRISC of every core, each on one half of
+// the core's tile list, with count/base slot 2*core + mover. The slot order is
+// the single-mover compaction order, so outputs are byte-identical.
+// GSPLAT_TT_PROJ_GATHER_MOVERS=1 runs the pass on BRISC alone and does not
+// launch the NCRISC mover (A/B baseline in the same build; the unused slots
+// 2*core+1 stay zero so the scan is unchanged). Only 1 or 2 is accepted.
+// GSPLAT_TT_PROJ_GATHER_SPLIT=<n> gives BRISC n/1000 of each core's tiles
+// (default 500). Both are read once.
+constexpr uint32_t GATHER_MOVERS = 2;  // slots per core (layout, fixed)
+static uint32_t proj_gather_movers() {
+    static const uint32_t v = [] {
+        const char* m = std::getenv("GSPLAT_TT_PROJ_GATHER_MOVERS");
+        if (m == nullptr || *m == '\0') return 2u;
+        if (std::strcmp(m, "1") == 0) return 1u;
+        if (std::strcmp(m, "2") == 0) return 2u;
+        throw std::invalid_argument(
+            std::string("GSPLAT_TT_PROJ_GATHER_MOVERS must be 1 or 2, got '") + m + "'");
+    }();
+    return v;
+}
+static uint32_t proj_gather_split_permille() {
+    static const uint32_t v = [] {
+        if (proj_gather_movers() == 1) return 1000u;
+        const char* e = std::getenv("GSPLAT_TT_PROJ_GATHER_SPLIT");
+        const int x = (e != nullptr) ? std::atoi(e) : 500;
+        return static_cast<uint32_t>(std::clamp(x, 0, 1000));
+    }();
+    return v;
+}
 
 inline uint32_t fp32_bits(float v) {
     uint32_t u;
@@ -144,28 +183,41 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshDevice> mesh_device;
     distributed::MeshCommandQueue* cq = nullptr;
     distributed::MeshWorkload workload;
-    KernelHandle kernel{};
+    KernelHandle kernel{};   // BRISC mover
+    KernelHandle kernel1{};  // NCRISC mover (not created when MOVERS=1)
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
     uint32_t num_cores = 0;
+    uint32_t num_slots = 0;  // count/base slots: GATHER_MOVERS per core
 
     // GSPLAT_TT_PROJ_DEVICE_SCAN: single-core on-device exclusive prefix-sum of
-    // the per-core counts (scan_bases-style). Replaces the host D2H(counts) +
+    // the per-slot counts (scan_bases-style). Replaces the host D2H(counts) +
     // host scan + host proj_M write between the count and scatter passes.
     distributed::MeshWorkload wl_scan;
     KernelHandle kscan{};
-    // Per-core exclusive bases ([0]=base, [1]=is_last); one 64B page per core.
+    // Per-slot exclusive bases ([0]=base, [1]=is_last); one 64B page per slot.
     std::shared_ptr<distributed::MeshBuffer> buf_core_base;
 
-    // Per-core visible counts (one 64B page per core; grow-on-demand never:
-    // num_cores is fixed for the device).
+    // Per-slot visible counts (one 64B page per slot; grow-on-demand never:
+    // num_slots is fixed for the device).
     std::shared_ptr<distributed::MeshBuffer> buf_counts;
+
+    // Per-tile visibility mask (one 128B page per N tile): written by the count
+    // pass, read by the scatter pass (task #75).
+    std::shared_ptr<distributed::MeshBuffer> buf_mask;
+    uint32_t cap_mask_tiles = 0;
 
     // Scene inputs (uploaded once per scene, cached by pointer + N).
     std::shared_ptr<distributed::MeshBuffer> buf_cr;
     std::shared_ptr<distributed::MeshBuffer> buf_cg;
     std::shared_ptr<distributed::MeshBuffer> buf_cb;
     std::shared_ptr<distributed::MeshBuffer> buf_op;
+    // Task #122 (GSPLAT_TT_PUBOC_PRE): per-scene UNORM16 packs, record words 10
+    // (opacity | col_r << 16) and 11 (col_g | col_b << 16). pub_ok is false when
+    // the scene has a NaN opacity / color (the device packs those).
+    std::shared_ptr<distributed::MeshBuffer> buf_pub01;
+    std::shared_ptr<distributed::MeshBuffer> buf_pub23;
+    bool pub_ok = false;
     std::size_t scene_cached_bytes = 0;
     const float* uploaded_colors_ptr = nullptr;
     const float* uploaded_opacities_ptr = nullptr;
@@ -185,6 +237,22 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_blendrec; // S1: AoS blend record, 64B/gaussian
     std::shared_ptr<distributed::MeshBuffer> buf_M;       // uint32 count
     std::size_t cap_m_elems = 0;
+
+    // Lever 2 (task #99, GSPLAT_TT_SFPU_VIS): balanced scan + slim scatter
+    // programs (built on first use) and the tile_assign inputs they write.
+    bool vis_built = false;
+    distributed::MeshWorkload wl_vis;       // gather_vis_scatter, both movers
+    distributed::MeshWorkload wl_vis_scan;  // gather_vis_scan, core (0,0)
+    KernelHandle kv0{};
+    KernelHandle kv1{};
+    KernelHandle kvscan{};
+    std::shared_ptr<distributed::MeshBuffer> buf_offs;  // proj_m_offs, M + 1 used
+    std::shared_ptr<distributed::MeshBuffer> buf_aabb;  // proj_m_aabb
+    std::size_t cap_vis_elems = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_fuse_counts;  // lever B, 64 B / pfwc core
+    uint32_t fuse_count_pages = 0;
+    bool last_vis = false;
+    uint32_t last_vis_P = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -199,8 +267,10 @@ static void build_program(GatherDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
 
+    // Every staging CB holds one copy per mover (the kernel offsets by
+    // mover * total_bytes), so BRISC and NCRISC share no L1.
     auto cb = [&](uint32_t id, uint32_t total_bytes, uint32_t page_bytes) {
-        CircularBufferConfig c(total_bytes, {{id, DataFormat::Float32}});
+        CircularBufferConfig c(GATHER_MOVERS * total_bytes, {{id, DataFormat::Float32}});
         c.set_page_size(id, page_bytes);
         CreateCircularBuffer(program, cores, c);
     };
@@ -215,12 +285,15 @@ static void build_program(GatherDeviceContext& ctx) {
     // emits the AoS record (GATHER_EMIT_BLENDREC is inlined), so this CB and the
     // matching accessor are unconditional.
     cb(23, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);
+    // Visibility-mask staging: two 128B pages per mover.
+    cb(24, 2 * MASK_BYTES, MASK_BYTES);
 
     std::vector<uint32_t> ct;
-    constexpr int n_acc = 25;  // 24 base + 1 AoS blend-record accessor
+    constexpr int n_acc = 26;  // 24 base + AoS blend-record + visibility mask
     for (int i = 0; i < n_acc; i++)
         TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
+    if (gsplat_tt::env_config::emit_puboc()) defines["EMIT_PUBOC"] = "1";
     ctx.kernel = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
@@ -231,17 +304,31 @@ static void build_program(GatherDeviceContext& ctx) {
             .compile_args = ct,
             .defines = defines,
         });
+    if (proj_gather_movers() == 2) ctx.kernel1 = CreateKernel(
+        program,
+        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_visible_scatter.cpp",
+        cores,
+        DataMovementConfig{
+            .processor = DataMovementProcessor::RISCV_1,
+            .noc = NOC::RISCV_1_default,
+            .compile_args = ct,
+            .defines = defines,
+        });
     distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
     ctx.workload.add_program(device_range, std::move(program));
 }
 
-// Single-core on-device exclusive prefix-sum of the per-core counts. Two 64B CBs
-// (in/out staging) + 3 DRAM-interleaved accessors (counts, base, proj_M).
+// Single-core on-device exclusive prefix-sum of the per-slot counts. Two CBs of
+// num_slots 64B pages (in/out staging) + 3 DRAM-interleaved accessors (counts,
+// base, proj_M).
 static void build_program_scan(GatherDeviceContext& ctx) {
     Program program = CreateProgram();
     const CoreRangeSet core0(CoreRange({0, 0}, {0, 0}));
+    // One 64B page per slot for both the counts in and the bases out: the scan
+    // issues all reads, then all writes, with one barrier each.
+    const uint32_t bytes = ctx.num_slots * PAGE_BYTES;
     auto cb = [&](uint32_t id) {
-        CircularBufferConfig c(PAGE_BYTES, {{id, DataFormat::Float32}});
+        CircularBufferConfig c(bytes, {{id, DataFormat::Float32}});
         c.set_page_size(id, PAGE_BYTES);
         CreateCircularBuffer(program, core0, c);
     };
@@ -263,12 +350,75 @@ static void build_program_scan(GatherDeviceContext& ctx) {
     ctx.wl_scan.add_program(device_range, std::move(program));
 }
 
+// Lever 2 (task #99): gather_vis_scatter on both movers of every core and the
+// single-core gather_vis_scan. CB ids match the kernels' headers.
+constexpr uint32_t VIS_SCAN_MAX_TILES = 16384;  // counts staging (128 KB) on core 0
+static void build_programs_vis(GatherDeviceContext& ctx) {
+    {
+        Program program = CreateProgram();
+        const CoreRangeSet& cores = ctx.all_cores;
+        auto cb = [&](uint32_t id, uint32_t total_bytes, uint32_t page_bytes) {
+            CircularBufferConfig c(GATHER_MOVERS * total_bytes, {{id, DataFormat::Float32}});
+            c.set_page_size(id, page_bytes);
+            CreateCircularBuffer(program, cores, c);
+        };
+        for (uint32_t id = 0; id < 14; id++) cb(id, TILE_BYTES, TILE_BYTES);  // inputs
+        for (uint32_t id = 14; id < 21; id++) cb(id, PAGE_BYTES, PAGE_BYTES);  // SoA staging
+        cb(21, PAGE_ELEMS * PAGE_BYTES, PAGE_ELEMS * PAGE_BYTES);  // 16 AoS records
+        cb(22, MASK_BYTES, MASK_BYTES);
+        cb(23, PAGE_BYTES, PAGE_BYTES);  // slot parameters
+        cb(24, TILE_BYTES, TILE_BYTES);  // puboc01 / puboc23 tiles (task #122)
+        cb(25, TILE_BYTES, TILE_BYTES);
+        std::vector<uint32_t> ct;
+        for (int i = 0; i < 24; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+        std::map<std::string, std::string> vdefines;
+        if (gsplat_tt::env_config::emit_puboc()) vdefines["EMIT_PUBOC"] = "1";
+        ctx.kv0 = CreateKernel(
+            program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_vis_scatter.cpp", cores,
+            DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
+                               .noc = NOC::RISCV_0_default,
+                               .compile_args = ct,
+                               .defines = vdefines});
+        ctx.kv1 = CreateKernel(
+            program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_vis_scatter.cpp", cores,
+            DataMovementConfig{.processor = DataMovementProcessor::RISCV_1,
+                               .noc = NOC::RISCV_1_default,
+                               .compile_args = ct,
+                               .defines = vdefines});
+        distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+        ctx.wl_vis.add_program(device_range, std::move(program));
+    }
+    {
+        Program program = CreateProgram();
+        const CoreRangeSet core0(CoreRange({0, 0}, {0, 0}));
+        auto cb = [&](uint32_t id, uint32_t bytes, uint32_t page_bytes) {
+            CircularBufferConfig c(bytes, {{id, DataFormat::Float32}});
+            c.set_page_size(id, page_bytes);
+            CreateCircularBuffer(program, core0, c);
+        };
+        cb(0, VIS_SCAN_MAX_TILES * 8, 1024);
+        cb(1, ctx.num_slots * PAGE_BYTES, PAGE_BYTES);
+        cb(2, 3 * PAGE_BYTES, PAGE_BYTES);
+        std::vector<uint32_t> ct;
+        for (int i = 0; i < 5; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
+        ctx.kvscan = CreateKernel(
+            program, OVERRIDE_KERNEL_PREFIX "kernels/dataflow/gather_vis_scan.cpp", core0,
+            DataMovementConfig{.processor = DataMovementProcessor::RISCV_0,
+                               .noc = NOC::RISCV_0_default,
+                               .compile_args = ct});
+        distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+        ctx.wl_vis_scan.add_program(device_range, std::move(program));
+    }
+    ctx.vis_built = true;
+}
+
 static GatherDeviceContext init_context() {
     GatherDeviceContext ctx;
     ctx.mesh_device = device_state::get_device();
     ctx.cq = device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
     ctx.num_cores = ctx.grid.x * ctx.grid.y;
+    ctx.num_slots = ctx.num_cores * GATHER_MOVERS;
     ctx.all_cores =
         CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program(ctx);
@@ -318,6 +468,17 @@ static void ensure_scene_uploaded(
         device_state::register_buffer("scene_col_g", ctx->buf_cg);
         device_state::register_buffer("scene_col_b", ctx->buf_cb);
         device_state::register_buffer("scene_opacities", ctx->buf_op);
+        ctx->buf_pub01.reset();
+        ctx->buf_pub23.reset();
+    }
+    const bool want_pub = gsplat_tt::env_config::emit_puboc() && gsplat_tt::puboc_pre_mode() == 1;
+    if (want_pub && !ctx->buf_pub01) {
+        ctx->buf_pub01 = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
+        ctx->buf_pub23 = make_dram(ctx->mesh_device.get(), soa_bytes, TILE_BYTES);
+        ctx->uploaded_colors_ptr = nullptr;  // fill them below
+        ctx->pub_ok = false;
+        device_state::register_buffer("scene_puboc01", nullptr);
+        device_state::register_buffer("scene_puboc23", nullptr);
     }
     const bool hit = (ctx->uploaded_colors_ptr == colors) &&
                      (ctx->uploaded_opacities_ptr == opacities) &&
@@ -328,12 +489,17 @@ static void ensure_scene_uploaded(
     const auto t0 = std::chrono::high_resolution_clock::now();
     std::vector<float> cr(padded_n, 0.0f), cg(padded_n, 0.0f),
         cbv(padded_n, 0.0f), op(padded_n, 0.0f);
+    // The packs are the device's to_unorm16 (same integer code, bit-exact);
+    // its NaN fallback is soft-float, so a NaN leaves the packing to the device.
+    std::vector<uint32_t> p01(want_pub ? padded_n : 0, 0u), p23(want_pub ? padded_n : 0, 0u);
     {
         auto& pool = soa_pool();
         const std::size_t W = pool.size();
         const std::size_t chunk = (N + W - 1) / W;
+        std::vector<uint8_t> nan_seen(W, 0);
         for (std::size_t w = 0; w < W; ++w) {
-            pool.submit([w, chunk, N, colors, opacities, &cr, &cg, &cbv, &op]() {
+            pool.submit([w, chunk, N, colors, opacities, want_pub, &cr, &cg, &cbv, &op, &p01,
+                         &p23, &nan_seen]() {
                 const std::size_t lo = std::min(w * chunk, N);
                 const std::size_t hi = std::min(lo + chunk, N);
                 for (std::size_t i = lo; i < hi; ++i) {
@@ -342,14 +508,39 @@ static void ensure_scene_uploaded(
                     cbv[i] = colors[i * 3 + 2];
                     op[i] = opacities[i];
                 }
+                if (!want_pub) return;
+                auto u16 = [&](float v, uint32_t* out) {
+                    uint32_t b;
+                    std::memcpy(&b, &v, 4);
+                    if (!sort_bin_fp32::unorm16(b, out)) nan_seen[w] = 1;
+                };
+                for (std::size_t i = lo; i < hi; ++i) {
+                    uint32_t uo, ur, ug, ub;
+                    u16(op[i], &uo);
+                    u16(cr[i], &ur);
+                    u16(cg[i], &ug);
+                    u16(cbv[i], &ub);
+                    p01[i] = uo | (ur << 16);
+                    p23[i] = ug | (ub << 16);
+                }
             });
         }
         pool.wait();
+        ctx->pub_ok = want_pub && std::find(nan_seen.begin(), nan_seen.end(), 1) == nan_seen.end();
     }
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_cr, cr, false);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_cg, cg, false);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_cb, cbv, false);
     distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_op, op, false);
+    if (ctx->pub_ok) {
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pub01, p01, false);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_pub23, p23, false);
+    } else if (want_pub) {
+        std::cerr << "[gsplat_tt::gather] scene has a NaN opacity / color: UNORM16 packs stay "
+                     "on the device\n";
+    }
+    device_state::register_buffer("scene_puboc01", ctx->pub_ok ? ctx->buf_pub01 : nullptr);
+    device_state::register_buffer("scene_puboc23", ctx->pub_ok ? ctx->buf_pub23 : nullptr);
     distributed::Finish(*ctx->cq);
     const auto t1 = std::chrono::high_resolution_clock::now();
     if (upload_ms) *upload_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -396,13 +587,39 @@ static void ensure_outputs(GatherDeviceContext* ctx, uint32_t cap_elems) {
     device_state::register_buffer("proj_m_colors", ctx->buf_colors);
 }
 
-// Allocate the per-core counts buffer once (one 64B page per core).
+// proj_m_offs (M + 1 used, + one spare page) / proj_m_aabb of the lever 2 and
+// lever B paths, at padded_n capacity.
+static void ensure_vis_outputs(GatherDeviceContext* ctx, uint32_t padded_n) {
+    if (ctx->buf_offs && ctx->cap_vis_elems >= padded_n) return;
+    ctx->buf_offs = make_dram(ctx->mesh_device.get(),
+                              (static_cast<std::size_t>(padded_n) + PAGE_ELEMS) * 4, PAGE_BYTES);
+    ctx->buf_aabb =
+        make_dram(ctx->mesh_device.get(), static_cast<std::size_t>(padded_n) * 4, PAGE_BYTES);
+    ctx->cap_vis_elems = padded_n;
+    device_state::register_buffer("proj_m_offs", ctx->buf_offs);
+    device_state::register_buffer("proj_m_aabb", ctx->buf_aabb);
+}
+
+// Allocate the per-slot counts and device-scan bases buffers once (one 64B
+// page per slot, GATHER_MOVERS slots per core). With MOVERS=1 the NCRISC slots
+// are never written by a kernel, so zero the counts once here.
 static void ensure_counts(GatherDeviceContext* ctx) {
     if (ctx->buf_counts) return;
-    const std::size_t bytes = static_cast<std::size_t>(ctx->num_cores) * PAGE_BYTES;
+    const std::size_t bytes = static_cast<std::size_t>(ctx->num_slots) * PAGE_BYTES;
     ctx->buf_counts = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
-    // Device-scan output bases (one 64B page per core); allocated alongside.
     ctx->buf_core_base = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
+    if (proj_gather_movers() == 1) {
+        std::vector<uint32_t> zeros(bytes / sizeof(uint32_t), 0u);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_counts, zeros, true);
+    }
+}
+
+// Allocate/grow the per-tile visibility mask buffer.
+static void ensure_mask(GatherDeviceContext* ctx, uint32_t num_tiles) {
+    if (ctx->buf_mask && ctx->cap_mask_tiles >= num_tiles) return;
+    ctx->buf_mask = make_dram(ctx->mesh_device.get(),
+                              static_cast<std::size_t>(num_tiles) * MASK_BYTES, MASK_BYTES);
+    ctx->cap_mask_tiles = num_tiles;
 }
 
 // Effective max_radius matching project_finish_with_cov2d_radii.
@@ -603,7 +820,12 @@ static gsplat_cpu::ProjectResult readback_proj_m_count_only(
     std::size_t M, double* readback_ms) {
     const auto t0 = std::chrono::high_resolution_clock::now();
     gsplat_cpu::ProjectResult proj;
-    proj.depths.assign(M, 0.0f);
+    // Task #198 (GSPLAT_TT_SORT_OL_EARLY): carry M as a scalar instead of a
+    // zeroed M-float vector nobody reads (~0.1 ms/view).
+    if (gsplat_tt::env_config::sort_ol_early())
+        proj.num_visible = M;
+    else
+        proj.depths.assign(M, 0.0f);
     const auto t1 = std::chrono::high_resolution_clock::now();
     if (readback_ms) *readback_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
     return proj;
@@ -618,7 +840,11 @@ static void launch_pass(
     uint32_t num_tiles, float min_opacity, int H, int W, float max_radius,
     bool count_only, const std::vector<uint32_t>* bases, int last_core,
     uint32_t t_stride, bool do_finish = true, bool device_scan = false) {
+    auto& st_acc = stagetimers::acc();
+    stagetimers::Span rtargs_span(st_acc.project_gather_rtargs);
     Program& program = ctx->workload.get_programs().begin()->second;
+    // The count pass writes the mask the scatter pass reads (same num_tiles).
+    if (count_only) ensure_mask(ctx, num_tiles);
     auto bm2x = device_state::get_buffer("pfwc_m2x");
     auto bm2y = device_state::get_buffer("pfwc_m2y");
     auto bdep = device_state::get_buffer("pfwc_depth");
@@ -643,11 +869,20 @@ static void launch_pass(
     const uint32_t blendrec_addr =
         ctx->buf_blendrec ? static_cast<uint32_t>(ctx->buf_blendrec->address()) : 0u;
 
-    for (uint32_t c = 0; c < ctx->num_cores; ++c) {
+    const uint32_t split = proj_gather_split_permille();
+    for (uint32_t c = 0; c < ctx->num_cores; ++c)
+    for (uint32_t mv = 0; mv < proj_gather_movers(); ++mv) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
-        const uint32_t base = bases ? (*bases)[c] : 0u;
+        // Mover 0 takes the first h0 tiles of the core's list, mover 1 the rest
+        // (slot order == single-mover order; see the kernel header).
+        const uint32_t n_all = ws.num_chunks[c];
+        const uint32_t h0 = (n_all * split + 500u) / 1000u;
+        const uint32_t t_first = ws.chunk_start[c] + (mv == 0 ? 0u : h0 * t_stride);
+        const uint32_t t_cnt = (mv == 0) ? h0 : n_all - h0;
+        const uint32_t slot = c * GATHER_MOVERS + mv;
+        const uint32_t base = bases ? (*bases)[slot] : 0u;
         const uint32_t is_last =
-            (bases && static_cast<int>(c) == last_core) ? 1u : 0u;
+            (bases && static_cast<int>(slot) == last_core) ? 1u : 0u;
         std::vector<uint32_t> args = {
             static_cast<uint32_t>(bm2x->address()),
             static_cast<uint32_t>(bm2y->address()),
@@ -680,20 +915,29 @@ static void launch_pass(
             common_h,
             common_maxr,
             count_only ? 1u : 0u,
-            ws.chunk_start[c],
-            ws.num_chunks[c],
+            t_first,
+            t_cnt,
             base,
             is_last,
-            c,
+            slot,
             counts_addr,
         };
         args.push_back(blendrec_addr);             // arg 37: AoS blend-record base
         args.push_back(t_stride);                  // arg 38: tile stride
         args.push_back(device_scan ? 1u : 0u);     // arg 39: device-scan flag
-        SetRuntimeArgs(program, ctx->kernel, core, args);
+        args.push_back(mv);                        // arg 40: mover
+        args.push_back(static_cast<uint32_t>(ctx->buf_mask->address()));  // arg 41: mask
+        SetRuntimeArgs(program, mv == 0 ? ctx->kernel : ctx->kernel1, core, args);
     }
-    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
-    if (do_finish) distributed::Finish(*ctx->cq);
+    rtargs_span.stop();
+    {
+        stagetimers::Span s(st_acc.project_gather_enqueue);
+        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->workload, false);
+    }
+    if (do_finish) {
+        stagetimers::Span s(st_acc.project_gather_wait);
+        distributed::Finish(*ctx->cq);
+    }
 }
 
 }  // namespace
@@ -716,6 +960,57 @@ bool readback_pfwc_resident(
 }
 
 bool gather_visible_device_ready() { return ensure_context() != nullptr; }
+
+bool gather_visible_upload_scene(const float* scene_colors, const float* scene_opacities,
+                                 std::size_t N) {
+    if (N == 0) return true;
+    auto* ctx = ensure_context();
+    if (ctx == nullptr) return false;
+    try {
+        const uint32_t num_tiles = static_cast<uint32_t>((N + TILE_ELEMS - 1) / TILE_ELEMS);
+        ensure_scene_uploaded(ctx, scene_colors, scene_opacities, N, num_tiles, nullptr,
+                              nullptr);
+    } catch (const std::exception& e) {
+        std::cerr << "[gsplat_tt::gather] scene upload failed: " << e.what() << "\n";
+        return false;
+    }
+    return true;
+}
+
+float gather_visible_effective_max_radius(int max_radius_param, int image_height,
+                                          int image_width) {
+    return effective_max_radius(max_radius_param, image_height, image_width);
+}
+
+bool gather_visible_fuse_prepare(std::size_t N, uint32_t num_cores) {
+    if (N == 0) return true;
+    auto* ctx = ensure_context();
+    if (ctx == nullptr) return false;
+    try {
+        const uint32_t num_tiles = static_cast<uint32_t>((N + TILE_ELEMS - 1) / TILE_ELEMS);
+        const uint32_t padded_n = num_tiles * TILE_ELEMS;
+        ensure_outputs(ctx, padded_n);
+        ensure_vis_outputs(ctx, padded_n);
+        if (!ctx->buf_fuse_counts || ctx->fuse_count_pages < num_cores) {
+            ctx->buf_fuse_counts = make_dram(ctx->mesh_device.get(),
+                                             static_cast<std::size_t>(num_cores) * PAGE_BYTES,
+                                             PAGE_BYTES);
+            ctx->fuse_count_pages = num_cores;
+            device_state::register_buffer("pfwc_fuse_counts", ctx->buf_fuse_counts);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "[gsplat_tt::gather] fuse prepare failed: " << e.what() << "\n";
+        return false;
+    }
+    return true;
+}
+
+bool gather_visible_last_pairs(uint32_t* P) {
+    auto& slot = context_slot();
+    if (!slot || !slot->last_vis) return false;
+    if (P) *P = slot->last_vis_P;
+    return true;
+}
 
 void gather_visible_device_shutdown() {
     auto& slot = context_slot();
@@ -746,6 +1041,10 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         if (device_ok) *device_ok = true;
         return gsplat_cpu::ProjectResult{};
     }
+    // Stage-timer sub-buckets of `project` (stage_timers.h). launch_pass books
+    // its own rtargs / enqueue spans; setup runs until the first launch.
+    auto& st_acc = stagetimers::acc();
+    stagetimers::Span setup_span(st_acc.project_gather_setup);
     auto* ctx = ensure_context();
     if (ctx == nullptr) return set_fail();
 
@@ -780,7 +1079,161 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         const auto t_k0 = std::chrono::high_resolution_clock::now();
         std::size_t M = 0;
 
-        if (proj_device_scan_enabled()) {
+        // Lever 2 (task #99, GSPLAT_TT_SFPU_VIS): pfwc already produced the
+        // visibility mask, the per-tile counts and the tpg / aabb words.
+        const int vis_mode = sfpu_vis_mode();
+        auto vtpg = device_state::get_buffer("pfwc_tpg");
+        auto vaabb = device_state::get_buffer("pfwc_aabb");
+        auto vmask = device_state::get_buffer("pfwc_vis_mask");
+        auto vcounts = device_state::get_buffer("pfwc_tile_counts");
+        const bool vis_path = vis_mode != 0 && pfwc_ran_vis() && vtpg && vaabb && vmask &&
+                              vcounts && num_tiles <= VIS_SCAN_MAX_TILES;
+        ctx->last_vis = false;
+
+        PfwcFuseInfo fuse_info;
+        if (pfwc_ran_fused(&fuse_info)) {
+            // Lever B (task #125): pfwc already wrote the compact segments and
+            // the counts table; its pfwc_* tiles are stale, so there is no
+            // fallback past this point. The tile_assign segment K2 publishes
+            // proj_M / ta_pairs_P and builds the pairs; its one blocking read
+            // of proj_M is this stage's host sync (like the lever 2 path).
+            if (!(downstream_resident && downstream_chain_resident() && !verify))
+                throw std::runtime_error(
+                    "GSPLAT_TT_PFWC_FUSE=1 needs the resident chain (downstream_resident, "
+                    "no verify)");
+            if (fuse_info.num_tiles != num_tiles || ctx->cap_vis_elems < padded_n)
+                throw std::runtime_error("fused pfwc ran for another scene size");
+            setup_span.stop();
+            uint32_t Mf = 0, Pf = 0;
+            {
+                stagetimers::Span w(st_acc.project_gather_wait);
+                if (!tile_assign_fused_k2(fuse_info.num_cores, num_tiles, fuse_info.tiles_x,
+                                          fuse_info.screen_tiles, &Mf, &Pf))
+                    throw std::runtime_error("tile_assign_fused_k2 failed");
+            }
+            M = Mf;
+            ctx->last_vis_P = Pf;
+            ctx->last_vis = true;
+        } else if (vis_path) {
+            ensure_outputs(ctx, padded_n);
+            if (!ctx->vis_built) build_programs_vis(*ctx);
+            ensure_vis_outputs(ctx, padded_n);
+            (void)tile_assign_device_ready();  // owns ta_pairs_P, which the scan publishes
+            auto pairs_p = device_state::get_buffer("ta_pairs_P");
+            if (!pairs_p) throw std::runtime_error("ta_pairs_P missing (tile_assign init)");
+            auto addr = [](const std::shared_ptr<distributed::MeshBuffer>& b, const char* what) {
+                if (!b) throw std::runtime_error(std::string("missing resident buffer ") + what);
+                return static_cast<uint32_t>(b->address());
+            };
+            setup_span.stop();
+            const bool check = vis_mode == 2;
+            if (check) {
+                // Cross-check input: the legacy count pass (mask + per-slot counts).
+                launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height, image_width,
+                            max_radius, /*count_only=*/true, /*bases=*/nullptr,
+                            /*last_core=*/-1, t_stride, /*do_finish=*/false,
+                            /*device_scan=*/true);
+            }
+            static const uint32_t balance = vis_env_u32("GSPLAT_TT_VIS_BALANCE", 1) ? 1u : 0u;
+            static const uint32_t tile_w = vis_env_u32("GSPLAT_TT_VIS_TILE_WEIGHT", 24);
+            static const uint32_t empty_w = vis_env_u32("GSPLAT_TT_VIS_EMPTY_WEIGHT", 1);
+            {
+                stagetimers::Span rt(st_acc.project_gather_rtargs);
+                Program& sp = ctx->wl_vis_scan.get_programs().begin()->second;
+                SetRuntimeArgs(sp, ctx->kvscan, CoreCoord{0, 0}, {
+                    addr(vcounts, "pfwc_tile_counts"),
+                    addr(ctx->buf_core_base, "core_base"),
+                    addr(ctx->buf_M, "proj_M"),
+                    addr(pairs_p, "ta_pairs_P"),
+                    addr(ctx->buf_offs, "proj_m_offs"),
+                    num_tiles, ctx->num_cores, GATHER_MOVERS, balance, tile_w, empty_w,
+                    500u, 0u,
+                });
+                Program& pg = ctx->wl_vis.get_programs().begin()->second;
+                const std::vector<uint32_t> bufs = {
+                    addr(device_state::get_buffer("pfwc_m2x"), "pfwc_m2x"),
+                    addr(device_state::get_buffer("pfwc_m2y"), "pfwc_m2y"),
+                    addr(device_state::get_buffer("pfwc_depth"), "pfwc_depth"),
+                    addr(device_state::get_buffer("pfwc_a"), "pfwc_a"),
+                    addr(device_state::get_buffer("pfwc_b"), "pfwc_b"),
+                    addr(device_state::get_buffer("pfwc_c"), "pfwc_c"),
+                    addr(ctx->buf_op, "scene_opacities"),
+                    addr(ctx->buf_cr, "scene_col_r"),
+                    addr(ctx->buf_cg, "scene_col_g"),
+                    addr(ctx->buf_cb, "scene_col_b"),
+                    addr(vtpg, "pfwc_tpg"),
+                    addr(vaabb, "pfwc_aabb"),
+                    addr(device_state::get_buffer("pfwc_rx"), "pfwc_rx"),
+                    addr(device_state::get_buffer("pfwc_ry"), "pfwc_ry"),
+                    addr(ctx->buf_depth, "proj_m_depth"),
+                    addr(ctx->buf_blendrec, "proj_m_blendrec"),
+                    addr(ctx->buf_offs, "proj_m_offs"),
+                    addr(ctx->buf_aabb, "proj_m_aabb"),
+                    addr(ctx->buf_px, "proj_m_px"),
+                    addr(ctx->buf_py, "proj_m_py"),
+                    addr(ctx->buf_rx, "proj_m_rx"),
+                    addr(ctx->buf_ry, "proj_m_ry"),
+                    addr(vmask, "pfwc_vis_mask"),
+                    addr(ctx->buf_core_base, "core_base"),
+                };
+                const bool pub = ctx->pub_ok;  // per-scene UNORM16 packs (task #122)
+                const uint32_t pub01 = pub ? addr(ctx->buf_pub01, "scene_puboc01") : 0u;
+                const uint32_t pub23 = pub ? addr(ctx->buf_pub23, "scene_puboc23") : 0u;
+                for (uint32_t c = 0; c < ctx->num_cores; ++c)
+                for (uint32_t mv = 0; mv < GATHER_MOVERS; ++mv) {
+                    std::vector<uint32_t> args = bufs;
+                    args.push_back(static_cast<uint32_t>(N));
+                    args.push_back(ctx->num_cores);
+                    args.push_back(num_tiles);
+                    args.push_back(c * GATHER_MOVERS + mv);
+                    args.push_back(mv);
+                    args.push_back(check ? 1u : 0u);
+                    args.push_back(pub01);  // arg 30: scene_puboc01 (0 = pack on device)
+                    args.push_back(pub23);  // arg 31: scene_puboc23
+                    SetRuntimeArgs(pg, mv == 0 ? ctx->kv0 : ctx->kv1,
+                                   CoreCoord{c % ctx->grid.x, c / ctx->grid.x}, args);
+                }
+            }
+            {
+                stagetimers::Span enq(st_acc.project_gather_enqueue);
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_vis_scan, false);
+                distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_vis, false);
+            }
+            // The project stage's one host sync: [0] = M, [1] = P.
+            std::vector<uint32_t> mread(PAGE_ELEMS, 0);
+            {
+                stagetimers::Span w(st_acc.project_gather_wait);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
+            }
+            M = mread[0];
+            ctx->last_vis_P = mread[1];
+            ctx->last_vis = true;
+            if (check) {
+                auto rd = [&](std::shared_ptr<distributed::MeshBuffer> b) {
+                    std::vector<uint32_t> v(b->size() / 4);
+                    distributed::EnqueueReadMeshBuffer(*ctx->cq, v, b, true);
+                    return v;
+                };
+                const std::vector<uint32_t> lm = rd(ctx->buf_mask), nm = rd(vmask),
+                                            cnt = rd(ctx->buf_counts);
+                uint64_t bad = 0;
+                long first = -1;
+                for (uint32_t i = 0; i < num_tiles * (MASK_BYTES / 4); i++)
+                    if (lm[i] != nm[i]) {
+                        if (first < 0) first = static_cast<long>(i);
+                        bad++;
+                    }
+                uint64_t m_legacy = 0;
+                for (uint32_t sl = 0; sl < ctx->num_slots; sl++)
+                    m_legacy += cnt[static_cast<std::size_t>(sl) * PAGE_ELEMS];
+                std::fprintf(stderr,
+                             "[VIS-CHECK] gather tiles=%u mask_word_mismatches=%llu "
+                             "first_word=%ld M_legacy=%llu M=%zu P=%u %s\n",
+                             num_tiles, static_cast<unsigned long long>(bad), first,
+                             static_cast<unsigned long long>(m_legacy), M, ctx->last_vis_P,
+                             (bad == 0 && m_legacy == M) ? "OK" : "MISMATCH");
+            }
+        } else if (proj_device_scan_enabled()) {
             // ── STEP-4 FUSION (GSPLAT_TT_PROJ_DEVICE_SCAN) ───────────────────
             // Enqueue count -> scan_bases -> scatter as ONE in-order CQ
             // submission with NO inter-kernel Finish AND NO mid-chain host M
@@ -797,6 +1250,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             // sort-publish+cull+blend). The project stage's ONLY host sync is the
             // single post-chain 1-page M read below.
             ensure_outputs(ctx, padded_n);
+            setup_span.stop();
 
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/true,
@@ -805,13 +1259,16 @@ gsplat_cpu::ProjectResult gather_visible_tt(
 
             // scan_bases: counts -> buf_core_base ([0]=base,[1]=is_last) + proj_M.
             {
+                stagetimers::Span rtargs_span(st_acc.project_gather_rtargs);
                 Program& sp = ctx->wl_scan.get_programs().begin()->second;
                 SetRuntimeArgs(sp, ctx->kscan, CoreCoord{0, 0}, {
                     static_cast<uint32_t>(ctx->buf_counts->address()),
                     static_cast<uint32_t>(ctx->buf_core_base->address()),
                     static_cast<uint32_t>(ctx->buf_M->address()),
-                    ctx->num_cores,
+                    ctx->num_slots,
                 });
+                rtargs_span.stop();
+                stagetimers::Span enq_span(st_acc.project_gather_enqueue);
                 distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_scan, false);
             }
 
@@ -830,21 +1287,26 @@ gsplat_cpu::ProjectResult gather_visible_tt(
             // depth D2H). proj_M is already published on-device for the resident
             // downstream consumers.
             std::vector<uint32_t> mread(PAGE_ELEMS, 0);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
+            {
+                stagetimers::Span s(st_acc.project_gather_wait);
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, ctx->buf_M, true);
+            }
             M = mread[0];
         } else {
+            setup_span.stop();
             launch_pass(ctx, ws, N, num_tiles, min_opacity, image_height,
                         image_width, max_radius, /*count_only=*/true,
                         /*bases=*/nullptr, /*last_core=*/-1, t_stride);
 
             // Read per-core counts (each occupies the first uint32 of its 64B page).
             std::vector<uint32_t> craw(
-                static_cast<std::size_t>(ctx->num_cores) * PAGE_ELEMS);
+                static_cast<std::size_t>(ctx->num_slots) * PAGE_ELEMS);
             distributed::EnqueueReadMeshBuffer(*ctx->cq, craw, ctx->buf_counts, true);
 
-            std::vector<uint32_t> bases(ctx->num_cores, 0);
+            // Per (core, mover) slot; last_core is the last non-empty slot.
+            std::vector<uint32_t> bases(ctx->num_slots, 0);
             int last_core = -1;
-            for (uint32_t c = 0; c < ctx->num_cores; ++c) {
+            for (uint32_t c = 0; c < ctx->num_slots; ++c) {
                 const uint32_t cnt = craw[static_cast<std::size_t>(c) * PAGE_ELEMS];
                 bases[c] = static_cast<uint32_t>(M);
                 M += cnt;
@@ -888,6 +1350,7 @@ gsplat_cpu::ProjectResult gather_visible_tt(
         // non-resident, or verify configs (which DO consume host-side proj_m_*).
         const bool fused_count_only =
             proj_device_scan_enabled() && minimal_readback;
+        stagetimers::Span result_span(st_acc.project_gather_result);
         gsplat_cpu::ProjectResult proj =
             fused_count_only
                 ? readback_proj_m_count_only(M, &T.readback_ms)

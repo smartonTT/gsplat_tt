@@ -1,0 +1,39 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=5b9e3efada281d7a21627a4fa701ef5006c3636d so_md5=c61fcf88409138edb23211b4ae18272f 
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t78-verify-a0  timeout=400s  worry=320s  ts=2026-09-30T13:30:08-0700
+cmd: bash /localdev/smarton/t78_scripts/remote_verify.sh 0
+-----------------------------------------
+== a=0 run 20:30:09
+run rc=0 20:30:39
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 52.1ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.1 p50_ms=48.6 min_ms=40.3 max_ms=65.8 n_views=30 warmup_s=19.5 out=/localdev/smarton/gstt2-t78/tmp/t78-a0
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.706 tile_assign=8.885 sort=14.237 blend_setup=0.027 cull=0.008 blend=16.943 d2h=0.239 assemble=0.000 tail=0.002 | sum=49.051 view_total=49.052 resid_in_view=+0.001 avg_frame_ms=49.091 resid_vs_frame=+0.040
+dump dir: ./tmp/t78-dump-a0
+a=0 views: 30
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t78/.ttw/logs/t78-verify-a0-20260930-133007.log
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t78-verify-a2  timeout=400s  worry=320s  ts=2026-09-30T13:30:40-0700
+cmd: bash /localdev/smarton/t78_scripts/remote_verify.sh 2
+-----------------------------------------
+== a=2 run 20:30:40
+run rc=0 20:31:10
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+[run]   view=hero 53.5ms saved=view00_hero.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=49.8 p50_ms=49.3 min_ms=40.8 max_ms=67.1 n_views=30 warmup_s=18.9 out=/localdev/smarton/gstt2-t78/tmp/t78-a2
+TTW_METRIC hero_vs_ref=100.00
+STAGES n=30 head=0.003 project=8.691 tile_assign=8.889 sort=14.225 blend_setup=0.028 cull=0.008 blend=17.736 d2h=0.210 assemble=0.000 tail=0.002 | sum=49.793 view_total=49.794 resid_in_view=+0.001 avg_frame_ms=49.830 resid_vs_frame=+0.037
+dump dir: ./tmp/t78-dump-a2
+a=2 views: 30
+ALL_VIEWS_IDENTICAL a0 vs a2
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t78/.ttw/logs/t78-verify-a2-20260930-133040.log

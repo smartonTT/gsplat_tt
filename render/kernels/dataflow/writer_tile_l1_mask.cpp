@@ -4,21 +4,14 @@
 //
 // Tile-local L1 microblock-cull WRITER (iter 102 / M3).
 //
-// Consumes CB_KEEP batches from microblock_cull_compute and writes the packed
-// 32-bit per-gaussian microblock mask into WORD3 of each record in the
-// depth-sorted PACK2 slab (sort_subchunk_payload) — the SAME slab the blend
-// reader bulk-loads. word3 is the depth key, dead after the sort, so it carries
-// the mask between the cull and blend kernel launches (slab lives in DRAM
-// between them; normal launch ordering provides cross-kernel visibility).
-//
-// Write-back strategy (M3): ALIGNED per-batch 64B page read-modify-write. The
-// strided 4B word3 default misaligned both ends (DRAM word3 at byte 12/44, L1
-// src at +4; Blackhole NoC needs >=16B). Instead we read the batch's 64B slab
-// pages into L1, patch word3 of each record (PACK2: record k -> page k/2, half
-// k&1; word3 == u32 index (k>>1)*16 + (k&1)*8 + 3), and write the whole 64B
-// pages back. processed advances by BATCH=32 == 16 pages, so every batch is
-// page-aligned (no partial-page sharing across batches); the RMW preserves the
-// untouched record words (cov/mean/op/color).
+// Task #59: consumes the reader's L1 slab slot (CB_BUCKET) and the band cull's
+// CB_KEEP tiles. Each keep tile covers COEFF_BATCH records; record i's mask
+// halves sit as fp32 2^23 + bits in tile words 64*(i/32) + 2*(i%32) (+1 for
+// bits 16-31), so the 32-bit mask is pure integer: (lo & 0xffff) | (hi << 16).
+// The mask goes into WORD3 of the record in L1 (word3 is the depth key, dead
+// after the sort, so it carries the mask to the blend), then the whole slab is
+// written back to sort_subchunk_payload in SLAB_PAGE_BYTES writes, the same
+// shape sort_subchunk_materialize emits it in. No DRAM read-modify-write.
 
 #include <cstdint>
 
@@ -27,43 +20,20 @@
 namespace {
 
 constexpr uint32_t CB_MASK_SCR = 6;
+constexpr uint32_t CB_BUCKET   = 8;    // the reader's slab slot (task #59: consumed here)
 constexpr uint32_t CB_KEEP     = 16;
 
 constexpr uint32_t SOA_PAGE_BYTES = 64;
 constexpr uint32_t IDS_PAGE_BYTES = 64;
-constexpr uint32_t BATCH = 32;
-constexpr uint32_t NUM_MB = 32;
 constexpr uint32_t CHUNK_MAX = 16;
 #ifndef MB_BUCKET_FIT
 constexpr uint32_t MB_BUCKET_FIT = 8192u;
 #endif
-
-// PACK2 slab geometry: two 32B splats per 64B page; record g -> page g/2, half
-// g&1. As u32 words: page (g>>1) base = (g>>1)*16; half g&1 starts at +8*(g&1);
-// word3 (the dead depth key, now the mask) is at +3 within the half.
-constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
-constexpr uint32_t PAGE_U32 = 16u;     // 64B page = 16 u32
-constexpr uint32_t HALF_U32 = 8u;      // 32B splat = 8 u32
-// iter 110 (A2): the slab now uses a LARGE DRAM interleave page (SLAB_PAGE_BYTES)
-// shared with the cull/blend readers and materialize. The mask write-back keeps
-// its ALIGNED 64B-sub-page RMW (scratch stays 1 BATCH == 16 sub-pages == 1024B);
-// only the DRAM address math changes: a 64B sub-page at subchunk-local index s
-// lives in slab page (payload_page + s/SLAB_SUBPAGES_PER_PAGE), byte
-// (s % SLAB_SUBPAGES_PER_PAGE)*64. payload_page is in SLAB_PAGE_BYTES units.
+constexpr uint32_t BULK_REC_SLOT = (MB_BUCKET_FIT + 1u) >> 1;  // CB_BUCKET pages per slot
+constexpr uint32_t COEFF_BATCH = 128u;  // records per keep tile (band cull)
+constexpr uint32_t L1_SPLAT_BYTES = 32u;
 constexpr uint32_t SLAB_PAGE_BYTES = 2048u;
-constexpr uint32_t SLAB_SUBPAGES_PER_PAGE = SLAB_PAGE_BYTES / L1_PACK_PAGE_BYTES;  // 32
-
-inline uint32_t word3_u32_index(uint32_t g) {
-    return (g >> 1) * PAGE_U32 + (g & 1u) * HALF_U32 + 3u;
-}
-
-inline uint32_t perm(uint32_t g, uint32_t m) {
-    const uint32_t cp = g & 1u;
-    if (m < 16u) {
-        return (2u * (g >> 1)) * 32u + cp + 2u * m;
-    }
-    return (2u * (g >> 1) + 1u) * 32u + cp + 2u * (m - 16u);
-}
+constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 
 template <typename Acc>
 inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_addr) {
@@ -72,9 +42,18 @@ inline uint32_t read_soa_u32(const Acc& acc, uint32_t elem, uint32_t scratch_add
     return reinterpret_cast<volatile uint32_t*>(scratch_addr)[elem & 0xF];
 }
 
+// Task #86: fine per-subchunk zones for attribution (host env
+// GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
+#if defined(MATCULL_PROF) && MATCULL_PROF
+#define CULL_PZ(name) DeviceZoneScopedN(name)
+#else
+#define CULL_PZ(name) ((void)0)
+#endif
+
 }  // namespace
 
 void kernel_main() {
+    DeviceZoneScopedN("tile_l1_mask_wr");
     const uint32_t payload_addr      = get_arg_val<uint32_t>(0);  // sort_subchunk_payload slab
     const uint32_t ranges_addr       = get_arg_val<uint32_t>(1);
     const uint32_t subchunk_meta_addr= get_arg_val<uint32_t>(2);  // [dir_base, num_sc] per tile
@@ -143,6 +122,7 @@ void kernel_main() {
 
     for (uint32_t ti = 0; ti < tile_ids_count; ti++) {
         const uint32_t tile_id = tile_ids[ti];
+        CULL_PZ("cw_tile");
         uint32_t id_start = read_soa_u32(ranges_acc, tile_id * 2u + 0u, scratch_addr);
         uint32_t id_end   = read_soa_u32(ranges_acc, tile_id * 2u + 1u, scratch_addr);
         const uint32_t L = id_end - id_start;
@@ -182,54 +162,39 @@ void kernel_main() {
                 payload_page = scratch_ptr[dof];
             }
 
-            uint32_t processed = 0;
-            while (processed < L_sub) {
-                uint32_t nb = L_sub - processed;
-                if (nb > BATCH) nb = BATCH;
-
-                cb_wait_front(CB_KEEP, 1);
-                auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
-
-                // processed is a multiple of BATCH (==16 sub-pages), so this batch's
-                // records start on a 64B sub-page boundary. RMW the npg 64B sub-pages
-                // spanning [processed, processed+nb): read -> patch word3 -> write
-                // back. Each 64B sub-page is addressed inside the LARGE slab page via
-                // get_noc_addr(page2048) + sub-page offset (still 64B-aligned writes).
-                const uint32_t sub0 = processed >> 1;  // subchunk-local 64B sub-page
-                const uint32_t npg = (nb + 1u) >> 1;
-                for (uint32_t pp = 0; pp < npg; ++pp) {
-                    const uint32_t s = sub0 + pp;
-                    const uint64_t noc = get_noc_addr(
-                        payload_page + (s / SLAB_SUBPAGES_PER_PAGE), payload_acc) +
-                        (s % SLAB_SUBPAGES_PER_PAGE) * L1_PACK_PAGE_BYTES;
-                    noc_async_read(noc, scratch_addr + pp * L1_PACK_PAGE_BYTES,
-                                   L1_PACK_PAGE_BYTES);
-                }
-                noc_async_read_barrier();
-
-                for (uint32_t g = 0; g < nb; g++) {
-                    uint32_t mask = 0u;
-                    for (uint32_t m = 0; m < NUM_MB; m++) {
-                        if (keep[perm(g, m)] != 0u) {
-                            mask |= (1u << m);
-                        }
-                    }
-                    scratch_ptr[word3_u32_index(g)] = mask;
-                }
-
-                for (uint32_t pp = 0; pp < npg; ++pp) {
-                    const uint32_t s = sub0 + pp;
-                    const uint64_t noc = get_noc_addr(
-                        payload_page + (s / SLAB_SUBPAGES_PER_PAGE), payload_acc) +
-                        (s % SLAB_SUBPAGES_PER_PAGE) * L1_PACK_PAGE_BYTES;
-                    noc_async_write(scratch_addr + pp * L1_PACK_PAGE_BYTES, noc,
-                                    L1_PACK_PAGE_BYTES);
-                }
-                noc_async_write_barrier();
-                cb_pop_front(CB_KEEP, 1);
-
-                processed += nb;
+            {
+                CULL_PZ("cw_slab_wait");
+                cb_wait_front(CB_BUCKET, BULK_REC_SLOT);
             }
+            const uint32_t slab = get_read_ptr(CB_BUCKET);
+            {
+                CULL_PZ("cw_patch");
+                for (uint32_t base = 0; base < L_sub; base += COEFF_BATCH) {
+                    const uint32_t n = (L_sub - base < COEFF_BATCH) ? (L_sub - base) : COEFF_BATCH;
+                    cb_wait_front(CB_KEEP, 1);
+                    auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
+                    auto rec = reinterpret_cast<volatile uint32_t*>(slab + base * L1_SPLAT_BYTES);
+                    for (uint32_t i = 0; i < n; ++i) {
+                        const uint32_t o = 64u * (i >> 5) + 2u * (i & 31u);
+                        const uint32_t lo = keep[o], hi = keep[o + 1u];
+                        rec[i * 8u + 3u] = (lo & 0xffffu) | (hi << 16);
+                    }
+                    cb_pop_front(CB_KEEP, 1);
+                }
+            }
+            asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads it
+            CULL_PZ("cw_wr");
+            const uint32_t out_pages = (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+            for (uint32_t p = 0; p < out_pages; ++p) {
+                const uint32_t recs = (p + 1u < out_pages)
+                    ? SLAB_RECS_PER_PAGE
+                    : (L_sub - p * SLAB_RECS_PER_PAGE);
+                noc_async_write(slab + p * SLAB_PAGE_BYTES,
+                                get_noc_addr(payload_page + p, payload_acc),
+                                recs * L1_SPLAT_BYTES);
+            }
+            noc_async_write_barrier();
+            cb_pop_front(CB_BUCKET, BULK_REC_SLOT);
         }
     }
 }

@@ -12,3 +12,13 @@ opt/ttw/*.bak-*
 build/
 build-*/
 build_*/
+
+# Build outputs: never track (absolute paths clobber other trees on sync)
+render/build-tt/
+*.so
+.venv
+opt/profiler/**/*.tracy
+
+# Python bytecode
+__pycache__/
+*.pyc

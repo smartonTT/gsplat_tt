@@ -27,13 +27,27 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_bin_fp32.h"
+#include "sort_radix_tile_algo.h"
+#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
+#include "sort_onelaunch_algo.h"
+#ifndef OL_MAT_PART
+#define OL_MAT_PART 4096u  // == sort_mover_split.h kOlMatPartRecs
+#endif
+static_assert(OL_MAT_PART % 64u == 0u, "a part starts on a payload page");
+#endif
 
 namespace {
 
 constexpr uint32_t PAGE_BYTES = 64;
 constexpr uint32_t ELEMS_PER_PAGE = 16;
 constexpr uint32_t L1_SPLAT_BYTES = 32u;
-constexpr uint32_t L1_PACK_PAGE_BYTES = 64u;
+// Task #86: buf_l1_recs and the overflow region hold REC_PAGE_RECS 32B records
+// per REC_PAGE_BYTES DRAM page (== render_config::kRecPageBytes), so a bucket
+// is read in 2 KB transfers (was 64 B PACK2 pages: ~1.0 ms/view per mover).
+// Record g of a bucket still lands at buck + g*32.
+constexpr uint32_t REC_PAGE_BYTES = 2048u;
+constexpr uint32_t REC_PAGE_RECS = REC_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 // iter 110 (A2): the depth-sorted slab is materialized into a DRAM buffer with a
 // LARGE interleave page (SLAB_PAGE_BYTES) so the cull/blend readers coalesce the
 // per-subchunk load into ceil(L/SLAB_RECS_PER_PAGE) big transfers. The slab is
@@ -45,17 +59,34 @@ constexpr uint32_t SLAB_RECS_PER_PAGE = SLAB_PAGE_BYTES / L1_SPLAT_BYTES;  // 64
 constexpr uint32_t TILE_SIZE = 32u;
 // iter 76: larger blendrec gather batches (fewer read/write barriers on sc>=1).
 constexpr uint32_t REC_BATCH = 32u;
+// Task #35: an over-cap gather item covers part `part` of its subchunk, records
+// [part * GATHER_PART_RECS, +GATHER_PART_RECS) (host sort_mover_split.h
+// kGatherPartRecs). Other items have part 0 and cover their whole tile/subchunk.
+constexpr uint32_t GATHER_PART_RECS = 2048u;
+#if defined(GATHER_PART_RECS_HOST) && defined(MAT_M0_CAP)
+static_assert(GATHER_PART_RECS == GATHER_PART_RECS_HOST,
+              "GATHER_PART_RECS must match sort_mover_split.h kGatherPartRecs");
+static_assert(GATHER_PART_RECS <= MAT_M0_CAP,
+              "a gather part must fit BRISC's materialize slab (kMatMover0Cap)");
+#endif
 
-constexpr uint32_t CB_SCR = 0;
-constexpr uint32_t CB_IDS = 1;
-constexpr uint32_t CB_REC = 2;
-constexpr uint32_t CB_PACK = 3;
-constexpr uint32_t CB_BUCKET = 4;
-constexpr uint32_t CB_BSORT = 5;
+// Dual mover: BRISC runs this kernel too, on its own (smaller) copies of every
+// CB at id + 16 (MAT_CB_BASE) and its own work-item slice. The host gives it
+// only items that fit its buffers (whole-tile items of <= idx_stride records,
+// any gather item).
+#ifndef MAT_CB_BASE
+#define MAT_CB_BASE 0
+#endif
+constexpr uint32_t CB_SCR = MAT_CB_BASE + 0;
+constexpr uint32_t CB_IDS = MAT_CB_BASE + 1;
+constexpr uint32_t CB_REC = MAT_CB_BASE + 2;
+constexpr uint32_t CB_PACK = MAT_CB_BASE + 3;
+constexpr uint32_t CB_BUCKET = MAT_CB_BASE + 4;
+constexpr uint32_t CB_BSORT = MAT_CB_BASE + 5;
 // iter 113 (sort Stage 1): contiguous L1 scratch the depth permutation lands in
 // (record k at byte k*32) so the depth-sorted slab is written to DRAM in
 // coalesced SLAB_PAGE_BYTES pages instead of bucket_fit per-record 32B writes.
-constexpr uint32_t CB_SLAB = 6;
+constexpr uint32_t CB_SLAB = MAT_CB_BASE + 6;
 
 inline float bits_to_f(uint32_t b) {
     float f;
@@ -69,10 +100,175 @@ inline uint32_t f_to_bits(float f) {
     return b;
 }
 
-inline volatile uint32_t* l1_splat_words(uint32_t buck_base, uint32_t g) {
-    return reinterpret_cast<volatile uint32_t*>(
-        buck_base + (g >> 1) * L1_PACK_PAGE_BYTES + (g & 1u) * L1_SPLAT_BYTES);
+// Copy the n records buck[sorted[k]] (32 B each; PACK2 slot g sits at byte
+// 32g) to slab record k. All 8 words of a record are loaded before any store:
+// alternating volatile load/store made every store wait for its own load.
+inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted,
+                            uint32_t n) {
+    for (uint32_t k = 0; k < n; ++k) {
+        auto src = reinterpret_cast<volatile uint32_t*>(buck + sorted[k] * L1_SPLAT_BYTES);
+        auto dst = reinterpret_cast<volatile uint32_t*>(slab + k * L1_SPLAT_BYTES);
+        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2], w3 = src[3];
+        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+        dst[0] = w0; dst[1] = w1; dst[2] = w2; dst[3] = w3;
+        dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+    }
 }
+
+// Read n 32B records starting at page page0 into buck (record g at buck + g*32):
+// whole REC_PAGE_BYTES pages, only the used bytes of the last one.
+template <typename Acc>
+inline void read_bucket(const Acc& acc, uint32_t page0, uint32_t n, uint32_t buck) {
+    const uint32_t npages = (n + REC_PAGE_RECS - 1u) / REC_PAGE_RECS;
+    for (uint32_t q = 0; q < npages; ++q) {
+        const uint32_t recs = (q + 1u < npages) ? REC_PAGE_RECS : (n - q * REC_PAGE_RECS);
+        noc_async_read(get_noc_addr(page0 + q, acc), buck + q * REC_PAGE_BYTES,
+                       recs * L1_SPLAT_BYTES);
+    }
+    noc_async_read_barrier();
+}
+
+// Task #86: fine per-item zones for attribution (host env
+// GSPLAT_TT_MATCULL_PROF=1; compiled out by default).
+#if defined(MATCULL_PROF) && MATCULL_PROF
+#define MAT_PZ(name) DeviceZoneScopedN(name)
+#else
+#define MAT_PZ(name) ((void)0)
+#endif
+
+// Task #90: the SFPU cull runs in this program (mat_cull_compute.cpp). Each
+// mover culls the slab it just depth-sorted before writing it: it transposes
+// every COEFF_BATCH records into an fp32 coefficient tile on its own stream
+// (CB_COEFF / CB_KEEP), and patches the returned 32-bit microblock mask into
+// word3 of each record (the depth key, dead after the sort), exactly what
+// reader_tile_l1_cull + writer_tile_l1_mask did in the separate cull program.
+// At most CULL_DEPTH batches are in flight per mover (== the CB depths), so
+// neither side ever blocks on a full CB. The stream ends with a tile whose
+// word END_WORD is non-zero.
+#if defined(FUSE_CULL) && FUSE_CULL
+constexpr uint32_t CB_COEFF = MAT_CB_BASE + 8;
+constexpr uint32_t CB_KEEP = MAT_CB_BASE + 9;
+constexpr uint32_t COEFF_BATCH = 128u;      // 4 groups x 32 SFPU lanes
+constexpr uint32_t OPQ_BIAS = 0x4B000000u;  // fp32 2^23; field = 2^23 + UNORM16 opacity
+constexpr uint32_t END_WORD = 1023u;        // == mat_cull_compute.cpp (outside the SFPU fields)
+constexpr uint32_t CULL_DEPTH = FUSE_CULL_DEPTH;
+
+// == reader_tile_l1_cull.cpp fill_coeff_tile: record i -> lane i%32 of group
+// i/32; field pairs (A,B), (C,opq), (mx,my) are adjacent tile words.
+inline void fill_coeff_tile(uint32_t slab, uint32_t base, uint32_t n, uint32_t tile) {
+    for (uint32_t i = 0; i < n; ++i) {
+        auto src = reinterpret_cast<volatile uint32_t*>(slab + (base + i) * L1_SPLAT_BYTES);
+        auto dst = reinterpret_cast<volatile uint32_t*>(tile) + 192u * (i >> 5) + 2u * (i & 31u);
+        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2];
+        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6];
+        dst[0] = w0;
+        dst[1] = w1;
+        dst[64] = w2;
+        dst[65] = OPQ_BIAS | (w6 & 0xffffu);
+        dst[128] = w4;
+        dst[129] = w5;
+    }
+    reinterpret_cast<volatile uint32_t*>(tile)[END_WORD] = 0u;
+}
+
+// == writer_tile_l1_mask.cpp: record i's mask halves are 2^23 + bits at keep
+// words 64*(i/32) + 2*(i%32) (+1 for bits 16-31).
+inline void patch_batch(uint32_t slab, uint32_t base, uint32_t n) {
+    cb_wait_front(CB_KEEP, 1);
+    auto keep = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_KEEP));
+    auto rec = reinterpret_cast<volatile uint32_t*>(slab + base * L1_SPLAT_BYTES);
+    for (uint32_t i = 0; i < n; ++i) {
+        const uint32_t o = 64u * (i >> 5) + 2u * (i & 31u);
+        const uint32_t lo = keep[o], hi = keep[o + 1u];
+        rec[i * 8u + 3u] = (lo & 0xffffu) | (hi << 16);
+    }
+    cb_pop_front(CB_KEEP, 1);
+}
+
+// Cull the n records at slab (record k at slab + 32k): word3 := mask.
+inline void cull_slab(uint32_t slab, uint32_t n) {
+    MAT_PZ("mat_cull");
+    uint32_t pushed = 0, patched = 0;
+    for (uint32_t base = 0; base < n; base += COEFF_BATCH) {
+        if (pushed - patched == CULL_DEPTH) {
+            const uint32_t pb = patched * COEFF_BATCH;
+            patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+            ++patched;
+        }
+        cb_reserve_back(CB_COEFF, 1);
+        const uint32_t tile = get_write_ptr(CB_COEFF);
+        fill_coeff_tile(slab, base, (n - base < COEFF_BATCH) ? (n - base) : COEFF_BATCH, tile);
+        asm volatile("fence" ::: "memory");
+        cb_push_back(CB_COEFF, 1);
+        ++pushed;
+    }
+    while (patched < pushed) {
+        const uint32_t pb = patched * COEFF_BATCH;
+        patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+        ++patched;
+    }
+    asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads the slab
+}
+
+// permute_records + cull_slab in one pass: slab[k] = buck[sorted[k]], and the
+// coefficient tile is filled from the words already loaded (no re-read of the
+// slab). word3 (the depth key) is not copied: patch_batch overwrites it with
+// the mask for every k < n.
+inline void permute_cull(uint32_t buck, uint32_t slab, const uint32_t* sorted, uint32_t n) {
+    uint32_t pushed = 0, patched = 0;
+    for (uint32_t base = 0; base < n; base += COEFF_BATCH) {
+        const uint32_t nb = (n - base < COEFF_BATCH) ? (n - base) : COEFF_BATCH;
+        if (pushed - patched == CULL_DEPTH) {
+            const uint32_t pb = patched * COEFF_BATCH;
+            patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+            ++patched;
+        }
+        cb_reserve_back(CB_COEFF, 1);
+        const uint32_t tile = get_write_ptr(CB_COEFF);
+        for (uint32_t i = 0; i < nb; ++i) {
+            const uint32_t k = base + i;
+            auto src = reinterpret_cast<volatile uint32_t*>(buck + sorted[k] * L1_SPLAT_BYTES);
+            auto dst = reinterpret_cast<volatile uint32_t*>(slab + k * L1_SPLAT_BYTES);
+            auto ct = reinterpret_cast<volatile uint32_t*>(tile) + 192u * (i >> 5) + 2u * (i & 31u);
+            const uint32_t w0 = src[0], w1 = src[1], w2 = src[2];
+            const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+            dst[0] = w0; dst[1] = w1; dst[2] = w2;
+            dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+            ct[0] = w0;
+            ct[1] = w1;
+            ct[64] = w2;
+            ct[65] = OPQ_BIAS | (w6 & 0xffffu);
+            ct[128] = w4;
+            ct[129] = w5;
+        }
+        reinterpret_cast<volatile uint32_t*>(tile)[END_WORD] = 0u;
+        asm volatile("fence" ::: "memory");
+        cb_push_back(CB_COEFF, 1);
+        ++pushed;
+    }
+    while (patched < pushed) {
+        const uint32_t pb = patched * COEFF_BATCH;
+        patch_batch(slab, pb, (n - pb < COEFF_BATCH) ? (n - pb) : COEFF_BATCH);
+        ++patched;
+    }
+    asm volatile("fence" ::: "memory");  // word3 stores reach L1 before the NoC reads the slab
+}
+
+inline void cull_end_stream() {
+    cb_reserve_back(CB_COEFF, 1);
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_COEFF))[END_WORD] = 1u;
+    asm volatile("fence" ::: "memory");
+    cb_push_back(CB_COEFF, 1);
+}
+#if defined(MATCULL_FOLD) && MATCULL_FOLD
+#define PERMUTE_CULL(buck, slab, sorted, n) permute_cull((buck), (slab), (sorted), (n))
+#else
+#define PERMUTE_CULL(buck, slab, sorted, n) \
+    do { permute_records((buck), (slab), (sorted), (n)); cull_slab((slab), (n)); } while (0)
+#endif
+#else
+#define PERMUTE_CULL(buck, slab, sorted, n) permute_records((buck), (slab), (sorted), (n))
+#endif
 
 }  // namespace
 
@@ -101,6 +297,18 @@ void kernel_main() {
     const uint32_t ov_recs_addr   = get_arg_val<uint32_t>(12);  // overflow region (0=off)
     const uint32_t ov_base_addr   = get_arg_val<uint32_t>(13);  // per-tile slot base (0=off)
     const uint32_t ov_cap         = get_arg_val<uint32_t>(14);  // kOverflowL1Cap
+    // In-budget radix index stride = this mover's CB_BSORT record capacity
+    // (bucket_fit on NCRISC, the smaller mover-0 cap on BRISC).
+    const uint32_t idx_stride     = get_arg_val<uint32_t>(15);
+#if defined(SORT_ONELAUNCH) && SORT_ONELAUNCH
+    // Task #106 (GSPLAT_TT_SORT_ONELAUNCH=1): non-zero => this frame's records
+    // are in sort_bin_onelaunch.cpp's fixed-capacity tile buckets (l1_recs
+    // = the bucket buffer, tile t's records from slot t * ol_tile_cap, in the
+    // prefix-sum layout's canonical order). ol_whole_cap = the most records
+    // this mover sorts as a whole tile (its CB_BUCKET / CB_BSORT capacity).
+    const uint32_t ol_tile_cap    = get_arg_val<uint32_t>(16);
+    const uint32_t ol_whole_cap   = get_arg_val<uint32_t>(17);
+#endif
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -117,16 +325,19 @@ void kernel_main() {
     const auto sorted_acc   = TensorAccessor(sorted_args,   sorted_addr,   PAGE_BYTES);
     const auto ranges_acc   = TensorAccessor(ranges_args,   ranges_addr,   PAGE_BYTES);
     const auto blendrec_acc = TensorAccessor(blendrec_args, blendrec_addr, PAGE_BYTES);
-    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  L1_PACK_PAGE_BYTES);
+    const auto l1_recs_acc  = TensorAccessor(l1_recs_args,  l1_recs_addr,  REC_PAGE_BYTES);
     const auto payload_acc  = TensorAccessor(payload_args,  payload_addr,  SLAB_PAGE_BYTES);
     const auto blend_meta_acc = TensorAccessor(blend_meta_args, blend_meta_addr, PAGE_BYTES);
     const auto dir_acc      = TensorAccessor(dir_args,      dir_addr,      PAGE_BYTES);
     const auto work_acc     = TensorAccessor(work_args,     work_addr,     PAGE_BYTES);
     const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
-    const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  L1_PACK_PAGE_BYTES);
+    const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  REC_PAGE_BYTES);
     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
 
     if (work_count == 0) {
+#if defined(FUSE_CULL) && FUSE_CULL
+        cull_end_stream();
+#endif
         return;
     }
 
@@ -136,40 +347,28 @@ void kernel_main() {
     auto idsp = reinterpret_cast<volatile uint32_t*>(ids_scr);
     const uint32_t rec_l1 = get_write_ptr(CB_REC);
     const uint32_t pack_l1 = get_write_ptr(CB_PACK);
+    (void)pack_l1;  // unused when FUSE_CULL gathers into the L1 slab
 
-    constexpr uint32_t MAX_WORK = 1024;
-    // Packed work item: (tile_id << 8) | sc. tile_id < 2^16, sc < 2^8 — fits.
-    uint32_t work_item[MAX_WORK];
-    {
-        // The work buffer is a flat u32 array; this core's items occupy u32
-        // indices [2*work_start, 2*work_start + 2*work_count). Stream the slice
-        // through CB_IDS; even u32 = tile_id, odd = sc, packed into work_item.
-        const uint32_t total_u32 = work_count * 2u;
-        const uint32_t u0 = work_start * 2u;
-        uint32_t page_idx = u0 / ELEMS_PER_PAGE;
-        uint32_t in_page  = u0 % ELEMS_PER_PAGE;
-        uint32_t got = 0;
-        uint32_t pend_tile = 0;
-        while (got < total_u32) {
-            noc_async_read(get_noc_addr(page_idx, work_acc), ids_scr, PAGE_BYTES);
-            noc_async_read_barrier();
-            uint32_t take = ELEMS_PER_PAGE - in_page;
-            if (take > total_u32 - got) take = total_u32 - got;
-            for (uint32_t i = 0; i < take; i++) {
-                const uint32_t gu = got + i;        // u32 offset within this slice
-                const uint32_t val = idsp[in_page + i];
-                if ((gu & 1u) == 0u) pend_tile = val;
-                else work_item[gu >> 1] = (pend_tile << 8) | (val & 0xFFu);
-            }
-            got += take;
-            page_idx += 1;
-            in_page = 0;
-        }
-    }
+    // Radix histograms in local memory (stack), see sort_radix_tile_algo.h.
+    // The work items are no longer copied to a 4 KB stack array (that plus
+    // the 3 KB histograms would not fit the 8 KB local memory): each item is
+    // read from DRAM when it is processed (a few dozen items per core).
+    sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
 
     for (uint32_t wi = 0; wi < work_count; wi++) {
-        const uint32_t tile_id = work_item[wi] >> 8;
-        const uint32_t sc = work_item[wi] & 0xFFu;
+        // The work buffer is a flat u32 array; item i = {tile_id at 2i,
+        // sc | part << 8 at 2i+1}, both in the same 64 B page (2i is even).
+        uint32_t tile_id, sc, part;
+        {
+            MAT_PZ("mat_meta");
+            const uint32_t u = (work_start + wi) * 2u;
+            noc_async_read(get_noc_addr(u / ELEMS_PER_PAGE, work_acc), scr, PAGE_BYTES);
+            noc_async_read_barrier();
+            tile_id = scrp[u % ELEMS_PER_PAGE] & 0xFFFFFFu;
+            const uint32_t w1 = scrp[u % ELEMS_PER_PAGE + 1u];
+            sc = w1 & 0xFFu;
+            part = (w1 >> 8) & 0xFFu;
+        }
         const uint32_t tx = tile_id % tiles_x;
         const uint32_t ty = tile_id / tiles_x;
         const float tx_tile = static_cast<float>(tx * TILE_SIZE);
@@ -177,6 +376,7 @@ void kernel_main() {
 
         uint32_t id_start = 0, id_end = 0;
         {
+            MAT_PZ("mat_meta");
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -204,6 +404,7 @@ void kernel_main() {
 
         uint32_t dir_base = 0;
         {
+            MAT_PZ("mat_meta");
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -211,6 +412,136 @@ void kernel_main() {
             noc_async_read_barrier();
             dir_base = scrp[off];
         }
+
+#if defined(SORT_ONELAUNCH) && SORT_ONELAUNCH
+        if (ol_tile_cap != 0u) {
+            // Task #106: the bucket holds the tile's records in canonical
+            // order, so the stable depth radix gives the legacy output byte
+            // for byte. count <= ol_whole_cap: one item (sc == 0) sorts the
+            // whole tile in L1 and emits every subchunk (== the overflow
+            // pre-pack path below). Bigger tiles (NCRISC only, one item per
+            // subchunk sc, build_mat_worklist onelaunch): keys extracted in
+            // ov_cap-record chunks, index sort, then the item fills its own
+            // subchunk from coalesced chunk re-reads.
+            const uint32_t page0 = tile_id * (ol_tile_cap / REC_PAGE_RECS);
+            const uint32_t buck = get_write_ptr(CB_BUCKET);
+            const uint32_t bs = get_write_ptr(CB_BSORT);
+            const uint32_t slab = get_write_ptr(CB_SLAB);
+            // Ls records of subchunk s from slab page p0 of its payload on.
+            auto emit_slab = [&](uint32_t s, uint32_t Ls, uint32_t p0 = 0u) {
+                uint32_t scp = 0;
+                {
+                    const uint32_t e0 = (dir_base + s) * 4u;
+                    noc_async_read(get_noc_addr(e0 >> 4, dir_acc), scr, PAGE_BYTES);
+                    noc_async_read_barrier();
+                    scp = scrp[e0 & 0xF] + p0;
+                }
+                const uint32_t out_pages = (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+                for (uint32_t p = 0; p < out_pages; ++p) {
+                    const uint32_t recs = (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE
+                                                               : (Ls - p * SLAB_RECS_PER_PAGE);
+                    noc_async_write(slab + p * SLAB_PAGE_BYTES, get_noc_addr(scp + p, payload_acc),
+                                    recs * L1_SPLAT_BYTES);
+                }
+                noc_async_write_barrier();
+            };
+            if (count <= ol_whole_cap) {
+                {
+                    MAT_PZ("mat_ol_rd");
+                    read_bucket(l1_recs_acc, page0, count, buck);
+                }
+                asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
+                uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
+                uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+                const uint32_t* sorted;
+                {
+                    MAT_PZ("mat_ol_sort");
+                    sorted = sort_radix_tile::sort_record_ids(
+                        reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ol_whole_cap,
+                        kB, kB + count, hist);
+                }
+                const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
+                for (uint32_t s = 0; s < num_sc; ++s) {
+                    const uint32_t Ls = (count - s * bucket_fit > bucket_fit)
+                        ? bucket_fit : (count - s * bucket_fit);
+                    {
+                        MAT_PZ("mat_ol_perm");
+                        PERMUTE_CULL(buck, slab, sorted + s * bucket_fit, Ls);
+                    }
+                    MAT_PZ("mat_ol_wr");
+                    emit_slab(s, Ls);
+                }
+                continue;
+            }
+#if MAT_CB_BASE != 0
+            continue;  // BRISC's buffers are too small; build_mat_worklist never does this
+#endif
+            // Big tile: k (keys, then this subchunk's sorted slots) in
+            // CB_BSORT; v / k2 / v2 in CB_BUCKET until the chunk re-reads.
+            const uint32_t N = count;
+            uint32_t* k = reinterpret_cast<uint32_t*>(bs);
+            {
+                MAT_PZ("mat_ol_keys");
+                for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
+                    const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
+                    read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
+                    auto rw = reinterpret_cast<const volatile uint32_t*>(buck);
+                    for (uint32_t i = 0; i < nr; ++i) k[r0 + i] = rw[i * 8u + 3u];
+                }
+            }
+#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
+            // Task #124: the item is part `part` of its subchunk, records
+            // [part * OL_MAT_PART, +OL_MAT_PART) (host kOlMatPartRecs), and
+            // sorts only the keys in the depth bins of those ranks
+            // (sort_onelaunch_algo.h), not the whole tile. Four N u32 arrays
+            // fill CB_BUCKET at N = 32768 (16384 x 32 B).
+            const uint32_t po = part * OL_MAT_PART;
+            if (po >= L_sub) continue;
+            const uint32_t L_item = (L_sub - po > OL_MAT_PART) ? OL_MAT_PART : (L_sub - po);
+            {
+                MAT_PZ("mat_ol_sort");
+                uint32_t* ck = reinterpret_cast<uint32_t*>(buck);
+                sort_ol::select_ranks(k, N, sc_off + po, sc_off + po + L_item, ck, ck + N,
+                                      ck + 2u * N, ck + 3u * N, k, hist);
+            }
+#else
+            const uint32_t po = 0u;
+            const uint32_t L_item = L_sub;
+            uint32_t* v = reinterpret_cast<uint32_t*>(buck);
+            uint32_t* k2 = v + N;
+            uint32_t* v2 = k2 + N;
+            for (uint32_t i = 0; i < N; ++i) v[i] = i;
+            {
+                MAT_PZ("mat_ol_sort");
+                const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
+                for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
+            }
+#endif
+            {
+                MAT_PZ("mat_ol_gather");
+                for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
+                    const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
+                    read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
+                    for (uint32_t i = 0; i < L_item; ++i) {
+                        const uint32_t off = k[i] - r0;
+                        if (off >= nr) continue;
+                        auto src = reinterpret_cast<volatile uint32_t*>(buck + off * L1_SPLAT_BYTES);
+                        auto dst = reinterpret_cast<volatile uint32_t*>(slab + i * L1_SPLAT_BYTES);
+                        const uint32_t w0 = src[0], w1 = src[1], w2 = src[2], w3 = src[3];
+                        const uint32_t w4 = src[4], w5 = src[5], w6 = src[6], w7 = src[7];
+                        dst[0] = w0; dst[1] = w1; dst[2] = w2; dst[3] = w3;
+                        dst[4] = w4; dst[5] = w5; dst[6] = w6; dst[7] = w7;
+                    }
+                }
+            }
+#if defined(FUSE_CULL) && FUSE_CULL
+            cull_slab(slab, L_item);
+#endif
+            MAT_PZ("mat_ol_wr");
+            emit_slab(sc, L_item, po / SLAB_RECS_PER_PAGE);
+            continue;
+        }
+#endif
 
         // iter-138: in-cap overflow tile pre-pack path. The whole tile's records
         // are pre-packed (gaussian/core-major, identical to buf_l1_recs) in the
@@ -222,6 +553,7 @@ void kernel_main() {
         if (ov_enabled && count > bucket_fit && count <= ov_cap) {
             uint32_t ov_base = 0xFFFFFFFFu;
             {
+                MAT_PZ("mat_meta");
                 const uint32_t e0 = tile_id;  // 1 u32 per tile
                 const uint32_t pg = e0 >> 4;
                 const uint32_t off = e0 & 0xF;
@@ -230,61 +562,38 @@ void kernel_main() {
                 ov_base = scrp[off];
             }
             if (ov_base != 0xFFFFFFFFu) {
-                // Coalesced read of the whole overflow bucket (PACK2 64B pages).
-                const uint32_t npages = (count + 1u) >> 1;
+                // Coalesced read of the whole overflow bucket (2 KB pages;
+                // ov_base is page-aligned).
                 const uint32_t buck = get_write_ptr(CB_BUCKET);
                 {
-                    const uint32_t page0 = ov_base >> 1;  // ov_base is even-aligned
-                    uint32_t pp = 0;
-                    while (pp < npages) {
-                        const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
-                        for (uint32_t q = pp; q < end; ++q) {
-                            noc_async_read_tile(
-                                page0 + q, ov_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
-                        }
-                        noc_async_read_barrier();
-                        pp = end;
-                    }
+                    MAT_PZ("mat_ov_rd");
+                    read_bucket(ov_recs_acc, ov_base / REC_PAGE_RECS, count, buck);
                 }
-                // Stable LSD radix sort over ALL `count` records by key word[3].
+                // Stable sort of ALL `count` records by key word[3] (adaptive
+                // radix, sort_radix_tile_algo.h). Keys/ids in CB_BSORT; the
+                // ping-pong pair borrows CB_SLAB (2*count u32 <= count*32 B),
+                // which is only written after the sort.
+                asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
                 const uint32_t bs = get_write_ptr(CB_BSORT);
-                uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-                uint32_t* idxB = idxA + ov_cap;
-                uint32_t* cnt  = idxB + ov_cap;
-                for (uint32_t i = 0; i < count; ++i) idxA[i] = i;
-                uint32_t* cur = idxA;
-                uint32_t* nxt = idxB;
-                for (uint32_t byte = 0; byte < 4u; ++byte) {
-                    const uint32_t shift = byte * 8u;
-                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
-                    for (uint32_t i = 0; i < count; ++i) {
-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
-                    }
-                    uint32_t sum = 0;
-                    for (uint32_t c = 0; c < 256u; ++c) {
-                        const uint32_t t = cnt[c];
-                        cnt[c] = sum;
-                        sum += t;
-                    }
-                    for (uint32_t i = 0; i < count; ++i) {
-                        const uint32_t b =
-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
-                        nxt[cnt[b]++] = cur[i];
-                    }
-                    uint32_t* tp = cur;
-                    cur = nxt;
-                    nxt = tp;
+                const uint32_t slab = get_write_ptr(CB_SLAB);
+                uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
+                uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+                const uint32_t* sorted;
+                {
+                    MAT_PZ("mat_ov_sort");
+                    sorted = sort_radix_tile::sort_record_ids(
+                        reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ov_cap,
+                        kB, kB + count, hist);
                 }
-                uint32_t* sorted = cur;
                 // Emit each subchunk's depth-sorted slab to its directory page run.
                 const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
-                const uint32_t slab = get_write_ptr(CB_SLAB);
                 for (uint32_t s = 0; s < num_sc; ++s) {
                     const uint32_t sc_off2 = s * bucket_fit;
                     const uint32_t Ls = (count - sc_off2 > bucket_fit)
                         ? bucket_fit : (count - sc_off2);
                     uint32_t scp = 0;
                     {
+                        MAT_PZ("mat_meta");
                         const uint32_t e0 = (dir_base + s) * 4u;
                         const uint32_t pg = e0 >> 4;
                         const uint32_t off = e0 & 0xF;
@@ -292,17 +601,11 @@ void kernel_main() {
                         noc_async_read_barrier();
                         scp = scrp[off];
                     }
-                    for (uint32_t k = 0; k < Ls; ++k) {
-                        const uint32_t idx = sorted[sc_off2 + k];
-                        const uint32_t src_page = (idx >> 1);
-                        const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                        auto src = reinterpret_cast<volatile uint32_t*>(
-                            buck + src_page * L1_PACK_PAGE_BYTES + src_half);
-                        auto dst = reinterpret_cast<volatile uint32_t*>(
-                            slab + k * L1_SPLAT_BYTES);
-                        dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-                        dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+                    {
+                        MAT_PZ("mat_ov_perm");
+                        PERMUTE_CULL(buck, slab, sorted + sc_off2, Ls);
                     }
+                    MAT_PZ("mat_ov_wr");
                     const uint32_t out_pages =
                         (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
                     for (uint32_t p = 0; p < out_pages; ++p) {
@@ -323,6 +626,7 @@ void kernel_main() {
         // C1b: page index must match sort_subchunk_dir (same field blend reader DMAs).
         uint32_t sc_page = 0;
         {
+            MAT_PZ("mat_meta");
             const uint32_t e0 = (dir_base + sc) * 4u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -335,81 +639,33 @@ void kernel_main() {
         // falls through to sorted_ids gather (iter 83: L1 slot order != masks).
         if (sc == 0u && L_sub <= bucket_fit && count <= bucket_fit) {
             const uint32_t L = L_sub;
-            const uint32_t npages = (L + 1u) >> 1;
             const uint32_t buck = get_write_ptr(CB_BUCKET);
             {
-                const uint32_t page0 = tile_id * (bucket_fit >> 1);
-                uint32_t pp = 0;
-                while (pp < npages) {
-                    const uint32_t end = (pp + 64u < npages) ? pp + 64u : npages;
-                    for (uint32_t q = pp; q < end; ++q) {
-                        noc_async_read_tile(
-                            page0 + q, l1_recs_acc, buck + q * L1_PACK_PAGE_BYTES);
-                    }
-                    noc_async_read_barrier();
-                    pp = end;
-                }
+                MAT_PZ("mat_rd");
+                read_bucket(l1_recs_acc, tile_id * (bucket_fit / REC_PAGE_RECS), L, buck);
             }
+            // Stable sort by key word[3] (adaptive radix, histograms in local
+            // memory; see the overflow path above for the scratch layout).
+            asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
             const uint32_t bs = get_write_ptr(CB_BSORT);
-            uint32_t* idxA = reinterpret_cast<uint32_t*>(bs);
-            uint32_t* idxB = idxA + bucket_fit;
-            uint32_t* cnt  = idxB + bucket_fit;
-            uint32_t* sorted;
-            if (L <= 16u) {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                for (uint32_t i = 1; i < L; ++i) {
-                    const uint32_t tmp = idxA[i];
-                    const uint32_t ki = l1_splat_words(buck, tmp)[3];
-                    uint32_t j = i;
-                    while (j > 0 && l1_splat_words(buck, idxA[j - 1])[3] > ki) {
-                        idxA[j] = idxA[j - 1];
-                        --j;
-                    }
-                    idxA[j] = tmp;
-                }
-                sorted = idxA;
-            } else {
-                for (uint32_t i = 0; i < L; ++i) idxA[i] = i;
-                uint32_t* cur = idxA;
-                uint32_t* nxt = idxB;
-                for (uint32_t byte = 0; byte < 4u; ++byte) {
-                    const uint32_t shift = byte * 8u;
-                    for (uint32_t c = 0; c < 256u; ++c) cnt[c] = 0;
-                    for (uint32_t i = 0; i < L; ++i) {
-                        cnt[(l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu]++;
-                    }
-                    uint32_t sum = 0;
-                    for (uint32_t c = 0; c < 256u; ++c) {
-                        const uint32_t t = cnt[c];
-                        cnt[c] = sum;
-                        sum += t;
-                    }
-                    for (uint32_t i = 0; i < L; ++i) {
-                        const uint32_t b =
-                            (l1_splat_words(buck, cur[i])[3] >> shift) & 0xFFu;
-                        nxt[cnt[b]++] = cur[i];
-                    }
-                    uint32_t* t = cur;
-                    cur = nxt;
-                    nxt = t;
-                }
-                sorted = cur;
+            const uint32_t slab = get_write_ptr(CB_SLAB);
+            uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
+            uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+            const uint32_t* sorted;
+            {
+                MAT_PZ("mat_sort");
+                sorted = sort_radix_tile::sort_record_ids(
+                    reinterpret_cast<volatile uint32_t*>(buck), L, kA, kA + idx_stride,
+                    kB, kB + L, hist);
             }
             // Stage 1: apply the radix permutation L1->L1 into a contiguous
             // slab scratch (output order), then emit the depth-sorted slab in
             // coalesced SLAB_PAGE_BYTES page writes (no per-record DRAM scatter).
-            const uint32_t slab = get_write_ptr(CB_SLAB);
-            for (uint32_t k = 0; k < L; ++k) {
-                const uint32_t idx = sorted[k];
-                const uint32_t src_page = (idx >> 1);
-                const uint32_t src_half = (idx & 1u) * L1_SPLAT_BYTES;
-                auto src = reinterpret_cast<volatile uint32_t*>(
-                    buck + src_page * L1_PACK_PAGE_BYTES + src_half);
-                auto dst = reinterpret_cast<volatile uint32_t*>(
-                    slab + k * L1_SPLAT_BYTES);
-                dst[0] = src[0]; dst[1] = src[1]; dst[2] = src[2]; dst[3] = src[3];
-                dst[4] = src[4]; dst[5] = src[5]; dst[6] = src[6]; dst[7] = src[7];
+            {
+                MAT_PZ("mat_perm");
+                PERMUTE_CULL(buck, slab, sorted, L);
             }
+            MAT_PZ("mat_wr");
             const uint32_t out_pages =
                 (L + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             for (uint32_t p = 0; p < out_pages; ++p) {
@@ -427,11 +683,22 @@ void kernel_main() {
 
         // sc>=1 / overflow sc==0: batched blendrec gather (iter 76: REC_BATCH=32,
         // per-slot PACK2, one write barrier per batch; reuse sorted-id page).
+        MAT_PZ("mat_gather");
         const uint32_t id_start_sc = id_start + sc_off;
-        uint32_t processed = 0;
+        uint32_t processed = part * GATHER_PART_RECS;
+        const uint32_t part_end = (L_sub - processed > GATHER_PART_RECS)
+            ? processed + GATHER_PART_RECS : L_sub;
         uint32_t nbrec = 0;
         uint32_t brec_out_g[REC_BATCH];
         int32_t sorted_id_page_cached = -1;
+#if defined(FUSE_CULL) && FUSE_CULL
+        // Task #90: gather the part into the L1 slab (record out_g - part_start
+        // at slab + 32 * (out_g - part_start)), cull it, then write it in
+        // SLAB_PAGE_BYTES pages (part_start is a multiple of GATHER_PART_RECS,
+        // so the part starts on a payload page).
+        const uint32_t part_start = processed;
+        const uint32_t gslab = get_write_ptr(CB_SLAB);
+#endif
         auto flush_brec_batch = [&]() {
             if (nbrec == 0) return;
             noc_async_read_barrier();
@@ -440,17 +707,29 @@ void kernel_main() {
                 auto aos = reinterpret_cast<volatile uint32_t*>(slot);
                 // Pack into CB_PACK (not slot+32): blendrec aos[8]/aos[9] live in
                 // the upper 32B of the 64B page and overlap PACK2 splat[0..1].
+#if defined(FUSE_CULL) && FUSE_CULL
+                auto splat = reinterpret_cast<volatile uint32_t*>(
+                    gslab + (brec_out_g[b] - part_start) * L1_SPLAT_BYTES);
+#else
                 auto splat = reinterpret_cast<volatile uint32_t*>(pack_l1);
-                float mx = bits_to_f(aos[3]);
-                float my = bits_to_f(aos[4]);
-                mx -= tx_tile;
-                my -= ty_tile;
-                splat[0] = aos[0];
-                splat[1] = aos[1];
-                splat[2] = aos[2];
-                splat[3] = aos[9];
-                splat[4] = f_to_bits(mx);
-                splat[5] = f_to_bits(my);
+#endif
+                // Tile-local mean fl(m - tile origin) via the integer sub_int
+                // (bit-exact, no __subsf3 on NCRISC); float only outside its range.
+                // Load every needed word before the first store (see
+                // permute_records).
+                const uint32_t a0 = aos[0], a1 = aos[1], a2 = aos[2], a3 = aos[3];
+                const uint32_t a4 = aos[4], a9 = aos[9], a10 = aos[10], a11 = aos[11];
+                uint32_t mxb, myb;
+                if (!sort_bin_fp32::sub_int(a3, tx * TILE_SIZE, &mxb))
+                    mxb = f_to_bits(bits_to_f(a3) - tx_tile);
+                if (!sort_bin_fp32::sub_int(a4, ty * TILE_SIZE, &myb))
+                    myb = f_to_bits(bits_to_f(a4) - ty_tile);
+                splat[0] = a0;
+                splat[1] = a1;
+                splat[2] = a2;
+                splat[3] = a9;
+                splat[4] = mxb;
+                splat[5] = myb;
                 // iter 132: op/color UNORM16 are packed ONCE per gaussian on the
                 // NCRISC side (sort_bin pack_invariants) and published into
                 // blendrec[10],[11] (via a full-64B page write-back); this depth-
@@ -460,8 +739,9 @@ void kernel_main() {
                 // rounding). iter-131 ablation MEASURED the re-pack at ~5.3 ms/view
                 // busiest-core (frame BRISC-FW -7.1) — the dominant overflow-gather
                 // cost, now eliminated off the long pole.
-                splat[6] = aos[10];
-                splat[7] = aos[11];
+                splat[6] = a10;
+                splat[7] = a11;
+#if !(defined(FUSE_CULL) && FUSE_CULL)
                 const uint32_t out_g = brec_out_g[b];
                 const uint32_t out_page = sc_page + (out_g / SLAB_RECS_PER_PAGE);
                 const uint32_t out_off = (out_g % SLAB_RECS_PER_PAGE) * L1_SPLAT_BYTES;
@@ -469,11 +749,14 @@ void kernel_main() {
                     pack_l1,
                     get_noc_addr(out_page, payload_acc) + out_off,
                     L1_SPLAT_BYTES);
+#endif
             }
+#if !(defined(FUSE_CULL) && FUSE_CULL)
             noc_async_write_barrier();
+#endif
             nbrec = 0;
         };
-        while (processed < L_sub) {
+        while (processed < part_end) {
             const uint32_t global_idx = id_start_sc + processed;
             const uint32_t id_page = global_idx >> 4;
             const uint32_t id_ip = global_idx & 0xF;
@@ -483,7 +766,7 @@ void kernel_main() {
                 sorted_id_page_cached = static_cast<int32_t>(id_page);
             }
             uint32_t take = ELEMS_PER_PAGE - id_ip;
-            if (take > L_sub - processed) take = L_sub - processed;
+            if (take > part_end - processed) take = part_end - processed;
             for (uint32_t j = 0; j < take; ++j) {
                 const uint32_t gid = idsp[id_ip + j];
                 const uint32_t slot = rec_l1 + nbrec * PAGE_BYTES;
@@ -495,5 +778,23 @@ void kernel_main() {
             processed += take;
         }
         flush_brec_batch();
+#if defined(FUSE_CULL) && FUSE_CULL
+        {
+            const uint32_t n = part_end - part_start;
+            cull_slab(gslab, n);
+            const uint32_t page0 = sc_page + part_start / SLAB_RECS_PER_PAGE;
+            const uint32_t out_pages = (n + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+            for (uint32_t p = 0; p < out_pages; ++p) {
+                const uint32_t recs = (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE
+                                                           : (n - p * SLAB_RECS_PER_PAGE);
+                noc_async_write(gslab + p * SLAB_PAGE_BYTES,
+                                get_noc_addr(page0 + p, payload_acc), recs * L1_SPLAT_BYTES);
+            }
+            noc_async_write_barrier();
+        }
+#endif
     }
+#if defined(FUSE_CULL) && FUSE_CULL
+    cull_end_stream();
+#endif
 }

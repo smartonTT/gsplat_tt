@@ -1,0 +1,248 @@
+diff --git a/render/host/sort_device.cpp b/render/host/sort_device.cpp
+index 4e69557..31bae81 100644
+--- a/render/host/sort_device.cpp
++++ b/render/host/sort_device.cpp
+@@ -1635,41 +1635,45 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+     }
+ 
+     try {
+-        // Read full P + P_pad published by tile_assign.
+-        std::vector<uint32_t> pbuf(ELEMS_PER_PAGE);
+-        distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
+-        T.pread_ms =
+-            std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
+-        const uint32_t P_full = pbuf[0];
+-        const uint32_t P_pad = pbuf[1];
+-        // S5.3 host-free overflow guard: tile_assign's scan_bases CLAMPS the
+-        // published P (pbuf[0]) to the static pair ceiling so neither it nor K2
+-        // ever indexes past the p_max-sized pair buffers (no silent memory
+-        // corruption). pbuf[2]=overflow / pbuf[3]=P_true surface a too-small
+-        // ceiling here — the one place that would read OOB — as a hard fail
+-        // (render_clean is single-path TT, no fallback). This reuses the P read
+-        // already on this path, so it adds no new mid-frame drain.
+-        const uint32_t p_overflow = pbuf[2];
+-        const uint32_t P_true = pbuf[3];
+-        if (p_overflow != 0) {
+-            std::cerr << "[gsplat_tt::sort] PAIR-CEILING OVERFLOW: pre-cull P_true="
+-                      << P_true << " exceeds the static pair_ceiling()=" << P_full
+-                      << " — pairs were clamped (output would be corrupt). Raise "
+-                         "env_config::pair_ceiling() above " << P_true
+-                      << " and rebuild. Hard fail (single-path TT, no fallback).\n";
+-            return fail();
+-        }
+-        if (P_full == 0) {
+-            publish_resident(ctx, result.sorted_gaussian_ids, result.tile_ranges, &T.publish_ms);
+-            if (device_ok) *device_ok = true;
+-            return result;
+-        }
++        // Read full P + P_pad published by tile_assign. t31: this read is now
++        // done AFTER the count pass is enqueued (read_pairs_P below), so the
++        // count pass chains behind tile_assign's K2 on the in-order CQ with no
++        // host drain between them (tile_assign no longer Finishes after K2).
++        // The count pass derives its own page split from the same ctrl page.
++        uint32_t P_full = 0;
++        uint32_t P_pad = 0;
++        auto read_pairs_P = [&]() -> bool {
++            const auto t_p0 = clk::now();
++            std::vector<uint32_t> pbuf(ELEMS_PER_PAGE);
++            distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
++            T.pread_ms =
++                std::chrono::duration<double, std::milli>(clk::now() - t_p0).count();
++            P_full = pbuf[0];
++            P_pad = pbuf[1];
++            // S5.3 host-free overflow guard: tile_assign's scan_bases CLAMPS the
++            // published P (pbuf[0]) to the static pair ceiling so neither it nor K2
++            // ever indexes past the p_max-sized pair buffers (no silent memory
++            // corruption). pbuf[2]=overflow / pbuf[3]=P_true surface a too-small
++            // ceiling here — the one place that would read OOB — as a hard fail
++            // (render_clean is single-path TT, no fallback).
++            const uint32_t p_overflow = pbuf[2];
++            const uint32_t P_true = pbuf[3];
++            if (p_overflow != 0) {
++                std::cerr << "[gsplat_tt::sort] PAIR-CEILING OVERFLOW: pre-cull P_true="
++                          << P_true << " exceeds the static pair_ceiling()=" << P_full
++                          << " — pairs were clamped (output would be corrupt). Raise "
++                             "env_config::pair_ceiling() above " << P_true
++                          << " and rebuild. Hard fail (single-path TT, no fallback).\n";
++                return false;
++            }
++            return true;
++        };
+ 
+         const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
+         const uint32_t dump_tile = 0;
+         const uint32_t stride = round_up(num_tiles, ELEMS_PER_PAGE);
+-        const uint32_t total_p_pages = P_pad / ELEMS_PER_PAGE;
+-        const PageSplit ws = split_pages(total_p_pages, num_cores);
++        // Filled from the ctrl page after the count pass (see read_pairs_P).
++        PageSplit ws;
+ 
+         // ── bin2d (per-core hist / base rows) ───────────────────────────
+         const std::size_t bin2d_bytes =
+@@ -1798,16 +1802,21 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+         // cursors start exactly where the single-mover pass would have them.
+         const bool dual_emit =
+             sort_emit_movers() == 2 && hist_rows && tile_bucket && l1_record_early;
++        // Same formula as the count pass's on-device split (sort_bin.cpp, arg 30).
+         std::vector<uint32_t> mover_mid(num_cores);
+-        for (uint32_t c = 0; c < num_cores; c++) {
+-            mover_mid[c] = ws.start[c] + static_cast<uint32_t>(
+-                static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
+-            if (mover_mid[c] < ws.start[c] || mover_mid[c] > ws.start[c] + ws.count[c]) {
+-                std::cerr << "[gsplat_tt::sort] emit mover split outside core " << c
+-                          << "'s page range — hard fail\n";
+-                return fail();
++        auto split_work = [&]() -> bool {
++            ws = split_pages(P_pad / ELEMS_PER_PAGE, num_cores);
++            for (uint32_t c = 0; c < num_cores; c++) {
++                mover_mid[c] = ws.start[c] + static_cast<uint32_t>(
++                    static_cast<uint64_t>(ws.count[c]) * sort_emit_split_permille() / 1000u);
++                if (mover_mid[c] < ws.start[c] || mover_mid[c] > ws.start[c] + ws.count[c]) {
++                    std::cerr << "[gsplat_tt::sort] emit mover split outside core " << c
++                              << "'s page range — hard fail\n";
++                    return false;
++                }
+             }
+-        }
++            return true;
++        };
+ 
+         // ── Pass A: per-core histogram (count) ──────────────────────────
+         const auto t_bin0 = clk::now();
+@@ -1827,7 +1836,9 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+                     static_cast<uint32_t>(row_buf->address()),
+                     ctx->buf_keys ? static_cast<uint32_t>(ctx->buf_keys->address()) : 0u,
+                     ctx->buf_ids ? static_cast<uint32_t>(ctx->buf_ids->address()) : 0u,
+-                    ws.start[c], ws.count[c], P_full, num_tiles, stride, c, mode,
++                    // Mode 0 derives page range / P / mid on-device (arg 30).
++                    mode == 0 ? 0u : ws.start[c], mode == 0 ? 0u : ws.count[c],
++                    mode == 0 ? 0u : P_full, num_tiles, stride, c, mode,
+                     dump_tile,
+                 };
+                 if (tile_bucket) {
+@@ -1848,15 +1859,20 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+                 }
+                 // T-C args 24..29: mover, dual, h0 rows, mid, own / peer semaphore.
+                 args.resize(24, 0u);
+-                const uint32_t lo = ws.start[c];
+-                const uint32_t hi = ws.start[c] + ws.count[c];
+-                const uint32_t mid = mover_mid[c];
++                const uint32_t lo = mode == 0 ? 0u : ws.start[c];
++                const uint32_t hi = mode == 0 ? 0u : ws.start[c] + ws.count[c];
++                const uint32_t mid = mode == 0 ? 0u : mover_mid[c];
+                 const uint32_t h0_addr = static_cast<uint32_t>(ctx->buf_bin_h0->address());
+                 std::vector<uint32_t> args0 = args;  // BRISC (mover 0)
++                // t31 args 30..32: ta_pairs_P ctrl page (count pass only; 0 =>
++                // use args 7/8/9/27), num_cores, emit split permille.
++                const uint32_t pctrl = mode == 0 ? static_cast<uint32_t>(bP->address()) : 0u;
+                 args.insert(args.end(), {1u, dual_emit ? 1u : 0u, h0_addr, mid,
+-                                         ctx->bin_sem[1], ctx->bin_sem[0]});
++                                         ctx->bin_sem[1], ctx->bin_sem[0],
++                                         pctrl, num_cores, sort_emit_split_permille()});
+                 args0.insert(args0.end(), {0u, dual_emit ? 1u : 0u, h0_addr, mid,
+-                                           ctx->bin_sem[0], ctx->bin_sem[1]});
++                                           ctx->bin_sem[0], ctx->bin_sem[1],
++                                           pctrl, num_cores, sort_emit_split_permille()});
+                 if (mode == 1 && dual_emit) {
+                     args0[7] = lo;
+                     args0[8] = mid - lo;
+@@ -1877,8 +1893,16 @@ static gsplat_cpu::SortResult sort_resident_pairs(
+             }
+         };
+         launch_bin(0, !device_layout);
++        if (!read_pairs_P()) return fail();
++        if (P_full == 0) {
++            publish_resident(ctx, result.sorted_gaussian_ids, result.tile_ranges, &T.publish_ms);
++            if (device_ok) *device_ok = true;
++            return result;
++        }
++        if (!split_work()) return fail();
+         const auto t_cnt = clk::now();
+-        T.bin_count_ms = std::chrono::duration<double, std::milli>(t_cnt - t_bin0).count();
++        T.bin_count_ms =
++            std::chrono::duration<double, std::milli>(t_cnt - t_bin0).count() - T.pread_ms;
+ 
+         std::vector<int64_t> counts(num_tiles, 0);
+         std::vector<int64_t> starts(num_tiles, 0);
+diff --git a/render/host/tile_assign_device.cpp b/render/host/tile_assign_device.cpp
+index 653ad61..1be649e 100644
+--- a/render/host/tile_assign_device.cpp
++++ b/render/host/tile_assign_device.cpp
+@@ -887,8 +887,19 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
+             }
+         } else {
+             // scan2 + K2 on one in-order CQ — single Finish (drops scan2-only drain).
+-            GSPLAT_HOST_ZONE("host_finish_ta_k2");
+-            distributed::Finish(*ctx->cq);
++            // t31: in the production resident-pairs, no-cull path nothing below
++            // needs K2's output on the host, so skip the drain: sort's count
++            // pass reads P on-device and chains behind K2 on the same CQ. The
++            // Finish here returned ~1.2 ms after K2's last core finished, with
++            // every core idle (docs/inter-program-gaps-2026-09-30.md). k2_ms is
++            // then enqueue-only; the K2 device time lands in sort's bin_count.
++            const bool chain_to_sort = device_scan && ta_no_cull && resident_pairs &&
++                                       resident_in && static_cast<bool>(res_op) &&
++                                       !ta_timing;
++            if (!chain_to_sort) {
++                GSPLAT_HOST_ZONE("host_finish_ta_k2");
++                distributed::Finish(*ctx->cq);
++            }
+             const auto t_k2_1 = clk::now();
+             T.k2_ms = std::chrono::duration<double, std::milli>(t_k2_1 - t_k2_0).count();
+             if (device_scan) {
+diff --git a/render/kernels/dataflow/sort_bin.cpp b/render/kernels/dataflow/sort_bin.cpp
+index 47b3c54..abd8f49 100644
+--- a/render/kernels/dataflow/sort_bin.cpp
++++ b/render/kernels/dataflow/sort_bin.cpp
+@@ -106,9 +106,9 @@ void kernel_main() {
+     const uint32_t bin2d_addr  = get_arg_val<uint32_t>(4);
+     const uint32_t keys_addr   = get_arg_val<uint32_t>(5);
+     const uint32_t ids_addr    = get_arg_val<uint32_t>(6);
+-    const uint32_t page_start  = get_arg_val<uint32_t>(7);
+-    const uint32_t page_count  = get_arg_val<uint32_t>(8);
+-    const uint32_t P           = get_arg_val<uint32_t>(9);
++    uint32_t page_start        = get_arg_val<uint32_t>(7);
++    uint32_t page_count        = get_arg_val<uint32_t>(8);
++    uint32_t P                 = get_arg_val<uint32_t>(9);
+     const uint32_t num_tiles   = get_arg_val<uint32_t>(10);
+     const uint32_t stride      = get_arg_val<uint32_t>(11);
+     const uint32_t core_id     = get_arg_val<uint32_t>(12);
+@@ -152,7 +152,7 @@ void kernel_main() {
+     const uint32_t mover        = get_arg_val<uint32_t>(24);
+     const bool dual             = get_arg_val<uint32_t>(25) != 0u;
+     const uint32_t h0_rows_addr = get_arg_val<uint32_t>(26);
+-    const uint32_t pg_mid       = get_arg_val<uint32_t>(27);
++    uint32_t pg_mid             = get_arg_val<uint32_t>(27);
+     const uint32_t sem_own_id   = get_arg_val<uint32_t>(28);
+     const uint32_t sem_peer_id  = get_arg_val<uint32_t>(29);
+     // BRISC has no count work, and no scatter work unless the split is on.
+@@ -246,6 +246,29 @@ void kernel_main() {
+     auto depp  = reinterpret_cast<volatile uint32_t*>(dep_l1);
+     auto rowp  = reinterpret_cast<volatile uint32_t*>(row_l1);
+ 
++    // t31: count pass chained behind tile_assign K2 with no host drain. The host
++    // has not read P yet, so args 7/8/9/27 are placeholders: read P and P_pad
++    // from the resident ta_pairs_P ctrl page (arg 30) and derive this core's
++    // page range and mover split with the host's split_pages / mover_mid
++    // formulas (args 31 = num_cores, 32 = split permille). The emit pass gets
++    // the same values from the host, computed from the same ctrl page.
++    const uint32_t pctrl_addr = get_arg_val<uint32_t>(30);
++    if (mode == 0 && pctrl_addr != 0u) {
++        const uint32_t ncores = get_arg_val<uint32_t>(31);
++        const uint32_t permille = get_arg_val<uint32_t>(32);
++        const InterleavedAddrGen<true> pctrl_gen{pctrl_addr, PAGE_BYTES};
++        noc_async_read(get_noc_addr(0, pctrl_gen), row_l1, PAGE_BYTES);
++        noc_async_read_barrier();
++        P = rowp[0];
++        const uint32_t pages = rowp[1] / ELEMS_PER_PAGE;
++        const uint32_t base = pages / ncores;
++        const uint32_t rem = pages % ncores;
++        page_start = core_id * base + (core_id < rem ? core_id : rem);
++        page_count = base + (core_id < rem ? 1u : 0u);
++        pg_mid = page_start + static_cast<uint32_t>(
++            static_cast<uint64_t>(page_count) * permille / 1000u);
++    }
++
+     const uint32_t row_pages = (num_tiles + ELEMS_PER_PAGE - 1) / ELEMS_PER_PAGE;
+     const uint32_t base_page = core_id * (stride / ELEMS_PER_PAGE);
+     const uint32_t pg_lo = page_start;

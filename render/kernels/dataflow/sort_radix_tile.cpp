@@ -7,12 +7,13 @@
 // One data-movement kernel (scalar C++ on a RISC core), mirroring the
 // gsplat_tt convention of doing integer/scalar "compute" inside a dataflow
 // kernel (see tile_assign_bbox / tile_assign_scatter). It reproduces
-// gsplat_cpu::sort.cpp Pass 3 (the per-tile sort) EXACTLY:
-//   - n <= 16  -> stable insertion sort
-//   - else     -> 4 x 8-bit STABLE LSD radix on the uint32 depth_bits key
+// gsplat_cpu::sort.cpp Pass 3 (the per-tile sort) EXACTLY: a stable sort on the
+// uint32 depth_bits key (n <= 16: insertion sort; else the adaptive LSD radix
+// of sort_radix_tile_algo.h, R11: digits sized to the tile's key range and n).
 // The (key, id) pair is moved together; only the depth_bits key drives order.
 //
-// Each core processes an LPT-assigned slice of NON-EMPTY tiles. Tiles live in
+// Each core processes an LPT-assigned slice of NON-EMPTY tiles, split between
+// its two data movers (NCRISC a prefix, BRISC the rest). Tiles live in
 // a PAGE-ALIGNED DRAM layout (each tile owns ceil(n/16) exclusive 64B pages),
 // so every read/write is a whole page exclusive to one tile — no cross-tile
 // page sharing, no write races. The host compacts the aligned segments back
@@ -32,6 +33,7 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "sort_radix_tile_algo.h"
 
 namespace {
 
@@ -40,12 +42,17 @@ constexpr uint32_t ELEMS_PER_PAGE = 16;
 
 // L1 scratch CB ids (declared in sort_device.cpp). Used as fixed scratch
 // regions via get_write_ptr (no cb_reserve/push).
-constexpr uint32_t CB_KIN  = 0;   // keys ping
-constexpr uint32_t CB_IIN  = 1;   // ids  ping
-constexpr uint32_t CB_KOUT = 2;   // keys pong
-constexpr uint32_t CB_IOUT = 3;   // ids  pong
-constexpr uint32_t CB_TIDS = 4;   // tile-id list scratch (one page)
-constexpr uint32_t CB_META = 5;   // tmeta scratch (one page)
+// Dual mover: BRISC runs this kernel too, on its own copies of every CB at
+// id + 16 (RADIX_CB_BASE), over the other part of its core's tile slice.
+#ifndef RADIX_CB_BASE
+#define RADIX_CB_BASE 0
+#endif
+constexpr uint32_t CB_KIN  = RADIX_CB_BASE + 0;   // keys ping
+constexpr uint32_t CB_IIN  = RADIX_CB_BASE + 1;   // ids  ping
+constexpr uint32_t CB_KOUT = RADIX_CB_BASE + 2;   // keys pong
+constexpr uint32_t CB_IOUT = RADIX_CB_BASE + 3;   // ids  pong
+constexpr uint32_t CB_TIDS = RADIX_CB_BASE + 4;   // tile-id list scratch (one page)
+constexpr uint32_t CB_META = RADIX_CB_BASE + 5;   // tmeta scratch (one page)
 
 }  // namespace
 
@@ -83,10 +90,12 @@ void kernel_main() {
     const uint32_t kout_l1 = get_write_ptr(CB_KOUT);
     const uint32_t iout_l1 = get_write_ptr(CB_IOUT);
 
-    auto kin  = reinterpret_cast<volatile uint32_t*>(kin_l1);
-    auto iin  = reinterpret_cast<volatile uint32_t*>(iin_l1);
-    auto kout = reinterpret_cast<volatile uint32_t*>(kout_l1);
-    auto iout = reinterpret_cast<volatile uint32_t*>(iout_l1);
+    auto kin  = reinterpret_cast<uint32_t*>(kin_l1);
+    auto iin  = reinterpret_cast<uint32_t*>(iin_l1);
+    auto kout = reinterpret_cast<uint32_t*>(kout_l1);
+    auto iout = reinterpret_cast<uint32_t*>(iout_l1);
+    // Radix histograms in local memory (stack), see sort_radix_tile_algo.h.
+    sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
 
     const uint32_t meta_scratch = get_write_ptr(CB_META);
     auto meta_ptr = reinterpret_cast<volatile uint32_t*>(meta_scratch);
@@ -125,55 +134,22 @@ void kernel_main() {
         }
         noc_async_read_barrier();
 
+        // The NoC wrote kin/iin behind the compiler's back: stop it hoisting
+        // the plain loads below above the barrier.
+        asm volatile("" ::: "memory");
+
         // ── Pass 3: per-tile stable sort on the depth_bits key ──────────
-        if (n <= 16) {
-            // Stable insertion sort (matches gsplat_cpu radix_sort_tile n<=16).
-            for (uint32_t i = 1; i < n; i++) {
-                const uint32_t k = kin[i];
-                const uint32_t v = iin[i];
-                uint32_t j = i;
-                while (j > 0 && kin[j - 1] > k) {
-                    kin[j] = kin[j - 1];
-                    iin[j] = iin[j - 1];
-                    --j;
-                }
-                kin[j] = k;
-                iin[j] = v;
-            }
-        } else {
-            // 4 x 8-bit STABLE LSD radix, ping-ponging kin/iin <-> kout/iout.
-            volatile uint32_t* in_k  = kin;
-            volatile uint32_t* in_v  = iin;
-            volatile uint32_t* out_k = kout;
-            volatile uint32_t* out_v = iout;
-            for (int byte_idx = 0; byte_idx < 4; byte_idx++) {
-                const int shift = byte_idx * 8;
-                uint32_t counts[256];
-                for (int b = 0; b < 256; b++) counts[b] = 0;
-                for (uint32_t i = 0; i < n; i++) {
-                    counts[(in_k[i] >> shift) & 0xFFu]++;
-                }
-                uint32_t sum = 0;
-                uint32_t offsets[256];
-                for (int b = 0; b < 256; b++) {
-                    offsets[b] = sum;
-                    sum += counts[b];
-                }
-                for (uint32_t i = 0; i < n; i++) {
-                    const uint32_t b = (in_k[i] >> shift) & 0xFFu;
-                    const uint32_t pos = offsets[b]++;
-                    out_k[pos] = in_k[i];
-                    out_v[pos] = in_v[i];
-                }
-                volatile uint32_t* tk = in_k; in_k = out_k; out_k = tk;
-                volatile uint32_t* tv = in_v; in_v = out_v; out_v = tv;
-            }
-            // After 4 (even) passes the sorted data is back in kin/iin.
-        }
+        // Adaptive stable LSD radix (sort_radix_tile_algo.h): same permutation
+        // as gsplat_cpu radix_sort_tile, fewer passes and no per-pass rescan.
+        const bool in_pong = sort_radix_tile::sort_pairs(kin, iin, kout, iout, n, hist);
+        const uint32_t sorted_ids_l1 = in_pong ? iout_l1 : iin_l1;
+
+        // Drain the RISC stores before the NoC reads the sorted ids from L1.
+        asm volatile("fence" ::: "memory");
 
         // Write sorted ids back to the tile's exclusive aligned pages.
         for (uint32_t p = 0; p < npages; p++) {
-            noc_async_write(iin_l1 + p * PAGE_BYTES,
+            noc_async_write(sorted_ids_l1 + p * PAGE_BYTES,
                             get_noc_addr(pstart_page + p, out_acc), PAGE_BYTES);
         }
         noc_async_write_barrier();

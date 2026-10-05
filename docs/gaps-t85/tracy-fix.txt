@@ -1,0 +1,20 @@
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=62.9 p50_ms=63.6 min_ms=56.0 max_ms=68.3 n_views=10 warmup_s=23.3 out=/localdev/smarton/gstt2-t85/tmp/t85-fix
+STAGES n=10 head=0.004 project=9.438 tile_assign=7.496 sort=14.047 blend_setup=0.027 cull=0.009 blend=12.293 d2h=0.247 assemble=0.000 tail=19.297 | sum=62.858 view_total=62.860 resid_in_view=+0.002 avg_frame_ms=62.927 resid_vs_frame=+0.069
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 4609181 Sep 30 23:10 /localdev/smarton/gstt2-t85/opt/profiler/t85-fix/chunks/0-10/render.tracy
+[capture_tracy] device profiler CSV data rows: 259755 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t85/opt/profiler/t85-fix/chunks/0-10/render.tracy
+-rw-r--r-- 1 smarton group_1211416483 36215730 Sep 30 23:10 opt/profiler/t85-fix/chunks/0-10/profile_log_device.csv
+-rw-r--r-- 1 smarton group_1211416483  4609181 Sep 30 23:10 opt/profiler/t85-fix/chunks/0-10/render.tracy
+views=10 segments/view=[10]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    1.989   1.989      0.000   110  pfwc
+ 1    2.042    8.579   6.538      0.053   110  proj_count+proj_scatter
+ 2    9.402   12.470   3.068      0.822   110  ta_gauss_aabb
+ 3   12.512   16.847   4.335      0.042   110  ta_bucket_scatter
+ 4   16.907   17.773   0.866      0.060   110  sort_bin_hist
+ 5   19.123   27.089   7.966      1.350   110  sort_bucket_emit
+ 6   27.128   29.645   2.517      0.039   110  sort_tile_depth
+ 7   29.656   30.800   1.144      0.011   110  <unnamed 110 cores>
+ 8   30.877   35.714   4.837      0.077   110  sort_subchunk_mat+tile_mb_mask+tile_l1_cull_rd
+ 9   35.721   43.222   7.501      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 2.461 ms/view

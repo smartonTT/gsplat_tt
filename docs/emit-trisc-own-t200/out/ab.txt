@@ -1,0 +1,6 @@
+t202 A/B: bicycle 1024x1024, 30 views, untraced, yyzo-bh-07 p100a, rev 626de7b; town = GSPLAT_TT_OL_EMIT_TOWN=1
+round order       base_ms  town_ms   delta   (blend stage base/town)   md5 both arms
+r1    base,town   15.212   14.267  -0.945   (10.101/9.168)            46a725ab x30 identical
+r2    town,base   15.197   14.255  -0.942   (10.093/9.161)            46a725ab x30 identical
+r3    base,town   15.275   14.279  -0.996   (10.116/9.106)            46a725ab x30 identical
+mean               15.228   14.267  -0.961   FPS 65.7 -> 70.1

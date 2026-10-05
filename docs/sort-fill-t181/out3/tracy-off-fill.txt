@@ -1,0 +1,7 @@
+sort_ol_fill     riscs 110 views  9 makespan us mean   412.5  per-core dur us med  162.4 max  414.9
+  P mean 2584097: fill bytes <= 20.7 MB/view
+sort_ol_fillb    riscs 110 views  9 makespan us mean   764.1  per-core dur us med   92.0 max  695.3
+sort_ol_prefix   riscs 110 views  9 makespan us mean   377.0  per-core dur us med  166.8 max  451.7
+sort_ol_barrier  riscs 110 views  9 makespan us mean   764.4  per-core dur us med  239.3 max  698.5
+sort_ol_emit     riscs 220 views  9 makespan us mean  2860.5  per-core dur us med 2367.5 max 3522.1
+fill union makespan us 764.1; 27.1 GB/s (8 B/pair, P 2584097)

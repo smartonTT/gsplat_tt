@@ -150,8 +150,18 @@ def psnr(a, b):
 
 
 def _to_u8(img01):
-    """Quantize a [0,1] float image to uint8 with floor — matches the saved PNG."""
+    """Quantize a [0,1] float image to uint8 with floor — matches the saved PNG.
+    render_clean already returns this uint8 image (packed on device, task #61)."""
+    if isinstance(img01, np.ndarray) and img01.dtype == np.uint8:
+        return img01
     return (np.clip(np.asarray(img01, dtype=np.float32), 0.0, 1.0) * 255.0).astype(np.uint8)
+
+
+def _to_f01(img):
+    """Float [0,1] view of an image (uint8 render_clean output or float ref)."""
+    if isinstance(img, np.ndarray) and img.dtype == np.uint8:
+        return img.astype(np.float32) / 255.0
+    return img
 
 
 def psnr8(img01, ref01):
@@ -172,6 +182,8 @@ def _to_image(res):
     img = res.image
     if hasattr(img, "numpy"):
         img = img.numpy()
+    if isinstance(img, np.ndarray) and img.dtype == np.uint8:
+        return img
     return np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0)
 
 
@@ -239,6 +251,10 @@ def main():
                     help="skip the cpu_cpp_mb reference render + PSNR gate; time "
                          "the 30 render_clean views only (used for a clean Tracy "
                          "device-profiler capture). Does not change render_clean.")
+    ap.add_argument("--view-range", default=None, metavar="START:END",
+                    help="time only order[START:END] (python slice). Used by the "
+                         "chunked Tracy capture so each devrun job fits the 600 s "
+                         "ceiling. The warmup still renders the hero view.")
     ap.add_argument("--ref-only", nargs=1, metavar="OUT_NPY",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
@@ -294,21 +310,42 @@ def main():
     print(f"[run] warmup (hero='{hero_name}', {W}x{H}, scene={args.scene})",
           flush=True)
     t_warm = time.perf_counter()
-    _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
     warmup_s = time.perf_counter() - t_warm
 
+    if args.view_range:
+        a, b = args.view_range.split(":")
+        order = order[int(a) if a else None:int(b) if b else None]
+        if not order:
+            sys.exit(f"[run] --view-range {args.view_range} selects no views")
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
+    # Zero the C++ per-stage accumulators so they cover the timed views only.
+    if hasattr(clean_backend._clean, "reset_stage_timings"):
+        clean_backend._clean.reset_stage_timings()
     per_view_ms = []
-    hero_clean = None
+    # The warmup is a hero render; a --view-range chunk may not contain the hero.
+    hero_clean = warm_img
+    # GSPLAT_PER_VIEW_STAGES=1: print each view's stage-timer deltas, to find
+    # one-off per-view costs (buffer regrowth) that the averages hide.
+    pv_stages = (os.environ.get("GSPLAT_PER_VIEW_STAGES") == "1"
+                 and hasattr(clean_backend._clean, "stage_timings"))
+    st_prev = clean_backend._clean.stage_timings() if pv_stages else None
     for i, name in enumerate(order):
         img, wall_ms = render_clean_view_timed(
             clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
         per_view_ms.append(wall_ms)
+        if pv_stages:
+            st_now = clean_backend._clean.stage_timings()
+            d = {k: float(st_now[k]) - float(st_prev[k]) for k in st_now
+                 if k != "views" and abs(float(st_now[k]) - float(st_prev[k])) >= 0.05}
+            st_prev = st_now
+            print(f"VIEW_STAGES i={i} name={name} wall={wall_ms:.2f} "
+                  + " ".join(f"{k}={v:.2f}" for k, v in d.items()), flush=True)
         if name == hero_name:
             hero_clean = img
         if dump_dir is not None:
             png = dump_dir / f"view{i:02d}_{name}.png"
-            Image.fromarray((img * 255.0).astype(np.uint8)).save(png)
+            Image.fromarray(_to_u8(img)).save(png)
             print(f"[run]   view={name} {wall_ms:.1f}ms saved={png.name}", flush=True)
         else:
             print(f"[run]   view={name} {wall_ms:.1f}ms", flush=True)
@@ -326,8 +363,8 @@ def main():
 
     # Secondary diagnostic: float PSNR vs the freshly-rendered CPU reference.
     hero_vs_cpu = float("nan")
-    if not args.no_ref and ref is not None:
-        hero_vs_cpu = psnr(hero_clean, ref)
+    if not args.no_ref and ref is not None and ref.shape == _to_f01(hero_clean).shape:
+        hero_vs_cpu = psnr(_to_f01(hero_clean), ref)
         ref_mean = float(ref.mean())
         if ref_mean > 0.95 or ref_mean < 0.05:
             print(f"[run] FATAL: reference mean={ref_mean:.4f} looks invalid "
@@ -338,8 +375,15 @@ def main():
 
     # PRIMARY gated metric: 8-bit PSNR vs the committed golden reference.
     hero_vs_ref = float("nan")
-    if GOLDEN_REF.exists():
+    golden8 = None
+    if not args.no_ref and GOLDEN_REF.exists():
         golden8 = np.asarray(Image.open(GOLDEN_REF).convert("RGB"), dtype=np.uint8)
+        if golden8.shape != _to_u8(hero_clean).shape:
+            print(f"[run] WARNING: golden {golden8.shape} != hero "
+                  f"{_to_u8(hero_clean).shape}; skipping golden compare",
+                  file=sys.stderr, flush=True)
+            golden8 = None
+    if golden8 is not None:
         hero_vs_ref = psnr8(hero_clean, golden8.astype(np.float32) / 255.0)
         d = np.clip(np.abs(_to_u8(hero_clean).astype(np.int16)
                            - golden8.astype(np.int16)) * 10, 0, 255).astype(np.uint8)
@@ -349,9 +393,9 @@ def main():
         hero_vs_ref = hero_vs_cpu
 
     # CPU reference artifacts (ground-truth visibility, regardless of golden).
-    if not args.no_ref and ref is not None:
+    if not args.no_ref and ref is not None and ref.shape == _to_f01(hero_clean).shape:
         Image.fromarray(_to_u8(ref)).save(out_dir / "hero_ref.png")
-        cpu_diff = np.clip(np.abs(hero_clean - ref) * 10.0, 0.0, 1.0)
+        cpu_diff = np.clip(np.abs(_to_f01(hero_clean) - ref) * 10.0, 0.0, 1.0)
         cpu_diff_name = "hero_diff10_cpu.png" if GOLDEN_REF.exists() else "hero_diff10.png"
         Image.fromarray((cpu_diff * 255.0).astype(np.uint8)).save(out_dir / cpu_diff_name)
 
@@ -369,6 +413,78 @@ def main():
         print(f"TTW_METRIC hero_vs_ref={fmt(hero_vs_ref)}", flush=True)
     print(f"TTW_TIMING ms_view={avg_ms:.3f}", flush=True)
     print(f"TTW_TIMING blend={avg_ms:.3f}", flush=True)
+
+    # Per-stage host attribution of the frame (render/host/stage_timers.h).
+    # Emitted as stage_<name> so the legacy ms_view/blend aliases above keep
+    # their meaning (both = avg frame time) for the existing report tooling.
+    # mat is 0 unless GSPLAT_TT_SPLIT_BLEND=1 (else blend holds mat+cull+blend).
+    _STAGE_ORDER = ["head", "project", "tile_assign", "sort", "blend_setup",
+                    "mat", "cull", "blend", "d2h", "assemble", "tail"]
+    if hasattr(clean_backend._clean, "stage_timings"):
+        st = clean_backend._clean.stage_timings()
+        n = max(1, int(st.get("views", 0)))
+        parts = []
+        stage_sum = 0.0
+        for k in _STAGE_ORDER:
+            v = float(st.get(k, 0.0)) / n
+            stage_sum += v
+            parts.append(f"{k}={v:.3f}")
+            print(f"TTW_TIMING stage_{k}={v:.3f}", flush=True)
+        view_total = float(st.get("view_total", 0.0)) / n
+        # view_total - sum(stages) is unaccounted C++ time inside render_view;
+        # avg_ms - view_total is the Python/pybind marshal residual.
+        print(f"TTW_TIMING stage_view_total={view_total:.3f}", flush=True)
+        print(f"TTW_TIMING stage_pybind={max(0.0, avg_ms - view_total):.3f}",
+              flush=True)
+        print(f"STAGES n={st.get('views', 0)} " + " ".join(parts)
+              + f" | sum={stage_sum:.3f} view_total={view_total:.3f}"
+              + f" resid_in_view={view_total - stage_sum:+.3f}"
+              + f" avg_frame_ms={avg_ms:.3f}"
+              + f" resid_vs_frame={avg_ms - stage_sum:+.3f}", flush=True)
+
+        # Leaf split of `sort` (SortCallTimings, render/host/sort.h). bin_* are
+        # the Pass A count kernel, the histogram D2H, the host layout and the
+        # Pass B emit kernel; publish_wait is the drain of radix+publish+dir.
+        _SORT_ORDER = ["pread", "bin_count", "bin_hist_d2h", "bin_layout",
+                       "upload", "bin_emit", "kernel", "d2h", "compact",
+                       "publish_host", "publish_wait", "mat"]
+        sort_parts = []
+        sort_sum = 0.0
+        for k in _SORT_ORDER:
+            v = float(st.get(f"sort_{k}", 0.0)) / n
+            sort_sum += v
+            sort_parts.append(f"{k}={v:.3f}")
+            print(f"TTW_TIMING stage_sort_{k}={v:.3f}", flush=True)
+        sort_ms = float(st.get("sort", 0.0)) / n
+        print(f"TTW_TIMING stage_sort_other={sort_ms - sort_sum:.3f}", flush=True)
+        print(f"SORT_STAGES n={st.get('views', 0)} " + " ".join(sort_parts)
+              + f" | sum={sort_sum:.3f} sort={sort_ms:.3f}"
+              + f" resid={sort_ms - sort_sum:+.3f}", flush=True)
+
+        # Leaf split of `project` and `tile_assign` (stage_timers.h): host setup
+        # / SetRuntimeArgs / enqueue / Finish-or-blocking-read per device driver.
+        _SUB_ORDER = {
+            "project": ["cov3d", "pfwc_setup", "pfwc_rtargs", "pfwc_enqueue",
+                        "pfwc_finish", "gather_setup", "gather_rtargs",
+                        "gather_enqueue", "gather_wait", "gather_result"],
+            "tile_assign": ["setup", "rtargs", "enqueue", "scan_finish",
+                            "p_d2h", "k2_finish", "publish"],
+        }
+        for stage, keys in _SUB_ORDER.items():
+            sub_parts = []
+            sub_sum = 0.0
+            for k in keys:
+                v = float(st.get(f"{stage}_{k}", 0.0)) / n
+                sub_sum += v
+                sub_parts.append(f"{k}={v:.3f}")
+                print(f"TTW_TIMING stage_{stage}_{k}={v:.3f}", flush=True)
+            stage_ms = float(st.get(stage, 0.0)) / n
+            print(f"TTW_TIMING stage_{stage}_other={stage_ms - sub_sum:.3f}",
+                  flush=True)
+            print(f"{stage.upper()}_STAGES n={st.get('views', 0)} "
+                  + " ".join(sub_parts)
+                  + f" | sum={sub_sum:.3f} {stage}={stage_ms:.3f}"
+                  + f" resid={stage_ms - sub_sum:+.3f}", flush=True)
 
     sys.stdout.flush()
     sys.stderr.flush()

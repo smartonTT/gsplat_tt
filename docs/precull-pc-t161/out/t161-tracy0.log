@@ -1,0 +1,44 @@
+##### tracy0 13:47:57
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=76.12dB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=34.3 p50_ms=34.0 min_ms=29.9 max_ms=39.2 n_views=10 warmup_s=6.7 out=/localdev/smarton/gstt2-t161/tmp/t161-m0
+STAGES n=10 head=0.003 project=5.213 tile_assign=0.009 sort=5.175 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.666 d2h=0.252 assemble=0.000 tail=13.936 | sum=34.254 view_total=34.256 resid_in_view=+0.002 avg_frame_ms=34.312 resid_vs_frame=+0.058
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 2938356 Oct  4 20:48 /localdev/smarton/gstt2-t161/opt/profiler/t161-m0/chunks/0-10/render.tracy
+[capture_tracy] device profiler CSV data rows: 162845 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t161/opt/profiler/t161-m0/chunks/0-10/render.tracy
+-rw-r--r-- 1 smarton group_1211416483 22855086 Oct  4 20:48 opt/profiler/t161-m0/chunks/0-10/profile_log_device.csv
+-rw-r--r-- 1 smarton group_1211416483  2938356 Oct  4 20:48 opt/profiler/t161-m0/chunks/0-10/render.tracy
+--- gaps
+views=10 segments/view=[5]
+ #    start      end    busy gap_before cores  program
+ 0    0.000    2.835   2.835      0.000   110  pfwc
+ 1    2.841    4.330   1.489      0.006   110  <unnamed 110 cores>
+ 2    5.230    9.964   4.734      0.900   110  sort_ol_count+sort_ol_barrier+sort_ol_prefix+sort_ol_emit
+ 3   10.290   14.035   3.745      0.326   110  sort_subchunk_mat+mat_cull_mask
+ 4   14.041   19.970   5.929      0.006   110  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+total all-core idle between programs: 1.238 ms/view
+--- zones
+n_views=10  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                   40857.4  4085.744       130.2      13.018    10890  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               40840.2  4084.024       130.2      13.016    10890  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   21075.6  2107.561       197.9      19.793     6050  BRISC
+BRISC-KERNEL               20528.3  2052.830       189.4      18.938     6050  BRISC
+NCRISC-FW                  20269.8  2026.977       190.9      19.092     6050  NCRISC
+NCRISC-KERNEL              20265.9  2026.594       190.9      19.089     6050  NCRISC
+tile_blend_sfpu            19869.8  1986.975        62.0       6.197     3630  TRISC_0,TRISC_1,TRISC_2
+mat_cull_mask              11463.9  1146.387        39.5       3.946     3630  TRISC_0,TRISC_1,TRISC_2
+pfwc                        9506.0   950.596        31.0       3.096     3630  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                8517.0   851.697        40.2       4.016     2420  BRISC,NCRISC
+sort_subchunk_mat           7078.3   707.826        39.5       3.946     2420  BRISC,NCRISC
+tile_blend_load             6291.5   629.150        58.5       5.852     1210  NCRISC
+rd_l1_bulk                  6163.2   616.323        57.1       5.712    12452  NCRISC
+sort_ol_count               1514.4   151.443        10.3       1.028     2420  BRISC,NCRISC
+sort_ol_barrier              315.5    31.553         5.0       0.497     2420  BRISC
+sort_ol_prefix                26.5     2.650         0.5       0.047     1210  BRISC
+--- deep (sort_ol / mat_ol)
+sort_ol_emit                              8517.0   283.90     1.34     80.7  BRISC,NCRISC
+sort_ol_count                             1514.4    50.48     0.34     80.7  BRISC,NCRISC
+sort_ol_barrier                            315.5    10.52     0.17     80.7  BRISC
+sort_ol_prefix                              26.5     0.88     0.02     40.3  BRISC
+##### tracy0 rc=0
+ALLDONE

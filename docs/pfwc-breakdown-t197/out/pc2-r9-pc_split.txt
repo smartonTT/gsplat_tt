@@ -1,0 +1,26 @@
+cores=110 launches/core=5..5 series=550
+
+BRISC pfwc_pw: 550 (core, launch) records
+  mean ms : wall 2.739, wait 0.704, bar 0.011, cls 0.729, rec 1.270, tail 0.013, iss 0.012
+  max core: wall 3.034, wait 0.411, bar 0.024, cls 0.756, rec 1.817, tail 0.013, iss 0.012  (n=55)
+  wall max/mean 3.034/2.739  chunks/launch mean 54.4  vis/launch 1570294 pairs/launch 2460425
+
+NCRISC pfwc_pr: 550 (core, launch) records
+  mean ms : wall 2.600, reserve 2.467, barrier 0.098
+  max core: wall 2.885, reserve 2.749, barrier 0.101  (n=55)
+  wall max/mean 2.885/2.600  chunks/launch mean 54.4
+
+TRISC_0 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.696, init 0.000, wait 0.022, xform 0.493, recip 0.043, depth 0.055, means 0.169, cov_cam 0.680, a 0.148, b 0.194, c 0.128, conic 0.049, radx 0.161, rady 0.206, vis+pop 0.346, copy 0.610, mul 0.012, add 0.015, acq 0.000, pack 0.000
+  max core: wall 2.998, init 0.000, wait 0.024, xform 0.498, recip 0.044, depth 0.056, means 0.442, cov_cam 0.687, a 0.150, b 0.197, c 0.130, conic 0.050, radx 0.163, rady 0.208, vis+pop 0.350, copy 0.616, mul 0.012, add 0.015, acq 0.000, pack 0.000  (n=55)
+  wall max/mean 2.998/2.696  chunks/launch mean 54.4
+
+TRISC_1 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.703, init 0.000, wait 0.001, xform 0.191, recip 0.046, depth 0.017, means 0.188, cov_cam 0.664, a 0.173, b 0.187, c 0.136, conic 0.073, radx 0.208, rady 0.206, vis+pop 0.613, copy 0.223, mul 0.232, add 0.155, acq 0.001, pack 0.002
+  max core: wall 3.006, init 0.000, wait 0.001, xform 0.195, recip 0.047, depth 0.017, means 0.462, cov_cam 0.670, a 0.175, b 0.189, c 0.137, conic 0.074, radx 0.210, rady 0.208, vis+pop 0.620, copy 0.225, mul 0.234, add 0.156, acq 0.001, pack 0.002  (n=55)
+  wall max/mean 3.006/2.703  chunks/launch mean 54.4
+
+TRISC_2 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.692, init 0.000, wait 0.001, xform 0.732, recip 0.057, depth 0.175, means 0.045, cov_cam 0.586, a 0.109, b 0.173, c 0.188, conic 0.207, radx 0.006, rady 0.206, vis+pop 0.206, copy 0.004, mul 0.005, add 0.003, acq 0.000, pack 0.547
+  max core: wall 2.994, init 0.000, wait 0.001, xform 0.743, recip 0.058, depth 0.451, means 0.044, cov_cam 0.592, a 0.110, b 0.175, c 0.190, conic 0.209, radx 0.006, rady 0.208, vis+pop 0.208, copy 0.004, mul 0.006, add 0.003, acq 0.000, pack 0.552  (n=55)
+  wall max/mean 2.994/2.692  chunks/launch mean 54.4

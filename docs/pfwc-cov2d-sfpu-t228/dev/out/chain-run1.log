@@ -1,0 +1,391 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=543869ba11b658e79bda10e015ebbd610c383f22 so_md5=ae4e4c7b5044d46f744057cc6914d4f2 
+SYNC_RC=0
+[ttw 2026-10-05T11:00:56-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=460s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:00:56-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 460s.
+[ttw 2026-10-05T11:00:56-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:00:56-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:00:56-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:00:56-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:00:56-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:00:56-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:00:56-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:00:56-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:00:56-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:00:56-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-times  timeout=460s  worry=368s  ts=2026-10-05T11:00:57-0400
+cmd: RUN_TO=300 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_time.sh s cov2d:GSPLAT_TT_PFWC_COV2D_SFPU=1
+-----------------------------------------
+=== rs-cov2d 543869b GSPLAT_TT_PFWC_COV2D_SFPU=1 15:00:57
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.006 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=14.1 p50_ms=14.3 min_ms=12.0 max_ms=16.1 n_views=30 warmup_s=18.5 out=/localdev/smarton/gstt2-t228/tmp/t228-rs-cov2d
+      1 STAGES n=30 head=0.004 project=3.642 tile_assign=0.006 sort=0.883 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.123 d2h=0.371 assemble=0.000 tail=0.003 | sum=14.033 view_total=14.034 resid_in_view=+0.001 avg_frame_ms=14.086 resid_vs_frame=+0.053
+      1 SORT_STAGES n=30 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.050 upload=0.000 bin_emit=0.558 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.158 publish_wait=0.000 mat=0.072 | sum=0.840 sort=0.883 resid=+0.042
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.008 pfwc_rtargs=0.049 pfwc_enqueue=0.064 pfwc_finish=0.000 gather_setup=0.002 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.517 gather_result=0.000 | sum=3.640 project=3.642 resid=+0.002
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round s 15:01:26
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-times-20261005-110056.log
+TIMEs_RC=0
+MD5_OK s-cov2d (default open, auto +24 KB)
+KX=0
+576132 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc2/trisc2.elf
+576132 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc2/trisc2.elf.xip.elf
+686576 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc0/trisc0.elf
+686576 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc0/trisc0.elf.xip.elf
+1455928 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/11134555176326654151/brisc/brisc.elf
+1455928 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/11134555176326654151/brisc/brisc.elf.xip.elf
+1896136 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/10277567180196825995/ncrisc/ncrisc.elf
+1896136 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/writer_pfwc_split/10277567180196825995/ncrisc/ncrisc.elf.xip.elf
+12412740 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc1/trisc1.elf
+12412740 /localdev/smarton/.cache/ttmc-gstt2-t228/tt-metal-cache5481144561508939120/kernels/project_pfwc_compute/9291449163307727815/trisc1/trisc1.elf.xip.elf
+[ttw 2026-10-05T11:01:28-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:01:29-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-05T11:01:29-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:01:29-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:01:29-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:01:29-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:01:29-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:01:29-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:01:29-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:01:29-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:01:29-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:01:29-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-k1  timeout=560s  worry=448s  ts=2026-10-05T11:01:29-0400
+cmd: KX=32 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_prof.sh t228-k1 1 GSPLAT_TT_PFWC_COV2D_SFPU=1
+-----------------------------------------
+=== t228-k1 views 0:4 543869b GSPLAT_TT_PFWC_COV2D_SFPU=1 15:01:30
+rc=0
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 2056371 Oct  5 15:02 /localdev/smarton/gstt2-t228/opt/profiler/t228-k1/chunks/0-4/render.tracy
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t228/opt/profiler/t228-k1/chunks/0-4/render.tracy
+cores=110 launches/core=5..5 series=550
+
+BRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 1.889, wait 0.409, cls 0.410, pfx 0.054, rec 0.739, opn 0.264, tail 0.013, rd 0.000
+  max core: wall 2.643, wait 0.265, cls 0.420, pfx 0.181, rec 0.865, opn 0.897, tail 0.014, rd 0.000  (n=28)
+  wall max/mean 2.643/1.889  chunks/launch mean 27.4
+
+NCRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 1.895, wait 0.398, cls 0.423, pfx 0.011, rec 1.011, opn 0.038, tail 0.012, rd 0.319
+  max core: wall 2.611, wait 0.245, cls 0.437, pfx 0.010, rec 1.881, opn 0.027, tail 0.013, rd 0.212  (n=27)
+  wall max/mean 2.611/1.895  chunks/launch mean 27.0
+
+TRISC_0 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 1.861, init 0.000, wait 0.048, xform 0.489, recip 0.044, depth 0.056, means 0.228, cov_cam 0.065, a 0.271, b 0.354, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.305
+  max core: wall 2.614, init 0.000, wait 0.147, xform 0.491, recip 0.045, depth 0.057, means 0.866, cov_cam 0.066, a 0.274, b 0.357, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.309  (n=55)
+  wall max/mean 2.614/1.861  chunks/launch mean 54.4
+
+TRISC_1 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 1.869, init 0.000, wait 0.001, xform 0.214, recip 0.047, depth 0.017, means 0.249, cov_cam 0.257, a 0.290, b 0.171, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.621
+  max core: wall 2.621, init 0.000, wait 0.001, xform 0.314, recip 0.047, depth 0.017, means 0.887, cov_cam 0.259, a 0.294, b 0.172, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.628  (n=55)
+  wall max/mean 2.621/1.869  chunks/launch mean 54.4
+
+TRISC_2 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 1.857, init 0.000, wait 0.001, xform 0.756, recip 0.057, depth 0.225, means 0.056, cov_cam 0.298, a 0.289, b 0.166, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.007
+  max core: wall 2.610, init 0.000, wait 0.001, xform 0.860, recip 0.059, depth 0.870, means 0.049, cov_cam 0.301, a 0.292, b 0.168, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.008  (n=55)
+  wall max/mean 2.610/1.857  chunks/launch mean 54.4
+=== done 15:02:01
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-k1-20261005-110129.log
+PROF_k1_RC=0
+cores=110 launches/core=5..5 series=550
+
+BRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 1.889, wait 0.409, cls 0.410, pfx 0.054, rec 0.739, opn 0.264, tail 0.013, rd 0.000
+  max core: wall 2.643, wait 0.265, cls 0.420, pfx 0.181, rec 0.865, opn 0.897, tail 0.014, rd 0.000  (n=28)
+  wall max/mean 2.643/1.889  chunks/launch mean 27.4
+
+NCRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 1.895, wait 0.398, cls 0.423, pfx 0.011, rec 1.011, opn 0.038, tail 0.012, rd 0.319
+  max core: wall 2.611, wait 0.245, cls 0.437, pfx 0.010, rec 1.881, opn 0.027, tail 0.013, rd 0.212  (n=27)
+  wall max/mean 2.611/1.895  chunks/launch mean 27.0
+
+TRISC_0 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 1.861, init 0.000, wait 0.048, xform 0.489, recip 0.044, depth 0.056, means 0.228, cov_cam 0.065, a 0.271, b 0.354, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.305
+  max core: wall 2.614, init 0.000, wait 0.147, xform 0.491, recip 0.045, depth 0.057, means 0.866, cov_cam 0.066, a 0.274, b 0.357, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.309  (n=55)
+  wall max/mean 2.614/1.861  chunks/launch mean 54.4
+
+TRISC_1 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 1.869, init 0.000, wait 0.001, xform 0.214, recip 0.047, depth 0.017, means 0.249, cov_cam 0.257, a 0.290, b 0.171, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.621
+  max core: wall 2.621, init 0.000, wait 0.001, xform 0.314, recip 0.047, depth 0.017, means 0.887, cov_cam 0.259, a 0.294, b 0.172, c 0.000, conic 0.001, radx 0.000, rady 0.000, vis+pop 0.628  (n=55)
+  wall max/mean 2.621/1.869  chunks/launch mean 54.4
+
+TRISC_2 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 1.857, init 0.000, wait 0.001, xform 0.756, recip 0.057, depth 0.225, means 0.056, cov_cam 0.298, a 0.289, b 0.166, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.007
+  max core: wall 2.610, init 0.000, wait 0.001, xform 0.860, recip 0.059, depth 0.870, means 0.049, cov_cam 0.301, a 0.292, b 0.168, c 0.000, conic 0.000, radx 0.000, rady 0.000, vis+pop 0.008  (n=55)
+  wall max/mean 2.610/1.857  chunks/launch mean 54.4
+[ttw 2026-10-05T11:02:03-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:02:03-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-05T11:02:03-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:02:03-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:02:03-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:02:03-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:02:03-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:02:03-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:02:03-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:02:03-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:02:03-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:02:03-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-k0  timeout=560s  worry=448s  ts=2026-10-05T11:02:03-0400
+cmd: KX=32 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_prof.sh t228-k0 1 GSPLAT_TT_PFWC_COV2D_SFPU=0
+-----------------------------------------
+=== t228-k0 views 0:4 543869b GSPLAT_TT_PFWC_COV2D_SFPU=0 15:02:04
+rc=0
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 2046257 Oct  5 15:02 /localdev/smarton/gstt2-t228/opt/profiler/t228-k0/chunks/0-4/render.tracy
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t228/opt/profiler/t228-k0/chunks/0-4/render.tracy
+cores=110 launches/core=5..5 series=550
+
+BRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 2.222, wait 1.054, cls 0.408, pfx 0.003, rec 0.708, opn 0.035, tail 0.012, rd 0.000
+  max core: wall 2.350, wait 0.813, cls 0.432, pfx 0.009, rec 0.890, opn 0.192, tail 0.013, rd 0.000  (n=28)
+  wall max/mean 2.350/2.222  chunks/launch mean 27.4
+
+NCRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 2.229, wait 1.000, cls 0.402, pfx 0.013, rec 0.775, opn 0.026, tail 0.012, rd 0.806
+  max core: wall 2.321, wait 0.753, cls 0.429, pfx 0.012, rec 1.053, opn 0.062, tail 0.012, rd 0.616  (n=27)
+  wall max/mean 2.321/2.229  chunks/launch mean 27.0
+
+TRISC_0 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.204, init 0.000, wait 0.036, xform 0.493, recip 0.044, depth 0.055, means 0.052, cov_cam 0.065, a 0.368, b 0.195, c 0.129, conic 0.050, radx 0.162, rady 0.207, vis+pop 0.349
+  max core: wall 2.309, init 0.000, wait 0.057, xform 0.497, recip 0.044, depth 0.056, means 0.111, cov_cam 0.066, a 0.372, b 0.197, c 0.130, conic 0.050, radx 0.163, rady 0.209, vis+pop 0.355  (n=55)
+  wall max/mean 2.309/2.204  chunks/launch mean 54.4
+
+TRISC_1 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.211, init 0.000, wait 0.001, xform 0.206, recip 0.046, depth 0.017, means 0.072, cov_cam 0.256, a 0.185, b 0.187, c 0.136, conic 0.073, radx 0.209, rady 0.207, vis+pop 0.615
+  max core: wall 2.316, init 0.000, wait 0.001, xform 0.230, recip 0.047, depth 0.017, means 0.131, cov_cam 0.259, a 0.187, b 0.189, c 0.138, conic 0.074, radx 0.211, rady 0.209, vis+pop 0.622  (n=55)
+  wall max/mean 2.316/2.211  chunks/launch mean 54.4
+
+TRISC_2 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.200, init 0.000, wait 0.001, xform 0.749, recip 0.057, depth 0.045, means 0.059, cov_cam 0.297, a 0.003, b 0.171, c 0.189, conic 0.208, radx 0.007, rady 0.206, vis+pop 0.206
+  max core: wall 2.305, init 0.000, wait 0.001, xform 0.779, recip 0.055, depth 0.109, means 0.057, cov_cam 0.301, a 0.003, b 0.174, c 0.190, conic 0.210, radx 0.007, rady 0.208, vis+pop 0.209  (n=55)
+  wall max/mean 2.305/2.200  chunks/launch mean 54.4
+=== done 15:02:18
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-k0-20261005-110203.log
+PROF_k0_RC=0
+cores=110 launches/core=5..5 series=550
+
+BRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 2.222, wait 1.054, cls 0.408, pfx 0.003, rec 0.708, opn 0.035, tail 0.012, rd 0.000
+  max core: wall 2.350, wait 0.813, cls 0.432, pfx 0.009, rec 0.890, opn 0.192, tail 0.013, rd 0.000  (n=28)
+  wall max/mean 2.350/2.222  chunks/launch mean 27.4
+
+NCRISC pfwc_ws: 550 (core, launch) records
+  mean ms : wall 2.229, wait 1.000, cls 0.402, pfx 0.013, rec 0.775, opn 0.026, tail 0.012, rd 0.806
+  max core: wall 2.321, wait 0.753, cls 0.429, pfx 0.012, rec 1.053, opn 0.062, tail 0.012, rd 0.616  (n=27)
+  wall max/mean 2.321/2.229  chunks/launch mean 27.0
+
+TRISC_0 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.204, init 0.000, wait 0.036, xform 0.493, recip 0.044, depth 0.055, means 0.052, cov_cam 0.065, a 0.368, b 0.195, c 0.129, conic 0.050, radx 0.162, rady 0.207, vis+pop 0.349
+  max core: wall 2.309, init 0.000, wait 0.057, xform 0.497, recip 0.044, depth 0.056, means 0.111, cov_cam 0.066, a 0.372, b 0.197, c 0.130, conic 0.050, radx 0.163, rady 0.209, vis+pop 0.355  (n=55)
+  wall max/mean 2.309/2.204  chunks/launch mean 54.4
+
+TRISC_1 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.211, init 0.000, wait 0.001, xform 0.206, recip 0.046, depth 0.017, means 0.072, cov_cam 0.256, a 0.185, b 0.187, c 0.136, conic 0.073, radx 0.209, rady 0.207, vis+pop 0.615
+  max core: wall 2.316, init 0.000, wait 0.001, xform 0.230, recip 0.047, depth 0.017, means 0.131, cov_cam 0.259, a 0.187, b 0.189, c 0.138, conic 0.074, radx 0.211, rady 0.209, vis+pop 0.622  (n=55)
+  wall max/mean 2.316/2.211  chunks/launch mean 54.4
+
+TRISC_2 pfwc_pc: 550 (core, launch) records
+  mean ms : wall 2.200, init 0.000, wait 0.001, xform 0.749, recip 0.057, depth 0.045, means 0.059, cov_cam 0.297, a 0.003, b 0.171, c 0.189, conic 0.208, radx 0.007, rady 0.206, vis+pop 0.206
+  max core: wall 2.305, init 0.000, wait 0.001, xform 0.779, recip 0.055, depth 0.109, means 0.057, cov_cam 0.301, a 0.003, b 0.174, c 0.190, conic 0.210, radx 0.007, rady 0.208, vis+pop 0.209  (n=55)
+  wall max/mean 2.305/2.200  chunks/launch mean 54.4
+[ttw 2026-10-05T11:02:20-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=460s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:02:20-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 460s.
+[ttw 2026-10-05T11:02:20-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:02:20-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:02:20-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:02:20-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:02:20-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:02:21-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:02:21-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:02:21-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:02:21-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:02:21-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-time1  timeout=460s  worry=368s  ts=2026-10-05T11:02:21-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_time.sh 1 base:GSPLAT_TT_NOOP=0 cov2d:GSPLAT_TT_PFWC_COV2D_SFPU=1,GSPLAT_TT_NOOP=0
+-----------------------------------------
+=== r1-base 543869b GSPLAT_TT_NOOP=0 15:02:22
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.006 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.7 p50_ms=13.9 min_ms=11.9 max_ms=15.5 n_views=30 warmup_s=5.4 out=/localdev/smarton/gstt2-t228/tmp/t228-r1-base
+      1 STAGES n=30 head=0.005 project=3.384 tile_assign=0.006 sort=0.894 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.108 d2h=0.261 assemble=0.000 tail=0.003 | sum=13.661 view_total=13.662 resid_in_view=+0.001 avg_frame_ms=13.712 resid_vs_frame=+0.051
+      1 SORT_STAGES n=30 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.051 upload=0.000 bin_emit=0.564 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.164 publish_wait=0.000 mat=0.071 | sum=0.852 sort=0.894 resid=+0.042
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.007 pfwc_rtargs=0.045 pfwc_enqueue=0.061 pfwc_finish=0.000 gather_setup=0.002 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.267 gather_result=0.000 | sum=3.382 project=3.384 resid=+0.002
+ALL_VIEWS_IDENTICAL (30 views)
+=== r1-cov2d 543869b GSPLAT_TT_PFWC_COV2D_SFPU=1 GSPLAT_TT_NOOP=0 15:02:38
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.005 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.006 tile_assign=0.007 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.9 p50_ms=14.0 min_ms=12.0 max_ms=15.9 n_views=30 warmup_s=2.5 out=/localdev/smarton/gstt2-t228/tmp/t228-r1-cov2d
+      1 STAGES n=30 head=0.004 project=3.640 tile_assign=0.007 sort=0.969 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.035 d2h=0.224 assemble=0.000 tail=0.003 | sum=13.882 view_total=13.883 resid_in_view=+0.001 avg_frame_ms=13.935 resid_vs_frame=+0.053
+      1 SORT_STAGES n=30 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.055 upload=0.000 bin_emit=0.588 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.194 publish_wait=0.000 mat=0.083 | sum=0.922 sort=0.969 resid=+0.047
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.007 pfwc_rtargs=0.053 pfwc_enqueue=0.058 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.518 gather_result=0.000 | sum=3.638 project=3.640 resid=+0.002
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 1 15:02:52
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-time1-20261005-110221.log
+TIME1_RC=0
+MD5_OK r1-base
+MD5_OK r1-cov2d
+[ttw 2026-10-05T11:03:02-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=460s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:03:02-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 460s.
+[ttw 2026-10-05T11:03:02-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:03:02-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:03:02-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:03:02-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:03:02-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:03:02-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:03:02-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:03:02-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:03:02-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:03:02-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-time2  timeout=460s  worry=368s  ts=2026-10-05T11:03:03-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_time.sh 2 cov2d:GSPLAT_TT_PFWC_COV2D_SFPU=1,GSPLAT_TT_NOOP=0 base:GSPLAT_TT_NOOP=0
+-----------------------------------------
+=== r2-cov2d 543869b GSPLAT_TT_PFWC_COV2D_SFPU=1 GSPLAT_TT_NOOP=0 15:03:03
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.9 p50_ms=14.0 min_ms=12.0 max_ms=15.9 n_views=30 warmup_s=2.4 out=/localdev/smarton/gstt2-t228/tmp/t228-r2-cov2d
+      1 STAGES n=30 head=0.002 project=3.596 tile_assign=0.004 sort=0.850 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.155 d2h=0.273 assemble=0.000 tail=0.002 | sum=13.883 view_total=13.883 resid_in_view=+0.001 avg_frame_ms=13.917 resid_vs_frame=+0.034
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.044 upload=0.000 bin_emit=0.559 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.151 publish_wait=0.000 mat=0.059 | sum=0.814 sort=0.850 resid=+0.036
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.037 pfwc_enqueue=0.030 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.523 gather_result=0.000 | sum=3.595 project=3.596 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r2-base 543869b GSPLAT_TT_NOOP=0 15:03:16
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.004 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.6 p50_ms=13.7 min_ms=11.8 max_ms=15.4 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t228/tmp/t228-r2-base
+      1 STAGES n=30 head=0.003 project=3.350 tile_assign=0.004 sort=0.853 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.148 d2h=0.213 assemble=0.000 tail=0.002 | sum=13.574 view_total=13.574 resid_in_view=+0.001 avg_frame_ms=13.613 resid_vs_frame=+0.039
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.045 upload=0.000 bin_emit=0.559 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.150 publish_wait=0.000 mat=0.063 | sum=0.817 sort=0.853 resid=+0.036
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.038 pfwc_enqueue=0.037 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.268 gather_result=0.000 | sum=3.349 project=3.350 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 2 15:03:28
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-time2-20261005-110302.log
+TIME2_RC=0
+MD5_OK r2-base
+MD5_OK r2-cov2d
+[ttw 2026-10-05T11:03:30-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=460s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:03:30-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 460s.
+[ttw 2026-10-05T11:03:30-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:03:30-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:03:30-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:03:30-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:03:30-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:03:30-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:03:30-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:03:30-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:03:30-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:03:30-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-time3  timeout=460s  worry=368s  ts=2026-10-05T11:03:31-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_time.sh 3 base:GSPLAT_TT_NOOP=0 cov2d:GSPLAT_TT_PFWC_COV2D_SFPU=1,GSPLAT_TT_NOOP=0
+-----------------------------------------
+=== r3-base 543869b GSPLAT_TT_NOOP=0 15:03:31
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.6 p50_ms=13.7 min_ms=11.9 max_ms=15.4 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t228/tmp/t228-r3-base
+      1 STAGES n=30 head=0.003 project=3.350 tile_assign=0.005 sort=0.875 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.128 d2h=0.214 assemble=0.000 tail=0.002 | sum=13.577 view_total=13.578 resid_in_view=+0.001 avg_frame_ms=13.612 resid_vs_frame=+0.035
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.049 upload=0.000 bin_emit=0.567 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.160 publish_wait=0.000 mat=0.061 | sum=0.838 sort=0.875 resid=+0.037
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.037 pfwc_enqueue=0.034 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.272 gather_result=0.000 | sum=3.348 project=3.350 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r3-cov2d 543869b GSPLAT_TT_PFWC_COV2D_SFPU=1 GSPLAT_TT_NOOP=0 15:03:43
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000 | sum=0.004 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.9 p50_ms=14.0 min_ms=12.0 max_ms=15.7 n_views=30 warmup_s=2.0 out=/localdev/smarton/gstt2-t228/tmp/t228-r3-cov2d
+      1 STAGES n=30 head=0.002 project=3.595 tile_assign=0.004 sort=0.847 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.160 d2h=0.214 assemble=0.000 tail=0.002 | sum=13.823 view_total=13.824 resid_in_view=+0.001 avg_frame_ms=13.855 resid_vs_frame=+0.031
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.044 upload=0.000 bin_emit=0.559 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.151 publish_wait=0.000 mat=0.058 | sum=0.813 sort=0.847 resid=+0.034
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.036 pfwc_enqueue=0.028 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.526 gather_result=0.000 | sum=3.594 project=3.595 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 3 15:03:54
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-time3-20261005-110331.log
+TIME3_RC=0
+MD5_OK r3-base
+MD5_OK r3-cov2d
+[ttw 2026-10-05T11:03:56-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=460s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T11:03:56-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 460s.
+[ttw 2026-10-05T11:03:56-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T11:03:56-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T11:03:56-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T11:03:56-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T11:03:56-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T11:03:56-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T11:03:56-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T11:03:56-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T11:03:56-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T11:03:56-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t228-time4  timeout=460s  worry=368s  ts=2026-10-05T11:03:57-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t228/docs/pfwc-cov2d-sfpu-t228/dev/remote_time.sh 4 cov2d:GSPLAT_TT_PFWC_COV2D_SFPU=1,GSPLAT_TT_NOOP=0 base:GSPLAT_TT_NOOP=0
+-----------------------------------------
+=== r4-cov2d 543869b GSPLAT_TT_PFWC_COV2D_SFPU=1 GSPLAT_TT_NOOP=0 15:03:57
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.9 p50_ms=14.1 min_ms=11.9 max_ms=15.9 n_views=30 warmup_s=2.3 out=/localdev/smarton/gstt2-t228/tmp/t228-r4-cov2d
+      1 STAGES n=30 head=0.002 project=3.588 tile_assign=0.005 sort=0.869 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.135 d2h=0.241 assemble=0.000 tail=0.002 | sum=13.843 view_total=13.844 resid_in_view=+0.001 avg_frame_ms=13.875 resid_vs_frame=+0.032
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.049 upload=0.000 bin_emit=0.569 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.158 publish_wait=0.000 mat=0.057 | sum=0.835 sort=0.869 resid=+0.034
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.038 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.516 gather_result=0.000 | sum=3.587 project=3.588 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r4-base 543869b GSPLAT_TT_NOOP=0 15:04:08
+run rc=0
+      1 [DEV] command queues 2, compute grid 11x10
+      1 TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.000 | sum=0.004 tile_assign=0.004 resid=+0.000
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=13.6 p50_ms=13.7 min_ms=11.8 max_ms=15.4 n_views=30 warmup_s=2.2 out=/localdev/smarton/gstt2-t228/tmp/t228-r4-base
+      1 STAGES n=30 head=0.002 project=3.338 tile_assign=0.004 sort=0.832 blend_setup=0.000 mat=0.000 cull=0.000 blend=9.168 d2h=0.251 assemble=0.000 tail=0.002 | sum=13.597 view_total=13.597 resid_in_view=+0.001 avg_frame_ms=13.629 resid_vs_frame=+0.032
+      1 SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.042 upload=0.000 bin_emit=0.554 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.146 publish_wait=0.000 mat=0.055 | sum=0.798 sort=0.832 resid=+0.034
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.003 pfwc_rtargs=0.036 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.267 gather_result=0.000 | sum=3.337 project=3.338 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 4 15:04:20
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t228/.ttw/logs/t228-time4-20261005-110356.log
+TIME4_RC=0
+MD5_OK r4-base
+MD5_OK r4-cov2d
+| round | base view_total | cov2d view_total | delta | base project | cov2d project | delta |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 | 13.662 | 13.883 | +0.221 | 3.384 | 3.640 | +0.256 |
+| 2 | 13.574 | 13.883 | +0.309 | 3.350 | 3.596 | +0.246 |
+| 3 | 13.578 | 13.824 | +0.246 | 3.350 | 3.595 | +0.245 |
+| 4 | 13.597 | 13.844 | +0.247 | 3.338 | 3.588 | +0.250 |
+| mean | 13.603 | 13.858 | **+0.256** | 3.356 | 3.605 | **+0.249** |
+FPS base 73.5 cov2d 72.2
+k0 TRISC_0: wall 2.204 steps6-11 1.111 ms/view = 27.6k cycles/chunk (a 0.368 b 0.195 c 0.129 conic 0.050 radx 0.162 rady 0.207) vis+pop 0.349
+k0 TRISC_1: wall 2.211 steps6-11 0.997 ms/view = 24.7k cycles/chunk (a 0.185 b 0.187 c 0.136 conic 0.073 radx 0.209 rady 0.207) vis+pop 0.615
+k0 TRISC_2: wall 2.200 steps6-11 0.784 ms/view = 19.5k cycles/chunk (a 0.003 b 0.171 c 0.189 conic 0.208 radx 0.007 rady 0.206) vis+pop 0.206
+k0 BRISC writer: wall 2.222 wait 1.054
+k0 NCRISC writer: wall 2.229 wait 1.000
+k1 TRISC_0: wall 1.861 steps6-11 0.625 ms/view = 15.5k cycles/chunk (a 0.271 b 0.354 c 0.000 conic 0.000 radx 0.000 rady 0.000) vis+pop 0.305
+k1 TRISC_1: wall 1.869 steps6-11 0.462 ms/view = 11.5k cycles/chunk (a 0.290 b 0.171 c 0.000 conic 0.001 radx 0.000 rady 0.000) vis+pop 0.621
+k1 TRISC_2: wall 1.857 steps6-11 0.455 ms/view = 11.3k cycles/chunk (a 0.289 b 0.166 c 0.000 conic 0.000 radx 0.000 rady 0.000) vis+pop 0.007
+k1 BRISC writer: wall 1.889 wait 0.409
+k1 NCRISC writer: wall 1.895 wait 0.398
+CHAIN_DONE

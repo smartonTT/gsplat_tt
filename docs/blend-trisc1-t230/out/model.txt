@@ -1,0 +1,69 @@
+== Step 1: fit to #229 (dms = model ms/view vs level 0; measured F +0.022/+0.063, A2 -1.015/-0.968)
+hypothesis                                   d=2  F    A2   d=4  F    A2   d=8  F    A2   d=16 F    A2   d=32 F    A2  
+H1 stall is RISC (jumps, load-use)           +0.00 -0.35  +0.00 -0.42  +0.00 -0.56  +0.00 -0.76  +0.00 -1.02
+H2 stall is SFPU hazards                     -0.43 -0.66  -0.41 -0.61  -0.29 -0.51  -0.12 -0.45  -0.00 -0.68
+H3 stall is push cost                        +0.00 -0.53  +0.00 -0.64  +0.00 -0.79  +0.00 -0.92  +0.00 -1.21
+H4 stall is MAD latency (counted), rest RISC -0.40 -0.74  -0.33 -0.69  -0.17 -0.59  -0.02 -0.55  -0.00 -0.84
+
+best fits (|dF - 0.063| + |dA2 + 0.968|):
+  err 0.11  H3 stall is push cost  d=16  A2 cycles/live record 306.4
+  err 0.12  H1 stall is RISC (jumps, load-use)  d=32  A2 cycles/live record 300.1
+  err 0.20  H4 stall is MAD latency (counted), rest RISC  d=32  A2 cycles/live record 281.1
+  err 0.24  H3 stall is push cost  d=8  A2 cycles/live record 315.0
+  err 0.27  H1 stall is RISC (jumps, load-use)  d=16  A2 cycles/live record 316.3
+  err 0.30  H3 stall is push cost  d=32  A2 cycles/live record 288.3
+
+== Step 2: candidates on top of A2, at every fit within 0.25 ms of both measurements
+cycles per live record; dms = ms/view saved vs A2 (positive = faster); 1 cycle = 0.0158 ms/view
+
+-- H3 stall is push cost, d=16 (walk 13.0/call, push 1.213)
+   A2 (tip)                                      303.4  dms +0.00   SFPU-bound  209.7
+   M1 middle nops filled (-3 ops)                294.3  dms +0.14   SFPU-bound  201.3
+   M2 MOP holds 7 middle ops (1 push)            296.1  dms +0.11   SFPU-bound  209.7
+   M3 shared-load pair pushed (F pair 109)       313.5  dms -0.16   SFPU-bound  209.7
+   S1 RAW_STAGE knob (-17 RISC/record)           286.4  dms +0.27   SFPU-bound  209.7
+   S2a decode-ahead, staging words only          246.4  dms +0.90   SFPU-bound  209.7
+   S2a' same, slow L1 loads (35 RISC)            261.4  dms +0.66   SFPU-bound  209.7
+   S2 decode-ahead + live-only list (scan 8)     227.2  dms +1.20   SFPU-bound  209.7
+   S3 pipelined staging behind front replay      279.6  dms +0.38   SFPU-bound  209.7
+   S4 = S2 + S3                                  217.3  dms +1.36   SFPU-bound  209.7
+   S5 bound: all scan/stage RISC work gone       211.5  dms +1.45   SFPU-bound  209.7
+
+-- H1 stall is RISC (jumps, load-use), d=32 (walk 31.4/call, push 1.000)
+   A2 (tip)                                      294.5  dms +0.00   SFPU-bound  209.7
+   M1 middle nops filled (-3 ops)                286.1  dms +0.13   SFPU-bound  201.3
+   M2 MOP holds 7 middle ops (1 push)            277.7  dms +0.27   SFPU-bound  209.7
+   M3 shared-load pair pushed (F pair 109)       320.3  dms -0.41   SFPU-bound  209.7
+   S1 RAW_STAGE knob (-17 RISC/record)           277.5  dms +0.27   SFPU-bound  209.7
+   S2a decode-ahead, staging words only          237.5  dms +0.90   SFPU-bound  209.7
+   S2a' same, slow L1 loads (35 RISC)            252.5  dms +0.66   SFPU-bound  209.7
+   S2 decode-ahead + live-only list (scan 8)     220.5  dms +1.17   SFPU-bound  209.7
+   S3 pipelined staging behind front replay      294.5  dms +0.00   SFPU-bound  209.7
+   S4 = S2 + S3                                  219.0  dms +1.19   SFPU-bound  209.7
+   S5 bound: all scan/stage RISC work gone       209.9  dms +1.34   SFPU-bound  209.7
+
+-- H4 stall is MAD latency (counted), rest RISC, d=32 (walk 17.5/call, push 1.000)
+   A2 (tip)                                      268.0  dms +0.00   SFPU-bound  209.7
+   M1 middle nops filled (-3 ops)                258.9  dms +0.14   SFPU-bound  201.3
+   M2 MOP holds 7 middle ops (1 push)            255.3  dms +0.20   SFPU-bound  209.7
+   M3 shared-load pair pushed (F pair 109)       289.5  dms -0.34   SFPU-bound  209.7
+   S1 RAW_STAGE knob (-17 RISC/record)           251.0  dms +0.27   SFPU-bound  209.7
+   S2a decode-ahead, staging words only          216.2  dms +0.82   SFPU-bound  209.7
+   S2a' same, slow L1 loads (35 RISC)            226.1  dms +0.66   SFPU-bound  209.7
+   S2 decode-ahead + live-only list (scan 8)     210.4  dms +0.91   SFPU-bound  209.7
+   S3 pipelined staging behind front replay      263.7  dms +0.07   SFPU-bound  209.7
+   S4 = S2 + S3                                  209.9  dms +0.92   SFPU-bound  209.7
+   S5 bound: all scan/stage RISC work gone       209.9  dms +0.92   SFPU-bound  209.7
+
+-- H3 stall is push cost, d=8 (walk 13.0/call, push 1.213)
+   A2 (tip)                                      311.9  dms +0.00   SFPU-bound  209.7
+   M1 middle nops filled (-3 ops)                302.8  dms +0.14   SFPU-bound  201.3
+   M2 MOP holds 7 middle ops (1 push)            304.6  dms +0.11   SFPU-bound  209.7
+   M3 shared-load pair pushed (F pair 109)       320.3  dms -0.13   SFPU-bound  209.7
+   S1 RAW_STAGE knob (-17 RISC/record)           294.9  dms +0.27   SFPU-bound  209.7
+   S2a decode-ahead, staging words only          254.9  dms +0.90   SFPU-bound  209.7
+   S2a' same, slow L1 loads (35 RISC)            269.9  dms +0.66   SFPU-bound  209.7
+   S2 decode-ahead + live-only list (scan 8)     235.8  dms +1.20   SFPU-bound  209.7
+   S3 pipelined staging behind front replay      284.9  dms +0.43   SFPU-bound  209.7
+   S4 = S2 + S3                                  226.9  dms +1.34   SFPU-bound  209.7
+   S5 bound: all scan/stage RISC work gone       221.2  dms +1.43   SFPU-bound  209.7

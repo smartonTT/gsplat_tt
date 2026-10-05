@@ -1,0 +1,48 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=6c0b2e564461e481a64132e3a77f23c5b8112043 so_md5=37ff951b53f95581fafcbfd602412116 
+SYNC_RC=0
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t221-times  timeout=400s  worry=320s  ts=2026-10-05T10:03:01-0400
+cmd: RUN_TO=240 bash /localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh s split:GSPLAT_TT_PFWC_WRITER_SPLIT=1
+-----------------------------------------
+=== rs-split 6c0b2e5 GSPLAT_TT_PFWC_WRITER_SPLIT=1 14:03:01
+run rc=139
+/localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh: line 12: 1794455 Segmentation fault      env "$@" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t221 timeout ${RUN_TO:-120} python3 render/run.py --no-ref --iter-dir t221-$tag --dump-views t221-dump-$tag > $S/run-$tag.log 2>&1
+      1 [DEV] command queues 2, compute grid 11x10
+      1 Traceback (most recent call last):
+      1 RuntimeError: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:2282: state.offset <= max_size
+      1 Program size (92496) too large for kernel config buffer (78848) on TENSIX
+      1 2026-10-05 14:03:16.834 | critical |          Always | TT_FATAL: Program size (92496) too large for kernel config buffer (78848) on TENSIX (assert.hpp:104)
+md5sum: '*': No such file or directory
+VIEWS DIFFER (0 of 0)
+=== done round s 14:03:19
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t221/.ttw/logs/t221-times-20261005-100300.log
+TIMEs_RC=0
+SPLIT_TOO_LARGE at default open: retry KX=16
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t221-times  timeout=400s  worry=320s  ts=2026-10-05T10:03:21-0400
+cmd: RUN_TO=150 bash /localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh s split16:GSPLAT_TT_PFWC_WRITER_SPLIT=1,GSPLAT_TT_KCFG_EXTRA_KB=16
+-----------------------------------------
+=== rs-split16 6c0b2e5 GSPLAT_TT_PFWC_WRITER_SPLIT=1 GSPLAT_TT_KCFG_EXTRA_KB=16 14:03:21
+run rc=139
+/localdev/smarton/gstt2-t221/docs/pfwc-writer-split-t207/dev-t221/remote_time.sh: line 12: 1795009 Segmentation fault      env "$@" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t221 timeout ${RUN_TO:-120} python3 render/run.py --no-ref --iter-dir t221-$tag --dump-views t221-dump-$tag > $S/run-$tag.log 2>&1
+      1 [DEV] command queues 2, compute grid 11x10
+      1 Traceback (most recent call last):
+      1 RuntimeError: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:2282: state.offset <= max_size
+      1 Program size (92496) too large for kernel config buffer (87040) on TENSIX
+      1 2026-10-05 14:03:26.341 | critical |          Always | TT_FATAL: Program size (92496) too large for kernel config buffer (87040) on TENSIX (assert.hpp:104)
+md5sum: '*': No such file or directory
+VIEWS DIFFER (0 of 0)
+=== done round s 14:03:28
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t221/.ttw/logs/t221-times-20261005-100320.log
+TIMEs_RC=0
+MD5_GATE_FAIL rs-split16
+CHAIN_DONE

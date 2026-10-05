@@ -1,0 +1,86 @@
+[sync_remote] sha=4caeab452deee1bba0d15424ec9a038172569e24 so_md5=35625d88fe7f74b33d459c02faa67cd3 
+[ttw 2026-10-05T10:04:12-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=580s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T10:04:12-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 580s.
+[ttw 2026-10-05T10:04:12-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T10:04:12-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T10:04:12-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T10:04:12-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T10:04:12-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T10:04:12-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T10:04:12-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T10:04:12-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T10:04:12-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T10:04:12-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t223-n960  timeout=580s  worry=464s  ts=2026-10-05T10:04:12-0400
+cmd: bash /localdev/smarton/gstt2-t223/docs/runpy-size-guard-t223/remote_run.sh n960 --no-ref --cameras docs/emit-trisc-own-t200/review-t217/cameras_960.json --view-range 0:4
+-----------------------------------------
+=== run n960 4caeab4 --no-ref --cameras docs/emit-trisc-own-t200/review-t217/cameras_960.json --view-range 0:4 14:04:13
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=15.2 p50_ms=14.6 min_ms=14.1 max_ms=17.4 n_views=4 warmup_s=17.6 out=/localdev/smarton/gstt2-t223/tmp/t223-n960
+MD5 n960 cf788a2c5d4ad2cb4fcadd9ed0f07fd6  view00_hero.png
+MD5 n960 a4f4b34f5233354d4ad5cbf39acdb239  view01_orb_00.png
+MD5 n960 edad52c1e3855cba2c9df943335ad1e9  view02_orb_01.png
+MD5 n960 ca43f28171db96bf34b9fbd8d33625f9  view03_orb_02.png
+=== done n960 rc=0 14:04:33
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t223/.ttw/logs/t223-n960-20261005-100412.log
+[ttw 2026-10-05T10:04:34-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=580s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T10:04:34-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 580s.
+[ttw 2026-10-05T10:04:34-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T10:04:34-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T10:04:34-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T10:04:34-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T10:04:34-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T10:04:34-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T10:04:34-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T10:04:34-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T10:04:34-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T10:04:34-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t223-r960  timeout=580s  worry=464s  ts=2026-10-05T10:04:34-0400
+cmd: bash /localdev/smarton/gstt2-t223/docs/runpy-size-guard-t223/remote_run.sh r960 --cameras docs/emit-trisc-own-t200/review-t217/cameras_960.json --view-range 0:4
+-----------------------------------------
+=== run r960 4caeab4 --cameras docs/emit-trisc-own-t200/review-t217/cameras_960.json --view-range 0:4 14:04:34
+run rc=0
+[run] WARNING: golden (1024, 1024, 3) != hero (960, 960, 3); skipping golden compare
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=41.29dB(8bit-vs-golden) hero_vs_cpu=41.29dB(float-vs-cpu) avg_frame_ms=15.2 p50_ms=14.7 min_ms=14.1 max_ms=17.4 n_views=4 warmup_s=1.9 out=/localdev/smarton/gstt2-t223/tmp/t223-r960
+MD5 r960 cf788a2c5d4ad2cb4fcadd9ed0f07fd6  view00_hero.png
+MD5 r960 a4f4b34f5233354d4ad5cbf39acdb239  view01_orb_00.png
+MD5 r960 edad52c1e3855cba2c9df943335ad1e9  view02_orb_01.png
+MD5 r960 ca43f28171db96bf34b9fbd8d33625f9  view03_orb_02.png
+=== done r960 rc=0 14:04:42
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t223/.ttw/logs/t223-r960-20261005-100434.log
+[ttw 2026-10-05T10:04:43-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=580s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-05T10:04:43-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 580s.
+[ttw 2026-10-05T10:04:43-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-05T10:04:43-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-05T10:04:43-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-05T10:04:43-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-05T10:04:43-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-05T10:04:43-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-05T10:04:43-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-05T10:04:43-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-05T10:04:43-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-05T10:04:43-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t223-r1024  timeout=580s  worry=464s  ts=2026-10-05T10:04:43-0400
+cmd: bash /localdev/smarton/gstt2-t223/docs/runpy-size-guard-t223/remote_run.sh r1024 --view-range 0:2
+-----------------------------------------
+=== run r1024 4caeab4 --view-range 0:2 14:04:44
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=100.00dB(8bit-vs-golden) hero_vs_cpu=41.37dB(float-vs-cpu) avg_frame_ms=13.9 p50_ms=13.9 min_ms=12.5 max_ms=15.2 n_views=2 warmup_s=1.8 out=/localdev/smarton/gstt2-t223/tmp/t223-r1024
+MD5 r1024 c4a040a51f2dd77d3a223cb70b778d7f  view00_hero.png
+MD5 r1024 b1304e66bb1b61680c2b61c4be845b60  view01_orb_00.png
+=== done r1024 rc=0 14:04:51
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t223/.ttw/logs/t223-r1024-20261005-100443.log
+RCS 0 0 0
+CHAIN_RC=0

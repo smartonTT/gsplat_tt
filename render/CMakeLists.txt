@@ -77,6 +77,7 @@ add_library(render_tt STATIC
   host/blend_device.cpp
   host/device_state.cpp
   host/jit_warmup.cpp
+  host/stage_timers.cpp
 )
 set_target_properties(render_tt PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(render_tt PUBLIC

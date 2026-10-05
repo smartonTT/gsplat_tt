@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t181/opt/profiler/analyze_zones.py", line 88, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t181/opt/profiler/analyze_zones.py", line 39, in main
+    for parts in kept_rows(path):
+  File "/localdev/smarton/gstt2-t181/opt/profiler/stitch_device_csv.py", line 81, in kept_rows
+    _, lines, ts = read_csv(path)
+  File "/localdev/smarton/gstt2-t181/opt/profiler/stitch_device_csv.py", line 46, in read_csv
+    with open(path) as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'opt/profiler/t181-off/dev30.csv'

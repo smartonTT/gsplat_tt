@@ -14,12 +14,23 @@
 //   0..8 : DRAM base addresses (mcx, mcy, mcz, c00, c01, c02, c11, c12, c22)
 //   9    : chunk_start (this core's first tile index)
 //   10   : num_chunks
+//   11   : PFWC_VIS only (task #99): scene opacity DRAM base (10th stream, CB 30)
+//   12   : PFWC_VIS only: tile stride (1: tiles chunk_start + k, the legacy
+//          contiguous range; num_cores: the strided deal of the lever B fused
+//          writer, task #125)
 //
-// COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8.
+// COMPILE-TIME ARGS: 9 TensorAccessorArgs, in the same order as runtime args 0..8
+// (10 with PFWC_VIS, the opacity last).
 
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#ifdef PFWC_STEPCYC
+// Task #197 (GSPLAT_TT_PFWC_STEPCYC): wall cycles in the CB reserves (compute
+// back-pressure) and in the read barrier (DRAM latency), recorded at the end (profiler builds) as "pfwc_pr":
+// "PR n wall reserve barrier".
+#define PR_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
+#endif
 
 void kernel_main() {
     const uint32_t mcx_addr  = get_arg_val<uint32_t>(0);
@@ -33,6 +44,14 @@ void kernel_main() {
     const uint32_t c22_addr  = get_arg_val<uint32_t>(8);
     const uint32_t chunk_start = get_arg_val<uint32_t>(9);
     const uint32_t num_chunks  = get_arg_val<uint32_t>(10);
+#ifdef PFWC_VIS
+    // Task #99 (lever 2): scene opacity, the 10th stream, for the SFPU predicate.
+    const uint32_t op_addr = get_arg_val<uint32_t>(11);
+    const uint32_t tile_stride = get_arg_val<uint32_t>(12);
+    constexpr uint32_t CB_OP = 30;
+#else
+    constexpr uint32_t tile_stride = 1;
+#endif
 
     constexpr uint32_t CB_MCX = 0;
     constexpr uint32_t CB_MCY = 1;
@@ -65,13 +84,35 @@ void kernel_main() {
     const auto acc_c11 = TensorAccessor(a6, c11_addr, tile_bytes);
     const auto acc_c12 = TensorAccessor(a7, c12_addr, tile_bytes);
     const auto acc_c22 = TensorAccessor(a8, c22_addr, tile_bytes);
+#ifdef PFWC_VIS
+    constexpr auto a9 = TensorAccessorArgs<a8.next_compile_time_args_offset()>();
+    const auto acc_op = TensorAccessor(a9, op_addr, tile_bytes);
+#endif
 
     if (num_chunks == 0) {
         return;
     }
 
+#ifdef PFWC_STEPCYC
+    const uint32_t pr_w0 = PR_NOW();
+    uint32_t pr_res = 0, pr_bar = 0;
+#endif
     for (uint32_t k = 0; k < num_chunks; k++) {
-        const uint32_t tile_id = chunk_start + k;
+        const uint32_t tile_id = chunk_start + k * tile_stride;
+#ifdef PFWC_STEPCYC
+        {
+            // All reserves up front (same CB state as below: nothing else
+            // reserves these CBs), so the wait on compute is timed alone.
+            const uint32_t t0 = PR_NOW();
+            cb_reserve_back(CB_MCX, 1); cb_reserve_back(CB_MCY, 1); cb_reserve_back(CB_MCZ, 1);
+            cb_reserve_back(CB_C00, 1); cb_reserve_back(CB_C01, 1); cb_reserve_back(CB_C02, 1);
+            cb_reserve_back(CB_C11, 1); cb_reserve_back(CB_C12, 1); cb_reserve_back(CB_C22, 1);
+#ifdef PFWC_VIS
+            cb_reserve_back(CB_OP, 1);
+#endif
+            pr_res += PR_NOW() - t0;
+        }
+#endif
 
         cb_reserve_back(CB_MCX, 1);
         noc_async_read_tile(tile_id, acc_mcx, get_write_ptr(CB_MCX));
@@ -91,8 +132,18 @@ void kernel_main() {
         noc_async_read_tile(tile_id, acc_c12, get_write_ptr(CB_C12));
         cb_reserve_back(CB_C22, 1);
         noc_async_read_tile(tile_id, acc_c22, get_write_ptr(CB_C22));
+#ifdef PFWC_VIS
+        cb_reserve_back(CB_OP, 1);
+        noc_async_read_tile(tile_id, acc_op, get_write_ptr(CB_OP));
+#endif
 
+#ifdef PFWC_STEPCYC
+        const uint32_t tb = PR_NOW();
         noc_async_read_barrier();
+        pr_bar += PR_NOW() - tb;
+#else
+        noc_async_read_barrier();
+#endif
 
         cb_push_back(CB_MCX, 1);
         cb_push_back(CB_MCY, 1);
@@ -103,5 +154,12 @@ void kernel_main() {
         cb_push_back(CB_C11, 1);
         cb_push_back(CB_C12, 1);
         cb_push_back(CB_C22, 1);
+#ifdef PFWC_VIS
+        cb_push_back(CB_OP, 1);
+#endif
     }
+#ifdef PFWC_STEPCYC
+    const uint32_t pr_v[4] = {num_chunks, PR_NOW() - pr_w0, pr_res, pr_bar};
+    for (uint32_t i = 0; i < 4; i++) DeviceTimestampedData("pfwc_pr", (uint64_t(i) << 32) | pr_v[i]);
+#endif
 }

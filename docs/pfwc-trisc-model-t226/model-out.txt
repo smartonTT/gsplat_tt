@@ -1,0 +1,10 @@
+T1 sum 2.210 ms/view = 54844 cyc/chunk
+steps a..rady: 24742 cyc, op model 21184, residual 3558 over 16 sec+pack units = 222/unit
+cov_cam pass calibration: 1.02 cycles per SFPU instruction
+optimistic  cpi 1.0: P2 new 12302 cyc, saves 12440 cyc = 0.501 ms/view; X saves 3522 cyc = 0.142 ms/view
+central     cpi 1.2: P2 new 12859 cyc, saves 11883 cyc = 0.479 ms/view; X saves 3177 cyc = 0.128 ms/view
+pessimistic cpi 2.0: P2 new 15086 cyc, saves 9656 cyc = 0.389 ms/view; X saves 1794 cyc = 0.072 ms/view
+R (radii reuse only) saves 6080 cyc = 0.245 ms/view
+optimistic : TRISC after P2 1.71 ms, after P2+X 1.57 ms; floor max(TRISC, 1.19) = 1.71
+central    : TRISC after P2 1.73 ms, after P2+X 1.61 ms; floor max(TRISC, 1.19) = 1.73
+pessimistic: TRISC after P2 1.82 ms, after P2+X 1.75 ms; floor max(TRISC, 1.19) = 1.82

@@ -1,0 +1,52 @@
+# task #26 (R11 adaptive radix): 30-view Tracy device zones (3 chunks x 10 views, stitched), yyzo-bh-07 (Blackhole p100a), bicycle 1024x1024
+# tree = 3d59718 + adaptive sort_radix_tile (commit 2a1bc33 content). render.tracy here is chunk 0-10.
+# Before (docs/tracy-chunked-2026-09-30.md, task #16): sort_tile_depth mean 6.75 / max 6.97 ms/view. After: see below.
+
+zone                 core_ms/v cores  mean_ms   max_ms balance  occ_%  riscs
+--------------------------------------------------------------------------------
+TRISC-FW              10394.47   330   31.498   34.049    0.93   38.0  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL          10392.53   330   31.493   34.048    0.92   38.0  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW               8567.91   110   77.890   83.339    0.93   93.1  BRISC
+BRISC-KERNEL           6729.91   110   61.181   64.625    0.95   72.3  BRISC
+NCRISC-FW              6688.68   110   60.806   65.743    0.92   73.3  NCRISC
+NCRISC-KERNEL          6686.07   110   60.782   65.721    0.92   73.3  NCRISC
+tile_mb_mask           4938.04   330   14.964   15.930    0.94   17.8  TRISC_0,TRISC_1,TRISC_2
+tile_blend_sfpu        4809.98   330   14.576   17.066    0.85   19.1  TRISC_0,TRISC_1,TRISC_2
+sort_bucket_emit       1711.94   220    7.782    8.073    0.96    9.0  BRISC,NCRISC
+tile_l1_cull_rd        1615.74   110   14.689   15.657    0.94   17.5  NCRISC
+tile_blend_load        1549.71   110   14.088   16.603    0.85   18.5  NCRISC
+rd_l1_bulk             1540.47   110   14.004   16.486    0.85   18.4  NCRISC
+proj_scatter           1150.98   110   10.463   11.936    0.88   13.4  BRISC
+sort_subchunk_mat      1043.97   110    9.491   11.933    0.80   13.3  NCRISC
+ta_bucket_scatter       738.66   220    3.358    3.590    0.94    4.0  BRISC,NCRISC
+pfwc                    644.43   330    1.953    1.987    0.98    2.3  TRISC_0,TRISC_1,TRISC_2
+proj_count              609.22   110    5.538    6.112    0.91    6.9  BRISC
+ta_gauss_aabb           556.55   220    2.530    2.540    1.00    2.8  BRISC,NCRISC
+sort_tile_depth         417.77   110    3.798    3.979    0.95    4.5  NCRISC
+sort_bin_hist            95.23   110    0.866    0.881    0.98    1.0  NCRISC
+
+stage        window_ms/v     min     max  zones
+--------------------------------------------------------------------------------
+project            20.19   18.40   22.09  pfwc+proj_count+proj_scatter
+tile_assign         7.52    5.68    9.24  ta_gauss_aabb+ta_bucket_scatter
+sort               14.33   11.66   16.84  sort_bin_hist+sort_bucket_emit+sort_tile_depth
+subchunk_mat       11.93    8.86   16.46  sort_subchunk_mat
+cull               15.93   13.05   18.60  tile_mb_mask+tile_l1_cull_rd
+blend              17.07   13.64   20.35  tile_blend_sfpu+tile_blend_load+rd_l1_bulk
+
+zone (timeline)      start_ms   end_ms   window  (mean over views)
+------------------------------------------------------------
+pfwc                     0.00     1.99     1.99
+proj_count               2.03     8.14     6.11
+proj_scatter             8.25    20.19    11.94
+ta_gauss_aabb           20.36    22.90     2.54
+ta_bucket_scatter       24.28    27.87     3.59
+sort_bin_hist           29.16    30.04     0.88
+sort_bucket_emit        31.40    39.48     8.07
+sort_tile_depth         39.51    43.49     3.98
+sort_subchunk_mat       44.72    56.65    11.93
+tile_mb_mask            56.66    72.59    15.93
+tile_l1_cull_rd         56.66    72.31    15.66
+tile_blend_sfpu         72.60    89.67    17.07
+tile_blend_load         72.60    89.21    16.60
+rd_l1_bulk              72.61    89.21    16.60

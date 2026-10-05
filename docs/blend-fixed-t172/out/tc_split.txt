@@ -1,0 +1,25 @@
+cores=110 launches=3 dropped_tiles=0
+
+== launch 0: tiles 1024, records 2895701, live 2345549, disp 6584240, readbacks 5143
+mean per core ms: wall=5.784 loop(records)=5.683 trb=0.097 stage=0.000 tail=0.000 init=0.004 emit=0.000 other(waits)=0.000
+per tile us: stage=0.03 tail=0.01 init=0.41 emit=0.01 other=0.05 trb_each=1.10
+fixed (stage+tail+init+emit) per tile 0.47 us, 0.004 ms/core; + waits 0.005
+fit cyc ~ 1 + rec + live: 91.2139 0.0264 0.1986  rms 70.3 us
+fit cyc ~ 1 + rec + live + disp + ntrb: 0.9861 0.0161 0.0801 0.0610 -2.3880  rms 14.7 us
+fit cyc-trb-stage ~ 1 + rec + live + disp: 2.1273 0.0115 0.0800 0.0611  rms 14.7 us
+
+== launch 1: tiles 1024, records 2895701, live 2345549, disp 6584240, readbacks 5143
+mean per core ms: wall=5.784 loop(records)=5.683 trb=0.097 stage=0.000 tail=0.000 init=0.004 emit=0.000 other(waits)=0.000
+per tile us: stage=0.03 tail=0.01 init=0.41 emit=0.01 other=0.05 trb_each=1.10
+fixed (stage+tail+init+emit) per tile 0.47 us, 0.004 ms/core; + waits 0.005
+fit cyc ~ 1 + rec + live: 91.2117 0.0264 0.1986  rms 70.3 us
+fit cyc ~ 1 + rec + live + disp + ntrb: 0.9823 0.0161 0.0800 0.0610 -2.3930  rms 14.7 us
+fit cyc-trb-stage ~ 1 + rec + live + disp: 2.1260 0.0115 0.0800 0.0611  rms 14.7 us
+
+== launch 2: tiles 1024, records 2090634, live 1693003, disp 5158379, readbacks 3587
+mean per core ms: wall=4.394 loop(records)=4.320 trb=0.069 stage=0.000 tail=0.000 init=0.004 emit=0.000 other(waits)=0.000
+per tile us: stage=0.03 tail=0.01 init=0.41 emit=0.01 other=0.05 trb_each=0.91
+fixed (stage+tail+init+emit) per tile 0.46 us, 0.004 ms/core; + waits 0.005
+fit cyc ~ 1 + rec + live: 83.9349 0.0290 0.1987  rms 63.8 us
+fit cyc ~ 1 + rec + live + disp + ntrb: 2.2522 0.0135 0.0822 0.0600 -1.0909  rms 11.4 us
+fit cyc-trb-stage ~ 1 + rec + live + disp: 2.7326 0.0114 0.0822 0.0600  rms 11.4 us

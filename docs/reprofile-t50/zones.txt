@@ -1,0 +1,23 @@
+n_views=30  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                  357186.9 11906.231      1163.3      38.777    29700  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL              347117.3 11570.578      1100.7      36.688    29700  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                  227960.4  7598.680      2143.6      71.454    46260  BRISC
+NCRISC-FW                 222852.5  7428.417      2093.4      69.781    46230  NCRISC
+NCRISC-KERNEL             219376.3  7312.543      2081.3      69.376    46230  NCRISC
+BRISC-KERNEL              185505.0  6183.498      1757.6      58.587    29730  BRISC
+tile_blend_sfpu           179112.8  5970.428       592.5      19.749     9900  TRISC_0,TRISC_1,TRISC_2
+tile_mb_mask              148668.9  4955.630       478.6      15.952     9900  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            57492.3  1916.411       573.2      19.106     3300  NCRISC
+rd_l1_bulk                 57214.3  1907.142       568.4      18.946    33925  NCRISC
+sort_bucket_emit           51107.8  1703.595       238.7       7.955     6600  BRISC,NCRISC
+tile_l1_cull_rd            48644.6  1621.487       470.1      15.669     3300  NCRISC
+proj_scatter               30354.2  1011.805       165.2       5.508     6600  BRISC,NCRISC
+ta_bucket_scatter          22193.3   739.777       105.7       3.525     6600  BRISC,NCRISC
+pfwc                       19333.3   644.444        59.6       1.986     9900  TRISC_0,TRISC_1,TRISC_2
+proj_count                 18245.3   608.178        96.8       3.227     6600  BRISC,NCRISC
+ta_gauss_aabb              16696.6   556.552        76.2       2.539     6600  BRISC,NCRISC
+sort_subchunk_mat          15203.7   506.791       168.2       5.608     3300  NCRISC
+sort_tile_depth            12532.4   417.747       118.2       3.941     3300  NCRISC
+sort_bin_hist               2843.2    94.775        26.2       0.875     3300  NCRISC
