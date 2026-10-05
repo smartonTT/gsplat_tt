@@ -48,3 +48,11 @@ bool cb_pages_reservable_at_back(int32_t operand, int32_t num_pages);
 bool cb_pages_available_at_front(int32_t operand, int32_t num_pages);
 extern uint8_t noc_index;
 bool ncrisc_noc_reads_flushed(uint32_t noc);
+// NoC register reads (task #232: the physical NoC0 column).
+uint32_t NOC_CMD_BUF_READ_REG(uint32_t noc, uint32_t buf, uint32_t addr);
+#ifndef NOC_NODE_ID
+#define NOC_NODE_ID 0x44u
+#endif
+#ifndef NOC_NODE_ID_MASK
+#define NOC_NODE_ID_MASK ((((uint64_t)0x1) << 6) - 1)
+#endif

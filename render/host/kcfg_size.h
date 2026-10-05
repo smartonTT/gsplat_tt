@@ -19,11 +19,14 @@ inline bool kcfg_profiler_on(const char* prof_env) {
 // Task #207/#221: the split pfwc writer adds the writer code to the NCRISC kernel
 // (92496 B program, too large at +8 and +16 KB); SFPU cov_cam alone needs ~4 KB.
 // split_fused: the split is on and builds (it only builds with the fused writer).
-// Task #258: the device profiler grows every kernel binary; the default program then
+// Task #232: with the BRISC reader (GSPLAT_TT_PFWC_RD_*, rd_brisc) the split program is
+// 96288 B with P2 and 98000 B without, too large at +24 KB.
+// Task #258: the device profiler grows every kernel binary; the t221 default program then
 // overflows +24 KB (TT_FATAL state.offset <= max_size in pfwc) and fits at +32 KB.
-inline long kcfg_extra_kb(const char* extra_env, bool split_fused, bool covcam_sfpu, bool profiler) {
+inline long kcfg_extra_kb(const char* extra_env, bool split_fused, bool rd_brisc, bool covcam_sfpu,
+                          bool profiler) {
     if (extra_env != nullptr) return std::atol(extra_env);
-    long kb = split_fused ? 24 : (covcam_sfpu ? 8 : 0);
+    long kb = split_fused ? (rd_brisc ? 32 : 24) : (covcam_sfpu ? 8 : 0);
     if (profiler) kb += 8;
     return kb;
 }

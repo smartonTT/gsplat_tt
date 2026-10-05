@@ -92,7 +92,8 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         const long extra_kb = kcfg_extra_kb(
             std::getenv("GSPLAT_TT_KCFG_EXTRA_KB"),
             env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1,
-            env_config::pfwc_covcam_sfpu(), kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")));
+            env_config::pfwc_rd_brisc(), env_config::pfwc_covcam_sfpu(),
+            kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")));
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
         if (extra_kb > 0 || num_cqs > 1) {

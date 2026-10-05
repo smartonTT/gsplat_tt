@@ -200,7 +200,8 @@ inline bool mat_cq1() {
 // NCRISC (odd chunks, plus the reader), writer_pfwc_split.cpp. Default on since
 // task #221 (=0 off): with pfwc_covcam_sfpu() paired -0.64 ms/view, alone -0.18.
 // The split program is 92496 B, so the device opens with 24 KB more kernel config
-// buffer (+32 KB with the device profiler) unless GSPLAT_TT_KCFG_EXTRA_KB is set (kcfg_size.h).
+// buffer (32 KB with the BRISC reader, task #232; 8 KB more with the device profiler)
+// unless GSPLAT_TT_KCFG_EXTRA_KB is set (kcfg_size.h).
 inline bool pfwc_writer_split() {
     static const bool v = env_uint("GSPLAT_TT_PFWC_WRITER_SPLIT", 1u) != 0u;
     return v;
@@ -216,11 +217,40 @@ inline bool pfwc_covcam_sfpu() {
 // Task #228 (P2, docs/pfwc-trisc-model-t226): cov2d a / b / c, the conic fold and the
 // radii (pfwc steps 7-11) in two DEST acquires with two looped SFPU passes
 // (pfwc_cov2d_sfpu.h) instead of six acquires of tile ops. Same rounding order, so
-// bit-identical. Default 0 (=1 on): measured +0.256 ms/view, because pfwc then waits on
-// the NCRISC writer on the right-hand grid columns (docs/pfwc-cov2d-sfpu-t228).
+// bit-identical. Alone it measured +0.256 ms/view (docs/pfwc-cov2d-sfpu-t228): pfwc then
+// waits on the NCRISC / NoC1 writer on the right-hand grid columns. Default on since task
+// #232 (=0 off), together with GSPLAT_TT_PFWC_RD_REST=0x0F (docs/pfwc-noc1-balance-t232).
 inline bool pfwc_cov2d_sfpu() {
-    static const bool v = env_uint("GSPLAT_TT_PFWC_COV2D_SFPU", 0u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_PFWC_COV2D_SFPU", 1u) != 0u;
     return v;
+}
+
+// Task #232: with the writer split, BRISC / NoC0 instead of NCRISC / NoC1 reads a set of
+// the 10 pfwc input tiles (bit o = tile o: mx my mz c00 c01 c02 c11 c12 c22 opacity):
+// GSPLAT_TT_PFWC_RD_SET on the cores in physical NoC0 column x where bit x of
+// GSPLAT_TT_PFWC_RD_BRISC is set, GSPLAT_TT_PFWC_RD_REST on the others. Hex or decimal.
+// Defaults: RD_BRISC 0, RD_SET 0x3FF (all ten), RD_REST 0x0F (BRISC reads mx my mz c00 on
+// every core, NCRISC the other six; =0 NCRISC reads all ten). With P2 the 4 / 6 split
+// measured -0.330 ms/view vs P2 off and NCRISC reading all (docs/pfwc-noc1-balance-t232).
+inline unsigned int env_hex(const char* name, unsigned int dflt) {
+    const char* e = std::getenv(name);
+    return (e != nullptr && *e != '\0') ? static_cast<unsigned int>(std::strtoul(e, nullptr, 0)) : dflt;
+}
+inline unsigned int pfwc_rd_brisc_cols() {
+    static const unsigned int v = env_hex("GSPLAT_TT_PFWC_RD_BRISC", 0u);
+    return v;
+}
+inline unsigned int pfwc_rd_set() {
+    static const unsigned int v = env_hex("GSPLAT_TT_PFWC_RD_SET", 0x3FFu) & 0x3FFu;
+    return v;
+}
+inline unsigned int pfwc_rd_rest() {
+    static const unsigned int v = env_hex("GSPLAT_TT_PFWC_RD_REST", 0x0Fu) & 0x3FFu;
+    return v;
+}
+// BRISC reads some input tile on some core (writer_pfwc_split.cpp PFWC_RD_COLS).
+inline bool pfwc_rd_brisc() {
+    return (pfwc_rd_brisc_cols() != 0u && pfwc_rd_set() != 0u) || pfwc_rd_rest() != 0u;
 }
 
 }  // namespace gsplat_tt::env_config
