@@ -1409,11 +1409,30 @@ def cull_tune_section() -> str:
 """
 
 
-# TT anchor for the GPU ratio: the latest measured 30-view 1024x1024 bicycle
-# average (iter-180 / task #146, docs/blend-diet-t146/README.md), measured on a
-# Blackhole P100 (p100a) in yyzo-bh-07. The iter-141 plateau was 173.3 ms.
-TT_ANCHOR_MS = 19.65
-TT_ANCHOR_LABEL = "Blackhole P100 (yyzo-bh-07), iter-180 blend TRISC1 diet (21.25 at iter-179; 173.3 at the iter-141 plateau)"
+# TT anchor for the GPU ratio: the newest measured tip, i.e. the highest-numbered
+# 'keep' row in opt/ttw/iters.jsonl with a measured 30-view 1024x1024 bicycle
+# timings.ms_view, labelled with its board. Falls back to iter-180 (19.65 ms,
+# docs/blend-diet-t146) only if no such row exists.
+def tt_anchor() -> tuple[float, str]:
+    best = None
+    for r in load_ttw_iters():
+        ms = (r.get("timings") or {}).get("ms_view")
+        if r.get("decision") != "keep" or not isinstance(ms, (int, float)):
+            continue
+        if best is None or int(r.get("iter", -1)) > int(best.get("iter", -1)):
+            best = r
+    if best is None:
+        return 19.65, "Blackhole P100 (yyzo-bh-07), iter-180 blend TRISC1 diet"
+    m = best.get("metrics") if isinstance(best.get("metrics"), dict) else {}
+    board = m.get("board") or "board not recorded"
+    commit = (best.get("buildid") or {}).get("cpp", "")
+    label = f"{board}, iter-{best.get('iter')} measured tip"
+    if commit:
+        label += f" ({commit})"
+    return float(best["timings"]["ms_view"]), label
+
+
+TT_ANCHOR_MS, TT_ANCHOR_LABEL = tt_anchor()
 
 GPU_RESULT_JSON = OPT_DIR / "cpu-vs-tt" / "gpu_result.json"
 

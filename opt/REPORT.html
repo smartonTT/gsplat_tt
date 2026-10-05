@@ -35,7 +35,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-05 08:14 EDT · 74 metal + 190 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-05 08:30 EDT · 74 metal + 190 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -55,9 +55,9 @@
   <table class='rows'>
     <tr><th>#</th><th>Renderer</th><th>Scene</th><th>GPU</th><th>Resolution</th>
         <th>Published speed</th><th>ms/view</th>
-        <th>vs TT (19.65 ms/view)</th><th>Source</th></tr>
-    <tr><td>G1</td><td>INRIA 3DGS (diff-gaussian-rasterization, Kerbl et al. 2023)</td><td>Mip-NeRF360 bicycle</td><td>NVIDIA RTX A6000</td><td>1920&times;1080</td><td>93 FPS (Fig. 1 teaser, bicycle)</td><td>10.75</td><td>GPU <b>1.8&times;</b> faster</td><td><a href='https://arxiv.org/abs/2308.04079' target='_blank'>arXiv:2308.04079</a></td></tr>
-<tr><td>G2</td><td>INRIA 3DGS, pixel-normalized to our bench</td><td>bicycle</td><td>NVIDIA RTX A6000</td><td>1024&times;1024 (normalized)</td><td>183.8 FPS-equivalent</td><td>5.44</td><td>GPU <b>3.6&times;</b> faster</td><td><a href='https://arxiv.org/abs/2308.04079' target='_blank'>derived from G1</a></td></tr>
+        <th>vs TT (14.235 ms/view)</th><th>Source</th></tr>
+    <tr><td>G1</td><td>INRIA 3DGS (diff-gaussian-rasterization, Kerbl et al. 2023)</td><td>Mip-NeRF360 bicycle</td><td>NVIDIA RTX A6000</td><td>1920&times;1080</td><td>93 FPS (Fig. 1 teaser, bicycle)</td><td>10.75</td><td>GPU <b>1.3&times;</b> faster</td><td><a href='https://arxiv.org/abs/2308.04079' target='_blank'>arXiv:2308.04079</a></td></tr>
+<tr><td>G2</td><td>INRIA 3DGS, pixel-normalized to our bench</td><td>bicycle</td><td>NVIDIA RTX A6000</td><td>1024&times;1024 (normalized)</td><td>183.8 FPS-equivalent</td><td>5.44</td><td>GPU <b>2.6&times;</b> faster</td><td><a href='https://arxiv.org/abs/2308.04079' target='_blank'>derived from G1</a></td></tr>
 <tr><td>G3</td><td>Kovini&cacute;/Stojkovi&cacute; TT line vs their CUDA reference</td><td>their test scenes</td><td>NVIDIA GTX 4060</td><td>not stated</td><td>their TT result &asymp; 1.6&times; slower than the 4060</td><td>&mdash;</td><td>&mdash;</td><td>Slack DM D0C1CV1AJJV, 2026-09-14</td></tr>
   </table>
   <p><b>Normalization assumption (G2):</b>
@@ -69,8 +69,8 @@
   would be higher. Not corrected for: different reconstruction (paper's 30K-iter
   bicycle vs our 6,131,954-Gaussian <code>bicycle.ply</code>), full SH vs our
   SH-degree-0 colors, and a different camera set.</p>
-  <p><b>TT anchor:</b> 19.65 ms/view (50.89 FPS)
-  &mdash; Blackhole P100 (yyzo-bh-07), iter-180 blend TRISC1 diet (21.25 at iter-179; 173.3 at the iter-141 plateau). Detail, sources and caveats: <a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; Published GPU reference rows.</p>
+  <p><b>TT anchor:</b> 14.235 ms/view (70.25 FPS)
+  &mdash; yyzo-bh-07 (Blackhole p100a), iter-194 measured tip (gsplat_tt ttp/t202 626de7b (A/B), a37ad1e (default on)). Detail, sources and caveats: <a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; Published GPU reference rows.</p>
 </section>
 
 
@@ -95,7 +95,7 @@
   Detail and the full search log: <a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; GPU reference.</p>
   <table class='kv'>
     <tr><th>TT anchor for the eventual ratio</th>
-        <td>19.65 ms/view (50.89 FPS) &mdash; Blackhole P100 (yyzo-bh-07), iter-180 blend TRISC1 diet (21.25 at iter-179; 173.3 at the iter-141 plateau)</td></tr>
+        <td>14.235 ms/view (70.25 FPS) &mdash; yyzo-bh-07 (Blackhole p100a), iter-194 measured tip (gsplat_tt ttp/t202 626de7b (A/B), a37ad1e (default on))</td></tr>
   </table>
 </section>
 
