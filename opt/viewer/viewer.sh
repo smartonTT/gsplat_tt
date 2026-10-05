@@ -3,12 +3,12 @@
 # box or the p100 lock). Run from a checkout/worktree of gstt2 on the Mac.
 #   opt/viewer/viewer.sh deploy [rev]  sync+build rev (default: newest best-iter-* tag) and restart
 #   opt/viewer/viewer.sh start | stop | restart | status | log | tunnel
-# Env: VIEWER_HOST (bh-35), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8081 on the Mac).
+# Env: VIEWER_HOST (bh-35), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac).
 # One-time box setup (tt-metal, venv, scenes): opt/viewer/setup_box.sh.
 set -euo pipefail
 HOST=${VIEWER_HOST:-bh-35}
 PORT=${VIEWER_PORT:-8080}
-LPORT=${VIEWER_LOCAL_PORT:-8081}
+LPORT=${VIEWER_LOCAL_PORT:-8091}
 VDIR=/localdev/smarton/viewer
 DIR=$VDIR/tree
 # Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key.

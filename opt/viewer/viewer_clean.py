@@ -55,7 +55,10 @@ def main():
     gauss = load_ply(args.ply_path)
     viewer = GaussianViewer(gauss, host=args.host, port=args.port, backend="tt_clean",
                             render_width=W, render_height=H, verbose=args.verbose,
-                            scene_path=args.ply_path)
+                            scene_path=args.ply_path,
+                            # Same contribution floor as the bench (1/255), not the
+                            # slider's 1/16384: that kept more pairs (slower, other image).
+                            contrib_floor=float(cam["contrib_floor"]))
 
     if args.selftest > 0:
         # Same call the viewer makes per frame (pipeline.render), hero view of
