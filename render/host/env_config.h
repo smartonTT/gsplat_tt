@@ -227,9 +227,10 @@ inline bool pfwc_cov2d_sfpu() {
 
 // Task #266: pfwc step 2 computes 1/tz as SFPARECIP + two Newton steps
 // (pfwc_recip_nr.h, ~1 ulp) instead of recip_tile's legacy path (up to 1.5e-3
-// relative for z just below a power of two; task #260). =1 on, changes the image.
+// relative for z just below a power of two; task #260). Default on since task #290
+// (hero 41.16 -> 42.51 dB vs reference_v2, cost noise); =0 restores recip_tile.
 inline bool pfwc_recip_newton() {
-    static const bool v = env_uint("GSPLAT_TT_PFWC_RECIP_NEWTON", 0u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_PFWC_RECIP_NEWTON", 1u) != 0u;
     return v;
 }
 
