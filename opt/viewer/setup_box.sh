@@ -37,7 +37,12 @@ steps() {
     "$BASE/.venv/bin/pip" install -q numpy==2.2.6 viser==1.0.27 nerfview==0.1.3 \
       pybind11==3.0.4 plyfile==1.1.3 pillow scipy matplotlib jaxtyping imageio rich splines==0.3.3 websockets==15.0.1
   fi
-  "$BASE/.venv/bin/python" -c "import torch, viser, nerfview, pybind11; print('venv ok')"
+  # viser encodes frames with cv2 when it is importable: one GIL-free call, so the JPEG encode
+  # on the viewer's sender thread no longer slows the render (PIL's chunked encode cost the
+  # render +1.6 ms/frame; task #257).
+  "$BASE/.venv/bin/python" -c "import cv2" 2>/dev/null || \
+    "$BASE/.venv/bin/pip" install -q --no-deps opencv-python-headless==5.0.0.93
+  "$BASE/.venv/bin/python" -c "import torch, viser, nerfview, pybind11, cv2; print('venv ok')"
 }
 ( steps ); rc=$?
 echo "$rc" > "$VDIR/setup.rc"
