@@ -168,6 +168,27 @@ struct RecStage {
         const uint32_t ge = G0 + rl * nb + rb;
         if (ge > gs) flush_rec(G0, gs, ge);
     }
+    // flush_rec's writes of staged records [gs, ge) of group G0, as write(s, g,
+    // n): n staged slots from slot s to pages g, g + nb, ... (one DRAM bank, nb
+    // = the bank count), one call per bank; per_page (more banks than NB_MAX):
+    // one call per page, n = 1.
+    template <class W>
+    void writes(uint32_t G0_, uint32_t gs_, uint32_t ge_, bool per_page, W&& write) const {
+        const uint32_t d = gs_ - G0_, e = ge_ - G0_;
+        for (uint32_t b = 0; b < nb; ++b) {
+            uint32_t lo = 0, hi = RL;
+            if (d != 0 || e != GS) {
+                lo = d > b ? (d - b + nb - 1) / nb : 0;
+                hi = e > b ? (e - b + nb - 1) / nb : 0;
+            }
+            if (hi <= lo) continue;
+            if (per_page) {
+                for (uint32_t l = lo; l < hi; ++l) write(b * RL + l, G0_ + b + l * nb, 1u);
+            } else {
+                write(b * RL + lo, G0_ + b + lo * nb, hi - lo);
+            }
+        }
+    }
 };
 
 }  // namespace pfwc_wsplit

@@ -228,22 +228,9 @@ void kernel_main() {
     rs.init(nb);
     // Staged records [gs, ge) of group G0, one write per bank.
     auto flush_rec = [&](uint32_t G0, uint32_t gs, uint32_t ge) {
-        const uint32_t d = gs - G0, e = ge - G0;
-        for (uint32_t b = 0; b < nb; ++b) {
-            uint32_t lo = 0, hi = RL;
-            if (d != 0 || e != rs.GS) {
-                lo = d > b ? (d - b + nb - 1) / nb : 0;
-                hi = e > b ? (e - b + nb - 1) / nb : 0;
-            }
-            if (hi <= lo) continue;
-            if (per_page) {
-                for (uint32_t l = lo; l < hi; ++l)
-                    noc_async_write(l1_rec + (b * RL + l) * PB, get_noc_addr(G0 + b + l * nb, o_rec), PB);
-            } else {
-                noc_async_write(l1_rec + (b * RL + lo) * PB, get_noc_addr(G0 + b + lo * nb, o_rec),
-                                (hi - lo) * PB);
-            }
-        }
+        rs.writes(G0, gs, ge, per_page, [&](uint32_t s, uint32_t g, uint32_t n) {
+            noc_async_write(l1_rec + s * PB, get_noc_addr(g, o_rec), n * PB);
+        });
         noc_async_writes_flushed();  // staging reusable; completion at the end
     };
     auto l1a = [](volatile uint32_t* p) { return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p)); };
