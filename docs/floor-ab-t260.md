@@ -24,7 +24,10 @@ edges (spokes, frame, foliage).
 
 Recommendation: keep A as the speed default. If an accurate mode is wanted, B (1/1024) buys
 +4.7 dB for +0.98 ms; C adds only +0.9 dB for another +0.9 ms; D/E are dominated by C.
-Changing the default is the user's call.
+Changing the default is the user's call. The default stays 1/255. B is available as an
+opt-in accuracy mode: `GSPLAT_TT_CONTRIB_FLOOR_INV=1024 python3 render/run.py ...` (same
+effect as setting `contrib_floor` to 1/1024 in the cameras json): 12.63 vs 11.65 ms/view,
+45.83 vs 41.16 dB vs `benchmarks/reference_v2/hero.png`.
 
 ## Residual (~47 dB) diagnosis: projection
 

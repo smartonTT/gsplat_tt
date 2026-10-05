@@ -157,6 +157,14 @@ Outputs (`hero_clean.png`, `hero_ref.png`, `hero_diff10.png`) land in
 > backend's CPU output depends on them. `render_clean` itself ignores all of
 > them (its config is baked).
 
+Opt-in knobs (default off; unset = production default):
+
+- `GSPLAT_TT_CONTRIB_FLOOR_INV=1024` — accuracy mode: contrib floor 1/1024 instead of
+  1/255. Bicycle on p100a: 12.63 vs 11.65 ms/view, 45.83 vs 41.16 dB vs
+  `benchmarks/reference_v2/hero.png` (task #260, `docs/floor-ab-t260.md`).
+- `GSPLAT_TT_DUMP_PROJ=<dir>` — debug: dumps the first frame's resident projection
+  buffers as raw u32 files (see `docs/floor-ab-t260/compare_proj.py`).
+
 ---
 
 ## Hacking a kernel

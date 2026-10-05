@@ -272,6 +272,11 @@ def main():
     fov_deg = float(cam["fov_deg"])
     W, H = cam["image_size"]
     contrib_floor = cam.get("contrib_floor", 1.0 / 255.0)
+    # Opt-in accuracy mode (task #260): GSPLAT_TT_CONTRIB_FLOOR_INV=N sets the floor
+    # to 1/N, same as editing contrib_floor in the cameras json. Bicycle, N=1024:
+    # 12.63 vs 11.65 ms/view, 45.83 vs 41.16 dB vs reference_v2. Unset = default 1/255.
+    if os.environ.get("GSPLAT_TT_CONTRIB_FLOOR_INV"):
+        contrib_floor = 1.0 / float(os.environ["GSPLAT_TT_CONTRIB_FLOOR_INV"])
     order = cam["order"]
     hero_name = order[0]
     hero_view = cam["views"][hero_name]
