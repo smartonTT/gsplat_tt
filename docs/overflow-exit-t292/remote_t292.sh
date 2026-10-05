@@ -4,6 +4,7 @@
 #   1. new, 30 bench views: sweep md5 must be the iter-205 golden 906e0435.
 #   2. cap 1 (GSPLAT_TT_TEST_TILE_CAP=1), hero only: base vs new. RuntimeError must
 #      surface; new must exit rc 1 with no SIGSEGV in static teardown.
+# Arg 'new' skips the base runs.
 #   3. cull disabled + cap 20000, hero only: base retries uselessly; new fails at once.
 set -u
 ulimit -c 0
@@ -53,8 +54,8 @@ run() {  # tag dir py|cd camjson|- dump(0/1) [ENV=V ...]
 }
 HERO=$S/cam_hero.json
 run bench-new $NEW py - 1
-RUN_TO=180 run cap1-base $BASE py $HERO 0 GSPLAT_TT_TEST_TILE_CAP=1
+[ "${1:-}" = new ] || RUN_TO=180 run cap1-base $BASE py $HERO 0 GSPLAT_TT_TEST_TILE_CAP=1
 RUN_TO=180 run cap1-new $NEW py $HERO 0 GSPLAT_TT_TEST_TILE_CAP=1
-RUN_TO=180 run cd-base $BASE cd $HERO 0 GSPLAT_TT_TEST_TILE_CAP=20000
+[ "${1:-}" = new ] || RUN_TO=180 run cd-base $BASE cd $HERO 0 GSPLAT_TT_TEST_TILE_CAP=20000
 RUN_TO=180 run cd-new $NEW cd $HERO 0 GSPLAT_TT_TEST_TILE_CAP=20000
 echo "=== done $(date +%T)"
