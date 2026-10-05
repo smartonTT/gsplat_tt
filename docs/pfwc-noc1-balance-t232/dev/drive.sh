@@ -57,7 +57,7 @@ fi
 if has smoke; then
   if [ $KX = 0 ]; then
     RT=300 tm s 460 fix:$FIX; fetch s fix
-    if md5ok s fix; then echo "MD5_OK s-fix (default open, auto +24 KB)"
+    if md5ok s fix; then echo "MD5_OK s-fix (default open, auto +24 / +32 KB)"
     elif big s fix; then echo "FIX_TOO_LARGE at default open: retry KX=32"; KX=32
     else echo "MD5_GATE_FAIL s-fix"; echo CHAIN_DONE; exit 4; fi
   fi
