@@ -47,3 +47,12 @@ drive3 on a6da4e4 stopped at its smoke too: v2 alone (fold off) hung on view 0 (
 so the board state is suspect; but the v2 table also reaches the K2 count-fold split (shared
 mover_speed_table()), which the pre-rebase gate never ran with. drive4.sh smokes tip, v2 and v2 with
 GSPLAT_TT_K2_FOLD=0 (2 views each, every arm runs), then the drive3 gate if tip and v2 pass.
+
+## drive4 result and drive5 (table only)
+
+drive4 (e4562c0, yyzo-bh-07 p100a, 17:15-17:30): all three 2-view smokes hung
+(rc=124): tip (v0 file), v2, v2 with GSPLAT_TT_K2_FOLD=0. The hang is not the v2
+table. The t164 fold is dropped (kernel back to smarton/tt-project-opt, no
+GSPLAT_TT_OL_EMIT_FOLD), so the branch now differs from the tip only in the host
+speed table. drive5.sh smokes the real tip in its own dir (board check), then the
+branch's v0 and v2 arms, and runs the drive3 gate if all pass.
