@@ -1,0 +1,41 @@
+0 mat_mean=2.512 mat_max=3.021 barrier=6.803 flags=6.343 saving=0.460 ungated=0.506 ready_wait=0.050 big_ready=3.021 bmax=1.813
+1 mat_mean=2.512 mat_max=3.021 barrier=6.821 flags=6.406 saving=0.415 ungated=0.511 ready_wait=0.115 big_ready=3.021 bmax=2.131
+2 mat_mean=2.512 mat_max=3.021 barrier=6.813 flags=6.407 saving=0.406 ungated=0.503 ready_wait=0.114 big_ready=3.021 bmax=2.061
+3 mat_mean=2.512 mat_max=3.021 barrier=6.810 flags=6.389 saving=0.421 ungated=0.498 ready_wait=0.093 big_ready=3.021 bmax=1.987
+4 mat_mean=2.512 mat_max=3.021 barrier=6.812 flags=6.382 saving=0.430 ungated=0.502 ready_wait=0.085 big_ready=3.021 bmax=1.844
+5 mat_mean=2.512 mat_max=3.021 barrier=6.815 flags=6.383 saving=0.432 ungated=0.506 ready_wait=0.088 big_ready=3.021 bmax=1.871
+6 mat_mean=2.512 mat_max=3.021 barrier=6.811 flags=6.348 saving=0.463 ungated=0.508 ready_wait=0.050 big_ready=3.021 bmax=1.870
+7 mat_mean=2.512 mat_max=3.021 barrier=6.808 flags=6.340 saving=0.468 ungated=0.507 ready_wait=0.046 big_ready=3.021 bmax=1.717
+8 mat_mean=2.512 mat_max=3.021 barrier=6.808 flags=6.336 saving=0.472 ungated=0.509 ready_wait=0.044 big_ready=3.021 bmax=1.627
+9 mat_mean=2.512 mat_max=3.021 barrier=6.805 flags=6.330 saving=0.475 ungated=0.512 ready_wait=0.042 big_ready=2.714 bmax=1.507
+10 mat_mean=2.512 mat_max=3.021 barrier=6.802 flags=6.331 saving=0.471 ungated=0.510 ready_wait=0.048 big_ready=2.819 bmax=1.506
+11 mat_mean=2.512 mat_max=3.021 barrier=6.794 flags=6.316 saving=0.478 ungated=0.509 ready_wait=0.029 big_ready=3.021 bmax=1.511
+12 mat_mean=2.512 mat_max=3.021 barrier=6.803 flags=6.312 saving=0.491 ungated=0.510 ready_wait=0.022 big_ready=3.021 bmax=1.566
+13 mat_mean=2.512 mat_max=3.021 barrier=6.806 flags=6.329 saving=0.477 ungated=0.510 ready_wait=0.039 big_ready=3.021 bmax=1.634
+14 mat_mean=2.512 mat_max=3.021 barrier=6.803 flags=6.330 saving=0.473 ungated=0.505 ready_wait=0.036 big_ready=3.021 bmax=1.706
+15 mat_mean=2.512 mat_max=3.021 barrier=6.805 flags=6.322 saving=0.484 ungated=0.508 ready_wait=0.030 big_ready=3.021 bmax=1.750
+16 mat_mean=2.512 mat_max=3.021 barrier=6.808 flags=6.336 saving=0.472 ungated=0.508 ready_wait=0.041 big_ready=3.021 bmax=1.691
+17 mat_mean=2.512 mat_max=3.021 barrier=6.805 flags=6.339 saving=0.466 ungated=0.507 ready_wait=0.044 big_ready=3.021 bmax=1.735
+18 mat_mean=2.512 mat_max=3.021 barrier=6.806 flags=6.347 saving=0.460 ungated=0.508 ready_wait=0.055 big_ready=3.021 bmax=1.663
+19 mat_mean=2.512 mat_max=3.021 barrier=6.803 flags=6.333 saving=0.469 ungated=0.509 ready_wait=0.047 big_ready=3.021 bmax=1.650
+20 mat_mean=2.512 mat_max=3.021 barrier=6.801 flags=6.341 saving=0.460 ungated=0.512 ready_wait=0.063 big_ready=3.021 bmax=1.689
+21 mat_mean=2.512 mat_max=3.021 barrier=6.803 flags=6.341 saving=0.463 ungated=0.508 ready_wait=0.050 big_ready=3.021 bmax=1.683
+22 mat_mean=2.512 mat_max=3.021 barrier=6.796 flags=6.347 saving=0.449 ungated=0.503 ready_wait=0.060 big_ready=3.021 bmax=1.898
+23 mat_mean=2.512 mat_max=3.021 barrier=6.800 flags=6.353 saving=0.447 ungated=0.510 ready_wait=0.065 big_ready=3.021 bmax=1.751
+24 mat_mean=2.512 mat_max=3.021 barrier=6.806 flags=6.387 saving=0.419 ungated=0.508 ready_wait=0.094 big_ready=3.021 bmax=1.897
+25 mat_mean=2.512 mat_max=3.021 barrier=6.809 flags=6.384 saving=0.425 ungated=0.508 ready_wait=0.092 big_ready=3.021 bmax=1.941
+26 mat_mean=2.512 mat_max=3.021 barrier=6.811 flags=6.392 saving=0.419 ungated=0.509 ready_wait=0.100 big_ready=3.021 bmax=2.195
+27 mat_mean=2.512 mat_max=3.021 barrier=6.811 flags=6.405 saving=0.406 ungated=0.508 ready_wait=0.110 big_ready=3.021 bmax=2.263
+28 mat_mean=2.512 mat_max=3.021 barrier=6.815 flags=6.396 saving=0.420 ungated=0.510 ready_wait=0.104 big_ready=3.021 bmax=2.328
+29 mat_mean=2.512 mat_max=3.021 barrier=6.808 flags=6.412 saving=0.396 ungated=0.502 ready_wait=0.116 big_ready=3.021 bmax=2.262
+blend fit us = 87.0 + 0.1841 n + -0.1161 max(n-8192,0)  (t147 views 0/1)
+views=30 order=desc lag=0.02
+  mat_mean     2.512  (min 2.512 max 2.512)
+  mat_max      3.021  (min 3.021 max 3.021)
+  barrier      6.807  (min 6.794 max 6.821)
+  flags        6.357  (min 6.312 max 6.412)
+  saving       0.450  (min 0.396 max 0.491)
+  ungated      0.507  (min 0.498 max 0.512)
+  ready_wait   0.066  (min 0.022 max 0.116)
+  big_ready    3.004  (min 2.714 max 3.021)
+  bmax         1.825  (min 1.506 max 2.328)
