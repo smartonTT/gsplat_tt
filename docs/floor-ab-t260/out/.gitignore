@@ -1,0 +1,4 @@
+*.npz
+cmp_all/
+model_*/model_images.npz
+hero/hero-r3-*.png

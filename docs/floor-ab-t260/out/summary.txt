@@ -1,0 +1,5 @@
+A ms/view 11.650 rounds 11.647 11.643 11.660 psnr_vs_ref 41.16 psnr_vs_golden inf golden_match True r1==r3 True mean_diff -0.457 max 58 >=2lv 22.92%
+B ms/view 12.630 rounds 12.650 12.667 12.573 psnr_vs_ref 45.83 psnr_vs_golden 44.50 golden_match False r1==r3 True mean_diff -0.031 max 53 >=2lv 8.06%
+C ms/view 13.522 rounds 13.467 13.503 13.597 psnr_vs_ref 46.71 psnr_vs_golden 42.90 golden_match False r1==r3 True mean_diff +0.082 max 53 >=2lv 6.17%
+D ms/view 15.253 rounds 15.337 15.207 15.217 psnr_vs_ref 46.79 psnr_vs_golden 42.50 golden_match False r1==r3 True mean_diff +0.117 max 52 >=2lv 5.92%
+E ms/view 14.374 rounds 14.377 14.363 14.383 psnr_vs_ref 46.78 psnr_vs_golden 42.58 golden_match False r1==r3 True mean_diff +0.110 max 52 >=2lv 5.93%
