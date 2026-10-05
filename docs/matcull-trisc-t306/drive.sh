@@ -7,7 +7,9 @@ DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
 H=yyzo-bh-07; T=/localdev/smarton/gstt2-t306; O=docs/matcull-trisc-t306/out
 cmd="opt/sync_remote.sh $H $T HEAD"
 for ra in "$@"; do r=${ra%%:*}; arms=${ra#*:}
-  cmd="$cmd && $DEVRUN --host $H --no-verify --timeout 1500 --tag t306-r$r -- 'bash $T/docs/matcull-trisc-t306/remote_time.sh $r ${arms//,/ }'"
+  for a in ${arms//,/ }; do  # one devrun per arm: each stays under the 600 s reservation ceiling
+    cmd="$cmd && $DEVRUN --host $H --no-verify --timeout 400 --tag t306-r$r-$a -- 'bash $T/docs/matcull-trisc-t306/remote_time.sh $r $a'"
+  done
 done
 ttp lock p100 -- bash -c "$cmd"; rc=$?
 echo "DRIVE_RC=$rc"
