@@ -1,26 +1,5 @@
 cores=110 launches/core=5..5 series=550
 
 BRISC pfwc_ws: 550 (core, launch) records
-  mean ms : wall 2.222, wait 1.057, cls 0.408, pfx 0.003, rec 0.708, opn 0.033, tail 0.012, rd 0.000
-  max core: wall 2.358, wait 0.827, cls 0.434, pfx 0.009, rec 0.885, opn 0.191, tail 0.013, rd 0.000  (n=28)
-  wall max/mean 2.358/2.222  chunks/launch mean 27.4
-
-NCRISC pfwc_ws: 550 (core, launch) records
-  mean ms : wall 2.228, wait 1.005, cls 0.402, pfx 0.013, rec 0.771, opn 0.026, tail 0.012, rd 0.810
-  max core: wall 2.319, wait 0.752, cls 0.428, pfx 0.013, rec 1.058, opn 0.055, tail 0.012, rd 0.614  (n=27)
-  wall max/mean 2.319/2.228  chunks/launch mean 27.0
-
-TRISC_0 pfwc_pc: 550 (core, launch) records
-  mean ms : wall 2.204, init 0.000, wait 0.036, xform 0.493, recip 0.044, depth 0.055, means 0.052, cov_cam 0.065, a 0.368, b 0.195, c 0.129, conic 0.050, radx 0.162, rady 0.207, vis+pop 0.349
-  max core: wall 2.286, init 0.000, wait 0.042, xform 0.497, recip 0.044, depth 0.056, means 0.103, cov_cam 0.066, a 0.372, b 0.197, c 0.130, conic 0.050, radx 0.163, rady 0.209, vis+pop 0.354  (n=55)
-  wall max/mean 2.286/2.204  chunks/launch mean 54.4
-
-TRISC_1 pfwc_pc: 550 (core, launch) records
-  mean ms : wall 2.211, init 0.000, wait 0.001, xform 0.206, recip 0.046, depth 0.017, means 0.072, cov_cam 0.256, a 0.185, b 0.187, c 0.136, conic 0.073, radx 0.209, rady 0.207, vis+pop 0.615
-  max core: wall 2.294, init 0.000, wait 0.001, xform 0.215, recip 0.047, depth 0.017, means 0.124, cov_cam 0.260, a 0.187, b 0.189, c 0.138, conic 0.074, radx 0.211, rady 0.209, vis+pop 0.622  (n=55)
-  wall max/mean 2.294/2.211  chunks/launch mean 54.4
-
-TRISC_2 pfwc_pc: 550 (core, launch) records
-  mean ms : wall 2.200, init 0.000, wait 0.001, xform 0.749, recip 0.057, depth 0.045, means 0.059, cov_cam 0.297, a 0.003, b 0.171, c 0.188, conic 0.208, radx 0.007, rady 0.206, vis+pop 0.206
-  max core: wall 2.282, init 0.000, wait 0.001, xform 0.764, recip 0.059, depth 0.096, means 0.060, cov_cam 0.301, a 0.003, b 0.174, c 0.190, conic 0.210, radx 0.007, rady 0.209, vis+pop 0.209  (n=55)
-  wall max/mean 2.282/2.200  chunks/launch mean 54.4
+  mean ms : wall 2.218, wait 1.112, cls 0.404, pfx 0.003, rec 0.655, opn 0.032, tail 0.013, rd 0.000, fl 0.092
+  max core: wall 2.369, wait 0.822, cls 0.420, pfx 0.011, rec 0.813, opn 0.290, tail 0.013, rd 0.000, fl 0.106  (n=28)

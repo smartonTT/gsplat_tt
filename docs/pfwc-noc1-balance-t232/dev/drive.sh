@@ -12,9 +12,9 @@
 #          pm<hex> = P2 + that mask (e.g. pmE000), pr<hex> = P2 + BRISC reads tile set <hex> on
 #          every core (RD_REST, e.g. pr1F = tiles 0..4), ph<set>_<rest> = P2 + set <set> on the
 #          MASK columns and <rest> elsewhere.
-#   1-4:   swapped untraced 30-view rounds base (default) / fix (P2 + MASK) [/ rdb (MASK alone)
-#          with ARM3=1; the host opens +32 KB kcfg for it]; hero_clean.png of each arm is fetched
-#          (device screenshot).
+#   1-4:   swapped untraced 30-view rounds base (default) / fix (P2 + FIXE) [/ a third arm with
+#          ARM3=1: alt = P2 + ALTE if ALTE is set, else rdb = MASK alone]; hero_clean.png of each
+#          arm is fetched (device screenshot).
 set -u
 cd "$(git rev-parse --show-toplevel)"
 DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
@@ -88,9 +88,10 @@ for s in $STEPS; do
   esac
 done
 if [ $KX = 0 ]; then X=GSPLAT_TT_NOOP=0; else X=GSPLAT_TT_KCFG_EXTRA_KB=$KX; fi
-B=base:$X; F=fix:$FIX,$X; M=rdb:GSPLAT_TT_PFWC_RD_BRISC=$MASK,$X
+B=base:$X; F=fix:$FIX,$X
+if [ -n "${ALTE:-}" ]; then M=alt:$CV,$ALTE,$X; a3=alt; else M=rdb:GSPLAT_TT_PFWC_RD_BRISC=$MASK,$X; a3=rdb; fi
 if [ "${ARM3:-0}" = 1 ]; then
-  ord=("$B $F $M" "$F $M $B" "$M $B $F" "$B $M $F"); arms="base fix rdb"
+  ord=("$B $F $M" "$F $M $B" "$M $B $F" "$B $M $F"); arms="base fix $a3"
 else
   ord=("$B $F" "$F $B" "$B $F" "$F $B"); arms="base fix"
 fi
