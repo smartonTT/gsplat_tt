@@ -140,6 +140,42 @@ def test_no_submit_patch():
     assert Renderer.submit.__module__ == "nerfview._renderer"
 
 
+def test_sender_threads_exit_on_disconnect():
+    """Repeated connect/disconnect must not leak gsplat-send threads (review #269)."""
+    import time
+    from gsplat.nerfview_viewer import FastRenderer
+
+    def senders():
+        return sum(t.name == "gsplat-send" and t.is_alive() for t in threading.enumerate())
+
+    base = senders()
+    for _ in range(20):
+        fr = FastRenderer(viewer=_Viewer(lambda *a: _test_image()), client=_Client(),
+                          lock=threading.Lock())
+        fr.running = False  # what nerfview's disconnect does
+        fr._sender.join(2.0)
+        assert not fr._sender.is_alive()
+    time.sleep(0.05)
+    assert senders() == base
+
+
+def test_bad_jpeg_env_falls_back_to_auto(monkeypatch=None):
+    import os
+    from gsplat.nerfview_viewer import JPEG_ENCODERS, jpeg_encoder_from_env, pick_jpeg_encoder
+    old = os.environ.get("GSPLAT_VIEWER_JPEG")
+    try:
+        os.environ["GSPLAT_VIEWER_JPEG"] = "bogus"
+        assert jpeg_encoder_from_env() == "auto"
+        assert pick_jpeg_encoder()[0] in JPEG_ENCODERS
+        os.environ["GSPLAT_VIEWER_JPEG"] = "viser"
+        assert jpeg_encoder_from_env() == "viser"
+    finally:
+        if old is None:
+            os.environ.pop("GSPLAT_VIEWER_JPEG", None)
+        else:
+            os.environ["GSPLAT_VIEWER_JPEG"] = old
+
+
 if __name__ == "__main__":
     if not HAVE_VIEWER:
         print("skip: needs viser + nerfview")
