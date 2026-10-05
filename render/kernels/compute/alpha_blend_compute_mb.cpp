@@ -569,8 +569,290 @@ inline void dispatch_blend_pairs(
 #endif
 #if BLEND_JUMP_WALK && BLEND_COEF_DEST && BLEND_ABL == 0 && defined(TRISC_MATH)
 #define BLEND_USE_JUMP_WALK 1
+// Task #219 (t205 lever; host env GSPLAT_TT_BLEND_SCHED, default 0): the bodies
+// below as raw SFPU instructions in a hand schedule. Every op is the compiled
+// body's op (opcode, immediate and mode as in docs/blend-dispatch-t189/out/
+// trisc1-default.dis); only the order and the LREGs differ, so that no op reads
+// the result of the MAD-class op right before it (a 1-cycle stall; the compiled
+// single has 11, the pair 22, these have 0). Bit-identical: docs/blend-loop-
+// model-t205/schedule.py runs every body against the compiled one, and
+// docs/blend-sched-t219/check_cpp.py checks this source against those listings.
+// 1 = F: straight-line bodies (single 60 ops, pair 109).
+// 2 = A2: singles push only x/y, the middle 27 ops and the D steps; the front 13
+//     ops and the tail 18 ops (+ SETRWC D=0) replay from the TRISC1 replay
+//     buffer, recorded per records loop by blend_sched_record(). A pair is two
+//     A2 singles. The tail addresses are relative to RWC D, which is 0 outside.
+// BS_* take their operands in disassembly order (destination first). LREG 9 is
+// 0.0 (the swaps park their dead output there; writes to it are dropped), 10 is
+// 1.0, 11 is -1.0, 12-14 are the exp constants of blend_stage_hoist.
+#ifndef BLEND_SCHED
+#define BLEND_SCHED 0
+#endif
+#if BLEND_SCHED
+#if !BLEND_CONST_HOIST || !defined(BLEND_PIXEL_FLOOR) || BLEND_FPU_QF_ABL
+#error "BLEND_SCHED bodies are the CONST_HOIST + PIXEL_FLOOR bodies"
+#endif
+#define BS_V(r, i) (2u * ((r) + (i)))  // SFPLOAD/SFPSTORE address of dst_reg[r + i]
+#define BS_S(s) BS_V(DR_S, s)
+#define BS_LD(l, a, m, am) TTI_SFPLOAD(l, m, am, a)
+#define BS_ST(l, a, m, am) TTI_SFPSTORE(l, m, am, a)
+#define BS_MAD(d, a, b, c, m) TTI_SFPMAD(a, b, c, d, m)
+#define BS_MUL(d, a, b, c, m) TTI_SFPMUL(a, b, c, d, m)
+#define BS_ADD(d, a, b, c, m) TTI_SFPADD(a, b, c, d, m)
+#define BS_ADDI(d, imm, m) TTI_SFPADDI(imm, d, m)
+#define BS_SWAP(d, c, m) TTI_SFPSWAP(0, c, d, m)
+#define BS_EXEXP(d, c, m) TTI_SFPEXEXP(0, c, d, m)
+#define BS_EXMAN(d, c, m) TTI_SFPEXMAN(0, c, d, m)
+#define BS_SHFT(d, c, imm, m) TTI_SFPSHFT(imm, c, d, m)
+#define BS_CAST(d, c, m) TTI_SFPCAST(c, d, m)
+#define BS_SETEXP(d, c, imm, m) TTI_SFPSETEXP(imm, c, d, m)
+#define BS_SETCC(c, imm, m) TTI_SFPSETCC(imm, c, 0, m)
+#define BS_MOV(d, c, m) TTI_SFPMOV(0, c, d, m)
+#define BS_ENCC(imm, m) TTI_SFPENCC(imm, 0, 0, m)
+#define BS_NOP() TTI_SFPNOP
+
+// Single body = x/y, front, middle, tail (schedule.py SCHED, FRONT, MIDDLE, TAIL).
+template <uint32_t IX>
+[[gnu::always_inline]] inline void bs_xy() {
+    BS_LD(2, BS_V(DR_X, IX), 0, 7);
+    BS_LD(1, BS_V(DR_Y, IX), 0, 7);
+}
+// power = A dx^2 + B dx dy + C dy^2 (x in L2, y in L1).
+[[gnu::always_inline]] inline void bs_front() {
+    BS_LD(6, BS_S(S_MX), 0, 7);
+    BS_LD(5, BS_S(S_MY), 0, 7);
+    BS_ADD(2, 10, 2, 6, 2);
+    BS_ADD(1, 10, 1, 5, 2);
+    BS_MUL(5, 2, 2, 9, 0);
+    BS_LD(4, BS_S(S_A), 0, 7);
+    BS_MUL(4, 4, 5, 9, 0);
+    BS_MUL(2, 2, 1, 9, 0);
+    BS_LD(3, BS_S(S_B), 0, 7);
+    BS_MAD(2, 3, 2, 4, 0);
+    BS_MUL(1, 1, 1, 9, 0);
+    BS_LD(0, BS_S(S_C), 0, 7);
+    BS_MAD(0, 0, 1, 2, 0);
+}
+// weight = exp21f(min(power, 0)), alpha = min(op * weight, 0.99), colours.
+[[gnu::always_inline]] inline void bs_middle() {
+    BS_NOP();
+    BS_SWAP(0, 9, 1);
+    BS_NOP();
+    BS_MUL(0, 0, 12, 9, 0);
+    BS_LD(4, BS_S(S_C0), 0, 7);
+    BS_ADDI(0, 17150, 0);
+    BS_NOP();
+    BS_SWAP(9, 0, 1);
+    BS_NOP();
+    BS_EXEXP(1, 0, 0);
+    BS_EXMAN(0, 0, 0);
+    BS_SHFT(0, 1, 0x000, 0);
+    BS_EXEXP(1, 0, 1);
+    BS_EXMAN(0, 0, 1);
+    BS_CAST(0, 0, 0);
+    BS_MAD(2, 0, 13, 14, 0);
+    BS_LD(5, BS_S(S_OP), 0, 7);
+    BS_MAD(0, 0, 2, 4, 0);
+    BS_LD(6, BS_S(S_K99), 0, 7);
+    BS_SETEXP(1, 0, 0x000, 0);
+    BS_MUL(0, 5, 1, 9, 0);
+    BS_LD(7, BS_S(S_FL), 0, 7);
+    BS_SWAP(0, 6, 1);
+    BS_NOP();
+    BS_LD(3, BS_S(S_CR), 0, 7);
+    BS_LD(4, BS_S(S_CG), 0, 7);
+    BS_LD(5, BS_S(S_CB), 0, 7);
+}
+// Pixel floor, R/G/B += alpha T colour, T *= 1 - alpha. AT/AR/AG/AB: addresses
+// of T/R/G/B (absolute in F, relative to RWC D in the A2 replay).
+template <uint32_t AT, uint32_t AR, uint32_t AG, uint32_t AB>
+[[gnu::always_inline]] inline void bs_tail() {
+    BS_MAD(1, 7, 11, 0, 0);
+    BS_LD(2, AT, 0, 7);
+    BS_SETCC(1, 0x000, 0);
+    BS_MOV(0, 9, 0);
+    BS_ENCC(0x003, 10);
+    BS_MUL(1, 0, 2, 9, 0);
+    BS_ADD(0, 10, 10, 0, 2);
+    BS_LD(6, AR, 0, 7);
+    BS_MAD(6, 1, 3, 6, 0);
+    BS_MUL(0, 2, 0, 9, 0);
+    BS_ST(6, AR, 0, 7);
+    BS_LD(7, AG, 0, 7);
+    BS_MAD(7, 1, 4, 7, 0);
+    BS_LD(6, AB, 0, 7);
+    BS_ST(7, AG, 0, 7);
+    BS_MAD(6, 1, 5, 6, 0);
+    BS_ST(0, AT, 0, 7);
+    BS_ST(6, AB, 0, 7);
+}
+template <uint32_t IX>
+[[gnu::always_inline]] inline void sched_single() {
+    bs_xy<IX>();
+    bs_front();
+    bs_middle();
+    bs_tail<BS_V(DR_T, IX), BS_V(DR_R, IX), BS_V(DR_G, IX), BS_V(DR_B, IX)>();
+}
+// Pair body (schedule.py PAIR): the single's steps for microblocks IXA (chain a)
+// and IXB (chain b) interleaved, b a few ops behind a. They share the MX MY A B C
+// OP CR CG CB loads; C0, K99 and FL are loaded per chain, as compiled.
+template <uint32_t IXA, uint32_t IXB>
+[[gnu::always_inline]] inline void sched_pair() {
+    BS_LD(0, BS_S(S_MX), 0, 7);
+    BS_LD(1, BS_S(S_MY), 0, 7);
+    BS_LD(2, BS_V(DR_X, IXA), 0, 7);
+    BS_LD(3, BS_V(DR_Y, IXA), 0, 7);
+    BS_ADD(2, 10, 2, 0, 2);
+    BS_LD(4, BS_V(DR_X, IXB), 0, 7);
+    BS_ADD(3, 10, 3, 1, 2);
+    BS_ADD(4, 10, 4, 0, 2);
+    BS_LD(0, BS_V(DR_Y, IXB), 0, 7);
+    BS_MUL(5, 2, 2, 9, 0);
+    BS_ADD(0, 10, 0, 1, 2);
+    BS_LD(1, BS_S(S_A), 0, 7);
+    BS_MUL(5, 1, 5, 9, 0);
+    BS_MUL(6, 4, 4, 9, 0);
+    BS_MUL(2, 2, 3, 9, 0);
+    BS_MUL(6, 1, 6, 9, 0);
+    BS_LD(1, BS_S(S_B), 0, 7);
+    BS_MAD(2, 1, 2, 5, 0);
+    BS_MUL(4, 4, 0, 9, 0);
+    BS_MUL(3, 3, 3, 9, 0);
+    BS_MAD(4, 1, 4, 6, 0);
+    BS_LD(1, BS_S(S_C), 0, 7);
+    BS_MAD(2, 1, 3, 2, 0);
+    BS_MUL(0, 0, 0, 9, 0);
+    BS_SWAP(2, 9, 1);
+    BS_NOP();
+    BS_MAD(0, 1, 0, 4, 0);
+    BS_MUL(2, 2, 12, 9, 0);
+    BS_SWAP(0, 9, 1);
+    BS_NOP();
+    BS_ADDI(2, 17150, 0);
+    BS_MUL(0, 0, 12, 9, 0);
+    BS_NOP();
+    BS_SWAP(9, 2, 1);
+    BS_NOP();
+    BS_ADDI(0, 17150, 0);
+    BS_EXEXP(1, 2, 0);
+    BS_EXMAN(2, 2, 0);
+    BS_NOP();
+    BS_SWAP(9, 0, 1);
+    BS_NOP();
+    BS_SHFT(2, 1, 0x000, 0);
+    BS_EXEXP(3, 0, 0);
+    BS_EXEXP(1, 2, 1);
+    BS_EXMAN(0, 0, 0);
+    BS_EXMAN(2, 2, 1);
+    BS_SHFT(0, 3, 0x000, 0);
+    BS_CAST(2, 2, 0);
+    BS_EXEXP(3, 0, 1);
+    BS_MAD(4, 2, 13, 14, 0);
+    BS_EXMAN(0, 0, 1);
+    BS_LD(5, BS_S(S_C0), 0, 7);
+    BS_MAD(2, 2, 4, 5, 0);
+    BS_CAST(0, 0, 0);
+    BS_SETEXP(1, 2, 0x000, 0);
+    BS_MAD(4, 0, 13, 14, 0);
+    BS_LD(5, BS_S(S_C0), 0, 7);
+    BS_MAD(0, 0, 4, 5, 0);
+    BS_LD(4, BS_S(S_OP), 0, 7);
+    BS_SETEXP(3, 0, 0x000, 0);
+    BS_MUL(2, 4, 1, 9, 0);
+    BS_MUL(0, 4, 3, 9, 0);
+    BS_LD(1, BS_S(S_K99), 0, 7);
+    BS_SWAP(2, 1, 1);
+    BS_NOP();
+    BS_LD(3, BS_S(S_K99), 0, 7);
+    BS_SWAP(0, 3, 1);
+    BS_NOP();
+    BS_LD(1, BS_S(S_FL), 0, 7);
+    BS_MAD(1, 1, 11, 2, 0);
+    BS_LD(3, BS_S(S_FL), 0, 7);
+    BS_SETCC(1, 0x000, 0);
+    BS_MOV(2, 9, 0);
+    BS_ENCC(0x003, 10);
+    BS_MAD(3, 3, 11, 0, 0);
+    BS_LD(4, BS_V(DR_T, IXA), 0, 7);
+    BS_SETCC(3, 0x000, 0);
+    BS_MOV(0, 9, 0);
+    BS_ENCC(0x003, 10);
+    BS_MUL(1, 2, 4, 9, 0);
+    BS_LD(5, BS_V(DR_T, IXB), 0, 7);
+    BS_ADD(2, 10, 10, 2, 2);
+    BS_MUL(3, 0, 5, 9, 0);
+    BS_LD(6, BS_S(S_CR), 0, 7);
+    BS_ADD(0, 10, 10, 0, 2);
+    BS_LD(7, BS_V(DR_R, IXA), 0, 7);
+    BS_MAD(7, 1, 6, 7, 0);
+    BS_MUL(4, 4, 2, 9, 0);
+    BS_ST(7, BS_V(DR_R, IXA), 0, 7);
+    BS_LD(7, BS_V(DR_R, IXB), 0, 7);
+    BS_MAD(7, 3, 6, 7, 0);
+    BS_ST(4, BS_V(DR_T, IXA), 0, 7);
+    BS_ST(7, BS_V(DR_R, IXB), 0, 7);
+    BS_MUL(5, 5, 0, 9, 0);
+    BS_LD(6, BS_S(S_CG), 0, 7);
+    BS_ST(5, BS_V(DR_T, IXB), 0, 7);
+    BS_LD(7, BS_V(DR_G, IXA), 0, 7);
+    BS_MAD(7, 1, 6, 7, 0);
+    BS_LD(5, BS_V(DR_G, IXB), 0, 7);
+    BS_ST(7, BS_V(DR_G, IXA), 0, 7);
+    BS_MAD(5, 3, 6, 5, 0);
+    BS_LD(6, BS_S(S_CB), 0, 7);
+    BS_ST(5, BS_V(DR_G, IXB), 0, 7);
+    BS_LD(7, BS_V(DR_B, IXA), 0, 7);
+    BS_MAD(7, 1, 6, 7, 0);
+    BS_LD(5, BS_V(DR_B, IXB), 0, 7);
+    BS_MAD(5, 3, 6, 5, 0);
+    BS_ST(7, BS_V(DR_B, IXA), 0, 7);
+    BS_ST(5, BS_V(DR_B, IXB), 0, 7);
+}
+#if BLEND_SCHED == 2
+// D += N in INCRWC steps (the field is 4 bits; even steps of <= 14).
+template <uint32_t N>
+[[gnu::always_inline]] inline void bs_incr_d() {
+    if constexpr (N > 0u) {
+        TTI_INCRWC(0, (N > 14u ? 14u : N), 0, 0);
+        bs_incr_d<(N > 14u ? N - 14u : 0u)>();
+    }
+}
+template <uint32_t IX>
+[[gnu::always_inline]] inline void sched_single_a2() {
+    bs_xy<IX>();
+    lltt::replay(0, 13);  // bs_front
+    bs_middle();
+    bs_incr_d<BS_V(0u, IX)>();
+    lltt::replay(13, 19);  // bs_tail relative to D, then D = 0
+}
+// Replay slots 0-12: front; 13-31: tail at D + (T, R, G, B of microblock 0),
+// then SETRWC D=0. Called before each records loop: other TRISC1 code (the
+// fill_tile zero fill at tile start) records its own ops into slots 0-3.
+inline void blend_sched_record() {
+    lltt::record<lltt::NoExec>(0, 13);
+    bs_front();
+    lltt::record<lltt::NoExec>(13, 19);
+    bs_tail<BS_V(DR_T, 0u), BS_V(DR_R, 0u), BS_V(DR_G, 0u), BS_V(DR_B, 0u)>();
+    TTI_SETRWC(p_setrwc::CLR_NONE, 0, 0, 0, 0, p_setrwc::SET_D);
+}
+#endif
+#endif  // BLEND_SCHED
 template <uint32_t J, uint32_t PM>
 __attribute__((noinline)) void blend_pair_body() {
+#if BLEND_SCHED == 1
+    if constexpr (PM == 3u) {
+        sched_pair<2u * J, 2u * J + 1u>();
+    } else {
+        sched_single<2u * J + (PM == 2u ? 1u : 0u)>();
+    }
+#elif BLEND_SCHED == 2
+    if constexpr (PM & 1u) {
+        sched_single_a2<2u * J>();
+    }
+    if constexpr (PM & 2u) {
+        sched_single_a2<2u * J + 1u>();
+    }
+#else
     if constexpr (PM == 3u) {
         blend_pair_gaussian_math<2u * J, 2u * J + 1u>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     } else if constexpr (PM == 1u) {
@@ -578,6 +860,7 @@ __attribute__((noinline)) void blend_pair_body() {
     } else {
         blend_one_gaussian_math<2u * J + 1u>(0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u, 0u);
     }
+#endif
 }
 using BlendBodyFn = void (*)();
 // Index 4 * pair + (2-bit pair mask); entry 0 of each pair is never called.
@@ -951,6 +1234,9 @@ inline void process_tile_l1_blend(
 #endif
     }
     TC_PART1(stage);
+#if BLEND_USE_JUMP_WALK && BLEND_SCHED == 2
+    MATH((blend_sched_record()));  // after all other TRISC1 replay use (tile init)
+#endif
 #if BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_USE_RAW_STAGE
     // SFPLOADI L0 USHORT, L0 HI16_ONLY, L2 USHORT opcode words, kept in registers.
     uint32_t raw_klo = 0x71020000u, raw_khi = 0x71080000u, raw_klo2 = 0x71220000u;

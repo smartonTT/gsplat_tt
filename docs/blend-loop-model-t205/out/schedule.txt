@@ -1,3 +1,8 @@
 compiled single body (microblock 2): 60 ops, 11 MAD->use stalls
 F schedule: 60 SFPU ops, 0 MAD->use stalls, DEST writes [4, 68, 132, 196], identical to compiled: True
 A2 split: 60 SFPU ops, 0 MAD->use stalls, DEST writes [4, 68, 132, 196], identical to compiled: True
+F single: 32 bodies, all identical to compiled: True, SFPU ops [60] (compiled [60]), MAD->use stalls max 0 (compiled [11]), rule violations 0
+A2 single: 32 bodies, all identical to compiled: True, SFPU ops [60] (compiled [60]), MAD->use stalls max 0 (compiled [11]), rule violations 0
+F pair: 16 bodies, all identical to compiled: True, SFPU ops [109] (compiled [109]), MAD->use stalls max 0 (compiled [22]), rule violations 0
+2 F singles: 16 bodies, all identical to compiled: True, SFPU ops [120] (compiled [109]), MAD->use stalls max 0 (compiled [22]), rule violations 0
+A2 pair (2 A2 singles): 16 bodies, all identical to compiled: True, SFPU ops [120] (compiled [109]), MAD->use stalls max 0 (compiled [22]), rule violations 0

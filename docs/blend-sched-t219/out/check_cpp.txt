@@ -1,0 +1,5 @@
+encoder vs t189 words: sfpadd 192, sfpaddi 64, sfpcast 52, sfpencc 64, sfpexexp 128, sfpexman 112, sfpload 996, sfpmad 480, sfpmov 64, sfpmul 516, sfpnop 288, sfpsetcc 64, sfpsetexp 64, sfpshft 64, sfpstore 277, sfpswap 192, ttincrwc 8, ttreplay 48, ttsetrwc 18
+level 0: BLEND_SCHED code compiled out, compiled bodies kept: True
+level 1 (F): 48/48 bodies equal to schedule.py single(m)/pair(j); issued ops: single 60, pair 109; ttreplay in bodies: False
+level 2 (A2): record fills slots 0-31 (32) and issues nothing; 48/48 bodies equal to schedule.py a2(m) after replay; issued ops (instructions pushed by TRISC1): single 31, single 32, single 33, single 34, single 35, single 36, pair 63, pair 64, pair 66, pair 67, pair 68, pair 70, pair 71, pair 72; record-mode replays in bodies: False
+check_cpp: OK

@@ -302,6 +302,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         compute_defines["BLEND_FPU_QF_ABL"] = env_or("GSPLAT_TT_BLEND_FPU_QF_ABL", "0");
         // Task #80: visit only the set mask pairs via a body table (0 = old walk).
         compute_defines["BLEND_JUMP_WALK"] = env_or("GSPLAT_TT_BLEND_JUMP_WALK", "1");
+        // Task #219 (#205 model): hand-scheduled jump-walk bodies, bit-identical
+        // (0 = compiled bodies, 1 = raw-TTI stall-free bodies, 2 = 1 + replay).
+        compute_defines["BLEND_SCHED"] = env_or("GSPLAT_TT_BLEND_SCHED", "0");
         // Task #80: decode UNORM16 op/colour on the SFPU (0 = RISC, 2 = check mode).
         compute_defines["BLEND_SFPU_UNORM"] = env_or("GSPLAT_TT_BLEND_SFPU_UNORM", "1");
         // Task #146 (bit-identical TRISC1 diet; 0 = the previous form, for A/B):
