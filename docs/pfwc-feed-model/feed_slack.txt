@@ -1,0 +1,11 @@
+cores=110 launches=5 (launch 0 = JIT warm-up of view 0)
+per (core, launch) mean ms: TRISC wall 2.212 busy 2.211 input-wait 0.036 | feed wall 2.249 (BRISC 2.223 NCRISC 2.229) | feed - TRISC busy 0.038 | tail B 0.013 N 0.012 | opn B 0.035 N 0.026
+
+launch | makespan(max feed/TRISC wall) | max TRISC busy | feed slack | crit core feed-TRISCbusy | crit core
+  0 | 2.347 | 2.287 | 0.060 | 0.063 | 15-2
+  1 | 2.337 | 2.290 | 0.047 | 0.070 | 14-2
+  2 | 2.300 | 2.258 | 0.042 | 0.048 | 15-2
+  3 | 2.298 | 2.252 | 0.046 | 0.068 | 13-2
+  4 | 2.304 | 2.259 | 0.044 | 0.069 | 13-2
+mean feed slack on the makespan (launches 1..): 0.045 ms/view, max 0.060
+per-core feed - TRISC busy: p50 0.036 p90 0.059 p99 0.084 max 0.096 ms
