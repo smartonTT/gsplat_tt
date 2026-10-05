@@ -41,7 +41,7 @@ Driver `drive.sh` (detached, one `ttp lock p100` per step), remote scripts `remo
 | mean | 17.306 | 17.044 | **-0.262** | 4.065 | 3.821 |
 
 ms/view, 30 views. Project and blend unchanged (4.11 / 8.87-8.91); the gain is all in the sort
-(bin_emit 3.46 vs ~3.70 on a): the fast loop no longer copies 1024 counts into the stack array at
+(bin_emit 3.43 vs 3.66 on a). Likely cause (not profiled): the fast loop no longer copies 1024 counts into the stack array at
 start and back at the end. All 6 runs ALL_VIEWS_IDENTICAL and md5-identical to md5-r82new.txt
 (46a725ab set).
 
