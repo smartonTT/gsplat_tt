@@ -138,3 +138,72 @@ gives the same times), so there is no need to decouple it further.
    (cls + rec, expect ~1.0-1.1 ms each) and that pfx/opn waits are small.
 4. Re-run 2-3 on top of the SFPU fusion when it lands. That is the A/B that decides the
    default.
+
+## Device results (task #221, 2026-10-05, yyzo-bh-07 p100a, tree 6c0b2e5 = 2edbd71 + t206)
+
+Drivers and raw output: `dev-t221/` (`drive.sh`, `remote_time.sh`, `remote_prof.sh`,
+`pc_split.py`, `out/`). Bicycle, 30 views, untraced, `render/run.py --no-ref`.
+
+**Program size.** The split pfwc program is 92496 B. It overflows the kernel config
+buffer at the default open (+8 KB, 78848 B) and at `KCFG_EXTRA_KB=16` (87040 B), with
+`TT_FATAL: Program size (92496) too large`. `+24 KB` (95232 B) is the smallest that fits,
+so every untraced arm ran at `GSPLAT_TT_KCFG_EXTRA_KB=24`. Under Tracy (STEPCYC=1) the
+split program is 96448 B and needs `+32 KB`. No hangs.
+
+**md5.** Every arm (base, split, cov, cov+split) gave `46a725ab` (md5-r82new.txt) on all
+30 views in every round.
+
+**Split alone, 4 swapped rounds (ms/view):**
+
+| round | base | split | Δ view_total | Δ project |
+|---|---:|---:|---:|---:|
+| 1 (base first) | 14.188 | 14.179 | -0.009 (split d2h outlier 0.416) | -0.236 |
+| 2 (split first) | 14.200 | 13.977 | -0.223 | -0.228 |
+| 3 | 14.187 | 13.979 | -0.208 | -0.242 |
+| 4 | 14.236 | 13.969 | -0.267 | -0.246 |
+| mean | 14.203 | 14.026 | **-0.177** (median -0.216) | **-0.238** |
+
+Below the 0.3 ms/view gate on its own, as the model said, though about twice the
+model's 0.02-0.12.
+
+**On top of t206 SFPU cov_cam, 3 rotated rounds (ms/view):**
+
+| round | base | cov | cov+split | cov - base | both - base | both - cov |
+|---|---:|---:|---:|---:|---:|---:|
+| c1 | 14.283 | 13.979 | 13.584 | -0.304 | -0.699 | -0.395 |
+| c2 | 14.195 | 13.990 | 13.578 | -0.205 | -0.617 | -0.412 |
+| c3 | 14.337 | 14.000 | 13.735 | -0.337 | -0.602 | -0.265 |
+| mean | 14.272 | 13.990 | 13.632 | -0.282 | **-0.639** | **-0.357** |
+
+project stage: base 3.985, cov 3.776, both 3.354 ms/view (both - base -0.631).
+The two levers are super-additive: alone -0.24 and -0.21 ms of project, together -0.63.
+Each one was hiding the other's saving behind the other bottleneck (split frees the
+writer, cov_cam cuts TRISC compute). Combined they clear the gate: 14.27 → 13.63 ms/view
+(70.1 → 73.4 FPS) in this paired run.
+
+**Tracy (STEPCYC=1, views 0-4, 110 cores, mean per launch = per view, ms):**
+
+| arm | pfwc wall | writer RISC | wait | cls | rec | cls+rec | pfx | opn | rd | TRISC wall | TRISC wait |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| base (k0) | 2.737 | BRISC | 0.701 | 0.730 | 1.270 | 2.000 | — | — | — | 2.69-2.70 | 0.001-0.022 |
+| split | 2.609 | BRISC | 1.478 | 0.404 | 0.696 | 1.100 | 0.002 | 0.016 | — | 2.59-2.60 | ≤0.036 |
+| split | 2.617 | NCRISC | 1.441 | 0.397 | 0.739 | 1.136 | 0.008 | 0.020 | 1.178 | | |
+| cov+split | 2.223 | BRISC | 1.053 | 0.410 | 0.710 | 1.120 | 0.003 | 0.035 | — | 2.20-2.21 | ≤0.036 |
+| cov+split | 2.229 | NCRISC | 0.990 | 0.403 | 0.786 | 1.189 | 0.013 | 0.026 | 0.817 | | |
+
+(base NCRISC reader: reserve 2.465 ms, i.e. it waits on the writer the whole time.)
+
+- Per-RISC writer busy time is 1.10-1.19 ms, as predicted (~1.0-1.1). pfx/opn waits are
+  small (≤0.035 ms mean; one core's BRISC opn max 0.33 ms).
+- NCRISC is the slower writer (rec 0.74-0.79 vs 0.70-0.71 mean, max core 1.04-1.07 vs
+  0.88-0.91) because it also runs the reader, but its wall is within 0.01 ms of BRISC.
+- With the split, pfwc is TRISC-bound (TRISC wait ~0, both writers wait 1.0-1.5 ms). That
+  is why cov_cam only pays off with the split. The next pfwc lever is TRISC compute:
+  per-TRISC split under cov+split is xform 0.49/0.21/0.75 and vis+pop 0.35/0.62/0.21 ms
+  (T0/T1/T2), so the three threads are already balanced at ~2.2 ms in total.
+
+**Decision.** Both knobs on by default (`GSPLAT_TT_PFWC_WRITER_SPLIT`,
+`GSPLAT_TT_PFWC_COVCAM_SFPU`, `=0` turns each off). With the split on and
+`GSPLAT_TT_KCFG_EXTRA_KB` unset, the device opens with +24 KB; with only cov_cam on, +8 KB.
+Base at +24 KB (14.19-14.34) matches the iter-194 tip (14.235), so the bigger kernel
+config buffer costs nothing visible. Profiling the default needs `GSPLAT_TT_KCFG_EXTRA_KB=32`.
