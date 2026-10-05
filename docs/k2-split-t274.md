@@ -34,7 +34,24 @@ lofs/box window (<= 640 pages) into L1, post header + GO, run its own part, wait
 NoC-write the job's pair pages and add its tile counts. Windows over the cap fall back to
 the mover doing everything.
 
-## A/B
+## A/B (yyzo-bh-07 p100a, untraced bicycle 30 views, swapped order, one build d71d9b6)
 
-Pending: `docs/k2-split-t274/drive.sh d71d9b6 "sync ab"` (3 swapped rounds, logs in
-`docs/k2-split-t274/out/ab-r*.log`).
+Mean of the 30 per-view times (`[run] view=` lines, 0.1 ms resolution each).
+
+| round | order | A (off) ms/view | B (K2_TRISC=1) ms/view | A-B |
+|---|---|---|---|---|
+| 1 | B,A | 11.673 | 11.510 | 0.163 |
+| 2 | A,B | 11.693 | 11.387 | 0.306 |
+| 3 | B,A | 11.763 | 11.497 | 0.266 |
+| mean | | 11.710 | 11.465 | **0.245** |
+
+md5: all 6 runs SWEEP_MD5=46a725ab, 30/30 views identical to golden.
+
+## Decision
+
+B is faster in all 3 rounds (0.245 ms/view, 2.1%), but below the 0.3 ms keep gate and
+about half the 0.45 ms model, which assumed the TRISCs run the loop at mover speed.
+**Not kept as default**: GSPLAT_TT_K2_TRISC stays default off. Logs: `out/ab-r*.log`.
+Next step (follow-up): a Tracy capture with K2_PROF + K2_TRISC=1 to get per-part times
+(mover part vs TRISC jobs vs the DONE wait), then rebalance the 43/21.5/35.5 split to the
+measured speeds. If the TRISC jobs are the long pole, a better split can reach the model.
