@@ -47,6 +47,7 @@ void run_job(uint32_t w) {
         pfwc_fuse::WinIo io{lofs, reinterpret_cast<const uint32_t*>(w + BOX_OFF), lofs, n_in,
                             reinterpret_cast<uint32_t*>(w + GID_OFF),
                             reinterpret_cast<uint32_t*>(w + TID_OFF)};
+        io.fill = h + H_FILL;
         pfwc_fuse::emit_pairs_diet_from<true>(tab, nseg, P_pub, tiles_x, pg0, npg, c, lo, io, cnt);
     }
 #if K2_PROF

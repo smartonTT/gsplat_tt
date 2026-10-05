@@ -1,0 +1,14 @@
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t291-chk  timeout=240s  worry=192s  ts=2026-10-05T16:09:59-0400
+cmd: bash /localdev/smarton/gstt2-t291/docs/k2-trisc-t291/remote_ab.sh chk B:GSPLAT_TT_K2_TRISC=1
+-----------------------------------------
+=== rchk-B b544d00 GSPLAT_TT_K2_TRISC=1 20:10:00
+run rc=1
+      1 Traceback (most recent call last):
+md5sum: '*': No such file or directory
+SWEEP_MD5=d41d8cd9 VIEWS=0 differs_from_golden
+=== done round chk 20:10:03
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t291/.ttw/logs/t291-chk-20261005-160957.log

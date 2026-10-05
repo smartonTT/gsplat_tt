@@ -66,6 +66,9 @@
 #ifndef K2_TJ1
 #define K2_TJ1 215u  // permille for job 1 (TRISC 1, runs both movers' jobs)
 #endif
+#ifndef K2_FCHUNK
+#define K2_FCHUNK 64u  // task #291: window pages per fill step (H_FILL)
+#endif
 #endif
 #ifndef K2_FOLD_TILES
 #define K2_FOLD_TILES 1024u  // tiles a count row can hold (local memory)
@@ -234,6 +237,7 @@ void kernel_main() {
                         uint32_t jnin, uint32_t jspan) {
         auto h = reinterpret_cast<volatile uint32_t*>(k2_trisc::job_addr(l1_cbj, j));
         h[k2_trisc::H_DONE] = 0;
+        h[k2_trisc::H_FILL] = 0;
         h[k2_trisc::H_PG0] = jpg0;
         h[k2_trisc::H_NPG] = jn;
         h[k2_trisc::H_C] = jc;
@@ -288,17 +292,13 @@ void kernel_main() {
                 for (uint32_t j = 0; j < 2 && fit; j++) {
                     if (n[j] == 0 || st[j] * PW >= P_pub) continue;
                     const bool to_end = st[j + 1] * PW >= P_pub;
-                    const uint32_t w = k2_trisc::job_addr(l1_cbj, j);
-                    n_in[j] = pfwc_fuse::diet_window(
-                        tab, nseg, c[j], lo[j], to_end, c[j + 1], lo[j + 1], K2_TCAP,
-                        [&](uint32_t k, uint32_t page) {
-                            noc_async_read(get_noc_addr(page, lofs_acc), w + k2_trisc::LOFS_OFF + k * PB, PB);
-                            noc_async_read(get_noc_addr(page, box_acc), w + k2_trisc::BOX_OFF + k * PB, PB);
-                        });
+                    // Task #291: sizes only; the windows are filled after the post.
+                    n_in[j] = pfwc_fuse::diet_window(tab, nseg, c[j], lo[j], to_end, c[j + 1], lo[j + 1],
+                                                     K2_TCAP, [](uint32_t, uint32_t) {});
                     if (n_in[j] > K2_TCAP) fit = false;
                 }
-                noc_async_read_barrier();
                 if (!fit) {
+                    n_in[0] = n_in[1] = 0;
                     n[0] = n[1] = 0;
                     st[1] = st[2] = pg0;
                     c[2] = c[0];
@@ -313,6 +313,27 @@ void kernel_main() {
 #if K2_PROF
                 t_post[j] = K2P_NOW();
 #endif
+            }
+            // Task #291: fill the windows behind the running TRISCs, job 1
+            // first (TRISC 1 runs both movers' job 1), raising H_FILL every
+            // K2_FCHUNK pages.
+            for (uint32_t jj = 0; jj < 2; jj++) {
+                const uint32_t j = 1u - jj;
+                if (n_in[j] == 0) continue;
+                const uint32_t w = k2_trisc::job_addr(l1_cbj, j);
+                volatile uint32_t* h = reinterpret_cast<volatile uint32_t*>(w);
+                const bool to_end = st[j + 1] * PW >= P_pub;
+                pfwc_fuse::diet_window(
+                    tab, nseg, c[j], lo[j], to_end, c[j + 1], lo[j + 1], K2_TCAP, [&](uint32_t k, uint32_t page) {
+                        noc_async_read(get_noc_addr(page, lofs_acc), w + k2_trisc::LOFS_OFF + k * PB, PB);
+                        noc_async_read(get_noc_addr(page, box_acc), w + k2_trisc::BOX_OFF + k * PB, PB);
+                        if ((k + 1u) % K2_FCHUNK == 0) {
+                            noc_async_read_barrier();
+                            h[k2_trisc::H_FILL] = k + 1u;
+                        }
+                    });
+                noc_async_read_barrier();
+                h[k2_trisc::H_FILL] = n_in[j];
             }
             K2P_ADD(K2P_JPREP, t_pairs);
             K2P_T0(t_own);

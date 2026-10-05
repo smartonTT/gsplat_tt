@@ -1,0 +1,35 @@
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t291-tr0  timeout=200s  worry=160s  ts=2026-10-05T16:13:25-0400
+cmd: bash /localdev/smarton/gstt2-t291/docs/k2-trisc-t291/remote_tracy.sh t291-tr0 GSPLAT_TT_K2_TRISC=1 GSPLAT_TT_K2_PROF=0
+-----------------------------------------
+=== tracy t291-tr0 b544d00 K2_PROF=0 env: GSPLAT_TT_K2_TRISC=1 GSPLAT_TT_K2_PROF=0 20:13:26
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=28.9 p50_ms=27.2 min_ms=25.2 max_ms=53.6 n_views=30 warmup_s=9.9 out=/localdev/smarton/gstt2-t291/tmp/t291-tr0
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 9273438 Oct  5 20:13 /localdev/smarton/gstt2-t291/opt/profiler/t291-tr0/render.tracy
+[capture_tracy] device profiler CSV data rows: 607153 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t291/opt/profiler/t291-tr0/render.tracy
+chunk opt/profiler/t291-tr0/profile_log_device.csv: rows=607152 frames=31 (warmup rows=19606) kept_rows=587546 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t291-tr0/dev30.csv: rows=587546 frames=30 rows/frame=19585
+zones rc=0
+gaps rc=0
+k2_parts rc=0
+k2p rows: 0
+no k2p_* markers (capture with GSPLAT_TT_K2_PROF=1); Part 1 skipped
+== Part 2: route (a) model, K2 inside the sort_ol launch (30 views)
+K2 end (max core) -> sort kernel start (first core): 0.011 ms/view
+K2 tail: mean core end -> max core end: 0.104 ms/view
+modeled saving (sort_ol end moves earlier by): mean 0.009, min 0.009, max 0.010 ms/view
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+sort_ol_town               10784.1   359.470        35.4       1.179     9900  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                7810.9   260.365        38.4       1.282     6600  BRISC,NCRISC
+k2_pairs                    3123.4   104.115        17.4       0.579     6600  BRISC,NCRISC
+k2_trisc                    2652.5    88.415         8.7       0.291    13200  TRISC_0,TRISC_1,TRISC_2
+sort_ol_fill                 269.3     8.976         3.0       0.101     3300  NCRISC
+sort_ol_barrier              247.0     8.233         2.8       0.092     3300  BRISC
+sort_ol_fillb                232.4     7.748         2.7       0.089     3300  BRISC
+sort_ol_prefix               137.1     4.571         2.5       0.083     3300  BRISC
+k2_rows                       38.4     1.280         0.2       0.007     6600  BRISC,NCRISC
+=== tracy done 20:13:54
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t291/.ttw/logs/t291-tr0-20261005-161324.log

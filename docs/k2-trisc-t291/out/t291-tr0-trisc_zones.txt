@@ -1,0 +1,18 @@
+== K2 TRISC job timeline (3300 core-views, ms per core per view)
+B job0 (T0) prep                             mean  0.1167  max  0.2655  n 3300
+B job0 (T0) run                              mean  0.2663  max  0.3615  n 3300
+B job0 (T0) slack                            mean  0.0574  max  0.1972  n 3300
+B job1 (T1 1st) prep                         mean  0.1168  max  0.2656  n 3300
+B job1 (T1 1st) run                          mean  0.1301  max  0.1771  n 3300
+B job1 (T1 1st) slack                        mean  0.1936  max  0.3152  n 3300
+N job0 (T2) prep                             mean  0.1499  max  0.3148  n 3300
+N job0 (T2) run                              mean  0.2714  max  0.3589  n 3300
+N job0 (T2) slack                            mean  0.0848  max  0.2940  n 3300
+N job1 (T1 2nd) prep                         mean  0.2893  max  0.5151  n 3300
+N job1 (T1 2nd) run                          mean  0.1360  max  0.1825  n 3300
+N job1 (T1 2nd) slack                        mean  0.0807  max  0.2395  n 3300
+core K2 pairs span                           mean  0.5260  max  0.7681  n 3300
+core: last job end -> last mover end         mean  0.0513  max  0.1284  n 3300
+mover B pairs                                mean  0.4405  max  0.6172  n 3300
+mover N pairs                                mean  0.5060  max  0.7122  n 3300
+slowest core K2 pairs span per view: mean 0.6263 ms

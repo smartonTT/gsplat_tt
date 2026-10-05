@@ -449,13 +449,27 @@ struct WinIo {
     uint32_t k = 0, out_k = 0;
     const uint32_t* sl[RA_SLOTS] = {};
     const uint32_t* sb[RA_SLOTS] = {};
+    // Task #291: window pages landed so far (the mover fills the window in
+    // chunks while the TRISC runs); nullptr = the whole window is in place.
+    const volatile uint32_t* fill = nullptr;
     void issue_lofs(uint32_t, uint32_t) {}
     void issue(uint32_t, uint32_t slot) {
         sl[slot] = k < n_in ? lofs + k * PAGE_WORDS : poison;
         sb[slot] = k < n_in ? box + k * PAGE_WORDS : poison;
         k++;
     }
-    void wait_reads() {}
+    void wait_reads() {
+        if (fill == nullptr) return;
+        const uint32_t need = k < n_in ? k : n_in;
+        while (*fill < need) {
+#if defined(COMPILE_FOR_TRISC)
+            asm volatile("fence" ::: "memory");
+#endif
+        }
+#if defined(COMPILE_FOR_TRISC)
+        asm volatile("fence" ::: "memory");
+#endif
+    }
     const uint32_t* lofs_slot(uint32_t s) const { return sl[s]; }
     const uint32_t* box_slot(uint32_t s) const { return sb[s]; }
     uint32_t* gid_slot(uint32_t) { return gid + out_k * PAGE_WORDS; }

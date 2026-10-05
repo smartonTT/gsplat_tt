@@ -12,7 +12,8 @@
 // (k2_trisc_compute.cpp) zeroes the job's count row, runs
 // emit_pairs_diet_from over WinIo into the job's gid / tid pages and sets
 // DONE. The mover, after its own pages, waits for DONE, clears GO, writes the
-// job's pages and adds its counts to its count row. Jobs are posted every
+// job's pages and adds its counts to its count row. Task #291: the mover posts
+// the jobs before their windows land and fills them in chunks (H_FILL). Jobs are posted every
 // launch, npg = 0 when there is no work, so the TRISCs never wait forever.
 #pragma once
 
@@ -26,8 +27,9 @@ namespace k2_trisc {
 
 constexpr uint32_t CB_JOB = 1;  // + 16 (TA_CB_OFFSET) for BRISC
 constexpr uint32_t MAGIC = 0x274A0B51u, MAGIC2 = 0x9C3D1E27u;
-enum : uint32_t { H_GO, H_GO2, H_DONE, H_PG0, H_NPG, H_C, H_LO, H_NIN, H_PPUB, H_TX, H_NSEG, H_TAB, H_SPAN, H_TS, H_TE };
+enum : uint32_t { H_GO, H_GO2, H_DONE, H_PG0, H_NPG, H_C, H_LO, H_NIN, H_PPUB, H_TX, H_NSEG, H_TAB, H_SPAN, H_TS, H_TE, H_FILL };
 // H_TS / H_TE: TRISC wall clock at GO seen / before DONE (K2_PROF builds only).
+// H_FILL (task #291): window pages in L1 so far; the mover raises it per chunk.
 constexpr uint32_t PB = 64;
 constexpr uint32_t FOLD_TILES = 1024;  // == K2_FOLD_TILES
 constexpr uint32_t CNT_OFF = PB;
