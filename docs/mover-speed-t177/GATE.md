@@ -56,3 +56,18 @@ table. The t164 fold is dropped (kernel back to smarton/tt-project-opt, no
 GSPLAT_TT_OL_EMIT_FOLD), so the branch now differs from the tip only in the host
 speed table. drive5.sh smokes the real tip in its own dir (board check), then the
 branch's v0 and v2 arms, and runs the drive3 gate if all pass.
+
+## drive5 gate result (2026-10-04, yyzo-bh-07 p100a, ccb455b, untraced, 3x30 views interleaved)
+
+Board check: real tip f4d91df smoke passed (rc=0), branch tip and v2 smokes passed. The drive4 hangs came from the t164 fold kernel edit, not the board or the table.
+
+| round | tip (v0 table) ms/view | v2 ms/view | v2 - tip |
+|---|---|---|---|
+| r1 | 17.265 | 17.053 | -0.212 |
+| r2 | 17.299 | 17.107 | -0.192 |
+| r3 | 17.309 | 17.113 | -0.196 |
+| mean | | | **-0.200** |
+
+bin_emit drops ~3.67 -> ~3.43 ms (-0.24). md5 46a725ab on all 6 runs, ALL_VIEWS_IDENTICAL.
+
+Decision: SHELVED. -0.200 ms/view is below the 0.3 gate. The 0.2 allowance needed the t164 issue_brec fold, which hangs with the K2 count fold after the rebase onto #170, so no combined arm exists. The v2 table stays on this branch (ttp/t177-...) for a later combined landing if a working emit fold or another emit lever comes along.
