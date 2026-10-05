@@ -352,17 +352,17 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         cb_raw(CB_VOP, TILE_BYTES_FP32);
         if (fuse) cb_raw(CB_FUSE, FUSE_CB_BYTES);
     }
-    // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 DPRINTs per-step wall cycles from the
+    // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 records per-step wall cycles (profiler builds) from the
     // reader, the three TRISCs and the fused writer (targeted profiling, default OFF).
-    // GSPLAT_TT_PFWC_STEPRISC (0..2 TRISC0..2, 3 reader, 4 writer; default 1) picks
-    // the one RISC instrumented per run (all five overflow the kernel config buffer).
+    // GSPLAT_TT_PFWC_STEPRISC (0..2 TRISC0..2, 3 reader, 4 writer, 9 all; default 9)
+    // picks the instrumented RISC(s); all five need GSPLAT_TT_KCFG_EXTRA_KB headroom.
     const uint32_t stepcyc = vis_env_u32("GSPLAT_TT_PFWC_STEPCYC", 0);
-    const uint32_t steprisc = vis_env_u32("GSPLAT_TT_PFWC_STEPRISC", 1);
+    const uint32_t steprisc = vis_env_u32("GSPLAT_TT_PFWC_STEPRISC", 9);
     std::map<std::string, std::string> reader_defines = vis_defines;
     if (stepcyc != 0) {
         vis_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
         vis_defines["PFWC_STEPRISC"] = std::to_string(steprisc);
-        if (steprisc == 3) reader_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
+        if (steprisc == 3 || steprisc == 9) reader_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
     }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
@@ -430,7 +430,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     }
     std::map<std::string, std::string> writer_defines;
     if (fuse && env_config::emit_puboc()) writer_defines["EMIT_PUBOC"] = "1";
-    if (fuse && stepcyc != 0 && steprisc == 4) writer_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
+    if (fuse && stepcyc != 0 && (steprisc == 4 || steprisc == 9)) writer_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
     // Targeted profiling only (task #122): writer_pfwc_fuse.cpp FUSE_ABL bits.
     if (fuse && vis_env_u32("GSPLAT_TT_FUSE_ABL", 0) != 0)
         writer_defines["FUSE_ABL"] = std::to_string(vis_env_u32("GSPLAT_TT_FUSE_ABL", 0)) + "u";

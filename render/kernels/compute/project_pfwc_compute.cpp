@@ -81,13 +81,12 @@
 #include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/eltwise_unary/rounding.h"
 
-// Task #197: PFWC_STEPRISC (0 unpack, 1 math, 2 pack) picks the one TRISC that
-// carries the counters; instrumenting all three overflows the kernel config buffer.
-#if defined(PFWC_STEPCYC) && ((PFWC_STEPRISC == 0 && defined(TRISC_UNPACK)) || \
+// Task #197: PFWC_STEPRISC (0 unpack, 1 math, 2 pack, 9 all) picks the TRISC(s)
+// that carry the counters (all five RISCs need GSPLAT_TT_KCFG_EXTRA_KB headroom).
+#if defined(PFWC_STEPCYC) && (PFWC_STEPRISC == 9 || (PFWC_STEPRISC == 0 && defined(TRISC_UNPACK)) || \
                               (PFWC_STEPRISC == 1 && defined(TRISC_MATH)) ||   \
                               (PFWC_STEPRISC == 2 && defined(TRISC_PACK)))
 #define PFWC_SC_ON 1
-#include "api/debug/dprint.h"
 #endif
 
 #ifdef TRISC_MATH
@@ -154,7 +153,7 @@ constexpr uint32_t CB_AABB   = 36;
 // ---- Per-step wall cycles (GSPLAT_TT_PFWC_STEPCYC=1, task #197; default OFF) ----
 // Every TRISC (UNPACK, MATH, PACK) adds the wall cycles (1350 MHz) between step
 // boundaries into one counter per step, summed over the core's chunks, and
-// DPRINTs "PC n wall init s0..s12" at kernel end. Steps: 0 input wait, 1 transform,
+// records "pfwc_pc" n wall init s0..s12 at kernel end. Steps: 0 input wait, 1 transform,
 // 2 recip, 3 depth, 4 means, 5 cov_cam, 6 a, 7 b, 8 c, 9 conic, 10 radii x,
 // 11 radii y, 12 vis + pops. =2 also splits step 5 (cov_cam: 36 copies, 36
 // mul_unary, 30 add_binary, 6 packs) by call type on each thread:
@@ -1064,9 +1063,8 @@ void kernel_main() {
         g_v[0] = num_chunks;
         g_v[1] = pc_now() - pc_w0;
         g_v[2] = pc_init;
-        DPRINT << "PC";
-        for (uint32_t i = 0; i < PC_NV; i++) DPRINT << " " << g_v[i];
-        DPRINT << ENDL();
+        // Profiler builds: one timestamped-data marker per value, (index << 32) | value.
+        for (uint32_t i = 0; i < PC_NV; i++) DeviceTimestampedData("pfwc_pc", (uint64_t(i) << 32) | g_v[i]);
     }
 #endif
 }

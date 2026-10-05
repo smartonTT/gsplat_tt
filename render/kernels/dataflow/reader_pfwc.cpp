@@ -26,9 +26,8 @@
 
 #include "api/dataflow/dataflow_api.h"
 #ifdef PFWC_STEPCYC
-#include "api/debug/dprint.h"
 // Task #197 (GSPLAT_TT_PFWC_STEPCYC): wall cycles in the CB reserves (compute
-// back-pressure) and in the read barrier (DRAM latency), DPRINTed at the end:
+// back-pressure) and in the read barrier (DRAM latency), recorded at the end (profiler builds) as "pfwc_pr":
 // "PR n wall reserve barrier".
 #define PR_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #endif
@@ -160,6 +159,7 @@ void kernel_main() {
 #endif
     }
 #ifdef PFWC_STEPCYC
-    DPRINT << "PR " << num_chunks << " " << (PR_NOW() - pr_w0) << " " << pr_res << " " << pr_bar << ENDL();
+    const uint32_t pr_v[4] = {num_chunks, PR_NOW() - pr_w0, pr_res, pr_bar};
+    for (uint32_t i = 0; i < 4; i++) DeviceTimestampedData("pfwc_pr", (uint64_t(i) << 32) | pr_v[i]);
 #endif
 }

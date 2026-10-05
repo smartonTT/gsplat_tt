@@ -47,13 +47,12 @@
 #define FUSE_ABL 0
 #endif
 
-// Task #197 (GSPLAT_TT_PFWC_STEPCYC): wall cycles per part, DPRINTed at the end:
+// Task #197 (GSPLAT_TT_PFWC_STEPCYC): wall cycles per part, recorded at the end (profiler builds) as "pfwc_pw":
 // "PW n wall wait bar cls rec tail iss m pr" (wait = the 10 compute tiles, bar = the
 // opacity / color read barrier, cls = classify_tile, rec = record + page staging
 // and flushes, tail = pops + last flushes + counts write, iss = read issue; m
 // visible, pr pairs).
 #ifdef PFWC_STEPCYC
-#include "api/debug/dprint.h"
 #define PW_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define PW_MARK(acc) do { const uint32_t n_ = PW_NOW(); acc += n_ - pw_t; pw_t = n_; } while (0)
 #else
@@ -340,8 +339,6 @@ void kernel_main() {
 #ifdef PFWC_STEPCYC
     PW_MARK(pw_tail);
     const uint32_t pw_v[10] = {num_chunks, PW_NOW() - pw_w0, pw_wait, pw_bar, pw_cls, pw_rec, pw_tail, pw_iss, m, pr};
-    DPRINT << "PW";
-    for (uint32_t i = 0; i < 10; i++) DPRINT << " " << pw_v[i];
-    DPRINT << ENDL();
+    for (uint32_t i = 0; i < 10; i++) DeviceTimestampedData("pfwc_pw", (uint64_t(i) << 32) | pw_v[i]);
 #endif
 }
