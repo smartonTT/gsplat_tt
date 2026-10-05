@@ -339,7 +339,9 @@ void kernel_main() {
     noc_async_write_barrier();
 #ifdef PFWC_STEPCYC
     PW_MARK(pw_tail);
-    DPRINT << "PW " << num_chunks << " " << (PW_NOW() - pw_w0) << " " << pw_wait << " " << pw_bar << " "
-           << pw_cls << " " << pw_rec << " " << pw_tail << " " << pw_iss << " " << m << " " << pr << ENDL();
+    const uint32_t pw_v[10] = {num_chunks, PW_NOW() - pw_w0, pw_wait, pw_bar, pw_cls, pw_rec, pw_tail, pw_iss, m, pr};
+    DPRINT << "PW";
+    for (uint32_t i = 0; i < 10; i++) DPRINT << " " << pw_v[i];
+    DPRINT << ENDL();
 #endif
 }

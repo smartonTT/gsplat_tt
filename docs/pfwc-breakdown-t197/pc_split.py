@@ -5,7 +5,7 @@ Lines (wall cycles, 1350 MHz), one per core, RISC and launch:
   TRISC0/1/2  "PC n wall init s0..s12"  steps: 0 input wait, 1 transform, 2 recip,
               3 depth, 4 means, 5 cov_cam, 6 a, 7 b, 8 c, 9 conic, 10 radii x,
               11 radii y, 12 vis+pops
-              "PO copy mul add acquire pack" (STEPCYC=2, cov_cam only)
+              + "copy mul add acquire pack" (STEPCYC=2, cov_cam only)
   NCRISC      "PR n wall reserve barrier"
   BRISC       "PW n wall wait bar cls rec tail iss m pr"
   pc_split.py pcN.dprint
@@ -26,6 +26,9 @@ for line in open(sys.argv[1], errors='replace'):
     if not m:
         continue
     v = [int(x) for x in m.group(5).split()]
+    if m.group(4) == 'PC' and len(v) == len(FMT['PC']) + len(FMT['PO']):  # STEPCYC=2 line
+        seq[(m.group(1) + '-' + m.group(2), m.group(3), 'PO')].append(v[len(FMT['PC']):])
+        v = v[:len(FMT['PC'])]
     if len(v) == len(FMT[m.group(4)]):
         seq[(m.group(1) + '-' + m.group(2), m.group(3), m.group(4))].append(v)
 nl = min(len(v) for v in seq.values())

@@ -160,10 +160,14 @@ constexpr uint32_t CB_AABB   = 36;
 // mul_unary, 30 add_binary, 6 packs) by call type on each thread:
 // "PO copy mulu addb acq pack".
 #ifdef PFWC_SC_ON
+// One array, printed by one loop (keeps the binary small): n, wall, init,
+// 13 steps, then 5 cov_cam parts when PFWC_STEPCYC >= 2.
 constexpr uint32_t PC_N = 13;
-uint32_t g_pc[PC_N];
+constexpr uint32_t PC_NV = 3 + PC_N + (PFWC_STEPCYC >= 2 ? 5 : 0);
+uint32_t g_v[3 + PC_N + 5];
+uint32_t* const g_pc = g_v + 3;
+uint32_t* const g_po = g_v + 3 + PC_N;
 uint32_t g_pc_t = 0;
-uint32_t g_po[5];
 inline uint32_t pc_now() {
     return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0];
 }
@@ -585,8 +589,7 @@ void kernel_main() {
         return;
     }
 #ifdef PFWC_SC_ON
-    for (uint32_t i = 0; i < PC_N; i++) g_pc[i] = 0;
-    for (uint32_t i = 0; i < 5; i++) g_po[i] = 0;
+    for (uint32_t i = 0; i < 3 + PC_N + 5; i++) g_v[i] = 0;
     g_pc_t = pc_now();
     const uint32_t pc_init = g_pc_t - pc_w0;
 #endif
@@ -1058,14 +1061,12 @@ void kernel_main() {
     }
 #ifdef PFWC_SC_ON
     {
-        const uint32_t wall = pc_now() - pc_w0;
-        DPRINT << "PC " << num_chunks << " " << wall << " " << pc_init;
-        for (uint32_t i = 0; i < PC_N; i++) DPRINT << " " << g_pc[i];
+        g_v[0] = num_chunks;
+        g_v[1] = pc_now() - pc_w0;
+        g_v[2] = pc_init;
+        DPRINT << "PC";
+        for (uint32_t i = 0; i < PC_NV; i++) DPRINT << " " << g_v[i];
         DPRINT << ENDL();
-#if PFWC_STEPCYC >= 2
-        DPRINT << "PO " << g_po[0] << " " << g_po[1] << " " << g_po[2] << " " << g_po[3] << " " << g_po[4]
-               << ENDL();
-#endif
     }
 #endif
 }
