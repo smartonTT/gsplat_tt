@@ -207,3 +207,15 @@ writer, cov_cam cuts TRISC compute). Combined they clear the gate: 14.27 → 13.
 `GSPLAT_TT_KCFG_EXTRA_KB` unset, the device opens with +24 KB; with only cov_cam on, +8 KB.
 Base at +24 KB (14.19-14.34) matches the iter-194 tip (14.235), so the bigger kernel
 config buffer costs nothing visible. Profiling the default needs `GSPLAT_TT_KCFG_EXTRA_KB=32`.
+
+**Default verify (f031ba0, 3 rotated rounds, untraced, no KCFG override).** Synced f031ba0 and
+ran default / both-off / cov-only per round (`dev-t221/verify.sh`, log `dev-t221/out/t221-verify.log`).
+All 9 arms: 30/30 views identical, md5-of-md5s 46a725ab, no hang, no TT_FATAL.
+
+| arm | rv1 | rv2 | rv3 | mean ms/view | project ms/view |
+|---|---:|---:|---:|---:|---:|
+| default (split+cov) | 13.578 | 13.590 | 13.643 | **13.604** (73.5 FPS) | 3.354 |
+| both off | 14.229 | 14.268 | 14.307 | 14.268 | 4.017 |
+| cov only | 14.038 | 14.010 | 14.021 | 14.023 | 3.790 |
+
+Default vs both-off -0.664 ms/view, vs cov-only -0.419. The defaults work without any env override.
