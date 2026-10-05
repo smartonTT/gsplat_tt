@@ -112,6 +112,12 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     bool need_host_sorted_ids = false,
     SortBlendContinuation* sort_blend = nullptr);
 
+// Task #270: after a failed sort_and_bin_tt, the largest (padded) record count
+// of a tile over the bucket capacity, else 0; and that capacity (32768, or
+// GSPLAT_TT_TEST_TILE_CAP). render_view retries such a view at a coarser floor.
+uint32_t sort_last_tile_overflow();
+uint32_t sort_tile_capacity();
+
 // Task #198 (GSPLAT_TT_SORT_OL_EARLY): enqueue the one-launch sort on the
 // device's CQ0 right behind the fold K2, before the host knows P. The kernel
 // reads P from ta_pairs_P and takes each mover's K2 page range from the running

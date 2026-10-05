@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -47,6 +48,7 @@
 #include "vis_mode.h"
 #include "host_profile.h"
 #include "jit_warmup.h"
+#include "overflow_retry.h"
 #include "pfwc.h"
 #include "project.h"
 #include "sort.h"
@@ -243,96 +245,121 @@ py::tuple render_view(
     gsplat_tt::jit_warmup_ideal_path();
     head_span.stop();
 
-    // Stage 1: project.
+    // Task #270 (overflow_retry.h): stages 1-5 run again at a coarser
+    // contribution floor when a tile overflows the sort bucket.
     gsplat_cpu::ProjectResult proj;
-    {
-        st::Span s(st::acc().project);
-        proj = run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
-                           opacities_ptr, min_opacity, N, image_height,
-                           image_width, max_radius, tile_size, mb_contrib_floor,
-                           cull_disabled);
-    }
-    const std::size_t M = proj.depths.empty() ? proj.num_visible : proj.depths.size();
-
+    std::size_t M = 0;
     py::dict stats;
-    if (M == 0) {
-        std::memset(image.mutable_data(), 0, image_bytes);
-        stats["num_visible"] = 0;
-        stats["num_entries"] = 0;
-        st::acc().views++;
-        return py::make_tuple(image, stats);
-    }
-
-    // Stage 2: tile_assign (resident inputs => null host pointers).
-    bool ta_ok = false;
-    gsplat_cpu::TileAssignResult ta;
-    {
-        st::Span s(st::acc().tile_assign);
-        ta = gsplat_tt::tile_assign_tt(
-            /*means_2d=*/nullptr, /*radii=*/nullptr, M, image_height,
-            image_width, tile_size, /*covs_2d=*/nullptr, /*opacities=*/nullptr,
-            contrib_floor, &ta_ok);
-    }
-    if (!ta_ok) {
-        throw std::runtime_error(
-            "render_clean: device tile_assign failed; single-path TT, no CPU "
-            "fallback");
-    }
-
-    // Hand the microblock-cull params to the sort driver via device_state so the
-    // fused SFPU cull pass can bake the keep mask into the dense record (these
-    // blend args never reach sort_and_bin_tt directly).
-    gsplat_tt::device_state::set_bucket_cull_params(mb_contrib_floor,
-                                                    cull_disabled);
-
-    // Stages 3+4+5: sort, then the in-sort continuation runs the SFPU cull and
-    // the resident microblock blend, writing the final image. Chaining them on
-    // one command-queue drain is the production host-free path.
+    gsplat_cpu::SortResult sr;
     bool sort_ok = false;
     bool blend_ok = false;
-    gsplat_tt::SortBlendContinuation sort_blend;
-    sort_blend.image_out = image.mutable_data();
-    sort_blend.image_height = image_height;
-    sort_blend.image_width = image_width;
-    sort_blend.mb_contrib_floor = mb_contrib_floor;
-    sort_blend.cull_disabled = cull_disabled;
-    sort_blend.blend_ok = &blend_ok;
+    for (int attempt = 0;; ++attempt) {
+        // Stage 1: project.
+        {
+            st::Span s(st::acc().project);
+            proj = run_project(means_ptr, cov3d_ptr, extr_ptr, intr_ptr, colors_ptr,
+                               opacities_ptr, min_opacity, N, image_height,
+                               image_width, max_radius, tile_size, mb_contrib_floor,
+                               cull_disabled);
+        }
+        M = proj.depths.empty() ? proj.num_visible : proj.depths.size();
 
-    // The whole call is timed into `sort`, then the fused continuation's own
-    // buckets (blend_setup/cull/blend/d2h/assemble, booked inside blend_device)
-    // are subtracted back out so `sort` is the sort work alone.
-    const st::Acc fused_before = st::acc();
-    gsplat_cpu::SortResult sr;
-    gsplat_tt::SortCallTimings sort_t;
-    {
-        st::Span s(st::acc().sort);
-        sr = gsplat_tt::sort_and_bin_tt(
-            ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
-            ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(),
-            &sort_ok,
-            &sort_t, /*need_host_sorted_ids=*/false, &sort_blend);
-    }
-    {
-        st::Acc& a = st::acc();
-        a.sort -= (a.blend_setup - fused_before.blend_setup) +
-                  (a.mat - fused_before.mat) +
-                  (a.cull - fused_before.cull) +
-                  (a.blend - fused_before.blend) +
-                  (a.d2h - fused_before.d2h) +
-                  (a.assemble - fused_before.assemble);
-        // The sort driver's own leaf spans (SortCallTimings) as sort_* buckets.
-        a.sort_pread += sort_t.pread_ms;
-        a.sort_bin_count += sort_t.bin_count_ms;
-        a.sort_bin_hist_d2h += sort_t.bin_hist_d2h_ms;
-        a.sort_bin_layout += sort_t.bin_layout_ms;
-        a.sort_upload += sort_t.upload_ms;
-        a.sort_bin_emit += sort_t.bin_emit_ms;
-        a.sort_kernel += sort_t.kernel_ms;
-        a.sort_d2h += sort_t.d2h_ms;
-        a.sort_compact += sort_t.compact_ms;
-        a.sort_publish_host += sort_t.publish_host_ms;
-        a.sort_publish_wait += sort_t.publish_wait_ms;
-        a.sort_mat += sort_t.materialize_ms;
+        if (M == 0) {
+            std::memset(image.mutable_data(), 0, image_bytes);
+            stats["num_visible"] = 0;
+            stats["num_entries"] = 0;
+            st::acc().views++;
+            return py::make_tuple(image, stats);
+        }
+
+        // Stage 2: tile_assign (resident inputs => null host pointers).
+        bool ta_ok = false;
+        gsplat_cpu::TileAssignResult ta;
+        {
+            st::Span s(st::acc().tile_assign);
+            ta = gsplat_tt::tile_assign_tt(
+                /*means_2d=*/nullptr, /*radii=*/nullptr, M, image_height,
+                image_width, tile_size, /*covs_2d=*/nullptr, /*opacities=*/nullptr,
+                contrib_floor, &ta_ok);
+        }
+        if (!ta_ok) {
+            throw std::runtime_error(
+                "render_clean: device tile_assign failed; single-path TT, no CPU "
+                "fallback");
+        }
+
+        // Hand the microblock-cull params to the sort driver via device_state so the
+        // fused SFPU cull pass can bake the keep mask into the dense record (these
+        // blend args never reach sort_and_bin_tt directly).
+        gsplat_tt::device_state::set_bucket_cull_params(mb_contrib_floor,
+                                                        cull_disabled);
+
+        // Stages 3+4+5: sort, then the in-sort continuation runs the SFPU cull and
+        // the resident microblock blend, writing the final image. Chaining them on
+        // one command-queue drain is the production host-free path.
+        sort_ok = false;
+        blend_ok = false;
+        gsplat_tt::SortBlendContinuation sort_blend;
+        sort_blend.image_out = image.mutable_data();
+        sort_blend.image_height = image_height;
+        sort_blend.image_width = image_width;
+        sort_blend.mb_contrib_floor = mb_contrib_floor;
+        sort_blend.cull_disabled = cull_disabled;
+        sort_blend.blend_ok = &blend_ok;
+
+        // The whole call is timed into `sort`, then the fused continuation's own
+        // buckets (blend_setup/cull/blend/d2h/assemble, booked inside blend_device)
+        // are subtracted back out so `sort` is the sort work alone.
+        const st::Acc fused_before = st::acc();
+        gsplat_tt::SortCallTimings sort_t;
+        {
+            st::Span s(st::acc().sort);
+            sr = gsplat_tt::sort_and_bin_tt(
+                ta.gaussian_ids.data(), ta.tile_ids.data(), proj.depths.data(),
+                ta.gaussian_ids.size(), M, tiles_x, tiles_y, &worker_pool(),
+                &sort_ok,
+                &sort_t, /*need_host_sorted_ids=*/false, &sort_blend);
+        }
+        {
+            st::Acc& a = st::acc();
+            a.sort -= (a.blend_setup - fused_before.blend_setup) +
+                      (a.mat - fused_before.mat) +
+                      (a.cull - fused_before.cull) +
+                      (a.blend - fused_before.blend) +
+                      (a.d2h - fused_before.d2h) +
+                      (a.assemble - fused_before.assemble);
+            // The sort driver's own leaf spans (SortCallTimings) as sort_* buckets.
+            a.sort_pread += sort_t.pread_ms;
+            a.sort_bin_count += sort_t.bin_count_ms;
+            a.sort_bin_hist_d2h += sort_t.bin_hist_d2h_ms;
+            a.sort_bin_layout += sort_t.bin_layout_ms;
+            a.sort_upload += sort_t.upload_ms;
+            a.sort_bin_emit += sort_t.bin_emit_ms;
+            a.sort_kernel += sort_t.kernel_ms;
+            a.sort_d2h += sort_t.d2h_ms;
+            a.sort_compact += sort_t.compact_ms;
+            a.sort_publish_host += sort_t.publish_host_ms;
+            a.sort_publish_wait += sort_t.publish_wait_ms;
+            a.sort_mat += sort_t.materialize_ms;
+        }
+
+        // Task #270: a tile over the sort bucket capacity failed the sort. Re-run
+        // the view at a coarser floor (every stage's cull uses it, so the frame
+        // stays seam-free); a view that fits never gets here.
+        const uint32_t over_n = gsplat_tt::sort_last_tile_overflow();
+        if (sort_ok || over_n == 0 || attempt >= gsplat_tt::overflow_retry::kMaxRetries ||
+            mb_contrib_floor >= gsplat_tt::overflow_retry::kMaxFloor) {
+            break;
+        }
+        const float next = gsplat_tt::overflow_retry::next_floor(
+            std::max(contrib_floor, mb_contrib_floor), over_n, gsplat_tt::sort_tile_capacity());
+        std::fprintf(stderr,
+                     "[render_clean] tile overflow (%u records > %u): retrying the view at "
+                     "contrib floor 1/%.0f (was 1/%.0f)\n",
+                     over_n, gsplat_tt::sort_tile_capacity(), 1.0 / next,
+                     1.0 / mb_contrib_floor);
+        contrib_floor = next;
+        mb_contrib_floor = next;
     }
     st::Span tail_span(st::acc().tail);
     // The sort driver runs the SFPU cull + microblock blend as its on-device

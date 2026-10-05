@@ -130,6 +130,21 @@ constexpr uint32_t MAX_TILE_ENTRIES = 32768;
 constexpr uint32_t MAX_TILE_PAGES = MAX_TILE_ENTRIES / ELEMS_PER_PAGE;  // 2048
 constexpr uint32_t SCRATCH_BYTES = MAX_TILE_ENTRIES * 4;  // 128 KB per CB
 
+// Task #270: the largest (padded) tile count of the last sort that failed on
+// a tile over the bucket capacity, else 0 (sort_last_tile_overflow()).
+static uint32_t g_last_tile_overflow = 0;
+// GSPLAT_TT_TEST_TILE_CAP=N (test only): fail the one-launch sort's capacity
+// check at N records instead of 32768, to exercise the overflow retry on the
+// bench views. Records up to 32768 still fit the buckets.
+static uint32_t test_tile_cap() {
+    static const uint32_t v = [] {
+        const char* e = std::getenv("GSPLAT_TT_TEST_TILE_CAP");
+        const long n = (e != nullptr) ? std::atol(e) : 0;
+        return n > 0 ? static_cast<uint32_t>(n) : 0xFFFFFFFFu;
+    }();
+    return v;
+}
+
 // Device-binning: max tiles the per-core L1 row / cursor / offset CBs hold
 // (hero is 1024 tiles). Larger inputs are unsupported and hard-fail.
 constexpr uint32_t MAX_BIN_TILES = 2048;
@@ -2379,20 +2394,28 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             std::vector<uint32_t> bmeta(ctx->cap_bucket_meta_bytes / 4, 0u);
             uint32_t P_kept = 0;
             uint32_t max_n = 0;
+            // Task #270: a tile over the bucket capacity (records past it were
+            // dropped) fails this sort; render_view reads the largest count from
+            // sort_last_tile_overflow() and re-renders at a coarser floor.
+            const uint32_t check_cap = std::min(cap, test_tile_cap());
+            uint32_t over_n = 0, over_t = 0;
+            for (uint32_t t = 0; t < num_tiles; t++) {
+                // The padded count is the legacy layout's status 2 bound.
+                const uint32_t need = std::max(tot[t], tot[stride + t]);
+                if (need > check_cap && need > over_n) {
+                    over_n = need;
+                    over_t = t;
+                }
+            }
+            if (over_n > 0) {
+                std::cerr << "[gsplat_tt::sort] tile " << over_t << " holds " << over_n
+                          << " (padded) records > bucket capacity " << check_cap
+                          << "; sort failed, the view is retried at a coarser floor\n";
+                g_last_tile_overflow = over_n;
+                return fail();
+            }
             for (uint32_t t = 0; t < num_tiles; t++) {
                 const uint32_t n = tot[t];
-                if (n > cap) {
-                    std::cerr << "[gsplat_tt::sort] tile " << t << " holds " << n
-                              << " records > bucket capacity " << cap
-                              << " (records past it were dropped) — hard fail "
-                                 "(render_clean is single-path TT, no host fallback)\n";
-                    return fail();
-                }
-                if (tot[stride + t] > MAX_TILE_ENTRIES) {  // the legacy layout's status 2
-                    std::cerr << "[gsplat_tt::sort] padded tile exceeds MAX_TILE_ENTRIES; "
-                                 "hard fail (render_clean is single-path TT, no host fallback)\n";
-                    return fail();
-                }
                 counts[t] = n;
                 pad_counts[t] = tot[stride + t];  // == the legacy LPT cost (per-core pages)
                 bmeta[static_cast<std::size_t>(t) * 2 + 0] = P_kept;
@@ -2861,8 +2884,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             }
             if (bl.status == 2) {
                 std::cerr << "[gsplat_tt::sort] padded tile exceeds MAX_TILE_ENTRIES; "
-                             "exceeds device sort capacity — hard fail "
-                             "(render_clean is single-path TT, no host fallback)\n";
+                             "sort failed, the view is retried at a coarser floor\n";
+                g_last_tile_overflow = std::max<uint32_t>(bl.max_pad_n, MAX_TILE_ENTRIES + 1);
                 return fail();
             }
             counts = bl.counts;
@@ -3356,6 +3379,9 @@ void sort_device_shutdown() {
     }
 }
 
+uint32_t sort_last_tile_overflow() { return g_last_tile_overflow; }
+uint32_t sort_tile_capacity() { return std::min(kOneLaunchTileCap, test_tile_cap()); }
+
 gsplat_cpu::SortResult sort_and_bin_tt(
     const int64_t* gaussian_ids,
     const int64_t* tile_ids,
@@ -3373,6 +3399,7 @@ gsplat_cpu::SortResult sort_and_bin_tt(
         if (device_ok) *device_ok = false;
         return gsplat_cpu::SortResult{};
     };
+    g_last_tile_overflow = 0;
 
     // render_clean is single-path: the resident-pairs device binning stage reads
     // the resident full-P (gid,tid) pairs + keep mask that tile_assign left in
