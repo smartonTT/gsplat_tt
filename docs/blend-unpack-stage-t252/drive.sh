@@ -41,7 +41,7 @@ if has sync; then
 fi
 if has smoke; then
   RT=300 tm s 560 P $U1
-  gate s P U1
+  gate s U1  # P renders injected edge values on purpose (wrong output): gate U1 only
 fi
 for r in 1 2 3; do
   has $r || continue

@@ -22,4 +22,7 @@ of every walk gets injected edge values (-0, a denormal, 0x7FFFFF, 1.0, -pi, q=0
 DPRINT TR1 at kernel end: `U2P n= bad= raw_bad=`.
 
 ## Results
+Stage 0 probe (2234282, yyzo-bh-07, 30 views): 3409 checked records, bad=0 (U2 staged values bit-equal to the
+da_stage path, edge values included); raw_bad=1 word on 2 of 3409 checks (the check reads the staging rows after
+SEMGET, so TRISC0 may already be overwriting them: probe race, not a staging error). U1 md5 matches 46a725ab.
 Pending: device chain `drive.sh` (probe smoke, 3 rotated def/U1 rounds, Tracy def/U1).
