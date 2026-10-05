@@ -1,0 +1,5 @@
+void (anonymous namespace)::blend_pair_body<0ul, 1ul>(): sfpu 60 replayed 0 issued 60 nop 5 load 18 store 4 risc 0
+void (anonymous namespace)::blend_pair_body<0ul, 2ul>(): sfpu 60 replayed 0 issued 60 nop 5 load 18 store 4 risc 0
+void (anonymous namespace)::blend_pair_body<0ul, 3ul>(): sfpu 104 replayed 5 issued 109 nop 8 load 26 store 8 risc 0
+void (anonymous namespace)::blend_pair_body<10ul, 1ul>(): sfpu 60 replayed 0 issued 60 nop 5 load 18 store 4 risc 0
+bodies found: 48

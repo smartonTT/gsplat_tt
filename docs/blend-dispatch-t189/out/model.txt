@@ -1,0 +1,21 @@
+per core: 59857 microblocks, 46946 body calls, 21323 live recs, 26325 recs
+1 cycle per microblock = 0.0443 ms/view; per call = 0.0348; per live rec = 0.0158
+calls/mb 0.784; microblocks in pair bodies 43.1%, in single bodies 56.9%
+
+per microblock: fit 82.3 cyc = 3.65 ms/view
+  SFPU work (loads, math, stores)     53.1 cyc  2.35 ms/view
+  sfpnop                               4.6 cyc  0.20 ms/view
+  walk RISC insns                     10.2 cyc  0.45 ms/view
+  unattributed stall                  14.5 cyc  0.64 ms/view
+  non-SFPU time per body call: 31.5 cyc for 13 insns
+
+loop: 7.67 Mcyc/core measured, 6.31 Mcyc issued, stall 1.36 Mcyc = 1.01 ms (18%)
+
+levers (ms/view, upper bounds unless noted):
+  fill every sfpnop                                                        0.20
+  drop duplicate k99/floor loads in pair bodies                            0.02
+  tail-chained walk, low (2 insns + 2 transfers x1 cyc, no load hide)      0.14
+  tail-chained walk, mid (2 + 2x3 + load-use hidden 1)                     0.31
+  tail-chained walk, high (2 + 2x4 + load-use hidden 5)                    0.52
+  every single body turned into a pair (impossible: needs 496 bodies)      0.54
+  all walk RISC + all unattributed stall gone (ceiling)                    1.10
