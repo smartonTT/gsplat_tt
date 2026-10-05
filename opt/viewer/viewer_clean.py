@@ -18,6 +18,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
+# numpy madvises big arrays for transparent huge pages; on a host with fragmented memory
+# (bh-35) every such page fault runs direct compaction and a 144 MB alloc takes >100 s
+# instead of 0.1 s (task #257). Must be set before numpy is imported.
+os.environ.setdefault("NUMPY_MADVISE_HUGEPAGE", "0")
 # render_clean JIT kernels get their own cache (as in render/run.py).
 os.environ.setdefault(
     "TT_METAL_CACHE", f"/localdev/{os.environ.get('USER', 'smarton')}/.cache/tt-metal-cache-viewer")

@@ -10,7 +10,8 @@ viewer_clean.py does (on a private port), then times at the bicycle hero view:
   render_fn_tr   the same under nerfview's per-line sys.settrace hook (old loop)
   jpeg_q40/q70   viser's JPEG encode of the frame
   loop_old       old nerfview loop per frame: lock + settrace + render_fn, then encode
-  loop_new       FastRenderer: render_fn, encode on the sender thread (overlapped)
+  loop_new       FastRenderer: render_fn, encode on the sender thread (overlapped), per
+                 GIL switch interval in --switch-ms
 
 and prints md5s of the hero frame from pipeline.render and from render_fn.
   .venv/bin/python opt/viewer/viewer_probe.py [--n 30] [--bench-hero tmp/x/hero_clean.png]
@@ -26,6 +27,11 @@ import sys
 import threading
 import time
 from pathlib import Path
+
+# numpy madvises big arrays for transparent huge pages; on a host with fragmented memory
+# (bh-35) every such page fault runs direct compaction and a 144 MB alloc takes >100 s
+# instead of 0.1 s (task #257). Must be set before numpy is imported.
+os.environ.setdefault("NUMPY_MADVISE_HUGEPAGE", "0")
 
 import numpy as np
 
@@ -56,6 +62,7 @@ def main():
     ap.add_argument("--n", type=int, default=30)
     ap.add_argument("--port", type=int, default=8097)
     ap.add_argument("--bench-hero", default=None, help="bench hero_clean.png to md5-compare")
+    ap.add_argument("--switch-ms", default="5", help="GIL switch intervals (ms, comma list) for loop_new")
     args = ap.parse_args()
 
     from viewer_clean import _load_run_py
@@ -109,7 +116,19 @@ def main():
                               c2w=hero_c2w.astype(np.float64))
     rts = viewer.viewer.render_tab_state
     fn_img = viewer._render_fn(cs, rts)
+    stage_rec: dict[str, list[dict]] = {}
+    rec_key = [None]
+    _orig_render = pipe.render
+
+    def _rec_render(*a, **k):
+        r = _orig_render(*a, **k)
+        if rec_key[0] is not None:
+            stage_rec.setdefault(rec_key[0], []).append(dict(r.timings))
+        return r
+    pipe.render = _rec_render
+    rec_key[0] = "render_fn"
     rows.append(("render_fn", timed(lambda: viewer._render_fn(cs, rts), args.n)))
+    rec_key[0] = None
 
     def tracer(frame, event, arg):  # same cost shape as nerfview's _may_interrupt_trace
         return tracer
@@ -127,33 +146,55 @@ def main():
     rows.append(("loop_old frame (serial)", timed(loop_old, args.n)))
 
     # FastRenderer with a client stub whose send is viser's real JPEG encode.
+    send_mode = ["encode"]
+
     class _Scene:
         def set_background_image(self, img, format, jpeg_quality, depth=None):
-            _encode_image_binary(img, format, jpeg_quality=jpeg_quality)
+            if send_mode[0] == "sleep":
+                time.sleep(0.005)  # same wall as the encode, no CPU or GIL use
+            else:
+                _encode_image_binary(img, format, jpeg_quality=jpeg_quality)
 
     class _Client:
         scene = _Scene()
         client_id = -1
 
-    sent: list[tuple[float, float, float]] = []
-    done = threading.Event()
+    def loop_new(switch_ms: float, mode: str = "encode") -> None:
+        send_mode[0] = mode
+        tag = f"switch {switch_ms:g} ms" + ("" if mode == "encode" else f", {mode} send")
+        rec_key[0] = "loop_new " + tag
+        sent: list[tuple[float, float, float]] = []
+        done = threading.Event()
 
-    def on_sent(t0, t1, t2):
-        sent.append((t0, t1, t2))
-        if len(sent) >= args.n + 3:
-            done.set()
-    fr = FastRenderer(viewer=viewer.viewer, client=_Client(), lock=viewer.viewer.lock,
-                      on_frame_sent=on_sent)
-    t_start = time.perf_counter()
-    for _ in range(args.n + 3):
-        fr.render_once(RenderTask("move", cs))
-    done.wait(5.0)
-    t_end = time.perf_counter()
-    fr.running = False
-    e2e = [(c - a) * 1000.0 for a, _, c in sent[3:]]
-    rows.append(("loop_new end-to-end (render->sent)", e2e))
-    print(f"[probe] loop_new: {len(sent)} sent of {args.n + 3}, "
-          f"{(t_end - t_start) * 1000.0 / max(len(sent), 1):.2f} ms/frame throughput", flush=True)
+        def on_sent(t0, t1, t2):
+            sent.append((t0, t1, t2))
+            if len(sent) >= args.n + 3:
+                done.set()
+        old_si = sys.getswitchinterval()
+        sys.setswitchinterval(switch_ms / 1000.0)
+        fr = FastRenderer(viewer=viewer.viewer, client=_Client(), lock=viewer.viewer.lock,
+                          on_frame_sent=on_sent)
+        t_start = time.perf_counter()
+        for _ in range(args.n + 3):
+            fr.render_once(RenderTask("move", cs))
+        done.wait(5.0)
+        t_end = time.perf_counter()
+        fr.running = False
+        sys.setswitchinterval(old_si)
+        rec_key[0] = None
+        rows.append((f"loop_new render ({tag})", [(b - a) * 1000.0 for a, b, _ in sent[3:]]))
+        rows.append((f"loop_new end-to-end (render->sent, {tag})",
+                     [(c - a) * 1000.0 for a, _, c in sent[3:]]))
+        print(f"[probe] loop_new {tag}: {len(sent)} sent of {args.n + 3}, "
+              f"{(t_end - t_start) * 1000.0 / max(len(sent), 1):.2f} ms/frame throughput", flush=True)
+
+    for sw in args.switch_ms.split(","):
+        loop_new(float(sw))
+    loop_new(5.0, "sleep")
+    for key, recs in stage_rec.items():
+        recs = recs[3:] if key.startswith("loop_new") else recs
+        cols = " ".join(f"{k}={statistics.median(r[k] for r in recs):.2f}" for k in recs[0])
+        print(f"PROBE stages {key}: {cols} (n={len(recs)})", flush=True)
 
     print("PROBE stage | median ms | min | max | n")
     for name, v in rows:
