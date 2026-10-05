@@ -354,10 +354,11 @@ py::tuple render_view(
 
         // Task #270: a tile over the sort bucket capacity failed the sort. Re-run
         // the view at a coarser floor (every stage's cull uses it, so the frame
-        // stays seam-free); a view that fits never gets here.
+        // stays seam-free); a view that fits never gets here. With the cull
+        // disabled the floor changes nothing, so the overflow fails at once.
         const uint32_t over_n = gsplat_tt::sort_last_tile_overflow();
-        if (sort_ok || over_n == 0 || attempt >= gsplat_tt::overflow_retry::kMaxRetries ||
-            mb_contrib_floor >= gsplat_tt::overflow_retry::kMaxFloor) {
+        if (!gsplat_tt::overflow_retry::should_retry(sort_ok, over_n, attempt,
+                                                     mb_contrib_floor, cull_disabled)) {
             break;
         }
         const float next = gsplat_tt::overflow_retry::next_floor(
