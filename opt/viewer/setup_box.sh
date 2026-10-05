@@ -6,16 +6,17 @@
 #   ssh <box> 'setsid nohup bash -s > /localdev/$USER/viewer/setup.log 2>&1 &' < opt/viewer/setup_box.sh
 set -uo pipefail
 # The ledger box (yyzo-bh-07) runs tt-metal e77780fe, a local commit that is not
-# on GitHub; it pins sfpi 7.49.0. f2e3d017 is the last GitHub main commit that
-# pins sfpi 7.49.0 (2026-05-15), i.e. the closest public base.
-TT_SHA=${TT_SHA:-f2e3d01729e6d54ba66b94d73a482b5f5575718b}
+# on GitHub; it pins sfpi 7.49.0. 437bc366 (2026-05-15) is the parent of
+# 36c276a8 (#44262), which removed _llk_math_eltwise_unary_sfpu_start_/_done_
+# that render/kernels/compute/project_pfwc_compute.cpp calls; it pins sfpi 7.49.0.
+TT_SHA=${TT_SHA:-437bc3664390ce8e7d564db2133083ff9035e7cd}
 ROOT=${ROOT:-/localdev/$USER}
 TT=$ROOT/tt-metal BASE=$ROOT/gstt2 VDIR=$ROOT/viewer
 mkdir -p "$ROOT" "$BASE/scenes" "$VDIR"
 rm -f "$VDIR/setup.rc"
 steps() {
   set -ex
-  if [ ! -f "$TT/build/tt_metal/libtt_metal.so" ]; then
+  if [ ! -f "$TT/build/tt_metal/libtt_metal.so" ] || [ "$(git -C "$TT" rev-parse HEAD)" != "$TT_SHA" ]; then
     [ -d "$TT/.git" ] || git clone -q https://github.com/tenstorrent/tt-metal.git "$TT"
     cd "$TT"
     git checkout -q "$TT_SHA"
