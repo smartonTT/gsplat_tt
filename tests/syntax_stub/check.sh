@@ -22,6 +22,8 @@ chk "sort_bin_onelaunch.cpp v2 PB8 RING8" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RI
 chk "sort_bin_onelaunch.cpp v2 PB16 RING2 no PUBOC" $DF -DOL_PB=16u -DOL_RING=2u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_HALF256" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_BULK=0" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=0 -DOL_BREC_HALF=128u render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_HALF256 EMIT_TOWN" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 EMIT_TOWN EMIT_PROF" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 -DOL_EMIT_PROF=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DOL_MAT_PART=4096u render/kernels/dataflow/sort_subchunk_materialize.cpp
@@ -40,6 +42,10 @@ chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.c
 chk "project_pfwc_compute.cpp PFWC_VIS" $CP -DPFWC_VIS=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 render/kernels/compute/project_pfwc_compute.cpp
+for tr in TRISC_UNPACK TRISC_MATH TRISC_PACK; do
+  chk "sort_ol_town_compute.cpp $tr" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u render/kernels/compute/sort_ol_town_compute.cpp
+  chk "sort_ol_town_compute.cpp $tr EMIT_PROF" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DOL_EMIT_PROF=1 render/kernels/compute/sort_ol_town_compute.cpp
+done
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
 for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
 PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)

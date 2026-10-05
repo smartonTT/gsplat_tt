@@ -1,6 +1,28 @@
 #pragma once
 #include <cstdint>
+// Thread sections (task #202): -DTRISC_UNPACK / -DTRISC_PACK select those, else MATH.
+#if defined(TRISC_UNPACK) || defined(TRISC_PACK)
+#define MATH(x)
+#else
 #define MATH(x) x
+#endif
+#ifdef TRISC_UNPACK
+#define UNPACK(x) x
+#else
+#define UNPACK(x)
+#endif
+#ifdef TRISC_PACK
+#define PACK(x) x
+#else
+#define PACK(x)
+#endif
+struct LocalCBInterface { uint32_t fifo_size, fifo_limit, fifo_page_size, fifo_num_pages, fifo_rd_ptr, fifo_wr_ptr; };
+LocalCBInterface& get_local_cb_interface(uint32_t cb);
+namespace ckernel {
+enum class ThreadId : uint32_t { UnpackThreadId = 0, MathThreadId = 1, PackThreadId = 2 };
+void mailbox_write(ThreadId, uint32_t);
+uint32_t mailbox_read(ThreadId);
+}  // namespace ckernel
 template <typename T> T get_arg_val(int);
 void cb_reserve_back(uint32_t, uint32_t); void cb_push_back(uint32_t, uint32_t);
 void cb_wait_front(uint32_t, uint32_t); void cb_pop_front(uint32_t, uint32_t);

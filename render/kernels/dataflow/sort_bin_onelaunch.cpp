@@ -873,7 +873,7 @@ void kernel_main() {
     twh[tw::H_MSK] = tx_mask;
     twh[tw::H_SH] = tx_shift;
     twh[tw::H_RING] = ring_l1;
-    twh[tw::H_CUR] = reinterpret_cast<uint32_t>(cur_lm);
+    twh[tw::H_CUR] = get_write_ptr(CB_CUR + cbo);  // == cur_lm
     for (uint32_t i = 0; i < tw::NT; i++) {
         twh[tw::H_FIN + i] = 0u;
         twh[tw::H_DONE + 4u * i] = 0u;

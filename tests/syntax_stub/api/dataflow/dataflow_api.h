@@ -36,3 +36,10 @@ void noc_semaphore_set(volatile uint32_t* sem, uint32_t val);
 void noc_semaphore_inc(uint64_t addr, uint32_t incr);
 void noc_async_atomic_barrier();
 void invalidate_l1_cache();
+#ifndef tt_reg_ptr
+#define tt_reg_ptr  // task #202 (EMIT_PROF variants)
+#endif
+#ifndef RISCV_DEBUG_REG_WALL_CLOCK_L
+#define RISCV_DEBUG_REG_WALL_CLOCK_L 0xFFB121F0u
+#endif
+void DeviceTimestampedData(const char*, uint64_t);  // task #202 (EMIT_PROF variants)
