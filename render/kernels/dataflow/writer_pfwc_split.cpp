@@ -169,6 +169,7 @@ void kernel_main() {
     uint32_t rd_k = 0;
     bool rd_pend = false;
     auto rd_step = [&]() {
+        invalidate_l1_cache();  // callers may spin on CB state across early returns
         if (rd_pend) {
             if (!ncrisc_noc_reads_flushed(noc_index)) return;
             for (uint32_t o = 0; o < 10; o++) cb_push_back(IN_CB[o], 1);
@@ -268,7 +269,10 @@ void kernel_main() {
 #endif
 #if WSPLIT_ROLE == 1
         for (uint32_t o = 0; o < 10; o++)
-            while (!cb_pages_available_at_front(OUT_CB[o], 1)) rd_poll();  // compute may wait on input
+            while (!cb_pages_available_at_front(OUT_CB[o], 1)) {  // compute may wait on input
+                invalidate_l1_cache();
+                rd_poll();
+            }
 #endif
         for (uint32_t o = 0; o < 10; o++) cb_wait_front(OUT_CB[o], 1);
         noc_async_read_barrier();
@@ -321,6 +325,7 @@ void kernel_main() {
             const volatile uint32_t* msg = msg_of(k);
             m0 = msg[MSG_M];
             pr = msg[MSG_PR];
+            asm volatile("fence" ::: "memory");  // message loads before EMPTY
             if (m0 % PW == 0) noc_semaphore_set(f, F_EMPTY);  // no OPEN follows
         }
         if (k + 1 < num_chunks) {
@@ -382,6 +387,7 @@ void kernel_main() {
             volatile tt_l1_ptr uint32_t* f = flag_of(k);
             wait_until([&] { return *f == F_OPEN; });
             pg.finish(msg_of(k), flush_pg);
+            asm volatile("fence" ::: "memory");  // message loads before EMPTY
             noc_semaphore_set(f, F_EMPTY);
         }
         WS_MARK(ws_opn);

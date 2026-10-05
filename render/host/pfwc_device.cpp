@@ -356,9 +356,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             c.set_page_size(id, bytes);
             CreateCircularBuffer(program, cores, c);
         };
-        cb_raw(CB_VMASK, VIS_MASK_BYTES);
+        if (!wsplit) cb_raw(CB_VMASK, VIS_MASK_BYTES);  // writer_pfwc_split.cpp uses neither
         if (!fuse) cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
-        cb_raw(CB_VOP, TILE_BYTES_FP32);
+        if (!wsplit) cb_raw(CB_VOP, TILE_BYTES_FP32);
         if (fuse) cb_raw(CB_FUSE, wsplit ? pfwc_wsplit::STG_BYTES : FUSE_CB_BYTES);
         if (wsplit) {
             // The odd chunks' outputs (project_pfwc_compute.cpp OCB), NCRISC's

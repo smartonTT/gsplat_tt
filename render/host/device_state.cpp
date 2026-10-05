@@ -14,6 +14,7 @@
 #include "gather_visible.h"
 #include "pfwc.h"
 #include "project.h"
+#include "vis_mode.h"
 #include "sort.h"
 #include "tile_assign.h"
 
@@ -90,7 +91,8 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         long extra_kb = kx ? std::atol(kx) : 0;
         // Task #207/#221: the split pfwc writer adds the writer code to the NCRISC kernel
         // (92496 B program, too large at +8 and +16 KB); SFPU cov_cam alone needs ~4 KB.
-        if (kx == nullptr && env_config::pfwc_writer_split()) extra_kb = 24;
+        // The split only builds with the fused writer (pfwc_fuse_mode() == 1).
+        if (kx == nullptr && env_config::pfwc_writer_split() && gsplat_tt::pfwc_fuse_mode() == 1) extra_kb = 24;
         else if (kx == nullptr && env_config::pfwc_covcam_sfpu()) extra_kb = 8;
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
