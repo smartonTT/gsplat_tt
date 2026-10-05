@@ -1,1 +1,2 @@
-proj_dev-*.npz
+*.npz
+out/hero-*.png
