@@ -55,7 +55,7 @@ document.addEventListener('keydown', function (e) {
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-05 12:08 EDT · 74 metal + 194 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-05 12:13 EDT · 74 metal + 194 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -145,7 +145,7 @@ document.addEventListener('keydown', function (e) {
     <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>096d892</code> defaults (GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size and a 512 px crop, and the 10x diff: no tile seams on 16/32 px edges, no blocky or empty tiles, no stripes or color shifts. Bit-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). hero_diff10.png is against benchmarks/reference_v2/hero.png (41.16 dB, the same as the golden itself) and shows only edge detail (spokes, frame, foliage), no tile grid.</p>
     <p class='iter-tracy'><a href='profiler/ttw-198/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-198/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-198/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-198/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-198/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-198/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-198/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="../metal-screenshots/ttw-198/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="../metal-screenshots/ttw-198/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="../metal-screenshots/ttw-198/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
 </div>
 
 <div class='backburner-row'>
@@ -159,7 +159,7 @@ document.addEventListener('keydown', function (e) {
     <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>768d91b</code> default-config render; knob md5-identical (GSPLAT_TT_PFWC_COV2D_SFPU default 0). Knob-on render GSPLAT_TT_PFWC_COV2D_SFPU=1 at the same commit: hero_cov2d_sfpu1.png, byte-identical, sweep md5 46a725ab. Backfill by task #236 with opt/ttw/screenshot.sh 197 768d91b [GSPLAT_TT_PFWC_COV2D_SFPU=1] · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure. The knob-on render (hero_cov2d_sfpu1.png) is byte-identical to hero.png.</p>
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t228/opt/profiler/t228-{k0,k1}/chunks/0-4/render.tracy (STEPCYC=1, views 0-4; CSVs docs/pfwc-cov2d-sfpu-t228/dev/out/prof-k{0,1}-dev.csv.gz))</p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-197/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-197/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-197/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-197/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-197/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="../metal-screenshots/ttw-197/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="../metal-screenshots/ttw-197/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="../metal-screenshots/ttw-197/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
 </div>
 
 <div class='backburner-row'>
@@ -173,7 +173,7 @@ document.addEventListener('keydown', function (e) {
     <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>06d4fa7</code> defaults (GSPLAT_TT_BLEND_SCHED=2, no knobs set); backfill by task #236 with opt/ttw/screenshot.sh 196 06d4fa7 · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure.</p>
     <p class='iter-tracy'><a href='profiler/ttw-196/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-196/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-196/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-196/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-196/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-196/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-196/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="../metal-screenshots/ttw-196/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="../metal-screenshots/ttw-196/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="../metal-screenshots/ttw-196/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
 </div>
 
 <div class='backburner-row'>
@@ -677,7 +677,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-159/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-159/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-159/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-159/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-159/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-159/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-159/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-159/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-159/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-159/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -705,7 +705,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-158/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-158/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-158/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-158/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-158/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-158/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-158/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-158/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -719,7 +719,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-156/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-156/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-156/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-156/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-156/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-156/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-156/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-156/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -733,7 +733,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-155/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-155/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-155/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-155/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-155/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-155/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-155/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-155/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -747,7 +747,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-154/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-154/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-154/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-154/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-154/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-154/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-154/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-154/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -761,7 +761,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-152/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-152/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-152/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-152/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-152/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-152/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-152/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-152/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -775,7 +775,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-151/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-151/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-151/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-151/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-151/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-151/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-151/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-151/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-151/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-151/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -789,7 +789,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-150/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-150/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-150/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-150/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-150/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-150/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-150/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-150/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -803,7 +803,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-149/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-149/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-149/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-149/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-149/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-149/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-149/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-149/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-149/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-149/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -873,7 +873,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-147/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-147/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-147/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-147/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-147/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-147/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-147/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-147/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -915,7 +915,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-142/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-142/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-142/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-142/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-142/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-142/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-142/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-142/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-142/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-142/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -971,7 +971,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-138/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-138/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-138/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-138/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-138/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-138/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-138/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-138/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-138/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-138/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -985,7 +985,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-137/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-137/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-137/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-137/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-137/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-137/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-137/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-137/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-137/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-137/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1013,7 +1013,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-135/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-135/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-135/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-135/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-135/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-135/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-135/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-135/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-135/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-135/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1027,7 +1027,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-134/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-134/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-134/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-134/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-134/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-134/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-134/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-134/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-134/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-134/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1041,7 +1041,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-133/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-133/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-133/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-133/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-133/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-133/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-133/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-133/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-133/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-133/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1069,7 +1069,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-132/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-132/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-132/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-132/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-132/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-132/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-132/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-132/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-132/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-132/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1083,7 +1083,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-131/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-131/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-131/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-131/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-131/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-131/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-131/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-131/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-131/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-131/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1097,7 +1097,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-130/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-130/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-130/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-130/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-130/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-130/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-130/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-130/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-130/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-130/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1111,7 +1111,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-129/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-129/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-129/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-129/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-129/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-129/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-129/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-129/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-129/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-129/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1125,7 +1125,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-128/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-128/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-128/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-128/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-128/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-128/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-128/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-128/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-128/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-128/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1139,7 +1139,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-127/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-127/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-127/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-127/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-127/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-127/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-127/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-127/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-127/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-127/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1167,7 +1167,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-125/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-125/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-125/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-125/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-125/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-125/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-125/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-125/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-125/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-125/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1181,7 +1181,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-124/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-124/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-124/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-124/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-124/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-124/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-124/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-124/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-124/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-124/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1195,7 +1195,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-123/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-123/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-123/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-123/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-123/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-123/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-123/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-123/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-123/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-123/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1209,7 +1209,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-122/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-122/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-122/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-122/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-122/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-122/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-122/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-122/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-122/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-122/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1223,7 +1223,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-121/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-121/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-121/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-121/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-121/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-121/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-121/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-121/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-121/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-121/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1265,7 +1265,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-118/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-118/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-118/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-118/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-118/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-118/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-118/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-118/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-118/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-118/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1293,7 +1293,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-116/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-116/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-116/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-116/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-116/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-116/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-116/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-116/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-116/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-116/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1321,7 +1321,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-114/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-114/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-114/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-114/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-114/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-114/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-114/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-114/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-114/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-114/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1335,7 +1335,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-113/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-113/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-113/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-113/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-113/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-113/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-113/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-113/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-113/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-113/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1349,7 +1349,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-112/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-112/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-112/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-112/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-112/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-112/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-112/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-112/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-112/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-112/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1363,7 +1363,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-111/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-111/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-111/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-111/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-111/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-111/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-111/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-111/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-111/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-111/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1377,7 +1377,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-110/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-110/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-110/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-110/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-110/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-110/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-110/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-110/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-110/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-110/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1391,7 +1391,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-109/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-109/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-109/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-109/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-109/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-109/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-109/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-109/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-109/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-109/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1405,7 +1405,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-108/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-108/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-108/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-108/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-108/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-108/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-108/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-108/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-108/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-108/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1419,7 +1419,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-107/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-107/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-107/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-107/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-107/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-107/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-107/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-107/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-107/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-107/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1433,7 +1433,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-106/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-106/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-106/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-106/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-106/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-106/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-106/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-106/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-106/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-106/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1447,7 +1447,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-105/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-105/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-105/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-105/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-105/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-105/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-105/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-105/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1461,7 +1461,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-104/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-104/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-104/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-104/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-104/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-104/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-104/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-104/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1475,7 +1475,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-103/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-103/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-103/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-103/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-103/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-103/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-103/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-103/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-103/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-103/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1489,7 +1489,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-102/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-102/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-102/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-102/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-102/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-102/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-102/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-102/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1503,7 +1503,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-101/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-101/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-101/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-101/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-101/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-101/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-101/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-101/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1517,7 +1517,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-100/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-100/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-100/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-100/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-100/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-100/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-100/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-100/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1531,7 +1531,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-099/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-099/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-099/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-099/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-099/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-099/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-099/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-099/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1545,7 +1545,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-098/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-098/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-098/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-098/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-098/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-098/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-098/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-098/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1573,7 +1573,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-097/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-097/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-097/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-097/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-097/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-097/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-097/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-097/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1587,7 +1587,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-097/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-097/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-097/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-097/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-097/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-097/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-097/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-097/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1601,7 +1601,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-096/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-096/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-096/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-096/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-096/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-096/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-096/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-096/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1615,7 +1615,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-094/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-094/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-094/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-094/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-094/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-094/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-094/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-094/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1629,7 +1629,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-093/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-093/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-093/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-093/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-093/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-093/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-093/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-093/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1643,7 +1643,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-092/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-092/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-092/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-092/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-092/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-092/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-092/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-092/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1657,7 +1657,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-091/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-091/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-091/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-091/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-091/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-091/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-091/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-091/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1671,7 +1671,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-090/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-090/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-090/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-090/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-090/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-090/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-090/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-090/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1727,7 +1727,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-088/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-088/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-088/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-088/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-088/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-088/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-088/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-088/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1755,7 +1755,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-085/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-085/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-085/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-085/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-085/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-085/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-085/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-085/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1783,7 +1783,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-083/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-083/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-083/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-083/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-083/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-083/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-083/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-083/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1797,7 +1797,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-082/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-082/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-082/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-082/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-082/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-082/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-082/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-082/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1839,7 +1839,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-077/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-077/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-077/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-077/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-077/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-077/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-077/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-077/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1853,7 +1853,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-076/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-076/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-076/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-076/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-076/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-076/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-076/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-076/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1867,7 +1867,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-074-tracy/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-074-tracy/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-074/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-074/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-074/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-074/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-074/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-074/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-074/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-074/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>
@@ -1881,7 +1881,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-073/hero.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-073/hero.png" class="thumb" alt=""></a><a href="metal-screenshots/ttw-073/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="metal-screenshots/ttw-073/hero_diff10.png" class="thumb" alt=""></a></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-073/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-073/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-073/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-073/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
 
 <div class='backburner-row'>

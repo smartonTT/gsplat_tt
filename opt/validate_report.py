@@ -65,6 +65,24 @@ def _max_ttw_iter(rows: list[dict]) -> int | None:
     return max(nums) if nums else None
 
 
+_IMG_SRC_RE = re.compile(r'<img\b[^>]*?\bsrc="([^"]+)"')
+
+
+def broken_img_srcs(paths: tuple[Path, ...] = (REPORT_HTML, br.REPORT_HTML_TTW)) -> list[str]:
+    """'<file>: <src>' for every relative img src that does not resolve to a file."""
+    out = []
+    for p in paths:
+        if not p.exists():
+            out.append(f"{p}: file missing")
+            continue
+        for src in _IMG_SRC_RE.findall(p.read_text(errors="replace")):
+            if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", src):  # data:, http:, ...
+                continue
+            if not (p.parent / src.split("#")[0].split("?")[0]).is_file():
+                out.append(f"{p.parent.name}/{p.name}: {src}")
+    return out
+
+
 def main() -> int:
     checks: list[str] = []
 
@@ -282,6 +300,12 @@ def main() -> int:
             f"every ttw iter > {br.SCREENSHOT_REQUIRED_AFTER} has a device screenshot + visual check; "
             f"{len(pending)} legacy iters shown as backfill pending"
         )
+
+        # 6. Every <img src> in both REPORT.html and the opt/ttw/ mirror resolves.
+        broken = broken_img_srcs()
+        if broken:
+            raise Invalid(f"{len(broken)} img src(s) do not resolve to a file: " + "; ".join(broken[:10]))
+        checks.append("every img src in REPORT.html and ttw/REPORT.html resolves to a file")
 
     except Invalid as e:
         for c in checks:

@@ -16,6 +16,7 @@ import argparse
 import base64
 import io
 import json
+import re
 import statistics
 import sys
 from html import escape as html_escape
@@ -1887,7 +1888,15 @@ def write_reports(html: str) -> None:
     html = "\n".join(line.rstrip() for line in html.split("\n"))
     REPORT_HTML.write_text(html)
     REPORT_HTML_TTW.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_HTML_TTW.write_text(html)
+    REPORT_HTML_TTW.write_text(rebase_for_ttw(html))
+
+
+_REL_ATTR_RE = re.compile(r'(\b(?:src|href)=")(?![a-zA-Z][a-zA-Z0-9+.-]*:|/|#)([^"]+")')
+
+
+def rebase_for_ttw(html: str) -> str:
+    """Prefix relative src/href paths with ../ so the opt/ttw/ mirror resolves them."""
+    return _REL_ATTR_RE.sub(r"\1../\2", html)
 
 
 def main() -> None:
@@ -1896,7 +1905,7 @@ def main() -> None:
     write_reports(html)
     n_ledger = len(load_metal_iters()) + len(load_ttw_iters())
     print(f"wrote {REPORT_HTML}  ({n_ledger} ledger rows, {len(rows)} cpu iters)")
-    print(f"wrote {REPORT_HTML_TTW}  (identical mirror)")
+    print(f"wrote {REPORT_HTML_TTW}  (mirror, relative paths rebased to ../)")
     errors, pending = check_device_screenshots(load_ttw_iters())
     if pending:
         print(f"  [WARN] {len(pending)} legacy iters flagged screenshot_backfill_pending: {pending}")
