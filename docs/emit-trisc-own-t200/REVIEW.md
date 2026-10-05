@@ -5,7 +5,7 @@ Files: `render/kernels/dataflow/sort_ol_town.h`, `render/kernels/compute/sort_ol
 the `OL_EMIT_TOWN` paths in `render/kernels/dataflow/sort_bin_onelaunch.cpp`,
 `render/host/sort_device.cpp`, `render/host/env_config.h`, `tests/unit/test_sort_ol_town.cpp`.
 
-**Verdict: DEVICE_PENDING** (code read: no blocking finding; device smoke result below).
+**Verdict: PASS.** No blocking finding. Device smokes md5-identical (46a725ab), see below.
 
 ## Protocol checks (code read)
 
@@ -76,7 +76,22 @@ clash at enqueue, so this cannot fail silently.
 
 ## Device check
 
-Pending (driver `review-t214/drive.sh`, own remote tree /localdev/smarton/gstt2-t214 on
-yyzo-bh-07, under `ttp lock p100`): 2-view bicycle md5 smoke with defaults on (OL_PB=8), and
-with `GSPLAT_TT_OL_PB=1` (16-pair batches, ~8x more batches: far more slot reuse, fl waits and
-queue service). Both must match md5 46a725ab.
+`review-t214/drive.sh 6abbda7` (= 656a1fa render code), own remote tree
+/localdev/smarton/gstt2-t214 on yyzo-bh-07 (Blackhole p100a), one `ttp lock p100` for
+sync + both runs, 2026-10-05. Logs: `review-t214/out/smoke-{dflt,pb1}.log`.
+
+| run | env | log line | md5 vs md5-r82new (46a725ab) | avg_frame_ms (2 views, smoke only) |
+|---|---|---|---|---|
+| dflt | defaults | `OL_PB=8 ... OL_EMIT_TOWN=1 cb_bytes/mover=567680` | 2 of 2 | 14.0 |
+| pb1 | `GSPLAT_TT_OL_PB=1` | `OL_PB=1 ... OL_EMIT_TOWN=1 cb_bytes/mover=563648` | 2 of 2 | 14.8 |
+
+No hang, no throw. OL_PB=1 runs ~8x more batches per stream, so the 4-slot reuse, fl waits and
+queue service run far more often; the output is still byte-identical. The 2-view times are
+not an A/B; the t202 3-round 30-view A/B (15.194 -> 14.235 ms/view) was not re-run.
+
+## Follow-up (non-blocking)
+
+- The device-side fallback (define on, `town` false on device: tiles_x not a power of two, or no
+  K2 fold) is only checked by reading. One md5 compare of `GSPLAT_TT_OL_EMIT_TOWN=1` vs `=0` at
+  a camera set whose tiles_x is not a power of two (e.g. 960 px wide, tiles_x = 30) would cover
+  it, and also shows whether the TRISC launch and +46 KB L1 cost anything there.
