@@ -68,6 +68,9 @@ case "${1:-status}" in
     opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
     # Tagged trees older than this script lack the launcher: ship it from here.
     rsh "mkdir -p $DIR/opt/viewer && cat > $DIR/opt/viewer/viewer_clean.py" < opt/viewer/viewer_clean.py
+    # Trees before the viewer's uint8 fix show render_clean frames all white.
+    rsh "grep -q 'render_clean packs 8-bit' $DIR/gsplat/viewer.py" ||
+      { echo "[viewer] overlay gsplat/viewer.py (uint8 frame fix)"; rsh "cat > $DIR/gsplat/viewer.py" < gsplat/viewer.py; }
     do_stop; do_start ;;
   start) do_start ;;
   stop) do_stop ;;
