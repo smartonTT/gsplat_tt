@@ -35,27 +35,100 @@
   .shot-missing small { font-weight: 400; }
   .shot-cap { color: #555; font-size: 11px; margin: 2px 0 0; }
   .shot-meta { color: #555; font-size: 11px; margin: 4px 0 0; }
+  .golden-badge { display: inline-block; font-size: 11px; margin: 4px 0 0; padding: 1px 6px; border-radius: 3px; }
+  .golden-ok { background: #e3f4e1; color: #2d6a4f; border: 1px solid #95d5b2; }
+  .golden-diff { background: #fff3cd; color: #8a6d00; border: 1px solid #e9c46a; }
   #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; cursor: zoom-out; align-items: center; justify-content: center; }
   #lightbox img { max-width: 96vw; max-height: 96vh; }
+  #viewer { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1001; flex-direction: column; align-items: center; justify-content: center; color: #eee; font-size: 13px; }
+  #viewer .vw-bar { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
+  #viewer .vw-bar label { cursor: pointer; }
+  #viewer .vw-bar code { background: #333; color: #eee; }
+  #viewer button { background: #444; color: #eee; border: 1px solid #777; border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  #viewer .vw-stage { position: relative; display: inline-block; line-height: 0; user-select: none; touch-action: none; }
+  #viewer .vw-stage img { max-width: 94vw; max-height: 84vh; display: block; }
+  #viewer .vw-stage img.vw-over { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #viewer .vw-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 3px #000; cursor: ew-resize; }
+  #viewer .vw-line::after { content: ''; position: absolute; top: 50%; left: -9px; width: 16px; height: 16px; margin-top: -9px; border: 2px solid #fff; border-radius: 50%; background: rgba(0,0,0,0.5); }
+  #viewer .vw-hint { color: #aaa; font-size: 11px; margin-top: 6px; }
 </style>
 <script>
-document.addEventListener('click', function (e) {
-  var lb = document.getElementById('lightbox');
-  if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
-  var a = e.target.closest('a.zoom');
-  if (!a || !lb) return;
-  e.preventDefault();
-  lb.querySelector('img').src = a.getAttribute('href');
-  lb.style.display = 'flex';
-});
-document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') { var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none'; }
-});
+// Compare viewer for device screenshots: ref / candidate / diff / split.
+// Self-contained (no external scripts or CSS). Image paths come from the
+// clicked link's data-img-* attributes, already relative to this file.
+(function () {
+  var V = null, pos = 50, dragging = false, dragged = false;
+  function q(sel) { return V.querySelector(sel); }
+  function setPos(p) {
+    pos = Math.max(0, Math.min(100, p));
+    // ref on the left of the line, candidate on the right.
+    q('.vw-over').style.clipPath = 'inset(0 ' + (100 - pos) + '% 0 0)';
+    q('.vw-line').style.left = pos + '%';
+  }
+  function setMode(m) {
+    var r = q('input[value="' + m + '"]');
+    if (r) r.checked = true;
+    var split = m === 'split';
+    q('.vw-base').src = V.dataset[split ? 'cand' : m];
+    q('.vw-over').style.display = split ? 'block' : 'none';
+    q('.vw-line').style.display = split ? 'block' : 'none';
+    if (split) setPos(pos);
+  }
+  function open(a) {
+    V = document.getElementById('viewer');
+    V.dataset.ref = a.getAttribute('data-img-ref');
+    V.dataset.cand = a.getAttribute('data-img-cand');
+    V.dataset.diff = a.getAttribute('data-img-diff');
+    q('.vw-over').src = V.dataset.ref;
+    q('.vw-ref-name').textContent = a.getAttribute('data-viewer-label') || V.dataset.ref;
+    V.style.display = 'flex';
+    setMode(a.getAttribute('data-viewer-mode') || 'cand');
+  }
+  function close() { if (V) V.style.display = 'none'; }
+  function fromEvent(e) {
+    var r = q('.vw-stage').getBoundingClientRect();
+    setPos((e.clientX - r.left) / r.width * 100);
+  }
+  document.addEventListener('click', function (e) {
+    var lb = document.getElementById('lightbox');
+    if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
+    if (dragged) { dragged = false; return; }  // a split drag that ended off the image
+    if (e.target.closest('.vw-close') || e.target.id === 'viewer') { close(); return; }
+    var a = e.target.closest('a.zoom');
+    if (!a) return;
+    e.preventDefault();
+    if (a.hasAttribute('data-img-ref')) { open(a); return; }
+    if (!lb) return;
+    lb.querySelector('img').src = a.getAttribute('href');
+    lb.style.display = 'flex';
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.name === 'vw-mode') setMode(e.target.value);
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (!V || V.style.display !== 'flex' || !q('input[value="split"]').checked) return;
+    if (!e.target.closest('.vw-stage')) return;
+    dragging = true; e.preventDefault(); fromEvent(e);
+  });
+  document.addEventListener('pointermove', function (e) { if (dragging) fromEvent(e); });
+  document.addEventListener('pointerup', function () { dragged = dragging; dragging = false; });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none';
+      close(); return;
+    }
+    if (!V || V.style.display !== 'flex') return;
+    var modes = {'1': 'ref', '2': 'cand', '3': 'diff', '4': 'split'};
+    if (modes[e.key]) setMode(modes[e.key]);
+    else if (e.key === 'ArrowLeft') { setMode('split'); setPos(pos - 5); }
+    else if (e.key === 'ArrowRight') { setMode('split'); setPos(pos + 5); }
+  });
+})();
 </script>
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-05 12:13 EDT · 74 metal + 194 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-05 12:32 EDT · 74 metal + 194 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -90,7 +163,7 @@ document.addEventListener('keydown', function (e) {
   bicycle vs our 6,131,954-Gaussian <code>bicycle.ply</code>), full SH vs our
   SH-degree-0 colors, and a different camera set.</p>
   <p><b>TT anchor:</b> 11.939 ms/view (83.76 FPS)
-  &mdash; yyzo-bh-07 (Blackhole p100a), iter-198 measured tip (gsplat_tt 096d892 (default 2)). Detail, sources and caveats: <a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; Published GPU reference rows.</p>
+  &mdash; yyzo-bh-07 (Blackhole p100a), iter-198 measured tip (gsplat_tt 096d892 (default 2)). Detail, sources and caveats: <a href='../cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; Published GPU reference rows.</p>
 </section>
 
 
@@ -112,7 +185,7 @@ document.addEventListener('keydown', function (e) {
   <p><code>python bench/gpu_reference/run_gpu_bench.py --backend gsplat --repeats 2
   &amp;&amp; python3 opt/build_report.py</code></p>
   <p>Unblocking needs a human to supply a GPU host or a cloud-GPU credential.
-  Detail and the full search log: <a href='cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; GPU reference.</p>
+  Detail and the full search log: <a href='../cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; GPU reference.</p>
   <table class='kv'>
     <tr><th>TT anchor for the eventual ratio</th>
         <td>11.939 ms/view (83.76 FPS) &mdash; yyzo-bh-07 (Blackhole p100a), iter-198 measured tip (gsplat_tt 096d892 (default 2))</td></tr>
@@ -131,49 +204,49 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M267</span>  ttw-198 — WIN</h3>
     <p class='iter-ts'>2026-10-05 11:55</p>
-    <p>ms_per_frame=11.94 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=11.94 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #231 (t230 design S2a/S2, docs/blend-trisc1-t230; write-up docs/blend-decode-ahead-t231): GSPLAT_TT_BLEND_DECODE_AHEAD TRISC0 decode-ahead staging for blend. TRISC0 (idle during blend) walks the records and writes each live record's 14 pre-encoded SFPLOADI words plus its microblock mask to an L1 ring (CB 10, 64 slots); TRISC1 loads and pushes them with the same SFPU ops in the same order as RAW_STAGE, so the output is bit-identical. 1 = S2a (TRISC1 still scans and reduces T), 2 = S2 (ring holds only live records plus readback and end markers, so TRISC1 skips the scan and the T reduce). Default now 2 (=1 S2a, =0 off).</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, one build of 2f926c6. Gate, 3 rotated untraced rounds: default (knob 0) 12.698/12.617/12.660 mean 12.658 ms/view; S2a 12.382/12.257/12.266 mean 12.302 (paired -0.357, kill gate 0.15 passed); S2 11.965/11.949/11.939 mean 11.951 (paired -0.707); RAW_STAGE=1 calibration 12.452 (-0.206, model +0.27). Model overestimated S2a (+0.66 to +0.90) and S2 (+0.91 to +1.20): the ring loads and handshake cost TRISC1 more than modeled. STAGES blend 8.145 / 7.771 / 7.486 / 7.947. Default verify on 096d892, 2 swapped rounds: default 11.931/11.946 mean 11.939 ms/view (83.8 FPS), knob 0 12.612/12.639 mean 12.626, paired -0.687. Tracy (KCFG_EXTRA_KB=32): device span 11.663 ms/view, mat+blend window 7.562 -> 6.898, tile_blend_sfpu makespan 4.417 -> 3.760; pfwc, K2 and sort_ol unchanged. All 18 arms 30/30 views md5-identical (46a725ab).</p>
     <p class='iter-build'><code>096d892</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>096d892</code> defaults (GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size and a 512 px crop, and the 10x diff: no tile seams on 16/32 px edges, no blocky or empty tiles, no stripes or color shifts. Bit-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). hero_diff10.png is against benchmarks/reference_v2/hero.png (41.16 dB, the same as the golden itself) and shows only edge detail (spokes, frame, foliage), no tile grid.</p>
-    <p class='iter-tracy'><a href='profiler/ttw-198/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-198/render.tracy</code></p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>096d892</code> defaults (GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full size and a 512 px crop, and the 10x diff: no tile seams on 16/32 px edges, no blocky or empty tiles, no stripes or color shifts. Bit-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). hero_diff10.png is against benchmarks/reference_v2/hero.png (41.16 dB, the same as the golden itself) and shows only edge detail (spokes, frame, foliage), no tile grid.</p>
+    <p class='iter-tracy'><a href='../profiler/ttw-198/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-198/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-198/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="../metal-screenshots/ttw-198/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="../metal-screenshots/ttw-198/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="../metal-screenshots/ttw-198/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-198/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../../benchmarks/reference_v2/hero.png" data-img-cand="../metal-screenshots/ttw-198/hero.png" data-img-diff="../metal-screenshots/ttw-198/hero_diff10.png"><img src="../metal-screenshots/ttw-198/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="../metal-screenshots/ttw-198/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../../benchmarks/reference_v2/hero.png" data-img-cand="../metal-screenshots/ttw-198/hero.png" data-img-diff="../metal-screenshots/ttw-198/hero_diff10.png"><img src="../metal-screenshots/ttw-198/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M266</span>  ttw-197 — FAIL</h3>
     <p class='iter-ts'>2026-10-05 11:14</p>
-    <p>ms_per_frame=13.86 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=13.86 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #228 (P2 from docs/pfwc-trisc-model-t226, write-up docs/pfwc-cov2d-sfpu-t228): pfwc steps 7-11 (cov2d a/b/c, conic fold, radii) as two DEST sections with looped raw-TTI SFPU passes (pfwc_cov2d_sfpu.h, GSPLAT_TT_PFWC_COV2D_SFPU=1) instead of six tile-op acquires; same rounding order, bit-identical. Per chunk: copy_tile 38 -> 17, SFPU tile ops 87 -> 8 plus the two passes.</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, 543869b (on 3b96ba6, measured before BLEND_SCHED=2 landed), 4 swapped untraced rounds: base (knob 0) 13.662/13.574/13.578/13.597 mean 13.603 ms/view; cov2d 13.883/13.883/13.824/13.844 mean 13.858 (+0.256; the gate needs -0.3). project 3.356 -> 3.605. md5 46a725ab on every arm (30/30). Tracy STEPCYC=1 views 0-4: TRISC_1 steps 6-11 24.7k -> 11.5k cycles/chunk (16k gate passes), TRISC mean wall 2.20 -> 1.86 ms, median core 2.247 -> 1.812 ms, but the slowest core 2.316 -> 2.552 ms. On grid columns x=13-15 the NCRISC writer (NoC1: odd chunks and the input reader) spends 1.24-1.40 ms in its record loop against 0.83 at x=1 and BRISC's flat ~0.75, so BRISC waits on its OPEN hand-off and compute waits on output CB space. Shelved with default 0; the code stays for a re-gate once the right-hand columns' NoC1 load is balanced (follow-up).</p>
     <p class='iter-build'><code>543869b</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>768d91b</code> default-config render; knob md5-identical (GSPLAT_TT_PFWC_COV2D_SFPU default 0). Knob-on render GSPLAT_TT_PFWC_COV2D_SFPU=1 at the same commit: hero_cov2d_sfpu1.png, byte-identical, sweep md5 46a725ab. Backfill by task #236 with opt/ttw/screenshot.sh 197 768d91b [GSPLAT_TT_PFWC_COV2D_SFPU=1] · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure. The knob-on render (hero_cov2d_sfpu1.png) is byte-identical to hero.png.</p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>768d91b</code> default-config render; knob md5-identical (GSPLAT_TT_PFWC_COV2D_SFPU default 0). Knob-on render GSPLAT_TT_PFWC_COV2D_SFPU=1 at the same commit: hero_cov2d_sfpu1.png, byte-identical, sweep md5 46a725ab. Backfill by task #236 with opt/ttw/screenshot.sh 197 768d91b [GSPLAT_TT_PFWC_COV2D_SFPU=1] · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure. The knob-on render (hero_cov2d_sfpu1.png) is byte-identical to hero.png.</p>
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t228/opt/profiler/t228-{k0,k1}/chunks/0-4/render.tracy (STEPCYC=1, views 0-4; CSVs docs/pfwc-cov2d-sfpu-t228/dev/out/prof-k{0,1}-dev.csv.gz))</p>
   </div>
-  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-197/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="../metal-screenshots/ttw-197/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="../metal-screenshots/ttw-197/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="../metal-screenshots/ttw-197/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-197/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../../benchmarks/reference_v2/hero.png" data-img-cand="../metal-screenshots/ttw-197/hero.png" data-img-diff="../metal-screenshots/ttw-197/hero_diff10.png"><img src="../metal-screenshots/ttw-197/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="../metal-screenshots/ttw-197/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../../benchmarks/reference_v2/hero.png" data-img-cand="../metal-screenshots/ttw-197/hero.png" data-img-diff="../metal-screenshots/ttw-197/hero_diff10.png"><img src="../metal-screenshots/ttw-197/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M265</span>  ttw-196 — WIN</h3>
     <p class='iter-ts'>2026-10-05 11:00</p>
-    <p>ms_per_frame=12.66 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=12.66 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #229 (t219 design, docs/blend-sched-t219, model docs/blend-loop-model-t205): GSPLAT_TT_BLEND_SCHED hand-scheduled raw-TTI blend jump-walk bodies, bit-identical to the compiled ones. 1 = F (stall-free MAD->use order), 2 = A2 (F with the common front/tail recorded once per tile into the replay buffer, so TRISC1 pushes about half the instructions per body). Default now 2 (=0 compiled, =1 F).</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, one build of 7f0850d. Gate, 3 rotated untraced rounds: level 0 13.609/13.665/13.620 mean 13.631 ms/view; level 1 13.648/13.635/13.676 mean 13.653 (+0.022, so the MAD->use stall is not the limit; TRISC1 instruction push is); level 2 12.602/12.609/12.638 mean 12.616 (paired -1.015 vs 0, -1.037 vs 1). STAGES blend 9.148/9.199/8.168. Tracy (KCFG_EXTRA_KB=32) blend segment busy 8.539/8.610/7.565 ms/view, tile_blend_sfpu makespan 5.381/5.444/4.413. Default verify on 29c288b, 2 swapped rounds: default 12.699/12.630 mean 12.665 (79.0 FPS), =0 13.691/13.603 mean 13.647, paired -0.982. All 15 arms 30/30 views md5-identical (46a725ab).</p>
     <p class='iter-build'><code>29c288b</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>06d4fa7</code> defaults (GSPLAT_TT_BLEND_SCHED=2, no knobs set); backfill by task #236 with opt/ttw/screenshot.sh 196 06d4fa7 · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure.</p>
-    <p class='iter-tracy'><a href='profiler/ttw-196/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-196/render.tracy</code></p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>06d4fa7</code> defaults (GSPLAT_TT_BLEND_SCHED=2, no knobs set); backfill by task #236 with opt/ttw/screenshot.sh 196 06d4fa7 · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure.</p>
+    <p class='iter-tracy'><a href='../profiler/ttw-196/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-196/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-196/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="../metal-screenshots/ttw-196/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="../metal-screenshots/ttw-196/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="../metal-screenshots/ttw-196/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-196/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../../benchmarks/reference_v2/hero.png" data-img-cand="../metal-screenshots/ttw-196/hero.png" data-img-diff="../metal-screenshots/ttw-196/hero_diff10.png"><img src="../metal-screenshots/ttw-196/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="../metal-screenshots/ttw-196/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../../benchmarks/reference_v2/hero.png" data-img-cand="../metal-screenshots/ttw-196/hero.png" data-img-diff="../metal-screenshots/ttw-196/hero_diff10.png"><img src="../metal-screenshots/ttw-196/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
@@ -185,9 +258,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #202: tile-owned TRISC emit pack (docs/emit-trisc-own-t200, model task #200). The one-launch sort's per-record emit loop moves from the 2 mover RISCs to the 3 idle TRISCs: TRISC i owns the tiles with t % 3 == i in both mover streams and does their cursor read-modify-write and the 32 B record pack into the mover's ring. The movers build per-TRISC lists per batch (32-bit entries), issue the pair/blendrec reads into 4 slots (was 2), write the full runs the TRISCs queue, and publish a per-tile flushed word so a TRISC starts a run only after its previous write landed. Same records in the same slots, so the output is bit-identical. Kill switch GSPLAT_TT_OL_EMIT_TOWN=0.</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024. Gate (Tracy views 0:10, EMIT_PROF=1): TRISC 178.8 cycles per owned record (kill > 270), emit zone makespan 2.312 -> 1.328 ms/view (kill < 0.3 drop), sort_ol program busy 2.497 -> 1.478, traced view span 15.037 -> 14.027; other programs unchanged. Untraced A/B, 3 rounds, order swapped in round 2: view_total base/town r1 15.177/14.235, r2 15.165/14.224, r3 15.241/14.247; mean 15.194 -> 14.235 ms/view, paired mean -0.959 (-6.3%), 70.2 FPS. Default flip checked on the tip (a37ad1e): default 14.226 (OL_EMIT_TOWN=1), =0 15.207. All 9 runs incl. the 2-view smoke md5-identical to md5-r82new.txt (46a725ab). Beats the t200 model (-0.63) since the TRISC loop runs at 179 cycles/record vs the mover's 216. +46.4 KB L1 per mover (docs/emit-trisc-own-t200).</p>
     <p class='iter-build'><code>ttp/t202</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-194/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-194/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-194/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-194/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -201,7 +274,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t166/opt/profiler/t174-p2w/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -215,7 +288,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t160/opt/profiler/t160-ep/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -227,9 +300,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #198: 2-CQ bridge hiding. (1) GSPLAT_TT_SORT_OL_EARLY: the one-launch sort is enqueued on CQ0 right behind the fused K2; the kernel reads P from the ta_pairs_P page and uses K2's speed-split mover ranges, so the host P read and the M-float depths vector go away. (2) GSPLAT_TT_MAT_CQ1: a second command queue waits on a K2 event, reads projM and the K2 count rows, the host sums the per-tile totals and runs bin_layout/publish/mat uploads on CQ1 while the device sorts; mat and blend are enqueued on CQ0 behind the sort. Kill switches GSPLAT_TT_SORT_OL_EARLY=0 (both off) and GSPLAT_TT_MAT_CQ1=0.</p><p class='reason'>Paired A/B on yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, untraced. Defaults on vs GSPLAT_TT_SORT_OL_EARLY=0, 3 rounds, order swapped: view_total 15.639 -> 15.221 ms/view, paired -0.420/-0.431/-0.404, mean -0.418. Env arms on the same tip, 4 rounds rotated: off/early/both 15.680/15.477/15.216, both-off mean -0.464. All 35 runs (incl. smoke with GSPLAT_TT_SORT_ONELAUNCH_CHECK=1) md5-identical to md5-r82new.txt (46a725ab). Tracy 30 views, same build off/on: K2->sort_ol gap 0.450 -> 0.010, sort_ol->mat 0.260 -> 0.007, pfwc->K2 and mat->blend stay 0.006; all-core idle 0.723 -> 0.029 ms/view; device busy per program unchanged (sort_ol 2.396/2.397); traced view span 15.627 -> 14.943. On the pre-#196 base the gain was only -0.266 because an early-started sort_ol ran slower on the request-bound row y=2 BRISC movers; #196's bulk blendrec reads removed that (emit makespan 2287.4 vs 2287.5 us) (docs/two-cq-t198).</p>
     <p class='iter-build'><code>ttp/t198</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-192/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-192/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-192/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-192/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -241,9 +314,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Re-baseline (task #199): measure 7a23beb (#196 bulk blendrec reads on the t194 tip) untraced, then a fresh 30-view default-chain Tracy capture for the per-program split. Measured before #198 (iter 192, 2-CQ bridge hiding) landed; this is the 7a23beb reference, not the current tip.</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, default env, run as 3855aa2 (7a23beb + default-off #197 pfwc counters + drivers), 3 untraced rounds: view_total 15.766/15.743/15.728 ms/view (mean 15.746, stdev 0.019, 63.5 FPS); avg_frame_ms mean 15.786. Matches #196's 15.740 and #198's off arm (15.639-15.680). All 3 rounds md5-identical to md5-r82new.txt (46a725ab). Tracy 30 views, program busy ms/view: pfwc 2.981, K2 0.986, gap 0.452, sort_ol 2.395 (t194 2.975), gap 0.259, mat 3.009, blend 5.538, all-core idle 0.723, traced end 15.632. sort_ol emit makespan 2286 us, per-mover median 2.13 vs max 2.74 ms (t194 2.53/3.62). Device-busy share: blend 37%, mat 20%, pfwc 20%, sort_ol 16%, K2 7%. The two host bridges (0.71 ms traced) are what #198 hides (docs/tip-t199).</p>
     <p class='iter-build'><code>7a23beb</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-193/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-193/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-193/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-193/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -255,9 +328,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #196: sort_ol emit mover imbalance. The fast K2-fold emit reads each batch's blendrec pages as one NoC read per DRAM bank (interleaved page p+nb follows page p in the same bank) instead of one 64 B read per distinct gaussian; ring halves grow to 256 pages (+16 KB L1 per mover). Kill switch GSPLAT_TT_OL_BREC_BULK=0. The per-g 64 B reads were request-bound and stalled most on the NoC hot spots (BRISC rows y=2,3, NCRISC columns x=14,15), which set the emit makespan.</p><p class='reason'>Paired A/B on yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, untraced, 3 rounds, arm order rotated. view_total off/bulk: r1 16.357/15.765, r2 16.116/15.699, r3 16.293/15.755 ms/view; mean -0.516 (-3.2%). Sort stage 3.324 -> 2.834. All 6 runs md5-identical to md5-r82new.txt (46a725ab). Tracy views 0:10 (EMIT_PROF=1): sort_ol busy 2.913 -> 2.491 ms/view, emit makespan 2776 -> 2362 us, mover median 2542 -> 2186 us, blendrec read issue 0.477 -> 0.037 ms per mover, emit cycles/record 286 -> 246; per-mover rate spread 0.67-1.09 -> 0.96-1.06 of the mean (docs/emit-imbalance-t196).</p>
     <p class='iter-build'><code>ttp/t196</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-191/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-191/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-191/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-191/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -269,9 +342,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Re-baseline (task #194): measure the combined tip 4d591f7 (#181 sort window bulk fill + #188 blend late claim) untraced, then a fresh 30-view default-chain Tracy capture for the per-program split.</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, default env, 3 untraced rounds: view_total 16.236/16.271/16.227 ms/view (mean 16.245, 61.6 FPS); avg_frame_ms mean 16.276. All 3 rounds md5-identical to md5-r82new.txt (46a725ab). Better than the expected ~16.6: #181 (-0.342) was measured on a pre-#188 base, and 17.001-0.342-0.381 = 16.28. Tracy 30 views, program busy ms/view: pfwc 2.981, K2 0.985, gap 0.419, sort_ol 2.975 (was 3.547 at t170), gap 0.260, mat 3.008, blend 5.540 (was 5.868), all-core idle 0.691, traced end 16.179. Top levers: blend 5.54 (MATH-bound records loop), mat 3.01, pfwc 2.98, sort_ol emit mover imbalance (median 2.53 vs max 3.62 ms), host bridges 0.69 ms traced (docs/tip-t194).</p>
     <p class='iter-build'><code>4d591f7</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-190/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-190/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-190/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-190/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -285,7 +358,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t181/opt/profiler/t181-on/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -299,7 +372,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t188/opt/profiler/t188-on/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -313,7 +386,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t172/opt/profiler/t172-prof/chunks/0-2/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -327,7 +400,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t170/opt/profiler/t170-on/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -341,7 +414,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (docs/precull-pc-t161/out/t161-m{0,1,2}-zones.txt)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -355,7 +428,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t161/opt/profiler/t161-m1/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -369,7 +442,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t142/opt/profiler/t142-{base,pc}; docs/precull-t142/out)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -383,7 +456,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t146/opt/profiler/t146-{off,all}; docs/blend-diet-t146/out)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -397,7 +470,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t122/opt/profiler/t122-fuse (the #125 code as written))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -411,7 +484,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -425,7 +498,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -439,7 +512,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t99/opt/profiler/t102-vis/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -453,7 +526,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -467,7 +540,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t85/opt/profiler/t85-fix/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -481,7 +554,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (remote yyzo-bh-07:/localdev/smarton/gstt2-t33/opt/profiler/ttw-157-t33/render.tracy (base: gstt2-t33base/opt/profiler/ttw-157-t33base))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -495,7 +568,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t80b/opt/profiler/t80-a0/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -509,7 +582,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t68/opt/profiler/t68-k1/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -523,7 +596,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (none (log tt-project/state/runs/219/t77b.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -537,7 +610,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (none (A/B log tt-project/state/runs/203/t61run3.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -551,7 +624,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t75/opt/profiler/ttw-t75-new/chunks/0-10/render.tracy (base: gstt2-t75base/.../ttw-t75-base; log tt-project/state/runs/200/t75ab.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -565,7 +638,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t60/opt/profiler/t60-t60/chunks/0-10/render.tracy (base: gstt2-t60base/.../t60-t60base; zone table in tt-project/state/runs/198/t60-abtr.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -579,7 +652,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t59/opt/profiler/t59-t59/chunks/0-10/render.tracy (zone table in tt-project/state/runs/152/t59dev.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -593,7 +666,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -607,7 +680,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -621,7 +694,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -635,7 +708,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-162/chunks/0-10/render.tracy (+ chunks/10-20, chunks/20-30))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -649,7 +722,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -661,9 +734,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #44: with the per-pixel blend floor (iter-156) the microblock mask only has to be a superset of blocks where a PIXEL CENTRE reaches the floor. The cull box goes from the continuous [x0,x0+8]x[y0,y0+4] to the pixel-centre box [x0+0.5,x0+7.5]x[y0+0.5,y0+3.5] (box ramps +0.5 in sort_device/blend_device make_box_ramp; extent 7x3 in microblock_cull_compute). With no slack left at the centres, the cull thr (SFPU log) and the blend alpha (bf16-rounded approx exp) disagreed on ~115 edge pixels/view by 1 LSB, so thr is widened by a 0.05 m2 margin (extra keeps are zeroed by the per-pixel floor).</p><p class='reason'>A/B on yyzo-bh-07 (Blackhole p100a), bicycle 30 views 1024x1024, 3 interleaved rounds, base e49d388: stage blend 44.81 -> 43.20 ms/view (-1.61, -3.6%), frame 94.10 -> 92.51 ms/view (-1.59, -1.7%). 30-view --dump-views md5 byte-identical to base, hero_vs_ref 100.00 dB. Box alone (no margin) was 43.05 ms but NOT identical (hero 91.90 dB; 3465 pixels over 30 views off by 1 LSB, all at x%8 in {0,7} / y%4 in {0,3}). Margin 0.02 was also byte-identical (blend 43.16); 0.05 kept for ~2.5x headroom over the bf16 alpha rounding (~0.008 m2). Tracy (30 views, 3 stitched chunks, same board): device blend window 17.07 -> 15.36 ms/view (-10%), tile_blend_sfpu mean 14.58 -> 13.09 ms; cull window unchanged (15.93 -> 15.99). Zones: opt/profiler/ttw-160/zones.txt.</p>
     <p class='iter-build'><code>ttp/t44</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-160/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-160/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-160/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-160/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -675,7 +748,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #26 (R11): adaptive stable radix in sort_tile_depth (sort_radix_tile.cpp). Per tile: one min/max scan, radix on key-kmin with 1..4 passes whose digit width is chosen from n and the key range, all histograms filled in one scan, last pass writes ids only; histograms as u16 in the RISC's 8 KB local memory (3 KB); 4-wide load-ahead in the histogram/scatter loops. Still a stable sort by key, so the permutation is unchanged.</p><p class='reason'>A/B on yyzo-bh-07 (Blackhole p100a), bicycle 30 views, 3 interleaved rounds, base 3d59718: frame 96.95 -> 94.10 ms/view (-2.85), stage sort 18.63 -> 15.64 ms, stage_sort_publish_wait 8.02 -> 5.02 ms (-3.00, -37%). hero_vs_ref 100.00 dB in all runs; 30-view --dump-views byte-identical (md5). Host test vs std::stable_sort: 1825 cases, 0 fails. Steps: first version kept histograms in an L1 CB and only saved 0.40 ms (L1 read-after-write on bucket counters); an ablation with the sort skipped put DMA+publish at 2.19 ms, so the sort math was ~5.8 ms; moving histograms to local memory gave 6.33 ms, the 4-wide load-ahead 5.02 ms. Sort math left ~2.8 ms, so further tuning here is < 1% of the frame. Tracy (30 views, 3 stitched chunks, same board): sort_tile_depth busiest core 6.97 -> 3.98 ms/view (mean 6.75 -> 3.80); baseline from the task #16 capture (kernel unchanged since). Zones: opt/profiler/ttw-159/zones.txt.</p>
     <p class='iter-build'><code>ttp/t26</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-159/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-159/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-159/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-159/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-159/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-159/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-159/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-159/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -691,7 +764,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-157)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -773,7 +846,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #30: audit the critical-path BRISC/NCRISC dataflow kernels for libgcc soft-float (data movers have no FPU; __addsf3/__subsf3/__mulsf3 ~85-90 cycles, compares ~20-30). objdump of the JIT ELFs found soft-float in the per-gaussian hot loops of gather_visible_scatter (count + scatter passes: 4 __addsf3, 4 __subsf3, 16 __gesf2, 4 __lesf2 call sites), tile_assign_bbox and tile_assign_scatter (AABB tile coords: add/sub + __mulsf3 + __fixsfsi per gaussian) and sort_subchunk_materialize (tile-local mean, 2 __subsf3 per overflow record). Replaced with integer, bit-exact fp32 helpers (new render/kernels/dataflow/dm_fp32.h: IEEE compares on bits, RNE add with 6 guard bits + sticky, trunc of x*2^-s; float expression kept as fallback outside the fast range) and sort_bin_fp32::sub_int. The gather's `mx + rx > 0` becomes the exact identity `-rx < mx`. Readers of pfwc/project, tile_l1_cull, blend and sort_radix_tile have no soft-float (checked in the ELFs). sort_bin skipped (task #27).</p><p class='reason'>A/B, 3 interleaved rounds per build in one device session on yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, base = smarton/tt-project-opt 7df44de: avg_frame_ms 145.47 (145.5/145.6/145.3) -> 121.73 (121.7/121.8/121.7), -23.73 ms/view (-16.3%), 6.87 -> 8.21 FPS. stage_project 36.97 -> 20.41 (-16.56), stage_tile_assign 21.77 -> 14.75 (-7.02), sort 18.77 / blend 63.58-63.60 unchanged (materialize's overflow-path subtract is below noise). hero_vs_ref 100.00 dB, hero md5 e3fefb11..., all 30 dumped views byte-identical to the base build. Host check tests/unit/test_dm_fp32.cpp: 11.8e9 comparisons against native fp32 (every fp32 pattern for trunc, full sweeps against fixed operands, 1e9 random pairs), 0 mismatches. Tracy 30 views (per-view busiest-core makespan, base = ttw-149 which has the same kernels for these zones): proj_count 14.96 -> 6.32, proj_scatter 20.81 -> 12.36, ta_gauss_aabb 9.20 -> 5.25, ta_bucket_scatter 10.49 -> 7.18, BRISC-FW 135.67 -> 112.29 ms.</p>
     <p class='iter-build'><code>ttp/t30</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-151/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-151/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-151/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-151/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-151/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-151/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-151/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-151/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -801,7 +874,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #22 T-C (R2 pilot): split sort_bucket_emit over both data movers. Each core's pair-page range is split at mid: BRISC (new kernel instance on RISCV_0/NOC0) scatters [lo, mid), NCRISC [mid, hi). Both fill the core's one shared counting-sort region and the same per-(core,tile) record/overflow slots as before; NCRISC's cursors start at mover 0's per-tile kept count, which the NCRISC count pass snapshots at mid into buf_bin_h0. Gaussian-major pairs => byte-identical output with NO host layout change (instead of the plan's per-(core,mover,tile) widening, which would have doubled per-tile radix padding). Fill-done semaphores order the shared write-out, split by tile between movers; other staging CBs private per mover (BRISC at CB id+16, +42 KB L1). Kill switch GSPLAT_TT_SORT_EMIT_MOVERS=1; GSPLAT_TT_SORT_EMIT_SPLIT=<permille>.</p><p class='reason'>A/B, 3 interleaved rounds per build in one session on yyzo-bh-07 (Blackhole p100a), bicycle 30 views 1024x1024, baseline T-B head 967e973: avg_frame_ms 152.99 +/- 0.54 -> 145.42 +/- 0.18 (-7.57 ms, 6.54 -> 6.88 FPS; slowest new 145.7 < fastest base 152.4); stage_sort 25.97 -> 18.76; bin_emit 16.15 -> 9.00 (56% of base); bin_count 0.906 -> 0.920; project/tile_assign/blend unchanged. hero_vs_ref 100.00 dB, hero md5 e3fefb11..., all 30 dumped views byte-identical to the base build. Tracy (30 views, per-view busiest core): sort_bucket_emit 15.92 -> 8.43 ms on both movers (1.89x, matches T-A p6 latency-bound 1.83x), NCRISC-KERNEL 108.33 -> 100.91 (-7.42), BRISC-KERNEL 86.23 -> 94.61 (+8.38), BRISC-FW 143.08 -> 135.67 (-7.41): moved work, not a cost shuffle. Split 450/550 permille measured slower (9.69/9.76 ms). Model test tests/unit/test_sort_bin_dual_mover.cpp: 21447 split cases byte-identical. Detail + follow-ups (proj_scatter/proj_count on BRISC 35.8 ms, tile_assign 19.7, sort_subchunk_mat 12.4): docs/sort-emit-dual-mover-2026-09-30.md.</p>
     <p class='iter-build'><code>9b49b58</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-149/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-149/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-149/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-149/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-149/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-149/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-149/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-149/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -817,7 +890,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-143)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -831,7 +904,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-144)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -845,7 +918,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-145)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -859,7 +932,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-146)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -887,7 +960,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-148)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -901,7 +974,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-153)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -913,7 +986,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Task #18: split the 46.5 ms sort stage (SortCallTimings wired into stage_timers as stage_sort_* leaves) and cut what the device actually waits on inside it. Measured split refuted the '~36 ms host binning' premise: Pass A count and Pass B emit were already device kernels; host-serial time was ~2.4 ms. Four bit-identical cuts: (1) host_bin_layout_into: row-major passes, persistent tables, heap LPT, no build/upload of the dead dense recbase table; (2) subchunk directory uploaded from the host's build_subchunk_layout instead of the serial single-core sort_subchunk_directory kernel (deleted); (3) emit reads its own count-pass histogram row (new buf_bin_hist, arg 17) instead of re-scanning its tid/keep pages; (4) count pass batches 32 pages of NoC reads per barrier.</p><p class='reason'>A/B, 3 interleaved rounds per build inside one reservation on yyzo-bh-07 (Blackhole p100a), bicycle 30 views 1024x1024: avg_frame_ms 173.53 +/- 0.56 -> 166.63 +/- 0.05 (-6.90 ms, 5.76 -> 6.00 FPS); stage_sort 46.49 -> 40.00 (-6.50 ms). Leaves: bin_layout 1.98 -> 0.25, publish_wait 10.31 -> 8.02 (directory kernel gone), bin_emit 32.17 -> 30.26, bin_count 1.40 -> 0.90; project/tile_assign/blend unchanged within 0.02 ms. hero_vs_ref 100.00 dB in all six runs and all 30 dumped views byte-identical to the baseline build. Host bridge now ~0.65 ms (at its floor); sort is 99% device: emit 30.3, radix+publish 8.0, count 0.9. Next lever: de-stall sort_bucket_emit (R3), -5 to -10 ms expected. Detail: docs/sort-stage-split-2026-09-30.md.</p>
     <p class='iter-build'><code>dede928</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-142/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-142/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-142/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-142/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-142/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-142/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-142/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-142/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -929,7 +1002,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-141)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -941,9 +1014,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>DECISIVE GATE EXPERIMENT (Stage-0 falsification of the persistent-kernel rewrite's load-bearing assumption): can a single in-order per-core program OVERLAP an NCRISC-dataflow stage with an SFPU-compute stage so fused makespan drops toward max(NCRISC,SFPU) instead of sum? Smallest decisive hang-safe probe: a GATED (GSPLAT_TT_OVERLAP_PROBE, default-OFF, reversible) store-stress injected into the cull NCRISC reader (reader_tile_l1_cull.cpp). After each cb_push_back of a bucket slot (now draining on the SFPU/TRISC cull compute, microblock_cull_compute.cpp tile_mb_mask), the reader issues store_reps 32B noc_async_writes (sort-emit store-bound proxy) into a throwaway DRAM scratch ring, barrier every 64 -> single in-order CQ, NO 2nd CQ, NO intermediate Finish, CB-fence handshake only (respects the iter-52/55-59 hang class). Host (blend_device.cpp) forces a clean Finish after cull when the probe is on so cull_ms is the TRUE program makespan, and prints TTW_OVERLAP. Stores hit throwaway scratch -> output stays byte-identical (hero_vs_ref=100.00). Measure fused makespan (reps=R) vs barrier-separated sum = baseline SFPU-cull (reps=0) + the added NCRISC store stage, busiest-core device zones via Tracy (tile_l1_cull_rd reader wall, ovlp_store NCRISC store busy, tile_mb_mask SFPU), plus a same-core wall-clock concurrency check.</p><p class='reason'>VERDICT = PROCEED. The load-bearing assumption HOLDS: NCRISC dataflow and SFPU compute run CONCURRENTLY on the same cores under one in-order program with CB handshaking; the fused makespan collapses to max(NCRISC,SFPU), hiding the ENTIRE SFPU stage. Device busiest-core per-view zones (cpp#123 bin=b4836c7dfcff6ca2, 30-view Tracy on yyzo-bh-07): BASELINE reps=0 (SFPU-cull alone) reader wall tile_l1_cull_rd = 21.99 ms == SFPU tile_mb_mask 22.39 ms (M0 ~= 22 ms; cull is internally balanced). FUSED reps=100000: reader wall (busiest core 14,2) = 73.66 ms (M1) of which ovlp_store NCRISC store-busy = 58.77 ms; SFPU compute UNCHANGED at 22.39 ms. Barrier-separated SUM = M1_ncrisc_stage(73.66) + M0_sfpu(21.99) = 95.65 ms; measured FUSED = 73.66 ms = max(73.66,22) -> the full ~22 ms SFPU stage is HIDDEN = 21.99 ms overlap = 23.0% reduction vs sum. Same-core wall-clock concurrency: NCRISC store window overlaps the SFPU zone 93.1% (vs 0% at reps=0). Host cull_ms scaling corroborates (reps 0->8k->100k->400k = 34->35->78->313 ms; adding 8k stores cost ~+1 ms because the SFPU absorbed it). ALL runs bit-identical (hero_vs_ref=100.00) and HANG-FREE (4 timed runs + 2 Tracy captures; the forced-Finish-after-cull ordering held with no wedge -- corroborates that the iter-55-59 hangs were the 2nd-CQ / intermediate-Finish-while-publish-pending class, NOT same-program NCRISC<->SFPU overlap). HONEST CAVEATS: (1) the store-stress is a SYNTHETIC sort-emit proxy (pure 32B writes, no divmod/pack) -> proves the MECHANISM and that piling a large NCRISC stage on top still hides the SFPU; the REAL sort-emit overlap efficiency is quantified in Stage 1. (2) The frame plateau is UNCHANGED at 173.1 ms (this iter is a microbench, no production path change; probe is committed default-OFF). The implied win: fusing the barrier-separated sort-emit (NCRISC ~32 ms, sort_bucket_emit) + cull (SFPU ~22 ms) pair should hide ~min(stage) -> proceed to staged L1-handoff (Stages 1-3 in tmp/hostfree-rewrite-scope-notes.md).</p>
     <p class='iter-build'><code>3f4759e</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-140/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-140/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-140/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-140/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-140)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -957,7 +1030,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-139)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -969,7 +1042,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Stage-2b: OVERFLOW records born PRE-PACKED in their bucket so the sort_subchunk_materialize OVERFLOW path reads them COALESCED instead of random-gathering blendrec[gid] in sorted-id order. DIAGNOSIS: an overflow tile (count>BUCKET_FIT=8192) cannot fit the pre-sized buf_l1_recs bucket (BUCKET_FIT*num_tiles), so emit DROPPED the excess and materialize re-built every subchunk by a random blendrec gather (iter-130: the dominant mat cost). DESIGN (memory-safe, additive): a SEPARATE COMPACT overflow DRAM region (buf_l1_ov), prefix-allocated over ONLY the in-cap overflow tiles (BUCKET_FIT<count<=kOverflowL1Cap=2*BUCKET_FIT=16384), even-aligned per tile for PACK2. sort_bucket_emit pre-packs the FULL overflow tile there (host computes per-(core,tile) bases histrec_overflow + per-tile tile_ov_base in host_bin_layout_from_hist). sort_subchunk_materialize gets ONE whole-tile work item per in-cap overflow tile (build_mat_worklist) and runs the SAME coalesced-bucket-read + stable-L1-radix depth-permute as the in-budget path, streaming each subchunk's slab to the directory page run (CB_SLAB stays BUCKET_FIT-sized). cap=2*BUCKET_FIT reuses the EXISTING CB_BUCKET (already bucket_fit*64 B=512 KB, only half-used) with ZERO growth; only CB_BSORT grows 65->129 KB. Over-cap tiles (the few heaviest, max_tile~26k) keep the legacy gather. DRAM delta ~24-37 MB/view. 16B-aligned >=16B granule respected (32B half-page writes into 64B PACK2 pages, identical to the proven buf_l1_recs scatter).</p><p class='reason'>KEEP: all three gate conditions met. (1) BIT-IDENTICAL: candidate hero PNG md5 == golden e3fefb11 (BYTE-IDENTICAL); hero_vs_ref=100.00 dB in all 4 timing runs; the stable L1 radix over the pre-packed bucket reproduces the global sort order exactly (same keys, same core/gaussian-major input order the in-budget path already relies on) -> proves overflow-prepack == gather. [OVERFLOW-DIST] 77-92% of gathered records fall in the cap=16384 band (prepacked); only the 5-18 heaviest tiles/view still gather. (2) NET (emit+mat) DROPS and it is NOT a cost-shuffle. Deterministic 30-view same-build same-thermal Tracy (per-view busiest-core makespan): sort_subchunk_mat 13.759->12.529 (-1.23), sort_bucket_emit 32.016->32.070 (+0.05 FLAT -- the extra coalesced overflow stores are absorbed, NOT a shuffle into the store-bound emit), net(emit+mat) 45.775->44.599 (-1.18). (3) FRAME AVG IMPROVES with clean cluster separation: same-thermal non-profiler render/run.py (30 views x4): avg 174.05->173.10 ms (baseline 174.2/173.7/174.1/174.2; candidate 173.2/173.1/173.1/173.0 -- candidate MAX 173.2 < baseline MIN 173.7, CLEAN separation), -0.95 ms (-0.55%). HONEST CAVEAT: the NCRISC-FW long-pole total is FLAT (124.756->125.012, +0.26, noise) and BRISC-FW flat (159.090->159.679); the mat makespan reduction translates into the modest frame-avg win but does not move the saturated firmware totals -- so the gain is small. Still a real, clean, zero-risk (byte-identical) reduction of the materialize overflow gather, which was the remaining on-critical-path lever. hero_vs_cpu=63.95 inherited (device output byte-identical to the golden anchor; cpu_cpp_mb ref skipped via --no-ref to avoid the documented dual-MetalContext host segfault).</p>
     <p class='iter-build'><code>1753eb4</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-138/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-138/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-138/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-138/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-138/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-138/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-138/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-138/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -983,7 +1056,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>READ MULTI-BUFFERING / PREFETCH on ta_gauss_aabb (tile_assign K1 per-Gaussian AABB, NCRISC, ~9.7 ms/view). iter-134 established this zone is NoC-READ-bound: it reads 4 input pages (px,py,rx,ry SoA, 64B each) per 16-Gaussian page and its per-Gaussian arithmetic is hidden UNDER the read barrier (the iter-134 reciprocal-multiply was flat here). DIAGNOSIS (confirmed latency-bound, NOT bandwidth-bound): the single-buffered loop paid a full DRAM read round-trip latency PER page -- issue 4 noc_async_read, noc_async_read_barrier (NoC drains to zero outstanding), compute 16 gaussians, noc_async_write+barrier, THEN issue the next page's reads cold -- so the read latency was exposed/serialized every page and the NoC sat idle through compute+write (only 4 reads ever in flight, then a hard stall). LEVER: deepen the read pipeline. Size the 5 K1 scratch CBs (px,py,rx,ry,out) to MULTIBUF_PAGES=8 pages each (host build_program_k1) and batch 8 pages of input reads = 32 noc_async_read issued back-to-back before ONE noc_async_read_barrier, then compute + issue all 8 noc_async_write, then one write barrier. The fixed DRAM round-trip latency is now amortized once per 8-page batch instead of once per page (32 reads pipelined through the NoC), mirroring the in-repo reader_tile_l1_cull bulk-load idiom. BIT-IDENTICAL: same pages read, same per-Gaussian compute (g>=M guard -> tpg=0 unchanged), same output pages written in the same order; only the read/barrier/write batching changed. +1.5KB L1/core for the 8-deep CBs.</p><p class='reason'>KEEP: bit-identical (candidate hero PNG md5 == golden e3fefb11, BYTE-IDENTICAL; hero_vs_ref=100.00 dB in all 8 timing runs; hero_diff10 all-black max=0) AND a real improvement with clean cluster separation. DECISIVE deterministic device-cycle Tracy (30-view, same-build same-thermal A/B): the EDITED zone ta_gauss_aabb 9.696->9.202 ms/view (-0.49, -5.1%), flowing ~1:1 into the idle-waiting BRISC long pole -- NCRISC-FW 125.252->124.748 (-0.50), BRISC-FW 159.590->159.087 (-0.50) -- causal mechanism-level proof, not wall-clock noise. Same-thermal non-profiler render/run.py (30 views, 4 runs each): frame avg 174.6->174.1 ms (baseline 174.7/174.6/174.5/174.6; candidate 174.2/174.1/174.1/173.9 -- candidate MAX 174.2 < baseline MIN 174.5, CLEAN cluster separation), min 140.3->139.9. This CONFIRMS the iter-134 hypothesis that ta_gauss_aabb was read-LATENCY-bound (batching hid the per-page DRAM round-trip) and REFUTES bandwidth-bound (which would have left the makespan flat). Zero risk (pure dataflow restructure, output proven byte-identical). hero_vs_cpu=63.95 inherited (device output byte-identical to the golden anchor; the cpu_cpp_mb reference subprocess flaked black/mean=0.0 twice -- the documented dual-MetalContext host artifact, unrelated to the device kernel change). NOTE: ta_gauss_aabb 9.7->9.2 leaves it the #4 NCRISC mover; the larger NCRISC zones (sort_bucket_emit 32.0, tile_blend_load 28.1, rd_l1_bulk 27.9, tile_l1_cull_rd 22.0) are the next read-pipeline candidates.</p>
     <p class='iter-build'><code>369831f</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-137/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-137/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-137/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-137/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-137/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-137/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-137/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-137/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -997,9 +1070,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>DIAGNOSTIC: decompose the inter-frame HOST gap (blend-done -> next-view pfwc-start) into named host activities and classify REDUCIBLE/HIDEABLE/IRREDUCIBLE to decide whether roadmap #2 (host out of loop) is the next big lever.</p><p class='reason'>DIAGNOSTIC (no frame kept). Re-added env-gated GSPLAT_TT_HOST_PROFILE chrono (header-only host_profile.h + call-sites in render.cpp/pfwc_device.cpp/blend_device.cpp; run.py HPPY) and measured the inter-frame host gap = blend-device-done -> next-view pfwc-enqueue on yyzo-bh-07, 30 views, 30 interior boundaries, warmup excluded. FINDING: the REAL steady-state production gap is ~4.86 ms/view (median; mean 4.85; range 4.59-5.27), NOT ~32 ms. Composition (medians): unpack bf16->fp32 tiles_to_image 3.24 (67%); python/pybind return+loop+c2w_to_w2c+marshal 0.76 (16%); final-image D2H readback 0.55 (11%); render_view head (array.request + 12.6MB memset + cached jit/cov3d) 0.18 (4%); pfwc dispatch (110*3 SetRuntimeArgs + EnqueueMeshWorkload) 0.07 (1.5%); post-blend tail ~0.004. Components sum 4.80 ~= gap 4.86 (consistent). ROOT CAUSE of the bogus 32 ms: it is a TRACY OBSERVER ARTIFACT. The per-frame ReadMeshDeviceProfilerResults dump (maybe_dump_device_profiler, fires ONLY under TT_METAL_DEVICE_PROFILER=1) + mid-run Tracy TCP streaming injects host stall ENTIRELY into the post-blend 'tail' window. Controlled A/B, same build/views: (1) clean prod: tail=0.004 gap=4.86 frame=174.7; (2) bare TT_METAL_DEVICE_PROFILER=1: tail=9.4 gap=14.5 frame=184.2; (3) full python -m tracy --dump-device-data-mid-run (the iter-135 method): tail=17.3 gap=22.5 AND warmup boundary=395.9 ms == iter-135's reported 393 ms (same artifact, smoking gun). Every non-tail component is constant across all three; only 'tail' scales with profiler intrusiveness. CLASSIFY: the entire 4.86 ms gap is device-idle host work => HIDEABLE behind the next view's device execution (double-buffer output image + dispatch view i+1 pfwc before unpacking view i). Biggest single piece = unpack 3.24 (also REDUCIBLE: have the blend writer/readback land a de-tiled fp32 image so no host repack). D2H 0.55 = IRREDUCIBLE (one image out per frame). pfwc dispatch 0.07 = IRREDUCIBLE & ~us (iter-126 trace<0.5ms). The genuinely-reducible host COMPUTE (sort hist->host prefix/LPT ~3.8ms, gather M-read, ta P-read) is a WITHIN-frame bubble, NOT part of this inter-frame gap; iter-120 already proved removing those host Finishes is frame-neutral on the in-order CQ. RANK / decides iter-137: do NOT make the host gap the next big lever -- it is 4.86 ms = 2.8% of the 174.7 ms frame; the '~32 ms host gap' premise (roadmap #2) is REFUTED. The frame stays device-kernel-bound (NCRISC sort/TA ~125 ms). If still pursued, lowest-risk first step = hide unpack+D2H behind the next view's device exec, expected ~3-4 ms/view, bit-identical. SINGLE-FRAME-LATENCY CAVEAT: that is a 30-view-AVG (cross-frame pipeline) win only -- it does NOT reduce true single-frame real-time latency (the unpack+D2H stay on the critical path for one frame), which conflicts with the production single-frame goal. Output bit-identical (hero PNG md5 == golden e3fefb11, hero_vs_ref=100.00); frame 174.7 ms/view unchanged vs iter-135 (instrumentation non-perturbing).</p>
     <p class='iter-build'><code>8ad13ed</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-136/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-136/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-136/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-136/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-136)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1011,7 +1084,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>NCRISC bit-identical strength reduction (iter-134 lever, integer variant): in sort_bin.cpp pack_rec the per-kept-pair tile-local-mean recompute needs tt/l1_tiles_x and tt%l1_tiles_x. l1_tiles_x is a RUNTIME arg so the compiler cannot strength-reduce it and emits a soft __udivmodsi4 PER PAIR on the divider-less NCRISC, inside sort_bucket_emit (the biggest NCRISC zone, 32.45 ms/view); the divmod is compute-exposed for the dominant blendrec-cache-hit pairs (no NoC read). For the 1024px hero tiles_x=32 (power of two), so tt/32 == tt>>5 and tt%32 == tt&31 EXACTLY (unsigned) -> BIT-IDENTICAL. Replaced the per-pair divmod with a power-of-two-guarded shift/mask (detect pow2 once, hoisted; non-pow2 grids fall back to exact / and % so output is unchanged for any tiles_x). DIAGNOSIS (analyze_zones, 30-view): the NAMED candidate sort_tile_depth (7.15 ms/view) has NO soft-divide -- its only /,% are by the COMPILE-TIME const ELEMS_PER_PAGE=16, already strength-reduced by the compiler to shift/mask -- so it is not a lever. The float /tsf lever is fully exhausted (both tile_assign kernels, iter-134). RESULT (30-view Tracy, candidate vs iter-134 baseline, deterministic device-cycle makespans): the ONLY changed zone sort_bucket_emit 32.449->32.022 ms/view (-0.43); it propagated ~1:1 through the idle-waiting BRISC long pole: NCRISC-FW 125.554->125.246 (-0.31), BRISC-FW 159.911->159.588 (-0.32). hero PNG md5 == committed golden (byte-identical). Frame 175.00->174.68 avg / 140.58->140.45 min (30-view, same-thermal, 4 runs each). A smaller-but-real instance of the iter-134 lever: the divmod is partly hidden under sort_bucket_emit's per-pair 32B L1-store floor (iter-129), so the win is ~4x smaller than ta_bucket_scatter's -1.74.</p><p class='reason'>KEEP: 100.00 >= 50.0 (bit-identical: hero PNG md5 == golden e3fefb11, byte-identical) AND a real improvement. Frame avg -0.3 ms (175.00->174.68); 3/4 candidate runs (174.5/174.6/174.7) sit below ALL 4 baseline runs (174.8/174.9/175.1/175.2) with a single boundary tie at 174.9 -- near-clean separation. The decisive evidence is deterministic device-cycle Tracy: the ONLY edited zone (sort_bucket_emit) dropped -0.43 ms and flowed 1:1 into the BRISC-FW frame long pole (-0.32), which is causal mechanism-level proof, not wall-clock noise. Zero risk (pow2-guarded, exact divmod fallback). NOTE: the cheap strength-reduction lever is now nearly exhausted on the NCRISC movers -- next big lever is the inter-frame host gap (Part B: steady-state ~32 ms/view, REAL not warmup) or the sort_bucket_emit record-layout change.</p>
     <p class='iter-build'><code>2be8ba5</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-135/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-135/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-135/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-135/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-135/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-135/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-135/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-135/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1025,7 +1098,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>tile_assign NCRISC reciprocal-multiply: replace the per-Gaussian soft-float DIVIDE by tile_size (tsf) with a hoisted MULTIPLY by 1/tsf in BOTH data-mover kernels K1 ta_gauss_aabb (tile_assign_bbox.cpp) and K2 ta_bucket_scatter (tile_assign_scatter.cpp). tile_size=32 is a power of two so 1/32=0.03125 is EXACTLY representable in fp32 and dividing by 2^5 only decrements the exponent (no mantissa rounding, no underflow for tile coords) => x*(1/tsf) is BIT-IDENTICAL to x/tsf, so min_x/min_y/max_x/max_y truncations are unchanged. The FPU-less data-mover RISC emits an expensive __divsf3 soft-float call per coord; the multiply (__mulsf3) is much cheaper. DIAGNOSIS (analyze_zones, 30-view): K2 was COMPUTE-EXPOSED (the AABB recompute's 3 divides/Gaussian sat on its critical path) so ta_bucket_scatter dropped 12.24->10.49 ms/view (-1.74); K1 is NoC-READ-bound (4 input pages read per 16 Gaussians, divides hidden under read-barrier latency) so ta_gauss_aabb stayed flat 9.70->9.70. NCRISC-FW 127.37->125.55 (-1.82); BRISC idle-waits on NCRISC so the BRISC-FW frame long pole dropped 161.71->159.91 (-1.80). hero md5 == committed golden (byte-identical). Frame 177.0->175.0 avg / 142.1->140.5 min (30-view, same-thermal, 4 runs each, clean cluster separation).</p><p class='reason'>100.00 >= 50.0 (bit-identical: hero PNG md5 == golden e3fefb11) AND frame avg improves 177.0->175.0 ms (-2.0) with clean cluster separation (baseline 176.9-177.1 vs candidate 174.7-175.2, no overlap; 4 runs each, same thermal). ta_bucket_scatter -1.74 ms/view, NCRISC-FW -1.82, BRISC-FW long pole -1.80. ta_gauss_aabb flat (NoC-read floor, not divide-bound).</p>
     <p class='iter-build'><code>80df833</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-134/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-134/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-134/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-134/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-134/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-134/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-134/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-134/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1039,7 +1112,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>PROGRAM FUSION #1 (roadmap lever #1): merge project(transform_means_cam) + pfwc into ONE device program (single CreateProgram/EnqueueMeshWorkload). The fp32 means_cam DRAM store+reload between the two programs is replaced by a CORE-LOCAL L1 pass: the fused compute kernel runs the world->camera transform (R*means) and folds the pfwc translation (+t) directly into the same fp32 DEST, emitting tx/ty/tz to L1 scratch CBs consumed in-place by the pfwc body (no NoC/DRAM round-trip). reader_pfwc/writer_pfwc reused verbatim (means SoA replaces means_cam SoA in input slots 0-2). BIT-IDENTICAL: means_cam was stored fp32 (lossless), so the in-DEST handoff produces identical bits -> hero_vs_ref=100.00dB (8bit-vs-golden, hero_diff10 ~all-black), hero_vs_cpu=63.95dB. MEASURED (30-view Tracy, analyze_zones): program dispatch/view 15.53->14.49 (-1.03, exactly one program removed; BRISC-FW pairs 51243->47833). BUT BRISC-FW busiest-core makespan 161.71->161.60 (-0.1, flat) because means_cam was the CHEAPEST program (mcam compute makespan was only 0.671ms); the 4.8ms/program AVERAGE is dominated by the heavy multi-launch sort/blend programs, not this light element-wise pair. No NCRISC penalty (NCRISC-FW 127.37->127.29; the means_cam DRAM write + project reader are gone, L1 handoff is free). Frame 177.1->176.8 avg / 142.3->141.8 min (30 views, same thermal) -- flat-to-slightly-better.</p><p class='reason'>100.00 >= 50.0 (bit-identical) AND no regression (frame avg -0.3 / min -0.5) AND real architectural gain: one fewer program dispatch/view (15.53->14.49) + means_cam DRAM round-trip eliminated (cleaner L1-resident handoff toward the host-free design). BRISC-FW makespan win small because means_cam is the cheapest program; the launch-firmware prize lives in fusing the heavy sort/blend programs (future levers).</p>
     <p class='iter-build'><code>c067ff1</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-133/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-133/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-133/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-133/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-133/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-133/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-133/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-133/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1055,7 +1128,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir newref-132)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1067,7 +1140,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>relocate op/color UNORM16 pack off BRISC proj_scatter onto NCRISC sort_bin pack_invariants; publish 2 packed words via 16B-aligned blendrec offset-32 write-back for materialize copy (bit-identical, frame 178.8->177.1 avg / 143.9->142.3 min same-thermal)</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>f8e63c1</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-132/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-132/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-132/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-132/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-132/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-132/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-132/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-132/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1081,7 +1154,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Stage-2b: pre-pack op/color UNORM16 into the 32B blend record at BIRTH (gather_visible_scatter) so sort_bin pack_invariants and the depth-sorted materialize overflow gather COPY the two packed words instead of re-deriving 4 fp32->UNORM16 conversions (per-gaussian / per-overflow-record). Phase-1 fresh 30-view ranking (ttw-131): BRISC-FW 165.86, NCRISC-KERNEL 131.42; top reducible NCRISC zones sort_bucket_emit 30.58, sort_subchunk_mat 19.62 (overflow re-read/re-pack), readers ~98% backpressure. Ablation MEASURED the gather re-pack at frame -7.1 (skip-pack) vs read -4.5 (skip-read). Bit-identical hero md5 e3fefb116d860f99d92bba1ef51d820c, 63.95dB. NCRISC-KERNEL 131.42->113.80 (-17.6), BRISC-FW 165.86->162.12 (-3.74); sort_bucket_emit 30.58->18.83, sort_subchunk_mat 19.62->13.74; tradeoff proj_scatter 20.83->35.40 (+14.6, pack relocated to BRISC producer). ms_view 181.6->178.9 avg / 147.0->143.8 min.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>faebfa0</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-131/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-131/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-131/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-131/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-131/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-131/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-131/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-131/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1095,7 +1168,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>sort_subchunk_mat subchunk-balanced (load balance). Phase-1 DIAGNOSED via 30-view Tracy phase sub-zones (analyze_zones): the dominant materialize cost is NOT the iter-113 in-place L1 permute (mat_perm 1.7ms/mat_read 0.55/mat_sort 6.3/mat_write 0.02 busiest-core) but the OVERFLOW gather (mat_gather 24.6ms) - random blendrec re-read + scalar UNORM pack + 32B scatter for overflow tiles, untouched by Stage 1. The shared per-tile count-LPT overloads cores owning big overflow tiles (mat_total max 27.1 vs 17.0ms balanced floor; busiest core 91% gather). FIX bit-identical: each (tile,sc) is an independent work item with core-independent output, so balance ALL items across cores via gather-cost-weighted greedy-LPT (kernel now iterates a work-item list; host build_mat_worklist). hero md5 e3fefb11 bit-identical, 63.95dB; ms_view min 156.6->147.1.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>0b49e4b</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-130/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-130/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-130/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-130/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-130/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-130/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-130/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-130/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1109,7 +1182,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>sort_bin be_main: kill the per-pair tile-coord integer div/mod (tile_x=tt%grid_w, tile_y=tt/grid_w) with a power-of-two shift/mask (grid_w=l1_tiles_x=32 for the 1024x1024 / 32px-tile bench, so tt&31==tt%32 and tt>>5==tt/32 bit-identically; div/mod fallback kept for non-pow2 grids; zero extra storage). MEASURE-FIRST REFUTED the premise: bit-identical (hero md5 e3fefb116d860f99d92bba1ef51d820c, 63.95dB) but FRAME-NEUTRAL -- sort_bucket_emit 30.57->30.58 (noise), NCRISC-KERNEL 134.23->134.28, BRISC-FW 168.96->169.02, ms_view 187.4->187.0 avg / 156.6->157.1 min. The NCRISC software divide is NOT the be_main residual hotspot (it is overlapped by the dominant per-pair L1 store traffic). CONFIRMING ABLATION (null the 8 per-pair 32B-record L1 stores, not bit-identical): sort_bucket_emit 30.58->13.03 (-17.5ms, -57%), NCRISC-KERNEL -16.7, BRISC-FW -15.7 => the residual be_main cost IS the per-pair 32B record L1 store traffic (8 u32 stores x ~21.7k pairs/core), NOT the tile-coord decode. REVERTED to HEAD (frame-neutral dead complexity). Next lever: cut the per-pair record store traffic (record born once-per-gaussian / Stage-2b TA-side fill), not the div/mod.</p><p class='reason'>bit-identical (hero md5 e3fefb11, 63.95dB) but frame-neutral: per-pair div/mod refuted as the be_main hotspot (sort_bucket_emit 30.57->30.58); reverted per the bit-identical-but-neutral gate. Ablation localizes the real cost to the per-pair 32B-record L1 stores (-17.5ms when nulled).</p>
     <p class='iter-build'><code>d333c34</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-129/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-129/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-129/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-129/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-129/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-129/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-129/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-129/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1123,7 +1196,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>sort_bucket_emit: hoist per-gaussian-invariant 32B record packing (cov/depth_key/UNORM16 op+color) out of the per-pair scatter loop. iter-128 ablation MEASURED pack_rec=27ms=71% of the 40.9ms scatter (the scattered-DRAM-write premise was REFUTED: 32B writes only 1.6ms); only the tile-local mean varies per pair, so the invariant words are computed once per gaussian (pack_invariants in the blendrec-read branch). Bit-identical hero md5 e3fefb11, 63.95dB. sort_bucket_emit 40.9->30.6, NCRISC-KERNEL 144.6->134.2, BRISC-FW ~179->169; ms_view 195.6->187.4 avg / 163.7->157.6 min.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>b744d2a</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-128/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-128/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-128/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-128/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-128/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-128/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-128/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-128/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1137,7 +1210,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>recover frame to baseline: disable on-device sort bin-layout (sort_device_layout_enabled=false) AND the S5.3 host-free M/P over-provisioning (host_free_mp_enabled=false) now that iter-126 MEASURED the Metal Trace endgame as a no-go (replay removes <0.5ms; the ~92ms BRISC-FW is on-device firmware+NCRISC dataflow trace replays unchanged). Restores the host host_bin_layout_from_hist+build_lpt path and the real-M/P-read tile_assign (pre-iter-121 working path); on-device layout (S5.1-S5.5 sort_bin_layout/sort_bin_emit) + static-ceiling over-provision code KEPT gated-off for a future fusion lever. Bit-identical: hero md5 e3fefb116d860f99d92bba1ef51d820c, 63.95dB. ms_view 236.7(iter-125 ledger)/~205-211(steady) -> 195.6 avg, min 163.7; BRISC-FW 224.7->179.1, NCRISC-KERNEL 189.9->144.4 == iter-116 best-known baseline (full regression recovery).</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>ecba17b</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-127/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-127/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-127/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-127/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-127/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-127/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-127/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-127/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1153,7 +1226,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-126)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1165,7 +1238,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>S5.4: parallelize on-device sort bin-layout Pass-2 base emit across 16 cores (new sort_bin_emit.cpp). Coordinator (sort_bin_layout.cpp) publishes per-worker running-prefix checkpoints (page_acc pages + rec_acc counts at each worker first source-core) to a small DRAM ckpt buffer; emit workers replay the exact Pass-2 accumulation over disjoint source-core ranges (contention-free) -> bit-identical bin2d/l1_rec_base bases. CQ-ordered after the coordinator (no semaphores; follows the proven program-ordering pattern). Recovers part of the iter-121 +13ms single-core layout regression: A/B (matched thermal) min_ms 213.0 -> 211.5 (-1.5), BRISC-FW 226.2 -> 224.7, NCRISC-KERNEL 191.4 -> 189.9, TRISC unchanged. Bit-exact (layout_verify=true: 33/33 IDENTICAL across 30 views) + hero 63.95dB. Launch overhead caps the 2-program win now; folds away under Metal Trace.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>de6d1db</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-125/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-125/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-125/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-125/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-125/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-125/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-125/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-125/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1179,7 +1252,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>S5.3 tile_assign P-read deletion — pair buffers + K2 scatter work-split sized to static pair_ceiling() (4,718,592); K2 reads clamped P from resident ta_pairs_P ctrl page (InterleavedAddrGen<true>); scan_bases clamps published P + publishes overflow/true-P; sort_device hard-fails on overflow. Behind host_free_mp_enabled (reversible). Frame-neutral trace-prerequisite (removes one of three mid-frame host blocking-read drains).</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>d754416</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-124/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-124/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-124/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-124/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-124/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-124/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-124/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-124/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1193,7 +1266,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>S5.3 M-domain GROUNDWORK (gated prerequisite, behind host_free_mp_enabled): tile_assign now reads the visible-count M from the resident proj_M control page via a runtime InterleavedAddrGen<true> (bbox K1 + scan_reduce + scan_add) and over-provisions the M-domain offsets/scan buffers + K1 page-split to a static page-aligned ceiling n_ceil (= proj_m_px capacity) instead of the host-read M. Reversible (host_free_mp_enabled() default true). Frame-neutral at the steady-state floor (~204-205 ms/view; the higher verify avg is thermal from back-to-back runs). Bit-identical (hero md5 e3fefb11, 63.95 dB across 30 views). NOTE: the three mid-frame host blocking read-deletions (tile_assign P-read, sort P-read, gather M-read) are NOT removed yet — this lands only the resident-read + static-ceiling pattern they depend on.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>f1a8eab</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-123/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-123/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-123/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-123/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-123/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-123/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-123/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-123/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1207,7 +1280,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>S5.2: cheap on-device sort bin-layout — L1-cache the per-core histogram (one DRAM read pass instead of two) + LSD radix LPT sort replacing O(n^2) selection (bit-exact, identical (cost,tile_id) order); recovers ~half the iter-121 +23ms single-core regression (215.0->205 ms/view), pixels bit-identical (hero md5 e3fefb11, 63.95dB)</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>1d99fbd</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-122/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-122/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-122/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-122/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-122/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-122/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-122/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-122/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1221,7 +1294,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>S5.1: enable on-device sort bin-layout (sort_device_layout_enabled=true). Recovered the missing sort_bin_layout.cpp kernel (host referenced it but it was absent from render/kernels/ — the real reason the flag was off), rewrote it as an efficient single-core bulk-row pass, and extended it to populate l1_rec_base (the L1_RECORD scatter's per-(core,tile) bucket base) which the legacy kernel lacked. Removes host hist-read + host-LPT + 6 H2D re-uploads; host now reads only resident result buffers + a tiny ctrl page.</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>56d8f42</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-121/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-121/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-121/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-121/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-121/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-121/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-121/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-121/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1237,7 +1310,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-120)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1249,9 +1322,9 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Sort Stage 2b DIAGNOSTIC: fuse projection into the bucket fill by killing the gaussian-major blendrec AoS DRAM array (gather stops writing proj_m_blendrec; sort_bin in-budget fill + sort_subchunk_materialize overflow re-gather assemble each 32B PACK2 record from the compacted SoA proj_m_* instead). Goal was to eliminate proj_scatter's 20.8 ms/view gaussian-major write.</p><p class='reason'>DIAGNOSTIC (no frame kept) — REFUTES the premise that proj_scatter's 20.8 ms/view is the blendrec write. Measured: killing blendrec drops proj_scatter only 20.83->18.79 ms/view (-2.0); the other ~18.8 ms is the REQUIRED SoA proj_m_* writes (px,py,rx,ry,a,b,c,depth,opacity,colors), which blend/cull/tile_assign still read. blendrec's real value was making the DEPTH-SORTED overflow re-gather cheap (1 contiguous 64B AoS read/record); without it sort_subchunk_mat must read ~8 SoA pages/record (gids depth-sorted, non-monotonic, uncacheable) -> sort_subchunk_mat 26.15->35.79 ms/view (+9.6) even after batching the reads (per-record-barrier naive form was +18.2 -> 44.33). In-budget bucket fill IMPROVED (sort_bucket_emit 39.68->36.02, -3.7, via gaussian-major SoA page caching). NET: ms_view 195.51 (iter-118 anchor) -> 206.56 naive / 198.07 batched (+2.56 ms, +1.3%), BIT-IDENTICAL pixels (hero md5 e3fefb116d860f99d92bba1ef51d820c == anchor). BRISC-FW long pole 179.72->183.64 (+3.9), NCRISC-KERNEL 144.53->150.53 (+6.0). Clear structural regression on a refuted premise -> REVERTED. Device kernel+host restored to pristine HEAD (md5 e3fefb11 re-verified, ms_view 195.24, bin=e447f26c64546156).</p>
     <p class='iter-build'><code>on</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-119/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-119/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-119/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-119/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-119)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1263,7 +1336,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Blend Track 1b: CHEAP microblock ILP — single mask-scan compacts covered microblocks into adjacent pairs; C=2 stage-interleaved dependent chain (power/exp/alpha/RGBT issued across BOTH independent microblocks) hides SFPU op-latency stalls, with NO DR_SCR spill (every intermediate stays LREG-resident; per-pair fallback to the single-chain form when only one of the pair is covered, so no wasted SFPU work).</p><p class='reason'>63.95 >= 50.0 BIT-IDENTICAL (hero md5 e3fefb11); blend SFPU zone makespan 34.11 -> 29.65 ms/view (-4.46 / -13.1%); frame ms_view flat within noise (195.51 avg ~= 195.54 baseline).</p>
     <p class='iter-build'><code>b6d1e03</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-118/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-118/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-118/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-118/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-118/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-118/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-118/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-118/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1279,7 +1352,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-117)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1291,7 +1364,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Revert Track 1 (iter-112) blend phasing — measured pure regression (+11.5 ms/view, bit-identical pixels per iter-115 ablation); restore the per-microblock full-chain (power->exp->alpha->RGBT) blend dispatch</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>97c3031</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-116/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-116/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-116/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-116/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-116/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-116/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-116/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-116/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1307,7 +1380,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-115)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1319,7 +1392,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Sort Stage 2: blendrec[g] read once per gaussian in the bucket fill (kills the random per-pair re-read); sort reads its tile bucket coalesced (materialize in-place L1 permute, iter 113)</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>7f71e2c</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-114/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-114/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-114/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-114/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-114/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-114/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-114/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-114/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1333,7 +1406,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Sort Stage 1: delete materialize DRAM scatter for in-budget tiles (in-place L1 permute + emit)</p><p class='reason'>63.95 >= 50.0</p>
     <p class='iter-build'><code>d33d3da</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-113/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-113/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-113/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-113/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-113/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-113/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-113/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-113/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1347,7 +1420,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>Track 1: phase blend dispatch (power/exp/alpha/RGBT) in chunks of ~4 microblocks for SFPU ILP</p><p class='reason'>63.95 >= 60.0</p>
     <p class='iter-build'><code>b46ef22</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-112/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-112/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-112/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-112/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-112/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-112/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-112/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-112/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1361,7 +1434,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>A1: hoist conic (cov->A,B,C) into pfwc; delete per-microblock det/recip/A/B/C recompute in blend; rewrite cull in conic space; invert conic->cov at the cpu_cpp_mb device->host readback boundary so the reference's CPU cull/blend stay raw-cov. Attacks SFPU wall (tile_blend_sfpu ~291k ms).</p><p class='reason'>63.95 >= 60.0</p>
     <p class='iter-build'><code>04c8992</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-111/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-111/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-111/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-111/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-111/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-111/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-111/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-111/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1375,7 +1448,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>A2: coalesce per-subchunk slab load into ceil(L/64) large 2048B-page NoC transfers (was ~4096 64B interleaved reads/subchunk); slab now uses LARGE DRAM interleave page across host sizing + dir + materialize + both readers + mask writer (l1_splat_words unchanged). Root-caused the 16.09dB false-fail to a STALE reference _gsplat_cpu.so (old 64B host + new 2048B JIT kernels); rebuilt it -> hero_vs_ref=63.95dB.</p><p class='reason'>63.95 >= 60.0</p>
     <p class='iter-build'><code>708168f</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-110/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-110/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-110/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-110/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-110/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-110/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-110/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-110/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1389,7 +1462,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>cull bulk L1 slab hand-off (mirror blend reader): delete per-record CB_CULL_COEFF stream, compute reads records straight from bulk CB_BUCKET slab</p><p class='reason'>63.74 >= 63.6</p>
     <p class='iter-build'><code>5a290f8</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-109/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-109/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-109/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-109/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-109/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-109/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-109/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-109/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1403,7 +1476,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>cull thr on SFPU (hw log_no_init); drop NCRISC per-pair soft-float logf</p><p class='reason'>63.74 >= 40.0</p>
     <p class='iter-build'><code>b69639a</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-108/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-108/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-108/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-108/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-108/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-108/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-108/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-108/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1417,7 +1490,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>M5: blend transmittance saturation early-out (per-microblock T<eps skip via tile_regs_commit handshake + non-zeroing release; runtime knobs BLEND_T_EPS=1/256, BLEND_T_PERIOD=512 with 0=off). 244.7ms@63.95dB vs 246@63.85 baseline; blend SFPU -7%.</p><p class='reason'>63.95 >= 63.6</p>
     <p class='iter-build'><code>a7da175</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-107/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-107/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-107/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-107/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-107/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-107/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-107/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-107/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1431,7 +1504,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>M5: REVERT cull double-buffer prefetch (iters 104-105) to baseline. Tracy proof: tile_l1_cull_rd (NCRISC reader) 27.46ms == tile_mb_mask (TRISC SFPU) 27.47ms -> cull stage already ALU/SFPU-co-limited and fully overlapped; reader is busy-bound (issues every slab read + emits every coeff row + per-gaussian logf), not stall-bound, so double-buffer cannot lower it. Same for blend (reader 12.33 <= SFPU 13.08). Restores 98.4ms baseline.</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>a0e5989</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-106/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-106/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-106/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-106/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-106/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-106/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-106/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-106/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1473,7 +1546,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>M4a: strip dead code from cull/blend (no ABI change) — remove unused blend-reader helpers (read_soa_u32/gather/load_ids/load_mask/pack_blendrec), dead per-tile bucket_meta read in blend reader, dead CB consts (CB_MB_COEFF/CB_BUCKET/CB_BSORT/CB_BMASK in readers+compute), dead host cb_cfg (CB_MB_COEFF, blend+cull CB_BSORT), and debug scaffolding (MB_CULL_SPIN/MB_C1_PAYLOAD_DEBUG/MB_RD_ROW_SUPPRESS_DPRINT defines + dprint include)</p><p class='reason'>63.85 >= 63.6</p>
     <p class='iter-build'><code>2ff081b</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-103/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-103/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-103/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-103/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-103/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-103/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-103/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-103/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1559,7 +1632,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-089)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1685,7 +1758,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-072)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1699,7 +1772,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-087)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1713,7 +1786,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-086)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1741,7 +1814,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-084)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1769,7 +1842,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-081)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1811,7 +1884,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-080)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1825,7 +1898,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-079)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1865,7 +1938,7 @@ document.addEventListener('keydown', function (e) {
     <p class='idea-desc'>mat: sc0 overflow tiles use l1 bulk not blendrec</p><p class='reason'>63.63 >= 63.6; ms_view -2.0%; materialize_ms ~21/view</p>
     <p class='iter-build'><code>b6397f7</code></p>
 
-    <p class='iter-tracy'><a href='profiler/ttw-074-tracy/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-074-tracy/render.tracy</code></p>
+    <p class='iter-tracy'><a href='../profiler/ttw-074-tracy/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-074-tracy/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="../metal-screenshots/ttw-074/hero.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-074/hero.png" class="thumb" alt=""></a><a href="../metal-screenshots/ttw-074/hero_diff10.png" class="zoom" target="_blank" rel="noopener"><img src="../metal-screenshots/ttw-074/hero_diff10.png" class="thumb" alt=""></a></div>
 </div>
@@ -1895,7 +1968,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-071)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1909,7 +1982,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-070)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1923,7 +1996,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-069)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1937,7 +2010,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-068)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1951,7 +2024,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-067)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1965,7 +2038,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-065)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1979,7 +2052,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-064)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1993,7 +2066,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-063)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2007,7 +2080,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-062)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2021,7 +2094,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-061)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2035,7 +2108,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-060)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2049,7 +2122,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-059)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2063,7 +2136,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-058)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2077,7 +2150,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-057)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2091,7 +2164,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-056)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2105,7 +2178,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-055)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2119,7 +2192,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-054)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2133,7 +2206,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-053)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2147,7 +2220,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-052)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2161,7 +2234,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-051)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2175,7 +2248,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-050)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2189,7 +2262,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-049)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2203,7 +2276,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-048)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2217,7 +2290,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-047)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2231,7 +2304,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-046)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2245,7 +2318,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-045)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2259,7 +2332,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-044)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2273,7 +2346,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-043)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2287,7 +2360,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-042)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2301,7 +2374,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-041)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2315,7 +2388,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-040)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2329,7 +2402,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-039)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2343,7 +2416,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-038)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2357,7 +2430,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-037)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2371,7 +2444,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-035)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2385,7 +2458,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-034)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2399,7 +2472,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-033)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2413,7 +2486,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-032)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2427,7 +2500,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-031)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2441,7 +2514,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-027)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2455,7 +2528,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-026)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2469,7 +2542,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-024)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2483,7 +2556,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-025)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2497,7 +2570,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-023)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2511,7 +2584,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-022)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2525,7 +2598,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-021)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2539,7 +2612,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-020)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2553,7 +2626,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-017)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2567,7 +2640,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-030)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2581,7 +2654,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-029)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2595,7 +2668,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-028)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2609,7 +2682,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-019)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2623,7 +2696,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-018)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2637,7 +2710,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-016)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2651,7 +2724,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-015)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2665,7 +2738,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-014)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2721,7 +2794,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-013)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2735,7 +2808,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-012)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2749,7 +2822,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-011)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2763,7 +2836,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-010)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2777,7 +2850,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-009)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2791,7 +2864,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-008)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2805,7 +2878,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-007)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2819,7 +2892,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-006)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2833,7 +2906,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-005)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2847,7 +2920,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-004)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2861,7 +2934,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-001)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2875,7 +2948,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-000)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -4697,10 +4770,10 @@ Macro 30-frame benchmark (loaded system, load avg ~8, Cursor at 215% CPU): sum_t
 
 <section>
   <h2>Algorithm snapshot</h2>
-  <p>See <a href='plan.md'>plan.md</a> for the frozen plan,
-  <a href='plan-amendment-002-tt-emulator-port.md'>plan-amendment-002-tt-emulator-port.md</a>
+  <p>See <a href='../plan.md'>plan.md</a> for the frozen plan,
+  <a href='../plan-amendment-002-tt-emulator-port.md'>plan-amendment-002-tt-emulator-port.md</a>
   for the TT port architecture, and
-  <a href='microblock-cpu-spec.md'>microblock-cpu-spec.md</a> for the microblock
+  <a href='../microblock-cpu-spec.md'>microblock-cpu-spec.md</a> for the microblock
   binning contract.</p>
   <ul>
     <li><b>cpu</b> (numpy): per-tile-per-pixel <code>alpha_blend</code>. Algorithm
@@ -4730,5 +4803,17 @@ Macro 30-frame benchmark (loaded system, load avg ~8, Cursor at 215% CPU): sum_t
 </section>
 
 <div id='lightbox'><img src='' alt='enlarged screenshot'></div>
+<div id='viewer'>
+  <div class='vw-bar'>
+    <label><input type='radio' name='vw-mode' value='ref'> ref</label>
+    <label><input type='radio' name='vw-mode' value='cand'> candidate</label>
+    <label><input type='radio' name='vw-mode' value='diff'> diff</label>
+    <label><input type='radio' name='vw-mode' value='split'> split</label>
+    <span>ref: <code class='vw-ref-name'></code></span>
+    <button type='button' class='vw-close'>close (Esc)</button>
+  </div>
+  <div class='vw-stage'><img class='vw-base' alt='viewer image'><img class='vw-over' alt='reference'><div class='vw-line'></div></div>
+  <div class='vw-hint'>split: ref left, candidate right; drag the line (all the way left = whole candidate). Keys 1-4 switch, arrows move the line.</div>
+</div>
 </body>
 </html>

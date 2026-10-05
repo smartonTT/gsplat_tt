@@ -27,8 +27,9 @@ Checks
 
   8. Device screenshot: every ttw iter > 197 has a complete device_screenshot
      (hero + diff files on disk, PSNR, md5, commit/config, visual-check note);
-     legacy iters 160-197 may instead be screenshot_backfill_pending and must
-     render as a red placeholder (opt/ttw/ITERATION_CHECKLIST.md).
+     PSNR and diff name the same reference and are recomputed from the images;
+     older iters without one predate the rule and show no placeholder
+     (opt/ttw/ITERATION_CHECKLIST.md).
 
 Usage:  python3 opt/validate_report.py   (exit 0 = valid, non-zero = invalid)
 """
@@ -65,7 +66,10 @@ def _max_ttw_iter(rows: list[dict]) -> int | None:
     return max(nums) if nums else None
 
 
-_IMG_SRC_RE = re.compile(r'<img\b[^>]*?\bsrc="([^"]+)"')
+_IMG_SRC_RE = re.compile(r'<img\b[^>]*?\bsrc="([^"]+)"|\bdata-img-(?:ref|cand|diff)="([^"]+)"')
+_EXTERNAL_RE = re.compile(
+    r'<script\b[^>]*\bsrc=|<link\b[^>]*\bstylesheet|@import|url\(\s*[\'"]?(?:https?:)?//'
+    r'|<(?:img|iframe|video|audio|source)\b[^>]*\bsrc=["\'](?:https?:)?//', re.I)
 
 
 def broken_img_srcs(paths: tuple[Path, ...] = (REPORT_HTML, br.REPORT_HTML_TTW)) -> list[str]:
@@ -75,11 +79,42 @@ def broken_img_srcs(paths: tuple[Path, ...] = (REPORT_HTML, br.REPORT_HTML_TTW))
         if not p.exists():
             out.append(f"{p}: file missing")
             continue
-        for src in _IMG_SRC_RE.findall(p.read_text(errors="replace")):
+        for m in _IMG_SRC_RE.findall(p.read_text(errors="replace")):
+            src = m[0] or m[1]
             if re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:", src):  # data:, http:, ...
                 continue
             if not (p.parent / src.split("#")[0].split("?")[0]).is_file():
                 out.append(f"{p.parent.name}/{p.name}: {src}")
+    return out
+
+
+_HREF_RE = re.compile(r"""\bhref=(["'])(.*?)\1""")
+
+
+def mirror_broken_hrefs() -> list[str]:
+    """Relative hrefs that resolve from opt/REPORT.html but not from the opt/ttw/ mirror."""
+    if not (REPORT_HTML.exists() and br.REPORT_HTML_TTW.exists()):
+        return []
+    def rel(p: Path) -> list[str]:
+        return [h for _, h in _HREF_RE.findall(p.read_text(errors="replace"))
+                if h and not re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*:|#|/", h)]
+    mirror_dir = br.REPORT_HTML_TTW.parent
+    out = []
+    for h in rel(br.REPORT_HTML_TTW):
+        path = h.split("#")[0].split("?")[0]
+        as_main = path[3:] if path.startswith("../") else path
+        if not (mirror_dir / path).exists() and (OPT_DIR / as_main).exists():
+            out.append(h)
+    return out
+
+
+def external_loads(paths: tuple[Path, ...] = (REPORT_HTML, br.REPORT_HTML_TTW)) -> list[str]:
+    """'<file>: <tag>' for every script, stylesheet or image loaded from outside the file tree."""
+    out = []
+    for p in paths:
+        if p.exists():
+            out.extend(f"{p.parent.name}/{p.name}: {m.group(0)[:80]}"
+                       for m in _EXTERNAL_RE.finditer(p.read_text(errors="replace")))
     return out
 
 
@@ -279,33 +314,38 @@ def main() -> int:
 
         # --- 8. Device screenshot on every iteration (user, 2026-10-05) -----
         # Iters > br.SCREENSHOT_REQUIRED_AFTER need a complete device_screenshot
-        # (hero + diff files, PSNR, md5, commit/config, visual-check note).
-        # Legacy iters may carry screenshot_backfill_pending, which must render
-        # as a red placeholder, never silently.
-        errors, pending = br.check_device_screenshots(ttw_rows)
+        # (hero + diff files, PSNR, md5, commit/config, visual-check note). PSNR
+        # and diff must name the same reference, and both are recomputed from
+        # the images. Older iters without one predate the rule: no placeholder.
+        errors = br.check_device_screenshots(ttw_rows, pixels=True)
         if errors:
             raise Invalid(
                 f"{len(errors)} device screenshot problem(s) "
                 f"(opt/ttw/ITERATION_CHECKLIST.md): " + "; ".join(errors)
             )
-        if pending and html.count(SHOT_PENDING_MARKER) < len(pending):
-            raise Invalid(
-                f"{len(pending)} iters are screenshot_backfill_pending but REPORT.html "
-                f"shows only {html.count(SHOT_PENDING_MARKER)} '{SHOT_PENDING_MARKER}' "
-                f"placeholders"
-            )
-        if pending:
-            print(f"  [WARN] {len(pending)} legacy iters still screenshot_backfill_pending: {pending}")
+        if SHOT_PENDING_MARKER in html:
+            raise Invalid(f"REPORT.html still shows the cancelled '{SHOT_PENDING_MARKER}' placeholder")
+        n_shots = sum(1 for r in ttw_rows if r.get("device_screenshot"))
         checks.append(
             f"every ttw iter > {br.SCREENSHOT_REQUIRED_AFTER} has a device screenshot + visual check; "
-            f"{len(pending)} legacy iters shown as backfill pending"
+            f"{n_shots} screenshots: PSNR and diff recomputed against the one named reference"
         )
 
-        # 6. Every <img src> in both REPORT.html and the opt/ttw/ mirror resolves.
+        # 6. Every <img src> and viewer image path in REPORT.html and the
+        # opt/ttw/ mirror resolves; nothing loads from outside the repo.
         broken = broken_img_srcs()
         if broken:
             raise Invalid(f"{len(broken)} img src(s) do not resolve to a file: " + "; ".join(broken[:10]))
-        checks.append("every img src in REPORT.html and ttw/REPORT.html resolves to a file")
+        mirror_bad = mirror_broken_hrefs()
+        if mirror_bad:
+            raise Invalid(f"{len(mirror_bad)} href(s) resolve in REPORT.html but not in the ttw/ mirror: "
+                          + "; ".join(mirror_bad[:10]))
+        external = external_loads()
+        if external:
+            raise Invalid(f"{len(external)} external load(s) in the report: " + "; ".join(external[:10]))
+        checks.append("every img src and viewer path in REPORT.html and ttw/REPORT.html resolves; "
+                      "mirror hrefs resolve like the main report's; "
+                      "no external scripts, CSS or images")
 
     except Invalid as e:
         for c in checks:
