@@ -13,7 +13,7 @@ run() {  # tag [ENV=V ...]
   local tag=r$r-$1; shift
   echo "=== $tag $(cut -c1-7 SHA) $* $(date +%T)"
   rm -rf tmp/t198-dump-$tag
-  env "$@" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t198 timeout 330 \
+  env "$@" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t198 timeout ${RUN_TO:-120} \
     python3 render/run.py --no-ref --iter-dir t198-$tag --dump-views t198-dump-$tag > $S/run-$tag.log 2>&1
   local rc=$?
   echo "run rc=$rc"
