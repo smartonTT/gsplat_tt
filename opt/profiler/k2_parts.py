@@ -33,7 +33,11 @@ CYC_MS = 1350.0 * 1000.0
 DATA, ZONE, TYPE = 6, 10, 11
 BL = 2e-3 * CYC_MS  # barrier latency, cycles
 PARTS = ["k2p_setup", "k2p_riss", "k2p_rdw", "k2p_wiss", "k2p_wfl", "k2p_pairs", "k2p_rows",
-         "k2p_wbar", "k2p_tot"]
+         "k2p_wbar", "k2p_tot",
+         # GSPLAT_TT_K2_TRISC=1 only (task #291); pg* are pages, not cycles.
+         "k2p_jprep", "k2p_own", "k2p_jw0", "k2p_jw1", "k2p_jwb", "k2p_ts0", "k2p_tr0",
+         "k2p_ts1", "k2p_tr1"]
+PAGES = ["k2p_pg0", "k2p_pg1", "k2p_pgown"]
 
 
 def main():
@@ -86,6 +90,15 @@ def main():
 
         for k in PARTS:
             row(k, lambda m, k=k: ms(val[m][k]))
+        for k in PAGES:
+            row(k + " (pages/view)", lambda m, k=k: val[m][k] / nv)
+        if any(val[m]["k2p_pg0"] for m in movers):
+            # Cycles per page of each worker (sums over all movers).
+            def cpp(c, p):
+                cs, ps = sum(val[m][c] for m in movers), sum(val[m][p] for m in movers)
+                return cs / ps if ps else 0.0
+            print(f"cycles/page: mover own {cpp('k2p_own', 'k2p_pgown'):.0f}, "
+                  f"TRISC job0 {cpp('k2p_tr0', 'k2p_pg0'):.0f}, TRISC job1 {cpp('k2p_tr1', 'k2p_pg1'):.0f}")
         noc = ["k2p_riss", "k2p_rdw", "k2p_wiss", "k2p_wfl"]
         row("loop NoC (riss+rdw+wiss+wfl)", lambda m: ms(sum(val[m][k] for k in noc)))
         row("loop compute (pairs - NoC)", lambda m: ms(val[m]["k2p_pairs"] - sum(val[m][k] for k in noc)))

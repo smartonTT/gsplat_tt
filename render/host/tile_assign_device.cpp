@@ -507,13 +507,21 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
     const bool trisc = diet && ctx.dual && et != nullptr && std::atoi(et) != 0;
     if (trisc) {
         defines["K2_TRISC"] = "1";
+        // Task #291: job page split in permille of each mover's range, job 0
+        // (TRISC 0 / 2) and job 1 (TRISC 1, both movers); the mover keeps the
+        // rest. GSPLAT_TT_K2_TJ0 / _TJ1 override the kernel's defaults.
+        for (auto [env, def] : {std::pair{"GSPLAT_TT_K2_TJ0", "K2_TJ0"}, std::pair{"GSPLAT_TT_K2_TJ1", "K2_TJ1"}})
+            if (const char* v = std::getenv(env); v != nullptr && *v != 0)
+                defines[def] = std::to_string(std::atoi(v)) + "u";
         for (uint32_t id : {k2_trisc::CB_JOB, k2_trisc::CB_JOB + TA_MOVER0_CB_OFFSET}) {
             CircularBufferConfig c(k2_trisc::CB_BYTES, {{id, DataFormat::UInt32}});
             c.set_page_size(id, k2_trisc::CB_BYTES);
             CreateCircularBuffer(program, cores, c);
         }
+        std::map<std::string, std::string> cdef;
+        if (defines.count("K2_PROF")) cdef["K2_PROF"] = "1";
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/k2_trisc_compute.cpp", cores,
-                     ComputeConfig{});
+                     ComputeConfig{.defines = cdef});
     }
     ctx.k2s = CreateKernel(program,
                            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter_seg.cpp",

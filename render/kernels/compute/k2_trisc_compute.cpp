@@ -19,6 +19,11 @@ using namespace k2_trisc;
 // Orders this RISC's stores and invalidates its L1 read cache (Blackhole).
 inline void l1_fence() { asm volatile("fence" ::: "memory"); }
 
+#ifndef K2_PROF
+#define K2_PROF 0
+#endif
+inline uint32_t now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
+
 void run_job(uint32_t w) {
     volatile uint32_t* h = reinterpret_cast<volatile uint32_t*>(w);
     for (;;) {
@@ -27,6 +32,9 @@ void run_job(uint32_t w) {
         for (uint32_t i = 0; i < 8u; i++) asm volatile("nop");
     }
     l1_fence();
+#if K2_PROF
+    const uint32_t ts = now();
+#endif
     const uint32_t pg0 = h[H_PG0], npg = h[H_NPG], c = h[H_C], lo = h[H_LO];
     const uint32_t n_in = h[H_NIN], P_pub = h[H_PPUB], tiles_x = h[H_TX], nseg = h[H_NSEG];
     const auto tab = reinterpret_cast<const volatile uint32_t*>(h[H_TAB]);
@@ -41,6 +49,10 @@ void run_job(uint32_t w) {
                             reinterpret_cast<uint32_t*>(w + TID_OFF)};
         pfwc_fuse::emit_pairs_diet_from<true>(tab, nseg, P_pub, tiles_x, pg0, npg, c, lo, io, cnt);
     }
+#if K2_PROF
+    h[H_TS] = ts;
+    h[H_TE] = now();
+#endif
     l1_fence();  // pair pages and counts are in L1 before DONE
     h[H_DONE] = MAGIC;
 }

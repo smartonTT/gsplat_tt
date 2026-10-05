@@ -78,7 +78,11 @@
 #define K2_PROF 0
 #endif
 #if K2_PROF
-enum { K2P_SETUP, K2P_RISS, K2P_RDW, K2P_WISS, K2P_WFL, K2P_PAIRS, K2P_ROWS, K2P_WBAR, K2P_TOT, K2P_N };
+enum { K2P_SETUP, K2P_RISS, K2P_RDW, K2P_WISS, K2P_WFL, K2P_PAIRS, K2P_ROWS, K2P_WBAR, K2P_TOT,
+       // K2_TRISC only (task #291): job prep, own part, DONE waits, write-back,
+       // per job TRISC start delay (post -> GO seen) and run time, pages.
+       K2P_JPREP, K2P_OWN, K2P_JW0, K2P_JW1, K2P_JWB, K2P_TS0, K2P_TR0, K2P_TS1, K2P_TR1,
+       K2P_PG0, K2P_PG1, K2P_PGOWN, K2P_N };
 uint32_t g_k2p[K2P_N];
 #define K2P_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define K2P_T0(v) const uint32_t v = K2P_NOW()
@@ -301,13 +305,35 @@ void kernel_main() {
                     lo[2] = lo[0];
                 }
             }
-            for (uint32_t j = 0; j < 2; j++) job_post(j, st[j], n[j], c[j], lo[j], n_in[j], n[j] ? span : 0u);
+#if K2_PROF
+            uint32_t t_post[2];
+#endif
+            for (uint32_t j = 0; j < 2; j++) {
+                job_post(j, st[j], n[j], c[j], lo[j], n_in[j], n[j] ? span : 0u);
+#if K2_PROF
+                t_post[j] = K2P_NOW();
+#endif
+            }
+            K2P_ADD(K2P_JPREP, t_pairs);
+            K2P_T0(t_own);
             if (pg0 + npg > st[2])
                 pfwc_fuse::emit_pairs_diet_from<true>(tab, nseg, P_pub, tiles_x, st[2], pg0 + npg - st[2],
                                                       c[2], lo[2], io, cnt);
+            K2P_ADD(K2P_OWN, t_own);
             K2P_ADD(K2P_PAIRS, t_pairs);
             for (uint32_t j = 0; j < 2; j++) {
+                K2P_T0(t_w);
                 const uint32_t w = job_wait(j);
+#if K2_PROF
+                K2P_ADD(K2P_JW0 + j, t_w);
+                K2P_T0(t_wb);
+                if (n[j] != 0) {
+                    auto h = reinterpret_cast<volatile uint32_t*>(w);
+                    g_k2p[K2P_TS0 + 2 * j] += h[k2_trisc::H_TS] - t_post[j];
+                    g_k2p[K2P_TR0 + 2 * j] += h[k2_trisc::H_TE] - h[k2_trisc::H_TS];
+                    g_k2p[K2P_PG0 + j] += n[j];
+                }
+#endif
                 for (uint32_t q = 0; q < n[j]; q++) {
                     noc_async_write(w + k2_trisc::GID_OFF + q * PB, get_noc_addr(st[j] + q, gids_acc), PB);
                     noc_async_write(w + k2_trisc::TID_OFF + q * PB, get_noc_addr(st[j] + q, tids_acc), PB);
@@ -316,8 +342,14 @@ void kernel_main() {
                     auto jc = reinterpret_cast<volatile uint32_t*>(w + k2_trisc::CNT_OFF);
                     for (uint32_t t = 0; t < span; t++) cnt[t] += jc[t];
                 }
+                K2P_ADD(K2P_JWB, t_wb);
             }
+            K2P_T0(t_fl);
             noc_async_writes_flushed();
+            K2P_ADD(K2P_JWB, t_fl);
+#if K2_PROF
+            g_k2p[K2P_PGOWN] += pg0 + npg - st[2];
+#endif
             for (uint32_t j = 0; j < 2; j++) job_clear(j);
 #else
             pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
@@ -403,5 +435,19 @@ void kernel_main() {
     DeviceTimestampedData("k2p_wbar", g_k2p[K2P_WBAR]);
     DeviceTimestampedData("k2p_tot", g_k2p[K2P_TOT]);
     DeviceTimestampedData("k2p_npg", npg);
+#if K2_TRISC
+    DeviceTimestampedData("k2p_jprep", g_k2p[K2P_JPREP]);
+    DeviceTimestampedData("k2p_own", g_k2p[K2P_OWN]);
+    DeviceTimestampedData("k2p_jw0", g_k2p[K2P_JW0]);
+    DeviceTimestampedData("k2p_jw1", g_k2p[K2P_JW1]);
+    DeviceTimestampedData("k2p_jwb", g_k2p[K2P_JWB]);
+    DeviceTimestampedData("k2p_ts0", g_k2p[K2P_TS0]);
+    DeviceTimestampedData("k2p_tr0", g_k2p[K2P_TR0]);
+    DeviceTimestampedData("k2p_ts1", g_k2p[K2P_TS1]);
+    DeviceTimestampedData("k2p_tr1", g_k2p[K2P_TR1]);
+    DeviceTimestampedData("k2p_pg0", g_k2p[K2P_PG0]);
+    DeviceTimestampedData("k2p_pg1", g_k2p[K2P_PG1]);
+    DeviceTimestampedData("k2p_pgown", g_k2p[K2P_PGOWN]);
+#endif
 #endif
 }

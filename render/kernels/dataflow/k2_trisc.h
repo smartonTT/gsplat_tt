@@ -26,7 +26,8 @@ namespace k2_trisc {
 
 constexpr uint32_t CB_JOB = 1;  // + 16 (TA_CB_OFFSET) for BRISC
 constexpr uint32_t MAGIC = 0x274A0B51u, MAGIC2 = 0x9C3D1E27u;
-enum : uint32_t { H_GO, H_GO2, H_DONE, H_PG0, H_NPG, H_C, H_LO, H_NIN, H_PPUB, H_TX, H_NSEG, H_TAB, H_SPAN };
+enum : uint32_t { H_GO, H_GO2, H_DONE, H_PG0, H_NPG, H_C, H_LO, H_NIN, H_PPUB, H_TX, H_NSEG, H_TAB, H_SPAN, H_TS, H_TE };
+// H_TS / H_TE: TRISC wall clock at GO seen / before DONE (K2_PROF builds only).
 constexpr uint32_t PB = 64;
 constexpr uint32_t FOLD_TILES = 1024;  // == K2_FOLD_TILES
 constexpr uint32_t CNT_OFF = PB;
