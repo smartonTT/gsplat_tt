@@ -1,0 +1,198 @@
+{
+ "ref|f32": {
+  "vs_ref": 65.76,
+  "vs_golden": 41.77,
+  "vs_golden_pre156": 47.48,
+  "mean_diff_vs_ref": 0.017,
+  "records": 192950
+ },
+ "ref|bf16": {
+  "vs_ref": 57.02,
+  "vs_golden": 41.75,
+  "vs_golden_pre156": 47.78,
+  "mean_diff_vs_ref": 0.129,
+  "records": 192950
+ },
+ "ref+floor255|f32": {
+  "vs_ref": 42.89,
+  "vs_golden": 47.04,
+  "vs_golden_pre156": 41.56,
+  "mean_diff_vs_ref": -0.548,
+  "records": 164538
+ },
+ "ref+floor255|bf16": {
+  "vs_ref": 42.91,
+  "vs_golden": 47.31,
+  "vs_golden_pre156": 41.64,
+  "mean_diff_vs_ref": -0.437,
+  "records": 164538
+ },
+ "ref+maskonly|f32": {
+  "vs_ref": 55.14,
+  "vs_golden": 42.26,
+  "vs_golden_pre156": 47.0,
+  "mean_diff_vs_ref": -0.119,
+  "records": 164538
+ },
+ "ref+maskonly|bf16": {
+  "vs_ref": 54.33,
+  "vs_golden": 42.26,
+  "vs_golden_pre156": 47.26,
+  "mean_diff_vs_ref": -0.008,
+  "records": 164538
+ },
+ "ref+Tdev|f32": {
+  "vs_ref": 66.63,
+  "vs_golden": 41.77,
+  "vs_golden_pre156": 47.47,
+  "mean_diff_vs_ref": 0.014,
+  "records": 192950
+ },
+ "ref+Tdev|bf16": {
+  "vs_ref": 57.13,
+  "vs_golden": 41.75,
+  "vs_golden_pre156": 47.78,
+  "mean_diff_vs_ref": 0.125,
+  "records": 192950
+ },
+ "ref+u16|f32": {
+  "vs_ref": 65.74,
+  "vs_golden": 41.77,
+  "vs_golden_pre156": 47.48,
+  "mean_diff_vs_ref": 0.017,
+  "records": 192949
+ },
+ "ref+u16|bf16": {
+  "vs_ref": 57.01,
+  "vs_golden": 41.75,
+  "vs_golden_pre156": 47.78,
+  "mean_diff_vs_ref": 0.129,
+  "records": 192949
+ },
+ "dev_pre156|f32": {
+  "vs_ref": 66.61,
+  "vs_golden": 41.77,
+  "vs_golden_pre156": 47.47,
+  "mean_diff_vs_ref": 0.014,
+  "records": 192949
+ },
+ "dev_pre156|bf16": {
+  "vs_ref": 57.13,
+  "vs_golden": 41.75,
+  "vs_golden_pre156": 47.78,
+  "mean_diff_vs_ref": 0.125,
+  "records": 192949
+ },
+ "dev|f32": {
+  "vs_ref": 42.89,
+  "vs_golden": 47.03,
+  "vs_golden_pre156": 41.55,
+  "mean_diff_vs_ref": -0.55,
+  "records": 164532
+ },
+ "dev|bf16": {
+  "vs_ref": 42.91,
+  "vs_golden": 47.31,
+  "vs_golden_pre156": 41.64,
+  "mean_diff_vs_ref": -0.439,
+  "records": 164532
+ },
+ "dev-Tdev|f32": {
+  "vs_ref": 42.89,
+  "vs_golden": 47.04,
+  "vs_golden_pre156": 41.56,
+  "mean_diff_vs_ref": -0.548,
+  "records": 164532
+ },
+ "dev-Tdev|bf16": {
+  "vs_ref": 42.91,
+  "vs_golden": 47.31,
+  "vs_golden_pre156": 41.64,
+  "mean_diff_vs_ref": -0.437,
+  "records": 164532
+ },
+ "dev-u16|f32": {
+  "vs_ref": 42.89,
+  "vs_golden": 47.03,
+  "vs_golden_pre156": 41.56,
+  "mean_diff_vs_ref": -0.55,
+  "records": 164538
+ },
+ "dev-u16|bf16": {
+  "vs_ref": 42.91,
+  "vs_golden": 47.31,
+  "vs_golden_pre156": 41.64,
+  "mean_diff_vs_ref": -0.439,
+  "records": 164538
+ },
+ "dev_floor1024|f32": {
+  "vs_ref": 52.11,
+  "vs_golden": 43.21,
+  "vs_golden_pre156": 46.23,
+  "mean_diff_vs_ref": -0.129,
+  "records": 178943
+ },
+ "dev_floor1024|bf16": {
+  "vs_ref": 51.78,
+  "vs_golden": 43.2,
+  "vs_golden_pre156": 46.44,
+  "mean_diff_vs_ref": -0.018,
+  "records": 178943
+ },
+ "dev_floor4096|f32": {
+  "vs_ref": 59.73,
+  "vs_golden": 42.08,
+  "vs_golden_pre156": 47.26,
+  "mean_diff_vs_ref": -0.02,
+  "records": 187483
+ },
+ "dev_floor4096|bf16": {
+  "vs_ref": 56.65,
+  "vs_golden": 42.06,
+  "vs_golden_pre156": 47.55,
+  "mean_diff_vs_ref": 0.091,
+  "records": 187483
+ },
+ "dev_Teps1024|f32": {
+  "vs_ref": 42.89,
+  "vs_golden": 47.04,
+  "vs_golden_pre156": 41.56,
+  "mean_diff_vs_ref": -0.548,
+  "records": 164532
+ },
+ "dev_Teps1024|bf16": {
+  "vs_ref": 42.91,
+  "vs_golden": 47.31,
+  "vs_golden_pre156": 41.64,
+  "mean_diff_vs_ref": -0.438,
+  "records": 164532
+ },
+ "dev_Teps1e-4|f32": {
+  "vs_ref": 42.89,
+  "vs_golden": 47.04,
+  "vs_golden_pre156": 41.56,
+  "mean_diff_vs_ref": -0.548,
+  "records": 164532
+ },
+ "dev_Teps1e-4|bf16": {
+  "vs_ref": 42.91,
+  "vs_golden": 47.31,
+  "vs_golden_pre156": 41.64,
+  "mean_diff_vs_ref": -0.437,
+  "records": 164532
+ },
+ "pre156_Teps1e-4|f32": {
+  "vs_ref": 65.74,
+  "vs_golden": 41.77,
+  "vs_golden_pre156": 47.48,
+  "mean_diff_vs_ref": 0.017,
+  "records": 192949
+ },
+ "pre156_Teps1e-4|bf16": {
+  "vs_ref": 57.01,
+  "vs_golden": 41.75,
+  "vs_golden_pre156": 47.78,
+  "mean_diff_vs_ref": 0.129,
+  "records": 192949
+ }
+}

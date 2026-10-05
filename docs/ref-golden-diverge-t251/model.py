@@ -5,7 +5,7 @@ gaussians; projection is shared by both paths). Each variant toggles one device
 approximation. Output: 8-bit PSNR of every variant vs benchmarks/reference_v2/hero.png.
 Run: python3 docs/ref-golden-diverge-t251/model.py [outdir]
 """
-import json, sys, time
+import json, os, sys, time
 import numpy as np, torch
 from PIL import Image
 
@@ -33,10 +33,16 @@ V = {
     'pre156_Teps1e-4': (F16K, 0.0, 'dev', 1e-4, 1),
 }
 
-p = np.load(FX + 'project_outputs.npz'); b = np.load(FX + 'blend_inputs.npz')
+# argv[2]: hero-view inputs from dump_inputs.py. The tests/fixtures/hero npz files are a
+# different view (their blend_output.npy is 12.3 dB vs reference_v2), so do not use them.
+b = np.load(sys.argv[2])
 m2 = b['means_2d'].astype(np.float32); cov = b['covs_2d'].astype(np.float32)
-op = b['opacities'].astype(np.float32); col = b['colors'].astype(np.float32)
-dep = p['depths'].astype(np.float32); rad = p['radii'].astype(np.float32)
+op = b['opacities'].astype(np.float32).reshape(-1); col = b['colors'].astype(np.float32)
+dep = b['depths'].astype(np.float32); rad = b['radii'].astype(np.float32)
+if rad.ndim == 1: rad = np.stack([rad, rad], 1)
+ONLY = [x for x in os.environ.get('T251_VARIANTS', '').split(',') if x]
+if ONLY: V = {k: V[k] for k in ONLY}
+TILES = [int(x) for x in os.environ.get('T251_TILES', '').split(',') if x]
 a, bb, c = cov[:, 0, 0], cov[:, 0, 1], cov[:, 1, 1]
 det = np.maximum(a * c - bb * bb, np.float32(1e-6))
 ia, ib, ic = c / det, -bb / det, a / det
@@ -68,7 +74,7 @@ nrec = {n: 0 for n in V}
 T0 = time.time()
 for t in range(NT * NT):
     s, e = starts[t], starts[t + 1]
-    if s == e:
+    if s == e or (TILES and t not in TILES):
         continue
     g = gid[s:e]; ty, tx = divmod(t, NT)
     px = torch.from_numpy((tx * TS + xx + 0.5).reshape(-1).astype(np.float32))
@@ -125,6 +131,12 @@ def u8_bf16(x):
     xb = torch.from_numpy(x).to(torch.bfloat16).float().numpy()
     return (np.clip(xb, 0, 1) * 255).astype(np.uint8).astype(np.float64)
 res = {}
+if TILES:
+    msk = np.zeros((H, W), bool)
+    for t in TILES:
+        ty, tx = divmod(t, NT); msk[ty*TS:(ty+1)*TS, tx*TS:(tx+1)*TS] = True
+    ref, gold, gold_pre = ref[msk], gold[msk], gold_pre[msk]
+    img = {n: img[n][msk] for n in img}
 for n in V:
     for oq, f in (('f32', u8_f32), ('bf16', u8_bf16)):
         im = f(img[n])
