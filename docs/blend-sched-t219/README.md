@@ -66,3 +66,41 @@ views; `GSPLAT_TT_BLEND_SCHED=0/1/2` in the env. TRISC1 text is +192 B at level 
 5. Optional, same session: TRISC1 perf counters around one view's records loop
    (SFPU_INSTRUCTION, FPU_INSTRN_AVAILABLE_1, THREAD_STALLS_1; see
    `tt-llk/tests/helpers/include/counters.h`) to get the SFPU busy share directly.
+
+## Device gate (task #229, measured)
+yyzo-bh-07 (Blackhole p100a), bicycle 30 views 1024x1024, one sync + build of 7f0850d (tip
+356f66e + drivers), each step under `ttp lock p100`. Drivers and raw logs: `dev-t229/`
+(`drive.sh`, `remote_time.sh`, `remote_tracy.sh`, `verify.sh`, `out/`).
+
+md5: all 11 untraced arms (smoke L1/L2 + 3 rounds x L0/L1/L2) give 30/30 views identical to
+`md5-r82new.txt` (46a725ab). The smoke ran at the default kernel config size (no TT_FATAL).
+
+Untraced, 3 rounds, order rotated (0 1 2 / 1 2 0 / 2 0 1), avg_frame_ms per view:
+
+| level | r1 | r2 | r3 | mean | STAGES blend |
+|---|---|---|---|---|---|
+| 0 (compiled) | 13.609 | 13.665 | 13.620 | 13.631 | 9.148 |
+| 1 (F, raw-TTI) | 13.648 | 13.635 | 13.676 | 13.653 | 9.199 |
+| 2 (A2, F + replay) | 12.602 | 12.609 | 12.638 | 12.616 | 8.168 |
+
+Paired: 1 vs 0 +0.022 (+0.039 / -0.030 / +0.056), 2 vs 0 -1.015 (-1.007 / -1.056 / -0.982),
+2 vs 1 -1.037 ms/view. Level 2 = 79.3 FPS.
+
+Tracy, 30 views each at `GSPLAT_TT_KCFG_EXTRA_KB=32` (the traced runs are slower in wall time; read
+the device numbers): blend program (mat+blend segment) busy ms/view 8.539 / 8.610 / 7.565 for levels
+0 / 1 / 2; `tile_blend_sfpu` makespan 5.381 / 5.444 / 4.413 ms/view; `tile_blend_load` 5.291 / 5.345 /
+4.343. pfwc, K2 and sort_ol are unchanged (2.33 / 0.98 / 1.44).
+
+Reading: level 1 is about 0, so the MAD->use stall is not what limits the bodies. The stall is on
+the RISC side: TRISC1 cannot push instructions fast enough. Level 2 cuts the pushed instructions
+per body about in half (31-36 vs 60 single, 63-72 vs 106 pair) and saves -0.97 ms/view of blend
+SFPU makespan. That is above the #205 model's best-supported range (+0.55 to +0.84) and inside
+its full range (+0.35 to +1.21).
+
+Decision: KEEP level 2. `GSPLAT_TT_BLEND_SCHED` defaults to 2 in `render/host/blend_device.cpp`
+(=0 compiled bodies, =1 F).
+
+Default verify on 29c288b (default flipped to 2; `verify.sh`, 2 rounds, order swapped): default
+12.699 / 12.630, mean 12.665 ms/view (79.0 FPS); `GSPLAT_TT_BLEND_SCHED=0` 13.691 / 13.603, mean
+13.647. Paired -0.982 ms/view. All 4 arms 30/30 views md5-identical (46a725ab). Tracy of level 2:
+`opt/profiler/ttw-196/render.tracy` (iter 196).
