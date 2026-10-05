@@ -1,0 +1,16 @@
+views=29 (ms from first mat start on any core, mean over views)
+cores                         110.000
+mat_end_max                     2.989
+mat_end_mean                    2.513
+blend_start_min                 2.243
+blend_start_mean                2.513
+blend_start_max                 2.989
+wait_mat_to_blend_mean          0.000
+blend_len_mean                  3.654
+blend_len_max                   3.937
+blend_end_max                   6.247
+blend_end_mean                  6.168
+tail_idle_mean                  0.079
+ncrisc_mat_end_max              2.989
+blend_load_start_min            1.759
+corr(mat_end, blend_end)        0.034

@@ -1,0 +1,46 @@
+views=29 (warmup dropped), ms, means over views
+
+[kernel span per program and RISC: mean over cores / max over cores]
+program               BRISC           NCRISC          TRISC_0          TRISC_1          TRISC_2
+pfwc          2.343/  2.626    2.209/  2.473    2.288/  2.588    2.296/  2.595    2.284/  2.584
+k2            0.872/  0.956    0.905/  0.980                -                -                -
+sort_ol       1.290/  1.423    1.341/  1.432    1.233/  1.356    1.234/  1.355    1.233/  1.354
+matblend      6.244/  6.324    6.100/  6.168    6.167/  6.247    6.168/  6.247    6.168/  6.247
+
+[summary]
+pfwc_window                       2.595
+pfwc_tail(max-mean end)           0.300
+k2_window                         0.965
+k2_tail(max-mean end)             0.065
+emit_window                       1.333
+emit_tail(max-mean end)           0.084
+town_window                       1.243
+town_tail(max-mean end)           0.124
+cores                           110.000
+mat_end_mean                      2.513
+mat_end_max                       2.989
+blend_start_mean                  2.513
+blend_start_max                   2.989
+gap_mean                          0.000
+blend_end_mean                    6.168
+blend_end_max                     6.247
+blend_tail(max-mean end)          0.079
+t1_idle_in_mat_mean               2.415
+t1_idle_in_mat_min                2.190
+t1_idle_in_mat_max                2.915
+t1_cull_busy_mean                 0.098
+
+[per-core distribution of per-view means: min / p25 / median / p75 / max]
+mat_start          0.000   0.000   0.000   0.000   0.000
+mat_end            2.391   2.445   2.488   2.551   2.814
+blend_start        2.391   2.445   2.488   2.551   2.814
+blend_end          6.151   6.163   6.169   6.173   6.184
+gap                0.000   0.000   0.000   0.000   0.000
+blend_len          3.353   3.616   3.682   3.725   3.781
+mov_br             2.278   2.369   2.377   2.388   2.450
+mov_nc             2.227   2.438   2.481   2.537   2.766
+t1_idle_mat        2.253   2.334   2.388   2.452   2.750
+t1_busy_mat        0.039   0.089   0.103   0.110   0.136
+batches          139.000 192.379 193.103 196.103 208.621
+math_wait          0.001   0.001   0.001   0.001   0.001
+math_act           2.386   2.439   2.482   2.544   2.806
