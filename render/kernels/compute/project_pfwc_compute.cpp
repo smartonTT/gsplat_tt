@@ -189,6 +189,14 @@ constexpr uint32_t CC_SCRATCH[6] = {
     CB_TMP_CC00, CB_TMP_CC01, CB_TMP_CC02,
     CB_TMP_CC11, CB_TMP_CC12, CB_TMP_CC22};
 
+// Task #207 (GSPLAT_TT_PFWC_WRITER_SPLIT): odd chunks go to the NCRISC
+// writer's output set (writer_pfwc_split.cpp, pfwc_wsplit::odd_cb).
+#ifdef PFWC_WSPLIT
+#define OCB(cb) ((chunk & 1u) ? ((cb) < 32u ? (cb) + 32u : (cb) + 14u) : (cb))
+#else
+#define OCB(cb) (cb)
+#endif
+
 inline void emit_dst(uint32_t idst, uint32_t cb_out) {
     cb_reserve_back(cb_out, 1);
     pack_tile(idst, cb_out);
@@ -660,7 +668,7 @@ void kernel_main() {
             copy_tile(CB_TMP_TZ, 0, 0);
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_DEP);
+            emit_dst(0, OCB(CB_DEP));
             tile_regs_release();
         }
 
@@ -676,7 +684,7 @@ void kernel_main() {
             add_unary_tile(0, cx);
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_M2X);
+            emit_dst(0, OCB(CB_M2X));
 #ifdef PFWC_VIS
             emit_scratch(0, CB_TMP_MX);
 #endif
@@ -694,7 +702,7 @@ void kernel_main() {
             add_unary_tile(0, cy);
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_M2Y);
+            emit_dst(0, OCB(CB_M2Y));
 #ifdef PFWC_VIS
             emit_scratch(0, CB_TMP_MY);
 #endif
@@ -884,9 +892,9 @@ void kernel_main() {
 
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_A);
-            emit_dst(1, CB_B);
-            emit_dst(2, CB_C);
+            emit_dst(0, OCB(CB_A));
+            emit_dst(1, OCB(CB_B));
+            emit_dst(2, OCB(CB_C));
             tile_regs_release();
         }
 
@@ -933,7 +941,7 @@ void kernel_main() {
 
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_RX);
+            emit_dst(0, OCB(CB_RX));
 #ifdef PFWC_VIS
             emit_scratch(0, CB_TMP_RX);
 #endif
@@ -983,7 +991,7 @@ void kernel_main() {
 
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_RY);
+            emit_dst(0, OCB(CB_RY));
 #ifdef PFWC_VIS
             emit_scratch(0, CB_TMP_RY);
 #endif
@@ -1031,8 +1039,8 @@ void kernel_main() {
 
             tile_regs_commit();
             tile_regs_wait();
-            emit_dst(0, CB_TPG);
-            emit_dst(1, CB_AABB);
+            emit_dst(0, OCB(CB_TPG));
+            emit_dst(1, OCB(CB_AABB));
             tile_regs_release();
             cb_pop_front(CB_OP, 1);
             cb_pop_front(CB_TMP_MX, 1);

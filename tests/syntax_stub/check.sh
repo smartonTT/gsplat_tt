@@ -37,6 +37,11 @@ chk "tile_assign_scatter_seg.cpp TA_CB_OFFSET" $DF -DTA_CB_OFFSET=16 render/kern
 chk "tile_assign_scatter_seg.cpp K2_DIET" $DF -DK2_DIET=1 render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "tile_assign_scatter_seg.cpp K2_DIET TA_CB_OFFSET" $DF -DK2_DIET=1 -DTA_CB_OFFSET=16 render/kernels/dataflow/tile_assign_scatter_seg.cpp
 chk "reader_pfwc.cpp PFWC_VIS" $DF -DPFWC_VIS=1 render/kernels/dataflow/reader_pfwc.cpp
+for r in 0 1; do
+  chk "writer_pfwc_split.cpp ROLE $r" $DF -DWSPLIT_ROLE=$r render/kernels/dataflow/writer_pfwc_split.cpp
+  chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_split.cpp
+  chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_STEPCYC" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_STEPCYC=1 render/kernels/dataflow/writer_pfwc_split.cpp
+done
 CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
 chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS" $CP -DPFWC_VIS=1 render/kernels/compute/project_pfwc_compute.cpp
@@ -46,6 +51,7 @@ for tr in TRISC_UNPACK TRISC_MATH TRISC_PACK; do
   chk "sort_ol_town_compute.cpp $tr" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u render/kernels/compute/sort_ol_town_compute.cpp
   chk "sort_ol_town_compute.cpp $tr EMIT_PROF" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DOL_EMIT_PROF=1 render/kernels/compute/sort_ol_town_compute.cpp
 done
+chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC PFWC_WSPLIT" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 render/kernels/compute/project_pfwc_compute.cpp
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
 for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
 PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)

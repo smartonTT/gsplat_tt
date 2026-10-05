@@ -27,6 +27,7 @@
 #include "env_config.h"
 #include "gather_visible.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
+#include "../kernels/dataflow/pfwc_wsplit.h"
 #include "host_profile.h"
 #include "stage_timers.h"
 #include "vis_mode.h"
@@ -188,6 +189,10 @@ struct PfwcDeviceContext {
     KernelHandle freader{};
     KernelHandle fcompute{};
     KernelHandle fwriter{};
+    // Task #207 (GSPLAT_TT_PFWC_WRITER_SPLIT): freader / fwriter are
+    // writer_pfwc_split.cpp (NCRISC / BRISC); its mailbox semaphores.
+    bool fuse_wsplit = false;
+    uint32_t fsem[pfwc_wsplit::NUM_SEMS] = {};
 };
 
 static gsplat_cpu::ThreadPool& soa_pool() {
@@ -309,6 +314,10 @@ static WorkSplit split_chunks(uint32_t num_tiles, uint32_t num_cores) {
 static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = false) {
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
+    // Task #207: with the split writer (fused program only) NCRISC reads between
+    // its own chunks, so the 10 inputs get a third slot.
+    const bool wsplit = fuse && env_config::pfwc_writer_split();
+    const uint32_t in_depth = wsplit ? 3u : 2u;
 
     auto cb_fp32 = [&](uint32_t id, uint32_t depth) {
         CircularBufferConfig c(depth * TILE_BYTES_FP32, {{id, DataFormat::Float32}});
@@ -317,9 +326,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     };
 
     // 9 input CBs (world means + cov3d unique)
-    cb_fp32(CB_MX, 2); cb_fp32(CB_MY, 2); cb_fp32(CB_MZ, 2);
-    cb_fp32(CB_C00, 2); cb_fp32(CB_C01, 2); cb_fp32(CB_C02, 2);
-    cb_fp32(CB_C11, 2); cb_fp32(CB_C12, 2); cb_fp32(CB_C22, 2);
+    cb_fp32(CB_MX, in_depth); cb_fp32(CB_MY, in_depth); cb_fp32(CB_MZ, in_depth);
+    cb_fp32(CB_C00, in_depth); cb_fp32(CB_C01, in_depth); cb_fp32(CB_C02, in_depth);
+    cb_fp32(CB_C11, in_depth); cb_fp32(CB_C12, in_depth); cb_fp32(CB_C22, in_depth);
     // 8 output CBs (mean_2d, depth, cov2d, radii)
     cb_fp32(CB_M2X, 2); cb_fp32(CB_M2Y, 2); cb_fp32(CB_DEP, 2);
     cb_fp32(CB_A, 2);   cb_fp32(CB_B, 2);   cb_fp32(CB_C, 2);
@@ -338,7 +347,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             vis_defines["PFWC_PRECULL"] = "1";  // lever C (task #140), args 65..66
         if (gsplat_tt::precull_mode() == 2 && gsplat_tt::sfpu_vis_mode() == 1)
             vis_defines["PRECULL_PC"] = "1";  // pixel-centre rect (task #157)
-        cb_fp32(CB_OP, 2);
+        cb_fp32(CB_OP, in_depth);
         cb_fp32(CB_TMP_MX, 2);     cb_fp32(CB_TMP_MY, 2);
         cb_fp32(CB_TMP_RX, 2);     cb_fp32(CB_TMP_RY, 2);
         cb_fp32(CB_TPG, 2);        cb_fp32(CB_AABB, 2);
@@ -350,7 +359,16 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         cb_raw(CB_VMASK, VIS_MASK_BYTES);
         if (!fuse) cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
         cb_raw(CB_VOP, TILE_BYTES_FP32);
-        if (fuse) cb_raw(CB_FUSE, FUSE_CB_BYTES);
+        if (fuse) cb_raw(CB_FUSE, wsplit ? pfwc_wsplit::STG_BYTES : FUSE_CB_BYTES);
+        if (wsplit) {
+            // The odd chunks' outputs (project_pfwc_compute.cpp OCB), NCRISC's
+            // staging and the chunk handoff mailbox (pfwc_wsplit.h).
+            for (uint32_t cb : {CB_M2X, CB_M2Y, CB_DEP, CB_A, CB_B, CB_C, CB_RX, CB_RY, CB_TPG, CB_AABB})
+                cb_fp32(pfwc_wsplit::odd_cb(cb), 2);
+            cb_raw(pfwc_wsplit::CB_STG_ODD, pfwc_wsplit::STG_BYTES);
+            cb_raw(pfwc_wsplit::CB_MBX, pfwc_wsplit::MBX_BYTES);
+            for (uint32_t i = 0; i < pfwc_wsplit::NUM_SEMS; ++i) ctx.fsem[i] = CreateSemaphore(program, cores, 0);
+        }
     }
     // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 records per-step wall cycles (profiler builds) from the
     // reader, the three TRISCs and the fused writer (targeted profiling, default OFF).
@@ -364,24 +382,34 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         vis_defines["PFWC_STEPRISC"] = std::to_string(steprisc);
         if (steprisc == 3 || steprisc == 9) reader_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
     }
+    // Task #207: writer_pfwc_split.cpp on NCRISC (role 1: odd chunks + the reader).
+    std::map<std::string, std::string> split_defines;
+    if (wsplit) {
+        vis_defines["PFWC_WSPLIT"] = "1";
+        split_defines["WSPLIT_ROLE"] = "1";
+        if (env_config::emit_puboc()) split_defines["EMIT_PUBOC"] = "1";
+        if (stepcyc != 0 && (steprisc == 3 || steprisc == 9))
+            split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
+    }
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
     // layout as before; the fused kernel just reads world means in slots 0..2
     // (instead of the project program's means_cam output), so reader_pfwc.cpp is
     // reused verbatim — only the runtime base addresses change.
     std::vector<uint32_t> reader_ct;
-    for (int i = 0; i < (vis ? 10 : 9); ++i) {
+    for (int i = 0; i < (wsplit ? 19 : (vis ? 10 : 9)); ++i) {  // split: writer's 9 + reader's 10
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
     const KernelHandle reader = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_pfwc.cpp",
+        wsplit ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_split.cpp"
+               : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_pfwc.cpp",
         cores,
         DataMovementConfig{
             .processor = DataMovementProcessor::RISCV_1,
             .noc = NOC::RISCV_1_default,
             .compile_args = reader_ct,
-            .defines = reader_defines,
+            .defines = wsplit ? split_defines : reader_defines,
         });
 
     // tt-007 fp32 unpack-to-DEST for every FP32 CB the compute kernel reads
@@ -434,9 +462,15 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // Targeted profiling only (task #122): writer_pfwc_fuse.cpp FUSE_ABL bits.
     if (fuse && vis_env_u32("GSPLAT_TT_FUSE_ABL", 0) != 0)
         writer_defines["FUSE_ABL"] = std::to_string(vis_env_u32("GSPLAT_TT_FUSE_ABL", 0)) + "u";
+    if (wsplit) {
+        if (writer_defines.erase("FUSE_ABL") != 0)
+            std::cerr << "[gsplat_tt::pfwc] GSPLAT_TT_FUSE_ABL is ignored with GSPLAT_TT_PFWC_WRITER_SPLIT=1\n";
+        writer_defines["WSPLIT_ROLE"] = "0";
+    }
     const KernelHandle writer = CreateKernel(
         program,
-        fuse  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_fuse.cpp"
+        wsplit  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_split.cpp"
+        : fuse  ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_fuse.cpp"
         : vis ? OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc_vis.cpp"
               : OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_pfwc.cpp",
         cores,
@@ -452,6 +486,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         ctx.freader = reader;
         ctx.fcompute = compute;
         ctx.fwriter = writer;
+        ctx.fuse_wsplit = wsplit;
         ctx.wl_fuse.add_program(device_range, std::move(program));
         ctx.fuse_built = true;
     } else if (vis) {
@@ -861,7 +896,8 @@ double pfwc_tt(
             reader_args.push_back(static_cast<uint32_t>(vis_op->address()));  // arg 11
             reader_args.push_back(fuse_on ? num_cores : 1u);  // arg 12: tile stride
         }
-        SetRuntimeArgs(program, k_reader, core, reader_args);
+        const bool wsplit_on = fuse_on && ctx->fuse_wsplit;
+        if (!wsplit_on) SetRuntimeArgs(program, k_reader, core, reader_args);
 
         std::vector<uint32_t> compute_args;
         compute_args.reserve(56);
@@ -896,6 +932,15 @@ double pfwc_tt(
             fw.push_back(c);
             fw.push_back(fuse_pub[0]);  // scene_puboc01 (0 = pack on device)
             fw.push_back(fuse_pub[1]);  // scene_puboc23
+            if (wsplit_on) {
+                // writer_pfwc_split.cpp: 25..28 the mailbox semaphores; NCRISC
+                // (the reader too): 29..38 the reader's 9 bases and the opacity.
+                for (uint32_t sid : ctx->fsem) fw.push_back(sid);
+                std::vector<uint32_t> nw = fw;
+                for (uint32_t k = 0; k < 9; ++k) nw.push_back(reader_args[k]);
+                nw.push_back(static_cast<uint32_t>(vis_op->address()));
+                SetRuntimeArgs(program, k_reader, core, nw);
+            }
             SetRuntimeArgs(program, k_writer, core, fw);
             continue;
         }

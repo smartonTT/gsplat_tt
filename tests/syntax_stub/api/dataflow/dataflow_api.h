@@ -43,3 +43,8 @@ void invalidate_l1_cache();
 #define RISCV_DEBUG_REG_WALL_CLOCK_L 0xFFB121F0u
 #endif
 void DeviceTimestampedData(const char*, uint64_t);  // task #202 (EMIT_PROF variants)
+// Non-blocking CB / NoC polls (task #207).
+bool cb_pages_reservable_at_back(int32_t operand, int32_t num_pages);
+bool cb_pages_available_at_front(int32_t operand, int32_t num_pages);
+extern uint8_t noc_index;
+bool ncrisc_noc_reads_flushed(uint32_t noc);

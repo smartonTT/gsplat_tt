@@ -196,4 +196,13 @@ inline bool mat_cq1() {
     return v;
 }
 
+// Task #207: the lever B fused pfwc writer split over BRISC (even chunks) and
+// NCRISC (odd chunks, plus the reader), writer_pfwc_split.cpp. Default off.
+// The device opens with 8 KB more kernel config buffer unless
+// GSPLAT_TT_KCFG_EXTRA_KB is set.
+inline bool pfwc_writer_split() {
+    static const bool v = env_uint("GSPLAT_TT_PFWC_WRITER_SPLIT", 0u) != 0u;
+    return v;
+}
+
 }  // namespace gsplat_tt::env_config
