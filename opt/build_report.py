@@ -136,7 +136,15 @@ def normalize_ttw_row(r: dict) -> dict:
             if isinstance(v, (int, float)) and v == v:
                 hero = v
                 break
-    sum_ms = sum(per_stage.values()) * VIEWS_PER_RUN if per_stage else None
+    # Prefer the measured per-view total (includes d2h/head/tail gaps); the
+    # stage sum omits those and reads ~0.25 ms low.
+    view_ms = timings.get("ms_view")
+    if not (isinstance(view_ms, (int, float)) and view_ms == view_ms and view_ms > 0):
+        view_ms = metrics.get("frame_ms_view")
+    if isinstance(view_ms, (int, float)) and view_ms == view_ms and view_ms > 0:
+        sum_ms = float(view_ms) * VIEWS_PER_RUN
+    else:
+        sum_ms = sum(per_stage.values()) * VIEWS_PER_RUN if per_stage else None
     ts = r.get("ts") or r.get("timestamp") or ""
     iter_dir = str(r.get("iter_dir") or "").strip()
     if not iter_dir and n is not None:
