@@ -101,6 +101,9 @@
 #ifdef PFWC_COV2D_SFPU
 #include "pfwc_cov2d_sfpu.h"
 #endif
+#ifdef PFWC_RECIP_NEWTON
+#include "pfwc_recip_nr.h"
+#endif
 #endif
 
 namespace {
@@ -693,7 +696,14 @@ void kernel_main() {
             tile_regs_acquire();
             copy_tile_to_dst_init_short(CB_TMP_TZ);
             copy_tile(CB_TMP_TZ, 0, 0);
+#ifdef PFWC_RECIP_NEWTON
+            // Task #266: SFPARECIP seed + 2 Newton steps (pfwc_recip_nr.h), ~1 ulp.
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_inv_tz_nr()));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#else
             recip_tile(0);
+#endif
             tile_regs_commit();
             tile_regs_wait();
             emit_scratch(0, CB_TMP_INV_TZ);
