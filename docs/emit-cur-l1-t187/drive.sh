@@ -14,13 +14,16 @@ RR="bash $B/docs/emit-cur-l1-t187/remote_run.sh"
 SR=${SR:-opt/sync_remote.sh}
 lk() { ttp lock --timeout 0 p100 -- "$@"; }
 fetch() { scp -q -o BatchMode=yes "$H:$L/t187-out/*" $O/ 2>/dev/null; }
-lk bash -c "$SR $H $A f4d91df && $SR $H $F fba971ea5d76d1cfa41c00be3415b2579ad48980 && $SR $H $C cd707df"
+[ -n "${SKIP_SYNC:-}" ] || lk bash -c "$SR $H $A f4d91df && $SR $H $F fba971ea5d76d1cfa41c00be3415b2579ad48980 && $SR $H $C cd707df"
 rc=$?; echo "SYNC_RC=$rc"; [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 for r in 1 2 3; do
   if [ $r = 2 ]; then o1=a; o2=b; else o1=b; o2=a; fi
   t1=$([ $o1 = a ] && echo $A || echo $B); t2=$([ $o2 = a ] && echo $A || echo $B)
-  lk $DEVRUN --host $H --no-verify --timeout 900 --tag t187-r$r -- "$RR r$r-$o1 $t1; $RR r$r-$o2 $t2"
-  echo "ROUND${r}_RC=$?"; fetch
+  # one devrun per arm: devrun refuses timeouts over the 600 s reservation ceiling
+  lk $DEVRUN --host $H --no-verify --timeout 450 --tag t187-r$r$o1 -- "RUN_TIMEOUT=360 $RR r$r-$o1 $t1"
+  echo "ROUND${r}${o1}_RC=$?"
+  lk $DEVRUN --host $H --no-verify --timeout 450 --tag t187-r$r$o2 -- "RUN_TIMEOUT=360 $RR r$r-$o2 $t2"
+  echo "ROUND${r}${o2}_RC=$?"; fetch
   if [ $r = 1 ] && ! ssh -o BatchMode=yes $H "diff -q $L/t82_scripts/md5-r82new.txt $L/t187-out/md5-r1-b.txt" >/dev/null; then
     echo "MD5_GATE_FAIL (r1 b)"; echo CHAIN_DONE; exit 4
   fi
