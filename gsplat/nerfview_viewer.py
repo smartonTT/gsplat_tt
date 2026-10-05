@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 import traceback
@@ -64,9 +65,19 @@ def make_jpeg_encoder(name: str) -> Callable[[np.ndarray, int], bytes]:
     raise ValueError(f"unknown JPEG encoder {name!r}; choose from {JPEG_ENCODERS}")
 
 
+def jpeg_encoder_from_env() -> str:
+    """GSPLAT_VIEWER_JPEG, or "auto" (with a warning) if unset or unknown."""
+    name = os.environ.get("GSPLAT_VIEWER_JPEG", "auto")
+    if name != "auto" and name not in JPEG_ENCODERS:
+        print(f"[viewer] WARNING: unknown GSPLAT_VIEWER_JPEG={name!r}; choose from "
+              f"{JPEG_ENCODERS}; using auto", file=sys.stderr)
+        return "auto"
+    return name
+
+
 def pick_jpeg_encoder(name: Optional[str] = None) -> tuple[str, Callable[[np.ndarray, int], bytes]]:
     """``name`` (default: env GSPLAT_VIEWER_JPEG, else "auto"): first usable in auto order."""
-    name = name or os.environ.get("GSPLAT_VIEWER_JPEG", "auto")
+    name = name or jpeg_encoder_from_env()
     for cand in (JPEG_ENCODERS if name == "auto" else (name,)):
         try:
             return cand, make_jpeg_encoder(cand)
@@ -103,6 +114,19 @@ class FastRenderer(Renderer):
         self._out_cv = threading.Condition()
         self._sender = threading.Thread(target=self._send_loop, name="gsplat-send", daemon=True)
         self._sender.start()
+
+    @property
+    def running(self) -> bool:
+        return getattr(self, "_running", True)
+
+    @running.setter
+    def running(self, value: bool) -> None:
+        # nerfview's disconnect sets running=False: wake the sender so it exits.
+        self._running = value
+        cv = getattr(self, "_out_cv", None)
+        if cv is not None and not value:
+            with cv:
+                cv.notify_all()
 
     def run(self) -> None:
         while self.running:
@@ -148,8 +172,10 @@ class FastRenderer(Renderer):
     def _send_loop(self) -> None:
         while self.running:
             with self._out_cv:
-                while self._out is None:
-                    self._out_cv.wait()
+                while self._out is None and self.running:
+                    self._out_cv.wait(0.5)  # recheck running: no leak on disconnect
+                if self._out is None:
+                    break
                 img, depth, quality, t0, t1 = self._out
                 self._out = None
             try:
@@ -188,6 +214,7 @@ class GsplatViewer(nerfview.Viewer):
         self._default_render_height = default_render_height
         self._ui_active_deadline = 0.0
         self._burst_running = True
+        jpeg_encoder_from_env()  # warn on a bad GSPLAT_VIEWER_JPEG now, not at first connect
         super().__init__(**kwargs)
         self._burst_thread = threading.Thread(
             target=self._ui_burst_loop,

@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -244,8 +245,15 @@ py::tuple render_view(
     // The device stages below touch no Python objects, so they run with the
     // GIL released: a viewer's JPEG/send thread then overlaps the render
     // (task #257). The bench is single-threaded, so this costs it nothing.
+    // Device state is shared, and the GIL is released below, so a second
+    // thread (viewer tab, selftest) must not enter render_view concurrently
+    // (review #269). Taken only while the GIL is released, so no deadlock;
+    // held to return, across the later GIL re-acquire/release blocks.
+    static std::mutex render_view_mutex;
+    std::unique_lock<std::mutex> view_lock(render_view_mutex, std::defer_lock);
     {
         py::gil_scoped_release nogil;
+        view_lock.lock();
         // One-shot JIT compile of all device programs at scene open.
         gsplat_tt::jit_warmup_ideal_path();
         head_span.stop();
