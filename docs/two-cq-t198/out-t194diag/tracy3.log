@@ -12,7 +12,7 @@
 [ttw 2026-10-04T20:00:02-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-07  tag=t198-tracy3  timeout=420s  worry=336s  ts=2026-10-04T20:00:03-0700
 cmd: bash /localdev/smarton/gstt2-t198/docs/two-cq-t198/remote_tracy.sh t198-dbase; bash /localdev/smarton/gstt2-t198/docs/two-cq-t198/remote_tracy.sh t198-dearly GSPLAT_TT_SORT_OL_EARLY=1; bash /localdev/smarton/gstt2-t198/docs/two-cq-t198/remote_tracy.sh t198-dboth GSPLAT_TT_SORT_OL_EARLY=1 GSPLAT_TT_MAT_CQ1=1
