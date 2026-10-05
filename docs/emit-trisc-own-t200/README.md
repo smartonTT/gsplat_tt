@@ -112,3 +112,32 @@ Upside left out: the movers have ~0.8 ms of slack. Giving them a share of the ti
 Cost/risk: medium-high code (3-RISC + 2-mover protocol, new TRISC kernel path in the sort_ol
 program, Tracy hang history). It is the largest lever left in the emit. The pack loop is
 1.90 ms of the 2.49 ms sort_ol program, and no single-RISC diet has found more than ~0.6 ms.
+
+## t202 build (GSPLAT_TT_OL_EMIT_TOWN=1, default off until gated)
+
+Code: `render/kernels/dataflow/sort_ol_town.h` (protocol, mailbox layout),
+`render/kernels/compute/sort_ol_town_compute.cpp` (TRISCs), the `#if OL_EMIT_TOWN` path in
+`sort_bin_onelaunch.cpp` (movers), `sort_device.cpp` (CB 14/30 mailbox 13.3 KB per mover,
+4 blendrec slots instead of 2, the compute kernel), `env_config.h` (knob). Model check:
+`tests/unit/test_sort_ol_town.cpp` (2 movers x 3 TRISCs at random interleavings, 300 seeds,
+bucket image == sequential emit; dropping the run-free wait or loosening the slot wait fails it).
+
+- Per batch k the mover builds one list per TRISC (owner t % 3) into slot k % 4, issues the
+  blendrec reads, and publishes READY = k + 1 after its read barrier. A slot is refilled once
+  every TRISC finished batch k - 4 (DONE counts).
+- TRISC i walks its list of each batch of both streams in batch order: cursor read-modify-write
+  (it alone owns those tiles), the same 32 B record into the mover's ring, and when a run is
+  full a run word (t | last << 10) into its queue. The mover writes queued runs in every wait
+  loop and once per batch, flushes, then sets fl[t] = last + 1; a TRISC starts a run only once
+  fl[t] equals its cursor. After the last batch the mover drains partial runs as before.
+- Every poll fences first: Blackhole's L1 reads go through a small write-through cache on all
+  five RISCs (`fence` == `invalidate_l1_cache()`).
+- Differences from the t200 plan: list entries are 32-bit (t << 16 | page byte offset) instead
+  of 8-bit indices, so the TRISCs never read the pair planes; the flush handshake is a per-tile
+  fl word plus consumed counts per queue instead of one flushed-sequence count per queue (no
+  ordering constraint between TRISCs); a FIN word per TRISC lets the mover clear GO safely.
+- Mover ep_* meanings under TOWN: ep_brec = list build + read issue, ep_wfl = slot waits,
+  ep_wiss = all queue service, ep_proc = tail wait for the TRISCs, ep_pairs = FIN wait,
+  ep_nrun = runs from the queues, ep_nrec = 0 (records: TRISC counter rec).
+- Drivers: `drive.sh` (sync, 2-view smoke, Tracy 0:10 town/base, 3 A/B rounds),
+  `town_parts.py` (TRISC counters, gate metric (proc - wfl - wq) / rec).
