@@ -95,6 +95,9 @@
 #ifdef PFWC_VIS
 #include "sfpu/ckernel_sfpu_converter.h"
 #endif
+#ifdef PFWC_COVCAM_SFPU
+#include "pfwc_covcam_sfpu.h"
+#endif
 #endif
 
 namespace {
@@ -235,6 +238,40 @@ inline void compute_cc_entry_to_scratch(uint32_t base_arg, uint32_t cb_out_scrat
     tile_regs_release();
     PO_ACC(4);
 }
+
+#ifdef PFWC_COVCAM_SFPU
+#ifdef TRISC_MATH
+inline void covcam_sfpu_math() {
+    pfwc_covcam::run([](uint32_t j) { return get_arg_val<uint32_t>(17 + j); });
+}
+#endif
+
+// Task #206 (GSPLAT_TT_PFWC_COVCAM_SFPU=1): all six cov_cam entries in one acquire:
+// 6 copies, one SFPU pass (pfwc_covcam_sfpu.h), 6 packs. Bit-identical to six
+// compute_cc_entry_to_scratch calls. PFWC_STEPCYC=2 books the SFPU pass as mulu.
+inline void covcam_sfpu_to_scratch() {
+    { PO_T0(); tile_regs_acquire(); PO_ACC(3); }
+    {
+        PO_T0();
+        copy_tile_to_dst_init_short(COV3D_CB[0]);  // the six cov3d CBs share one format
+        for (uint32_t k = 0; k < 6; k++) copy_tile(COV3D_CB[k], 0, k);
+        PO_ACC(0);
+    }
+    {
+        PO_T0();
+        MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+        MATH((covcam_sfpu_math()));
+        MATH((_llk_math_eltwise_unary_sfpu_done_()));
+        PO_ACC(1);
+    }
+    PO_T0();
+    tile_regs_commit();
+    tile_regs_wait();
+    for (uint32_t e = 0; e < 6; e++) emit_scratch(e, CC_SCRATCH[e]);
+    tile_regs_release();
+    PO_ACC(4);
+}
+#endif
 
 #ifdef TRISC_MATH
 // A1 conic fold for ONE 32-lane vector V of the chunk tile. DEST tile 0 holds
@@ -711,9 +748,13 @@ void kernel_main() {
 
         PC_MARK(4);
         // ── 6. cov_cam (6 unique entries) → scratch CBs
+#ifdef PFWC_COVCAM_SFPU
+        covcam_sfpu_to_scratch();
+#else
         for (uint32_t e = 0; e < 6; e++) {
             compute_cc_entry_to_scratch(17 + e * 6, CC_SCRATCH[e]);
         }
+#endif
 
         // Drain cov3d inputs — done feeding cov_cam.
         cb_pop_front(CB_C00, 1);
