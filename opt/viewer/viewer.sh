@@ -18,14 +18,19 @@ cd "$(git rev-parse --show-toplevel)"
 rsh() { "${SSH[@]}" "$HOST" "$@"; }
 
 do_stop() {
-  rsh "VDIR=$VDIR bash -s" <<'R'
-pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)
-if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
-  kill -INT "$pid"   # KeyboardInterrupt -> pipeline.close() -> device_shutdown
-  for _ in $(seq 30); do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
-  kill -0 "$pid" 2>/dev/null && { kill -TERM "$pid"; sleep 3; }
-  kill -0 "$pid" 2>/dev/null && kill -KILL "$pid"
-  echo "[viewer] stopped pid $pid"
+  rsh "VDIR=$VDIR PORT=$PORT bash -s" <<'R'
+# viewer.pid can hold setsid's pid rather than python's, so also match our own
+# viewer_clean.py on this port; a survivor would keep the chip lock.
+pids=$( { cat "$VDIR/viewer.pid" 2>/dev/null; pgrep -u "$USER" -f "opt/viewer/viewer_clean.py .*--port $PORT"; } | sort -u)
+alive=; for p in $pids; do kill -0 "$p" 2>/dev/null && alive="$alive $p"; done
+if [ -n "$alive" ]; then
+  kill -INT $alive 2>/dev/null   # KeyboardInterrupt -> pipeline.close() -> device_shutdown
+  for p in $alive; do
+    for _ in $(seq 30); do kill -0 "$p" 2>/dev/null || break; sleep 1; done
+    kill -0 "$p" 2>/dev/null && { kill -TERM "$p"; sleep 3; }
+    kill -0 "$p" 2>/dev/null && kill -KILL "$p"
+  done
+  echo "[viewer] stopped pid(s)$alive"
 else
   echo "[viewer] not running"
 fi
@@ -44,8 +49,10 @@ export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME GSPLAT_SHA=$(cat SHA)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
 setsid nohup .venv/bin/python opt/viewer/viewer_clean.py scenes/bicycle.ply --port "$PORT" \
   > "$VDIR/viewer.log" 2>&1 < /dev/null &
-echo $! > "$VDIR/viewer.pid"
-echo "[viewer] started pid $! sha $GSPLAT_SHA port $PORT (log $VDIR/viewer.log)"
+sleep 1
+pid=$(pgrep -n -u "$USER" -f "opt/viewer/viewer_clean.py .*--port $PORT" || echo $!)
+echo "$pid" > "$VDIR/viewer.pid"
+echo "[viewer] started pid $pid sha $GSPLAT_SHA port $PORT (log $VDIR/viewer.log)"
 R
 }
 
