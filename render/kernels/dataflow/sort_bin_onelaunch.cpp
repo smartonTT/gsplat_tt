@@ -63,6 +63,9 @@
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
 #include "sort_onelaunch_algo.h"
+#if defined(OL_FILL_BULK) && OL_FILL_BULK == 2
+#include "api/debug/dprint.h"
+#endif
 
 #ifndef EMIT_PUBOC
 #define EMIT_PUBOC 0u
@@ -273,6 +276,31 @@ void kernel_main() {
         };
         unpack(win_tid, win_gid);
         unpack(win_keep, win_tid);
+#if OL_FILL_BULK == 2
+        // Debug (GSPLAT_TT_OL_FILL_BULK=2): re-read every window page one by
+        // one, count and repair the pages the bulk fill got wrong.
+        {
+            const uint32_t scr = get_write_ptr(CB_SCRATCH + cbo);
+            auto sv = reinterpret_cast<volatile uint32_t*>(scr);
+            uint32_t bad = 0;
+            for (uint32_t w = 0; w < nwin; w++) {
+                for (uint32_t pl = 0; pl < 2u; pl++) {
+                    noc_async_read(get_noc_addr(pg_lo + w, pl ? tids_acc : gids_acc), scr, PAGE_BYTES);
+                    noc_async_read_barrier();
+                    auto dp = reinterpret_cast<volatile uint32_t*>((pl ? win_tid : win_gid) + w * PAGE_BYTES);
+                    bool diff = false;
+                    for (uint32_t e = 0; e < ELEMS_PER_PAGE; e++) {
+                        if (dp[e] != sv[e]) { diff = true; dp[e] = sv[e]; }
+                    }
+                    bad += diff ? 1u : 0u;
+                }
+            }
+            if (bad != 0u || core_id == 0u) {
+                DPRINT << "FILLCHK core " << core_id << " mover " << mover << " nb " << nb << " nwin "
+                       << nwin << " pg_lo " << pg_lo << " bad " << bad << ENDL();
+            }
+        }
+#endif
         return true;
     };
     auto fill_window = [&]() {
