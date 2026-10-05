@@ -40,6 +40,8 @@ chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.c
 chk "project_pfwc_compute.cpp PFWC_VIS" $CP -DPFWC_VIS=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 render/kernels/compute/project_pfwc_compute.cpp
+chk "project_pfwc_compute.cpp PFWC_COVCAM_SFPU" $CP -DPFWC_COVCAM_SFPU=1 render/kernels/compute/project_pfwc_compute.cpp
+chk "project_pfwc_compute.cpp PFWC_COVCAM_SFPU PFWC_VIS PFWC_PRECULL" $CP -DPFWC_COVCAM_SFPU=1 -DPFWC_VIS=1 -DPFWC_PRECULL=1 render/kernels/compute/project_pfwc_compute.cpp
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
 for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
 PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)
