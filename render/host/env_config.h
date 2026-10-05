@@ -223,15 +223,30 @@ inline bool pfwc_cov2d_sfpu() {
     return v;
 }
 
-// Task #232: with the writer split, BRISC / NoC0 instead of NCRISC / NoC1 reads the
-// pfwc input tiles on the cores in physical NoC0 column x where bit x is set (hex or
-// decimal, e.g. 0xF000 = x 12..15). Default 0 (NCRISC reads everywhere).
+// Task #232: with the writer split, BRISC / NoC0 instead of NCRISC / NoC1 reads a set of
+// the 10 pfwc input tiles (bit o = tile o: mx my mz c00 c01 c02 c11 c12 c22 opacity):
+// GSPLAT_TT_PFWC_RD_SET on the cores in physical NoC0 column x where bit x of
+// GSPLAT_TT_PFWC_RD_BRISC is set, GSPLAT_TT_PFWC_RD_REST on the others. Hex or decimal.
+// Defaults: RD_BRISC 0, RD_SET 0x3FF (all ten), RD_REST 0 (NCRISC reads everywhere).
+inline unsigned int env_hex(const char* name, unsigned int dflt) {
+    const char* e = std::getenv(name);
+    return (e != nullptr && *e != '\0') ? static_cast<unsigned int>(std::strtoul(e, nullptr, 0)) : dflt;
+}
 inline unsigned int pfwc_rd_brisc_cols() {
-    static const unsigned int v = [] {
-        const char* e = std::getenv("GSPLAT_TT_PFWC_RD_BRISC");
-        return (e != nullptr && *e != '\0') ? static_cast<unsigned int>(std::strtoul(e, nullptr, 0)) : 0u;
-    }();
+    static const unsigned int v = env_hex("GSPLAT_TT_PFWC_RD_BRISC", 0u);
     return v;
+}
+inline unsigned int pfwc_rd_set() {
+    static const unsigned int v = env_hex("GSPLAT_TT_PFWC_RD_SET", 0x3FFu) & 0x3FFu;
+    return v;
+}
+inline unsigned int pfwc_rd_rest() {
+    static const unsigned int v = env_hex("GSPLAT_TT_PFWC_RD_REST", 0u) & 0x3FFu;
+    return v;
+}
+// BRISC reads some input tile on some core (writer_pfwc_split.cpp PFWC_RD_COLS).
+inline bool pfwc_rd_brisc() {
+    return (pfwc_rd_brisc_cols() != 0u && pfwc_rd_set() != 0u) || pfwc_rd_rest() != 0u;
 }
 
 }  // namespace gsplat_tt::env_config

@@ -1,13 +1,17 @@
 #!/bin/bash
-# t232: device runs of the BRISC-reader column mask (GSPLAT_TT_PFWC_RD_BRISC) with P2
-# (GSPLAT_TT_PFWC_COV2D_SFPU=1) against today's default. Mac side, one ttp lock p100 per step.
+# t232: device runs of the BRISC input reader (GSPLAT_TT_PFWC_RD_BRISC column mask, RD_SET /
+# RD_REST tile sets) with P2 (GSPLAT_TT_PFWC_COV2D_SFPU=1) against today's default. Mac side,
+# one ttp lock p100 per step.
 #   drive.sh [rev] [steps]   steps: any of sync smoke p<name> 1 2 3 4
-#   MASK (default 0xF000 = physical NoC0 x 12..15) is the fix arm's column mask.
+#   MASK (default 0xF000 = physical NoC0 x 12..15) is the column mask of pf, ph and rdb;
+#   FIXE (default GSPLAT_TT_PFWC_RD_BRISC=$MASK) is the fix arm's env besides P2.
 #   smoke: 30 views fix at the default open, md5-gated; on a "too large" TT_FATAL retry at
 #          KX=32 and run every later untraced arm at KX=32.
 #   p<name>: Tracy STEPCYC=1 STEPRISC=9 views 0:4, KX 32 (+8 on a too-large TT_FATAL), arms
 #          pf = P2 + MASK, p0 = P2 alone, pb = default, pa = P2 + all columns,
-#          pm<hex> = P2 + that mask (e.g. pmE000).
+#          pm<hex> = P2 + that mask (e.g. pmE000), pr<hex> = P2 + BRISC reads tile set <hex> on
+#          every core (RD_REST, e.g. pr1F = tiles 0..4), ph<set>_<rest> = P2 + set <set> on the
+#          MASK columns and <rest> elsewhere.
 #   1-4:   swapped untraced 30-view rounds base (default) / fix (P2 + MASK) [/ rdb (MASK alone)
 #          with ARM3=1; the host opens +32 KB kcfg for it]; hero_clean.png of each arm is fetched
 #          (device screenshot).
@@ -21,7 +25,8 @@ P=docs/pfwc-noc1-balance-t232/dev
 O=$P/out; mkdir -p $O
 MASK=${MASK:-0xF000}
 CV=GSPLAT_TT_PFWC_COV2D_SFPU=1
-FIX=$CV,GSPLAT_TT_PFWC_RD_BRISC=$MASK
+FIXE=${FIXE:-GSPLAT_TT_PFWC_RD_BRISC=$MASK}
+FIX=$CV,$FIXE
 KX=${KX:-0}   # 0 = default open (auto +24 KB)
 lk() { ttp lock p100 -- "$@"; local rc=$?; [ $rc -eq 75 ] && { echo LOCK_BUSY; echo CHAIN_DONE; exit 75; }; return $rc; }
 fetch() {
@@ -68,7 +73,7 @@ prof() {  # name kx env...
   if [ $kx -lt 40 ] && grep -qE "too large|Program size" $O/prof-$n-capture.log 2>/dev/null; then
     echo "PROF_${n}_TOO_LARGE at KX=$kx: retry at $((kx + 8))"; prof $n $((kx + 8)) "$@"; return
   fi
-  python3 $P/percol.py $O/prof-$n-dev.csv.gz | tee $O/percol-$n.txt
+  { python3 $P/percol.py $O/prof-$n-dev.csv.gz; python3 $P/span.py $O/prof-$n-dev.csv.gz; } | tee $O/percol-$n.txt
 }
 for s in $STEPS; do
   case $s in
@@ -77,6 +82,9 @@ for s in $STEPS; do
     pb) prof pb 32 GSPLAT_TT_NOOP=0 ;;
     pa) prof pa 32 $CV GSPLAT_TT_PFWC_RD_BRISC=0xFFFE ;;
     pm*) prof $s 32 $CV GSPLAT_TT_PFWC_RD_BRISC=0x${s#pm} ;;
+    pr*) prof $s 32 $CV GSPLAT_TT_PFWC_RD_REST=0x${s#pr} ;;
+    ph*) x=${s#ph}; prof $s 32 $CV GSPLAT_TT_PFWC_RD_BRISC=$MASK GSPLAT_TT_PFWC_RD_SET=0x${x%_*} \
+           GSPLAT_TT_PFWC_RD_REST=0x${x#*_} ;;
   esac
 done
 if [ $KX = 0 ]; then X=GSPLAT_TT_NOOP=0; else X=GSPLAT_TT_KCFG_EXTRA_KB=$KX; fi

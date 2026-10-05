@@ -7,9 +7,10 @@
 // chunks, NCRISC odd chunks; one of them runs the reader) that follow the kernel's steps:
 // output wait, classify, PREFIX receive / send, record loop, OPEN receive,
 // OPEN send or the last chunk's close and counts, pop. Compute and the reader
-// are modelled as CB counts (inputs depth 3, two output sets of depth 2); the
-// reader only advances where its RISC polls it (NCRISC, or BRISC on the
-// GSPLAT_TT_PFWC_RD_BRISC columns, task #232; both are run). A random scheduler interleaves
+// are modelled as CB counts (inputs depth 3, two output sets of depth 2); a
+// reader only advances where its RISC polls it. Task #232: NCRISC reads all
+// input tiles, BRISC reads all, or each reads a subset (two readers with their
+// own input CBs; compute needs both); all three are run. A random scheduler interleaves
 // the agents. For random chunk sizes (incl. 0, 1, 15..17 and full tiles),
 // chunk counts 0..13, segment bases and DRAM bank counts 1..12 it checks
 // against writer_pfwc_fuse.cpp's single writer: the dep / offs / aabb pages,
@@ -105,10 +106,10 @@ struct Shared {
     uint32_t flag[NUM_SEMS] = {};
     uint32_t msg[NUM_SEMS][MSG_WORDS] = {};
     int32_t msg_id[NUM_SEMS];  // chunk the slot's message is for (-1 none)
-    uint32_t in_q = 0, out_q[2] = {0, 0}, comp_k = 0;  // CB pages, compute's next chunk
-    uint32_t rd_k = 0;
-    bool rd_pend = false;
-    uint32_t rd_role = 1;  // the writer that runs the reader
+    uint32_t out_q[2] = {0, 0}, comp_k = 0;  // output CB pages, compute's next chunk
+    // Per RISC's reader: pages in its input CBs, next chunk, read in flight, any tiles at all.
+    uint32_t in_q[2] = {0, 0}, rd_k[2] = {0, 0};
+    bool rd_pend[2] = {false, false}, rd_on[2] = {false, true};
     Shared() {
         for (auto& i : msg_id) i = -1;
     }
@@ -116,27 +117,30 @@ struct Shared {
 
 constexpr uint32_t IN_DEPTH = 3, OUT_DEPTH = 2;
 
-// Compute: chunk comp_k needs an input page and room in its output set.
+// Compute: chunk comp_k needs each reader's input page and room in its output set.
 bool compute_step(const Core& c, Shared& sh) {
-    if (sh.comp_k >= c.n || sh.in_q == 0 || sh.out_q[sh.comp_k & 1u] >= OUT_DEPTH) return false;
-    sh.in_q--;
+    if (sh.comp_k >= c.n || sh.out_q[sh.comp_k & 1u] >= OUT_DEPTH) return false;
+    for (uint32_t r = 0; r < 2; r++)
+        if (sh.rd_on[r] && sh.in_q[r] == 0) return false;
+    for (uint32_t r = 0; r < 2; r++)
+        if (sh.rd_on[r]) sh.in_q[r]--;
     sh.out_q[sh.comp_k & 1u]++;
     sh.comp_k++;
     return true;
 }
 
-// writer_pfwc_split.cpp rd_step: push the landed chunk, issue the next one.
-bool rd_step(const Core& c, Shared& sh) {
+// writer_pfwc_split.cpp rd_step on RISC r: push the landed chunk, issue the next one.
+bool rd_step(const Core& c, Shared& sh, uint32_t r) {
     bool moved = false;
-    if (sh.rd_pend) {
-        sh.in_q++;  // reads land by the next poll
-        if (sh.in_q > IN_DEPTH) fail("input CB overflow", sh.in_q);
-        sh.rd_pend = false;
-        sh.rd_k++;
+    if (sh.rd_pend[r]) {
+        sh.in_q[r]++;  // reads land by the next poll
+        if (sh.in_q[r] > IN_DEPTH) fail("input CB overflow", sh.in_q[r]);
+        sh.rd_pend[r] = false;
+        sh.rd_k[r]++;
         moved = true;
     }
-    if (sh.rd_k >= c.n || sh.in_q >= IN_DEPTH) return moved;
-    sh.rd_pend = true;
+    if (sh.rd_k[r] >= c.n || sh.in_q[r] >= IN_DEPTH) return moved;
+    sh.rd_pend[r] = true;
     return true;
 }
 
@@ -173,7 +177,7 @@ struct Writer {
 
     // One step; false = blocked with nothing changed.
     bool step(const Core& c, Shared& sh, Dram& out, std::mt19937& rng) {
-        auto poll = [&]() { return role == sh.rd_role ? rd_step(c, sh) : false; };
+        auto poll = [&]() { return sh.rd_on[role] ? rd_step(c, sh, role) : false; };
         auto slot_of = [&](uint32_t j) { return slot_index(j); };
         auto flush_pg = [&](volatile uint32_t* d, volatile uint32_t* o, volatile uint32_t* a, uint32_t page) {
             out.put_page(d, o, a, page);
@@ -303,7 +307,7 @@ struct Writer {
                 pt = START;
                 return true;
             case DRAIN:
-                if (role == sh.rd_role && sh.rd_k < c.n) return poll();
+                if (sh.rd_on[role] && sh.rd_k[role] < c.n) return poll();
                 pt = DONE;
                 return true;
             case DONE:
@@ -324,7 +328,8 @@ uint32_t pick_vc(std::mt19937& rng) {
     }
 }
 
-void run_trial(const Core& c, std::mt19937& rng, uint32_t rd_role) {
+// rd_mode: 0 NCRISC reads, 1 BRISC reads, 2 both read a subset.
+void run_trial(const Core& c, std::mt19937& rng, uint32_t rd_mode) {
     const uint32_t npages = c.seg_base / PW + (c.m_total + PW - 1) / PW + 4;
     const uint32_t nrec = c.seg_base + c.m_total + 4 * NB_MAX * RL;
     Dram ref, got;
@@ -333,7 +338,8 @@ void run_trial(const Core& c, std::mt19937& rng, uint32_t rd_role) {
     reference(c, ref);
 
     Shared sh;
-    sh.rd_role = rd_role;
+    sh.rd_on[0] = rd_mode != 0;
+    sh.rd_on[1] = rd_mode != 1;
     Writer w[2];
     w[0].init(c, 0);
     w[1].init(c, 1);
@@ -360,8 +366,10 @@ void run_trial(const Core& c, std::mt19937& rng, uint32_t rd_role) {
 
     for (uint32_t s = 0; s < NUM_SEMS; s++)
         if (sh.flag[s] != F_EMPTY || sh.msg_id[s] != -1) fail("semaphore left set", s);
-    if (sh.in_q != 0 || sh.out_q[0] != 0 || sh.out_q[1] != 0 || sh.rd_k != c.n || sh.rd_pend)
-        fail("CB pages left", sh.in_q);
+    if (sh.out_q[0] != 0 || sh.out_q[1] != 0) fail("output CB pages left");
+    for (uint32_t r = 0; r < 2; r++)
+        if (sh.in_q[r] != 0 || sh.rd_pend[r] || sh.rd_k[r] != (sh.rd_on[r] ? c.n : 0u))
+            fail("input CB pages left", r);
     for (uint32_t p = 0; p < npages; p++) {
         if (got.pg_hits[p] != ref.pg_hits[p]) fail("page write count", p);
         for (uint32_t x = 0; x < PW; x++)
@@ -410,12 +418,12 @@ int main() {
     for (uint32_t n = 0; n <= 13; n++)
         for (uint32_t t = 0; t < 400; t++, trials++) {
             trial_id = trials;
-            run_trial(make_core(rng, n), rng, t & 1u);
+            run_trial(make_core(rng, n), rng, t % 3);
         }
     // Larger cores, as on bicycle (up to ~50 chunks per core).
     for (uint32_t t = 0; t < 120; t++, trials++) {
         trial_id = trials;
-        run_trial(make_core(rng, 30 + rng() % 30), rng, t & 1u);
+        run_trial(make_core(rng, 30 + rng() % 30), rng, t % 3);
     }
     std::printf("%llu trials, %d failures\n", (unsigned long long)trials, failures);
     return failures == 0 ? 0 : 1;

@@ -10,16 +10,19 @@
 //     (project_pfwc_compute.cpp PFWC_WSPLIT). NCRISC is also the reader
 //     (reader_pfwc.cpp, PFWC_VIS): rd_poll() tops up the 10 input CBs between
 //     its own steps, and every wait on NCRISC polls it, since compute may be
-//     waiting on input. With PFWC_RD_COLS (task #232) BRISC is the reader
-//     instead on the cores whose physical NoC0 column x has bit x of arg 39 set
-//     (GSPLAT_TT_PFWC_RD_BRISC): it moves the 10 input tiles per chunk off NoC1.
+//     waiting on input. With PFWC_RD_COLS (task #232) BRISC reads a runtime
+//     subset of the 10 input tiles per chunk (set arg 40 on the physical NoC0
+//     columns x with bit x of arg 39 set, else set arg 41) and NCRISC the rest:
+//     each RISC runs its own reader over its own input CBs, which moves that
+//     share of the input traffic from NoC1 to NoC0.
 // pfwc_wsplit.h hands (m, pr) and the shared page from chunk to chunk, so the
 // DRAM bytes are writer_pfwc_fuse.cpp's (md5-identical).
 //
 // RUNTIME ARGS: 0..24 as writer_pfwc_fuse.cpp; 25..28 the mailbox slot
 // semaphore ids (pfwc_wsplit::slot_index order); role 1 or PFWC_RD_COLS: 29..38
 // the reader's DRAM bases (mcx, mcy, mcz, c00, c01, c02, c11, c12, c22, opacity);
-// PFWC_RD_COLS: 39 the BRISC reader column mask.
+// PFWC_RD_COLS: 39 the column mask, 40 / 41 BRISC's input tile set (bit o = tile o
+// above) on / off those columns.
 // COMPILE-TIME ARGS: the writer's 9 TensorAccessorArgs; role 1 or PFWC_RD_COLS:
 // + the reader's 10.
 // Not supported: FUSE_ABL.
@@ -152,14 +155,18 @@ void kernel_main() {
 
 #if WS_READER
     // The reader (reader_pfwc.cpp with PFWC_VIS, stride deal), non-blocking:
-    // reads chunk rd_k once all 10 input CBs have room, pushes it once landed.
+    // reads chunk rd_k once its input CBs (rd_set) have room, pushes it once landed.
 #ifdef PFWC_RD_COLS
     // NOC_NODE_ID is the physical NoC0 position (my_x is the translated one).
     const uint32_t x0 = static_cast<uint32_t>(NOC_CMD_BUF_READ_REG(0, 0, NOC_NODE_ID) & NOC_NODE_ID_MASK);
-    const bool rd_here = (ROLE == 0) == (((get_arg_val<uint32_t>(39) >> x0) & 1u) != 0u);
+    const uint32_t b_set = get_arg_val<uint32_t>(((get_arg_val<uint32_t>(39) >> x0) & 1u) ? 40 : 41);
+    const uint32_t rd_set = (ROLE == 0 ? b_set : ~b_set) & 0x3FFu;
+    const bool rd_here = rd_set != 0;
 #else
+    constexpr uint32_t rd_set = 0x3FFu;
     constexpr bool rd_here = true;
 #endif
+    auto rd_has = [&](uint32_t o) { return ((rd_set >> o) & 1u) != 0; };
     const uint32_t in_bytes = get_tile_size(0);
     constexpr auto r0 = TensorAccessorArgs<a8.next_compile_time_args_offset()>();
     constexpr auto r1 = TensorAccessorArgs<r0.next_compile_time_args_offset()>();
@@ -188,26 +195,28 @@ void kernel_main() {
         invalidate_l1_cache();  // callers may spin on CB state across early returns
         if (rd_pend) {
             if (!ncrisc_noc_reads_flushed(noc_index)) return;
-            for (uint32_t o = 0; o < 10; o++) cb_push_back(IN_CB[o], 1);
+            for (uint32_t o = 0; o < 10; o++)
+                if (rd_has(o)) cb_push_back(IN_CB[o], 1);
             rd_pend = false;
             rd_k++;
         }
         if (rd_k >= num_chunks) return;
         invalidate_l1_cache();  // compute's tiles_acked (as cb_reserve_back)
         for (uint32_t o = 0; o < 10; o++)
-            if (!cb_pages_reservable_at_back(IN_CB[o], 1)) return;
-        for (uint32_t o = 0; o < 10; o++) cb_reserve_back(IN_CB[o], 1);
+            if (rd_has(o) && !cb_pages_reservable_at_back(IN_CB[o], 1)) return;
+        for (uint32_t o = 0; o < 10; o++)
+            if (rd_has(o)) cb_reserve_back(IN_CB[o], 1);
         const uint32_t t = chunk_start + rd_k * stride;
-        noc_async_read_tile(t, in0, get_write_ptr(IN_CB[0]));
-        noc_async_read_tile(t, in1, get_write_ptr(IN_CB[1]));
-        noc_async_read_tile(t, in2, get_write_ptr(IN_CB[2]));
-        noc_async_read_tile(t, in3, get_write_ptr(IN_CB[3]));
-        noc_async_read_tile(t, in4, get_write_ptr(IN_CB[4]));
-        noc_async_read_tile(t, in5, get_write_ptr(IN_CB[5]));
-        noc_async_read_tile(t, in6, get_write_ptr(IN_CB[6]));
-        noc_async_read_tile(t, in7, get_write_ptr(IN_CB[7]));
-        noc_async_read_tile(t, in8, get_write_ptr(IN_CB[8]));
-        noc_async_read_tile(t, in9, get_write_ptr(IN_CB[9]));
+        if (rd_has(0)) noc_async_read_tile(t, in0, get_write_ptr(IN_CB[0]));
+        if (rd_has(1)) noc_async_read_tile(t, in1, get_write_ptr(IN_CB[1]));
+        if (rd_has(2)) noc_async_read_tile(t, in2, get_write_ptr(IN_CB[2]));
+        if (rd_has(3)) noc_async_read_tile(t, in3, get_write_ptr(IN_CB[3]));
+        if (rd_has(4)) noc_async_read_tile(t, in4, get_write_ptr(IN_CB[4]));
+        if (rd_has(5)) noc_async_read_tile(t, in5, get_write_ptr(IN_CB[5]));
+        if (rd_has(6)) noc_async_read_tile(t, in6, get_write_ptr(IN_CB[6]));
+        if (rd_has(7)) noc_async_read_tile(t, in7, get_write_ptr(IN_CB[7]));
+        if (rd_has(8)) noc_async_read_tile(t, in8, get_write_ptr(IN_CB[8]));
+        if (rd_has(9)) noc_async_read_tile(t, in9, get_write_ptr(IN_CB[9]));
         rd_pend = true;
     };
     auto rd_poll = [&]() {

@@ -192,7 +192,7 @@ struct PfwcDeviceContext {
     // Task #207 (GSPLAT_TT_PFWC_WRITER_SPLIT): freader / fwriter are
     // writer_pfwc_split.cpp (NCRISC / BRISC); its mailbox semaphores.
     bool fuse_wsplit = false;
-    uint32_t fuse_rd_cols = 0;  // task #232: BRISC-reader NoC0 columns (0 = NCRISC reads)
+    bool fuse_rd_brisc = false;  // task #232: BRISC reads some input tiles (PFWC_RD_COLS)
     uint32_t fsem[pfwc_wsplit::NUM_SEMS] = {};
 };
 
@@ -318,7 +318,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // Task #207: with the split writer (fused program only) NCRISC reads between
     // its own chunks, so the 10 inputs get a third slot.
     const bool wsplit = fuse && env_config::pfwc_writer_split();
-    const uint32_t rd_cols = wsplit ? env_config::pfwc_rd_brisc_cols() : 0u;
+    const bool rd_brisc = wsplit && env_config::pfwc_rd_brisc();
     const uint32_t in_depth = wsplit ? 3u : 2u;
 
     auto cb_fp32 = [&](uint32_t id, uint32_t depth) {
@@ -392,7 +392,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (env_config::emit_puboc()) split_defines["EMIT_PUBOC"] = "1";
         if (stepcyc != 0 && (steprisc == 3 || steprisc == 9))
             split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
-        if (rd_cols != 0) split_defines["PFWC_RD_COLS"] = "1";
+        if (rd_brisc) split_defines["PFWC_RD_COLS"] = "1";
     }
     // Task #206: GSPLAT_TT_PFWC_COVCAM_SFPU=1 runs cov_cam as one SFPU pass over the six
     // cov3d tiles in DEST (6 copy_tile instead of 36, no mul_unary/add_binary), same
@@ -463,7 +463,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // aabb, mask, counts, opacity; 9 for the lever B writer: opacity, colors,
     // the 4 compact outputs and the counts table).
     std::vector<uint32_t> writer_ct;
-    for (int i = 0; i < (fuse ? (rd_cols != 0 ? 19 : 9) : (vis ? 13 : 8)); ++i) {  // + the reader's 10
+    for (int i = 0; i < (fuse ? (rd_brisc ? 19 : 9) : (vis ? 13 : 8)); ++i) {  // + the reader's 10
         TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     }
     std::map<std::string, std::string> writer_defines;
@@ -476,8 +476,8 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (writer_defines.erase("FUSE_ABL") != 0)
             std::cerr << "[gsplat_tt::pfwc] GSPLAT_TT_FUSE_ABL is ignored with GSPLAT_TT_PFWC_WRITER_SPLIT=1\n";
         writer_defines["WSPLIT_ROLE"] = "0";
-        // Task #232: BRISC runs the reader on the GSPLAT_TT_PFWC_RD_BRISC columns.
-        if (rd_cols != 0) writer_defines["PFWC_RD_COLS"] = "1";
+        // Task #232: BRISC reads the GSPLAT_TT_PFWC_RD_* input tiles.
+        if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
     }
     const KernelHandle writer = CreateKernel(
         program,
@@ -499,7 +499,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         ctx.fcompute = compute;
         ctx.fwriter = writer;
         ctx.fuse_wsplit = wsplit;
-        ctx.fuse_rd_cols = rd_cols;
+        ctx.fuse_rd_brisc = rd_brisc;
         ctx.wl_fuse.add_program(device_range, std::move(program));
         ctx.fuse_built = true;
     } else if (vis) {
@@ -948,13 +948,16 @@ double pfwc_tt(
             if (wsplit_on) {
                 // writer_pfwc_split.cpp: 25..28 the mailbox semaphores; NCRISC
                 // (the reader too): 29..38 the reader's 9 bases and the opacity;
-                // with PFWC_RD_COLS both RISCs get 29..38 and 39 the column mask.
+                // with PFWC_RD_COLS both RISCs get 29..38, 39 the column mask and
+                // 40 / 41 BRISC's input tile set on / off those columns.
                 for (uint32_t sid : ctx->fsem) fw.push_back(sid);
                 std::vector<uint32_t> nw = fw;
                 for (uint32_t k = 0; k < 9; ++k) nw.push_back(reader_args[k]);
                 nw.push_back(static_cast<uint32_t>(vis_op->address()));
-                if (ctx->fuse_rd_cols != 0) {
-                    nw.push_back(ctx->fuse_rd_cols);
+                if (ctx->fuse_rd_brisc) {
+                    nw.push_back(env_config::pfwc_rd_brisc_cols());
+                    nw.push_back(env_config::pfwc_rd_set());
+                    nw.push_back(env_config::pfwc_rd_rest());
                     fw = nw;
                 }
                 SetRuntimeArgs(program, k_reader, core, nw);
