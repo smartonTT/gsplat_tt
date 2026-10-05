@@ -98,6 +98,9 @@
 #ifdef PFWC_COVCAM_SFPU
 #include "pfwc_covcam_sfpu.h"
 #endif
+#ifdef PFWC_COV2D_SFPU
+#include "pfwc_cov2d_sfpu.h"
+#endif
 #endif
 
 namespace {
@@ -765,6 +768,82 @@ void kernel_main() {
         cb_pop_front(CB_C22, 1);
 
         PC_MARK(5);
+#ifdef PFWC_COV2D_SFPU
+        // ── 7-11 (task #228, P2): two acquires instead of six. S_AC: a, c and
+        //      the radii (pfwc_cov2d::run_ac, then the same relu / sqrt / k /
+        //      ceil tile ops on copies of a and c in slots 6 / 7).
+        {
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_TMP_CC00);  // all Float32: one init
+            copy_tile(CB_TMP_CC00, 0, 0);
+            copy_tile(CB_TMP_CC02, 0, 1);
+            copy_tile(CB_TMP_CC22, 0, 2);
+            copy_tile(CB_TMP_CC11, 0, 3);
+            copy_tile(CB_TMP_CC12, 0, 4);
+            copy_tile(CB_TMP_INV_TZ, 0, 5);
+            copy_tile(CB_TMP_TX, 0, 6);
+            copy_tile(CB_TMP_TY, 0, 7);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_cov2d::run_ac(fx, neg_fx_bits, fy, neg_fy_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            relu_tile(6);
+            sqrt_tile(6);
+            mul_unary_tile(6, k_bits);
+            ceil_tile(6);
+            relu_tile(7);
+            sqrt_tile(7);
+            mul_unary_tile(7, k_bits);
+            ceil_tile(7);
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_scratch(0, CB_TMP_A);
+            emit_scratch(3, CB_TMP_C);
+            emit_dst(6, OCB(CB_RX));
+#ifdef PFWC_VIS
+            emit_scratch(6, CB_TMP_RX);
+#endif
+            emit_dst(7, OCB(CB_RY));
+#ifdef PFWC_VIS
+            emit_scratch(7, CB_TMP_RY);
+#endif
+            tile_regs_release();
+        }
+
+        PC_MARK(6);
+        // S_BC: b (pfwc_cov2d::run_b), then the conic fold of a, b, c.
+        {
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_TMP_CC02);
+            copy_tile(CB_TMP_CC02, 0, 0);
+            copy_tile(CB_TMP_CC01, 0, 1);
+            copy_tile(CB_TMP_CC12, 0, 2);
+            copy_tile(CB_TMP_CC22, 0, 3);
+            copy_tile(CB_TMP_INV_TZ, 0, 4);
+            copy_tile(CB_TMP_TX, 0, 5);
+            copy_tile(CB_TMP_TY, 0, 6);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_cov2d::run_b(fx, neg_fx_bits, fy, neg_fy_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            copy_tile(CB_TMP_A, 0, 0);
+            copy_tile(CB_TMP_C, 0, 2);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            pfwc_conic_unroll<0>();
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_dst(0, OCB(CB_A));
+            emit_dst(1, OCB(CB_B));
+            emit_dst(2, OCB(CB_C));
+            emit_scratch(7, CB_TMP_B);
+            tile_regs_release();
+        }
+        // Steps 8-11 have no work of their own here (STEPCYC books 0).
+        PC_MARK(7);
+        PC_MARK(8);
+        PC_MARK(9);
+        PC_MARK(10);
+        PC_MARK(11);
+#else
         // ── 7. cov2d_a = j00²·cc00 + 2·j00·j02·cc02 + j02²·cc22 + 0.3
         {
             tile_regs_acquire();
@@ -1040,6 +1119,7 @@ void kernel_main() {
         }
 
         PC_MARK(11);
+#endif  // PFWC_COV2D_SFPU
 #ifdef PFWC_VIS
         // ── 11.5 (task #99). Visibility predicate + tile rectangle on the SFPU.
         {
