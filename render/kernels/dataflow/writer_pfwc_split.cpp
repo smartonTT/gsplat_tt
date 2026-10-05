@@ -10,14 +10,18 @@
 //     (project_pfwc_compute.cpp PFWC_WSPLIT). NCRISC is also the reader
 //     (reader_pfwc.cpp, PFWC_VIS): rd_poll() tops up the 10 input CBs between
 //     its own steps, and every wait on NCRISC polls it, since compute may be
-//     waiting on input.
+//     waiting on input. With PFWC_RD_COLS (task #232) BRISC is the reader
+//     instead on the cores whose physical NoC0 column x has bit x of arg 39 set
+//     (GSPLAT_TT_PFWC_RD_BRISC): it moves the 10 input tiles per chunk off NoC1.
 // pfwc_wsplit.h hands (m, pr) and the shared page from chunk to chunk, so the
 // DRAM bytes are writer_pfwc_fuse.cpp's (md5-identical).
 //
 // RUNTIME ARGS: 0..24 as writer_pfwc_fuse.cpp; 25..28 the mailbox slot
-// semaphore ids (pfwc_wsplit::slot_index order); role 1 only: 29..38 the
-// reader's DRAM bases (mcx, mcy, mcz, c00, c01, c02, c11, c12, c22, opacity).
-// COMPILE-TIME ARGS: the writer's 9 TensorAccessorArgs; role 1: + the reader's 10.
+// semaphore ids (pfwc_wsplit::slot_index order); role 1 or PFWC_RD_COLS: 29..38
+// the reader's DRAM bases (mcx, mcy, mcz, c00, c01, c02, c11, c12, c22, opacity);
+// PFWC_RD_COLS: 39 the BRISC reader column mask.
+// COMPILE-TIME ARGS: the writer's 9 TensorAccessorArgs; role 1 or PFWC_RD_COLS:
+// + the reader's 10.
 // Not supported: FUSE_ABL.
 
 #include <cstdint>
@@ -31,12 +35,17 @@
 #ifndef WSPLIT_ROLE
 #define WSPLIT_ROLE 0
 #endif
+#if WSPLIT_ROLE == 1 || defined(PFWC_RD_COLS)
+#define WS_READER 1  // this RISC may run the reader
+#else
+#define WS_READER 0
+#endif
 
 // GSPLAT_TT_PFWC_STEPCYC: wall cycles per part, recorded at the end (profiler
 // builds) as "pfwc_ws", word i = (role * 16 + i) << 32 | value: "n wall wait cls
 // pfx rec opn tail rd" (n = chunks written, wait = the color reads and the 10
 // compute tiles, pfx = PREFIX wait / send, opn = OPEN wait and head merge,
-// rd = time in rd_poll, NCRISC only and included in the other parts).
+// rd = time in rd_poll, on the reader's RISC only and included in the other parts).
 #ifdef PFWC_STEPCYC
 #define WS_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define WS_MARK(acc) do { const uint32_t n_ = WS_NOW(); acc += n_ - ws_t; ws_t = n_; } while (0)
@@ -141,9 +150,16 @@ void kernel_main() {
              ws_rd = 0, ws_n = 0;
 #endif
 
-#if WSPLIT_ROLE == 1
+#if WS_READER
     // The reader (reader_pfwc.cpp with PFWC_VIS, stride deal), non-blocking:
     // reads chunk rd_k once all 10 input CBs have room, pushes it once landed.
+#ifdef PFWC_RD_COLS
+    // NOC_NODE_ID is the physical NoC0 position (my_x is the translated one).
+    const uint32_t x0 = static_cast<uint32_t>(NOC_CMD_BUF_READ_REG(0, 0, NOC_NODE_ID) & NOC_NODE_ID_MASK);
+    const bool rd_here = (ROLE == 0) == (((get_arg_val<uint32_t>(39) >> x0) & 1u) != 0u);
+#else
+    constexpr bool rd_here = true;
+#endif
     const uint32_t in_bytes = get_tile_size(0);
     constexpr auto r0 = TensorAccessorArgs<a8.next_compile_time_args_offset()>();
     constexpr auto r1 = TensorAccessorArgs<r0.next_compile_time_args_offset()>();
@@ -203,11 +219,11 @@ void kernel_main() {
         rd_step();
 #endif
     };
-#define WS_POLL() rd_poll()
+#define WS_POLL() do { if (rd_here) rd_poll(); } while (0)
 #else
 #define WS_POLL() ((void)0)
 #endif
-    // Spin until ready(), polling the reader (NCRISC).
+    // Spin until ready(), polling the reader (on its RISC).
     auto wait_until = [&](auto&& ready) {
         do {
             invalidate_l1_cache();
@@ -267,12 +283,13 @@ void kernel_main() {
             noc_async_read_tile(t, i_q23, l1_q23);
         }
 #endif
-#if WSPLIT_ROLE == 1
-        for (uint32_t o = 0; o < 10; o++)
-            while (!cb_pages_available_at_front(OUT_CB[o], 1)) {  // compute may wait on input
-                invalidate_l1_cache();
-                rd_poll();
-            }
+#if WS_READER
+        if (rd_here)
+            for (uint32_t o = 0; o < 10; o++)
+                while (!cb_pages_available_at_front(OUT_CB[o], 1)) {  // compute may wait on input
+                    invalidate_l1_cache();
+                    rd_poll();
+                }
 #endif
         for (uint32_t o = 0; o < 10; o++) cb_wait_front(OUT_CB[o], 1);
         noc_async_read_barrier();
@@ -342,8 +359,8 @@ void kernel_main() {
         pg.begin(m0, seg_base / PW);
         rs.begin(seg_base + m0);
         for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++) {
-#if WSPLIT_ROLE == 1
-            if ((w & 7u) == 7u) rd_poll();
+#if WS_READER
+            if (rd_here && (w & 7u) == 7u) rd_poll();
 #endif
             for (uint32_t bits = mw[w]; bits != 0; bits &= bits - 1) {
                 const uint32_t il = w * 32 + static_cast<uint32_t>(__builtin_ctz(bits));
@@ -408,8 +425,9 @@ void kernel_main() {
         WS_MARK(ws_tail);
     }
     if (ROLE == 0 && num_chunks == 0) write_counts(0, 0);
-#if WSPLIT_ROLE == 1
-    while (rd_k < num_chunks) rd_poll();
+#if WS_READER
+    if (rd_here)
+        while (rd_k < num_chunks) rd_poll();
 #endif
     noc_async_write_barrier();
 #ifdef PFWC_STEPCYC

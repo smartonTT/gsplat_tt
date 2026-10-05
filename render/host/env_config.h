@@ -223,4 +223,15 @@ inline bool pfwc_cov2d_sfpu() {
     return v;
 }
 
+// Task #232: with the writer split, BRISC / NoC0 instead of NCRISC / NoC1 reads the
+// pfwc input tiles on the cores in physical NoC0 column x where bit x is set (hex or
+// decimal, e.g. 0xF000 = x 12..15). Default 0 (NCRISC reads everywhere).
+inline unsigned int pfwc_rd_brisc_cols() {
+    static const unsigned int v = [] {
+        const char* e = std::getenv("GSPLAT_TT_PFWC_RD_BRISC");
+        return (e != nullptr && *e != '\0') ? static_cast<unsigned int>(std::strtoul(e, nullptr, 0)) : 0u;
+    }();
+    return v;
+}
+
 }  // namespace gsplat_tt::env_config

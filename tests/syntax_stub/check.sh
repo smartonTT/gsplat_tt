@@ -41,6 +41,7 @@ for r in 0 1; do
   chk "writer_pfwc_split.cpp ROLE $r" $DF -DWSPLIT_ROLE=$r render/kernels/dataflow/writer_pfwc_split.cpp
   chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_split.cpp
   chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_STEPCYC" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_STEPCYC=1 render/kernels/dataflow/writer_pfwc_split.cpp
+  chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_RD_COLS PFWC_STEPCYC" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_RD_COLS=1 -DPFWC_STEPCYC=1 render/kernels/dataflow/writer_pfwc_split.cpp
 done
 CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
 chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp

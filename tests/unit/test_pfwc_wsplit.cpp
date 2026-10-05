@@ -4,11 +4,12 @@
 //   tests/unit/run_cpp.sh tests/unit/test_pfwc_wsplit.cpp
 //
 // Runs one core's chunks through two writer state machines (BRISC even
-// chunks, NCRISC odd chunks plus the reader) that follow the kernel's steps:
+// chunks, NCRISC odd chunks; one of them runs the reader) that follow the kernel's steps:
 // output wait, classify, PREFIX receive / send, record loop, OPEN receive,
 // OPEN send or the last chunk's close and counts, pop. Compute and the reader
 // are modelled as CB counts (inputs depth 3, two output sets of depth 2); the
-// reader only advances where NCRISC polls it. A random scheduler interleaves
+// reader only advances where its RISC polls it (NCRISC, or BRISC on the
+// GSPLAT_TT_PFWC_RD_BRISC columns, task #232; both are run). A random scheduler interleaves
 // the agents. For random chunk sizes (incl. 0, 1, 15..17 and full tiles),
 // chunk counts 0..13, segment bases and DRAM bank counts 1..12 it checks
 // against writer_pfwc_fuse.cpp's single writer: the dep / offs / aabb pages,
@@ -107,6 +108,7 @@ struct Shared {
     uint32_t in_q = 0, out_q[2] = {0, 0}, comp_k = 0;  // CB pages, compute's next chunk
     uint32_t rd_k = 0;
     bool rd_pend = false;
+    uint32_t rd_role = 1;  // the writer that runs the reader
     Shared() {
         for (auto& i : msg_id) i = -1;
     }
@@ -171,7 +173,7 @@ struct Writer {
 
     // One step; false = blocked with nothing changed.
     bool step(const Core& c, Shared& sh, Dram& out, std::mt19937& rng) {
-        auto poll = [&]() { return role == 1 ? rd_step(c, sh) : false; };
+        auto poll = [&]() { return role == sh.rd_role ? rd_step(c, sh) : false; };
         auto slot_of = [&](uint32_t j) { return slot_index(j); };
         auto flush_pg = [&](volatile uint32_t* d, volatile uint32_t* o, volatile uint32_t* a, uint32_t page) {
             out.put_page(d, o, a, page);
@@ -252,7 +254,7 @@ struct Writer {
                 pt = REC;
                 return true;
             case REC: {
-                // A random run of records, then (NCRISC) a poll, as every 8 mask words.
+                // A random run of records, then (the reader's RISC) a poll, as every 8 mask words.
                 const uint32_t run = 1 + rng() % 48;
                 for (uint32_t x = 0; x < run && i < vc; x++, i++) {
                     const uint32_t j = jbase + i;
@@ -301,7 +303,7 @@ struct Writer {
                 pt = START;
                 return true;
             case DRAIN:
-                if (role == 1 && sh.rd_k < c.n) return poll();
+                if (role == sh.rd_role && sh.rd_k < c.n) return poll();
                 pt = DONE;
                 return true;
             case DONE:
@@ -322,7 +324,7 @@ uint32_t pick_vc(std::mt19937& rng) {
     }
 }
 
-void run_trial(const Core& c, std::mt19937& rng) {
+void run_trial(const Core& c, std::mt19937& rng, uint32_t rd_role) {
     const uint32_t npages = c.seg_base / PW + (c.m_total + PW - 1) / PW + 4;
     const uint32_t nrec = c.seg_base + c.m_total + 4 * NB_MAX * RL;
     Dram ref, got;
@@ -331,6 +333,7 @@ void run_trial(const Core& c, std::mt19937& rng) {
     reference(c, ref);
 
     Shared sh;
+    sh.rd_role = rd_role;
     Writer w[2];
     w[0].init(c, 0);
     w[1].init(c, 1);
@@ -407,12 +410,12 @@ int main() {
     for (uint32_t n = 0; n <= 13; n++)
         for (uint32_t t = 0; t < 400; t++, trials++) {
             trial_id = trials;
-            run_trial(make_core(rng, n), rng);
+            run_trial(make_core(rng, n), rng, t & 1u);
         }
     // Larger cores, as on bicycle (up to ~50 chunks per core).
-    for (uint32_t t = 0; t < 60; t++, trials++) {
+    for (uint32_t t = 0; t < 120; t++, trials++) {
         trial_id = trials;
-        run_trial(make_core(rng, 30 + rng() % 30), rng);
+        run_trial(make_core(rng, 30 + rng() % 30), rng, t & 1u);
     }
     std::printf("%llu trials, %d failures\n", (unsigned long long)trials, failures);
     return failures == 0 ? 0 : 1;
