@@ -88,8 +88,10 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         // the fused pfwc program is 71216 B and overflows the default 70656 B buffer.
         const char* kx = std::getenv("GSPLAT_TT_KCFG_EXTRA_KB");
         long extra_kb = kx ? std::atol(kx) : 0;
-        // Task #207: the split pfwc writer adds the writer code to the NCRISC kernel.
-        if (kx == nullptr && env_config::pfwc_writer_split()) extra_kb = 8;
+        // Task #207/#221: the split pfwc writer adds the writer code to the NCRISC kernel
+        // (92496 B program, too large at +8 and +16 KB); SFPU cov_cam alone needs ~4 KB.
+        if (kx == nullptr && env_config::pfwc_writer_split()) extra_kb = 24;
+        else if (kx == nullptr && env_config::pfwc_covcam_sfpu()) extra_kb = 8;
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
         if (extra_kb > 0 || num_cqs > 1) {

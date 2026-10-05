@@ -393,8 +393,8 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     }
     // Task #206: GSPLAT_TT_PFWC_COVCAM_SFPU=1 runs cov_cam as one SFPU pass over the six
     // cov3d tiles in DEST (6 copy_tile instead of 36, no mul_unary/add_binary), same
-    // rounding order, so bit-identical. Default 0 (off).
-    if (vis_env_u32("GSPLAT_TT_PFWC_COVCAM_SFPU", 0) != 0) vis_defines["PFWC_COVCAM_SFPU"] = "1";
+    // rounding order, so bit-identical. Default on since task #221 (=0 off).
+    if (env_config::pfwc_covcam_sfpu()) vis_defines["PFWC_COVCAM_SFPU"] = "1";
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
     // layout as before; the fused kernel just reads world means in slots 0..2
