@@ -1,0 +1,23 @@
+n_views=30  freq=1350.0MHz
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+------------------------------------------------------------------------------------------------
+TRISC-FW                  100938.8  3364.628       308.1      10.269    39600  TRISC_0,TRISC_1,TRISC_2
+TRISC-KERNEL               96055.3  3201.845       300.5      10.016    39600  TRISC_0,TRISC_1,TRISC_2
+BRISC-FW                   37461.4  1248.715       344.1      11.468    16500  BRISC
+tile_blend_sfpu            37049.0  1234.967       112.8       3.759     9900  TRISC_0,TRISC_1,TRISC_2
+NCRISC-FW                  36789.4  1226.314       339.3      11.309    16500  NCRISC
+NCRISC-KERNEL              35170.9  1172.365       326.6      10.886    16500  NCRISC
+BRISC-KERNEL               34958.3  1165.275       324.5      10.817    16500  BRISC
+mat_cull_mask              24945.5   831.515        85.1       2.837     9900  TRISC_0,TRISC_1,TRISC_2
+pfwc                       21813.4   727.114        68.1       2.270     9900  TRISC_0,TRISC_1,TRISC_2
+sort_subchunk_mat          16111.0   537.033        83.5       2.784     6600  BRISC,NCRISC
+tile_blend_load            12125.7   404.190       110.6       3.688     3300  NCRISC
+sort_ol_town               10780.4   359.346        35.2       1.172     9900  TRISC_0,TRISC_1,TRISC_2
+sort_ol_emit                7814.5   260.482        38.5       1.282     6600  BRISC,NCRISC
+k2_pairs                    5688.8   189.628        27.7       0.922     6600  BRISC,NCRISC
+rd_l1_bulk                   349.0    11.634        27.5       0.916    33073  NCRISC
+sort_ol_fill                 268.2     8.940         2.8       0.095     3300  NCRISC
+sort_ol_barrier              246.8     8.227         2.8       0.092     3300  BRISC
+sort_ol_fillb                232.4     7.748         2.7       0.089     3300  BRISC
+sort_ol_prefix               136.9     4.563         2.5       0.083     3300  BRISC
+k2_rows                       38.4     1.281         0.2       0.006     6600  BRISC,NCRISC
