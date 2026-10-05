@@ -196,7 +196,8 @@ void kernel_main() {
             {
                 DeviceZoneScopedN("k2_pairs");
                 pfwc_fuse::emit_pairs_diet_m<pfwc_fuse::MODE_DIFF>(tab, nseg, P_pub, tiles_x,
-                                                                   pg0, npg, io, cnt);
+                                                                   pg0, npg, io, cnt,
+                                                                   nd / tiles_x);
             }
             DeviceZoneScopedN("k2_rows");
             pfwc_fuse::diff_to_counts(cnt, span, tiles_x, span, rowp);

@@ -768,7 +768,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
         // the pairs; the difference array must fit the K2's local row.
         const uint32_t span = row_pages * ELEMS_PER_PAGE;
         const uint32_t diff_words =
-            span == 0 ? 0u : ((span + tiles_x - 1u) / tiles_x + 1u) * (tiles_x + 1u);
+            span == 0 ? 0u : (span + tiles_x - 1u) / tiles_x * tiles_x;
         const bool want_gen =
             want_early && env_config::k2_folded() && diff_words <= K2_FOLD_TILES;
         {

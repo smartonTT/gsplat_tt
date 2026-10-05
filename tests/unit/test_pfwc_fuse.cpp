@@ -308,12 +308,22 @@ void check_fold298(const Scene& s, const Fused& f, const std::vector<uint32_t>& 
                    uint32_t win_pages) {
     std::vector<uint32_t> acc(speed.size() + 1u, 0u);
     for (std::size_t k = 0; k < speed.size(); k++) acc[k + 1] = acc[k] + speed[k];
-    const uint32_t screen = s.tiles_x * 50u;  // make_scene: rectangles end above row 50
+    // Tight screen: the lowest rectangle ends on the last row, so the
+    // difference walk's dropped right/bottom updates are exercised.
+    uint32_t tiles_y = 1;
+    for (std::size_t i = 0; i < s.box.size(); i++)
+        if (s.vis[i] && s.pairs[i] != 0) {
+            const uint32_t h = s.pairs[i] / vis_tile::aabb_w(s.box[i]);
+            tiles_y = std::max(tiles_y, vis_tile::aabb_min_y(s.box[i]) + h);
+        }
+    const uint32_t screen = s.tiles_x * tiles_y;
     const uint32_t span = (screen + 15u) / 16u * 16u;
     const uint32_t pages = (P_pub + 15) / 16;
     std::vector<uint32_t> dg(pages * 16, 0xFFFFFFFFu), dt(pages * 16, 0xFFFFFFFFu);
     std::vector<uint32_t> written(pages, 0);
-    std::vector<uint32_t> diff(pfwc_fuse::diff_words(screen, s.tiles_x)), row(span), ref(span);
+    const uint32_t nd = pfwc_fuse::diff_words(screen, s.tiles_x);
+    if (nd != screen) fail("diff words != screen tiles", nd, screen);
+    std::vector<uint32_t> diff(nd + 64u), row(span), ref(span);  // + a guard tail
     for (uint32_t k = 0; k < K; k++)
         for (uint32_t mv = 0; mv < 2; mv++) {
             uint32_t pg0 = 0, npg = 0;
@@ -325,7 +335,10 @@ void check_fold298(const Scene& s, const Fused& f, const std::vector<uint32_t>& 
             cio.box = &f.box;
             std::fill(diff.begin(), diff.end(), 0u);
             pfwc_fuse::emit_pairs_diet_m<pfwc_fuse::MODE_DIFF>(tab.data(), C, P_pub, s.tiles_x,
-                                                               pg0, npg, cio, diff.data());
+                                                               pg0, npg, cio, diff.data(),
+                                                               tiles_y);
+            for (uint32_t t = nd; t < diff.size(); t++)
+                if (diff[t] != 0) fail("diff write past the screen", t, diff[t]);
             if (!cio.rd.empty()) fail("diff: reads in flight at the end", k, cio.rd.size());
             if (!cio.wr.empty()) fail("diff: pair writes", k, cio.wr.size());
             pfwc_fuse::diff_to_counts(diff.data(), screen, s.tiles_x, span, row.data());

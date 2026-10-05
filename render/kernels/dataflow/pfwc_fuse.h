@@ -191,8 +191,10 @@ constexpr uint32_t OUT_SLOTS = 2 * OUT_HALF;
 
 //
 // Task #298 (lever B): MODE_DIFF counts the same pairs without writing any:
-// cnt is a (tiles_y + 1) x (tiles_x + 1) difference array (the caller zeroes
-// it, diff_to_counts turns it into the per-tile count row) and every rectangle
+// cnt is a tiles_y x tiles_x difference array (the caller zeroes it,
+// diff_to_counts turns it into the per-tile count row; updates right of the
+// last column or below the last row are dropped, no tile reads them, so a
+// 32 x 32 screen fits the 1024-word row) and every rectangle
 // part of the range (first partial row, the full rows, last partial row) costs
 // 4 updates, not one per pair. gid_slot / tid_slot / write_page /
 // writes_flushed are never called.
@@ -200,7 +202,7 @@ constexpr uint32_t MODE_PAIRS = 0, MODE_COUNT = 1, MODE_DIFF = 2;
 template <uint32_t MODE, class Io>
 inline void emit_pairs_diet_m(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
                               uint32_t tiles_x, uint32_t pg0, uint32_t npg, Io& io,
-                              uint32_t* cnt) {
+                              uint32_t* cnt, uint32_t tiles_y = 0) {
     constexpr bool COUNT = MODE == MODE_COUNT;
     constexpr bool DIFF = MODE == MODE_DIFF;
     if (npg == 0) return;
@@ -325,15 +327,18 @@ inline void emit_pairs_diet_m(const volatile uint32_t* tab, uint32_t nseg, uint3
                 uint32_t n = e - p;
                 p = e;
                 if constexpr (DIFF) {
-                    const uint32_t S = tiles_x + 1u, x0 = vis_tile::aabb_min_x(box);
+                    const uint32_t S = tiles_x, x0 = vis_tile::aabb_min_x(box);
                     uint32_t y = vis_tile::aabb_min_y(box) + dy;
                     auto rect = [&](uint32_t x, uint32_t rw, uint32_t rh) {
                         uint32_t* d0 = cnt + y * S + x;
-                        uint32_t* d1 = d0 + rh * S;
+                        const bool right = x + rw < tiles_x;
                         d0[0]++;
-                        d0[rw]--;
-                        d1[0]--;
-                        d1[rw]++;
+                        if (right) d0[rw]--;
+                        if (y + rh < tiles_y) {
+                            uint32_t* d1 = d0 + rh * S;
+                            d1[0]--;
+                            if (right) d1[rw]++;
+                        }
                     };
                     if (dx != 0) {
                         const uint32_t run = (w - dx < n) ? w - dx : n;
@@ -409,14 +414,14 @@ inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_
 // Words of the MODE_DIFF array for a tiles_x wide screen of num_tiles tiles.
 inline uint32_t diff_words(uint32_t num_tiles, uint32_t tiles_x) {
     const uint32_t tiles_y = (num_tiles + tiles_x - 1u) / tiles_x;
-    return (tiles_y + 1u) * (tiles_x + 1u);
+    return tiles_y * tiles_x;
 }
 
 // MODE_DIFF array -> count row: out[t] = 2D inclusive prefix of d at tile t
 // (t < num_tiles); out[t] = 0 for num_tiles <= t < span.
 inline void diff_to_counts(const uint32_t* d, uint32_t num_tiles, uint32_t tiles_x,
                            uint32_t span, volatile uint32_t* out) {
-    const uint32_t S = tiles_x + 1u;
+    const uint32_t S = tiles_x;
     uint32_t t = 0;
     for (uint32_t y = 0; t < num_tiles; y++) {
         uint32_t run = 0;  // prefix of d's row y
