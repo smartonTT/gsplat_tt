@@ -925,6 +925,13 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #ifndef BLEND_DECODE_AHEAD
 #define BLEND_DECODE_AHEAD 0  // task #231, see the decode-ahead block below
 #endif
+// Decode-ahead stages the default blend path only; other knob mixes (and
+// MB_STATS) run without it, so the host default can stay on.
+#if BLEND_DECODE_AHEAD && (!(BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_JUMP_WALK && BLEND_ABL == 0 && \
+                             !BLEND_FPU_QF_ABL) || defined(GSPLAT_TT_MB_STATS))
+#undef BLEND_DECODE_AHEAD
+#define BLEND_DECODE_AHEAD 0
+#endif
 #ifndef BLEND_T_EPS
 #define BLEND_T_EPS 0.00390625f
 #endif
@@ -1019,9 +1026,8 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
 // over the whole launch; TRISC0 zeroes them and mailboxes the ring address to
 // TRISC1 before the first get_tile_address, so the mailbox order is unchanged.
 #if BLEND_DECODE_AHEAD
-#if !(BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_JUMP_WALK && BLEND_ABL == 0 && !BLEND_FPU_QF_ABL) || \
-    defined(GSPLAT_TT_MB_STATS) || BLEND_DECODE_AHEAD > 2
-#error "BLEND_DECODE_AHEAD (1 or 2) needs COEF_DEST=1, SFPU_UNORM=1, JUMP_WALK=1, ABL=0, FPU_QF_ABL=0, no MB_STATS"
+#if BLEND_DECODE_AHEAD > 2
+#error "BLEND_DECODE_AHEAD must be 0, 1 or 2"
 #endif
 constexpr uint32_t CB_DA_RING = 10;
 constexpr uint32_t DA_SLOTS = 64;  // power of two; mirrors blend_device.cpp
