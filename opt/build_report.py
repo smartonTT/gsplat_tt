@@ -1369,6 +1369,56 @@ def in_flight_section() -> str:
 """
 
 
+THROUGHPUT_JSONL = OPT_DIR / "ttw" / "throughput.jsonl"
+
+
+def throughput_section() -> str:
+    """Secondary metric (task #275): back-to-back throughput, ms/frame.
+
+    Rows come from opt/ttw/throughput.jsonl (render/run.py --back-to-back). They
+    never feed the primary ms/view latency, the iteration ledger or the GPU anchor."""
+    rows = _read_jsonl(THROUGHPUT_JSONL)
+    if not rows:
+        return ""
+    body = []
+    for r in sorted(rows, key=lambda r: r.get("ts", ""), reverse=True):
+        ms = float(r["b2b_ms_frame"])
+        lat = r.get("latency_ms_view")
+        drop = r.get("b2b_drop_ms_frame")
+        rounds = ", ".join(f"{x:.3f}" for x in r.get("b2b_ms_frame_rounds", []))
+        md5 = html_escape(str(r.get("md5", "")))
+        match = " (golden match)" if r.get("golden_match") else ""
+        src = html_escape(str(r.get("source", "")))
+        body.append(
+            f"<tr><td>{html_escape(format_ts_minutes(r.get('ts', '')))}</td>"
+            f"<td>iter-{r.get('iter_ref', '?')} @ <code>{html_escape(str(r.get('commit', '')))}</code></td>"
+            f"<td>{html_escape(str(r.get('board', '')))}</td>"
+            f"<td><b>{ms:.3f}</b> ({1000.0 / ms:.1f} FPS)<br><small>rounds {rounds}</small></td>"
+            f"<td>{'&mdash;' if drop is None else f'{float(drop):.3f}'}</td>"
+            f"<td>{'&mdash;' if lat is None else f'{float(lat):.3f}'}</td>"
+            f"<td><code>{md5}</code>{match}</td>"
+            f"<td><a href='{_opt_href(src)}'>{src}</a></td></tr>")
+    return f"""
+<section style='border-left:4px solid #8d99ae;padding:8px 16px'>
+  <h2 style='margin-top:0'>Throughput, back-to-back
+    <span style='background:#8d99ae;color:#fff;padding:1px 8px;border-radius:10px;
+      font-size:12px'>SECONDARY METRIC</span></h2>
+  <p>Frames rendered back to back with no host work between views
+  (<code>render/run.py --back-to-back</code>): wall time / frames. The <b>primary
+  metric stays per-view latency</b> (ms/view, as in the ledger and the GPU comparison);
+  this table does not change it. All rows measured on device, 3 untraced rounds.
+  Kept = frames kept and checked byte for byte against a check pass;
+  dropped = frames dropped as <code>render()</code> returns, like a viewer.</p>
+  <table class='rows'>
+    <tr><th>Measured</th><th>Tip</th><th>Board</th>
+        <th>Throughput, back-to-back, ms/frame (kept)</th><th>dropped, ms/frame</th>
+        <th>Latency, same session, ms/view</th><th>Sweep md5</th><th>Source</th></tr>
+    {"".join(body)}
+  </table>
+</section>
+"""
+
+
 def ledger_section(rows: list[dict]) -> str:
     """Unified ledger as big backburner-style cards, one per iter.
     Sorted by timestamp descending so the newest (Blackhole) iters appear on top."""
@@ -2021,6 +2071,7 @@ def build_html(rows: list[dict]) -> str:
 {meta}
 {in_flight_section()}
 {figs_html}
+{throughput_section()}
 {published_gpu_section()}
 {gpu_reference_section()}
 {ledger_section(rows)}
