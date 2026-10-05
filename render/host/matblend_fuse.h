@@ -1,5 +1,5 @@
-// Task #280/#285: fused mat+blend program (GSPLAT_TT_MATBLEND_FUSE=1, default
-// off). Design: docs/matblend-ready-t273/README.md step 2.
+// Task #280/#285: fused mat+blend program (GSPLAT_TT_MATBLEND_FUSE, default on
+// since #293; =0 turns it off). Design: docs/matblend-ready-t273/README.md step 2.
 //
 // Only for one-launch frames with the sort->blend continuation. Instead of
 // enqueueing the materialize program, launch_subchunk_materialize (sort_device)
@@ -30,7 +30,7 @@ namespace gsplat_tt::matblend_fuse {
 inline bool enabled() {
     static const bool on = [] {
         const char* e = std::getenv("GSPLAT_TT_MATBLEND_FUSE");
-        return e != nullptr && e[0] == '1';
+        return e == nullptr || e[0] != '0';
     }();
     return on;
 }
