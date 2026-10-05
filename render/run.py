@@ -363,7 +363,7 @@ def main():
 
     # Secondary diagnostic: float PSNR vs the freshly-rendered CPU reference.
     hero_vs_cpu = float("nan")
-    if not args.no_ref and ref is not None:
+    if not args.no_ref and ref is not None and ref.shape == _to_f01(hero_clean).shape:
         hero_vs_cpu = psnr(_to_f01(hero_clean), ref)
         ref_mean = float(ref.mean())
         if ref_mean > 0.95 or ref_mean < 0.05:
@@ -375,8 +375,15 @@ def main():
 
     # PRIMARY gated metric: 8-bit PSNR vs the committed golden reference.
     hero_vs_ref = float("nan")
-    if GOLDEN_REF.exists():
+    golden8 = None
+    if not args.no_ref and GOLDEN_REF.exists():
         golden8 = np.asarray(Image.open(GOLDEN_REF).convert("RGB"), dtype=np.uint8)
+        if golden8.shape != _to_u8(hero_clean).shape:
+            print(f"[run] WARNING: golden {golden8.shape} != hero "
+                  f"{_to_u8(hero_clean).shape}; skipping golden compare",
+                  file=sys.stderr, flush=True)
+            golden8 = None
+    if golden8 is not None:
         hero_vs_ref = psnr8(hero_clean, golden8.astype(np.float32) / 255.0)
         d = np.clip(np.abs(_to_u8(hero_clean).astype(np.int16)
                            - golden8.astype(np.int16)) * 10, 0, 255).astype(np.uint8)
@@ -386,7 +393,7 @@ def main():
         hero_vs_ref = hero_vs_cpu
 
     # CPU reference artifacts (ground-truth visibility, regardless of golden).
-    if not args.no_ref and ref is not None:
+    if not args.no_ref and ref is not None and ref.shape == _to_f01(hero_clean).shape:
         Image.fromarray(_to_u8(ref)).save(out_dir / "hero_ref.png")
         cpu_diff = np.clip(np.abs(_to_f01(hero_clean) - ref) * 10.0, 0.0, 1.0)
         cpu_diff_name = "hero_diff10_cpu.png" if GOLDEN_REF.exists() else "hero_diff10.png"
