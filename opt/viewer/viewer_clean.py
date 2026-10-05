@@ -73,6 +73,21 @@ def main():
         med = statistics.median(ms)
         print(f"[viewer_clean] SELFTEST hero {W}x{H} n={len(ms)} median={med:.2f} ms "
               f"({1000.0 / med:.1f} FPS) min={min(ms):.2f} max={max(ms):.2f}", flush=True)
+        # Save the device frame and score it against the reference render.
+        import numpy as np
+        from PIL import Image
+        img = viewer.pipeline.render(gauss, extr, K, H, W).image
+        img8 = (img if img.dtype == np.uint8 else
+                (np.clip(np.asarray(img, dtype=np.float32), 0.0, 1.0) * 255.0).astype(np.uint8))
+        out = REPO.parent / "hero_viewer.png"
+        Image.fromarray(img8).save(out)
+        ref_p = REPO / "benchmarks" / "reference_v2" / "hero.png"
+        if ref_p.exists():
+            ref = np.asarray(Image.open(ref_p).convert("RGB"), dtype=np.float64)
+            mse = float(np.mean((img8.astype(np.float64) - ref) ** 2))
+            psnr = 10.0 * np.log10(255.0 ** 2 / mse) if mse > 0 else float("inf")
+            print(f"[viewer_clean] HERO saved {out} PSNR vs reference_v2/hero.png = {psnr:.2f} dB",
+                  flush=True)
 
     print(f"[viewer_clean] READY port={args.port}", flush=True)
     viewer.run()
