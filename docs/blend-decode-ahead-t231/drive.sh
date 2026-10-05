@@ -4,7 +4,8 @@
 # Mac side, one ttp lock p100 per step, one sync + build for every arm (the knobs are JIT defines).
 #   drive.sh [rev] [steps]   steps: any of sync smoke 1 2 3
 #   smoke: 30 views at DA 1 and 2, md5-gated. A ring deadlock shows up as a run timeout without dumps.
-#   1-3:   rotated untraced 30-view rounds of def / DA1 / DA2 / RAW, md5-gated.
+#   1-3:   rotated untraced 30-view rounds of def / DA1 / DA2 / RAW, md5-gated (two devrun calls of
+#          two arms each: devrun refuses a timeout over 600 s).
 # Every run also saves its device hero render (run.py tmp/<iter-dir>/hero_clean.png); the chain
 # fetches them to tmp/t231/hero-r<round>-<arm>.png (untracked) for the iteration's screenshot.
 set -u
@@ -29,7 +30,7 @@ gate() {  # round arm...: fetch logs, fail the chain on any md5 mismatch
   done
   [ $bad -eq 0 ] || { echo CHAIN_DONE; exit 4; }
 }
-tm() {  # round timeout arms...
+tm() {  # round timeout arms...  (devrun refuses timeouts over 600 s: at most 2 arms per call)
   local r=$1 to=$2; shift 2
   lk $DEVRUN --host $H --no-verify --timeout $to --tag t231-time$r -- "RUN_TO=${RT:-150} bash $T/$P/remote_time.sh $r $*"
   echo "TIME${r}_RC=$?"
@@ -48,13 +49,13 @@ if has sync; then
   lk opt/sync_remote.sh $H $T "${1:-HEAD}"; rc=$?; echo "SYNC_RC=$rc"; [ $rc -eq 0 ] || { echo CHAIN_DONE; exit $rc; }
 fi
 if has smoke; then
-  RT=240 tm s 700 $(arm DA1) $(arm DA2)
+  RT=180 tm s 400 $(arm DA1) $(arm DA2)
   gate s DA1 DA2
 fi
 ord=("def DA1 DA2 RAW" "DA2 RAW def DA1" "RAW def DA1 DA2")
 for r in 1 2 3; do
   has $r || continue
-  a=""; for l in ${ord[$((r-1))]}; do a="$a $(arm $l)"; done
-  tm $r 900 $a; gate $r def DA1 DA2 RAW
+  set -- ${ord[$((r-1))]}
+  tm $r 360 $(arm $1) $(arm $2); tm $r 360 $(arm $3) $(arm $4); gate $r def DA1 DA2 RAW
 done
 echo CHAIN_DONE
