@@ -30,6 +30,12 @@ inline constexpr uint32_t kDropped = 0xFFFFFFFFu;
 // per-tile limit). The materialize's big path keeps keys + 3 tile_cap u32
 // arrays in its 512 KB bucket CB, so tile_cap <= 43690.
 inline constexpr uint32_t kTileCap = 32768;
+// Task #284: the bucket after a frame overflowed kTileCap (sort_device.cpp
+// grows it once and keeps it). == sort_onelaunch_algo.h BIG_MAX_N: the
+// materialize selects the ranks of tiles over kTileCap instead of sorting
+// all their keys. A multiple of the 64-record DRAM page.
+inline constexpr uint32_t kTileCapBig = 65472;
+static_assert(kTileCapBig % 64u == 0u, "whole record pages");
 
 struct CoreSplit {
     uint32_t lo = 0, mid = 0, hi = 0;  // pair pages: mover 0 [lo, mid), mover 1 [mid, hi)

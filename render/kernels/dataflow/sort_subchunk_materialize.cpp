@@ -29,8 +29,10 @@
 #include "api/dataflow/dataflow_api.h"
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
-#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
+#if (defined(OL_MAT_SELECT) && OL_MAT_SELECT) || (defined(SORT_ONELAUNCH) && SORT_ONELAUNCH)
 #include "sort_onelaunch_algo.h"
+#endif
+#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
 #ifndef OL_MAT_PART
 #define OL_MAT_PART 4096u  // == sort_mover_split.h kOlMatPartRecs
 #endif
@@ -480,6 +482,43 @@ void kernel_main() {
             // CB_BSORT; v / k2 / v2 in CB_BUCKET until the chunk re-reads.
             const uint32_t N = count;
             uint32_t* k = reinterpret_cast<uint32_t*>(bs);
+#if defined(OL_MAT_SELECT) && OL_MAT_SELECT
+            uint32_t po = part * OL_MAT_PART;
+            if (po >= L_sub) continue;
+            uint32_t L_item = (L_sub - po > OL_MAT_PART) ? OL_MAT_PART : (L_sub - po);
+#else
+            uint32_t po = 0u;
+            uint32_t L_item = L_sub;
+#endif
+            if (N > sort_radix_tile::MAX_N) {
+                // Task #284: a tile past kTileCap (bucket grown to
+                // kTileCapBig). Keys fill CB_BUCKET's first N u32, staged
+                // through CB_SLAB in 8192-record chunks; the candidates of
+                // the item's ranks (<= 32768) take CB_BUCKET's top half and
+                // CB_SLAB, and k gets the item's sorted slots.
+                uint32_t* keys = reinterpret_cast<uint32_t*>(buck);
+                {
+                    MAT_PZ("mat_ol_keys");
+                    constexpr uint32_t kStage = 8192u;  // CB_SLAB records
+                    for (uint32_t r0 = 0; r0 < N; r0 += kStage) {
+                        const uint32_t nr = (N - r0 < kStage) ? (N - r0) : kStage;
+                        read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, slab);
+                        auto rw = reinterpret_cast<const volatile uint32_t*>(slab);
+                        for (uint32_t i = 0; i < nr; ++i) keys[r0 + i] = rw[i * 8u + 3u];
+                    }
+                }
+                {
+                    MAT_PZ("mat_ol_sort");
+                    constexpr uint32_t kCand = sort_radix_tile::MAX_N;
+                    uint32_t* ck = keys + 2u * kCand;  // byte 256 KB: past the keys
+                    uint32_t* ck2 = reinterpret_cast<uint32_t*>(slab);
+                    const uint32_t lo = sc_off + po;
+                    if (!sort_ol::select_ranks_big(keys, N, lo, lo + L_item, ck, ck + kCand, ck2,
+                                                   ck2 + kCand, kCand, k, hist)) {
+                        for (uint32_t i = 0; i < L_item; ++i) k[i] = lo + i;  // stays in bounds
+                    }
+                }
+            } else {
             {
                 MAT_PZ("mat_ol_keys");
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
@@ -495,9 +534,6 @@ void kernel_main() {
             // sorts only the keys in the depth bins of those ranks
             // (sort_onelaunch_algo.h), not the whole tile. Four N u32 arrays
             // fill CB_BUCKET at N = 32768 (16384 x 32 B).
-            const uint32_t po = part * OL_MAT_PART;
-            if (po >= L_sub) continue;
-            const uint32_t L_item = (L_sub - po > OL_MAT_PART) ? OL_MAT_PART : (L_sub - po);
             {
                 MAT_PZ("mat_ol_sort");
                 uint32_t* ck = reinterpret_cast<uint32_t*>(buck);
@@ -505,8 +541,6 @@ void kernel_main() {
                                       ck + 2u * N, ck + 3u * N, k, hist);
             }
 #else
-            const uint32_t po = 0u;
-            const uint32_t L_item = L_sub;
             uint32_t* v = reinterpret_cast<uint32_t*>(buck);
             uint32_t* k2 = v + N;
             uint32_t* v2 = k2 + N;
@@ -517,6 +551,7 @@ void kernel_main() {
                 for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
 #endif
+            }  // N <= MAX_N
             {
                 MAT_PZ("mat_ol_gather");
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {

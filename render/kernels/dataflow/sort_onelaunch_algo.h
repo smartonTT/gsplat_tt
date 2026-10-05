@@ -101,7 +101,7 @@ inline void select_refine(const uint32_t* k, uint32_t n, const Edge e, uint32_t 
 // Separate edges matter when outliers or a gap sit between the two ranks.
 // 0 <= lo < hi <= n <= MAX_N.
 inline Select select_bins(const uint32_t* k, uint32_t n, uint32_t lo, uint32_t hi,
-                          sort_radix_tile::hist_t* hist) {
+                          sort_radix_tile::hist_t* hist, uint32_t levels = SELECT_LEVELS) {
     Edge el{k[0], k[0], 0u, n};
     for (uint32_t i = 1; i < n; i++) {
         const uint32_t x = k[i];
@@ -110,7 +110,7 @@ inline Select select_bins(const uint32_t* k, uint32_t n, uint32_t lo, uint32_t h
     }
     Edge eh = el;
     auto result = [&]() { return Select{el.klo, eh.khi, el.below, eh.below + eh.cnt - el.below}; };
-    for (uint32_t lvl = 0; lvl < SELECT_LEVELS; lvl++) {
+    for (uint32_t lvl = 0; lvl < levels; lvl++) {
         if (result().m <= 2u * (hi - lo)) break;
         const bool lo_done = el.klo == el.khi, hi_done = eh.klo == eh.khi;
         if (lo_done && hi_done) break;
@@ -150,6 +150,50 @@ inline void select_ranks(const uint32_t* k, uint32_t n, uint32_t lo, uint32_t hi
     const uint32_t m = select_collect(k, n, s, ck, cv);
     const uint32_t* res = sort_radix_tile::sort_pairs(ck, cv, ck2, cv2, m, hist) ? cv2 : cv;
     for (uint32_t i = lo; i < hi; i++) out[i - lo] = res[i - s.base];
+}
+
+// Task #284: a grown tile bucket (after an overflow) holds up to BIG_MAX_N
+// records, more than the radix sorts (MAX_N); the u16 bin counts stay exact
+// below 65536. One more level than select_ranks: after 4 rounds of 1024 bins
+// every edge range is a single key. The collect then drops the edge keys'
+// ties outside [lo, hi) (equal keys keep index order, so their ranks are
+// known), leaving ~hi - lo candidates even on tied keys. ck, cv, ck2, cv2
+// hold `cap` (<= MAX_N) entries each. Returns false (out partly written) if
+// the candidates do not fit them.
+constexpr uint32_t BIG_MAX_N = 65472;
+constexpr uint32_t BIG_LEVELS = SELECT_LEVELS + 1u;
+static_assert(BIG_MAX_N < 65536u, "u16 bin counts");
+inline bool select_ranks_big(const uint32_t* k, uint32_t n, uint32_t lo, uint32_t hi, uint32_t* ck,
+                             uint32_t* cv, uint32_t* ck2, uint32_t* cv2, uint32_t cap,
+                             uint32_t* out, sort_radix_tile::hist_t* hist) {
+    const Select s = select_bins(k, n, lo, hi, hist, BIG_LEVELS);
+    const uint32_t span = s.khi - s.klo;
+    // Ranks of the khi ties start at b_hi (keys below khi).
+    uint32_t b_hi = s.base;
+    if (s.khi != s.klo) {
+        for (uint32_t i = 0; i < n; i++) b_hi += (k[i] - s.klo < span) ? 1u : 0u;
+    }
+    const uint32_t skip_lo = lo - s.base;
+    uint32_t t_lo = 0, t_hi = 0, m = 0;
+    for (uint32_t i = 0; i < n; i++) {
+        const uint32_t x = k[i];
+        if (x - s.klo > span) continue;  // unsigned: outside [klo, khi]
+        if (x == s.klo) {
+            const uint32_t t = t_lo++;
+            if (t < skip_lo || s.base + t >= hi) continue;  // rank base + t
+        } else if (x == s.khi) {
+            if (b_hi + t_hi++ >= hi) continue;
+        }
+        if (m == cap) return false;
+        ck[m] = x;
+        cv[m] = i;
+        m++;
+    }
+    if (m > sort_radix_tile::MAX_N) return false;
+    const uint32_t base = s.base + (t_lo < skip_lo ? t_lo : skip_lo);  // rank of ck[first]
+    const uint32_t* res = sort_radix_tile::sort_pairs(ck, cv, ck2, cv2, m, hist) ? cv2 : cv;
+    for (uint32_t i = lo; i < hi; i++) out[i - lo] = res[i - base];
+    return true;
 }
 
 }  // namespace sort_ol

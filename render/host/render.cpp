@@ -356,6 +356,16 @@ py::tuple render_view(
         // the view at a coarser floor (every stage's cull uses it, so the frame
         // stays seam-free); a view that fits never gets here.
         const uint32_t over_n = gsplat_tt::sort_last_tile_overflow();
+        // Task #284: first grow the bucket (once per process) and re-render at
+        // the same floor; the coarser floor is the fallback past kTileCapBig.
+        if (!sort_ok && over_n != 0 && attempt < gsplat_tt::overflow_retry::kMaxRetries &&
+            gsplat_tt::sort_grow_tile_capacity(over_n)) {
+            std::fprintf(stderr,
+                         "[render_clean] tile overflow (%u records): bucket grown to %u, "
+                         "retrying the view at contrib floor 1/%.0f\n",
+                         over_n, gsplat_tt::sort_tile_capacity(), 1.0 / mb_contrib_floor);
+            continue;
+        }
         if (sort_ok || over_n == 0 || attempt >= gsplat_tt::overflow_retry::kMaxRetries ||
             mb_contrib_floor >= gsplat_tt::overflow_retry::kMaxFloor) {
             break;

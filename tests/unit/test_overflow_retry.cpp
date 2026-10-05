@@ -44,6 +44,14 @@ int main() {
         for (int i = 0; i < orr::kMaxRetries; ++i) g = orr::next_floor(g, 10 * cap, cap);
         CHECK(g == orr::kMaxFloor);
     }
+    // t284: an overflow up to the big bucket grows it once (same floor);
+    // over it, already grown, or a test cap below the tile: floor retry.
+    constexpr uint32_t big = 65472, none = 0xFFFFFFFFu;
+    CHECK(orr::grown_tile_cap(cap, big, 38345, none) == big);
+    CHECK(orr::grown_tile_cap(cap, big, big, none) == big);
+    CHECK(orr::grown_tile_cap(cap, big, big + 1, none) == 0);
+    CHECK(orr::grown_tile_cap(big, big, 70000, none) == 0);
+    CHECK(orr::grown_tile_cap(cap, big, 25407, 20000) == 0);
     if (fails == 0) std::printf("ok\n");
     return fails == 0 ? 0 : 1;
 }

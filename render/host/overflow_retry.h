@@ -40,4 +40,14 @@ inline float next_floor(float floor, uint32_t max_n, uint32_t cap) {
     return static_cast<float>(std::min(next, static_cast<double>(kMaxFloor)));
 }
 
+// Task #284: before any coarser floor, the sort bucket grows from `cap` to
+// `big` records (same floor, full quality). Returns the grown capacity, or 0
+// when growing does not help: already grown, the tile is over `big`, or the
+// largest tile `max_n` is over `limit` (GSPLAT_TT_TEST_TILE_CAP), which a
+// bigger bucket does not lift.
+inline uint32_t grown_tile_cap(uint32_t cap, uint32_t big, uint32_t max_n, uint32_t limit) {
+    if (cap >= big || max_n > big || max_n > limit) return 0u;
+    return big;
+}
+
 }  // namespace gsplat_tt::overflow_retry

@@ -166,6 +166,37 @@ void emit(const std::vector<std::pair<uint32_t, uint32_t>>& recs, std::vector<ui
     }
 }
 
+// Task #284: select_ranks_big on tiles over the radix MAX_N (grown bucket),
+// every 8192-record subchunk against std::stable_sort, with the kernel's
+// candidate capacity (32768).
+void test_select_big() {
+    std::mt19937 rng(284);
+    sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
+    const uint32_t sizes[] = {32769u, 38345u, 54090u, sort_ol::BIG_MAX_N};
+    const uint32_t SC = 8192u, CAP = 32768u;
+    for (int kind = 0; kind < 5; ++kind) {
+        for (const uint32_t n : sizes) {
+            const std::vector<uint32_t> k = make_keys(kind, n, rng);
+            std::vector<uint32_t> ord(n);
+            std::iota(ord.begin(), ord.end(), 0u);
+            std::stable_sort(ord.begin(), ord.end(),
+                             [&](uint32_t a, uint32_t b) { return k[a] < k[b]; });
+            std::vector<uint32_t> scratch(4u * CAP), out(SC);
+            for (uint32_t lo = 0; lo < n; lo += SC) {
+                const uint32_t hi = std::min(n, lo + SC);
+                const bool ok = sort_ol::select_ranks_big(
+                    k.data(), n, lo, hi, scratch.data(), scratch.data() + CAP,
+                    scratch.data() + 2u * CAP, scratch.data() + 3u * CAP, CAP, out.data(), hist);
+                CHECK(ok, "select_big kind %d n %u [%u,%u): candidates over cap", kind, n, lo, hi);
+                if (!ok) continue;
+                uint32_t bad = 0;
+                for (uint32_t i = lo; i < hi; ++i) bad += (out[i - lo] != ord[i]) ? 1u : 0u;
+                CHECK(bad == 0u, "select_big kind %d n %u [%u,%u): %u wrong", kind, n, lo, hi, bad);
+            }
+        }
+    }
+}
+
 void test_ring() {
     std::mt19937 rng(7);
     for (const uint32_t R : {2u, 4u, 8u, 16u}) {
@@ -362,6 +393,7 @@ void test_worklist() {
 
 int main() {
     test_select();
+    test_select_big();
     test_ring();
     test_row_split();
     test_speed_bounds();

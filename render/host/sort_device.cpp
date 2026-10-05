@@ -25,6 +25,7 @@
 #include "blend_claim_order.h"
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
+#include "overflow_retry.h"
 #include "device_state.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/sort_ol_town.h"
@@ -361,7 +362,9 @@ static bool sort_onelaunch_enabled() {
 }
 // Records per tile bucket (== the legacy MAX_TILE_ENTRIES limit). The emit's
 // L1 page window is env_config::ol_win_pages() (define OL_WIN_PAGES).
-constexpr uint32_t kOneLaunchTileCap = sort_onelaunch::kTileCap;
+// Task #284: kTileCap until a frame overflows it, then kTileCapBig for the
+// rest of the process (sort_grow_tile_capacity; the DRAM buckets grow once).
+static uint32_t g_ol_tile_cap = sort_onelaunch::kTileCap;
 // Tiles with an emit record ring (== OL_RING_TILES); more tiles: rings off.
 constexpr uint32_t kOneLaunchRingTiles = 1024;
 // Coefficient/mask tiles in flight per mover in the fused mat+cull program
@@ -782,7 +785,7 @@ static bool launch_subchunk_materialize(
             if (sort_onelaunch_enabled()) {
                 // Built with SORT_ONELAUNCH: bucket capacity (0 = legacy frame)
                 // and this mover's whole-tile sort capacity.
-                args.push_back(ctx->ol_frame ? kOneLaunchTileCap : 0u);
+                args.push_back(ctx->ol_frame ? g_ol_tile_cap : 0u);
                 args.push_back(ncrisc ? render_config::kOverflowL1Cap : kMatMover0Cap);
             }
             SetRuntimeArgs(prog, ncrisc ? ctx->ksubchunk : ctx->ksubchunk_m0, core, args);
@@ -1987,10 +1990,14 @@ static void ensure_onelaunch_buffers(SortDeviceContext* ctx, uint32_t num_tiles,
                                      uint32_t num_cores, uint32_t stride) {
     auto* dev = ctx->mesh_device.get();
     const std::size_t bucket_bytes =
-        static_cast<std::size_t>(num_tiles) * kOneLaunchTileCap * 32u;
+        static_cast<std::size_t>(num_tiles) * g_ol_tile_cap * 32u;
     if (!ctx->buf_ol_bucket || ctx->cap_ol_bucket_bytes < bucket_bytes) {
         ctx->buf_ol_bucket = make_dram_paged(dev, bucket_bytes, render_config::kRecPageBytes);
         ctx->cap_ol_bucket_bytes = bucket_bytes;
+        // Task #284: the bucket can grow mid-run; keep the name on the live one.
+        if (device_state::get_buffer("sort_l1_recs")) {
+            device_state::register_buffer("sort_l1_recs", ctx->buf_ol_bucket);
+        }
     }
     // The blend's argument lists name sort_l1_recs and sort_tile_recs; a
     // run with only one-launch frames never creates them (not read here).
@@ -2226,7 +2233,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         if (onelaunch) {
             using ms_t = std::chrono::duration<double, std::milli>;
             if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
-            const uint32_t cap = kOneLaunchTileCap;
+            const uint32_t cap = g_ol_tile_cap;
             const uint32_t row_pages = stride / ELEMS_PER_PAGE;
             ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
             bool fold = true;
@@ -3343,7 +3350,7 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
             static_cast<uint32_t>(ctx->buf_ol_bases->address()),
             static_cast<uint32_t>(ctx->buf_ol_totals->address()),
             pairs_P_addr, static_cast<uint32_t>(acc[2u * c + 1u]), 0xFFFFFFFFu,
-            num_tiles, row_pages, c, num_cores, kOneLaunchTileCap, tiles_x, 1u,
+            num_tiles, row_pages, c, num_cores, g_ol_tile_cap, tiles_x, 1u,
             ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
             ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
             noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, 1u,
@@ -3380,7 +3387,15 @@ void sort_device_shutdown() {
 }
 
 uint32_t sort_last_tile_overflow() { return g_last_tile_overflow; }
-uint32_t sort_tile_capacity() { return std::min(kOneLaunchTileCap, test_tile_cap()); }
+uint32_t sort_tile_capacity() { return std::min(g_ol_tile_cap, test_tile_cap()); }
+bool sort_grow_tile_capacity(uint32_t max_n) {
+    if (!sort_onelaunch_enabled()) return false;  // the legacy layout stays at MAX_TILE_ENTRIES
+    const uint32_t big = overflow_retry::grown_tile_cap(g_ol_tile_cap, sort_onelaunch::kTileCapBig,
+                                                        max_n, test_tile_cap());
+    if (big == 0u) return false;
+    g_ol_tile_cap = big;
+    return true;
+}
 
 gsplat_cpu::SortResult sort_and_bin_tt(
     const int64_t* gaussian_ids,

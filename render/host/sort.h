@@ -117,6 +117,10 @@ gsplat_cpu::SortResult sort_and_bin_tt(
 // GSPLAT_TT_TEST_TILE_CAP). render_view retries such a view at a coarser floor.
 uint32_t sort_last_tile_overflow();
 uint32_t sort_tile_capacity();
+// Task #284: grow the bucket capacity to sort_onelaunch::kTileCapBig if a
+// tile of max_n records then fits (not under GSPLAT_TT_TEST_TILE_CAP); true
+// if it grew. The capacity stays grown for the rest of the process.
+bool sort_grow_tile_capacity(uint32_t max_n);
 
 // Task #198 (GSPLAT_TT_SORT_OL_EARLY): enqueue the one-launch sort on the
 // device's CQ0 right behind the fold K2, before the host knows P. The kernel
