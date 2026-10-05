@@ -225,6 +225,14 @@ inline bool pfwc_cov2d_sfpu() {
     return v;
 }
 
+// Task #266: pfwc step 2 computes 1/tz as SFPARECIP + two Newton steps
+// (pfwc_recip_nr.h, ~1 ulp) instead of recip_tile's legacy path (up to 1.5e-3
+// relative for z just below a power of two; task #260). =1 on, changes the image.
+inline bool pfwc_recip_newton() {
+    static const bool v = env_uint("GSPLAT_TT_PFWC_RECIP_NEWTON", 0u) != 0u;
+    return v;
+}
+
 // Task #232: with the writer split, BRISC / NoC0 instead of NCRISC / NoC1 reads a set of
 // the 10 pfwc input tiles (bit o = tile o: mx my mz c00 c01 c02 c11 c12 c22 opacity):
 // GSPLAT_TT_PFWC_RD_SET on the cores in physical NoC0 column x where bit x of

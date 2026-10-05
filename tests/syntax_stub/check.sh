@@ -58,7 +58,7 @@ chk "project_pfwc_compute.cpp PFWC_COVCAM_SFPU PFWC_VIS PFWC_PRECULL" $CP -DPFWC
 chk "project_pfwc_compute.cpp PFWC_COVCAM_SFPU PFWC_VIS PFWC_PRECULL PFWC_WSPLIT" $CP -DPFWC_COVCAM_SFPU=1 -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 render/kernels/compute/project_pfwc_compute.cpp
 for tr in TRISC_UNPACK TRISC_MATH TRISC_PACK; do
   chk "project_pfwc_compute.cpp $tr PFWC_COV2D_SFPU" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DPFWC_COV2D_SFPU=1 -DPFWC_COVCAM_SFPU=1 render/kernels/compute/project_pfwc_compute.cpp
-  chk "project_pfwc_compute.cpp $tr PFWC_COV2D_SFPU PFWC_VIS PFWC_PRECULL PFWC_WSPLIT STEPCYC" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DPFWC_COV2D_SFPU=1 -DPFWC_COVCAM_SFPU=1 -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 -DPFWC_STEPCYC=1 -DPFWC_STEPRISC=9 render/kernels/compute/project_pfwc_compute.cpp
+  chk "project_pfwc_compute.cpp $tr PFWC_COV2D_SFPU PFWC_VIS PFWC_PRECULL PFWC_WSPLIT STEPCYC RECIP_NEWTON" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DPFWC_COV2D_SFPU=1 -DPFWC_COVCAM_SFPU=1 -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 -DPFWC_STEPCYC=1 -DPFWC_STEPRISC=9 -DPFWC_RECIP_NEWTON=1 render/kernels/compute/project_pfwc_compute.cpp
 done
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
 for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
