@@ -841,9 +841,10 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         defines["OL_EMIT_FAST"] = "0";
     }
     // Task #181: GSPLAT_TT_OL_FILL_BULK=0 is the kill switch of the fold's
-    // per-bank window fill (default on; same output either way).
-    if (const char* e = std::getenv("GSPLAT_TT_OL_FILL_BULK"); e != nullptr && std::atoi(e) == 0) {
-        defines["OL_FILL_BULK"] = "0";
+    // per-bank window fill (default on; same output either way); 2 also
+    // re-reads the window page by page and DPRINTs the pages it had to fix.
+    if (const char* e = std::getenv("GSPLAT_TT_OL_FILL_BULK"); e != nullptr && std::atoi(e) != 1) {
+        defines["OL_FILL_BULK"] = std::atoi(e) == 2 ? "2" : "0";
     }
     ctx.kol = CreateKernel(
         program,
