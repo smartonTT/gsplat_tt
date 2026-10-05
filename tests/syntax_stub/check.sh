@@ -20,6 +20,8 @@ chk "sort_bin_onelaunch.cpp" $DF render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 PB8 RING8" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_WIN_PAGES=1024u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 PB16 RING2 no PUBOC" $DF -DOL_PB=16u -DOL_RING=2u render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_HALF256" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_BULK=0" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=0 -DOL_BREC_HALF=128u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DOL_MAT_PART=4096u render/kernels/dataflow/sort_subchunk_materialize.cpp
