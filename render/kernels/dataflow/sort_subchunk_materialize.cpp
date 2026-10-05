@@ -309,6 +309,13 @@ void kernel_main() {
     const uint32_t ol_tile_cap    = get_arg_val<uint32_t>(16);
     const uint32_t ol_whole_cap   = get_arg_val<uint32_t>(17);
 #endif
+#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
+    // Task #280 (fused mat+blend program): ready-flag buffer + this launch's
+    // epoch. After a subchunk's slab write barrier the mover writes the epoch
+    // to flag page tile*8+sc, which the blend reader polls before reading it.
+    const uint32_t ready_addr     = get_arg_val<uint32_t>(18);
+    const uint32_t ready_epoch    = get_arg_val<uint32_t>(19);
+#endif
 
     constexpr auto sorted_args = TensorAccessorArgs<0>();
     constexpr auto ranges_args = TensorAccessorArgs<sorted_args.next_compile_time_args_offset()>();
@@ -333,6 +340,13 @@ void kernel_main() {
     const bool ov_enabled   = (ov_recs_addr != 0u) && (ov_base_addr != 0u);
     const auto ov_recs_acc  = TensorAccessor(ov_recs_args,  ov_recs_addr,  REC_PAGE_BYTES);
     const auto ov_base_acc  = TensorAccessor(ov_base_args,  ov_base_addr,  PAGE_BYTES);
+#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
+    constexpr auto ready_args = TensorAccessorArgs<ov_base_args.next_compile_time_args_offset()>();
+    const auto ready_acc = TensorAccessor(ready_args, ready_addr, PAGE_BYTES);
+    constexpr uint32_t CB_READY = MAT_CB_BASE + 10;  // 64 B flag source page
+    const uint32_t ready_src = get_write_ptr(CB_READY);
+    reinterpret_cast<volatile uint32_t*>(ready_src)[0] = ready_epoch;
+#endif
 
     if (work_count == 0) {
 #if defined(FUSE_CULL) && FUSE_CULL
@@ -444,6 +458,11 @@ void kernel_main() {
                                     recs * L1_SPLAT_BYTES);
                 }
                 noc_async_write_barrier();
+#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
+                // Payload is in DRAM: publish this subchunk's ready flag.
+                noc_async_write(ready_src, get_noc_addr(tile_id * 8u + s, ready_acc), PAGE_BYTES);
+                noc_async_write_barrier();
+#endif
             };
             if (count <= ol_whole_cap) {
                 {

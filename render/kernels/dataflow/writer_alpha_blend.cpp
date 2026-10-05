@@ -7,6 +7,14 @@
 #include "api/dataflow/dataflow_api.h"
 #include "img_pack_u8.h"
 
+// Task #280: shifted ids / compile-time args in the fused mat+blend program.
+#ifndef BLEND_CB_BASE
+#define BLEND_CB_BASE 0
+#endif
+#ifndef BLEND_CTA_BASE
+#define BLEND_CTA_BASE 0
+#endif
+
 // Alpha-blend WRITER kernel (BRISC, NoC0; see DataMovementProcessor::RISCV_0
 // in alpha_blend.cpp).
 //
@@ -57,12 +65,12 @@ void kernel_main() {
     const uint32_t tiles_x       = get_arg_val<uint32_t>(4);
     const uint32_t pitch         = get_arg_val<uint32_t>(5);
 
-    constexpr uint32_t CB_COLOR_OUT = 16;
-    constexpr uint32_t CB_IMG_U8 = 8;  // 32 x 96 B RGB staging block
+    constexpr uint32_t CB_COLOR_OUT = BLEND_CB_BASE + 16;
+    constexpr uint32_t CB_IMG_U8 = BLEND_CB_BASE + 8;  // 32 x 96 B RGB staging block
     const uint32_t tile_bytes = get_tile_size(CB_COLOR_OUT);
     constexpr uint32_t tile_ids_page_bytes = 64;
 
-    constexpr auto out_args      = TensorAccessorArgs<0>();
+    constexpr auto out_args      = TensorAccessorArgs<BLEND_CTA_BASE>();
     constexpr auto tile_ids_args = TensorAccessorArgs<out_args.next_compile_time_args_offset()>();
     constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
 
@@ -70,7 +78,7 @@ void kernel_main() {
     (void)tile_ids_addr; (void)lpt_meta_addr; (void)core_index;
     // Task #60: the reader claims tiles dynamically and queues each claimed
     // screen tile id here (CB_TILE_Q) before its data; 0xFFFFFFFF ends the stream.
-    constexpr uint32_t CB_TILE_Q = 13;
+    constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;
 
     // Main per-tile loop: pack the 3 R/G/B tiles compute pushed for this
     // screen tile into u8 image rows and write them to the image buffer.
