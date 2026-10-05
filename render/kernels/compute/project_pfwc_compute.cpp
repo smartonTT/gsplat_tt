@@ -81,6 +81,10 @@
 #include "api/compute/eltwise_unary/relu.h"
 #include "api/compute/eltwise_unary/rounding.h"
 
+#ifdef PFWC_STEPCYC
+#include "api/debug/dprint.h"
+#endif
+
 #ifdef TRISC_MATH
 #include "sfpi.h"
 #include "llk_math_eltwise_unary_sfpu.h"
@@ -142,6 +146,36 @@ constexpr uint32_t CB_TPG    = 35;
 constexpr uint32_t CB_AABB   = 36;
 #endif
 
+// ---- Per-step wall cycles (GSPLAT_TT_PFWC_STEPCYC=1, task #197; default OFF) ----
+// Every TRISC (UNPACK, MATH, PACK) adds the wall cycles (1350 MHz) between step
+// boundaries into one counter per step, summed over the core's chunks, and
+// DPRINTs "PC n wall init s0..s12" at kernel end. Steps: 0 input wait, 1 transform,
+// 2 recip, 3 depth, 4 means, 5 cov_cam, 6 a, 7 b, 8 c, 9 conic, 10 radii x,
+// 11 radii y, 12 vis + pops. =2 also splits step 5 (cov_cam: 36 copies, 36
+// mul_unary, 30 add_binary, 6 packs) by call type on each thread:
+// "PO copy mulu addb acq pack".
+#ifdef PFWC_STEPCYC
+constexpr uint32_t PC_N = 13;
+uint32_t g_pc[PC_N];
+uint32_t g_pc_t = 0;
+uint32_t g_po[5];
+inline uint32_t pc_now() {
+    return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0];
+}
+#define PC_MARK(i) do { const uint32_t n_ = pc_now(); g_pc[i] += n_ - g_pc_t; g_pc_t = n_; } while (0)
+#if PFWC_STEPCYC >= 2
+#define PO_T0() const uint32_t po_t_ = pc_now()
+#define PO_ACC(i) g_po[i] += pc_now() - po_t_
+#else
+#define PO_T0() ((void)0)
+#define PO_ACC(i) ((void)0)
+#endif
+#else
+#define PC_MARK(i) ((void)0)
+#define PO_T0() ((void)0)
+#define PO_ACC(i) ((void)0)
+#endif
+
 constexpr uint32_t COV3D_CB[6] = {CB_C00, CB_C11, CB_C22, CB_C01, CB_C02, CB_C12};
 constexpr uint32_t CC_SCRATCH[6] = {
     CB_TMP_CC00, CB_TMP_CC01, CB_TMP_CC02,
@@ -170,20 +204,20 @@ inline void compute_cc_entry_to_scratch(uint32_t base_arg, uint32_t cb_out_scrat
     const uint32_t s5 = get_arg_val<uint32_t>(base_arg + 5);
     const uint32_t scales[6] = {s0, s1, s2, s3, s4, s5};
 
-    tile_regs_acquire();
-    copy_tile_to_dst_init_short(COV3D_CB[0]);
-    copy_tile(COV3D_CB[0], 0, 0);
-    mul_unary_tile(0, scales[0]);
+    { PO_T0(); tile_regs_acquire(); PO_ACC(3); }
+    { PO_T0(); copy_tile_to_dst_init_short(COV3D_CB[0]); copy_tile(COV3D_CB[0], 0, 0); PO_ACC(0); }
+    { PO_T0(); mul_unary_tile(0, scales[0]); PO_ACC(1); }
     for (uint32_t k = 1; k < 6; k++) {
-        copy_tile_to_dst_init_short(COV3D_CB[k]);
-        copy_tile(COV3D_CB[k], 0, 1);
-        mul_unary_tile(1, scales[k]);
-        add_binary_tile(0, 1, 0);
+        { PO_T0(); copy_tile_to_dst_init_short(COV3D_CB[k]); copy_tile(COV3D_CB[k], 0, 1); PO_ACC(0); }
+        { PO_T0(); mul_unary_tile(1, scales[k]); PO_ACC(1); }
+        { PO_T0(); add_binary_tile(0, 1, 0); PO_ACC(2); }
     }
+    PO_T0();
     tile_regs_commit();
     tile_regs_wait();
     emit_scratch(0, cb_out_scratch);
     tile_regs_release();
+    PO_ACC(4);
 }
 
 #ifdef TRISC_MATH
@@ -503,6 +537,9 @@ inline void pfwc_vis_unroll() {
 
 void kernel_main() {
     DeviceZoneScopedN("pfwc");  // Tracy stage label (fused project+pfwc compute)
+#ifdef PFWC_STEPCYC
+    const uint32_t pc_w0 = pc_now();
+#endif
     const uint32_t num_chunks = get_arg_val<uint32_t>(0);
 
     // R (row-major) + t for the fused world→camera transform.
@@ -542,6 +579,12 @@ void kernel_main() {
     if (num_chunks == 0) {
         return;
     }
+#ifdef PFWC_STEPCYC
+    for (uint32_t i = 0; i < PC_N; i++) g_pc[i] = 0;
+    for (uint32_t i = 0; i < 5; i++) g_po[i] = 0;
+    g_pc_t = pc_now();
+    const uint32_t pc_init = g_pc_t - pc_w0;
+#endif
 
     for (uint32_t chunk = 0; chunk < num_chunks; chunk++) {
         cb_wait_front(CB_MX, 1);
@@ -553,6 +596,7 @@ void kernel_main() {
         cb_wait_front(CB_C11, 1);
         cb_wait_front(CB_C12, 1);
         cb_wait_front(CB_C22, 1);
+        PC_MARK(0);
 
         // ── 1. FUSED transform: tx/ty/tz = R · means + t  (means_cam folded
         //      with the pfwc translation; L1 bridge into the pfwc body below).
@@ -588,6 +632,7 @@ void kernel_main() {
         cb_pop_front(CB_MY, 1);
         cb_pop_front(CB_MZ, 1);
 
+        PC_MARK(1);
         // ── 2. inv_tz = 1/tz → scratch
         {
             tile_regs_acquire();
@@ -600,6 +645,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(2);
         // ── 3. depth = tz → output
         {
             tile_regs_acquire();
@@ -611,6 +657,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(3);
         // ── 4. mean_x = fx · tx · inv_tz + cx → output
         {
             tile_regs_acquire();
@@ -647,6 +694,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(4);
         // ── 6. cov_cam (6 unique entries) → scratch CBs
         for (uint32_t e = 0; e < 6; e++) {
             compute_cc_entry_to_scratch(17 + e * 6, CC_SCRATCH[e]);
@@ -660,6 +708,7 @@ void kernel_main() {
         cb_pop_front(CB_C12, 1);
         cb_pop_front(CB_C22, 1);
 
+        PC_MARK(5);
         // ── 7. cov2d_a = j00²·cc00 + 2·j00·j02·cc02 + j02²·cc22 + 0.3
         {
             tile_regs_acquire();
@@ -712,6 +761,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(6);
         // ── 8. cov2d_b = j00·j11·cc01 + j00·j12·cc02 + j02·j11·cc12 + j02·j12·cc22
         {
             tile_regs_acquire();
@@ -767,6 +817,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(7);
         // ── 9. cov2d_c = j11²·cc11 + 2·j11·j12·cc12 + j12²·cc22 + 0.3
         {
             tile_regs_acquire();
@@ -809,6 +860,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(8);
         // ── 9.5 (A1). Conic fold: A,B,C from scratch a,b,c → cov2d outputs.
         {
             tile_regs_acquire();
@@ -831,6 +883,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(9);
         // ── 10. radii.x = ceil(k · sqrt(max(a, 0))) — recompute a.
         {
             tile_regs_acquire();
@@ -880,6 +933,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(10);
         // ── 11. radii.y = ceil(k · sqrt(max(c, 0))) — recompute c.
         {
             tile_regs_acquire();
@@ -929,6 +983,7 @@ void kernel_main() {
             tile_regs_release();
         }
 
+        PC_MARK(11);
 #ifdef PFWC_VIS
         // ── 11.5 (task #99). Visibility predicate + tile rectangle on the SFPU.
         {
@@ -994,5 +1049,18 @@ void kernel_main() {
         cb_pop_front(CB_TMP_A, 1);
         cb_pop_front(CB_TMP_B, 1);
         cb_pop_front(CB_TMP_C, 1);
+        PC_MARK(12);
     }
+#ifdef PFWC_STEPCYC
+    {
+        const uint32_t wall = pc_now() - pc_w0;
+        DPRINT << "PC " << num_chunks << " " << wall << " " << pc_init;
+        for (uint32_t i = 0; i < PC_N; i++) DPRINT << " " << g_pc[i];
+        DPRINT << ENDL();
+#if PFWC_STEPCYC >= 2
+        DPRINT << "PO " << g_po[0] << " " << g_po[1] << " " << g_po[2] << " " << g_po[3] << " " << g_po[4]
+               << ENDL();
+#endif
+    }
+#endif
 }

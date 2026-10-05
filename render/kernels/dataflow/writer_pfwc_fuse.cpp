@@ -47,6 +47,19 @@
 #define FUSE_ABL 0
 #endif
 
+// Task #197 (GSPLAT_TT_PFWC_STEPCYC): wall cycles per part, DPRINTed at the end:
+// "PW n wall wait bar cls rec tail iss m pr" (wait = the 10 compute tiles, bar = the
+// opacity / color read barrier, cls = classify_tile, rec = record + page staging
+// and flushes, tail = pops + last flushes + counts write, iss = read issue; m
+// visible, pr pairs).
+#ifdef PFWC_STEPCYC
+#include "api/debug/dprint.h"
+#define PW_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
+#define PW_MARK(acc) do { const uint32_t n_ = PW_NOW(); acc += n_ - pw_t; pw_t = n_; } while (0)
+#else
+#define PW_MARK(acc) ((void)0)
+#endif
+
 void kernel_main() {
     uint32_t addr[9];
     for (uint32_t k = 0; k < 9; k++) addr[k] = get_arg_val<uint32_t>(k);
@@ -185,6 +198,10 @@ void kernel_main() {
         noc_async_writes_flushed();  // staging reusable; completion at the end
     };
 
+#ifdef PFWC_STEPCYC
+    const uint32_t pw_w0 = PW_NOW();
+    uint32_t pw_t = pw_w0, pw_wait = 0, pw_bar = 0, pw_cls = 0, pw_rec = 0, pw_tail = 0, pw_iss = 0;
+#endif
     for (uint32_t k = 0; k < num_chunks; k++) {
         const uint32_t t = chunk_start + k * stride;
         // The opacity / color tiles stream in while the SFPU tile lands.
@@ -200,8 +217,11 @@ void kernel_main() {
             }
 #endif
         }
+        PW_MARK(pw_iss);
         for (uint32_t o = 0; o < 10; o++) cb_wait_front(IN_CB[o], 1);
+        PW_MARK(pw_wait);
         noc_async_read_barrier();
+        PW_MARK(pw_bar);
 
         auto p_m2x = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_M2X));
         auto p_m2y = reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_M2Y));
@@ -228,6 +248,7 @@ void kernel_main() {
         };
         uint32_t vc = 0, pc = 0;
         vis_tile::classify_tile(p_tpg, p_aabb, n_el, mw, prm, get_inputs, &vc, &pc);
+        PW_MARK(pw_cls);
 #if EMIT_PUBOC
         if (pub01 == 0)  // NaN scene: pack the visible lanes here
             for (uint32_t w = 0; w < vis_tile::MASK_WORDS; w++)
@@ -294,7 +315,9 @@ void kernel_main() {
                 }
             }
 
+        PW_MARK(pw_rec);
         for (uint32_t o = 0; o < 10; o++) cb_pop_front(IN_CB[o], 1);
+        PW_MARK(pw_tail);
     }
 
     // Partial last page: depth / aabb 0 and offs = segment pairs past the last
@@ -314,4 +337,9 @@ void kernel_main() {
     w_cnt[pfwc_fuse::T_P] = pr;
     noc_async_write(l1_cnt, get_noc_addr(core, o_cnt), PB);
     noc_async_write_barrier();
+#ifdef PFWC_STEPCYC
+    PW_MARK(pw_tail);
+    DPRINT << "PW " << num_chunks << " " << (PW_NOW() - pw_w0) << " " << pw_wait << " " << pw_bar << " "
+           << pw_cls << " " << pw_rec << " " << pw_tail << " " << pw_iss << " " << m << " " << pr << ENDL();
+#endif
 }

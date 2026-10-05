@@ -25,6 +25,13 @@
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#ifdef PFWC_STEPCYC
+#include "api/debug/dprint.h"
+// Task #197 (GSPLAT_TT_PFWC_STEPCYC): wall cycles in the CB reserves (compute
+// back-pressure) and in the read barrier (DRAM latency), DPRINTed at the end:
+// "PR n wall reserve barrier".
+#define PR_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
+#endif
 
 void kernel_main() {
     const uint32_t mcx_addr  = get_arg_val<uint32_t>(0);
@@ -87,8 +94,26 @@ void kernel_main() {
         return;
     }
 
+#ifdef PFWC_STEPCYC
+    const uint32_t pr_w0 = PR_NOW();
+    uint32_t pr_res = 0, pr_bar = 0;
+#endif
     for (uint32_t k = 0; k < num_chunks; k++) {
         const uint32_t tile_id = chunk_start + k * tile_stride;
+#ifdef PFWC_STEPCYC
+        {
+            // All reserves up front (same CB state as below: nothing else
+            // reserves these CBs), so the wait on compute is timed alone.
+            const uint32_t t0 = PR_NOW();
+            cb_reserve_back(CB_MCX, 1); cb_reserve_back(CB_MCY, 1); cb_reserve_back(CB_MCZ, 1);
+            cb_reserve_back(CB_C00, 1); cb_reserve_back(CB_C01, 1); cb_reserve_back(CB_C02, 1);
+            cb_reserve_back(CB_C11, 1); cb_reserve_back(CB_C12, 1); cb_reserve_back(CB_C22, 1);
+#ifdef PFWC_VIS
+            cb_reserve_back(CB_OP, 1);
+#endif
+            pr_res += PR_NOW() - t0;
+        }
+#endif
 
         cb_reserve_back(CB_MCX, 1);
         noc_async_read_tile(tile_id, acc_mcx, get_write_ptr(CB_MCX));
@@ -113,7 +138,13 @@ void kernel_main() {
         noc_async_read_tile(tile_id, acc_op, get_write_ptr(CB_OP));
 #endif
 
+#ifdef PFWC_STEPCYC
+        const uint32_t tb = PR_NOW();
         noc_async_read_barrier();
+        pr_bar += PR_NOW() - tb;
+#else
+        noc_async_read_barrier();
+#endif
 
         cb_push_back(CB_MCX, 1);
         cb_push_back(CB_MCY, 1);
@@ -128,4 +159,7 @@ void kernel_main() {
         cb_push_back(CB_OP, 1);
 #endif
     }
+#ifdef PFWC_STEPCYC
+    DPRINT << "PR " << num_chunks << " " << (PR_NOW() - pr_w0) << " " << pr_res << " " << pr_bar << ENDL();
+#endif
 }

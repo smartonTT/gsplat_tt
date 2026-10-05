@@ -352,6 +352,10 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         cb_raw(CB_VOP, TILE_BYTES_FP32);
         if (fuse) cb_raw(CB_FUSE, FUSE_CB_BYTES);
     }
+    // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 DPRINTs per-step wall cycles from the
+    // reader, the three TRISCs and the fused writer (targeted profiling, default OFF).
+    const uint32_t stepcyc = vis_env_u32("GSPLAT_TT_PFWC_STEPCYC", 0);
+    if (stepcyc != 0) vis_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
     // layout as before; the fused kernel just reads world means in slots 0..2
@@ -418,6 +422,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     }
     std::map<std::string, std::string> writer_defines;
     if (fuse && env_config::emit_puboc()) writer_defines["EMIT_PUBOC"] = "1";
+    if (fuse && stepcyc != 0) writer_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
     // Targeted profiling only (task #122): writer_pfwc_fuse.cpp FUSE_ABL bits.
     if (fuse && vis_env_u32("GSPLAT_TT_FUSE_ABL", 0) != 0)
         writer_defines["FUSE_ABL"] = std::to_string(vis_env_u32("GSPLAT_TT_FUSE_ABL", 0)) + "u";
