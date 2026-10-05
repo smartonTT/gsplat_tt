@@ -31,4 +31,27 @@ Fold kernel (t177 cd707df, issue_brec fold) without and with the fix (fba971e = 
 ## Device (yyzo-bh-07 p100a, bicycle 30 views 1024x1024, untraced)
 
 Driver `drive.sh` (detached, one `ttp lock p100` per step), remote scripts `remote_run.sh`,
-`remote_tracy.sh`. Results: pending.
+`remote_tracy.sh`. Run 2026-10-04 (task run 507). a = tip f4d91df (stack cur_lm), b = 1f6274e (fix).
+
+| round (order) | a view_total | b view_total | b - a | a sort | b sort |
+|---|---|---|---|---|---|
+| r1 (b, a) | 17.410 | 17.149 | -0.261 | 4.087 | 3.882 |
+| r2 (a, b) | 17.304 | 17.002 | -0.302 | 4.091 | 3.800 |
+| r3 (b, a) | 17.205 | 16.982 | -0.223 | 4.017 | 3.781 |
+| mean | 17.306 | 17.044 | **-0.262** | 4.065 | 3.821 |
+
+ms/view, 30 views. Project and blend unchanged (4.11 / 8.87-8.91); the gain is all in the sort
+(bin_emit 3.46 vs ~3.70 on a): the fast loop no longer copies 1024 counts into the stack array at
+start and back at the end. All 6 runs ALL_VIEWS_IDENTICAL and md5-identical to md5-r82new.txt
+(46a725ab set).
+
+### Fold hang (t164 issue_brec fold under the K2 count fold)
+
+| tree | GSPLAT_TT_OL_EMIT_FOLD=1 untraced | EMIT_PROF=1 Tracy |
+|---|---|---|
+| c = cd707df (no fix) | **hangs** (rc=124 after `[SORT] ONELAUNCH k2_fold=1`, as in #177) | not run |
+| f = fba971e (cd707df + fix) | runs, 16.915 ms/view, md5 46a725ab | runs (rc=0), emit zone 2.706 ms/view |
+
+Verdict: the fold hang was the stack overrun; with cur_lm off the stack the fold runs traced and
+untraced. Single unpaired f run vs b mean: -0.13 ms/view (v2 table + fold over the fix); the
+paired fold + v2 gate is in GATE.md.
