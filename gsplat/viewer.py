@@ -740,7 +740,9 @@ class GaussianViewer:
         intrinsics = torch.tensor(
             camera_state.get_K((W, H)), dtype=torch.float32,
         )
-        extrinsics = c2w_to_w2c(render_c2w)
+        # Invert in float32 torch exactly as the bench (render/run.py) does, so a
+        # viewer frame is bit-identical to the bench's for the same camera.
+        extrinsics = c2w_to_w2c(torch.from_numpy(np.asarray(render_c2w, dtype=np.float32)))
 
         try:
             result = self.pipeline.render(
