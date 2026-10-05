@@ -1,0 +1,28 @@
+cores=110 launches=3
+launch 0: tiles=1024 sum_us=637995 mean/core=5800.0 max_tile=2806
+  early lpt_rec(today)   max_end   6114.6 tail  291.0
+  early rec_desc         max_end   6152.4 tail  328.8
+  early fit_desc(live)   max_end   5991.6 tail  168.1
+  early oracle_us        max_end   5943.7 tail  120.2
+  late  lpt_rec(today)   max_end   5932.9 tail  109.4
+  late  rec_desc         max_end   5908.5 tail   84.9
+  late  fit_desc(live)   max_end   5908.9 tail   85.3
+  late  oracle_us        max_end   5857.7 tail   34.1
+launch 1: tiles=1024 sum_us=637994 mean/core=5799.9 max_tile=2806
+  early lpt_rec(today)   max_end   6051.8 tail  228.2
+  early rec_desc         max_end   6035.4 tail  211.9
+  early fit_desc(live)   max_end   5991.6 tail  168.0
+  early oracle_us        max_end   5943.4 tail  119.8
+  late  lpt_rec(today)   max_end   6052.1 tail  228.5
+  late  rec_desc         max_end   5882.4 tail   58.8
+  late  fit_desc(live)   max_end   5920.8 tail   97.2
+  late  oracle_us        max_end   5858.4 tail   34.8
+launch 2: tiles=1024 sum_us=484516 mean/core=4404.7 max_tile=2964
+  early lpt_rec(today)   max_end   4777.5 tail  349.2
+  early rec_desc         max_end   4583.7 tail  155.4
+  early fit_desc(live)   max_end   4627.8 tail  199.4
+  early oracle_us        max_end   4618.9 tail  190.6
+  late  lpt_rec(today)   max_end   4527.0 tail   98.6
+  late  rec_desc         max_end   4491.4 tail   63.1
+  late  fit_desc(live)   max_end   4472.1 tail   43.8
+  late  oracle_us        max_end   4451.1 tail   22.7
