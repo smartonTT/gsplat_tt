@@ -42,10 +42,13 @@ cd "$DIR"
 export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_ARCH_NAME=blackhole
 export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME GSPLAT_SHA=$(cat SHA)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
-setsid nohup .venv/bin/python opt/viewer/viewer_clean.py scenes/bicycle.ply --port "$PORT" \
-  > "$VDIR/viewer.log" 2>&1 < /dev/null &
-echo $! > "$VDIR/viewer.pid"
-echo "[viewer] started pid $! sha $GSPLAT_SHA port $PORT (log $VDIR/viewer.log)"
+# The pid file is written by the viewer process itself (exec keeps the pid): $! can be
+# setsid's pid when setsid forks, and then stop misses the real viewer (task #257).
+rm -f "$VDIR/viewer.pid"
+setsid nohup bash -c 'echo $$ > "$0/viewer.pid"; exec .venv/bin/python opt/viewer/viewer_clean.py scenes/bicycle.ply --port "$1"' \
+  "$VDIR" "$PORT" > "$VDIR/viewer.log" 2>&1 < /dev/null &
+for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$VDIR/viewer.pid" ] && break; sleep 0.2; done
+echo "[viewer] started pid $(cat "$VDIR/viewer.pid") sha $GSPLAT_SHA port $PORT (log $VDIR/viewer.log)"
 R
 }
 
