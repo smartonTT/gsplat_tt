@@ -43,6 +43,7 @@
 #include "blend.h"
 #include "config.h"
 #include "device_state.h"
+#include "matblend_fuse.h"
 
 using namespace tt;
 using namespace tt::tt_metal;
@@ -70,6 +71,14 @@ struct DeviceContext {
     CoreCoord grid{0, 0};
     CoreRangeSet all_cores;
     uint32_t claim_sem = 0;  // task #60: blend tile-claim counter semaphore id
+
+    // Task #285: fused mat+blend program (matblend_fuse.h), built on first use.
+    distributed::MeshWorkload fz_workload;
+    KernelHandle fz_ncrisc{};
+    KernelHandle fz_brisc{};
+    KernelHandle fz_compute{};
+    uint32_t fz_claim_sem = 0;
+    bool fz_built = false;
 
     // RESIDENT blend scratch (GSPLAT_TT_RESIDENT_BLEND): persistent per-context
     // DRAM buffers reused across frames (the render intermediates themselves —
@@ -140,11 +149,20 @@ constexpr uint32_t COUNTS_PAGE_BYTES = 128;
 constexpr uint32_t COEFF_ROW_BYTES_MB = 64;
 constexpr uint32_t RAMP_TILE_BYTES = TILE_H * TILE_W * 4;  // fp32 32x32
 
-static void build_program_and_workload_mb(DeviceContext& ctx) {
+// fused (task #285): build the fused mat+blend program into ctx.fz_* instead:
+// the mat part first (sort_device.cpp), then the blend CBs at +kBlendCbBase
+// without the CBs the resident reader never uses (CB_BUCKET, CB_BMASK) and
+// with CB_BUCKET_BULK aliased onto mat's CB_BUCKET.
+static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false) {
+    namespace mbf = gsplat_tt::matblend_fuse;
     Program program = CreateProgram();
     const CoreRangeSet& cores = ctx.all_cores;
+    mbf::MatPart mat;
+    if (fused) mat = mbf::add_mat_part(program, cores);
+    const uint32_t cb_base = fused ? mbf::kBlendCbBase : 0u;
 
-    auto cb_cfg = [&](uint32_t id, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+    auto cb_cfg = [&](uint32_t id0, uint32_t page_bytes, uint32_t depth, DataFormat fmt) {
+        const uint32_t id = id0 + cb_base;
         CircularBufferConfig c(depth * page_bytes, {{id, fmt}});
         c.set_page_size(id, page_bytes);
         CreateCircularBuffer(program, cores, c);
@@ -186,7 +204,8 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // reads ahead of one barrier and overlaps cull of chunk K with the in-flight
     // reads of chunk K+1.
     constexpr uint32_t GATHER_PAGES = 2u * 16u * 9u;  // 288 pages
-    cb_cfg(CB_SCR_ATTR, 64, GATHER_PAGES, DataFormat::Float32);
+    // Fused: the resident reader only keeps the lpt meta here (2 u32 per core).
+    cb_cfg(CB_SCR_ATTR, 64, fused ? 32u : GATHER_PAGES, DataFormat::Float32);
     // Reader-private double-buffered cull_masks scratch (2 buffers x 2 pages x
     // 64B = 256B): each <=16-gaussian chunk's masks span at most two 64B pages.
     cb_cfg(CB_SCR_MASK, 256, 1, DataFormat::UInt32);
@@ -195,7 +214,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // shared claim counter (a semaphore; the copy on the first core is used).
     constexpr uint32_t CB_TILE_Q = 13;
     cb_cfg(CB_TILE_Q, 16, 16, DataFormat::UInt32);
-    ctx.claim_sem = CreateSemaphore(program, cores, 0);
+    (fused ? ctx.fz_claim_sem : ctx.claim_sem) = CreateSemaphore(program, cores, 0);
 
     // CB_BUCKET/CB_BMASK: in-budget sort+emit scratch (push deferred until after
     // coeff stream). CB_BUCKET_BULK/CB_BMASK_BULK: overflow bulk L1 (iter 49) —
@@ -204,12 +223,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     constexpr uint32_t CB_BMASK  = 11;
     constexpr uint32_t CB_BUCKET_BULK = 12;
     constexpr uint32_t rec_bytes = 64u;
-    cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
-    cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
-    // Depth 2x: double-buffer subchunks (iter 51 prefetch while blend). M3: the
-    // mask travels in slab word3, so there is no separate CB_BMASK_BULK.
-    const uint32_t bulk_rec_depth = kBucketFit;
-    cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
+    if (!fused) {
+        cb_cfg(CB_BUCKET, rec_bytes, kBucketFit, DataFormat::Float32);
+        cb_cfg(CB_BMASK, 64, (kBucketFit + 15u) / 16u + 1u, DataFormat::UInt32);
+        // Depth 2x: double-buffer subchunks (iter 51 prefetch while blend). M3: the
+        // mask travels in slab word3, so there is no separate CB_BMASK_BULK.
+        const uint32_t bulk_rec_depth = kBucketFit;
+        cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
+    }
     // Task #231: GSPLAT_TT_BLEND_DECODE_AHEAD (2 = S2, default; 1 = S2a; 0 = off): TRISC0
     // decodes the live records' SFPLOADI words into an L1 ring that TRISC1 reads.
     // The ring CB exists only when the knob is on: 64 B header + 64 slots of 64 B
@@ -253,20 +274,52 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
     }
-    ctx.reader = CreateKernel(
-        program,
-        OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp",
-        cores,
-        DataMovementConfig{
-            .processor = DataMovementProcessor::RISCV_1,
-            .noc = NOC::RISCV_1_default,
-            .compile_args = reader_ct,
-            .defines = reader_defines,
-        });
+    // Fused: one kernel per RISC runs the mat body, then the blend body; blend
+    // compile-time args follow mat's, plus the ready-flag accessor (reader).
+    std::map<std::string, std::string> fz_common;
+    if (fused) {
+        fz_common = {
+            {"MATBLEND_FUSE", "1"},
+            {"BLEND_CB_BASE", std::to_string(mbf::kBlendCbBase)},
+            {"BLEND_CTA_BASE", std::to_string(mat.ct.size())},
+        };
+        TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
+        std::vector<uint32_t> ct = mat.ct;
+        ct.insert(ct.end(), reader_ct.begin(), reader_ct.end());
+        std::map<std::string, std::string> d = mat.defines_n;
+        for (const auto& kv : reader_defines) d[kv.first] = kv.second;
+        for (const auto& kv : fz_common) d[kv.first] = kv.second;
+        d["BLEND_RTA_BASE"] = std::to_string(mbf::kDmRtaBase);
+        ctx.fz_ncrisc = CreateKernel(
+            program,
+            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/matblend_ncrisc.cpp",
+            cores,
+            DataMovementConfig{
+                .processor = DataMovementProcessor::RISCV_1,
+                .noc = NOC::RISCV_1_default,
+                .compile_args = ct,
+                .defines = d,
+            });
+    } else {
+        ctx.reader = CreateKernel(
+            program,
+            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/reader_alpha_blend_mb_devcull.cpp",
+            cores,
+            DataMovementConfig{
+                .processor = DataMovementProcessor::RISCV_1,
+                .noc = NOC::RISCV_1_default,
+                .compile_args = reader_ct,
+                .defines = reader_defines,
+            });
+    }
 
     std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
-    u2d[CB_XRAMP] = UnpackToDestMode::UnpackToDestFp32;
-    u2d[CB_YRAMP] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[CB_XRAMP + cb_base] = UnpackToDestMode::UnpackToDestFp32;
+    u2d[CB_YRAMP + cb_base] = UnpackToDestMode::UnpackToDestFp32;
+    if (fused) {  // mat cull coefficient tiles (both movers)
+        u2d[8] = UnpackToDestMode::UnpackToDestFp32;
+        u2d[24] = UnpackToDestMode::UnpackToDestFp32;
+    }
 
     std::map<std::string, std::string> compute_defines;
     if (blend_prof_on) {
@@ -328,9 +381,14 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         compute_defines["BLEND_FAST_TRED"] = env_or("GSPLAT_TT_BLEND_FAST_TRED", "1");
         compute_defines["BLEND_DECODE_AHEAD"] = blend_da;
     }
-    ctx.compute = CreateKernel(
+    if (fused) {
+        compute_defines["BLEND_CB_BASE"] = std::to_string(mbf::kBlendCbBase);
+        compute_defines["BLEND_RTA_BASE"] = std::to_string(mbf::kCpRtaBase);
+    }
+    (fused ? ctx.fz_compute : ctx.compute) = CreateKernel(
         program,
-        OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
+        fused ? OVERRIDE_KERNEL_PREFIX "kernels/compute/matblend_compute.cpp"
+              : OVERRIDE_KERNEL_PREFIX "kernels/compute/alpha_blend_compute_mb.cpp",
         cores,
         ComputeConfig{
             .math_fidelity = MathFidelity::HiFi3,
@@ -345,6 +403,28 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(writer_ct);
+    if (fused) {
+        std::vector<uint32_t> ct = mat.ct;
+        ct.insert(ct.end(), writer_ct.begin(), writer_ct.end());
+        std::map<std::string, std::string> d = mat.defines_m0;
+        for (const auto& kv : writer_defines) d[kv.first] = kv.second;
+        for (const auto& kv : fz_common) d[kv.first] = kv.second;
+        d["BLEND_RTA_BASE"] = std::to_string(mbf::kDmRtaBase);
+        ctx.fz_brisc = CreateKernel(
+            program,
+            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/matblend_brisc.cpp",
+            cores,
+            DataMovementConfig{
+                .processor = DataMovementProcessor::RISCV_0,
+                .noc = NOC::RISCV_0_default,
+                .compile_args = ct,
+                .defines = d,
+            });
+        distributed::MeshCoordinateRange device_range(ctx.mesh_device->shape());
+        ctx.fz_workload.add_program(device_range, std::move(program));
+        ctx.fz_built = true;
+        return;
+    }
     ctx.writer = CreateKernel(
         program,
         OVERRIDE_KERNEL_PREFIX "kernels/dataflow/writer_alpha_blend.cpp",
@@ -536,6 +616,16 @@ static double process_frame_mb_devcull_resident(
 
     const bool launch_only = (phase == ResidentBlendPhase::DeviceLaunchAndReadback);
 
+    // Task #285: a materialize parked by sort_device (GSPLAT_TT_MATBLEND_FUSE)
+    // runs with this blend as one fused program. Any other case enqueues the
+    // plain materialize first, so it still precedes the blend on the queue.
+    namespace mbf = gsplat_tt::matblend_fuse;
+    mbf::Pending& pend = mbf::pending();
+    bool fz = pend.active && phase == ResidentBlendPhase::Complete &&
+              pend.cores.size() == ctx.all_cores.num_cores();
+    if (!fz) pend.run_fallback();
+    if (fz && !ctx.fz_built) build_program_and_workload_mb(ctx, /*fused=*/true);
+
     if (!launch_only) {
     // Post-sort subchunk meta: device-written at sort publish (iter 55 / step B).
     auto buf_sc_meta = ds::get_buffer("blend_subchunk_meta");
@@ -611,6 +701,19 @@ static double process_frame_mb_devcull_resident(
     }
 
     Program& program = get_program_for_workload(ctx);
+    Program* fz_program = nullptr;
+    if (fz) {
+        auto& programs = ctx.fz_workload.get_programs();
+        fz_program = &programs.find(distributed::MeshCoordinateRange(ctx.mesh_device->shape()))->second;
+        for (const auto& range : ctx.all_cores.ranges()) {
+            for (auto x = range.start_coord.x; x <= range.end_coord.x; x++) {
+                for (auto y = range.start_coord.y; y <= range.end_coord.y; y++) {
+                    if (pend.cores.count(mbf::core_key(x, y)) == 0) fz = false;
+                }
+            }
+        }
+        if (!fz) pend.run_fallback();
+    }
     uint32_t core_index = 0;
     const uint32_t a_addr     = static_cast<uint32_t>(buf_a->address());
     const uint32_t b_addr     = static_cast<uint32_t>(buf_b->address());
@@ -666,7 +769,34 @@ static double process_frame_mb_devcull_resident(
                     reader_args.push_back(num_cores);                // arg 24
                     reader_args.push_back(static_cast<uint32_t>(ctr_core.x));  // arg 25
                     reader_args.push_back(static_cast<uint32_t>(ctr_core.y));  // arg 26
-                    reader_args.push_back(ctx.claim_sem);            // arg 27
+                    reader_args.push_back(fz ? ctx.fz_claim_sem : ctx.claim_sem);  // arg 27
+                    if (fz) {
+                        // Mat args first, blend args from the kDmRtaBase /
+                        // kCpRtaBase offsets, ready flags at reader args 28/29.
+                        const mbf::CoreArgs& ma = pend.cores.at(mbf::core_key(x, y));
+                        reader_args.push_back(pend.flags_addr);  // arg 28
+                        reader_args.push_back(pend.epoch);       // arg 29
+                        std::vector<uint32_t> n = ma.n;
+                        n.push_back(pend.flags_addr);  // mat arg 18
+                        n.push_back(pend.epoch);       // mat arg 19
+                        n.resize(mbf::kDmRtaBase, 0u);
+                        n.insert(n.end(), reader_args.begin(), reader_args.end());
+                        std::vector<uint32_t> m0 = ma.m0;
+                        m0.push_back(pend.flags_addr);
+                        m0.push_back(pend.epoch);
+                        m0.resize(mbf::kDmRtaBase, 0u);
+                        m0.insert(m0.end(), {out_addr, tile_ids_addr, lpt_meta_addr, core_index,
+                                             tiles_x, pitch});
+                        std::vector<uint32_t> cp = ma.cp;
+                        cp.resize(mbf::kCpRtaBase, 0u);
+                        cp.push_back(blend_eps_bits);
+                        cp.push_back(floor_bits);
+                        SetRuntimeArgs(*fz_program, ctx.fz_ncrisc, core, n);
+                        SetRuntimeArgs(*fz_program, ctx.fz_brisc, core, m0);
+                        SetRuntimeArgs(*fz_program, ctx.fz_compute, core, cp);
+                        core_index++;
+                        continue;
+                    }
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
                     SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
                     SetRuntimeArgs(program, ctx.writer, core, {
@@ -699,7 +829,12 @@ static double process_frame_mb_devcull_resident(
         distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_yramp, yramp);
         ctx.res_ramp_uploaded = true;
     }
-    distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    if (fz) {
+        pend.clear();
+        distributed::EnqueueMeshWorkload(*ctx.cq, ctx.fz_workload, /*blocking=*/false);
+    } else {
+        distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+    }
     {
         GSPLAT_HOST_ZONE("host_finish_blend");
         distributed::Finish(*ctx.cq);
