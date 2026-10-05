@@ -20,3 +20,15 @@ f4d91df (old) and e8754ac (new):
 | new (BRISC = NCRISC) | 784 B | 800 B |
 
 -4112 B: the stack margin goes from ~0 to ~4.1 KB.
+
+Fold kernel (t177 cd707df, issue_brec fold) without and with the fix (fba971e = cd707df + e8754ac):
+
+| kernel | F=0 | F=1 (PROF 0 or 1) |
+|---|---|---|
+| cd707df | 4912 B | 4928 B |
+| fba971e | 816 B | 848 B |
+
+## Device (yyzo-bh-07 p100a, bicycle 30 views 1024x1024, untraced)
+
+Driver `drive.sh` (detached, one `ttp lock p100` per step), remote scripts `remote_run.sh`,
+`remote_tracy.sh`. Results: pending.
