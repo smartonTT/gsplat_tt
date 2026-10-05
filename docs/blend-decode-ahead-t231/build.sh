@@ -4,7 +4,7 @@
 # build dir). Copy of docs/blend-sched-t219/build.sh: the t229 JIT cache entry
 # of alpha_blend_compute_mb (BLEND_SCHED=2 defaults) gives the generated headers,
 # default blend defines and firmware symbols.
-# Usage (on the host): [LEVELS="0 1 2"] build.sh [src tree holding render/kernels] [scratch dir]
+# Usage (on the host): [LEVELS="0 1 2"] [EXTRA="#define ..."] build.sh [src tree holding render/kernels] [scratch dir]
 set -u
 T=/localdev/smarton/tt-metal
 W=${2:-/localdev/smarton/gstt2-t231-scratch}
@@ -34,7 +34,7 @@ build() {  # level trisc(0|1|2)
 }
 for L in ${LEVELS:-0 1 2}; do
     D=$W/k$L; rm -rf $D && mkdir -p $D && cp $K/chlkc_*.h $D/
-    { cat $K/defines_generated.h; echo "#define BLEND_DECODE_AHEAD $L"; } > $D/defines_generated.h
+    { cat $K/defines_generated.h; echo "#define BLEND_DECODE_AHEAD $L"; [ -n "${EXTRA:-}" ] && echo "$EXTRA"; } > $D/defines_generated.h
     for N in 0 1 2; do build $L $N > $W/build$L-$N.txt 2>&1 & done
 done
 wait

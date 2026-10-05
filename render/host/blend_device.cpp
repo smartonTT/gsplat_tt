@@ -210,13 +210,13 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
     // mask travels in slab word3, so there is no separate CB_BMASK_BULK.
     const uint32_t bulk_rec_depth = kBucketFit;
     cb_cfg(CB_BUCKET_BULK, rec_bytes, bulk_rec_depth, DataFormat::Float32);
-    // Task #231: GSPLAT_TT_BLEND_DECODE_AHEAD (1 = S2a, 2 = S2, 0 = off): TRISC0
+    // Task #231: GSPLAT_TT_BLEND_DECODE_AHEAD (2 = S2, default; 1 = S2a; 0 = off): TRISC0
     // decodes the live records' SFPLOADI words into an L1 ring that TRISC1 reads.
     // The ring CB exists only when the knob is on: 64 B header + 64 slots of 64 B
     // (DA_SLOTS / DA_SLOT_BYTES in alpha_blend_compute_mb.cpp).
     const char* blend_da_env = std::getenv("GSPLAT_TT_BLEND_DECODE_AHEAD");
     const std::string blend_da =
-        (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("0");
+        (blend_da_env != nullptr && blend_da_env[0] != '\0') ? std::string(blend_da_env) : std::string("2");
     if (blend_da != "0") {
         constexpr uint32_t CB_DA_RING = 10;
         cb_cfg(CB_DA_RING, 64, 1u + 64u, DataFormat::UInt32);
