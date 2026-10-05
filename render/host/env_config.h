@@ -196,6 +196,16 @@ inline bool mat_cq1() {
     return v;
 }
 
+// Task #298 (lever B, docs/next-levers-after-205.md B): under the early sort
+// the K2 only counts (count rows, M, P; a difference array per mover, no pair
+// pages) and the one-launch sort's movers make their pairs in their L1 window
+// while they wait (sort_bin_onelaunch.cpp gen). Default on; 0 = off (the K2
+// writes the pairs and the sort reads them, as before).
+inline bool k2_folded() {
+    static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_K2_FOLDED", 1u) != 0u;
+    return v;
+}
+
 // Task #207: the lever B fused pfwc writer split over BRISC (even chunks) and
 // NCRISC (odd chunks, plus the reader), writer_pfwc_split.cpp. Default on since
 // task #221 (=0 off): with pfwc_covcam_sfpu() paired -0.64 ms/view, alone -0.18.

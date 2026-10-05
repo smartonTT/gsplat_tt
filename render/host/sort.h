@@ -128,7 +128,10 @@ uint32_t sort_tile_capacity();
 bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
                                   uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
                                   uint32_t keep_addr, uint32_t pairs_P_addr,
-                                  const std::vector<uint64_t>& acc);
+                                  const std::vector<uint64_t>& acc,
+                                  const uint32_t* gen = nullptr);
+// gen (task #298, GSPLAT_TT_K2_FOLDED): the K2 only counted; the sort makes the
+// pairs from {proj_m_offs, proj_m_aabb, pfwc counts table, nseg, K2 num_tiles}.
 
 // Lazily initializes the device sort context (programs + CBs). Returns true
 // if the device path is operational.

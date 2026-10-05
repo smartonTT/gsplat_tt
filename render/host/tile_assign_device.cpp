@@ -764,6 +764,24 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             want_early && env_config::mat_cq1() ? device_state::command_queue1() : nullptr;
         bool early = false;
         uint32_t p_cap = 0;
+        // Task #298: count-only K2 (no pair pages) when the early sort makes
+        // the pairs; the difference array must fit the K2's local row.
+        const uint32_t span = row_pages * ELEMS_PER_PAGE;
+        const uint32_t diff_words =
+            span == 0 ? 0u : ((span + tiles_x - 1u) / tiles_x + 1u) * (tiles_x + 1u);
+        const bool want_gen =
+            want_early && env_config::k2_folded() && diff_words <= K2_FOLD_TILES;
+        {
+            static int logged = -1;
+            if (logged != static_cast<int>(want_gen)) {
+                logged = static_cast<int>(want_gen);
+                std::fprintf(stderr, "[TA] K2 folded into sort=%d (diff words %u)\n",
+                             static_cast<int>(want_gen), diff_words);
+            }
+        }
+        const uint32_t gen_args[5] = {static_cast<uint32_t>(offs->address()),
+                                      static_cast<uint32_t>(aabb->address()),
+                                      static_cast<uint32_t>(cnt->address()), nseg, num_tiles};
         std::vector<uint32_t> mread(ELEMS_PER_PAGE, 0);
         // Normally one pass; a P over the pair capacity publishes overflow,
         // then the buffers grow and the K2 reruns (the segments are intact).
@@ -775,6 +793,8 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                                                    static_cast<uint32_t>(ctx->cap_p_bytes / 4))
                               : static_cast<uint32_t>(ctx->cap_p_bytes / 4);
             Program& prog = ctx->wl_k2seg.get_programs().begin()->second;
+            const bool count_only = pass == 0 && want_gen;
+            auto set_k2_args = [&](bool count_only) {
             for (uint32_t c = 0; c < num_cores; c++) {
                 const CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
                 auto args = [&](uint32_t mover) -> std::vector<uint32_t> {
@@ -791,20 +811,30 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                         acc.empty() ? 0u : static_cast<uint32_t>(acc[2u * c + mover]),
                         acc.empty() ? 0u : static_cast<uint32_t>(acc[2u * c + mover + 1u]),
                         acc.empty() ? 0u : static_cast<uint32_t>(acc.back()),
+                        count_only ? 1u : 0u,
                     };
                 };
                 SetRuntimeArgs(prog, ctx->k2s, core, args(1));
                 if (ctx->dual) SetRuntimeArgs(prog, ctx->k2sb, core, args(0));
             }
+            };
+            set_k2_args(count_only);
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
             if (pass == 0 && want_early) {
                 auto enqueue_sort = [&]() {
-                    return sort_onelaunch_enqueue_early(
+                    const bool ok = sort_onelaunch_enqueue_early(
                         screen_tiles, tiles_x, row_pages, rows_addr,
                         static_cast<uint32_t>(ctx->buf_gids->address()),
                         static_cast<uint32_t>(ctx->buf_tids->address()),
                         static_cast<uint32_t>(ctx->buf_keep->address()),
-                        static_cast<uint32_t>(ctx->buf_pairs_P->address()), acc);
+                        static_cast<uint32_t>(ctx->buf_pairs_P->address()), acc,
+                        count_only ? gen_args : nullptr);
+                    if (!ok && count_only) {
+                        // No early sort to make the pairs: the K2 writes them.
+                        set_k2_args(false);
+                        distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
+                    }
+                    return ok;
                 };
                 if (cq1 != nullptr) {
                     const distributed::MeshEvent k2_done = ctx->cq->enqueue_record_event();

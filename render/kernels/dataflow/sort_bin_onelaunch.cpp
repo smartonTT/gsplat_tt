@@ -55,7 +55,12 @@
 //   19..24 semaphores: counted, based, arrive1, release1, arrive2, release2
 //   25 coordinator NoC x  26 coordinator NoC y  27 fold
 //   28, 29 early launch only (below), else 0
-//   30.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
+//   30..34 gen only (fold = 2, task #298, see gen_window), else 0
+//   35.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
+// Gen (task #298, arg 27 = 2; host GSPLAT_TT_K2_FOLDED=0 is the kill switch):
+// the fold with a count-only K2 that wrote the count rows, M and P but no
+// pairs. Each mover makes its window's pairs in L1 with the K2's walk while it
+// waits (gen_window) and writes only the pages past its window to DRAM.
 // Early launch (task #198, host GSPLAT_TT_SORT_OL_EARLY): enqueued right behind
 // the fold's K2, before the host knows P. 11 == 0xFFFFFFFF; 9 is then the
 // ta_pairs_P page ([0] P_pub), 10 and 28 this mover's running mover-speed sums
@@ -180,6 +185,58 @@ __attribute__((noinline)) uint32_t sub_int_cold(uint32_t abits, uint32_t k) {
     return out;
 }
 
+// Gen (task #298, arg 27 = 2): emit_pairs_diet's Io for making this mover's
+// pairs in place. The ring, the staging and the segment table sit in the
+// window's keep plane (scratch under the fold until the emit's ones); pages
+// below nwin go straight into the window's gid / tid planes, the rest through
+// the staging to the pair pages, which the emit re-reads.
+template <class LA, class BA, class GA, class TA>
+struct GenIo {
+    const LA& lofs_acc;
+    const BA& box_acc;
+    const GA& gids_acc;
+    const TA& tids_acc;
+    uint32_t ra_lofs, ra_box, st_gid, st_tid, win_gid, win_tid, pg_lo, nwin;
+    uint32_t cur;  // page the next slot is for
+    void issue_lofs(uint32_t page, uint32_t slot) const {
+        noc_async_read(get_noc_addr(page, lofs_acc), ra_lofs + slot * 64u, 64u);
+    }
+    void issue(uint32_t page, uint32_t slot) const {
+        noc_async_read(get_noc_addr(page, lofs_acc), ra_lofs + slot * 64u, 64u);
+        noc_async_read(get_noc_addr(page, box_acc), ra_box + slot * 64u, 64u);
+    }
+    void wait_reads() const {
+        noc_async_read_barrier();
+        asm volatile("" ::: "memory");
+    }
+    const uint32_t* lofs_slot(uint32_t slot) const {
+        return reinterpret_cast<const uint32_t*>(ra_lofs + slot * 64u);
+    }
+    const uint32_t* box_slot(uint32_t slot) const {
+        return reinterpret_cast<const uint32_t*>(ra_box + slot * 64u);
+    }
+    uint32_t* gid_slot(uint32_t o) const {
+        const uint32_t w = cur - pg_lo;
+        return reinterpret_cast<uint32_t*>(w < nwin ? win_gid + w * 64u : st_gid + o * 64u);
+    }
+    uint32_t* tid_slot(uint32_t o) const {
+        const uint32_t w = cur - pg_lo;
+        return reinterpret_cast<uint32_t*>(w < nwin ? win_tid + w * 64u : st_tid + o * 64u);
+    }
+    void write_page(uint32_t page, uint32_t o) {
+        asm volatile("" ::: "memory");
+        if (page - pg_lo >= nwin) {
+            noc_async_write(st_gid + o * 64u, get_noc_addr(page, gids_acc), 64u);
+            noc_async_write(st_tid + o * 64u, get_noc_addr(page, tids_acc), 64u);
+        }
+        cur = page + 1u;
+    }
+    void writes_flushed() const {
+        noc_async_writes_flushed();
+        asm volatile("" ::: "memory");
+    }
+};
+
 }  // namespace
 
 void kernel_main() {
@@ -210,7 +267,9 @@ void kernel_main() {
     const uint32_t sem_release2_id = get_arg_val<uint32_t>(24);
     const uint32_t coord_x = get_arg_val<uint32_t>(25);
     const uint32_t coord_y = get_arg_val<uint32_t>(26);
-    const bool fold = get_arg_val<uint32_t>(27) != 0u;
+    const uint32_t fold_mode = get_arg_val<uint32_t>(27);
+    const bool fold = fold_mode != 0u;
+    const bool gen = fold_mode == 2u;
 
     constexpr auto gids_args = TensorAccessorArgs<0>();
     constexpr auto tids_args = TensorAccessorArgs<gids_args.next_compile_time_args_offset()>();
@@ -344,7 +403,40 @@ void kernel_main() {
 #endif
         return true;
     };
+    // Gen (task #298): this mover makes its own pairs (the count-only K2 wrote
+    // none) with the K2's walk: reads the pfwc counts table, builds the
+    // segment table and walks its page range (pfwc_fuse.h). Args 30 lofs,
+    // 31 aabb, 32 pfwc counts table, 33 nseg, 34 the K2's num_tiles.
+    auto gen_window = [&]() {
+        DeviceZoneScopedN("sort_ol_gen");
+        const InterleavedAddrGen<true> lofs_g{get_arg_val<uint32_t>(30), PAGE_BYTES};
+        const InterleavedAddrGen<true> box_g{get_arg_val<uint32_t>(31), PAGE_BYTES};
+        const InterleavedAddrGen<true> ctab_g{get_arg_val<uint32_t>(32), PAGE_BYTES};
+        const uint32_t nseg = get_arg_val<uint32_t>(33);
+        constexpr uint32_t RS = pfwc_fuse::RA_SLOTS, OS = pfwc_fuse::OUT_SLOTS;
+        static_assert((pfwc_fuse::MAX_SEG + 2u * RS + 2u * OS) * 64u <= WIN_PAGES * PAGE_BYTES,
+                      "gen scratch fits the keep plane");
+        const uint32_t l1_tab = win_keep;
+        for (uint32_t c = 0; c < nseg; c++)
+            noc_async_read(get_noc_addr(c, ctab_g), l1_tab + c * PAGE_BYTES, PAGE_BYTES);
+        noc_async_read_barrier();
+        invalidate_l1_cache();
+        auto tab = reinterpret_cast<volatile uint32_t*>(l1_tab);
+        uint32_t M = 0, Pa = 0;
+        pfwc_fuse::seg_table(tab, nseg, get_arg_val<uint32_t>(34), &M, &Pa);
+        const uint32_t ra = l1_tab + pfwc_fuse::MAX_SEG * PAGE_BYTES;
+        GenIo<decltype(lofs_g), decltype(box_g), decltype(gids_acc), decltype(tids_acc)> io{
+            lofs_g, box_g, gids_acc, tids_acc, ra, ra + RS * 64u, ra + 2u * RS * 64u,
+            ra + (2u * RS + OS) * 64u, win_gid, win_tid, pg_lo, nwin, pg_lo};
+        pfwc_fuse::emit_pairs_diet<false>(tab, nseg, P, tiles_x, pg_lo, npages, io,
+                                          static_cast<uint32_t*>(nullptr));
+        noc_async_write_barrier();  // the emit re-reads the pages past nwin
+    };
     auto fill_window = [&]() {
+        if (gen) {
+            gen_window();
+            return;
+        }
         if (OL_FILL_BULK && fill_window_bulk()) return;
         fill_window_pages();
     };
@@ -438,7 +530,7 @@ void kernel_main() {
                 noc_semaphore_wait(arrive, num_cores - 1u);
                 noc_semaphore_set(arrive, 0u);
                 for (uint32_t r = 1; r < num_cores; r++) {
-                    const uint32_t xy = get_arg_val<uint32_t>(30 + r);
+                    const uint32_t xy = get_arg_val<uint32_t>(35 + r);
                     sem_inc(xy & 0xFFFFu, xy >> 16, release_id);
                 }
                 noc_async_atomic_barrier();

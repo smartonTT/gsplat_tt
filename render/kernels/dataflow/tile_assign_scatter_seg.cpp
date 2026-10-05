@@ -37,6 +37,8 @@
 //   14: p_cap (pair buffer capacity, elements)   15: tiles_x
 //   16: count rows (K2_DIET)   17: row_pages (0: no count rows)
 //   18, 19: speed sums before / after this mover   20: speed total (0: k2_range)
+//   21: count only (task #298, GSPLAT_TT_K2_FOLDED): count rows, M and P but no
+//       pair pages; the one-launch sort makes the pairs (sort_bin_onelaunch gen)
 //
 // COMPILE-TIME ARGS: 8 TensorAccessorArgs in runtime-arg order 0..6, 16.
 // CB: one raw scratch CB per mover (id 0 on NCRISC, TA_CB_OFFSET on BRISC):
@@ -183,13 +185,29 @@ void kernel_main() {
     if (row_pages != 0 && span <= K2_FOLD_TILES) {
         uint32_t cnt[K2_FOLD_TILES];
         for (uint32_t t = 0; t < span; t++) cnt[t] = 0;
-        {
-            DeviceZoneScopedN("k2_pairs");
-            pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
-        }
-        DeviceZoneScopedN("k2_rows");
         auto rowp = reinterpret_cast<volatile uint32_t*>(l1_row);
-        for (uint32_t t = 0; t < span; t++) rowp[t] = cnt[t];
+        if (get_arg_val<uint32_t>(21) != 0 &&
+            pfwc_fuse::diff_words(span, tiles_x) <= K2_FOLD_TILES) {
+            // Count only (task #298): the sort's movers make the pairs in their
+            // L1 window; this K2 only gives the count rows, M and P. Each
+            // gaussian's run of the rectangle walk is 4 difference updates.
+            const uint32_t nd = pfwc_fuse::diff_words(span, tiles_x);
+            for (uint32_t t = 0; t < nd; t++) cnt[t] = 0;
+            {
+                DeviceZoneScopedN("k2_pairs");
+                pfwc_fuse::emit_pairs_diet_m<pfwc_fuse::MODE_DIFF>(tab, nseg, P_pub, tiles_x,
+                                                                   pg0, npg, io, cnt);
+            }
+            DeviceZoneScopedN("k2_rows");
+            pfwc_fuse::diff_to_counts(cnt, span, tiles_x, span, rowp);
+        } else {
+            {
+                DeviceZoneScopedN("k2_pairs");
+                pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
+            }
+            DeviceZoneScopedN("k2_rows");
+            for (uint32_t t = 0; t < span; t++) rowp[t] = cnt[t];
+        }
         asm volatile("fence" ::: "memory");
         const uint32_t r0 = (kc * 2u + mover) * row_pages;
         for (uint32_t q = 0; q < row_pages; q++)

@@ -2430,6 +2430,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
                     ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
                     noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u, 0u, 0u,
+                    0u, 0u, 0u, 0u, 0u,  // 30..34: gen only (task #298)
                 };
                 SetRuntimeArgs(oprog, ctx->kol, core, a);
                 a[9] = lo;
@@ -3422,7 +3423,7 @@ bool sort_device_ready() { return ensure_context() != nullptr; }
 bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
                                   uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
                                   uint32_t keep_addr, uint32_t pairs_P_addr,
-                                  const std::vector<uint64_t>& acc) {
+                                  const std::vector<uint64_t>& acc, const uint32_t* gen) {
     if (!env_config::sort_ol_early()) return false;
     auto* ctx = ensure_context();
     if (ctx == nullptr) return false;
@@ -3473,9 +3474,10 @@ bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t
             num_tiles, row_pages, c, num_cores, kOneLaunchTileCap, tiles_x, 1u,
             ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
             ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
-            noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, 1u,
+            noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, gen != nullptr ? 2u : 1u,
             static_cast<uint32_t>(acc[2u * c + 2u]), static_cast<uint32_t>(acc.back()),
         };
+        for (uint32_t k = 0; k < 5; k++) a.push_back(gen != nullptr ? gen[k] : 0u);  // 30..34
         SetRuntimeArgs(oprog, ctx->kol, core, a);
         a[10] = static_cast<uint32_t>(acc[2u * c]);
         a[18] = 0u;
