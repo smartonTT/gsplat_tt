@@ -35,27 +35,100 @@
   .shot-missing small { font-weight: 400; }
   .shot-cap { color: #555; font-size: 11px; margin: 2px 0 0; }
   .shot-meta { color: #555; font-size: 11px; margin: 4px 0 0; }
+  .golden-badge { display: inline-block; font-size: 11px; margin: 4px 0 0; padding: 1px 6px; border-radius: 3px; }
+  .golden-ok { background: #e3f4e1; color: #2d6a4f; border: 1px solid #95d5b2; }
+  .golden-diff { background: #fff3cd; color: #8a6d00; border: 1px solid #e9c46a; }
   #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; cursor: zoom-out; align-items: center; justify-content: center; }
   #lightbox img { max-width: 96vw; max-height: 96vh; }
+  #viewer { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1001; flex-direction: column; align-items: center; justify-content: center; color: #eee; font-size: 13px; }
+  #viewer .vw-bar { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
+  #viewer .vw-bar label { cursor: pointer; }
+  #viewer .vw-bar code { background: #333; color: #eee; }
+  #viewer button { background: #444; color: #eee; border: 1px solid #777; border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  #viewer .vw-stage { position: relative; display: inline-block; line-height: 0; user-select: none; touch-action: none; }
+  #viewer .vw-stage img { max-width: 94vw; max-height: 84vh; display: block; }
+  #viewer .vw-stage img.vw-over { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #viewer .vw-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 3px #000; cursor: ew-resize; }
+  #viewer .vw-line::after { content: ''; position: absolute; top: 50%; left: -9px; width: 16px; height: 16px; margin-top: -9px; border: 2px solid #fff; border-radius: 50%; background: rgba(0,0,0,0.5); }
+  #viewer .vw-hint { color: #aaa; font-size: 11px; margin-top: 6px; }
 </style>
 <script>
-document.addEventListener('click', function (e) {
-  var lb = document.getElementById('lightbox');
-  if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
-  var a = e.target.closest('a.zoom');
-  if (!a || !lb) return;
-  e.preventDefault();
-  lb.querySelector('img').src = a.getAttribute('href');
-  lb.style.display = 'flex';
-});
-document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') { var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none'; }
-});
+// Compare viewer for device screenshots: ref / candidate / diff / split.
+// Self-contained (no external scripts or CSS). Image paths come from the
+// clicked link's data-img-* attributes, already relative to this file.
+(function () {
+  var V = null, pos = 50, dragging = false, dragged = false;
+  function q(sel) { return V.querySelector(sel); }
+  function setPos(p) {
+    pos = Math.max(0, Math.min(100, p));
+    // ref on the left of the line, candidate on the right.
+    q('.vw-over').style.clipPath = 'inset(0 ' + (100 - pos) + '% 0 0)';
+    q('.vw-line').style.left = pos + '%';
+  }
+  function setMode(m) {
+    var r = q('input[value="' + m + '"]');
+    if (r) r.checked = true;
+    var split = m === 'split';
+    q('.vw-base').src = V.dataset[split ? 'cand' : m];
+    q('.vw-over').style.display = split ? 'block' : 'none';
+    q('.vw-line').style.display = split ? 'block' : 'none';
+    if (split) setPos(pos);
+  }
+  function open(a) {
+    V = document.getElementById('viewer');
+    V.dataset.ref = a.getAttribute('data-img-ref');
+    V.dataset.cand = a.getAttribute('data-img-cand');
+    V.dataset.diff = a.getAttribute('data-img-diff');
+    q('.vw-over').src = V.dataset.ref;
+    q('.vw-ref-name').textContent = a.getAttribute('data-viewer-label') || V.dataset.ref;
+    V.style.display = 'flex';
+    setMode(a.getAttribute('data-viewer-mode') || 'cand');
+  }
+  function close() { if (V) V.style.display = 'none'; }
+  function fromEvent(e) {
+    var r = q('.vw-stage').getBoundingClientRect();
+    setPos((e.clientX - r.left) / r.width * 100);
+  }
+  document.addEventListener('click', function (e) {
+    var lb = document.getElementById('lightbox');
+    if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
+    if (dragged) { dragged = false; return; }  // a split drag that ended off the image
+    if (e.target.closest('.vw-close') || e.target.id === 'viewer') { close(); return; }
+    var a = e.target.closest('a.zoom');
+    if (!a) return;
+    e.preventDefault();
+    if (a.hasAttribute('data-img-ref')) { open(a); return; }
+    if (!lb) return;
+    lb.querySelector('img').src = a.getAttribute('href');
+    lb.style.display = 'flex';
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.name === 'vw-mode') setMode(e.target.value);
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (!V || V.style.display !== 'flex' || !q('input[value="split"]').checked) return;
+    if (!e.target.closest('.vw-stage')) return;
+    dragging = true; e.preventDefault(); fromEvent(e);
+  });
+  document.addEventListener('pointermove', function (e) { if (dragging) fromEvent(e); });
+  document.addEventListener('pointerup', function () { dragged = dragging; dragging = false; });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none';
+      close(); return;
+    }
+    if (!V || V.style.display !== 'flex') return;
+    var modes = {'1': 'ref', '2': 'cand', '3': 'diff', '4': 'split'};
+    if (modes[e.key]) setMode(modes[e.key]);
+    else if (e.key === 'ArrowLeft') { setMode('split'); setPos(pos - 5); }
+    else if (e.key === 'ArrowRight') { setMode('split'); setPos(pos + 5); }
+  });
+})();
 </script>
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-05 12:33 EDT · 74 metal + 195 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-05 12:50 EDT · 74 metal + 195 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -124,14 +197,14 @@ document.addEventListener('keydown', function (e) {
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M269</span>  ttw-199 — WIN</h3>
     <p class='iter-ts'>2026-10-05 12:45</p>
-    <p>ms_per_frame=11.62 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=11.62 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #232 (write-up docs/pfwc-noc1-balance-t232): balance the pfwc writer NoCs, then re-gate P2. writer_pfwc_split.cpp (PFWC_RD_COLS) lets either RISC read any subset of the 10 pfwc input tiles per chunk (runtime args 39-41: NoC0 column mask, BRISC tile set on those columns, BRISC tile set elsewhere); NCRISC reads the complement. New defaults: GSPLAT_TT_PFWC_COV2D_SFPU=1 (P2, t228) and GSPLAT_TT_PFWC_RD_REST=0x0F (BRISC/NoC0 reads input tiles 0-3 on every core, NCRISC/NoC1 reads tiles 4-9); =0 turns each off. Kernel config auto-opens +32 KB (program 96288 B).</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024. STEPCYC writer field fl (time in flush_rec/flush_pg) showed the slow cores stall in NoC write issue: input reads on a NoC slow that NoC's record and page writes (NoC1 reads hurt columns 13-15, NoC0 reads hurt rows 2-4), so a 4/6 read split balances both. Tracy STEPCYC=1 views 0-4 (KCFG_EXTRA_KB=32): mean pfwc span old default 2.323, P2 alone 2.565, P2 + RD_REST=0x0F 1.935 ms; core wall max 2.552 (P2 alone) -> 1.903; NCRISC record loop at x=14 1.402 -> 0.866 ms; column means within 0.07 ms. Gate, 4 rotated untraced rounds on c074fae (before iter 198 merged): old default 12.607/12.609/12.626/12.579 mean 12.605 ms/view, fix 12.261/12.257/12.281/12.301 mean 12.275 (paired -0.330, gate -0.3), alt (P2 + tiles 0-5 on x>=13, 0-2 elsewhere) 12.336 (-0.269). Verify on the merged tip 3ec6008 (with BLEND_DECODE_AHEAD=2), 2 swapped rounds: default 11.600/11.651 mean 11.625 ms/view (86.0 FPS), off (COV2D_SFPU=0, RD_REST=0) 11.918/11.984 mean 11.951, paired -0.326; project 3.343 -> 3.021. Tracy 30 views (KCFG_EXTRA_KB=32): device span 11.334 ms/view (iter 198: 11.663), pfwc window 2.004. md5 46a725ab on all 16 arms (30/30 views). Not built: 2:1 chunk deal and NoC0 for NCRISC record writes (the read split alone passed the gate).</p>
     <p class='iter-build'><code>3ec6008</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>3ec6008</code> defaults (GSPLAT_TT_PFWC_COV2D_SFPU=1, GSPLAT_TT_PFWC_RD_REST=0x0F, GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 (same ttp lock as the A/B run) · md5 <code>46a725ab</code> · PSNR 41.16 dB<br>visual check: Looked at hero.png full frame, a 512 px full-resolution crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.93/7.51 vs 6.76/7.71 elsewhere; 16 px 6.73/7.75 vs 6.76/7.70), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes or color shifts; spokes and fence slats are crisp. PSNR 41.16 dB vs benchmarks/reference_v2/hero.png, the same as the golden. The 10x diff vs that reference shows only edge detail (spokes, frame, fence slats, foliage) and faint soft blobs at upper left from culled low-contribution Gaussians; no tile grid (per 32 px tile diff mean p50 0.82, max 6.20).</p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>3ec6008</code> defaults (GSPLAT_TT_PFWC_COV2D_SFPU=1, GSPLAT_TT_PFWC_RD_REST=0x0F, GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 (same ttp lock as the A/B run) · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full frame, a 512 px full-resolution crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.93/7.51 vs 6.76/7.71 elsewhere; 16 px 6.73/7.75 vs 6.76/7.70), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes or color shifts; spokes and fence slats are crisp. PSNR 41.16 dB vs benchmarks/reference_v2/hero.png, the same as the golden. The 10x diff vs that reference shows only edge detail (spokes, frame, fence slats, foliage) and faint soft blobs at upper left from culled low-contribution Gaussians; no tile grid (per 32 px tile diff mean p50 0.82, max 6.20).</p>
     <p class='iter-tracy'><a href='profiler/ttw-199/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-199/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-199/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-199/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-199/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-199/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR 41.16 dB</p></div>
+  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-199/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-199/hero.png" data-img-diff="metal-screenshots/ttw-199/hero_diff10.png"><img src="metal-screenshots/ttw-199/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="metal-screenshots/ttw-199/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-199/hero.png" data-img-diff="metal-screenshots/ttw-199/hero_diff10.png"><img src="metal-screenshots/ttw-199/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
@@ -145,49 +218,49 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M267</span>  ttw-198 — WIN</h3>
     <p class='iter-ts'>2026-10-05 11:55</p>
-    <p>ms_per_frame=11.94 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=11.94 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #231 (t230 design S2a/S2, docs/blend-trisc1-t230; write-up docs/blend-decode-ahead-t231): GSPLAT_TT_BLEND_DECODE_AHEAD TRISC0 decode-ahead staging for blend. TRISC0 (idle during blend) walks the records and writes each live record's 14 pre-encoded SFPLOADI words plus its microblock mask to an L1 ring (CB 10, 64 slots); TRISC1 loads and pushes them with the same SFPU ops in the same order as RAW_STAGE, so the output is bit-identical. 1 = S2a (TRISC1 still scans and reduces T), 2 = S2 (ring holds only live records plus readback and end markers, so TRISC1 skips the scan and the T reduce). Default now 2 (=1 S2a, =0 off).</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, one build of 2f926c6. Gate, 3 rotated untraced rounds: default (knob 0) 12.698/12.617/12.660 mean 12.658 ms/view; S2a 12.382/12.257/12.266 mean 12.302 (paired -0.357, kill gate 0.15 passed); S2 11.965/11.949/11.939 mean 11.951 (paired -0.707); RAW_STAGE=1 calibration 12.452 (-0.206, model +0.27). Model overestimated S2a (+0.66 to +0.90) and S2 (+0.91 to +1.20): the ring loads and handshake cost TRISC1 more than modeled. STAGES blend 8.145 / 7.771 / 7.486 / 7.947. Default verify on 096d892, 2 swapped rounds: default 11.931/11.946 mean 11.939 ms/view (83.8 FPS), knob 0 12.612/12.639 mean 12.626, paired -0.687. Tracy (KCFG_EXTRA_KB=32): device span 11.663 ms/view, mat+blend window 7.562 -> 6.898, tile_blend_sfpu makespan 4.417 -> 3.760; pfwc, K2 and sort_ol unchanged. All 18 arms 30/30 views md5-identical (46a725ab).</p>
     <p class='iter-build'><code>096d892</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>096d892</code> defaults (GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size and a 512 px crop, and the 10x diff: no tile seams on 16/32 px edges, no blocky or empty tiles, no stripes or color shifts. Bit-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). hero_diff10.png is against benchmarks/reference_v2/hero.png (41.16 dB, the same as the golden itself) and shows only edge detail (spokes, frame, foliage), no tile grid.</p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>096d892</code> defaults (GSPLAT_TT_BLEND_DECODE_AHEAD=2, GSPLAT_TT_BLEND_SCHED=2, ...), verify round rv1 · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full size and a 512 px crop, and the 10x diff: no tile seams on 16/32 px edges, no blocky or empty tiles, no stripes or color shifts. Bit-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). hero_diff10.png is against benchmarks/reference_v2/hero.png (41.16 dB, the same as the golden itself) and shows only edge detail (spokes, frame, foliage), no tile grid.</p>
     <p class='iter-tracy'><a href='profiler/ttw-198/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-198/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-198/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-198/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-198/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-198/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-198/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-198/hero.png" data-img-diff="metal-screenshots/ttw-198/hero_diff10.png"><img src="metal-screenshots/ttw-198/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="metal-screenshots/ttw-198/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-198/hero.png" data-img-diff="metal-screenshots/ttw-198/hero_diff10.png"><img src="metal-screenshots/ttw-198/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M266</span>  ttw-197 — FAIL</h3>
     <p class='iter-ts'>2026-10-05 11:14</p>
-    <p>ms_per_frame=13.86 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=13.86 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #228 (P2 from docs/pfwc-trisc-model-t226, write-up docs/pfwc-cov2d-sfpu-t228): pfwc steps 7-11 (cov2d a/b/c, conic fold, radii) as two DEST sections with looped raw-TTI SFPU passes (pfwc_cov2d_sfpu.h, GSPLAT_TT_PFWC_COV2D_SFPU=1) instead of six tile-op acquires; same rounding order, bit-identical. Per chunk: copy_tile 38 -> 17, SFPU tile ops 87 -> 8 plus the two passes.</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, 543869b (on 3b96ba6, measured before BLEND_SCHED=2 landed), 4 swapped untraced rounds: base (knob 0) 13.662/13.574/13.578/13.597 mean 13.603 ms/view; cov2d 13.883/13.883/13.824/13.844 mean 13.858 (+0.256; the gate needs -0.3). project 3.356 -> 3.605. md5 46a725ab on every arm (30/30). Tracy STEPCYC=1 views 0-4: TRISC_1 steps 6-11 24.7k -> 11.5k cycles/chunk (16k gate passes), TRISC mean wall 2.20 -> 1.86 ms, median core 2.247 -> 1.812 ms, but the slowest core 2.316 -> 2.552 ms. On grid columns x=13-15 the NCRISC writer (NoC1: odd chunks and the input reader) spends 1.24-1.40 ms in its record loop against 0.83 at x=1 and BRISC's flat ~0.75, so BRISC waits on its OPEN hand-off and compute waits on output CB space. Shelved with default 0; the code stays for a re-gate once the right-hand columns' NoC1 load is balanced (follow-up).</p>
     <p class='iter-build'><code>543869b</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>768d91b</code> default-config render; knob md5-identical (GSPLAT_TT_PFWC_COV2D_SFPU default 0). Knob-on render GSPLAT_TT_PFWC_COV2D_SFPU=1 at the same commit: hero_cov2d_sfpu1.png, byte-identical, sweep md5 46a725ab. Backfill by task #236 with opt/ttw/screenshot.sh 197 768d91b [GSPLAT_TT_PFWC_COV2D_SFPU=1] · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure. The knob-on render (hero_cov2d_sfpu1.png) is byte-identical to hero.png.</p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>768d91b</code> default-config render; knob md5-identical (GSPLAT_TT_PFWC_COV2D_SFPU default 0). Knob-on render GSPLAT_TT_PFWC_COV2D_SFPU=1 at the same commit: hero_cov2d_sfpu1.png, byte-identical, sweep md5 46a725ab. Backfill by task #236 with opt/ttw/screenshot.sh 197 768d91b [GSPLAT_TT_PFWC_COV2D_SFPU=1] · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure. The knob-on render (hero_cov2d_sfpu1.png) is byte-identical to hero.png.</p>
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t228/opt/profiler/t228-{k0,k1}/chunks/0-4/render.tracy (STEPCYC=1, views 0-4; CSVs docs/pfwc-cov2d-sfpu-t228/dev/out/prof-k{0,1}-dev.csv.gz))</p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-197/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-197/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-197/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-197/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-197/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-197/hero.png" data-img-diff="metal-screenshots/ttw-197/hero_diff10.png"><img src="metal-screenshots/ttw-197/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="metal-screenshots/ttw-197/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-197/hero.png" data-img-diff="metal-screenshots/ttw-197/hero_diff10.png"><img src="metal-screenshots/ttw-197/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
   <div class='backburner-meta'>
     <h3><span class='iter-pos'>M265</span>  ttw-196 — WIN</h3>
     <p class='iter-ts'>2026-10-05 11:00</p>
-    <p>ms_per_frame=12.66 ms/frame, psnr=100.0 dB</p>
+    <p>ms_per_frame=12.66 ms/frame, psnr=41.16 dB vs benchmarks/reference_v2/hero.png</p>
 
     <p class='idea-desc'>Task #229 (t219 design, docs/blend-sched-t219, model docs/blend-loop-model-t205): GSPLAT_TT_BLEND_SCHED hand-scheduled raw-TTI blend jump-walk bodies, bit-identical to the compiled ones. 1 = F (stall-free MAD->use order), 2 = A2 (F with the common front/tail recorded once per tile into the replay buffer, so TRISC1 pushes about half the instructions per body). Default now 2 (=0 compiled, =1 F).</p><p class='reason'>yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, one build of 7f0850d. Gate, 3 rotated untraced rounds: level 0 13.609/13.665/13.620 mean 13.631 ms/view; level 1 13.648/13.635/13.676 mean 13.653 (+0.022, so the MAD->use stall is not the limit; TRISC1 instruction push is); level 2 12.602/12.609/12.638 mean 12.616 (paired -1.015 vs 0, -1.037 vs 1). STAGES blend 9.148/9.199/8.168. Tracy (KCFG_EXTRA_KB=32) blend segment busy 8.539/8.610/7.565 ms/view, tile_blend_sfpu makespan 5.381/5.444/4.413. Default verify on 29c288b, 2 swapped rounds: default 12.699/12.630 mean 12.665 (79.0 FPS), =0 13.691/13.603 mean 13.647, paired -0.982. All 15 arms 30/30 views md5-identical (46a725ab).</p>
     <p class='iter-build'><code>29c288b</code></p>
-    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>06d4fa7</code> defaults (GSPLAT_TT_BLEND_SCHED=2, no knobs set); backfill by task #236 with opt/ttw/screenshot.sh 196 06d4fa7 · md5 <code>46a725ab</code> · PSNR ∞ dB<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure.</p>
+    <p class='shot-meta'>device screenshot on yyzo-bh-07 p100a: <code>06d4fa7</code> defaults (GSPLAT_TT_BLEND_SCHED=2, no knobs set); backfill by task #236 with opt/ttw/screenshot.sh 196 06d4fa7 · sweep md5 <code>46a725ab</code> · PSNR 41.16 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: Looked at hero.png full size, a 512 px crop of the bike, and the 10x diff. No seams on 16/32 px tile edges (mean gradient across 32 px column/row boundaries 6.95/7.54 vs 6.78/7.73 elsewhere), no blocky, empty or black tiles (darkest 32x32 tile mean 14.5/255), no stripes, banding or color shifts. Byte-identical to tests/fixtures/hero/hero_golden_8bit.png (max diff 0, PSNR inf). The 10x diff vs benchmarks/reference_v2/hero.png (41.16 dB, same as the golden) shows only edge detail (spokes, frame, bench slats, foliage) plus faint large soft blobs at upper left from culled low-contribution Gaussians; no tile grid or tile-aligned structure.</p>
     <p class='iter-tracy'><a href='profiler/ttw-196/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-196/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-196/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to enlarge)"><img src="metal-screenshots/ttw-196/hero.png" class="thumb" alt="device hero (click to enlarge)"></a><a href="metal-screenshots/ttw-196/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="diff vs reference (click to enlarge)"><img src="metal-screenshots/ttw-196/hero_diff10.png" class="thumb" alt="diff vs reference (click to enlarge)"></a><p class='shot-cap'>device hero · diff vs ref · PSNR ∞ dB</p></div>
+  <div class='backburner-thumbs'><a href="metal-screenshots/ttw-196/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-196/hero.png" data-img-diff="metal-screenshots/ttw-196/hero_diff10.png"><img src="metal-screenshots/ttw-196/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="metal-screenshots/ttw-196/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-196/hero.png" data-img-diff="metal-screenshots/ttw-196/hero_diff10.png"><img src="metal-screenshots/ttw-196/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 41.16 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>
 
 <div class='backburner-row'>
@@ -201,7 +274,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-194/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-194/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -215,7 +288,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t166/opt/profiler/t174-p2w/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -229,7 +302,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t160/opt/profiler/t160-ep/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -243,7 +316,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-192/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-192/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -257,7 +330,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-193/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-193/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -271,7 +344,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-191/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-191/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -285,7 +358,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-190/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-190/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -299,7 +372,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t181/opt/profiler/t181-on/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -313,7 +386,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t188/opt/profiler/t188-on/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -327,7 +400,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t172/opt/profiler/t172-prof/chunks/0-2/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -341,7 +414,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t170/opt/profiler/t170-on/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -355,7 +428,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (docs/precull-pc-t161/out/t161-m{0,1,2}-zones.txt)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -369,7 +442,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t161/opt/profiler/t161-m1/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -383,7 +456,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t142/opt/profiler/t142-{base,pc}; docs/precull-t142/out)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -397,7 +470,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t146/opt/profiler/t146-{off,all}; docs/blend-diet-t146/out)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -411,7 +484,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t122/opt/profiler/t122-fuse (the #125 code as written))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -425,7 +498,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -439,7 +512,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -453,7 +526,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t99/opt/profiler/t102-vis/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -467,7 +540,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -481,7 +554,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t85/opt/profiler/t85-fix/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -495,7 +568,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (remote yyzo-bh-07:/localdev/smarton/gstt2-t33/opt/profiler/ttw-157-t33/render.tracy (base: gstt2-t33base/opt/profiler/ttw-157-t33base))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -509,7 +582,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t80b/opt/profiler/t80-a0/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -523,7 +596,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t68/opt/profiler/t68-k1/chunks/0-10/render.tracy)</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -537,7 +610,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (none (log tt-project/state/runs/219/t77b.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -551,7 +624,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (none (A/B log tt-project/state/runs/203/t61run3.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -565,7 +638,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t75/opt/profiler/ttw-t75-new/chunks/0-10/render.tracy (base: gstt2-t75base/.../ttw-t75-base; log tt-project/state/runs/200/t75ab.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -579,7 +652,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t60/opt/profiler/t60-t60/chunks/0-10/render.tracy (base: gstt2-t60base/.../t60-t60base; zone table in tt-project/state/runs/198/t60-abtr.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -593,7 +666,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (yyzo-bh-07:/localdev/smarton/gstt2-t59/opt/profiler/t59-t59/chunks/0-10/render.tracy (zone table in tt-project/state/runs/152/t59dev.log))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -607,7 +680,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -621,7 +694,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -635,7 +708,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -649,7 +722,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy' style='color:#c44536;font-size:11px'>Tracy trace missing (opt/profiler/ttw-162/chunks/0-10/render.tracy (+ chunks/10-20, chunks/20-30))</p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -663,7 +736,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -677,7 +750,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-160/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-160/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><div class='shot-missing'>screenshot missing - backfill pending</div></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -705,7 +778,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-157)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -831,7 +904,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-143)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -845,7 +918,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-144)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -859,7 +932,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-145)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -873,7 +946,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-146)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -901,7 +974,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-148)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -915,7 +988,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-153)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -943,7 +1016,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-141)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -957,7 +1030,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-140/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-140/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-140)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -971,7 +1044,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-139)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1013,7 +1086,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-136/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-136/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-136)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1069,7 +1142,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir newref-132)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1167,7 +1240,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-126)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1251,7 +1324,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-120)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1265,7 +1338,7 @@ document.addEventListener('keydown', function (e) {
 
     <p class='iter-tracy'><a href='profiler/ttw-119/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-119/render.tracy</code></p>
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-119)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1293,7 +1366,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-117)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1321,7 +1394,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-115)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1573,7 +1646,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-089)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1699,7 +1772,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-072)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1713,7 +1786,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-087)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1727,7 +1800,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-086)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1755,7 +1828,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-084)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1783,7 +1856,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-081)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1825,7 +1898,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-080)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1839,7 +1912,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-079)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1909,7 +1982,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-071)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1923,7 +1996,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-070)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1937,7 +2010,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-069)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1951,7 +2024,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-068)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1965,7 +2038,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-067)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1979,7 +2052,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-065)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -1993,7 +2066,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-064)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2007,7 +2080,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-063)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2021,7 +2094,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-062)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2035,7 +2108,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-061)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2049,7 +2122,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-060)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2063,7 +2136,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-059)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2077,7 +2150,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-058)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2091,7 +2164,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-057)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2105,7 +2178,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-056)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2119,7 +2192,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-055)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2133,7 +2206,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-054)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2147,7 +2220,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-053)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2161,7 +2234,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-052)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2175,7 +2248,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-051)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2189,7 +2262,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-050)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2203,7 +2276,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-049)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2217,7 +2290,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-048)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2231,7 +2304,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-047)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2245,7 +2318,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-046)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2259,7 +2332,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-045)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2273,7 +2346,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-044)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2287,7 +2360,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-043)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2301,7 +2374,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-042)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2315,7 +2388,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-041)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2329,7 +2402,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-040)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2343,7 +2416,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-039)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2357,7 +2430,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-038)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2371,7 +2444,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-037)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2385,7 +2458,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-035)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2399,7 +2472,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-034)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2413,7 +2486,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-033)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2427,7 +2500,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-032)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2441,7 +2514,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-031)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2455,7 +2528,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-027)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2469,7 +2542,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-026)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2483,7 +2556,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-024)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2497,7 +2570,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-025)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2511,7 +2584,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-023)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2525,7 +2598,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-022)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2539,7 +2612,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-021)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2553,7 +2626,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-020)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2567,7 +2640,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-017)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2581,7 +2654,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-030)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2595,7 +2668,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-029)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2609,7 +2682,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-028)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2623,7 +2696,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-019)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2637,7 +2710,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-018)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2651,7 +2724,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-016)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2665,7 +2738,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-015)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2679,7 +2752,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-014)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2735,7 +2808,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-013)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2749,7 +2822,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-012)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2763,7 +2836,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-011)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2777,7 +2850,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-010)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2791,7 +2864,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-009)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2805,7 +2878,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-008)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2819,7 +2892,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-007)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2833,7 +2906,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-006)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2847,7 +2920,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-005)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2861,7 +2934,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-004)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2875,7 +2948,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-001)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -2889,7 +2962,7 @@ document.addEventListener('keydown', function (e) {
 
 
   </div>
-  <div class='backburner-thumbs'><span style='color:#c44536;font-size:11px'>missing hero screenshot (run verify with --iter-dir ttw-000)</span></div>
+  <div class='backburner-thumbs'></div>
 </div>
 
 <div class='backburner-row'>
@@ -4744,5 +4817,17 @@ Macro 30-frame benchmark (loaded system, load avg ~8, Cursor at 215% CPU): sum_t
 </section>
 
 <div id='lightbox'><img src='' alt='enlarged screenshot'></div>
+<div id='viewer'>
+  <div class='vw-bar'>
+    <label><input type='radio' name='vw-mode' value='ref'> ref</label>
+    <label><input type='radio' name='vw-mode' value='cand'> candidate</label>
+    <label><input type='radio' name='vw-mode' value='diff'> diff</label>
+    <label><input type='radio' name='vw-mode' value='split'> split</label>
+    <span>ref: <code class='vw-ref-name'></code></span>
+    <button type='button' class='vw-close'>close (Esc)</button>
+  </div>
+  <div class='vw-stage'><img class='vw-base' alt='viewer image'><img class='vw-over' alt='reference'><div class='vw-line'></div></div>
+  <div class='vw-hint'>split: ref left, candidate right; drag the line (all the way left = whole candidate). Keys 1-4 switch, arrows move the line.</div>
+</div>
 </body>
 </html>

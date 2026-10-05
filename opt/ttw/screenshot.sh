@@ -7,8 +7,9 @@
 # the output dir under opt/metal-screenshots/), FILE (hero.png), NO_SYNC=1 (reuse tree).
 # Output: opt/metal-screenshots/<NAME>/<FILE>, <FILE stem>_diff10.png (|hero - ref| * 10,
 # ref = benchmarks/reference_v2/hero.png), and a SHOT line with the sweep md5 (8 chars of
-# md5 of the sorted per-view md5 list; 46a725ab = the bicycle default since iter 82) and
-# PSNR vs tests/fixtures/hero/hero_golden_8bit.png and vs reference_v2.
+# md5 of the sorted per-view md5 list; 46a725ab = the bicycle default since iter 82), the
+# PSNR vs reference_v2 (the same reference as the diff: device_screenshot.psnr_vs_ref) and
+# the golden match vs tests/fixtures/hero/hero_golden_8bit.png (golden_match, a badge only).
 # Still LOOK at the hero and the diff (tile seams, blocky/empty tiles) before attaching it.
 set -u
 cd "$(git rev-parse --show-toplevel)"
@@ -49,6 +50,6 @@ ref = rgb("benchmarks/reference_v2/hero.png")
 Image.fromarray(np.clip(np.abs(h - ref) * 10, 0, 255).astype(np.uint8)).save(diff)
 sweep = hashlib.md5(open(md5f, "rb").read()).hexdigest()[:8]
 print(f"SHOT hero={hero} diff={diff} commit={sha} env='{env or 'defaults'}' size={h.shape[1]}x{h.shape[0]} "
-      f"sweep_md5={sweep} psnr_vs_golden={psnr(h, gold)} max_lsb_vs_golden={int(np.abs(h - gold).max())} "
-      f"psnr_vs_ref_v2={psnr(h, ref)}")
+      f"sweep_md5={sweep} ref=benchmarks/reference_v2/hero.png psnr_vs_ref={psnr(h, ref)} "
+      f"golden_match={str(bool(np.array_equal(h, gold))).lower()} max_lsb_vs_golden={int(np.abs(h - gold).max())}")
 PY

@@ -176,7 +176,6 @@ def normalize_ttw_row(r: dict) -> dict:
         "tracy": r.get("tracy") or "",
         "iter": n,
         "device_screenshot": r.get("device_screenshot"),
-        "screenshot_backfill_pending": r.get("screenshot_backfill_pending"),
     }
 
 
@@ -230,6 +229,34 @@ def img_link(src: str, cls: str = "thumb", title: str = "") -> str:
     t = f' title="{title}"' if title else ""
     return (f'<a href="{src}" class="zoom" target="_blank" rel="noopener"{t}>'
             f'<img src="{src}" class="{cls}" alt="{title}"></a>')
+
+
+def viewer_link(shot: dict, mode: str, title: str) -> str:
+    """Thumb that opens the compare viewer (ref / candidate / diff / split).
+
+    The data-img-* paths are relative to opt/REPORT.html; rebase_for_ttw
+    rewrites them for the opt/ttw/ mirror like src/href.
+    """
+    src = _opt_href(shot["hero" if mode == "cand" else "diff"])
+    t = html_escape(title, quote=True)
+    return (f'<a href="{src}" class="zoom" target="_blank" rel="noopener" title="{t}" '
+            f'data-viewer-mode="{mode}" data-viewer-label="{html_escape(shot["ref"], quote=True)}" '
+            f'data-img-ref="{_opt_href(shot["ref"])}" data-img-cand="{_opt_href(shot["hero"])}" '
+            f'data-img-diff="{_opt_href(shot["diff"])}">'
+            f'<img src="{src}" class="thumb" alt="{t}"></a>')
+
+
+def golden_badge(shot: dict) -> str:
+    """md5/golden match as its own badge (never shown as the PSNR)."""
+    gold = shot.get("golden")
+    if not gold or not isinstance(shot.get("golden_match"), bool):
+        return ""
+    g = html_escape(gold)
+    if shot["golden_match"]:
+        return (f"<p class='golden-badge golden-ok' title='pixel-identical to {g}'>"
+                f"✓ golden match <code>{g}</code></p>")
+    return (f"<p class='golden-badge golden-diff' title='differs from {g}'>"
+            f"✗ differs from golden <code>{g}</code></p>")
 
 
 def _read_timing_jsonl(path: Path) -> dict[str, float]:
@@ -350,15 +377,17 @@ def ensure_hero_diff10(iter_dir: str) -> None:
 # --- Device screenshot requirement (user, 2026-10-05) -------------------------
 # Every ttw iteration carries a `device_screenshot` object (see
 # opt/ttw/ITERATION_CHECKLIST.md): the bicycle hero rendered ON DEVICE at the
-# iteration's commit/config, a diff vs the reference, PSNR, md5 and a written
-# visual check for tile artifacts. Iters > SCREENSHOT_REQUIRED_AFTER must have
-# it. Legacy iters SCREENSHOT_LEGACY_FROM..SCREENSHOT_REQUIRED_AFTER that never
-# got one may instead carry "screenshot_backfill_pending": true, which the
-# report shows as a red placeholder. Older iters use the legacy
-# screenshot/screenshot_diff fields and are not checked here.
+# iteration's commit/config, a 10x diff and a PSNR against ONE named reference
+# (`ref` for the PSNR, `diff_ref` for the diff; they must be the same file), the
+# sweep md5, a golden-match badge (`golden`/`golden_match`, never the PSNR) and a
+# written visual check for tile artifacts. Iters > SCREENSHOT_REQUIRED_AFTER
+# must have it. Older iters predate the rule: they show whatever they have, with
+# no placeholder, and are not checked here.
 SCREENSHOT_REQUIRED_AFTER = 197
-SCREENSHOT_LEGACY_FROM = 160
-SCREENSHOT_FIELDS = ("hero", "diff", "psnr_vs_ref", "md5", "commit", "config", "visual_check")
+SCREENSHOT_FIELDS = ("hero", "diff", "ref", "diff_ref", "psnr_vs_ref", "md5", "commit",
+                     "config", "visual_check")
+SHOT_REF = "benchmarks/reference_v2/hero.png"
+SHOT_GOLDEN = "tests/fixtures/hero/hero_golden_8bit.png"
 REPO_ROOT = OPT_DIR.parent
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
@@ -391,52 +420,92 @@ def device_screenshot_problems(r: dict, root: Path | None = None) -> list[str]:
     vc = str(shot.get("visual_check") or "").strip()
     if vc and len(vc) < 8:
         probs.append("device_screenshot.visual_check is too short to be a real note")
-    for k in ("hero", "diff"):
+    for k in ("hero", "diff", "ref", "diff_ref", "golden"):
         rel = str(shot.get(k) or "").strip()
         if rel:
             fp = _shot_file_problem(rel, root)
             if fp:
                 probs.append(f"device_screenshot.{k}: {fp}")
+    ref, diff_ref = str(shot.get("ref") or ""), str(shot.get("diff_ref") or "")
+    if ref and diff_ref and ref != diff_ref:
+        probs.append(f"device_screenshot: PSNR reference {ref} and diff reference {diff_ref} differ; "
+                     f"both must name the same reference")
+    if shot.get("golden") and not isinstance(shot.get("golden_match"), bool):
+        probs.append("device_screenshot.golden_match must be true/false when golden is set")
     hero = str(shot.get("hero") or "")
-    ref_rel = "benchmarks/reference_v2/hero.png"
-    if hero == ref_rel or any(part.startswith("cpu") for part in Path(hero).parts[:-1]):
+    if hero in (SHOT_REF, ref) or any(part.startswith("cpu") for part in Path(hero).parts[:-1]):
         probs.append(f"device_screenshot.hero {hero} is a CPU/reference image, not a device render")
     return probs
 
 
+def _psnr(a, b) -> float:
+    import numpy as np
+    mse = float(((a - b) ** 2).mean())
+    return float("inf") if mse == 0 else 10.0 * float(np.log10(255.0 ** 2 / mse))
+
+
+def screenshot_pixel_problems(shot: dict, root: Path | None = None) -> list[str]:
+    """Recompute a device_screenshot's numbers from its images ([] = consistent).
+
+    PSNR(hero, ref) must match `psnr_vs_ref` (0.01 dB), the diff must be
+    |hero - diff_ref| * 10 (1 LSB), and `golden_match` must say whether hero is
+    byte-identical in pixels to `golden`. Also checks a nested `knob_on` shot.
+    """
+    import numpy as np
+    from PIL import Image
+    root = root or REPO_ROOT
+    probs: list[str] = []
+    for name, s in (("device_screenshot", shot), ("device_screenshot.knob_on", shot.get("knob_on"))):
+        if not isinstance(s, dict) or not s.get("hero"):
+            continue
+        ref_rel = s.get("ref") or shot.get("ref")
+        diff_ref_rel = s.get("diff_ref") or shot.get("diff_ref")
+        try:
+            rgb = lambda rel: np.asarray(Image.open(root / rel).convert("RGB"), dtype=np.float64)
+            hero = rgb(s["hero"])
+            ref = rgb(ref_rel)
+            p = _psnr(hero, ref)
+            want = s.get("psnr_vs_ref")
+            want_f = float("inf") if want == "inf" else float(want)
+            if not (p == want_f or abs(p - want_f) <= 0.01):
+                probs.append(f"{name}.psnr_vs_ref {want} but PSNR({s['hero']}, {ref_rel}) = {p:.3f}")
+            if s.get("diff"):
+                want_diff = np.clip(np.abs(hero - rgb(diff_ref_rel)) * 10.0, 0, 255)
+                if np.abs(rgb(s["diff"]) - want_diff).max() > 1.0:
+                    probs.append(f"{name}.diff {s['diff']} is not |hero - {diff_ref_rel}| * 10")
+            gold_rel = s.get("golden") or shot.get("golden")
+            if gold_rel and isinstance(s.get("golden_match", shot.get("golden_match")), bool):
+                same = bool(np.array_equal(hero, rgb(gold_rel)))
+                if same != s.get("golden_match", shot.get("golden_match")):
+                    probs.append(f"{name}.golden_match says {not same} but hero vs {gold_rel} "
+                                 f"is {'identical' if same else 'different'}")
+        except Exception as e:  # unreadable image, bad number, ...
+            probs.append(f"{name}: cannot recompute PSNR/diff ({type(e).__name__}: {e})")
+    return probs
+
+
 def screenshot_status(r: dict, root: Path | None = None) -> tuple[str, list[str]]:
-    """('ok' | 'pending' | 'missing' | 'legacy', problems) for a ttw row."""
+    """('ok' | 'missing' | 'legacy', problems) for a ttw row."""
     it = r.get("iter")
     has_shot = r.get("device_screenshot") is not None
-    if not isinstance(it, int) or (it < SCREENSHOT_LEGACY_FROM and not has_shot):
+    if not has_shot and (not isinstance(it, int) or it <= SCREENSHOT_REQUIRED_AFTER):
         return "legacy", []
     if has_shot:
         probs = device_screenshot_problems(r, root)
         return ("missing" if probs else "ok"), probs
-    if r.get("screenshot_backfill_pending") is True:
-        if it > SCREENSHOT_REQUIRED_AFTER:
-            return "missing", [
-                f"screenshot_backfill_pending is only allowed for legacy iters "
-                f"{SCREENSHOT_LEGACY_FROM}-{SCREENSHOT_REQUIRED_AFTER}"
-            ]
-        return "pending", []
-    return "missing", ["no device_screenshot object (and no screenshot_backfill_pending flag)"]
+    return "missing", ["no device_screenshot object"]
 
 
-def check_device_screenshots(rows: list[dict], root: Path | None = None) -> tuple[list[str], list[int]]:
-    """(errors, backfill-pending iters) over all ttw rows."""
+def check_device_screenshots(rows: list[dict], root: Path | None = None,
+                             pixels: bool = False) -> list[str]:
+    """Errors over all ttw rows; `pixels` also recomputes PSNR/diff from the images."""
     errors: list[str] = []
-    pending: list[int] = []
     for r in rows:
         status, probs = screenshot_status(r, root)
-        if status == "pending":
-            pending.append(r["iter"])
-        elif status == "missing":
-            errors.extend(f"ttw iter {r.get('iter')}: {p}" for p in probs)
-        if status == "ok" and r.get("screenshot_backfill_pending"):
-            print(f"  [WARN] ttw iter {r.get('iter')} has a valid device_screenshot; "
-                  f"drop its stale screenshot_backfill_pending flag")
-    return errors, pending
+        if status == "ok" and pixels:
+            probs = screenshot_pixel_problems(r["device_screenshot"], root)
+        errors.extend(f"ttw iter {r.get('iter')}: {p}" for p in probs)
+    return errors
 
 
 def _opt_href(rel: str) -> str:
@@ -1152,25 +1221,32 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         if status == "ok":
             psnr = shot["psnr_vs_ref"]
             psnr_txt = "∞" if psnr == "inf" else f"{float(psnr):.2f}"
+            ref = shot["ref"]
+            ref_name = html_escape(ref)
+            psnr_min_str = f"{psnr_txt} dB vs {ref_name}"
             thumb_html = (
-                img_link(_opt_href(shot["hero"]), title="device hero (click to enlarge)")
-                + img_link(_opt_href(shot["diff"]), title="diff vs reference (click to enlarge)")
-                + f"<p class='shot-cap'>device hero · diff vs ref · PSNR {psnr_txt} dB</p>"
+                viewer_link(shot, "cand", "device hero (click to compare)")
+                + viewer_link(shot, "diff", f"10x diff vs {ref} (click to compare)")
+                + f"<p class='shot-cap'>device hero · 10× diff · PSNR {psnr_txt} dB<br>"
+                f"ref: <code>{ref_name}</code></p>"
+                + golden_badge(shot)
             )
             device = f" on {html_escape(shot['device'])}" if shot.get("device") else ""
             shot_html = (
                 f"<p class='shot-meta'>device screenshot{device}: "
                 f"<code>{html_escape(shot['commit'])}</code> {html_escape(shot['config'])} · "
-                f"md5 <code>{html_escape(shot['md5'])}</code> · PSNR {psnr_txt} dB<br>"
+                f"sweep md5 <code>{html_escape(shot['md5'])}</code> · "
+                f"PSNR {psnr_txt} dB vs <code>{ref_name}</code> (diff vs the same)<br>"
                 f"visual check: {html_escape(shot['visual_check'])}</p>"
             )
-        elif status == "pending":
-            thumb_html = "<div class='shot-missing'>screenshot missing - backfill pending</div>"
         elif status == "missing":
             thumb_html = (
                 "<div class='shot-missing'>device screenshot MISSING - required<br>"
                 f"<small>{html_escape('; '.join(probs))}</small></div>"
             )
+        elif not preview_paths:
+            # Predates the screenshot rule and never had one: show nothing.
+            thumb_html = ""
 
     # Description: the `action` (the idea/what-was-tried) is the primary
     # human-readable line. For metal rows action is a slug + a descriptive
@@ -1835,22 +1911,95 @@ def build_html(rows: list[dict]) -> str:
   .shot-missing small { font-weight: 400; }
   .shot-cap { color: #555; font-size: 11px; margin: 2px 0 0; }
   .shot-meta { color: #555; font-size: 11px; margin: 4px 0 0; }
+  .golden-badge { display: inline-block; font-size: 11px; margin: 4px 0 0; padding: 1px 6px; border-radius: 3px; }
+  .golden-ok { background: #e3f4e1; color: #2d6a4f; border: 1px solid #95d5b2; }
+  .golden-diff { background: #fff3cd; color: #8a6d00; border: 1px solid #e9c46a; }
   #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 1000; cursor: zoom-out; align-items: center; justify-content: center; }
   #lightbox img { max-width: 96vw; max-height: 96vh; }
+  #viewer { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 1001; flex-direction: column; align-items: center; justify-content: center; color: #eee; font-size: 13px; }
+  #viewer .vw-bar { display: flex; gap: 14px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; justify-content: center; }
+  #viewer .vw-bar label { cursor: pointer; }
+  #viewer .vw-bar code { background: #333; color: #eee; }
+  #viewer button { background: #444; color: #eee; border: 1px solid #777; border-radius: 3px; padding: 2px 10px; cursor: pointer; }
+  #viewer .vw-stage { position: relative; display: inline-block; line-height: 0; user-select: none; touch-action: none; }
+  #viewer .vw-stage img { max-width: 94vw; max-height: 84vh; display: block; }
+  #viewer .vw-stage img.vw-over { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+  #viewer .vw-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 3px #000; cursor: ew-resize; }
+  #viewer .vw-line::after { content: ''; position: absolute; top: 50%; left: -9px; width: 16px; height: 16px; margin-top: -9px; border: 2px solid #fff; border-radius: 50%; background: rgba(0,0,0,0.5); }
+  #viewer .vw-hint { color: #aaa; font-size: 11px; margin-top: 6px; }
 </style>
 <script>
-document.addEventListener('click', function (e) {
-  var lb = document.getElementById('lightbox');
-  if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
-  var a = e.target.closest('a.zoom');
-  if (!a || !lb) return;
-  e.preventDefault();
-  lb.querySelector('img').src = a.getAttribute('href');
-  lb.style.display = 'flex';
-});
-document.addEventListener('keydown', function (e) {
-  if (e.key === 'Escape') { var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none'; }
-});
+// Compare viewer for device screenshots: ref / candidate / diff / split.
+// Self-contained (no external scripts or CSS). Image paths come from the
+// clicked link's data-img-* attributes, already relative to this file.
+(function () {
+  var V = null, pos = 50, dragging = false, dragged = false;
+  function q(sel) { return V.querySelector(sel); }
+  function setPos(p) {
+    pos = Math.max(0, Math.min(100, p));
+    // ref on the left of the line, candidate on the right.
+    q('.vw-over').style.clipPath = 'inset(0 ' + (100 - pos) + '% 0 0)';
+    q('.vw-line').style.left = pos + '%';
+  }
+  function setMode(m) {
+    var r = q('input[value="' + m + '"]');
+    if (r) r.checked = true;
+    var split = m === 'split';
+    q('.vw-base').src = V.dataset[split ? 'cand' : m];
+    q('.vw-over').style.display = split ? 'block' : 'none';
+    q('.vw-line').style.display = split ? 'block' : 'none';
+    if (split) setPos(pos);
+  }
+  function open(a) {
+    V = document.getElementById('viewer');
+    V.dataset.ref = a.getAttribute('data-img-ref');
+    V.dataset.cand = a.getAttribute('data-img-cand');
+    V.dataset.diff = a.getAttribute('data-img-diff');
+    q('.vw-over').src = V.dataset.ref;
+    q('.vw-ref-name').textContent = a.getAttribute('data-viewer-label') || V.dataset.ref;
+    V.style.display = 'flex';
+    setMode(a.getAttribute('data-viewer-mode') || 'cand');
+  }
+  function close() { if (V) V.style.display = 'none'; }
+  function fromEvent(e) {
+    var r = q('.vw-stage').getBoundingClientRect();
+    setPos((e.clientX - r.left) / r.width * 100);
+  }
+  document.addEventListener('click', function (e) {
+    var lb = document.getElementById('lightbox');
+    if (e.target.closest('#lightbox')) { lb.style.display = 'none'; return; }
+    if (dragged) { dragged = false; return; }  // a split drag that ended off the image
+    if (e.target.closest('.vw-close') || e.target.id === 'viewer') { close(); return; }
+    var a = e.target.closest('a.zoom');
+    if (!a) return;
+    e.preventDefault();
+    if (a.hasAttribute('data-img-ref')) { open(a); return; }
+    if (!lb) return;
+    lb.querySelector('img').src = a.getAttribute('href');
+    lb.style.display = 'flex';
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target.name === 'vw-mode') setMode(e.target.value);
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (!V || V.style.display !== 'flex' || !q('input[value="split"]').checked) return;
+    if (!e.target.closest('.vw-stage')) return;
+    dragging = true; e.preventDefault(); fromEvent(e);
+  });
+  document.addEventListener('pointermove', function (e) { if (dragging) fromEvent(e); });
+  document.addEventListener('pointerup', function () { dragged = dragging; dragging = false; });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      var lb = document.getElementById('lightbox'); if (lb) lb.style.display = 'none';
+      close(); return;
+    }
+    if (!V || V.style.display !== 'flex') return;
+    var modes = {'1': 'ref', '2': 'cand', '3': 'diff', '4': 'split'};
+    if (modes[e.key]) setMode(modes[e.key]);
+    else if (e.key === 'ArrowLeft') { setMode('split'); setPos(pos - 5); }
+    else if (e.key === 'ArrowRight') { setMode('split'); setPos(pos + 5); }
+  });
+})();
 </script>
 """
     n_metal = len(load_metal_iters())
@@ -1877,6 +2026,18 @@ document.addEventListener('keydown', function (e) {
 {ledger_section(rows)}
 {algorithm_snapshot(rows)}
 <div id='lightbox'><img src='' alt='enlarged screenshot'></div>
+<div id='viewer'>
+  <div class='vw-bar'>
+    <label><input type='radio' name='vw-mode' value='ref'> ref</label>
+    <label><input type='radio' name='vw-mode' value='cand'> candidate</label>
+    <label><input type='radio' name='vw-mode' value='diff'> diff</label>
+    <label><input type='radio' name='vw-mode' value='split'> split</label>
+    <span>ref: <code class='vw-ref-name'></code></span>
+    <button type='button' class='vw-close'>close (Esc)</button>
+  </div>
+  <div class='vw-stage'><img class='vw-base' alt='viewer image'><img class='vw-over' alt='reference'><div class='vw-line'></div></div>
+  <div class='vw-hint'>split: ref left, candidate right; drag the line (all the way left = whole candidate). Keys 1-4 switch, arrows move the line.</div>
+</div>
 </body>
 </html>
 """
@@ -1891,12 +2052,13 @@ def write_reports(html: str) -> None:
     REPORT_HTML_TTW.write_text(rebase_for_ttw(html))
 
 
-_REL_ATTR_RE = re.compile(r'(\b(?:src|href)=")(?![a-zA-Z][a-zA-Z0-9+.-]*:|/|#)([^"]+")')
+_REL_ATTR_RE = re.compile(
+    r"""(\b(?:src|href|data-img-ref|data-img-cand|data-img-diff)=(["']))(?![a-zA-Z][a-zA-Z0-9+.-]*:|/|#)([^"']+\2)""")
 
 
 def rebase_for_ttw(html: str) -> str:
-    """Prefix relative src/href paths with ../ so the opt/ttw/ mirror resolves them."""
-    return _REL_ATTR_RE.sub(r"\1../\2", html)
+    """Prefix relative src/href/data-img-* paths with ../ so the opt/ttw/ mirror resolves them."""
+    return _REL_ATTR_RE.sub(r"\1../\3", html)
 
 
 def main() -> None:
@@ -1906,9 +2068,7 @@ def main() -> None:
     n_ledger = len(load_metal_iters()) + len(load_ttw_iters())
     print(f"wrote {REPORT_HTML}  ({n_ledger} ledger rows, {len(rows)} cpu iters)")
     print(f"wrote {REPORT_HTML_TTW}  (mirror, relative paths rebased to ../)")
-    errors, pending = check_device_screenshots(load_ttw_iters())
-    if pending:
-        print(f"  [WARN] {len(pending)} legacy iters flagged screenshot_backfill_pending: {pending}")
+    errors = check_device_screenshots(load_ttw_iters(), pixels=True)
     if errors:
         for e in errors:
             print(f"SCREENSHOT MISSING: {e}")
