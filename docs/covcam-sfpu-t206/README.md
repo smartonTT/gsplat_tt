@@ -1,7 +1,7 @@
 # Task #206: single-pass SFPU cov_cam (GSPLAT_TT_PFWC_COVCAM_SFPU, default 0)
 
-Built and host-tested only. No device run yet: the numbers below are estimates, not
-measurements.
+Device-checked in task #218 (results at the end). Decision: SHELVED, default stays 0.
+The "Expected savings" section is the pre-device estimate.
 
 ## What changes
 
@@ -58,3 +58,33 @@ That is near the 0.3 gate.
 3. `GSPLAT_TT_PFWC_STEPCYC=2` split as in docs/pfwc-breakdown-t197. With the knob on,
    cov_cam is booked as copy (6 copies), mulu (the SFPU pass) and pack.
 4. Paired A/B, knob 0 vs 1, untraced. Flip the default if the gain is at least 0.3 ms/view.
+
+## Device results (task #218, 2026-10-05, yyzo-bh-07 p100a, tree 2c11da1)
+
+Logs: `out/`. Driver: `drive.sh` (smoke, STEPCYC=2 at knob 0/1, 3 swapped paired rounds).
+
+- Build: compiles. The fused pfwc program with the knob on is 71184 B, 528 B over the
+  70656 B kernel config buffer (TT_FATAL at load). All arms (both A and B) therefore ran
+  with `GSPLAT_TT_KCFG_EXTRA_KB=4`. Making the knob usable by default would also need a
+  >=528 B TRISC1 trim.
+- md5: 46a725ab in all 6 untraced 30-view runs (knob 0 and 1), smoke 2/2 views. The fp32
+  DEST round-trip of the staged scales is exact on device.
+- STEPCYC=2 traced (ms/view, mean core): TRISC1 cov_cam 0.664 -> 0.257 (as modelled).
+  pfwc wall: TRISC1 2.704 -> 2.413, BRISC 2.739 -> 2.450 (-0.29). Part of the saving moves
+  into waits: TRISC0/1 `means` 0.17/0.19 -> 0.28/0.30, TRISC0 `a` 0.15 -> 0.37, so pfwc is
+  now close to the reader/writer limit (NCRISC reserve 2.18, BRISC cls+rec 2.0).
+- Paired untraced, 30 views, view_total ms/view:
+
+  | round | knob 0 | knob 1 | delta |
+  |---|---|---|---|
+  | 1 | 14.365 | 14.059 | -0.306 |
+  | 2 | 14.235 | 14.037 | -0.198 |
+  | 3 | 14.245 | 14.023 | -0.222 |
+  | mean | 14.282 | 14.040 | **-0.242** |
+
+  project stage: 4.016 -> 3.805 (-0.211).
+
+Decision: -0.242 ms/view is below the 0.3 ms/view gate, and enabling it also costs a
+528 B code trim or a larger kernel config buffer. SHELVED, default stays 0. If pfwc is
+revisited, combine this with a reader/writer-side cut: the traced data shows the compute
+saving is partly absorbed by feed waits, so it would compound with one.
