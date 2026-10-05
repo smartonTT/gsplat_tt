@@ -44,5 +44,35 @@ with the cpu_cpp project. Unambiguous rows (1,877,808; 2,149 duplicate keys drop
   tighter, not a precision issue).
 - Depth order within tiles: 1,844 adjacent swaps in 385 tiles (of 3.35 M pairs).
 
-model.py (t251) on device-projected vs CPU-projected inputs (variants dev, dev_pre156): see
-`out/model_*/model_psnr.json` (filled in by the follow-up run).
+model.py (t251, variants dev = 1/255 floors, dev_pre156 = no floor) on three input sets
+(`run_model.sh`, results in `out/model_*/model_psnr.json`; image-to-image PSNR computed from
+the gitignored `model_images.npz`):
+
+| inputs | rows | dev vs ref | dev vs golden | pre156 vs ref |
+|---|---|---|---|---|
+| cpu (cpu_cpp project, all CPU-visible) | 1,883,790 | 42.49 | 46.42 | 66.66 |
+| cpu_devset (CPU values, matched device rows) | 1,877,798 | 37.46 | 37.98 | 39.10 |
+| dev (device pfwc values, same rows) | 1,877,798 | 37.01 | 38.61 | 38.49 |
+
+Same-row comparison, model image vs model image (8-bit PSNR):
+
+| pair | floor 1/255 | no floor |
+|---|---|---|
+| dev vs cpu_devset (device projection numerics only) | 46.59 | 47.02 |
+| cpu_devset vs cpu (row set only) | 38.73 | 39.09 |
+
+Reading:
+- With CPU inputs and no floor the model reproduces the reference (66.7 dB), and with the
+  floor it lands at 42.5 dB vs ref (device: 41.16). The model is a faithful blend replay.
+- Swapping in the device projection values on the same rows changes the image by 46.6-47.0
+  dB: this matches the ~47 dB residual. **The residual is the device projection numerics**
+  (mostly the ~1.5e-3 relative 1/z error moving off-centre means by up to 0.84 px, plus the
+  conic error), not the blend.
+- The row-set arm (38.7 dB) is NOT a device loss: the real device render is 41.16 dB vs ref,
+  better than this. It mostly reflects the dump matching (2,149 rows with duplicate
+  opacity/colour keys dropped, plus ~3.8 k real cull differences, M 1,879,959 vs 1,883,790,
+  whose share cannot be separated with this dump). A follow-up would need the device to
+  write the source id into the record.
+- Fix direction: one Newton step on the device 1/z (and the conic inverse) in pfwc. Expected
+  gain cannot exceed the ~47 dB term, i.e. ~+0.2 dB on the default (41.16) and
+  ~+0.9 dB on the 1/1024 arm (45.83), at a small pfwc cost.

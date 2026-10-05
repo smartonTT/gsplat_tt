@@ -1,0 +1,30 @@
+{
+ "dev|f32": {
+  "vs_ref": 42.49,
+  "vs_golden": 46.42,
+  "vs_golden_pre156": 41.19,
+  "mean_diff_vs_ref": -0.563,
+  "records": 2658298
+ },
+ "dev|bf16": {
+  "vs_ref": 42.51,
+  "vs_golden": 46.63,
+  "vs_golden_pre156": 41.25,
+  "mean_diff_vs_ref": -0.453,
+  "records": 2658298
+ },
+ "dev_pre156|f32": {
+  "vs_ref": 66.66,
+  "vs_golden": 41.17,
+  "vs_golden_pre156": 46.82,
+  "mean_diff_vs_ref": 0.013,
+  "records": 3132705
+ },
+ "dev_pre156|bf16": {
+  "vs_ref": 57.21,
+  "vs_golden": 41.15,
+  "vs_golden_pre156": 47.06,
+  "mean_diff_vs_ref": 0.123,
+  "records": 3132705
+ }
+}
