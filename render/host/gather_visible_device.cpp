@@ -820,7 +820,12 @@ static gsplat_cpu::ProjectResult readback_proj_m_count_only(
     std::size_t M, double* readback_ms) {
     const auto t0 = std::chrono::high_resolution_clock::now();
     gsplat_cpu::ProjectResult proj;
-    proj.depths.assign(M, 0.0f);
+    // Task #198 (GSPLAT_TT_SORT_OL_EARLY): carry M as a scalar instead of a
+    // zeroed M-float vector nobody reads (~0.1 ms/view).
+    if (gsplat_tt::env_config::sort_ol_early())
+        proj.num_visible = M;
+    else
+        proj.depths.assign(M, 0.0f);
     const auto t1 = std::chrono::high_resolution_clock::now();
     if (readback_ms) *readback_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
     return proj;

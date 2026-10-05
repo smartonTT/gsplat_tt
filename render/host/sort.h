@@ -32,6 +32,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "gsplat_cpu/sort.h"
 
@@ -110,6 +111,18 @@ gsplat_cpu::SortResult sort_and_bin_tt(
     // skips it (required for CPU blend_mode=0 in the same process as TT env).
     bool need_host_sorted_ids = false,
     SortBlendContinuation* sort_blend = nullptr);
+
+// Task #198 (GSPLAT_TT_SORT_OL_EARLY): enqueue the one-launch sort on the
+// device's CQ0 right behind the fold K2, before the host knows P. The kernel
+// reads P from ta_pairs_P and takes each mover's K2 page range from the running
+// mover-speed sums acc (2 * cores + 1, as the K2 got them), so the fold holds
+// by construction. The pair buffers are passed in: tile_assign registers them
+// only later. Returns false, with nothing enqueued, when the one-launch config
+// does not hold; the sort then runs at its usual place.
+bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
+                                  uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
+                                  uint32_t keep_addr, uint32_t pairs_P_addr,
+                                  const std::vector<uint64_t>& acc);
 
 // Lazily initializes the device sort context (programs + CBs). Returns true
 // if the device path is operational.

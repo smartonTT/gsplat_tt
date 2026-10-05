@@ -51,6 +51,9 @@ bool is_initialized();
 void shutdown();
 
 tt::tt_metal::distributed::MeshCommandQueue* command_queue();
+// Task #198 (env_config::mat_cq1): the second command queue, nullptr when the
+// device has one.
+tt::tt_metal::distributed::MeshCommandQueue* command_queue1();
 
 void register_buffer(
     const std::string& key,
@@ -81,6 +84,13 @@ struct K2CountRows {
     // [b[2c+1], b[2c+2]).
     std::vector<uint32_t> bounds;
     std::size_t bytes = 0;  // allocated size of buf
+    // Task #198: the K2's proj_M (P_true, overflow); early = the one-launch
+    // sort for these rows is already enqueued (sort_onelaunch_enqueue_early);
+    // cq1 = command_queue1() waited for the K2, so its reads see the rows.
+    uint32_t P_true = 0;
+    uint32_t overflow = 0;
+    bool early = false;
+    bool cq1 = false;
 };
 void set_k2_count_rows(const K2CountRows& rows);
 bool take_k2_count_rows(K2CountRows* rows);

@@ -54,13 +54,21 @@
 //   18 mover (0 BRISC, 1 NCRISC)
 //   19..24 semaphores: counted, based, arrive1, release1, arrive2, release2
 //   25 coordinator NoC x  26 coordinator NoC y  27 fold
-//   28.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
+//   28, 29 early launch only (below), else 0
+//   30.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
+// Early launch (task #198, host GSPLAT_TT_SORT_OL_EARLY): enqueued right behind
+// the fold's K2, before the host knows P. 11 == 0xFFFFFFFF; 9 is then the
+// ta_pairs_P page ([0] P_pub), 10 and 28 this mover's running mover-speed sums
+// (the K2's args 18, 19) and 29 their total (K2 arg 20): the kernel takes the
+// K2's own page range (pfwc_fuse::k2_range_speed), so the fold holds by
+// construction.
 // COMPILE-TIME ARGS: 9 TensorAccessorArgs (gids, tids, keep, depth, blendrec,
 //   bucket, count rows, base rows, totals rows).
 
 #include <cstdint>
 
 #include "api/dataflow/dataflow_api.h"
+#include "pfwc_fuse.h"
 #include "sort_bin_fp32.h"
 #include "sort_onelaunch_algo.h"
 #if defined(OL_FILL_BULK) && OL_FILL_BULK == 2
@@ -173,9 +181,9 @@ void kernel_main() {
     const uint32_t counts_addr = get_arg_val<uint32_t>(6);
     const uint32_t bases_addr = get_arg_val<uint32_t>(7);
     const uint32_t totals_addr = get_arg_val<uint32_t>(8);
-    const uint32_t pg_lo = get_arg_val<uint32_t>(9);
-    const uint32_t pg_hi = get_arg_val<uint32_t>(10);
-    const uint32_t P = get_arg_val<uint32_t>(11);
+    uint32_t pg_lo = get_arg_val<uint32_t>(9);
+    uint32_t pg_hi = get_arg_val<uint32_t>(10);
+    uint32_t P = get_arg_val<uint32_t>(11);
     const uint32_t num_tiles = get_arg_val<uint32_t>(12);
     const uint32_t row_pages = get_arg_val<uint32_t>(13);
     const uint32_t core_id = get_arg_val<uint32_t>(14);
@@ -220,6 +228,20 @@ void kernel_main() {
     auto h0p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + MOVER0_CB_OFFSET));
     auto h1p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H));
 
+    if (P == 0xFFFFFFFFu) {
+        // Early launch: the ta_pairs_P page lands in this mover's H row (the
+        // fold reads no H row before NCRISC's count-row read overwrites it).
+        const InterleavedAddrGen<true> pctrl{pg_lo, PAGE_BYTES};
+        noc_async_read(get_noc_addr(0, pctrl), get_write_ptr(CB_H + cbo), PAGE_BYTES);
+        noc_async_read_barrier();
+        invalidate_l1_cache();
+        P = hp[0];
+        uint32_t start = 0, count = 0;
+        pfwc_fuse::k2_range_speed(P, pg_hi, get_arg_val<uint32_t>(28), get_arg_val<uint32_t>(29),
+                                  &start, &count);
+        pg_lo = start;
+        pg_hi = start + count;
+    }
     const uint32_t npages = pg_hi - pg_lo;
     // Window size rounded down to whole count batches (a batch is all-window
     // or all-fallback).
@@ -405,7 +427,7 @@ void kernel_main() {
                 noc_semaphore_wait(arrive, num_cores - 1u);
                 noc_semaphore_set(arrive, 0u);
                 for (uint32_t r = 1; r < num_cores; r++) {
-                    const uint32_t xy = get_arg_val<uint32_t>(28 + r);
+                    const uint32_t xy = get_arg_val<uint32_t>(30 + r);
                     sem_inc(xy & 0xFFFFu, xy >> 16, release_id);
                 }
                 noc_async_atomic_barrier();

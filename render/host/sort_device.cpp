@@ -293,6 +293,10 @@ struct SortDeviceContext {
     std::size_t cap_ol_rows_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_ol_totals;  // totals row, padded-totals row
     std::size_t cap_ol_totals_bytes = 0;
+    // Task #198: the tile grid of the one-launch sort enqueued behind the K2
+    // (sort_onelaunch_enqueue_early); sort_resident_pairs checks it.
+    uint32_t ol_early_tiles = 0;
+    uint32_t ol_early_tiles_x = 0;
 };
 
 static std::shared_ptr<distributed::MeshBuffer> make_dram(
@@ -672,14 +676,19 @@ static void upload_subchunk_directory(
 
 // Device post-radix PACK2 materialize (enqueue only; caller Finish()).
 // Kernel: in-budget sc==0 uses buf_l1_recs bulk; overflow sc==0/sc>=1 use sorted_ids gather.
+// bridge_cq (task #198, GSPLAT_TT_MAT_CQ1): the queue that carried the bridge's
+// uploads; the work list goes there too and it is drained before the
+// materialize is enqueued on ctx->cq.
 static bool launch_subchunk_materialize(
     SortDeviceContext* ctx,
     const MatWorkAssignment& work,
     uint32_t num_cores,
     uint32_t tiles_x,
     uint32_t bucket_fit,
-    const SortBlendContinuation* cont = nullptr) {
+    const SortBlendContinuation* cont = nullptr,
+    distributed::MeshCommandQueue* bridge_cq = nullptr) {
     if (work.flat.empty()) {
+        if (bridge_cq != nullptr) distributed::Finish(*bridge_cq);
         return true;
     }
     auto bbrec = device_state::get_buffer("proj_m_blendrec");
@@ -701,7 +710,8 @@ static bool launch_subchunk_materialize(
     const uint32_t cap_elems = static_cast<uint32_t>(ctx->cap_mat_work_bytes / 4);
     std::vector<uint32_t> wbuf(cap_elems, 0);
     for (std::size_t i = 0; i < work.flat.size(); ++i) wbuf[i] = work.flat[i];
-    distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_mat_work, wbuf, false);
+    distributed::EnqueueWriteMeshBuffer(bridge_cq != nullptr ? *bridge_cq : *ctx->cq,
+                                        ctx->buf_mat_work, wbuf, false);
 
     // iter-138: overflow region + per-tile overflow base for the coalesced path.
     // Both 0 ⇒ no in-cap overflow tiles this view (kernel keeps gather/in-budget).
@@ -765,6 +775,10 @@ static bool launch_subchunk_materialize(
             // Both movers always end their stream (idle ones at once): live = 3.
             SetRuntimeArgs(prog, ctx->kmatcull, core, {floor_bits, cull_disabled, 3u});
         }
+    }
+    if (bridge_cq != nullptr) {
+        GSPLAT_HOST_ZONE("host_finish_cq1_bridge");
+        distributed::Finish(*bridge_cq);
     }
     distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_subchunk, false);
     return true;
@@ -1936,6 +1950,50 @@ static void maybe_run_sort_blend_continuation(
     }
 }
 
+// One-launch sort buffers (grow-only): tile buckets, count/base rows, totals.
+static void ensure_onelaunch_buffers(SortDeviceContext* ctx, uint32_t num_tiles,
+                                     uint32_t num_cores, uint32_t stride) {
+    auto* dev = ctx->mesh_device.get();
+    const std::size_t bucket_bytes =
+        static_cast<std::size_t>(num_tiles) * kOneLaunchTileCap * 32u;
+    if (!ctx->buf_ol_bucket || ctx->cap_ol_bucket_bytes < bucket_bytes) {
+        ctx->buf_ol_bucket = make_dram_paged(dev, bucket_bytes, render_config::kRecPageBytes);
+        ctx->cap_ol_bucket_bytes = bucket_bytes;
+    }
+    // The blend's argument lists name sort_l1_recs and sort_tile_recs; a
+    // run with only one-launch frames never creates them (not read here).
+    if (!device_state::get_buffer("sort_l1_recs")) {
+        device_state::register_buffer("sort_l1_recs", ctx->buf_ol_bucket);
+    }
+    if (!ctx->buf_tile_recs) {
+        ctx->buf_tile_recs = make_dram(dev, PAGE_BYTES);
+        ctx->cap_tile_recs_bytes = PAGE_BYTES;
+        device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
+    }
+    const std::size_t rows_bytes = static_cast<std::size_t>(num_cores) * stride * 4u;
+    if (!ctx->buf_ol_counts || ctx->cap_ol_rows_bytes < rows_bytes) {
+        ctx->buf_ol_counts = make_dram(dev, rows_bytes);
+        ctx->buf_ol_bases = make_dram(dev, rows_bytes);
+        ctx->cap_ol_rows_bytes = rows_bytes;
+    }
+    const std::size_t totals_bytes = static_cast<std::size_t>(stride) * 2u * 4u;
+    if (!ctx->buf_ol_totals || ctx->cap_ol_totals_bytes < totals_bytes) {
+        ctx->buf_ol_totals = make_dram(dev, totals_bytes);
+        ctx->cap_ol_totals_bytes = totals_bytes;
+    }
+}
+
+// Logical core c's NoC x | y << 16, c < num_cores (row-major over the grid).
+static std::vector<uint32_t> core_noc_xy(const SortDeviceContext* ctx, uint32_t num_cores) {
+    std::vector<uint32_t> noc_xy(num_cores, 0u);
+    for (uint32_t c = 0; c < num_cores; c++) {
+        const CoreCoord v = ctx->mesh_device->worker_core_from_logical_core(
+            CoreCoord{c % ctx->grid.x, c / ctx->grid.x});
+        noc_xy[c] = static_cast<uint32_t>(v.x) | (static_cast<uint32_t>(v.y) << 16);
+    }
+    return noc_xy;
+}
+
 // ── R4/R5 resident-pairs device binning ─────────────────────────────────
 // Bins the resident full-P (gid,tid) pairs + keep mask into the page-aligned
 // per-tile (key,id) layout on-device, runs the radix kernel, compacts, and
@@ -1982,9 +2040,24 @@ static gsplat_cpu::SortResult sort_resident_pairs(
     }
 
     try {
-        // Read full P + P_pad published by tile_assign.
+        ctx->ol_frame = false;
+        // Task #170 fold: the segment K2's per-mover count rows (taken every
+        // frame so a row set never outlives its pairs).
+        device_state::K2CountRows k2rows;
+        const bool have_k2rows = device_state::take_k2_count_rows(&k2rows);
+        // Task #198: the one-launch sort already runs behind the K2.
+        const bool early = have_k2rows && k2rows.early;
+        // Read full P + P_pad published by tile_assign (early: the K2's proj_M
+        // read returned them, with the queue still running).
         std::vector<uint32_t> pbuf(ELEMS_PER_PAGE);
-        distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
+        if (early) {
+            pbuf[0] = k2rows.P_pub;
+            pbuf[1] = round_up(k2rows.P_pub, ELEMS_PER_PAGE);
+            pbuf[2] = k2rows.overflow;
+            pbuf[3] = k2rows.P_true;
+        } else {
+            distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
+        }
         T.pread_ms =
             std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
         const uint32_t P_full = pbuf[0];
@@ -2107,53 +2180,37 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // depth radix), byte-identical to the prefix-sum layout's sort. The
         // host reads the totals rows (8 KB) instead of the histogram, uploads
         // no layout and launches no radix or publish.
-        ctx->ol_frame = false;
-        // Task #170 fold: the segment K2's per-mover count rows (taken every
-        // frame so a row set never outlives its pairs).
-        device_state::K2CountRows k2rows;
-        const bool have_k2rows = device_state::take_k2_count_rows(&k2rows);
-        if (sort_onelaunch_enabled() && tile_bucket && !need_host_sorted_ids &&
-            resident_blend_chain_enabled() && sort_device_publish_enabled()) {
+        const bool onelaunch = sort_onelaunch_enabled() && tile_bucket && !need_host_sorted_ids &&
+                               resident_blend_chain_enabled() && sort_device_publish_enabled();
+        if (early && (!onelaunch || ctx->ol_early_tiles != num_tiles ||
+                      ctx->ol_early_tiles_x != static_cast<uint32_t>(tiles_x) ||
+                      k2rows.num_cores != num_cores || k2rows.num_tiles != num_tiles)) {
+            std::cerr << "[gsplat_tt::sort] the early one-launch sort ran for another "
+                         "configuration (tiles " << ctx->ol_early_tiles << " vs " << num_tiles
+                      << ", tiles_x " << ctx->ol_early_tiles_x << " vs " << tiles_x
+                      << ", one-launch " << onelaunch << ") — hard fail\n";
+            return fail();
+        }
+        if (onelaunch) {
             using ms_t = std::chrono::duration<double, std::milli>;
             if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
             const uint32_t cap = kOneLaunchTileCap;
             const uint32_t row_pages = stride / ELEMS_PER_PAGE;
-            auto* dev = ctx->mesh_device.get();
-            const std::size_t bucket_bytes = static_cast<std::size_t>(num_tiles) * cap * 32u;
-            if (!ctx->buf_ol_bucket || ctx->cap_ol_bucket_bytes < bucket_bytes) {
-                ctx->buf_ol_bucket = make_dram_paged(dev, bucket_bytes, render_config::kRecPageBytes);
-                ctx->cap_ol_bucket_bytes = bucket_bytes;
-            }
-            // The blend's argument lists name sort_l1_recs and sort_tile_recs; a
-            // run with only one-launch frames never creates them (not read here).
-            if (!device_state::get_buffer("sort_l1_recs")) {
-                device_state::register_buffer("sort_l1_recs", ctx->buf_ol_bucket);
-            }
-            if (!ctx->buf_tile_recs) {
-                ctx->buf_tile_recs = make_dram(dev, PAGE_BYTES);
-                ctx->cap_tile_recs_bytes = PAGE_BYTES;
-                device_state::register_buffer("sort_tile_recs", ctx->buf_tile_recs);
-            }
-            const std::size_t rows_bytes = static_cast<std::size_t>(num_cores) * stride * 4u;
-            if (!ctx->buf_ol_counts || ctx->cap_ol_rows_bytes < rows_bytes) {
-                ctx->buf_ol_counts = make_dram(dev, rows_bytes);
-                ctx->buf_ol_bases = make_dram(dev, rows_bytes);
-                ctx->cap_ol_rows_bytes = rows_bytes;
-            }
-            const std::size_t totals_bytes = static_cast<std::size_t>(stride) * 2u * 4u;
-            if (!ctx->buf_ol_totals || ctx->cap_ol_totals_bytes < totals_bytes) {
-                ctx->buf_ol_totals = make_dram(dev, totals_bytes);
-                ctx->cap_ol_totals_bytes = totals_bytes;
-            }
-
+            ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
+            bool fold = true;
+            const auto t_e0 = clk::now();
+            if (early) {
+                static bool logged = false;
+                if (!logged) {
+                    logged = true;
+                    std::fprintf(stderr, "[SORT] ONELAUNCH k2_fold=1 early=1 cq1=%d (enqueued "
+                                 "behind the K2; cores %u row_pages %u tiles %u)\n",
+                                 static_cast<int>(k2rows.cq1), num_cores, row_pages, num_tiles);
+                }
+            } else {
             // This launch's mover page ranges: core c's BRISC [lo, mid), NCRISC
             // [mid, hi); task #174 speed-proportional when ol_mover_speed().
-            std::vector<uint32_t> noc_xy(num_cores, 0u);
-            for (uint32_t c = 0; c < num_cores; c++) {
-                const CoreCoord v = ctx->mesh_device->worker_core_from_logical_core(
-                    CoreCoord{c % ctx->grid.x, c / ctx->grid.x});
-                noc_xy[c] = static_cast<uint32_t>(v.x) | (static_cast<uint32_t>(v.y) << 16);
-            }
+            const std::vector<uint32_t> noc_xy = core_noc_xy(ctx, num_cores);
             std::vector<uint32_t> sb;  // task #174: speed-proportional mover ranges
             if (ol_mover_speed()) {
                 sb = gsplat_tt::sort_split::speed_bounds(
@@ -2187,7 +2244,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     k2rows.bounds[2u * c + 2u] != r_hi[c])
                     why = 7;
             }
-            const bool fold = why == 0;
+            fold = why == 0;
             {
                 static int logged = -1;
                 if (logged != why) {
@@ -2205,7 +2262,6 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 ? static_cast<uint32_t>(k2rows.buf->address())
                 : static_cast<uint32_t>(ctx->buf_ol_counts->address());
 
-            const auto t_e0 = clk::now();
             Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
             for (uint32_t c = 0; c < num_cores; c++) {
                 CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
@@ -2224,7 +2280,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                     static_cast<uint32_t>(tiles_x), 1u,
                     ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
                     ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
-                    noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u,
+                    noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, fold ? 1u : 0u, 0u, 0u,
                 };
                 SetRuntimeArgs(oprog, ctx->kol, core, a);
                 a[9] = lo;
@@ -2234,8 +2290,21 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 SetRuntimeArgs(oprog, ctx->kol0, core, a);
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_onelaunch, false);
+            }  // !early
+            // Task #198 (GSPLAT_TT_MAT_CQ1): the totals from the K2's count
+            // rows, read on CQ1 while the sort runs on CQ0; the bridge's
+            // uploads below go on CQ1 as well and the mat waits for them.
+            distributed::MeshCommandQueue* cq1 =
+                early && k2rows.cq1 ? device_state::command_queue1() : nullptr;
             std::vector<uint32_t> tot(ctx->cap_ol_totals_bytes / 4, 0u);
-            {
+            if (cq1 != nullptr) {
+                std::vector<uint32_t> krow(k2rows.bytes / 4, 0u);
+                {
+                    GSPLAT_HOST_ZONE("host_cq1_k2_rows");
+                    distributed::EnqueueReadMeshBuffer(*cq1, krow, k2rows.buf, true);
+                }
+                sort_onelaunch::totals_from_k2_rows(krow, num_cores, stride, tot);
+            } else {
                 GSPLAT_HOST_ZONE("host_finish_sort_onelaunch");
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, tot, ctx->buf_ol_totals, true);
             }
@@ -2268,7 +2337,24 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 const uint32_t bad = sort_onelaunch::check_prefix(crow, brow, tot, num_cores,
                                                                   stride, num_tiles);
                 std::fprintf(stderr, "[SORT] ONELAUNCH_CHECK bad_tiles=%u\n", bad);
+                if (cq1 != nullptr) {
+                    std::vector<uint32_t> dtot(ctx->cap_ol_totals_bytes / 4, 0u);
+                    distributed::EnqueueReadMeshBuffer(*ctx->cq, dtot, ctx->buf_ol_totals, true);
+                    uint32_t miss = 0;
+                    for (uint32_t t = 0; t < num_tiles; t++)
+                        miss += (dtot[t] != tot[t] ? 1u : 0u) +
+                                (dtot[stride + t] != tot[stride + t] ? 1u : 0u);
+                    std::fprintf(stderr, "[SORT] MAT_CQ1 host totals vs device: %u mismatches\n",
+                                 miss);
+                }
             }
+            // The bridge's uploads go on CQ1 (ctx->cq restored before the mat).
+            struct CqSwap {
+                SortDeviceContext* c;
+                distributed::MeshCommandQueue* saved;
+                ~CqSwap() { c->cq = saved; }
+            } cq_swap{ctx, ctx->cq};
+            if (cq1 != nullptr) ctx->cq = cq1;
 
             // Per-tile layout from the totals alone.
             std::vector<int64_t> counts(num_tiles, 0);
@@ -2355,13 +2441,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             // drain unless GSPLAT_TT_SPLIT_BLEND=1).
             ctx->ol_frame = true;
             bool mat_ok = true;
+            ctx->cq = cq_swap.saved;
             if (sort_blend_pipe_enabled()) {
                 device_state::mark_sort_publish_pending();
                 const bool split = stagetimers::split_blend();
                 stagetimers::Span mat_span(split ? stagetimers::acc().mat : T.materialize_ms);
                 mat_ok = launch_subchunk_materialize(ctx, ol_work, num_cores,
                                                      static_cast<uint32_t>(tiles_x),
-                                                     render_config::kBucketFit, sort_blend);
+                                                     render_config::kBucketFit, sort_blend, cq1);
                 if (mat_ok && split) {
                     GSPLAT_HOST_ZONE("host_finish_mat_split");
                     distributed::Finish(*ctx->cq);
@@ -2371,7 +2458,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 const auto t_mat0 = clk::now();
                 mat_ok = launch_subchunk_materialize(ctx, ol_work, num_cores,
                                                      static_cast<uint32_t>(tiles_x),
-                                                     render_config::kBucketFit);
+                                                     render_config::kBucketFit, nullptr, cq1);
                 if (mat_ok) {
                     GSPLAT_HOST_ZONE("host_finish_sort_materialize");
                     distributed::Finish(*ctx->cq);
@@ -3164,6 +3251,76 @@ static gsplat_cpu::SortResult sort_resident_pairs(
 }  // namespace
 
 bool sort_device_ready() { return ensure_context() != nullptr; }
+
+bool sort_onelaunch_enqueue_early(uint32_t num_tiles, uint32_t tiles_x, uint32_t row_pages,
+                                  uint32_t rows_addr, uint32_t gids_addr, uint32_t tids_addr,
+                                  uint32_t keep_addr, uint32_t pairs_P_addr,
+                                  const std::vector<uint64_t>& acc) {
+    if (!env_config::sort_ol_early()) return false;
+    auto* ctx = ensure_context();
+    if (ctx == nullptr) return false;
+    ctx->ol_early_tiles = 0;
+    ctx->ol_early_tiles_x = 0;
+    const uint32_t num_cores = ctx->grid.x * ctx->grid.y;
+    const uint32_t stride = round_up(num_tiles, ELEMS_PER_PAGE);
+    auto bdep = device_state::get_buffer("proj_m_depth");
+    auto bbrec = device_state::get_buffer("proj_m_blendrec");
+    // why: 0 enqueued, 1 one-launch config off, 2 tiles, 3 row pages, 4 speed
+    // sums, 5 gather buffers missing (logged when it changes).
+    const int why =
+        !(sort_onelaunch_enabled() && tile_bucket_enabled() && resident_blend_chain_enabled() &&
+          sort_device_publish_enabled() && ol_mover_speed())         ? 1
+        : num_tiles == 0 || num_tiles > MAX_BIN_TILES               ? 2
+        : stride / ELEMS_PER_PAGE != row_pages                      ? 3
+        : acc.size() != 2u * num_cores + 1u || acc.back() == 0u ||
+                  acc.back() > 0xFFFFFFFFull                         ? 4
+        : !bdep || !bbrec                                            ? 5
+                                                                     : 0;
+    {
+        static int logged = -1;
+        if (logged != why) {
+            logged = why;
+            std::fprintf(stderr, "[SORT] ONELAUNCH early=%d why=%d (tiles %u row_pages %u "
+                         "cores %u)\n", static_cast<int>(why == 0), why, num_tiles, row_pages,
+                         num_cores);
+        }
+    }
+    if (why != 0) return false;
+    if (!ctx->ol_built) build_program_sort_onelaunch(*ctx);
+    ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
+    const std::vector<uint32_t> noc_xy = core_noc_xy(ctx, num_cores);
+    Program& oprog = ctx->wl_onelaunch.get_programs().begin()->second;
+    for (uint32_t c = 0; c < num_cores; c++) {
+        const CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
+        // 9 = the ta_pairs_P page, 11 = 0xFFFFFFFF (P from that page); 10, 28,
+        // 29 = this mover's speed sums (pfwc_fuse::k2_range_speed).
+        std::vector<uint32_t> a = {
+            gids_addr, tids_addr, keep_addr,
+            static_cast<uint32_t>(bdep->address()),
+            static_cast<uint32_t>(bbrec->address()),
+            static_cast<uint32_t>(ctx->buf_ol_bucket->address()),
+            rows_addr,
+            static_cast<uint32_t>(ctx->buf_ol_bases->address()),
+            static_cast<uint32_t>(ctx->buf_ol_totals->address()),
+            pairs_P_addr, static_cast<uint32_t>(acc[2u * c + 1u]), 0xFFFFFFFFu,
+            num_tiles, row_pages, c, num_cores, kOneLaunchTileCap, tiles_x, 1u,
+            ctx->ol_sem[0], ctx->ol_sem[1], ctx->ol_sem[2],
+            ctx->ol_sem[3], ctx->ol_sem[4], ctx->ol_sem[5],
+            noc_xy[0] & 0xFFFFu, noc_xy[0] >> 16, 1u,
+            static_cast<uint32_t>(acc[2u * c + 2u]), static_cast<uint32_t>(acc.back()),
+        };
+        SetRuntimeArgs(oprog, ctx->kol, core, a);
+        a[10] = static_cast<uint32_t>(acc[2u * c]);
+        a[18] = 0u;
+        a[28] = static_cast<uint32_t>(acc[2u * c + 1u]);
+        if (c == 0) a.insert(a.end(), noc_xy.begin(), noc_xy.end());  // coordinator
+        SetRuntimeArgs(oprog, ctx->kol0, core, a);
+    }
+    distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_onelaunch, false);
+    ctx->ol_early_tiles = num_tiles;
+    ctx->ol_early_tiles_x = tiles_x;
+    return true;
+}
 
 bool sort_matcull_fused() {
     static const bool v = [] {

@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -92,6 +94,25 @@ inline Prefix device_prefix(const std::vector<uint32_t>& h, uint32_t num_cores, 
         }
     }
     return out;
+}
+
+// Task #198 (GSPLAT_TT_MAT_CQ1): device_prefix's totals from the fold K2's
+// count rows (row 2c + mover, stride words each; a core's h is its two rows'
+// sum), so the host has them before the one-launch sort ends. tot holds at
+// least 2 * stride words: [0, stride) per-tile counts, [stride, 2 stride) the
+// per-core counts padded to 16, summed.
+inline void totals_from_k2_rows(const std::vector<uint32_t>& krow, uint32_t num_cores,
+                                uint32_t stride, std::vector<uint32_t>& tot) {
+    std::fill(tot.begin(), tot.begin() + 2u * static_cast<std::size_t>(stride), 0u);
+    for (uint32_t c = 0; c < num_cores; ++c) {
+        const uint32_t* r0 = krow.data() + 2u * static_cast<std::size_t>(c) * stride;
+        const uint32_t* r1 = r0 + stride;
+        for (uint32_t t = 0; t < stride; ++t) {
+            const uint32_t h = r0[t] + r1[t];
+            tot[t] += h;
+            tot[stride + t] += (h + 15u) & ~15u;
+        }
+    }
 }
 
 // Emit: the bucket slot of every pair (kDropped if not kept or past tile_cap).

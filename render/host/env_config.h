@@ -167,4 +167,23 @@ inline bool blend_claim_desc() {
     return v;
 }
 
+// Task #198 bridge hiding (docs/two-cq-t198). Early sort: the one-launch sort
+// is enqueued right behind the fused K2, before the host knows P; the kernel
+// reads P from ta_pairs_P and takes the K2's own page ranges, so the fold holds
+// by construction. The host reads proj_M without draining the queue, skips the
+// sort's P read and the M-float depths vector. Default off; 1 = on.
+inline bool sort_ol_early() {
+    static const bool v = env_uint("GSPLAT_TT_SORT_OL_EARLY", 0u) != 0u;
+    return v;
+}
+// Second command queue (needs sort_ol_early): CQ1 waits for the K2, reads
+// proj_M and the K2 count rows; the host sums the bucket totals from the rows
+// and uploads the bin layout and the mat work list on CQ1 while the sort runs
+// on CQ0, then enqueues mat on CQ0 behind it. The device opens with 2 CQs.
+// Default off; 1 = on.
+inline bool mat_cq1() {
+    static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_MAT_CQ1", 0u) != 0u;
+    return v;
+}
+
 }  // namespace gsplat_tt::env_config

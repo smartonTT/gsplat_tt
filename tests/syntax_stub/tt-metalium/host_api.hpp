@@ -55,7 +55,11 @@ namespace distributed {
 struct MeshShape {};
 class MeshDevice { public: CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const;
     CoreCoord worker_core_from_logical_core(const CoreCoord&) const; };
-class MeshCommandQueue {};
+class MeshEvent {};
+class MeshCommandQueue { public:
+    MeshEvent enqueue_record_event(); MeshEvent enqueue_record_event_to_host();
+    void enqueue_wait_for_event(const MeshEvent&); void finish(); };
+struct MeshCoordinate { MeshCoordinate(uint32_t, uint32_t) {} };
 struct MeshCoordinateRange { explicit MeshCoordinateRange(MeshShape) {} };
 struct DeviceLocalBufferConfig { uint64_t page_size = 0; BufferType buffer_type = BufferType::DRAM; };
 struct ReplicatedBufferConfig { std::size_t size = 0; };
@@ -72,6 +76,8 @@ template <class T> void EnqueueWriteMeshBuffer(MeshCommandQueue&, std::shared_pt
 template <class T> void EnqueueReadMeshBuffer(MeshCommandQueue&, std::vector<T>&, std::shared_ptr<MeshBuffer>, bool);
 void EnqueueMeshWorkload(MeshCommandQueue&, MeshWorkload&, bool);
 void Finish(MeshCommandQueue&);
+template <class T> void ReadShard(MeshCommandQueue&, std::vector<T>&, const std::shared_ptr<MeshBuffer>&, const MeshCoordinate&, bool = true);
+void EventSynchronize(const MeshEvent&);
 }  // namespace distributed
 }  // namespace tt_metal
 }  // namespace tt

@@ -23,6 +23,7 @@
 #include "gather_visible.h"
 #include "vis_mode.h"
 #include "sort_mover_speed.h"
+#include "sort.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/vis_tile.h"
 #include "gsplat_cpu/thread_pool.h"
@@ -47,6 +48,7 @@
 #include <tt-metalium/device.hpp>
 #include <tt-metalium/distributed.hpp>
 #include <tt-metalium/host_api.hpp>
+#include <tt-metalium/mesh_event.hpp>
 #include <tt-metalium/tensor_accessor_args.hpp>
 #include "tt-metalium/base_types.hpp"
 #include "tt-metalium/kernel_types.hpp"
@@ -751,6 +753,13 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             }
         }
         const uint32_t rows_addr = fold ? static_cast<uint32_t>(ctx->buf_k2_rows->address()) : 0u;
+        // Task #198: the one-launch sort goes right behind the K2 (it reads P on
+        // the device); with GSPLAT_TT_MAT_CQ1, CQ1 waits for the K2 and reads
+        // proj_M, else proj_M is read without draining CQ0.
+        const bool want_early = env_config::sort_ol_early() && fold && !acc.empty();
+        distributed::MeshCommandQueue* cq1 =
+            want_early && env_config::mat_cq1() ? device_state::command_queue1() : nullptr;
+        bool early = false;
         uint32_t p_cap = 0;
         std::vector<uint32_t> mread(ELEMS_PER_PAGE, 0);
         // Normally one pass; a P over the pair capacity publishes overflow,
@@ -785,7 +794,39 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                 if (ctx->dual) SetRuntimeArgs(prog, ctx->k2sb, core, args(0));
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
-            distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, true);
+            if (pass == 0 && want_early) {
+                auto enqueue_sort = [&]() {
+                    return sort_onelaunch_enqueue_early(
+                        screen_tiles, tiles_x, row_pages, rows_addr,
+                        static_cast<uint32_t>(ctx->buf_gids->address()),
+                        static_cast<uint32_t>(ctx->buf_tids->address()),
+                        static_cast<uint32_t>(ctx->buf_keep->address()),
+                        static_cast<uint32_t>(ctx->buf_pairs_P->address()), acc);
+                };
+                if (cq1 != nullptr) {
+                    const distributed::MeshEvent k2_done = ctx->cq->enqueue_record_event();
+                    early = enqueue_sort();
+                    cq1->enqueue_wait_for_event(k2_done);
+                    GSPLAT_HOST_ZONE("host_cq1_proj_m");
+                    distributed::EnqueueReadMeshBuffer(*cq1, mread, projM, true);
+                } else {
+                    distributed::ReadShard(*ctx->cq, mread, projM, distributed::MeshCoordinate(0, 0),
+                                           false);
+                    const distributed::MeshEvent read_done =
+                        ctx->cq->enqueue_record_event_to_host();
+                    early = enqueue_sort();
+                    GSPLAT_HOST_ZONE("host_wait_proj_m");
+                    distributed::EventSynchronize(read_done);
+                }
+                if (early && mread[2] != 0) {
+                    // The early sort took the clamped pairs: drain it, then regrow
+                    // and rerun the K2; the sort runs at its usual place.
+                    distributed::Finish(*ctx->cq);
+                    early = false;
+                }
+            } else {
+                distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, true);
+            }
             if (mread[2] == 0 || host_free) break;
             if (pass == 1) throw std::runtime_error("pair overflow after regrow");
             ensure_pair_buffers(*ctx, static_cast<std::size_t>(round_up(mread[1], ELEMS_PER_PAGE)) * 4);
@@ -818,6 +859,10 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                 }
             }
             rows.bytes = ctx->cap_k2_rows_bytes;
+            rows.P_true = mread[1];
+            rows.overflow = mread[2];
+            rows.early = early;
+            rows.cq1 = early && cq1 != nullptr;
             device_state::set_k2_count_rows(rows);
         }
         return true;

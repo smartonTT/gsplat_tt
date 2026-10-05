@@ -252,7 +252,7 @@ py::tuple render_view(
                            image_width, max_radius, tile_size, mb_contrib_floor,
                            cull_disabled);
     }
-    const std::size_t M = proj.depths.size();
+    const std::size_t M = proj.depths.empty() ? proj.num_visible : proj.depths.size();
 
     py::dict stats;
     if (M == 0) {

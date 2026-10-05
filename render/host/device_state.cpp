@@ -10,6 +10,7 @@
 #include <unordered_map>
 
 #include "blend.h"
+#include "env_config.h"
 #include "gather_visible.h"
 #include "pfwc.h"
 #include "project.h"
@@ -87,15 +88,23 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         // the fused pfwc program is 71216 B and overflows the default 70656 B buffer.
         const char* kx = std::getenv("GSPLAT_TT_KCFG_EXTRA_KB");
         const long extra_kb = kx ? std::atol(kx) : 0;
-        if (extra_kb > 0) {
-            const size_t kcfg = (69 + static_cast<size_t>(extra_kb)) * 1024;
-            const size_t worker_l1 = tt::tt_metal::hal::get_max_worker_l1_unreserved_size() - kcfg;
+        // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
+        const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
+        if (extra_kb > 0 || num_cqs > 1) {
+            size_t worker_l1 = DEFAULT_WORKER_L1_SIZE;
+            if (extra_kb > 0) {
+                const size_t kcfg = (69 + static_cast<size_t>(extra_kb)) * 1024;
+                worker_l1 = tt::tt_metal::hal::get_max_worker_l1_unreserved_size() - kcfg;
+            }
             s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(
-                device_id, DEFAULT_L1_SMALL_SIZE, DEFAULT_TRACE_REGION_SIZE, 1,
+                device_id, DEFAULT_L1_SMALL_SIZE, DEFAULT_TRACE_REGION_SIZE, num_cqs,
                 tt::tt_metal::DispatchCoreConfig{}, {}, worker_l1);
         } else {
             s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
         }
+        const auto g = s.mesh_device->compute_with_storage_grid_size();
+        std::fprintf(stderr, "[DEV] command queues %u, compute grid %zux%zu\n",
+                     static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y);
     }
     return s.mesh_device;
 }
@@ -109,6 +118,11 @@ bool is_initialized() {
 tt::tt_metal::distributed::MeshCommandQueue* command_queue() {
     auto dev = get_device();
     return &dev->mesh_command_queue();
+}
+
+tt::tt_metal::distributed::MeshCommandQueue* command_queue1() {
+    auto dev = get_device();
+    return dev->num_hw_cqs() > 1 ? &dev->mesh_command_queue(1) : nullptr;
 }
 
 void shutdown() {
