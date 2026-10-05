@@ -1,0 +1,131 @@
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-05 20:30:08.842 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 20:30:08.842 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 20:30:08.844 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 20:30:08.845 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 20:30:08.845 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 20:30:08.845 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 20:30:08.846 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-05 20:30:08.846 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-05 20:30:08.846 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 20:30:08.846 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 20:30:08.848 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 20:30:08.849 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 20:30:08.849 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 20:30:08.849 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 20:30:08.849 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-05 20:30:08.849 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-05 20:30:08.849 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-05 20:30:08.889 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-05 20:30:08.889 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-05 20:30:08.889 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-05 20:30:08.889 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-05 20:30:08.890 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-05 20:30:08.891 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffffc0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-05 20:30:08.982 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-05 20:30:09.491 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-05 20:30:09.491 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-05 20:30:09.491 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 20:30:09.491 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 20:30:09.491 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 20:30:09.492 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 20:30:09.492 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 20:30:09.492 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 20:30:09.493 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-05 20:30:09.493 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-05 20:30:09.493 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:30:09.493 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:30:09.493 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-05 20:30:09.493 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:30:09.493 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:30:09.493 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-05 20:30:09.493 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-05 20:30:09.493 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-05 20:30:09.493 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-05 20:30:09.493 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-05 20:30:09.493 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-05 20:30:19.502 | error    |           Metal | Timeout detected (metal_context.cpp:737)
+2026-10-05 20:30:19.502 | info     |           Metal | Serializing Inspector RPC data (metal_context.cpp:740)
+2026-10-05 20:30:19.502 | critical |          Always | TT_THROW: Device 0: Timeout (10000 ms) waiting for physical cores to finish: 11-9. (assert.hpp:104)
+2026-10-05 20:30:19.503 | critical |          Always | TT_THROW: Device 0 init: failed to initialize FW! Try resetting the board. (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 582, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 394, in main
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 234, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/gstt2-t289/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 120, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/device/firmware/risc_firmware_initializer.cpp:1267: tt::exception
+info:
+Device 0 init: failed to initialize FW! Try resetting the board.
+backtrace:
+ --- /localdev/smarton/tt-metal/build/lib/libtt_metal.so(+0x9aa092) [0x7ff540a1e092]
+ --- tt::tt_metal::RiscFirmwareInitializer::run_launch_phase(std::set<int, std::less<int>, std::allocator<int> > const&)
+ --- tt::tt_metal::MetalContext::initialize(tt::tt_metal::DispatchCoreConfig const&, unsigned char, std::vector<unsigned int, std::allocator<unsigned int> > const&, unsigned long, bool)
+ --- tt::tt_metal::MetalContext::initialize_device_manager(std::vector<int, std::allocator<int> > const&, unsigned char, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long, bool, bool)
+ --- tt::tt_metal::experimental::CreateDevices(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned char, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::vector<unsigned int, std::allocator<unsigned int> > const&, unsigned long, bool, bool)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::ScopedDevices::ScopedDevices(std::vector<tt::tt_metal::distributed::MaybeRemote<int>, std::allocator<tt::tt_metal::distributed::MaybeRemote<int> > > const&, std::vector<tt::tt_metal::distributed::MaybeRemote<int>, std::allocator<tt::tt_metal::distributed::MaybeRemote<int> > > const&, unsigned long, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, ttsl::StrongType<int, tt::tt_metal::ContextIdTag>)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_meshes(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, std::vector<int, std::allocator<int> > const&, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(ttsl::StrongType<int, tt::tt_metal::ContextIdTag>, int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDeviceImpl::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- tt::tt_metal::distributed::MeshDevice::create_unit_mesh(int, unsigned long, unsigned long, unsigned long, tt::tt_metal::DispatchCoreConfig const&, std::span<unsigned int const, 18446744073709551615ul>, unsigned long)
+ --- gsplat_tt::device_state::get_device()
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0xeb31f) [0x7ff54163231f]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ea8) [0x7ff616308ea8]
+ --- gsplat_tt::jit_warmup_ideal_path()
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x4b866) [0x7ff541592866]
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x63d62) [0x7ff5415aad62]
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x62272) [0x7ff5415a9272]
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x47b03) [0x7ff54158eb03]
+ --- python3(+0x17ec7f) [0x55cb787b9c7f]
+ --- python3(_PyEval_EvalFrameDefault+0x56d3) [0x55cb787b5cd3]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55cb787c6aec]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55cb787b0e07]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55cb787c6aec]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55cb787b0e07]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55cb787c6aec]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55cb787b0cc0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55cb787c6aec]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55cb787b0cc0]
+ --- python3(+0x25b036) [0x55cb78896036]
+ --- python3(PyEval_EvalCode+0x86) [0x55cb78895f06]
+ --- python3(+0x281a88) [0x55cb788bca88]
+ --- python3(+0x27c0df) [0x55cb788b70df]
+ --- python3(+0x281825) [0x55cb788bc825]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55cb788bbd68]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55cb788bba47]
+ --- python3(Py_RunMain+0x2be) [0x55cb788afeae]
+ --- python3(Py_BytesMain+0x2d) [0x55cb78889f4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7ff616298d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7ff616298e40]
+ --- python3(_start+0x25) [0x55cb78889e45]
+
+2026-10-05 20:30:19.631 | info     |    BuildKernels | JIT cache stats: 10/10 hits (100.0%) [10 cached, 0 build-once dedup, 0 merged artifacts, 0 merged genfiles] (build_cache_telemetry.cpp:197)
+2026-10-05 20:30:19.631 | info     |    BuildKernels | JIT telemetry: 2 registered TelemetryTokens (build_cache_telemetry.cpp:230)
+2026-10-05 20:30:19.631 | info     |    BuildKernels | JIT telemetry [dependencies_up_to_date]: count=19, total=8.767ms, min=0.018ms, max=1.124ms, mean=0.461ms (build_cache_telemetry.cpp:238)
+2026-10-05 20:30:19.631 | info     |    BuildKernels | JIT telemetry [JitBuildState::build]: count=9, total=9.289ms, min=0.855ms, max=1.185ms, mean=1.032ms (build_cache_telemetry.cpp:238)
+2026-10-05 20:30:19.633 | info     |          Device | Closing user mode device drivers (tt_cluster.cpp:498)
+2026-10-05 20:30:19.633 | info     |             UMD | Closing devices in cluster (cluster.cpp:1057)
+2026-10-05 20:30:19.685 | info     |             UMD | Closing devices in cluster completed. (cluster.cpp:1066)
+2026-10-05 20:30:19.685 | info     |             UMD | Cluster destructor started. (cluster.cpp:550)
+2026-10-05 20:30:19.685 | info     |             UMD | Cluster destructor completed. (cluster.cpp:553)

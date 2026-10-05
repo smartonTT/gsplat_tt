@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t289/opt/profiler/matblend_cores.py", line 87, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t289/opt/profiler/matblend_cores.py", line 28, in main
+    _, lines, ts = read_csv(a.csv)
+  File "/localdev/smarton/gstt2-t289/opt/profiler/stitch_device_csv.py", line 46, in read_csv
+    with open(path) as f:
+FileNotFoundError: [Errno 2] No such file or directory: 'opt/profiler/t293-fuse/dev30.csv'

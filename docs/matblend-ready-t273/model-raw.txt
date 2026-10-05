@@ -1,0 +1,11 @@
+blend fit us = 87.0 + 0.1841 n + -0.1161 max(n-8192,0)  (t147 views 0/1)
+views=30 order=desc lag=0.02
+  mat_mean     2.292  (min 1.879 max 2.778)
+  mat_max      3.021  (min 3.021 max 3.021)
+  barrier      6.807  (min 6.794 max 6.821)
+  flags        6.173  (min 5.882 max 6.575)
+  saving       0.634  (min 0.228 max 0.934)
+  ungated      0.729  (min 0.244 max 1.150)
+  ready_wait   0.107  (min 0.012 max 0.249)
+  big_ready    3.011  (min 2.818 max 3.021)
+  bmax         1.825  (min 1.506 max 2.328)

@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 namespace tt {
-enum class DataFormat { Float32, UInt32, Float16_b, Int32 };
+enum class DataFormat { Float32, UInt32, Float16_b, Int32, UInt8 };
 namespace tt_metal {
 using KernelHandle = uint32_t;
 struct CoreCoord { std::size_t x = 0, y = 0; CoreCoord() = default; CoreCoord(std::size_t a, std::size_t b) : x(a), y(b) {} };

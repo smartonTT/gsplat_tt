@@ -35,6 +35,7 @@
 //  10: cull_disabled     1 => skip the constrained-min (m2_min := 0 in bbox)
 //  (stale above; see kernel_main for args 0-23)
 //  24: num_cores  25/26: counter core NoC x/y  27: counter semaphore id (task #60)
+//  28/29 (MATBLEND_FUSE): ready-flag buffer, this launch's epoch (task #280)
 //
 // COMPILE-TIME ARGS: 6 TensorAccessorArgs: attrs, ids, ids_off, xramp, yramp,
 // tile_ids. All DRAM-interleaved.
@@ -43,6 +44,16 @@
 
 #include "api/dataflow/dataflow_api.h"
 
+// Task #280 (GSPLAT_TT_MATBLEND_FUSE): in the fused mat+blend program this body
+// runs after the mat mover on the same RISC (matblend_ncrisc.cpp), with its CB
+// ids, compile-time args and runtime args shifted past mat's.
+#ifndef BLEND_CB_BASE
+#define BLEND_CB_BASE 0
+#endif
+#ifndef BLEND_CTA_BASE
+#define BLEND_CTA_BASE 0
+#endif
+
 namespace {
 
 constexpr uint32_t ATTR_PAGE_BYTES = 64;   // 16 fp32, 9 used
@@ -50,15 +61,15 @@ constexpr uint32_t IDS_PAGE_BYTES = 64;    // 16 uint32 ids per page
 constexpr uint32_t RAMP_TILE_BYTES = 32 * 32 * 4;
 constexpr uint32_t TILE_SIZE = 32;
 
-constexpr uint32_t CB_XRAMP     = 0;
-constexpr uint32_t CB_YRAMP     = 1;
-constexpr uint32_t CB_MB_COUNTS = 3;
-constexpr uint32_t CB_SCR_IDS   = 4;   // reader-private: ids page scratch
-constexpr uint32_t CB_SCR_ATTR  = 5;   // reader-private: attr page scratch
-constexpr uint32_t CB_SCR_MASK  = 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
-constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
-constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk: bulk L1 slab records (mask in word3)
-constexpr uint32_t CB_TILE_Q = 13;      // task #60: claimed tile ids -> writer
+constexpr uint32_t CB_XRAMP     = BLEND_CB_BASE + 0;
+constexpr uint32_t CB_YRAMP     = BLEND_CB_BASE + 1;
+constexpr uint32_t CB_MB_COUNTS = BLEND_CB_BASE + 3;
+constexpr uint32_t CB_SCR_IDS   = BLEND_CB_BASE + 4;   // reader-private: ids page scratch
+constexpr uint32_t CB_SCR_ATTR  = BLEND_CB_BASE + 5;   // reader-private: attr page scratch
+constexpr uint32_t CB_SCR_MASK  = BLEND_CB_BASE + 6;   // reader-private: 2x64B cull_masks page scratch (MB_SFPU_CULL)
+constexpr uint32_t CB_CORE_TILES = BLEND_CB_BASE + 7;  // MB_RESIDENT: hand tile_ids_count to compute (no host arg)
+constexpr uint32_t CB_BUCKET_BULK = BLEND_CB_BASE + 12; // subchunk: bulk L1 slab records (mask in word3)
+constexpr uint32_t CB_TILE_Q = BLEND_CB_BASE + 13;      // task #60: claimed tile ids -> writer
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -140,7 +151,7 @@ void kernel_main() {
     const uint32_t subchunk_payload_addr = get_arg_val<uint32_t>(22);
     const uint32_t subchunk_dir_addr = get_arg_val<uint32_t>(23);
 
-    constexpr auto a_args        = TensorAccessorArgs<0>();
+    constexpr auto a_args        = TensorAccessorArgs<BLEND_CTA_BASE>();
     constexpr auto b_args        = TensorAccessorArgs<a_args.next_compile_time_args_offset()>();
     constexpr auto c_args        = TensorAccessorArgs<b_args.next_compile_time_args_offset()>();
     constexpr auto px_args       = TensorAccessorArgs<c_args.next_compile_time_args_offset()>();
@@ -162,6 +173,15 @@ void kernel_main() {
         TensorAccessorArgs<subchunk_meta_args.next_compile_time_args_offset()>();
     constexpr auto subchunk_dir_args =
         TensorAccessorArgs<subchunk_payload_args.next_compile_time_args_offset()>();
+#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
+    // Task #280: per-(tile, subchunk) ready flags the mat movers of the same
+    // program write (epoch value) once that subchunk's slab is in DRAM.
+    constexpr auto ready_args =
+        TensorAccessorArgs<subchunk_dir_args.next_compile_time_args_offset()>();
+    const uint32_t ready_addr  = get_arg_val<uint32_t>(28);
+    const uint32_t ready_epoch = get_arg_val<uint32_t>(29);
+    const auto ready_acc = TensorAccessor(ready_args, ready_addr, 64);
+#endif
 
     // proj_m_* / sort_* are 64B (16-elem) DRAM-interleaved SoA pages.
     constexpr uint32_t SOA_PAGE_BYTES = 64;
@@ -385,6 +405,22 @@ void kernel_main() {
         // mask (written by the cull writer), so there is NO separate cull_masks
         // bulk load — the blend compute reads the mask from rec[3].
         if (L_sub > 0) {
+#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
+            {
+                // Wait until a mat mover has written this subchunk's slab. The
+                // bound only avoids a device hang if a flag were never written
+                // (the image would then be wrong, which the md5 check catches).
+                BLEND_PZ("rd_ready");
+                const uint32_t scr = get_write_ptr(CB_SCR_IDS);
+                auto fp = reinterpret_cast<volatile uint32_t*>(scr);
+                for (uint32_t it = 0; it < (1u << 22); ++it) {
+                    noc_async_read_tile(tile_id * 8u + sc, ready_acc, scr);
+                    noc_async_read_barrier();
+                    invalidate_l1_cache();
+                    if (fp[0] == ready_epoch) break;
+                }
+            }
+#endif
             const uint32_t rec_pages =
                 (L_sub + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             const uint32_t sc_flags = flags | MB_FLAG_L1_BULK;
