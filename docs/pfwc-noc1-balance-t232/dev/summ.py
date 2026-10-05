@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """t232: paired untraced rounds (view_total, project ms/view): base (default) vs fix (P2 + the
-BRISC input reader config) and, when run, rdb (the mask alone) or alt (P2 + another config).
+BRISC input reader config) and, when run, rdb (the mask alone) or alt (P2 + another config);
+verify rounds v1 v2: base (new default) vs off (the old default).
    summ.py <out dir>"""
 import re
 import sys
@@ -18,9 +19,9 @@ def stages(path):
     return None
 
 
-for arm in ("fix", "rdb", "alt"):
+for arm, rounds in (("fix", "1234"), ("rdb", "1234"), ("alt", "1234"), ("off", ("v1", "v2"))):
     rows = []
-    for r in ("1", "2", "3", "4"):
+    for r in rounds:
         b, c = stages(f"{O}/run-r{r}-base.log"), stages(f"{O}/run-r{r}-{arm}.log")
         if b and c:
             rows.append((r, b, c))

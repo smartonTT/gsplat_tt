@@ -12,6 +12,8 @@
 #          pm<hex> = P2 + that mask (e.g. pmE000), pr<hex> = P2 + BRISC reads tile set <hex> on
 #          every core (RD_REST, e.g. pr1F = tiles 0..4), ph<set>_<rest> = P2 + set <set> on the
 #          MASK columns and <rest> elsewhere.
+#   v1 v2: swapped untraced 30-view rounds base (new default) / off (COV2D_SFPU=0, RD_REST=0).
+#   tr:    30-view Tracy of the default at KX 32 (remote_tracy.sh), fetches render.tracy.
 #   1-4:   swapped untraced 30-view rounds base (default) / fix (P2 + FIXE) [/ a third arm with
 #          ARM3=1: alt = P2 + ALTE if ALTE is set, else rdb = MASK alone]; hero_clean.png of each
 #          arm is fetched (device screenshot).
@@ -99,5 +101,19 @@ for r in 1 2 3 4; do
   has $r || continue
   tm $r 460 ${ord[$((r-1))]}; gate $r $arms
 done
+# v1 v2: verify of the new default (P2 + RD_REST=0x0F) against the old one (off), swapped.
+OFF=off:GSPLAT_TT_PFWC_COV2D_SFPU=0,GSPLAT_TT_PFWC_RD_REST=0,$X
+for r in v1 v2; do
+  has $r || continue
+  if [ $r = v1 ]; then tm $r 460 $B $OFF; else tm $r 460 $OFF $B; fi; gate $r base off
+done
+if has tr; then  # tr: 30-view Tracy of the default (KX 32), zones / gaps / roofline and render.tracy
+  lk $DEVRUN --host $H --no-verify --timeout 560 --tag t232-tr -- \
+    "bash $T/$P/remote_tracy.sh t232-def GSPLAT_TT_KCFG_EXTRA_KB=32"
+  echo "TRACY_RC=$?"
+  for x in capture.log gaps.txt zones.txt roofline.txt render.tracy; do
+    scp -q -o BatchMode=yes "$H:$T/opt/profiler/t232-def/$x" $O/tracy-$x 2>/dev/null
+  done
+fi
 python3 $P/summ.py $O 2>&1 | tee $O/summary.txt
 echo CHAIN_DONE
