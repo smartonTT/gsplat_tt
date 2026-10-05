@@ -1,0 +1,20 @@
+== Part 1: K2 mover split (220 movers, ms/view)
+part                                          mean     BRISC    NCRISC   busiest
+k2p_setup                                    0.023     0.024     0.022     0.026
+k2p_riss                                     0.026     0.026     0.025     0.026
+k2p_rdw                                      0.006     0.004     0.008     0.008
+k2p_wiss                                     0.037     0.037     0.038     0.040
+k2p_wfl                                      0.001     0.001     0.001     0.001
+k2p_pairs                                    0.817     0.800     0.835     0.873
+k2p_rows                                     0.006     0.006     0.006     0.006
+k2p_wbar                                     0.000     0.000     0.000     0.000
+k2p_tot                                      0.846     0.830     0.863     0.905
+loop NoC (riss+rdw+wiss+wfl)                 0.070     0.068     0.072     0.076
+loop compute (pairs - NoC)                   0.747     0.732     0.762     0.797
+NoC wait only (rdw+wfl+wbar)                 0.007     0.006     0.009     0.010
+compute share of K2 busy: loop compute 88.3 %, loop+setup+rows 91.7 %
+pairs per view 2640222; loop cycles/pair 91.9, compute cycles/pair 84.0
+== Part 2: route (a) model, K2 inside the sort_ol launch (30 views)
+K2 end (max core) -> sort kernel start (first core): 0.011 ms/view
+K2 tail: mean core end -> max core end: 0.063 ms/view
+modeled saving (sort_ol end moves earlier by): mean 0.009, min 0.009, max 0.010 ms/view
