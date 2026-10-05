@@ -1,0 +1,17 @@
+t172 Tracy sub-zones (GSPLAT_TT_BLEND_PROF=2), views 0:2 = 3 blend launches, 110 cores, 1350 MHz
+zone        risc     count  ms/core/launch  us/each
+cmp_emit    TRISC_0    3072          0.000     0.02
+cmp_emit    TRISC_1    3072          0.000     0.02
+cmp_emit    TRISC_2    3072          0.752    80.77
+cmp_init    TRISC_0    3072          0.004     0.45
+cmp_init    TRISC_1    3072          0.004     0.43
+cmp_init    TRISC_2    3072          0.000     0.01
+cmp_sc_tail TRISC_0    3316          0.801    79.72
+cmp_sc_tail TRISC_1    3316          0.000     0.02
+cmp_sc_tail TRISC_2    3316          0.000     0.01
+cmp_stage   TRISC_0    3316          0.000     0.01
+cmp_stage   TRISC_1    3316          0.001     0.05
+cmp_stage   TRISC_2    3316          0.000     0.01
+cmp_trb     TRISC_0   13873          4.350   103.49
+cmp_trb     TRISC_1   13873          0.088     2.10
+cmp_trb     TRISC_2   13873          4.335   103.11
