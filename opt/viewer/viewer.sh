@@ -66,6 +66,8 @@ case "${1:-status}" in
     "${SSH[@]}" "$HOST" true   # aborts here on a changed host key
     echo "[viewer] deploy $REV = $SHA to $HOST:$DIR"
     opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
+    # Tagged trees older than this script lack the launcher: ship it from here.
+    rsh "mkdir -p $DIR/opt/viewer && cat > $DIR/opt/viewer/viewer_clean.py" < opt/viewer/viewer_clean.py
     do_stop; do_start ;;
   start) do_start ;;
   stop) do_stop ;;
