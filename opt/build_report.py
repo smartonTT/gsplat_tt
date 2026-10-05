@@ -165,6 +165,9 @@ def normalize_ttw_row(r: dict) -> dict:
         "action": idea,
         "note": r.get("reason") or r.get("notes") or "",
         "hero_psnr_dB": hero,
+        # hero_vs_ref == 100.0 is a capped "bit-identical to golden" marker,
+        # not a PSNR against benchmarks/reference_v2; the card says so.
+        "_hero_golden_marker": isinstance(hero, (int, float)) and hero >= 100.0,
         "ms_per_view": (sum_ms / VIEWS_PER_RUN) if sum_ms else None,
         "sum_total_ms": sum_ms,
         "per_stage_median_ms": per_stage,
@@ -216,6 +219,9 @@ def normalize_in_flight_row(row: dict) -> dict:
         "action": idea,
         "note": row.get("note") or row.get("reason") or "",
         "hero_psnr_dB": hero,
+        # hero_vs_ref == 100.0 is a capped "bit-identical to golden" marker,
+        # not a PSNR against benchmarks/reference_v2; the card says so.
+        "_hero_golden_marker": isinstance(hero, (int, float)) and hero >= 100.0,
         "per_stage_median_ms": per_stage,
         "psnr_per_view": {"hero": float(hero)} if isinstance(hero, (int, float)) else {},
         "_runtime": "blackhole",
@@ -559,9 +565,7 @@ def metal_section(rows: list[dict]) -> str:
         return """
 <section>
   <h2>Metal port — TT-as-emulator (amendment-002)</h2>
-  <p>Target: bh-30 P150 Blackhole, 1 ms/frame. Plan:
-  <a href='plan-amendment-002-tt-emulator-port.md'>plan-amendment-002-tt-emulator-port.md</a>.
-  No metal iters logged yet.</p>
+  <p>Target: bh-30 P150 Blackhole, 1 ms/frame. No metal iters logged yet.</p>
 </section>
 """
     head = ("<tr><th>iter</th><th>time</th><th>verdict</th><th>action</th>"
@@ -586,8 +590,7 @@ def metal_section(rows: list[dict]) -> str:
             f"<td><small title='{note}'>{note_short}</small></td></tr>"
         )
     return (f"<section><h2>Metal port — TT-as-emulator (amendment-002)</h2>"
-            f"<p>Plan: <a href='plan-amendment-002-tt-emulator-port.md'>plan-amendment-002-tt-emulator-port.md</a>. "
-            f"Reference of record: <code>cpu_cpp_mb</code> backend; PSNR gated against "
+            f"<p>Reference of record: <code>cpu_cpp_mb</code> backend; PSNR gated against "
             f"<code>benchmarks/reference_v2/</code> (regenerated 2026-05-28, validated 72.7 dB vs absolute GT).</p>"
             f"<table class='ledger'>{head}{body}</table></section>")
 
@@ -1171,7 +1174,9 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
 
     psnr_d = r.get("psnr_per_view") or {}
     finite = [v for v in psnr_d.values() if isinstance(v, (int, float)) and v != float("inf") and v == v]
-    if finite:
+    if r.get("_hero_golden_marker"):
+        psnr_min_str = "golden match (bit-identical to hero_golden_8bit; not a PSNR vs reference_v2)"
+    elif finite:
         psnr_min_str = f"{min(finite):.1f} dB"
     elif psnr_d and any(v == float("inf") for v in psnr_d.values() if isinstance(v, (int, float))):
         psnr_min_str = "∞ dB"
@@ -1833,11 +1838,6 @@ def algorithm_snapshot(rows: list[dict]) -> str:
     return """
 <section>
   <h2>Algorithm snapshot</h2>
-  <p>See <a href='plan.md'>plan.md</a> for the frozen plan,
-  <a href='plan-amendment-002-tt-emulator-port.md'>plan-amendment-002-tt-emulator-port.md</a>
-  for the TT port architecture, and
-  <a href='microblock-cpu-spec.md'>microblock-cpu-spec.md</a> for the microblock
-  binning contract.</p>
   <ul>
     <li><b>cpu</b> (numpy): per-tile-per-pixel <code>alpha_blend</code>. Algorithm
         spec, slow (~45 s / 30 views). Bit-truth.</li>
