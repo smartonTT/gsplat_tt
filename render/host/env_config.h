@@ -150,4 +150,21 @@ inline unsigned int ol_win_pages() {
     return v;
 }
 
+
+// Task #188 blend claim knobs (docs/blend-tail-t183). Late claim: the blend
+// reader waits for a free bulk ring slot before it takes the next tile from the
+// shared counter, so a core holds at most 2 tiles (compute + ring) instead of 3.
+// Default on; 0 = claim as soon as the previous subchunk is pushed.
+inline bool blend_late_claim() {
+    static const bool v = env_uint("GSPLAT_TT_BLEND_LATE_CLAIM", 1u) != 0u;
+    return v;
+}
+// Blend per-core lists dealt round-robin in record-count-descending order (core c
+// gets ranks c, c+n, ...), so the reader's rank interleave claims tiles in
+// global descending order. Default on; 0 = LPT lists (build_lpt).
+inline bool blend_claim_desc() {
+    static const bool v = env_uint("GSPLAT_TT_BLEND_CLAIM_DESC", 1u) != 0u;
+    return v;
+}
+
 }  // namespace gsplat_tt::env_config

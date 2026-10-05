@@ -253,6 +253,16 @@ void kernel_main() {
     // has more than k tiles). rank_base = claims taken by ranks < k.
     uint32_t rank = 0, rank_base = 0, rank_width = num_cores;
     for (;;) {
+#if defined(BLEND_LATE_CLAIM) && BLEND_LATE_CLAIM
+        // Task #188 late claim: wait for a free bulk ring slot before taking the
+        // next tile, so a core never holds a claimed tile it cannot start (at
+        // most one in compute + one in the ring). cb_reserve_back only waits for
+        // space; the first subchunk's reserve below then returns at once.
+        {
+            BLEND_PZ("rd_bulk_wait");
+            cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+        }
+#endif
         ret_ptr[0] = 0xFFFFFFFFu;
         asm volatile("fence" ::: "memory");
         noc_fast_atomic_increment<noc_mode, /*program_ret_addr=*/true>(

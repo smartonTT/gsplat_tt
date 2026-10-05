@@ -22,6 +22,7 @@
 #include "env_config.h"
 #include "sort.h"
 #include "sort_mover_speed.h"
+#include "blend_claim_order.h"
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
 #include "device_state.h"
@@ -1346,6 +1347,26 @@ static LptAssignment build_lpt(
     return a;
 }
 
+// Task #188: blend lists in record-count-descending round-robin order
+// (blend_claim_order.h).
+static LptAssignment build_desc_rr(
+    const std::vector<int64_t>& counts, uint32_t num_tiles, uint32_t num_cores) {
+    LptAssignment a;
+    blend_order::desc_round_robin(counts, num_tiles, num_cores, a.flat_tile_ids,
+                                  a.per_core_offset, a.per_core_count);
+    return a;
+}
+
+// Blend per-core lists: record-count-descending deal (default) or LPT on the
+// padded cost (GSPLAT_TT_BLEND_CLAIM_DESC=0).
+static LptAssignment build_blend_lists(
+    const std::vector<int64_t>& rec_counts, const std::vector<int64_t>& pad_counts,
+    uint32_t num_tiles, uint32_t num_cores) {
+    return gsplat_tt::env_config::blend_claim_desc()
+        ? build_desc_rr(rec_counts, num_tiles, num_cores)
+        : build_lpt(pad_counts, num_tiles, num_cores);
+}
+
 struct BinLayoutResult {
     std::vector<uint32_t> hist;  // page-aligned bases in bin2d layout
     std::vector<int64_t> counts;
@@ -2264,7 +2285,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 max_n = std::max(max_n, n);
             }
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bucket_meta, bmeta, false);
-            const LptAssignment lpt = build_lpt(pad_counts, num_tiles, num_cores);
+            const LptAssignment lpt =
+                build_blend_lists(counts, pad_counts, num_tiles, num_cores);
             std::vector<uint32_t> tile_ids_flat(ctx->cap_tile_ids_bytes / 4, 0u);
             std::copy(lpt.flat_tile_ids.begin(), lpt.flat_tile_ids.end(), tile_ids_flat.begin());
             publish_sort_downstream_metadata(ctx, lpt, counts, num_tiles, num_cores);

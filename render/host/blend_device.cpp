@@ -231,6 +231,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx) {
         reader_defines["BLEND_PROF"] = "1";
         writer_defines["BLEND_PROF"] = "1";
     }
+    // Task #188: claim the next tile only once a bulk ring slot is free
+    // (GSPLAT_TT_BLEND_LATE_CLAIM, default 1).
+    if (gsplat_tt::env_config::blend_late_claim()) {
+        reader_defines["BLEND_LATE_CLAIM"] = "1";
+    }
     std::vector<uint32_t> reader_ct;
     for (int i = 0; i < num_reader_accessors; i++) {
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
