@@ -50,4 +50,14 @@ inline uint32_t grown_tile_cap(uint32_t cap, uint32_t big, uint32_t max_n, uint3
     return big;
 }
 
+// Whether render_view re-runs a view after the sort. Only a tile overflow
+// (max_n records > 0) is retried, and only while a coarser floor can still
+// help: with the cull disabled no stage applies the floor, so every retry
+// would overflow the same way (task #292).
+inline bool should_retry(bool sort_ok, uint32_t max_n, int attempt, float floor,
+                         bool cull_disabled) {
+    return !sort_ok && max_n != 0 && !cull_disabled && attempt < kMaxRetries &&
+           floor < kMaxFloor;
+}
+
 }  // namespace gsplat_tt::overflow_retry

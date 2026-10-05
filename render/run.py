@@ -305,7 +305,7 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
     return 0 if identical else 5
 
 
-def main():
+def _main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--scene", default="bicycle")
     ap.add_argument("--cameras", type=Path,
@@ -576,6 +576,30 @@ def main():
     sys.stdout.flush()
     sys.stderr.flush()
     os._exit(0)
+
+
+def main():
+    """Run _main and always leave through os._exit (task #292). Once the device is
+    open, a normal interpreter exit runs native static teardown, which crashes
+    (MeshWorkload destructors, then a double free in tt-metal's
+    ShmResourceTracker::cleanup_all), so an uncaught error would dump core after
+    its traceback. The success paths in _main already call os._exit."""
+    rc = 0
+    try:
+        _main()
+    except SystemExit as e:
+        if isinstance(e.code, int):
+            rc = e.code
+        elif e.code is not None:
+            print(e.code, file=sys.stderr)
+            rc = 1
+    except BaseException:
+        import traceback
+        traceback.print_exc()
+        rc = 1
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(rc)
 
 
 if __name__ == "__main__":

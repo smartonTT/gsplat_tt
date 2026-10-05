@@ -6,6 +6,9 @@
 // a small overflow takes a small step (the t257 viewer case, tile 370 with
 // 34672 records at 1/16384, retries at a floor still finer than 1/1024); any
 // overflow 10x the cap reaches kMaxFloor within kMaxRetries steps.
+// should_retry (task #292): only an overflow is retried, never with the cull
+// disabled (no stage applies the floor then), and never past the attempt or
+// floor limit.
 #include <cstdio>
 
 #include "render/host/overflow_retry.h"
@@ -52,6 +55,13 @@ int main() {
     CHECK(orr::grown_tile_cap(cap, big, big + 1, none) == 0);
     CHECK(orr::grown_tile_cap(big, big, 70000, none) == 0);
     CHECK(orr::grown_tile_cap(cap, big, 25407, 20000) == 0);
+    // should_retry: an overflow at the bench floor retries; nothing else does.
+    CHECK(orr::should_retry(false, 34672, 0, 1.0f / 255, false));
+    CHECK(!orr::should_retry(true, 0, 0, 1.0f / 255, false));      // sort ok
+    CHECK(!orr::should_retry(false, 0, 0, 1.0f / 255, false));     // other sort error
+    CHECK(!orr::should_retry(false, 34672, 0, 1.0f / 255, true));  // cull disabled
+    CHECK(!orr::should_retry(false, 34672, orr::kMaxRetries, 1.0f / 255, false));
+    CHECK(!orr::should_retry(false, 34672, 0, orr::kMaxFloor, false));
     if (fails == 0) std::printf("ok\n");
     return fails == 0 ? 0 : 1;
 }

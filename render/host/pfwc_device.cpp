@@ -529,8 +529,11 @@ static PfwcDeviceContext init_context() {
 }
 
 static std::unique_ptr<PfwcDeviceContext>& context_slot() {
-    static std::unique_ptr<PfwcDeviceContext> ctx;
-    return ctx;
+    // Never destroyed (task #292): first touched after the device opens, a
+    // plain static would be torn down before device_state's exit leak and
+    // run ProgramImpl destructors at exit (SIGSEGV after an uncaught error).
+    static auto* ctx = new std::unique_ptr<PfwcDeviceContext>();
+    return *ctx;
 }
 
 static PfwcDeviceContext* ensure_context() {

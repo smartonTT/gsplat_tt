@@ -58,15 +58,20 @@
 #include "api/debug/dprint.h"
 #endif
 
+// Task #280: shifted CB ids in the fused mat+blend program.
+#ifndef BLEND_CB_BASE
+#define BLEND_CB_BASE 0
+#endif
+
 namespace {
 
-constexpr uint32_t CB_XRAMP     = 0;   // fp32 tile-local x ramp (c + 0.5)
-constexpr uint32_t CB_YRAMP     = 1;   // fp32 tile-local y ramp (r + 0.5)
-constexpr uint32_t CB_MB_COUNTS = 3;   // 32 uint32 per tile (per-microblock count)
-constexpr uint32_t CB_CORE_TILES = 7;  // MB_RESIDENT: tile count from reader (no host arg)
-constexpr uint32_t CB_BUCKET_BULK = 12; // subchunk L1 records (slab carries mask in word3)
-constexpr uint32_t CB_COLOR_OUT = 16;
-constexpr uint32_t CB_T_RB = 2;        // iter 107: mid-accumulation T readback (bf16, 1 tile)
+constexpr uint32_t CB_XRAMP     = BLEND_CB_BASE + 0;   // fp32 tile-local x ramp (c + 0.5)
+constexpr uint32_t CB_YRAMP     = BLEND_CB_BASE + 1;   // fp32 tile-local y ramp (r + 0.5)
+constexpr uint32_t CB_MB_COUNTS = BLEND_CB_BASE + 3;   // 32 uint32 per tile (per-microblock count)
+constexpr uint32_t CB_CORE_TILES = BLEND_CB_BASE + 7;  // MB_RESIDENT: tile count from reader (no host arg)
+constexpr uint32_t CB_BUCKET_BULK = BLEND_CB_BASE + 12; // subchunk L1 records (slab carries mask in word3)
+constexpr uint32_t CB_COLOR_OUT = BLEND_CB_BASE + 16;
+constexpr uint32_t CB_T_RB = BLEND_CB_BASE + 2;        // iter 107: mid-accumulation T readback (bf16, 1 tile)
 
 // MB_COUNTS flags (slot 1): bit0=emit_tile, bit1=continue_blend, bit2=l1_bulk.
 constexpr uint32_t MB_FLAG_EMIT = 1u;
@@ -1029,7 +1034,7 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
 #if BLEND_DECODE_AHEAD > 2
 #error "BLEND_DECODE_AHEAD must be 0, 1 or 2"
 #endif
-constexpr uint32_t CB_DA_RING = 10;
+constexpr uint32_t CB_DA_RING = BLEND_CB_BASE + 10;
 constexpr uint32_t DA_SLOTS = 64;  // power of two; mirrors blend_device.cpp
 constexpr uint32_t DA_SLOT_BYTES = 64;
 constexpr uint32_t DA_HDR_BYTES = 64;

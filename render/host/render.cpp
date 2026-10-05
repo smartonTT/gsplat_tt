@@ -30,6 +30,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -244,8 +245,15 @@ py::tuple render_view(
     // The device stages below touch no Python objects, so they run with the
     // GIL released: a viewer's JPEG/send thread then overlaps the render
     // (task #257). The bench is single-threaded, so this costs it nothing.
+    // Device state is shared, and the GIL is released below, so a second
+    // thread (viewer tab, selftest) must not enter render_view concurrently
+    // (review #269). Taken only while the GIL is released, so no deadlock;
+    // held to return, across the later GIL re-acquire/release blocks.
+    static std::mutex render_view_mutex;
+    std::unique_lock<std::mutex> view_lock(render_view_mutex, std::defer_lock);
     {
         py::gil_scoped_release nogil;
+        view_lock.lock();
         // One-shot JIT compile of all device programs at scene open.
         gsplat_tt::jit_warmup_ideal_path();
         head_span.stop();
@@ -354,7 +362,8 @@ py::tuple render_view(
 
         // Task #270: a tile over the sort bucket capacity failed the sort. Re-run
         // the view at a coarser floor (every stage's cull uses it, so the frame
-        // stays seam-free); a view that fits never gets here.
+        // stays seam-free); a view that fits never gets here. With the cull
+        // disabled the floor changes nothing, so the overflow fails at once.
         const uint32_t over_n = gsplat_tt::sort_last_tile_overflow();
         // Task #284: first grow the bucket (once per process) and re-render at
         // the same floor; the coarser floor is the fallback past kTileCapBig.
@@ -366,8 +375,8 @@ py::tuple render_view(
                          over_n, gsplat_tt::sort_tile_capacity(), 1.0 / mb_contrib_floor);
             continue;
         }
-        if (sort_ok || over_n == 0 || attempt >= gsplat_tt::overflow_retry::kMaxRetries ||
-            mb_contrib_floor >= gsplat_tt::overflow_retry::kMaxFloor) {
+        if (!gsplat_tt::overflow_retry::should_retry(sort_ok, over_n, attempt,
+                                                     mb_contrib_floor, cull_disabled)) {
             break;
         }
         const float next = gsplat_tt::overflow_retry::next_floor(

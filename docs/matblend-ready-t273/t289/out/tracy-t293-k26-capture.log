@@ -1,0 +1,145 @@
+[capture_tracy] render_clean capture (iter-dir=t293-k26 views=all) -> /localdev/smarton/gstt2-t289/opt/profiler/t293-k26/render.tracy
+[capture_tracy] CMD: /localdev/smarton/gstt2-t289/.venv/bin/python3 -m tracy -r -p -v --dump-device-data-mid-run -o /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26 /localdev/smarton/gstt2-t289/opt/profiler/_capture_inner.sh
+2026-10-05 20:20:28.448 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26
+2026-10-05 20:20:28.448 | INFO     | __main__:main:336 - Using port 8086
+2026-10-05 20:20:28.448 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-10-05 20:20:28.452 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+Connecting to 127.0.0.1:8086...2026-10-05 20:20:28.456 | INFO     | __main__:main:400 - Test process started
+2026-10-05 20:20:29.062 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26
+[capture-inner] python3 render/run.py --no-ref --iter-dir t293-k26  (MID_RUN_DUMP=1 DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TRACY_PORT=8086)
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-05 20:20:32.811 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 20:20:32.811 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 20:20:32.813 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 20:20:32.814 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 20:20:32.814 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 20:20:32.814 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 20:20:32.814 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-05 20:20:32.814 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-05 20:20:32.814 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 20:20:32.814 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 20:20:32.817 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 20:20:32.818 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 20:20:32.818 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 20:20:32.818 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 20:20:32.818 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-05 20:20:32.818 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-05 20:20:32.818 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-05 20:20:32.862 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-05 20:20:32.862 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-05 20:20:32.862 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-05 20:20:32.862 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-05 20:20:32.863 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-05 20:20:32.864 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffffc0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-05 20:20:32.864 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-05 20:20:33.403 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-05 20:20:33.403 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-05 20:20:33.403 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 20:20:33.403 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 20:20:33.404 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 20:20:33.405 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 20:20:33.405 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 20:20:33.405 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 20:20:33.406 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-05 20:20:33.406 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-05 20:20:33.406 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:20:33.406 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:20:33.406 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-05 20:20:33.406 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:20:33.406 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 20:20:33.406 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-05 20:20:33.406 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-05 20:20:33.406 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-05 20:20:33.406 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-05 20:20:33.406 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-05 20:20:33.406 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-05 20:20:33.442 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+2026-10-05 20:20:33.496 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_1941771_2887821429_0' (shm_resource_tracker.cpp:265)
+2026-10-05 20:20:33.496 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_1941771' (shm_resource_tracker.cpp:275)
+2026-10-05 20:20:34.078 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349977 GHz, device_time_at_sync=110330965489 cycles (realtime_profiler_manager.cpp:1075)
+[DEV] command queues 2, compute grid 11x10
+[JIT_WARMUP] ideal-path contexts compiled in 1288.1 ms
+2026-10-05 20:20:34.358 | critical |          Always | TT_FATAL: Program size (97536) too large for kernel config buffer (97280) on TENSIX (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 582, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 394, in main
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 234, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/gstt2-t289/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/gstt2-t289/render/run.py", line 120, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: TT_FATAL @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:2282: state.offset <= max_size
+info:
+Program size (97536) too large for kernel config buffer (97280) on TENSIX
+backtrace:
+ --- /localdev/smarton/tt-metal/build/lib/libtt_metal.so(_ZN2tt8tt_metal6detail11ProgramImpl24finalize_program_offsetsEN4ttsl10StrongTypeIiNS0_12ContextIdTagEEEPNS0_7IDeviceERKSt8functionIFRSt13unordered_mapIjSt10shared_ptrINS0_6KernelEESt4hashIjESt8equal_toIjESaISt4pairIKjSD_EEEjEERKS9_IFRSt6vectorISB_INS0_11KernelGroupEESaISU_EEjEERKS9_IFRKSS_INS0_9SemaphoreESaIS12_EEvEESt4spanIPS2_Lm18446744073709551615EE+0x7c4) [0x7fa3fb1aecc4]
+ --- tt::tt_metal::distributed::MeshWorkloadImpl::finalize_offsets(tt::tt_metal::distributed::MeshDevice*)
+ --- tt::tt_metal::distributed::EnqueueMeshWorkload(tt::tt_metal::distributed::MeshCommandQueue&, tt::tt_metal::distributed::MeshWorkload&, bool)
+ --- gsplat_tt::pfwc_tt(float const*, float const*, float const*, float const*, unsigned long, float*, float*, float*, float*, gsplat_tt::PfwcCallTimings*, gsplat_tt::PfwcVisParams const*)
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x4bb6a) [0x7fa3fbe92b6a]
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x63d62) [0x7fa3fbeaad62]
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x62272) [0x7fa3fbea9272]
+ --- /localdev/smarton/gstt2-t289/render/render_clean.cpython-310-x86_64-linux-gnu.so(+0x47b03) [0x7fa3fbe8eb03]
+ --- python3(+0x17ec7f) [0x55c74af15c7f]
+ --- python3(_PyEval_EvalFrameDefault+0x56d3) [0x55c74af11cd3]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55c74af22aec]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55c74af0ce07]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55c74af22aec]
+ --- python3(_PyEval_EvalFrameDefault+0x807) [0x55c74af0ce07]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55c74af22aec]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55c74af0ccc0]
+ --- python3(_PyFunction_Vectorcall+0x7c) [0x55c74af22aec]
+ --- python3(_PyEval_EvalFrameDefault+0x6c0) [0x55c74af0ccc0]
+ --- python3(+0x25b036) [0x55c74aff2036]
+ --- python3(PyEval_EvalCode+0x86) [0x55c74aff1f06]
+ --- python3(+0x281a88) [0x55c74b018a88]
+ --- python3(+0x27c0df) [0x55c74b0130df]
+ --- python3(+0x281825) [0x55c74b018825]
+ --- python3(_PyRun_SimpleFileObject+0x1a8) [0x55c74b017d68]
+ --- python3(_PyRun_AnyFileObject+0x47) [0x55c74b017a47]
+ --- python3(Py_RunMain+0x2be) [0x55c74b00beae]
+ --- python3(Py_BytesMain+0x2d) [0x55c74afe5f4d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x29d90) [0x7fa4d0b42d90]
+ --- /lib/x86_64-linux-gnu/libc.so.6(__libc_start_main+0x80) [0x7fa4d0b42e40]
+ --- python3(_start+0x25) [0x55c74afe5e45]
+
+
+Queue delay: 16 ns
+Timer resolution: 0 ns
+
+Frames: 2
+Time span: 3.15 s
+Zones: 815
+Elapsed time: 3.6 s
+Saving trace... done!
+Trace size 831.28 KB (26.83% ratio)
+/localdev/smarton/gstt2-t289/opt/profiler/_capture_inner.sh: line 28: 1942924 Aborted                 (core dumped) python3 render/run.py --no-ref --iter-dir "$ITER_DIR" "${RANGE_ARGS[@]}"
+[capture-inner] run.py rc=134
+2026-10-05 20:20:38.473 | INFO     | tracy:generate_report:154 - Host side ops time report generated at /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26/.logs/tracy_ops_times.csv
+2026-10-05 20:20:38.479 | INFO     | tracy:generate_report:165 - Host side ops data report generated at /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26/.logs/tracy_ops_data.csv
+2026-10-05 20:20:38.479 | INFO     | tracy.process_ops_logs:import_tracy_op_logs:255 - Importing ops logs
+2026-10-05 20:20:38.484 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1014 - Copying runtime artifacts
+2026-10-05 20:20:38.490 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1224 - No device logs found
+[capture_tracy] wrapper exited rc=0
+[capture_tracy] OK tracy: -rw-r--r-- 1 smarton group_1211416483 851435 Oct  5 20:20 /localdev/smarton/gstt2-t289/opt/profiler/t293-k26/render.tracy
+[capture_tracy] WARN: no /localdev/smarton/gstt2-t289/opt/profiler/wrap_out_t293-k26/.logs/profile_log_device.csv (cannot prove device-zone coverage)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t289/opt/profiler/t293-k26/render.tracy
