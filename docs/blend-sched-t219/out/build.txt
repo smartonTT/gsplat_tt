@@ -1,0 +1,10 @@
+# build.sh on yyzo-bh-07 (levels 0 1 2, this tree)
+level 0 rc=0 warnings/errors: 0, text bytes: 18508
+level 1 rc=0 warnings/errors: 0, text bytes: 18700
+level 2 rc=0 warnings/errors: 0, text bytes: 12924
+# LEVELS=0 build.sh of the tip kernel (4063ed7), TRISC1 instruction lines compared with level 0 of this tree
+level 0 rc=0 warnings/errors: 0, text bytes: 18508
+  4627 /tmp/t219-base.ins
+  4627 /tmp/t219-l0.ins
+  9254 total
+LEVEL0_TEXT_IDENTICAL_TO_TIP

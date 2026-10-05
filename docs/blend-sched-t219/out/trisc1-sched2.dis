@@ -1,0 +1,6181 @@
+
+trisc1.elf:     file format elf32-littleriscv
+
+
+Disassembly of section .text:
+
+00007130 <_start>:
+    7130:	f1010113          	addi	sp,sp,-240
+    7134:	0e112623          	sw	ra,236(sp)
+    7138:	0d312e23          	sw	s3,220(sp)
+    713c:	0d412c23          	sw	s4,216(sp)
+    7140:	0d712623          	sw	s7,204(sp)
+    7144:	0d912223          	sw	s9,196(sp)
+
+    7148:	ffb007b7          	lui	a5,0xffb00
+    714c:	ffb00737          	lui	a4,0xffb00
+
+    7150:	03478793          	addi	a5,a5,52 # ffb00034 <(anonymous namespace)::g_blend_bodies+0xc>
+
+    7154:	12870713          	addi	a4,a4,296 # ffb00128 <__ldm_bss_end>
+    7158:	00f76e63          	bltu	a4,a5,7174 <.L51>
+    715c:	fe07ae23          	sw	zero,-4(a5)
+
+    7160:	fe07ac23          	sw	zero,-8(a5)
+
+    7164:	fe07aa23          	sw	zero,-12(a5)
+
+    7168:	fe07a823          	sw	zero,-16(a5)
+
+    716c:	01078793          	addi	a5,a5,16
+
+    7170:	fef776e3          	bgeu	a4,a5,715c <.L52>
+    7174:	ff878693          	addi	a3,a5,-8
+
+    7178:	6ed764e3          	bltu	a4,a3,8060 <.L114>
+    717c:	fe07aa23          	sw	zero,-12(a5)
+
+    7180:	fe07a823          	sw	zero,-16(a5)
+
+    7184:	ffc78693          	addi	a3,a5,-4
+
+    7188:	00d76463          	bltu	a4,a3,7190 <.L54>
+    718c:	fe07ac23          	sw	zero,-8(a5)
+
+    7190:	0000a737          	lui	a4,0xa
+    7194:	3ac70713          	addi	a4,a4,940 # a3ac <__kernel_data_lma>
+    7198:	83018793          	addi	a5,gp,-2000 # ffb00020 <(anonymous namespace)::g_blend_t_eps>
+    719c:	06f70a63          	beq	a4,a5,7210 <.L56>
+    71a0:	ffb00637          	lui	a2,0xffb00
+    71a4:	02460613          	addi	a2,a2,36 # ffb00024 <(anonymous namespace)::g_pixel_floor_bits>
+    71a8:	40f60633          	sub	a2,a2,a5
+
+    71ac:	00800593          	li	a1,8
+
+    71b0:	40265693          	srai	a3,a2,0x2
+
+    71b4:	04c5d063          	bge	a1,a2,71f4 <.L57>
+    71b8:	00200613          	li	a2,2
+    71bc:	00072883          	lw	a7,0(a4)
+    71c0:	00472803          	lw	a6,4(a4)
+    71c4:	00872503          	lw	a0,8(a4)
+
+    71c8:	00078593          	mv	a1,a5
+    71cc:	00070793          	mv	a5,a4
+    71d0:	00c78793          	addi	a5,a5,12
+    71d4:	00c58593          	addi	a1,a1,12
+    71d8:	ffd68693          	addi	a3,a3,-3
+    71dc:	00078713          	mv	a4,a5
+    71e0:	00058793          	mv	a5,a1
+
+    71e4:	ff15aa23          	sw	a7,-12(a1)
+    71e8:	ff05ac23          	sw	a6,-8(a1)
+    71ec:	fea5ae23          	sw	a0,-4(a1)
+
+    71f0:	fcd646e3          	blt	a2,a3,71bc <.L58>
+    71f4:	00d05e63          	blez	a3,7210 <.L56>
+    71f8:	00072583          	lw	a1,0(a4)
+
+    71fc:	00200613          	li	a2,2
+
+    7200:	00b7a023          	sw	a1,0(a5)
+
+    7204:	00c69663          	bne	a3,a2,7210 <.L56>
+    7208:	00472703          	lw	a4,4(a4)
+    720c:	00e7a223          	sw	a4,4(a5)
+
+    7210:	42002783          	lw	a5,1056(zero) # 420 <.LVUS87>
+    7214:	08000713          	li	a4,128
+    7218:	00279793          	slli	a5,a5,0x2
+
+    721c:	3f37c683          	lbu	a3,1011(a5)
+    7220:	06078793          	addi	a5,a5,96
+
+    7224:	00e68863          	beq	a3,a4,7234 <.L63>
+    7228:	0ff0000f          	fence
+
+    722c:	3937c683          	lbu	a3,915(a5)
+
+    7230:	fee69ce3          	bne	a3,a4,7228 <.L60>
+    7234:	c8340002          	ttsetc16	13,0
+
+    7238:	c8740002          	ttsetc16	29,0
+
+    723c:	c8c00002          	ttsetc16	48,0
+
+    7240:	40610000          	ttzeroacc	3,0,0,1,0
+
+    7244:	8201a783          	lw	a5,-2016(gp) # ffb00010 <rta_l1_base>
+
+    7248:	0007a703          	lw	a4,0(a5)
+
+    724c:	00070463          	beqz	a4,7254 <.L62>
+    7250:	82e1a823          	sw	a4,-2000(gp) # ffb00020 <(anonymous namespace)::g_blend_t_eps>
+
+    7254:	0047a703          	lw	a4,4(a5)
+
+    7258:	ffec17b7          	lui	a5,0xffec1
+
+    725c:	82e1aa23          	sw	a4,-1996(gp) # ffb00024 <(anonymous namespace)::g_pixel_floor_bits>
+
+    7260:	0007a783          	lw	a5,0(a5) # ffec1000 <__instrn_buffer+0x81000>
+
+    7264:	0007ac83          	lw	s9,0(a5)
+
+    7268:	c83c0002          	ttsetc16	15,0
+
+    726c:	c87c0002          	ttsetc16	31,0
+
+    7270:	c8c80002          	ttsetc16	50,0
+
+    7274:	c8300006          	ttsetc16	12,1
+
+    7278:	c8700006          	ttsetc16	28,1
+
+    727c:	c8bc0002          	ttsetc16	47,0
+
+    7280:	c8380022          	ttsetc16	14,8
+
+    7284:	c8780022          	ttsetc16	30,8
+
+    7288:	c8c40002          	ttsetc16	49,0
+
+    728c:	ffe806b7          	lui	a3,0xffe80
+    7290:	00868613          	addi	a2,a3,8 # ffe80008 <__instrn_buffer+0x40008>
+    7294:	00000793          	li	a5,0
+
+    7298:	00f62023          	sw	a5,0(a2)
+    729c:	00062783          	lw	a5,0(a2)
+    72a0:	00f07033          	and	zero,zero,a5
+
+    72a4:	ffb807b7          	lui	a5,0xffb80
+    72a8:	00400613          	li	a2,4
+    72ac:	00c7a023          	sw	a2,0(a5) # ffb80000 <__global_pointer$+0x7f810>
+
+    72b0:	00200613          	li	a2,2
+    72b4:	00c7a223          	sw	a2,4(a5)
+
+    72b8:	020005b7          	lui	a1,0x2000
+
+    72bc:	37c00637          	lui	a2,0x37c00
+
+    72c0:	00b7a423          	sw	a1,8(a5)
+
+    72c4:	00360613          	addi	a2,a2,3 # 37c00003 <__device_print_strings_info_end+0x31700003>
+    72c8:	00c7a623          	sw	a2,12(a5)
+
+    72cc:	00b7a823          	sw	a1,16(a5)
+
+    72d0:	28008637          	lui	a2,0x28008
+    72d4:	00c7aa23          	sw	a2,20(a5)
+
+    72d8:	00b7ac23          	sw	a1,24(a5)
+
+    72dc:	00c7ae23          	sw	a2,28(a5)
+
+    72e0:	02c7a023          	sw	a2,32(a5)
+
+    72e4:	c81c0002          	ttsetc16	7,0
+
+    72e8:	dc00003c          	ttsetrwc	0,0,0,0,0,15
+
+    72ec:	00000793          	li	a5,0
+    72f0:	00468713          	addi	a4,a3,4
+    72f4:	00f72023          	sw	a5,0(a4)
+    72f8:	00072783          	lw	a5,0(a4)
+    72fc:	00f07033          	and	zero,zero,a5
+
+    7300:	0246a783          	lw	a5,36(a3)
+
+    7304:	0ff7f793          	zext.b	a5,a5
+    7308:	fe079ce3          	bnez	a5,7300 <.L64>
+    730c:	8c400022          	ttseminit	1,0,2
+
+    7310:	8001a823          	sw	zero,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7314:	c8040002          	ttsetc16	1,0
+
+    7318:	ffe40737          	lui	a4,0xffe40
+    731c:	b30807b7          	lui	a5,0xb3080
+    7320:	00070993          	mv	s3,a4
+    7324:	0dc78793          	addi	a5,a5,220 # b30800dc <__device_print_strings_info_end+0xacb800dc>
+    7328:	00f9a023          	sw	a5,0(s3)
+
+    732c:	89000042          	ttstallwait	128,16
+
+    7330:	b68007b7          	lui	a5,0xb6800
+    7334:	00178793          	addi	a5,a5,1 # b6800001 <__device_print_strings_info_end+0xb0300001>
+    7338:	00f9a023          	sw	a5,0(s3)
+
+    733c:	b62027b7          	lui	a5,0xb6202
+    7340:	00178793          	addi	a5,a5,1 # b6202001 <__device_print_strings_info_end+0xafd02001>
+    7344:	00f9a023          	sw	a5,0(s3)
+
+    7348:	b64047b7          	lui	a5,0xb6404
+    734c:	00178793          	addi	a5,a5,1 # b6404001 <__device_print_strings_info_end+0xaff04001>
+    7350:	00f9a023          	sw	a5,0(s3)
+
+    7354:	440003c6          	sfpconfig	15,0,1
+
+    7358:	c84c0002          	ttsetc16	19,0
+
+    735c:	c88c0002          	ttsetc16	35,0
+
+    7360:	c8d80002          	ttsetc16	54,0
+
+    7364:	dc00003c          	ttsetrwc	0,0,0,0,0,15
+
+    7368:	000086b7          	lui	a3,0x8
+
+    736c:	00008737          	lui	a4,0x8
+
+    7370:	000087b7          	lui	a5,0x8
+
+    7374:	83818a13          	addi	s4,gp,-1992 # ffb00028 <(anonymous namespace)::g_blend_bodies>
+    7378:	06868693          	addi	a3,a3,104 # 8068 <void (anonymous namespace)::blend_pair_body<0ul, 1ul>()>
+
+    737c:	0e870713          	addi	a4,a4,232 # 80e8 <void (anonymous namespace)::blend_pair_body<0ul, 2ul>()>
+
+    7380:	16c78793          	addi	a5,a5,364 # 816c <void (anonymous namespace)::blend_pair_body<0ul, 3ul>()>
+
+    7384:	00008337          	lui	t1,0x8
+
+    7388:	000088b7          	lui	a7,0x8
+
+    738c:	26c30313          	addi	t1,t1,620 # 826c <void (anonymous namespace)::blend_pair_body<1ul, 1ul>()>
+
+    7390:	2f088893          	addi	a7,a7,752 # 82f0 <void (anonymous namespace)::blend_pair_body<1ul, 2ul>()>
+
+    7394:	00da2223          	sw	a3,4(s4)
+
+    7398:	00ea2423          	sw	a4,8(s4)
+
+    739c:	00fa2623          	sw	a5,12(s4)
+
+    73a0:	00008837          	lui	a6,0x8
+
+    73a4:	00008537          	lui	a0,0x8
+
+    73a8:	000085b7          	lui	a1,0x8
+
+    73ac:	00008637          	lui	a2,0x8
+
+    73b0:	000086b7          	lui	a3,0x8
+
+    73b4:	00008737          	lui	a4,0x8
+
+    73b8:	000087b7          	lui	a5,0x8
+
+    73bc:	37480813          	addi	a6,a6,884 # 8374 <void (anonymous namespace)::blend_pair_body<1ul, 3ul>()>
+
+    73c0:	47850513          	addi	a0,a0,1144 # 8478 <void (anonymous namespace)::blend_pair_body<2ul, 1ul>()>
+
+    73c4:	4fc58593          	addi	a1,a1,1276 # 84fc <void (anonymous namespace)::blend_pair_body<2ul, 2ul>()>
+
+    73c8:	58060613          	addi	a2,a2,1408 # 8580 <void (anonymous namespace)::blend_pair_body<2ul, 3ul>()>
+
+    73cc:	68468693          	addi	a3,a3,1668 # 8684 <void (anonymous namespace)::blend_pair_body<3ul, 1ul>()>
+
+    73d0:	70870713          	addi	a4,a4,1800 # 8708 <void (anonymous namespace)::blend_pair_body<3ul, 2ul>()>
+
+    73d4:	78c78793          	addi	a5,a5,1932 # 878c <void (anonymous namespace)::blend_pair_body<3ul, 3ul>()>
+
+    73d8:	006a2a23          	sw	t1,20(s4)
+
+    73dc:	011a2c23          	sw	a7,24(s4)
+
+    73e0:	00009337          	lui	t1,0x9
+
+    73e4:	000098b7          	lui	a7,0x9
+
+    73e8:	89030313          	addi	t1,t1,-1904 # 8890 <void (anonymous namespace)::blend_pair_body<4ul, 1ul>()>
+
+    73ec:	91888893          	addi	a7,a7,-1768 # 8918 <void (anonymous namespace)::blend_pair_body<4ul, 2ul>()>
+
+    73f0:	010a2e23          	sw	a6,28(s4)
+
+    73f4:	02aa2223          	sw	a0,36(s4)
+
+    73f8:	02ba2423          	sw	a1,40(s4)
+
+    73fc:	02ca2623          	sw	a2,44(s4)
+
+    7400:	02da2a23          	sw	a3,52(s4)
+
+    7404:	02ea2c23          	sw	a4,56(s4)
+
+    7408:	02fa2e23          	sw	a5,60(s4)
+
+    740c:	00009837          	lui	a6,0x9
+
+    7410:	00009537          	lui	a0,0x9
+
+    7414:	000095b7          	lui	a1,0x9
+
+    7418:	00009637          	lui	a2,0x9
+
+    741c:	000096b7          	lui	a3,0x9
+
+    7420:	00009737          	lui	a4,0x9
+
+    7424:	000097b7          	lui	a5,0x9
+
+    7428:	9a080813          	addi	a6,a6,-1632 # 89a0 <void (anonymous namespace)::blend_pair_body<4ul, 3ul>()>
+
+    742c:	aac50513          	addi	a0,a0,-1364 # 8aac <void (anonymous namespace)::blend_pair_body<5ul, 1ul>()>
+
+    7430:	b3458593          	addi	a1,a1,-1228 # 8b34 <void (anonymous namespace)::blend_pair_body<5ul, 2ul>()>
+
+    7434:	bbc60613          	addi	a2,a2,-1092 # 8bbc <void (anonymous namespace)::blend_pair_body<5ul, 3ul>()>
+
+    7438:	cc868693          	addi	a3,a3,-824 # 8cc8 <void (anonymous namespace)::blend_pair_body<6ul, 1ul>()>
+
+    743c:	d5070713          	addi	a4,a4,-688 # 8d50 <void (anonymous namespace)::blend_pair_body<6ul, 2ul>()>
+
+    7440:	dd878793          	addi	a5,a5,-552 # 8dd8 <void (anonymous namespace)::blend_pair_body<6ul, 3ul>()>
+
+    7444:	046a2223          	sw	t1,68(s4)
+
+    7448:	051a2423          	sw	a7,72(s4)
+
+    744c:	00009337          	lui	t1,0x9
+
+    7450:	000098b7          	lui	a7,0x9
+
+    7454:	ee430313          	addi	t1,t1,-284 # 8ee4 <void (anonymous namespace)::blend_pair_body<7ul, 1ul>()>
+
+    7458:	f6c88893          	addi	a7,a7,-148 # 8f6c <void (anonymous namespace)::blend_pair_body<7ul, 2ul>()>
+
+    745c:	050a2623          	sw	a6,76(s4)
+
+    7460:	04aa2a23          	sw	a0,84(s4)
+
+    7464:	04ba2c23          	sw	a1,88(s4)
+
+    7468:	04ca2e23          	sw	a2,92(s4)
+
+    746c:	06da2223          	sw	a3,100(s4)
+
+    7470:	06ea2423          	sw	a4,104(s4)
+
+    7474:	06fa2623          	sw	a5,108(s4)
+
+    7478:	00009837          	lui	a6,0x9
+
+    747c:	00009537          	lui	a0,0x9
+
+    7480:	000095b7          	lui	a1,0x9
+
+    7484:	00009637          	lui	a2,0x9
+
+    7488:	000096b7          	lui	a3,0x9
+
+    748c:	00009737          	lui	a4,0x9
+
+    7490:	000097b7          	lui	a5,0x9
+
+    7494:	ff880813          	addi	a6,a6,-8 # 8ff8 <void (anonymous namespace)::blend_pair_body<7ul, 3ul>()>
+
+    7498:	10850513          	addi	a0,a0,264 # 9108 <void (anonymous namespace)::blend_pair_body<8ul, 1ul>()>
+
+    749c:	19458593          	addi	a1,a1,404 # 9194 <void (anonymous namespace)::blend_pair_body<8ul, 2ul>()>
+
+    74a0:	22060613          	addi	a2,a2,544 # 9220 <void (anonymous namespace)::blend_pair_body<8ul, 3ul>()>
+
+    74a4:	33468693          	addi	a3,a3,820 # 9334 <void (anonymous namespace)::blend_pair_body<9ul, 1ul>()>
+
+    74a8:	3c070713          	addi	a4,a4,960 # 93c0 <void (anonymous namespace)::blend_pair_body<9ul, 2ul>()>
+
+    74ac:	44c78793          	addi	a5,a5,1100 # 944c <void (anonymous namespace)::blend_pair_body<9ul, 3ul>()>
+
+    74b0:	066a2a23          	sw	t1,116(s4)
+
+    74b4:	071a2c23          	sw	a7,120(s4)
+
+    74b8:	00009337          	lui	t1,0x9
+
+    74bc:	000098b7          	lui	a7,0x9
+
+    74c0:	56030313          	addi	t1,t1,1376 # 9560 <void (anonymous namespace)::blend_pair_body<10ul, 1ul>()>
+
+    74c4:	5ec88893          	addi	a7,a7,1516 # 95ec <void (anonymous namespace)::blend_pair_body<10ul, 2ul>()>
+
+    74c8:	070a2e23          	sw	a6,124(s4)
+
+    74cc:	08aa2223          	sw	a0,132(s4)
+
+    74d0:	08ba2423          	sw	a1,136(s4)
+
+    74d4:	08ca2623          	sw	a2,140(s4)
+
+    74d8:	08da2a23          	sw	a3,148(s4)
+
+    74dc:	08ea2c23          	sw	a4,152(s4)
+
+    74e0:	08fa2e23          	sw	a5,156(s4)
+
+    74e4:	00009837          	lui	a6,0x9
+
+    74e8:	00009537          	lui	a0,0x9
+
+    74ec:	0000a5b7          	lui	a1,0xa
+
+    74f0:	0000a637          	lui	a2,0xa
+
+    74f4:	0000a6b7          	lui	a3,0xa
+
+    74f8:	0000a737          	lui	a4,0xa
+
+    74fc:	0000a7b7          	lui	a5,0xa
+
+    7500:	0a6a2223          	sw	t1,164(s4)
+
+    7504:	0b1a2423          	sw	a7,168(s4)
+
+    7508:	67880813          	addi	a6,a6,1656 # 9678 <void (anonymous namespace)::blend_pair_body<10ul, 3ul>()>
+
+    750c:	78c50513          	addi	a0,a0,1932 # 978c <void (anonymous namespace)::blend_pair_body<11ul, 1ul>()>
+
+    7510:	81c58593          	addi	a1,a1,-2020 # 981c <void (anonymous namespace)::blend_pair_body<11ul, 2ul>()>
+
+    7514:	8ac60613          	addi	a2,a2,-1876 # 98ac <void (anonymous namespace)::blend_pair_body<11ul, 3ul>()>
+
+    7518:	9c868693          	addi	a3,a3,-1592 # 99c8 <void (anonymous namespace)::blend_pair_body<12ul, 1ul>()>
+
+    751c:	a5870713          	addi	a4,a4,-1448 # 9a58 <void (anonymous namespace)::blend_pair_body<12ul, 2ul>()>
+
+    7520:	ae878793          	addi	a5,a5,-1304 # 9ae8 <void (anonymous namespace)::blend_pair_body<12ul, 3ul>()>
+
+    7524:	0b0a2623          	sw	a6,172(s4)
+
+    7528:	0000a337          	lui	t1,0xa
+
+    752c:	0000a8b7          	lui	a7,0xa
+
+    7530:	0000a837          	lui	a6,0xa
+
+    7534:	0aaa2a23          	sw	a0,180(s4)
+
+    7538:	0aba2c23          	sw	a1,184(s4)
+
+    753c:	0000a537          	lui	a0,0xa
+
+    7540:	0000a5b7          	lui	a1,0xa
+
+    7544:	0aca2e23          	sw	a2,188(s4)
+
+    7548:	0cda2223          	sw	a3,196(s4)
+
+    754c:	0000a637          	lui	a2,0xa
+
+    7550:	0000a6b7          	lui	a3,0xa
+
+    7554:	0cea2423          	sw	a4,200(s4)
+
+    7558:	0cfa2623          	sw	a5,204(s4)
+
+    755c:	0000a737          	lui	a4,0xa
+
+    7560:	0000a7b7          	lui	a5,0xa
+
+    7564:	c0430313          	addi	t1,t1,-1020 # 9c04 <void (anonymous namespace)::blend_pair_body<13ul, 1ul>()>
+
+    7568:	c9488893          	addi	a7,a7,-876 # 9c94 <void (anonymous namespace)::blend_pair_body<13ul, 2ul>()>
+
+    756c:	d2480813          	addi	a6,a6,-732 # 9d24 <void (anonymous namespace)::blend_pair_body<13ul, 3ul>()>
+
+    7570:	e4050513          	addi	a0,a0,-448 # 9e40 <void (anonymous namespace)::blend_pair_body<14ul, 1ul>()>
+
+    7574:	ed058593          	addi	a1,a1,-304 # 9ed0 <void (anonymous namespace)::blend_pair_body<14ul, 2ul>()>
+
+    7578:	f6460613          	addi	a2,a2,-156 # 9f64 <void (anonymous namespace)::blend_pair_body<14ul, 3ul>()>
+
+    757c:	08468693          	addi	a3,a3,132 # a084 <void (anonymous namespace)::blend_pair_body<15ul, 1ul>()>
+
+    7580:	11870713          	addi	a4,a4,280 # a118 <void (anonymous namespace)::blend_pair_body<15ul, 2ul>()>
+
+    7584:	1ac78793          	addi	a5,a5,428 # a1ac <void (anonymous namespace)::blend_pair_body<15ul, 3ul>()>
+
+    7588:	0c6a2a23          	sw	t1,212(s4)
+
+    758c:	0d1a2c23          	sw	a7,216(s4)
+
+    7590:	0d0a2e23          	sw	a6,220(s4)
+
+    7594:	0eaa2223          	sw	a0,228(s4)
+
+    7598:	0eba2423          	sw	a1,232(s4)
+
+    759c:	0eca2623          	sw	a2,236(s4)
+
+    75a0:	0eda2a23          	sw	a3,244(s4)
+
+    75a4:	0eea2c23          	sw	a4,248(s4)
+
+    75a8:	0efa2e23          	sw	a5,252(s4)
+
+    75ac:	240c8c63          	beqz	s9,7804 <.L126>
+    75b0:	001c8793          	addi	a5,s9,1
+    75b4:	0f212023          	sw	s2,224(sp)
+    75b8:	0d612823          	sw	s6,208(sp)
+    75bc:	0017b913          	seqz	s2,a5
+
+    75c0:	7f800b37          	lui	s6,0x7f800
+    75c4:	0d512a23          	sw	s5,212(sp)
+
+    75c8:	03212623          	sw	s2,44(sp)
+    75cc:	0e812423          	sw	s0,232(sp)
+    75d0:	0e912223          	sw	s1,228(sp)
+    75d4:	0d812423          	sw	s8,200(sp)
+    75d8:	0da12023          	sw	s10,192(sp)
+    75dc:	0bb12e23          	sw	s11,188(sp)
+
+    75e0:	001b0a93          	addi	s5,s6,1 # 7f800001 <__device_print_strings_info_end+0x79300001>
+
+    75e4:	00000913          	li	s2,0
+
+    75e8:	fff00393          	li	t2,-1
+    75ec:	00000713          	li	a4,0
+    75f0:	247c8ce3          	beq	s9,t2,8048 <.L163>
+    75f4:	ffe80437          	lui	s0,0xffe80
+    75f8:	03912223          	sw	s9,36(sp)
+    75fc:	03212423          	sw	s2,40(sp)
+    7600:	00070d93          	mv	s11,a4
+    7604:	00038493          	mv	s1,t2
+
+    7608:	ffec17b7          	lui	a5,0xffec1
+    760c:	0007a783          	lw	a5,0(a5) # ffec1000 <__instrn_buffer+0x81000>
+
+    7610:	0007ad03          	lw	s10,0(a5)
+
+    7614:	0047a783          	lw	a5,4(a5)
+
+    7618:	0027f693          	andi	a3,a5,2
+
+    761c:	0017f713          	andi	a4,a5,1
+
+    7620:	20068263          	beqz	a3,7824 <.L68>
+    7624:	180d0c63          	beqz	s10,77bc <.L69>
+    7628:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    762c:	b20106b7          	lui	a3,0xb2010
+
+    7630:	00f037b3          	snez	a5,a5
+    7634:	00979793          	slli	a5,a5,0x9
+
+    7638:	00d787b3          	add	a5,a5,a3
+
+    763c:	ffec16b7          	lui	a3,0xffec1
+    7640:	0006af83          	lw	t6,0(a3) # ffec1000 <__instrn_buffer+0x81000>
+
+    7644:	00f9a023          	sw	a5,0(s3)
+
+    7648:	8a000042          	ttstallwait	256,16
+
+    764c:	8341a783          	lw	a5,-1996(gp) # ffb00024 <(anonymous namespace)::g_pixel_floor_bits>
+
+    7650:	71020637          	lui	a2,0x71020
+    7654:	0807c6b3          	zext.h	a3,a5
+    7658:	00c686b3          	add	a3,a3,a2
+    765c:	00d9a023          	sw	a3,0(s3)
+    7660:	0107d793          	srli	a5,a5,0x10
+
+    7664:	710806b7          	lui	a3,0x71080
+    7668:	00d787b3          	add	a5,a5,a3
+    766c:	00f9a023          	sw	a5,0(s3)
+
+    7670:	c8038631          	sfpstore	L0,396,0,7
+
+    7674:	c4080201          	sfploadi	L0,128,2
+    7678:	c420de01          	sfploadi	L0,14208,8
+
+    767c:	c8038651          	sfpstore	L0,404,0,7
+
+    7680:	c40aa8ed          	sfploadi	L0,-21957,2
+    7684:	c420fee1          	sfploadi	L0,16312,8
+
+    7688:	44000302          	sfpconfig	12,0,0
+
+    768c:	c40a9061          	sfploadi	L0,-23528,2
+    7690:	c4209eb1          	sfploadi	L0,10156,8
+
+    7694:	44000342          	sfpconfig	13,0,0
+
+    7698:	c4096b69          	sfploadi	L0,23258,2
+    769c:	c420cea1          	sfploadi	L0,13224,8
+
+    76a0:	44000382          	sfpconfig	14,0,0
+
+    76a4:	c408e215          	sfploadi	L0,14469,2
+    76a8:	c420fe01          	sfploadi	L0,16256,8
+
+    76ac:	c8038659          	sfpstore	L0,406,0,7
+
+    76b0:	c409c291          	sfploadi	L0,28836,2
+    76b4:	c420fdf5          	sfploadi	L0,16253,8
+
+    76b8:	c8038661          	sfpstore	L0,408,0,7
+
+    76bc:	10000344          	ttreplay	0,13,0,1
+
+    76c0:	c1838601          	sfpload	L6,384,0,7
+
+    76c4:	c1438609          	sfpload	L5,386,0,7
+
+    76c8:	1428988a          	sfpadd	L2,L10,L2,L6,2
+
+    76cc:	1428544a          	sfpadd	L1,L10,L1,L5,2
+
+    76d0:	1808a542          	sfpmul	L5,L2,L2,L9,0
+
+    76d4:	c1038611          	sfpload	L4,388,0,7
+
+    76d8:	18116502          	sfpmul	L4,L4,L5,L9,0
+
+    76dc:	18086482          	sfpmul	L2,L2,L1,L9,0
+
+    76e0:	c0c38619          	sfpload	L3,390,0,7
+
+    76e4:	100c9082          	sfpmad	L2,L3,L2,L4,0
+
+    76e8:	18046442          	sfpmul	L1,L1,L1,L9,0
+
+    76ec:	c0038621          	sfpload	L0,392,0,7
+
+    76f0:	10004802          	sfpmad	L0,L0,L1,L2,0
+
+    76f4:	100d04c4          	ttreplay	13,19,0,1
+
+    76f8:	101ec042          	sfpmad	L1,L7,L11,L0,0
+
+    76fc:	c0838301          	sfpload	L2,192,0,7
+
+    7700:	ec000401          	sfpsetcc	L1,0x000,0
+
+    7704:	f0002401          	sfpmov	L0,L9,0
+
+    7708:	2800c02a          	sfpencc	0x003,10
+
+    770c:	1800a442          	sfpmul	L1,L0,L2,L9,0
+
+    7710:	142a800a          	sfpadd	L0,L10,L10,L0,2
+
+    7714:	c1838001          	sfpload	L6,0,0,7
+
+    7718:	1004d982          	sfpmad	L6,L1,L3,L6,0
+
+    771c:	18082402          	sfpmul	L0,L2,L0,L9,0
+
+    7720:	c9838001          	sfpstore	L6,0,0,7
+
+    7724:	c1c38101          	sfpload	L7,64,0,7
+
+    7728:	10051dc2          	sfpmad	L7,L1,L4,L7,0
+
+    772c:	c1838201          	sfpload	L6,128,0,7
+
+    7730:	c9c38101          	sfpstore	L7,64,0,7
+
+    7734:	10055982          	sfpmad	L6,L1,L5,L6,0
+
+    7738:	c8038301          	sfpstore	L0,192,0,7
+
+    773c:	c9838201          	sfpstore	L6,128,0,7
+
+    7740:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    7744:	710207b7          	lui	a5,0x71020
+    7748:	00f12823          	sw	a5,16(sp)
+    774c:	710807b7          	lui	a5,0x71080
+    7750:	00f12a23          	sw	a5,20(sp)
+
+    7754:	710207b7          	lui	a5,0x71020
+
+    7758:	00000c13          	li	s8,0
+
+    775c:	000d8c93          	mv	s9,s11
+
+    7760:	00f12c23          	sw	a5,24(sp)
+    7764:	000d0913          	mv	s2,s10
+    7768:	00e12e23          	sw	a4,28(sp)
+    776c:	03b12023          	sw	s11,32(sp)
+    7770:	000f8e13          	mv	t3,t6
+
+    7774:	000c8663          	beqz	s9,7780 <.L80>
+    7778:	1ffcfd13          	andi	s10,s9,511
+
+    777c:	440d0063          	beqz	s10,7bbc <.L164>
+    7780:	005c1713          	slli	a4,s8,0x5
+    7784:	01c70733          	add	a4,a4,t3
+
+    7788:	00c72783          	lw	a5,12(a4)
+
+    778c:	001c8c93          	addi	s9,s9,1
+
+    7790:	00f4fdb3          	and	s11,s1,a5
+
+    7794:	560d9463          	bnez	s11,7cfc <.L106>
+    7798:	001c0c13          	addi	s8,s8,1
+
+    779c:	fd891ce3          	bne	s2,s8,7774 <.L107>
+    77a0:	02012d83          	lw	s11,32(sp)
+    77a4:	01c12703          	lw	a4,28(sp)
+    77a8:	012d8db3          	add	s11,s11,s2
+
+    77ac:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    77b0:	ffec17b7          	lui	a5,0xffec1
+
+    77b4:	00190d13          	addi	s10,s2,1
+
+    77b8:	01a7a023          	sw	s10,0(a5) # ffec1000 <__instrn_buffer+0x81000>
+
+    77bc:	e40706e3          	beqz	a4,7608 <.L111>
+    77c0:	02412c83          	lw	s9,36(sp)
+    77c4:	02812903          	lw	s2,40(sp)
+    77c8:	88042042          	ttstallwait	2,2064
+
+    77cc:	90000022          	ttsempost	2
+
+    77d0:	02c12703          	lw	a4,44(sp)
+
+    77d4:	00190913          	addi	s2,s2,1
+
+    77d8:	019937b3          	sltu	a5,s2,s9
+
+    77dc:	00f767b3          	or	a5,a4,a5
+    77e0:	e00794e3          	bnez	a5,75e8 <.L112>
+    77e4:	0e812403          	lw	s0,232(sp)
+    77e8:	0e412483          	lw	s1,228(sp)
+    77ec:	0e012903          	lw	s2,224(sp)
+
+    77f0:	0d412a83          	lw	s5,212(sp)
+    77f4:	0d012b03          	lw	s6,208(sp)
+    77f8:	0c812c03          	lw	s8,200(sp)
+    77fc:	0c012d03          	lw	s10,192(sp)
+    7800:	0bc12d83          	lw	s11,188(sp)
+
+    7804:	0ec12083          	lw	ra,236(sp)
+    7808:	0dc12983          	lw	s3,220(sp)
+    780c:	0d812a03          	lw	s4,216(sp)
+    7810:	0cc12b83          	lw	s7,204(sp)
+    7814:	0c412c83          	lw	s9,196(sp)
+    7818:	00000513          	li	a0,0
+    781c:	0f010113          	addi	sp,sp,240
+    7820:	00008067          	ret
+
+    7824:	9a84002a          	ttsemwait	322,2,2
+
+    7828:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    782c:	b20106b7          	lui	a3,0xb2010
+
+    7830:	00f037b3          	snez	a5,a5
+    7834:	00979793          	slli	a5,a5,0x9
+
+    7838:	00d787b3          	add	a5,a5,a3
+    783c:	00f9a023          	sw	a5,0(s3)
+
+    7840:	8a000042          	ttstallwait	256,16
+
+    7844:	00400793          	li	a5,4
+
+    7848:	ca438001          	sfpstore	L9,0,0,7
+
+    784c:	e0020000          	ttincrwc	0,2,0,0
+
+    7850:	ca438001          	sfpstore	L9,0,0,7
+
+    7854:	e0020000          	ttincrwc	0,2,0,0
+
+    7858:	ca438001          	sfpstore	L9,0,0,7
+
+    785c:	e0020000          	ttincrwc	0,2,0,0
+
+    7860:	ca438001          	sfpstore	L9,0,0,7
+
+    7864:	e0020000          	ttincrwc	0,2,0,0
+
+    7868:	ca438001          	sfpstore	L9,0,0,7
+
+    786c:	e0020000          	ttincrwc	0,2,0,0
+
+    7870:	ca438001          	sfpstore	L9,0,0,7
+
+    7874:	e0020000          	ttincrwc	0,2,0,0
+
+    7878:	ca438001          	sfpstore	L9,0,0,7
+
+    787c:	e0020000          	ttincrwc	0,2,0,0
+
+    7880:	ca438001          	sfpstore	L9,0,0,7
+
+    7884:	e0020000          	ttincrwc	0,2,0,0
+
+    7888:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    788c:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    7890:	fff78793          	addi	a5,a5,-1
+    7894:	fa079ae3          	bnez	a5,7848 <.L71>
+    7898:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    789c:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    78a0:	b20106b7          	lui	a3,0xb2010
+
+    78a4:	00f037b3          	snez	a5,a5
+
+    78a8:	04068693          	addi	a3,a3,64 # b2010040 <__device_print_strings_info_end+0xabb10040>
+
+    78ac:	00979793          	slli	a5,a5,0x9
+
+    78b0:	00d787b3          	add	a5,a5,a3
+    78b4:	00f9a023          	sw	a5,0(s3)
+
+    78b8:	8a000042          	ttstallwait	256,16
+
+    78bc:	00400793          	li	a5,4
+
+    78c0:	ca438001          	sfpstore	L9,0,0,7
+
+    78c4:	e0020000          	ttincrwc	0,2,0,0
+
+    78c8:	ca438001          	sfpstore	L9,0,0,7
+
+    78cc:	e0020000          	ttincrwc	0,2,0,0
+
+    78d0:	ca438001          	sfpstore	L9,0,0,7
+
+    78d4:	e0020000          	ttincrwc	0,2,0,0
+
+    78d8:	ca438001          	sfpstore	L9,0,0,7
+
+    78dc:	e0020000          	ttincrwc	0,2,0,0
+
+    78e0:	ca438001          	sfpstore	L9,0,0,7
+
+    78e4:	e0020000          	ttincrwc	0,2,0,0
+
+    78e8:	ca438001          	sfpstore	L9,0,0,7
+
+    78ec:	e0020000          	ttincrwc	0,2,0,0
+
+    78f0:	ca438001          	sfpstore	L9,0,0,7
+
+    78f4:	e0020000          	ttincrwc	0,2,0,0
+
+    78f8:	ca438001          	sfpstore	L9,0,0,7
+
+    78fc:	e0020000          	ttincrwc	0,2,0,0
+
+    7900:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    7904:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    7908:	fff78793          	addi	a5,a5,-1
+    790c:	fa079ae3          	bnez	a5,78c0 <.L72>
+    7910:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    7914:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7918:	b20106b7          	lui	a3,0xb2010
+
+    791c:	00f037b3          	snez	a5,a5
+
+    7920:	08068693          	addi	a3,a3,128 # b2010080 <__device_print_strings_info_end+0xabb10080>
+
+    7924:	00979793          	slli	a5,a5,0x9
+
+    7928:	00d787b3          	add	a5,a5,a3
+    792c:	00f9a023          	sw	a5,0(s3)
+
+    7930:	8a000042          	ttstallwait	256,16
+
+    7934:	00400793          	li	a5,4
+
+    7938:	ca438001          	sfpstore	L9,0,0,7
+
+    793c:	e0020000          	ttincrwc	0,2,0,0
+
+    7940:	ca438001          	sfpstore	L9,0,0,7
+
+    7944:	e0020000          	ttincrwc	0,2,0,0
+
+    7948:	ca438001          	sfpstore	L9,0,0,7
+
+    794c:	e0020000          	ttincrwc	0,2,0,0
+
+    7950:	ca438001          	sfpstore	L9,0,0,7
+
+    7954:	e0020000          	ttincrwc	0,2,0,0
+
+    7958:	ca438001          	sfpstore	L9,0,0,7
+
+    795c:	e0020000          	ttincrwc	0,2,0,0
+
+    7960:	ca438001          	sfpstore	L9,0,0,7
+
+    7964:	e0020000          	ttincrwc	0,2,0,0
+
+    7968:	ca438001          	sfpstore	L9,0,0,7
+
+    796c:	e0020000          	ttincrwc	0,2,0,0
+
+    7970:	ca438001          	sfpstore	L9,0,0,7
+
+    7974:	e0020000          	ttincrwc	0,2,0,0
+
+    7978:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    797c:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    7980:	fff78793          	addi	a5,a5,-1
+    7984:	fa079ae3          	bnez	a5,7938 <.L73>
+    7988:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    798c:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7990:	b20106b7          	lui	a3,0xb2010
+
+    7994:	00f037b3          	snez	a5,a5
+
+    7998:	0c068693          	addi	a3,a3,192 # b20100c0 <__device_print_strings_info_end+0xabb100c0>
+
+    799c:	00979793          	slli	a5,a5,0x9
+
+    79a0:	00d787b3          	add	a5,a5,a3
+    79a4:	00f9a023          	sw	a5,0(s3)
+
+    79a8:	8a000042          	ttstallwait	256,16
+
+    79ac:	00400793          	li	a5,4
+
+    79b0:	ca838001          	sfpstore	L10,0,0,7
+
+    79b4:	e0020000          	ttincrwc	0,2,0,0
+
+    79b8:	ca838001          	sfpstore	L10,0,0,7
+
+    79bc:	e0020000          	ttincrwc	0,2,0,0
+
+    79c0:	ca838001          	sfpstore	L10,0,0,7
+
+    79c4:	e0020000          	ttincrwc	0,2,0,0
+
+    79c8:	ca838001          	sfpstore	L10,0,0,7
+
+    79cc:	e0020000          	ttincrwc	0,2,0,0
+
+    79d0:	ca838001          	sfpstore	L10,0,0,7
+
+    79d4:	e0020000          	ttincrwc	0,2,0,0
+
+    79d8:	ca838001          	sfpstore	L10,0,0,7
+
+    79dc:	e0020000          	ttincrwc	0,2,0,0
+
+    79e0:	ca838001          	sfpstore	L10,0,0,7
+
+    79e4:	e0020000          	ttincrwc	0,2,0,0
+
+    79e8:	ca838001          	sfpstore	L10,0,0,7
+
+    79ec:	e0020000          	ttincrwc	0,2,0,0
+
+    79f0:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    79f4:	dc480010          	ttsetrwc	0,4,8,0,0,4
+
+    79f8:	fff78793          	addi	a5,a5,-1
+    79fc:	fa079ae3          	bnez	a5,79b0 <.L74>
+    7a00:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    7a04:	c83c0002          	ttsetc16	15,0
+
+    7a08:	c87c0002          	ttsetc16	31,0
+
+    7a0c:	c8c80002          	ttsetc16	50,0
+
+    7a10:	c8300006          	ttsetc16	12,1
+
+    7a14:	c8700006          	ttsetc16	28,1
+
+    7a18:	c8bc0002          	ttsetc16	47,0
+
+    7a1c:	c8380022          	ttsetc16	14,8
+
+    7a20:	c8780022          	ttsetc16	30,8
+
+    7a24:	c8c40002          	ttsetc16	49,0
+
+    7a28:	ffe806b7          	lui	a3,0xffe80
+    7a2c:	00868693          	addi	a3,a3,8 # ffe80008 <__instrn_buffer+0x40008>
+    7a30:	00f6a023          	sw	a5,0(a3)
+    7a34:	0006a783          	lw	a5,0(a3)
+    7a38:	00f07033          	and	zero,zero,a5
+
+    7a3c:	ffb807b7          	lui	a5,0xffb80
+    7a40:	00400693          	li	a3,4
+    7a44:	00d7a023          	sw	a3,0(a5) # ffb80000 <__global_pointer$+0x7f810>
+
+    7a48:	00200693          	li	a3,2
+    7a4c:	00d7a223          	sw	a3,4(a5)
+
+    7a50:	02000637          	lui	a2,0x2000
+
+    7a54:	37c006b7          	lui	a3,0x37c00
+
+    7a58:	00c7a423          	sw	a2,8(a5)
+
+    7a5c:	00368693          	addi	a3,a3,3 # 37c00003 <__device_print_strings_info_end+0x31700003>
+    7a60:	00d7a623          	sw	a3,12(a5)
+
+    7a64:	00c7a823          	sw	a2,16(a5)
+
+    7a68:	280086b7          	lui	a3,0x28008
+    7a6c:	00d7aa23          	sw	a3,20(a5)
+
+    7a70:	00c7ac23          	sw	a2,24(a5)
+
+    7a74:	00d7ae23          	sw	a3,28(a5)
+
+    7a78:	02d7a023          	sw	a3,32(a5)
+
+    7a7c:	c81c0002          	ttsetc16	7,0
+
+    7a80:	dc00003c          	ttsetrwc	0,0,0,0,0,15
+
+    7a84:	9804080a          	ttsemwait	2,128,2
+
+    7a88:	88042042          	ttstallwait	2,2064
+
+    7a8c:	90000802          	ttsempost	128
+
+    7a90:	03c42783          	lw	a5,60(s0) # ffe8003c <__instrn_buffer+0x4003c>
+
+    7a94:	0ff7f793          	zext.b	a5,a5
+    7a98:	fe078ce3          	beqz	a5,7a90 <.L75>
+    7a9c:	00100793          	li	a5,1
+    7aa0:	02f42e23          	sw	a5,60(s0)
+
+    7aa4:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7aa8:	ffec16b7          	lui	a3,0xffec1
+
+    7aac:	00f037b3          	snez	a5,a5
+    7ab0:	00979793          	slli	a5,a5,0x9
+
+    7ab4:	10078793          	addi	a5,a5,256
+
+    7ab8:	00f6a023          	sw	a5,0(a3) # ffec1000 <__instrn_buffer+0x81000>
+
+    7abc:	98040046          	ttsemwait	2,4,1
+
+    7ac0:	88042042          	ttstallwait	2,2064
+
+    7ac4:	94000042          	ttsemget	4
+
+    7ac8:	100ec7b7          	lui	a5,0x100ec
+
+    7acc:	00478693          	addi	a3,a5,4 # 100ec004 <__device_print_strings_info_end+0x9bec004>
+
+    7ad0:	00f9a023          	sw	a5,0(s3)
+
+    7ad4:	00178793          	addi	a5,a5,1
+
+    7ad8:	fed79ce3          	bne	a5,a3,7ad0 <.L76>
+    7adc:	c83c0002          	ttsetc16	15,0
+
+    7ae0:	c87c0002          	ttsetc16	31,0
+
+    7ae4:	c8c80002          	ttsetc16	50,0
+
+    7ae8:	c8300006          	ttsetc16	12,1
+
+    7aec:	c8700006          	ttsetc16	28,1
+
+    7af0:	c8bc0002          	ttsetc16	47,0
+
+    7af4:	c8380022          	ttsetc16	14,8
+
+    7af8:	c8780022          	ttsetc16	30,8
+
+    7afc:	c8c40002          	ttsetc16	49,0
+
+    7b00:	ffe80637          	lui	a2,0xffe80
+    7b04:	00000693          	li	a3,0
+    7b08:	00860613          	addi	a2,a2,8 # ffe80008 <__instrn_buffer+0x40008>
+    7b0c:	00d62023          	sw	a3,0(a2)
+    7b10:	00062683          	lw	a3,0(a2)
+    7b14:	00d07033          	and	zero,zero,a3
+
+    7b18:	ffb806b7          	lui	a3,0xffb80
+    7b1c:	00400613          	li	a2,4
+    7b20:	00c6a023          	sw	a2,0(a3) # ffb80000 <__global_pointer$+0x7f810>
+
+    7b24:	00200613          	li	a2,2
+    7b28:	00c6a223          	sw	a2,4(a3)
+
+    7b2c:	020005b7          	lui	a1,0x2000
+
+    7b30:	37c00637          	lui	a2,0x37c00
+
+    7b34:	00b6a423          	sw	a1,8(a3)
+
+    7b38:	00360613          	addi	a2,a2,3 # 37c00003 <__device_print_strings_info_end+0x31700003>
+    7b3c:	00c6a623          	sw	a2,12(a3)
+
+    7b40:	00b6a823          	sw	a1,16(a3)
+
+    7b44:	28008637          	lui	a2,0x28008
+    7b48:	00c6aa23          	sw	a2,20(a3)
+
+    7b4c:	00b6ac23          	sw	a1,24(a3)
+
+    7b50:	00c6ae23          	sw	a2,28(a3)
+
+    7b54:	02c6a023          	sw	a2,32(a3)
+
+    7b58:	c81c0002          	ttsetc16	7,0
+
+    7b5c:	dc00003c          	ttsetrwc	0,0,0,0,0,15
+
+    7b60:	9804080a          	ttsemwait	2,128,2
+
+    7b64:	88042042          	ttstallwait	2,2064
+
+    7b68:	90000802          	ttsempost	128
+
+    7b6c:	03c42683          	lw	a3,60(s0)
+
+    7b70:	0ff6f693          	zext.b	a3,a3
+    7b74:	fe068ce3          	beqz	a3,7b6c <.L77>
+    7b78:	00100693          	li	a3,1
+    7b7c:	02d42e23          	sw	a3,60(s0)
+
+    7b80:	8101a683          	lw	a3,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7b84:	ffec1637          	lui	a2,0xffec1
+
+    7b88:	00d036b3          	snez	a3,a3
+    7b8c:	00969693          	slli	a3,a3,0x9
+
+    7b90:	14068693          	addi	a3,a3,320
+
+    7b94:	00d62023          	sw	a3,0(a2) # ffec1000 <__instrn_buffer+0x81000>
+
+    7b98:	98040046          	ttsemwait	2,4,1
+
+    7b9c:	88042042          	ttstallwait	2,2064
+
+    7ba0:	94000042          	ttsemget	4
+
+    7ba4:	100ec6b7          	lui	a3,0x100ec
+    7ba8:	00868693          	addi	a3,a3,8 # 100ec008 <__device_print_strings_info_end+0x9bec008>
+
+    7bac:	00f9a023          	sw	a5,0(s3)
+
+    7bb0:	00178793          	addi	a5,a5,1
+
+    7bb4:	fed79ce3          	bne	a5,a3,7bac <.L78>
+    7bb8:	a6dff06f          	j	7624 <.L79>
+    7bbc:	dc000010          	ttsetrwc	0,0,0,0,0,4
+
+    7bc0:	88042042          	ttstallwait	2,2064
+
+    7bc4:	90000022          	ttsempost	2
+
+    7bc8:	9a84002a          	ttsemwait	322,2,2
+
+    7bcc:	ffec17b7          	lui	a5,0xffec1
+    7bd0:	0007a483          	lw	s1,0(a5) # ffec1000 <__instrn_buffer+0x81000>
+
+    7bd4:	0ff0000f          	fence
+
+    7bd8:	8301ad83          	lw	s11,-2000(gp) # ffb00020 <(anonymous namespace)::g_blend_t_eps>
+
+    7bdc:	fffd8793          	addi	a5,s11,-1
+
+    7be0:	2d67f263          	bgeu	a5,s6,7ea4 <.L165>
+    7be4:	000107b7          	lui	a5,0x10
+    7be8:	fff78793          	addi	a5,a5,-1 # ffff <.LASF1531+0x2ca6>
+    7bec:	00fd86b3          	add	a3,s11,a5
+    7bf0:	000083b7          	lui	t2,0x8
+
+    7bf4:	0106d813          	srli	a6,a3,0x10
+
+    7bf8:	f8038393          	addi	t2,t2,-128 # 7f80 <.LBB2906>
+    7bfc:	08048713          	addi	a4,s1,128
+    7c00:	410383b3          	sub	t2,t2,a6
+    7c04:	00000693          	li	a3,0
+
+    7c08:	00000493          	li	s1,0
+
+    7c0c:	02000313          	li	t1,32
+
+    7c10:	f8070613          	addi	a2,a4,-128
+
+    7c14:	00000793          	li	a5,0
+
+    7c18:	00000893          	li	a7,0
+
+    7c1c:	00062f83          	lw	t6,0(a2)
+
+    7c20:	00462503          	lw	a0,4(a2)
+
+    7c24:	00862e83          	lw	t4,8(a2)
+
+    7c28:	080fcf33          	zext.h	t5,t6
+
+    7c2c:	01055593          	srli	a1,a0,0x10
+
+    7c30:	08054533          	zext.h	a0,a0
+
+    7c34:	080ec2b3          	zext.h	t0,t4
+
+    7c38:	010ede93          	srli	t4,t4,0x10
+
+    7c3c:	410e8eb3          	sub	t4,t4,a6
+
+    7c40:	410585b3          	sub	a1,a1,a6
+
+    7c44:	0bd5d5b3          	minu	a1,a1,t4
+
+    7c48:	00c62e83          	lw	t4,12(a2)
+
+    7c4c:	410f0f33          	sub	t5,t5,a6
+
+    7c50:	41050533          	sub	a0,a0,a6
+
+    7c54:	410282b3          	sub	t0,t0,a6
+
+    7c58:	010fdf93          	srli	t6,t6,0x10
+
+    7c5c:	0a555533          	minu	a0,a0,t0
+    7c60:	0be55533          	minu	a0,a0,t5
+
+    7c64:	010edf13          	srli	t5,t4,0x10
+
+    7c68:	080eceb3          	zext.h	t4,t4
+
+    7c6c:	410f8fb3          	sub	t6,t6,a6
+
+    7c70:	410e8eb3          	sub	t4,t4,a6
+
+    7c74:	0bf5d5b3          	minu	a1,a1,t6
+
+    7c78:	410f0f33          	sub	t5,t5,a6
+
+    7c7c:	0bd55533          	minu	a0,a0,t4
+
+    7c80:	0be5d5b3          	minu	a1,a1,t5
+
+    7c84:	00a3b533          	sltu	a0,t2,a0
+
+    7c88:	00b3b5b3          	sltu	a1,t2,a1
+    7c8c:	0015b593          	seqz	a1,a1
+
+    7c90:	00153513          	seqz	a0,a0
+
+    7c94:	00a8e8b3          	or	a7,a7,a0
+
+    7c98:	00b7e7b3          	or	a5,a5,a1
+
+    7c9c:	00f8f5b3          	and	a1,a7,a5
+
+    7ca0:	01060613          	addi	a2,a2,16
+
+    7ca4:	1e059c63          	bnez	a1,7e9c <.L118>
+    7ca8:	f6e61ae3          	bne	a2,a4,7c1c <.L104>
+    7cac:	00179793          	slli	a5,a5,0x1
+
+    7cb0:	0117e7b3          	or	a5,a5,a7
+
+    7cb4:	00d797b3          	sll	a5,a5,a3
+
+    7cb8:	00268693          	addi	a3,a3,2
+
+    7cbc:	00f4e4b3          	or	s1,s1,a5
+
+    7cc0:	08070713          	addi	a4,a4,128
+
+    7cc4:	f46696e3          	bne	a3,t1,7c10 <.L105>
+    7cc8:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7ccc:	b2010737          	lui	a4,0xb2010
+
+    7cd0:	00f037b3          	snez	a5,a5
+    7cd4:	00979793          	slli	a5,a5,0x9
+
+    7cd8:	00e787b3          	add	a5,a5,a4
+    7cdc:	00f9a023          	sw	a5,0(s3)
+
+    7ce0:	8a000042          	ttstallwait	256,16
+
+    7ce4:	005c1713          	slli	a4,s8,0x5
+    7ce8:	01c70733          	add	a4,a4,t3
+
+    7cec:	00c72783          	lw	a5,12(a4) # b201000c <__device_print_strings_info_end+0xabb1000c>
+
+    7cf0:	001c8c93          	addi	s9,s9,1
+
+    7cf4:	00f4fdb3          	and	s11,s1,a5
+
+    7cf8:	aa0d80e3          	beqz	s11,7798 <.L110>
+    7cfc:	01072883          	lw	a7,16(a4)
+
+    7d00:	01012783          	lw	a5,16(sp)
+
+    7d04:	01872603          	lw	a2,24(a4)
+
+    7d08:	0808c333          	zext.h	t1,a7
+
+    7d0c:	01c72683          	lw	a3,28(a4)
+
+    7d10:	00072803          	lw	a6,0(a4)
+    7d14:	00472503          	lw	a0,4(a4)
+    7d18:	00872583          	lw	a1,8(a4)
+    7d1c:	01472703          	lw	a4,20(a4)
+
+    7d20:	00f30333          	add	t1,t1,a5
+    7d24:	0069a023          	sw	t1,0(s3)
+    7d28:	01412783          	lw	a5,20(sp)
+    7d2c:	0108d893          	srli	a7,a7,0x10
+
+    7d30:	00f888b3          	add	a7,a7,a5
+    7d34:	0119a023          	sw	a7,0(s3)
+
+    7d38:	c8038601          	sfpstore	L0,384,0,7
+
+    7d3c:	01812783          	lw	a5,24(sp)
+    7d40:	080748b3          	zext.h	a7,a4
+    7d44:	00f888b3          	add	a7,a7,a5
+    7d48:	0119a023          	sw	a7,0(s3)
+    7d4c:	01075713          	srli	a4,a4,0x10
+
+    7d50:	710808b7          	lui	a7,0x71080
+    7d54:	01170733          	add	a4,a4,a7
+    7d58:	00e9a023          	sw	a4,0(s3)
+
+    7d5c:	c8038609          	sfpstore	L0,386,0,7
+
+    7d60:	08084733          	zext.h	a4,a6
+    7d64:	710208b7          	lui	a7,0x71020
+    7d68:	01170733          	add	a4,a4,a7
+    7d6c:	00e9a023          	sw	a4,0(s3)
+    7d70:	01085713          	srli	a4,a6,0x10
+    7d74:	71080837          	lui	a6,0x71080
+
+    7d78:	01070733          	add	a4,a4,a6
+    7d7c:	00e9a023          	sw	a4,0(s3)
+
+    7d80:	c8038611          	sfpstore	L0,388,0,7
+
+    7d84:	08054733          	zext.h	a4,a0
+    7d88:	71020837          	lui	a6,0x71020
+    7d8c:	01070733          	add	a4,a4,a6
+    7d90:	00e9a023          	sw	a4,0(s3)
+    7d94:	01055713          	srli	a4,a0,0x10
+    7d98:	71080537          	lui	a0,0x71080
+
+    7d9c:	00a70733          	add	a4,a4,a0
+    7da0:	00e9a023          	sw	a4,0(s3)
+
+    7da4:	c8038619          	sfpstore	L0,390,0,7
+
+    7da8:	0805c733          	zext.h	a4,a1
+    7dac:	71020537          	lui	a0,0x71020
+    7db0:	00a70733          	add	a4,a4,a0
+    7db4:	00e9a023          	sw	a4,0(s3)
+    7db8:	0105d713          	srli	a4,a1,0x10
+    7dbc:	710805b7          	lui	a1,0x71080
+
+    7dc0:	00b70733          	add	a4,a4,a1
+    7dc4:	00e9a023          	sw	a4,0(s3)
+
+    7dc8:	c8038621          	sfpstore	L0,392,0,7
+
+    7dcc:	08064733          	zext.h	a4,a2
+
+    7dd0:	710205b7          	lui	a1,0x71020
+    7dd4:	00b70733          	add	a4,a4,a1
+
+    7dd8:	00e9a023          	sw	a4,0(s3)
+
+    7ddc:	40000002          	sfpcast	L0,L0,0
+
+    7de0:	c0438651          	sfpload	L1,404,0,7
+
+    7de4:	18006402          	sfpmul	L0,L0,L1,L9,0
+
+    7de8:	c8038629          	sfpstore	L0,394,0,7
+
+    7dec:	01065713          	srli	a4,a2,0x10
+
+    7df0:	71020637          	lui	a2,0x71020
+
+    7df4:	00c70733          	add	a4,a4,a2
+
+    7df8:	00e9a023          	sw	a4,0(s3)
+
+    7dfc:	40000002          	sfpcast	L0,L0,0
+
+    7e00:	c0438651          	sfpload	L1,404,0,7
+
+    7e04:	18006402          	sfpmul	L0,L0,L1,L9,0
+
+    7e08:	c8038639          	sfpstore	L0,398,0,7
+
+    7e0c:	0806c733          	zext.h	a4,a3
+
+    7e10:	71020637          	lui	a2,0x71020
+    7e14:	00c70733          	add	a4,a4,a2
+
+    7e18:	00e9a023          	sw	a4,0(s3)
+
+    7e1c:	40000002          	sfpcast	L0,L0,0
+
+    7e20:	c0438651          	sfpload	L1,404,0,7
+
+    7e24:	18006402          	sfpmul	L0,L0,L1,L9,0
+
+    7e28:	c8038641          	sfpstore	L0,400,0,7
+
+    7e2c:	0106d713          	srli	a4,a3,0x10
+
+    7e30:	710206b7          	lui	a3,0x71020
+
+    7e34:	00d70733          	add	a4,a4,a3
+
+    7e38:	00e9a023          	sw	a4,0(s3)
+
+    7e3c:	40000002          	sfpcast	L0,L0,0
+
+    7e40:	c0438651          	sfpload	L1,404,0,7
+
+    7e44:	18006402          	sfpmul	L0,L0,L1,L9,0
+
+    7e48:	c8038649          	sfpstore	L0,402,0,7
+
+    7e4c:	00912623          	sw	s1,12(sp)
+    7e50:	00300d13          	li	s10,3
+    7e54:	000d8493          	mv	s1,s11
+
+    7e58:	01212423          	sw	s2,8(sp)
+    7e5c:	000e0d93          	mv	s11,t3
+
+    7e60:	60149793          	ctz	a5,s1
+
+    7e64:	ffe7f913          	andi	s2,a5,-2
+
+    7e68:	0124d733          	srl	a4,s1,s2
+
+    7e6c:	00377713          	andi	a4,a4,3
+
+    7e70:	20e92733          	sh1add	a4,s2,a4
+    7e74:	21474733          	sh2add	a4,a4,s4
+
+    7e78:	00072703          	lw	a4,0(a4)
+    7e7c:	000700e7          	jalr	a4
+
+    7e80:	012d17b3          	sll	a5,s10,s2
+
+    7e84:	40f4f4b3          	andn	s1,s1,a5
+
+    7e88:	fc049ce3          	bnez	s1,7e60 <.L109>
+    7e8c:	00812903          	lw	s2,8(sp)
+    7e90:	00c12483          	lw	s1,12(sp)
+
+    7e94:	000d8e13          	mv	t3,s11
+    7e98:	901ff06f          	j	7798 <.L110>
+    7e9c:	00300793          	li	a5,3
+
+    7ea0:	e15ff06f          	j	7cb4 <.L103>
+    7ea4:	00000593          	li	a1,0
+    7ea8:	03010513          	addi	a0,sp,48
+    7eac:	08000613          	li	a2,128
+    7eb0:	01c12423          	sw	t3,8(sp)
+    7eb4:	41c020ef          	jal	a2d0 <memset>
+
+    7eb8:	00812e03          	lw	t3,8(sp)
+
+    7ebc:	00050793          	mv	a5,a0
+
+    7ec0:	00000593          	li	a1,0
+
+    7ec4:	ffff08b7          	lui	a7,0xffff0
+
+    7ec8:	40000813          	li	a6,1024
+
+    7ecc:	0015d713          	srli	a4,a1,0x1
+
+    7ed0:	0055d613          	srli	a2,a1,0x5
+
+    7ed4:	20974733          	sh2add	a4,a4,s1
+    7ed8:	00072703          	lw	a4,0(a4)
+
+    7edc:	00166693          	ori	a3,a2,1
+
+    7ee0:	0015f513          	andi	a0,a1,1
+
+    7ee4:	20f6c6b3          	sh2add	a3,a3,a5
+
+    7ee8:	ffe67613          	andi	a2,a2,-2
+
+    7eec:	20f64633          	sh2add	a2,a2,a5
+
+    7ef0:	0a050c63          	beqz	a0,7fa8 <.L82>
+    7ef4:	0006a603          	lw	a2,0(a3) # 71020000 <__device_print_strings_info_end+0x6ab20000>
+
+    7ef8:	01177733          	and	a4,a4,a7
+
+    7efc:	00e63633          	sltu	a2,a2,a4
+
+    7f00:	01573533          	sltu	a0,a4,s5
+    7f04:	00a67633          	and	a2,a2,a0
+    7f08:	0c061063          	bnez	a2,7fc8 <.L166>
+    7f0c:	00158593          	addi	a1,a1,1 # 71020001 <__device_print_strings_info_end+0x6ab20001>
+
+    7f10:	fb059ee3          	bne	a1,a6,7ecc <.L88>
+    7f14:	80000337          	lui	t1,0x80000
+    7f18:	fff30713          	addi	a4,t1,-1 # 7fffffff <__device_print_strings_info_end+0x79afffff>
+
+    7f1c:	00edf733          	and	a4,s11,a4
+    7f20:	00000493          	li	s1,0
+
+    7f24:	daeb62e3          	bltu	s6,a4,7cc8 <.L102>
+    7f28:	006de333          	or	t1,s11,t1
+    7f2c:	0a0dd863          	bgez	s11,7fdc <.L155>
+    7f30:	fffdc313          	not	t1,s11
+    7f34:	0a0dd463          	bgez	s11,7fdc <.L155>
+    7f38:	80000537          	lui	a0,0x80000
+    7f3c:	fff50513          	addi	a0,a0,-1 # 7fffffff <__device_print_strings_info_end+0x79afffff>
+
+    7f40:	00000493          	li	s1,0
+
+    7f44:	00100893          	li	a7,1
+
+    7f48:	02000813          	li	a6,32
+
+    7f4c:	0007a703          	lw	a4,0(a5)
+
+    7f50:	01a89633          	sll	a2,a7,s10
+
+    7f54:	00a776b3          	and	a3,a4,a0
+
+    7f58:	00db6e63          	bltu	s6,a3,7f74 <.L96>
+    7f5c:	01b766b3          	or	a3,a4,s11
+
+    7f60:	00169593          	slli	a1,a3,0x1
+    7f64:	00058663          	beqz	a1,7f70 <.L98>
+    7f68:	006706b3          	add	a3,a4,t1
+
+    7f6c:	02074a63          	bltz	a4,7fa0 <.L167>
+    7f70:	00c4e4b3          	or	s1,s1,a2
+
+    7f74:	001d0d13          	addi	s10,s10,1
+
+    7f78:	00478793          	addi	a5,a5,4
+    7f7c:	fd0d18e3          	bne	s10,a6,7f4c <.L101>
+    7f80:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    7f84:	b2010737          	lui	a4,0xb2010
+
+    7f88:	00f037b3          	snez	a5,a5
+    7f8c:	00979793          	slli	a5,a5,0x9
+
+    7f90:	00e787b3          	add	a5,a5,a4
+    7f94:	00f9a023          	sw	a5,0(s3)
+
+    7f98:	8a000042          	ttstallwait	256,16
+
+    7f9c:	d49ff06f          	j	7ce4 <.L168>
+    7fa0:	fce6f8e3          	bgeu	a3,a4,7f70 <.L98>
+    7fa4:	fd1ff06f          	j	7f74 <.L96>
+    7fa8:	00062683          	lw	a3,0(a2) # 71020000 <__device_print_strings_info_end+0x6ab20000>
+    7fac:	01071713          	slli	a4,a4,0x10
+
+    7fb0:	00e6b6b3          	sltu	a3,a3,a4
+
+    7fb4:	01573533          	sltu	a0,a4,s5
+    7fb8:	00a6f6b3          	and	a3,a3,a0
+    7fbc:	00069a63          	bnez	a3,7fd0 <.L169>
+    7fc0:	00158593          	addi	a1,a1,1
+
+    7fc4:	f09ff06f          	j	7ecc <.L88>
+    7fc8:	00e6a023          	sw	a4,0(a3)
+    7fcc:	f41ff06f          	j	7f0c <.L84>
+    7fd0:	00e62023          	sw	a4,0(a2)
+
+    7fd4:	00158593          	addi	a1,a1,1
+
+    7fd8:	ef5ff06f          	j	7ecc <.L88>
+    7fdc:	80000f37          	lui	t5,0x80000
+    7fe0:	ffff0813          	addi	a6,t5,-1 # 7fffffff <__device_print_strings_info_end+0x79afffff>
+
+    7fe4:	00000493          	li	s1,0
+
+    7fe8:	00100513          	li	a0,1
+
+    7fec:	02000593          	li	a1,32
+
+    7ff0:	0007a703          	lw	a4,0(a5)
+
+    7ff4:	01a51633          	sll	a2,a0,s10
+
+    7ff8:	010776b3          	and	a3,a4,a6
+
+    7ffc:	02db6063          	bltu	s6,a3,801c <.L93>
+    8000:	00ede6b3          	or	a3,s11,a4
+
+    8004:	00169893          	slli	a7,a3,0x1
+    8008:	00088863          	beqz	a7,8018 <.L94>
+    800c:	01e766b3          	or	a3,a4,t5
+
+    8010:	00074663          	bltz	a4,801c <.L93>
+    8014:	0066e463          	bltu	a3,t1,801c <.L93>
+    8018:	00c4e4b3          	or	s1,s1,a2
+
+    801c:	001d0d13          	addi	s10,s10,1
+
+    8020:	00478793          	addi	a5,a5,4
+    8024:	fcbd16e3          	bne	s10,a1,7ff0 <.L95>
+    8028:	8101a783          	lw	a5,-2032(gp) # ffb00000 <ckernel::dest_offset_id>
+
+    802c:	b2010737          	lui	a4,0xb2010
+
+    8030:	00f037b3          	snez	a5,a5
+    8034:	00979793          	slli	a5,a5,0x9
+
+    8038:	00e787b3          	add	a5,a5,a4
+    803c:	00f9a023          	sw	a5,0(s3)
+
+    8040:	8a000042          	ttstallwait	256,16
+
+    8044:	ca1ff06f          	j	7ce4 <.L168>
+    8048:	ffec17b7          	lui	a5,0xffec1
+    804c:	0007a783          	lw	a5,0(a5) # ffec1000 <__instrn_buffer+0x81000>
+
+    8050:	0047a783          	lw	a5,4(a5)
+
+    8054:	0087f713          	andi	a4,a5,8
+
+    8058:	d8070e63          	beqz	a4,75f4 <.L66>
+    805c:	f88ff06f          	j	77e4 <.L162>
+    8060:	00068793          	mv	a5,a3
+    8064:	920ff06f          	j	7184 <.L53>
+00008068 <void (anonymous namespace)::blend_pair_body<0ul, 1ul>()>:
+    8068:	c0838401          	sfpload	L2,256,0,7
+
+    806c:	c0438501          	sfpload	L1,320,0,7
+
+    8070:	10000340          	ttreplay	0,13,0,0
+
+    8074:	3c000002          	sfpnop
+
+    8078:	48002406          	sfpswap	L0,L9,1
+
+    807c:	3c000002          	sfpnop
+
+    8080:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8084:	c1038659          	sfpload	L4,406,0,7
+
+    8088:	d50bf801          	sfpaddi	L0,17150,0
+
+    808c:	3c000002          	sfpnop
+
+    8090:	48000246          	sfpswap	L9,L0,1
+
+    8094:	3c000002          	sfpnop
+
+    8098:	dc000041          	sfpexexp	L1,L0,0
+
+    809c:	e0000001          	sfpexman	L0,L0,0
+
+    80a0:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    80a4:	dc000045          	sfpexexp	L1,L0,1
+
+    80a8:	e0000005          	sfpexman	L0,L0,1
+
+    80ac:	40000002          	sfpcast	L0,L0,0
+
+    80b0:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    80b4:	c1438629          	sfpload	L5,394,0,7
+
+    80b8:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    80bc:	c1838661          	sfpload	L6,408,0,7
+
+    80c0:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    80c4:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    80c8:	c1c38631          	sfpload	L7,396,0,7
+
+    80cc:	48001806          	sfpswap	L0,L6,1
+
+    80d0:	3c000002          	sfpnop
+
+    80d4:	c0c38639          	sfpload	L3,398,0,7
+
+    80d8:	c1038641          	sfpload	L4,400,0,7
+
+    80dc:	c1438649          	sfpload	L5,402,0,7
+
+    80e0:	100d04c0          	ttreplay	13,19,0,0
+
+    80e4:	00008067          	ret
+
+000080e8 <void (anonymous namespace)::blend_pair_body<0ul, 2ul>()>:
+    80e8:	c0838409          	sfpload	L2,258,0,7
+
+    80ec:	c0438509          	sfpload	L1,322,0,7
+
+    80f0:	10000340          	ttreplay	0,13,0,0
+
+    80f4:	3c000002          	sfpnop
+
+    80f8:	48002406          	sfpswap	L0,L9,1
+
+    80fc:	3c000002          	sfpnop
+
+    8100:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8104:	c1038659          	sfpload	L4,406,0,7
+
+    8108:	d50bf801          	sfpaddi	L0,17150,0
+
+    810c:	3c000002          	sfpnop
+
+    8110:	48000246          	sfpswap	L9,L0,1
+
+    8114:	3c000002          	sfpnop
+
+    8118:	dc000041          	sfpexexp	L1,L0,0
+
+    811c:	e0000001          	sfpexman	L0,L0,0
+
+    8120:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8124:	dc000045          	sfpexexp	L1,L0,1
+
+    8128:	e0000005          	sfpexman	L0,L0,1
+
+    812c:	40000002          	sfpcast	L0,L0,0
+
+    8130:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8134:	c1438629          	sfpload	L5,394,0,7
+
+    8138:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    813c:	c1838661          	sfpload	L6,408,0,7
+
+    8140:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8144:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8148:	c1c38631          	sfpload	L7,396,0,7
+
+    814c:	48001806          	sfpswap	L0,L6,1
+
+    8150:	3c000002          	sfpnop
+
+    8154:	c0c38639          	sfpload	L3,398,0,7
+
+    8158:	c1038641          	sfpload	L4,400,0,7
+
+    815c:	c1438649          	sfpload	L5,402,0,7
+
+    8160:	e0020000          	ttincrwc	0,2,0,0
+
+    8164:	100d04c0          	ttreplay	13,19,0,0
+
+    8168:	00008067          	ret
+
+0000816c <void (anonymous namespace)::blend_pair_body<0ul, 3ul>()>:
+    816c:	c0838401          	sfpload	L2,256,0,7
+
+    8170:	c0438501          	sfpload	L1,320,0,7
+
+    8174:	10000340          	ttreplay	0,13,0,0
+
+    8178:	3c000002          	sfpnop
+
+    817c:	48002406          	sfpswap	L0,L9,1
+
+    8180:	3c000002          	sfpnop
+
+    8184:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8188:	c1038659          	sfpload	L4,406,0,7
+
+    818c:	d50bf801          	sfpaddi	L0,17150,0
+
+    8190:	3c000002          	sfpnop
+
+    8194:	48000246          	sfpswap	L9,L0,1
+
+    8198:	3c000002          	sfpnop
+
+    819c:	dc000041          	sfpexexp	L1,L0,0
+
+    81a0:	e0000001          	sfpexman	L0,L0,0
+
+    81a4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    81a8:	dc000045          	sfpexexp	L1,L0,1
+
+    81ac:	e0000005          	sfpexman	L0,L0,1
+
+    81b0:	40000002          	sfpcast	L0,L0,0
+
+    81b4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    81b8:	c1438629          	sfpload	L5,394,0,7
+
+    81bc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    81c0:	c1838661          	sfpload	L6,408,0,7
+
+    81c4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    81c8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    81cc:	c1c38631          	sfpload	L7,396,0,7
+
+    81d0:	48001806          	sfpswap	L0,L6,1
+
+    81d4:	3c000002          	sfpnop
+
+    81d8:	c0c38639          	sfpload	L3,398,0,7
+
+    81dc:	c1038641          	sfpload	L4,400,0,7
+
+    81e0:	c1438649          	sfpload	L5,402,0,7
+
+    81e4:	100d04c0          	ttreplay	13,19,0,0
+
+    81e8:	c0838409          	sfpload	L2,258,0,7
+
+    81ec:	c0438509          	sfpload	L1,322,0,7
+
+    81f0:	10000340          	ttreplay	0,13,0,0
+
+    81f4:	3c000002          	sfpnop
+
+    81f8:	48002406          	sfpswap	L0,L9,1
+
+    81fc:	3c000002          	sfpnop
+
+    8200:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8204:	c1038659          	sfpload	L4,406,0,7
+
+    8208:	d50bf801          	sfpaddi	L0,17150,0
+
+    820c:	3c000002          	sfpnop
+
+    8210:	48000246          	sfpswap	L9,L0,1
+
+    8214:	3c000002          	sfpnop
+
+    8218:	dc000041          	sfpexexp	L1,L0,0
+
+    821c:	e0000001          	sfpexman	L0,L0,0
+
+    8220:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8224:	dc000045          	sfpexexp	L1,L0,1
+
+    8228:	e0000005          	sfpexman	L0,L0,1
+
+    822c:	40000002          	sfpcast	L0,L0,0
+
+    8230:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8234:	c1438629          	sfpload	L5,394,0,7
+
+    8238:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    823c:	c1838661          	sfpload	L6,408,0,7
+
+    8240:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8244:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8248:	c1c38631          	sfpload	L7,396,0,7
+
+    824c:	48001806          	sfpswap	L0,L6,1
+
+    8250:	3c000002          	sfpnop
+
+    8254:	c0c38639          	sfpload	L3,398,0,7
+
+    8258:	c1038641          	sfpload	L4,400,0,7
+
+    825c:	c1438649          	sfpload	L5,402,0,7
+
+    8260:	e0020000          	ttincrwc	0,2,0,0
+
+    8264:	100d04c0          	ttreplay	13,19,0,0
+
+    8268:	00008067          	ret
+
+0000826c <void (anonymous namespace)::blend_pair_body<1ul, 1ul>()>:
+    826c:	c0838411          	sfpload	L2,260,0,7
+
+    8270:	c0438511          	sfpload	L1,324,0,7
+
+    8274:	10000340          	ttreplay	0,13,0,0
+
+    8278:	3c000002          	sfpnop
+
+    827c:	48002406          	sfpswap	L0,L9,1
+
+    8280:	3c000002          	sfpnop
+
+    8284:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8288:	c1038659          	sfpload	L4,406,0,7
+
+    828c:	d50bf801          	sfpaddi	L0,17150,0
+
+    8290:	3c000002          	sfpnop
+
+    8294:	48000246          	sfpswap	L9,L0,1
+
+    8298:	3c000002          	sfpnop
+
+    829c:	dc000041          	sfpexexp	L1,L0,0
+
+    82a0:	e0000001          	sfpexman	L0,L0,0
+
+    82a4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    82a8:	dc000045          	sfpexexp	L1,L0,1
+
+    82ac:	e0000005          	sfpexman	L0,L0,1
+
+    82b0:	40000002          	sfpcast	L0,L0,0
+
+    82b4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    82b8:	c1438629          	sfpload	L5,394,0,7
+
+    82bc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    82c0:	c1838661          	sfpload	L6,408,0,7
+
+    82c4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    82c8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    82cc:	c1c38631          	sfpload	L7,396,0,7
+
+    82d0:	48001806          	sfpswap	L0,L6,1
+
+    82d4:	3c000002          	sfpnop
+
+    82d8:	c0c38639          	sfpload	L3,398,0,7
+
+    82dc:	c1038641          	sfpload	L4,400,0,7
+
+    82e0:	c1438649          	sfpload	L5,402,0,7
+
+    82e4:	e0040000          	ttincrwc	0,4,0,0
+
+    82e8:	100d04c0          	ttreplay	13,19,0,0
+
+    82ec:	00008067          	ret
+
+000082f0 <void (anonymous namespace)::blend_pair_body<1ul, 2ul>()>:
+    82f0:	c0838419          	sfpload	L2,262,0,7
+
+    82f4:	c0438519          	sfpload	L1,326,0,7
+
+    82f8:	10000340          	ttreplay	0,13,0,0
+
+    82fc:	3c000002          	sfpnop
+
+    8300:	48002406          	sfpswap	L0,L9,1
+
+    8304:	3c000002          	sfpnop
+
+    8308:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    830c:	c1038659          	sfpload	L4,406,0,7
+
+    8310:	d50bf801          	sfpaddi	L0,17150,0
+
+    8314:	3c000002          	sfpnop
+
+    8318:	48000246          	sfpswap	L9,L0,1
+
+    831c:	3c000002          	sfpnop
+
+    8320:	dc000041          	sfpexexp	L1,L0,0
+
+    8324:	e0000001          	sfpexman	L0,L0,0
+
+    8328:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    832c:	dc000045          	sfpexexp	L1,L0,1
+
+    8330:	e0000005          	sfpexman	L0,L0,1
+
+    8334:	40000002          	sfpcast	L0,L0,0
+
+    8338:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    833c:	c1438629          	sfpload	L5,394,0,7
+
+    8340:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8344:	c1838661          	sfpload	L6,408,0,7
+
+    8348:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    834c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8350:	c1c38631          	sfpload	L7,396,0,7
+
+    8354:	48001806          	sfpswap	L0,L6,1
+
+    8358:	3c000002          	sfpnop
+
+    835c:	c0c38639          	sfpload	L3,398,0,7
+
+    8360:	c1038641          	sfpload	L4,400,0,7
+
+    8364:	c1438649          	sfpload	L5,402,0,7
+
+    8368:	e0060000          	ttincrwc	0,6,0,0
+
+    836c:	100d04c0          	ttreplay	13,19,0,0
+
+    8370:	00008067          	ret
+
+00008374 <void (anonymous namespace)::blend_pair_body<1ul, 3ul>()>:
+    8374:	c0838411          	sfpload	L2,260,0,7
+
+    8378:	c0438511          	sfpload	L1,324,0,7
+
+    837c:	10000340          	ttreplay	0,13,0,0
+
+    8380:	3c000002          	sfpnop
+
+    8384:	48002406          	sfpswap	L0,L9,1
+
+    8388:	3c000002          	sfpnop
+
+    838c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8390:	c1038659          	sfpload	L4,406,0,7
+
+    8394:	d50bf801          	sfpaddi	L0,17150,0
+
+    8398:	3c000002          	sfpnop
+
+    839c:	48000246          	sfpswap	L9,L0,1
+
+    83a0:	3c000002          	sfpnop
+
+    83a4:	dc000041          	sfpexexp	L1,L0,0
+
+    83a8:	e0000001          	sfpexman	L0,L0,0
+
+    83ac:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    83b0:	dc000045          	sfpexexp	L1,L0,1
+
+    83b4:	e0000005          	sfpexman	L0,L0,1
+
+    83b8:	40000002          	sfpcast	L0,L0,0
+
+    83bc:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    83c0:	c1438629          	sfpload	L5,394,0,7
+
+    83c4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    83c8:	c1838661          	sfpload	L6,408,0,7
+
+    83cc:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    83d0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    83d4:	c1c38631          	sfpload	L7,396,0,7
+
+    83d8:	48001806          	sfpswap	L0,L6,1
+
+    83dc:	3c000002          	sfpnop
+
+    83e0:	c0c38639          	sfpload	L3,398,0,7
+
+    83e4:	c1038641          	sfpload	L4,400,0,7
+
+    83e8:	c1438649          	sfpload	L5,402,0,7
+
+    83ec:	e0040000          	ttincrwc	0,4,0,0
+
+    83f0:	100d04c0          	ttreplay	13,19,0,0
+
+    83f4:	c0838419          	sfpload	L2,262,0,7
+
+    83f8:	c0438519          	sfpload	L1,326,0,7
+
+    83fc:	10000340          	ttreplay	0,13,0,0
+
+    8400:	3c000002          	sfpnop
+
+    8404:	48002406          	sfpswap	L0,L9,1
+
+    8408:	3c000002          	sfpnop
+
+    840c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8410:	c1038659          	sfpload	L4,406,0,7
+
+    8414:	d50bf801          	sfpaddi	L0,17150,0
+
+    8418:	3c000002          	sfpnop
+
+    841c:	48000246          	sfpswap	L9,L0,1
+
+    8420:	3c000002          	sfpnop
+
+    8424:	dc000041          	sfpexexp	L1,L0,0
+
+    8428:	e0000001          	sfpexman	L0,L0,0
+
+    842c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8430:	dc000045          	sfpexexp	L1,L0,1
+
+    8434:	e0000005          	sfpexman	L0,L0,1
+
+    8438:	40000002          	sfpcast	L0,L0,0
+
+    843c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8440:	c1438629          	sfpload	L5,394,0,7
+
+    8444:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8448:	c1838661          	sfpload	L6,408,0,7
+
+    844c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8450:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8454:	c1c38631          	sfpload	L7,396,0,7
+
+    8458:	48001806          	sfpswap	L0,L6,1
+
+    845c:	3c000002          	sfpnop
+
+    8460:	c0c38639          	sfpload	L3,398,0,7
+
+    8464:	c1038641          	sfpload	L4,400,0,7
+
+    8468:	c1438649          	sfpload	L5,402,0,7
+
+    846c:	e0060000          	ttincrwc	0,6,0,0
+
+    8470:	100d04c0          	ttreplay	13,19,0,0
+
+    8474:	00008067          	ret
+
+00008478 <void (anonymous namespace)::blend_pair_body<2ul, 1ul>()>:
+    8478:	c0838421          	sfpload	L2,264,0,7
+
+    847c:	c0438521          	sfpload	L1,328,0,7
+
+    8480:	10000340          	ttreplay	0,13,0,0
+
+    8484:	3c000002          	sfpnop
+
+    8488:	48002406          	sfpswap	L0,L9,1
+
+    848c:	3c000002          	sfpnop
+
+    8490:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8494:	c1038659          	sfpload	L4,406,0,7
+
+    8498:	d50bf801          	sfpaddi	L0,17150,0
+
+    849c:	3c000002          	sfpnop
+
+    84a0:	48000246          	sfpswap	L9,L0,1
+
+    84a4:	3c000002          	sfpnop
+
+    84a8:	dc000041          	sfpexexp	L1,L0,0
+
+    84ac:	e0000001          	sfpexman	L0,L0,0
+
+    84b0:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    84b4:	dc000045          	sfpexexp	L1,L0,1
+
+    84b8:	e0000005          	sfpexman	L0,L0,1
+
+    84bc:	40000002          	sfpcast	L0,L0,0
+
+    84c0:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    84c4:	c1438629          	sfpload	L5,394,0,7
+
+    84c8:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    84cc:	c1838661          	sfpload	L6,408,0,7
+
+    84d0:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    84d4:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    84d8:	c1c38631          	sfpload	L7,396,0,7
+
+    84dc:	48001806          	sfpswap	L0,L6,1
+
+    84e0:	3c000002          	sfpnop
+
+    84e4:	c0c38639          	sfpload	L3,398,0,7
+
+    84e8:	c1038641          	sfpload	L4,400,0,7
+
+    84ec:	c1438649          	sfpload	L5,402,0,7
+
+    84f0:	e0080000          	ttincrwc	0,8,0,0
+
+    84f4:	100d04c0          	ttreplay	13,19,0,0
+
+    84f8:	00008067          	ret
+
+000084fc <void (anonymous namespace)::blend_pair_body<2ul, 2ul>()>:
+    84fc:	c0838429          	sfpload	L2,266,0,7
+
+    8500:	c0438529          	sfpload	L1,330,0,7
+
+    8504:	10000340          	ttreplay	0,13,0,0
+
+    8508:	3c000002          	sfpnop
+
+    850c:	48002406          	sfpswap	L0,L9,1
+
+    8510:	3c000002          	sfpnop
+
+    8514:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8518:	c1038659          	sfpload	L4,406,0,7
+
+    851c:	d50bf801          	sfpaddi	L0,17150,0
+
+    8520:	3c000002          	sfpnop
+
+    8524:	48000246          	sfpswap	L9,L0,1
+
+    8528:	3c000002          	sfpnop
+
+    852c:	dc000041          	sfpexexp	L1,L0,0
+
+    8530:	e0000001          	sfpexman	L0,L0,0
+
+    8534:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8538:	dc000045          	sfpexexp	L1,L0,1
+
+    853c:	e0000005          	sfpexman	L0,L0,1
+
+    8540:	40000002          	sfpcast	L0,L0,0
+
+    8544:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8548:	c1438629          	sfpload	L5,394,0,7
+
+    854c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8550:	c1838661          	sfpload	L6,408,0,7
+
+    8554:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8558:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    855c:	c1c38631          	sfpload	L7,396,0,7
+
+    8560:	48001806          	sfpswap	L0,L6,1
+
+    8564:	3c000002          	sfpnop
+
+    8568:	c0c38639          	sfpload	L3,398,0,7
+
+    856c:	c1038641          	sfpload	L4,400,0,7
+
+    8570:	c1438649          	sfpload	L5,402,0,7
+
+    8574:	e00a0000          	ttincrwc	0,10,0,0
+
+    8578:	100d04c0          	ttreplay	13,19,0,0
+
+    857c:	00008067          	ret
+
+00008580 <void (anonymous namespace)::blend_pair_body<2ul, 3ul>()>:
+    8580:	c0838421          	sfpload	L2,264,0,7
+
+    8584:	c0438521          	sfpload	L1,328,0,7
+
+    8588:	10000340          	ttreplay	0,13,0,0
+
+    858c:	3c000002          	sfpnop
+
+    8590:	48002406          	sfpswap	L0,L9,1
+
+    8594:	3c000002          	sfpnop
+
+    8598:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    859c:	c1038659          	sfpload	L4,406,0,7
+
+    85a0:	d50bf801          	sfpaddi	L0,17150,0
+
+    85a4:	3c000002          	sfpnop
+
+    85a8:	48000246          	sfpswap	L9,L0,1
+
+    85ac:	3c000002          	sfpnop
+
+    85b0:	dc000041          	sfpexexp	L1,L0,0
+
+    85b4:	e0000001          	sfpexman	L0,L0,0
+
+    85b8:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    85bc:	dc000045          	sfpexexp	L1,L0,1
+
+    85c0:	e0000005          	sfpexman	L0,L0,1
+
+    85c4:	40000002          	sfpcast	L0,L0,0
+
+    85c8:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    85cc:	c1438629          	sfpload	L5,394,0,7
+
+    85d0:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    85d4:	c1838661          	sfpload	L6,408,0,7
+
+    85d8:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    85dc:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    85e0:	c1c38631          	sfpload	L7,396,0,7
+
+    85e4:	48001806          	sfpswap	L0,L6,1
+
+    85e8:	3c000002          	sfpnop
+
+    85ec:	c0c38639          	sfpload	L3,398,0,7
+
+    85f0:	c1038641          	sfpload	L4,400,0,7
+
+    85f4:	c1438649          	sfpload	L5,402,0,7
+
+    85f8:	e0080000          	ttincrwc	0,8,0,0
+
+    85fc:	100d04c0          	ttreplay	13,19,0,0
+
+    8600:	c0838429          	sfpload	L2,266,0,7
+
+    8604:	c0438529          	sfpload	L1,330,0,7
+
+    8608:	10000340          	ttreplay	0,13,0,0
+
+    860c:	3c000002          	sfpnop
+
+    8610:	48002406          	sfpswap	L0,L9,1
+
+    8614:	3c000002          	sfpnop
+
+    8618:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    861c:	c1038659          	sfpload	L4,406,0,7
+
+    8620:	d50bf801          	sfpaddi	L0,17150,0
+
+    8624:	3c000002          	sfpnop
+
+    8628:	48000246          	sfpswap	L9,L0,1
+
+    862c:	3c000002          	sfpnop
+
+    8630:	dc000041          	sfpexexp	L1,L0,0
+
+    8634:	e0000001          	sfpexman	L0,L0,0
+
+    8638:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    863c:	dc000045          	sfpexexp	L1,L0,1
+
+    8640:	e0000005          	sfpexman	L0,L0,1
+
+    8644:	40000002          	sfpcast	L0,L0,0
+
+    8648:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    864c:	c1438629          	sfpload	L5,394,0,7
+
+    8650:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8654:	c1838661          	sfpload	L6,408,0,7
+
+    8658:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    865c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8660:	c1c38631          	sfpload	L7,396,0,7
+
+    8664:	48001806          	sfpswap	L0,L6,1
+
+    8668:	3c000002          	sfpnop
+
+    866c:	c0c38639          	sfpload	L3,398,0,7
+
+    8670:	c1038641          	sfpload	L4,400,0,7
+
+    8674:	c1438649          	sfpload	L5,402,0,7
+
+    8678:	e00a0000          	ttincrwc	0,10,0,0
+
+    867c:	100d04c0          	ttreplay	13,19,0,0
+
+    8680:	00008067          	ret
+
+00008684 <void (anonymous namespace)::blend_pair_body<3ul, 1ul>()>:
+    8684:	c0838431          	sfpload	L2,268,0,7
+
+    8688:	c0438531          	sfpload	L1,332,0,7
+
+    868c:	10000340          	ttreplay	0,13,0,0
+
+    8690:	3c000002          	sfpnop
+
+    8694:	48002406          	sfpswap	L0,L9,1
+
+    8698:	3c000002          	sfpnop
+
+    869c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    86a0:	c1038659          	sfpload	L4,406,0,7
+
+    86a4:	d50bf801          	sfpaddi	L0,17150,0
+
+    86a8:	3c000002          	sfpnop
+
+    86ac:	48000246          	sfpswap	L9,L0,1
+
+    86b0:	3c000002          	sfpnop
+
+    86b4:	dc000041          	sfpexexp	L1,L0,0
+
+    86b8:	e0000001          	sfpexman	L0,L0,0
+
+    86bc:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    86c0:	dc000045          	sfpexexp	L1,L0,1
+
+    86c4:	e0000005          	sfpexman	L0,L0,1
+
+    86c8:	40000002          	sfpcast	L0,L0,0
+
+    86cc:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    86d0:	c1438629          	sfpload	L5,394,0,7
+
+    86d4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    86d8:	c1838661          	sfpload	L6,408,0,7
+
+    86dc:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    86e0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    86e4:	c1c38631          	sfpload	L7,396,0,7
+
+    86e8:	48001806          	sfpswap	L0,L6,1
+
+    86ec:	3c000002          	sfpnop
+
+    86f0:	c0c38639          	sfpload	L3,398,0,7
+
+    86f4:	c1038641          	sfpload	L4,400,0,7
+
+    86f8:	c1438649          	sfpload	L5,402,0,7
+
+    86fc:	e00c0000          	ttincrwc	0,12,0,0
+
+    8700:	100d04c0          	ttreplay	13,19,0,0
+
+    8704:	00008067          	ret
+
+00008708 <void (anonymous namespace)::blend_pair_body<3ul, 2ul>()>:
+    8708:	c0838439          	sfpload	L2,270,0,7
+
+    870c:	c0438539          	sfpload	L1,334,0,7
+
+    8710:	10000340          	ttreplay	0,13,0,0
+
+    8714:	3c000002          	sfpnop
+
+    8718:	48002406          	sfpswap	L0,L9,1
+
+    871c:	3c000002          	sfpnop
+
+    8720:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8724:	c1038659          	sfpload	L4,406,0,7
+
+    8728:	d50bf801          	sfpaddi	L0,17150,0
+
+    872c:	3c000002          	sfpnop
+
+    8730:	48000246          	sfpswap	L9,L0,1
+
+    8734:	3c000002          	sfpnop
+
+    8738:	dc000041          	sfpexexp	L1,L0,0
+
+    873c:	e0000001          	sfpexman	L0,L0,0
+
+    8740:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8744:	dc000045          	sfpexexp	L1,L0,1
+
+    8748:	e0000005          	sfpexman	L0,L0,1
+
+    874c:	40000002          	sfpcast	L0,L0,0
+
+    8750:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8754:	c1438629          	sfpload	L5,394,0,7
+
+    8758:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    875c:	c1838661          	sfpload	L6,408,0,7
+
+    8760:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8764:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8768:	c1c38631          	sfpload	L7,396,0,7
+
+    876c:	48001806          	sfpswap	L0,L6,1
+
+    8770:	3c000002          	sfpnop
+
+    8774:	c0c38639          	sfpload	L3,398,0,7
+
+    8778:	c1038641          	sfpload	L4,400,0,7
+
+    877c:	c1438649          	sfpload	L5,402,0,7
+
+    8780:	e00e0000          	ttincrwc	0,14,0,0
+
+    8784:	100d04c0          	ttreplay	13,19,0,0
+
+    8788:	00008067          	ret
+
+0000878c <void (anonymous namespace)::blend_pair_body<3ul, 3ul>()>:
+    878c:	c0838431          	sfpload	L2,268,0,7
+
+    8790:	c0438531          	sfpload	L1,332,0,7
+
+    8794:	10000340          	ttreplay	0,13,0,0
+
+    8798:	3c000002          	sfpnop
+
+    879c:	48002406          	sfpswap	L0,L9,1
+
+    87a0:	3c000002          	sfpnop
+
+    87a4:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    87a8:	c1038659          	sfpload	L4,406,0,7
+
+    87ac:	d50bf801          	sfpaddi	L0,17150,0
+
+    87b0:	3c000002          	sfpnop
+
+    87b4:	48000246          	sfpswap	L9,L0,1
+
+    87b8:	3c000002          	sfpnop
+
+    87bc:	dc000041          	sfpexexp	L1,L0,0
+
+    87c0:	e0000001          	sfpexman	L0,L0,0
+
+    87c4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    87c8:	dc000045          	sfpexexp	L1,L0,1
+
+    87cc:	e0000005          	sfpexman	L0,L0,1
+
+    87d0:	40000002          	sfpcast	L0,L0,0
+
+    87d4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    87d8:	c1438629          	sfpload	L5,394,0,7
+
+    87dc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    87e0:	c1838661          	sfpload	L6,408,0,7
+
+    87e4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    87e8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    87ec:	c1c38631          	sfpload	L7,396,0,7
+
+    87f0:	48001806          	sfpswap	L0,L6,1
+
+    87f4:	3c000002          	sfpnop
+
+    87f8:	c0c38639          	sfpload	L3,398,0,7
+
+    87fc:	c1038641          	sfpload	L4,400,0,7
+
+    8800:	c1438649          	sfpload	L5,402,0,7
+
+    8804:	e00c0000          	ttincrwc	0,12,0,0
+
+    8808:	100d04c0          	ttreplay	13,19,0,0
+
+    880c:	c0838439          	sfpload	L2,270,0,7
+
+    8810:	c0438539          	sfpload	L1,334,0,7
+
+    8814:	10000340          	ttreplay	0,13,0,0
+
+    8818:	3c000002          	sfpnop
+
+    881c:	48002406          	sfpswap	L0,L9,1
+
+    8820:	3c000002          	sfpnop
+
+    8824:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8828:	c1038659          	sfpload	L4,406,0,7
+
+    882c:	d50bf801          	sfpaddi	L0,17150,0
+
+    8830:	3c000002          	sfpnop
+
+    8834:	48000246          	sfpswap	L9,L0,1
+
+    8838:	3c000002          	sfpnop
+
+    883c:	dc000041          	sfpexexp	L1,L0,0
+
+    8840:	e0000001          	sfpexman	L0,L0,0
+
+    8844:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8848:	dc000045          	sfpexexp	L1,L0,1
+
+    884c:	e0000005          	sfpexman	L0,L0,1
+
+    8850:	40000002          	sfpcast	L0,L0,0
+
+    8854:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8858:	c1438629          	sfpload	L5,394,0,7
+
+    885c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8860:	c1838661          	sfpload	L6,408,0,7
+
+    8864:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8868:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    886c:	c1c38631          	sfpload	L7,396,0,7
+
+    8870:	48001806          	sfpswap	L0,L6,1
+
+    8874:	3c000002          	sfpnop
+
+    8878:	c0c38639          	sfpload	L3,398,0,7
+
+    887c:	c1038641          	sfpload	L4,400,0,7
+
+    8880:	c1438649          	sfpload	L5,402,0,7
+
+    8884:	e00e0000          	ttincrwc	0,14,0,0
+
+    8888:	100d04c0          	ttreplay	13,19,0,0
+
+    888c:	00008067          	ret
+
+00008890 <void (anonymous namespace)::blend_pair_body<4ul, 1ul>()>:
+    8890:	c0838441          	sfpload	L2,272,0,7
+
+    8894:	c0438541          	sfpload	L1,336,0,7
+
+    8898:	10000340          	ttreplay	0,13,0,0
+
+    889c:	3c000002          	sfpnop
+
+    88a0:	48002406          	sfpswap	L0,L9,1
+
+    88a4:	3c000002          	sfpnop
+
+    88a8:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    88ac:	c1038659          	sfpload	L4,406,0,7
+
+    88b0:	d50bf801          	sfpaddi	L0,17150,0
+
+    88b4:	3c000002          	sfpnop
+
+    88b8:	48000246          	sfpswap	L9,L0,1
+
+    88bc:	3c000002          	sfpnop
+
+    88c0:	dc000041          	sfpexexp	L1,L0,0
+
+    88c4:	e0000001          	sfpexman	L0,L0,0
+
+    88c8:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    88cc:	dc000045          	sfpexexp	L1,L0,1
+
+    88d0:	e0000005          	sfpexman	L0,L0,1
+
+    88d4:	40000002          	sfpcast	L0,L0,0
+
+    88d8:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    88dc:	c1438629          	sfpload	L5,394,0,7
+
+    88e0:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    88e4:	c1838661          	sfpload	L6,408,0,7
+
+    88e8:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    88ec:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    88f0:	c1c38631          	sfpload	L7,396,0,7
+
+    88f4:	48001806          	sfpswap	L0,L6,1
+
+    88f8:	3c000002          	sfpnop
+
+    88fc:	c0c38639          	sfpload	L3,398,0,7
+
+    8900:	c1038641          	sfpload	L4,400,0,7
+
+    8904:	c1438649          	sfpload	L5,402,0,7
+
+    8908:	e00e0000          	ttincrwc	0,14,0,0
+
+    890c:	e0020000          	ttincrwc	0,2,0,0
+
+    8910:	100d04c0          	ttreplay	13,19,0,0
+
+    8914:	00008067          	ret
+
+00008918 <void (anonymous namespace)::blend_pair_body<4ul, 2ul>()>:
+    8918:	c0838449          	sfpload	L2,274,0,7
+
+    891c:	c0438549          	sfpload	L1,338,0,7
+
+    8920:	10000340          	ttreplay	0,13,0,0
+
+    8924:	3c000002          	sfpnop
+
+    8928:	48002406          	sfpswap	L0,L9,1
+
+    892c:	3c000002          	sfpnop
+
+    8930:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8934:	c1038659          	sfpload	L4,406,0,7
+
+    8938:	d50bf801          	sfpaddi	L0,17150,0
+
+    893c:	3c000002          	sfpnop
+
+    8940:	48000246          	sfpswap	L9,L0,1
+
+    8944:	3c000002          	sfpnop
+
+    8948:	dc000041          	sfpexexp	L1,L0,0
+
+    894c:	e0000001          	sfpexman	L0,L0,0
+
+    8950:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8954:	dc000045          	sfpexexp	L1,L0,1
+
+    8958:	e0000005          	sfpexman	L0,L0,1
+
+    895c:	40000002          	sfpcast	L0,L0,0
+
+    8960:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8964:	c1438629          	sfpload	L5,394,0,7
+
+    8968:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    896c:	c1838661          	sfpload	L6,408,0,7
+
+    8970:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8974:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8978:	c1c38631          	sfpload	L7,396,0,7
+
+    897c:	48001806          	sfpswap	L0,L6,1
+
+    8980:	3c000002          	sfpnop
+
+    8984:	c0c38639          	sfpload	L3,398,0,7
+
+    8988:	c1038641          	sfpload	L4,400,0,7
+
+    898c:	c1438649          	sfpload	L5,402,0,7
+
+    8990:	e00e0000          	ttincrwc	0,14,0,0
+
+    8994:	e0040000          	ttincrwc	0,4,0,0
+
+    8998:	100d04c0          	ttreplay	13,19,0,0
+
+    899c:	00008067          	ret
+
+000089a0 <void (anonymous namespace)::blend_pair_body<4ul, 3ul>()>:
+    89a0:	c0838441          	sfpload	L2,272,0,7
+
+    89a4:	c0438541          	sfpload	L1,336,0,7
+
+    89a8:	10000340          	ttreplay	0,13,0,0
+
+    89ac:	3c000002          	sfpnop
+
+    89b0:	48002406          	sfpswap	L0,L9,1
+
+    89b4:	3c000002          	sfpnop
+
+    89b8:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    89bc:	c1038659          	sfpload	L4,406,0,7
+
+    89c0:	d50bf801          	sfpaddi	L0,17150,0
+
+    89c4:	3c000002          	sfpnop
+
+    89c8:	48000246          	sfpswap	L9,L0,1
+
+    89cc:	3c000002          	sfpnop
+
+    89d0:	dc000041          	sfpexexp	L1,L0,0
+
+    89d4:	e0000001          	sfpexman	L0,L0,0
+
+    89d8:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    89dc:	dc000045          	sfpexexp	L1,L0,1
+
+    89e0:	e0000005          	sfpexman	L0,L0,1
+
+    89e4:	40000002          	sfpcast	L0,L0,0
+
+    89e8:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    89ec:	c1438629          	sfpload	L5,394,0,7
+
+    89f0:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    89f4:	c1838661          	sfpload	L6,408,0,7
+
+    89f8:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    89fc:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8a00:	c1c38631          	sfpload	L7,396,0,7
+
+    8a04:	48001806          	sfpswap	L0,L6,1
+
+    8a08:	3c000002          	sfpnop
+
+    8a0c:	c0c38639          	sfpload	L3,398,0,7
+
+    8a10:	c1038641          	sfpload	L4,400,0,7
+
+    8a14:	c1438649          	sfpload	L5,402,0,7
+
+    8a18:	e00e0000          	ttincrwc	0,14,0,0
+
+    8a1c:	e0020000          	ttincrwc	0,2,0,0
+
+    8a20:	100d04c0          	ttreplay	13,19,0,0
+
+    8a24:	c0838449          	sfpload	L2,274,0,7
+
+    8a28:	c0438549          	sfpload	L1,338,0,7
+
+    8a2c:	10000340          	ttreplay	0,13,0,0
+
+    8a30:	3c000002          	sfpnop
+
+    8a34:	48002406          	sfpswap	L0,L9,1
+
+    8a38:	3c000002          	sfpnop
+
+    8a3c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8a40:	c1038659          	sfpload	L4,406,0,7
+
+    8a44:	d50bf801          	sfpaddi	L0,17150,0
+
+    8a48:	3c000002          	sfpnop
+
+    8a4c:	48000246          	sfpswap	L9,L0,1
+
+    8a50:	3c000002          	sfpnop
+
+    8a54:	dc000041          	sfpexexp	L1,L0,0
+
+    8a58:	e0000001          	sfpexman	L0,L0,0
+
+    8a5c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8a60:	dc000045          	sfpexexp	L1,L0,1
+
+    8a64:	e0000005          	sfpexman	L0,L0,1
+
+    8a68:	40000002          	sfpcast	L0,L0,0
+
+    8a6c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8a70:	c1438629          	sfpload	L5,394,0,7
+
+    8a74:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8a78:	c1838661          	sfpload	L6,408,0,7
+
+    8a7c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8a80:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8a84:	c1c38631          	sfpload	L7,396,0,7
+
+    8a88:	48001806          	sfpswap	L0,L6,1
+
+    8a8c:	3c000002          	sfpnop
+
+    8a90:	c0c38639          	sfpload	L3,398,0,7
+
+    8a94:	c1038641          	sfpload	L4,400,0,7
+
+    8a98:	c1438649          	sfpload	L5,402,0,7
+
+    8a9c:	e00e0000          	ttincrwc	0,14,0,0
+
+    8aa0:	e0040000          	ttincrwc	0,4,0,0
+
+    8aa4:	100d04c0          	ttreplay	13,19,0,0
+
+    8aa8:	00008067          	ret
+
+00008aac <void (anonymous namespace)::blend_pair_body<5ul, 1ul>()>:
+    8aac:	c0838451          	sfpload	L2,276,0,7
+
+    8ab0:	c0438551          	sfpload	L1,340,0,7
+
+    8ab4:	10000340          	ttreplay	0,13,0,0
+
+    8ab8:	3c000002          	sfpnop
+
+    8abc:	48002406          	sfpswap	L0,L9,1
+
+    8ac0:	3c000002          	sfpnop
+
+    8ac4:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8ac8:	c1038659          	sfpload	L4,406,0,7
+
+    8acc:	d50bf801          	sfpaddi	L0,17150,0
+
+    8ad0:	3c000002          	sfpnop
+
+    8ad4:	48000246          	sfpswap	L9,L0,1
+
+    8ad8:	3c000002          	sfpnop
+
+    8adc:	dc000041          	sfpexexp	L1,L0,0
+
+    8ae0:	e0000001          	sfpexman	L0,L0,0
+
+    8ae4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8ae8:	dc000045          	sfpexexp	L1,L0,1
+
+    8aec:	e0000005          	sfpexman	L0,L0,1
+
+    8af0:	40000002          	sfpcast	L0,L0,0
+
+    8af4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8af8:	c1438629          	sfpload	L5,394,0,7
+
+    8afc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8b00:	c1838661          	sfpload	L6,408,0,7
+
+    8b04:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8b08:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8b0c:	c1c38631          	sfpload	L7,396,0,7
+
+    8b10:	48001806          	sfpswap	L0,L6,1
+
+    8b14:	3c000002          	sfpnop
+
+    8b18:	c0c38639          	sfpload	L3,398,0,7
+
+    8b1c:	c1038641          	sfpload	L4,400,0,7
+
+    8b20:	c1438649          	sfpload	L5,402,0,7
+
+    8b24:	e00e0000          	ttincrwc	0,14,0,0
+
+    8b28:	e0060000          	ttincrwc	0,6,0,0
+
+    8b2c:	100d04c0          	ttreplay	13,19,0,0
+
+    8b30:	00008067          	ret
+
+00008b34 <void (anonymous namespace)::blend_pair_body<5ul, 2ul>()>:
+    8b34:	c0838459          	sfpload	L2,278,0,7
+
+    8b38:	c0438559          	sfpload	L1,342,0,7
+
+    8b3c:	10000340          	ttreplay	0,13,0,0
+
+    8b40:	3c000002          	sfpnop
+
+    8b44:	48002406          	sfpswap	L0,L9,1
+
+    8b48:	3c000002          	sfpnop
+
+    8b4c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8b50:	c1038659          	sfpload	L4,406,0,7
+
+    8b54:	d50bf801          	sfpaddi	L0,17150,0
+
+    8b58:	3c000002          	sfpnop
+
+    8b5c:	48000246          	sfpswap	L9,L0,1
+
+    8b60:	3c000002          	sfpnop
+
+    8b64:	dc000041          	sfpexexp	L1,L0,0
+
+    8b68:	e0000001          	sfpexman	L0,L0,0
+
+    8b6c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8b70:	dc000045          	sfpexexp	L1,L0,1
+
+    8b74:	e0000005          	sfpexman	L0,L0,1
+
+    8b78:	40000002          	sfpcast	L0,L0,0
+
+    8b7c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8b80:	c1438629          	sfpload	L5,394,0,7
+
+    8b84:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8b88:	c1838661          	sfpload	L6,408,0,7
+
+    8b8c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8b90:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8b94:	c1c38631          	sfpload	L7,396,0,7
+
+    8b98:	48001806          	sfpswap	L0,L6,1
+
+    8b9c:	3c000002          	sfpnop
+
+    8ba0:	c0c38639          	sfpload	L3,398,0,7
+
+    8ba4:	c1038641          	sfpload	L4,400,0,7
+
+    8ba8:	c1438649          	sfpload	L5,402,0,7
+
+    8bac:	e00e0000          	ttincrwc	0,14,0,0
+
+    8bb0:	e0080000          	ttincrwc	0,8,0,0
+
+    8bb4:	100d04c0          	ttreplay	13,19,0,0
+
+    8bb8:	00008067          	ret
+
+00008bbc <void (anonymous namespace)::blend_pair_body<5ul, 3ul>()>:
+    8bbc:	c0838451          	sfpload	L2,276,0,7
+
+    8bc0:	c0438551          	sfpload	L1,340,0,7
+
+    8bc4:	10000340          	ttreplay	0,13,0,0
+
+    8bc8:	3c000002          	sfpnop
+
+    8bcc:	48002406          	sfpswap	L0,L9,1
+
+    8bd0:	3c000002          	sfpnop
+
+    8bd4:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8bd8:	c1038659          	sfpload	L4,406,0,7
+
+    8bdc:	d50bf801          	sfpaddi	L0,17150,0
+
+    8be0:	3c000002          	sfpnop
+
+    8be4:	48000246          	sfpswap	L9,L0,1
+
+    8be8:	3c000002          	sfpnop
+
+    8bec:	dc000041          	sfpexexp	L1,L0,0
+
+    8bf0:	e0000001          	sfpexman	L0,L0,0
+
+    8bf4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8bf8:	dc000045          	sfpexexp	L1,L0,1
+
+    8bfc:	e0000005          	sfpexman	L0,L0,1
+
+    8c00:	40000002          	sfpcast	L0,L0,0
+
+    8c04:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8c08:	c1438629          	sfpload	L5,394,0,7
+
+    8c0c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8c10:	c1838661          	sfpload	L6,408,0,7
+
+    8c14:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8c18:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8c1c:	c1c38631          	sfpload	L7,396,0,7
+
+    8c20:	48001806          	sfpswap	L0,L6,1
+
+    8c24:	3c000002          	sfpnop
+
+    8c28:	c0c38639          	sfpload	L3,398,0,7
+
+    8c2c:	c1038641          	sfpload	L4,400,0,7
+
+    8c30:	c1438649          	sfpload	L5,402,0,7
+
+    8c34:	e00e0000          	ttincrwc	0,14,0,0
+
+    8c38:	e0060000          	ttincrwc	0,6,0,0
+
+    8c3c:	100d04c0          	ttreplay	13,19,0,0
+
+    8c40:	c0838459          	sfpload	L2,278,0,7
+
+    8c44:	c0438559          	sfpload	L1,342,0,7
+
+    8c48:	10000340          	ttreplay	0,13,0,0
+
+    8c4c:	3c000002          	sfpnop
+
+    8c50:	48002406          	sfpswap	L0,L9,1
+
+    8c54:	3c000002          	sfpnop
+
+    8c58:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8c5c:	c1038659          	sfpload	L4,406,0,7
+
+    8c60:	d50bf801          	sfpaddi	L0,17150,0
+
+    8c64:	3c000002          	sfpnop
+
+    8c68:	48000246          	sfpswap	L9,L0,1
+
+    8c6c:	3c000002          	sfpnop
+
+    8c70:	dc000041          	sfpexexp	L1,L0,0
+
+    8c74:	e0000001          	sfpexman	L0,L0,0
+
+    8c78:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8c7c:	dc000045          	sfpexexp	L1,L0,1
+
+    8c80:	e0000005          	sfpexman	L0,L0,1
+
+    8c84:	40000002          	sfpcast	L0,L0,0
+
+    8c88:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8c8c:	c1438629          	sfpload	L5,394,0,7
+
+    8c90:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8c94:	c1838661          	sfpload	L6,408,0,7
+
+    8c98:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8c9c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8ca0:	c1c38631          	sfpload	L7,396,0,7
+
+    8ca4:	48001806          	sfpswap	L0,L6,1
+
+    8ca8:	3c000002          	sfpnop
+
+    8cac:	c0c38639          	sfpload	L3,398,0,7
+
+    8cb0:	c1038641          	sfpload	L4,400,0,7
+
+    8cb4:	c1438649          	sfpload	L5,402,0,7
+
+    8cb8:	e00e0000          	ttincrwc	0,14,0,0
+
+    8cbc:	e0080000          	ttincrwc	0,8,0,0
+
+    8cc0:	100d04c0          	ttreplay	13,19,0,0
+
+    8cc4:	00008067          	ret
+
+00008cc8 <void (anonymous namespace)::blend_pair_body<6ul, 1ul>()>:
+    8cc8:	c0838461          	sfpload	L2,280,0,7
+
+    8ccc:	c0438561          	sfpload	L1,344,0,7
+
+    8cd0:	10000340          	ttreplay	0,13,0,0
+
+    8cd4:	3c000002          	sfpnop
+
+    8cd8:	48002406          	sfpswap	L0,L9,1
+
+    8cdc:	3c000002          	sfpnop
+
+    8ce0:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8ce4:	c1038659          	sfpload	L4,406,0,7
+
+    8ce8:	d50bf801          	sfpaddi	L0,17150,0
+
+    8cec:	3c000002          	sfpnop
+
+    8cf0:	48000246          	sfpswap	L9,L0,1
+
+    8cf4:	3c000002          	sfpnop
+
+    8cf8:	dc000041          	sfpexexp	L1,L0,0
+
+    8cfc:	e0000001          	sfpexman	L0,L0,0
+
+    8d00:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8d04:	dc000045          	sfpexexp	L1,L0,1
+
+    8d08:	e0000005          	sfpexman	L0,L0,1
+
+    8d0c:	40000002          	sfpcast	L0,L0,0
+
+    8d10:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8d14:	c1438629          	sfpload	L5,394,0,7
+
+    8d18:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8d1c:	c1838661          	sfpload	L6,408,0,7
+
+    8d20:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8d24:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8d28:	c1c38631          	sfpload	L7,396,0,7
+
+    8d2c:	48001806          	sfpswap	L0,L6,1
+
+    8d30:	3c000002          	sfpnop
+
+    8d34:	c0c38639          	sfpload	L3,398,0,7
+
+    8d38:	c1038641          	sfpload	L4,400,0,7
+
+    8d3c:	c1438649          	sfpload	L5,402,0,7
+
+    8d40:	e00e0000          	ttincrwc	0,14,0,0
+
+    8d44:	e00a0000          	ttincrwc	0,10,0,0
+
+    8d48:	100d04c0          	ttreplay	13,19,0,0
+
+    8d4c:	00008067          	ret
+
+00008d50 <void (anonymous namespace)::blend_pair_body<6ul, 2ul>()>:
+    8d50:	c0838469          	sfpload	L2,282,0,7
+
+    8d54:	c0438569          	sfpload	L1,346,0,7
+
+    8d58:	10000340          	ttreplay	0,13,0,0
+
+    8d5c:	3c000002          	sfpnop
+
+    8d60:	48002406          	sfpswap	L0,L9,1
+
+    8d64:	3c000002          	sfpnop
+
+    8d68:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8d6c:	c1038659          	sfpload	L4,406,0,7
+
+    8d70:	d50bf801          	sfpaddi	L0,17150,0
+
+    8d74:	3c000002          	sfpnop
+
+    8d78:	48000246          	sfpswap	L9,L0,1
+
+    8d7c:	3c000002          	sfpnop
+
+    8d80:	dc000041          	sfpexexp	L1,L0,0
+
+    8d84:	e0000001          	sfpexman	L0,L0,0
+
+    8d88:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8d8c:	dc000045          	sfpexexp	L1,L0,1
+
+    8d90:	e0000005          	sfpexman	L0,L0,1
+
+    8d94:	40000002          	sfpcast	L0,L0,0
+
+    8d98:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8d9c:	c1438629          	sfpload	L5,394,0,7
+
+    8da0:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8da4:	c1838661          	sfpload	L6,408,0,7
+
+    8da8:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8dac:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8db0:	c1c38631          	sfpload	L7,396,0,7
+
+    8db4:	48001806          	sfpswap	L0,L6,1
+
+    8db8:	3c000002          	sfpnop
+
+    8dbc:	c0c38639          	sfpload	L3,398,0,7
+
+    8dc0:	c1038641          	sfpload	L4,400,0,7
+
+    8dc4:	c1438649          	sfpload	L5,402,0,7
+
+    8dc8:	e00e0000          	ttincrwc	0,14,0,0
+
+    8dcc:	e00c0000          	ttincrwc	0,12,0,0
+
+    8dd0:	100d04c0          	ttreplay	13,19,0,0
+
+    8dd4:	00008067          	ret
+
+00008dd8 <void (anonymous namespace)::blend_pair_body<6ul, 3ul>()>:
+    8dd8:	c0838461          	sfpload	L2,280,0,7
+
+    8ddc:	c0438561          	sfpload	L1,344,0,7
+
+    8de0:	10000340          	ttreplay	0,13,0,0
+
+    8de4:	3c000002          	sfpnop
+
+    8de8:	48002406          	sfpswap	L0,L9,1
+
+    8dec:	3c000002          	sfpnop
+
+    8df0:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8df4:	c1038659          	sfpload	L4,406,0,7
+
+    8df8:	d50bf801          	sfpaddi	L0,17150,0
+
+    8dfc:	3c000002          	sfpnop
+
+    8e00:	48000246          	sfpswap	L9,L0,1
+
+    8e04:	3c000002          	sfpnop
+
+    8e08:	dc000041          	sfpexexp	L1,L0,0
+
+    8e0c:	e0000001          	sfpexman	L0,L0,0
+
+    8e10:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8e14:	dc000045          	sfpexexp	L1,L0,1
+
+    8e18:	e0000005          	sfpexman	L0,L0,1
+
+    8e1c:	40000002          	sfpcast	L0,L0,0
+
+    8e20:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8e24:	c1438629          	sfpload	L5,394,0,7
+
+    8e28:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8e2c:	c1838661          	sfpload	L6,408,0,7
+
+    8e30:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8e34:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8e38:	c1c38631          	sfpload	L7,396,0,7
+
+    8e3c:	48001806          	sfpswap	L0,L6,1
+
+    8e40:	3c000002          	sfpnop
+
+    8e44:	c0c38639          	sfpload	L3,398,0,7
+
+    8e48:	c1038641          	sfpload	L4,400,0,7
+
+    8e4c:	c1438649          	sfpload	L5,402,0,7
+
+    8e50:	e00e0000          	ttincrwc	0,14,0,0
+
+    8e54:	e00a0000          	ttincrwc	0,10,0,0
+
+    8e58:	100d04c0          	ttreplay	13,19,0,0
+
+    8e5c:	c0838469          	sfpload	L2,282,0,7
+
+    8e60:	c0438569          	sfpload	L1,346,0,7
+
+    8e64:	10000340          	ttreplay	0,13,0,0
+
+    8e68:	3c000002          	sfpnop
+
+    8e6c:	48002406          	sfpswap	L0,L9,1
+
+    8e70:	3c000002          	sfpnop
+
+    8e74:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8e78:	c1038659          	sfpload	L4,406,0,7
+
+    8e7c:	d50bf801          	sfpaddi	L0,17150,0
+
+    8e80:	3c000002          	sfpnop
+
+    8e84:	48000246          	sfpswap	L9,L0,1
+
+    8e88:	3c000002          	sfpnop
+
+    8e8c:	dc000041          	sfpexexp	L1,L0,0
+
+    8e90:	e0000001          	sfpexman	L0,L0,0
+
+    8e94:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8e98:	dc000045          	sfpexexp	L1,L0,1
+
+    8e9c:	e0000005          	sfpexman	L0,L0,1
+
+    8ea0:	40000002          	sfpcast	L0,L0,0
+
+    8ea4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8ea8:	c1438629          	sfpload	L5,394,0,7
+
+    8eac:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8eb0:	c1838661          	sfpload	L6,408,0,7
+
+    8eb4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8eb8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8ebc:	c1c38631          	sfpload	L7,396,0,7
+
+    8ec0:	48001806          	sfpswap	L0,L6,1
+
+    8ec4:	3c000002          	sfpnop
+
+    8ec8:	c0c38639          	sfpload	L3,398,0,7
+
+    8ecc:	c1038641          	sfpload	L4,400,0,7
+
+    8ed0:	c1438649          	sfpload	L5,402,0,7
+
+    8ed4:	e00e0000          	ttincrwc	0,14,0,0
+
+    8ed8:	e00c0000          	ttincrwc	0,12,0,0
+
+    8edc:	100d04c0          	ttreplay	13,19,0,0
+
+    8ee0:	00008067          	ret
+
+00008ee4 <void (anonymous namespace)::blend_pair_body<7ul, 1ul>()>:
+    8ee4:	c0838471          	sfpload	L2,284,0,7
+
+    8ee8:	c0438571          	sfpload	L1,348,0,7
+
+    8eec:	10000340          	ttreplay	0,13,0,0
+
+    8ef0:	3c000002          	sfpnop
+
+    8ef4:	48002406          	sfpswap	L0,L9,1
+
+    8ef8:	3c000002          	sfpnop
+
+    8efc:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8f00:	c1038659          	sfpload	L4,406,0,7
+
+    8f04:	d50bf801          	sfpaddi	L0,17150,0
+
+    8f08:	3c000002          	sfpnop
+
+    8f0c:	48000246          	sfpswap	L9,L0,1
+
+    8f10:	3c000002          	sfpnop
+
+    8f14:	dc000041          	sfpexexp	L1,L0,0
+
+    8f18:	e0000001          	sfpexman	L0,L0,0
+
+    8f1c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8f20:	dc000045          	sfpexexp	L1,L0,1
+
+    8f24:	e0000005          	sfpexman	L0,L0,1
+
+    8f28:	40000002          	sfpcast	L0,L0,0
+
+    8f2c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8f30:	c1438629          	sfpload	L5,394,0,7
+
+    8f34:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8f38:	c1838661          	sfpload	L6,408,0,7
+
+    8f3c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8f40:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8f44:	c1c38631          	sfpload	L7,396,0,7
+
+    8f48:	48001806          	sfpswap	L0,L6,1
+
+    8f4c:	3c000002          	sfpnop
+
+    8f50:	c0c38639          	sfpload	L3,398,0,7
+
+    8f54:	c1038641          	sfpload	L4,400,0,7
+
+    8f58:	c1438649          	sfpload	L5,402,0,7
+
+    8f5c:	e00e0000          	ttincrwc	0,14,0,0
+
+    8f60:	e00e0000          	ttincrwc	0,14,0,0
+
+    8f64:	100d04c0          	ttreplay	13,19,0,0
+
+    8f68:	00008067          	ret
+
+00008f6c <void (anonymous namespace)::blend_pair_body<7ul, 2ul>()>:
+    8f6c:	c0838479          	sfpload	L2,286,0,7
+
+    8f70:	c0438579          	sfpload	L1,350,0,7
+
+    8f74:	10000340          	ttreplay	0,13,0,0
+
+    8f78:	3c000002          	sfpnop
+
+    8f7c:	48002406          	sfpswap	L0,L9,1
+
+    8f80:	3c000002          	sfpnop
+
+    8f84:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    8f88:	c1038659          	sfpload	L4,406,0,7
+
+    8f8c:	d50bf801          	sfpaddi	L0,17150,0
+
+    8f90:	3c000002          	sfpnop
+
+    8f94:	48000246          	sfpswap	L9,L0,1
+
+    8f98:	3c000002          	sfpnop
+
+    8f9c:	dc000041          	sfpexexp	L1,L0,0
+
+    8fa0:	e0000001          	sfpexman	L0,L0,0
+
+    8fa4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    8fa8:	dc000045          	sfpexexp	L1,L0,1
+
+    8fac:	e0000005          	sfpexman	L0,L0,1
+
+    8fb0:	40000002          	sfpcast	L0,L0,0
+
+    8fb4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    8fb8:	c1438629          	sfpload	L5,394,0,7
+
+    8fbc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    8fc0:	c1838661          	sfpload	L6,408,0,7
+
+    8fc4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    8fc8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    8fcc:	c1c38631          	sfpload	L7,396,0,7
+
+    8fd0:	48001806          	sfpswap	L0,L6,1
+
+    8fd4:	3c000002          	sfpnop
+
+    8fd8:	c0c38639          	sfpload	L3,398,0,7
+
+    8fdc:	c1038641          	sfpload	L4,400,0,7
+
+    8fe0:	c1438649          	sfpload	L5,402,0,7
+
+    8fe4:	e00e0000          	ttincrwc	0,14,0,0
+
+    8fe8:	e00e0000          	ttincrwc	0,14,0,0
+
+    8fec:	e0020000          	ttincrwc	0,2,0,0
+
+    8ff0:	100d04c0          	ttreplay	13,19,0,0
+
+    8ff4:	00008067          	ret
+
+00008ff8 <void (anonymous namespace)::blend_pair_body<7ul, 3ul>()>:
+    8ff8:	c0838471          	sfpload	L2,284,0,7
+
+    8ffc:	c0438571          	sfpload	L1,348,0,7
+
+    9000:	10000340          	ttreplay	0,13,0,0
+
+    9004:	3c000002          	sfpnop
+
+    9008:	48002406          	sfpswap	L0,L9,1
+
+    900c:	3c000002          	sfpnop
+
+    9010:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9014:	c1038659          	sfpload	L4,406,0,7
+
+    9018:	d50bf801          	sfpaddi	L0,17150,0
+
+    901c:	3c000002          	sfpnop
+
+    9020:	48000246          	sfpswap	L9,L0,1
+
+    9024:	3c000002          	sfpnop
+
+    9028:	dc000041          	sfpexexp	L1,L0,0
+
+    902c:	e0000001          	sfpexman	L0,L0,0
+
+    9030:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9034:	dc000045          	sfpexexp	L1,L0,1
+
+    9038:	e0000005          	sfpexman	L0,L0,1
+
+    903c:	40000002          	sfpcast	L0,L0,0
+
+    9040:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9044:	c1438629          	sfpload	L5,394,0,7
+
+    9048:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    904c:	c1838661          	sfpload	L6,408,0,7
+
+    9050:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9054:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9058:	c1c38631          	sfpload	L7,396,0,7
+
+    905c:	48001806          	sfpswap	L0,L6,1
+
+    9060:	3c000002          	sfpnop
+
+    9064:	c0c38639          	sfpload	L3,398,0,7
+
+    9068:	c1038641          	sfpload	L4,400,0,7
+
+    906c:	c1438649          	sfpload	L5,402,0,7
+
+    9070:	e00e0000          	ttincrwc	0,14,0,0
+
+    9074:	e00e0000          	ttincrwc	0,14,0,0
+
+    9078:	100d04c0          	ttreplay	13,19,0,0
+
+    907c:	c0838479          	sfpload	L2,286,0,7
+
+    9080:	c0438579          	sfpload	L1,350,0,7
+
+    9084:	10000340          	ttreplay	0,13,0,0
+
+    9088:	3c000002          	sfpnop
+
+    908c:	48002406          	sfpswap	L0,L9,1
+
+    9090:	3c000002          	sfpnop
+
+    9094:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9098:	c1038659          	sfpload	L4,406,0,7
+
+    909c:	d50bf801          	sfpaddi	L0,17150,0
+
+    90a0:	3c000002          	sfpnop
+
+    90a4:	48000246          	sfpswap	L9,L0,1
+
+    90a8:	3c000002          	sfpnop
+
+    90ac:	dc000041          	sfpexexp	L1,L0,0
+
+    90b0:	e0000001          	sfpexman	L0,L0,0
+
+    90b4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    90b8:	dc000045          	sfpexexp	L1,L0,1
+
+    90bc:	e0000005          	sfpexman	L0,L0,1
+
+    90c0:	40000002          	sfpcast	L0,L0,0
+
+    90c4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    90c8:	c1438629          	sfpload	L5,394,0,7
+
+    90cc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    90d0:	c1838661          	sfpload	L6,408,0,7
+
+    90d4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    90d8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    90dc:	c1c38631          	sfpload	L7,396,0,7
+
+    90e0:	48001806          	sfpswap	L0,L6,1
+
+    90e4:	3c000002          	sfpnop
+
+    90e8:	c0c38639          	sfpload	L3,398,0,7
+
+    90ec:	c1038641          	sfpload	L4,400,0,7
+
+    90f0:	c1438649          	sfpload	L5,402,0,7
+
+    90f4:	e00e0000          	ttincrwc	0,14,0,0
+
+    90f8:	e00e0000          	ttincrwc	0,14,0,0
+
+    90fc:	e0020000          	ttincrwc	0,2,0,0
+
+    9100:	100d04c0          	ttreplay	13,19,0,0
+
+    9104:	00008067          	ret
+
+00009108 <void (anonymous namespace)::blend_pair_body<8ul, 1ul>()>:
+    9108:	c0838481          	sfpload	L2,288,0,7
+
+    910c:	c0438581          	sfpload	L1,352,0,7
+
+    9110:	10000340          	ttreplay	0,13,0,0
+
+    9114:	3c000002          	sfpnop
+
+    9118:	48002406          	sfpswap	L0,L9,1
+
+    911c:	3c000002          	sfpnop
+
+    9120:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9124:	c1038659          	sfpload	L4,406,0,7
+
+    9128:	d50bf801          	sfpaddi	L0,17150,0
+
+    912c:	3c000002          	sfpnop
+
+    9130:	48000246          	sfpswap	L9,L0,1
+
+    9134:	3c000002          	sfpnop
+
+    9138:	dc000041          	sfpexexp	L1,L0,0
+
+    913c:	e0000001          	sfpexman	L0,L0,0
+
+    9140:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9144:	dc000045          	sfpexexp	L1,L0,1
+
+    9148:	e0000005          	sfpexman	L0,L0,1
+
+    914c:	40000002          	sfpcast	L0,L0,0
+
+    9150:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9154:	c1438629          	sfpload	L5,394,0,7
+
+    9158:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    915c:	c1838661          	sfpload	L6,408,0,7
+
+    9160:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9164:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9168:	c1c38631          	sfpload	L7,396,0,7
+
+    916c:	48001806          	sfpswap	L0,L6,1
+
+    9170:	3c000002          	sfpnop
+
+    9174:	c0c38639          	sfpload	L3,398,0,7
+
+    9178:	c1038641          	sfpload	L4,400,0,7
+
+    917c:	c1438649          	sfpload	L5,402,0,7
+
+    9180:	e00e0000          	ttincrwc	0,14,0,0
+
+    9184:	e00e0000          	ttincrwc	0,14,0,0
+
+    9188:	e0040000          	ttincrwc	0,4,0,0
+
+    918c:	100d04c0          	ttreplay	13,19,0,0
+
+    9190:	00008067          	ret
+
+00009194 <void (anonymous namespace)::blend_pair_body<8ul, 2ul>()>:
+    9194:	c0838489          	sfpload	L2,290,0,7
+
+    9198:	c0438589          	sfpload	L1,354,0,7
+
+    919c:	10000340          	ttreplay	0,13,0,0
+
+    91a0:	3c000002          	sfpnop
+
+    91a4:	48002406          	sfpswap	L0,L9,1
+
+    91a8:	3c000002          	sfpnop
+
+    91ac:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    91b0:	c1038659          	sfpload	L4,406,0,7
+
+    91b4:	d50bf801          	sfpaddi	L0,17150,0
+
+    91b8:	3c000002          	sfpnop
+
+    91bc:	48000246          	sfpswap	L9,L0,1
+
+    91c0:	3c000002          	sfpnop
+
+    91c4:	dc000041          	sfpexexp	L1,L0,0
+
+    91c8:	e0000001          	sfpexman	L0,L0,0
+
+    91cc:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    91d0:	dc000045          	sfpexexp	L1,L0,1
+
+    91d4:	e0000005          	sfpexman	L0,L0,1
+
+    91d8:	40000002          	sfpcast	L0,L0,0
+
+    91dc:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    91e0:	c1438629          	sfpload	L5,394,0,7
+
+    91e4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    91e8:	c1838661          	sfpload	L6,408,0,7
+
+    91ec:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    91f0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    91f4:	c1c38631          	sfpload	L7,396,0,7
+
+    91f8:	48001806          	sfpswap	L0,L6,1
+
+    91fc:	3c000002          	sfpnop
+
+    9200:	c0c38639          	sfpload	L3,398,0,7
+
+    9204:	c1038641          	sfpload	L4,400,0,7
+
+    9208:	c1438649          	sfpload	L5,402,0,7
+
+    920c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9210:	e00e0000          	ttincrwc	0,14,0,0
+
+    9214:	e0060000          	ttincrwc	0,6,0,0
+
+    9218:	100d04c0          	ttreplay	13,19,0,0
+
+    921c:	00008067          	ret
+
+00009220 <void (anonymous namespace)::blend_pair_body<8ul, 3ul>()>:
+    9220:	c0838481          	sfpload	L2,288,0,7
+
+    9224:	c0438581          	sfpload	L1,352,0,7
+
+    9228:	10000340          	ttreplay	0,13,0,0
+
+    922c:	3c000002          	sfpnop
+
+    9230:	48002406          	sfpswap	L0,L9,1
+
+    9234:	3c000002          	sfpnop
+
+    9238:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    923c:	c1038659          	sfpload	L4,406,0,7
+
+    9240:	d50bf801          	sfpaddi	L0,17150,0
+
+    9244:	3c000002          	sfpnop
+
+    9248:	48000246          	sfpswap	L9,L0,1
+
+    924c:	3c000002          	sfpnop
+
+    9250:	dc000041          	sfpexexp	L1,L0,0
+
+    9254:	e0000001          	sfpexman	L0,L0,0
+
+    9258:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    925c:	dc000045          	sfpexexp	L1,L0,1
+
+    9260:	e0000005          	sfpexman	L0,L0,1
+
+    9264:	40000002          	sfpcast	L0,L0,0
+
+    9268:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    926c:	c1438629          	sfpload	L5,394,0,7
+
+    9270:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9274:	c1838661          	sfpload	L6,408,0,7
+
+    9278:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    927c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9280:	c1c38631          	sfpload	L7,396,0,7
+
+    9284:	48001806          	sfpswap	L0,L6,1
+
+    9288:	3c000002          	sfpnop
+
+    928c:	c0c38639          	sfpload	L3,398,0,7
+
+    9290:	c1038641          	sfpload	L4,400,0,7
+
+    9294:	c1438649          	sfpload	L5,402,0,7
+
+    9298:	e00e0000          	ttincrwc	0,14,0,0
+
+    929c:	e00e0000          	ttincrwc	0,14,0,0
+
+    92a0:	e0040000          	ttincrwc	0,4,0,0
+
+    92a4:	100d04c0          	ttreplay	13,19,0,0
+
+    92a8:	c0838489          	sfpload	L2,290,0,7
+
+    92ac:	c0438589          	sfpload	L1,354,0,7
+
+    92b0:	10000340          	ttreplay	0,13,0,0
+
+    92b4:	3c000002          	sfpnop
+
+    92b8:	48002406          	sfpswap	L0,L9,1
+
+    92bc:	3c000002          	sfpnop
+
+    92c0:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    92c4:	c1038659          	sfpload	L4,406,0,7
+
+    92c8:	d50bf801          	sfpaddi	L0,17150,0
+
+    92cc:	3c000002          	sfpnop
+
+    92d0:	48000246          	sfpswap	L9,L0,1
+
+    92d4:	3c000002          	sfpnop
+
+    92d8:	dc000041          	sfpexexp	L1,L0,0
+
+    92dc:	e0000001          	sfpexman	L0,L0,0
+
+    92e0:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    92e4:	dc000045          	sfpexexp	L1,L0,1
+
+    92e8:	e0000005          	sfpexman	L0,L0,1
+
+    92ec:	40000002          	sfpcast	L0,L0,0
+
+    92f0:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    92f4:	c1438629          	sfpload	L5,394,0,7
+
+    92f8:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    92fc:	c1838661          	sfpload	L6,408,0,7
+
+    9300:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9304:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9308:	c1c38631          	sfpload	L7,396,0,7
+
+    930c:	48001806          	sfpswap	L0,L6,1
+
+    9310:	3c000002          	sfpnop
+
+    9314:	c0c38639          	sfpload	L3,398,0,7
+
+    9318:	c1038641          	sfpload	L4,400,0,7
+
+    931c:	c1438649          	sfpload	L5,402,0,7
+
+    9320:	e00e0000          	ttincrwc	0,14,0,0
+
+    9324:	e00e0000          	ttincrwc	0,14,0,0
+
+    9328:	e0060000          	ttincrwc	0,6,0,0
+
+    932c:	100d04c0          	ttreplay	13,19,0,0
+
+    9330:	00008067          	ret
+
+00009334 <void (anonymous namespace)::blend_pair_body<9ul, 1ul>()>:
+    9334:	c0838491          	sfpload	L2,292,0,7
+
+    9338:	c0438591          	sfpload	L1,356,0,7
+
+    933c:	10000340          	ttreplay	0,13,0,0
+
+    9340:	3c000002          	sfpnop
+
+    9344:	48002406          	sfpswap	L0,L9,1
+
+    9348:	3c000002          	sfpnop
+
+    934c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9350:	c1038659          	sfpload	L4,406,0,7
+
+    9354:	d50bf801          	sfpaddi	L0,17150,0
+
+    9358:	3c000002          	sfpnop
+
+    935c:	48000246          	sfpswap	L9,L0,1
+
+    9360:	3c000002          	sfpnop
+
+    9364:	dc000041          	sfpexexp	L1,L0,0
+
+    9368:	e0000001          	sfpexman	L0,L0,0
+
+    936c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9370:	dc000045          	sfpexexp	L1,L0,1
+
+    9374:	e0000005          	sfpexman	L0,L0,1
+
+    9378:	40000002          	sfpcast	L0,L0,0
+
+    937c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9380:	c1438629          	sfpload	L5,394,0,7
+
+    9384:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9388:	c1838661          	sfpload	L6,408,0,7
+
+    938c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9390:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9394:	c1c38631          	sfpload	L7,396,0,7
+
+    9398:	48001806          	sfpswap	L0,L6,1
+
+    939c:	3c000002          	sfpnop
+
+    93a0:	c0c38639          	sfpload	L3,398,0,7
+
+    93a4:	c1038641          	sfpload	L4,400,0,7
+
+    93a8:	c1438649          	sfpload	L5,402,0,7
+
+    93ac:	e00e0000          	ttincrwc	0,14,0,0
+
+    93b0:	e00e0000          	ttincrwc	0,14,0,0
+
+    93b4:	e0080000          	ttincrwc	0,8,0,0
+
+    93b8:	100d04c0          	ttreplay	13,19,0,0
+
+    93bc:	00008067          	ret
+
+000093c0 <void (anonymous namespace)::blend_pair_body<9ul, 2ul>()>:
+    93c0:	c0838499          	sfpload	L2,294,0,7
+
+    93c4:	c0438599          	sfpload	L1,358,0,7
+
+    93c8:	10000340          	ttreplay	0,13,0,0
+
+    93cc:	3c000002          	sfpnop
+
+    93d0:	48002406          	sfpswap	L0,L9,1
+
+    93d4:	3c000002          	sfpnop
+
+    93d8:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    93dc:	c1038659          	sfpload	L4,406,0,7
+
+    93e0:	d50bf801          	sfpaddi	L0,17150,0
+
+    93e4:	3c000002          	sfpnop
+
+    93e8:	48000246          	sfpswap	L9,L0,1
+
+    93ec:	3c000002          	sfpnop
+
+    93f0:	dc000041          	sfpexexp	L1,L0,0
+
+    93f4:	e0000001          	sfpexman	L0,L0,0
+
+    93f8:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    93fc:	dc000045          	sfpexexp	L1,L0,1
+
+    9400:	e0000005          	sfpexman	L0,L0,1
+
+    9404:	40000002          	sfpcast	L0,L0,0
+
+    9408:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    940c:	c1438629          	sfpload	L5,394,0,7
+
+    9410:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9414:	c1838661          	sfpload	L6,408,0,7
+
+    9418:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    941c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9420:	c1c38631          	sfpload	L7,396,0,7
+
+    9424:	48001806          	sfpswap	L0,L6,1
+
+    9428:	3c000002          	sfpnop
+
+    942c:	c0c38639          	sfpload	L3,398,0,7
+
+    9430:	c1038641          	sfpload	L4,400,0,7
+
+    9434:	c1438649          	sfpload	L5,402,0,7
+
+    9438:	e00e0000          	ttincrwc	0,14,0,0
+
+    943c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9440:	e00a0000          	ttincrwc	0,10,0,0
+
+    9444:	100d04c0          	ttreplay	13,19,0,0
+
+    9448:	00008067          	ret
+
+0000944c <void (anonymous namespace)::blend_pair_body<9ul, 3ul>()>:
+    944c:	c0838491          	sfpload	L2,292,0,7
+
+    9450:	c0438591          	sfpload	L1,356,0,7
+
+    9454:	10000340          	ttreplay	0,13,0,0
+
+    9458:	3c000002          	sfpnop
+
+    945c:	48002406          	sfpswap	L0,L9,1
+
+    9460:	3c000002          	sfpnop
+
+    9464:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9468:	c1038659          	sfpload	L4,406,0,7
+
+    946c:	d50bf801          	sfpaddi	L0,17150,0
+
+    9470:	3c000002          	sfpnop
+
+    9474:	48000246          	sfpswap	L9,L0,1
+
+    9478:	3c000002          	sfpnop
+
+    947c:	dc000041          	sfpexexp	L1,L0,0
+
+    9480:	e0000001          	sfpexman	L0,L0,0
+
+    9484:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9488:	dc000045          	sfpexexp	L1,L0,1
+
+    948c:	e0000005          	sfpexman	L0,L0,1
+
+    9490:	40000002          	sfpcast	L0,L0,0
+
+    9494:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9498:	c1438629          	sfpload	L5,394,0,7
+
+    949c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    94a0:	c1838661          	sfpload	L6,408,0,7
+
+    94a4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    94a8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    94ac:	c1c38631          	sfpload	L7,396,0,7
+
+    94b0:	48001806          	sfpswap	L0,L6,1
+
+    94b4:	3c000002          	sfpnop
+
+    94b8:	c0c38639          	sfpload	L3,398,0,7
+
+    94bc:	c1038641          	sfpload	L4,400,0,7
+
+    94c0:	c1438649          	sfpload	L5,402,0,7
+
+    94c4:	e00e0000          	ttincrwc	0,14,0,0
+
+    94c8:	e00e0000          	ttincrwc	0,14,0,0
+
+    94cc:	e0080000          	ttincrwc	0,8,0,0
+
+    94d0:	100d04c0          	ttreplay	13,19,0,0
+
+    94d4:	c0838499          	sfpload	L2,294,0,7
+
+    94d8:	c0438599          	sfpload	L1,358,0,7
+
+    94dc:	10000340          	ttreplay	0,13,0,0
+
+    94e0:	3c000002          	sfpnop
+
+    94e4:	48002406          	sfpswap	L0,L9,1
+
+    94e8:	3c000002          	sfpnop
+
+    94ec:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    94f0:	c1038659          	sfpload	L4,406,0,7
+
+    94f4:	d50bf801          	sfpaddi	L0,17150,0
+
+    94f8:	3c000002          	sfpnop
+
+    94fc:	48000246          	sfpswap	L9,L0,1
+
+    9500:	3c000002          	sfpnop
+
+    9504:	dc000041          	sfpexexp	L1,L0,0
+
+    9508:	e0000001          	sfpexman	L0,L0,0
+
+    950c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9510:	dc000045          	sfpexexp	L1,L0,1
+
+    9514:	e0000005          	sfpexman	L0,L0,1
+
+    9518:	40000002          	sfpcast	L0,L0,0
+
+    951c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9520:	c1438629          	sfpload	L5,394,0,7
+
+    9524:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9528:	c1838661          	sfpload	L6,408,0,7
+
+    952c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9530:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9534:	c1c38631          	sfpload	L7,396,0,7
+
+    9538:	48001806          	sfpswap	L0,L6,1
+
+    953c:	3c000002          	sfpnop
+
+    9540:	c0c38639          	sfpload	L3,398,0,7
+
+    9544:	c1038641          	sfpload	L4,400,0,7
+
+    9548:	c1438649          	sfpload	L5,402,0,7
+
+    954c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9550:	e00e0000          	ttincrwc	0,14,0,0
+
+    9554:	e00a0000          	ttincrwc	0,10,0,0
+
+    9558:	100d04c0          	ttreplay	13,19,0,0
+
+    955c:	00008067          	ret
+
+00009560 <void (anonymous namespace)::blend_pair_body<10ul, 1ul>()>:
+    9560:	c08384a1          	sfpload	L2,296,0,7
+
+    9564:	c04385a1          	sfpload	L1,360,0,7
+
+    9568:	10000340          	ttreplay	0,13,0,0
+
+    956c:	3c000002          	sfpnop
+
+    9570:	48002406          	sfpswap	L0,L9,1
+
+    9574:	3c000002          	sfpnop
+
+    9578:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    957c:	c1038659          	sfpload	L4,406,0,7
+
+    9580:	d50bf801          	sfpaddi	L0,17150,0
+
+    9584:	3c000002          	sfpnop
+
+    9588:	48000246          	sfpswap	L9,L0,1
+
+    958c:	3c000002          	sfpnop
+
+    9590:	dc000041          	sfpexexp	L1,L0,0
+
+    9594:	e0000001          	sfpexman	L0,L0,0
+
+    9598:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    959c:	dc000045          	sfpexexp	L1,L0,1
+
+    95a0:	e0000005          	sfpexman	L0,L0,1
+
+    95a4:	40000002          	sfpcast	L0,L0,0
+
+    95a8:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    95ac:	c1438629          	sfpload	L5,394,0,7
+
+    95b0:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    95b4:	c1838661          	sfpload	L6,408,0,7
+
+    95b8:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    95bc:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    95c0:	c1c38631          	sfpload	L7,396,0,7
+
+    95c4:	48001806          	sfpswap	L0,L6,1
+
+    95c8:	3c000002          	sfpnop
+
+    95cc:	c0c38639          	sfpload	L3,398,0,7
+
+    95d0:	c1038641          	sfpload	L4,400,0,7
+
+    95d4:	c1438649          	sfpload	L5,402,0,7
+
+    95d8:	e00e0000          	ttincrwc	0,14,0,0
+
+    95dc:	e00e0000          	ttincrwc	0,14,0,0
+
+    95e0:	e00c0000          	ttincrwc	0,12,0,0
+
+    95e4:	100d04c0          	ttreplay	13,19,0,0
+
+    95e8:	00008067          	ret
+
+000095ec <void (anonymous namespace)::blend_pair_body<10ul, 2ul>()>:
+    95ec:	c08384a9          	sfpload	L2,298,0,7
+
+    95f0:	c04385a9          	sfpload	L1,362,0,7
+
+    95f4:	10000340          	ttreplay	0,13,0,0
+
+    95f8:	3c000002          	sfpnop
+
+    95fc:	48002406          	sfpswap	L0,L9,1
+
+    9600:	3c000002          	sfpnop
+
+    9604:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9608:	c1038659          	sfpload	L4,406,0,7
+
+    960c:	d50bf801          	sfpaddi	L0,17150,0
+
+    9610:	3c000002          	sfpnop
+
+    9614:	48000246          	sfpswap	L9,L0,1
+
+    9618:	3c000002          	sfpnop
+
+    961c:	dc000041          	sfpexexp	L1,L0,0
+
+    9620:	e0000001          	sfpexman	L0,L0,0
+
+    9624:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9628:	dc000045          	sfpexexp	L1,L0,1
+
+    962c:	e0000005          	sfpexman	L0,L0,1
+
+    9630:	40000002          	sfpcast	L0,L0,0
+
+    9634:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9638:	c1438629          	sfpload	L5,394,0,7
+
+    963c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9640:	c1838661          	sfpload	L6,408,0,7
+
+    9644:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9648:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    964c:	c1c38631          	sfpload	L7,396,0,7
+
+    9650:	48001806          	sfpswap	L0,L6,1
+
+    9654:	3c000002          	sfpnop
+
+    9658:	c0c38639          	sfpload	L3,398,0,7
+
+    965c:	c1038641          	sfpload	L4,400,0,7
+
+    9660:	c1438649          	sfpload	L5,402,0,7
+
+    9664:	e00e0000          	ttincrwc	0,14,0,0
+
+    9668:	e00e0000          	ttincrwc	0,14,0,0
+
+    966c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9670:	100d04c0          	ttreplay	13,19,0,0
+
+    9674:	00008067          	ret
+
+00009678 <void (anonymous namespace)::blend_pair_body<10ul, 3ul>()>:
+    9678:	c08384a1          	sfpload	L2,296,0,7
+
+    967c:	c04385a1          	sfpload	L1,360,0,7
+
+    9680:	10000340          	ttreplay	0,13,0,0
+
+    9684:	3c000002          	sfpnop
+
+    9688:	48002406          	sfpswap	L0,L9,1
+
+    968c:	3c000002          	sfpnop
+
+    9690:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9694:	c1038659          	sfpload	L4,406,0,7
+
+    9698:	d50bf801          	sfpaddi	L0,17150,0
+
+    969c:	3c000002          	sfpnop
+
+    96a0:	48000246          	sfpswap	L9,L0,1
+
+    96a4:	3c000002          	sfpnop
+
+    96a8:	dc000041          	sfpexexp	L1,L0,0
+
+    96ac:	e0000001          	sfpexman	L0,L0,0
+
+    96b0:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    96b4:	dc000045          	sfpexexp	L1,L0,1
+
+    96b8:	e0000005          	sfpexman	L0,L0,1
+
+    96bc:	40000002          	sfpcast	L0,L0,0
+
+    96c0:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    96c4:	c1438629          	sfpload	L5,394,0,7
+
+    96c8:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    96cc:	c1838661          	sfpload	L6,408,0,7
+
+    96d0:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    96d4:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    96d8:	c1c38631          	sfpload	L7,396,0,7
+
+    96dc:	48001806          	sfpswap	L0,L6,1
+
+    96e0:	3c000002          	sfpnop
+
+    96e4:	c0c38639          	sfpload	L3,398,0,7
+
+    96e8:	c1038641          	sfpload	L4,400,0,7
+
+    96ec:	c1438649          	sfpload	L5,402,0,7
+
+    96f0:	e00e0000          	ttincrwc	0,14,0,0
+
+    96f4:	e00e0000          	ttincrwc	0,14,0,0
+
+    96f8:	e00c0000          	ttincrwc	0,12,0,0
+
+    96fc:	100d04c0          	ttreplay	13,19,0,0
+
+    9700:	c08384a9          	sfpload	L2,298,0,7
+
+    9704:	c04385a9          	sfpload	L1,362,0,7
+
+    9708:	10000340          	ttreplay	0,13,0,0
+
+    970c:	3c000002          	sfpnop
+
+    9710:	48002406          	sfpswap	L0,L9,1
+
+    9714:	3c000002          	sfpnop
+
+    9718:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    971c:	c1038659          	sfpload	L4,406,0,7
+
+    9720:	d50bf801          	sfpaddi	L0,17150,0
+
+    9724:	3c000002          	sfpnop
+
+    9728:	48000246          	sfpswap	L9,L0,1
+
+    972c:	3c000002          	sfpnop
+
+    9730:	dc000041          	sfpexexp	L1,L0,0
+
+    9734:	e0000001          	sfpexman	L0,L0,0
+
+    9738:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    973c:	dc000045          	sfpexexp	L1,L0,1
+
+    9740:	e0000005          	sfpexman	L0,L0,1
+
+    9744:	40000002          	sfpcast	L0,L0,0
+
+    9748:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    974c:	c1438629          	sfpload	L5,394,0,7
+
+    9750:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9754:	c1838661          	sfpload	L6,408,0,7
+
+    9758:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    975c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9760:	c1c38631          	sfpload	L7,396,0,7
+
+    9764:	48001806          	sfpswap	L0,L6,1
+
+    9768:	3c000002          	sfpnop
+
+    976c:	c0c38639          	sfpload	L3,398,0,7
+
+    9770:	c1038641          	sfpload	L4,400,0,7
+
+    9774:	c1438649          	sfpload	L5,402,0,7
+
+    9778:	e00e0000          	ttincrwc	0,14,0,0
+
+    977c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9780:	e00e0000          	ttincrwc	0,14,0,0
+
+    9784:	100d04c0          	ttreplay	13,19,0,0
+
+    9788:	00008067          	ret
+
+0000978c <void (anonymous namespace)::blend_pair_body<11ul, 1ul>()>:
+    978c:	c08384b1          	sfpload	L2,300,0,7
+
+    9790:	c04385b1          	sfpload	L1,364,0,7
+
+    9794:	10000340          	ttreplay	0,13,0,0
+
+    9798:	3c000002          	sfpnop
+
+    979c:	48002406          	sfpswap	L0,L9,1
+
+    97a0:	3c000002          	sfpnop
+
+    97a4:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    97a8:	c1038659          	sfpload	L4,406,0,7
+
+    97ac:	d50bf801          	sfpaddi	L0,17150,0
+
+    97b0:	3c000002          	sfpnop
+
+    97b4:	48000246          	sfpswap	L9,L0,1
+
+    97b8:	3c000002          	sfpnop
+
+    97bc:	dc000041          	sfpexexp	L1,L0,0
+
+    97c0:	e0000001          	sfpexman	L0,L0,0
+
+    97c4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    97c8:	dc000045          	sfpexexp	L1,L0,1
+
+    97cc:	e0000005          	sfpexman	L0,L0,1
+
+    97d0:	40000002          	sfpcast	L0,L0,0
+
+    97d4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    97d8:	c1438629          	sfpload	L5,394,0,7
+
+    97dc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    97e0:	c1838661          	sfpload	L6,408,0,7
+
+    97e4:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    97e8:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    97ec:	c1c38631          	sfpload	L7,396,0,7
+
+    97f0:	48001806          	sfpswap	L0,L6,1
+
+    97f4:	3c000002          	sfpnop
+
+    97f8:	c0c38639          	sfpload	L3,398,0,7
+
+    97fc:	c1038641          	sfpload	L4,400,0,7
+
+    9800:	c1438649          	sfpload	L5,402,0,7
+
+    9804:	e00e0000          	ttincrwc	0,14,0,0
+
+    9808:	e00e0000          	ttincrwc	0,14,0,0
+
+    980c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9810:	e0020000          	ttincrwc	0,2,0,0
+
+    9814:	100d04c0          	ttreplay	13,19,0,0
+
+    9818:	00008067          	ret
+
+0000981c <void (anonymous namespace)::blend_pair_body<11ul, 2ul>()>:
+    981c:	c08384b9          	sfpload	L2,302,0,7
+
+    9820:	c04385b9          	sfpload	L1,366,0,7
+
+    9824:	10000340          	ttreplay	0,13,0,0
+
+    9828:	3c000002          	sfpnop
+
+    982c:	48002406          	sfpswap	L0,L9,1
+
+    9830:	3c000002          	sfpnop
+
+    9834:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9838:	c1038659          	sfpload	L4,406,0,7
+
+    983c:	d50bf801          	sfpaddi	L0,17150,0
+
+    9840:	3c000002          	sfpnop
+
+    9844:	48000246          	sfpswap	L9,L0,1
+
+    9848:	3c000002          	sfpnop
+
+    984c:	dc000041          	sfpexexp	L1,L0,0
+
+    9850:	e0000001          	sfpexman	L0,L0,0
+
+    9854:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9858:	dc000045          	sfpexexp	L1,L0,1
+
+    985c:	e0000005          	sfpexman	L0,L0,1
+
+    9860:	40000002          	sfpcast	L0,L0,0
+
+    9864:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9868:	c1438629          	sfpload	L5,394,0,7
+
+    986c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9870:	c1838661          	sfpload	L6,408,0,7
+
+    9874:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9878:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    987c:	c1c38631          	sfpload	L7,396,0,7
+
+    9880:	48001806          	sfpswap	L0,L6,1
+
+    9884:	3c000002          	sfpnop
+
+    9888:	c0c38639          	sfpload	L3,398,0,7
+
+    988c:	c1038641          	sfpload	L4,400,0,7
+
+    9890:	c1438649          	sfpload	L5,402,0,7
+
+    9894:	e00e0000          	ttincrwc	0,14,0,0
+
+    9898:	e00e0000          	ttincrwc	0,14,0,0
+
+    989c:	e00e0000          	ttincrwc	0,14,0,0
+
+    98a0:	e0040000          	ttincrwc	0,4,0,0
+
+    98a4:	100d04c0          	ttreplay	13,19,0,0
+
+    98a8:	00008067          	ret
+
+000098ac <void (anonymous namespace)::blend_pair_body<11ul, 3ul>()>:
+    98ac:	c08384b1          	sfpload	L2,300,0,7
+
+    98b0:	c04385b1          	sfpload	L1,364,0,7
+
+    98b4:	10000340          	ttreplay	0,13,0,0
+
+    98b8:	3c000002          	sfpnop
+
+    98bc:	48002406          	sfpswap	L0,L9,1
+
+    98c0:	3c000002          	sfpnop
+
+    98c4:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    98c8:	c1038659          	sfpload	L4,406,0,7
+
+    98cc:	d50bf801          	sfpaddi	L0,17150,0
+
+    98d0:	3c000002          	sfpnop
+
+    98d4:	48000246          	sfpswap	L9,L0,1
+
+    98d8:	3c000002          	sfpnop
+
+    98dc:	dc000041          	sfpexexp	L1,L0,0
+
+    98e0:	e0000001          	sfpexman	L0,L0,0
+
+    98e4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    98e8:	dc000045          	sfpexexp	L1,L0,1
+
+    98ec:	e0000005          	sfpexman	L0,L0,1
+
+    98f0:	40000002          	sfpcast	L0,L0,0
+
+    98f4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    98f8:	c1438629          	sfpload	L5,394,0,7
+
+    98fc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9900:	c1838661          	sfpload	L6,408,0,7
+
+    9904:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9908:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    990c:	c1c38631          	sfpload	L7,396,0,7
+
+    9910:	48001806          	sfpswap	L0,L6,1
+
+    9914:	3c000002          	sfpnop
+
+    9918:	c0c38639          	sfpload	L3,398,0,7
+
+    991c:	c1038641          	sfpload	L4,400,0,7
+
+    9920:	c1438649          	sfpload	L5,402,0,7
+
+    9924:	e00e0000          	ttincrwc	0,14,0,0
+
+    9928:	e00e0000          	ttincrwc	0,14,0,0
+
+    992c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9930:	e0020000          	ttincrwc	0,2,0,0
+
+    9934:	100d04c0          	ttreplay	13,19,0,0
+
+    9938:	c08384b9          	sfpload	L2,302,0,7
+
+    993c:	c04385b9          	sfpload	L1,366,0,7
+
+    9940:	10000340          	ttreplay	0,13,0,0
+
+    9944:	3c000002          	sfpnop
+
+    9948:	48002406          	sfpswap	L0,L9,1
+
+    994c:	3c000002          	sfpnop
+
+    9950:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9954:	c1038659          	sfpload	L4,406,0,7
+
+    9958:	d50bf801          	sfpaddi	L0,17150,0
+
+    995c:	3c000002          	sfpnop
+
+    9960:	48000246          	sfpswap	L9,L0,1
+
+    9964:	3c000002          	sfpnop
+
+    9968:	dc000041          	sfpexexp	L1,L0,0
+
+    996c:	e0000001          	sfpexman	L0,L0,0
+
+    9970:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9974:	dc000045          	sfpexexp	L1,L0,1
+
+    9978:	e0000005          	sfpexman	L0,L0,1
+
+    997c:	40000002          	sfpcast	L0,L0,0
+
+    9980:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9984:	c1438629          	sfpload	L5,394,0,7
+
+    9988:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    998c:	c1838661          	sfpload	L6,408,0,7
+
+    9990:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9994:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9998:	c1c38631          	sfpload	L7,396,0,7
+
+    999c:	48001806          	sfpswap	L0,L6,1
+
+    99a0:	3c000002          	sfpnop
+
+    99a4:	c0c38639          	sfpload	L3,398,0,7
+
+    99a8:	c1038641          	sfpload	L4,400,0,7
+
+    99ac:	c1438649          	sfpload	L5,402,0,7
+
+    99b0:	e00e0000          	ttincrwc	0,14,0,0
+
+    99b4:	e00e0000          	ttincrwc	0,14,0,0
+
+    99b8:	e00e0000          	ttincrwc	0,14,0,0
+
+    99bc:	e0040000          	ttincrwc	0,4,0,0
+
+    99c0:	100d04c0          	ttreplay	13,19,0,0
+
+    99c4:	00008067          	ret
+
+000099c8 <void (anonymous namespace)::blend_pair_body<12ul, 1ul>()>:
+    99c8:	c08384c1          	sfpload	L2,304,0,7
+
+    99cc:	c04385c1          	sfpload	L1,368,0,7
+
+    99d0:	10000340          	ttreplay	0,13,0,0
+
+    99d4:	3c000002          	sfpnop
+
+    99d8:	48002406          	sfpswap	L0,L9,1
+
+    99dc:	3c000002          	sfpnop
+
+    99e0:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    99e4:	c1038659          	sfpload	L4,406,0,7
+
+    99e8:	d50bf801          	sfpaddi	L0,17150,0
+
+    99ec:	3c000002          	sfpnop
+
+    99f0:	48000246          	sfpswap	L9,L0,1
+
+    99f4:	3c000002          	sfpnop
+
+    99f8:	dc000041          	sfpexexp	L1,L0,0
+
+    99fc:	e0000001          	sfpexman	L0,L0,0
+
+    9a00:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9a04:	dc000045          	sfpexexp	L1,L0,1
+
+    9a08:	e0000005          	sfpexman	L0,L0,1
+
+    9a0c:	40000002          	sfpcast	L0,L0,0
+
+    9a10:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9a14:	c1438629          	sfpload	L5,394,0,7
+
+    9a18:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9a1c:	c1838661          	sfpload	L6,408,0,7
+
+    9a20:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9a24:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9a28:	c1c38631          	sfpload	L7,396,0,7
+
+    9a2c:	48001806          	sfpswap	L0,L6,1
+
+    9a30:	3c000002          	sfpnop
+
+    9a34:	c0c38639          	sfpload	L3,398,0,7
+
+    9a38:	c1038641          	sfpload	L4,400,0,7
+
+    9a3c:	c1438649          	sfpload	L5,402,0,7
+
+    9a40:	e00e0000          	ttincrwc	0,14,0,0
+
+    9a44:	e00e0000          	ttincrwc	0,14,0,0
+
+    9a48:	e00e0000          	ttincrwc	0,14,0,0
+
+    9a4c:	e0060000          	ttincrwc	0,6,0,0
+
+    9a50:	100d04c0          	ttreplay	13,19,0,0
+
+    9a54:	00008067          	ret
+
+00009a58 <void (anonymous namespace)::blend_pair_body<12ul, 2ul>()>:
+    9a58:	c08384c9          	sfpload	L2,306,0,7
+
+    9a5c:	c04385c9          	sfpload	L1,370,0,7
+
+    9a60:	10000340          	ttreplay	0,13,0,0
+
+    9a64:	3c000002          	sfpnop
+
+    9a68:	48002406          	sfpswap	L0,L9,1
+
+    9a6c:	3c000002          	sfpnop
+
+    9a70:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9a74:	c1038659          	sfpload	L4,406,0,7
+
+    9a78:	d50bf801          	sfpaddi	L0,17150,0
+
+    9a7c:	3c000002          	sfpnop
+
+    9a80:	48000246          	sfpswap	L9,L0,1
+
+    9a84:	3c000002          	sfpnop
+
+    9a88:	dc000041          	sfpexexp	L1,L0,0
+
+    9a8c:	e0000001          	sfpexman	L0,L0,0
+
+    9a90:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9a94:	dc000045          	sfpexexp	L1,L0,1
+
+    9a98:	e0000005          	sfpexman	L0,L0,1
+
+    9a9c:	40000002          	sfpcast	L0,L0,0
+
+    9aa0:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9aa4:	c1438629          	sfpload	L5,394,0,7
+
+    9aa8:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9aac:	c1838661          	sfpload	L6,408,0,7
+
+    9ab0:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9ab4:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9ab8:	c1c38631          	sfpload	L7,396,0,7
+
+    9abc:	48001806          	sfpswap	L0,L6,1
+
+    9ac0:	3c000002          	sfpnop
+
+    9ac4:	c0c38639          	sfpload	L3,398,0,7
+
+    9ac8:	c1038641          	sfpload	L4,400,0,7
+
+    9acc:	c1438649          	sfpload	L5,402,0,7
+
+    9ad0:	e00e0000          	ttincrwc	0,14,0,0
+
+    9ad4:	e00e0000          	ttincrwc	0,14,0,0
+
+    9ad8:	e00e0000          	ttincrwc	0,14,0,0
+
+    9adc:	e0080000          	ttincrwc	0,8,0,0
+
+    9ae0:	100d04c0          	ttreplay	13,19,0,0
+
+    9ae4:	00008067          	ret
+
+00009ae8 <void (anonymous namespace)::blend_pair_body<12ul, 3ul>()>:
+    9ae8:	c08384c1          	sfpload	L2,304,0,7
+
+    9aec:	c04385c1          	sfpload	L1,368,0,7
+
+    9af0:	10000340          	ttreplay	0,13,0,0
+
+    9af4:	3c000002          	sfpnop
+
+    9af8:	48002406          	sfpswap	L0,L9,1
+
+    9afc:	3c000002          	sfpnop
+
+    9b00:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9b04:	c1038659          	sfpload	L4,406,0,7
+
+    9b08:	d50bf801          	sfpaddi	L0,17150,0
+
+    9b0c:	3c000002          	sfpnop
+
+    9b10:	48000246          	sfpswap	L9,L0,1
+
+    9b14:	3c000002          	sfpnop
+
+    9b18:	dc000041          	sfpexexp	L1,L0,0
+
+    9b1c:	e0000001          	sfpexman	L0,L0,0
+
+    9b20:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9b24:	dc000045          	sfpexexp	L1,L0,1
+
+    9b28:	e0000005          	sfpexman	L0,L0,1
+
+    9b2c:	40000002          	sfpcast	L0,L0,0
+
+    9b30:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9b34:	c1438629          	sfpload	L5,394,0,7
+
+    9b38:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9b3c:	c1838661          	sfpload	L6,408,0,7
+
+    9b40:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9b44:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9b48:	c1c38631          	sfpload	L7,396,0,7
+
+    9b4c:	48001806          	sfpswap	L0,L6,1
+
+    9b50:	3c000002          	sfpnop
+
+    9b54:	c0c38639          	sfpload	L3,398,0,7
+
+    9b58:	c1038641          	sfpload	L4,400,0,7
+
+    9b5c:	c1438649          	sfpload	L5,402,0,7
+
+    9b60:	e00e0000          	ttincrwc	0,14,0,0
+
+    9b64:	e00e0000          	ttincrwc	0,14,0,0
+
+    9b68:	e00e0000          	ttincrwc	0,14,0,0
+
+    9b6c:	e0060000          	ttincrwc	0,6,0,0
+
+    9b70:	100d04c0          	ttreplay	13,19,0,0
+
+    9b74:	c08384c9          	sfpload	L2,306,0,7
+
+    9b78:	c04385c9          	sfpload	L1,370,0,7
+
+    9b7c:	10000340          	ttreplay	0,13,0,0
+
+    9b80:	3c000002          	sfpnop
+
+    9b84:	48002406          	sfpswap	L0,L9,1
+
+    9b88:	3c000002          	sfpnop
+
+    9b8c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9b90:	c1038659          	sfpload	L4,406,0,7
+
+    9b94:	d50bf801          	sfpaddi	L0,17150,0
+
+    9b98:	3c000002          	sfpnop
+
+    9b9c:	48000246          	sfpswap	L9,L0,1
+
+    9ba0:	3c000002          	sfpnop
+
+    9ba4:	dc000041          	sfpexexp	L1,L0,0
+
+    9ba8:	e0000001          	sfpexman	L0,L0,0
+
+    9bac:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9bb0:	dc000045          	sfpexexp	L1,L0,1
+
+    9bb4:	e0000005          	sfpexman	L0,L0,1
+
+    9bb8:	40000002          	sfpcast	L0,L0,0
+
+    9bbc:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9bc0:	c1438629          	sfpload	L5,394,0,7
+
+    9bc4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9bc8:	c1838661          	sfpload	L6,408,0,7
+
+    9bcc:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9bd0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9bd4:	c1c38631          	sfpload	L7,396,0,7
+
+    9bd8:	48001806          	sfpswap	L0,L6,1
+
+    9bdc:	3c000002          	sfpnop
+
+    9be0:	c0c38639          	sfpload	L3,398,0,7
+
+    9be4:	c1038641          	sfpload	L4,400,0,7
+
+    9be8:	c1438649          	sfpload	L5,402,0,7
+
+    9bec:	e00e0000          	ttincrwc	0,14,0,0
+
+    9bf0:	e00e0000          	ttincrwc	0,14,0,0
+
+    9bf4:	e00e0000          	ttincrwc	0,14,0,0
+
+    9bf8:	e0080000          	ttincrwc	0,8,0,0
+
+    9bfc:	100d04c0          	ttreplay	13,19,0,0
+
+    9c00:	00008067          	ret
+
+00009c04 <void (anonymous namespace)::blend_pair_body<13ul, 1ul>()>:
+    9c04:	c08384d1          	sfpload	L2,308,0,7
+
+    9c08:	c04385d1          	sfpload	L1,372,0,7
+
+    9c0c:	10000340          	ttreplay	0,13,0,0
+
+    9c10:	3c000002          	sfpnop
+
+    9c14:	48002406          	sfpswap	L0,L9,1
+
+    9c18:	3c000002          	sfpnop
+
+    9c1c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9c20:	c1038659          	sfpload	L4,406,0,7
+
+    9c24:	d50bf801          	sfpaddi	L0,17150,0
+
+    9c28:	3c000002          	sfpnop
+
+    9c2c:	48000246          	sfpswap	L9,L0,1
+
+    9c30:	3c000002          	sfpnop
+
+    9c34:	dc000041          	sfpexexp	L1,L0,0
+
+    9c38:	e0000001          	sfpexman	L0,L0,0
+
+    9c3c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9c40:	dc000045          	sfpexexp	L1,L0,1
+
+    9c44:	e0000005          	sfpexman	L0,L0,1
+
+    9c48:	40000002          	sfpcast	L0,L0,0
+
+    9c4c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9c50:	c1438629          	sfpload	L5,394,0,7
+
+    9c54:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9c58:	c1838661          	sfpload	L6,408,0,7
+
+    9c5c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9c60:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9c64:	c1c38631          	sfpload	L7,396,0,7
+
+    9c68:	48001806          	sfpswap	L0,L6,1
+
+    9c6c:	3c000002          	sfpnop
+
+    9c70:	c0c38639          	sfpload	L3,398,0,7
+
+    9c74:	c1038641          	sfpload	L4,400,0,7
+
+    9c78:	c1438649          	sfpload	L5,402,0,7
+
+    9c7c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9c80:	e00e0000          	ttincrwc	0,14,0,0
+
+    9c84:	e00e0000          	ttincrwc	0,14,0,0
+
+    9c88:	e00a0000          	ttincrwc	0,10,0,0
+
+    9c8c:	100d04c0          	ttreplay	13,19,0,0
+
+    9c90:	00008067          	ret
+
+00009c94 <void (anonymous namespace)::blend_pair_body<13ul, 2ul>()>:
+    9c94:	c08384d9          	sfpload	L2,310,0,7
+
+    9c98:	c04385d9          	sfpload	L1,374,0,7
+
+    9c9c:	10000340          	ttreplay	0,13,0,0
+
+    9ca0:	3c000002          	sfpnop
+
+    9ca4:	48002406          	sfpswap	L0,L9,1
+
+    9ca8:	3c000002          	sfpnop
+
+    9cac:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9cb0:	c1038659          	sfpload	L4,406,0,7
+
+    9cb4:	d50bf801          	sfpaddi	L0,17150,0
+
+    9cb8:	3c000002          	sfpnop
+
+    9cbc:	48000246          	sfpswap	L9,L0,1
+
+    9cc0:	3c000002          	sfpnop
+
+    9cc4:	dc000041          	sfpexexp	L1,L0,0
+
+    9cc8:	e0000001          	sfpexman	L0,L0,0
+
+    9ccc:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9cd0:	dc000045          	sfpexexp	L1,L0,1
+
+    9cd4:	e0000005          	sfpexman	L0,L0,1
+
+    9cd8:	40000002          	sfpcast	L0,L0,0
+
+    9cdc:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9ce0:	c1438629          	sfpload	L5,394,0,7
+
+    9ce4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9ce8:	c1838661          	sfpload	L6,408,0,7
+
+    9cec:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9cf0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9cf4:	c1c38631          	sfpload	L7,396,0,7
+
+    9cf8:	48001806          	sfpswap	L0,L6,1
+
+    9cfc:	3c000002          	sfpnop
+
+    9d00:	c0c38639          	sfpload	L3,398,0,7
+
+    9d04:	c1038641          	sfpload	L4,400,0,7
+
+    9d08:	c1438649          	sfpload	L5,402,0,7
+
+    9d0c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9d10:	e00e0000          	ttincrwc	0,14,0,0
+
+    9d14:	e00e0000          	ttincrwc	0,14,0,0
+
+    9d18:	e00c0000          	ttincrwc	0,12,0,0
+
+    9d1c:	100d04c0          	ttreplay	13,19,0,0
+
+    9d20:	00008067          	ret
+
+00009d24 <void (anonymous namespace)::blend_pair_body<13ul, 3ul>()>:
+    9d24:	c08384d1          	sfpload	L2,308,0,7
+
+    9d28:	c04385d1          	sfpload	L1,372,0,7
+
+    9d2c:	10000340          	ttreplay	0,13,0,0
+
+    9d30:	3c000002          	sfpnop
+
+    9d34:	48002406          	sfpswap	L0,L9,1
+
+    9d38:	3c000002          	sfpnop
+
+    9d3c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9d40:	c1038659          	sfpload	L4,406,0,7
+
+    9d44:	d50bf801          	sfpaddi	L0,17150,0
+
+    9d48:	3c000002          	sfpnop
+
+    9d4c:	48000246          	sfpswap	L9,L0,1
+
+    9d50:	3c000002          	sfpnop
+
+    9d54:	dc000041          	sfpexexp	L1,L0,0
+
+    9d58:	e0000001          	sfpexman	L0,L0,0
+
+    9d5c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9d60:	dc000045          	sfpexexp	L1,L0,1
+
+    9d64:	e0000005          	sfpexman	L0,L0,1
+
+    9d68:	40000002          	sfpcast	L0,L0,0
+
+    9d6c:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9d70:	c1438629          	sfpload	L5,394,0,7
+
+    9d74:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9d78:	c1838661          	sfpload	L6,408,0,7
+
+    9d7c:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9d80:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9d84:	c1c38631          	sfpload	L7,396,0,7
+
+    9d88:	48001806          	sfpswap	L0,L6,1
+
+    9d8c:	3c000002          	sfpnop
+
+    9d90:	c0c38639          	sfpload	L3,398,0,7
+
+    9d94:	c1038641          	sfpload	L4,400,0,7
+
+    9d98:	c1438649          	sfpload	L5,402,0,7
+
+    9d9c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9da0:	e00e0000          	ttincrwc	0,14,0,0
+
+    9da4:	e00e0000          	ttincrwc	0,14,0,0
+
+    9da8:	e00a0000          	ttincrwc	0,10,0,0
+
+    9dac:	100d04c0          	ttreplay	13,19,0,0
+
+    9db0:	c08384d9          	sfpload	L2,310,0,7
+
+    9db4:	c04385d9          	sfpload	L1,374,0,7
+
+    9db8:	10000340          	ttreplay	0,13,0,0
+
+    9dbc:	3c000002          	sfpnop
+
+    9dc0:	48002406          	sfpswap	L0,L9,1
+
+    9dc4:	3c000002          	sfpnop
+
+    9dc8:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9dcc:	c1038659          	sfpload	L4,406,0,7
+
+    9dd0:	d50bf801          	sfpaddi	L0,17150,0
+
+    9dd4:	3c000002          	sfpnop
+
+    9dd8:	48000246          	sfpswap	L9,L0,1
+
+    9ddc:	3c000002          	sfpnop
+
+    9de0:	dc000041          	sfpexexp	L1,L0,0
+
+    9de4:	e0000001          	sfpexman	L0,L0,0
+
+    9de8:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9dec:	dc000045          	sfpexexp	L1,L0,1
+
+    9df0:	e0000005          	sfpexman	L0,L0,1
+
+    9df4:	40000002          	sfpcast	L0,L0,0
+
+    9df8:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9dfc:	c1438629          	sfpload	L5,394,0,7
+
+    9e00:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9e04:	c1838661          	sfpload	L6,408,0,7
+
+    9e08:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9e0c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9e10:	c1c38631          	sfpload	L7,396,0,7
+
+    9e14:	48001806          	sfpswap	L0,L6,1
+
+    9e18:	3c000002          	sfpnop
+
+    9e1c:	c0c38639          	sfpload	L3,398,0,7
+
+    9e20:	c1038641          	sfpload	L4,400,0,7
+
+    9e24:	c1438649          	sfpload	L5,402,0,7
+
+    9e28:	e00e0000          	ttincrwc	0,14,0,0
+
+    9e2c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9e30:	e00e0000          	ttincrwc	0,14,0,0
+
+    9e34:	e00c0000          	ttincrwc	0,12,0,0
+
+    9e38:	100d04c0          	ttreplay	13,19,0,0
+
+    9e3c:	00008067          	ret
+
+00009e40 <void (anonymous namespace)::blend_pair_body<14ul, 1ul>()>:
+    9e40:	c08384e1          	sfpload	L2,312,0,7
+
+    9e44:	c04385e1          	sfpload	L1,376,0,7
+
+    9e48:	10000340          	ttreplay	0,13,0,0
+
+    9e4c:	3c000002          	sfpnop
+
+    9e50:	48002406          	sfpswap	L0,L9,1
+
+    9e54:	3c000002          	sfpnop
+
+    9e58:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9e5c:	c1038659          	sfpload	L4,406,0,7
+
+    9e60:	d50bf801          	sfpaddi	L0,17150,0
+
+    9e64:	3c000002          	sfpnop
+
+    9e68:	48000246          	sfpswap	L9,L0,1
+
+    9e6c:	3c000002          	sfpnop
+
+    9e70:	dc000041          	sfpexexp	L1,L0,0
+
+    9e74:	e0000001          	sfpexman	L0,L0,0
+
+    9e78:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9e7c:	dc000045          	sfpexexp	L1,L0,1
+
+    9e80:	e0000005          	sfpexman	L0,L0,1
+
+    9e84:	40000002          	sfpcast	L0,L0,0
+
+    9e88:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9e8c:	c1438629          	sfpload	L5,394,0,7
+
+    9e90:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9e94:	c1838661          	sfpload	L6,408,0,7
+
+    9e98:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9e9c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9ea0:	c1c38631          	sfpload	L7,396,0,7
+
+    9ea4:	48001806          	sfpswap	L0,L6,1
+
+    9ea8:	3c000002          	sfpnop
+
+    9eac:	c0c38639          	sfpload	L3,398,0,7
+
+    9eb0:	c1038641          	sfpload	L4,400,0,7
+
+    9eb4:	c1438649          	sfpload	L5,402,0,7
+
+    9eb8:	e00e0000          	ttincrwc	0,14,0,0
+
+    9ebc:	e00e0000          	ttincrwc	0,14,0,0
+
+    9ec0:	e00e0000          	ttincrwc	0,14,0,0
+
+    9ec4:	e00e0000          	ttincrwc	0,14,0,0
+
+    9ec8:	100d04c0          	ttreplay	13,19,0,0
+
+    9ecc:	00008067          	ret
+
+00009ed0 <void (anonymous namespace)::blend_pair_body<14ul, 2ul>()>:
+    9ed0:	c08384e9          	sfpload	L2,314,0,7
+
+    9ed4:	c04385e9          	sfpload	L1,378,0,7
+
+    9ed8:	10000340          	ttreplay	0,13,0,0
+
+    9edc:	3c000002          	sfpnop
+
+    9ee0:	48002406          	sfpswap	L0,L9,1
+
+    9ee4:	3c000002          	sfpnop
+
+    9ee8:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9eec:	c1038659          	sfpload	L4,406,0,7
+
+    9ef0:	d50bf801          	sfpaddi	L0,17150,0
+
+    9ef4:	3c000002          	sfpnop
+
+    9ef8:	48000246          	sfpswap	L9,L0,1
+
+    9efc:	3c000002          	sfpnop
+
+    9f00:	dc000041          	sfpexexp	L1,L0,0
+
+    9f04:	e0000001          	sfpexman	L0,L0,0
+
+    9f08:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9f0c:	dc000045          	sfpexexp	L1,L0,1
+
+    9f10:	e0000005          	sfpexman	L0,L0,1
+
+    9f14:	40000002          	sfpcast	L0,L0,0
+
+    9f18:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9f1c:	c1438629          	sfpload	L5,394,0,7
+
+    9f20:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9f24:	c1838661          	sfpload	L6,408,0,7
+
+    9f28:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9f2c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9f30:	c1c38631          	sfpload	L7,396,0,7
+
+    9f34:	48001806          	sfpswap	L0,L6,1
+
+    9f38:	3c000002          	sfpnop
+
+    9f3c:	c0c38639          	sfpload	L3,398,0,7
+
+    9f40:	c1038641          	sfpload	L4,400,0,7
+
+    9f44:	c1438649          	sfpload	L5,402,0,7
+
+    9f48:	e00e0000          	ttincrwc	0,14,0,0
+
+    9f4c:	e00e0000          	ttincrwc	0,14,0,0
+
+    9f50:	e00e0000          	ttincrwc	0,14,0,0
+
+    9f54:	e00e0000          	ttincrwc	0,14,0,0
+
+    9f58:	e0020000          	ttincrwc	0,2,0,0
+
+    9f5c:	100d04c0          	ttreplay	13,19,0,0
+
+    9f60:	00008067          	ret
+
+00009f64 <void (anonymous namespace)::blend_pair_body<14ul, 3ul>()>:
+    9f64:	c08384e1          	sfpload	L2,312,0,7
+
+    9f68:	c04385e1          	sfpload	L1,376,0,7
+
+    9f6c:	10000340          	ttreplay	0,13,0,0
+
+    9f70:	3c000002          	sfpnop
+
+    9f74:	48002406          	sfpswap	L0,L9,1
+
+    9f78:	3c000002          	sfpnop
+
+    9f7c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    9f80:	c1038659          	sfpload	L4,406,0,7
+
+    9f84:	d50bf801          	sfpaddi	L0,17150,0
+
+    9f88:	3c000002          	sfpnop
+
+    9f8c:	48000246          	sfpswap	L9,L0,1
+
+    9f90:	3c000002          	sfpnop
+
+    9f94:	dc000041          	sfpexexp	L1,L0,0
+
+    9f98:	e0000001          	sfpexman	L0,L0,0
+
+    9f9c:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    9fa0:	dc000045          	sfpexexp	L1,L0,1
+
+    9fa4:	e0000005          	sfpexman	L0,L0,1
+
+    9fa8:	40000002          	sfpcast	L0,L0,0
+
+    9fac:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    9fb0:	c1438629          	sfpload	L5,394,0,7
+
+    9fb4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    9fb8:	c1838661          	sfpload	L6,408,0,7
+
+    9fbc:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    9fc0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    9fc4:	c1c38631          	sfpload	L7,396,0,7
+
+    9fc8:	48001806          	sfpswap	L0,L6,1
+
+    9fcc:	3c000002          	sfpnop
+
+    9fd0:	c0c38639          	sfpload	L3,398,0,7
+
+    9fd4:	c1038641          	sfpload	L4,400,0,7
+
+    9fd8:	c1438649          	sfpload	L5,402,0,7
+
+    9fdc:	e00e0000          	ttincrwc	0,14,0,0
+
+    9fe0:	e00e0000          	ttincrwc	0,14,0,0
+
+    9fe4:	e00e0000          	ttincrwc	0,14,0,0
+
+    9fe8:	e00e0000          	ttincrwc	0,14,0,0
+
+    9fec:	100d04c0          	ttreplay	13,19,0,0
+
+    9ff0:	c08384e9          	sfpload	L2,314,0,7
+
+    9ff4:	c04385e9          	sfpload	L1,378,0,7
+
+    9ff8:	10000340          	ttreplay	0,13,0,0
+
+    9ffc:	3c000002          	sfpnop
+
+    a000:	48002406          	sfpswap	L0,L9,1
+
+    a004:	3c000002          	sfpnop
+
+    a008:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    a00c:	c1038659          	sfpload	L4,406,0,7
+
+    a010:	d50bf801          	sfpaddi	L0,17150,0
+
+    a014:	3c000002          	sfpnop
+
+    a018:	48000246          	sfpswap	L9,L0,1
+
+    a01c:	3c000002          	sfpnop
+
+    a020:	dc000041          	sfpexexp	L1,L0,0
+
+    a024:	e0000001          	sfpexman	L0,L0,0
+
+    a028:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    a02c:	dc000045          	sfpexexp	L1,L0,1
+
+    a030:	e0000005          	sfpexman	L0,L0,1
+
+    a034:	40000002          	sfpcast	L0,L0,0
+
+    a038:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    a03c:	c1438629          	sfpload	L5,394,0,7
+
+    a040:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    a044:	c1838661          	sfpload	L6,408,0,7
+
+    a048:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    a04c:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    a050:	c1c38631          	sfpload	L7,396,0,7
+
+    a054:	48001806          	sfpswap	L0,L6,1
+
+    a058:	3c000002          	sfpnop
+
+    a05c:	c0c38639          	sfpload	L3,398,0,7
+
+    a060:	c1038641          	sfpload	L4,400,0,7
+
+    a064:	c1438649          	sfpload	L5,402,0,7
+
+    a068:	e00e0000          	ttincrwc	0,14,0,0
+
+    a06c:	e00e0000          	ttincrwc	0,14,0,0
+
+    a070:	e00e0000          	ttincrwc	0,14,0,0
+
+    a074:	e00e0000          	ttincrwc	0,14,0,0
+
+    a078:	e0020000          	ttincrwc	0,2,0,0
+
+    a07c:	100d04c0          	ttreplay	13,19,0,0
+
+    a080:	00008067          	ret
+
+0000a084 <void (anonymous namespace)::blend_pair_body<15ul, 1ul>()>:
+    a084:	c08384f1          	sfpload	L2,316,0,7
+
+    a088:	c04385f1          	sfpload	L1,380,0,7
+
+    a08c:	10000340          	ttreplay	0,13,0,0
+
+    a090:	3c000002          	sfpnop
+
+    a094:	48002406          	sfpswap	L0,L9,1
+
+    a098:	3c000002          	sfpnop
+
+    a09c:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    a0a0:	c1038659          	sfpload	L4,406,0,7
+
+    a0a4:	d50bf801          	sfpaddi	L0,17150,0
+
+    a0a8:	3c000002          	sfpnop
+
+    a0ac:	48000246          	sfpswap	L9,L0,1
+
+    a0b0:	3c000002          	sfpnop
+
+    a0b4:	dc000041          	sfpexexp	L1,L0,0
+
+    a0b8:	e0000001          	sfpexman	L0,L0,0
+
+    a0bc:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    a0c0:	dc000045          	sfpexexp	L1,L0,1
+
+    a0c4:	e0000005          	sfpexman	L0,L0,1
+
+    a0c8:	40000002          	sfpcast	L0,L0,0
+
+    a0cc:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    a0d0:	c1438629          	sfpload	L5,394,0,7
+
+    a0d4:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    a0d8:	c1838661          	sfpload	L6,408,0,7
+
+    a0dc:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    a0e0:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    a0e4:	c1c38631          	sfpload	L7,396,0,7
+
+    a0e8:	48001806          	sfpswap	L0,L6,1
+
+    a0ec:	3c000002          	sfpnop
+
+    a0f0:	c0c38639          	sfpload	L3,398,0,7
+
+    a0f4:	c1038641          	sfpload	L4,400,0,7
+
+    a0f8:	c1438649          	sfpload	L5,402,0,7
+
+    a0fc:	e00e0000          	ttincrwc	0,14,0,0
+
+    a100:	e00e0000          	ttincrwc	0,14,0,0
+
+    a104:	e00e0000          	ttincrwc	0,14,0,0
+
+    a108:	e00e0000          	ttincrwc	0,14,0,0
+
+    a10c:	e0040000          	ttincrwc	0,4,0,0
+
+    a110:	100d04c0          	ttreplay	13,19,0,0
+
+    a114:	00008067          	ret
+
+0000a118 <void (anonymous namespace)::blend_pair_body<15ul, 2ul>()>:
+    a118:	c08384f9          	sfpload	L2,318,0,7
+
+    a11c:	c04385f9          	sfpload	L1,382,0,7
+
+    a120:	10000340          	ttreplay	0,13,0,0
+
+    a124:	3c000002          	sfpnop
+
+    a128:	48002406          	sfpswap	L0,L9,1
+
+    a12c:	3c000002          	sfpnop
+
+    a130:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    a134:	c1038659          	sfpload	L4,406,0,7
+
+    a138:	d50bf801          	sfpaddi	L0,17150,0
+
+    a13c:	3c000002          	sfpnop
+
+    a140:	48000246          	sfpswap	L9,L0,1
+
+    a144:	3c000002          	sfpnop
+
+    a148:	dc000041          	sfpexexp	L1,L0,0
+
+    a14c:	e0000001          	sfpexman	L0,L0,0
+
+    a150:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    a154:	dc000045          	sfpexexp	L1,L0,1
+
+    a158:	e0000005          	sfpexman	L0,L0,1
+
+    a15c:	40000002          	sfpcast	L0,L0,0
+
+    a160:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    a164:	c1438629          	sfpload	L5,394,0,7
+
+    a168:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    a16c:	c1838661          	sfpload	L6,408,0,7
+
+    a170:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    a174:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    a178:	c1c38631          	sfpload	L7,396,0,7
+
+    a17c:	48001806          	sfpswap	L0,L6,1
+
+    a180:	3c000002          	sfpnop
+
+    a184:	c0c38639          	sfpload	L3,398,0,7
+
+    a188:	c1038641          	sfpload	L4,400,0,7
+
+    a18c:	c1438649          	sfpload	L5,402,0,7
+
+    a190:	e00e0000          	ttincrwc	0,14,0,0
+
+    a194:	e00e0000          	ttincrwc	0,14,0,0
+
+    a198:	e00e0000          	ttincrwc	0,14,0,0
+
+    a19c:	e00e0000          	ttincrwc	0,14,0,0
+
+    a1a0:	e0060000          	ttincrwc	0,6,0,0
+
+    a1a4:	100d04c0          	ttreplay	13,19,0,0
+
+    a1a8:	00008067          	ret
+
+0000a1ac <void (anonymous namespace)::blend_pair_body<15ul, 3ul>()>:
+    a1ac:	c08384f1          	sfpload	L2,316,0,7
+
+    a1b0:	c04385f1          	sfpload	L1,380,0,7
+
+    a1b4:	10000340          	ttreplay	0,13,0,0
+
+    a1b8:	3c000002          	sfpnop
+
+    a1bc:	48002406          	sfpswap	L0,L9,1
+
+    a1c0:	3c000002          	sfpnop
+
+    a1c4:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    a1c8:	c1038659          	sfpload	L4,406,0,7
+
+    a1cc:	d50bf801          	sfpaddi	L0,17150,0
+
+    a1d0:	3c000002          	sfpnop
+
+    a1d4:	48000246          	sfpswap	L9,L0,1
+
+    a1d8:	3c000002          	sfpnop
+
+    a1dc:	dc000041          	sfpexexp	L1,L0,0
+
+    a1e0:	e0000001          	sfpexman	L0,L0,0
+
+    a1e4:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    a1e8:	dc000045          	sfpexexp	L1,L0,1
+
+    a1ec:	e0000005          	sfpexman	L0,L0,1
+
+    a1f0:	40000002          	sfpcast	L0,L0,0
+
+    a1f4:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    a1f8:	c1438629          	sfpload	L5,394,0,7
+
+    a1fc:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    a200:	c1838661          	sfpload	L6,408,0,7
+
+    a204:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    a208:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    a20c:	c1c38631          	sfpload	L7,396,0,7
+
+    a210:	48001806          	sfpswap	L0,L6,1
+
+    a214:	3c000002          	sfpnop
+
+    a218:	c0c38639          	sfpload	L3,398,0,7
+
+    a21c:	c1038641          	sfpload	L4,400,0,7
+
+    a220:	c1438649          	sfpload	L5,402,0,7
+
+    a224:	e00e0000          	ttincrwc	0,14,0,0
+
+    a228:	e00e0000          	ttincrwc	0,14,0,0
+
+    a22c:	e00e0000          	ttincrwc	0,14,0,0
+
+    a230:	e00e0000          	ttincrwc	0,14,0,0
+
+    a234:	e0040000          	ttincrwc	0,4,0,0
+
+    a238:	100d04c0          	ttreplay	13,19,0,0
+
+    a23c:	c08384f9          	sfpload	L2,318,0,7
+
+    a240:	c04385f9          	sfpload	L1,382,0,7
+
+    a244:	10000340          	ttreplay	0,13,0,0
+
+    a248:	3c000002          	sfpnop
+
+    a24c:	48002406          	sfpswap	L0,L9,1
+
+    a250:	3c000002          	sfpnop
+
+    a254:	18032402          	sfpmul	L0,L0,L12,L9,0
+
+    a258:	c1038659          	sfpload	L4,406,0,7
+
+    a25c:	d50bf801          	sfpaddi	L0,17150,0
+
+    a260:	3c000002          	sfpnop
+
+    a264:	48000246          	sfpswap	L9,L0,1
+
+    a268:	3c000002          	sfpnop
+
+    a26c:	dc000041          	sfpexexp	L1,L0,0
+
+    a270:	e0000001          	sfpexman	L0,L0,0
+
+    a274:	e8000401          	sfpshft	L0,L1,0x000,0
+
+    a278:	dc000045          	sfpexexp	L1,L0,1
+
+    a27c:	e0000005          	sfpexman	L0,L0,1
+
+    a280:	40000002          	sfpcast	L0,L0,0
+
+    a284:	10037882          	sfpmad	L2,L0,L13,L14,0
+
+    a288:	c1438629          	sfpload	L5,394,0,7
+
+    a28c:	10009002          	sfpmad	L0,L0,L2,L4,0
+
+    a290:	c1838661          	sfpload	L6,408,0,7
+
+    a294:	08000042          	sfpsetexp	L1,L0,0x000,0
+
+    a298:	18146402          	sfpmul	L0,L5,L1,L9,0
+
+    a29c:	c1c38631          	sfpload	L7,396,0,7
+
+    a2a0:	48001806          	sfpswap	L0,L6,1
+
+    a2a4:	3c000002          	sfpnop
+
+    a2a8:	c0c38639          	sfpload	L3,398,0,7
+
+    a2ac:	c1038641          	sfpload	L4,400,0,7
+
+    a2b0:	c1438649          	sfpload	L5,402,0,7
+
+    a2b4:	e00e0000          	ttincrwc	0,14,0,0
+
+    a2b8:	e00e0000          	ttincrwc	0,14,0,0
+
+    a2bc:	e00e0000          	ttincrwc	0,14,0,0
+
+    a2c0:	e00e0000          	ttincrwc	0,14,0,0
+
+    a2c4:	e0060000          	ttincrwc	0,6,0,0
+
+    a2c8:	100d04c0          	ttreplay	13,19,0,0
+
+    a2cc:	00008067          	ret
+
+0000a2d0 <memset>:
+    a2d0:	00f00313          	li	t1,15
+    a2d4:	00050713          	mv	a4,a0
+    a2d8:	02c37e63          	bgeu	t1,a2,a314 <.Ltiny>
+    a2dc:	00f77793          	andi	a5,a4,15
+    a2e0:	0a079063          	bnez	a5,a380 <.Lmisaligned>
+    a2e4:	08059263          	bnez	a1,a368 <.Lwordify>
+    a2e8:	ff067693          	andi	a3,a2,-16
+    a2ec:	00f67613          	andi	a2,a2,15
+    a2f0:	00e686b3          	add	a3,a3,a4
+
+    a2f4:	00b72023          	sw	a1,0(a4) # b2010000 <__device_print_strings_info_end+0xabb10000>
+    a2f8:	00b72223          	sw	a1,4(a4)
+    a2fc:	00b72423          	sw	a1,8(a4)
+    a300:	00b72623          	sw	a1,12(a4)
+    a304:	01070713          	addi	a4,a4,16
+    a308:	fed766e3          	bltu	a4,a3,a2f4 <.L1^B1>
+    a30c:	00061463          	bnez	a2,a314 <.Ltiny>
+    a310:	00008067          	ret
+    a314:	40c306b3          	sub	a3,t1,a2
+    a318:	00269693          	slli	a3,a3,0x2
+
+    a31c:	00000297          	auipc	t0,0x0
+    a320:	005686b3          	add	a3,a3,t0
+
+    a324:	00c68067          	jr	12(a3)
+
+    a328:	00b70723          	sb	a1,14(a4)
+    a32c:	00b706a3          	sb	a1,13(a4)
+    a330:	00b70623          	sb	a1,12(a4)
+    a334:	00b705a3          	sb	a1,11(a4)
+    a338:	00b70523          	sb	a1,10(a4)
+    a33c:	00b704a3          	sb	a1,9(a4)
+    a340:	00b70423          	sb	a1,8(a4)
+    a344:	00b703a3          	sb	a1,7(a4)
+    a348:	00b70323          	sb	a1,6(a4)
+    a34c:	00b702a3          	sb	a1,5(a4)
+    a350:	00b70223          	sb	a1,4(a4)
+    a354:	00b701a3          	sb	a1,3(a4)
+    a358:	00b70123          	sb	a1,2(a4)
+    a35c:	00b700a3          	sb	a1,1(a4)
+    a360:	00b70023          	sb	a1,0(a4)
+    a364:	00008067          	ret
+
+    a368:	0ff5f593          	zext.b	a1,a1
+    a36c:	00859693          	slli	a3,a1,0x8
+    a370:	00d5e5b3          	or	a1,a1,a3
+    a374:	01059693          	slli	a3,a1,0x10
+    a378:	00d5e5b3          	or	a1,a1,a3
+    a37c:	f6dff06f          	j	a2e8 <.Lwordified>
+    a380:	00279693          	slli	a3,a5,0x2
+
+    a384:	00000297          	auipc	t0,0x0
+    a388:	005686b3          	add	a3,a3,t0
+    a38c:	00008293          	mv	t0,ra
+    a390:	fa0680e7          	jalr	-96(a3)
+    a394:	00028093          	mv	ra,t0
+    a398:	ff078793          	addi	a5,a5,-16
+    a39c:	40f70733          	sub	a4,a4,a5
+    a3a0:	00f60633          	add	a2,a2,a5
+    a3a4:	f6c378e3          	bgeu	t1,a2,a314 <.Ltiny>
+    a3a8:	f3dff06f          	j	a2e4 <.Laligned>
