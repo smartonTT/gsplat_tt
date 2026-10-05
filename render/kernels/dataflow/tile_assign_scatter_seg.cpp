@@ -58,6 +58,23 @@
 #ifndef K2_FOLD_TILES
 #define K2_FOLD_TILES 1024u  // tiles a count row can hold (local memory)
 #endif
+// Task #274 (host knob GSPLAT_TT_K2_PROF=1, profiling only): each mover sums
+// wall-clock cycles per part (K2P_* below) and records the totals as Tracy
+// timestamped-data markers "k2p_*" at its end (value = cycles over the launch).
+// Off: the macros are empty and the binary is the same as before.
+#ifndef K2_PROF
+#define K2_PROF 0
+#endif
+#if K2_PROF
+enum { K2P_SETUP, K2P_RISS, K2P_RDW, K2P_WISS, K2P_WFL, K2P_PAIRS, K2P_ROWS, K2P_WBAR, K2P_TOT, K2P_N };
+uint32_t g_k2p[K2P_N];
+#define K2P_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
+#define K2P_T0(v) const uint32_t v = K2P_NOW()
+#define K2P_ADD(i, t0) g_k2p[i] += K2P_NOW() - (t0)
+#else
+#define K2P_T0(v)
+#define K2P_ADD(i, t0)
+#endif
 
 #if K2_DIET
 namespace {
@@ -72,15 +89,21 @@ struct DietIo {
     const TA& tids_acc;
     uint32_t ra_lofs, ra_box, st_gid, st_tid;
     void issue_lofs(uint32_t page, uint32_t slot) const {
+        K2P_T0(t0);
         noc_async_read(get_noc_addr(page, lofs_acc), ra_lofs + slot * 64u, 64u);
+        K2P_ADD(K2P_RISS, t0);
     }
     void issue(uint32_t page, uint32_t slot) const {
+        K2P_T0(t0);
         noc_async_read(get_noc_addr(page, lofs_acc), ra_lofs + slot * 64u, 64u);
         noc_async_read(get_noc_addr(page, box_acc), ra_box + slot * 64u, 64u);
+        K2P_ADD(K2P_RISS, t0);
     }
     void wait_reads() const {
+        K2P_T0(t0);
         noc_async_read_barrier();
         asm volatile("" ::: "memory");
+        K2P_ADD(K2P_RDW, t0);
     }
     const uint32_t* lofs_slot(uint32_t slot) const {
         return reinterpret_cast<const uint32_t*>(ra_lofs + slot * 64u);
@@ -92,18 +115,26 @@ struct DietIo {
     uint32_t* tid_slot(uint32_t o) const { return reinterpret_cast<uint32_t*>(st_tid + o * 64u); }
     void write_page(uint32_t page, uint32_t o) const {
         asm volatile("" ::: "memory");
+        K2P_T0(t0);
         noc_async_write(st_gid + o * 64u, get_noc_addr(page, gids_acc), 64u);
         noc_async_write(st_tid + o * 64u, get_noc_addr(page, tids_acc), 64u);
+        K2P_ADD(K2P_WISS, t0);
     }
     void writes_flushed() const {
+        K2P_T0(t0);
         noc_async_writes_flushed();
         asm volatile("" ::: "memory");
+        K2P_ADD(K2P_WFL, t0);
     }
 };
 }  // namespace
 #endif
 
 void kernel_main() {
+    K2P_T0(t_tot);
+#if K2_PROF
+    for (uint32_t i = 0; i < K2P_N; i++) g_k2p[i] = 0;
+#endif
     constexpr uint32_t PW = pfwc_fuse::PAGE_WORDS;
     constexpr uint32_t PB = PW * 4;
     uint32_t addr[7];
@@ -183,17 +214,22 @@ void kernel_main() {
     if (row_pages != 0 && span <= K2_FOLD_TILES) {
         uint32_t cnt[K2_FOLD_TILES];
         for (uint32_t t = 0; t < span; t++) cnt[t] = 0;
+        K2P_ADD(K2P_SETUP, t_tot);
         {
             DeviceZoneScopedN("k2_pairs");
+            K2P_T0(t_pairs);
             pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
+            K2P_ADD(K2P_PAIRS, t_pairs);
         }
         DeviceZoneScopedN("k2_rows");
+        K2P_T0(t_rows);
         auto rowp = reinterpret_cast<volatile uint32_t*>(l1_row);
         for (uint32_t t = 0; t < span; t++) rowp[t] = cnt[t];
         asm volatile("fence" ::: "memory");
         const uint32_t r0 = (kc * 2u + mover) * row_pages;
         for (uint32_t q = 0; q < row_pages; q++)
             noc_async_write(l1_row + q * PB, get_noc_addr(r0 + q, row_acc), PB);
+        K2P_ADD(K2P_ROWS, t_rows);
     } else {
         DeviceZoneScopedN("k2_pairs");
         pfwc_fuse::emit_pairs_diet<false>(tab, nseg, P_pub, tiles_x, pg0, npg, io,
@@ -244,5 +280,20 @@ void kernel_main() {
                               read_box, out);
     }
 #endif
+    K2P_T0(t_wbar);
     noc_async_write_barrier();
+#if K2_PROF
+    K2P_ADD(K2P_WBAR, t_wbar);
+    K2P_ADD(K2P_TOT, t_tot);
+    DeviceTimestampedData("k2p_setup", g_k2p[K2P_SETUP]);
+    DeviceTimestampedData("k2p_riss", g_k2p[K2P_RISS]);
+    DeviceTimestampedData("k2p_rdw", g_k2p[K2P_RDW]);
+    DeviceTimestampedData("k2p_wiss", g_k2p[K2P_WISS]);
+    DeviceTimestampedData("k2p_wfl", g_k2p[K2P_WFL]);
+    DeviceTimestampedData("k2p_pairs", g_k2p[K2P_PAIRS]);
+    DeviceTimestampedData("k2p_rows", g_k2p[K2P_ROWS]);
+    DeviceTimestampedData("k2p_wbar", g_k2p[K2P_WBAR]);
+    DeviceTimestampedData("k2p_tot", g_k2p[K2P_TOT]);
+    DeviceTimestampedData("k2p_npg", npg);
+#endif
 }

@@ -496,6 +496,10 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
     for (int i = 0; i < 8; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     std::map<std::string, std::string> defines;
     if (diet) defines["K2_DIET"] = "1";
+    // Task #274: GSPLAT_TT_K2_PROF=1 (profiling only) records the K2 movers'
+    // per-part cycle totals as Tracy "k2p_*" markers. Unset: no define.
+    if (const char* e = std::getenv("GSPLAT_TT_K2_PROF"); e != nullptr && std::atoi(e) != 0)
+        defines["K2_PROF"] = "1";
     ctx.k2s = CreateKernel(program,
                            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter_seg.cpp",
                            cores,
