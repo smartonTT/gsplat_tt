@@ -75,6 +75,14 @@ class _Scene:
     def __init__(self):
         self._websock_interface = _Ws()
 
+    def set_background_image(self, image, format="jpeg", jpeg_quality=None, depth=None):
+        # viser's path (used when only its own encoder is installed): encode, queue one message.
+        from viser._messages import BackgroundImageMessage
+        from gsplat.nerfview_viewer import make_jpeg_encoder
+        data = make_jpeg_encoder("viser")(np.ascontiguousarray(image), jpeg_quality or 90)
+        self._websock_interface.queue_message(
+            BackgroundImageMessage(format=format, rgb_data=data, depth_data=None))
+
 
 class _Client:
     client_id = 0
