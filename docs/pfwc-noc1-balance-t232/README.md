@@ -96,8 +96,25 @@ read split alone passed the gate and leaves both NoCs with similar write stalls 
 
 ## 6. Verify on the merged tip (new default vs off)
 
-Pending: `drive.sh 3ec6008 "sync v1 v2 tr"` (rounds v1 / v2: base = new default, off =
-`GSPLAT_TT_PFWC_COV2D_SFPU=0,GSPLAT_TT_PFWC_RD_REST=0`; tr = 30-view Tracy of the default).
+`drive.sh 3ec6008 "sync v1 v2 tr"` on the tip with iter 198 merged (BLEND_DECODE_AHEAD=2).
+base = new default, off = `GSPLAT_TT_PFWC_COV2D_SFPU=0,GSPLAT_TT_PFWC_RD_REST=0`; v1 runs
+base first, v2 off first.
+
+| round | default | off | delta | project default | project off |
+|---|---:|---:|---:|---:|---:|
+| v1 | 11.600 | 11.918 | -0.318 | 3.017 | 3.344 |
+| v2 | 11.651 | 11.984 | -0.333 | 3.024 | 3.343 |
+| mean | 11.625 (86.0 FPS) | 11.951 (83.7 FPS) | **-0.326** | 3.021 | 3.343 |
+
+md5 46a725ab on all four runs. Tracy of the default, 30 views (KCFG_EXTRA_KB=32,
+`out/tracy-*.txt`, `opt/profiler/ttw-199/render.tracy`): device span 11.334 ms/view
+(iter 198: 11.663), pfwc window 2.004 ms, pfwc cores mean 1.76 / max 1.95 per RISC.
+Stage windows: pfwc 2.004, K2 0.981, sort_ol 1.431, mat + blend 6.894.
+
+Device screenshot (iter 199): the rv1 default hero, `opt/metal-screenshots/ttw-199/`. It is
+byte-identical to `tests/fixtures/hero/hero_golden_8bit.png`; PSNR 41.16 dB against
+`benchmarks/reference_v2/hero.png`. Visual check: no tile seams, blocky or empty tiles,
+stripes or color shifts; the 10x diff shows only edge detail.
 
 ## 7. Follow-ups
 
