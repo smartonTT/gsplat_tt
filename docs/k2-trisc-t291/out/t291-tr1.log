@@ -1,0 +1,68 @@
+ttp lock: waiting for p100 (held by task #293 (run 786) since 16:21)
+ttp lock: got p100 after 0.3 min
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t291-tr1  timeout=250s  worry=200s  ts=2026-10-05T16:22:21-0400
+cmd: bash /localdev/smarton/gstt2-t291/docs/k2-trisc-t291/remote_tracy.sh t291-tr1 GSPLAT_TT_K2_TRISC=1
+-----------------------------------------
+=== tracy t291-tr1 6139a14 K2_PROF=1 env: GSPLAT_TT_K2_TRISC=1 20:22:22
+[ttw 2026-10-05T16:25:55-0400] no output for 200s (>worry 200s) — snapshotting diagnostics
+===== ttw diagnose host=yyzo-bh-07 @ 2026-10-05T16:25:55-0400 =====
+--- device status (read-only) ---
+{
+    "time": "2026-10-05T20:25:56.986836",
+    "host_info": {
+        "OS": "Linux",
+        "Distro": "Ubuntu 22.04.5 LTS",
+        "Kernel": "5.15.0-136-generic",
+        "Hostname": "yyzo-bh-07-special-smarton-for-reservation-237429",
+        "Platform": "x86_64",
+        "Python": "3.10.20",
+        "Memory": "61.98 GB",
+        "Driver": "TT-KMD 2.9.0"
+    },
+    "host_sw_vers": {
+        "tt_smi": "5.2.0",
+        "pyluwen": "0.8.5",
+        "tt_umd": "0.9.5"
+    },
+    "device_info": [
+        {
+            "smbus_telem": {
+                "BOARD_ID_HIGH": "0x432",
+                "BOARD_ID_LOW": "0x3191b005",
+                "ASIC_ID": null,
+                "HARVESTING_STATE": "0x0",
+                "UPDATE_TELEM_SPEED": "0x64",
+                "VCORE": "0x328",
+                "TDP": "0x42",
+                "TDC": "0x52",
+                "VDD_LIMITS": "0x38402bc",
+                "THM_LIMIT_SHUTDOWN": "0x6e",
+                "ASIC_TEMPERATURE": "0x405002",
+                "VREG_TEMPERATURE": "0x0",
+                "BOARD_TEMPERATURE": "0x0",
+                "AICLK": "0x546",
+                "AXICLK": "0x3c0",
+                "ARCCLK": "0x320",
+                "L2CPUCLK0": "0x320",
+                "L2CPUCLK1": "0x320",
+                "L2CPUCLK2": "0x320",
+                "L2CPUCLK3": "0x320",
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 20:25:57 up 24 days,  7:46,  0 users,  load average: 6.27, 6.33, 6.81
+--- device processes ---
+1944477       03:35  0.0 /bin/sh -c /localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2-t291/opt/profiler/wrap_out_t291-tr1/.logs/tracy_profile_log_host.tracy -f -p 8086
+1944478       03:35  0.1 /localdev/smarton/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/gstt2-t291/opt/profiler/wrap_out_t291-tr1/.logs/tracy_profile_log_host.tracy -f -p 8086
+--- JIT cache size ---
+75M	/localdev/smarton/.cache/tt-metal-cache
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.
+[ttw 2026-10-05T16:26:07-0400] FATAL device-wedge marker ('Timeout waiting for ARC msg request queue') — aborting run; recover: recover.sh --unwedge yyzo-bh-07
+Terminated: 15             ttw_timeout "$timeout_s" -- ssh "$host" "bash -lc $(printf '%q' "$locked")" 2>&1 | tee -a "$log"
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t291/.ttw/logs/t291-tr1-20261005-162219.log

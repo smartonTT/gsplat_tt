@@ -1,0 +1,19 @@
+ttp lock: waiting for p100 (held by task #293 (run 786) since 16:20)
+ttp lock: got p100 after 0.5 min
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-07  tag=t291-chk3  timeout=240s  worry=192s  ts=2026-10-05T16:20:39-0400
+cmd: RUN_TO=200 bash /localdev/smarton/gstt2-t291/docs/k2-trisc-t291/remote_ab.sh 1 B:GSPLAT_TT_K2_TRISC=1 F:GSPLAT_TT_K2_TRISC=1,GSPLAT_TT_K2_TJ0=500,GSPLAT_TT_K2_TJ1=250
+-----------------------------------------
+=== r1-B 6139a14 GSPLAT_TT_K2_TRISC=1 20:20:40
+run rc=0
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.4 p50_ms=11.5 min_ms=9.8 max_ms=12.9 n_views=30 warmup_s=5.9 out=/localdev/smarton/gstt2-t291/tmp/t291-r1-B
+SWEEP_MD5=46a725ab VIEWS=30 ALL_VIEWS_IDENTICAL_TO_GOLDEN
+=== r1-F 6139a14 GSPLAT_TT_K2_TRISC=1,GSPLAT_TT_K2_TJ0=500,GSPLAT_TT_K2_TJ1=250 20:20:56
+run rc=0
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.4 p50_ms=11.5 min_ms=9.9 max_ms=12.8 n_views=30 warmup_s=2.8 out=/localdev/smarton/gstt2-t291/tmp/t291-r1-F
+SWEEP_MD5=46a725ab VIEWS=30 ALL_VIEWS_IDENTICAL_TO_GOLDEN
+=== done round 1 20:21:09
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t291/.ttw/logs/t291-chk3-20261005-162038.log

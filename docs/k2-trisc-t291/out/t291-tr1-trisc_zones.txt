@@ -1,0 +1,8 @@
+capture.log
+ls: cannot access 'opt/profiler/t291-tr1/*.csv': No such file or directory
+Traceback (most recent call last):
+  File "/localdev/smarton/gstt2-t291/opt/profiler/k2_trisc_zones.py", line 86, in <module>
+    main()
+  File "/localdev/smarton/gstt2-t291/opt/profiler/k2_trisc_zones.py", line 26, in main
+    path = sys.argv[1]
+IndexError: list index out of range
