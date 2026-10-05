@@ -60,4 +60,41 @@ A g outside the run (pairs not g-sorted) gets one blocking read, so the output n
 - Ring half: 256 pages when bulk is on, so +16 KB of L1 per mover.
 - EMIT_PROF counters `ep_nbk` (bulk batches) and `ep_bpg` (bulk pages read).
 
-Result: see below.
+## Result: KEEP, -0.516 ms/view
+
+Build 3d975ca on yyzo-bh-07 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024.
+Driver: `drive.sh` (sync, 2-view smoke, 3 untraced rounds with the arm order rotated, then Tracy for both arms).
+Outputs are in `out/`.
+
+Untraced view_total, ms/view:
+
+| round | bulk on (default) | off (`GSPLAT_TT_OL_BREC_BULK=0`) | delta |
+|---|---|---|---|
+| r1 | 15.765 | 16.357 | -0.592 |
+| r2 | 15.699 | 16.116 | -0.417 |
+| r3 | 15.755 | 16.293 | -0.538 |
+| mean | 15.740 | 16.255 | -0.516 (-3.2%) |
+
+- FPS: 61.5 -> 63.5. The off arm reproduces the t194 tip (16.245 ms/view).
+- Sort stage: 3.324 -> 2.834 ms/view. Project and blend did not change.
+- md5: all 6 runs (and the 2-view smoke) are identical to `md5-r82new.txt` (46a725ab).
+
+Tracy, views 0:10, `GSPLAT_TT_OL_EMIT_PROF=1` (`out/tracy-{on,off}-*`), off -> on:
+
+- sort_ol program busy: 2.913 -> 2.491 ms/view.
+- Emit makespan: 2776 -> 2362 us.
+  - Mover median: 2542 -> 2186 us.
+  - Per-view max mover: 2720 -> 2308 us.
+  - Makespan minus median: 234 -> 176 us.
+- `ep_brec` (blendrec read issue): 0.477 -> 0.037 ms on the mean mover, 0.539 -> 0.039 ms on the busiest.
+- Emit cycles per record: 286 -> 246.
+- All 93 batches per mover take the bulk path.
+  - Bulk pages read: 7611 per mover per view. The per-g path read 7614, so the gaps cost almost nothing.
+  - 35 per-g pages per view remain, from batches whose g run does not fit a ring half.
+- The per-mover rate is now even, 0.96-1.06 of the mean. At the tip the BRISC movers on rows y=2,3 ran at 0.67-0.88.
+
+Leftover, not pursued: the #174 mover speed table is on by default with PRECULL=2.
+It still gives the formerly slow movers fewer pages.
+- BRISC rows y=2,3 now finish early: 1417-2112 us, against about 2200 us elsewhere.
+- Their NCRISC partners, which took the extra pages, now end last: (14,3), (13,3), (3,3) and (13,2).
+- An even split could save at most about 0.1 ms/view traced (per-view max 2308 us against median 2186 us). That is below the gate.

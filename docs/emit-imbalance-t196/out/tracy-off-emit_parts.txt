@@ -1,0 +1,22 @@
+n_views=10 movers=220 busiest=('14', '3', 'NCRISC') (emit zone 2.720 ms/view)
+part (ms/view)                                       mean mover   mean BRISC  mean NCRISC      busiest
+sort_ol_emit zone                                         2.522        2.469        2.574        2.720
+ep_pro prologue (ring starts, first pair/brec reads)        0.016        0.017        0.015        0.022
+ep_rdw read barrier wait in loop (brec k, pairs k+1)        0.005        0.006        0.004        0.014
+ep_brec issue_brec: keep/gid scan + brec read issue        0.477        0.468        0.486        0.539
+ep_pairs issue_pairs: pair page read issue                0.002        0.002        0.002        0.002
+ep_proc process_batch total                               1.934        1.897        1.971        2.069
+ep_wfl   of which writes_flushed wait (run start)         0.018        0.018        0.018        0.020
+ep_wiss   of which run write issue (flush_run)            0.109        0.107        0.112        0.121
+ep_drain tail drain (partial runs)                        0.085        0.076        0.093        0.071
+ep_wbar final write barrier                               0.001        0.000        0.001        0.000
+pack/key build = proc - wfl - wiss                        1.807        1.773        1.841        1.928
+unattributed = zone - sum(top-level parts)                0.002        0.002        0.002        0.002
+ep_nrec per view                                          11888        11675        12101        12726
+ep_npf per view                                            7614         7444         7783         8092
+ep_nb per view                                               93           92           95          100
+ep_ncold per view                                             2            2            2            7
+ep_nrun per view                                           1488         1464         1512         1591
+ep_nbk per view                                               0            0            0            0
+ep_bpg per view                                               0            0            0            0
+emit cycles per record                                    286.4        285.5        287.2        288.5
