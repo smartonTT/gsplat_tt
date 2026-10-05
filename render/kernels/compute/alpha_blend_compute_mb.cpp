@@ -922,6 +922,16 @@ inline const uint32_t* l1_splat_words(const uint32_t buck, uint32_t g) {
 #ifndef BLEND_FAST_TRED
 #define BLEND_FAST_TRED 0
 #endif
+#ifndef BLEND_DECODE_AHEAD
+#define BLEND_DECODE_AHEAD 0  // task #231, see the decode-ahead block below
+#endif
+// Decode-ahead stages the default blend path only; other knob mixes (and
+// MB_STATS) run without it, so the host default can stay on.
+#if BLEND_DECODE_AHEAD && (!(BLEND_COEF_DEST && BLEND_SFPU_UNORM == 1 && BLEND_JUMP_WALK && BLEND_ABL == 0 && \
+                             !BLEND_FPU_QF_ABL) || defined(GSPLAT_TT_MB_STATS))
+#undef BLEND_DECODE_AHEAD
+#define BLEND_DECODE_AHEAD 0
+#endif
 #ifndef BLEND_T_EPS
 #define BLEND_T_EPS 0.00390625f
 #endif
@@ -985,10 +995,194 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
     tile_regs_acquire();                              // MATH: re-acquire dest (acc intact)
     cb_wait_front(CB_T_RB, 1);                         // UNPACK: wait for the packed T
     const uint32_t t_rb_addr = get_tile_address(CB_T_RB, 0);  // all threads (mailbox sync)
+#if BLEND_DECODE_AHEAD != 2
     MATH((blend_t_reduce(live_mb_mask, t_rb_addr)));  // MATH-only: rebuild live mask
+#endif
+#if BLEND_DECODE_AHEAD
+    UNPACK((blend_t_reduce(live_mb_mask, t_rb_addr)));  // decode-ahead: TRISC0 masks the records
+#endif
     cb_pop_front(CB_T_RB, 1);                          // UNPACK: free the scratch slot
     MATH((_llk_math_eltwise_unary_sfpu_start_(0)));   // resume the SFPU section
 }
+
+// ---- Decode-ahead staging (task #231, host env GSPLAT_TT_BLEND_DECODE_AHEAD) --
+// TRISC1 issue time, not the SFPU, limits the blend (t230). TRISC0 (UNPACK) is
+// idle in this loop, so it walks the records instead: per live record it writes
+// the 14 SFPLOADI words of blend_stage_coeffs_raw, already encoded, and the
+// record's mask into an L1 ring (CB_DA_RING, set up by the host only when the
+// knob is on). TRISC1 loads the words and pushes them with the same SFPU ops in
+// the same order as BLEND_RAW_STAGE (bit-identical, t146), then the bodies.
+// TRISC0 runs its own copy of the T reduce at each readback (same code, same T
+// tile), so it masks the records exactly as TRISC1 would.
+// 1 = S2a: TRISC1 still scans the records and does the readbacks; it takes a
+//     ring slot for each record with a live mask.
+// 2 = S2: the ring holds only live records plus markers: a readback marker at
+//     the same record position as today's g_seen % 512 trigger, and an end of
+//     subchunk marker. TRISC1 reads only the ring and skips its T reduce.
+// TRISC2 only takes part in the readbacks, so it steps from one to the next.
+// Ring: header (produced count at word 0, written by TRISC0; consumed count at
+// word 8, written by TRISC1), then DA_SLOTS slots of 16 words: [0, 14) the
+// SFPLOADI words, [14] the mask (0 = marker), [15] the marker kind. Counts run
+// over the whole launch; TRISC0 zeroes them and mailboxes the ring address to
+// TRISC1 before the first get_tile_address, so the mailbox order is unchanged.
+#if BLEND_DECODE_AHEAD
+#if BLEND_DECODE_AHEAD > 2
+#error "BLEND_DECODE_AHEAD must be 0, 1 or 2"
+#endif
+constexpr uint32_t CB_DA_RING = 10;
+constexpr uint32_t DA_SLOTS = 64;  // power of two; mirrors blend_device.cpp
+constexpr uint32_t DA_SLOT_BYTES = 64;
+constexpr uint32_t DA_HDR_BYTES = 64;
+constexpr uint32_t DA_PROD = 0, DA_CONS = 8;  // header words
+constexpr uint32_t DA_MARK_RB = 1, DA_MARK_END = 2;
+uint32_t g_da_ring = 0;  // ring byte address (TRISC0, TRISC1)
+uint32_t g_da_idx = 0;   // TRISC0: slots produced; TRISC1: slots consumed
+uint32_t g_da_seen = 0;  // TRISC0: last consumed count read; TRISC1: last produced count read
+
+inline volatile uint32_t* da_hdr() {
+    return reinterpret_cast<volatile uint32_t*>(g_da_ring);
+}
+inline volatile uint32_t* da_slot(uint32_t i) {
+    return reinterpret_cast<volatile uint32_t*>(
+        g_da_ring + DA_HDR_BYTES + (i & (DA_SLOTS - 1u)) * DA_SLOT_BYTES);
+}
+// Spin between polls of the other thread's count, so the poll loads do not
+// compete with the other thread's L1 loads.
+inline void da_backoff() {
+    for (uint32_t k = 0; k < 8u; ++k) {
+        asm volatile("nop; nop; nop; nop");
+    }
+}
+
+inline void da_init() {
+#ifdef TRISC_UNPACK
+    g_da_ring = get_local_cb_interface(get_operand_id(CB_DA_RING)).fifo_rd_ptr << 4;
+    da_hdr()[DA_PROD] = 0u;
+    da_hdr()[DA_CONS] = 0u;
+    asm volatile("fence" ::: "memory");  // zeroes land before TRISC1 reads the counts
+    ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, g_da_ring);
+#endif
+#ifdef TRISC_MATH
+    g_da_ring = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
+#endif
+}
+
+#ifdef TRISC_UNPACK
+// Wait for a free slot. Once full, wait for 8 free slots before polling stops.
+inline void da_wait_space() {
+    if (g_da_idx - g_da_seen < DA_SLOTS) {
+        return;
+    }
+    do {
+        da_backoff();
+        mb_cb_consume_fence();
+        g_da_seen = da_hdr()[DA_CONS];
+    } while (g_da_idx - g_da_seen > DA_SLOTS - 8u);
+}
+inline void da_publish() {
+    ++g_da_idx;
+    asm volatile("fence" ::: "memory");  // the slot's stores land before the count
+    da_hdr()[DA_PROD] = g_da_idx;
+}
+// The SFPLOADI words of blend_stage_coeffs_raw: L0 USHORT lo + L0 HI16_ONLY hi
+// for d, e, a, b, c; L0 / L2 USHORT for the UNORM16 halves of w6, w7.
+inline void da_put_rec(const uint32_t* rec, uint32_t mask) {
+    constexpr uint32_t klo = 0x71020000u, khi = 0x71080000u, klo2 = 0x71220000u;
+    const uint32_t a = rec[0], b = rec[1], c = rec[2], d = rec[4], e = rec[5];
+    const uint32_t w6 = rec[6], w7 = rec[7];
+    da_wait_space();
+    volatile uint32_t* s = da_slot(g_da_idx);
+    s[0] = (d & 0xffffu) + klo;
+    s[1] = (d >> 16) + khi;
+    s[2] = (e & 0xffffu) + klo;
+    s[3] = (e >> 16) + khi;
+    s[4] = (a & 0xffffu) + klo;
+    s[5] = (a >> 16) + khi;
+    s[6] = (b & 0xffffu) + klo;
+    s[7] = (b >> 16) + khi;
+    s[8] = (c & 0xffffu) + klo;
+    s[9] = (c >> 16) + khi;
+    s[10] = (w6 & 0xffffu) + klo;
+    s[11] = (w6 >> 16) + klo2;
+    s[12] = (w7 & 0xffffu) + klo;
+    s[13] = (w7 >> 16) + klo2;
+    s[14] = mask;
+    da_publish();
+}
+#if BLEND_DECODE_AHEAD == 2
+inline void da_put_mark(uint32_t kind) {
+    da_wait_space();
+    volatile uint32_t* s = da_slot(g_da_idx);
+    s[14] = 0u;
+    s[15] = kind;
+    da_publish();
+}
+#endif
+#endif  // TRISC_UNPACK
+
+#ifdef TRISC_MATH
+inline const volatile uint32_t* da_wait_slot() {
+    if (g_da_idx == g_da_seen) {
+        for (;;) {
+            mb_cb_consume_fence();
+            g_da_seen = da_hdr()[DA_PROD];
+            if (g_da_idx != g_da_seen) {
+                break;
+            }
+            da_backoff();
+        }
+    }
+    return da_slot(g_da_idx);
+}
+// After the slot's last load is used, so TRISC0 may refill it.
+inline void da_consumed() {
+    ++g_da_idx;
+    da_hdr()[DA_CONS] = g_da_idx;
+}
+// blend_stage_coeffs_raw with the SFPLOADI words loaded from the slot. Loads run
+// four words ahead of the pushes that use them (volatile: kept in this order).
+inline void da_stage(const volatile uint32_t* s) {
+    volatile uint32_t* ib = ckernel::instrn_buffer;
+    constexpr uint32_t A0 = (DR_S) * 2u;
+    const uint32_t v0 = s[0], v1 = s[1], v2 = s[2], v3 = s[3];
+    ib[0] = v0;
+    const uint32_t v4 = s[4];
+    ib[0] = v1;
+    const uint32_t v5 = s[5];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_MX);
+    ib[0] = v2;
+    const uint32_t v6 = s[6];
+    ib[0] = v3;
+    const uint32_t v7 = s[7];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_MY);
+    ib[0] = v4;
+    const uint32_t v8 = s[8];
+    ib[0] = v5;
+    const uint32_t v9 = s[9];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_A);
+    ib[0] = v6;
+    const uint32_t v10 = s[10];
+    ib[0] = v7;
+    const uint32_t v11 = s[11];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_B);
+    ib[0] = v8;
+    const uint32_t v12 = s[12];
+    ib[0] = v9;
+    const uint32_t v13 = s[13];
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_C);
+    TTI_SFPLOAD(1, 0, 7, A0 + 2u * S_INV);
+    ib[0] = v10; TTI_SFPCAST(0, 0, 0);
+    ib[0] = v11; TTI_SFPMUL(0, 1, 9, 0, 0); TTI_SFPCAST(2, 2, 0);
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_OP);
+    ib[0] = v12; TTI_SFPMUL(2, 1, 9, 2, 0); TTI_SFPCAST(0, 0, 0);
+    TTI_SFPSTORE(2, 0, 7, A0 + 2u * S_CR);
+    ib[0] = v13; TTI_SFPMUL(0, 1, 9, 0, 0); TTI_SFPCAST(2, 2, 0);
+    TTI_SFPSTORE(0, 0, 7, A0 + 2u * S_CG);
+    TTI_SFPMUL(2, 1, 9, 2, 0);
+    TTI_SFPSTORE(2, 0, 7, A0 + 2u * S_CB);
+}
+#endif  // TRISC_MATH
+#endif  // BLEND_DECODE_AHEAD
 
 // ---- Sub-tile waste instrumentation (GSPLAT_TT_MB_STATS, default OFF) -------
 // Scalar MATH-thread counters over every slab record the blend consumes; one
@@ -1205,6 +1399,91 @@ inline void tc_dump() {
 #define TC_DUMP()
 #endif
 
+#if BLEND_DECODE_AHEAD
+// The records loop of process_tile_l1_blend in decode-ahead mode, per thread.
+inline void blend_da_walk(uint32_t num_g, uint32_t buck, uint32_t& live_mb_mask, uint32_t& g_seen) {
+#if defined(TRISC_UNPACK)
+    mb_cb_consume_fence();  // first read of this slab on this thread
+    for (uint32_t g = 0; g < num_g; g++) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+            BLEND_PZ_SUB("cmp_trb");
+#if BLEND_DECODE_AHEAD == 2
+            da_put_mark(DA_MARK_RB);  // before blocking in the readback
+#endif
+            blend_t_readback(live_mb_mask);
+        }
+        ++g_seen;
+        const uint32_t* rec = l1_splat_words(buck, g);
+        const uint32_t mask = rec[3] & live_mb_mask;
+        if (mask != 0u) {
+            da_put_rec(rec, mask);
+        }
+    }
+#if BLEND_DECODE_AHEAD == 2
+    da_put_mark(DA_MARK_END);
+#endif
+#elif defined(TRISC_MATH) && BLEND_DECODE_AHEAD == 1
+    for (uint32_t g = 0; g < num_g; g++) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+            BLEND_PZ_SUB("cmp_trb");
+            TC_PART0();
+            blend_t_readback(live_mb_mask);
+            TC_PART1(trb);
+            TC_TRB();
+        }
+        ++g_seen;
+        const uint32_t mask = l1_splat_words(buck, g)[3] & live_mb_mask;
+        if (mask != 0u) {
+            TC_LIVE(mask);
+            const volatile uint32_t* s = da_wait_slot();
+            da_stage(s);
+            da_consumed();
+            dispatch_blend_jump(mask);
+        }
+    }
+#elif defined(TRISC_MATH)
+    (void)buck;
+    g_seen += num_g;  // unused here: the markers carry the readback positions
+    for (;;) {
+        const volatile uint32_t* s = da_wait_slot();
+        const uint32_t mask = s[14];
+        if (mask == 0u) {
+            const uint32_t kind = s[15];
+            da_consumed();
+            if (kind == DA_MARK_END) {
+                break;
+            }
+            BLEND_PZ_SUB("cmp_trb");
+            TC_PART0();
+            blend_t_readback(live_mb_mask);
+            TC_PART1(trb);
+            TC_TRB();
+            continue;
+        }
+        TC_LIVE(mask);
+        da_stage(s);
+        da_consumed();
+        dispatch_blend_jump(mask);
+    }
+#else  // TRISC_PACK: only the readbacks, at the same record positions
+    (void)buck;
+    for (uint32_t g = 0; g < num_g;) {
+        if (kBlendTPeriod != 0u && g_seen != 0u && (g_seen % kBlendTPeriod) == 0u) {
+            BLEND_PZ_SUB("cmp_trb");
+            blend_t_readback(live_mb_mask);
+        }
+        uint32_t step = num_g - g;
+        if (kBlendTPeriod != 0u) {
+            const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+            step = to_next < step ? to_next : step;
+        }
+        g += step;
+        g_seen += step;
+    }
+#endif
+}
+#endif  // BLEND_DECODE_AHEAD
+
 // Blend one subchunk whose PACK2 records + masks sit in CB_BUCKET_BULK /
 // CB_BMASK_BULK (iter 49/50). Separate from in-budget CB_BUCKET/CB_BMASK so
 // bulk reserve does not deadlock against coeff-stream scratch.
@@ -1242,6 +1521,9 @@ inline void process_tile_l1_blend(
     uint32_t raw_klo = 0x71020000u, raw_khi = 0x71080000u, raw_klo2 = 0x71220000u;
     asm volatile("" : "+r"(raw_klo), "+r"(raw_khi), "+r"(raw_klo2));
 #endif
+#if BLEND_DECODE_AHEAD
+    blend_da_walk(num_g, buck, live_mb_mask, g_seen);
+#else
 #if BLEND_ABL == 4
     for (uint32_t g = num_g; g < num_g; g++) {
 #else
@@ -1318,6 +1600,7 @@ inline void process_tile_l1_blend(
 #endif
         }
     }
+#endif  // BLEND_DECODE_AHEAD
     TC_PART0();
     BLEND_PZ_SUB("cmp_sc_tail");
     MATH((_llk_math_eltwise_unary_sfpu_done_()));
@@ -1348,6 +1631,9 @@ void kernel_main() {
     }
 #if defined(BLEND_PIXEL_FLOOR)
     g_pixel_floor_bits = get_arg_val<uint32_t>(1);
+#endif
+#if BLEND_DECODE_AHEAD
+    da_init();  // before the first get_tile_address (mailbox order)
 #endif
     cb_wait_front(CB_CORE_TILES, 1);
     const uint32_t num_tiles =

@@ -45,7 +45,14 @@ is a prerequisite to any GPU claim and is reachable with the levers below.
 Published GPU reference: INRIA 3DGS on an RTX A6000, bicycle, 93 FPS at 1080p
 `[P]` ⇒ 5.44 ms at 1024² under an optimistic linear-in-pixels normalization
 `[D]`. A second, softer anchor: the Kovinić/Stojković TT line reached ≈1.6×
-slower than a GTX 4060 `[P]`, which says the remaining gap is algorithmic.
+slower than a GTX 4060 `[P]`. That ratio is end-to-end on the *train* scene at
+960 px (257.0 vs 163.3 ms/frame), with CPU host stages (project, sort) on both
+sides and the GPU side using Mateja's own simple CUDA blend kernel
+(`backends/cuda/kernels/alpha_blend.cu`), published in Kovelja009/gsplat_tt
+`benchmark/results`. It is **not** a gsplat/INRIA GPU reference and is not
+comparable to our device-only bicycle numbers; see `docs/mateja-review/README.md`
+§3 (branch `ttp/t233-mateja-review`). The INRIA A6000 bicycle number above
+(published, not measured) remains the GPU reference.
 
 ---
 
