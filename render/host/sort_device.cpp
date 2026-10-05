@@ -27,6 +27,7 @@
 #include "sort_onelaunch_layout.h"
 #include "device_state.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
+#include "../kernels/dataflow/sort_ol_town.h"
 #include "host_tracy.hpp"
 #include "stage_timers.h"
 #include "vis_mode.h"
@@ -812,6 +813,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         return e == nullptr || std::atoi(e) != 0;
     }();
     const uint32_t brec_half = brec_bulk ? std::max(pb * 16u, 256u) : pb * 16u;
+    // Task #202: GSPLAT_TT_OL_EMIT_TOWN=1 runs the emit's per-record loop on the
+    // 3 TRISCs (sort_ol_town_compute.cpp): sort_ol_town::SLOTS blendrec slots
+    // instead of 2 halves and a mailbox CB (14) per mover. Same output.
+    const bool town = gsplat_tt::env_config::ol_emit_town() && pb * 16u <= sort_ol_town::LIST_MAX;
+    const uint32_t brec_slots = town ? sort_ol_town::SLOTS : 2u;
     uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
         mover_bytes = 0;
@@ -826,10 +832,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         mcb(4, BIN_ROW_BYTES);                // per-tile count of this mover
         mcb(5, BIN_ROW_BYTES);                // per-tile cursor
         mcb(6, 2u * 32u * PAGE_BYTES);        // count-pass read batch (tid, keep)
-        mcb(7, 2u * brec_half * PAGE_BYTES);  // blendrec rings: >= 16 pages per pair page
+        mcb(7, brec_slots * brec_half * PAGE_BYTES);  // blendrec rings: >= 16 pages per pair page
         mcb(8, 16u * 32u);                    // 32 B record staging (OL_RING=0)
         mcb(12, win * 3u * PAGE_BYTES);       // gid/tid/keep window
         if (ring != 0u) mcb(13, ring_bytes);  // per-tile record runs
+        if (town) mcb(sort_ol_town::CB_TWN, sort_ol_town::BYTES);  // TRISC mailbox, lists, queues
     }
     cb(10, BIN_ROW_BYTES);                       // the core's count row, then base row
     cb(11, (2u * num_cores + 2u) * PAGE_BYTES);  // prefix pass staging
@@ -838,9 +845,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         logged = true;
         std::fprintf(stderr,
                      "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
-                     "OL_BREC_BULK=%u cb_bytes/mover=%u shared=%u\n",
+                     "OL_BREC_BULK=%u OL_EMIT_TOWN=%u cb_bytes/mover=%u shared=%u\n",
                      pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
-                     mover_bytes,
+                     town ? 1u : 0u, mover_bytes,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
     for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
@@ -858,9 +865,11 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     // Task #154: GSPLAT_TT_OL_EMIT_PROF=1 (profiling only) records the emit's
     // per-part cycle totals as Tracy "ep_*" markers. Unset: no define, the same
     // kernel binary as before.
-    if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_PROF"); e != nullptr && std::atoi(e) != 0) {
-        defines["OL_EMIT_PROF"] = "1";
-    }
+    const bool emit_prof = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_EMIT_PROF");
+        return e != nullptr && std::atoi(e) != 0;
+    }();
+    if (emit_prof) defines["OL_EMIT_PROF"] = "1";
     // Task #160: GSPLAT_TT_OL_EMIT_FAST=0 is the kill switch of the fast emit
     // loop (default on; same output either way).
     if (const char* e = std::getenv("GSPLAT_TT_OL_EMIT_FAST"); e != nullptr && std::atoi(e) == 0) {
@@ -871,6 +880,13 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     // re-reads the window page by page and DPRINTs the pages it had to fix.
     if (const char* e = std::getenv("GSPLAT_TT_OL_FILL_BULK"); e != nullptr && std::atoi(e) != 1) {
         defines["OL_FILL_BULK"] = std::atoi(e) == 2 ? "2" : "0";
+    }
+    if (town) {
+        defines["OL_EMIT_TOWN"] = "1";
+        std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"}};
+        if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
+        CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,
+                     ComputeConfig{.defines = tdef});
     }
     ctx.kol = CreateKernel(
         program,

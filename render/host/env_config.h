@@ -149,6 +149,13 @@ inline unsigned int ol_win_pages() {
     }();
     return v;
 }
+// Task #202 (docs/emit-trisc-own-t200): the emit's per-record loop runs on the
+// 3 TRISCs, tile-owned (sort_ol_town_compute.cpp). Needs the rings. Default off
+// until gated; same output either way.
+inline bool ol_emit_town() {
+    static const bool v = env_uint("GSPLAT_TT_OL_EMIT_TOWN", 0u) != 0u && ol_ring() != 0u;
+    return v;
+}
 
 
 // Task #188 blend claim knobs (docs/blend-tail-t183). Late claim: the blend

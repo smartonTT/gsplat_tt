@@ -117,6 +117,17 @@
 #ifndef OL_EMIT_FAST
 #define OL_EMIT_FAST 1
 #endif
+// Task #202 (host knob GSPLAT_TT_OL_EMIT_TOWN=1, docs/emit-trisc-own-t200):
+// the fast fold emit's per-record loop runs on the 3 TRISCs, tile-owned
+// (sort_ol_town.h, ../compute/sort_ol_town_compute.cpp). The movers read the
+// pairs and blendrec pages, build per-TRISC lists and write the runs the
+// TRISCs fill. Off: no define, the same kernel binary as before.
+#ifndef OL_EMIT_TOWN
+#define OL_EMIT_TOWN 0
+#endif
+#if OL_EMIT_TOWN
+#include "sort_ol_town.h"
+#endif
 #if OL_EMIT_PROF
 #define EP_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
 #define EP_T0(v) const uint32_t v = EP_NOW()
@@ -717,7 +728,12 @@ void kernel_main() {
     const uint32_t bk_sf = (bk_nb != 0u) ? BREC_HALF / bk_nb : 0u;
     const uint32_t bk_cap = bk_sf * bk_nb;
     const uint32_t bk_run = bk_sf * PAGE_BYTES, bk_wrap = bk_cap * PAGE_BYTES - PAGE_BYTES;
-    uint32_t bk_a[2] = {0u, 0u}, bk_n[2] = {0u, 0u};
+#if OL_EMIT_TOWN
+    constexpr uint32_t BK_SLOTS = sort_ol_town::SLOTS;  // TOWN: blendrec slot k % SLOTS
+#else
+    constexpr uint32_t BK_SLOTS = 2u;
+#endif
+    uint32_t bk_a[BK_SLOTS] = {}, bk_n[BK_SLOTS] = {};
     // A g outside its batch's bulk run (only if the pairs were not g-sorted):
     // one blocking read into the scratch page (unused with rings).
     auto brec_now = [&](int32_t g) -> const uint32_t* {
@@ -834,6 +850,211 @@ void kernel_main() {
     int32_t f_g = -1;
     uint32_t f_cov0 = 0, f_cov1 = 0, f_cov2 = 0, f_dep = 0, f_mx = 0, f_my = 0, f_opr = 0, f_cgb = 0;
     uint32_t f_ty = 0xFFFFFFFFu, f_myt = 0;
+#if OL_EMIT_TOWN
+    // Task #202: publish this stream to the TRISCs (nb = 0 when the TOWN path
+    // does not apply: they then only acknowledge). Batch k: its owner lists and
+    // blendrec pages in slot k % SLOTS, published by READY = k + 1 once its
+    // reads landed; the slot is refilled once every TRISC finished batch
+    // k - SLOTS. The mover writes the runs the TRISCs queue (service), then
+    // marks the tile's ring free (fl). Mover parts under OL_EMIT_PROF: ep_brec
+    // = list build + reads issue, ep_wfl = slot waits, ep_wiss = all queue
+    // service, ep_proc = waiting for the TRISCs after the last batch, ep_pairs
+    // = their final acknowledgement; ep_nrun = runs from the queues.
+    namespace tw = sort_ol_town;
+    static_assert(BATCH_ELEMS <= tw::LIST_MAX && OL_RING_TILES <= tw::TILES, "TOWN list / fl sizes");
+    static_assert(BREC_HALF * PAGE_BYTES <= 65536u, "TOWN: blendrec page offsets in 16 bits");
+    const uint32_t twn = get_write_ptr(tw::CB_TWN + cbo);
+    volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(twn);
+    volatile uint32_t* const tfl = reinterpret_cast<volatile uint32_t*>(twn + tw::FL_OFF);
+    const bool town = fast && fold && num_tiles <= tw::TILES && tile_cap <= (1u << 22);
+    twh[tw::H_NB] = town ? nbatch : 0u;
+    twh[tw::H_READY] = 0u;
+    twh[tw::H_CAP] = tile_cap;
+    twh[tw::H_MSK] = tx_mask;
+    twh[tw::H_SH] = tx_shift;
+    twh[tw::H_RING] = ring_l1;
+    twh[tw::H_CUR] = reinterpret_cast<uint32_t>(cur_lm);
+    for (uint32_t i = 0; i < tw::NT; i++) {
+        twh[tw::H_FIN + i] = 0u;
+        twh[tw::H_DONE + 4u * i] = 0u;
+        twh[tw::H_QWP + 4u * i] = 0u;
+        twh[tw::H_QRD + 4u * i] = 0u;
+    }
+    if (town) {
+        for (uint32_t t = 0; t < num_tiles; t++) tfl[t] = startp[t];
+    }
+    asm volatile("fence" ::: "memory");
+    twh[tw::H_GO2] = tw::MAGIC2;
+    asm volatile("fence" ::: "memory");
+    twh[tw::H_GO] = tw::MAGIC;
+    auto tw_spin = [&]() {
+        for (uint32_t i = 0; i < 8u; i++) asm volatile("nop");
+    };
+    if (town) {
+        uint32_t q_rd[tw::NT] = {0u, 0u, 0u};
+        // The TRISCs' run words: write the runs, wait until they left L1,
+        // then mark the tiles' rings free and the words consumed.
+        auto service = [&]() -> bool {
+            uint32_t wp[tw::NT];
+            bool any = false;
+            invalidate_l1_cache();
+            for (uint32_t i = 0; i < tw::NT; i++) {
+                wp[i] = twh[tw::H_QWP + 4u * i];
+                any = any || wp[i] != q_rd[i];
+            }
+            if (!any) return false;
+            EP_T0(ep_t);
+            asm volatile("fence" ::: "memory");
+            for (uint32_t i = 0; i < tw::NT; i++) {
+                auto q = reinterpret_cast<const volatile uint32_t*>(twn + tw::q_off(i));
+                for (uint32_t j = q_rd[i]; j != wp[i]; j++) {
+                    const uint32_t w = q[j & (tw::QCAP - 1u)];
+                    flush_run(tw::run_tile(w), tw::run_last(w));
+                }
+            }
+            noc_async_writes_flushed();
+            for (uint32_t i = 0; i < tw::NT; i++) {
+                auto q = reinterpret_cast<const volatile uint32_t*>(twn + tw::q_off(i));
+                for (uint32_t j = q_rd[i]; j != wp[i]; j++) {
+                    const uint32_t w = q[j & (tw::QCAP - 1u)];
+                    tfl[tw::run_tile(w)] = tw::run_last(w) + 1u;
+                }
+                EP_CNT(ep_nrun, wp[i] - q_rd[i]);
+            }
+            asm volatile("fence" ::: "memory");
+            for (uint32_t i = 0; i < tw::NT; i++) {
+                if (wp[i] != q_rd[i]) {
+                    q_rd[i] = wp[i];
+                    twh[tw::H_QRD + 4u * i] = wp[i];
+                }
+            }
+            EP_ADD(ep_wiss, ep_t);
+            return true;
+        };
+        auto min_done = [&]() -> uint32_t {
+            invalidate_l1_cache();
+            uint32_t m = twh[tw::H_DONE];
+            const uint32_t d1 = twh[tw::H_DONE + 4u], d2 = twh[tw::H_DONE + 8u];
+            if (d1 < m) m = d1;
+            if (d2 < m) m = d2;
+            return m;
+        };
+        // Batch k's lists in slot s: per pair t << 16 | the byte offset of its
+        // g's blendrec page in slot s (bulk run: the fast loop's page stepping;
+        // per-g pages: one page per run of equal g from the batch start, as
+        // issue_brec reads them with scan_g = -1). Fold: every pair is kept.
+        // False (nothing published): a g outside the bulk run.
+        auto build_lists = [&](uint32_t k, uint32_t s) -> bool {
+            const Planes pl = planes(k);
+            const int32_t* gp = const_cast<const int32_t*>(pl.g);
+            const uint32_t* tp = reinterpret_cast<const uint32_t*>(const_cast<const int32_t*>(pl.t));
+            const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+            uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
+            if (p0 + n_el > P) n_el = (P > p0) ? P - p0 : 0u;
+            uint32_t* const l0 = reinterpret_cast<uint32_t*>(twn + tw::list_off(s, 0u));
+            uint32_t* lw[tw::NT] = {l0, l0 + tw::LIST_MAX, l0 + 2u * tw::LIST_MAX};
+            const uint32_t ba = bk_a[s], bn = bk_n[s];
+            uint32_t jl = 0, jr = 0, off = 0, npg = 0;
+            int32_t g_c = -1;
+            for (uint32_t j = 0; j < n_el; j++) {
+                const int32_t g = gp[j];
+                const uint32_t t = tp[j];
+                if (g != g_c) {
+                    g_c = g;
+                    if (bn != 0u) {
+                        const uint32_t jg = static_cast<uint32_t>(g) - ba;
+                        if (jg >= bn) return false;
+                        if (jg < jl) {
+                            jl = 0;
+                            jr = 0;
+                            off = 0;
+                        }
+                        for (; jl != jg; jl++) {
+                            off += bk_run;
+                            if (++jr == bk_nb) {
+                                jr = 0;
+                                off -= bk_wrap;
+                            }
+                        }
+                    } else {
+                        off = npg * PAGE_BYTES;
+                        npg++;
+                    }
+                }
+                *lw[tw::owner(t)]++ = tw::entry(t, off);
+            }
+            auto desc = reinterpret_cast<volatile uint32_t*>(twn + tw::desc_off(s));
+            desc[0] = static_cast<uint32_t>(lw[0] - l0);
+            desc[1] = static_cast<uint32_t>(lw[1] - (l0 + tw::LIST_MAX));
+            desc[2] = static_cast<uint32_t>(lw[2] - (l0 + 2u * tw::LIST_MAX));
+            desc[3] = rec_cache_l1 + s * BREC_HALF * PAGE_BYTES;
+            return true;
+        };
+        // Batch k's blendrec pages and lists into slot k % SLOTS. A g outside
+        // the bulk run: wait for the run, re-read the batch one page per g.
+        auto issue_town = [&](uint32_t k) {
+            const uint32_t s = k % tw::SLOTS;
+            scan_g = -1;
+            issue_brec(k, s);
+            if (build_lists(k, s)) return;
+            noc_async_read_barrier();
+            const Planes pl = planes(k);
+            const uint32_t dst0 = rec_cache_l1 + s * BREC_HALF * PAGE_BYTES;
+            const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+            const uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
+            int32_t sg = -1;
+            uint32_t n_pf = 0;
+            for (uint32_t j = 0; j < n_el; j++) {
+                if (p0 + j >= P) break;
+                const int32_t gj = pl.g[j];
+                if (gj != sg) {
+                    noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc), dst0 + n_pf * PAGE_BYTES,
+                                   PAGE_BYTES);
+                    n_pf++;
+                    sg = gj;
+                }
+            }
+            EP_CNT(ep_npf, n_pf);
+            bk_n[s] = 0u;
+            build_lists(k, s);
+        };
+        if (nbatch > 0) {
+            issue_pairs(0);
+            noc_async_read_barrier();
+            issue_town(0);
+            if (nbatch > 1) issue_pairs(1);
+            EP_ADD(ep_pro, ep_t_pro);
+            for (uint32_t k = 0; k < nbatch; k++) {
+                EP_T0(ep_t1);
+                noc_async_read_barrier();  // blendrec of batch k, pairs of batch k+1
+                EP_ADD(ep_rdw, ep_t1);
+                asm volatile("fence" ::: "memory");
+                twh[tw::H_READY] = k + 1u;
+                if (k + 1u < nbatch) {
+                    EP_T0(ep_t2);
+                    while (min_done() + tw::SLOTS < k + 2u) {
+                        if (!service()) tw_spin();
+                    }
+                    EP_T0(ep_t3);
+                    EP_ADD(ep_wfl, ep_t2);
+                    issue_town(k + 1u);
+                    if (k + 2u < nbatch) issue_pairs(k + 2u);
+                    EP_ADD(ep_brec, ep_t3);
+                }
+                service();
+            }
+            EP_CNT(ep_nb, nbatch);
+            EP_T0(ep_t5);
+            while (min_done() < nbatch) {
+                if (!service()) tw_spin();
+            }
+            service();  // the last run words (queued before the batch counts)
+            EP_ADD(ep_proc, ep_t5);
+        }
+        asm volatile("fence" ::: "memory");
+        invalidate_l1_cache();  // the TRISCs' cursors, for the drain
+    } else
+#endif
     if (nbatch > 0) {
         issue_pairs(0);
         noc_async_read_barrier();
@@ -979,6 +1200,25 @@ void kernel_main() {
     EP_T0(ep_t_wbar);
     noc_async_write_barrier();
     EP_ADD(ep_wbar, ep_t_wbar);
+#if OL_EMIT_TOWN
+    {
+        // Every TRISC is done with this stream: clear GO for the next launch.
+        EP_T0(ep_t_fin);
+        for (;;) {
+            invalidate_l1_cache();
+            if (twh[tw::H_FIN] == tw::MAGIC && twh[tw::H_FIN + 1u] == tw::MAGIC &&
+                twh[tw::H_FIN + 2u] == tw::MAGIC) {
+                break;
+            }
+            tw_spin();
+        }
+        twh[tw::H_GO] = 0u;
+        twh[tw::H_GO2] = 0u;
+        for (uint32_t i = 0; i < tw::NT; i++) twh[tw::H_FIN + i] = 0u;
+        asm volatile("fence" ::: "memory");
+        EP_ADD(ep_pairs, ep_t_fin);
+    }
+#endif
 #if OL_EMIT_PROF
     DeviceTimestampedData("ep_pro", ep_pro);
     DeviceTimestampedData("ep_rdw", ep_rdw);
