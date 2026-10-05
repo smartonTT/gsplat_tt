@@ -16,7 +16,12 @@ unchanged (tests/unit/test_kcfg_size.cpp checks both).
   184b829: rc 0, 4 programs per view on 110 cores: pfwc 2.005, K2 0.985, sort_ol 1.441,
   fused mat+blend 6.346 ms (traced). mat->blend wait 0.000, blend_end_max 6.252 ms.
   Files: docs/matblend-ready-t273/t289/out/tracy-t302-def-*.
-- Untraced paired round (drive2.sh, base 51ac7cf vs head, alternating builds): RESULTS_TBD
+- Untraced paired round (drive2.sh, base 51ac7cf vs head 6d64965, alternating builds b,h,b,h,
+  2 runs each): all 8 runs give the same 30 md5s as md5-r6-base.txt (hero 86524912, golden
+  set 906e0435), 30/30 views. avg_frame_ms base 11.091 / 11.112 / 11.086 / 11.270 (mean 11.140),
+  head 11.097 / 11.132 / 11.078 / 11.120 (mean 11.107): no regression (untraced code path is
+  unchanged). remote_time.sh prints "VIEWS DIFFER" because its REF is the old r82 list; both
+  arms show it. Files: out/md5-rt302*.txt, out/run-rt302*.log.
 
 Note: drive.sh's untraced step used `--timeout 900`, which devrun now refuses (600 s
 ceiling); drive2.sh uses 400 s (one arm takes ~12 s).
