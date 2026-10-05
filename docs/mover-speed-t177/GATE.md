@@ -40,3 +40,10 @@ view (`timeout` rc=124; log ends after `[SORT] ONELAUNCH k2_fold=1`). With the e
 EMIT_PROF hang, the fold is timing-sensitive and not safe to land. a6da4e4 makes it opt-in
 (GSPLAT_TT_OL_EMIT_FOLD=1, default off) and drive3.sh gates the v2 table alone against the tip
 (#174 table via file), two arms, 3 rounds, 30 views. Gate for v2 alone: >= 0.3 ms/view.
+
+## drive3 smoke hang (run 493) and drive4
+drive3 on a6da4e4 stopped at its smoke too: v2 alone (fold off) hung on view 0 (rc=124, log ends after
+`[SORT] ONELAUNCH k2_fold=1`). #181's Tracy run on the same board hung just before (16:46-16:54, no CSV),
+so the board state is suspect; but the v2 table also reaches the K2 count-fold split (shared
+mover_speed_table()), which the pre-rebase gate never ran with. drive4.sh smokes tip, v2 and v2 with
+GSPLAT_TT_K2_FOLD=0 (2 views each, every arm runs), then the drive3 gate if tip and v2 pass.
