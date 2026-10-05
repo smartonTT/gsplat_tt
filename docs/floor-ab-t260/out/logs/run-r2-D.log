@@ -1,0 +1,216 @@
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-05 17:34:39.170 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 17:34:39.170 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 17:34:39.173 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 17:34:39.174 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 17:34:39.174 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 17:34:39.174 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 17:34:39.175 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-05 17:34:39.175 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-05 17:34:39.175 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 17:34:39.175 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 17:34:39.177 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 17:34:39.178 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 17:34:39.178 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 17:34:39.178 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 17:34:39.178 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-05 17:34:39.178 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-05 17:34:39.178 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-05 17:34:39.218 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-05 17:34:39.218 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-05 17:34:39.218 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-05 17:34:39.218 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-05 17:34:39.219 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-05 17:34:39.219 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffffc0000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-05 17:34:39.220 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-05 17:34:39.727 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-05 17:34:39.727 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-05 17:34:39.727 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-05 17:34:39.727 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-05 17:34:39.728 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-05 17:34:39.728 | info     |             UMD | Established firmware bundle version: 19.12.0 (topology_discovery.cpp:544)
+2026-10-05 17:34:39.728 | info     |             UMD | Firmware bundle version 19.12.0 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-05 17:34:39.728 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-05 17:34:39.729 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-05 17:34:39.729 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-05 17:34:39.729 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 17:34:39.729 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 17:34:39.729 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-05 17:34:39.729 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 17:34:39.729 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-05 17:34:39.729 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-05 17:34:39.729 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-05 17:34:39.729 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-05 17:34:39.729 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-05 17:34:39.729 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-05 17:34:39.729 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-05 17:34:39.781 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_1881759_1248362957_0' (shm_resource_tracker.cpp:265)
+2026-10-05 17:34:39.781 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_1881759' (shm_resource_tracker.cpp:275)
+2026-10-05 17:34:40.359 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.349978 GHz, device_time_at_sync=37946365175226 cycles (realtime_profiler_manager.cpp:1075)
+[DEV] command queues 2, compute grid 11x10
+[JIT_WARMUP] ideal-path contexts compiled in 1205.5 ms
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=108 total_subchunks=1143 max_subchunks_per_tile=4 payload_pages=52290
+[SORT] stage=ONELAUNCH P=3314682 P_kept=3314682 num_tiles=1024 max_tile_n=25460 onelaunch=0.56 layout=0.05 pub_host=0.16 total=0.80ms
+[run] timing 30 views (warmup excluded)
+[SUBCHUNK] tiles_split=108 total_subchunks=1143 max_subchunks_per_tile=4 payload_pages=52290
+[SORT] stage=ONELAUNCH P=3314682 P_kept=3314682 num_tiles=1024 max_tile_n=25460 onelaunch=0.56 layout=0.04 pub_host=0.14 total=0.75ms
+[run]   view=hero 16.4ms saved=view00_hero.png
+[SUBCHUNK] tiles_split=81 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=37890
+[SORT] stage=ONELAUNCH P=2392608 P_kept=2392608 num_tiles=1024 max_tile_n=21447 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.74ms
+[run]   view=orb_00 12.8ms saved=view01_orb_00.png
+[SUBCHUNK] tiles_split=78 total_subchunks=1110 max_subchunks_per_tile=3 payload_pages=39118
+[SORT] stage=ONELAUNCH P=2471499 P_kept=2471499 num_tiles=1024 max_tile_n=21054 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_01 13.1ms saved=view02_orb_01.png
+[SUBCHUNK] tiles_split=79 total_subchunks=1111 max_subchunks_per_tile=3 payload_pages=40721
+[SORT] stage=ONELAUNCH P=2572092 P_kept=2572092 num_tiles=1024 max_tile_n=21336 onelaunch=0.55 layout=0.05 pub_host=0.16 total=0.76ms
+[run]   view=orb_02 13.5ms saved=view03_orb_02.png
+[SUBCHUNK] tiles_split=80 total_subchunks=1116 max_subchunks_per_tile=3 payload_pages=42824
+[SORT] stage=ONELAUNCH P=2708901 P_kept=2708901 num_tiles=1024 max_tile_n=20238 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.74ms
+[run]   view=orb_03 13.9ms saved=view04_orb_03.png
+[SUBCHUNK] tiles_split=82 total_subchunks=1117 max_subchunks_per_tile=3 payload_pages=45425
+[SORT] stage=ONELAUNCH P=2876048 P_kept=2876048 num_tiles=1024 max_tile_n=22862 onelaunch=0.58 layout=0.06 pub_host=0.16 total=0.81ms
+[run]   view=orb_04 14.8ms saved=view05_orb_04.png
+[SUBCHUNK] tiles_split=95 total_subchunks=1126 max_subchunks_per_tile=3 payload_pages=49254
+[SORT] stage=ONELAUNCH P=3119795 P_kept=3119795 num_tiles=1024 max_tile_n=24461 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.76ms
+[run]   view=orb_05 15.3ms saved=view06_orb_05.png
+[SUBCHUNK] tiles_split=106 total_subchunks=1139 max_subchunks_per_tile=3 payload_pages=52156
+[SORT] stage=ONELAUNCH P=3306562 P_kept=3306562 num_tiles=1024 max_tile_n=23834 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.76ms
+[run]   view=orb_06 16.2ms saved=view07_orb_06.png
+[SUBCHUNK] tiles_split=105 total_subchunks=1141 max_subchunks_per_tile=3 payload_pages=55571
+[SORT] stage=ONELAUNCH P=3524021 P_kept=3524021 num_tiles=1024 max_tile_n=23760 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_07 17.7ms saved=view08_orb_07.png
+[SUBCHUNK] tiles_split=107 total_subchunks=1145 max_subchunks_per_tile=3 payload_pages=56546
+[SORT] stage=ONELAUNCH P=3586617 P_kept=3586617 num_tiles=1024 max_tile_n=20861 onelaunch=0.56 layout=0.04 pub_host=0.16 total=0.76ms
+[run]   view=orb_08 18.2ms saved=view09_orb_08.png
+[SUBCHUNK] tiles_split=107 total_subchunks=1145 max_subchunks_per_tile=3 payload_pages=57054
+[SORT] stage=ONELAUNCH P=3619996 P_kept=3619996 num_tiles=1024 max_tile_n=21342 onelaunch=0.56 layout=0.04 pub_host=0.16 total=0.76ms
+[run]   view=orb_09 18.3ms saved=view10_orb_09.png
+[SUBCHUNK] tiles_split=106 total_subchunks=1142 max_subchunks_per_tile=3 payload_pages=57400
+[SORT] stage=ONELAUNCH P=3640585 P_kept=3640585 num_tiles=1024 max_tile_n=21185 onelaunch=0.57 layout=0.04 pub_host=0.16 total=0.77ms
+[run]   view=orb_10 18.2ms saved=view11_orb_10.png
+[SUBCHUNK] tiles_split=110 total_subchunks=1143 max_subchunks_per_tile=3 payload_pages=56019
+[SORT] stage=ONELAUNCH P=3552608 P_kept=3552608 num_tiles=1024 max_tile_n=22006 onelaunch=0.57 layout=0.04 pub_host=0.15 total=0.76ms
+[run]   view=orb_11 17.3ms saved=view12_orb_11.png
+[SUBCHUNK] tiles_split=97 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=53657
+[SORT] stage=ONELAUNCH P=3402004 P_kept=3402004 num_tiles=1024 max_tile_n=22068 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_12 16.7ms saved=view13_orb_12.png
+[SUBCHUNK] tiles_split=99 total_subchunks=1128 max_subchunks_per_tile=3 payload_pages=52011
+[SORT] stage=ONELAUNCH P=3296414 P_kept=3296414 num_tiles=1024 max_tile_n=22550 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_13 16.0ms saved=view14_orb_13.png
+[SUBCHUNK] tiles_split=97 total_subchunks=1124 max_subchunks_per_tile=3 payload_pages=50955
+[SORT] stage=ONELAUNCH P=3228542 P_kept=3228542 num_tiles=1024 max_tile_n=23513 onelaunch=0.56 layout=0.04 pub_host=0.16 total=0.76ms
+[run]   view=orb_14 15.5ms saved=view15_orb_14.png
+[SUBCHUNK] tiles_split=100 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=49950
+[SORT] stage=ONELAUNCH P=3164304 P_kept=3164304 num_tiles=1024 max_tile_n=21464 onelaunch=0.56 layout=0.05 pub_host=0.16 total=0.76ms
+[run]   view=orb_15 15.5ms saved=view16_orb_15.png
+[SUBCHUNK] tiles_split=96 total_subchunks=1126 max_subchunks_per_tile=3 payload_pages=49177
+[SORT] stage=ONELAUNCH P=3115855 P_kept=3115855 num_tiles=1024 max_tile_n=22011 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.76ms
+[run]   view=orb_16 15.4ms saved=view17_orb_16.png
+[SUBCHUNK] tiles_split=97 total_subchunks=1129 max_subchunks_per_tile=3 payload_pages=49138
+[SORT] stage=ONELAUNCH P=3112342 P_kept=3112342 num_tiles=1024 max_tile_n=20499 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.76ms
+[run]   view=orb_17 15.3ms saved=view18_orb_17.png
+[SUBCHUNK] tiles_split=97 total_subchunks=1128 max_subchunks_per_tile=3 payload_pages=49433
+[SORT] stage=ONELAUNCH P=3131592 P_kept=3131592 num_tiles=1024 max_tile_n=20172 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_18 15.3ms saved=view19_orb_18.png
+[SUBCHUNK] tiles_split=91 total_subchunks=1127 max_subchunks_per_tile=3 payload_pages=49380
+[SORT] stage=ONELAUNCH P=3128212 P_kept=3128212 num_tiles=1024 max_tile_n=20976 onelaunch=0.55 layout=0.04 pub_host=0.16 total=0.75ms
+[run]   view=orb_19 15.7ms saved=view20_orb_19.png
+[SUBCHUNK] tiles_split=101 total_subchunks=1133 max_subchunks_per_tile=3 payload_pages=49039
+[SORT] stage=ONELAUNCH P=3106129 P_kept=3106129 num_tiles=1024 max_tile_n=20411 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_20 15.3ms saved=view21_orb_20.png
+[SUBCHUNK] tiles_split=102 total_subchunks=1138 max_subchunks_per_tile=4 payload_pages=48540
+[SORT] stage=ONELAUNCH P=3073677 P_kept=3073677 num_tiles=1024 max_tile_n=24629 onelaunch=0.55 layout=0.04 pub_host=0.16 total=0.75ms
+[run]   view=orb_21 15.4ms saved=view22_orb_21.png
+[SUBCHUNK] tiles_split=99 total_subchunks=1130 max_subchunks_per_tile=3 payload_pages=47128
+[SORT] stage=ONELAUNCH P=2984264 P_kept=2984264 num_tiles=1024 max_tile_n=20481 onelaunch=0.55 layout=0.04 pub_host=0.16 total=0.76ms
+[run]   view=orb_22 15.0ms saved=view23_orb_22.png
+[SUBCHUNK] tiles_split=94 total_subchunks=1126 max_subchunks_per_tile=3 payload_pages=45345
+[SORT] stage=ONELAUNCH P=2869094 P_kept=2869094 num_tiles=1024 max_tile_n=22730 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.74ms
+[run]   view=orb_23 14.5ms saved=view24_orb_23.png
+[SUBCHUNK] tiles_split=89 total_subchunks=1122 max_subchunks_per_tile=3 payload_pages=42138
+[SORT] stage=ONELAUNCH P=2664853 P_kept=2664853 num_tiles=1024 max_tile_n=22087 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.74ms
+[run]   view=orb_24 13.7ms saved=view25_orb_24.png
+[SUBCHUNK] tiles_split=84 total_subchunks=1116 max_subchunks_per_tile=3 payload_pages=39661
+[SORT] stage=ONELAUNCH P=2507590 P_kept=2507590 num_tiles=1024 max_tile_n=23688 onelaunch=0.56 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_25 13.0ms saved=view26_orb_25.png
+[SUBCHUNK] tiles_split=78 total_subchunks=1107 max_subchunks_per_tile=3 payload_pages=38126
+[SORT] stage=ONELAUNCH P=2408031 P_kept=2408031 num_tiles=1024 max_tile_n=24246 onelaunch=0.55 layout=0.05 pub_host=0.17 total=0.76ms
+[run]   view=orb_26 12.8ms saved=view27_orb_26.png
+[SUBCHUNK] tiles_split=79 total_subchunks=1108 max_subchunks_per_tile=3 payload_pages=37275
+[SORT] stage=ONELAUNCH P=2352998 P_kept=2352998 num_tiles=1024 max_tile_n=24182 onelaunch=0.55 layout=0.05 pub_host=0.15 total=0.75ms
+[run]   view=orb_27 12.7ms saved=view28_orb_27.png
+[SUBCHUNK] tiles_split=76 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=37139
+[SORT] stage=ONELAUNCH P=2344398 P_kept=2344398 num_tiles=1024 max_tile_n=22787 onelaunch=0.55 layout=0.04 pub_host=0.15 total=0.75ms
+[run]   view=orb_28 12.7ms saved=view29_orb_28.png
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=15.2 p50_ms=15.3 min_ms=12.7 max_ms=18.3 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t260/tmp/t260-r2-D
+TTW_TIMING ms_view=15.216
+TTW_TIMING blend=15.216
+TTW_TIMING stage_head=0.003
+TTW_TIMING stage_project=3.081
+TTW_TIMING stage_tile_assign=0.004
+TTW_TIMING stage_sort=0.849
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=11.045
+TTW_TIMING stage_d2h=0.200
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=0.002
+TTW_TIMING stage_view_total=15.183
+TTW_TIMING stage_pybind=0.032
+STAGES n=30 head=0.003 project=3.081 tile_assign=0.004 sort=0.849 blend_setup=0.000 mat=0.000 cull=0.000 blend=11.045 d2h=0.200 assemble=0.000 tail=0.002 | sum=15.183 view_total=15.183 resid_in_view=+0.001 avg_frame_ms=15.216 resid_vs_frame=+0.033
+TTW_TIMING stage_sort_pread=0.001
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.043
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.557
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.154
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.056
+TTW_TIMING stage_sort_other=0.038
+SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.043 upload=0.000 bin_emit=0.557 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.154 publish_wait=0.000 mat=0.056 | sum=0.811 sort=0.849 resid=+0.038
+TTW_TIMING stage_project_cov3d=0.000
+TTW_TIMING stage_project_pfwc_setup=0.004
+TTW_TIMING stage_project_pfwc_rtargs=0.040
+TTW_TIMING stage_project_pfwc_enqueue=0.033
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.001
+TTW_TIMING stage_project_gather_rtargs=0.000
+TTW_TIMING stage_project_gather_enqueue=0.000
+TTW_TIMING stage_project_gather_wait=3.001
+TTW_TIMING stage_project_gather_result=0.000
+TTW_TIMING stage_project_other=0.001
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.040 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=3.001 gather_result=0.000 | sum=3.080 project=3.081 resid=+0.001
+TTW_TIMING stage_tile_assign_setup=0.003
+TTW_TIMING stage_tile_assign_rtargs=0.000
+TTW_TIMING stage_tile_assign_enqueue=0.000
+TTW_TIMING stage_tile_assign_scan_finish=0.000
+TTW_TIMING stage_tile_assign_p_d2h=0.000
+TTW_TIMING stage_tile_assign_k2_finish=0.000
+TTW_TIMING stage_tile_assign_publish=0.001
+TTW_TIMING stage_tile_assign_other=0.000
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.003 tile_assign=0.004 resid=+0.000
