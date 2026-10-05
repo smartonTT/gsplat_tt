@@ -71,3 +71,13 @@ correlated (about 2.8 microblocks per live record), so part of this stall may be
   `ttp lock p100`) of >= 0.3 ms/view. Otherwise leave it off and record the number.
 - If the A/B is below the gate, also stop the quad/vertical-body idea: both live on the same
   per-call cost.
+
+## Measured (task #191, 2026-10-04): tail-chained walk is below the gate; closed
+Built in t190 (`GSPLAT_TT_BLEND_CHAIN_WALK`), measured in t191 (`docs/blend-chain-t191`) on
+yyzo-bh-07 p100a: 3 rotated rounds of 30 untraced bicycle views, same build. md5 identical to
+`md5-r82new.txt` for knobs 0/1/2. Knob 1 (spec version) saves **0.163 ms/view of blend**
+(-0.165 / -0.167 / -0.156) and 0.25 ms/view end-to-end (d2h noise included); knob 2
+(branch-free) saves 0.098. That is the model's low estimate (0.14), below the 0.3 gate: the knob
+stays default 0 and is not landed. **The quad / vertical-body idea is closed too**: it lives on
+the same per-call cost, and the measured per-call saving shows that cost is smaller than the
+mid estimate assumed. No further blend dispatch-walk work.
