@@ -89,6 +89,14 @@
 #ifndef OL_WIN_PAGES
 #define OL_WIN_PAGES 1536u  // == sort_device.cpp onelaunch window
 #endif
+// Task #196 (host knob GSPLAT_TT_OL_BREC_BULK=0 turns it off): the fast fold
+// emit reads a batch's blendrec pages as one run per DRAM bank, see issue_brec.
+#ifndef OL_BREC_BULK
+#define OL_BREC_BULK 1
+#endif
+#ifndef OL_BREC_HALF
+#define OL_BREC_HALF (OL_PB * 16u)  // blendrec pages per ring half (== sort_device.cpp)
+#endif
 // Task #154 (host knob GSPLAT_TT_OL_EMIT_PROF=1, profiling only): the emit
 // accumulates wall-clock cycles per part (EP_* below) and, at its end, records
 // each total as a Tracy timestamped-data marker (zone names "ep_*", value =
@@ -504,7 +512,8 @@ void kernel_main() {
     // its writes-flushed waits, its run write issues, the tail drain, the final
     // write barrier. Counts: records, blendrec pages, batches.
     uint32_t ep_pro = 0, ep_rdw = 0, ep_brec = 0, ep_pairs = 0, ep_proc = 0, ep_wfl = 0, ep_wiss = 0,
-             ep_drain = 0, ep_wbar = 0, ep_nrec = 0, ep_npf = 0, ep_nb = 0, ep_ncold = 0, ep_nrun = 0;
+             ep_drain = 0, ep_wbar = 0, ep_nrec = 0, ep_npf = 0, ep_nb = 0, ep_ncold = 0, ep_nrun = 0,
+             ep_nbk = 0, ep_bpg = 0;
     EP_T0(ep_t_pro);
 #endif
     constexpr uint32_t PB = OL_PB;
@@ -531,7 +540,9 @@ void kernel_main() {
     const uint32_t keep_l1 = get_write_ptr(CB_KEEP + cbo);
     const uint32_t dep_l1 = get_write_ptr(CB_DEP + cbo);
     auto depp = reinterpret_cast<volatile uint32_t*>(dep_l1);
-    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC + cbo);  // 2 x PB*16 blendrec pages
+    constexpr uint32_t BREC_HALF = OL_BREC_HALF;
+    static_assert(BREC_HALF >= BATCH_ELEMS, "OL_BREC_HALF: a ring half holds a page per pair of a batch");
+    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC + cbo);  // 2 x BREC_HALF blendrec pages
     const uint32_t l1_scratch = get_write_ptr(CB_SCRATCH + cbo);
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
     int32_t blendrec_cached_g = -1;
@@ -663,14 +674,65 @@ void kernel_main() {
             }
         }
     };
+    // OL_BREC_BULK (task #196): under the fold the pairs are gaussian-major and
+    // all kept, so a batch's g run from its first to its last g is near-dense
+    // (pfwc segments are dense). When the run fits a ring half, its pages are
+    // nb reads, one per DRAM bank (page ga + j lands at slot (j % nb) * bk_sf +
+    // j / nb), instead of one 64 B read per distinct g: those were
+    // request-bound, and their issue stalled most on the NoC hot spots (BRISC
+    // rows y=2,3, NCRISC columns x=14,15; docs/emit-imbalance-t196).
+    // bk_n[h]: pages of half h's bulk run, 0 = per-g pages.
+    uint32_t bk_nb = 0;
+    if (OL_BREC_BULK && fast && fold) {
+        const uint64_t a0 = get_noc_addr(0u, brec_acc);
+        for (uint32_t q = 1; q <= 16u; q++) {
+            if (get_noc_addr(q, brec_acc) == a0 + PAGE_BYTES) {
+                bk_nb = q;
+                break;
+            }
+        }
+    }
+    const uint32_t bk_sf = (bk_nb != 0u) ? BREC_HALF / bk_nb : 0u;
+    const uint32_t bk_cap = bk_sf * bk_nb;
+    const uint32_t bk_run = bk_sf * PAGE_BYTES, bk_wrap = bk_cap * PAGE_BYTES - PAGE_BYTES;
+    uint32_t bk_a[2] = {0u, 0u}, bk_n[2] = {0u, 0u};
+    // A g outside its batch's bulk run (only if the pairs were not g-sorted):
+    // one blocking read into the scratch page (unused with rings).
+    auto brec_now = [&](int32_t g) -> const uint32_t* {
+        noc_async_read(get_noc_addr(static_cast<uint32_t>(g), brec_acc), l1_scratch, PAGE_BYTES);
+        noc_async_read_barrier();
+        asm volatile("" ::: "memory");
+        EP_CNT(ep_npf, 1u);
+        return reinterpret_cast<const uint32_t*>(l1_scratch);
+    };
     // One blendrec page per run of equal kept g (scan_g carries the last kept
     // g across batches, the same test process_batch uses) into ring half h.
     int32_t scan_g = -1;
     auto issue_brec = [&](uint32_t k, uint32_t h) {
         const Planes pl = planes(k);
-        const uint32_t dst0 = rec_cache_l1 + h * BATCH_ELEMS * PAGE_BYTES;
+        const uint32_t dst0 = rec_cache_l1 + h * BREC_HALF * PAGE_BYTES;
         const uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
         const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
+        bk_n[h] = 0u;
+        if (bk_nb != 0u && p0 < P) {
+            const uint32_t m = (p0 + n_el > P) ? P - p0 : n_el;
+            const int32_t ga = pl.g[0], gb = pl.g[m - 1u];
+            const uint32_t n = static_cast<uint32_t>(gb - ga) + 1u;
+            if (gb >= ga && n <= bk_cap) {
+                const uint32_t q = n / bk_nb, rem = n - q * bk_nb;
+                const uint32_t nr = (n < bk_nb) ? n : bk_nb;
+                for (uint32_t r = 0; r < nr; r++) {
+                    noc_async_read(get_noc_addr(static_cast<uint32_t>(ga) + r, brec_acc),
+                                   dst0 + r * bk_sf * PAGE_BYTES, (q + (r < rem ? 1u : 0u)) * PAGE_BYTES);
+                }
+                bk_a[h] = static_cast<uint32_t>(ga);
+                bk_n[h] = n;
+                scan_g = gb;
+                EP_CNT(ep_nbk, 1u);
+                EP_CNT(ep_bpg, n);
+                return;
+            }
+        }
         uint32_t n_pf = 0;
         for (uint32_t j = 0; j < n_el; j++) {
             if (p0 + j >= P) break;
@@ -687,7 +749,7 @@ void kernel_main() {
     };
     auto process_batch = [&](uint32_t k, uint32_t h) {
         const Planes pl = planes(k);
-        const uint32_t ring0 = rec_cache_l1 + h * BATCH_ELEMS * PAGE_BYTES;
+        const uint32_t ring0 = rec_cache_l1 + h * BREC_HALF * PAGE_BYTES;
         const uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
         const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
         uint32_t rec_slot = 0;
@@ -783,7 +845,12 @@ void kernel_main() {
                 const uint32_t p0 = (pg_lo + k * PB) * ELEMS_PER_PAGE;
                 uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
                 if (p0 + n_el > P) n_el = (P > p0) ? P - p0 : 0u;
-                const uint8_t* bp = reinterpret_cast<const uint8_t*>(rec_cache_l1 + h * BATCH_ELEMS * PAGE_BYTES);
+                const uint8_t* bp = reinterpret_cast<const uint8_t*>(rec_cache_l1 + h * BREC_HALF * PAGE_BYTES);
+                // Bulk half: g's page is at (jr, ji) = ((g - ba) % nb, (g - ba) / nb),
+                // stepped from the last g (jl = its g - ba): rp = bp + jr * bk_run + ji * 64.
+                const uint32_t ba = bk_a[h], bn = bk_n[h];
+                const uint8_t* rp = bp;
+                uint32_t jl = 0, jr = 0;
                 const uint32_t cap = tile_cap, msk = tx_mask, sh = tx_shift, ring = ring_l1;
                 int32_t g_c = f_g;
                 uint32_t cov0 = f_cov0, cov1 = f_cov1, cov2 = f_cov2, dep = f_dep, mxb = f_mx, myb = f_my;
@@ -794,8 +861,28 @@ void kernel_main() {
                     const uint32_t t = tp[j];
                     if (g != g_c) {
                         g_c = g;
-                        const uint32_t* cp = reinterpret_cast<const uint32_t*>(bp);
-                        bp += PAGE_BYTES;
+                        const uint32_t* cp;
+                        const uint32_t jg = static_cast<uint32_t>(g) - ba;
+                        if (jg < bn) {
+                            if (jg < jl) {
+                                jl = 0;
+                                jr = 0;
+                                rp = bp;
+                            }
+                            for (; jl != jg; jl++) {
+                                rp += bk_run;
+                                if (++jr == bk_nb) {
+                                    jr = 0;
+                                    rp -= bk_wrap;
+                                }
+                            }
+                            cp = reinterpret_cast<const uint32_t*>(rp);
+                        } else if (bn == 0u) {
+                            cp = reinterpret_cast<const uint32_t*>(bp);
+                            bp += PAGE_BYTES;
+                        } else {
+                            cp = brec_now(g);
+                        }
                         cov0 = cp[0];
                         cov1 = cp[1];
                         cov2 = cp[2];
@@ -885,5 +972,7 @@ void kernel_main() {
     DeviceTimestampedData("ep_nb", ep_nb);
     DeviceTimestampedData("ep_ncold", ep_ncold);
     DeviceTimestampedData("ep_nrun", ep_nrun);
+    DeviceTimestampedData("ep_nbk", ep_nbk);
+    DeviceTimestampedData("ep_bpg", ep_bpg);
 #endif
 }

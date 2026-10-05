@@ -790,6 +790,14 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const uint32_t ring = gsplat_tt::env_config::ol_ring();
     const uint32_t win = gsplat_tt::env_config::ol_win_pages();
     const uint32_t ring_bytes = kOneLaunchRingTiles * (ring * 32u + 4u);
+    // Task #196: GSPLAT_TT_OL_BREC_BULK=0 is the kill switch of the fast fold
+    // emit's per-bank blendrec reads (default on; same output either way). On:
+    // ring halves of 256 pages, so a batch's g run may have gaps.
+    const bool brec_bulk = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_BREC_BULK");
+        return e == nullptr || std::atoi(e) != 0;
+    }();
+    const uint32_t brec_half = brec_bulk ? std::max(pb * 16u, 256u) : pb * 16u;
     uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
         mover_bytes = 0;
@@ -804,7 +812,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         mcb(4, BIN_ROW_BYTES);                // per-tile count of this mover
         mcb(5, BIN_ROW_BYTES);                // per-tile cursor
         mcb(6, 2u * 32u * PAGE_BYTES);        // count-pass read batch (tid, keep)
-        mcb(7, 2u * pb * 16u * PAGE_BYTES);   // blendrec rings: 16 pages per pair page
+        mcb(7, 2u * brec_half * PAGE_BYTES);  // blendrec rings: >= 16 pages per pair page
         mcb(8, 16u * 32u);                    // 32 B record staging (OL_RING=0)
         mcb(12, win * 3u * PAGE_BYTES);       // gid/tid/keep window
         if (ring != 0u) mcb(13, ring_bytes);  // per-tile record runs
@@ -816,8 +824,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         logged = true;
         std::fprintf(stderr,
                      "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
-                     "cb_bytes/mover=%u shared=%u\n",
-                     pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, mover_bytes,
+                     "OL_BREC_BULK=%u cb_bytes/mover=%u shared=%u\n",
+                     pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
+                     mover_bytes,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
     for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
@@ -830,6 +839,8 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["OL_RING"] = std::to_string(ring) + "u";
     defines["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
     defines["OL_WIN_PAGES"] = std::to_string(win) + "u";
+    defines["OL_BREC_BULK"] = brec_bulk ? "1" : "0";
+    defines["OL_BREC_HALF"] = std::to_string(brec_half) + "u";
     // Task #154: GSPLAT_TT_OL_EMIT_PROF=1 (profiling only) records the emit's
     // per-part cycle totals as Tracy "ep_*" markers. Unset: no define, the same
     // kernel binary as before.
