@@ -64,6 +64,18 @@ inline uint32_t pick_stream(uint32_t& live, uint32_t& prefer) {
 }
 #endif
 
+// Task #297: profiler builds only (PROFILE_KERNEL): per-core cycle split of the
+// mat-phase cull, reported at the end as "mc_*" timestamped-data markers
+// (opt/profiler/postl1_cores.py). UNPACK: mc_uw = spin in pick_stream (waiting for
+// a mover's coefficient tile). MATH: mc_mw = wait in mailbox_read, mc_act = copy +
+// SFPU + commit per batch, mc_sf = band_batch alone, mc_nb = batches, mc_tot = all.
+#if defined(PROFILE_KERNEL)
+#define MC_PROF 1
+inline uint32_t mc_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
+#else
+#define MC_PROF 0
+#endif
+
 }  // namespace
 
 void kernel_main() {
@@ -84,15 +96,31 @@ void kernel_main() {
     uint32_t prefer = 0;
     (void)live;
     (void)prefer;
+#if MC_PROF
+    uint32_t mc_uw = 0, mc_mw = 0, mc_act = 0, mc_sf = 0, mc_nb = 0;
+    const uint32_t mc_t0 = mc_now();
+    (void)mc_uw; (void)mc_mw; (void)mc_act; (void)mc_sf;
+#endif
     for (;;) {
         uint32_t msg = MSG_DONE;
+#if MC_PROF
+        const uint32_t mc_w0 = mc_now();
+        (void)mc_w0;
+#endif
         UNPACK(({
             msg = pick_stream(live, prefer);
+#if MC_PROF
+            mc_uw += mc_now() - mc_w0;
+#endif
             ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, msg);
             ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, msg);
         }));
         MATH((msg = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
         PACK((msg = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
+#if MC_PROF
+        const uint32_t mc_a0 = mc_now();
+        MATH((mc_mw += mc_a0 - mc_w0));
+#endif
         if (msg == MSG_DONE) {
             break;
         }
@@ -103,13 +131,24 @@ void kernel_main() {
         copy_tile_to_dst_init_short(cb_in);
         copy_tile(cb_in, 0, DR_IN / 32);
         MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+#if MC_PROF
+        const uint32_t mc_s0 = mc_now();
+        (void)mc_s0;
+#endif
         if (cull_disabled) {
             MATH((band_keep_all()));
         } else {
             MATH((band_batch(inv_floor_bits)));
         }
         MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#if MC_PROF
+        MATH((mc_sf += mc_now() - mc_s0));
+#endif
         tile_regs_commit();
+#if MC_PROF
+        MATH((mc_act += mc_now() - mc_a0));
+        mc_nb++;
+#endif
         tile_regs_wait();
         cb_reserve_back(cb_out, 1);
         pack_tile(DR_OUT / 32, cb_out);
@@ -117,4 +156,18 @@ void kernel_main() {
         tile_regs_release();
         cb_pop_front(cb_in, 1);
     }
+#if MC_PROF
+    const uint32_t mc_tot = mc_now() - mc_t0;
+#ifdef TRISC_UNPACK
+    DeviceTimestampedData("mc_uw", mc_uw);
+    DeviceTimestampedData("mc_utot", mc_tot);
+#endif
+#ifdef TRISC_MATH
+    DeviceTimestampedData("mc_mw", mc_mw);
+    DeviceTimestampedData("mc_act", mc_act);
+    DeviceTimestampedData("mc_sf", mc_sf);
+    DeviceTimestampedData("mc_nb", mc_nb);
+    DeviceTimestampedData("mc_tot", mc_tot);
+#endif
+#endif
 }
