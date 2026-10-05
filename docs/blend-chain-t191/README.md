@@ -34,6 +34,6 @@ The extra view_total gap comes from d2h: knob 0 rounds 1 and 2 had d2h 0.28/0.29
 ## Decision
 Below the >= 0.3 ms/view gate on both measures, so the knob stays off (t189 rule). The t189
 model put the lever at 0.14 / 0.31 / 0.52 (low / mid / high); the measurement sits at the low
-end: removing two taken jumps and hiding the table `lw` per body call recovers ~3.7 cycles per
+end: removing two taken jumps and hiding the table `lw` per body call recovers ~4.7 cycles per
 call, not the ~9 of the middle estimate. The quad / vertical-body idea is closed with it (same
 per-call cost; see `docs/blend-dispatch-t189`).
