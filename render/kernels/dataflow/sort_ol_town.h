@@ -2,11 +2,12 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Task #202 (host knob GSPLAT_TT_OL_EMIT_TOWN=1, docs/emit-trisc-own-t200): the
-// one-launch emit's per-record loop runs on the 3 TRISCs, tile-owned. TRISC i
-// owns the tiles with t % 3 == i in both movers' streams: it alone does their
-// cursor read-modify-write and packs their 32 B records into the mover's ring,
-// in stream order, so every record gets the same slot as the movers' own loop.
+// Task #202 (on by default, GSPLAT_TT_OL_EMIT_TOWN=0 turns it off;
+// docs/emit-trisc-own-t200): the one-launch emit's per-record loop runs on the
+// 3 TRISCs, tile-owned. TRISC i owns the tiles with t % 3 == i in both movers'
+// streams: it alone does their cursor read-modify-write and packs their 32 B
+// records into the mover's ring, in stream order, so every record gets the same
+// slot as the movers' own loop.
 //
 // Per mover (stream) one mailbox CB (CB_TWN, + 16 for mover 0 like the other
 // private CBs):

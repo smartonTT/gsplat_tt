@@ -117,11 +117,11 @@
 #ifndef OL_EMIT_FAST
 #define OL_EMIT_FAST 1
 #endif
-// Task #202 (host knob GSPLAT_TT_OL_EMIT_TOWN=1, docs/emit-trisc-own-t200):
-// the fast fold emit's per-record loop runs on the 3 TRISCs, tile-owned
-// (sort_ol_town.h, ../compute/sort_ol_town_compute.cpp). The movers read the
-// pairs and blendrec pages, build per-TRISC lists and write the runs the
-// TRISCs fill. Off: no define, the same kernel binary as before.
+// Task #202 (on by default, GSPLAT_TT_OL_EMIT_TOWN=0 turns it off;
+// docs/emit-trisc-own-t200): the fast fold emit's per-record loop runs on the 3
+// TRISCs, tile-owned (sort_ol_town.h, ../compute/sort_ol_town_compute.cpp). The
+// movers read the pairs and blendrec pages, build per-TRISC lists and write the
+// runs the TRISCs fill. Off: no define, the same kernel binary as before.
 #ifndef OL_EMIT_TOWN
 #define OL_EMIT_TOWN 0
 #endif

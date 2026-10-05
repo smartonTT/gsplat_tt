@@ -813,9 +813,10 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         return e == nullptr || std::atoi(e) != 0;
     }();
     const uint32_t brec_half = brec_bulk ? std::max(pb * 16u, 256u) : pb * 16u;
-    // Task #202: GSPLAT_TT_OL_EMIT_TOWN=1 runs the emit's per-record loop on the
-    // 3 TRISCs (sort_ol_town_compute.cpp): sort_ol_town::SLOTS blendrec slots
-    // instead of 2 halves and a mailbox CB (14) per mover. Same output.
+    // Task #202: the emit's per-record loop runs on the 3 TRISCs (default on;
+    // GSPLAT_TT_OL_EMIT_TOWN=0 is the kill switch; sort_ol_town_compute.cpp):
+    // sort_ol_town::SLOTS blendrec slots instead of 2 halves and a mailbox CB
+    // (14) per mover. Same output.
     const bool town = gsplat_tt::env_config::ol_emit_town() && pb * 16u <= sort_ol_town::LIST_MAX;
     const uint32_t brec_slots = town ? sort_ol_town::SLOTS : 2u;
     uint32_t mover_bytes = 0;

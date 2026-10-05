@@ -150,10 +150,11 @@ inline unsigned int ol_win_pages() {
     return v;
 }
 // Task #202 (docs/emit-trisc-own-t200): the emit's per-record loop runs on the
-// 3 TRISCs, tile-owned (sort_ol_town_compute.cpp). Needs the rings. Default off
-// until gated; same output either way.
+// 3 TRISCs, tile-owned (sort_ol_town_compute.cpp). Needs the rings. Default on
+// (gated -0.96 ms/view); GSPLAT_TT_OL_EMIT_TOWN=0 is the kill switch, same
+// output either way.
 inline bool ol_emit_town() {
-    static const bool v = env_uint("GSPLAT_TT_OL_EMIT_TOWN", 0u) != 0u && ol_ring() != 0u;
+    static const bool v = env_uint("GSPLAT_TT_OL_EMIT_TOWN", 1u) != 0u && ol_ring() != 0u;
     return v;
 }
 

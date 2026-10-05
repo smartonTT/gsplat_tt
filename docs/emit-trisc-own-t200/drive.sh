@@ -4,7 +4,7 @@
 # GSPLAT_TT_OL_EMIT_PROF=1 for town and base (TRISC counters town_pc, mover ep_*, emit zone);
 # then, if the gate passes, 3 swapped untraced 30-view rounds base/town, every run md5-gated.
 #   drive.sh [rev] [steps]   (Mac; one ttp lock p100 per device step)
-#   steps: any of sync smoke tracy 1 2 3 (default: sync smoke tracy)
+#   steps: any of sync smoke tracy 1 2 3 dflt (default: sync smoke tracy)
 # devrun refuses --timeout over 600 s; a warm 30-view run is ~15-25 s (first run JIT-compiles).
 set -u
 cd "$(git rev-parse --show-toplevel)"
@@ -54,4 +54,10 @@ for r in 1 2 3; do
     "RUN_TO=130 bash $T/$P/remote_time.sh $r ${ord[$((r-1))]}"
   echo "TIME${r}_RC=$?"; gate $r base town
 done
+# dflt: after the default flip, default env (TOWN on) vs the kill switch (=0), both md5-gated.
+if has dflt; then
+  lk $DEVRUN --host $H --no-verify --timeout 300 --tag t202-dflt -- \
+    "RUN_TO=130 bash $T/$P/remote_time.sh d base off:GSPLAT_TT_OL_EMIT_TOWN=0"
+  echo "DFLT_RC=$?"; gate d base off
+fi
 echo CHAIN_DONE

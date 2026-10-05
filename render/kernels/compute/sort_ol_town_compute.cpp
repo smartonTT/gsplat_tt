@@ -2,14 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
-// Task #202 (host knob GSPLAT_TT_OL_EMIT_TOWN=1, docs/emit-trisc-own-t200): the
-// one-launch emit's per-record loop on the 3 TRISCs, tile-owned (protocol:
-// ../dataflow/sort_ol_town.h). TRISC i walks its list of every batch of both
-// movers in batch order: the tile's cursor read-modify-write, the same 32 B
-// record as the mover's fast loop (sort_bin_onelaunch.cpp) into the mover's
-// ring, and a run word to the mover when a run is full. L1 only: no LLK, no CB
-// traffic. UNPACK sends the two mailbox addresses to MATH and PACK (task #165:
-// MATH has no CB interfaces, PACK no read pointers).
+// Task #202 (on by default, GSPLAT_TT_OL_EMIT_TOWN=0 turns it off;
+// docs/emit-trisc-own-t200): the one-launch emit's per-record loop on the 3
+// TRISCs, tile-owned (protocol: ../dataflow/sort_ol_town.h). TRISC i walks its
+// list of every batch of both movers in batch order: the tile's cursor
+// read-modify-write, the same 32 B record as the mover's fast loop
+// (sort_bin_onelaunch.cpp) into the mover's ring, and a run word to the mover
+// when a run is full. L1 only: no LLK, no CB traffic. UNPACK sends the two
+// mailbox addresses to MATH and PACK (task #165: MATH has no CB interfaces,
+// PACK no read pointers).
 //
 // GSPLAT_TT_OL_EMIT_PROF=1 (profiling only): cycle and count totals per launch
 // as Tracy timestamped data "town_pc", value (index << 32) | total, index
