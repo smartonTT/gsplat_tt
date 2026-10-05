@@ -1,0 +1,10 @@
+blend MATH saving, ms/view (= per-core MATH wall cut):
+  t172 v0: dead 550152 (19.0%)  t172 fit (cyc-trb-stage): 0.058, t172 fit (full): 0.081, t148 assumed 44 cyc: 0.163
+  t172 v1: dead 397631 (19.0%)  t172 fit (cyc-trb-stage): 0.042, t172 fit (full): 0.058, t148 assumed 44 cyc: 0.118
+  t148 30v: dead 488264 (16.5%)  t172 fit (cyc-trb-stage): 0.051, t172 fit (full): 0.071, t148 assumed 44 cyc: 0.145
+mat cost of compaction:
+  0.010 us/rec: critical item +0.14..0.16 ms traced (+0.07..0.08 untraced); mean mover +0.13 ms vs slack 0.618 traced
+  0.020 us/rec: critical item +0.28..0.32 ms traced (+0.14..0.16 untraced); mean mover +0.26 ms vs slack 0.618 traced
+  0.030 us/rec: critical item +0.42..0.48 ms traced (+0.21..0.24 untraced); mean mover +0.40 ms vs slack 0.618 traced
+net, compaction skipped on the critical item: +0.027 .. +0.163 ms/view (gate 0.3)
+net, compaction on every item (c=0.02): -0.133 .. +0.093 ms/view
