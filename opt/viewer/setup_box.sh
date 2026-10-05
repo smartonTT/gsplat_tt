@@ -32,7 +32,7 @@ steps() {
     "$BASE/.venv/bin/pip" install -q --upgrade pip
     "$BASE/.venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
     "$BASE/.venv/bin/pip" install -q numpy==2.2.6 viser==1.0.27 nerfview==0.1.3 \
-      pybind11==3.0.4 plyfile==1.1.3 pillow scipy splines==0.3.3 websockets==15.0.1
+      pybind11==3.0.4 plyfile==1.1.3 pillow scipy matplotlib jaxtyping imageio rich splines==0.3.3 websockets==15.0.1
   fi
   "$BASE/.venv/bin/python" -c "import torch, viser, nerfview, pybind11; print('venv ok')"
 }
