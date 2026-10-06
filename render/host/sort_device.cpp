@@ -621,6 +621,17 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
         // (permute_cull) instead of a second pass over the slab (cull_slab).
         const char* fold = std::getenv("GSPLAT_TT_MATCULL_FOLD");
         mat_defines["MATCULL_FOLD"] = (fold != nullptr && fold[0] == '1') ? "1" : "0";
+        // Task #306: GSPLAT_TT_MATCULL_TRISC_FILL=1 moves the coefficient fill and
+        // the word3 patch to the TRISCs; the movers post one 32 B job per slab
+        // on CB 7 / 23 (2 pages each).
+        if (sort_matcull_trisc_fill()) {
+            mat_defines["MATCULL_TRISC_FILL"] = "1";
+            for (uint32_t id : {7u, 23u}) {
+                CircularBufferConfig c(2u * 32u, {{id, DataFormat::UInt32}});
+                c.set_page_size(id, 32u);
+                CreateCircularBuffer(program, cores, c);
+            }
+        }
     }
     // Task #106: the one-launch bucket branch (args 16, 17).
     if (sort_onelaunch_enabled()) {
@@ -661,6 +672,8 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
         std::vector<UnpackToDestMode> u2d(64, UnpackToDestMode::Default);
         u2d[8] = UnpackToDestMode::UnpackToDestFp32;
         u2d[24] = UnpackToDestMode::UnpackToDestFp32;
+        std::map<std::string, std::string> cull_defines;
+        if (sort_matcull_trisc_fill()) cull_defines["MATCULL_TRISC_FILL"] = "1";
         ctx.kmatcull = CreateKernel(
             program,
             OVERRIDE_KERNEL_PREFIX "kernels/compute/mat_cull_compute.cpp",
@@ -671,6 +684,7 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
                 .dst_full_sync_en = true,
                 .unpack_to_dest_mode = u2d,
                 .math_approx_mode = false,
+                .defines = cull_defines,
             });
     }
     const std::vector<uint32_t> ct = mat_compile_args(/*fused=*/false);
@@ -3493,6 +3507,14 @@ bool sort_matcull_fused() {
     static const bool v = [] {
         const char* e = std::getenv("GSPLAT_TT_FUSE_MATCULL");
         return !(e != nullptr && e[0] == '0');
+    }();
+    return v;
+}
+
+bool sort_matcull_trisc_fill() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_MATCULL_TRISC_FILL");
+        return e != nullptr && e[0] == '1' && sort_matcull_fused() && sort_onelaunch_enabled();
     }();
     return v;
 }

@@ -260,7 +260,66 @@ inline void cull_end_stream() {
     asm volatile("fence" ::: "memory");
     cb_push_back(CB_COEFF, 1);
 }
-#if defined(MATCULL_FOLD) && MATCULL_FOLD
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+#if !(defined(SORT_ONELAUNCH) && SORT_ONELAUNCH)
+#error "MATCULL_TRISC_FILL needs SORT_ONELAUNCH (the deferred emit lives on that path)"
+#endif
+// Task #306: the TRISCs fill the coefficient tiles and patch word3. The mover
+// posts one 32 B job page per slab on CB_JOB ({slab, n, done, end}); TRISC0
+// fills each 128-record batch from the slab into CB_COEFF (TRISC-owned in this
+// mode), TRISC2 patches the masks from CB_KEEP into the slab's word3 and then
+// writes the job's done word. The mover has at most one job in flight and
+// never touches CB_COEFF / CB_KEEP; the stream ends with a job whose end word
+// is non-zero.
+constexpr uint32_t CB_JOB = MAT_CB_BASE + 7;
+constexpr uint32_t JOB_SLAB = 0u;  // == mat_cull_compute.cpp
+constexpr uint32_t JOB_N = 1u;
+constexpr uint32_t DONE_WORD = 2u;
+constexpr uint32_t JOB_END = 3u;
+
+inline uint32_t post_job(uint32_t slab, uint32_t n) {
+    cb_reserve_back(CB_JOB, 1);
+    const uint32_t page = get_write_ptr(CB_JOB);
+    auto p = reinterpret_cast<volatile uint32_t*>(page);
+    p[JOB_SLAB] = slab;
+    p[JOB_N] = n;
+    p[DONE_WORD] = 0u;
+    p[JOB_END] = 0u;
+    asm volatile("fence" ::: "memory");  // slab and job words reach L1 before the push
+    cb_push_back(CB_JOB, 1);
+    return page;
+}
+
+inline void job_end_stream() {
+    cb_reserve_back(CB_JOB, 1);
+    reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_JOB))[JOB_END] = 1u;
+    asm volatile("fence" ::: "memory");
+    cb_push_back(CB_JOB, 1);
+}
+
+inline void wait_job(uint32_t page) {
+    MAT_PZ("mat_cull_wait");
+    auto p = reinterpret_cast<volatile uint32_t*>(page);
+    do {
+        invalidate_l1_cache();
+    } while (p[DONE_WORD] == 0u);
+    invalidate_l1_cache();  // the slab's word3 was written by TRISC2
+}
+
+// Synchronous cull (paths that emit right after it).
+inline void cull_slab_trisc(uint32_t slab, uint32_t n) {
+    if (n != 0u) wait_job(post_job(slab, n));
+}
+#define CULL_SLAB(slab, n) cull_slab_trisc((slab), (n))
+#define CULL_END_STREAM() job_end_stream()
+#define PERMUTE_CULL(buck, slab, sorted, n) \
+    do { permute_records((buck), (slab), (sorted), (n)); cull_slab_trisc((slab), (n)); } while (0)
+#else
+#define CULL_SLAB(slab, n) cull_slab((slab), (n))
+#define CULL_END_STREAM() cull_end_stream()
+#endif
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+#elif defined(MATCULL_FOLD) && MATCULL_FOLD
 #define PERMUTE_CULL(buck, slab, sorted, n) permute_cull((buck), (slab), (sorted), (n))
 #else
 #define PERMUTE_CULL(buck, slab, sorted, n) \
@@ -350,7 +409,7 @@ void kernel_main() {
 
     if (work_count == 0) {
 #if defined(FUSE_CULL) && FUSE_CULL
-        cull_end_stream();
+        CULL_END_STREAM();
 #endif
         return;
     }
@@ -368,6 +427,56 @@ void kernel_main() {
     // the 3 KB histograms would not fit the 8 KB local memory): each item is
     // read from DRAM when it is processed (a few dozen items per core).
     sort_radix_tile::hist_t hist[sort_radix_tile::HIST_ENTRIES];
+
+#if defined(SORT_ONELAUNCH) && SORT_ONELAUNCH
+    // Ls records of subchunk s of tile tid from `slab`, to its payload from
+    // page p0 on (+ the ready flag when fused).
+    auto emit_at = [&](uint32_t slab, uint32_t tid, uint32_t dbase, uint32_t s, uint32_t Ls,
+                       uint32_t p0) {
+        uint32_t scp = 0;
+        {
+            const uint32_t e0 = (dbase + s) * 4u;
+            noc_async_read(get_noc_addr(e0 >> 4, dir_acc), scr, PAGE_BYTES);
+            noc_async_read_barrier();
+            scp = scrp[e0 & 0xF] + p0;
+        }
+        const uint32_t out_pages = (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
+        for (uint32_t p = 0; p < out_pages; ++p) {
+            const uint32_t recs = (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE
+                                                       : (Ls - p * SLAB_RECS_PER_PAGE);
+            noc_async_write(slab + p * SLAB_PAGE_BYTES, get_noc_addr(scp + p, payload_acc),
+                            recs * L1_SPLAT_BYTES);
+        }
+        noc_async_write_barrier();
+#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
+        // Payload is in DRAM: publish this subchunk's ready flag.
+        noc_async_write(ready_src, get_noc_addr(tid * 8u + s, ready_acc), PAGE_BYTES);
+        noc_async_write_barrier();
+#endif
+    };
+#endif
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+    // Task #306: the slab whose TRISC cull is in flight; its emit waits until
+    // the next item has been read and sorted (or until a path needs the slab).
+    struct {
+        uint32_t page, slab, tid, dbase, s, Ls, p0;
+    } pend{0u, 0u, 0u, 0u, 0u, 0u, 0u};
+    auto flush_pending = [&]() {
+        if (pend.page == 0u) return;
+        wait_job(pend.page);
+        MAT_PZ("mat_ol_wr");
+        emit_at(pend.slab, pend.tid, pend.dbase, pend.s, pend.Ls, pend.p0);
+        pend.page = 0u;
+    };
+    auto defer_emit = [&](uint32_t slab, uint32_t tid, uint32_t dbase, uint32_t s, uint32_t Ls,
+                          uint32_t p0) {
+        if (Ls == 0u) {  // nothing to cull (the TRISCs never see an empty job)
+            emit_at(slab, tid, dbase, s, Ls, p0);
+            return;
+        }
+        pend = {post_job(slab, Ls), slab, tid, dbase, s, Ls, p0};
+    };
+#endif
 
     for (uint32_t wi = 0; wi < work_count; wi++) {
         // The work buffer is a flat u32 array; item i = {tile_id at 2i,
@@ -443,26 +552,7 @@ void kernel_main() {
             const uint32_t slab = get_write_ptr(CB_SLAB);
             // Ls records of subchunk s from slab page p0 of its payload on.
             auto emit_slab = [&](uint32_t s, uint32_t Ls, uint32_t p0 = 0u) {
-                uint32_t scp = 0;
-                {
-                    const uint32_t e0 = (dir_base + s) * 4u;
-                    noc_async_read(get_noc_addr(e0 >> 4, dir_acc), scr, PAGE_BYTES);
-                    noc_async_read_barrier();
-                    scp = scrp[e0 & 0xF] + p0;
-                }
-                const uint32_t out_pages = (Ls + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
-                for (uint32_t p = 0; p < out_pages; ++p) {
-                    const uint32_t recs = (p + 1u < out_pages) ? SLAB_RECS_PER_PAGE
-                                                               : (Ls - p * SLAB_RECS_PER_PAGE);
-                    noc_async_write(slab + p * SLAB_PAGE_BYTES, get_noc_addr(scp + p, payload_acc),
-                                    recs * L1_SPLAT_BYTES);
-                }
-                noc_async_write_barrier();
-#if defined(MATBLEND_FUSE) && MATBLEND_FUSE
-                // Payload is in DRAM: publish this subchunk's ready flag.
-                noc_async_write(ready_src, get_noc_addr(tile_id * 8u + s, ready_acc), PAGE_BYTES);
-                noc_async_write_barrier();
-#endif
+                emit_at(slab, tile_id, dir_base, s, Ls, p0);
             };
             if (count <= ol_whole_cap) {
                 {
@@ -472,6 +562,22 @@ void kernel_main() {
                 asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
                 uint32_t* kA = reinterpret_cast<uint32_t*>(bs);
                 uint32_t* kB = reinterpret_cast<uint32_t*>(slab);
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+                // The radix ping-pong pair (8 * count B) must miss the slab
+                // records still being culled: behind them in the slab, else
+                // behind this item's records in the bucket, else emit first.
+                if (pend.page != 0u) {
+                    const uint32_t need = 8u * count;
+                    if (pend.Ls * L1_SPLAT_BYTES + need <= get_local_cb_interface(CB_SLAB).fifo_size) {
+                        kB = reinterpret_cast<uint32_t*>(slab + pend.Ls * L1_SPLAT_BYTES);
+                    } else if (count * L1_SPLAT_BYTES + need <=
+                               get_local_cb_interface(CB_BUCKET).fifo_size) {
+                        kB = reinterpret_cast<uint32_t*>(buck + count * L1_SPLAT_BYTES);
+                    } else {
+                        flush_pending();
+                    }
+                }
+#endif
                 const uint32_t* sorted;
                 {
                     MAT_PZ("mat_ol_sort");
@@ -483,12 +589,21 @@ void kernel_main() {
                 for (uint32_t s = 0; s < num_sc; ++s) {
                     const uint32_t Ls = (count - s * bucket_fit > bucket_fit)
                         ? bucket_fit : (count - s * bucket_fit);
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+                    flush_pending();  // the permute overwrites the slab
+                    {
+                        MAT_PZ("mat_ol_perm");
+                        permute_records(buck, slab, sorted + s * bucket_fit, Ls);
+                    }
+                    defer_emit(slab, tile_id, dir_base, s, Ls, 0u);
+#else
                     {
                         MAT_PZ("mat_ol_perm");
                         PERMUTE_CULL(buck, slab, sorted + s * bucket_fit, Ls);
                     }
                     MAT_PZ("mat_ol_wr");
                     emit_slab(s, Ls);
+#endif
                 }
                 continue;
             }
@@ -536,6 +651,9 @@ void kernel_main() {
                 for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
 #endif
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+            flush_pending();  // the gather overwrites the slab
+#endif
             {
                 MAT_PZ("mat_ol_gather");
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
@@ -553,13 +671,20 @@ void kernel_main() {
                     }
                 }
             }
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+            defer_emit(slab, tile_id, dir_base, sc, L_item, po / SLAB_RECS_PER_PAGE);
+#else
 #if defined(FUSE_CULL) && FUSE_CULL
             cull_slab(slab, L_item);
 #endif
             MAT_PZ("mat_ol_wr");
             emit_slab(sc, L_item, po / SLAB_RECS_PER_PAGE);
+#endif
             continue;
         }
+#endif
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+        flush_pending();  // the paths below cull and emit the slab synchronously
 #endif
 
         // iter-138: in-cap overflow tile pre-pack path. The whole tile's records
@@ -800,7 +925,7 @@ void kernel_main() {
 #if defined(FUSE_CULL) && FUSE_CULL
         {
             const uint32_t n = part_end - part_start;
-            cull_slab(gslab, n);
+            CULL_SLAB(gslab, n);
             const uint32_t page0 = sc_page + part_start / SLAB_RECS_PER_PAGE;
             const uint32_t out_pages = (n + SLAB_RECS_PER_PAGE - 1u) / SLAB_RECS_PER_PAGE;
             for (uint32_t p = 0; p < out_pages; ++p) {
@@ -813,7 +938,10 @@ void kernel_main() {
         }
 #endif
     }
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+    flush_pending();
+#endif
 #if defined(FUSE_CULL) && FUSE_CULL
-    cull_end_stream();
+    CULL_END_STREAM();
 #endif
 }
