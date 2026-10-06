@@ -18,6 +18,8 @@ ROOT=${ROOT:-/localdev/$USER}
 TT=${TT:-$ROOT/tt-metal} BASE=$ROOT/gstt2 VDIR=$ROOT/viewer
 VENV=${VENV:-$BASE/.venv}
 mkdir -p "$ROOT" "$BASE/scenes" "$VDIR"
+# precompile_fw JITs firmware into the cache; keep it off the small home quota (full on bh-30, task #263).
+export TT_METAL_CACHE=${TT_METAL_CACHE:-$VDIR/tt-metal-cache}
 rm -f "$VDIR/setup.rc"
 steps() {
   set -ex

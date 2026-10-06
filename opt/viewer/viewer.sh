@@ -48,6 +48,8 @@ if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "[viewer] already runn
 cd "$DIR"
 export TT_METAL_HOME=$TTMH TT_METAL_ARCH_NAME=blackhole
 export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME GSPLAT_SHA=$(cat SHA)
+# JIT cache on /localdev: the default ~/.cache sits on the 9.4 GB home quota, which filled on bh-30 (task #263).
+export TT_METAL_CACHE=$VDIR/tt-metal-cache
 export NUMPY_MADVISE_HUGEPAGE=0  # THP compaction stalls on bh-35 (see viewer_clean.py)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
 # The pid file is written by the viewer process itself (exec keeps the pid): $! can be
