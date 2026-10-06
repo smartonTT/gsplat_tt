@@ -44,8 +44,9 @@ void device_shutdown();
 // program (sort_device.cpp; GSPLAT_TT_FUSE_MATCULL=0 restores the separate
 // tile_l1_cull program). The blend then skips its own cull pass.
 bool sort_matcull_fused();
-// Task #306: GSPLAT_TT_MATCULL_TRISC_FILL=1 (needs the fused cull and the
+// Task #306: GSPLAT_TT_MATCULL_TRISC_FILL (needs the fused cull and the
 // one-launch sort): the TRISCs fill the cull tiles and patch the masks.
+// Task #315: unset = on, =0 = off.
 bool sort_matcull_trisc_fill();
 
 // Force-create resident blend/cull MeshWorkload contexts (JIT compile only).

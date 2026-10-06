@@ -26,6 +26,7 @@
 #include "sort_mover_split.h"
 #include "sort_onelaunch_layout.h"
 #include "device_state.h"
+#include "matcull_trisc_fill.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/sort_ol_town.h"
 #include "host_tracy.hpp"
@@ -621,7 +622,7 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
         // (permute_cull) instead of a second pass over the slab (cull_slab).
         const char* fold = std::getenv("GSPLAT_TT_MATCULL_FOLD");
         mat_defines["MATCULL_FOLD"] = (fold != nullptr && fold[0] == '1') ? "1" : "0";
-        // Task #306: GSPLAT_TT_MATCULL_TRISC_FILL=1 moves the coefficient fill and
+        // Task #306: GSPLAT_TT_MATCULL_TRISC_FILL (default on, =0 off) moves the coefficient fill and
         // the word3 patch to the TRISCs; the movers post one 32 B job per slab
         // on CB 7 / 23 (2 pages each).
         if (sort_matcull_trisc_fill()) {
@@ -3513,8 +3514,9 @@ bool sort_matcull_fused() {
 
 bool sort_matcull_trisc_fill() {
     static const bool v = [] {
-        const char* e = std::getenv("GSPLAT_TT_MATCULL_TRISC_FILL");
-        return e != nullptr && e[0] == '1' && sort_matcull_fused() && sort_onelaunch_enabled();
+        // Task #315: on by default (iter 207); GSPLAT_TT_MATCULL_TRISC_FILL=0 turns it off.
+        return matcull_trisc_fill_on(std::getenv("GSPLAT_TT_MATCULL_TRISC_FILL"),
+                                     sort_matcull_fused(), sort_onelaunch_enabled());
     }();
     return v;
 }

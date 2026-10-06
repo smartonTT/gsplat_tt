@@ -1,7 +1,9 @@
 # t306: mat cull fill/patch on the TRISCs (MATCULL_TRISC_FILL)
 
 Candidate 1 from `docs/mat-mover-opcount-t304.md`, built on iter 206 (fused mat+blend).
-Env `GSPLAT_TT_MATCULL_TRISC_FILL=1` (define `MATCULL_TRISC_FILL`), **off by default**.
+Env `GSPLAT_TT_MATCULL_TRISC_FILL` (define `MATCULL_TRISC_FILL`). Off by default in t306;
+**on by default since t315** (unset = on, `=0` = off; `render/host/matcull_trisc_fill.h`).
+Confirming A/B and iter 207: `docs/iter207-t315/README.md`.
 
 - Movers (`sort_subchunk_materialize.cpp`): post one `{slab,n}` job page per slab on CB 7/23
   instead of `cull_slab`; the emit of item i moves after the read+sort of item i+1 and waits
@@ -21,7 +23,7 @@ Env `GSPLAT_TT_MATCULL_TRISC_FILL=1` (define `MATCULL_TRISC_FILL`), **off by def
 md5 list 906e0435 (hero 86524912) in all 4 runs, 30/30: bit-identical.
 Logs and md5 lists: `out/`.
 
-## Verdict: not kept
+## Verdict (t306): not kept under the 0.3 ms gate; superseded by t315
 
 −0.16 ms/view is under the 0.3 ms gate (both rounds under). The default stays off, so there is
 no new iteration, tag or screenshot. The t304 model predicted 0.55 ms (range 0.30-0.72); the
