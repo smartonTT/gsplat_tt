@@ -54,10 +54,10 @@ split (the blend works on 32x32 tiles).
   fallback: 29.35 dB). Frame 15.6 ms (first view pays the grow + retry; the
   bucket then stays grown). Tile 554's own PSNR is 35.6 dB, the same as its
   spoke-region neighbours (28-35 dB); no tile seams in the image or the x10
-  diff (`out/hero-r3-far2_255.png`, `out/far2_255_diff10.png`).
+  diff (`img/far2_255_grown.png`, `img/far2_255_diff10.png`).
 - Far pose at 1/16384: 39376 records, grown, 18.9 ms.
 - Pulled back 4: 50704 records, grown, 17.8 ms; image looks clean
-  (`out/hero-r3-far4_255.png`).
+  (`img/far4_255_grown.png`).
 - Last resort (`GSPLAT_TT_TEST_TILE_CAP=20000`): no grow; the floor retry runs
   1/255 -> 1/16 -> 1/5 -> 1/2, the tile still holds 29488 > 20000, so the view
   raises "device sort failed" (as #270 does when every floor overflows).
