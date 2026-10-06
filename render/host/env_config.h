@@ -199,10 +199,11 @@ inline bool mat_cq1() {
 // Task #298 (lever B, docs/next-levers-after-205.md B): under the early sort
 // the K2 only counts (count rows, M, P; a difference array per mover, no pair
 // pages) and the one-launch sort's movers make their pairs in their L1 window
-// while they wait (sort_bin_onelaunch.cpp gen). Default on; 0 = off (the K2
-// writes the pairs and the sort reads them, as before).
+// while they wait (sort_bin_onelaunch.cpp gen). Default OFF (shelved: +0.19
+// ms/view, docs/k2-folded-t298/RESULT.md); 1 = on. Off: the K2 writes the
+// pairs and the sort reads them, as before.
 inline bool k2_folded() {
-    static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_K2_FOLDED", 1u) != 0u;
+    static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_K2_FOLDED", 0u) != 0u;
     return v;
 }
 

@@ -57,7 +57,7 @@
 //   28, 29 early launch only (below), else 0
 //   30..34 gen only (fold = 2, task #298, see gen_window), else 0
 //   35.. (core 0 mover 0 only) NoC x | y << 16 of logical core r, r < num_cores
-// Gen (task #298, arg 27 = 2; host GSPLAT_TT_K2_FOLDED=0 is the kill switch):
+// Gen (task #298, arg 27 = 2; host GSPLAT_TT_K2_FOLDED=1 opts in; shelved, default off):
 // the fold with a count-only K2 that wrote the count rows, M and P but no
 // pairs. Each mover makes its window's pairs in L1 with the K2's walk while it
 // waits (gen_window) and writes only the pages past its window to DRAM.
