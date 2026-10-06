@@ -27,7 +27,8 @@ EXCL=(":(exclude)tests/fixtures/hero/*.npz" ":(exclude)opt/profiler/ttw-*"
 [ "${SYNC_ALL:-0}" = 1 ] && EXCL=()
 git archive --format=tar "$SHA" -- . "${EXCL[@]}" | ssh -o BatchMode=yes "$HOST" \
   "mkdir -p '$DIR' && tar -m -x -C '$DIR' && echo $SHA > '$DIR/SHA'"
-ssh -o BatchMode=yes "$HOST" "DIR='$DIR' bash -s" <<'REMOTE'
+# REMOTE_TT_METAL_HOME (Mac side) overrides the remote TT_METAL_HOME default below.
+ssh -o BatchMode=yes "$HOST" "DIR='$DIR' ${REMOTE_TT_METAL_HOME:+TT_METAL_HOME='$REMOTE_TT_METAL_HOME'} bash -s" <<'REMOTE'
 set -eu
 cd "$DIR"
 # non-interactive ssh has no TT env; cmake needs TT_METAL_HOME (GSPLAT_WITH_TT)

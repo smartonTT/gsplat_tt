@@ -3,12 +3,14 @@
 # box or the p100 lock). Run from a checkout/worktree of gstt2 on the Mac.
 #   opt/viewer/viewer.sh deploy [rev]  sync+build rev (default: newest best-iter-* tag) and restart
 #   opt/viewer/viewer.sh start | stop | restart | status | log | tunnel
-# Env: VIEWER_HOST (bh-35), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay).
+# Env: VIEWER_HOST (bh-35), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
+#      VIEWER_TT_METAL_HOME (/localdev/smarton/tt-metal; bh-30 uses its own build, /localdev/smarton/viewer/tt-metal).
 # One-time box setup (tt-metal, venv, scenes): opt/viewer/setup_box.sh.
 set -euo pipefail
 HOST=${VIEWER_HOST:-bh-35}
 PORT=${VIEWER_PORT:-8080}
 LPORT=${VIEWER_LOCAL_PORT:-8091}
+TTMH=${VIEWER_TT_METAL_HOME:-/localdev/smarton/tt-metal}
 VDIR=/localdev/smarton/viewer
 DIR=$VDIR/tree
 # Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key.
@@ -39,12 +41,12 @@ R
 }
 
 do_start() {
-  rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT bash -s" <<'R'
+  rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)
 if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "[viewer] already running pid $pid"; exit 0; fi
 cd "$DIR"
-export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_ARCH_NAME=blackhole
+export TT_METAL_HOME=$TTMH TT_METAL_ARCH_NAME=blackhole
 export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME GSPLAT_SHA=$(cat SHA)
 export NUMPY_MADVISE_HUGEPAGE=0  # THP compaction stalls on bh-35 (see viewer_clean.py)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
@@ -99,7 +101,7 @@ case "${1:-status}" in
     SHA=$(git rev-parse "$REV^{commit}")
     "${SSH[@]}" "$HOST" true   # aborts here on a changed host key
     echo "[viewer] deploy $REV = $SHA to $HOST:$DIR"
-    opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
+    REMOTE_TT_METAL_HOME=$TTMH opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
     # Tagged trees older than this script lack the launcher: ship it from here.
     rsh "mkdir -p $DIR/opt/viewer && cat > $DIR/opt/viewer/viewer_clean.py" < opt/viewer/viewer_clean.py
     # Trees before the viewer's uint8 fix show render_clean frames all white.

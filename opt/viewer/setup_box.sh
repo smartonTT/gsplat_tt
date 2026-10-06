@@ -13,7 +13,10 @@ set -uo pipefail
 # that render/kernels/compute/project_pfwc_compute.cpp calls; it pins sfpi 7.49.0.
 TT_SHA=${TT_SHA:-437bc3664390ce8e7d564db2133083ff9035e7cd}
 ROOT=${ROOT:-/localdev/$USER}
-TT=$ROOT/tt-metal BASE=$ROOT/gstt2 VDIR=$ROOT/viewer
+# TT and VENV can point elsewhere when the box's shared tt-metal checkout or venv must not be
+# touched (bh-30, task #263: its tt-metal tree no longer matches its build or sfpi).
+TT=${TT:-$ROOT/tt-metal} BASE=$ROOT/gstt2 VDIR=$ROOT/viewer
+VENV=${VENV:-$BASE/.venv}
 mkdir -p "$ROOT" "$BASE/scenes" "$VDIR"
 rm -f "$VDIR/setup.rc"
 steps() {
@@ -30,23 +33,23 @@ steps() {
       -DBUILD_PROGRAMMING_EXAMPLES=OFF
     cmake --build build -j "$(nproc)"
   fi
-  if [ ! -x "$BASE/.venv/bin/python" ]; then
-    python3 -m venv "$BASE/.venv"
-    "$BASE/.venv/bin/pip" install -q --upgrade pip
-    "$BASE/.venv/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
-    "$BASE/.venv/bin/pip" install -q numpy==2.2.6 viser==1.0.27 nerfview==0.1.3 \
+  if [ ! -x "$VENV/bin/python" ]; then
+    python3 -m venv "$VENV"
+    "$VENV/bin/pip" install -q --upgrade pip
+    "$VENV/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
+    "$VENV/bin/pip" install -q numpy==2.2.6 viser==1.0.27 nerfview==0.1.3 \
       pybind11==3.0.4 plyfile==1.1.3 pillow scipy matplotlib jaxtyping imageio rich splines==0.3.3 websockets==15.0.1
   fi
   # viser encodes frames with cv2 when it is importable: one GIL-free call, so the JPEG encode
   # on the viewer's sender thread no longer slows the render (PIL's chunked encode cost the
   # render +1.6 ms/frame; task #257).
-  "$BASE/.venv/bin/python" -c "import cv2" 2>/dev/null || \
-    "$BASE/.venv/bin/pip" install -q --no-deps opencv-python-headless==5.0.0.93
+  "$VENV/bin/python" -c "import cv2" 2>/dev/null || \
+    "$VENV/bin/pip" install -q --no-deps opencv-python-headless==5.0.0.93
   # The sender thread encodes with simplejpeg (bundled libjpeg-turbo, releases the GIL) when it
   # is importable; see gsplat/nerfview_viewer.py and docs/viewer-encode-t271 (task #271).
-  "$BASE/.venv/bin/python" -c "import simplejpeg" 2>/dev/null || \
-    "$BASE/.venv/bin/pip" install -q --no-deps simplejpeg==1.9.0
-  "$BASE/.venv/bin/python" -c "import torch, viser, nerfview, pybind11, cv2, simplejpeg; print('venv ok')"
+  "$VENV/bin/python" -c "import simplejpeg" 2>/dev/null || \
+    "$VENV/bin/pip" install -q --no-deps simplejpeg==1.9.0
+  "$VENV/bin/python" -c "import torch, viser, nerfview, pybind11, cv2, simplejpeg; print('venv ok')"
 }
 ( steps ); rc=$?
 echo "$rc" > "$VDIR/setup.rc"
