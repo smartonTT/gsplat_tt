@@ -93,7 +93,8 @@ overlay_viewer_py() {
 
 case "${1:-status}" in
   deploy)
-    git fetch -q --tags origin
+    # GitHub can be unreachable from the Mac (port 22 timeouts); deploy from local refs then.
+    timeout 60 git fetch -q --tags origin || echo "[viewer] git fetch failed: using local refs" >&2
     REV=${2:-$(git tag -l 'best-iter-*' --sort=-v:refname | head -1)}
     SHA=$(git rev-parse "$REV^{commit}")
     "${SSH[@]}" "$HOST" true   # aborts here on a changed host key
