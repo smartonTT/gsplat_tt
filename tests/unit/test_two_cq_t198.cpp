@@ -48,14 +48,15 @@ void check_totals(std::mt19937& rng, uint32_t num_cores, uint32_t num_tiles) {
         if (tot[i] != ref.totals[i]) fail("totals_from_k2_rows != device_prefix", i, tot[i]);
 }
 
-void check_early_ranges(std::mt19937& rng, uint32_t num_cores) {
+void check_early_ranges(std::mt19937& rng, uint32_t num_cores,
+                        gsplat_tt::sort_split::MoverBoard board) {
     std::vector<uint32_t> noc_xy(num_cores);
     for (uint32_t c = 0; c < num_cores; c++) {
         const uint32_t x = 1u + (c % 10u) + (c % 10u >= 4u ? 1u : 0u);
         const uint32_t y = 2u + c / 10u + (c / 10u >= 5u ? 1u : 0u);
         noc_xy[c] = x | (y << 16);
     }
-    const std::vector<uint32_t> speed = gsplat_tt::sort_split::mover_speeds(noc_xy);
+    const std::vector<uint32_t> speed = gsplat_tt::sort_split::mover_speeds(noc_xy, board);
     std::vector<uint64_t> acc(speed.size() + 1u, 0u);
     for (std::size_t k = 0; k < speed.size(); k++) acc[k + 1] = acc[k] + speed[k];
     if (acc.size() != 2u * num_cores + 1u) fail("acc size", acc.size(), 2u * num_cores + 1u);
@@ -91,8 +92,11 @@ int main() {
     check_totals(rng, 110u, 4056u);
     check_totals(rng, 7u, 16u);
     check_totals(rng, 1u, 1u);
-    check_early_ranges(rng, 110u);
-    check_early_ranges(rng, 64u);
+    for (const auto b : {gsplat_tt::sort_split::MoverBoard::P100a,
+                         gsplat_tt::sort_split::MoverBoard::P150}) {  // task #358
+        check_early_ranges(rng, 110u, b);
+        check_early_ranges(rng, 64u, b);
+    }
     std::printf("%s\n", failures == 0 ? "OK" : "FAILED");
     return failures == 0 ? 0 : 1;
 }

@@ -55,6 +55,7 @@
 #include <utility>
 #include <vector>
 
+#include <tt-metalium/cluster.hpp>
 #include <tt-metalium/core_coord.hpp>
 #include <tt-metalium/device.hpp>
 #include <tt-metalium/distributed.hpp>
@@ -2394,7 +2395,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             std::vector<uint32_t> sb;  // task #174: speed-proportional mover ranges
             if (ol_mover_speed()) {
                 sb = gsplat_tt::sort_split::speed_bounds(
-                    total_p_pages, gsplat_tt::sort_split::mover_speeds(noc_xy));
+                    total_p_pages, gsplat_tt::sort_split::mover_speeds(
+                        noc_xy, gsplat_tt::sort_split::mover_board()));
             }
             std::vector<uint32_t> r_lo(num_cores), r_mid(num_cores), r_hi(num_cores);
             for (uint32_t c = 0; c < num_cores; c++) {
@@ -3604,3 +3606,25 @@ gsplat_cpu::SortResult sort_and_bin_tt(
 }
 
 }  // namespace gsplat_tt
+
+// Task #358: the mover speed table of this device's board (p150 or p100a),
+// GSPLAT_TT_MOVER_TABLE=p100a|p150 overrides it. Read once; the K2 fold
+// (tile_assign_device.cpp) reads it too, so both count the same ranges.
+namespace gsplat_tt::sort_split {
+MoverBoard mover_board() {
+    static const MoverBoard v = [] {
+        const int ct = static_cast<int>(tt::tt_metal::GetClusterType());
+        const MoverBoard detected = mover_board_for_cluster(ct);
+        const char* e = std::getenv("GSPLAT_TT_MOVER_TABLE");
+        bool ok = true;
+        const MoverBoard b = mover_board_from_env(e, detected, &ok);
+        if (!ok)
+            std::cerr << "[SORT] GSPLAT_TT_MOVER_TABLE=\"" << e
+                      << "\" not p100a|p150|auto; using the detected table\n";
+        std::fprintf(stderr, "[SORT] mover table %s (cluster type %d, detected %s)\n",
+                     mover_board_name(b), ct, mover_board_name(detected));
+        return b;
+    }();
+    return v;
+}
+}  // namespace gsplat_tt::sort_split

@@ -10,11 +10,21 @@
 // are NOC0's top rows (y = 2, 3: brec read issue stalls) and NOC1's right
 // columns (x = 14, 15). The host gives each mover pages in proportion to this.
 // Cores missing from the table count as 1000.
+//
+// Task #358: that table was measured on a p100a (it was misnamed P150) and
+// mis-weights a real p150 (emit window 2.92 ms vs 1.34 on the p100a, rows
+// y = 2-4 slow; docs/p150-gap.md). kMoverSpeedP150 is re-derived on bh-30
+// (p150b) from the t356 EMIT capture by docs/p150-gap-t356/reweight.py
+// (v = share / time, out/reweight-E.txt). The table is picked by the detected
+// board (tt::tt_metal::GetClusterType(), see mover_board());
+// GSPLAT_TT_MOVER_TABLE=p100a|p150 overrides it.
 
 #pragma once
 
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <iterator>
 #include <vector>
 
 #include "vis_mode.h"
@@ -26,7 +36,7 @@ struct MoverSpeed {
     uint16_t brisc, ncrisc;
 };
 
-inline constexpr MoverSpeed kMoverSpeedP150[] = {
+inline constexpr MoverSpeed kMoverSpeedP100a[] = {
     {1, 2, 731, 1053},
     {2, 2, 706, 1040},
     {3, 2, 701, 1037},
@@ -139,6 +149,151 @@ inline constexpr MoverSpeed kMoverSpeedP150[] = {
     {15, 11, 1046, 984},
 };
 
+// Task #358: re-derived on p150b bh-30 (t356 EMIT capture, iter 207).
+inline constexpr MoverSpeed kMoverSpeedP150[] = {
+    {1, 2, 499, 1038},
+    {2, 2, 473, 963},
+    {3, 2, 483, 989},
+    {4, 2, 523, 862},
+    {5, 2, 579, 784},
+    {6, 2, 629, 786},
+    {11, 2, 555, 786},
+    {12, 2, 600, 785},
+    {13, 2, 736, 854},
+    {14, 2, 822, 809},
+    {15, 2, 938, 799},
+    {1, 3, 588, 707},
+    {2, 3, 555, 707},
+    {3, 3, 543, 715},
+    {4, 3, 544, 730},
+    {5, 3, 557, 741},
+    {6, 3, 575, 734},
+    {11, 3, 579, 702},
+    {12, 3, 592, 750},
+    {13, 3, 716, 738},
+    {14, 3, 773, 726},
+    {15, 3, 839, 745},
+    {1, 4, 776, 893},
+    {2, 4, 748, 887},
+    {3, 4, 741, 909},
+    {4, 4, 756, 883},
+    {5, 4, 773, 895},
+    {6, 4, 798, 871},
+    {11, 4, 765, 836},
+    {12, 4, 802, 842},
+    {13, 4, 813, 809},
+    {14, 4, 804, 736},
+    {15, 4, 846, 737},
+    {1, 5, 927, 1081},
+    {2, 5, 907, 1102},
+    {3, 5, 905, 1116},
+    {4, 5, 910, 1123},
+    {5, 5, 924, 1157},
+    {6, 5, 948, 1072},
+    {11, 5, 961, 1057},
+    {12, 5, 1005, 958},
+    {13, 5, 978, 839},
+    {14, 5, 958, 713},
+    {15, 5, 1046, 695},
+    {1, 6, 993, 1144},
+    {2, 6, 978, 1108},
+    {3, 6, 977, 1126},
+    {4, 6, 988, 1135},
+    {5, 6, 1008, 1113},
+    {6, 6, 1040, 1052},
+    {11, 6, 1062, 1094},
+    {12, 6, 1104, 944},
+    {13, 6, 1003, 826},
+    {14, 6, 976, 704},
+    {15, 6, 1031, 686},
+    {1, 7, 1097, 1179},
+    {2, 7, 1079, 1186},
+    {3, 7, 1079, 1191},
+    {4, 7, 1086, 1186},
+    {5, 7, 1104, 1156},
+    {6, 7, 1127, 1045},
+    {11, 7, 1143, 1059},
+    {12, 7, 1170, 927},
+    {13, 7, 1064, 823},
+    {14, 7, 1044, 707},
+    {15, 7, 1125, 685},
+    {1, 8, 1190, 1409},
+    {2, 8, 1180, 1369},
+    {3, 8, 1178, 1323},
+    {4, 8, 1187, 1243},
+    {5, 8, 1204, 1134},
+    {6, 8, 1234, 1017},
+    {11, 8, 1275, 1038},
+    {12, 8, 1283, 911},
+    {13, 8, 1098, 811},
+    {14, 8, 969, 706},
+    {15, 8, 996, 689},
+    {1, 9, 1271, 1436},
+    {2, 9, 1257, 1399},
+    {3, 9, 1264, 1338},
+    {4, 9, 1280, 1254},
+    {5, 9, 1306, 1147},
+    {6, 9, 1290, 1019},
+    {11, 9, 1407, 1052},
+    {12, 9, 1421, 927},
+    {13, 9, 1029, 818},
+    {14, 9, 925, 720},
+    {15, 9, 930, 707},
+    {1, 10, 1313, 1437},
+    {2, 10, 1301, 1408},
+    {3, 10, 1310, 1358},
+    {4, 10, 1324, 1290},
+    {5, 10, 1346, 1172},
+    {6, 10, 1358, 1041},
+    {11, 10, 1436, 1081},
+    {12, 10, 1443, 946},
+    {13, 10, 1127, 828},
+    {14, 10, 1029, 744},
+    {15, 10, 1007, 732},
+    {1, 11, 1385, 1445},
+    {2, 11, 1368, 1439},
+    {3, 11, 1374, 1421},
+    {4, 11, 1375, 1376},
+    {5, 11, 1378, 1308},
+    {6, 11, 1403, 1221},
+    {11, 11, 1471, 1257},
+    {12, 11, 1487, 1177},
+    {13, 11, 1342, 982},
+    {14, 11, 1269, 860},
+    {15, 11, 1330, 854},
+};
+
+enum class MoverBoard { P100a, P150 };
+
+// Table for a tt::tt_metal::ClusterType value (P100 = 6, P150 = 7, P150_X2 = 8,
+// P150_X4 = 9, P150_X8 = 13): the p150 table for p150 cards, else the p100a
+// table (the pre-#358 behaviour for every board).
+inline MoverBoard mover_board_for_cluster(int cluster_type) {
+    switch (cluster_type) {
+        case 7: case 8: case 9: case 13: return MoverBoard::P150;
+        default: return MoverBoard::P100a;
+    }
+}
+
+// GSPLAT_TT_MOVER_TABLE: "p100a" or "p150" forces a table; unset, empty or
+// "auto" gives `detected`. Anything else is an error (nullptr ok = false).
+inline MoverBoard mover_board_from_env(const char* e, MoverBoard detected, bool* ok) {
+    *ok = true;
+    if (e == nullptr || *e == '\0' || std::strcmp(e, "auto") == 0) return detected;
+    if (std::strcmp(e, "p100a") == 0) return MoverBoard::P100a;
+    if (std::strcmp(e, "p150") == 0) return MoverBoard::P150;
+    *ok = false;
+    return detected;
+}
+
+inline const char* mover_board_name(MoverBoard b) {
+    return b == MoverBoard::P150 ? "p150" : "p100a";
+}
+
+// The table of this process's device: defined in sort_device.cpp (needs the
+// tt-metal cluster), read once, so the sort and the K2 fold use the same one.
+MoverBoard mover_board();
+
 // GSPLAT_TT_OL_MOVER_SPEED: the one-launch sort takes speed-proportional
 // mover ranges (default 1 with GSPLAT_TT_PRECULL=2, else 0). Read once; the
 // segment K2 reads it too, to count the same ranges (task #170 fold).
@@ -152,11 +307,15 @@ inline bool ol_mover_speed_enabled() {
 }
 
 // Mover speeds (BRISC, NCRISC per core, core order) of the cores at NoC
-// x | y << 16; cores missing from the table count as 1000.
-inline std::vector<uint32_t> mover_speeds(const std::vector<uint32_t>& noc_xy) {
+// x | y << 16 from `board`'s table; cores missing from it count as 1000.
+inline std::vector<uint32_t> mover_speeds(const std::vector<uint32_t>& noc_xy, MoverBoard board) {
     std::vector<uint32_t> speed(2u * noc_xy.size(), 1000u);
+    const MoverSpeed* tab = board == MoverBoard::P150 ? kMoverSpeedP150 : kMoverSpeedP100a;
+    const std::size_t n = board == MoverBoard::P150 ? std::size(kMoverSpeedP150)
+                                                    : std::size(kMoverSpeedP100a);
     for (std::size_t c = 0; c < noc_xy.size(); c++) {
-        for (const auto& m : kMoverSpeedP150) {
+        for (std::size_t i = 0; i < n; i++) {
+            const MoverSpeed& m = tab[i];
             if (m.x == (noc_xy[c] & 0xFFFFu) && m.y == (noc_xy[c] >> 16)) {
                 speed[2u * c] = m.brisc;
                 speed[2u * c + 1u] = m.ncrisc;

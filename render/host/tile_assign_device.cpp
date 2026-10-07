@@ -732,7 +732,8 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                     CoreCoord{c % ctx->grid.x, c / ctx->grid.x});
                 noc_xy[c] = static_cast<uint32_t>(v.x) | (static_cast<uint32_t>(v.y) << 16);
             }
-            const std::vector<uint32_t> speed = gsplat_tt::sort_split::mover_speeds(noc_xy);
+            const std::vector<uint32_t> speed = gsplat_tt::sort_split::mover_speeds(
+                noc_xy, gsplat_tt::sort_split::mover_board());
             acc.assign(speed.size() + 1u, 0u);
             for (std::size_t k = 0; k < speed.size(); k++) acc[k + 1] = acc[k] + speed[k];
         }
