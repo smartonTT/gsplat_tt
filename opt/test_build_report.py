@@ -51,3 +51,19 @@ def test_rebase_for_ttw_prefixes_relative_paths_only():
     assert 'src="data:image/png;base64,AA"' in out
     assert 'href="../../docs/x.md"' in out
     assert 'href="https://x"' in out and 'href="#top"' in out
+
+
+def test_conclusion_section_links_doc_when_present(tmp_path):
+    import build_report as br
+    orig = br.CONCLUSION_MD
+    try:
+        br.CONCLUSION_MD = tmp_path / "missing.md"
+        assert br.conclusion_section() == ""
+        md = tmp_path / "conclusion.md"
+        md.write_text("# Conclusion: stop at iter 207\n\nbody\n")
+        br.CONCLUSION_MD = md
+        sec = br.conclusion_section()
+        assert "href='../docs/conclusion.md'" in sec and "stop at iter 207" in sec, sec
+        assert "href=\"../../docs/conclusion.md\"" in br.rebase_for_ttw(sec.replace("'", '"'))
+    finally:
+        br.CONCLUSION_MD = orig
