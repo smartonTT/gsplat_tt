@@ -2,8 +2,8 @@
 //
 //   tests/unit/run_cpp.sh tests/unit/test_mover_table_t358.cpp
 //
-// - cluster types pick the table: P150 cards (7, 8, 9, 13) the p150 table,
-//   P100 (6) and every other board the p100a table (the pre-#358 behaviour);
+// - auto picks the p100a table on every board, p150 cards (7, 8, 9, 13)
+//   included: the p150 table measured slower on bh-30 (#358);
 // - GSPLAT_TT_MOVER_TABLE parsing: unset/""/auto = detected, p100a, p150,
 //   anything else = detected and not ok;
 // - both tables cover the 110 sort cores (physical x 1-6, 11-15, y 2-11) once
@@ -40,9 +40,7 @@ void check_table(const MoverSpeed (&tab)[N], const char* name) {
 
 int main() {
     namespace ss = gsplat_tt::sort_split;
-    for (int ct : {7, 8, 9, 13})
-        if (ss::mover_board_for_cluster(ct) != MoverBoard::P150) fail("p150 cluster", ct, 0);
-    for (int ct : {0, 1, 6, 11, 14, 16, 18})
+    for (int ct : {0, 1, 6, 7, 8, 9, 11, 13, 14, 16, 18})
         if (ss::mover_board_for_cluster(ct) != MoverBoard::P100a) fail("p100a cluster", ct, 0);
 
     bool ok = false;

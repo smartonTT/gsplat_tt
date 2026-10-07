@@ -15,9 +15,11 @@
 // mis-weights a real p150 (emit window 2.92 ms vs 1.34 on the p100a, rows
 // y = 2-4 slow; docs/p150-gap.md). kMoverSpeedP150 is re-derived on bh-30
 // (p150b) from the t356 EMIT capture by docs/p150-gap-t356/reweight.py
-// (v = share / time, out/reweight-E.txt). The table is picked by the detected
-// board (tt::tt_metal::GetClusterType(), see mover_board());
-// GSPLAT_TT_MOVER_TABLE=p100a|p150 overrides it.
+// (v = share / time, out/reweight-E.txt). Measured on bh-30 it LOSES:
+// 13.50 vs 12.76 ms/view, emit 2.81 vs 2.44 ms (it overloads x = 11-12,
+// y = 2-4; per-core speed depends on the load split, so a static re-fit does
+// not converge; docs/p150-mover-t358/README.md). So auto keeps the p100a table
+// on every board; GSPLAT_TT_MOVER_TABLE=p100a|p150 forces one.
 
 #pragma once
 
@@ -266,13 +268,11 @@ inline constexpr MoverSpeed kMoverSpeedP150[] = {
 enum class MoverBoard { P100a, P150 };
 
 // Table for a tt::tt_metal::ClusterType value (P100 = 6, P150 = 7, P150_X2 = 8,
-// P150_X4 = 9, P150_X8 = 13): the p150 table for p150 cards, else the p100a
-// table (the pre-#358 behaviour for every board).
-inline MoverBoard mover_board_for_cluster(int cluster_type) {
-    switch (cluster_type) {
-        case 7: case 8: case 9: case 13: return MoverBoard::P150;
-        default: return MoverBoard::P100a;
-    }
+// P150_X4 = 9, P150_X8 = 13): the p100a table for every board, p150 included,
+// since kMoverSpeedP150 measured slower on bh-30 (#358). Kept as the one place
+// to switch once a p150 table wins.
+inline MoverBoard mover_board_for_cluster(int /*cluster_type*/) {
+    return MoverBoard::P100a;
 }
 
 // GSPLAT_TT_MOVER_TABLE: "p100a" or "p150" forces a table; unset, empty or
