@@ -22,12 +22,14 @@ from backends import get_backend
 # `viser_patches` MUST be imported before any viser/nerfview machinery is
 # touched so the monkey-patches are in place when the server is created.
 import gsplat.viser_patches  # noqa: F401
+from gsplat.viser_patches import LIVE_CONNECTIONS
 from gsplat.camera_controls import ClientCameraController
 from gsplat.data_structures import Gaussians
 from gsplat.letterbox import letterbox_for_aspect
 from gsplat.nerfview_viewer import GsplatViewer
 from gsplat.pipeline import Pipeline, RenderResult, format_timings
 from gsplat.utils import c2w_to_w2c
+from gsplat.viewer_session import Heartbeat, PoseMemory, log
 
 
 # Tile size matches the kernel (32x32) for both backends so CPU and
@@ -623,13 +625,35 @@ class GaussianViewer:
             _apply_default_view()
             self._request_rerender()
 
+        self._frames_rendered = 0
+        self._frames_sent = 0
+        self._heartbeat = Heartbeat()
+        # A page that drops and reconnects by itself gets its last view back.
+        self._pose_memory = PoseMemory()
+
         @self.server.on_client_connect
         def _on_client_connect(client: viser.ClientHandle) -> None:
             controller = ClientCameraController(center, default_distance)
             controller.set_mode(ClientCameraController.ORBIT)
             self._camera_controllers[client.client_id] = controller
 
-            if self._preset_c2w is not None:
+            restored = self._pose_memory.recall(len(self.server.get_clients()) - 1)
+            if restored is not None:
+                self._preset_active = False
+                self._programmatic_camera = True
+                self._slider_suppress = True
+                self._ignore_camera_updates_until = time.perf_counter() + 0.5
+                try:
+                    client.camera.fov = restored.fov
+                    client.camera.position = restored.position
+                    client.camera.look_at = restored.look_at
+                    client.camera.up_direction = restored.up_direction
+                finally:
+                    self._slider_suppress = False
+                    self._programmatic_camera = False
+                log(f"client {client.client_id} camera restored to the pose it had "
+                    f"{time.monotonic() - restored.t:.0f}s ago")
+            elif self._preset_c2w is not None:
                 self._preset_active = True
                 self._programmatic_camera = True
                 self._slider_suppress = True
@@ -669,6 +693,11 @@ class GaussianViewer:
                 if self._preset_c2w is not None:
                     self._preset_active = False
                 controller.on_camera_update(client.camera)
+
+        @self.server.on_client_disconnect
+        def _on_client_disconnect(client: viser.ClientHandle) -> None:
+            self._pose_memory.remember(client.camera)
+            self._camera_controllers.pop(client.client_id, None)
 
         self._running = False
         if self.force_square is not None:
@@ -722,6 +751,7 @@ class GaussianViewer:
         scale to fill without distortion.
         """
         wall_start = time.perf_counter()
+        self._frames_rendered += 1
         W, H = self._resolve_render_size(render_tab_state)
         if self.verbose:
             print(
@@ -793,6 +823,7 @@ class GaussianViewer:
 
     def _on_frame_sent(self, t_start: float, t_rendered: float, t_sent: float) -> None:
         """FastRenderer callback after a frame's JPEG went out (perf_counter s)."""
+        self._frames_sent += 1
         self._e2e_ms.append((t_sent - t_start) * 1000.0)
         gap = t_sent - self._last_sent
         if gap < 0.25:  # continuous frames only, not the idle gap before them
@@ -915,6 +946,10 @@ class GaussianViewer:
         try:
             while self._running:
                 time.sleep(1.0)
+                line = self._heartbeat.line(self._frames_rendered, self._frames_sent,
+                                            len(self.server.get_clients()))
+                if line is not None:
+                    log(f"{line} open_connections={len(LIVE_CONNECTIONS)}")
         except KeyboardInterrupt:
             print("\nViewer stopped.")
         finally:
