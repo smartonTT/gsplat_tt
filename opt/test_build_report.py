@@ -67,3 +67,26 @@ def test_conclusion_section_links_doc_when_present(tmp_path):
         assert "href=\"../../docs/conclusion.md\"" in br.rebase_for_ttw(sec.replace("'", '"'))
     finally:
         br.CONCLUSION_MD = orig
+
+
+def test_conclusion_section_shows_p150_line(tmp_path):
+    import json
+    import build_report as br
+    orig = br.CONCLUSION_MD, br.P150_JSON
+    try:
+        md = tmp_path / "conclusion.md"
+        md.write_text("# Conclusion\n")
+        br.CONCLUSION_MD, br.P150_JSON = md, tmp_path / "missing.json"
+        assert "p150" not in br.conclusion_section()
+        p = tmp_path / "p150.json"
+        p.write_text(json.dumps({"board": "bh-30 (Blackhole p150b)", "tag": "best-iter-207",
+            "ms_view": 12.906, "fps": 77.5, "md5": "906e0435", "md5_views": "30/30",
+            "hero_psnr_vs_ref": 42.51, "p100a_ms_view": 10.907, "gpu_g1_ms": 10.75,
+            "gpu_g1_label": "G1 published, not measured", "doc": "docs/p150-bench-bh30.md"}))
+        br.P150_JSON = p
+        sec = br.conclusion_section()
+        assert "p150 (diagnostic, not an iteration)" in sec and "12.906 ms/view (77.5 FPS)" in sec, sec
+        assert "p100a 10.907 ms" in sec and "published, not measured 10.75 ms" in sec, sec
+        assert "p150 / G1 = 1.20x" in sec and "href='../docs/p150-bench-bh30.md'" in sec, sec
+    finally:
+        br.CONCLUSION_MD, br.P150_JSON = orig

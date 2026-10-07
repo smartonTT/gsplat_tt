@@ -1741,6 +1741,24 @@ PUBLISHED_GPU_ROWS = [
 
 
 CONCLUSION_MD = OPT_DIR.parent / "docs" / "conclusion.md"
+# p150 diagnostic run of the final iteration (task #346): not an iteration row, no tag.
+P150_JSON = OPT_DIR.parent / "docs" / "p150-bench-t346" / "p150.json"
+
+
+def p150_line() -> str:
+    """One p150-labelled line (ms/view, FPS, p100a and published G1 next to it), if measured."""
+    if not P150_JSON.exists():
+        return ""
+    d = json.loads(P150_JSON.read_text(encoding="utf-8"))
+    href = _opt_href(d["doc"])
+    return (
+        f"<br><b>p150 (diagnostic, not an iteration):</b> {html_escape(d['board'])}, "
+        f"{html_escape(d['tag'])}: <b>{d['ms_view']:.3f} ms/view ({d['fps']:.1f} FPS)</b>, "
+        f"md5 {html_escape(d['md5'])} {html_escape(d['md5_views'])}, hero {d['hero_psnr_vs_ref']:.2f} dB "
+        f"| p100a {d['p100a_ms_view']:.3f} ms | {html_escape(d['gpu_g1_label'])} {d['gpu_g1_ms']:.2f} ms "
+        f"| p150 / G1 = {d['ms_view'] / d['gpu_g1_ms']:.2f}x "
+        f"(<a href='{href}' target='_blank'>{html_escape(d['doc'])}</a>)"
+    )
 
 
 def conclusion_section() -> str:
@@ -1754,7 +1772,7 @@ def conclusion_section() -> str:
         "<div class='conclusion' style='border:2px solid #2a7;border-radius:6px;padding:8px 12px;"
         "margin:10px 0;background:#f3fbf6'>"
         f"<b>Project conclusion:</b> <a href='{href}' target='_blank'>{html_escape(title)}</a>"
-        " (docs/conclusion.md)</div>"
+        f" (docs/conclusion.md){p150_line()}</div>"
     )
 
 

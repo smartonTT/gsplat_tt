@@ -1,0 +1,28 @@
+{
+ "board": "bh-30 (Blackhole p150b, AMD EPYC 7352 host)",
+ "commit": "b28a6c76",
+ "tag": "best-iter-207",
+ "config": "iter-207 defaults (MATCULL_TRISC_FILL on, contrib floor 1/255)",
+ "ms_view": 12.906,
+ "ms_view_rounds": [
+  12.934,
+  12.878
+ ],
+ "median_ms_view": 12.9,
+ "fps": 77.5,
+ "p100a_ms_view": 10.907,
+ "p100a_board": "yyzo-bh-04 (Blackhole p100a, Ryzen 5 7600X host)",
+ "gpu_g1_ms": 10.75,
+ "gpu_g1_label": "G1 INRIA 3DGS RTX A6000, published, not measured",
+ "md5": "906e0435",
+ "md5_views": "30/30",
+ "hero_psnr_vs_ref": 42.51,
+ "ref": "benchmarks/reference_v2/hero.png",
+ "golden_match": true,
+ "tt_metal": "437bc366 (/localdev/smarton/viewer/tt-metal)",
+ "firmware": "19.13.2",
+ "doc": "docs/p150-bench-bh30.md",
+ "ts": "2026-10-07T19:50:05Z",
+ "ratio_vs_g1": 1.201,
+ "ratio_vs_p100a": 1.183
+}

@@ -9,6 +9,7 @@ source. GPU numbers are **published, not measured** (there is no GPU box in this
 |---|---:|---:|---|
 | Project start, 30-view bicycle 1024x1024 baseline | 173.30 ± 0.26 | 5.8 | `docs/benchmark-baseline.md`, commit a3a11c6e (p100a) |
 | **iter 207 (final, tag `best-iter-207`)** | **10.907** | **91.7** | `opt/ttw/iters.jsonl` iter 207, yyzo-bh-04 p100a, 3 rounds 10.923 / 10.861 / 10.937 |
+| iter 207 on **p150b** (bh-30), diagnostic, not an iteration | 12.906 | 77.5 | `docs/p150-bench-bh30.md` (#346), 2 rounds 12.934 / 12.878, md5 906e0435 30/30 |
 | GPU G1: INRIA 3DGS, RTX A6000, bicycle 1080p | 10.75 | 93.0 | published, not measured (REPORT.html) |
 | GPU G2: G1 scaled to 1024² pixels | 5.44 | 184 | published G1, pixel-normalized; not measured |
 
@@ -17,8 +18,13 @@ source. GPU numbers are **published, not measured** (there is no GPU box in this
 - Quality at iter 207: md5 906e0435 on 30/30 views, hero 42.51 dB against
   `benchmarks/reference_v2/hero.png`, device screenshot checked by eye with no tile seams
   (#315, #319). The 8-bit golden match is a separate badge.
-- All numbers are on a **p100a** (Blackhole, yyzo-bh-07 then yyzo-bh-04). No p150 number exists:
-  no free non-viewer p150 was available when measurement boxes were reserved. Absolute ms/view
+- **p150 (added by #346):** iter 207 on bh-30 (p150b, the user's viewer box, the only p150 we could
+  get) runs at **12.906 ms/view (77.5 FPS)**: 1.20x G1 (10.75 ms, published, not measured) and
+  1.18x the p100a's 10.907 ms. Same image (md5 906e0435 30/30, hero 42.51 dB, no seams). Blend is
+  0.44 ms faster on the p150 but sort `bin_emit` is 1.85 ms slower and host stages are slower; the
+  boxes also differ in host CPU (EPYC 7352 vs Ryzen 7600X), firmware and tt-metal build.
+  See `docs/p150-bench-bh30.md`.
+- All other numbers are on a **p100a** (Blackhole, yyzo-bh-07 then yyzo-bh-04). Absolute ms/view
   differ a little between boxes (iter 206 tip: 11.129 on bh-07, re-baselined 11.093 on bh-04), so
   every A/B ran both arms on the same box.
 - Defaults at iter 207: one-launch sort v2, PRECULL=2, BLEND_SCHED=2, decode-ahead, PFWC writer
@@ -104,8 +110,9 @@ and every blend lever measured so far is either shipped or shelved.
 - **#284 big-tile split for far views** (`docs/tile-split-t284/README.md` on ttp/t284 @ da0464ba):
   tiles over 32768 records render at full 1/255 instead of a coarser floor; far poses go from
   29.35 to 43.57 dB at +0.01 ms and the default md5 is unchanged. Review and landing were queued.
-- **A p150 measurement.** Every number here is from a p100a. A p150 run of iter 207 would give
-  the board the charter names; it needs a free non-viewer p150.
+- **p150 sort gap.** The p150 run (#346) is slower than the p100a only in sort `bin_emit` and the
+  host stages. Whether that is the host CPU or the chip is not known yet; a per-view stage or
+  Tracy run on the p150 would tell.
 - **G2 gap.** At equal pixel count the published GPU number is about 2x faster. Nothing on the
   lever list closes that; it would take a different blend formulation (for example FPU matmul
   blending that is not md5-identical), which is a new project, not a tuning step.
