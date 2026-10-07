@@ -67,7 +67,7 @@ One JSON line, for example:
 
 Optional fields: `pending_machine`/`pending_job`/`pending_cluster` (a queued request), and
 `release_job`/`release_host` (the old box a move still has to release). The last JSON line per
-role is kept in `<git common dir>/ird-state/<role>.json` (here `~/dev/gstt2/.git/ird-state/`,
+role is kept in `<git common dir>/ird-state/<role>.json` (for the task worktrees `~/dev/gsplat_tt/.git/ird-state/`,
 shared by every worktree; override with `IRD_STATE_DIR`). It is the script's memory of the
 current host, a pending request and an unfinished move. `--dry-run` never writes it.
 
