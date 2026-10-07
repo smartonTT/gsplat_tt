@@ -1,0 +1,87 @@
+[ttw 2026-10-07T04:44:43-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T04:44:43-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-07T04:44:43-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T04:44:43-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T04:44:43-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T04:44:43-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T04:44:44-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T04:44:44-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T04:44:44-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T04:44:44-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T04:44:44-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T04:44:44-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=d09e37d4 bin=8f3a135522521360 t319 fill-zones d09e37d4 (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t319-tracy  timeout=560s  worry=600s  ts=2026-10-07T04:44:44-0400
+cmd: T=/localdev/smarton/gstt2-t319 bash /localdev/smarton/gstt2-t319/tmp/t319_remote_tracy.sh t319-fz
+-----------------------------------------
+=== tracy t319-fz d09e37d4 env:  08:44:45
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=28.1 p50_ms=27.4 min_ms=24.9 max_ms=38.5 n_views=30 warmup_s=12.3 out=/localdev/smarton/gstt2-t319/tmp/t319-fz
+[capture_tracy] OK tracy: -rw-rw-r-- 1 smarton smarton 8083938 Oct  7 08:45 /localdev/smarton/gstt2-t319/opt/profiler/t319-fz/render.tracy
+[capture_tracy] device profiler CSV data rows: 610565 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t319/opt/profiler/t319-fz/render.tracy
+chunk opt/profiler/t319-fz/profile_log_device.csv: rows=610564 frames=31 (warmup rows=19716) kept_rows=590848 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/t319-fz/dev30.csv: rows=590848 frames=30 rows/frame=19695
+zones rc=0
+fill rc=0
+views=29 (warmup dropped); per view mean / max over cores, then mean over views; ms unless named (cyc_rec = cycles per record, *_us = us)
+metric                       mean        max
+mat_end                     2.292      2.834
+mat_len                     2.292      2.833
+nc_busy                     2.289      2.833
+nc_dw                       0.355      0.618
+nc_rd                       0.102      0.177
+nc_sort                     1.250      1.681
+nc_perm                     0.370      0.466
+nc_wr                       0.014      0.030
+nc_meta                     0.004      0.013
+nc_big                      0.188      2.305
+nc_dwm_us                 288.838    439.667
+nc_dwn                      3.728      6.862
+nc_dwb                      2.248      4.034
+nc_jobs                     3.728      6.862
+nc_recs                 11955.080  15898.241
+br_busy                     1.962      2.179
+br_dw                       0.188      0.412
+br_rd                       0.049      0.080
+br_sort                     1.343      1.427
+br_perm                     0.358      0.434
+br_wr                       0.014      0.021
+br_meta                     0.007      0.008
+br_big                      0.000      0.000
+br_dwm_us                 144.485    316.613
+br_dwn                      6.291      6.966
+br_dwb                      2.622      4.345
+br_jobs                     6.291      6.966
+br_recs                 11965.891  12043.552
+t0_tot                      2.291      2.833
+t0_idle(pick)               1.109      1.665
+t0_fillw                    0.004      0.005
+t0_fill                     1.142      1.295
+t0_other                    0.036      0.049
+t0_busy_frac                0.518      0.612
+t0_recs                 23920.971  27864.414
+t0_batches                191.437    221.345
+t0_jobs                    10.019     13.414
+t0_fill_cyc_rec            64.529     76.319
+t1_tot                      2.291      2.833
+t1_mbw                      0.000      0.000
+t1_copy                     0.011      0.013
+t1_band                     1.187      1.339
+t1_idle(tot-band)           1.104      1.661
+t2_tot                      2.292      2.833
+t2_mbw                      0.000      0.000
+t2_regw                     0.001      0.001
+t2_pack                     0.010      0.011
+t2_patchw                   0.875      0.981
+t2_patch                    0.330      0.386
+t2_busy(pack+patch)         0.340      0.397
+t2_idle(waits)              0.876      0.982
+t2_patch_cyc_rec           18.650     18.709
+cores                     110.000    110.000
+pfwc_tail(max-mean end)      0.191
+mat_tail(max-mean end)      0.542
+=== tracy done 08:45:15
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t319/tmp/ttw-state/logs/t319-tracy-20261007-044444.log

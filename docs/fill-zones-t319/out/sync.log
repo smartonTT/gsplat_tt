@@ -1,0 +1,4 @@
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=d09e37d499ca8123b5484ec715a3e466c78920e1 so_md5=bb29e3ebe1ab65fc2187fea15c62935e
