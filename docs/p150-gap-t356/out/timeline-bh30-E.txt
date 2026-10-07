@@ -1,0 +1,22 @@
+bh30-E: frames=30  (device ms from first pfwc start; host ms from first EnqueueProgram)
+zone                        start      end   window   n
+pfwc                        0.000    1.834    1.834  30
+host_cq1_proj_m             0.298    2.813    2.516  30
+BRISC-FW                    1.898   64.070   62.173  30
+NCRISC-FW                   1.898   64.045   62.147  30
+k2_pairs                    1.907    2.721    0.814  30
+k2_rows                     2.355    2.727    0.371  30
+sort_ol_prefix              2.742    2.825    0.082  30
+sort_ol_barrier             2.742    2.888    0.145  30
+sort_ol_fill                2.744    2.868    0.123  30
+sort_ol_emit                2.839    5.625    2.785  30
+sort_ol_town                2.858    5.545    2.687  30
+host_cq1_k2_rows            3.375    5.688    2.314  30
+host_finish_cq1_bridge      6.373    6.424    0.051  30
+host_blend_setup            6.436    6.517    0.081  30
+mat_cull_mask               6.505    9.331    2.826  30
+sort_subchunk_mat           6.505    9.331    2.826  30
+host_finish_blend           6.562   12.722    6.160  30
+tile_blend_load             8.325   12.486    4.162  30
+tile_blend_sfpu             8.399   12.568    4.169  30
+EnqueueProgram k: mean start  0:0.000  1:0.179  2:0.274  3:6.533
