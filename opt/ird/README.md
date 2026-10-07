@@ -43,10 +43,11 @@ manual steps the renewal tasks (#263, #316, #318, #320, #321, #325) worked out a
    starts `opt/viewer/setup_box.sh` detached (log and `setup.rc` in `/localdev/$USER/viewer/`)
    and exits 4. Rerun once `setup.rc` exists. A non-zero `setup.rc` is reported (exit 6,
    `setup_failed`, with the `setup.log` tail), not restarted; delete it after fixing the box.
-5. Viewer: redeploys the newest `best-iter-<N>` tag with
-   `ttp lock viewer -- env VIEWER_HOST=<host> opt/viewer/viewer.sh deploy <tag>` into
-   `/localdev/$USER/viewer`. If the deployed build already contains the tag, it only starts the
-   viewer when it is not running.
+5. Viewer: deploys `--rev REF` (default `origin/smarton/tt-project-opt`, so reviewed untagged
+   changes reach the viewer) with
+   `ttp lock viewer -- env VIEWER_HOST=<host> opt/viewer/viewer.sh deploy <sha>` into
+   `/localdev/$USER/viewer`. If the deployed commit has the same tree as REF, it only starts the
+   viewer when it is not running. The JSON line carries `deployed_sha`.
 6. Measure after a move: `ttp lock p100 -- opt/sync_remote.sh <host> /localdev/$USER/gstt2 <tag>`,
    then releases the old job under `ttp lock p100`. The old box stays reserved until the new one
    has built, and every run until then extends it too (`ird change-timeout`).

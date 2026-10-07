@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Renew one role's IRD reservation through the jump host and print one JSON line.
-#   opt/ird/renew.sh <viewer|measure> [--dry-run] [--host H] [--fingerprint SHA256:...] [--stay] [--no-deploy]
+#   opt/ird/renew.sh <viewer|measure> [--dry-run] [--host H] [--fingerprint SHA256:...] [--stay] [--no-deploy] [--rev REF]
 # viewer : resource key 'viewer'. Keeps bh-30 (else a free p150, else a free p100), then
-#          redeploys the newest best-iter-<N> tag into /localdev/$USER/viewer (opt/viewer/viewer.sh).
+#          deploys --rev REF (default origin/smarton/tt-project-opt) into /localdev/$USER/viewer
+#          (opt/viewer/viewer.sh) when its tree differs from the deployed commit's tree.
 # measure: moves to a free p150 that is not the viewer box (never bh-30) if one is free, else
 #          extends the p100. Sync, build and release run under `ttp lock p100`.
 # Only the role's designated reserver runs this without --dry-run. See opt/ird/README.md.
@@ -26,7 +27,7 @@ SCENE=${IRD_SCENE:-scenes/bicycle.ply}; [ -s "$SCENE" ] || SCENE=$HOME/dev/gstt2
 # a command-line -o wins over it, so every ssh to a box goes through BOX_SSH.
 BOX_SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 
-ROLE=; DRY=0; HOST_ARG=; FP_ARG=; STAY=0; DEPLOY=1
+ROLE=; DRY=0; HOST_ARG=; FP_ARG=; STAY=0; DEPLOY=1; REV=origin/smarton/tt-project-opt
 while [ $# -gt 0 ]; do
   case $1 in
     viewer|measure) ROLE=$1 ;;
@@ -35,11 +36,12 @@ while [ $# -gt 0 ]; do
     --fingerprint) FP_ARG=${2:?--fingerprint needs a value}; shift ;;
     --stay) STAY=1 ;;
     --no-deploy) DEPLOY=0 ;;
-    *) sed -n 2,12p "$0" >&2; exit 2 ;;
+    --rev) REV=${2:?--rev needs a value}; shift ;;
+    *) sed -n 2,13p "$0" >&2; exit 2 ;;
   esac
   shift
 done
-[ -n "$ROLE" ] || { sed -n 2,12p "$0" >&2; exit 2; }
+[ -n "$ROLE" ] || { sed -n 2,13p "$0" >&2; exit 2; }
 OTHER_ROLE=measure; [ "$ROLE" = measure ] && OTHER_ROLE=viewer
 cd "$(git rev-parse --show-toplevel)" || exit 2
 # Per-role state lives in the repository's common git dir, which every worktree shares.
@@ -79,7 +81,7 @@ OTHER_PENDING_JOB=$(st "$OTHER_ROLE" pending_job)
 OLD_JOB=$(st "$ROLE" release_job); OLD_HOST=$(st "$ROLE" release_host)
 
 # Result fields
-HOST=$CUR; JOB=; CLUSTER=; LEFT_S=0; ACTION=none; STATUS=ok; DEPLOY_MSG=; NOTE=; BOX_TYPE=
+HOST=$CUR; JOB=; CLUSTER=; LEFT_S=0; ACTION=none; STATUS=ok; DEPLOY_MSG=; DEPLOY_SHA=; NOTE=; BOX_TYPE=
 emit() {  # emit <exit code>; writes state unless --dry-run, prints the one JSON line
   local rc=$1 changed=false exp=
   [ "$HOST" != "$CUR" ] && changed=true
@@ -87,12 +89,12 @@ emit() {  # emit <exit code>; writes state unless --dry-run, prints the one JSON
   local j
   j=$(jq -cn --arg role "$ROLE" --arg host "$HOST" --arg job "$JOB" --arg port "$PORT" \
     --arg exp "$exp" --arg type "$BOX_TYPE" --argjson changed "$changed" --arg prev "$CUR" \
-    --arg action "$ACTION" --arg status "$STATUS" --arg cluster "$CLUSTER" --arg deploy "$DEPLOY_MSG" \
+    --arg action "$ACTION" --arg status "$STATUS" --arg cluster "$CLUSTER" --arg deploy "$DEPLOY_MSG" --arg dsha "${DEPLOY_SHA:-}" \
     --arg note "$NOTE" --argjson dry "$([ "$DRY" = 1 ] && echo true || echo false)" \
     --arg pm "${PENDING:-}" --arg pj "${PENDING_JOB:-}" --arg pc "${PENDING_CL:-}" --arg rj "${OLD_JOB:-}" --arg rh "${OLD_HOST:-}" --argjson rc "$rc" \
     '{role:$role, host:$host, job_id:$job, port:($port|tonumber), expiry_utc:$exp, box_type:$type,
       box_changed:$changed, prev_host:$prev, cluster:$cluster, action:$action, status:$status,
-      deploy:$deploy, note:($note|sub("; *$";"")), dry_run:$dry, exit:$rc}
+      deploy:$deploy, deployed_sha:$dsha, note:($note|sub("; *$";"")), dry_run:$dry, exit:$rc}
      + (if $pm != "" then {pending_machine:$pm, pending_job:$pj, pending_cluster:$pc} else {} end)
      + (if $rj != "" then {release_job:$rj, release_host:$rh} else {} end)')
   # HOST changes only once a reservation on it exists, so the next run finds the job it holds.
@@ -371,20 +373,23 @@ if [ "$DEPLOY" = 1 ] && [ "$ROLE" = viewer ]; then
   # Never /localdev/$USER/gstt2 (a devsync mirror of the Mac) and nothing in /home (quota full).
   ensure_setup "$VDIR/tt-metal" "$VDIR/venv" "$VDIR/scenes" ttp lock viewer --; rc=$?
   [ $rc = 4 ] || [ $rc = 6 ] && emit $rc
-  timeout 60 git fetch -q --tags origin 2>/dev/null || log "git fetch failed: using local tags"
-  TAG=$(git tag -l 'best-iter-*' --sort=-v:refname | head -1)
-  TSHA=$(git rev-parse "$TAG^{commit}")
+  timeout 60 git fetch -q --tags origin 2>/dev/null || log "git fetch failed: using local refs"
+  TSHA=$(git rev-parse --verify -q "$REV^{commit}") || { STATUS=bad_rev; DEPLOY_MSG="cannot resolve --rev $REV"; emit 2; }
+  TTREE=$(git rev-parse "$TSHA^{tree}")
   vs=; [ $PLANNED = 1 ] || vs=$(env VIEWER_HOST="$HOST" opt/viewer/viewer.sh status 2>&1 | head -1)
   DSHA=$(sed -nE 's/.*sha=([0-9a-f]+).*/\1/p' <<<"$vs")
-  if [ -n "$DSHA" ] && git merge-base --is-ancestor "$TSHA" "$DSHA" 2>/dev/null; then
-    if [[ $vs == *running* ]]; then DEPLOY_MSG="current: $DSHA contains $TAG, running"
+  DTREE=; [ -n "$DSHA" ] && DTREE=$(git rev-parse -q --verify "$DSHA^{tree}" 2>/dev/null)
+  if [ -n "$DTREE" ] && [ "$DTREE" = "$TTREE" ]; then
+    DEPLOY_SHA=$DSHA
+    if [[ $vs == *running* ]]; then DEPLOY_MSG="current: $DSHA has the tree of $REV ($TSHA), running"
     else
-      DEPLOY_MSG="started: $DSHA contains $TAG"
+      DEPLOY_MSG="started: $DSHA has the tree of $REV ($TSHA)"
       act ttp lock viewer -- env VIEWER_HOST="$HOST" opt/viewer/viewer.sh start >&2 || { DEPLOY_MSG="start failed"; STATUS=deploy_failed; emit 6; }
     fi
   else
-    DEPLOY_MSG="deployed $TAG ($TSHA) over ${DSHA:-none}"
-    act ttp lock viewer -- env VIEWER_HOST="$HOST" opt/viewer/viewer.sh deploy "$TAG" >&2 || { DEPLOY_MSG="deploy $TAG failed"; STATUS=deploy_failed; emit 6; }
+    DEPLOY_SHA=$TSHA
+    DEPLOY_MSG="deployed $REV ($TSHA) over ${DSHA:-none}"
+    act ttp lock viewer -- env VIEWER_HOST="$HOST" opt/viewer/viewer.sh deploy "$TSHA" >&2 || { DEPLOY_MSG="deploy $REV failed"; STATUS=deploy_failed; emit 6; }
   fi
   [ "$DRY" = 1 ] && DEPLOY_MSG="planned: $DEPLOY_MSG"
 fi
