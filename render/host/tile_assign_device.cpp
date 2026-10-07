@@ -54,6 +54,7 @@
 #include <tt-metalium/tensor_accessor_args.hpp>
 #include "tt-metalium/base_types.hpp"
 #include "tt-metalium/kernel_types.hpp"
+#include "tt-metalium/allocator.hpp"
 
 using namespace tt;
 using namespace tt::tt_metal;
