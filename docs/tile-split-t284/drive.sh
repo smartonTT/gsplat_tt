@@ -7,7 +7,7 @@
 set -u
 cd "$(git rev-parse --show-toplevel)"
 DEVRUN=~/dev/tt-workflows/scripts/devrun.sh
-H=yyzo-bh-07
+H=${H:-yyzo-bh-04}
 T=/localdev/smarton/gstt2-t284; TB=/localdev/smarton/gstt2-t284b
 P=docs/tile-split-t284
 O=${OUT:-$P/out}; mkdir -p $O
@@ -31,5 +31,5 @@ esac; done
 for r in ${ROUNDS:-1 2 3}; do
   scp -q -o BatchMode=yes "$H:$T/tmp/t284/run-r$r-*.log" "$H:$T/tmp/t284/md5-r$r-*.txt" "$H:$T/tmp/t284/hero-r$r-*.png" "$H:$T/tmp/t284/view-r$r-*" $O/ 2>/dev/null
 done
-[ -n "${NO_SHOT:-}" ] || { NO_SYNC=1 T=$T NAME=t284 opt/ttw/screenshot.sh t284 "$rev"; echo "SHOT_RC=$?"; }
+[ -n "${NO_SHOT:-}" ] || { H=$H NO_SYNC=1 T=$T NAME=t284 opt/ttw/screenshot.sh t284 "$rev"; echo "SHOT_RC=$?"; }
 echo CHAIN_DONE
