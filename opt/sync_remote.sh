@@ -8,13 +8,23 @@
 # Exit codes: 0 ok, 1 configure/build failed (last log lines printed), 3 stale
 # .so. Callers MUST check the exit code: don't pipe the output (e.g. `| tail`)
 # without `set -o pipefail`, or a failed build looks like success.
-# Remote env defaults: TT_METAL_HOME=/localdev/smarton/tt-metal,
+# Remote env defaults: TT_METAL_HOME=/localdev/$USER/tt-metal,
 # TT_METAL_ARCH_NAME=blackhole; set them on the remote side to override.
 # A fresh remote dir is made self-sufficient: missing .venv and scenes are
-# symlinked to $BASE (/localdev/smarton/gstt2), and a missing _gsplat_cpu .so is
+# symlinked to $BASE (/localdev/$USER/gstt2), and a missing _gsplat_cpu .so is
 # built (build-avx2-tt) or, if that fails, copied from $BASE.
+# GSTT2_BASE, GSTT2_VENV and GSTT2_SCENES (Mac side) override $BASE, the venv and
+# the scenes dir; set links that point elsewhere are replaced. The viewer deploy
+# uses them for its own $VIEWER_DIR: bh-30's gstt2 tree is a devsync mirror of the
+# Mac (task #324).
 set -euo pipefail
 HOST=${1:?host}; DIR=${2:?remote_dir}; REV=${3:-HEAD}
+# The viewer box is the user's always-on viewer: only opt/viewer/viewer.sh
+# (SYNC_REMOTE_VIEWER=1) deploys there, never a measurement task (task #324).
+case " ${GSTT2_VIEWER_HOSTS:-bh-30} " in
+  *" $HOST "*) [ "${SYNC_REMOTE_VIEWER:-0}" = 1 ] || {
+    echo "[sync_remote] refusing $HOST: it is the viewer box; deploy there with opt/viewer/viewer.sh" >&2; exit 2; } ;;
+esac
 SHA=$(git rev-parse "$REV")
 # Skip what a device run never reads: the LFS hero fixtures (*.npz, ~330 MB once
 # git-lfs smudges them; test inputs only), committed profiler captures
@@ -27,18 +37,26 @@ EXCL=(":(exclude)tests/fixtures/hero/*.npz" ":(exclude)opt/profiler/ttw-*"
 [ "${SYNC_ALL:-0}" = 1 ] && EXCL=()
 git archive --format=tar "$SHA" -- . "${EXCL[@]}" | ssh -o BatchMode=yes "$HOST" \
   "mkdir -p '$DIR' && tar -m -x -C '$DIR' && echo $SHA > '$DIR/SHA'"
-ssh -o BatchMode=yes "$HOST" "DIR='$DIR' bash -s" <<'REMOTE'
+# REMOTE_TT_METAL_HOME (Mac side) overrides the remote TT_METAL_HOME default below.
+ssh -o BatchMode=yes "$HOST" "DIR='$DIR' ${REMOTE_TT_METAL_HOME:+TT_METAL_HOME='$REMOTE_TT_METAL_HOME'}\
+${GSTT2_BASE:+ GSTT2_BASE='$GSTT2_BASE'}${GSTT2_VENV:+ GSTT2_VENV='$GSTT2_VENV'}${GSTT2_SCENES:+ GSTT2_SCENES='$GSTT2_SCENES'} bash -s" <<'REMOTE'
 set -eu
 cd "$DIR"
 # non-interactive ssh has no TT env; cmake needs TT_METAL_HOME (GSPLAT_WITH_TT)
-export TT_METAL_HOME=${TT_METAL_HOME:-/localdev/smarton/tt-metal}
+U=${USER:-$(id -un)}
+export TT_METAL_HOME=${TT_METAL_HOME:-/localdev/$U/tt-metal}
 export TT_METAL_RUNTIME_ROOT=${TT_METAL_RUNTIME_ROOT:-$TT_METAL_HOME} TT_METAL_ARCH_NAME=${TT_METAL_ARCH_NAME:-blackhole}
-[ -f /localdev/smarton/gstt2/.venv/bin/activate ] && . /localdev/smarton/gstt2/.venv/bin/activate
+BASE=${GSTT2_BASE:-/localdev/$U/gstt2}
+VENV=${GSTT2_VENV:-$BASE/.venv} SCENES=${GSTT2_SCENES:-$BASE/scenes}
+[ -f "$VENV/bin/activate" ] && . "$VENV/bin/activate"
 [ -L .venv ] && [ ! -e .venv ] && rm -f .venv   # tracked .venv symlink breaks remote CMake
-BASE=${GSTT2_BASE:-/localdev/smarton/gstt2}
 if [ "$(cd "$BASE" 2>/dev/null && pwd -P)" != "$(pwd -P)" ]; then
   for d in .venv scenes; do
-    [ -e "$d" ] || { ln -sfn "$BASE/$d" "$d"; echo "[sync_remote] linked $d -> $BASE/$d"; }
+    t=$VENV; [ "$d" = scenes ] && t=$SCENES
+    # A set override also replaces a link to elsewhere (e.g. a deploy dir once linked into gstt2).
+    if [ ! -e "$d" ] || { [ -n "${GSTT2_BASE:-}${GSTT2_VENV:-}${GSTT2_SCENES:-}" ] && [ -L "$d" ] && [ "$(readlink "$d")" != "$t" ]; }; then
+      ln -sfn "$t" "$d"; echo "[sync_remote] linked $d -> $t"
+    fi
   done
 fi
 so_md5() { md5sum render/render_clean*.so 2>/dev/null | awk '{print $1}' | sort | tr '\n' ' '; }
