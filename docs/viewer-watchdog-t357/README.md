@@ -41,8 +41,34 @@ Replay / soak (device lock held):
   first render 600 s for the JIT) appends its pose, the replay command, the ring
   tail and all thread stacks to <viewer dir>/viewer_hang.log, writes
   viewer_hang_pose_<UTC>.json and exits 86.
-- opt/viewer/supervise.sh (run by viewer.sh start) restarts on any non-zero exit,
+- opt/viewer/supervise.sh (run by viewer.sh start) restarts on a non-zero exit,
   backoff 5 s doubling to 300 s, at most 6 restarts an hour, log
   viewer_supervisor.log. `viewer.sh stop` touches viewer.stop so it stays down.
+  It also stops on exit 75 (viewer_clean.py found port 8080 taken) and on death by
+  SIGINT/SIGTERM/SIGKILL (an outside stop). Reason: in the first live test, task
+  #369's bench stopped the viewer with an older viewer.sh (no stop file) and started
+  its own; the supervisor kept restarting, and viser quietly moved the extra viewer to
+  port 8081. An OOM kill (SIGKILL) now leaves the viewer down, by design.
 - Test hook: `VIEWER_STALL_FILE=<path> opt/viewer/viewer.sh start`; writing a number of
   seconds to that file makes the next render sleep that long once.
+
+## Live test on bh-30 (2026-10-07, head 8329be50 = this branch + opt iter 210)
+
+Deployed with `VIEWER_STALL_FILE=/localdev/smarton/viewer/stall_once opt/viewer/viewer.sh deploy`,
+then `node opt/viewer/page_reconnect_check.mjs` drove a headless Chrome on the Mac through
+localhost:8091: page open, frames, arm the hook (`echo 600 > stall_once`), drag the camera.
+
+    23:38:10.769Z client 0 connected
+    23:38:31.054Z [watchdog] STALL hook: render sleeps 600 s
+    23:38:36.199Z [watchdog] render seq=241 1024x1024 stuck 5.1 s: pose and stacks in viewer_hang.log ... exiting 86
+    23:38:36Z     [supervisor] viewer exited rc=86 after 141s; restart 1/6 this hour in 5s
+    23:38:41Z     [supervisor] starting viewer_clean.py port 8080
+                  SELFTEST hero 1024x1024 n=30 median=11.55 ms (86.6 FPS); HERO PSNR vs reference_v2/hero.png = 42.51 dB; READY
+    23:38:54.009Z page: [gsplat] viewer connected   (reconnect shim, 22 s after the drag, no reload)
+
+viewer_hang.log has the WATCHDOG header, POSE (w2c, c2w, K, 1024x1024, cull settings),
+POSE_JSON, REPLAY command, RING and THREADS (render thread in render_watchdog._maybe_stall,
+plus the sender, executor, watchdog, UI and main threads). hero_viewer_8329be50.jpg (device
+frame after the restart) and page_after_reconnect.jpg (page after the reconnect) show no
+tile seams. The viewer was then restarted without the hook (stall_hook=off, SELFTEST
+11.53 ms, localhost:8091 -> 200).
