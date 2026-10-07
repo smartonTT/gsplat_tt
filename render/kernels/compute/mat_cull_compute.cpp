@@ -51,6 +51,19 @@ constexpr uint32_t OPQ_BIAS = 0x4B000000u;
 constexpr uint32_t JOB_DONE_MSG = 0xffffffffu;
 
 inline uint32_t n_batches(uint32_t n) { return (n + COEFF_BATCH - 1u) / COEFF_BATCH; }
+
+// Task #319: profiler builds only (PROFILE_KERNEL): per-TRISC cycle counters of
+// the fill path, reported once at the end as "fz_*" timestamped-data markers
+// (opt/profiler/fill_zones.py). UNPACK: pick_job wait, fill_batch CB wait and
+// copy, records. MATH: mailbox wait, copy_tile, band_batch. PACK: mailbox wait,
+// tile_regs_wait, pack, patch_batch wait on the packer and patch loop.
+#if defined(PROFILE_KERNEL)
+#define FZ_PROF 1
+inline uint32_t fz_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
+uint32_t fz_a, fz_b;  // fill_batch: CB wait / copy; patch_batch: packer wait / patch
+#else
+#define FZ_PROF 0
+#endif
 #endif
 
 #ifdef TRISC_UNPACK
@@ -120,9 +133,16 @@ inline void fill_batch(uint32_t cb, uint32_t slab, uint32_t base, uint32_t n) {
     auto& ci = get_local_cb_interface(cb);
     const uint32_t depth = ci.fifo_size / ci.fifo_page_size;
     volatile tt_l1_ptr uint32_t* ap = get_cb_tiles_acked_ptr(cb);
+#if FZ_PROF
+    const uint32_t fz_t0 = fz_now();
+#endif
     while (static_cast<uint16_t>(ci.tiles_acked - static_cast<uint16_t>(reg_read(reinterpret_cast<uint32_t>(ap)))) >=
            depth) {
     }
+#if FZ_PROF
+    const uint32_t fz_t1 = fz_now();
+    fz_a += fz_t1 - fz_t0;
+#endif
     const uint32_t tile = ci.fifo_rd_ptr << 4;
     for (uint32_t i = 0; i < n; ++i) {
         auto src = reinterpret_cast<volatile uint32_t*>(slab + (base + i) * L1_SPLAT_BYTES);
@@ -137,6 +157,9 @@ inline void fill_batch(uint32_t cb, uint32_t slab, uint32_t base, uint32_t n) {
         dst[129] = w5;
     }
     asm volatile("fence" ::: "memory");  // tile words reach L1 before the unpacker reads them
+#if FZ_PROF
+    fz_b += fz_now() - fz_t1;
+#endif
 }
 #endif
 #endif
@@ -147,8 +170,15 @@ inline void fill_batch(uint32_t cb, uint32_t slab, uint32_t base, uint32_t n) {
 inline void patch_batch(uint32_t cb, uint32_t keep_addr, uint32_t slab, uint32_t base, uint32_t n) {
     const uint16_t want = get_local_cb_interface(cb).tiles_received;
     volatile tt_l1_ptr uint32_t* rp = get_cb_tiles_received_ptr(cb);
+#if FZ_PROF
+    const uint32_t fz_t0 = fz_now();
+#endif
     while (static_cast<uint16_t>(reg_read(reinterpret_cast<uint32_t>(rp))) != want) {
     }
+#if FZ_PROF
+    const uint32_t fz_t1 = fz_now();
+    fz_a += fz_t1 - fz_t0;
+#endif
     asm volatile("fence" ::: "memory");
     auto keep = reinterpret_cast<volatile uint32_t*>(keep_addr);
     auto rec = reinterpret_cast<volatile uint32_t*>(slab + base * L1_SPLAT_BYTES);
@@ -159,6 +189,9 @@ inline void patch_batch(uint32_t cb, uint32_t keep_addr, uint32_t slab, uint32_t
     }
     asm volatile("fence" ::: "memory");  // word3 and keep reads done before the page is freed
     *get_cb_tiles_acked_ptr(cb) = want;
+#if FZ_PROF
+    fz_b += fz_now() - fz_t1;
+#endif
 }
 #endif
 
@@ -183,11 +216,23 @@ void kernel_main() {
     (void)live;
     (void)prefer;
 #if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
+#if FZ_PROF
+    // w: pick_job / mailbox wait; c: MATH copy_tile, PACK tile_regs_wait;
+    // k: MATH band_batch, PACK pack + push; nb / nr / nj: batches, records, jobs.
+    uint32_t fz_w = 0, fz_c = 0, fz_k = 0, fz_nb = 0, fz_nr = 0, fz_nj = 0;
+    fz_a = fz_b = 0;
+    const uint32_t fz_t0 = fz_now();
+    (void)fz_c;
+    (void)fz_k;
+#endif
     for (;;) {
         uint32_t job = JOB_DONE_MSG;
         uint32_t slab = 0, n = 0;
         (void)slab;
         (void)n;
+#if FZ_PROF
+        const uint32_t fz_w0 = fz_now();
+#endif
         UNPACK(({
             job = pick_job(live, prefer, slab, n);
             ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, job);
@@ -195,6 +240,9 @@ void kernel_main() {
         }));
         MATH((job = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
         PACK((job = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
+#if FZ_PROF
+        fz_w += fz_now() - fz_w0;
+#endif
         if (job == JOB_DONE_MSG) {
             break;
         }
@@ -212,6 +260,11 @@ void kernel_main() {
             n = reinterpret_cast<volatile uint32_t*>(page)[JOB_N];
         }));
         const uint32_t nb = n_batches(n);
+#if FZ_PROF
+        fz_nj++;
+        fz_nb += nb;
+        fz_nr += n;
+#endif
         for (uint32_t b = 0; b < nb; ++b) {
             const uint32_t base = b * COEFF_BATCH;
             const uint32_t cnt = (n - base < COEFF_BATCH) ? (n - base) : COEFF_BATCH;
@@ -219,16 +272,37 @@ void kernel_main() {
             UNPACK((fill_batch(cb_in, slab, base, cnt)));
             tile_regs_acquire();
             copy_tile_to_dst_init_short(cb_in);
+#if FZ_PROF
+            const uint32_t fz_c0 = fz_now();
+            (void)fz_c0;
+#endif
             copy_tile(cb_in, 0, DR_IN / 32);
             MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+#if FZ_PROF
+            const uint32_t fz_k0 = fz_now();
+            (void)fz_k0;
+            MATH((fz_c += fz_k0 - fz_c0));
+#endif
             if (cull_disabled) {
                 MATH((band_keep_all()));
             } else {
                 MATH((band_batch(inv_floor_bits)));
             }
             MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#if FZ_PROF
+            MATH((fz_k += fz_now() - fz_k0));
+#endif
             tile_regs_commit();
+#if FZ_PROF
+            const uint32_t fz_r0 = fz_now();
+            (void)fz_r0;
+#endif
             tile_regs_wait();
+#if FZ_PROF
+            const uint32_t fz_r1 = fz_now();
+            (void)fz_r1;
+            PACK((fz_c += fz_r1 - fz_r0));
+#endif
             cb_reserve_back(cb_out, 1);
             uint32_t keep = 0;
             (void)keep;
@@ -236,6 +310,9 @@ void kernel_main() {
             pack_tile(DR_OUT / 32, cb_out);
             cb_push_back(cb_out, 1);
             tile_regs_release();
+#if FZ_PROF
+            PACK((fz_k += fz_now() - fz_r1));
+#endif
             PACK((patch_batch(cb_out, keep, slab, base, cnt)));
             cb_pop_front(cb_in, 1);
         }
@@ -245,6 +322,32 @@ void kernel_main() {
             asm volatile("fence" ::: "memory");
         }));
     }
+#if FZ_PROF
+    const uint32_t fz_tot = fz_now() - fz_t0;
+#ifdef TRISC_UNPACK
+    DeviceTimestampedData("fz_u_tot", fz_tot);
+    DeviceTimestampedData("fz_u_pick", fz_w);
+    DeviceTimestampedData("fz_u_fillw", fz_a);
+    DeviceTimestampedData("fz_u_fill", fz_b);
+    DeviceTimestampedData("fz_u_nb", fz_nb);
+    DeviceTimestampedData("fz_u_nr", fz_nr);
+    DeviceTimestampedData("fz_u_nj", fz_nj);
+#endif
+#ifdef TRISC_MATH
+    DeviceTimestampedData("fz_m_tot", fz_tot);
+    DeviceTimestampedData("fz_m_mbw", fz_w);
+    DeviceTimestampedData("fz_m_copy", fz_c);
+    DeviceTimestampedData("fz_m_band", fz_k);
+#endif
+#ifdef TRISC_PACK
+    DeviceTimestampedData("fz_p_tot", fz_tot);
+    DeviceTimestampedData("fz_p_mbw", fz_w);
+    DeviceTimestampedData("fz_p_regw", fz_c);
+    DeviceTimestampedData("fz_p_pack", fz_k);
+    DeviceTimestampedData("fz_p_patchw", fz_a);
+    DeviceTimestampedData("fz_p_patch", fz_b);
+#endif
+#endif
 #else
     for (;;) {
         uint32_t msg = MSG_DONE;
