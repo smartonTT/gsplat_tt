@@ -20,9 +20,9 @@ restart() {
 echo "=== viewer stop $(date -u +%FT%TZ)"
 VIEWER_HOST=bh-30 opt/viewer/viewer.sh stop
 trap restart EXIT
-"${SSH[@]}" "bash $P/bench_gap.sh $*"
+"${SSH[@]}" "${REMOTE_ENV:-} bash $P/bench_gap.sh $*"
 echo "bench rc=$?"
 restart; trap - EXIT
 mkdir -p $D/out
-rsync -q -e "ssh -o BatchMode=yes -o StrictHostKeyChecking=yes" "bh-30:$P/out350/" $D/out/
+scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "bh-30:$P/out350/*" $D/out/
 echo "=== drive end $(date -u +%FT%TZ)"
