@@ -188,6 +188,57 @@ def test_supervisor_stops_after_outside_kill_or_taken_port():
             assert not (vdir / "viewer.sup.pid").exists()
 
 
+def test_viewer_run_always_os_exits_when_cleanup_raises():
+    """GaussianViewer.run must reach os._exit(0) even if pipeline.close raises (#380).
+
+    viser may be missing here, so run() is taken from the source with ast and run
+    with stubs instead of importing gsplat.viewer.
+    """
+    import ast
+    import textwrap
+    src = (ROOT / "gsplat" / "viewer.py").read_text()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.FunctionDef) and n.name == "run"
+              and "os._exit" in ast.get_source_segment(src, n))
+    code = textwrap.dedent(ast.get_source_segment(src, fn))
+    exits, calls = [], []
+
+    class _Exit(BaseException):
+        pass
+
+    def _os_exit(rc):
+        exits.append(rc)
+        raise _Exit
+
+    def _boom():
+        calls.append("close")
+        raise RuntimeError("close failed")
+
+    def _sleep(_):
+        raise KeyboardInterrupt
+
+    ns = {"time": SimpleNamespace(sleep=_sleep), "os": SimpleNamespace(_exit=_os_exit),
+          "traceback": __import__("traceback"), "log": print, "LIVE_CONNECTIONS": []}
+    exec(code, ns)
+    fake = SimpleNamespace(
+        _running=False, exit_hooks=[lambda: calls.append("hook")],
+        _write_benchmark=lambda: calls.append("bench"),
+        viewer=SimpleNamespace(stop_burst=lambda: calls.append("burst")),
+        pipeline=SimpleNamespace(close=_boom))
+    fake._running = True
+    try:
+        ns["run"](fake)
+    except _Exit:
+        pass
+    assert exits == [0], exits
+    assert calls == ["hook", "bench", "burst", "close"], calls
+
+
+def test_viewer_clean_checks_bound_port():
+    src = (ROOT / "opt" / "viewer" / "viewer_clean.py").read_text()
+    assert "viewer.server.get_port()" in src and "os._exit(75)" in src
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):

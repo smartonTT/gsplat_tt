@@ -84,6 +84,13 @@ def main():
                             # Same contribution floor as the bench (1/255), not the
                             # slider's 1/16384: that kept more pairs (slower, other image).
                             contrib_floor=float(cam["contrib_floor"]))
+    # The bind check above is racy: another process can take the port before viser
+    # binds, and viser then moves on silently. Check the port it really holds (#380).
+    bound = viewer.server.get_port()
+    if bound != args.port:
+        print(f"[viewer_clean] viser bound port {bound}, not {args.port}: another viewer runs; "
+              "exiting 75", file=sys.stderr, flush=True)
+        os._exit(75)
 
     try:
         from gsplat.render_watchdog import RenderWatchdog

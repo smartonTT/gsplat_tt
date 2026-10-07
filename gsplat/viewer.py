@@ -955,15 +955,21 @@ class GaussianViewer:
         except KeyboardInterrupt:
             print("\nViewer stopped.")
         finally:
-            for hook in self.exit_hooks:
-                try:
-                    hook()
-                except Exception:
-                    traceback.print_exc()
-            self._write_benchmark()
-            self.viewer.stop_burst()
-            self.pipeline.close()
-            os._exit(0)
+            # os._exit(0) must run even if a cleanup step raises: a non-zero exit
+            # makes supervise.sh restart the viewer mid-bench (task #380).
+            try:
+                for hook in self.exit_hooks:
+                    try:
+                        hook()
+                    except Exception:
+                        traceback.print_exc()
+                for step in (self._write_benchmark, self.viewer.stop_burst, self.pipeline.close):
+                    try:
+                        step()
+                    except Exception:
+                        traceback.print_exc()
+            finally:
+                os._exit(0)
 
     def stop(self) -> None:
         """Signal the viewer to stop."""
