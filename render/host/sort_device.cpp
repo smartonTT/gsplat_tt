@@ -2481,13 +2481,21 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::vector<uint32_t> krow(k2rows.bytes / 4, 0u);
                 if (k2rows.view) {
                     // Task #355: 4 KB pages, unshuffled to the 64 B page order.
-                    std::vector<uint32_t> vrow(k2rows.bytes / 4, 0u);
+                    // Task #362: tile_assign already read them behind proj_M.
+                    std::vector<uint32_t> vrow;
+                    const uint32_t* vsrc = nullptr;
                     {
                         GSPLAT_HOST_ZONE("host_cq1_k2_rows");
-                        distributed::EnqueueReadMeshBuffer(*cq1, vrow, k2rows.view, true);
+                        if (k2rows.wait_view) {
+                            vsrc = k2rows.wait_view();
+                        } else {
+                            vrow.assign(k2rows.bytes / 4, 0u);
+                            distributed::EnqueueReadMeshBuffer(*cq1, vrow, k2rows.view, true);
+                            vsrc = vrow.data();
+                        }
                     }
                     sort_onelaunch::unpack_rows_view(
-                        vrow.data(), static_cast<uint32_t>(k2rows.bytes / 64u), k2rows.view_banks,
+                        vsrc, static_cast<uint32_t>(k2rows.bytes / 64u), k2rows.view_banks,
                         k2rows.view_m, krow.data());
                 } else {
                     GSPLAT_HOST_ZONE("host_cq1_k2_rows");

@@ -202,6 +202,14 @@ inline bool k2_rows_view() {
     static const bool v = env_uint("GSPLAT_TT_K2_ROWS_VIEW", 1u) != 0u;
     return v;
 }
+// Task #362: issue the K2 rows view read on CQ1 right behind proj_M (both
+// non-blocking, one event each), so it runs at the K2's end instead of when
+// the sort's bridge gets to it; the sort only waits for its event. Needs
+// k2_rows_view and mat_cq1. Default on; 0 = the read in the bridge.
+inline bool k2_rows_early() {
+    static const bool v = k2_rows_view() && env_uint("GSPLAT_TT_K2_ROWS_EARLY", 1u) != 0u;
+    return v;
+}
 // Test only (task #213): allocate the pair buffers for this many pairs
 // instead of pair_ceiling(), so a view over it takes the K2 pair-overflow
 // regrow path. 0 (default) = off.

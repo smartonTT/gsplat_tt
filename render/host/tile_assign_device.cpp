@@ -42,6 +42,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -125,6 +126,10 @@ struct TileAssignDeviceContext {
     std::size_t cap_k2_rows_bytes = 0;
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
     uint32_t k2_rows_banks = 0;
+    // Task #362: host copy of the view, read on CQ1 behind proj_M; the read
+    // is in flight while k2_rows_ev is set (drain_k2_rows_read).
+    std::vector<uint32_t> k2_rows_host;
+    std::optional<distributed::MeshEvent> k2_rows_ev;
 
     // Cached DRAM buffers (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -560,6 +565,14 @@ static std::unique_ptr<TileAssignDeviceContext>& context_slot() {
     return *ctx;
 }
 
+// Task #362: wait for the K2 rows view read still on CQ1 (if any), so its host
+// vector or the rows buffer can be reused.
+static void drain_k2_rows_read(TileAssignDeviceContext* ctx) {
+    if (!ctx->k2_rows_ev) return;
+    distributed::EventSynchronize(*ctx->k2_rows_ev);
+    ctx->k2_rows_ev.reset();
+}
+
 static TileAssignDeviceContext* ensure_context() {
     auto& slot = context_slot();
     if (!slot) {
@@ -763,6 +776,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                                  static_cast<uint32_t>(rows_bytes / PAGE_BYTES), banks, vm)) *
                              PAGE_BYTES;
             if (!ctx->buf_k2_rows || ctx->cap_k2_rows_bytes < rows_bytes) {
+                drain_k2_rows_read(ctx);
                 ctx->buf_k2_rows = make_dram(ctx->mesh_device.get(), rows_bytes);
                 ctx->cap_k2_rows_bytes = rows_bytes;
                 ctx->buf_k2_rows_view.reset();
@@ -784,6 +798,8 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
         distributed::MeshCommandQueue* cq1 =
             want_early && env_config::mat_cq1() ? device_state::command_queue1() : nullptr;
         bool early = false;
+        const bool rows_early = cq1 != nullptr && env_config::k2_rows_early() &&
+                                ctx->buf_k2_rows_view != nullptr;
         uint32_t p_cap = 0;
         std::vector<uint32_t> mread(ELEMS_PER_PAGE, 0);
         // Normally one pass; a P over the pair capacity publishes overflow,
@@ -832,7 +848,20 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                     early = enqueue_sort();
                     cq1->enqueue_wait_for_event(k2_done);
                     GSPLAT_HOST_ZONE("host_cq1_proj_m");
-                    distributed::EnqueueReadMeshBuffer(*cq1, mread, projM, true);
+                    if (rows_early) {
+                        // Task #362: the rows view read goes right behind proj_M.
+                        drain_k2_rows_read(ctx);
+                        ctx->k2_rows_host.resize(ctx->cap_k2_rows_bytes / 4);
+                        const distributed::MeshCoordinate c0(0, 0);
+                        distributed::ReadShard(*cq1, mread, projM, c0, false);
+                        const distributed::MeshEvent m_done = cq1->enqueue_record_event_to_host();
+                        distributed::ReadShard(*cq1, ctx->k2_rows_host, ctx->buf_k2_rows_view, c0,
+                                               false);
+                        ctx->k2_rows_ev = cq1->enqueue_record_event_to_host();
+                        distributed::EventSynchronize(m_done);
+                    } else {
+                        distributed::EnqueueReadMeshBuffer(*cq1, mread, projM, true);
+                    }
                 } else {
                     distributed::ReadShard(*ctx->cq, mread, projM, distributed::MeshCoordinate(0, 0),
                                            false);
@@ -851,6 +880,7 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                     distributed::Finish(*ctx->cq);
                     early = false;
                 }
+                if (!early) drain_k2_rows_read(ctx);
             } else {
                 distributed::EnqueueReadMeshBuffer(*ctx->cq, mread, projM, true);
             }
@@ -895,6 +925,12 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             rows.view = ctx->buf_k2_rows_view;
             rows.view_m = sort_onelaunch::kRowsViewPerPage;
             rows.view_banks = ctx->k2_rows_banks;
+            if (rows.cq1 && ctx->k2_rows_ev) {
+                rows.wait_view = [ctx]() -> const uint32_t* {
+                    drain_k2_rows_read(ctx);
+                    return ctx->k2_rows_host.data();
+                };
+            }
             device_state::set_k2_count_rows(rows);
         }
         return true;

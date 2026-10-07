@@ -29,6 +29,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -96,6 +97,10 @@ struct K2CountRows {
     std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> view;
     uint32_t view_m = 0;
     uint32_t view_banks = 0;
+    // Task #362: the view read is already on CQ1 (env_config::k2_rows_early);
+    // wait_view() waits for it and returns its words (bytes / 4). Empty = read
+    // the view here.
+    std::function<const uint32_t*()> wait_view;
 };
 void set_k2_count_rows(const K2CountRows& rows);
 bool take_k2_count_rows(K2CountRows* rows);
