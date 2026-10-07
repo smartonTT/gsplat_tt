@@ -4,7 +4,8 @@
 # tt-metal 437bc366 used read-only), plus GSPLAT_PER_VIEW_STAGES=1.
 #   bench_gap.sh bench <tag> [U|P]...  one 30-view round per arm: U = unpinned,
 #                                      P = taskset -c $PIN (cores 18-23, two Zen 2 CCXs)
-#   bench_gap.sh tracy <tag>           one 30-view Tracy capture with device zones
+#                                      C = GSPLAT_TT_MAT_CQ1=0
+#   [EMIT=1] bench_gap.sh tracy <tag>  one 30-view Tracy capture with device zones
 # While each run is in flight it samples mutagen-agent (the user's devsync; read only, never
 # touched) and the box's CPU use every 0.5 s into $O/<tag>-<arm>.mutagen.
 set -u
@@ -54,6 +55,7 @@ case $MODE in
       case $arm in
         U) run_one U || rc=$? ;;
         P) run_one P taskset -c $PIN || rc=$? ;;
+        C) run_one C env GSPLAT_TT_MAT_CQ1=0 || rc=$? ;;   # #351: K2 rows / totals on CQ0
       esac
       [ $rc = 0 ] || break
     done ;;
@@ -61,6 +63,7 @@ case $MODE in
     # Device + host Tracy zones, as opt/profiler/capture_tracy.sh (mid-run device dump), but all
     # output under $P (TT_METAL_PROFILER_DIR), nothing written into the viewer's tt-metal tree.
     export TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1
+    [ "${EMIT:-0}" = 1 ] && export GSPLAT_TT_OL_EMIT_PROF=1   # emit sub-zones for emit_cores.py
     export TT_METAL_PROFILER_DIR=$P/prof350/$TAG PYTHONPATH=$V/tt-metal/tools:${PYTHONPATH:-}
     rm -rf $P/prof350/$TAG; mkdir -p $P/prof350/$TAG
     cat > $P/prof350/inner.sh <<EOF
