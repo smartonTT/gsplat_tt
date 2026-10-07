@@ -1,0 +1,6 @@
+== bh-30
+fresh=0.096 ms  reused=0.090 ms
+fresh=0.100 ms  reused=0.090 ms
+== yyzo-bh-04
+fresh=0.099 ms  reused=0.099 ms
+fresh=0.100 ms  reused=0.099 ms

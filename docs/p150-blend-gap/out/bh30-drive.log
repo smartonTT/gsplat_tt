@@ -1,0 +1,23 @@
+=== viewer stop 2026-10-07T23:02:58Z
+[viewer] stopped pid(s) 51061
+=== t366 tracy start 2026-10-07T23:03:32Z sha=010939d2
+tracy rc=0 2026-10-07T23:04:17Z
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=59.5 p50_ms=59.2 min_ms=56.6 max_ms=66.9 n_views=30 warmup_s=22.8 out=/localdev/smarton/p150bench-t355/tree/tmp/t366-t366-T
+STAGES n=30 head=0.008 project=2.991 tile_assign=0.009 sort=2.255 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.788 d2h=0.555 assemble=0.000 tail=46.802 | sum=59.408 view_total=59.413 resid_in_view=+0.005 avg_frame_ms=59.518 resid_vs_frame=+0.110
+SORT_STAGES n=30 pread=0.004 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.109 upload=0.000 bin_emit=1.465 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.423 publish_wait=0.000 mat=0.130 | sum=2.131 sort=2.255 resid=+0.124
+total 11808
+drwxr-xr-x 2 smarton smarton      90 Oct  7 23:04 .
+drwxr-xr-x 8 smarton smarton     189 Oct  7 23:03 ..
+-rw-r--r-- 1 smarton smarton   94568 Oct  7 23:04 t366-T.log
+-rw-r--r-- 1 smarton smarton 6204652 Oct  7 23:04 t366-dev.csv.gz
+-rw-r--r-- 1 smarton smarton 5754304 Oct  7 23:04 t366-tracy-u.csv.gz
+=== end t366 rc=0 2026-10-07T23:04:20Z
+bench rc=0
+=== viewer start 2026-10-07T23:04:20Z
+[viewer] started pid 52815 sha 4307f076c1f5210e889ecf7aba351a76693391d8 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=13.10 ms (76.3 FPS) min=12.98 max=13.19
+[viewer_clean] READY port=8080
+SHA=
+cat: /localdev/smarton/viewer/SHA: No such file or directory
+=== viewer ready 2026-10-07T23:04:28Z localhost:8091 -> 200
+=== drive end 2026-10-07T23:04:32Z

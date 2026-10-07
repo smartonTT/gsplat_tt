@@ -17,7 +17,9 @@
 //  - build_mat_worklist(onelaunch) gives each over-cap tile one item per
 //    subchunk (no gather parts), all big items NCRISC-only, and BRISC never
 //    gets a tile above kMatMover0Cap;
-//  - check_prefix flags a corrupted base or total.
+//  - check_prefix flags a corrupted base or total;
+//  - unpack_rows_view (task #355) inverts the 4 KB-page view of the 64 B-page
+//    interleaved K2 rows for 7 and 8 DRAM banks.
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -289,6 +291,40 @@ int check_worklist(std::mt19937& rng) {
     return bad;
 }
 
+// Task #355: model the interleaved DRAM placement of both page sizes and
+// check unpack_rows_view restores the 64 B page order.
+int check_rows_view(std::mt19937& rng) {
+    int bad = 0;
+    for (uint32_t banks : {7u, 8u, 12u}) {
+        for (uint32_t pages0 : {14080u, 1000u, 1u}) {
+            const uint32_t m = kRowsViewPerPage;
+            const uint32_t pages = rows_view_pages(pages0, banks, m);
+            if (pages % (banks * m) != 0u || pages < pages0) bad++;
+            std::vector<uint32_t> lin(static_cast<std::size_t>(pages) * kElemsPerPage);
+            for (auto& v : lin) v = rng();
+            // Write the 64 B pages into per-bank memory, read it as m * 64 B pages.
+            const uint32_t per_bank = pages / banks * kElemsPerPage;
+            std::vector<uint32_t> mem(static_cast<std::size_t>(banks) * per_bank);
+            for (uint32_t i = 0; i < pages; ++i)
+                std::copy(lin.begin() + i * kElemsPerPage, lin.begin() + (i + 1u) * kElemsPerPage,
+                          mem.begin() + (i % banks) * per_bank + (i / banks) * kElemsPerPage);
+            std::vector<uint32_t> view(lin.size());
+            const uint32_t vw = m * kElemsPerPage;
+            for (uint32_t j = 0; j < pages / m; ++j)
+                std::copy(mem.begin() + (j % banks) * per_bank + (j / banks) * vw,
+                          mem.begin() + (j % banks) * per_bank + (j / banks + 1u) * vw,
+                          view.begin() + j * vw);
+            std::vector<uint32_t> out(lin.size(), 0u);
+            unpack_rows_view(view.data(), pages, banks, m, out.data());
+            if (out != lin) {
+                if (bad++ < 5) std::printf("rows view: banks %u pages %u mismatch\n", banks, pages0);
+            }
+        }
+    }
+    std::printf("rows view: bad=%d\n", bad);
+    return bad;
+}
+
 }  // namespace
 
 int main() {
@@ -304,6 +340,7 @@ int main() {
     bad += check_frame(make_frame(rng, 60000, 200, 2, 0.2), 256, "overcap");
     bad += check_check_prefix(rng);
     bad += check_worklist(rng);
+    bad += check_rows_view(rng);
     std::printf(bad == 0 ? "PASS\n" : "FAIL (%d)\n", bad);
     return bad == 0 ? 0 : 1;
 }
