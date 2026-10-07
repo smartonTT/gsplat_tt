@@ -24,6 +24,7 @@
 #include "vis_mode.h"
 #include "sort_mover_speed.h"
 #include "sort.h"
+#include "pair_guard.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
 #include "../kernels/dataflow/vis_tile.h"
 #include "gsplat_cpu/thread_pool.h"
@@ -462,9 +463,8 @@ static void build_program_scan_add(TileAssignDeviceContext& ctx) {
 // hit 4 of 30 views (1.3 ms/view). A P above the ceiling still grows the buffers.
 static void ensure_pair_buffers(TileAssignDeviceContext& ctx, std::size_t p_bytes) {
     if (ctx.buf_gids && ctx.cap_p_bytes >= p_bytes) return;
-    const std::size_t ceil_bytes =
-        static_cast<std::size_t>(round_up(env_config::pair_ceiling(), ELEMS_PER_PAGE)) * 4;
-    const std::size_t alloc_bytes = std::max(p_bytes, ceil_bytes);
+    const std::size_t alloc_bytes = pair_guard::pair_alloc_bytes(
+        p_bytes, env_config::pair_ceiling(), env_config::pair_cap_test());
     ctx.buf_gids = make_dram(ctx.mesh_device.get(), alloc_bytes);
     ctx.buf_tids = make_dram(ctx.mesh_device.get(), alloc_bytes);
     ctx.buf_keep = make_dram(ctx.mesh_device.get(), alloc_bytes);
@@ -817,7 +817,10 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                                            false);
                     const distributed::MeshEvent read_done =
                         ctx->cq->enqueue_record_event_to_host();
-                    early = enqueue_sort();
+                    // Task #213: the read above still targets mread; if the sort
+                    // enqueue throws, drain CQ0 before the stack unwinds.
+                    early = pair_guard::drain_on_throw(enqueue_sort,
+                                                       [&] { distributed::Finish(*ctx->cq); });
                     GSPLAT_HOST_ZONE("host_wait_proj_m");
                     distributed::EventSynchronize(read_done);
                 }
@@ -832,6 +835,8 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             }
             if (mread[2] == 0 || host_free) break;
             if (pass == 1) throw std::runtime_error("pair overflow after regrow");
+            std::fprintf(stderr, "[TA] K2 pair overflow: P=%u cap=%u, regrow and rerun\n",
+                         mread[1], p_cap);
             ensure_pair_buffers(*ctx, static_cast<std::size_t>(round_up(mread[1], ELEMS_PER_PAGE)) * 4);
         }
         *M = mread[0];

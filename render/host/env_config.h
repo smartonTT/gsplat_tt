@@ -195,6 +195,13 @@ inline bool mat_cq1() {
     static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_MAT_CQ1", 1u) != 0u;
     return v;
 }
+// Test only (task #213): allocate the pair buffers for this many pairs
+// instead of pair_ceiling(), so a view over it takes the K2 pair-overflow
+// regrow path. 0 (default) = off.
+inline unsigned int pair_cap_test() {
+    static const unsigned int v = env_uint("GSPLAT_TT_PAIR_CAP_TEST", 0u);
+    return v;
+}
 
 // Task #207: the lever B fused pfwc writer split over BRISC (even chunks) and
 // NCRISC (odd chunks, plus the reader), writer_pfwc_split.cpp. Default on since
