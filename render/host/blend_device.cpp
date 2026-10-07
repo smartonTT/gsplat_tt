@@ -334,6 +334,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     if (blend_prof_on) {
         compute_defines["BLEND_PROF"] = blend_prof_level;
     }
+    if (fused && gsplat_tt::sort_matcull_trisc_fill()) compute_defines["MATCULL_TRISC_FILL"] = "1";
     // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
     // per-core record/microblock/pixel counters into the blend compute kernel
     // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.
