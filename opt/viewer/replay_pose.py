@@ -1,6 +1,10 @@
 """Replay one viewer camera pose through render_clean (task #357).
 
     TTW_ALLOW_DIRECT=1 .venv/bin/python opt/viewer/replay_pose.py POSE.json [--timeout 30] [-n 3]
+    TTW_ALLOW_DIRECT=1 .venv/bin/python opt/viewer/replay_pose.py --hero -n 2000 --timeout 5
+
+--hero renders the bench hero view (cameras_v2.json, as the viewer SELFTEST does)
+instead of a pose file: a soak for hangs that are not tied to one pose.
 
 POSE.json is a pose the render watchdog wrote (viewer_hang_pose_*.json) or a
 viewer_poses.jsonl file (its last line): w2c and K exactly as the viewer passed
@@ -29,7 +33,8 @@ os.environ.setdefault("NUMPY_MADVISE_HUGEPAGE", "0")
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("pose", type=Path)
+    ap.add_argument("pose", type=Path, nargs="?")
+    ap.add_argument("--hero", action="store_true", help="bench hero view instead of a pose file")
     ap.add_argument("--ply", default=str(REPO / "scenes" / "bicycle.ply"))
     ap.add_argument("--timeout", type=float, default=30.0)
     ap.add_argument("-n", type=int, default=3)
@@ -38,8 +43,8 @@ def main() -> int:
         print("[replay] REFUSING to open the TT device without TTW_DEVRUN or TTW_ALLOW_DIRECT=1",
               file=sys.stderr)
         return 3
-    text = args.pose.read_text().strip()
-    pose = json.loads(text.splitlines()[-1] if args.pose.suffix == ".jsonl" else text)
+    if (args.pose is None) == (not args.hero):
+        ap.error("give POSE.json or --hero")
 
     import numpy as np
     import torch
@@ -48,6 +53,18 @@ def main() -> int:
     spec = importlib.util.spec_from_file_location("render_run", REPO / "render" / "run.py")
     run = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(run)
+    if args.hero:
+        from gsplat.utils import c2w_to_w2c
+        cam = json.loads((REPO / "benchmarks" / "cameras_v2.json").read_text())["bicycle"]
+        W, H = cam["image_size"]
+        c2w = torch.tensor(cam["views"][cam["order"][0]]["c2w"], dtype=torch.float32)
+        pose = {"width": W, "height": H, "w2c": c2w_to_w2c(c2w).tolist(),
+                "K": np.asarray(run.build_intrinsics(W, H, float(cam["fov_deg"]))).tolist(),
+                "settings": {"contrib_floor_override": float(cam["contrib_floor"])}}
+        args.pose = REPO.parent / "replay_hero.json"
+    else:
+        text = args.pose.read_text().strip()
+        pose = json.loads(text.splitlines()[-1] if args.pose.suffix == ".jsonl" else text)
     from gsplat.loading_gaussians import load_ply
     from gsplat.pipeline import Pipeline
     from gsplat.render_watchdog import RenderWatchdog
