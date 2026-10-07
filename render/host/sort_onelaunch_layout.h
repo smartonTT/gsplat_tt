@@ -121,6 +121,35 @@ inline void totals_from_k2_rows(const std::vector<uint32_t>& krow, uint32_t num_
     }
 }
 
+// Task #355: the fold K2's count rows are an interleaved buffer of 64 B pages
+// (page i in DRAM bank i % banks at offset (i / banks) * 64), so each bank
+// holds its pages back to back. The early path reads them on CQ1 through a
+// view of the same address with m * 64 B pages (pages a multiple of banks * m,
+// see rows_view_pages): view page j is bank j % banks at offset (j / banks) *
+// m * 64, i.e. 64 B pages b + banks * ((j / banks) * m + k), k < m. One 4 KB
+// view page replaces 64 page reads (14,080 -> 220 on the hero frame).
+// unpack_rows_view puts the view's bytes back in 64 B page order.
+inline constexpr uint32_t kRowsViewPerPage = 64;  // 64 B pages per 4 KB view page
+inline uint32_t rows_view_pages(uint32_t pages, uint32_t banks, uint32_t m) {
+    const uint32_t g = banks * m;
+    return (pages + g - 1u) / g * g;
+}
+// view: pages * kElemsPerPage u32 (pages = rows_view_pages(...)); out: same size.
+inline void unpack_rows_view(const uint32_t* view, uint32_t pages, uint32_t banks, uint32_t m,
+                             uint32_t* out) {
+    const uint32_t vpages = pages / m;
+    for (uint32_t j = 0; j < vpages; ++j) {
+        const uint32_t b = j % banks;
+        const uint32_t q0 = (j / banks) * m;
+        const uint32_t* src = view + static_cast<std::size_t>(j) * m * kElemsPerPage;
+        for (uint32_t k = 0; k < m; ++k) {
+            const std::size_t i = b + static_cast<std::size_t>(banks) * (q0 + k);
+            std::copy(src + k * kElemsPerPage, src + (k + 1u) * kElemsPerPage,
+                      out + i * kElemsPerPage);
+        }
+    }
+}
+
 // Emit: the bucket slot of every pair (kDropped if not kept or past tile_cap).
 inline std::vector<uint32_t> emit_slots(const std::vector<int32_t>& tids,
                                         const std::vector<int32_t>& keep, uint32_t P,

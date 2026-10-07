@@ -91,6 +91,11 @@ struct K2CountRows {
     uint32_t overflow = 0;
     bool early = false;
     bool cq1 = false;
+    // Task #355: view = buf's address in view_m * 64 B pages over view_banks
+    // DRAM banks (sort_onelaunch::unpack_rows_view); null = read buf.
+    std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> view;
+    uint32_t view_m = 0;
+    uint32_t view_banks = 0;
 };
 void set_k2_count_rows(const K2CountRows& rows);
 bool take_k2_count_rows(K2CountRows* rows);
