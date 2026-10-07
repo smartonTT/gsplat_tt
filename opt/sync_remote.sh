@@ -17,14 +17,25 @@
 # the scenes dir; set links that point elsewhere are replaced. The viewer deploy
 # uses them for its own $VIEWER_DIR: bh-30's gstt2 tree is a devsync mirror of the
 # Mac (task #324).
+# SYNC_REMOTE_JOBS sets the build -j (default 16). On a viewer host the build runs
+# under nice -n 19 ionice -c3 with half the remote cores, so it does not starve the
+# live viewer (user, 2026-10-07). SYNC_REMOTE_DRY_RUN=1 prints the build settings
+# and exits without any ssh.
 set -euo pipefail
 HOST=${1:?host}; DIR=${2:?remote_dir}; REV=${3:-HEAD}
 # The viewer box is the user's always-on viewer: only opt/viewer/viewer.sh
 # (SYNC_REMOTE_VIEWER=1) deploys there, never a measurement task (task #324).
 case " ${GSTT2_VIEWER_HOSTS:-bh-30} " in
   *" $HOST "*) [ "${SYNC_REMOTE_VIEWER:-0}" = 1 ] || {
-    echo "[sync_remote] refusing $HOST: it is the viewer box; deploy there with opt/viewer/viewer.sh" >&2; exit 2; } ;;
+    echo "[sync_remote] refusing $HOST: it is the viewer box; deploy there with opt/viewer/viewer.sh" >&2; exit 2; }
+    VIEWER_BUILD=1 ;;
 esac
+VIEWER_BUILD=${VIEWER_BUILD:-0} JOBS=${SYNC_REMOTE_JOBS:-16}
+if [ "${SYNC_REMOTE_DRY_RUN:-0}" = 1 ]; then
+  if [ "$VIEWER_BUILD" = 1 ]; then echo "[sync_remote] dry run: $HOST build: nice -n 19 ionice -c3, -j \$(( \$(nproc)/2 ))"
+  else echo "[sync_remote] dry run: $HOST build: -j $JOBS"; fi
+  exit 0
+fi
 SHA=$(git rev-parse "$REV")
 # Skip what a device run never reads: the LFS hero fixtures (*.npz, ~330 MB once
 # git-lfs smudges them; test inputs only), committed profiler captures
@@ -38,7 +49,7 @@ EXCL=(":(exclude)tests/fixtures/hero/*.npz" ":(exclude)opt/profiler/ttw-*"
 git archive --format=tar "$SHA" -- . "${EXCL[@]}" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" \
   "mkdir -p '$DIR' && tar -m -x -C '$DIR' && echo $SHA > '$DIR/SHA'"
 # REMOTE_TT_METAL_HOME (Mac side) overrides the remote TT_METAL_HOME default below.
-ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "DIR='$DIR' ${REMOTE_TT_METAL_HOME:+TT_METAL_HOME='$REMOTE_TT_METAL_HOME'}\
+ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "DIR='$DIR' VIEWER_BUILD=$VIEWER_BUILD JOBS='$JOBS' ${REMOTE_TT_METAL_HOME:+TT_METAL_HOME='$REMOTE_TT_METAL_HOME'}\
 ${GSTT2_BASE:+ GSTT2_BASE='$GSTT2_BASE'}${GSTT2_VENV:+ GSTT2_VENV='$GSTT2_VENV'}${GSTT2_SCENES:+ GSTT2_SCENES='$GSTT2_SCENES'} bash -s" <<'REMOTE'
 set -eu
 cd "$DIR"
@@ -65,11 +76,15 @@ src_md5() { find render -path render/build-tt -prune -o -path '*/kernels' -prune
   -print | LC_ALL=C sort | xargs md5sum | md5sum | awk '{print $1}'; }
 SRC_NOW=$(src_md5); SRC_OLD=$(cat .host_src.md5 2>/dev/null || true); SO_OLD=$(so_md5)
 mkdir -p tmp
+NICE=()
+if [ "$VIEWER_BUILD" = 1 ]; then   # viewer box: low priority, half the cores
+  NICE=(nice -n 19 ionice -c3); JOBS=$(( $(nproc)/2 )); [ "$JOBS" -ge 1 ] || JOBS=1
+fi
 (cmake -G Ninja -S render -B render/build-tt -DCMAKE_BUILD_TYPE=Release > tmp/cfg.log 2>&1 &&
- cmake --build render/build-tt -j 16 > tmp/build.log 2>&1) || { tail -n 30 tmp/cfg.log tmp/build.log 2>/dev/null; exit 1; }
+ ${NICE[@]+"${NICE[@]}"} cmake --build render/build-tt -j "$JOBS" > tmp/build.log 2>&1) || { tail -n 30 tmp/cfg.log tmp/build.log 2>/dev/null; exit 1; }
 if ! ls backends/cpu_cpp/_gsplat_cpu*.so >/dev/null 2>&1; then
   if (cmake -G Ninja -S src -B build-avx2-tt -DCMAKE_BUILD_TYPE=Release > tmp/cpu_cfg.log 2>&1 &&
-      cmake --build build-avx2-tt --target _gsplat_cpu -j 16 > tmp/cpu_build.log 2>&1) &&
+      ${NICE[@]+"${NICE[@]}"} cmake --build build-avx2-tt --target _gsplat_cpu -j "$JOBS" > tmp/cpu_build.log 2>&1) &&
      ls backends/cpu_cpp/_gsplat_cpu*.so >/dev/null 2>&1; then
     echo "[sync_remote] built _gsplat_cpu"
   elif cp "$BASE"/backends/cpu_cpp/_gsplat_cpu*.so backends/cpu_cpp/ 2>/dev/null; then
