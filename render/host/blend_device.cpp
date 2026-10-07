@@ -118,6 +118,7 @@ struct DeviceContext {
     // ring the caller takes frames from without a copy (out_ring.h).
     gsplat_tt::OutRing<OutPinImage, OutPinMap> out_ring;
     size_t out_pin_bytes = 0;
+    size_t out_pin_pitch = 0;  // row pitch of the pinned image (bytes)
     size_t out_pin_slot = 0;  // the slot the frame being set up writes
     size_t res_tile_ids_bytes = 0;
     bool res_ramp_uploaded = false;
