@@ -27,4 +27,20 @@ microblock seams, no blocky or empty tiles; the diff shows only thin edges (spok
 ## p150 A/B (bh-30)
 
 `p150_drive.sh` / `p150_remote.sh`: same A/B on bh-30 under the existing viewer reservation,
-holding `ttp lock viewer`; viewer stopped for the bench only. Results: see below once run.
+holding `ttp lock viewer`; viewer stopped for the bench only (stopped 22:18:34Z, restarted
+22:21:13Z, pid 36136). Build at 010939d2, 3 alternating rounds, untraced, 30 views.
+
+| arm | ms/view (r1 / r2 / r3, mean) | sort | bin_emit | blend |
+|---|---|---:|---:|---:|
+| view on (base) | 12.443 / 12.658 / 12.724 = **12.608** | 1.077 | **0.415** | 7.969 |
+| view off (64-B pages) | 12.876 / 13.002 / 13.070 = **12.983** | 3.175 | **2.519** | 6.235 |
+
+- bin_emit drops 2.10 ms (-84 %), ms/view drops **0.375 ms (-2.9 %)**, consistent in every round
+  (-0.43 / -0.34 / -0.35). Most of the saved host time reappears as blend wait (+1.73 ms): the
+  device is now the critical path. Per #356 the remaining stall is mat waiting on the host
+  totals across the CQ1 bridge; merging the totals into the host_cq1_proj_m read after k2_done,
+  or computing them on device, is the next lever.
+- md5: all 6 arms ALL_VIEWS_IDENTICAL, sweep 906e0435 (30/30).
+- Device hero `out/p150/hero-r1-base.png` is byte-identical to the p100a hero (md5 86524912);
+  diff `out/p150/hero-r1-base_diff10.png`; PSNR vs `benchmarks/reference_v2/hero.png` 42.51 dB.
+  Looked at the diff: edges only (spokes, frame, slats), no tile seams.
