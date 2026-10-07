@@ -21,6 +21,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -28,6 +29,8 @@
 #include <tt-metalium/core_coord.hpp>
 #include <tt-metalium/device.hpp>
 #include <tt-metalium/distributed.hpp>
+#include <tt-metalium/experimental/pinned_memory.hpp>
+#include <tt-metalium/host_buffer.hpp>
 #include <tt-metalium/host_api.hpp>
 #include <tt-metalium/tensor_accessor_args.hpp>
 #include <tt-metalium/work_split.hpp>
@@ -96,6 +99,13 @@ struct DeviceContext {
     size_t res_out_bytes = 0;
     // Host bounce buffer, only used when the device row pitch != W*3.
     std::vector<uint8_t> res_out_host;
+    // Task #367 (GSPLAT_TT_OUT_PINNED): page-aligned host image buffer with the
+    // res_out layout, pinned and NoC-mapped; the writer writes the rows there.
+    std::shared_ptr<uint32_t[]> out_pin_host;
+    std::shared_ptr<experimental::PinnedMemory> out_pin;
+    size_t out_pin_bytes = 0;
+    uint32_t out_pin_xy = 0;
+    uint64_t out_pin_addr = 0;
     size_t res_tile_ids_bytes = 0;
     bool res_ramp_uploaded = false;
 
@@ -270,6 +280,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     const bool blend_prof_on = blend_prof != nullptr && (blend_prof[0] == '1' || blend_prof[0] == '2');
     const std::string blend_prof_level = blend_prof_on ? std::string(1, blend_prof[0]) : "0";
     std::map<std::string, std::string> writer_defines;
+    if (gsplat_tt::env_config::out_pinned()) {
+        writer_defines["OUT_PINNED"] = "1";
+    }
     if (blend_prof_on) {
         reader_defines["BLEND_PROF"] = "1";
         writer_defines["BLEND_PROF"] = "1";
@@ -709,6 +722,24 @@ static double process_frame_mb_devcull_resident(
         ctx.res_out = make_dram(out_bytes, pitch);
         ctx.res_out_bytes = out_bytes;
     }
+    const bool out_pinned = gsplat_tt::env_config::out_pinned();
+    if (out_pinned && ctx.out_pin_bytes != out_bytes) {
+        const size_t page = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+        const size_t alloc = (out_bytes + page - 1) / page * page;
+        ctx.out_pin.reset();
+        ctx.out_pin_host = std::shared_ptr<uint32_t[]>(
+            static_cast<uint32_t*>(std::aligned_alloc(page, alloc)), [](uint32_t* p) { std::free(p); });
+        TT_FATAL(ctx.out_pin_host != nullptr, "GSPLAT_TT_OUT_PINNED: host alloc of {} B failed", alloc);
+        HostBuffer view(tt::stl::Span<uint32_t>(ctx.out_pin_host.get(), alloc / sizeof(uint32_t)),
+                        MemoryPin(ctx.out_pin_host));
+        distributed::MeshCoordinateRangeSet range_set(distributed::MeshCoordinateRange(ctx.mesh_device->shape()));
+        ctx.out_pin = experimental::PinnedMemory::Create(*ctx.mesh_device, range_set, view, /*map_to_noc=*/true);
+        const auto noc = ctx.out_pin->get_noc_addr(ctx.mesh_device->get_devices().front()->id());
+        TT_FATAL(noc.has_value(), "GSPLAT_TT_OUT_PINNED: pinned image buffer is not NoC-mapped");
+        ctx.out_pin_xy = noc->pcie_xy_enc;
+        ctx.out_pin_addr = noc->addr;
+        ctx.out_pin_bytes = out_bytes;
+    }
 
     Program& program = get_program_for_workload(ctx);
     Program* fz_program = nullptr;
@@ -797,6 +828,10 @@ static double process_frame_mb_devcull_resident(
                         m0.resize(mbf::kDmRtaBase, 0u);
                         m0.insert(m0.end(), {out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                                              tiles_x, pitch});
+                        if (out_pinned) {
+                            m0.insert(m0.end(), {ctx.out_pin_xy, static_cast<uint32_t>(ctx.out_pin_addr),
+                                                 static_cast<uint32_t>(ctx.out_pin_addr >> 32)});
+                        }
                         std::vector<uint32_t> cp = ma.cp;
                         cp.resize(mbf::kCpRtaBase, 0u);
                         cp.push_back(blend_eps_bits);
@@ -809,10 +844,15 @@ static double process_frame_mb_devcull_resident(
                     }
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
                     SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
-                    SetRuntimeArgs(program, ctx.writer, core, {
+                    std::vector<uint32_t> writer_args = {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                         tiles_x, pitch,
-                    });
+                    };
+                    if (out_pinned) {
+                        writer_args.insert(writer_args.end(), {ctx.out_pin_xy, static_cast<uint32_t>(ctx.out_pin_addr),
+                                                               static_cast<uint32_t>(ctx.out_pin_addr >> 32)});
+                    }
+                    SetRuntimeArgs(program, ctx.writer, core, writer_args);
                     core_index++;
                 }
             }
@@ -861,7 +901,19 @@ static double process_frame_mb_devcull_resident(
     const bool direct = (out_pitch == row_bytes) &&
                         (ctx.res_out_bytes == static_cast<size_t>(image_h) * row_bytes);
     gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
-    if (direct) {
+    const bool pinned = gsplat_tt::env_config::out_pinned() && ctx.out_pin_bytes == ctx.res_out_bytes;
+    if (pinned) {
+        // The writer already put the image in host memory (write acks barriered
+        // before it exited, Finish above); only the host copy remains.
+        const auto* src = reinterpret_cast<const uint8_t*>(ctx.out_pin_host.get());
+        if (direct) {
+            std::memcpy(image_out, src, static_cast<size_t>(image_h) * row_bytes);
+        } else {
+            for (uint32_t y = 0; y < image_h; y++) {
+                std::memcpy(image_out + y * row_bytes, src + static_cast<size_t>(y) * out_pitch, row_bytes);
+            }
+        }
+    } else if (direct) {
         ctx.cq->enqueue_read_mesh_buffer(image_out, ctx.res_out, /*blocking=*/true);
     } else {
         ctx.res_out_host.resize(ctx.res_out_bytes);
@@ -871,7 +923,7 @@ static double process_frame_mb_devcull_resident(
     d2h_span.stop();
     gsplat_tt::hostprof::on_blend_readback_done();
 
-    if (!direct) {
+    if (!direct && !pinned) {
         gsplat_tt::stagetimers::Span assemble_span(
             gsplat_tt::stagetimers::acc().assemble);
         for (uint32_t y = 0; y < image_h; y++) {
