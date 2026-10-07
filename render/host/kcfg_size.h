@@ -23,11 +23,14 @@ inline bool kcfg_profiler_on(const char* prof_env) {
 // 96288 B with P2 and 98000 B without, too large at +24 KB.
 // Task #258: the device profiler grows every kernel binary; the t221 default program then
 // overflows +24 KB (TT_FATAL state.offset <= max_size in pfwc) and fits at +32 KB.
+// Task #302: with the split the profiler size is +32 KB, not +40. The traced split pfwc with
+// the BRISC reader is 97536 B (fits from +27 KB), and at +40 KB the fused mat+blend program's
+// static CBs overflow L1 by 5888 B (they fit up to +34 KB).
 inline long kcfg_extra_kb(const char* extra_env, bool split_fused, bool rd_brisc, bool covcam_sfpu,
                           bool profiler) {
     if (extra_env != nullptr) return std::atol(extra_env);
     long kb = split_fused ? (rd_brisc ? 32 : 24) : (covcam_sfpu ? 8 : 0);
-    if (profiler) kb += 8;
+    if (profiler) kb = split_fused ? 32 : kb + 8;
     return kb;
 }
 

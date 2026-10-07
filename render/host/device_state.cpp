@@ -87,7 +87,7 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         constexpr int device_id = 0;
         // GSPLAT_TT_KCFG_EXTRA_KB=N grows the Tensix kernel config ring buffer by N KB (default
         // 69 KB) by shrinking the worker L1 allocator. Unset: sized for the pfwc config, plus
-        // 8 KB with the device profiler on (kcfg_size.h). The split only builds with the fused
+        // 8 KB with the device profiler on, except the split stays at 32 KB (kcfg_size.h). The split only builds with the fused
         // writer (pfwc_fuse_mode() == 1).
         const long extra_kb = kcfg_extra_kb(
             std::getenv("GSPLAT_TT_KCFG_EXTRA_KB"),

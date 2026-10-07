@@ -200,7 +200,7 @@ inline bool mat_cq1() {
 // NCRISC (odd chunks, plus the reader), writer_pfwc_split.cpp. Default on since
 // task #221 (=0 off): with pfwc_covcam_sfpu() paired -0.64 ms/view, alone -0.18.
 // The split program is 92496 B, so the device opens with 24 KB more kernel config
-// buffer (32 KB with the BRISC reader, task #232; 8 KB more with the device profiler)
+// buffer (32 KB with the BRISC reader, task #232; 32 KB also with the device profiler, #302)
 // unless GSPLAT_TT_KCFG_EXTRA_KB is set (kcfg_size.h).
 inline bool pfwc_writer_split() {
     static const bool v = env_uint("GSPLAT_TT_PFWC_WRITER_SPLIT", 1u) != 0u;

@@ -65,6 +65,10 @@ namespace py = pybind11;
 
 namespace {
 
+// Serializes render_view and device_shutdown (review #269, task #307).
+// Lock order everywhere: release the GIL first, then take this mutex.
+std::mutex render_view_mutex;
+
 // Single shared worker pool for the host-side bridges (SoA pack, etc.). The
 // production renderer caps at 48 workers on the 96-thread bh hosts (measured
 // sweet spot); honour GSPLAT_TT_NUM_THREADS if set, else cap at 48.
@@ -249,7 +253,6 @@ py::tuple render_view(
     // thread (viewer tab, selftest) must not enter render_view concurrently
     // (review #269). Taken only while the GIL is released, so no deadlock;
     // held to return, across the later GIL re-acquire/release blocks.
-    static std::mutex render_view_mutex;
     std::unique_lock<std::mutex> view_lock(render_view_mutex, std::defer_lock);
     {
         py::gil_scoped_release nogil;
@@ -433,7 +436,14 @@ PYBIND11_MODULE(render_clean, m) {
           py::arg("mb_contrib_floor"), py::arg("cull_disabled"),
           py::arg("transmittance_threshold"), py::arg("max_radius"),
           py::arg("k_cap"), py::arg("use_isoellipse"), py::arg("blend_mode") = 2);
-    m.def("device_shutdown", []() { gsplat_tt::device_state::shutdown(); });
+    m.def("device_shutdown", []() {
+        // Same lock order as render_view: GIL released, then the mutex, so a
+        // close() waits for an in-flight viewer frame instead of freeing
+        // device state under it.
+        py::gil_scoped_release nogil;
+        std::lock_guard<std::mutex> lock(render_view_mutex);
+        gsplat_tt::device_state::shutdown();
+    });
     // Per-stage host attribution. Totals in ms accumulated over every
     // render_view since reset_stage_timings(); `views` is the sample count.
     m.def("stage_timings", []() {

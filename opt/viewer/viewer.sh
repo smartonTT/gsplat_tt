@@ -3,13 +3,17 @@
 # box or the p100 lock). Run from a checkout/worktree of gstt2 on the Mac.
 #   opt/viewer/viewer.sh deploy [rev]  sync+build rev (default: newest best-iter-* tag) and restart
 #   opt/viewer/viewer.sh start | stop | restart | status | log | tunnel
-# Env: VIEWER_HOST (bh-35), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay).
-# One-time box setup (tt-metal, venv, scenes): opt/viewer/setup_box.sh.
+# Env: VIEWER_HOST (bh-30), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
+#      VIEWER_DIR (/localdev/$USER/viewer), VIEWER_TT_METAL_HOME (the viewer's own build, $VIEWER_DIR/tt-metal;
+#      bh-30's shared /localdev/$USER/tt-metal no longer JITs, task #263).
+# One-time box setup (tt-metal, $VIEWER_DIR/venv, $VIEWER_DIR/scenes): opt/viewer/setup_box.sh.
 set -euo pipefail
-HOST=${VIEWER_HOST:-bh-35}
+HOST=${VIEWER_HOST:-bh-30}
 PORT=${VIEWER_PORT:-8080}
 LPORT=${VIEWER_LOCAL_PORT:-8091}
-VDIR=/localdev/smarton/viewer
+# The box account matches the Mac's $USER (same as setup_box.sh's /localdev/$USER).
+VDIR=${VIEWER_DIR:-/localdev/$USER/viewer}
+TTMH=${VIEWER_TT_METAL_HOME:-$VDIR/tt-metal}
 DIR=$VDIR/tree
 # Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key.
 SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
@@ -39,13 +43,15 @@ R
 }
 
 do_start() {
-  rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT bash -s" <<'R'
+  rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)
 if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "[viewer] already running pid $pid"; exit 0; fi
 cd "$DIR"
-export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_ARCH_NAME=blackhole
+export TT_METAL_HOME=$TTMH TT_METAL_ARCH_NAME=blackhole
 export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME GSPLAT_SHA=$(cat SHA)
+# JIT cache on /localdev: the default ~/.cache sits on the 9.4 GB home quota, which filled on bh-30 (task #263).
+export TT_METAL_CACHE=$VDIR/tt-metal-cache
 export NUMPY_MADVISE_HUGEPAGE=0  # THP compaction stalls on bh-35 (see viewer_clean.py)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
 # The pid file is written by the viewer process itself (exec keeps the pid): $! can be
@@ -93,12 +99,15 @@ overlay_viewer_py() {
 
 case "${1:-status}" in
   deploy)
-    git fetch -q --tags origin
+    # GitHub can be unreachable from the Mac (port 22 timeouts); deploy from local refs then.
+    timeout 60 git fetch -q --tags origin || echo "[viewer] git fetch failed: using local refs" >&2
     REV=${2:-$(git tag -l 'best-iter-*' --sort=-v:refname | head -1)}
     SHA=$(git rev-parse "$REV^{commit}")
     "${SSH[@]}" "$HOST" true   # aborts here on a changed host key
     echo "[viewer] deploy $REV = $SHA to $HOST:$DIR"
-    opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
+    # Build with and link the viewer's own venv and scenes, never /localdev/$USER/gstt2 (task #324).
+    SYNC_REMOTE_VIEWER=1 GSTT2_BASE=$VDIR GSTT2_VENV=$VDIR/venv GSTT2_SCENES=$VDIR/scenes \
+      REMOTE_TT_METAL_HOME=$TTMH opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
     # Tagged trees older than this script lack the launcher: ship it from here.
     rsh "mkdir -p $DIR/opt/viewer && cat > $DIR/opt/viewer/viewer_clean.py" < opt/viewer/viewer_clean.py
     # Trees before the viewer's uint8 fix show render_clean frames all white.
