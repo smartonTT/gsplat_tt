@@ -88,3 +88,21 @@ pfwc_rtargs 0.10 vs 0.05, sort_mat 0.10 vs 0.06 (+0.47 ms together). Next lever:
 
 Scripts: `drive_bh30.sh` (sync/build, viewer stop/bench/restart), `drive_p100a.sh` (under `ttp lock p100`),
 `bench365.sh` (arms P0, P1, P2, F<n>; MB=1 runs the microbench).
+
+## Review #369 (independent, landed as iter 210)
+
+The branch was based on #358's tree (no iter 209). Landed by cherry-picking only the five #365 commits
+onto `smarton/tt-project-opt` (ac04f5c5, iter 209); #358's shelved mover-table code stays off the line.
+A/B re-run at that head (4f4e812b), same binary, P0 = `GSPLAT_TT_OL_TILE_PAD=0` vs P1 = auto,
+alternating rounds, outputs in `review-t369-p150/` and `review-t369-p100a/`:
+
+| Board | P0 (512 pages) ms/view | P1 (auto) ms/view | Delta |
+|---|---|---|---|
+| bh-30 p150b (8 banks, viewer stopped 23:24:33-23:26:51Z, ready 23:26:59Z, localhost:8091 -> 200) | 12.757 / 12.615 / 12.649, mean 12.674 | 11.066 / 11.003 / 11.144, mean 11.071 | -1.603 (-12.6%) |
+| yyzo-bh-04 p100a (7 banks, stride 512 in both arms) | 10.873 / 10.914, mean 10.894 | 10.985 / 10.884, mean 10.935 | noise (identical layout) |
+
+On top of iter 209 the host `bin_emit` stage no longer shows the gap (0.40 vs 0.35 ms); it moves to
+the blend wait (stage_blend 8.03 -> 6.58 ms, r1) and d2h (0.64 -> 0.44). md5 906e0435 on 30/30 views in
+all 10 runs. Device hero (bh-30 P1) md5 86524912 on all 3 P1 rounds and the p100a, same as #365:
+42.51 dB vs `benchmarks/reference_v2/hero.png`, max abs diff 46; diff x10 looked at: edge residue only,
+no tile seams or grid lines.
