@@ -12,7 +12,7 @@
 [ttw 2026-10-07T19:16:59-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=c8e744c6 bin=bef15a5d048f9f90 t367 iter-210 c8e744c6 pinned-host output (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t367-r0-pin  timeout=420s  worry=600s  ts=2026-10-07T19:16:59-0400
 cmd: T=/localdev/smarton/gstt2-t367 bash /localdev/smarton/gstt2-t367/tmp/t367_remote_time.sh 0 pin
