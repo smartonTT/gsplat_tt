@@ -4,7 +4,8 @@
 #   opt/viewer/viewer.sh deploy [rev]  sync+build rev (default: newest best-iter-* tag) and restart
 #   opt/viewer/viewer.sh start | stop | restart | status | log | tunnel
 # start runs opt/viewer/supervise.sh, which restarts the viewer after a render-watchdog
-# exit or a crash (task #357); stop touches $VIEWER_DIR/viewer.stop so it stays down.
+# exit or a crash (task #357); stop touches $VIEWER_DIR/viewer.stop so it stays down
+# (a signal kill or a taken port also ends the supervisor, see supervise.sh).
 # Env: VIEWER_HOST (bh-30), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
 #      VIEWER_DIR (/localdev/$USER/viewer), VIEWER_TT_METAL_HOME (the viewer's own build, $VIEWER_DIR/tt-metal;
 #      bh-30's shared /localdev/$USER/tt-metal no longer JITs, task #263).

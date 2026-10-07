@@ -52,6 +52,19 @@ def main():
                     help="limit for a resolution's first render (JIT compile)")
     args = ap.parse_args()
 
+    # viser silently moves to the next free port when ours is taken: a second viewer
+    # would then hold the chip unseen. Exit 75 instead (supervise.sh then stops, task #357).
+    import socket
+    with socket.socket() as s:
+        # REUSEADDR: a just-killed viewer's TIME_WAIT sockets do not count; a listener does.
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind((args.host, args.port))
+        except OSError as e:
+            print(f"[viewer_clean] port {args.port} is taken ({e}): another viewer runs; exiting 75",
+                  flush=True)
+            sys.exit(75)
+
     run = _load_run_py()
     import backends
     backends.REGISTRY["tt_clean"] = run.CleanBackend

@@ -3,7 +3,9 @@
 # the deployed tree:  supervise.sh VDIR PORT
 # Runs opt/viewer/viewer_clean.py and restarts it when it exits non-zero (the render
 # watchdog exits 86 on a hung render; a crash or a failed device open also counts).
-# Exit 0 (a clean stop by SIGINT) or $VDIR/viewer.stop ends the loop. Backoff doubles
+# Exit 0 (a clean stop by SIGINT), $VDIR/viewer.stop, exit 75 (port taken by another
+# viewer) or death by SIGINT/SIGTERM/SIGKILL (rc 130/143/137: an outside stop, e.g. a bench
+# using an older viewer.sh without the stop file) ends the loop. Backoff doubles
 # from VIEWER_BACKOFF_S (5) to VIEWER_BACKOFF_MAX_S (300) and resets after a run of
 # VIEWER_HEALTHY_S (600); more than VIEWER_MAX_RESTARTS_PER_HOUR (6) restarts in an
 # hour gives up and leaves the viewer down. Log: $VDIR/viewer_supervisor.log.
@@ -34,6 +36,9 @@ while :; do
   log "viewer exited rc=$rc after ${ran}s"
   if [ "$rc" = 0 ]; then log "clean exit: supervisor done"; break; fi
   if [ -e "$VDIR/viewer.stop" ]; then log "stop file present: not restarting"; break; fi
+  # Without these two, an outside stop+start made a second viewer that viser moved to the next port.
+  if [ "$rc" = 75 ]; then log "port $PORT is taken: another viewer runs; supervisor done"; break; fi
+  case $rc in 130|137|143) log "killed by a signal: outside stop; supervisor done"; break ;; esac
   now=$(date +%s)
   kept=()
   for t in "${restarts[@]+"${restarts[@]}"}"; do [ $((now - t)) -lt 3600 ] && kept+=("$t"); done

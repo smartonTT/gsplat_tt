@@ -170,6 +170,24 @@ def test_supervisor_gives_up_at_the_hourly_cap():
         assert slog.count("starting viewer_clean.py") == 3 and "giving up" in slog
 
 
+def test_supervisor_stops_after_outside_kill_or_taken_port():
+    for rc, msg in ((143, "outside stop"), (130, "outside stop"), (75, "port 8080 is taken")):
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            vdir = tmp / "v"
+            vdir.mkdir()
+            fake = tmp / "fake_python"
+            fake.write_text(f"#!/bin/bash\nexit {rc}\n")
+            fake.chmod(0o755)
+            env = dict(os.environ, VIEWER_PYTHON=str(fake), VIEWER_BACKOFF_S="0")
+            r = subprocess.run(["bash", str(ROOT / "opt/viewer/supervise.sh"), str(vdir), "8080"],
+                               cwd=tmp, env=env, capture_output=True, text=True, timeout=30)
+            assert r.returncode == 0, r.stdout + r.stderr
+            slog = (vdir / "viewer_supervisor.log").read_text()
+            assert slog.count("starting viewer_clean.py") == 1 and msg in slog, slog
+            assert not (vdir / "viewer.sup.pid").exists()
+
+
 if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
