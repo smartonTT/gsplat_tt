@@ -2,12 +2,13 @@
 # t315: untraced bicycle 30-view timing; md5 of each arm vs the base arm of the
 # same round (base = new default, TRISC_FILL on; golden 906e0435).
 #   remote_time.sh <round> <arm> ...   arm: base | off | name:ENV=V,ENV=V
-#   (run on yyzo-bh-07 through devrun.sh, under ttp lock p100)
+#   (run on the measurement box through devrun.sh, under ttp lock p100)
 set -u
 export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal
 export TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=P100 TTW_DEVRUN=1
-T=/localdev/smarton/gstt2-t315; cd "$T" || exit 1; source .venv/bin/activate
+T=${T:-/localdev/smarton/gstt2-t315}; cd "$T" || exit 1; source .venv/bin/activate
 S=$T/tmp/t315; mkdir -p $S
+REF=${REF:-$T/docs/matblend-ready-t273/t289/md5-golden-906e0435.txt}
 r=${1:-1}; shift
 run() {  # tag [ENV=V ...]
   local tag=r$r-$1; shift
@@ -21,7 +22,8 @@ run() {  # tag [ENV=V ...]
   local d; d=$(find . -maxdepth 3 -type d -name t315-dump-$tag | head -1)
   if [ -n "$d" ]; then
     (cd "$d" && md5sum * | sort -k2) > $S/md5-$tag.txt
-    echo "views: $(wc -l < $S/md5-$tag.txt)"
+    diff -q $REF $S/md5-$tag.txt > /dev/null && echo "ALL_VIEWS_IDENTICAL ($(wc -l < $S/md5-$tag.txt) views)" \
+      || echo "VIEWS DIFFER ($(diff $REF $S/md5-$tag.txt | grep -c '^>') of $(wc -l < $S/md5-$tag.txt))"
     rm -rf "$d"
   fi
   return $rc

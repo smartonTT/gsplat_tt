@@ -7,9 +7,11 @@ coordinator ruled ~1.4% clears the charter's ~1% bar. Keep rule for this task: m
 >= 0.1 ms over at least 3 alternating rounds, consistent in every round, md5 906e0435 30/30
 in every run.
 
-Driver: `docs/iter207-t315/run_all.sh` (3 rounds via `drive.sh`, then
-`opt/ttw/screenshot.sh 207 HEAD`), each step under `ttp lock p100`.
+Driver: `docs/iter207-t315/drive.sh 207 HEAD`, one `ttp lock p100` around sync + build,
+tt-build stamp, 3 alternating rounds (base,off / off,base / base,off) and the device hero
+shot (`opt/ttw/screenshot.sh`, same tree). Box: yyzo-bh-04 (p100a); both arms run in the
+same session because absolute ms/view are box-specific (bh-04 iter-208 baseline 11.093).
 
 ## Untraced A/B
 
-Pending (device host unreachable at the first attempt).
+Pending.
