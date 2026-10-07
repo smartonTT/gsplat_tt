@@ -63,3 +63,13 @@ split (the blend works on 32x32 tiles).
   raises "device sort failed" (as #270 does when every floor overflows).
 - Device hero (defaults): md5 906e0435, 42.51 dB vs
   benchmarks/reference_v2/hero.png, golden match, no seams.
+
+## Drive 3 (yyzo-bh-04, 2026-10-07, base 9b4abc3b vs new c8e9e85a)
+- 30-view sweep md5 906e0435 on all 8 arms (ABBA+BAAB), 0 of 30 views differ. Note: 906e0435 is the
+  current opt-tip default md5 on bh-04 (base == new); 46a725ab in the spec was the older tip's.
+- Paired stage sum (project+sort+blend, ms/view): base 10.81, new 10.82 (+0.01, limit +0.05).
+- Far pose dolly -2 at 1/255: bucket grown to 65472, no floor drop; md5 c5605dd6 = drive 2 (43.57 dB vs
+  CPU ref; was 29.35 dB). Far stage sum ~14.0 ms. Dolly -4 at 1/255 also renders at full floor.
+- cap=20000 test: floor fallback runs down to 1/5 and then fails cleanly (test-only cap, expected).
+- Device hero screenshot: opt/metal-screenshots/t284/hero.png, hero_diff10.png, PSNR 42.51 dB vs
+  benchmarks/reference_v2/hero.png. Hero diff and far-pose image checked by eye: no tile seams.

@@ -1,0 +1,24 @@
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: waiting for p100 (held by task #315 (run 909) since 02:33)
+ttp lock: got p100 after 37.4 min
+[sync_remote] linked .venv -> /localdev/smarton/gstt2/.venv
+[sync_remote] linked scenes -> /localdev/smarton/gstt2/scenes
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=c8e9e85ac25d68625488dc85bd31cc875a712e1d so_md5=07b5b888714c836c4630d14bead28e05 
