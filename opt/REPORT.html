@@ -128,7 +128,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-07 03:14 EDT · 74 metal + 204 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-07 03:49 EDT · 74 metal + 204 ttw + 58 cpu ledger rows</p>
 
 
 <section>
@@ -221,7 +221,7 @@
     <p class='idea-desc'>Task #306/#315: GSPLAT_TT_MATCULL_TRISC_FILL on by default (unset=on, =0 off). The mat cull coefficient fill/patch runs on the TRISCs instead of the data movers.</p><p class='reason'>yyzo-bh-04 (Blackhole p100a, not a p150), bicycle 30 views 1024x1024, commit 4bdf0888 (iter-206 defaults + fill on). 3 alternating untraced rounds in one session (on/off, off/on, on/off): on 10.923/10.861/10.937 mean 10.907 vs MATCULL_TRISC_FILL=0 11.077/11.099/11.092 mean 11.089 ms/view (-0.182; per round -0.154/-0.238/-0.155). Blend stage (fused mat+blend) 6.711/6.715/6.762 vs 6.940/6.894/6.889. Off arm matches the iter-208 bh-04 re-baseline (11.093). md5 906e0435 on 30/30 views in all 6 runs; hero golden match, PSNR vs reference_v2 42.51 dB.</p>
     <p class='iter-build'><code>ttp/t315-iter-207-matcull-trisc-fill-on-by-defaul</code></p>
     <p class='shot-meta'>device screenshot on yyzo-bh-04 p100a: <code>4bdf0888</code> defaults (GSPLAT_TT_MATCULL_TRISC_FILL=1 now default; fused mat+blend and PFWC_RECIP_NEWTON on) · sweep md5 <code>906e0435</code> · PSNR 42.51 dB vs <code>benchmarks/reference_v2/hero.png</code> (diff vs the same)<br>visual check: looked at hero and diff: no tile or microblock seams, no blocky or empty tiles, no stripes or color shifts; diff only on thin high-gradient edges (spokes, frame, foliage), same as iter 206/208</p>
-
+    <p class='iter-tracy'><a href='profiler/ttw-207/render.tracy' title='open in Tracy profiler'>🔬 Tracy trace</a> <code class='tracy-cmd' title='copy &amp; run to open in Tracy' style='font-size:11px;background:#f0f0f0;padding:1px 6px;border-radius:3px;user-select:all;cursor:text'>tracy opt/profiler/ttw-207/render.tracy</code></p>
   </div>
   <div class='backburner-thumbs'><a href="metal-screenshots/ttw-207/hero.png" class="zoom" target="_blank" rel="noopener" title="device hero (click to compare)" data-viewer-mode="cand" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-207/hero.png" data-img-diff="metal-screenshots/ttw-207/hero_diff10.png"><img src="metal-screenshots/ttw-207/hero.png" class="thumb" alt="device hero (click to compare)"></a><a href="metal-screenshots/ttw-207/hero_diff10.png" class="zoom" target="_blank" rel="noopener" title="10x diff vs benchmarks/reference_v2/hero.png (click to compare)" data-viewer-mode="diff" data-viewer-label="benchmarks/reference_v2/hero.png" data-img-ref="../benchmarks/reference_v2/hero.png" data-img-cand="metal-screenshots/ttw-207/hero.png" data-img-diff="metal-screenshots/ttw-207/hero_diff10.png"><img src="metal-screenshots/ttw-207/hero_diff10.png" class="thumb" alt="10x diff vs benchmarks/reference_v2/hero.png (click to compare)"></a><p class='shot-cap'>device hero · 10× diff · PSNR 42.51 dB<br>ref: <code>benchmarks/reference_v2/hero.png</code></p><p class='golden-badge golden-ok' title='pixel-identical to tests/fixtures/hero/hero_golden_8bit.png'>✓ golden match <code>tests/fixtures/hero/hero_golden_8bit.png</code></p></div>
 </div>

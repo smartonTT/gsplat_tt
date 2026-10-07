@@ -1,0 +1,82 @@
+[ttw 2026-10-07T03:40:24-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T03:40:24-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-07T03:40:24-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T03:40:24-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T03:40:24-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T03:40:24-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T03:40:24-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T03:40:24-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T03:40:24-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T03:40:24-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T03:40:24-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T03:40:24-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t315-tracy  timeout=560s  worry=448s  ts=2026-10-07T03:40:25-0400
+cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_tracy.sh ttw-207
+-----------------------------------------
+=== tracy ttw-207 4bdf0888 env:  07:40:27
+Traceback (most recent call last):
+[capture_tracy] FAIL: /localdev/smarton/gstt2-t315/opt/profiler/wrap_out_ttw-207/.logs/tracy_profile_log_host.tracy missing/empty; listing /localdev/smarton/gstt2-t315/opt/profiler/wrap_out_ttw-207:
+[capture_tracy] DONE rc=1 tracy=/localdev/smarton/gstt2-t315/opt/profiler/ttw-207/render.tracy
+=== tracy FAIL ttw-207
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t315/.ttw/logs/t315-tracy-20261007-034024.log
+[ttw 2026-10-07T03:40:38-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T03:40:38-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-07T03:40:38-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T03:40:38-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T03:40:38-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T03:40:38-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T03:40:38-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T03:40:38-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T03:40:38-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T03:40:38-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T03:40:38-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T03:40:38-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t315-tracy  timeout=560s  worry=448s  ts=2026-10-07T03:40:39-0400
+cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_tracy.sh ttw-207 GSPLAT_TT_PFWC_WRITER_SPLIT=0
+-----------------------------------------
+=== tracy ttw-207 4bdf0888 env: GSPLAT_TT_PFWC_WRITER_SPLIT=0 07:40:41
+Traceback (most recent call last):
+[capture_tracy] FAIL: /localdev/smarton/gstt2-t315/opt/profiler/wrap_out_ttw-207/.logs/tracy_profile_log_host.tracy missing/empty; listing /localdev/smarton/gstt2-t315/opt/profiler/wrap_out_ttw-207:
+[capture_tracy] DONE rc=1 tracy=/localdev/smarton/gstt2-t315/opt/profiler/ttw-207/render.tracy
+=== tracy FAIL ttw-207
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t315/.ttw/logs/t315-tracy-20261007-034038.log
+[ttw 2026-10-07T03:44:04-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T03:44:04-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-07T03:44:04-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T03:44:04-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T03:44:04-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T03:44:04-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T03:44:04-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T03:44:04-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T03:44:04-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T03:44:04-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T03:44:04-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T03:44:04-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t315-tracy  timeout=560s  worry=448s  ts=2026-10-07T03:44:05-0400
+cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_tracy.sh ttw-207
+-----------------------------------------
+=== tracy ttw-207 4bdf0888 env:  07:44:08
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=25.8 p50_ms=25.1 min_ms=22.5 max_ms=37.4 n_views=30 warmup_s=12.1 out=/localdev/smarton/gstt2-t315/tmp/ttw-207
+[capture_tracy] OK tracy: -rw-rw-r-- 1 smarton smarton 7448680 Oct  7 07:44 /localdev/smarton/gstt2-t315/opt/profiler/ttw-207/render.tracy
+[capture_tracy] device profiler CSV data rows: 470755 (~19.9k rows/view at ttw-142; 30 views + warmup ~616k)
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t315/opt/profiler/ttw-207/render.tracy
+chunk opt/profiler/ttw-207/profile_log_device.csv: rows=470754 frames=31 (warmup rows=15206) kept_rows=455548 kept_frames=30 cores/frame=330 shift_cyc=0
+stitched opt/profiler/ttw-207/dev30.csv: rows=455548 frames=30 rows/frame=15185
+zones rc=0
+zone                      total_ms  per_view  maxcore_ms pv_makespan    pairs  riscs
+tile_blend_sfpu            36484.0  1216.134       115.9       3.865     9900  TRISC_0,TRISC_1,TRISC_2
+tile_blend_load            11945.9   398.196       114.3       3.811     3300  NCRISC
+=== tracy done 07:44:32
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t315/.ttw/logs/t315-tracy-20261007-034404.log
