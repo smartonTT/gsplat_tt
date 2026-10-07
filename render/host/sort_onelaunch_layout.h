@@ -36,6 +36,30 @@ inline constexpr uint32_t kTileCap = 32768;
 // all their keys. A multiple of the 64-record DRAM page.
 inline constexpr uint32_t kTileCapBig = 65472;
 static_assert(kTileCapBig % 64u == 0u, "whole record pages");
+// Task #365: the bucket is interleaved over the DRAM banks by 2 KB record page
+// (64 records), so tile t's page k sits in bank (t * pages + k) % nbanks. kTileCap
+// is 512 pages: with the p150's 8 banks page k of every tile lands in the same
+// bank, and the movers early in the prefix order (bases near 0) all write bank 0.
+// bucket_tile_cap pads the tile stride to the next page count coprime with the
+// bank count (8 banks: 513 pages); with 7 banks (p100a) 512 stays. pad_pages >= 0
+// forces that many extra pages instead (GSPLAT_TT_OL_TILE_PAD; 0 = pre-#365).
+inline constexpr uint32_t gcd_u32(uint32_t a, uint32_t b) {
+    while (b != 0u) {
+        const uint32_t t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+inline constexpr uint32_t bucket_tile_cap(uint32_t cap, uint32_t nbanks, int pad_pages) {
+    uint32_t pages = cap / 64u;
+    if (pad_pages >= 0) return (pages + static_cast<uint32_t>(pad_pages)) * 64u;
+    while (nbanks > 1u && gcd_u32(pages, nbanks) != 1u) pages++;
+    return pages * 64u;
+}
+static_assert(bucket_tile_cap(kTileCap, 7u, -1) == kTileCap, "p100a: stride unchanged");
+static_assert(bucket_tile_cap(kTileCap, 8u, -1) == kTileCap + 64u, "p150: 513 pages");
+static_assert(bucket_tile_cap(kTileCap, 8u, -1) <= 43690u, "materialize big-path limit");
 
 struct CoreSplit {
     uint32_t lo = 0, mid = 0, hi = 0;  // pair pages: mover 0 [lo, mid), mover 1 [mid, hi)

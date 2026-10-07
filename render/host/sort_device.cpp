@@ -1481,6 +1481,13 @@ static SortDeviceContext* ensure_context() {
     if (!slot) {
         try {
             slot = std::make_unique<SortDeviceContext>(init_context());
+            // Task #365: tile stride coprime with the DRAM bank count (bucket_tile_cap).
+            if (g_ol_tile_cap == sort_onelaunch::kTileCap) {
+                const uint32_t nb = static_cast<uint32_t>(slot->mesh_device->num_dram_channels());
+                g_ol_tile_cap = sort_onelaunch::bucket_tile_cap(g_ol_tile_cap, nb, gsplat_tt::env_config::ol_tile_pad());
+                std::cerr << "[gsplat_tt::sort] bucket tile stride " << g_ol_tile_cap / 64u << " pages, "
+                          << nb << " DRAM banks\n";
+            }
         } catch (const std::exception& e) {
             std::cerr << "[gsplat_tt::sort] device init failed: " << e.what() << "\n";
             slot.reset();
