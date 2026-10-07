@@ -213,6 +213,12 @@ inline bool k2_rows_view() {
     static const bool v = env_uint("GSPLAT_TT_K2_ROWS_VIEW", 1u) != 0u;
     return v;
 }
+// Task #367: the blend writer writes the u8 image straight into a pinned,
+// NoC-mapped host buffer (no D2H read of the DRAM image). Default off.
+inline bool out_pinned() {
+    static const bool v = env_uint("GSPLAT_TT_OUT_PINNED", 0u) != 0u;
+    return v;
+}
 // Test only (task #213): allocate the pair buffers for this many pairs
 // instead of pair_ceiling(), so a view over it takes the K2 pair-overflow
 // regrow path. 0 (default) = off.

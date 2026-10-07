@@ -46,6 +46,9 @@
 //   1-3: tile_ids_addr, lpt_meta_addr, core_index (unused since task #60)
 //   4: tiles_x
 //   5: pitch              image buffer row pitch in bytes (page size)
+//   6-8 (OUT_PINNED only, task #367): pcie_xy_enc, addr_lo, addr_hi of a pinned,
+//        NoC-mapped host image buffer with the same (rows, pitch) layout; the
+//        rows go straight to host memory over PCIe instead of to out_addr.
 //
 // COMPILE-TIME ARGS: 3 TensorAccessorArgs in order: out, tile_ids, lpt_meta.
 
@@ -75,6 +78,12 @@ void kernel_main() {
     constexpr auto lpt_meta_args = TensorAccessorArgs<tile_ids_args.next_compile_time_args_offset()>();
 
     const auto out          = TensorAccessor(out_args,      out_addr,      pitch);
+#if defined(OUT_PINNED) && OUT_PINNED
+    const uint32_t pin_xy = get_arg_val<uint32_t>(6);
+    const uint64_t pin_base = (static_cast<uint64_t>(get_arg_val<uint32_t>(8)) << 32) |
+                              get_arg_val<uint32_t>(7);
+    noc_write_init_state<write_cmd_buf>(noc_index, NOC_UNICAST_WRITE_VC);
+#endif
     (void)tile_ids_addr; (void)lpt_meta_addr; (void)core_index;
     // Task #60: the reader claims tiles dynamically and queues each claimed
     // screen tile id here (CB_TILE_Q) before its data; 0xFFFFFFFF ends the stream.
@@ -116,10 +125,19 @@ void kernel_main() {
 
         const uint32_t row0 = ty * 32u;
         const uint32_t col_off = tx * ROW_BYTES;
+#if defined(OUT_PINNED) && OUT_PINNED
+        uint64_t dst = pin_base + static_cast<uint64_t>(row0) * pitch + col_off;
+        for (uint32_t i = 0; i < 32u; i++) {
+            noc_wwrite_with_state<noc_mode, write_cmd_buf, CQ_NOC_SNDL, CQ_NOC_SEND, CQ_NOC_WAIT, true, false>(
+                noc_index, stage_addr + i * ROW_BYTES, pin_xy, dst, ROW_BYTES, 1);
+            dst += pitch;
+        }
+#else
         for (uint32_t i = 0; i < 32u; i++) {
             noc_async_write(stage_addr + i * ROW_BYTES,
                             out.get_noc_addr(row0 + i, col_off), ROW_BYTES);
         }
+#endif
     }
     noc_async_write_barrier();
 }
