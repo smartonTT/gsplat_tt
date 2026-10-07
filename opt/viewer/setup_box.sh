@@ -36,7 +36,9 @@ steps() {
     cmake --build build -j "$(nproc)"
   fi
   if [ ! -x "$VENV/bin/python" ]; then
-    python3 -m venv "$VENV"
+    # System python, not whatever python3 is on PATH: a venv made from another venv's python
+    # breaks when that venv goes (bh-30's gstt2/.venv became a Mac symlink, task #316).
+    /usr/bin/python3 -m venv "$VENV"
     "$VENV/bin/pip" install -q --upgrade pip
     "$VENV/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
     "$VENV/bin/pip" install -q numpy==2.2.6 viser==1.0.27 nerfview==0.1.3 \
