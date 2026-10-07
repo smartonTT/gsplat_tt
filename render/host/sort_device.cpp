@@ -2105,7 +2105,9 @@ static bool sort_device_publish_enabled() { return true; }  // SORT_DEVICE_PUBLI
 
 static void maybe_run_sort_blend_continuation(
     SortBlendContinuation* cont, int tiles_x, uint32_t num_tiles) {
-    if (cont == nullptr || cont->image_out == nullptr) {
+    // Task #374: with zero-copy output the caller passes no image buffer and
+    // takes the pinned one afterwards (blend_out_zerocopy_last).
+    if (cont == nullptr || (cont->image_out == nullptr && !gsplat_tt::env_config::out_zerocopy())) {
         return;
     }
     if (!sort_blend_pipe_enabled() || !resident_blend_chain_enabled()) {

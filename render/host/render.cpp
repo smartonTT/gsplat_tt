@@ -45,6 +45,7 @@
 #include "blend.h"
 #include "config.h"
 #include "device_state.h"
+#include "env_config.h"
 #include "gather_visible.h"
 #include "vis_mode.h"
 #include "host_profile.h"
@@ -240,9 +241,15 @@ py::tuple render_view(
 
     // Output image (H, W, 3) uint8 = uint8(clip(rgb, 0, 1) * 255), packed on
     // device by the blend writer (task #61), which fully overwrites it.
-    py::array_t<uint8_t> image({static_cast<py::ssize_t>(image_height),
-                                static_cast<py::ssize_t>(image_width),
-                                static_cast<py::ssize_t>(3)});
+    // Task #374 (GSPLAT_TT_OUT_ZEROCOPY=1): no array here; the returned image is
+    // a view of the pinned buffer the writer wrote (see the end of render_view).
+    const bool zerocopy = gsplat_tt::env_config::out_zerocopy();
+    const auto new_image = [&] {
+        return py::array_t<uint8_t>({static_cast<py::ssize_t>(image_height),
+                                     static_cast<py::ssize_t>(image_width),
+                                     static_cast<py::ssize_t>(3)});
+    };
+    py::array_t<uint8_t> image = zerocopy ? py::array_t<uint8_t>() : new_image();
     const std::size_t image_bytes = static_cast<std::size_t>(image_height) *
                                     static_cast<std::size_t>(image_width) * 3;
 
@@ -283,6 +290,7 @@ py::tuple render_view(
         M = proj.depths.empty() ? proj.num_visible : proj.depths.size();
 
         if (M == 0) {
+            if (zerocopy) image = new_image();
             std::memset(image.mutable_data(), 0, image_bytes);
             stats["num_visible"] = 0;
             stats["num_entries"] = 0;
@@ -319,7 +327,7 @@ py::tuple render_view(
         sort_ok = false;
         blend_ok = false;
         gsplat_tt::SortBlendContinuation sort_blend;
-        sort_blend.image_out = image.mutable_data();
+        sort_blend.image_out = zerocopy ? nullptr : image.mutable_data();
         sort_blend.image_height = image_height;
         sort_blend.image_width = image_width;
         sort_blend.mb_contrib_floor = mb_contrib_floor;
@@ -420,6 +428,21 @@ py::tuple render_view(
     // unless TT_METAL_DEVICE_PROFILER=1). See above.
     maybe_dump_device_profiler();
     gsplat_tt::hostprof::on_view_return();
+    if (zerocopy) {
+        // The array keeps the ring slot's lease, so the ring never writes this
+        // buffer again while Python holds the image (or any view of it).
+        gsplat_tt::OutImageView v = gsplat_tt::blend_out_zerocopy_last();
+        if (v.data == nullptr) {
+            throw std::runtime_error("render_clean: zero-copy output has no image");
+        }
+        auto* owner = new std::shared_ptr<const void>(std::move(v.owner));
+        py::capsule keep(owner, [](void* p) { delete static_cast<std::shared_ptr<const void>*>(p); });
+        image = py::array_t<uint8_t>(
+            {static_cast<py::ssize_t>(image_height), static_cast<py::ssize_t>(image_width),
+             static_cast<py::ssize_t>(3)},
+            {static_cast<py::ssize_t>(v.pitch), static_cast<py::ssize_t>(3), static_cast<py::ssize_t>(1)},
+            v.data, keep);
+    }
     st::acc().views++;
     return py::make_tuple(image, stats);
 }
