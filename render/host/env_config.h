@@ -195,6 +195,13 @@ inline bool mat_cq1() {
     static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_MAT_CQ1", 1u) != 0u;
     return v;
 }
+// Task #355: read the fold K2's count rows on CQ1 through a 4 KB-page view
+// of the same DRAM address (220 page reads, not 14,080 of 64 B), then
+// unshuffle on the host. Default on; 0 = the 64 B-page read.
+inline bool k2_rows_view() {
+    static const bool v = env_uint("GSPLAT_TT_K2_ROWS_VIEW", 1u) != 0u;
+    return v;
+}
 // Test only (task #213): allocate the pair buffers for this many pairs
 // instead of pair_ceiling(), so a view over it takes the K2 pair-overflow
 // regrow path. 0 (default) = off.

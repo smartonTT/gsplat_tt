@@ -23,6 +23,7 @@
 #include "gather_visible.h"
 #include "vis_mode.h"
 #include "sort_mover_speed.h"
+#include "sort_onelaunch_layout.h"
 #include "sort.h"
 #include "pair_guard.h"
 #include "../kernels/dataflow/pfwc_fuse.h"
@@ -121,6 +122,8 @@ struct TileAssignDeviceContext {
     // Task #170 K2 fold: per-mover per-tile count rows (2 per core).
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows;
     std::size_t cap_k2_rows_bytes = 0;
+    std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
+    uint32_t k2_rows_banks = 0;
 
     // Cached DRAM buffers (grow-on-demand).
     std::shared_ptr<distributed::MeshBuffer> buf_px;
@@ -748,11 +751,28 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             }
         }
         if (fold) {
-            const std::size_t rows_bytes =
+            std::size_t rows_bytes =
                 static_cast<std::size_t>(num_cores) * 2u * row_pages * PAGE_BYTES;
+            // Task #355: pad to whole 4 KB view pages in every DRAM bank.
+            const uint32_t banks = static_cast<uint32_t>(
+                ctx->mesh_device->allocator()->get_num_banks(BufferType::DRAM));
+            const uint32_t vm = sort_onelaunch::kRowsViewPerPage;
+            if (env_config::k2_rows_view())
+                rows_bytes = static_cast<std::size_t>(sort_onelaunch::rows_view_pages(
+                                 static_cast<uint32_t>(rows_bytes / PAGE_BYTES), banks, vm)) *
+                             PAGE_BYTES;
             if (!ctx->buf_k2_rows || ctx->cap_k2_rows_bytes < rows_bytes) {
                 ctx->buf_k2_rows = make_dram(ctx->mesh_device.get(), rows_bytes);
                 ctx->cap_k2_rows_bytes = rows_bytes;
+                ctx->buf_k2_rows_view.reset();
+                if (env_config::k2_rows_view()) {
+                    distributed::ReplicatedBufferConfig rc{.size = rows_bytes};
+                    distributed::DeviceLocalBufferConfig lc{.page_size = vm * PAGE_BYTES,
+                                                            .buffer_type = BufferType::DRAM};
+                    ctx->buf_k2_rows_view = distributed::MeshBuffer::create(
+                        rc, lc, ctx->mesh_device.get(), ctx->buf_k2_rows->address());
+                    ctx->k2_rows_banks = banks;
+                }
             }
         }
         const uint32_t rows_addr = fold ? static_cast<uint32_t>(ctx->buf_k2_rows->address()) : 0u;
@@ -871,6 +891,9 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
             rows.overflow = mread[2];
             rows.early = early;
             rows.cq1 = early && cq1 != nullptr;
+            rows.view = ctx->buf_k2_rows_view;
+            rows.view_m = sort_onelaunch::kRowsViewPerPage;
+            rows.view_banks = ctx->k2_rows_banks;
             device_state::set_k2_count_rows(rows);
         }
         return true;
