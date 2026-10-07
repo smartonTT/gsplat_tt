@@ -138,6 +138,30 @@ inline void read_bucket(const Acc& acc, uint32_t page0, uint32_t n, uint32_t buc
 #define MAT_PZ(name) ((void)0)
 #endif
 
+// Task #319: profiler builds only (PROFILE_KERNEL): per-mover cycle counters of
+// the mat phase, reported once at the end as "fz_*" timestamped-data markers
+// (opt/profiler/fill_zones.py). Untraced builds compile none of it.
+#if defined(PROFILE_KERNEL)
+#define FZ_PROF 1
+inline uint32_t fz_now() { return *reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L); }
+// dw: done-word wait, dwn: waits, dwb: waits >= 1 us, dwm: longest wait,
+// rd / sort / perm / wr / meta / big: per-item read, radix sort, permute, emit,
+// metadata reads, big-tile items; jobs / recs: TRISC jobs and their records.
+uint32_t fz_dw, fz_dwn, fz_dwb, fz_dwm, fz_rd, fz_sort, fz_perm, fz_wr, fz_meta, fz_big, fz_jobs, fz_recs;
+struct FzAcc {
+    uint32_t& a;
+    const uint32_t t0;
+    explicit FzAcc(uint32_t& x) : a(x), t0(fz_now()) {}
+    ~FzAcc() { a += fz_now() - t0; }
+};
+#define FZ_CAT2(a, b) a##b
+#define FZ_CAT(a, b) FZ_CAT2(a, b)
+#define FZ_ACC(var) FzAcc FZ_CAT(fz_acc_, __LINE__)(var)
+#else
+#define FZ_PROF 0
+#define FZ_ACC(var) ((void)0)
+#endif
+
 // Task #90: the SFPU cull runs in this program (mat_cull_compute.cpp). Each
 // mover culls the slab it just depth-sorted before writing it: it transposes
 // every COEFF_BATCH records into an fp32 coefficient tile on its own stream
@@ -289,6 +313,10 @@ inline uint32_t post_job(uint32_t slab, uint32_t n) {
     p[JOB_END] = 0u;
     asm volatile("fence" ::: "memory");  // slab and job words reach L1 before the push
     cb_push_back(CB_JOB, 1);
+#if FZ_PROF
+    fz_jobs++;
+    fz_recs += n;
+#endif
     return page;
 }
 
@@ -301,11 +329,21 @@ inline void job_end_stream() {
 
 inline void wait_job(uint32_t page) {
     MAT_PZ("mat_cull_wait");
+#if FZ_PROF
+    const uint32_t fz_t0 = fz_now();
+#endif
     auto p = reinterpret_cast<volatile uint32_t*>(page);
     do {
         invalidate_l1_cache();
     } while (p[DONE_WORD] == 0u);
     invalidate_l1_cache();  // the slab's word3 was written by TRISC2
+#if FZ_PROF
+    const uint32_t fz_d = fz_now() - fz_t0;
+    fz_dw += fz_d;
+    fz_dwn++;
+    if (fz_d >= 1350u) fz_dwb++;
+    if (fz_d > fz_dwm) fz_dwm = fz_d;
+#endif
 }
 
 // Synchronous cull (paths that emit right after it).
@@ -335,6 +373,10 @@ inline void cull_slab_trisc(uint32_t slab, uint32_t n) {
 
 void kernel_main() {
     DeviceZoneScopedN("sort_subchunk_mat");
+#if FZ_PROF
+    fz_dw = fz_dwn = fz_dwb = fz_dwm = fz_rd = fz_sort = fz_perm = fz_wr = fz_meta = fz_big = 0u;
+    fz_jobs = fz_recs = 0u;
+#endif
     const uint32_t sorted_addr    = get_arg_val<uint32_t>(0);
     const uint32_t ranges_addr    = get_arg_val<uint32_t>(1);
     const uint32_t blendrec_addr  = get_arg_val<uint32_t>(2);
@@ -467,6 +509,7 @@ void kernel_main() {
         if (pend.page == 0u) return;
         wait_job(pend.page);
         MAT_PZ("mat_ol_wr");
+        FZ_ACC(fz_wr);
         emit_at(pend.slab, pend.tid, pend.dbase, pend.s, pend.Ls, pend.p0);
         pend.page = 0u;
     };
@@ -486,6 +529,7 @@ void kernel_main() {
         uint32_t tile_id, sc, part;
         {
             MAT_PZ("mat_meta");
+            FZ_ACC(fz_meta);
             const uint32_t u = (work_start + wi) * 2u;
             noc_async_read(get_noc_addr(u / ELEMS_PER_PAGE, work_acc), scr, PAGE_BYTES);
             noc_async_read_barrier();
@@ -502,6 +546,7 @@ void kernel_main() {
         uint32_t id_start = 0, id_end = 0;
         {
             MAT_PZ("mat_meta");
+            FZ_ACC(fz_meta);
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -530,6 +575,7 @@ void kernel_main() {
         uint32_t dir_base = 0;
         {
             MAT_PZ("mat_meta");
+            FZ_ACC(fz_meta);
             const uint32_t e0 = tile_id * 2u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -559,6 +605,7 @@ void kernel_main() {
             if (count <= ol_whole_cap) {
                 {
                     MAT_PZ("mat_ol_rd");
+                    FZ_ACC(fz_rd);
                     read_bucket(l1_recs_acc, page0, count, buck);
                 }
                 asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
@@ -583,6 +630,7 @@ void kernel_main() {
                 const uint32_t* sorted;
                 {
                     MAT_PZ("mat_ol_sort");
+                    FZ_ACC(fz_sort);
                     sorted = sort_radix_tile::sort_record_ids(
                         reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ol_whole_cap,
                         kB, kB + count, hist);
@@ -595,6 +643,7 @@ void kernel_main() {
                     flush_pending();  // the permute overwrites the slab
                     {
                         MAT_PZ("mat_ol_perm");
+                        FZ_ACC(fz_perm);
                         permute_records(buck, slab, sorted + s * bucket_fit, Ls);
                     }
                     defer_emit(slab, tile_id, dir_base, s, Ls, 0u);
@@ -658,6 +707,7 @@ void kernel_main() {
             } else {
             {
                 MAT_PZ("mat_ol_keys");
+                FZ_ACC(fz_big);
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
@@ -673,6 +723,7 @@ void kernel_main() {
             // fill CB_BUCKET at N = 32768 (16384 x 32 B).
             {
                 MAT_PZ("mat_ol_sort");
+                FZ_ACC(fz_big);
                 uint32_t* ck = reinterpret_cast<uint32_t*>(buck);
                 sort_ol::select_ranks(k, N, sc_off + po, sc_off + po + L_item, ck, ck + N,
                                       ck + 2u * N, ck + 3u * N, k, hist);
@@ -684,6 +735,7 @@ void kernel_main() {
             for (uint32_t i = 0; i < N; ++i) v[i] = i;
             {
                 MAT_PZ("mat_ol_sort");
+                FZ_ACC(fz_big);
                 const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
                 for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
@@ -694,6 +746,7 @@ void kernel_main() {
 #endif
             {
                 MAT_PZ("mat_ol_gather");
+                FZ_ACC(fz_big);
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
@@ -736,6 +789,7 @@ void kernel_main() {
             uint32_t ov_base = 0xFFFFFFFFu;
             {
                 MAT_PZ("mat_meta");
+                FZ_ACC(fz_meta);
                 const uint32_t e0 = tile_id;  // 1 u32 per tile
                 const uint32_t pg = e0 >> 4;
                 const uint32_t off = e0 & 0xF;
@@ -776,6 +830,7 @@ void kernel_main() {
                     uint32_t scp = 0;
                     {
                         MAT_PZ("mat_meta");
+                        FZ_ACC(fz_meta);
                         const uint32_t e0 = (dir_base + s) * 4u;
                         const uint32_t pg = e0 >> 4;
                         const uint32_t off = e0 & 0xF;
@@ -809,6 +864,7 @@ void kernel_main() {
         uint32_t sc_page = 0;
         {
             MAT_PZ("mat_meta");
+            FZ_ACC(fz_meta);
             const uint32_t e0 = (dir_base + sc) * 4u;
             const uint32_t pg = e0 >> 4;
             const uint32_t off = e0 & 0xF;
@@ -981,5 +1037,19 @@ void kernel_main() {
 #endif
 #if defined(FUSE_CULL) && FUSE_CULL
     CULL_END_STREAM();
+#endif
+#if FZ_PROF
+    DeviceTimestampedData("fz_mv_dw", fz_dw);
+    DeviceTimestampedData("fz_mv_dwn", fz_dwn);
+    DeviceTimestampedData("fz_mv_dwb", fz_dwb);
+    DeviceTimestampedData("fz_mv_dwm", fz_dwm);
+    DeviceTimestampedData("fz_mv_rd", fz_rd);
+    DeviceTimestampedData("fz_mv_sort", fz_sort);
+    DeviceTimestampedData("fz_mv_perm", fz_perm);
+    DeviceTimestampedData("fz_mv_wr", fz_wr);
+    DeviceTimestampedData("fz_mv_meta", fz_meta);
+    DeviceTimestampedData("fz_mv_big", fz_big);
+    DeviceTimestampedData("fz_mv_jobs", fz_jobs);
+    DeviceTimestampedData("fz_mv_recs", fz_recs);
 #endif
 }
