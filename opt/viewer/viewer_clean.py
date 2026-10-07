@@ -42,6 +42,14 @@ def main():
     ap.add_argument("--selftest", type=int, default=30,
                     help="hero-view frames to time before serving (0 = skip)")
     ap.add_argument("-v", "--verbose", action="store_true")
+    # Render watchdog (gsplat/render_watchdog.py, task #357): a render over the limit
+    # logs its pose and all thread stacks to <viewer dir>/viewer_hang.log and exits 86
+    # for opt/viewer/supervise.sh to restart. 0 disables it.
+    ap.add_argument("--watchdog-s", type=float,
+                    default=float(os.environ.get("GSPLAT_VIEWER_WATCHDOG_S", "5")))
+    ap.add_argument("--watchdog-first-s", type=float,
+                    default=float(os.environ.get("GSPLAT_VIEWER_WATCHDOG_FIRST_S", "600")),
+                    help="limit for a resolution's first render (JIT compile)")
     args = ap.parse_args()
 
     run = _load_run_py()
@@ -63,6 +71,25 @@ def main():
                             # Same contribution floor as the bench (1/255), not the
                             # slider's 1/16384: that kept more pairs (slower, other image).
                             contrib_floor=float(cam["contrib_floor"]))
+
+    try:
+        from gsplat.render_watchdog import RenderWatchdog
+    except ImportError:  # trees older than task #357
+        RenderWatchdog = None
+    if RenderWatchdog is not None and args.watchdog_s > 0:
+        wd = RenderWatchdog(
+            viewer.pipeline.backend, REPO.parent / "viewer_hang.log",
+            REPO.parent / "viewer_poses.jsonl", limit_s=args.watchdog_s,
+            first_limit_s=args.watchdog_first_s,
+            stall_file=os.environ.get("GSPLAT_VIEWER_STALL_FILE") or None,
+            pyspy=os.environ.get("GSPLAT_VIEWER_PYSPY") or None)
+        viewer.pipeline.render = wd.wrap(viewer.pipeline.render)
+        if hasattr(viewer, "exit_hooks"):
+            viewer.exit_hooks.append(lambda: wd.flush_ring("exit"))
+        wd.start()
+        print(f"[viewer_clean] watchdog limit={args.watchdog_s:g} s "
+              f"(first render per size {args.watchdog_first_s:g} s) "
+              f"stall_hook={'on' if wd.stall_file else 'off'}", flush=True)
 
     if args.selftest > 0:
         # Same call the viewer makes per frame (pipeline.render), hero view of
