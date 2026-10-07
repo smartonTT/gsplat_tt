@@ -46,6 +46,9 @@ def time_weights(emit, table):
     emit cycles sum s / sum(s_c / T_c); movers missing from the table or with no time
     are left out."""
     keys = [m for m in emit if m in table and emit[m] > 0]
+    if not keys:
+        sys.exit("emit_cores: no mover in this capture is in kMoverSpeedP150 "
+                 "(render/host/sort_mover_speed.h); cannot derive time weights")
     speed = {m: table[m] / emit[m] for m in keys}
     return speed, sum(table[m] for m in keys) / sum(speed.values())
 
