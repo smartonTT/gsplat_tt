@@ -3,15 +3,17 @@
 # box or the p100 lock). Run from a checkout/worktree of gstt2 on the Mac.
 #   opt/viewer/viewer.sh deploy [rev]  sync+build rev (default: newest best-iter-* tag) and restart
 #   opt/viewer/viewer.sh start | stop | restart | status | log | tunnel
-# Env: VIEWER_HOST (bh-35), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
-#      VIEWER_TT_METAL_HOME (/localdev/smarton/tt-metal; bh-30 uses its own build, /localdev/smarton/viewer/tt-metal).
+# Env: VIEWER_HOST (bh-30), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
+#      VIEWER_DIR (/localdev/$USER/viewer), VIEWER_TT_METAL_HOME (the viewer's own build, $VIEWER_DIR/tt-metal;
+#      bh-30's shared /localdev/$USER/tt-metal no longer JITs, task #263).
 # One-time box setup (tt-metal, venv, scenes): opt/viewer/setup_box.sh.
 set -euo pipefail
-HOST=${VIEWER_HOST:-bh-35}
+HOST=${VIEWER_HOST:-bh-30}
 PORT=${VIEWER_PORT:-8080}
 LPORT=${VIEWER_LOCAL_PORT:-8091}
-TTMH=${VIEWER_TT_METAL_HOME:-/localdev/smarton/tt-metal}
-VDIR=/localdev/smarton/viewer
+# The box account matches the Mac's $USER (same as setup_box.sh's /localdev/$USER).
+VDIR=${VIEWER_DIR:-/localdev/$USER/viewer}
+TTMH=${VIEWER_TT_METAL_HOME:-$VDIR/tt-metal}
 DIR=$VDIR/tree
 # Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key.
 SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
