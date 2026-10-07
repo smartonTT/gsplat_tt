@@ -12,7 +12,7 @@
 [ttw 2026-10-07T03:06:53-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=4bdf0888 bin=5470f625ff613ae2 t315 iter-207 4bdf0888 MATCULL_TRISC_FILL default on (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t315-r1-off  timeout=420s  worry=600s  ts=2026-10-07T03:06:54-0400
 cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_time.sh 1 off

@@ -12,7 +12,7 @@
 [ttw 2026-10-07T03:40:24-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t315-tracy  timeout=560s  worry=448s  ts=2026-10-07T03:40:25-0400
 cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_tracy.sh ttw-207
@@ -37,7 +37,7 @@ Traceback (most recent call last):
 [ttw 2026-10-07T03:40:38-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t315-tracy  timeout=560s  worry=448s  ts=2026-10-07T03:40:39-0400
 cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_tracy.sh ttw-207 GSPLAT_TT_PFWC_WRITER_SPLIT=0
@@ -62,7 +62,7 @@ Traceback (most recent call last):
 [ttw 2026-10-07T03:44:04-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t315-tracy  timeout=560s  worry=448s  ts=2026-10-07T03:44:05-0400
 cmd: T=/localdev/smarton/gstt2-t315 bash /localdev/smarton/gstt2-t315/tmp/t315_remote_tracy.sh ttw-207
