@@ -1,0 +1,36 @@
+fatal: not a git repository (or any parent up to mount point /)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+=== p100a capture 2026-10-07T23:06:08Z tree 
+  61380 17277
+  27280 32535
+  27280 16443
+  27280 13133
+  27280 12391
+  20460 6925
+  20460 56494
+  20460 39536
+  20460 24109
+  13640 9643
+  13640 770
+  13640 49754
+  13640 15945
+   6820 9391
+   6820 8621
+   6820 64027
+   6820 62700
+   6820 60365
+   6820 59212
+   6820 46421
+   6820 45103
+   6820 43
+   6820 40276
+[capture_tracy] DONE rc=0 tracy=/localdev/smarton/gstt2-t355/opt/profiler/ttw-t366/render.tracy
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t366/tmp/ttw-state/logs/t366-p100a-20261007-190609.log
+total 103252
+drwxrwxr-x 2 smarton smarton     4096 Oct  7 23:06 .
+drwxrwxr-x 6 smarton smarton     4096 Oct  7 23:06 ..
+-rw-rw-r-- 1 smarton smarton  6158401 Oct  7 23:06 p100a-dev.csv.gz
+-rw-rw-r-- 1 smarton smarton  4987562 Oct  7 23:06 p100a-tracy-u.csv.gz
+-rw-rw-r-- 1 smarton smarton 86545797 Oct  7 23:06 profile_log_device.csv
+-rw-rw-r-- 1 smarton smarton  8021159 Oct  7 23:06 render.tracy
+=== p100a done rc=0 2026-10-07T23:06:46Z

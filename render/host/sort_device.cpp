@@ -1480,6 +1480,13 @@ static SortDeviceContext* ensure_context() {
     if (!slot) {
         try {
             slot = std::make_unique<SortDeviceContext>(init_context());
+            // Task #365: tile stride coprime with the DRAM bank count (bucket_tile_cap).
+            if (g_ol_tile_cap == sort_onelaunch::kTileCap) {
+                const uint32_t nb = static_cast<uint32_t>(slot->mesh_device->num_dram_channels());
+                g_ol_tile_cap = sort_onelaunch::bucket_tile_cap(g_ol_tile_cap, nb, gsplat_tt::env_config::ol_tile_pad());
+                std::cerr << "[gsplat_tt::sort] bucket tile stride " << g_ol_tile_cap / 64u << " pages, "
+                          << nb << " DRAM banks\n";
+            }
         } catch (const std::exception& e) {
             std::cerr << "[gsplat_tt::sort] device init failed: " << e.what() << "\n";
             slot.reset();
@@ -2479,7 +2486,17 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             std::vector<uint32_t> tot(ctx->cap_ol_totals_bytes / 4, 0u);
             if (cq1 != nullptr) {
                 std::vector<uint32_t> krow(k2rows.bytes / 4, 0u);
-                {
+                if (k2rows.view) {
+                    // Task #355: 4 KB pages, unshuffled to the 64 B page order.
+                    std::vector<uint32_t> vrow(k2rows.bytes / 4, 0u);
+                    {
+                        GSPLAT_HOST_ZONE("host_cq1_k2_rows");
+                        distributed::EnqueueReadMeshBuffer(*cq1, vrow, k2rows.view, true);
+                    }
+                    sort_onelaunch::unpack_rows_view(
+                        vrow.data(), static_cast<uint32_t>(k2rows.bytes / 64u), k2rows.view_banks,
+                        k2rows.view_m, krow.data());
+                } else {
                     GSPLAT_HOST_ZONE("host_cq1_k2_rows");
                     distributed::EnqueueReadMeshBuffer(*cq1, krow, k2rows.buf, true);
                 }

@@ -36,6 +36,30 @@ inline constexpr uint32_t kTileCap = 32768;
 // all their keys. A multiple of the 64-record DRAM page.
 inline constexpr uint32_t kTileCapBig = 65472;
 static_assert(kTileCapBig % 64u == 0u, "whole record pages");
+// Task #365: the bucket is interleaved over the DRAM banks by 2 KB record page
+// (64 records), so tile t's page k sits in bank (t * pages + k) % nbanks. kTileCap
+// is 512 pages: with the p150's 8 banks page k of every tile lands in the same
+// bank, and the movers early in the prefix order (bases near 0) all write bank 0.
+// bucket_tile_cap pads the tile stride to the next page count coprime with the
+// bank count (8 banks: 513 pages); with 7 banks (p100a) 512 stays. pad_pages >= 0
+// forces that many extra pages instead (GSPLAT_TT_OL_TILE_PAD; 0 = pre-#365).
+inline constexpr uint32_t gcd_u32(uint32_t a, uint32_t b) {
+    while (b != 0u) {
+        const uint32_t t = a % b;
+        a = b;
+        b = t;
+    }
+    return a;
+}
+inline constexpr uint32_t bucket_tile_cap(uint32_t cap, uint32_t nbanks, int pad_pages) {
+    uint32_t pages = cap / 64u;
+    if (pad_pages >= 0) return (pages + static_cast<uint32_t>(pad_pages)) * 64u;
+    while (nbanks > 1u && gcd_u32(pages, nbanks) != 1u) pages++;
+    return pages * 64u;
+}
+static_assert(bucket_tile_cap(kTileCap, 7u, -1) == kTileCap, "p100a: stride unchanged");
+static_assert(bucket_tile_cap(kTileCap, 8u, -1) == kTileCap + 64u, "p150: 513 pages");
+static_assert(bucket_tile_cap(kTileCap, 8u, -1) <= 43690u, "materialize big-path limit");
 
 struct CoreSplit {
     uint32_t lo = 0, mid = 0, hi = 0;  // pair pages: mover 0 [lo, mid), mover 1 [mid, hi)
@@ -117,6 +141,35 @@ inline void totals_from_k2_rows(const std::vector<uint32_t>& krow, uint32_t num_
             const uint32_t h = r0[t] + r1[t];
             tot[t] += h;
             tot[stride + t] += (h + 15u) & ~15u;
+        }
+    }
+}
+
+// Task #355: the fold K2's count rows are an interleaved buffer of 64 B pages
+// (page i in DRAM bank i % banks at offset (i / banks) * 64), so each bank
+// holds its pages back to back. The early path reads them on CQ1 through a
+// view of the same address with m * 64 B pages (pages a multiple of banks * m,
+// see rows_view_pages): view page j is bank j % banks at offset (j / banks) *
+// m * 64, i.e. 64 B pages b + banks * ((j / banks) * m + k), k < m. One 4 KB
+// view page replaces 64 page reads (14,080 -> 220 on the hero frame).
+// unpack_rows_view puts the view's bytes back in 64 B page order.
+inline constexpr uint32_t kRowsViewPerPage = 64;  // 64 B pages per 4 KB view page
+inline uint32_t rows_view_pages(uint32_t pages, uint32_t banks, uint32_t m) {
+    const uint32_t g = banks * m;
+    return (pages + g - 1u) / g * g;
+}
+// view: pages * kElemsPerPage u32 (pages = rows_view_pages(...)); out: same size.
+inline void unpack_rows_view(const uint32_t* view, uint32_t pages, uint32_t banks, uint32_t m,
+                             uint32_t* out) {
+    const uint32_t vpages = pages / m;
+    for (uint32_t j = 0; j < vpages; ++j) {
+        const uint32_t b = j % banks;
+        const uint32_t q0 = (j / banks) * m;
+        const uint32_t* src = view + static_cast<std::size_t>(j) * m * kElemsPerPage;
+        for (uint32_t k = 0; k < m; ++k) {
+            const std::size_t i = b + static_cast<std::size_t>(banks) * (q0 + k);
+            std::copy(src + k * kElemsPerPage, src + (k + 1u) * kElemsPerPage,
+                      out + i * kElemsPerPage);
         }
     }
 }

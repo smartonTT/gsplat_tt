@@ -1,0 +1,1 @@
+out-p100a/hero-r1-P1.png vs benchmarks/reference_v2/hero.png: PSNR 42.51 dB, max abs diff 46, px>8: 0.822%

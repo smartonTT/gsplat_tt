@@ -122,6 +122,17 @@ inline unsigned int ol_pair_batch() {
     }();
     return v;
 }
+// Task #365: extra 2 KB pages per tile bucket stride (sort_onelaunch::bucket_tile_cap).
+// Unset or negative: auto (stride coprime with the DRAM bank count); 0: the pre-#365 stride.
+inline int ol_tile_pad() {
+    static const int v = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_TILE_PAD");
+        if (e == nullptr || *e == '\0') return -1;
+        const int n = std::atoi(e);
+        return (n >= 0 && n <= 64) ? n : -1;
+    }();
+    return v;
+}
 // Emit records per per-tile run: 0 (one 32 B write per record), 2, 4 or 8.
 // Default 8 (#100's EMIT_RING).
 inline unsigned int ol_ring() {
@@ -193,6 +204,13 @@ inline bool sort_ol_early() {
 // Default on; 0 = off.
 inline bool mat_cq1() {
     static const bool v = sort_ol_early() && env_uint("GSPLAT_TT_MAT_CQ1", 1u) != 0u;
+    return v;
+}
+// Task #355: read the fold K2's count rows on CQ1 through a 4 KB-page view
+// of the same DRAM address (220 page reads, not 14,080 of 64 B), then
+// unshuffle on the host. Default on; 0 = the 64 B-page read.
+inline bool k2_rows_view() {
+    static const bool v = env_uint("GSPLAT_TT_K2_ROWS_VIEW", 1u) != 0u;
     return v;
 }
 // Test only (task #213): allocate the pair buffers for this many pairs

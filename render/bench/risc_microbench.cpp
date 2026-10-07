@@ -14,6 +14,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <string>
@@ -36,6 +37,9 @@ constexpr uint32_t MAGIC = 0x4D42A5A5u;
 constexpr uint32_t SCRATCH_BYTES = 64 * 1024;
 constexpr uint32_t SCAT_PAGE = 1024, SCAT_PAGES = 4096;  // 4 MiB scatter target
 constexpr uint32_t BW_PAGE = 8192, BW_PAGES = 8192;      // 64 MiB bandwidth buffer
+// Task #365 p10: 64 B pair/blendrec pages (16 MiB) and the 2 KB-page bucket (256 tiles x 513 pages).
+constexpr uint32_t P64_PAGE = 64, P64_PAGES = 1u << 18;
+constexpr uint32_t BKT_PAGE = 2048, BKT_PAGES = 256u * 513u + 64u;
 
 enum Risc : uint32_t { BRISC = 0, NCRISC = 1 };
 
@@ -43,7 +47,7 @@ struct Env {
     std::shared_ptr<distributed::MeshDevice> dev;
     distributed::MeshCommandQueue* cq = nullptr;
     CoreCoord grid;
-    std::shared_ptr<distributed::MeshBuffer> res, scat, bw;
+    std::shared_ptr<distributed::MeshBuffer> res, scat, bw, p64, bkt;
 };
 
 struct Spec {
@@ -52,12 +56,13 @@ struct Spec {
     std::map<std::string, std::string> defines;
     std::vector<std::pair<Risc, uint32_t>> movers;  // (risc, n)
     uint32_t mode = 0;
-    int buf = 0;  // 0 none, 1 scatter, 2 bandwidth
+    int buf = 0;  // 0 none, 1 scatter, 2 bandwidth, 3 64 B pages, 4 bucket
 };
 
 struct Sample {
     uint32_t ops;
     uint64_t total, a, b;
+    uint32_t x = 0, y = 0, risc = 0;  // logical core, RISC
 };
 
 std::shared_ptr<distributed::MeshBuffer> make_dram(distributed::MeshDevice* dev, uint64_t bytes, uint32_t page) {
@@ -91,8 +96,8 @@ std::vector<Sample> run(Env& e, const Spec& s, CoreCoord hi, double* host_s = nu
     std::vector<uint32_t> ct;
     TensorAccessorArgs::create_dram_interleaved().append_to(ct);
     TensorAccessorArgs::create_dram_interleaved().append_to(ct);
-    const auto& data = s.buf == 2 ? e.bw : e.scat;
-    const uint32_t npages = s.buf == 2 ? BW_PAGES : SCAT_PAGES;
+    const auto& data = s.buf == 2 ? e.bw : s.buf == 3 ? e.p64 : s.buf == 4 ? e.bkt : e.scat;
+    const uint32_t npages = s.buf == 2 ? BW_PAGES : s.buf == 3 ? P64_PAGES : s.buf == 4 ? BKT_PAGES : SCAT_PAGES;
 
     for (auto [risc, n] : s.movers) {
         auto k = CreateKernel(prog, std::string(MB_KERNEL_DIR) + s.kfile, cores,
@@ -134,7 +139,7 @@ std::vector<Sample> run(Env& e, const Spec& s, CoreCoord hi, double* host_s = nu
                     continue;
                 }
                 auto u64 = [&](int i) { return static_cast<uint64_t>(r[i]) | (static_cast<uint64_t>(r[i + 1]) << 32); };
-                out.push_back({r[1], u64(2), u64(4), u64(6)});
+                out.push_back({r[1], u64(2), u64(4), u64(6), x, y, static_cast<uint32_t>(risc)});
             }
     return out;
 }
@@ -143,6 +148,74 @@ std::string movers_str(const Spec& s) {
     std::string m;
     for (auto [r, n] : s.movers) m += std::string(m.empty() ? "" : "+") + (r == BRISC ? "b" : "n");
     return m;
+}
+
+// Task #365: emit-shaped probes (p10) on the sort's 11x10 grid (MB_ALLGRID=1: whole
+// grid), both scopes. Prints one [MBE] summary per run and, for the all-core scope,
+// one [MBMAP] row per (RISC, core row) with each core's bytes per RISC tick at its
+// virtual NoC coordinates (the device profiler's), so it lines up with the emit zones.
+void emit_suite(Env& e, double mhz) {
+    const bool allgrid = std::getenv("MB_ALLGRID") != nullptr;
+    const CoreCoord hi = allgrid ? CoreCoord{e.grid.x - 1, e.grid.y - 1}
+                                 : CoreCoord{std::min<uint32_t>(10, e.grid.x - 1), std::min<uint32_t>(9, e.grid.y - 1)};
+    const uint32_t slots = (hi.x + 1) * (hi.y + 1) * 2;
+    struct P {
+        std::string name;
+        uint32_t mode, xfer, depth, stride;
+    };
+    const std::vector<P> probes = {
+        {"R64_d16", 0, 64, 16, 0},          {"R256_d8", 0, 256, 8, 0},
+        {"W256_s512", 1, 256, 8, 512},      {"W256_s513", 1, 256, 8, 513},
+        {"W32_s512", 1, 32, 16, 512},       {"W32_s513", 1, 32, 16, 513},
+    };
+    const std::vector<std::vector<std::pair<Risc, uint32_t>>> mover_sets = {
+        {{BRISC, 4096}}, {{NCRISC, 4096}}, {{BRISC, 4096}, {NCRISC, 4096}}};
+    for (const auto& p : probes)
+        for (const auto& movers : mover_sets)
+            for (int scope = 0; scope < 2; scope++) {
+                Spec s{p.name, "p10_emit_noc.cpp",
+                       {{"MB_DATA_PAGE", std::to_string(p.mode == 0 ? P64_PAGE : BKT_PAGE) + "u"},
+                        {"MB_XFER", std::to_string(p.xfer) + "u"},
+                        {"MB_DEPTH", std::to_string(p.depth) + "u"},
+                        {"MB_STRIDE", std::to_string(std::max(p.stride, 1u)) + "u"},
+                        {"MB_SLOTS", std::to_string(slots) + "u"}},
+                       movers, p.mode, p.mode == 0 ? 3 : 4};
+                const CoreCoord h = scope == 0 ? CoreCoord{0, 0} : hi;
+                run(e, s, h);  // JIT + warm
+                double host_s = 0;
+                const auto v = run(e, s, h, &host_s);
+                if (v.empty()) continue;
+                std::vector<double> bpt;
+                uint64_t tmax = 0, bytes = 0;
+                for (const auto& x : v) {
+                    bpt.push_back(double(x.ops) * p.xfer / double(x.total));
+                    tmax = std::max(tmax, x.total);
+                    bytes += uint64_t(x.ops) * p.xfer;
+                }
+                std::printf("[MBE] probe=%s risc=%s scope=%s cores=%u xfer=%u depth=%u Bpt_med=%.3f Bpt_min=%.3f "
+                            "Bpt_max=%.3f makespan_us=%.1f agg_GBps=%.1f\n",
+                            p.name.c_str(), movers_str(s).c_str(), scope == 0 ? "1core" : "all",
+                            (h.x + 1) * (h.y + 1), p.xfer, p.depth, med(bpt),
+                            *std::min_element(bpt.begin(), bpt.end()), *std::max_element(bpt.begin(), bpt.end()),
+                            tmax / mhz, double(bytes) / (tmax / (mhz * 1e6)) / 1e9);
+                if (scope == 0) continue;
+                for (auto [risc, n] : movers)
+                    for (uint32_t y = 0; y <= h.y; y++) {
+                        std::string row;
+                        uint32_t vy = 0;
+                        for (const auto& x : v) {
+                            if (x.risc != risc || x.y != y) continue;
+                            const CoreCoord vc = e.dev->worker_core_from_logical_core(CoreCoord{x.x, x.y});
+                            vy = vc.y;
+                            char buf[32];
+                            std::snprintf(buf, sizeof buf, " %zu:%.3f", vc.x, double(x.ops) * p.xfer / double(x.total));
+                            row += buf;
+                        }
+                        std::printf("[MBMAP] probe=%s set=%s risc=%c y=%u%s\n", p.name.c_str(), movers_str(s).c_str(),
+                                    risc == BRISC ? 'b' : 'n', vy, row.c_str());
+                    }
+                std::fflush(stdout);
+            }
 }
 
 }  // namespace
@@ -156,6 +229,8 @@ int main() {
     e.res = make_dram(e.dev.get(), uint64_t(ncores) * 2 * RES_BYTES, RES_BYTES);
     e.scat = make_dram(e.dev.get(), uint64_t(SCAT_PAGE) * SCAT_PAGES, SCAT_PAGE);
     e.bw = make_dram(e.dev.get(), uint64_t(BW_PAGE) * BW_PAGES, BW_PAGE);
+    e.p64 = make_dram(e.dev.get(), uint64_t(P64_PAGE) * P64_PAGES, P64_PAGE);
+    e.bkt = make_dram(e.dev.get(), uint64_t(BKT_PAGE) * BKT_PAGES, BKT_PAGE);
     {
         std::vector<uint32_t> fill(size_t(BW_PAGE) * BW_PAGES / 4, 0x3F800000u);
         distributed::EnqueueWriteMeshBuffer(*e.cq, e.bw, fill, true);
@@ -177,6 +252,11 @@ int main() {
     std::printf("[MB] clock tick_mhz=%.1f (ticks %llu vs %llu, host %.4f s vs %.4f s)\n", mhz,
                 (unsigned long long)s_long[0].total, (unsigned long long)s_short[0].total, h_long, h_short);
 
+    if (const char* suite = std::getenv("MB_SUITE"); suite && std::string(suite) == "emit") {
+        emit_suite(e, mhz);
+        e.dev->close();
+        return 0;
+    }
     const std::vector<Spec> specs = {
         {"p0_loop_overhead", "p0_clock.cpp", {}, {{NCRISC, N}}},
         {"p1_l1_store_volatile", "p1_l1_store_volatile.cpp", {}, {{NCRISC, N}}},

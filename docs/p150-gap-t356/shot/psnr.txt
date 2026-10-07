@@ -1,0 +1,1 @@
+docs/p150-gap-t356/shot/hero.png vs benchmarks/reference_v2/hero.png: PSNR 42.51 dB, max abs diff 46, px>8: 0.822%
