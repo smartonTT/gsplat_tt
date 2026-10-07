@@ -10,7 +10,7 @@ import traceback
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-from typing import NamedTuple
+from typing import Callable, NamedTuple
 
 import numpy as np
 import torch
@@ -300,6 +300,8 @@ class GaussianViewer:
         self._interval_ms: deque[float] = deque(maxlen=30)
         self._last_sent = 0.0
         self._session_start = datetime.now()
+        # Called on a clean stop before the pipeline closes (render watchdog pose log).
+        self.exit_hooks: list[Callable[[], None]] = []
         self._camera_controllers: dict[int, ClientCameraController] = {}
 
         means = gaussians.means.numpy()
@@ -953,6 +955,11 @@ class GaussianViewer:
         except KeyboardInterrupt:
             print("\nViewer stopped.")
         finally:
+            for hook in self.exit_hooks:
+                try:
+                    hook()
+                except Exception:
+                    traceback.print_exc()
             self._write_benchmark()
             self.viewer.stop_burst()
             self.pipeline.close()

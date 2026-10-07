@@ -1,0 +1,22 @@
+p100a-209: frames=30  (device ms from first pfwc start; host ms from first EnqueueProgram)
+zone                        start      end   window   n
+pfwc                        0.000    1.960    1.960  30
+host_cq1_proj_m             0.294    3.106    2.812  30
+BRISC-FW                    2.018   30.883   28.865  30
+NCRISC-FW                   2.018   30.839   28.821  30
+k2_pairs                    2.027    2.997    0.969  30
+k2_rows                     2.555    3.002    0.447  30
+sort_ol_prefix              3.076    3.162    0.086  30
+sort_ol_barrier             3.076    3.225    0.149  30
+sort_ol_fill                3.078    3.207    0.129  30
+sort_ol_emit                3.177    4.510    1.333  30
+sort_ol_town                3.195    4.438    1.244  30
+host_cq1_k2_rows            4.354    4.420    0.066  30
+host_finish_cq1_bridge      4.791    4.804    0.014  30
+host_blend_setup            4.811    4.844    0.033  30
+host_finish_blend           4.870   11.517    6.647  30
+mat_cull_mask               5.339    8.175    2.836  30
+sort_subchunk_mat           5.339    8.175    2.836  30
+tile_blend_load             7.154   11.320    4.166  30
+tile_blend_sfpu             7.234   11.406    4.172  30
+EnqueueProgram k: mean start  0:0.000  1:0.087  2:0.277  3:4.853
