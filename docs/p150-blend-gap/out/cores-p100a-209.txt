@@ -1,0 +1,6 @@
+docs/p150-blend-gap/out/p100a-tracy-u.csv.gz: frames=31 (stats over frames 1..)
+zone                  window core_mean core_min core_max end_spread start_spread ncores
+mat_cull_mask          2.836     2.298    1.894    2.836      0.941        0.001 330
+sort_subchunk_mat      2.836     2.132    1.688    2.836      1.148        0.000 220
+tile_blend_load        4.166     3.616    3.070    4.102      0.112        1.021 110
+tile_blend_sfpu        4.172     3.681    3.133    4.093      0.142        0.941 330
