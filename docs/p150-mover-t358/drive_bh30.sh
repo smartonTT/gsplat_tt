@@ -3,10 +3,10 @@
 # Stop the viewer, run bench_ab.sh detached on the box, ALWAYS restart the viewer right away
 # (opt/viewer/viewer.sh start), log UTC stop/start, check localhost:8091, fetch the outputs.
 # The tree (/localdev/smarton/p150bench/tree358) is built beforehand with nice/ionice, -j nproc/2.
-#   ttp lock viewer -- docs/p150-mover-t358/drive_bh30.sh <rounds>
+#   [ARMS="A E"] [TRACY=B] [OUT=out-p150-2] ttp lock viewer -- docs/p150-mover-t358/drive_bh30.sh <rounds>
 set -u
 cd "$(git rev-parse --show-toplevel)"
-P=/localdev/smarton/p150bench; D=docs/p150-mover-t358; VDIR=/localdev/smarton/viewer; O=$P/out358
+P=/localdev/smarton/p150bench; D=docs/p150-mover-t358; VDIR=/localdev/smarton/viewer; O=$P/out358; LOUT=${OUT:-out-p150}
 SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 bh-30)
 "${SSH[@]}" true || { echo "ssh bh-30 failed: viewer untouched"; exit 3; }
 scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes $D/bench_ab.sh bh-30:$P/bench_ab.sh || exit 3
@@ -21,10 +21,11 @@ restart() {
 echo "=== viewer stop $(date -u +%FT%TZ)"
 VIEWER_HOST=bh-30 opt/viewer/viewer.sh stop
 trap restart EXIT
-"${SSH[@]}" "T=$P/tree358 TTMH=$VDIR/tt-metal CACHE=$P/cache O=$O setsid nohup bash $P/bench_ab.sh ${1:-3} > $P/bench358.log 2>&1 < /dev/null &"
-for _ in $(seq 240); do "${SSH[@]}" "test -e $O/bench.rc" && break; sleep 5; done
+"${SSH[@]}" "ARMS='${ARMS:-A B}' TRACY=${TRACY:-} T=$P/tree358 TTMH=$VDIR/tt-metal CACHE=$P/cache O=$O setsid nohup bash $P/bench_ab.sh ${1:-3} > $P/bench358.log 2>&1 < /dev/null &"
+for _ in $(seq 300); do "${SSH[@]}" "test -e $O/bench.rc" && break; sleep 5; done
 "${SSH[@]}" "cat $P/bench358.log"
 restart; trap - EXIT
-mkdir -p $D/out-p150
-scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "bh-30:$O/*" $D/out-p150/
+mkdir -p $D/$LOUT
+scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "bh-30:$O/*" $D/$LOUT/ 2>/dev/null
+rm -rf $D/$LOUT/prof-*
 echo "=== drive end $(date -u +%FT%TZ)"
