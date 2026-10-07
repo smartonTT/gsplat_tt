@@ -1,0 +1,33 @@
+== bh-30-special-smarton-for-reservation-135630 2026-10-07T23:39:26Z
+model name	: AMD EPYC 7352 24-Core Processor
+24
+cpu0 cur=2300000 max=2300000 gov=performance
+cpu1 cur=3098890 max=2300000 gov=performance
+ 23:39:26 up 21:13,  0 users,  load average: 3.65, 4.94, 5.41
+/sys/class/tenstorrent/tenstorrent!0/device link 16.0 GT/s PCIe x16 numa 0
+/sys/class/tenstorrent/tenstorrent!1/device link 16.0 GT/s PCIe x16 numa 0
+/sys/class/tenstorrent/tenstorrent!2/device link 16.0 GT/s PCIe x16 numa 1
+/sys/class/tenstorrent/tenstorrent!3/device link 16.0 GT/s PCIe x16 numa 1
+AnonHugePages:      2048 kB
+HugePages_Total:     705
+HugePages_Free:        0
+always [madvise] never
+-- top cpu users
+%CPU     PID USER     COMMAND
+ 122   26796 smarton  mutagen-agent
+48.6   58783 smarton  python
+ 0.1   26795 smarton  sshd
+ 0.0       1 root     bash
+ 0.0      15 root     sshd
+-- run 1
+warm  0.082 ms
+cold  0.227 ms
+coldf 1.770 ms
+pf    1.558 ms
+scalar 1.302 ns/iter
+-- run 2
+warm  0.076 ms
+cold  0.225 ms
+coldf 1.729 ms
+pf    1.561 ms
+scalar 1.305 ns/iter

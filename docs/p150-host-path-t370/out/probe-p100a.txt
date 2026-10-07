@@ -1,0 +1,30 @@
+== yyzo-bh-04-special-smarton-for-reservation-244892 2026-10-07T23:39:49Z
+model name	: AMD Ryzen 5 7600X 6-Core Processor
+12
+cpu0 cur=4563508 max=5452734 gov=performance
+cpu1 cur=5174564 max=5452734 gov=performance
+ 23:39:49 up 1 day,  3:25,  0 users,  load average: 2.04, 2.08, 2.28
+/sys/class/tenstorrent/tenstorrent!0/device link 32.0 GT/s PCIe x16 numa -1
+AnonHugePages:      2048 kB
+HugePages_Total:     705
+HugePages_Free:        0
+always [madvise] never
+-- top cpu users
+%CPU     PID USER     COMMAND
+ 1.9  269686 smarton  mutagen-agent
+ 0.0       1 root     bash
+ 0.0      15 root     sshd
+ 0.0     346 root     sh
+ 0.0    1918 munge    munged
+-- run 1
+warm  0.099 ms
+cold  0.183 ms
+coldf 0.953 ms
+pf    0.574 ms
+scalar 0.776 ns/iter
+-- run 2
+warm  0.099 ms
+cold  0.180 ms
+coldf 0.903 ms
+pf    0.572 ms
+scalar 0.776 ns/iter
