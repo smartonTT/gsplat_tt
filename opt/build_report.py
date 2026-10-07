@@ -1740,6 +1740,24 @@ PUBLISHED_GPU_ROWS = [
 ]
 
 
+CONCLUSION_MD = OPT_DIR.parent / "docs" / "conclusion.md"
+
+
+def conclusion_section() -> str:
+    """Banner linking the project's final write-up, once docs/conclusion.md exists."""
+    if not CONCLUSION_MD.exists():
+        return ""
+    lines = CONCLUSION_MD.read_text(encoding="utf-8").splitlines()
+    title = lines[0].lstrip("# ").strip() if lines else "Conclusion"
+    href = _opt_href("docs/conclusion.md")
+    return (
+        "<div class='conclusion' style='border:2px solid #2a7;border-radius:6px;padding:8px 12px;"
+        "margin:10px 0;background:#f3fbf6'>"
+        f"<b>Project conclusion:</b> <a href='{href}' target='_blank'>{html_escape(title)}</a>"
+        " (docs/conclusion.md)</div>"
+    )
+
+
 def published_gpu_section() -> str:
     """Published-literature GPU rows. Always labelled 'published, not measured'."""
     doc_link = (
@@ -2069,6 +2087,7 @@ def build_html(rows: list[dict]) -> str:
 <body>
 <h1>gstt2 — Optimization Report</h1>
 {meta}
+{conclusion_section()}
 {in_flight_section()}
 {figs_html}
 {throughput_section()}
