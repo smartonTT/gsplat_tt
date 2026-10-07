@@ -16,7 +16,7 @@ git diff --name-only --diff-filter=d "$base" HEAD | tar -cf - -T - 2>/dev/null |
     cmake --build render/bench/build -j 10 > tmp/mbbuild.log 2>&1 || { tail -30 tmp/mbcfg.log tmp/mbbuild.log; exit 1; }; } &&
   tail -1 tmp/build365.log" || exit 1
 scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes $D/bench365.sh $H:$T/tmp/bench365.sh || exit 3
-"${SSH[@]}" "rm -rf $O; ARMS='${ARMS:-P1}' MB=${MB:-1} T=$T TTMH=$TTMH CACHE=/localdev/smarton/.cache/ttmc-gstt2-t358 O=$O MESH=P100 bash $T/tmp/bench365.sh ${1:-1}"
+"${SSH[@]}" "rm -rf $O; ARMS='${ARMS:-P1}' MB=${MB-1} T=$T TTMH=$TTMH CACHE=/localdev/smarton/.cache/ttmc-gstt2-t358 O=$O MESH=P100 bash $T/tmp/bench365.sh ${1:-1}"
 rc=$?
 mkdir -p $D/${OUT:-out-p100a}
 scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$H:$O/*" $D/${OUT:-out-p100a}/ 2>/dev/null
