@@ -15,9 +15,11 @@ TT_SHA=${TT_SHA:-437bc3664390ce8e7d564db2133083ff9035e7cd}
 ROOT=${ROOT:-/localdev/$USER}
 # TT and VENV can point elsewhere when the box's shared tt-metal checkout or venv must not be
 # touched (bh-30, task #263: its tt-metal tree no longer matches its build or sfpi).
-TT=${TT:-$ROOT/tt-metal} BASE=$ROOT/gstt2 VDIR=$ROOT/viewer
-VENV=${VENV:-$BASE/.venv}
-mkdir -p "$ROOT" "$BASE/scenes" "$VDIR"
+# The venv and scenes live in $VDIR, not $ROOT/gstt2: on bh-30 that tree is a devsync
+# mirror of the Mac and its .venv and scenes became Mac symlinks (tasks #316, #324).
+TT=${TT:-$ROOT/tt-metal} VDIR=$ROOT/viewer
+VENV=${VENV:-$VDIR/venv}
+mkdir -p "$ROOT" "$VDIR/scenes"
 # precompile_fw JITs firmware into the cache; keep it off the small home quota (full on bh-30, task #263).
 export TT_METAL_CACHE=${TT_METAL_CACHE:-$VDIR/tt-metal-cache}
 rm -f "$VDIR/setup.rc"

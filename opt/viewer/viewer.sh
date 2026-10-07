@@ -6,7 +6,7 @@
 # Env: VIEWER_HOST (bh-30), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
 #      VIEWER_DIR (/localdev/$USER/viewer), VIEWER_TT_METAL_HOME (the viewer's own build, $VIEWER_DIR/tt-metal;
 #      bh-30's shared /localdev/$USER/tt-metal no longer JITs, task #263).
-# One-time box setup (tt-metal, venv, scenes): opt/viewer/setup_box.sh.
+# One-time box setup (tt-metal, $VIEWER_DIR/venv, $VIEWER_DIR/scenes): opt/viewer/setup_box.sh.
 set -euo pipefail
 HOST=${VIEWER_HOST:-bh-30}
 PORT=${VIEWER_PORT:-8080}
@@ -105,7 +105,9 @@ case "${1:-status}" in
     SHA=$(git rev-parse "$REV^{commit}")
     "${SSH[@]}" "$HOST" true   # aborts here on a changed host key
     echo "[viewer] deploy $REV = $SHA to $HOST:$DIR"
-    REMOTE_TT_METAL_HOME=$TTMH opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
+    # Build with and link the viewer's own venv and scenes, never /localdev/$USER/gstt2 (task #324).
+    SYNC_REMOTE_VIEWER=1 GSTT2_BASE=$VDIR GSTT2_VENV=$VDIR/venv GSTT2_SCENES=$VDIR/scenes \
+      REMOTE_TT_METAL_HOME=$TTMH opt/sync_remote.sh "$HOST" "$DIR" "$SHA"
     # Tagged trees older than this script lack the launcher: ship it from here.
     rsh "mkdir -p $DIR/opt/viewer && cat > $DIR/opt/viewer/viewer_clean.py" < opt/viewer/viewer_clean.py
     # Trees before the viewer's uint8 fix show render_clean frames all white.
