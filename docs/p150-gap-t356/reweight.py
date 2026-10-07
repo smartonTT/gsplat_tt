@@ -16,7 +16,7 @@ for ln in open(sys.argv[1]):
         x, y = int(m[1]), int(m[2])
         emit[(x, y, 0)] = float(m[3]); emit[(x, y, 1)] = float(m[4])
 src = open(sys.argv[2]).read()
-tab = src[src.index("kMoverSpeedP150"):]
+tab = src[src.index("kMoverSpeedP150[]"):]
 tab = tab[:tab.index("};")]
 s = {}
 for m in re.finditer(r"\{(\d+), (\d+), (\d+), (\d+)\}", tab):
