@@ -1,0 +1,7 @@
+views 30 (view 0 dropped), clock 1350 MHz
+device span pfwc start -> blend end: mean 11.712 ms (min 9.752, max 13.606); in-view device idle 0.043 ms
+  pfwc              0.000 -  1.831 ms
+  k2_pairs          1.904 -  2.718 ms
+  sort_ol_emit      2.837 -  5.628 ms
+  mat_cull_mask     5.652 -  8.483 ms
+  tile_blend_sfpu   7.546 - 11.712 ms
