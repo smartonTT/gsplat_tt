@@ -12,7 +12,7 @@
 [ttw 2026-10-06T20:30:24-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t212-r2  timeout=420s  worry=336s  ts=2026-10-06T20:30:25-0400
 cmd: T=/localdev/smarton/gstt2-t212 bash /localdev/smarton/gstt2-t212/tmp/t212_remote_time.sh 2 base
