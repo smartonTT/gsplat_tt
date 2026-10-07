@@ -3,7 +3,7 @@
 # bicycle hero view (plus the 30-view md5 sweep) on the device, fetch the hero and write
 # the 10x diff and PSNRs. One ttp lock p100 around the whole sync + build + render.
 #   opt/ttw/screenshot.sh <iter> <rev> [ENV=V ...]
-# Env: H (yyzo-bh-07), T (remote tree, /localdev/smarton/gstt2-shot), NAME (ttw-<iter>,
+# Env: H (yyzo-bh-04, the measurement box since 2026-10-06), T (remote tree, /localdev/smarton/gstt2-shot), NAME (ttw-<iter>,
 # the output dir under opt/metal-screenshots/), FILE (hero.png), NO_SYNC=1 (reuse tree).
 # Output: opt/metal-screenshots/<NAME>/<FILE>, <FILE stem>_diff10.png (|hero - ref| * 10,
 # ref = benchmarks/reference_v2/hero.png), and a SHOT line with the sweep md5 (8 chars of
@@ -14,7 +14,7 @@
 set -u
 cd "$(git rev-parse --show-toplevel)"
 it=${1:?iter}; rev=${2:?rev}; shift 2
-H=${H:-yyzo-bh-07}; T=${T:-/localdev/smarton/gstt2-shot}
+H=${H:-yyzo-bh-04}; T=${T:-/localdev/smarton/gstt2-shot}
 NAME=${NAME:-ttw-$it}; FILE=${FILE:-hero.png}
 tag=$NAME-${FILE%.png}
 O=opt/metal-screenshots/$NAME; mkdir -p "$O" tmp/shot
