@@ -122,6 +122,17 @@ inline unsigned int ol_pair_batch() {
     }();
     return v;
 }
+// Task #365: extra 2 KB pages per tile bucket stride (sort_onelaunch::bucket_tile_cap).
+// Unset or negative: auto (stride coprime with the DRAM bank count); 0: the pre-#365 stride.
+inline int ol_tile_pad() {
+    static const int v = [] {
+        const char* e = std::getenv("GSPLAT_TT_OL_TILE_PAD");
+        if (e == nullptr || *e == '\0') return -1;
+        const int n = std::atoi(e);
+        return (n >= 0 && n <= 64) ? n : -1;
+    }();
+    return v;
+}
 // Emit records per per-tile run: 0 (one 32 B write per record), 2, 4 or 8.
 // Default 8 (#100's EMIT_RING).
 inline unsigned int ol_ring() {
