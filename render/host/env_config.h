@@ -215,8 +215,21 @@ inline bool k2_rows_view() {
 }
 // Task #367: the blend writer writes the u8 image straight into a pinned,
 // NoC-mapped host buffer (no D2H read of the DRAM image). Default off.
+// Task #374: zero-copy output. The caller gets the pinned buffer the writer
+// wrote (no host copy); implies out_pinned(). Default off.
+inline bool out_zerocopy() {
+    static const bool v = env_uint("GSPLAT_TT_OUT_ZEROCOPY", 0u) != 0u;
+    return v;
+}
+// Task #367 (+ #374 zero-copy, which needs it).
 inline bool out_pinned() {
-    static const bool v = env_uint("GSPLAT_TT_OUT_PINNED", 0u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_OUT_PINNED", 0u) != 0u || out_zerocopy();
+    return v;
+}
+// Task #374: most pinned image buffers the zero-copy ring keeps (out_ring.h).
+inline uint32_t out_zerocopy_slots() {
+    static const uint32_t n = env_uint("GSPLAT_TT_OUT_ZEROCOPY_SLOTS", 4u);
+    static const uint32_t v = n < 1u ? 1u : n;
     return v;
 }
 // Test only (task #213): allocate the pair buffers for this many pairs
