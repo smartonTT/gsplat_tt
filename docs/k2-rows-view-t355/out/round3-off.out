@@ -12,7 +12,7 @@
 [ttw 2026-10-07T16:29:04-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=8588f1ac bin=95856cef64abdd45 t355 iter-207 8588f1ac K2 rows 4 KB view (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t355-r3-off  timeout=420s  worry=600s  ts=2026-10-07T16:29:04-0400
 cmd: T=/localdev/smarton/gstt2-t355 bash /localdev/smarton/gstt2-t355/tmp/t355_remote_time.sh 3 off
