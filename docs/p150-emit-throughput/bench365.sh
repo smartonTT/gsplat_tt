@@ -30,7 +30,7 @@ run_one() {  # round arm
   diff -q $REF $O/md5-r$1-$2.txt > /dev/null && echo "ALL_VIEWS_IDENTICAL r$1 $2 ($(wc -l < $O/md5-r$1-$2.txt))" \
     || echo "VIEWS_DIFFER r$1 $2 ($(diff $REF $O/md5-r$1-$2.txt | grep -c '^>'))"
 }
-arm_env() { case $1 in P0) e=(GSPLAT_TT_OL_TILE_PAD=0) ;; P2) e=(GSPLAT_TT_OL_TILE_PAD=2) ;; *) e=() ;; esac; }
+arm_env() { case $1 in P0) e=(GSPLAT_TT_OL_TILE_PAD=0) ;; P2) e=(GSPLAT_TT_OL_TILE_PAD=2) ;; F*) e=(GSPLAT_TT_OL_TILE_PAD=${1#F}) ;; *) e=() ;; esac; }
 if [ -n "${MB:-}" ]; then
   echo "=== mb start $(date -u +%T) aiclk=$(cat /sys/class/tenstorrent/tenstorrent!0/tt_aiclk 2>/dev/null) MHz"
   MB_SUITE=emit timeout 900 render/bench/build/risc_microbench > $O/mb-full.log 2>&1; echo "mb rc=$? $(date -u +%T)"
