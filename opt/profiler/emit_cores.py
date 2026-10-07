@@ -11,13 +11,43 @@ ends last.
 Usage: emit_cores.py <dev30.csv> [n_views=30] [--weights]
 --weights also prints a sort_mover_weights.h table: per physical core, BRISC and
 NCRISC records per ms (1/cost) scaled so the mean mover is 1000, and the emit time
-the measured costs predict for a split in proportion to them.
+the measured costs predict for a split in proportion to them. When the capture has
+no record counts (ep_nrec is 0, as in iter-207 EMIT captures), it falls back to
+time-based speeds: pages are split today by kMoverSpeedP150 (s_c) in
+render/host/sort_mover_speed.h, so a mover's emit time T_c gives speed s_c / T_c
+(as docs/p150-gap-t356/reweight.py).
 """
+import os
+import re
 import sys
 from collections import defaultdict
 
 CYC_PER_MS = 1350.0 * 1000.0
 T_COL, DATA_COL, ZONE_COL, TYPE_COL = 5, 6, 10, 11
+SPEED_H = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
+                       "render", "host", "sort_mover_speed.h")
+
+
+def table_speeds(path=SPEED_H):
+    """{(x, y, 'BRISC'|'NCRISC'): s_c} from kMoverSpeedP150."""
+    src = open(path).read()
+    tab = src[src.index("kMoverSpeedP150"):]
+    tab = tab[:tab.index("};")]
+    s = {}
+    for m in re.finditer(r"\{(\d+), (\d+), (\d+), (\d+)\}", tab):
+        x, y = int(m[1]), int(m[2])
+        s[(x, y, "BRISC")] = int(m[3])
+        s[(x, y, "NCRISC")] = int(m[4])
+    return s
+
+
+def time_weights(emit, table):
+    """Speeds s_c / T_c (pages per cycle up to a constant) and the predicted balanced
+    emit cycles sum s / sum(s_c / T_c); movers missing from the table or with no time
+    are left out."""
+    keys = [m for m in emit if m in table and emit[m] > 0]
+    speed = {m: table[m] / emit[m] for m in keys}
+    return speed, sum(table[m] for m in keys) / sum(speed.values())
 
 
 def main():
@@ -81,15 +111,21 @@ def main():
     for m, k in sorted(last.items(), key=lambda kv: -kv[1])[:8]:
         print(f"  last to end: {m} {k}x")
     if "--weights" in sys.argv:
-        speed = {m: val[m]["ep_nrec"] / max(emit[m], 1) for m in movers}  # records per cycle
-        mean = sum(speed.values()) / len(speed)
         tot = sum(val[m]["ep_nrec"] for m in movers)
+        if tot > 0:
+            speed = {m: val[m]["ep_nrec"] / max(emit[m], 1) for m in movers}  # records per cycle
+            pred, unit = tot / sum(speed.values()), "records per cycle"
+        else:
+            speed, pred = time_weights(emit, table_speeds())
+            unit = "kMoverSpeedP150 / emit time; no record counts in capture"
+        mean = sum(speed.values()) / len(speed)
         print(f"\npredicted emit (pages in proportion to speed): "
-              f"{ms(tot / sum(speed.values())):.3f} ms/view; max now {ms(max(emit.values())):.3f}")
-        print("// {x, y, BRISC, NCRISC} relative speed (records per cycle, mean mover = 1000)")
+              f"{ms(pred):.3f} ms/view; max now {ms(max(emit.values())):.3f}")
+        print(f"// {{x, y, BRISC, NCRISC}} relative speed ({unit}, mean mover = 1000)")
         for c in cores:
             b, n = c + ("BRISC",), c + ("NCRISC",)
-            print(f"    {{{c[0]}, {c[1]}, {round(1000 * speed[b] / mean)}, {round(1000 * speed[n] / mean)}}},")
+            if b in speed and n in speed:
+                print(f"    {{{c[0]}, {c[1]}, {round(1000 * speed[b] / mean)}, {round(1000 * speed[n] / mean)}}},")
 
 
 if __name__ == "__main__":
