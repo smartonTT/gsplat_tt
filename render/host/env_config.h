@@ -205,9 +205,11 @@ inline bool k2_rows_view() {
 // Task #362: issue the K2 rows view read on CQ1 right behind proj_M (both
 // non-blocking, one event each), so it runs at the K2's end instead of when
 // the sort's bridge gets to it; the sort only waits for its event. Needs
-// k2_rows_view and mat_cq1. Default on; 0 = the read in the bridge.
+// k2_rows_view and mat_cq1. Default off: no gain on p150 (12.648 vs 12.647
+// ms/view) and +0.07 ms on p100a; the sort's saving reappears as blend wait
+// (device-bound). 1 = the early read.
 inline bool k2_rows_early() {
-    static const bool v = k2_rows_view() && env_uint("GSPLAT_TT_K2_ROWS_EARLY", 1u) != 0u;
+    static const bool v = k2_rows_view() && env_uint("GSPLAT_TT_K2_ROWS_EARLY", 0u) != 0u;
     return v;
 }
 // Test only (task #213): allocate the pair buffers for this many pairs
