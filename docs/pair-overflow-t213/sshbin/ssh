@@ -1,0 +1,4 @@
+#!/bin/bash
+# The user's ~/.ssh/config turns host-key checking off for bh-*/yyzo-bh-*;
+# a command-line -o wins over the config, so devrun's ssh checks keys.
+exec /usr/bin/ssh -o StrictHostKeyChecking=yes "$@"
