@@ -39,6 +39,10 @@ T_COL, ZONE_COL, TYPE_COL = 5, 10, 11
 CLUSTER_GAP_CYC = 20 * 1350 * 1000     # 20 ms: anchors of one frame start within us
 LEAD_GAP_CYC = 5 * 1350 * 1000         # 5 ms: marker gap inside a frame's lead-in
 CHUNK_GAP_CYC = 100 * 1350 * 1000      # idle gap inserted between shifted chunks
+# Task #407: under xview the next frame's anchors start ~9 ms after the last ones
+# (no host gap), so 20 ms merges frames (and evenly sized chunks then pass the
+# count check). Try 2 ms first, fall back to 20 ms when it gives uneven clusters.
+XVIEW_CLUSTER_GAP_CYC = 2 * 1350 * 1000
 
 
 def read_csv(path):
@@ -96,21 +100,38 @@ def segment_frames(lines, ts, anchor=ANCHOR):
         return segment_frames(lines, ts, anchor="pfwc")
     if anchors.size == 0:
         raise ValueError(f"no {anchor} ZONE_START rows: not a render_clean capture")
-    breaks = np.nonzero(np.diff(anchors) > CLUSTER_GAP_CYC)[0] + 1
-    clusters = np.split(anchors, breaks)
-    sizes = {c.size for c in clusters}
+    for gap in (XVIEW_CLUSTER_GAP_CYC, CLUSTER_GAP_CYC):
+        breaks = np.nonzero(np.diff(anchors) > gap)[0] + 1
+        clusters = np.split(anchors, breaks)
+        sizes = {c.size for c in clusters}
+        if len(sizes) == 1:
+            break
     if len(sizes) != 1:
         raise ValueError(f"uneven {anchor} starts per frame {[c.size for c in clusters]}"
                          " (truncated capture or profiler buffer overflow?)")
     all_sorted = np.sort(ts[~orphan])
+    # Task #407: with the cross-view overlap (xview) the next view's first program runs
+    # right behind the previous blend, so there may be no host gap to walk back to (and
+    # a warmup view can hold a >5 ms host gap before its last program, which the walk
+    # would stop at, pulling that program into the next frame). Programs run one after
+    # another, so a frame never starts before the last firmware (*-FW) ZONE_END ahead of
+    # its anchor cluster: clamp the walk-back there. Without xview this is a no-op (the
+    # host gap lies after that FW end). Overlapping programs fail the balance check below.
+    fw_end = np.sort(np.array([t for ln, t, o in zip(lines, ts, orphan)
+                               if not o and ln.split(",", 12)[ZONE_COL].endswith("-FW")
+                               and ln.split(",", 12)[TYPE_COL] == "ZONE_END"], dtype=np.int64))
     bounds = []
     for prev, cur in zip(clusters, clusters[1:]):
         i = int(np.searchsorted(all_sorted, cur.min(), side="left"))
         while i > 0 and all_sorted[i] - all_sorted[i - 1] < LEAD_GAP_CYC:
             i -= 1
             if all_sorted[i] <= prev.max():
-                raise ValueError("no host gap between frames: cannot split")
-        bounds.append(all_sorted[i])
+                break
+        j = int(np.searchsorted(fw_end, cur.min(), side="left")) - 1
+        floor = int(fw_end[j]) + 1 if j >= 0 and fw_end[j] > prev.max() else None
+        if all_sorted[i] <= prev.max() and floor is None:
+            raise ValueError("no host gap between frames: cannot split")
+        bounds.append(int(all_sorted[i]) if floor is None else max(int(all_sorted[i]), floor))
     frame = np.searchsorted(np.array(bounds, dtype=np.int64), ts, side="right")
     frame[orphan] = -1
     bal = defaultdict(int)
