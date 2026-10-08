@@ -65,6 +65,14 @@ def main():
                   flush=True)
             sys.exit(75)
 
+    # ETH dispatch (12x10) on a p150 as in render/run.py (task #415), before the device opens.
+    # viewer.sh puts the overlay outside the viewer tree; make_overlay.sh refuses one inside it,
+    # and eth_default.py then falls back to worker. Trees before #409 have no eth_default.py.
+    if (REPO / "render" / "eth_default.py").exists():
+        sys.path.insert(0, str(REPO / "render"))
+        from eth_default import setup as eth_setup
+        eth_setup(os.environ, REPO, log=lambda m: print(m, flush=True))
+
     run = _load_run_py()
     import backends
     backends.REGISTRY["tt_clean"] = run.CleanBackend
