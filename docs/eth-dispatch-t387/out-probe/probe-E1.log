@@ -1,0 +1,94 @@
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-08 00:30:18.652 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-08 00:30:18.652 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-08 00:30:18.656 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-08 00:30:18.657 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 00:30:18.657 | info     |             UMD | Firmware bundle version 19.13.2 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-08 00:30:18.658 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-08 00:30:18.659 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-08 00:30:18.659 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-08 00:30:18.660 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-08 00:30:18.660 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-08 00:30:18.663 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-08 00:30:18.664 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 00:30:18.664 | info     |             UMD | Firmware bundle version 19.13.2 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-08 00:30:18.665 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-08 00:30:18.665 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-08 00:30:18.665 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-08 00:30:18.665 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-08 00:30:18.739 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-08 00:30:18.739 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-08 00:30:18.739 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-08 00:30:18.739 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-08 00:30:18.740 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-08 00:30:18.741 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffff40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-08 00:30:18.742 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-08 00:30:19.060 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-08 00:30:19.060 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-08 00:30:19.061 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-08 00:30:19.061 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-08 00:30:19.062 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-08 00:30:19.064 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 00:30:19.064 | info     |             UMD | Firmware bundle version 19.13.2 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-08 00:30:19.064 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-08 00:30:19.065 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0x61) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-08 00:30:19.066 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-08 00:30:19.066 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 00:30:19.066 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 00:30:19.066 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-08 00:30:19.066 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 00:30:19.066 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 00:30:19.066 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-08 00:30:19.066 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-08 00:30:19.066 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-08 00:30:19.066 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-08 00:30:19.066 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-08 00:30:19.066 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-08 00:30:21.940 | critical |          Always | TT_THROW: /localdev/smarton/p150bench/cache387o/tt-metal-cache4574037365809002018/kernels/cq_dispatch/12001969284399026595//idle_erisc/idle_erisc.elf: segment[0] [0x6870,+0x319c) overflows region:0 limit of 0x2ab0 bytes, reduce the size of code (assert.hpp:104)
+Traceback (most recent call last):
+  File "/localdev/smarton/p150bench/tree387/render/run.py", line 589, in main
+    _main()
+  File "/localdev/smarton/p150bench/tree387/render/run.py", line 394, in _main
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+  File "/localdev/smarton/p150bench/tree387/render/run.py", line 234, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/p150bench/tree387/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/p150bench/tree387/render/run.py", line 120, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/llrt/tt_elffile.cpp:393: tt::exception
+info:
+/localdev/smarton/p150bench/cache387o/tt-metal-cache4574037365809002018/kernels/cq_dispatch/12001969284399026595//idle_erisc/idle_erisc.elf: segment[0] [0x6870,+0x319c) overflows region:0 limit of 0x2ab0 bytes, reduce the size of code
+backtrace:
+ --- ll_api::ElfFile::Impl::TrimSegments(std::span<unsigned int const, 18446744073709551615ul>)
+ --- ll_api::memory::memory(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, ll_api::memory::Loading)
+ --- tt::llrt::get_risc_binary(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, ll_api::memory::Loading, std::function<void (ll_api::memory&)> const&)
+ --- tt::tt_metal::EthernetKernel::read_binaries(tt::tt_metal::IDevice*, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0x849cdd) [0x72d57b649cdd]
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0xa40665) [0x72d57b840665]
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0x6a39cd) [0x72d57b4a39cd]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ea8) [0x72d5d6c0eea8]
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0xa4245a) [0x72d57b84245a]
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0x867400) [0x72d57b667400]
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0x866002) [0x72d57b666002]
+ --- /localdev/smarton/viewer/tt-metal/build/tt_metal/libtt_metal.so(+0x866645) [0x72d57b666645]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x72d5d42b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94a83) [0x72d5d6c09a83]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268e0) [0x72d5d6c9b8e0]
+

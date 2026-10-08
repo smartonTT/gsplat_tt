@@ -1,0 +1,16 @@
+=== viewer stop 2026-10-08T00:29:42Z
+[viewer] stopped pid(s) 72111
+=== bench sha=f70118da host=bh-30-special-smarton-for-reservation-135630 2026-10-08T00:30:16Z card=p150b aiclk=1350 rt_root=/localdev/smarton/p150bench/ttm-eth12
+=== probe-E1 dispatch=eth start 00:30:16
+run probe-E1 rc=1 00:30:22
+2026-10-08 00:30:21.940 | critical |          Always | TT_THROW: /localdev/smarton/p150bench/cache387o/tt-metal-cache4574037365809002018/kernels/cq_dispatch/12001969284399026595//idle_erisc/idle_erisc.elf: segment[0] [0x6870,+0x319c) overflows region:0 limit of 0x2ab0 bytes, reduce the size of code 
+Traceback (most recent call last):
+RuntimeError: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/llrt/tt_elffile.cpp:393: tt::exception
+=== bench end rc=1 2026-10-08T00:30:22Z
+=== viewer start 2026-10-08T00:30:27Z
+[viewer] started pid 73011 supervisor 73004 sha 8329be508584ee7d369eac1ae6555097a8b08bf8 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=11.51 ms (86.8 FPS) min=11.49 max=11.55
+[viewer_clean] READY port=8080
+SHA=8329be508584ee7d369eac1ae6555097a8b08bf8
+=== viewer ready 2026-10-08T00:30:35Z localhost:8091 -> 200
+=== drive end 2026-10-08T00:30:38Z
