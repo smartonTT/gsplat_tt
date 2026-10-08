@@ -171,7 +171,7 @@ int main() {
     }
     // Materialize record sort (n <= kOverflowL1Cap = 16384) vs the old kernel.
     {
-        const uint32_t rsizes[] = {0, 1, 5, 16, 17, 33, 300, 2049, 8192, 16384};
+        const uint32_t rsizes[] = {0, 1, 5, 16, 17, 18, 33, 300, 2048, 2049, 8192, 16384, 32768};
         for (uint32_t n : rsizes) {
             for (uint32_t trial = 0; trial < 3; trial++) {
                 std::vector<uint32_t> keys(n);
@@ -184,6 +184,14 @@ int main() {
                 std::uniform_real_distribution<float> dist(0.5f, 60.0f);
                 for (auto& x : keys) x = fbits(dist(rng));
                 fails += !check_records(keys, "depth"); cases++;
+                // Task #418: every key width B, so the packed path (B - d + ib <=
+                // 32) and its pair-sort fallback both run for every n.
+                for (uint32_t B = 1; B <= 32; B += 1) {
+                    const uint32_t base = rng();
+                    const uint32_t span = B >= 32 ? 0xFFFFFFFFu : ((1u << B) - 1u);
+                    for (auto& x : keys) x = base + (span ? rng() % span : 0u);
+                    fails += !check_records(keys, "narrow"); cases++;
+                }
             }
         }
     }
