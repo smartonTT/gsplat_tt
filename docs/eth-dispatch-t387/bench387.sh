@@ -6,18 +6,20 @@
 # Then ONE 30-view Tracy capture on eth (per-core mat+blend busy on the 12x10 grid), then a
 # short live-viewer check from tree387 with GSPLAT_TT_DISPATCH=eth on port 8080 (READY,
 # HTTP 200, one websocket pose -> frames), stopped by its own pid. Viewer's tt-metal read-only.
+# TT_METAL_RUNTIME_ROOT (all arms) = the make_overlay.sh overlay: its ETH dispatch yaml lists
+# only the p150b's 12 live ETH cores (stock 437bc366 lists 14 and throws at open).
 set -u
 P=/localdev/smarton/p150bench; T=$P/tree387; V=/localdev/smarton/viewer; O=$P/out387; ROUNDS=${1:-3}
-export TT_METAL_HOME=$V/tt-metal TT_METAL_RUNTIME_ROOT=$V/tt-metal TT_METAL_ARCH_NAME=blackhole
+export TT_METAL_HOME=$V/tt-metal TT_METAL_RUNTIME_ROOT=${RT_ROOT:-$P/ttm-eth12} TT_METAL_ARCH_NAME=blackhole
 export TTW_DEVRUN=1 PYTHONDONTWRITEBYTECODE=1 GSPLAT_PER_VIEW_STAGES=1
 cd $T || exit 1; source .venv/bin/activate; rm -rf $O; mkdir -p $O
 REF=$T/docs/matblend-ready-t273/t289/md5-golden-906e0435.txt
-echo "=== bench sha=$(cut -c1-8 SHA) host=$(hostname) $(date -u +%FT%TZ) card=$(cat '/sys/class/tenstorrent/tenstorrent!0/tt_card_type') aiclk=$(cat '/sys/class/tenstorrent/tenstorrent!0/tt_aiclk' 2>/dev/null)"
+echo "=== bench sha=$(cut -c1-8 SHA) host=$(hostname) $(date -u +%FT%TZ) card=$(cat '/sys/class/tenstorrent/tenstorrent!0/tt_card_type') aiclk=$(cat '/sys/class/tenstorrent/tenstorrent!0/tt_aiclk' 2>/dev/null) rt_root=$TT_METAL_RUNTIME_ROOT"
 rc=0
 run() {  # run <tag> <dispatch>
   local t=t387-$1 rr; rm -rf tmp/$t tmp/$t-dump
   echo "=== $1 dispatch=$2 start $(date -u +%T)"
-  GSPLAT_TT_DISPATCH=$2 TT_METAL_CACHE_RENDER=$P/cache387 timeout ${RUN_TIMEOUT:-330} \
+  GSPLAT_TT_DISPATCH=$2 TT_METAL_CACHE_RENDER=$P/cache387o timeout ${RUN_TIMEOUT:-330} \
     python3 render/run.py --no-ref --iter-dir $t --dump-views $t-dump > $O/$1.log 2>&1
   rr=$?; echo "run $1 rc=$rr $(date -u +%T)"
   grep -E "^\[DEV\] dispatch|^(SUMMARY|STAGES|SORT_STAGES)|Traceback|TT_THROW|TT_FATAL" $O/$1.log | cut -c1-300 | head -6
@@ -40,7 +42,7 @@ if [ $rc = 0 ]; then
   cat > $PR/inner.sh <<IN
 #!/bin/bash
 cd $T; source .venv/bin/activate
-GSPLAT_TT_DISPATCH=eth TT_METAL_CACHE_RENDER=$P/cache387-prof python3 render/run.py --no-ref --iter-dir t387-T
+GSPLAT_TT_DISPATCH=eth TT_METAL_CACHE_RENDER=$P/cache387o-prof python3 render/run.py --no-ref --iter-dir t387-T
 IN
   chmod +x $PR/inner.sh
   echo "=== tracy (eth) start $(date -u +%T)"
@@ -55,7 +57,7 @@ IN
 fi
 if [ $rc = 0 ]; then
   echo "=== viewer eth check start $(date -u +%T)"
-  GSPLAT_TT_DISPATCH=eth TT_METAL_CACHE=$P/cache387-viewer NUMPY_MADVISE_HUGEPAGE=0 GSPLAT_SHA=$(cat SHA) \
+  GSPLAT_TT_DISPATCH=eth TT_METAL_CACHE=$P/cache387o-viewer NUMPY_MADVISE_HUGEPAGE=0 GSPLAT_SHA=$(cat SHA) \
     setsid python3 opt/viewer/viewer_clean.py scenes/bicycle.ply --port 8080 > $O/viewer-eth.log 2>&1 < /dev/null &
   vp=$!
   for _ in $(seq 120); do grep -q READY $O/viewer-eth.log && break; kill -0 $vp 2>/dev/null || break; sleep 2; done

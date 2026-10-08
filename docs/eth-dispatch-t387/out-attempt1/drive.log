@@ -1,0 +1,30 @@
+=== viewer stop 2026-10-08T00:23:44Z
+[viewer] stopped pid(s) 68002
+=== bench sha=f70118da host=bh-30-special-smarton-for-reservation-135630 2026-10-08T00:24:18Z card=p150b aiclk=1350
+=== r1-W dispatch=worker start 00:24:18
+run r1-W rc=0 00:24:54
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.9 p50_ms=11.1 min_ms=9.2 max_ms=12.7 n_views=30 warmup_s=21.5 out=/localdev/smarton/p150bench/tree387/tmp/t387-r1-W
+STAGES n=30 head=0.006 project=2.997 tile_assign=0.008 sort=0.965 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.563 d2h=0.316 assemble=0.000 tail=0.004 | sum=10.859 view_total=10.861 resid_in_view=+0.002 avg_frame_ms=10.932 resid_vs_frame=+0.074
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.350 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.319 publish_wait=0.000 mat=0.093 | sum=0.848 sort=0.965 resid=+0.116
+ALL_VIEWS_IDENTICAL r1-W (30)
+=== r1-E dispatch=eth start 00:24:54
+run r1-E rc=1 00:24:57
+Traceback (most recent call last):
+2026-10-08 00:24:20.585 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 00:24:20.591 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+
+arton      99 Oct  8 00:24 .
+arton    4096 Oct  8 00:24 ..
+arton 1703239 Oct  8 00:24 hero-r1-W.png
+arton    1558 Oct  8 00:24 md5-r1-W.txt
+arton    9227 Oct  8 00:24 r1-E.log
+arton   26680 Oct  8 00:24 r1-W.log
+=== bench end rc=1 2026-10-08T00:24:57Z
+=== viewer start 2026-10-08T00:25:01Z
+[viewer] started pid 69985 supervisor 69978 sha 8329be508584ee7d369eac1ae6555097a8b08bf8 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=11.54 ms (86.6 FPS) min=11.50 max=11.60
+[viewer_clean] READY port=8080
+SHA=8329be508584ee7d369eac1ae6555097a8b08bf8
+=== viewer ready 2026-10-08T00:25:10Z localhost:8091 -> 200
+=== drive end 2026-10-08T00:25:14Z

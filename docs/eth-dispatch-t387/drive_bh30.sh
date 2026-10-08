@@ -11,7 +11,8 @@ P=/localdev/smarton/p150bench; D=docs/eth-dispatch-t387; VDIR=/localdev/smarton/
 VSH=${TMPDIR:-/tmp}/viewer-t387.sh; git show origin/smarton/tt-project-opt:opt/viewer/viewer.sh > $VSH || exit 3
 SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 bh-30)
 "${SSH[@]}" true || { echo "ssh bh-30 failed: viewer untouched"; exit 3; }
-scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes $D/bench387.sh bh-30:$P/bench387.sh || exit 3
+scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes $D/bench387.sh $D/make_overlay.sh bh-30:$P/ || exit 3
+"${SSH[@]}" "test -e $P/ttm-eth12/tt_metal/core_descriptors/blackhole_140_arch_eth_dispatch.yaml || bash $P/make_overlay.sh $VDIR/tt-metal $P/ttm-eth12 12" || exit 3
 "${SSH[@]}" "rm -rf $O"
 restart() {
   echo "=== viewer start $(date -u +%FT%TZ)"
