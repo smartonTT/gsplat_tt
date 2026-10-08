@@ -10,7 +10,8 @@ make ReadMeshDeviceProfilerResults throw, so check before a capture.
 
   zone_hash_check.py [--repo DIR] [--path-root ABS]
 --path-root is the absolute repo path the kernels are compiled from
-(default: --repo resolved). Exit 1 and print the pairs on a collision.
+(default: --repo resolved). Exit 1 and print the pairs on a collision; exit 2 if
+render/kernels is missing or has no zones (wrong --repo).
 """
 import argparse
 import os
@@ -18,7 +19,11 @@ import re
 import sys
 
 KERNEL_DIR = "render/kernels"
-ZONE_RE = re.compile(r'\bDevice(?:ZoneScoped\w*|TimestampedData\w*|Recordevent\w*|Validate\w*)\s*\(\s*"([^"]*)"')
+DEVICE_CALL = r'Device(?:ZoneScoped\w*|TimestampedData\w*|Recordevent\w*|Validate\w*)'
+ZONE_RE = re.compile(r'\b' + DEVICE_CALL + r'\s*\(\s*"([^"]*)"')
+# '#define W(name) DeviceZoneScopedN(name)': call sites of W use their own
+# __FILE__/__LINE__ and literal name, so they hash like direct calls.
+WRAPPER_RE = re.compile(r'^\s*#\s*define\s+(\w+)\s*\(\s*(\w+)[^)]*\)\s*' + DEVICE_CALL + r'\s*\(\s*\2\b')
 
 
 def hash16(s: str) -> int:
@@ -32,21 +37,31 @@ def zone_string(name, path, line):
     return f"{name},{path},{line},KERNEL_PROFILER"
 
 
-def scan(repo):
-    """Yield (name, repo-relative path, line) for every named device zone."""
+def _sources(repo):
     base = os.path.join(repo, KERNEL_DIR)
     for d, _, files in os.walk(base):
         for f in sorted(files):
-            if not f.endswith((".cpp", ".h", ".hpp", ".cc")):
+            if f.endswith((".cpp", ".h", ".hpp", ".cc")):
+                p = os.path.join(d, f)
+                with open(p, errors="replace") as fh:
+                    yield os.path.relpath(p, repo), fh.read().splitlines()
+
+
+def scan(repo):
+    """Yield (name, repo-relative path, line) for every named device zone,
+    direct or through a one-argument wrapper macro."""
+    srcs = list(_sources(repo))
+    wrappers = sorted({m.group(1) for _, lines in srcs for t in lines
+                       for m in [WRAPPER_RE.match(t)] if m})
+    alts = [DEVICE_CALL] + [re.escape(w) for w in wrappers]
+    call_re = re.compile(r'\b(?:' + "|".join(alts) + r')\s*\(\s*"([^"]*)"')
+    for rel, lines in srcs:
+        for ln, text in enumerate(lines, 1):
+            st = text.lstrip()
+            if st.startswith("//") or WRAPPER_RE.match(text):
                 continue
-            p = os.path.join(d, f)
-            rel = os.path.relpath(p, repo)
-            with open(p, errors="replace") as fh:
-                for ln, text in enumerate(fh, 1):
-                    if text.lstrip().startswith("//"):
-                        continue
-                    for m in ZONE_RE.finditer(text):
-                        yield m.group(1), rel, ln
+            for m in call_re.finditer(text):
+                yield m.group(1), rel, ln
 
 
 def collisions(zones, path_root):
@@ -64,7 +79,13 @@ def main(argv=None):
     a = ap.parse_args(argv)
     repo = os.path.abspath(a.repo)
     root = a.path_root or os.path.realpath(repo)
+    if not os.path.isdir(os.path.join(repo, KERNEL_DIR)):
+        print(f"[zone_hash_check] ERROR: no {KERNEL_DIR} under {repo}", file=sys.stderr)
+        return 2
     zones = list(scan(repo))
+    if not zones:
+        print(f"[zone_hash_check] ERROR: 0 zones found under {repo}/{KERNEL_DIR}", file=sys.stderr)
+        return 2
     bad = collisions(zones, root)
     if not bad:
         print(f"[zone_hash_check] OK: {len(zones)} zones, no 16-bit hash collisions at {root}")

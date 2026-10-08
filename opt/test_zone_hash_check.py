@@ -36,3 +36,24 @@ def test_check_fails_at_t416_path(tmp_path, capsys):
 def test_check_passes_at_other_path(tmp_path):
     repo = _fixture(tmp_path)
     assert z.main(["--repo", str(repo), "--path-root", "/localdev/smarton/gstt2"]) == 0
+
+
+def test_wrapper_macro_zone_collides(tmp_path):
+    d = tmp_path / DF
+    d.mkdir(parents=True)
+    a = ['#define W(name) DeviceZoneScopedN(name)\n'] + ["\n"] * 432 + ['    W("sort_ol_barrier");\n']
+    b = ["\n"] * 1043 + ['    DeviceTimestampedData("fz_mv_dwb", fz_dwb);\n']
+    (d / "sort_bin_onelaunch.cpp").write_text("".join(a))
+    (d / "sort_subchunk_materialize.cpp").write_text("".join(b))
+    assert ("sort_ol_barrier", f"{DF}/sort_bin_onelaunch.cpp", 434) in list(z.scan(str(tmp_path)))
+    assert z.main(["--repo", str(tmp_path), "--path-root", T416]) == 1
+
+
+def test_wrong_repo_exits_2(tmp_path):
+    assert z.main(["--repo", str(tmp_path)]) == 2
+    (tmp_path / DF).mkdir(parents=True)
+    assert z.main(["--repo", str(tmp_path)]) == 2
+
+
+def test_real_repo_finds_wrapper_zones():
+    assert len(list(z.scan(str(ROOT)))) >= 149
