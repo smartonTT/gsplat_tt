@@ -235,5 +235,4 @@ view_total                            9.086   pfwc window                       
   tail                                0.004   sum of the above                             10.387
 frame - view_total (pybind etc.)      0.078   traced device - untraced per-view             1.228
 per-view mean, 27 views               9.159   traced host - traced device                  -0.113
-traced host per-view, 27 views       10.274                                                      
-                                                                                                 
+traced host per-view, 27 views       10.274
