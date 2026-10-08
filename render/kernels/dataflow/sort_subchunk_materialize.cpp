@@ -105,8 +105,37 @@ inline uint32_t f_to_bits(float f) {
 // Copy the n records buck[sorted[k]] (32 B each; PACK2 slot g sits at byte
 // 32g) to slab record k. All 8 words of a record are loaded before any store:
 // alternating volatile load/store made every store wait for its own load.
+//
+// Task #425: PERM_NOC (host GSPLAT_TT_PERM_NOC, default 3) bit 0: issue one
+// 32 B loopback NoC read per record (source and destination in this core's L1)
+// instead: the RISC writes three command registers per record and the NoC
+// moves the bytes, rather than 8 loads + 8 stores at ~2.5 cycles each. Bit 1:
+// the same for the big-tile gather (mat_ol_gather).
+#ifndef PERM_NOC
+#define PERM_NOC 3
+#endif
 inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted,
                             uint32_t n) {
+#if PERM_NOC & 1
+    if (n == 0u) return;
+    noc_async_read_one_packet_set_state(NOC_XY_ADDR(my_x[noc_index], my_y[noc_index], buck),
+                                        L1_SPLAT_BYTES);
+    uint32_t k = 0;
+    for (; k + 4u <= n; k += 4u) {
+        const uint32_t s0 = sorted[k], s1 = sorted[k + 1u], s2 = sorted[k + 2u], s3 = sorted[k + 3u];
+        const uint32_t d = slab + k * L1_SPLAT_BYTES;
+        noc_async_read_one_packet_with_state(buck + s0 * L1_SPLAT_BYTES, d);
+        noc_async_read_one_packet_with_state(buck + s1 * L1_SPLAT_BYTES, d + L1_SPLAT_BYTES);
+        noc_async_read_one_packet_with_state(buck + s2 * L1_SPLAT_BYTES, d + 2u * L1_SPLAT_BYTES);
+        noc_async_read_one_packet_with_state(buck + s3 * L1_SPLAT_BYTES, d + 3u * L1_SPLAT_BYTES);
+    }
+    for (; k < n; ++k) {
+        noc_async_read_one_packet_with_state(buck + sorted[k] * L1_SPLAT_BYTES,
+                                             slab + k * L1_SPLAT_BYTES);
+    }
+    noc_async_read_barrier();
+    return;
+#endif
     for (uint32_t k = 0; k < n; ++k) {
         auto src = reinterpret_cast<volatile uint32_t*>(buck + sorted[k] * L1_SPLAT_BYTES);
         auto dst = reinterpret_cast<volatile uint32_t*>(slab + k * L1_SPLAT_BYTES);
@@ -750,6 +779,18 @@ void kernel_main() {
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
+#if PERM_NOC & 2
+                    noc_async_read_one_packet_set_state(
+                        NOC_XY_ADDR(my_x[noc_index], my_y[noc_index], buck), L1_SPLAT_BYTES);
+                    for (uint32_t i = 0; i < L_item; ++i) {
+                        const uint32_t off = k[i] - r0;
+                        if (off >= nr) continue;
+                        noc_async_read_one_packet_with_state(buck + off * L1_SPLAT_BYTES,
+                                                             slab + i * L1_SPLAT_BYTES);
+                    }
+                    noc_async_read_barrier();  // before the next chunk overwrites buck
+                    continue;
+#endif
                     for (uint32_t i = 0; i < L_item; ++i) {
                         const uint32_t off = k[i] - r0;
                         if (off >= nr) continue;
