@@ -30,7 +30,7 @@ N=${3:-12}
 case $N in ''|*[!0-9]*) die "N must be 1..13, got '$N'" ;; esac
 [ "$N" -ge 1 ] && [ "$N" -le 13 ] || die "N must be 1..13, got $N"
 KB=${ETH_IERISC_KB:-32}
-case $KB in ''|*[!0-9]*) die "ETH_IERISC_KB must be 32..48, got '$KB'" ;; esac
+case $KB in ''|0*|*[!0-9]*) die "ETH_IERISC_KB must be 32..48 (decimal, no leading 0), got '$KB'" ;; esac
 [ "$KB" -ge 32 ] && [ "$KB" -le 48 ] || die "ETH_IERISC_KB must be 32..48, got $KB"
 
 [ -d "$1" ] || die "no tt-metal dir: $1"

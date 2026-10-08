@@ -10,7 +10,7 @@ marked untraced; ms/view at 1350 MHz.
   (IRD job 135630; no reserve/extend/release). Viewer stopped 03:44:13Z, READY again and
   localhost:8091 page 200 / websocket 101 at 03:48:55Z (~4.7 min).
 - **ETH Tracy enablement.** With the profiler on, the idle-ERISC cq_prefetch is 0x4668 bytes,
-  over the 24 KB link-time bound (0x4490 left) in the overlay's `kernel_ierisc.ld`.
+  over the 32 KB link-time bound (0x4490 left, #397) in the overlay's `kernel_ierisc.ld`.
   `opt/eth/make_overlay.sh` gained `ETH_IERISC_KB` (default 32 = byte-identical output; 36 for a
   profiler-only overlay `ttm-eth12p36` with its own JIT cache). No tt-metal rebuild.
 - Zone-hash pre-check (opt/profiler/zone_hash_check.py at the remote tree): 149 zones, no 16-bit

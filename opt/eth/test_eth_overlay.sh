@@ -95,7 +95,7 @@ for f in $K $KS; do
 done
 check "KB=36 marker" grep -qxF 'ierisc_kb=36' "$T/out/ov36/.gsplat-eth-overlay"
 check "default marker has no ierisc_kb" [ "$(grep -c ierisc_kb "$O/.gsplat-eth-overlay")" = 0 ]
-for kb in 31 49 3x; do
+for kb in 31 49 3x 036; do
   ETH_IERISC_KB=$kb bash "$MK" "$S" "$T/out/ovkb" > /dev/null 2>&1; rc=$?
   check "KB=$kb refused (exit 2)" eval '[ $rc = 2 ] && [ ! -e "$T/out/ovkb" ]'
 done
