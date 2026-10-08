@@ -29,7 +29,8 @@ using namespace gsplat_tt::sort_split;
 namespace {
 
 constexpr uint32_t kBucketFit = render_config::kBucketFit;
-constexpr uint32_t kCores = 110;
+// 110 = 11x10 (worker dispatch); main() also runs 120 = 12x10 (p150 ETH dispatch, #383).
+uint32_t kCores = 110;
 constexpr uint32_t kTiles = 1024;
 constexpr uint64_t kGatherWeight = 1;  // build_mat_worklist default
 
@@ -173,13 +174,16 @@ int check_radix(std::mt19937& rng, const std::vector<int64_t>& counts) {
 }  // namespace
 
 int main() {
-    std::mt19937 rng(35);
     int bad = 0, cases = 0;
+    for (const uint32_t cores : {110u, 120u}) {
+    kCores = cores;
+    std::mt19937 rng(35);
     for (int trial = 0; trial < 60; ++trial) {
         const auto counts = random_counts(rng);
         bad += check_mat(counts);
         bad += check_radix(rng, counts);
         ++cases;
+    }
     }
     std::printf("%s: %d random scenes, %d failures\n", bad ? "FAIL" : "PASS", cases, bad);
     return bad ? 1 : 0;

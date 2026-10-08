@@ -98,6 +98,8 @@ int main() {
     run_case(1024, 130, 3, 0.5);
     run_case(64, 110, 4, 0.2);    // fewer tiles than cores
     run_case(220, 110, 5, 0.0);   // exact multiple
+    run_case(1024, 120, 8, 0.1);  // p150 with ETH dispatch (12x10, task #383)
+    run_case(240, 120, 9, 0.0);
     run_case(1, 8, 6, 0.0);
     run_case(16, 8, 7, 1.0);      // all empty
     if (fails) { std::fprintf(stderr, "%d failures\n", fails); return 1; }
