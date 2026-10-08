@@ -69,7 +69,7 @@ done
 # matblend_compute.cpp is not stub-checked: the stubs lack the blend compute
 # headers (fill.h, sfpu exp), as for alpha_blend_compute_mb.cpp; the device build checks it.
 HS="-std=c++20 -I$ST -Irender/host -Isrc -Wno-mismatched-tags"
-for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp; do chk "$f" $HS render/host/$f; done
+for f in pfwc_device.cpp gather_visible_device.cpp tile_assign_device.cpp sort_device.cpp blend_device.cpp; do chk "$f" $HS render/host/$f; done
 PB=$(python3 -c "import pybind11; print(pybind11.get_include())" 2>/dev/null)
 PYH=$(python3 -c "import sysconfig; print(sysconfig.get_paths()['include'])" 2>/dev/null)
 [ -f "$PYH/Python.h" ] || PYH=$(ls -d /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/*/Headers 2>/dev/null | head -1)
