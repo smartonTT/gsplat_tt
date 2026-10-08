@@ -1,4 +1,5 @@
 """python3 opt/test_screenshot_requirement.py — device screenshot gate (user, 2026-10-05)."""
+import hashlib
 import sys
 import tempfile
 from pathlib import Path
@@ -7,6 +8,19 @@ sys.path.insert(0, str(Path(__file__).parent))
 import build_report as b
 
 root = Path(tempfile.mkdtemp())
+
+# The real reports must survive this test byte-identical (#395/#400): every
+# report write goes to the temp dir.
+_REAL_REPORTS = (b.REPORT_HTML, b.REPORT_HTML_TTW)
+
+
+def _md5s():
+    return [hashlib.md5(p.read_bytes()).hexdigest() if p.exists() else None for p in _REAL_REPORTS]
+
+
+_md5_before = _md5s()
+b.REPORT_HTML = root / "opt" / "REPORT.html"
+b.REPORT_HTML_TTW = root / "opt" / "ttw" / "REPORT.html"
 shots = root / "opt" / "metal-screenshots" / "ttw-198"
 shots.mkdir(parents=True)
 (shots / "hero.png").write_bytes(b.PNG_MAGIC + b"x")
@@ -120,8 +134,7 @@ assert b.rebase_for_ttw("<a href='profiler/x.tracy'>") == "<a href='../profiler/
 assert b.rebase_for_ttw("<a href='https://arxiv.org/x'><a href=\"#top\">") == "<a href='https://arxiv.org/x'><a href=\"#top\">"
 
 # build_report main exits non-zero when a new iteration lacks a screenshot.
-_patches = {"load_iters": lambda: [], "build_html": lambda rows: "", "write_reports": lambda h: None,
-            "load_ttw_iters": lambda: [{"iter": 199, "idea": "x"}]}
+_patches = {"load_iters": lambda: [], "build_html": lambda rows: "", "load_ttw_iters": lambda: [{"iter": 199, "idea": "x"}]}
 _saved = {k: getattr(b, k) for k in _patches}
 for k, v in _patches.items():
     setattr(b, k, v)
@@ -133,4 +146,6 @@ except SystemExit as e:
 finally:
     for k, v in _saved.items():
         setattr(b, k, v)
+assert b.REPORT_HTML.exists() and b.REPORT_HTML_TTW.exists(), "main() did not write the temp reports"
+assert _md5s() == _md5_before, ("real reports changed", _md5_before, _md5s())
 print("ok")
