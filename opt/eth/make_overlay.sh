@@ -11,6 +11,10 @@
 #       the one line LONG((24 * 1024) -> LONG((32 * 1024): the idle-ERISC kernel text link
 #       bound. BH idle-ETH kernels run in place from the 25 KB config ring, and
 #       program.cpp still TT_FATALs on a real overflow; cq_dispatch needs 0x3124 B > 0x2ab0.
+# ETH_IERISC_KB=<32..48> (default 32; task #427) sets that bound for a profiler-only overlay:
+# with TT_METAL_DEVICE_PROFILER=1 the idle-ERISC firmware grows and the instrumented
+# cq_prefetch (0x4668 B) no longer fits the 32 KB link bound (0x4490 left, #397). Use a
+# bigger bound only in its own overlay dir + JIT cache; the default overlay stays at 32.
 # Fails (exit 1) unless each .ld changes exactly one line and every yaml list matches.
 # Builds into a temp dir and swaps it in only on success; rerunning gives the same tree.
 # Refuses (exit 2) an overlay under /localdev/smarton/viewer (the live viewer) or inside
@@ -25,6 +29,9 @@ die() { echo "make_overlay: $*" >&2; exit "${RC:-2}"; }
 N=${3:-12}
 case $N in ''|*[!0-9]*) die "N must be 1..13, got '$N'" ;; esac
 [ "$N" -ge 1 ] && [ "$N" -le 13 ] || die "N must be 1..13, got $N"
+KB=${ETH_IERISC_KB:-32}
+case $KB in ''|*[!0-9]*) die "ETH_IERISC_KB must be 32..48, got '$KB'" ;; esac
+[ "$KB" -ge 32 ] && [ "$KB" -le 48 ] || die "ETH_IERISC_KB must be 32..48, got $KB"
 
 [ -d "$1" ] || die "no tt-metal dir: $1"
 SRC=$(cd -P "$1" && pwd)
@@ -100,20 +107,21 @@ replace $YAML -E "s/^( *)$full\$/\\1[$list]/"
 echo "== $YAML: $m dispatch lists cut to $N ETH cores"
 diff "$SRC/$YAML" "$NEW/$YAML" || true
 
-# .ld: exactly one LONG((24 * 1024) -> LONG((32 * 1024) per file
+# .ld: exactly one LONG((24 * 1024) -> LONG((KB * 1024) per file
 for f in $LDS; do
   c=$(grep -cF 'LONG((24 * 1024)' "$SRC/$f" || true)
   [ "$c" = 1 ] || die "$f: 'LONG((24 * 1024)' matches $c lines, need exactly 1"
-  replace "$f" 's/LONG((24 \* 1024)/LONG((32 * 1024)/'
+  replace "$f" "s/LONG((24 \\* 1024)/LONG(($KB * 1024)/"
   [ "$(changed "$f" '<')" = 1 ] && [ "$(changed "$f" '>')" = 1 ] \
     || die "$f: sed did not change exactly one line"
-  echo "== $f: idle-ERISC kernel text bound 24 KB -> 32 KB"
+  echo "== $f: idle-ERISC kernel text bound 24 KB -> $KB KB"
   diff "$SRC/$f" "$NEW/$f" || true
 done
 RC=2
 
 printf 'src=%s\nn_eth=%s\n' "$SRC" "$N" > "$NEW/$MARK"
+[ "$KB" = 32 ] || echo "ierisc_kb=$KB" >> "$NEW/$MARK"
 [ -d "$OV" ] && rm -rf "$OV"
 mv "$NEW" "$OV"
 trap - EXIT
-echo "overlay $OV ready (src $SRC, $N ETH dispatch cores; 3 real files, rest symlinks)"
+echo "overlay $OV ready (src $SRC, $N ETH dispatch cores, idle-ERISC bound $KB KB; 3 real files, rest symlinks)"

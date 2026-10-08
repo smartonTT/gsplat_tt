@@ -87,6 +87,19 @@ check "rerun prints the same output" cmp -s "$T/run1.log" "$T/run2.log"
 bash "$MK" "$S" "$T/out/ov4" 4 > /dev/null 2>&1
 check "N=4 cut" [ "$(grep -cxF '    [[0, 0], [0, 1], [0, 2], [0, 3]]' "$T/out/ov4/$Y")" = 6 ]
 
+# 3b. ETH_IERISC_KB (task #427): profiler-only overlay with a bigger idle-ERISC bound
+ETH_IERISC_KB=36 bash "$MK" "$S" "$T/out/ov36" > /dev/null 2>&1; rc=$?
+check "KB=36 exit 0" [ $rc = 0 ]
+for f in $K $KS; do
+  check "KB=36 $(basename $f): 36 KB bound" grep -qxF '    LONG((36 * 1024)' "$T/out/ov36/$f"
+done
+check "KB=36 marker" grep -qxF 'ierisc_kb=36' "$T/out/ov36/.gsplat-eth-overlay"
+check "default marker has no ierisc_kb" [ "$(grep -c ierisc_kb "$O/.gsplat-eth-overlay")" = 0 ]
+for kb in 31 49 3x; do
+  ETH_IERISC_KB=$kb bash "$MK" "$S" "$T/out/ovkb" > /dev/null 2>&1; rc=$?
+  check "KB=$kb refused (exit 2)" eval '[ $rc = 2 ] && [ ! -e "$T/out/ovkb" ]'
+done
+
 # 4. pattern mismatches fail (exit 1) and leave the existing overlay alone
 for c in "0 6 .ld-0-matches" "2 6 .ld-2-matches" "1 0 yaml-no-list"; do
   set -- $c; s=$T/src-$3; fake "$s" "$1" "$2"
