@@ -1,0 +1,5 @@
+views 10, core-views 1100, skipped 0 (post/job count mismatch or replay stuck)
+measured mat length (T1 mat_cull_mask), mean core: 1.644 ms
+replayed today (1-deep):                  mean core 1.646 ms, worst core 2.119 ms
+replayed 2-deep when both slabs fit:      mean core 1.605 ms, worst core 2.106 ms
+mean-core mat change: -0.040 ms/view

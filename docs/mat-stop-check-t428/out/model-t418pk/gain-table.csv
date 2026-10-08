@@ -1,0 +1,22 @@
+case,s,mover_only_ms,gain_ms,fill_us_per_core,slabs_per_core,mover_delay_us
+"fit whole slabs, cap 1024 rec (32 KB slot), wr now",1.0,0.000,0.063,101,0.62,19
+"fit whole slabs, cap 1024 rec, wr deferred",1.0,0.000,0.085,101,0.62,3
+"fit whole slabs, cap 4096 rec (128 KB slot), wr deferred",1.0,0.000,0.092,101,0.49,2
+"fit whole slabs, no cap, wr deferred",1.0,0.000,0.092,101,0.49,2
+"fit whole slabs, no cap, wr deferred, rand map",1.0,0.000,0.124,125,0.78,4
+"pre sub-slab + DEST spill, wr now",1.0,0.000,0.157,287,5.50,32
+"pre sub-slab + DEST spill, wr deferred",1.0,0.000,0.171,287,5.50,27
+"fit whole slabs, cap 1024 rec (32 KB slot), wr now",0.7,0.253,0.030,66,0.46,14
+"fit whole slabs, cap 1024 rec, wr deferred",0.7,0.253,0.044,66,0.46,2
+"fit whole slabs, cap 4096 rec (128 KB slot), wr deferred",0.7,0.253,0.049,66,0.39,2
+"fit whole slabs, no cap, wr deferred",0.7,0.253,0.049,66,0.39,2
+"fit whole slabs, no cap, wr deferred, rand map",0.7,0.253,0.064,76,0.51,3
+"pre sub-slab + DEST spill, wr now",0.7,0.253,0.132,189,4.69,26
+"pre sub-slab + DEST spill, wr deferred",0.7,0.253,0.134,189,4.69,23
+"fit whole slabs, cap 1024 rec (32 KB slot), wr now",0.5,0.414,0.016,43,0.34,10
+"fit whole slabs, cap 1024 rec, wr deferred",0.5,0.414,0.027,43,0.34,2
+"fit whole slabs, cap 4096 rec (128 KB slot), wr deferred",0.5,0.414,0.029,43,0.31,2
+"fit whole slabs, no cap, wr deferred",0.5,0.414,0.029,43,0.31,2
+"fit whole slabs, no cap, wr deferred, rand map",0.5,0.414,0.038,46,0.36,2
+"pre sub-slab + DEST spill, wr now",0.5,0.414,0.057,125,4.00,21
+"pre sub-slab + DEST spill, wr deferred",0.5,0.414,0.058,125,4.00,20

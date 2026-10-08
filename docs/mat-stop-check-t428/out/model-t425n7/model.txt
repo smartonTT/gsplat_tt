@@ -1,0 +1,34 @@
+views 10, cores/view 110, slabs/view 1100
+calibration: measured slowest-core blend end 5.446 ms, simulated baseline 5.333 ms (diff -0.113)
+between gaps us pct 10/50/90/99/max: [  0.   0.  60. 226. 676.]
+blend cost per slab us pct 1/10/25/50/90: [ 40.  78. 117. 265. 842.] mean 365
+share of between-gap time in gaps >= the p10 slab (78 us): 0.50
+records per mj_job us (fz_mv_recs / mj_job time): 11.3
+
+gain = baseline end - interleave end at the same s, ms/view (mean of 30 views);
+mover_only = gain of the gap cut alone vs s=1.0 baseline; fill/core, mvdelay in us
+case                                              s mover_only    gain fill/core  slabs mvdelay
+fit whole slabs, cap 1024 rec (32 KB slot), wr now  1.0      0.000   0.027        59   0.42      13
+fit whole slabs, cap 1024 rec, wr deferred      1.0      0.000   0.041        59   0.42       2
+fit whole slabs, cap 4096 rec (128 KB slot), wr deferred  1.0      0.000   0.045        59   0.36       2
+fit whole slabs, no cap, wr deferred            1.0      0.000   0.045        59   0.36       2
+fit whole slabs, no cap, wr deferred, rand map  1.0      0.000   0.061        69   0.49       2
+pre sub-slab + DEST spill, wr now               1.0      0.000   0.105       166   3.57      20
+pre sub-slab + DEST spill, wr deferred          1.0      0.000   0.115       166   3.57      18
+
+fit whole slabs, cap 1024 rec (32 KB slot), wr now  0.7      0.186   0.016        38   0.31       9
+fit whole slabs, cap 1024 rec, wr deferred      0.7      0.186   0.027        38   0.31       2
+fit whole slabs, cap 4096 rec (128 KB slot), wr deferred  0.7      0.186   0.028        38   0.29       1
+fit whole slabs, no cap, wr deferred            0.7      0.186   0.028        38   0.29       1
+fit whole slabs, no cap, wr deferred, rand map  0.7      0.186   0.036        44   0.38       2
+pre sub-slab + DEST spill, wr now               0.7      0.186   0.062       108   3.11      16
+pre sub-slab + DEST spill, wr deferred          0.7      0.186   0.064       108   3.11      16
+
+fit whole slabs, cap 1024 rec (32 KB slot), wr now  0.5      0.311   0.009        23   0.22       6
+fit whole slabs, cap 1024 rec, wr deferred      0.5      0.311   0.017        23   0.22       1
+fit whole slabs, cap 4096 rec (128 KB slot), wr deferred  0.5      0.311   0.017        23   0.22       1
+fit whole slabs, no cap, wr deferred            0.5      0.311   0.017        23   0.22       1
+fit whole slabs, no cap, wr deferred, rand map  0.5      0.311   0.020        26   0.26       1
+pre sub-slab + DEST spill, wr now               0.5      0.311   0.044        71   2.78      14
+pre sub-slab + DEST spill, wr deferred          0.5      0.311   0.045        71   2.78      14
+
