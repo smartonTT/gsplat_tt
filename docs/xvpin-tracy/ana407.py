@@ -553,7 +553,7 @@ def job_gaps(Z, D, CL, NV, cores, job_csv=None):
             print(f"  {lab:<18} fillable {np.mean(fill[key]):.3f} mean-core; crit {np.mean(crit[key]):+.3f} ms/view")
     if job_csv:
         with open(job_csv, "w") as f:
-            w = csv.writer(f)
+            w = csv.writer(f, lineterminator="\n")
             w.writerow(["view", "core_x", "core_y", "jobs", "mat_ms", "start_ms", "between_ms", "between_max_ms",
                         "tail_ms", "injob_idle_ms", "band_ms"])
             for r in rows:

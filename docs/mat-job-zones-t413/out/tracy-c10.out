@@ -12,7 +12,7 @@
 [ttw 2026-10-07T22:30:35-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=0cc15151 bin=dda8fd8c69ec517b t413 0cc15151 per-job mat zones (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t413-T10  timeout=540s  worry=600s  ts=2026-10-07T22:30:37-0400
 cmd: T=/localdev/smarton/gstt2-t413 bash /localdev/smarton/gstt2-t413/docs/mat-job-zones-t413/remote_tracy.sh 10
