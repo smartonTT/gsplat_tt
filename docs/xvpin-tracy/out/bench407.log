@@ -1,0 +1,50 @@
+=== bench sha=275798b4 host=bh-30-special-smarton-for-reservation-135630 2026-10-08T02:02:45Z aiclk=1350
+=== r1 start 02:02:45
+run r1 rc=0 02:03:21
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.2 min_ms=7.6 max_ms=12.0 n_views=30 warmup_s=21.7 out=/localdev/smarton/p150bench/tree407/tmp/t407-r1
+STAGES n=30 head=0.008 project=1.162 tile_assign=0.009 sort=1.066 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.423 d2h=0.299 assemble=0.000 tail=0.004 xview=0.132 | sum=9.103 view_total=9.106 resid_in_view=+0.003 avg_frame_ms=9.188 resid_vs_frame=+0.085 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.087 upload=0.000 bin_emit=0.421 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.333 publish_wait=0.000 mat=0.100 | sum=0.943 sort=1.066 resid=+0.123
+ALL_VIEWS_IDENTICAL r1 (30)
+XVIEW_HITS_OK r1 29/30
+=== r2 start 02:03:21
+run r2 rc=0 02:03:38
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.2 min_ms=7.7 max_ms=11.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree407/tmp/t407-r2
+STAGES n=30 head=0.007 project=1.159 tile_assign=0.008 sort=1.070 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.414 d2h=0.297 assemble=0.000 tail=0.004 xview=0.129 | sum=9.089 view_total=9.092 resid_in_view=+0.003 avg_frame_ms=9.169 resid_vs_frame=+0.080 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.453 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.323 publish_wait=0.000 mat=0.088 | sum=0.951 sort=1.070 resid=+0.119
+ALL_VIEWS_IDENTICAL r2 (30)
+XVIEW_HITS_OK r2 29/30
+=== r3 start 02:03:38
+run r3 rc=0 02:03:54
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.1 p50_ms=9.2 min_ms=7.6 max_ms=11.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree407/tmp/t407-r3
+STAGES n=30 head=0.007 project=1.150 tile_assign=0.008 sort=1.084 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.411 d2h=0.267 assemble=0.000 tail=0.004 xview=0.125 | sum=9.057 view_total=9.060 resid_in_view=+0.003 avg_frame_ms=9.135 resid_vs_frame=+0.078 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.084 upload=0.000 bin_emit=0.458 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.326 publish_wait=0.000 mat=0.096 | sum=0.967 sort=1.084 resid=+0.117
+ALL_VIEWS_IDENTICAL r3 (30)
+XVIEW_HITS_OK r3 29/30
+=== tracy c0 start 02:03:55
+tracy c0 rc=0 02:04:29
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=75.9 p50_ms=10.0 min_ms=8.6 max_ms=668.9 n_views=10 warmup_s=22.0 out=/localdev/smarton/p150bench/tree407/tmp/t407-T0
+STAGES n=10 head=0.005 project=2.254 tile_assign=0.009 sort=1.051 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.430 d2h=0.284 assemble=0.000 tail=65.705 xview=0.097 | sum=75.835 view_total=75.837 resid_in_view=+0.003 avg_frame_ms=75.898 resid_vs_frame=+0.063 xview_hits=9 xview_misses=0
+SORT_STAGES n=10 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.079 upload=0.000 bin_emit=0.452 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.323 publish_wait=0.000 mat=0.083 | sum=0.939 sort=1.051 resid=+0.112
+XVIEW_HITS c0 9/10
+=== tracy c10 start 02:04:30
+tracy c10 rc=0 02:04:44
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=84.2 p50_ms=11.0 min_ms=10.2 max_ms=742.7 n_views=10 warmup_s=1.8 out=/localdev/smarton/p150bench/tree407/tmp/t407-T10
+STAGES n=10 head=0.005 project=2.466 tile_assign=0.006 sort=0.905 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.176 d2h=0.284 assemble=0.000 tail=73.216 xview=0.098 | sum=84.156 view_total=84.159 resid_in_view=+0.002 avg_frame_ms=84.221 resid_vs_frame=+0.064 xview_hits=9 xview_misses=0
+SORT_STAGES n=10 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.078 upload=0.000 bin_emit=0.317 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.329 publish_wait=0.000 mat=0.069 | sum=0.796 sort=0.905 resid=+0.109
+XVIEW_HITS c10 9/10
+=== tracy c20 start 02:04:45
+tracy c20 rc=0 02:05:00
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=91.8 p50_ms=10.0 min_ms=8.7 max_ms=830.2 n_views=10 warmup_s=1.9 out=/localdev/smarton/p150bench/tree407/tmp/t407-T20
+STAGES n=10 head=0.004 project=2.166 tile_assign=0.004 sort=0.878 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.150 d2h=0.278 assemble=0.000 tail=82.141 xview=0.096 | sum=91.717 view_total=91.720 resid_in_view=+0.003 avg_frame_ms=91.779 resid_vs_frame=+0.062 xview_hits=9 xview_misses=0
+SORT_STAGES n=10 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.076 upload=0.000 bin_emit=0.314 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.312 publish_wait=0.000 mat=0.067 | sum=0.772 sort=0.878 resid=+0.106
+XVIEW_HITS c20 9/10
+2026-10-08 02:02:47.668 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 02:02:47.675 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+
+=== bench end rc=0 2026-10-08T02:05:00Z
+=== viewer restarted pid 92992 2026-10-08T02:05:01Z
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=11.53 ms (86.7 FPS) min=11.50 max=11.66
+[viewer_clean] READY port=8080
+SHA=8329be508584ee7d369eac1ae6555097a8b08bf8
+=== viewer ready 2026-10-08T02:05:08Z localhost:8091 -> 200
+=== drive end 2026-10-08T02:05:20Z
