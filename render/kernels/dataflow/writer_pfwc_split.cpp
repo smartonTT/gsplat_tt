@@ -22,7 +22,10 @@
 // semaphore ids (pfwc_wsplit::slot_index order); role 1 or PFWC_RD_COLS: 29..38
 // the reader's DRAM bases (mcx, mcy, mcz, c00, c01, c02, c11, c12, c22, opacity);
 // PFWC_RD_COLS: 39 the column mask, 40 / 41 BRISC's input tile set (bit o = tile o
-// above) on / off those columns.
+// above) on / off those columns. PFWC_TILE_LIST (task #433 chunk cull): two more
+// args after those, the DRAM bank-0 offset of this core's tile ids and their page
+// bytes; chunk k is tile list[k] instead of chunk_start + k * stride (k keeps its
+// parity, so the roles split the list as they split the strided deal).
 // COMPILE-TIME ARGS: the writer's 9 TensorAccessorArgs; role 1 or PFWC_RD_COLS:
 // + the reader's 10.
 // Not supported: FUSE_ABL.
@@ -63,9 +66,9 @@ void kernel_main() {
     using namespace pfwc_wsplit;
     uint32_t addr[9];
     for (uint32_t k = 0; k < 9; k++) addr[k] = get_arg_val<uint32_t>(k);
-    const uint32_t chunk_start = get_arg_val<uint32_t>(9);
+    [[maybe_unused]] const uint32_t chunk_start = get_arg_val<uint32_t>(9);
     const uint32_t num_chunks = get_arg_val<uint32_t>(10);
-    const uint32_t stride = get_arg_val<uint32_t>(11);
+    [[maybe_unused]] const uint32_t stride = get_arg_val<uint32_t>(11);
     const uint32_t N = get_arg_val<uint32_t>(12);
     vis_tile::Params prm;
     prm.k_near = get_arg_val<uint32_t>(13);
@@ -84,6 +87,25 @@ void kernel_main() {
     const uint32_t pub23 = get_arg_val<uint32_t>(24);
     uint32_t sem[NUM_SEMS];
     for (uint32_t i = 0; i < NUM_SEMS; i++) sem[i] = get_semaphore(get_arg_val<uint32_t>(25 + i));
+#ifdef PFWC_TILE_LIST
+    // Task #433: each role reads the list into its own half of CB 38 (no cross-RISC sync).
+#ifdef PFWC_RD_COLS
+    constexpr uint32_t TL_ARG = 42;
+#else
+    constexpr uint32_t TL_ARG = ROLE ? 39 : 29;
+#endif
+    constexpr uint32_t CB_TLIST = 38, TLIST_MAX_PAGE = 1024;
+    const uint32_t tl_l1 = get_write_ptr(CB_TLIST) + ROLE * TLIST_MAX_PAGE;
+    if (num_chunks != 0) {
+        const InterleavedAddrGen<true> tl_gen{get_arg_val<uint32_t>(TL_ARG), get_arg_val<uint32_t>(TL_ARG + 1)};
+        noc_async_read(get_noc_addr(0, tl_gen), tl_l1, tl_gen.page_size);  // single-page buffer: bank 0
+        noc_async_read_barrier();
+    }
+    volatile tt_l1_ptr uint32_t* tl = reinterpret_cast<volatile tt_l1_ptr uint32_t*>(tl_l1);
+    auto tile_of = [&](uint32_t k) -> uint32_t { return tl[k]; };
+#else
+    auto tile_of = [&](uint32_t k) -> uint32_t { return chunk_start + k * stride; };
+#endif
 
     constexpr uint32_t LO = ROLE ? 32 : 0, HI = ROLE ? 14 : 0;
     constexpr uint32_t CB_M2X = 9 + LO, CB_M2Y = 10 + LO, CB_DEP = 11 + LO, CB_A = 12 + LO,
@@ -213,7 +235,7 @@ void kernel_main() {
             if (rd_has(o) && !cb_pages_reservable_at_back(IN_CB[o], 1)) return;
         for (uint32_t o = 0; o < 10; o++)
             if (rd_has(o)) cb_reserve_back(IN_CB[o], 1);
-        const uint32_t t = chunk_start + rd_k * stride;
+        const uint32_t t = tile_of(rd_k);
         if (rd_has(0)) noc_async_read_tile(t, in0, get_write_ptr(IN_CB[0]));
         if (rd_has(1)) noc_async_read_tile(t, in1, get_write_ptr(IN_CB[1]));
         if (rd_has(2)) noc_async_read_tile(t, in2, get_write_ptr(IN_CB[2]));
@@ -292,7 +314,7 @@ void kernel_main() {
     pg.ha = pgw(6);
 
     for (uint32_t k = ROLE; k < num_chunks; k += 2) {
-        const uint32_t t = chunk_start + k * stride;
+        const uint32_t t = tile_of(k);
         noc_async_read_tile(t, i_op, l1_op);
         noc_async_read_tile(t, i_cr, l1_cr);
         noc_async_read_tile(t, i_cg, l1_cg);

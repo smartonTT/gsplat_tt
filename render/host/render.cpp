@@ -581,6 +581,7 @@ PYBIND11_MODULE(render_clean, m) {
         d["project_cov3d"] = a.project_cov3d;
         d["project_pfwc_setup"] = a.project_pfwc_setup;
         d["project_pfwc_rtargs"] = a.project_pfwc_rtargs;
+        d["project_pfwc_chunkcull"] = a.project_pfwc_chunkcull;
         d["project_pfwc_enqueue"] = a.project_pfwc_enqueue;
         d["project_pfwc_finish"] = a.project_pfwc_finish;
         d["project_gather_setup"] = a.project_gather_setup;

@@ -105,8 +105,38 @@ inline uint32_t f_to_bits(float f) {
 // Copy the n records buck[sorted[k]] (32 B each; PACK2 slot g sits at byte
 // 32g) to slab record k. All 8 words of a record are loaded before any store:
 // alternating volatile load/store made every store wait for its own load.
+//
+// Task #425: PERM_NOC (host GSPLAT_TT_PERM_NOC, default 3) bit 0: issue one
+// 32 B loopback NoC read per record (source and destination in this core's L1)
+// instead: the RISC writes three command registers per record and the NoC
+// moves the bytes, rather than 8 loads + 8 stores at ~2.5 cycles each. Bit 1:
+// the same for the big-tile gather (mat_ol_gather). Bit 2: the big-tile
+// whole-tile sort uses the packed id sort (sort_ids_gathered) too.
+#ifndef PERM_NOC
+#define PERM_NOC 7
+#endif
 inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted,
                             uint32_t n) {
+#if PERM_NOC & 1
+    if (n == 0u) return;
+    noc_async_read_one_packet_set_state(NOC_XY_ADDR(my_x[noc_index], my_y[noc_index], buck),
+                                        L1_SPLAT_BYTES);
+    uint32_t k = 0;
+    for (; k + 4u <= n; k += 4u) {
+        const uint32_t s0 = sorted[k], s1 = sorted[k + 1u], s2 = sorted[k + 2u], s3 = sorted[k + 3u];
+        const uint32_t d = slab + k * L1_SPLAT_BYTES;
+        noc_async_read_one_packet_with_state(buck + s0 * L1_SPLAT_BYTES, d);
+        noc_async_read_one_packet_with_state(buck + s1 * L1_SPLAT_BYTES, d + L1_SPLAT_BYTES);
+        noc_async_read_one_packet_with_state(buck + s2 * L1_SPLAT_BYTES, d + 2u * L1_SPLAT_BYTES);
+        noc_async_read_one_packet_with_state(buck + s3 * L1_SPLAT_BYTES, d + 3u * L1_SPLAT_BYTES);
+    }
+    for (; k < n; ++k) {
+        noc_async_read_one_packet_with_state(buck + sorted[k] * L1_SPLAT_BYTES,
+                                             slab + k * L1_SPLAT_BYTES);
+    }
+    noc_async_read_barrier();
+    return;
+#endif
     for (uint32_t k = 0; k < n; ++k) {
         auto src = reinterpret_cast<volatile uint32_t*>(buck + sorted[k] * L1_SPLAT_BYTES);
         auto dst = reinterpret_cast<volatile uint32_t*>(slab + k * L1_SPLAT_BYTES);
@@ -705,6 +735,7 @@ void kernel_main() {
                     }
                 }
             } else {
+            uint32_t kmin = 0xFFFFFFFFu, kmax = 0u;
             {
                 MAT_PZ("mat_ol_keys");
                 FZ_ACC(fz_big);
@@ -712,7 +743,12 @@ void kernel_main() {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
                     auto rw = reinterpret_cast<const volatile uint32_t*>(buck);
-                    for (uint32_t i = 0; i < nr; ++i) k[r0 + i] = rw[i * 8u + 3u];
+                    for (uint32_t i = 0; i < nr; ++i) {
+                        const uint32_t x = rw[i * 8u + 3u];
+                        k[r0 + i] = x;
+                        kmin = x < kmin ? x : kmin;
+                        kmax = x > kmax ? x : kmax;
+                    }
                 }
             }
 #if defined(OL_MAT_SELECT) && OL_MAT_SELECT
@@ -732,11 +768,18 @@ void kernel_main() {
             uint32_t* v = reinterpret_cast<uint32_t*>(buck);
             uint32_t* k2 = v + N;
             uint32_t* v2 = k2 + N;
-            for (uint32_t i = 0; i < N; ++i) v[i] = i;
             {
                 MAT_PZ("mat_ol_sort");
                 FZ_ACC(fz_big);
+#if SORT_RECS_PACKED && (PERM_NOC & 4)
+                // Task #425: the packed id sort of the whole-tile path (N > ol_whole_cap > 16).
+                const uint32_t* res =
+                    sort_radix_tile::sort_ids_gathered(k, N, kmin, kmax, v, k2, v2, hist);
+#else
+                (void)kmin; (void)kmax;
+                for (uint32_t i = 0; i < N; ++i) v[i] = i;
                 const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
+#endif
                 for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
 #endif
@@ -750,6 +793,18 @@ void kernel_main() {
                 for (uint32_t r0 = 0; r0 < N; r0 += ov_cap) {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
+#if PERM_NOC & 2
+                    noc_async_read_one_packet_set_state(
+                        NOC_XY_ADDR(my_x[noc_index], my_y[noc_index], buck), L1_SPLAT_BYTES);
+                    for (uint32_t i = 0; i < L_item; ++i) {
+                        const uint32_t off = k[i] - r0;
+                        if (off >= nr) continue;
+                        noc_async_read_one_packet_with_state(buck + off * L1_SPLAT_BYTES,
+                                                             slab + i * L1_SPLAT_BYTES);
+                    }
+                    noc_async_read_barrier();  // before the next chunk overwrites buck
+                    continue;
+#endif
                     for (uint32_t i = 0; i < L_item; ++i) {
                         const uint32_t off = k[i] - r0;
                         if (off >= nr) continue;

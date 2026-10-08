@@ -123,6 +123,28 @@ static bool check_records(const std::vector<uint32_t>& keys, const char* what) {
             return false;
         }
     }
+    // Task #425: sort_ids_gathered on the gathered keys (the big-tile path,
+    // every n incl. n <= 16) gives the same permutation.
+    if (n != 0u) {
+        std::vector<uint32_t> g(keys);
+        g.push_back(0xDEADBEEFu);
+        std::fill(v.begin(), v.end(), 0xDEADBEEFu);
+        std::fill(v2.begin(), v2.end(), 0xDEADBEEFu);
+        const uint32_t kmin = *std::min_element(keys.begin(), keys.end());
+        const uint32_t kmax = *std::max_element(keys.begin(), keys.end());
+        const uint32_t* o2 = srt::sort_ids_gathered(g.data(), n, kmin, kmax, v.data(), k2.data(),
+                                                    v2.data(), hist.data());
+        if (o2 != v.data() || v[n] != 0xDEADBEEFu || v2[n] != 0xDEADBEEFu || g[n] != 0xDEADBEEFu) {
+            std::printf("FAIL gathered %s n=%u: result not in v or scratch overrun\n", what, n);
+            return false;
+        }
+        for (uint32_t i = 0; i < n; i++) {
+            if (o2[i] != ref[i]) {
+                std::printf("FAIL gathered %s n=%u at %u: got %u want %u\n", what, n, i, o2[i], ref[i]);
+                return false;
+            }
+        }
+    }
     return true;
 }
 
