@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <map>
-#include <optional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -62,8 +61,8 @@ class Allocator { public: uint32_t get_num_banks(const BufferType&) const; };
 namespace distributed {
 struct MeshShape {};
 struct IDevice { int id() const; };
-class MeshDevice { public: CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const;
-    std::vector<IDevice*> get_devices() const;
+class MeshDevice { public: std::vector<IDevice*> get_devices() const;
+    CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const;
     CoreCoord worker_core_from_logical_core(const CoreCoord&) const;
     uint32_t num_dram_channels() const;
     const std::unique_ptr<Allocator>& allocator() const; };

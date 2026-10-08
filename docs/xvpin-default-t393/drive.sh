@@ -5,6 +5,7 @@
 # rounds of two arms on the same binary:
 #   old   = GSPLAT_TT_XVIEW_OVERLAP=0 GSPLAT_TT_OUT_PINNED=0 (the pre-#393 default)
 #   xvdef = no env (the #393 default: cross-view overlap + pinned output)
+# then (t404) one zero-copy round (GSPLAT_TT_OUT_ZEROCOPY=1, t395 path; md5 + XVIEW_HITS),
 # then the device hero shot with the default config (opt/ttw/screenshot.sh, same tree):
 # hero.png + 10x diff + PSNR vs benchmarks/reference_v2/hero.png. LOOK at both images.
 #   ttp detach t393-ab -- docs/xvpin-default-t393/drive.sh <iter> <rev>      (Mac, repo root)
@@ -18,7 +19,7 @@ it=${1:?iter}; rev=${2:?rev}
 export H=${H:-yyzo-bh-04} T=${T:-/localdev/smarton/gstt2-t393}
 DEVRUN=${DEVRUN:-$HOME/dev/tt-workflows/scripts/devrun.sh}
 PRE=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
-O=docs/xvpin-default-t393/out; mkdir -p "$O" tmp/ttw-state tmp/t393-bin
+O=${O:-docs/xvpin-default-t393/out}; mkdir -p "$O" tmp/ttw-state tmp/t393-bin
 if [ "${3:-}" != --locked ]; then
   exec ttp lock p100 -- "$PWD/docs/xvpin-default-t393/drive.sh" "$it" "$rev" --locked
 fi
@@ -57,6 +58,9 @@ for ra in 1:old,xvdef 2:xvdef,old 3:old,xvdef; do r=${ra%%:*}
     [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
   done
 done
+$DEVRUN --host "$H" --no-verify --timeout 420 --tag t393-r4-xvzc -- \
+  "T=$T bash $T/tmp/t379_remote_time.sh 4 xvzc:GSPLAT_TT_OUT_ZEROCOPY=1" 2>&1 | tee "$O/round4-xvzc.out" | grep -E "$pat"
+[ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
 fetch || rc=4
 echo "=== rounds done rc=$rc $(date)"
 for a in old xvdef; do

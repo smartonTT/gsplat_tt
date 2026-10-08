@@ -49,10 +49,10 @@
 #include "device_state.h"
 #include "matblend_fuse.h"
 #include "out_ring.h"
+#include "pair_guard.h"
 
 #include <cstdio>
 #include <deque>
-#include "pair_guard.h"
 
 using namespace tt;
 using namespace tt::tt_metal;
