@@ -12,7 +12,7 @@
 [ttw 2026-10-07T21:21:30-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=dd5e523c bin=0004f12e747d82c6 t393 iter-212 dd5e523c xvpin default (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t393-r0-xvdef  timeout=420s  worry=600s  ts=2026-10-07T21:21:31-0400
 cmd: T=/localdev/smarton/gstt2-t393 bash /localdev/smarton/gstt2-t393/tmp/t379_remote_time.sh 0 xvdef:
