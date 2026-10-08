@@ -1,0 +1,15 @@
+[ttw 2026-10-07T22:51:52-0400] REFUSED: devrun (--timeout / ttw.toml timeout_s) timeout=720s is over the 600s reservation ceiling.
+[ttw 2026-10-07T22:51:52-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 720s.
+[ttw 2026-10-07T22:51:52-0400]   A run that cannot fit under 600s is parking HOST work on a shared box.
+[ttw 2026-10-07T22:51:52-0400]   This is NOT 'do not run it' — restructure the run and resubmit. The measurement still happens.
+[ttw 2026-10-07T22:51:52-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T22:51:52-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T22:51:52-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T22:51:52-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T22:51:52-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T22:51:52-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T22:51:52-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T22:51:52-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T22:51:52-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T22:51:52-0400]   Then size the timeout from the MEASURED device-held time (aim <=400s).
+[ttw 2026-10-07T22:51:52-0400] ERROR: reservation over the 600s ceiling — see knowledge/reservation-budget.md

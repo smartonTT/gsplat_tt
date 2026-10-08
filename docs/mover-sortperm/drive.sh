@@ -9,7 +9,8 @@
 # never the viewer box; every ssh/scp goes through shims forcing StrictHostKeyChecking=yes.
 set -u
 cd "$(git rev-parse --show-toplevel)" || exit 1
-rev=${1:?rev}
+rev=${1:?rev}; MODE=${MODE:-all}  # all | rounds (skip Tracy and the hero)
+export MODE
 export H=${H:-yyzo-bh-04} T=${T:-/localdev/smarton/gstt2-t418}
 DEVRUN=${DEVRUN:-$HOME/dev/tt-workflows/scripts/devrun.sh}
 PRE=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
@@ -34,16 +35,23 @@ opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.
 tail -2 "$O/sync.log"
 ~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t418 $sha packed sort_record_ids ($H)"
 scp -q -o BatchMode=yes docs/xview-overlap-t379/remote_time.sh "$H:$T/tmp/t379_remote_time.sh" || exit 3
-$SSH "$H" "rm -rf $T/tmp/t379/run-r*.log $T/tmp/t379/md5-r*.txt $T/tmp/t418; mkdir -p $T/tmp/t418"
+[ "$MODE" = rounds ] && keep="" || keep=" $T/tmp/t418"
+$SSH "$H" "rm -rf $T/tmp/t379/run-r*.log $T/tmp/t379/md5-r*.txt$keep; mkdir -p $T/tmp/t418"
 pat="^(===|run rc|tracy |STAGES|SUMMARY|ALL_|VIEWS|XVIEW_|HANG|device csv|no device|DRAM|Trace|TT_FATAL)"
 PK=xvpk: PAIR=xvpair:GSPLAT_TT_SORT_PACKED=0
 rc=0
 for r in 1 2 3; do
   if [ $((r % 2)) = 1 ]; then arms="$PK $PAIR"; else arms="$PAIR $PK"; fi
-  $DEVRUN --host "$H" --no-verify --timeout 720 --tag t418-r$r -- \
-    "T=$T bash $T/tmp/t379_remote_time.sh $r $arms" 2>&1 | tee "$O/round$r.out" | grep -E "$pat"
-  [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
+  for arm in $arms; do  # one devrun per arm: devrun caps a reservation at 600 s
+    $DEVRUN --host "$H" --no-verify --timeout 420 --tag t418-r$r-${arm%%:*} -- \
+      "T=$T bash $T/tmp/t379_remote_time.sh $r $arm" 2>&1 | tee "$O/round$r-${arm%%:*}.out" | grep -E "$pat"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || rc=1
+  done
 done
+if [ "$MODE" = rounds ]; then
+  scp -q -o BatchMode=yes "$H:$T/tmp/t379/run-r*.log" "$H:$T/tmp/t379/md5-r*.txt" "$O/" || rc=4
+  echo "=== drive t418 rounds done rc=$rc $(date)"; exit $rc
+fi
 for a in 0 10 20; do
   $DEVRUN --host "$H" --no-verify --timeout 540 --tag t418-T$a -- \
     "T=$T bash $T/$D/remote_tracy.sh $a pk" 2>&1 | tee "$O/tracy-pk-c$a.out" | grep -E "$pat"
