@@ -67,6 +67,14 @@ struct SortBlendContinuation {
     double blend_ms = 0.0;
 };
 
+// Review #391: a continuation produces an image when the caller passes a buffer,
+// or (GSPLAT_TT_OUT_ZEROCOPY, task #374) passes none and takes the pinned slot
+// the writer wrote afterwards. Every "has output" gate (the continuation, the
+// fused mat+blend program) must use this, not image_out alone.
+inline bool sort_blend_has_output(const SortBlendContinuation* c, bool zerocopy) {
+    return c != nullptr && (c->image_out != nullptr || zerocopy);
+}
+
 // On the resident-pairs path (the only one render_clean runs) every "bin" step
 // is a DEVICE kernel except the per-tile layout: bin_ms = bin_count_ms +
 // bin_hist_d2h_ms + bin_layout_ms + bin_emit_ms. The leaf fields below are
