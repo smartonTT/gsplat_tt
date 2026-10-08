@@ -506,7 +506,7 @@ def _main():
     # their meaning (both = avg frame time) for the existing report tooling.
     # mat is 0 unless GSPLAT_TT_SPLIT_BLEND=1 (else blend holds mat+cull+blend).
     _STAGE_ORDER = ["head", "project", "tile_assign", "sort", "blend_setup",
-                    "mat", "cull", "blend", "d2h", "assemble", "tail"]
+                    "mat", "cull", "blend", "d2h", "assemble", "tail", "xview"]
     if hasattr(clean_backend._clean, "stage_timings"):
         st = clean_backend._clean.stage_timings()
         n = max(1, int(st.get("views", 0)))
