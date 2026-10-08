@@ -172,12 +172,49 @@ int check_radix(std::mt19937& rng, const std::vector<int64_t>& counts) {
 
 }  // namespace
 
+// Task #417 ramp: on each LPT slot (descending cost) the n smallest items move
+// to the front, ascending; the item multiset and the rest's order are kept.
+int check_ramp(const std::vector<int64_t>& counts) {
+    const auto two = build_mat_worklist(counts, kTiles, kCores, kBucketFit, 2, kMatMover0Cap);
+    int bad = 0;
+    for (uint32_t s = 0; s < 2 * kCores; ++s) {
+        std::vector<std::pair<uint32_t, uint32_t>> v;
+        for (uint32_t i = 0; i < two.per_core_count[s]; ++i) {
+            const uint32_t j = 2 * (two.per_core_offset[s] + i);
+            v.emplace_back(two.flat[j], two.flat[j + 1]);
+        }
+        auto cost = [&](const std::pair<uint32_t, uint32_t>& p) {
+            return item_cost(counts, p.first, p.second);
+        };
+        for (uint32_t n : {1u, 3u, 1000u}) {
+            auto r = v;
+            ramp_front(r, n);
+            const uint32_t m = std::min<uint32_t>(n, static_cast<uint32_t>(v.size()));
+            std::vector<std::pair<uint32_t, uint32_t>> want(v.rbegin(), v.rbegin() + m);
+            want.insert(want.end(), v.begin(), v.end() - m);
+            if (r != want) {
+                std::printf("ramp: slot %u n %u wrong order\n", s, n);
+                ++bad;
+            }
+            for (uint32_t i = 0; i < r.size(); ++i) {
+                if (i + 1 < m && cost(r[i]) > cost(r[i + 1])) {
+                    std::printf("ramp: slot %u n %u not ascending at %u\n", s, n, i);
+                    ++bad;
+                }
+                if (m > 0 && v.size() > m && cost(r[0]) > cost(v.back())) ++bad;
+            }
+        }
+    }
+    return bad;
+}
+
 int main() {
     std::mt19937 rng(35);
     int bad = 0, cases = 0;
     for (int trial = 0; trial < 60; ++trial) {
         const auto counts = random_counts(rng);
         bad += check_mat(counts);
+        bad += check_ramp(counts);
         bad += check_radix(rng, counts);
         ++cases;
     }

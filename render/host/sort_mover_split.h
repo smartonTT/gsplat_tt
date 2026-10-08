@@ -31,6 +31,30 @@ inline constexpr uint32_t kGatherPartRecs = 2048;
 // == sort_subchunk_materialize.cpp OL_MAT_PART.
 inline constexpr uint32_t kOlMatPartRecs = 4096;
 
+// Task #417: LPT deals items in descending cost, so every slot starts on its
+// BIGGEST item and the mat TRISCs idle (the start gap, #413: 0.61 ms mean per
+// core) until that tile is read and sorted. ramp_front moves a slot's n
+// smallest items (its last n, the list being descending) to the front in
+// ascending order, so the first job reaches the TRISCs after a small sort.
+// Only the order within the slot changes; every item still writes only its own
+// output, so the result is byte-identical. GSPLAT_TT_MAT_RAMP=n (0 = off).
+inline void ramp_front(std::vector<std::pair<uint32_t, uint32_t>>& v, uint32_t n) {
+    n = std::min<uint32_t>(n, static_cast<uint32_t>(v.size()));
+    if (n == 0u) return;
+    std::rotate(v.begin(), v.end() - n, v.end());
+    std::reverse(v.begin(), v.begin() + n);
+}
+
+inline uint32_t mat_ramp_items() {
+    static const uint32_t n = [] {
+        const char* e = std::getenv("GSPLAT_TT_MAT_RAMP");
+        const int v = (e != nullptr) ? std::atoi(e) : 0;
+        if (v > 0) std::fprintf(stderr, "MAT_RAMP n=%d\n", v);
+        return static_cast<uint32_t>(v > 0 ? v : 0);
+    }();
+    return n;
+}
+
 // iter 130: materialize work-item assignment — balance at (tile, subchunk)
 // granularity. iter-130 MEASURED the dominant materialize cost as the OVERFLOW
 // gather (24.6 ms/view busiest-core vs the in-budget permute's 1.7 ms), and the
@@ -151,6 +175,9 @@ inline MatWorkAssignment build_mat_worklist(
         }
         per_core[c].emplace_back(it.tile, it.sc);
         load[c] += it.cost;
+    }
+    if (const uint32_t ramp = mat_ramp_items(); ramp != 0u) {
+        for (auto& v : per_core) ramp_front(v, ramp);
     }
     if (std::getenv("GSPLAT_TT_MAT_STATS") != nullptr) {
         uint64_t tot = 0, big = 0, gather = 0, mx[2] = {0, 0};
