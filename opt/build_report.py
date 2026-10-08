@@ -1786,7 +1786,8 @@ STOP_GATE_MS = 0.15  # reopen only for a new lever worth at least this much
 STOP_TRAJECTORY_ITERS = [138, 151, 164, 176, 178, 180, 191, 196, 206, 207, 212, 214, 216]
 STOP_CLOSED_LEVERS = [
     ("#419", "Blend interleave into the mat gaps",
-     "modelled bound 0.078-0.277 ms/view", "closed: under the gate"),
+     "modelled bound 0.078-0.277 ms/view",
+     "closed: realistic 0.078 < 0.15 gate; 0.277 idealised needs DEST save/restore that does not exist"),
     ("#423", "L1b global presort, device bin_layout/publish, pfwc/project micro-levers",
      "modelled, each under 0.15 ms/view", "closed: under the gate"),
     ("#428", "Mat gap and mover-queue levers",
