@@ -116,3 +116,47 @@ blocky or empty tiles); md5 and PSNR alone are not enough.
 Restrictions for the device run: only the existing measurement reservation (no ird
 reserve/release), never the viewer box, host-key checking always on, one device run at a
 time under `ttp lock p100`. Always A/B all arms on the same box.
+
+## Results (#388, device, measured 2026-10-07)
+
+Box: yyzo-bh-04 (p100a, measurement reservation IRD job 244892), rev `37f2829a`, iter 211.
+One `ttp lock p100` held for sync + build + runs + screenshot. 3 rotating rounds × 4 arms,
+untraced 30-view bicycle sweep per run. Raw logs in `out/`.
+
+| arm   | mean ms/view | rounds (ms/view)        | vs base | project | sort  | blend | d2h   |
+|-------|-------------:|-------------------------|--------:|--------:|------:|------:|------:|
+| base  | 10.940       | 10.949 10.891 10.979    |    —    | 3.05    | 0.51  | 7.08  | 0.24  |
+| xv    |  9.169       |  9.113  9.207  9.187    | −16.2 % | 1.13    | 0.47  | 7.24  | 0.19  |
+| xvpin |  8.934       |  8.940  8.936  8.926    | −18.3 % | 1.10    | 0.46  | 7.06  | 0.19  |
+| xvzc  |  9.409       |  9.427  9.371  9.428    | −14.0 % | 1.15    | 0.53  | 7.58  | 0.00  |
+
+(Stage columns: mean of the three rounds' `STAGES` lines, ms/view.)
+
+Correctness:
+- md5: all 13 runs (xv smoke + 12 A/B runs) give the same 30-view md5 list, which matches
+  golden `906e0435`. Every run printed `ALL_VIEWS_IDENTICAL (30 views)`.
+- `XVIEW_HITS_OK hits=29 views=30` for every xv/xvpin/xvzc run (10 of 10), with 0 misses.
+- Screenshot: `opt/metal-screenshots/t379-xview-overlap/hero.png` + `hero_diff10.png`
+  (device render, `GSPLAT_TT_XVIEW_OVERLAP=1`, 1024×1024): PSNR vs
+  `benchmarks/reference_v2/hero.png` = 42.51 dB, golden match, max LSB vs golden 0. Both images
+  checked by eye: no tile seams, blocky or empty tiles. The diff only shows the usual
+  edge/spoke differences against the reference.
+
+Findings:
+- The gain is about 5× the model (1.77 ms vs ~0.3-0.4 ms/view). The model assumed pfwc was
+  short. In fact base `project` is 3.05 ms/view on this box, mostly `gather_wait` on pfwc
+  device time. With the overlap, pfwc N+1 runs while view N finishes (blend tail, D2H, host
+  tail), and `project` drops to ~1.1 ms (the remaining `gather_wait`).
+- Plain `xv` costs blend about +0.16 ms. The pfwc N+1 enqueue sits in the same queue as
+  view N's output readback. `xvpin` (pinned output) removes that cost (blend 7.06 vs 7.08 base)
+  and is the best arm: **8.934 ms/view, −18.3 % vs base**.
+- `xvzc` (zero-copy output) slows blend by ~0.5 ms, as earlier zero-copy runs did, and loses
+  to both xv and xvpin.
+- The rounds are tight (spread ≤0.1 ms), so the gaps between arms are well above noise.
+
+Proposal, not run: confirm on the bh-30 p150 under the viewer exception (task holds resource
+`viewer` exclusively, stops the viewer only for the bench, uses the existing viewer reservation
+with no reserve/extend/release, `nice -n 19`/`ionice -c3` builds at half the cores, restarts
+the viewer, tells the user). Arms: base vs xvpin (plus xv), 3 rotating rounds, same md5 and
+`XVIEW_HITS_OK` checks, plus a device hero screenshot. If the gain holds, make
+`GSPLAT_TT_XVIEW_OVERLAP=1` + `GSPLAT_TT_OUT_PINNED=1` the default and add it as a new iteration.
