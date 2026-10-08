@@ -55,6 +55,11 @@ tt::tt_metal::distributed::MeshCommandQueue* command_queue();
 // device has one.
 tt::tt_metal::distributed::MeshCommandQueue* command_queue1();
 
+// Task #397: GSPLAT_TT_GRID_X / GSPLAT_TT_GRID_Y cap the compute grid every stage
+// partitions over (unset or 0 = the full grid). Lets ETH dispatch (12x10 on p150) run
+// on the worker-dispatch shape (11x10) to separate core-count effects from dispatch.
+void cap_grid(std::size_t& x, std::size_t& y);
+
 void register_buffer(
     const std::string& key,
     std::shared_ptr<tt::tt_metal::distributed::MeshBuffer> buffer);

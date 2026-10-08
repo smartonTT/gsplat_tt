@@ -1,0 +1,57 @@
+SSH_PREFLIGHT=ok
+=== viewer stop 2026-10-08T01:31:53Z
+[viewer] stopped pid(s) 85037
+=== bench sha=758ea493 host=bh-30-special-smarton-for-reservation-135630 2026-10-08T01:32:27Z card=p150b aiclk=1350
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12v2 TT_METAL_CACHE=/localdev/smarton/p150bench/cache392/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 
+=== E11 dispatch=eth grid_x=11 start 01:32:28
+run E11 rc=0 01:32:43
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10, stage grid capped to 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.3 p50_ms=11.2 min_ms=9.4 max_ms=19.7 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t397b-E11
+STAGES n=30 head=0.005 project=3.072 tile_assign=0.008 sort=1.217 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.509 d2h=0.464 assemble=0.000 tail=0.003 | sum=11.277 view_total=11.279 resid_in_view=+0.002 avg_frame_ms=11.338 resid_vs_frame=+0.061
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.593 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.330 publish_wait=0.000 mat=0.096 | sum=1.105 sort=1.217 resid=+0.111
+MD5 E11 list=906e0435 vs906e0435_differ=0 vsEth12_differ=30
+=== W11 dispatch=worker grid_x=0 start 01:32:44
+run W11 rc=0 01:33:00
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.2 p50_ms=11.3 min_ms=9.4 max_ms=13.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree392/tmp/t397b-W11
+STAGES n=30 head=0.005 project=2.980 tile_assign=0.008 sort=1.114 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.430 d2h=0.549 assemble=0.000 tail=0.003 | sum=11.090 view_total=11.092 resid_in_view=+0.002 avg_frame_ms=11.152 resid_vs_frame=+0.062
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.081 upload=0.000 bin_emit=0.451 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.326 publish_wait=0.000 mat=0.141 | sum=1.003 sort=1.114 resid=+0.111
+MD5 W11 list=906e0435 vs906e0435_differ=0 vsEth12_differ=30
+=== E12 dispatch=eth grid_x=0 start 01:33:00
+run E12 rc=0 01:33:16
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.6 p50_ms=10.6 min_ms=8.9 max_ms=13.6 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t397b-E12
+STAGES n=30 head=0.006 project=2.942 tile_assign=0.008 sort=1.199 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.867 d2h=0.489 assemble=0.000 tail=0.007 | sum=10.518 view_total=10.520 resid_in_view=+0.002 avg_frame_ms=10.592 resid_vs_frame=+0.073
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.085 upload=0.000 bin_emit=0.526 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.341 publish_wait=0.000 mat=0.118 | sum=1.074 sort=1.199 resid=+0.126
+MD5 E12 list=39d84b28 vs906e0435_differ=30 vsEth12_differ=0
+=== W10 dispatch=worker grid_x=10 start 01:33:16
+run W10 rc=0 01:33:33
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10, stage grid capped to 10x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=12.0 p50_ms=12.2 min_ms=10.0 max_ms=14.0 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree392/tmp/t397b-W10
+STAGES n=30 head=0.005 project=3.244 tile_assign=0.007 sort=1.017 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.159 d2h=0.526 assemble=0.000 tail=0.003 | sum=11.962 view_total=11.964 resid_in_view=+0.002 avg_frame_ms=12.024 resid_vs_frame=+0.062
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.415 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.308 publish_wait=0.000 mat=0.098 | sum=0.907 sort=1.017 resid=+0.110
+MD5 W10 list=e1bd4bfc vs906e0435_differ=30 vsEth12_differ=30
+
+arton    4096 Oct  8 01:33 .
+arton    4096 Oct  8 01:32 ..
+arton   26325 Oct  8 01:32 E11.log
+arton   26292 Oct  8 01:33 E12.log
+arton   27046 Oct  8 01:33 W10.log
+arton   26679 Oct  8 01:33 W11.log
+arton 1703239 Oct  8 01:32 hero-E11.png
+arton 1703259 Oct  8 01:33 hero-E12.png
+arton 1703280 Oct  8 01:33 hero-W10.png
+arton 1703239 Oct  8 01:33 hero-W11.png
+arton    1558 Oct  8 01:32 md5-E11.txt
+arton    1558 Oct  8 01:33 md5-E12.txt
+arton    1558 Oct  8 01:33 md5-W10.txt
+arton    1558 Oct  8 01:33 md5-W11.txt
+arton    2042 Oct  8 01:32 overlay.log
+=== bench end rc=0 2026-10-08T01:33:33Z
+=== viewer start (remote) 2026-10-08T01:33:33Z
+[viewer] started pid 87708 supervisor 87701 sha 8329be508584ee7d369eac1ae6555097a8b08bf8 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=11.55 ms (86.6 FPS) min=11.50 max=11.97
+[viewer_clean] READY port=8080
+SHA=8329be508584ee7d369eac1ae6555097a8b08bf8
+=== viewer ready 2026-10-08T01:33:42Z localhost:8091 -> 200
+=== drive end 2026-10-08T01:33:53Z

@@ -417,6 +417,7 @@ static GatherDeviceContext init_context() {
     ctx.mesh_device = device_state::get_device();
     ctx.cq = device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    gsplat_tt::device_state::cap_grid(ctx.grid.x, ctx.grid.y);
     ctx.num_cores = ctx.grid.x * ctx.grid.y;
     ctx.num_slots = ctx.num_cores * GATHER_MOVERS;
     ctx.all_cores =

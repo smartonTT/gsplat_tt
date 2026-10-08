@@ -7,9 +7,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <mutex>
+#include <string>
 #include <unordered_map>
 
 #include "blend.h"
+#include "dispatch_select.h"
 #include "env_config.h"
 #include "gather_visible.h"
 #include "kcfg_size.h"
@@ -96,7 +98,26 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
             kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")));
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
-        if (extra_kb > 0 || num_cqs > 1) {
+        // Task #383 (GSPLAT_TT_DISPATCH=worker|eth|auto): Ethernet dispatch frees the Tensix
+        // column worker dispatch takes (p150: 12x10 instead of 11x10). Task #409: default auto,
+        // which needs the opt/eth overlay as TT_METAL_RUNTIME_ROOT (render/eth_default.py).
+        bool bad_mode = false;
+        const dispatch::Mode mode = dispatch::mode_from_env(std::getenv("GSPLAT_TT_DISPATCH"), &bad_mode);
+        if (bad_mode) {
+            std::fprintf(stderr, "[DEV] GSPLAT_TT_DISPATCH=%s unknown (worker|eth|auto); using worker\n",
+                         std::getenv("GSPLAT_TT_DISPATCH"));
+        }
+        const std::string card = mode == dispatch::Mode::kAuto
+                                     ? dispatch::read_card_type_file(dispatch::card_type_path(device_id))
+                                     : std::string();
+        const dispatch::Choice dc =
+            dispatch::resolve(mode, card, static_cast<uint32_t>(num_cqs),
+                              dispatch::overlay_active(std::getenv("TT_METAL_RUNTIME_ROOT")));
+        const bool eth = dc.kind == dispatch::Kind::kEth;
+        const tt::tt_metal::DispatchCoreConfig dispatch_cfg =
+            eth ? tt::tt_metal::DispatchCoreConfig{tt::tt_metal::DispatchCoreType::ETH}
+                : tt::tt_metal::DispatchCoreConfig{};
+        if (extra_kb > 0 || num_cqs > 1 || eth) {
             size_t worker_l1 = DEFAULT_WORKER_L1_SIZE;
             if (extra_kb > 0) {
                 const size_t kcfg = (69 + static_cast<size_t>(extra_kb)) * 1024;
@@ -104,13 +125,19 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
             }
             s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(
                 device_id, DEFAULT_L1_SMALL_SIZE, DEFAULT_TRACE_REGION_SIZE, num_cqs,
-                tt::tt_metal::DispatchCoreConfig{}, {}, worker_l1);
+                dispatch_cfg, {}, worker_l1);
         } else {
             s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
         }
         const auto g = s.mesh_device->compute_with_storage_grid_size();
-        std::fprintf(stderr, "[DEV] command queues %u, compute grid %zux%zu\n",
-                     static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y);
+        std::size_t gx = g.x, gy = g.y;
+        cap_grid(gx, gy);
+        std::fprintf(stderr, "[DEV] dispatch %s (%s%s%s), command queues %u, compute grid %zux%zu%s\n",
+                     eth ? "eth" : "worker", dc.why, card.empty() ? "" : ", card ", card.c_str(),
+                     static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y,
+                     (gx != g.x || gy != g.y)
+                         ? (", stage grid capped to " + std::to_string(gx) + "x" + std::to_string(gy)).c_str()
+                         : "");
     }
     return s.mesh_device;
 }
@@ -124,6 +151,13 @@ bool is_initialized() {
 tt::tt_metal::distributed::MeshCommandQueue* command_queue() {
     auto dev = get_device();
     return &dev->mesh_command_queue();
+}
+
+void cap_grid(std::size_t& x, std::size_t& y) {
+    static const std::size_t cx = env_config::env_uint("GSPLAT_TT_GRID_X", 0u);
+    static const std::size_t cy = env_config::env_uint("GSPLAT_TT_GRID_Y", 0u);
+    if (cx > 0 && cx < x) x = cx;
+    if (cy > 0 && cy < y) y = cy;
 }
 
 tt::tt_metal::distributed::MeshCommandQueue* command_queue1() {
