@@ -1,0 +1,2 @@
+ARM old mean_ms_view=10.965 n=3 rounds: 10.879 11.016 11.001
+ARM xvdef mean_ms_view=9.016 n=3 rounds: 8.978 9.071 8.998

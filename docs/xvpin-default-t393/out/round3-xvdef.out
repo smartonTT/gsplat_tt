@@ -1,0 +1,30 @@
+[ttw 2026-10-07T21:01:09-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=420s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T21:01:09-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 420s.
+[ttw 2026-10-07T21:01:09-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T21:01:09-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T21:01:09-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T21:01:09-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T21:01:09-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T21:01:09-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T21:01:09-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T21:01:09-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T21:01:09-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T21:01:09-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=56f75707 bin=05041cc9d71f9082 t393 iter-211 56f75707 xvpin default (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t393-r3-xvdef  timeout=420s  worry=600s  ts=2026-10-07T21:01:09-0400
+cmd: T=/localdev/smarton/gstt2-t393 bash /localdev/smarton/gstt2-t393/tmp/t379_remote_time.sh 3 xvdef:
+-----------------------------------------
+=== r3-xvdef 56f7570  01:01:10
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.0 p50_ms=9.0 min_ms=7.4 max_ms=11.6 n_views=30 warmup_s=2.1 out=/localdev/smarton/gstt2-t393/tmp/t379-r3-xvdef
+STAGES n=30 head=0.007 project=1.143 tile_assign=0.006 sort=0.508 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.004 d2h=0.201 assemble=0.000 tail=0.003 xview=0.066 | sum=8.938 view_total=8.940 resid_in_view=+0.002 avg_frame_ms=8.998 resid_vs_frame=+0.060 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.049 upload=0.000 bin_emit=0.203 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.162 publish_wait=0.000 mat=0.037 | sum=0.452 sort=0.508 resid=+0.056
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.047 pfwc_enqueue=0.016 pfwc_finish=0.000 gather_setup=0.004 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=1.135 gather_result=0.000 | sum=1.207 project=1.143 resid=-0.063
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.006 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 3 01:01:21
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t393/tmp/ttw-state/logs/t393-r3-xvdef-20261007-210109.log
