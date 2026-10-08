@@ -48,6 +48,10 @@ export GSPLAT_TT_PROFILE=1
 
 REPO="${GSTT2_REPO:-/localdev/smarton/gstt2}"  # override to capture from another tree
 cd "$REPO" || { echo "[capture_tracy] FATAL: cannot cd $REPO" >&2; exit 1; }
+# tt-metal hashes zones to 16 bits over "name,abs path,line": a collision at this
+# checkout path makes ReadMeshDeviceProfilerResults throw (#416). Fail before the run.
+python3 opt/profiler/zone_hash_check.py --repo "$REPO" \
+  || { echo "[capture_tracy] FATAL: device zone hash collision (see above)" >&2; exit 1; }
 OUTDIR="$REPO/opt/profiler/wrap_out_${ITER_DIR}${SUB//\//_}"
 TRACY="$OUTDIR/.logs/tracy_profile_log_host.tracy"
 DLOG="$OUTDIR/.logs/profile_log_device.csv"
