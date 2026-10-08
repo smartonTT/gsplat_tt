@@ -127,9 +127,14 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
             s.mesh_device = tt::tt_metal::distributed::MeshDevice::create_unit_mesh(device_id);
         }
         const auto g = s.mesh_device->compute_with_storage_grid_size();
-        std::fprintf(stderr, "[DEV] dispatch %s (%s%s%s), command queues %u, compute grid %zux%zu\n",
+        std::size_t gx = g.x, gy = g.y;
+        cap_grid(gx, gy);
+        std::fprintf(stderr, "[DEV] dispatch %s (%s%s%s), command queues %u, compute grid %zux%zu%s\n",
                      eth ? "eth" : "worker", dc.why, card.empty() ? "" : ", card ", card.c_str(),
-                     static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y);
+                     static_cast<unsigned>(s.mesh_device->num_hw_cqs()), g.x, g.y,
+                     (gx != g.x || gy != g.y)
+                         ? (", stage grid capped to " + std::to_string(gx) + "x" + std::to_string(gy)).c_str()
+                         : "");
     }
     return s.mesh_device;
 }
@@ -143,6 +148,13 @@ bool is_initialized() {
 tt::tt_metal::distributed::MeshCommandQueue* command_queue() {
     auto dev = get_device();
     return &dev->mesh_command_queue();
+}
+
+void cap_grid(std::size_t& x, std::size_t& y) {
+    static const std::size_t cx = env_config::env_uint("GSPLAT_TT_GRID_X", 0u);
+    static const std::size_t cy = env_config::env_uint("GSPLAT_TT_GRID_Y", 0u);
+    if (cx > 0 && cx < x) x = cx;
+    if (cy > 0 && cy < y) y = cy;
 }
 
 tt::tt_metal::distributed::MeshCommandQueue* command_queue1() {

@@ -455,6 +455,7 @@ static DeviceContext init_device_context_mb() {
     ctx.mesh_device = gsplat_tt::device_state::get_device();
     ctx.cq = gsplat_tt::device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    device_state::cap_grid(ctx.grid.x, ctx.grid.y);
     ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     build_program_and_workload_mb(ctx);
     return ctx;
@@ -1022,6 +1023,7 @@ static DeviceContext init_device_context() {
     ctx.mesh_device = gsplat_tt::device_state::get_device();
     ctx.cq = gsplat_tt::device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    device_state::cap_grid(ctx.grid.x, ctx.grid.y);
     ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     cull::build_program_and_workload(ctx);
     return ctx;
@@ -1270,6 +1272,7 @@ static DeviceContext init_device_context() {
     ctx.mesh_device = gsplat_tt::device_state::get_device();
     ctx.cq = gsplat_tt::device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    device_state::cap_grid(ctx.grid.x, ctx.grid.y);
     ctx.all_cores = CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     tile_l1_cull::build_program_and_workload(ctx);
     return ctx;
