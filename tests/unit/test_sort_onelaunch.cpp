@@ -38,7 +38,8 @@ using gsplat_tt::sort_split::MatWorkAssignment;
 
 namespace {
 
-constexpr uint32_t kCores = 110;
+// 110 = 11x10 (worker dispatch); main() also runs 120 = 12x10 (p150 ETH dispatch, #383).
+uint32_t kCores = 110;
 
 struct Frame {
     uint32_t P = 0, num_tiles = 0, stride = 0;
@@ -328,8 +329,10 @@ int check_rows_view(std::mt19937& rng) {
 }  // namespace
 
 int main() {
-    std::mt19937 rng(106);
     int bad = 0;
+    for (const uint32_t cores : {110u, 120u}) {
+    kCores = cores;
+    std::mt19937 rng(106);
     // Bicycle-like: ~1.2 M pairs over 1000 tiles (stride padding exercised),
     // one hot tile near the bucket cap.
     bad += check_frame(make_frame(rng, 1200000, 1000, 17, 0.02), kTileCap, "bicycle-like");
@@ -341,6 +344,7 @@ int main() {
     bad += check_check_prefix(rng);
     bad += check_worklist(rng);
     bad += check_rows_view(rng);
+    }
     std::printf(bad == 0 ? "PASS\n" : "FAIL (%d)\n", bad);
     return bad == 0 ? 0 : 1;
 }

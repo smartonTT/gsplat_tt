@@ -532,6 +532,7 @@ static TileAssignDeviceContext init_context() {
     ctx.mesh_device = device_state::get_device();
     ctx.cq = device_state::command_queue();
     ctx.grid = ctx.mesh_device->compute_with_storage_grid_size();
+    gsplat_tt::device_state::cap_grid(ctx.grid.x, ctx.grid.y);
     ctx.all_cores =
         CoreRangeSet(CoreRange({0, 0}, {ctx.grid.x - 1, ctx.grid.y - 1}));
     ctx.dual = ta_dual_mover();
