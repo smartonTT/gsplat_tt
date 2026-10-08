@@ -12,7 +12,7 @@
 [ttw 2026-10-07T20:17:46-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #125 sha=a963af6b bin=23030a0671f336a3 t374 diag a963af6b (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t374-diag-r11  timeout=600s  worry=600s  ts=2026-10-07T20:17:46-0400
 cmd: T=/localdev/smarton/gstt2-t374 bash /localdev/smarton/gstt2-t374/tmp/t374_remote_time.sh 11 pin zc pinhold:GSPLAT_TT_OUT_PINNED=1,GSPLAT_TT_OUT_PIN_HOLD=2 zcpv:GSPLAT_TT_OUT_ZEROCOPY=1,GSPLAT_PER_VIEW_STAGES=1
