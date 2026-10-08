@@ -106,7 +106,7 @@ inline uint32_t f_to_bits(float f) {
 // 32g) to slab record k. All 8 words of a record are loaded before any store:
 // alternating volatile load/store made every store wait for its own load.
 //
-// Task #425: PERM_NOC (host GSPLAT_TT_PERM_NOC, default 3) bit 0: issue one
+// Task #425: PERM_NOC (host GSPLAT_TT_PERM_NOC, default 7) bit 0: issue one
 // 32 B loopback NoC read per record (source and destination in this core's L1)
 // instead: the RISC writes three command registers per record and the NoC
 // moves the bytes, rather than 8 loads + 8 stores at ~2.5 cycles each. Bit 1:

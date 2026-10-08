@@ -41,7 +41,7 @@ S pfwc 1.874 matches #437's 1.898 for the same config. The LPT deal removed abou
 imbalance (max/mean 1.144 -> 1.096), as #437 modeled, but the average core finished 0.055 ms
 later. Likely cause (not measured): under the strided deal all 120 cores read neighbouring tiles
 at each step, while the LPT order scatters each step's reads across DRAM; the tile-list read
-itself is 50 u16 per core. Whatever the cause, it ate the modeled +0.10 to 0.19 gain.
+itself is 50 u32 per core. Whatever the cause, it ate the modeled +0.10 to 0.19 gain.
 
 ## Correctness
 

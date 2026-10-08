@@ -1776,6 +1776,110 @@ def conclusion_section() -> str:
     )
 
 
+# --- Conclusions / stop line (task #442) ---------------------------------
+# The project stopped after iter 216. Not a measured change: no iteration row.
+STOP_ITER = 216
+STOP_TAG, STOP_COMMIT = "best-iter-216", "e13e9f6b"
+STOP_GPU_G1_MS = 10.75  # published, not measured (PUBLISHED_GPU_ROWS G1)
+STOP_GATE_MS = 0.15  # reopen only for a new lever worth at least this much
+# Running-best milestones since this project started (2026-09-29); ms/view from the ledger.
+STOP_TRAJECTORY_ITERS = [138, 151, 164, 176, 178, 180, 191, 196, 206, 207, 212, 214, 216]
+STOP_CLOSED_LEVERS = [
+    ("#419", "Blend interleave into the mat gaps",
+     "modelled bound 0.078-0.277 ms/view", "closed: under the gate"),
+    ("#423", "L1b global presort, device bin_layout/publish, pfwc/project micro-levers",
+     "modelled, each under 0.15 ms/view", "closed: under the gate"),
+    ("#428", "Mat gap and mover-queue levers",
+     "modelled, at most 0.115 ms/view", "closed: under the gate"),
+    ("#433 / #438", "Chunk frustum cull",
+     "measured off 8.23 vs on 8.95 ms/view (yyzo-bh-04 p100a)",
+     "slower; landed off by default at 39e4f3a1"),
+    ("#439 / #441", "Weighted LPT pfwc tile deal",
+     "measured strided 7.796 vs lpt 7.807 ms/view (+0.011, bh-30 p150, untraced)",
+     "misses the -0.1 ms gate; landed off by default at b144d80c"),
+]
+STOP_OFF_FLAGS = [
+    ("GSPLAT_TT_CHUNK_CULL=1", "chunk frustum cull (#433); default 0", "docs/chunk-cull-ab-t433/README.md"),
+    ("GSPLAT_TT_PFWC_DEAL=lpt", "weighted LPT pfwc tile deal (#439); needs GSPLAT_TT_PFWC_DEAL_W",
+     "docs/pfwc-deal-t439/README.md"),
+]
+
+
+def _ledger_ms(iter_n: int) -> tuple[float, str] | None:
+    """(ms/view, board) of the last kept ledger row for iter_n."""
+    hit = None
+    for r in load_ttw_iters():
+        ms = (r.get("timings") or {}).get("ms_view")
+        if r.get("iter") == iter_n and r.get("decision") == "keep" and isinstance(ms, (int, float)):
+            m = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+            hit = (float(ms), m.get("board") or "board not recorded")
+    return hit
+
+
+def stop_line_section() -> str:
+    """Conclusions / stop line: final best, trajectory, closed levers, off-by-default flags."""
+    stop = next((r for r in reversed(load_ttw_iters()) if r.get("iter") == STOP_ITER), None)
+    if stop is None:
+        return ""
+    m = stop.get("metrics") or {}
+    p150 = m.get("p150_frame_ms_view")
+    p100 = (stop.get("timings") or {}).get("ms_view")
+    start = _ledger_ms(STOP_TRAJECTORY_ITERS[0])
+    start_ms = start[0] if start else None
+    traj = []
+    for n in STOP_TRAJECTORY_ITERS:
+        got = _ledger_ms(n)
+        if got is None:
+            continue
+        ms, board = got
+        x = f"{start_ms / ms:.1f}&times;" if start_ms else "&mdash;"
+        traj.append(f"<tr><td>{n}</td><td>{ms:.3f}</td><td>{1000.0 / ms:.1f}</td>"
+                    f"<td>{x}</td><td>{html_escape(board)}</td></tr>")
+    if isinstance(p150, (int, float)):
+        x = f"{start_ms / p150:.1f}&times;" if start_ms else "&mdash;"
+        traj.append(f"<tr><td>{STOP_ITER} (p150)</td><td>{p150:.3f}</td><td>{1000.0 / p150:.1f}</td>"
+                    f"<td>{x}</td><td>{html_escape(m.get('p150_board') or 'p150')}</td></tr>")
+    levers = "".join(
+        f"<tr><td>{t}</td><td>{html_escape(what)}</td><td>{html_escape(num)}</td><td>{html_escape(out)}</td></tr>"
+        for t, what, num, out in STOP_CLOSED_LEVERS)
+    flags = "".join(
+        f"<li><code>{f}</code>: {html_escape(what)} (<a href='{_opt_href(doc)}' target='_blank'>{doc}</a>)</li>"
+        for f, what, doc in STOP_OFF_FLAGS)
+    best = ""
+    if isinstance(p150, (int, float)):
+        best = (
+            f"<b>{p150:.3f} ms/view ({1000.0 / p150:.1f} FPS)</b> on {html_escape(m.get('p150_board') or 'p150')}, "
+            f"md5 {html_escape(str(m.get('p150_md5', '')))} on 30/30 views, hero "
+            f"{m.get('p150_hero_psnr_vs_ref', 0):.2f} dB vs <code>benchmarks/reference_v2/hero.png</code>. "
+            f"That is <b>{STOP_GPU_G1_MS / p150:.2f}&times;</b> faster than GPU G1 "
+            f"({STOP_GPU_G1_MS} ms/view, RTX A6000, <b>published, not measured</b>). ")
+    if isinstance(p100, (int, float)):
+        best += (f"On the p100a measurement box ({html_escape(m.get('board') or '')}) it runs "
+                 f"{p100:.3f} ms/view, md5 {html_escape(str(m.get('md5', '')))}.")
+    return f"""
+<section class='stop-line' style='border-left:4px solid #2a7;background:#f3fbf6;padding:12px 16px'>
+  <h2 style='margin-top:0'>Conclusions / stop line</h2>
+  <p><b>Final best: iter {STOP_ITER}</b> (tag <code>{STOP_TAG}</code>, commit <code>{STOP_COMMIT}</code>,
+  <code>GSPLAT_TT_PERM_NOC=7</code>): {best}</p>
+  <h3>Trajectory since this project started (2026-09-29)</h3>
+  <p>Running-best milestones from the ledger; speedup is against iter {STOP_TRAJECTORY_ITERS[0]},
+  the best when the project started. Boards differ between rows; every A/B ran both arms on one box.</p>
+  <table class='rows'><tr><th>iter</th><th>ms/view</th><th>FPS</th><th>vs start</th><th>board</th></tr>
+  {''.join(traj)}</table>
+  <h3>Closed levers (gate: a lever must be worth at least {STOP_GATE_MS} ms/view)</h3>
+  <table class='rows'><tr><th>task</th><th>lever</th><th>number</th><th>outcome</th></tr>
+  {levers}</table>
+  <h3>Off-by-default flags</h3>
+  <ul>{flags}</ul>
+  <p>ETH Tracy tooling for profiling the dispatch path is landed at <code>a7a97b19</code>
+  (<a href='{_opt_href("docs/eth-tracy-t427/README.md")}' target='_blank'>docs/eth-tracy-t427</a>).</p>
+  <h3>What would justify reopening</h3>
+  <p>A new lever with measured or well-modelled value of at least <b>{STOP_GATE_MS} ms/view</b> on the
+  bicycle reference, or new guidance from the user. Every lever open at #423 is closed above.</p>
+</section>
+"""
+
+
 def published_gpu_section() -> str:
     """Published-literature GPU rows. Always labelled 'published, not measured'."""
     doc_link = (
@@ -2106,6 +2210,7 @@ def build_html(rows: list[dict]) -> str:
 <h1>gstt2 — Optimization Report</h1>
 {meta}
 {conclusion_section()}
+{stop_line_section()}
 {in_flight_section()}
 {figs_html}
 {throughput_section()}

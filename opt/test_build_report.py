@@ -90,3 +90,26 @@ def test_conclusion_section_shows_p150_line(tmp_path):
         assert "p150 / G1 = 1.20x" in sec and "href='../docs/p150-bench-bh30.md'" in sec, sec
     finally:
         br.CONCLUSION_MD, br.P150_JSON = orig
+
+
+def test_stop_line_section_final_best_levers_and_gate():
+    import build_report as br
+    orig = br.load_ttw_iters
+    try:
+        br.load_ttw_iters = lambda: []
+        assert br.stop_line_section() == ""
+        br.load_ttw_iters = lambda: [
+            {"iter": 138, "decision": "keep", "timings": {"ms_view": 173.1}, "metrics": {"board": "bh-07 p100a"}},
+            {"iter": 216, "decision": "keep", "timings": {"ms_view": 8.043},
+             "metrics": {"board": "bh-04 p100a", "md5": "906e0435", "p150_board": "bh-30 p150",
+                         "p150_frame_ms_view": 7.705, "p150_md5": "39d84b28", "p150_hero_psnr_vs_ref": 42.51}},
+        ]
+        sec = br.stop_line_section()
+        assert "Conclusions / stop line" in sec and "best-iter-216" in sec and "e13e9f6b" in sec, sec
+        assert "7.705 ms/view (129.8 FPS)" in sec and "39d84b28" in sec and "42.51 dB" in sec, sec
+        assert "1.40&times;</b> faster than GPU G1" in sec and "published, not measured" in sec, sec
+        assert "8.043 ms/view, md5 906e0435" in sec and "22.5&times;" in sec and "21.5&times;" in sec, sec
+        assert "at least 0.15 ms/view" in sec and "GSPLAT_TT_CHUNK_CULL=1" in sec, sec
+        assert "GSPLAT_TT_PFWC_DEAL=lpt" in sec and "7.807" in sec and "8.95" in sec, sec
+    finally:
+        br.load_ttw_iters = orig

@@ -1,4 +1,9 @@
-# Conclusion: Gaussian splatting on Tenstorrent, bicycle reference (stop at iter 207)
+# Conclusion: Gaussian splatting on Tenstorrent, bicycle reference (final stop at iter 216)
+
+**Update 2026-10-08 (#442):** the project went on past iter 207 and stopped at iter 216 (tag
+`best-iter-216`, e13e9f6b): 7.705 ms/view (129.8 FPS) on p150 bh-30, 1.40x faster than G1 (10.75 ms,
+published, not measured). The final best, trajectory, closed levers and reopen gate are in the
+"Conclusions / stop line" section of `opt/REPORT.html`. The text below is the iter 207 write-up.
 
 Written by task #335 on 2026-10-07. No device was used for this document; every number names its
 source. GPU numbers are **published, not measured** (there is no GPU box in this project).
