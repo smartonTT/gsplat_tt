@@ -30,6 +30,9 @@ run() {  # run <tag> <dispatch>
   diff -q $REF $O/md5-$1.txt > /dev/null && echo "ALL_VIEWS_IDENTICAL $1 ($(wc -l < $O/md5-$1.txt))" \
     || echo "VIEWS_DIFFER $1 ($(diff $REF $O/md5-$1.txt | grep -c '^>'))"
 }
+if [ "$ROUNDS" = probe ]; then  # attempt 3: does ETH dispatch open with 1 CQ (GSPLAT_TT_MAT_CQ1=0)?
+  GSPLAT_TT_MAT_CQ1=0 run probe-E1 eth; ROUNDS=0; echo $rc > $O/bench.rc; echo "=== bench end rc=$rc $(date -u +%FT%TZ)"; exit 0
+fi
 for r in $(seq 1 $ROUNDS); do
   case $r in
     1) run r1-W worker && run r1-E eth ;;

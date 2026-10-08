@@ -1,0 +1,33 @@
+=== viewer stop 2026-10-08T00:26:40Z
+[viewer] stopped pid(s) 69985
+=== bench sha=f70118da host=bh-30-special-smarton-for-reservation-135630 2026-10-08T00:27:14Z card=p150b aiclk=1350 rt_root=/localdev/smarton/p150bench/ttm-eth12
+=== r1-W dispatch=worker start 00:27:14
+run r1-W rc=0 00:27:50
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.1 p50_ms=11.1 min_ms=9.4 max_ms=12.8 n_views=30 warmup_s=21.5 out=/localdev/smarton/p150bench/tree387/tmp/t387-r1-W
+STAGES n=30 head=0.005 project=2.981 tile_assign=0.007 sort=1.074 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.467 d2h=0.471 assemble=0.000 tail=0.003 | sum=11.008 view_total=11.010 resid_in_view=+0.002 avg_frame_ms=11.066 resid_vs_frame=+0.058
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.454 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.315 publish_wait=0.000 mat=0.109 | sum=0.965 sort=1.074 resid=+0.109
+ALL_VIEWS_IDENTICAL r1-W (30)
+=== r1-E dispatch=eth start 00:27:51
+run r1-E rc=1 00:27:57
+2026-10-08 00:27:56.831 | critical |          Always | TT_THROW: /localdev/smarton/p150bench/cache387o/tt-metal-cache2674056940313099667/kernels/cq_dispatch/10390542323557100015//idle_erisc/idle_erisc.elf: segment[0] [0x6870,+0x3120) overflows region:0 limit of 0x2ab0 bytes, reduce the size of code 
+2026-10-08 00:27:56.865 | critical |          Always | TT_THROW: /localdev/smarton/p150bench/cache387o/tt-metal-cache2674056940313099667/kernels/cq_dispatch/12652910212460351335//idle_erisc/idle_erisc.elf: segment[0] [0x6870,+0x3124) overflows region:0 limit of 0x2ab0 bytes, reduce the size of code 
+Traceback (most recent call last):
+RuntimeError: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/llrt/tt_elffile.cpp:393: tt::exception
+2026-10-08 00:27:17.091 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 00:27:17.098 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+
+arton      99 Oct  8 00:27 .
+arton    4096 Oct  8 00:27 ..
+arton 1703239 Oct  8 00:27 hero-r1-W.png
+arton    1558 Oct  8 00:27 md5-r1-W.txt
+arton    9991 Oct  8 00:27 r1-E.log
+arton   26679 Oct  8 00:27 r1-W.log
+=== bench end rc=1 2026-10-08T00:27:57Z
+=== viewer start 2026-10-08T00:27:58Z
+[viewer] started pid 72111 supervisor 72104 sha 8329be508584ee7d369eac1ae6555097a8b08bf8 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=11.54 ms (86.6 FPS) min=11.51 max=11.60
+[viewer_clean] READY port=8080
+SHA=8329be508584ee7d369eac1ae6555097a8b08bf8
+=== viewer ready 2026-10-08T00:28:06Z localhost:8091 -> 200
+=== drive end 2026-10-08T00:28:10Z
