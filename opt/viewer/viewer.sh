@@ -8,7 +8,10 @@
 # (a signal kill or a taken port also ends the supervisor, see supervise.sh).
 # Env: VIEWER_HOST (bh-30), VIEWER_PORT (8080 on the box), VIEWER_LOCAL_PORT (8091 on the Mac; 8081 is taken by the LTX relay),
 #      VIEWER_DIR (/localdev/$USER/viewer), VIEWER_TT_METAL_HOME (the viewer's own build, $VIEWER_DIR/tt-metal;
-#      bh-30's shared /localdev/$USER/tt-metal no longer JITs, task #263).
+#      bh-30's shared /localdev/$USER/tt-metal no longer JITs, task #263),
+#      VIEWER_ETH_OVERLAY (/localdev/$USER/viewer-eth-overlay: the ETH dispatch overlay of the viewer's
+#      tt-metal, JIT cache <overlay>-cache; never under VIEWER_DIR, task #415),
+#      VIEWER_DISPATCH (empty = render/eth_default.py decides: eth 12x10 on a p150; worker forces 11x10).
 # One-time box setup (tt-metal, $VIEWER_DIR/venv, $VIEWER_DIR/scenes): opt/viewer/setup_box.sh.
 set -euo pipefail
 HOST=${VIEWER_HOST:-bh-30}
@@ -18,6 +21,7 @@ LPORT=${VIEWER_LOCAL_PORT:-8091}
 VDIR=${VIEWER_DIR:-/localdev/$USER/viewer}
 TTMH=${VIEWER_TT_METAL_HOME:-$VDIR/tt-metal}
 DIR=$VDIR/tree
+ETHOV=${VIEWER_ETH_OVERLAY:-/localdev/$USER/viewer-eth-overlay}
 # Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key.
 SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 cd "$(git rev-parse --show-toplevel)"
@@ -55,7 +59,7 @@ R
 do_start() {
   # Debug knobs (task #357), forwarded only when set here: VIEWER_STALL_FILE arms the
   # watchdog test hook, VIEWER_WATCHDOG_S changes the limit, VIEWER_PYSPY adds native stacks.
-  rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH" \
+  rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH ETHOV=$ETHOV DISPATCH=${VIEWER_DISPATCH:-}" \
       "GSPLAT_VIEWER_STALL_FILE=${VIEWER_STALL_FILE:-} GSPLAT_VIEWER_PYSPY=${VIEWER_PYSPY:-}" \
       "${VIEWER_WATCHDOG_S:+GSPLAT_VIEWER_WATCHDOG_S=$VIEWER_WATCHDOG_S} bash -s" <<'R'
 set -eu
@@ -68,6 +72,10 @@ export TT_METAL_HOME=$TTMH TT_METAL_ARCH_NAME=blackhole
 export TT_METAL_RUNTIME_ROOT=$TT_METAL_HOME GSPLAT_SHA=$(cat SHA)
 # JIT cache on /localdev: the default ~/.cache sits on the 9.4 GB home quota, which filled on bh-30 (task #263).
 export TT_METAL_CACHE=$VDIR/tt-metal-cache
+# ETH dispatch (task #415): viewer_clean.py runs render/eth_default.py, which makes/reuses the
+# overlay here and switches TT_METAL_CACHE to the overlay's own cache (its ELFs must not mix).
+export GSPLAT_TT_ETH_OVERLAY=$ETHOV GSPLAT_TT_ETH_CACHE=$ETHOV-cache
+if [ -n "$DISPATCH" ]; then export GSPLAT_TT_DISPATCH=$DISPATCH; else unset GSPLAT_TT_DISPATCH; fi
 export NUMPY_MADVISE_HUGEPAGE=0  # THP compaction stalls on bh-35 (see viewer_clean.py)
 [ -f "$VDIR/viewer.log" ] && mv -f "$VDIR/viewer.log" "$VDIR/viewer.prev.log"
 # The pid file is written by the viewer process itself (exec keeps the pid): $! can be
