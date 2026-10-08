@@ -374,6 +374,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         compute_defines["BLEND_PROF"] = blend_prof_level;
     }
     if (fused && gsplat_tt::sort_matcull_trisc_fill()) compute_defines["MATCULL_TRISC_FILL"] = "1";
+    // Task #413: GSPLAT_TT_MATCULL_PROF=1 also adds per-job mat zones on the TRISCs.
+    if (const char* mcp = std::getenv("GSPLAT_TT_MATCULL_PROF"); fused && mcp != nullptr && mcp[0] == '1') {
+        compute_defines["MATCULL_PROF"] = "1";
+    }
     // Sub-tile waste instrumentation (task t9): GSPLAT_TT_MB_STATS=1 compiles
     // per-core record/microblock/pixel counters into the blend compute kernel
     // and DPRINTs them at kernel end (needs TT_METAL_DPRINT_CORES). Default OFF.

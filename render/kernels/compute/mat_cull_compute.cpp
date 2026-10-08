@@ -64,6 +64,15 @@ uint32_t fz_a, fz_b;  // fill_batch: CB wait / copy; patch_batch: packer wait / 
 #else
 #define FZ_PROF 0
 #endif
+// Task #413: GSPLAT_TT_MATCULL_PROF=1 (MATCULL_PROF, profiler builds only) adds two Tracy
+// zones per job on each TRISC: "mj_wait" (UNPACK pick_job, MATH/PACK mailbox read; the
+// last one per core is the wait for both streams to end) and "mj_job" (the job's batch
+// loop: UNPACK fill, MATH copy + band, PACK pack + patch + done word). Default OFF.
+#if defined(MATCULL_PROF) && MATCULL_PROF && defined(PROFILE_KERNEL)
+#define MJ_ZONE(name) DeviceZoneScopedN(name)
+#else
+#define MJ_ZONE(name) ((void)0)
+#endif
 #endif
 
 #ifdef TRISC_UNPACK
@@ -233,19 +242,23 @@ void kernel_main() {
 #if FZ_PROF
         const uint32_t fz_w0 = fz_now();
 #endif
-        UNPACK(({
-            job = pick_job(live, prefer, slab, n);
-            ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, job);
-            ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, job);
-        }));
-        MATH((job = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
-        PACK((job = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
+        {
+            MJ_ZONE("mj_wait");
+            UNPACK(({
+                job = pick_job(live, prefer, slab, n);
+                ckernel::mailbox_write(ckernel::ThreadId::MathThreadId, job);
+                ckernel::mailbox_write(ckernel::ThreadId::PackThreadId, job);
+            }));
+            MATH((job = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
+            PACK((job = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId)));
+        }
 #if FZ_PROF
         fz_w += fz_now() - fz_w0;
 #endif
         if (job == JOB_DONE_MSG) {
             break;
         }
+        MJ_ZONE("mj_job");
         const uint32_t s = job & 1u;
         const uint32_t page = job & ~1u;
         const uint32_t cb_in = s ? CB_COEFF_S1 : CB_COEFF_S0;

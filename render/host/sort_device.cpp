@@ -678,6 +678,10 @@ static void build_program_subchunk(SortDeviceContext& ctx) {
         u2d[24] = UnpackToDestMode::UnpackToDestFp32;
         std::map<std::string, std::string> cull_defines;
         if (sort_matcull_trisc_fill()) cull_defines["MATCULL_TRISC_FILL"] = "1";
+        // Task #413: per-job mat zones on the TRISCs (GSPLAT_TT_MATCULL_PROF=1).
+        if (const char* mcp = std::getenv("GSPLAT_TT_MATCULL_PROF"); mcp != nullptr && mcp[0] == '1') {
+            cull_defines["MATCULL_PROF"] = "1";
+        }
         ctx.kmatcull = CreateKernel(
             program,
             OVERRIDE_KERNEL_PREFIX "kernels/compute/mat_cull_compute.cpp",
