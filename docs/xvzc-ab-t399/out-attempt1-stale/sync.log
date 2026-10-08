@@ -1,2 +1,2 @@
-[sync_remote] sha=7623475d5f57f59467fa3823227dca130839c999 so_md5=81ba493e20250cfd204d2aa21f82e123 
+[sync_remote] sha=7623475d5f57f59467fa3823227dca130839c999 so_md5=81ba493e20250cfd204d2aa21f82e123
 [sync_remote] WARNING: host sources changed but render_clean .so md5 did not -- stale build? rm render/render_clean*.so and rebuild

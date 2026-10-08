@@ -12,7 +12,7 @@
 [ttw 2026-10-07T21:42:31-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=30b05e43 bin=2c5a4584f5619524 t399 7623475d xvpin vs xvzc (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t399-r3-xvzc  timeout=420s  worry=600s  ts=2026-10-07T21:42:31-0400
 cmd: T=/localdev/smarton/gstt2-t399 bash /localdev/smarton/gstt2-t399/tmp/t379_remote_time.sh 3 xvzc
