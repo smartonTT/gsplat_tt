@@ -119,8 +119,22 @@ const std::vector<float>& cov3d_unique(const float* cov3d, std::size_t N) {
 // device zones never reach the live Tracy stream. ReadMeshDeviceProfilerResults
 // is a strict no-op unless the profiler was enabled at init
 // (TT_METAL_DEVICE_PROFILER=1). Never changes pixels / PSNR.
+// Task #407 (GSPLAT_TT_PROFILE_READ_EVERY=N, default 1): read only after every
+// N-th render. Each read Finish()es both CQs and pulls every core's buffers
+// (~46 ms with the mid-run dump), which stalls the device between views and
+// hides the cross-view overlap. With N = renders per process (warmup + views)
+// the whole run is read once at its end; the device DRAM buffers must hold it.
 void maybe_dump_device_profiler() {
     if (!gsplat_tt::device_state::is_initialized()) {
+        return;
+    }
+    static const unsigned long every = [] {
+        const char* e = std::getenv("GSPLAT_TT_PROFILE_READ_EVERY");
+        const unsigned long v = (e != nullptr && *e != '\0') ? std::strtoul(e, nullptr, 10) : 1ul;
+        return v == 0ul ? 1ul : v;
+    }();
+    static unsigned long renders = 0;
+    if (++renders % every != 0ul) {
         return;
     }
     auto dev = gsplat_tt::device_state::get_device();
