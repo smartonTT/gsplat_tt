@@ -12,7 +12,7 @@
 [ttw 2026-10-07T20:36:25-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=37f2829a bin=d2539862431b5403 t379 iter-211 37f2829a cross-view overlap (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t379-r2-xv  timeout=420s  worry=600s  ts=2026-10-07T20:36:26-0400
 cmd: T=/localdev/smarton/gstt2-t379 bash /localdev/smarton/gstt2-t379/tmp/t379_remote_time.sh 2 xv
