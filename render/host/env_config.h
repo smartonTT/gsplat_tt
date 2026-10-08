@@ -216,9 +216,12 @@ inline bool k2_rows_view() {
 // Task #367: the blend writer writes the u8 image straight into a pinned,
 // NoC-mapped host buffer (no D2H read of the DRAM image). Default off.
 // Task #374: zero-copy output. The caller gets the pinned buffer the writer
-// wrote (no host copy); implies out_pinned(). Default off.
+// wrote (no host copy); implies out_pinned(). Default on since task #399
+// (with the cross-view overlap: 8.735 vs xvpin 9.146 ms/view on p100a);
+// GSPLAT_TT_OUT_ZEROCOPY=0 (pinned copy) or GSPLAT_TT_OUT_PINNED=0 opts out.
 inline bool out_zerocopy() {
-    static const bool v = env_uint("GSPLAT_TT_OUT_ZEROCOPY", 0u) != 0u;
+    static const bool v = env_uint("GSPLAT_TT_OUT_ZEROCOPY", 1u) != 0u &&
+                           env_uint("GSPLAT_TT_OUT_PINNED", 1u) != 0u;
     return v;
 }
 // Task #367 (+ #374 zero-copy, which needs it). Default on since task #393
