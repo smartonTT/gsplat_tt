@@ -1,0 +1,212 @@
+2026-10-08 04:25:01.769 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/p150bench/prof439/L
+2026-10-08 04:25:01.771 | INFO     | __main__:main:336 - Using port 8086
+2026-10-08 04:25:01.771 | INFO     | tracy:run_report_setup:88 - Verifying tracy profiling tools
+2026-10-08 04:25:01.777 | INFO     | tracy:run_report_setup:108 - Capture command: ('/localdev/smarton/viewer/tt-metal/build/tools/profiler/bin/capture-release -o /localdev/smarton/p150bench/prof439/L/.logs/tracy_profile_log_host.tracy -f -p 8086',)
+Connecting to 127.0.0.1:8086...2026-10-08 04:25:01.794 | INFO     | __main__:main:400 - Test process started
+2026-10-08 04:25:03.059 | INFO     | __main__:main:175 - Setting profiler artifacts folder to /localdev/smarton/p150bench/prof439/L
+[eth] card p150b: eth dispatch, overlay /localdev/smarton/p150bench/ttm-eth12p36 (from env)
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-08 04:25:05.586 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-08 04:25:05.586 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-08 04:25:05.589 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-08 04:25:05.590 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 04:25:05.590 | info     |             UMD | Firmware bundle version 19.13.2 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-08 04:25:05.591 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-08 04:25:05.592 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-08 04:25:05.592 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-08 04:25:05.593 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-08 04:25:05.593 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-08 04:25:05.596 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-08 04:25:05.597 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 04:25:05.597 | info     |             UMD | Firmware bundle version 19.13.2 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-08 04:25:05.597 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-08 04:25:05.597 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x0 ETH: 0x120 PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-08 04:25:05.598 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-08 04:25:05.598 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-08 04:25:05.670 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-08 04:25:05.670 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-08 04:25:05.670 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-08 04:25:05.670 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-08 04:25:05.671 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-08 04:25:05.672 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0xffffffff40000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-08 04:25:05.673 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-08 04:25:05.993 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-08 04:25:05.993 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-08 04:25:05.993 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-08 04:25:05.993 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-08 04:25:05.995 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-08 04:25:05.996 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 04:25:05.996 | info     |             UMD | Firmware bundle version 19.13.2 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-08 04:25:05.996 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-08 04:25:05.997 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0x61) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-08 04:25:05.998 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-08 04:25:05.998 | info     |          Fabric |
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 04:25:05.998 | info     |          Fabric |
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 04:25:05.998 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-08 04:25:05.998 | info     |          Fabric |
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 04:25:05.998 | info     |          Fabric |
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-08 04:25:05.998 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-08 04:25:05.998 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-08 04:25:05.998 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-08 04:25:05.998 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-08 04:25:05.998 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-08 04:25:05.998 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-08 04:25:06.065 | info     |           Metal | Profiler started on device 0 (profiler_initializer.cpp:49)
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[gsplat_tt::sort] bucket tile stride 513 pages, 8 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 569.8 ms
+[gsplat_tt::pfwc] pfwc deal lpt: 5989 tiles on 120 cores, weights /localdev/smarton/p150bench/tree392/docs/pfwc-deal-t439/bicycle-hero-w.txt
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 120)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=23680
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 120 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.63 layout=0.10 pub_host=0.34 total=1.14ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+[run] timing 10 views (warmup excluded)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.52 layout=0.07 pub_host=0.32 total=0.92ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+VIEW_STAGES i=0 name=hero wall=10.12 project=2.98 sort=1.46 blend=5.46 xview=0.12 view_total=10.05 sort_bin_layout=0.07 sort_bin_emit=0.52 sort_publish_host=0.32 sort_mat=0.09 project_pfwc_rtargs=0.20 project_pfwc_enqueue=0.09 project_gather_wait=2.79
+[run]   view=hero 10.1ms
+[SUBCHUNK] tiles_split=64 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=33181
+[SORT] stage=ONELAUNCH P=2090575 P_kept=2090575 num_tiles=1024 max_tile_n=19171 onelaunch=0.53 layout=0.08 pub_host=0.35 total=0.96ms
+OUT_RING new pinned slot (slots=3 grows=2 replaced=0)
+VIEW_STAGES i=1 name=orb_00 wall=8.20 project=2.11 sort=1.51 blend=4.39 xview=0.12 xview_hits=1.00 view_total=8.15 sort_bin_layout=0.08 sort_bin_emit=0.53 sort_publish_host=0.35 sort_mat=0.11 project_pfwc_rtargs=0.09 project_gather_wait=2.11
+[run]   view=orb_00 8.2ms
+[SUBCHUNK] tiles_split=63 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=34324
+[SORT] stage=ONELAUNCH P=2164042 P_kept=2164042 num_tiles=1024 max_tile_n=18956 onelaunch=0.53 layout=0.08 pub_host=0.33 total=0.94ms
+OUT_RING new pinned slot (slots=4 grows=3 replaced=0)
+VIEW_STAGES i=2 name=orb_01 wall=8.40 project=2.23 sort=1.46 blend=4.52 xview=0.12 xview_hits=1.00 view_total=8.35 sort_bin_layout=0.08 sort_bin_emit=0.53 sort_publish_host=0.33 sort_mat=0.09 project_pfwc_rtargs=0.09 project_gather_wait=2.23
+[run]   view=orb_01 8.4ms
+[SUBCHUNK] tiles_split=66 total_subchunks=1093 max_subchunks_per_tile=3 payload_pages=35760
+[SORT] stage=ONELAUNCH P=2255766 P_kept=2255766 num_tiles=1024 max_tile_n=18906 onelaunch=0.52 layout=0.08 pub_host=0.34 total=0.94ms
+VIEW_STAGES i=3 name=orb_02 wall=8.12 project=2.17 sort=1.13 blend=4.63 xview=0.12 xview_hits=1.00 view_total=8.07 sort_bin_layout=0.08 sort_bin_emit=0.52 sort_publish_host=0.34 sort_mat=0.10 project_pfwc_rtargs=0.09 project_gather_wait=2.17
+[run]   view=orb_02 8.1ms
+[SUBCHUNK] tiles_split=62 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=37612
+[SORT] stage=ONELAUNCH P=2374790 P_kept=2374790 num_tiles=1024 max_tile_n=17834 onelaunch=0.44 layout=0.08 pub_host=0.33 total=0.86ms
+VIEW_STAGES i=4 name=orb_03 wall=8.45 project=2.29 sort=1.06 blend=4.91 xview=0.12 xview_hits=1.00 view_total=8.40 sort_bin_layout=0.08 sort_bin_emit=0.44 sort_publish_host=0.33 sort_mat=0.10 project_pfwc_rtargs=0.09 project_gather_wait=2.29
+[run]   view=orb_03 8.5ms
+[SUBCHUNK] tiles_split=68 total_subchunks=1096 max_subchunks_per_tile=3 payload_pages=39937
+[SORT] stage=ONELAUNCH P=2523377 P_kept=2523377 num_tiles=1024 max_tile_n=20034 onelaunch=0.42 layout=0.08 pub_host=0.34 total=0.84ms
+VIEW_STAGES i=5 name=orb_04 wall=8.70 project=2.33 sort=1.02 blend=5.16 xview=0.12 xview_hits=1.00 view_total=8.65 sort_bin_layout=0.08 sort_bin_emit=0.42 sort_publish_host=0.34 sort_mat=0.08 project_pfwc_rtargs=0.09 project_gather_wait=2.33
+[run]   view=orb_04 8.7ms
+[SUBCHUNK] tiles_split=70 total_subchunks=1097 max_subchunks_per_tile=3 payload_pages=43036
+[SORT] stage=ONELAUNCH P=2722282 P_kept=2722282 num_tiles=1024 max_tile_n=22369 onelaunch=0.42 layout=0.08 pub_host=0.34 total=0.84ms
+VIEW_STAGES i=6 name=orb_05 wall=9.11 project=2.44 sort=1.02 blend=5.45 xview=0.12 xview_hits=1.00 view_total=9.06 sort_bin_layout=0.08 sort_bin_emit=0.42 sort_publish_host=0.34 sort_mat=0.08 project_pfwc_rtargs=0.09 project_gather_wait=2.44
+[run]   view=orb_05 9.1ms
+[SUBCHUNK] tiles_split=75 total_subchunks=1104 max_subchunks_per_tile=3 payload_pages=45752
+[SORT] stage=ONELAUNCH P=2895762 P_kept=2895762 num_tiles=1024 max_tile_n=21267 onelaunch=0.43 layout=0.08 pub_host=0.32 total=0.83ms
+VIEW_STAGES i=7 name=orb_06 wall=9.59 project=2.53 sort=1.02 blend=5.84 xview=0.13 xview_hits=1.00 view_total=9.54 sort_bin_layout=0.08 sort_bin_emit=0.43 sort_publish_host=0.32 sort_mat=0.09 project_pfwc_rtargs=0.10 project_gather_wait=2.52
+[run]   view=orb_06 9.6ms
+[SUBCHUNK] tiles_split=81 total_subchunks=1109 max_subchunks_per_tile=3 payload_pages=48611
+[SORT] stage=ONELAUNCH P=3078956 P_kept=3078956 num_tiles=1024 max_tile_n=21032 onelaunch=0.43 layout=0.08 pub_host=0.32 total=0.83ms
+VIEW_STAGES i=8 name=orb_07 wall=10.03 project=2.64 sort=1.01 blend=6.16 xview=0.14 xview_hits=1.00 view_total=9.98 sort_bin_layout=0.08 sort_bin_emit=0.43 sort_publish_host=0.32 sort_mat=0.08 project_pfwc_rtargs=0.09 project_gather_wait=2.63
+[run]   view=orb_07 10.0ms
+[SUBCHUNK] tiles_split=85 total_subchunks=1114 max_subchunks_per_tile=3 payload_pages=49703
+[SORT] stage=ONELAUNCH P=3149841 P_kept=3149841 num_tiles=1024 max_tile_n=19047 onelaunch=0.42 layout=0.08 pub_host=0.33 total=0.83ms
+2026-10-08 04:25:13.995 | info     |           Metal | Device kernel duration perf summary (device=0): count=1, min=191642234ns, avg=191642234.0ns, max=191642234ns (profiler_analysis.cpp:645)
+2026-10-08 04:25:13.995 | info     |           Metal | Device kernel duration perf histogram (device=0): (buckets=10, bucket_size=100ns, range=[191642200..191643200), underflow(<191642200ns)=0, overflow(>=191643200ns)=0) (profiler_analysis.cpp:682)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642200 ..    191642300) |########################################|        1 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642300 ..    191642400) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642400 ..    191642500) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642500 ..    191642600) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642600 ..    191642700) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642700 ..    191642800) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642800 ..    191642900) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191642900 ..    191643000) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191643000 ..    191643100) |                                        |        0 (profiler_analysis.cpp:700)
+2026-10-08 04:25:13.995 | info     |           Metal |   [   191643100 ..    191643200) |                                        |        0 (profiler_analysis.cpp:700)
+VIEW_STAGES i=9 name=orb_08 wall=785.31 project=2.74 sort=1.02 blend=6.45 tail=774.99 xview_hits=1.00 view_total=785.23 sort_bin_layout=0.08 sort_bin_emit=0.42 sort_publish_host=0.33 sort_mat=0.09 project_gather_wait=2.74
+[run]   view=orb_08 785.3ms
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=86.6 p50_ms=8.9 min_ms=8.1 max_ms=785.3 n_views=10 warmup_s=7.8 out=/localdev/smarton/p150bench/tree392/tmp/t439-TL
+TTW_TIMING ms_view=86.604
+TTW_TIMING blend=86.604
+TTW_TIMING stage_head=0.004
+TTW_TIMING stage_project=2.446
+TTW_TIMING stage_tile_assign=0.008
+TTW_TIMING stage_sort=1.172
+TTW_TIMING stage_blend_setup=0.000
+TTW_TIMING stage_mat=0.000
+TTW_TIMING stage_cull=0.000
+TTW_TIMING stage_blend=5.297
+TTW_TIMING stage_d2h=0.009
+TTW_TIMING stage_assemble=0.000
+TTW_TIMING stage_tail=77.503
+TTW_TIMING stage_xview=0.110
+TTW_TIMING stage_view_total=86.550
+TTW_TIMING stage_pybind=0.054
+STAGES n=10 head=0.004 project=2.446 tile_assign=0.008 sort=1.172 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.297 d2h=0.009 assemble=0.000 tail=77.503 xview=0.110 | sum=86.547 view_total=86.550 resid_in_view=+0.002 avg_frame_ms=86.604 resid_vs_frame=+0.056 xview_hits=9 xview_misses=0
+TTW_TIMING stage_sort_pread=0.002
+TTW_TIMING stage_sort_bin_count=0.000
+TTW_TIMING stage_sort_bin_hist_d2h=0.000
+TTW_TIMING stage_sort_bin_layout=0.077
+TTW_TIMING stage_sort_upload=0.000
+TTW_TIMING stage_sort_bin_emit=0.466
+TTW_TIMING stage_sort_kernel=0.000
+TTW_TIMING stage_sort_d2h=0.000
+TTW_TIMING stage_sort_compact=0.000
+TTW_TIMING stage_sort_publish_host=0.334
+TTW_TIMING stage_sort_publish_wait=0.000
+TTW_TIMING stage_sort_mat=0.090
+TTW_TIMING stage_sort_other=0.203
+SORT_STAGES n=10 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.077 upload=0.000 bin_emit=0.466 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.334 publish_wait=0.000 mat=0.090 | sum=0.968 sort=1.172 resid=+0.203
+TTW_TIMING stage_project_cov3d=0.000
+TTW_TIMING stage_project_pfwc_setup=0.004
+TTW_TIMING stage_project_pfwc_rtargs=0.094
+TTW_TIMING stage_project_pfwc_enqueue=0.029
+TTW_TIMING stage_project_pfwc_finish=0.000
+TTW_TIMING stage_project_gather_setup=0.002
+TTW_TIMING stage_project_gather_rtargs=0.000
+TTW_TIMING stage_project_gather_enqueue=0.000
+TTW_TIMING stage_project_gather_wait=2.425
+TTW_TIMING stage_project_gather_result=0.000
+TTW_TIMING stage_project_other=-0.108
+PROJECT_STAGES n=10 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.094 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.002 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=2.425 gather_result=0.000 | sum=2.554 project=2.446 resid=-0.108
+TTW_TIMING stage_tile_assign_setup=0.006
+TTW_TIMING stage_tile_assign_rtargs=0.000
+TTW_TIMING stage_tile_assign_enqueue=0.000
+TTW_TIMING stage_tile_assign_scan_finish=0.000
+TTW_TIMING stage_tile_assign_p_d2h=0.000
+TTW_TIMING stage_tile_assign_k2_finish=0.000
+TTW_TIMING stage_tile_assign_publish=0.001
+TTW_TIMING stage_tile_assign_other=0.001
+TILE_ASSIGN_STAGES n=10 setup=0.006 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.007 tile_assign=0.008 resid=+0.001
+
+Queue delay: 34 ns
+Timer resolution: 9 ns
+
+Frames: 2
+Time span: 9.31 s
+Zones: 244,305
+Elapsed time: 9.91 s
+Saving trace... done!
+Trace size 3423.84 KB (29.12% ratio)
+2026-10-08 04:25:15.943 | INFO     | tracy:generate_report:154 - Host side ops time report generated at /localdev/smarton/p150bench/prof439/L/.logs/tracy_ops_times.csv
+2026-10-08 04:25:15.968 | INFO     | tracy:generate_report:165 - Host side ops data report generated at /localdev/smarton/p150bench/prof439/L/.logs/tracy_ops_data.csv
+2026-10-08 04:25:15.968 | INFO     | tracy.process_ops_logs:import_tracy_op_logs:255 - Importing ops logs
+/localdev/smarton/viewer/tt-metal/tools/tracy/process_ops_logs.py:360: DtypeWarning: Columns (3) have mixed types. Specify dtype option on import or set low_memory=False.
+  df = pd.read_csv(tracyOpTimesLog)
+2026-10-08 04:25:16.713 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1014 - Copying runtime artifacts
+2026-10-08 04:25:16.732 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1020 - Getting device only ops data
+2026-10-08 04:25:18.489 | INFO     | tracy.process_device_log:core_to_device_timeseries:416 - Importing Data For Device Number : 0
+2026-10-08 04:25:21.245 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1032 - Generating device op report ...
+2026-10-08 04:25:21.261 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1210 - Device only OPs csv generated at: /localdev/smarton/p150bench/prof439/L/reports/2026_10_08_04_25_16/ops_perf_results_2026_10_08_04_25_16.csv
+2026-10-08 04:25:21.263 | INFO     | tracy.process_ops_logs:get_device_data_generate_report:1219 - Device only per core op to op times csv generated at: /localdev/smarton/p150bench/prof439/L/reports/2026_10_08_04_25_16/per_core_op_to_op_times_2026_10_08_04_25_16.csv
