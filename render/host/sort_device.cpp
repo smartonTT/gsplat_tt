@@ -647,6 +647,10 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
         }
     }
     if (fused) mat_defines["MATBLEND_FUSE"] = "1";
+    // Task #418: GSPLAT_TT_SORT_PACKED=0 restores the pair radix in sort_record_ids
+    // (default: packed key|id words, sort_radix_tile_algo.h).
+    const char* packed = std::getenv("GSPLAT_TT_SORT_PACKED");
+    mat_defines["SORT_RECS_PACKED"] = (packed != nullptr && packed[0] == '0') ? "0" : "1";
     mat_defines_m0 = mat_defines;
     mat_defines_m0["MAT_CB_BASE"] = "16";
     // A gather part is staged whole in the mover's slab (BRISC: kMatMover0Cap).

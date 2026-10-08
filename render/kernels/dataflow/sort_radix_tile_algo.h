@@ -208,6 +208,97 @@ inline bool sort_pairs(uint32_t* k, uint32_t* v, uint32_t* k2, uint32_t* v2,
 
 namespace sort_radix_tile {
 
+// Task #418: SORT_RECS_PACKED=1 (host GSPLAT_TT_SORT_PACKED, default on) sorts
+// the record ids with one u32 per element after the first pass: w = (r >> d)
+// << ib | id, ib = bitlen(n - 1), whenever the key bits left after pass 0 fit
+// next to the id (B - d + ib <= 32; per-tile depth ranges almost always do).
+// Pass 0 reads the gathered keys and takes the id from the loop index, the last
+// pass writes ids straight into v, and kmin / kmax come from the gather loop.
+// Per element that halves the L1 traffic of sort_pairs (no id array, no
+// key + id pair moves, no odd-pass copy back). Still a stable LSD radix with
+// the same plan, so the permutation is the same.
+#ifndef SORT_RECS_PACKED
+#define SORT_RECS_PACKED 1
+#endif
+
+// Ids of the stable order of k[0, n) (n > 16, kmin < kmax) into out; w2 is n u32
+// of scratch, k is clobbered. Requires P == 1 or B - d + ib <= 32.
+inline void sort_ids_packed(uint32_t* k, uint32_t* out, uint32_t* w2, uint32_t n,
+                            uint32_t kmin, const Plan& pl, uint32_t ib, hist_t* hist) {
+    const uint32_t P = pl.passes;
+    const uint32_t d = pl.bits;
+    const uint32_t R = 1u << d;
+    const uint32_t mask = R - 1u;
+    for (uint32_t j = 0; j < P * R; j++) hist[j] = 0;
+    switch (P) {
+        case 1: fill_hist<1>(k, n, kmin, d, mask, hist); break;
+        case 2: fill_hist<2>(k, n, kmin, d, mask, hist); break;
+        case 3: fill_hist<3>(k, n, kmin, d, mask, hist); break;
+        default: fill_hist<4>(k, n, kmin, d, mask, hist); break;
+    }
+    for (uint32_t p = 0; p < P; p++) {
+        hist_t* h = hist + p * R;
+        uint32_t sum = 0;
+        for (uint32_t b = 0; b < R; b++) {
+            const uint32_t c = h[b];
+            h[b] = static_cast<hist_t>(sum);
+            sum += c;
+        }
+    }
+    uint32_t i = 0;
+    if (P == 1) {
+        for (; i + UNROLL <= n; i += UNROLL) {
+            uint32_t r[UNROLL];
+#pragma GCC unroll 4
+            for (uint32_t u = 0; u < UNROLL; u++) r[u] = k[i + u] - kmin;
+#pragma GCC unroll 4
+            for (uint32_t u = 0; u < UNROLL; u++) out[hist[r[u] & mask]++] = i + u;
+        }
+        for (; i < n; i++) out[hist[(k[i] - kmin) & mask]++] = i;
+        return;
+    }
+    // Pass 0: keys -> packed words in w2.
+    for (; i + UNROLL <= n; i += UNROLL) {
+        uint32_t r[UNROLL];
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) r[u] = k[i + u] - kmin;
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) w2[hist[r[u] & mask]++] = ((r[u] >> d) << ib) | (i + u);
+    }
+    for (; i < n; i++) {
+        const uint32_t r = k[i] - kmin;
+        w2[hist[r & mask]++] = ((r >> d) << ib) | i;
+    }
+    const uint32_t idmask = (1u << ib) - 1u;
+    uint32_t* src = w2;
+    uint32_t* dst = k;
+    for (uint32_t p = 1; p < P; p++) {
+        hist_t* h = hist + p * R;
+        const uint32_t sh = ib + (p - 1u) * d;
+        i = 0;
+        if (p + 1u == P) {
+            for (; i + UNROLL <= n; i += UNROLL) {
+                uint32_t w[UNROLL];
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) w[u] = src[i + u];
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) out[h[(w[u] >> sh) & mask]++] = w[u] & idmask;
+            }
+            for (; i < n; i++) out[h[(src[i] >> sh) & mask]++] = src[i] & idmask;
+        } else {
+            for (; i + UNROLL <= n; i += UNROLL) {
+                uint32_t w[UNROLL];
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) w[u] = src[i + u];
+#pragma GCC unroll 4
+                for (uint32_t u = 0; u < UNROLL; u++) dst[h[(w[u] >> sh) & mask]++] = w[u];
+            }
+            for (; i < n; i++) dst[h[(src[i] >> sh) & mask]++] = src[i];
+            uint32_t* t = src; src = dst; dst = t;
+        }
+    }
+}
+
 // Stable depth order of n 32 B records (8 u32 words, record i at words
 // [8i, 8i+8), depth key at word 3) for sort_subchunk_materialize.cpp. Returns
 // the sorted record indices, always in v. k, v, k2, v2 hold n entries each.
@@ -217,6 +308,44 @@ namespace sort_radix_tile {
 inline uint32_t* sort_record_ids(const volatile uint32_t* recs, uint32_t n, uint32_t* k,
                                  uint32_t* v, uint32_t* k2, uint32_t* v2, hist_t* hist) {
     uint32_t i = 0;
+#if SORT_RECS_PACKED
+    if (n > 16u) {
+        uint32_t kmin = 0xFFFFFFFFu, kmax = 0u;
+        for (; i + UNROLL <= n; i += UNROLL) {
+            uint32_t kk[UNROLL];
+#pragma GCC unroll 4
+            for (uint32_t u = 0; u < UNROLL; u++) kk[u] = recs[(i + u) * 8u + 3u];
+#pragma GCC unroll 4
+            for (uint32_t u = 0; u < UNROLL; u++) {
+                k[i + u] = kk[u];
+                kmin = kk[u] < kmin ? kk[u] : kmin;
+                kmax = kk[u] > kmax ? kk[u] : kmax;
+            }
+        }
+        for (; i < n; i++) {
+            const uint32_t x = recs[i * 8u + 3u];
+            k[i] = x;
+            kmin = x < kmin ? x : kmin;
+            kmax = x > kmax ? x : kmax;
+        }
+        if (kmin == kmax) {
+            for (i = 0; i < n; i++) v[i] = i;
+            return v;
+        }
+        const uint32_t B = bit_length(kmax - kmin);
+        const Plan pl = choose_plan(n, B);
+        const uint32_t ib = bit_length(n - 1u);
+        if (pl.passes == 1u || B - pl.bits + ib <= 32u) {
+            sort_ids_packed(k, v, k2, n, kmin, pl, ib, hist);
+            return v;
+        }
+        for (i = 0; i < n; i++) v[i] = i;  // wide key range: the pair sort below
+        if (sort_pairs(k, v, k2, v2, n, hist)) {
+            for (i = 0; i < n; i++) v[i] = v2[i];
+        }
+        return v;
+    }
+#endif
     for (; i + UNROLL <= n; i += UNROLL) {
         uint32_t kk[UNROLL];
 #pragma GCC unroll 4
