@@ -12,7 +12,7 @@
 [ttw 2026-10-07T22:58:59-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #125 sha=bb1c9bdd bin=422ffb8f423c9724 t418 33e6f55b packed sort_record_ids (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t418-Tpair0  timeout=540s  worry=600s  ts=2026-10-07T22:59:00-0400
 cmd: T=/localdev/smarton/gstt2-t418 bash /localdev/smarton/gstt2-t418/docs/mover-sortperm/remote_tracy.sh 0 pair GSPLAT_TT_SORT_PACKED=0

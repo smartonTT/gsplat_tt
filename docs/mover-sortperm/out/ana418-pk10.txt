@@ -191,7 +191,7 @@ Blend fill (per core, ms/view; gap time in gaps >= the threshold; 'blend job' = 
 
 views=0; host view period (proj_m -> next proj_m) mean nan ms
 zone                                 n/view  ms/view  max one first st last end
-EnqueueProgram starts (ms from proj_m start): 
+EnqueueProgram starts (ms from proj_m start):
 not Tracy zones in this build (TTW_TIMING stage timers only, see the reconciliation): xview hook, EventSynchronize, gather_wait, bin_layout, publish_host
 
 ## Reconciliation: untraced stage means vs traced device span (ms/view)
