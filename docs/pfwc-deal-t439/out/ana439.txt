@@ -1,0 +1,6 @@
+dev-S.csv.gz   pfwc             cores=120 views=10 window(max-core end) mean=1.874 ms  mean-core end=1.638  max/mean=1.144
+dev-S.csv.gz   tile_blend_sfpu  cores=120 views=10 window(max-core end) mean=5.195 ms  mean-core end=5.062  max/mean=1.026
+dev-L.csv.gz   pfwc             cores=120 views=10 window(max-core end) mean=1.856 ms  mean-core end=1.693  max/mean=1.096
+dev-L.csv.gz   tile_blend_sfpu  cores=120 views=10 window(max-core end) mean=5.189 ms  mean-core end=5.060  max/mean=1.026
+delta pfwc             (2nd - 1st) per view: mean -0.018 ms, min -0.162, max +0.110
+delta tile_blend_sfpu  (2nd - 1st) per view: mean -0.006 ms, min -0.045, max +0.005

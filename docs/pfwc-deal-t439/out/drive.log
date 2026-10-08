@@ -1,0 +1,88 @@
+SSH_PREFLIGHT=ok
+=== sync e13e9f6b98adefce2af87748fd4cf49b6066f528 -> 31bf48c4 2026-10-08T04:21:39Z
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+[9/9] Linking CXX shared module /localdev/smarton/p150bench/tree392/render/render_clean.cpython-310-x86_64-linux-gnu.so
+rton 1396832 Oct  8 04:21 render/render_clean.cpython-310-x86_64-linux-gnu.so
+31bf48c46dfcd4607f98c297dba0aad22332d6d4
+=== sync rc=0 2026-10-08T04:21:58Z
+=== viewer stop 2026-10-08T04:22:00Z
+[viewer] stopped pid(s) 122843
+=== bench sha=31bf48c4 host=bh-30-special-smarton-for-reservation-135630 2026-10-08T04:22:34Z card=p150b aiclk=1350
+=== s0-S start 04:22:34
+s0-S rc=0 04:22:41
+[eth] card p150b: eth dispatch, overlay /localdev/smarton/p150bench/tree392/tmp/ttm-eth12, JIT cache /localdev/smarton/p150bench/tree392/tmp/ttm-eth12-cache
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+S0_PASS S
+=== s0-L start 04:22:41
+s0-L rc=0 04:22:51
+[eth] card p150b: eth dispatch, overlay /localdev/smarton/p150bench/tree392/tmp/ttm-eth12, JIT cache /localdev/smarton/p150bench/tree392/tmp/ttm-eth12-cache
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[gsplat_tt::pfwc] pfwc deal lpt: 5989 tiles on 120 cores, weights /localdev/smarton/p150bench/tree392/docs/pfwc-deal-t439/bicycle-hero-w.txt
+S0_PASS L
+=== r1-S start 04:22:51
+run r1-S rc=0 04:23:07
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.7 min_ms=6.6 max_ms=10.3 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t439-r1-S
+STAGES n=30 head=0.007 project=1.080 tile_assign=0.007 sort=1.177 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.264 d2h=0.010 assemble=0.000 tail=0.005 xview=0.138 | sum=7.687 view_total=7.690 resid_in_view=+0.003 avg_frame_ms=7.763 resid_vs_frame=+0.075 xview_hits=29 xview_misses=0
+LIST_MD5 r1-S 39d84b28
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== r1-L start 04:23:07
+run r1-L rc=0 04:23:23
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.6 max_ms=10.2 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t439-r1-L
+STAGES n=30 head=0.006 project=1.080 tile_assign=0.008 sort=1.182 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.252 d2h=0.009 assemble=0.000 tail=0.006 xview=0.140 | sum=7.683 view_total=7.686 resid_in_view=+0.002 avg_frame_ms=7.759 resid_vs_frame=+0.076 xview_hits=29 xview_misses=0
+LIST_MD5 r1-L e1ecd879
+=== r2-L start 04:23:23
+run r2-L rc=0 04:23:39
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.6 max_ms=10.3 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t439-r2-L
+STAGES n=30 head=0.005 project=1.077 tile_assign=0.008 sort=1.222 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.203 d2h=0.009 assemble=0.000 tail=0.006 xview=0.152 | sum=7.682 view_total=7.685 resid_in_view=+0.003 avg_frame_ms=7.752 resid_vs_frame=+0.070 xview_hits=29 xview_misses=0
+LIST_MD5 r2-L e1ecd879
+=== r2-S start 04:23:39
+run r2-S rc=0 04:23:55
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.5 max_ms=10.2 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t439-r2-S
+STAGES n=30 head=0.007 project=1.096 tile_assign=0.008 sort=1.186 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.248 d2h=0.009 assemble=0.000 tail=0.007 xview=0.149 | sum=7.710 view_total=7.713 resid_in_view=+0.002 avg_frame_ms=7.789 resid_vs_frame=+0.079 xview_hits=29 xview_misses=0
+LIST_MD5 r2-S 39d84b28
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== r3-S start 04:23:55
+run r3-S rc=0 04:24:11
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.5 max_ms=10.9 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t439-r3-S
+STAGES n=30 head=0.006 project=1.075 tile_assign=0.007 sort=1.154 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.357 d2h=0.010 assemble=0.000 tail=0.006 xview=0.147 | sum=7.762 view_total=7.764 resid_in_view=+0.002 avg_frame_ms=7.835 resid_vs_frame=+0.073 xview_hits=29 xview_misses=0
+LIST_MD5 r3-S 39d84b28
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== r3-L start 04:24:11
+run r3-L rc=0 04:24:27
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.9 p50_ms=7.8 min_ms=6.7 max_ms=10.4 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t439-r3-L
+STAGES n=30 head=0.007 project=1.196 tile_assign=0.008 sort=1.200 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.248 d2h=0.010 assemble=0.000 tail=0.006 xview=0.151 | sum=7.827 view_total=7.829 resid_in_view=+0.003 avg_frame_ms=7.911 resid_vs_frame=+0.084 xview_hits=29 xview_misses=0
+LIST_MD5 r3-L e1ecd879
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12p36 TT_METAL_CACHE=/localdev/smarton/p150bench/cache439-p36/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 ierisc_kb=36
+=== tracy S start 04:24:27
+tracy S rc=0 04:25:00
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=94.2 p50_ms=8.9 min_ms=7.9 max_ms=862.3 n_views=10 warmup_s=19.3 out=/localdev/smarton/p150bench/tree392/tmp/t439-TS
+STAGES n=10 head=0.004 project=2.431 tile_assign=0.008 sort=1.050 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.393 d2h=0.009 assemble=0.000 tail=85.194 xview=0.104 | sum=94.190 view_total=94.193 resid_in_view=+0.003 avg_frame_ms=94.248 resid_vs_frame=+0.058 xview_hits=9 xview_misses=0
+=== tracy L start 04:25:00
+tracy L rc=0 04:25:21
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+[gsplat_tt::pfwc] pfwc deal lpt: 5989 tiles on 120 cores, weights /localdev/smarton/p150bench/tree392/docs/pfwc-deal-t439/bicycle-hero-w.txt
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=86.6 p50_ms=8.9 min_ms=8.1 max_ms=785.3 n_views=10 warmup_s=7.8 out=/localdev/smarton/p150bench/tree392/tmp/t439-TL
+STAGES n=10 head=0.004 project=2.446 tile_assign=0.008 sort=1.172 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.297 d2h=0.009 assemble=0.000 tail=77.503 xview=0.110 | sum=86.547 view_total=86.550 resid_in_view=+0.002 avg_frame_ms=86.604 resid_vs_frame=+0.056 xview_hits=9 xview_misses=0
+=== bench end rc=0 2026-10-08T04:25:21Z
+=== viewer start (remote) 2026-10-08T04:25:21Z
+[viewer] started pid 128733 supervisor 128726 sha 0b43b8155a894d20afc31f917652428e8a5ed141 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=10.84 ms (92.3 FPS) min=10.77 max=11.03
+[viewer_clean] READY port=8080
+SHA=0b43b8155a894d20afc31f917652428e8a5ed141
+=== viewer ready 2026-10-08T04:25:30Z localhost:8091 -> 200
+=== drive end 2026-10-08T04:25:46Z
