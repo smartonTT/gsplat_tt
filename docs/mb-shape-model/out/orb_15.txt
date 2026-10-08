@@ -1,0 +1,7 @@
+view n=1786262 pairs=2831350
+shape 4x8 rec 2831350 rec_cull 2571927 rec_live 2225385 disp 6326664 disp_nocut 7690738 pairs 4970556 lanes_live 64751141 disp_dead 102798 readbacks 5035 ch_diff_bits 0 ch_diff_u8 0 px_T_diff 0 maxabs 0 psnr_vs_4x8 999.00
+shape 8x4 rec 2831350 rec_cull 2573231 rec_live 2270340 disp 6971202 disp_nocut 8356893 pairs 4809187 lanes_live 66596514 disp_dead 124322 readbacks 5035 ch_diff_bits 233653 ch_diff_u8 4950 px_T_diff 109032 maxabs 0.00384 psnr_vs_4x8 83.52
+shape 2x16 rec 2831350 rec_cull 2566214 rec_live 2224745 disp 7726092 disp_nocut 9150114 pairs 6715847 lanes_live 65001770 disp_dead 126174 readbacks 5035 ch_diff_bits 222500 ch_diff_u8 5311 px_T_diff 99141 maxabs 0.00376 psnr_vs_4x8 83.15
+shape 16x2 rec 2831350 rec_cull 2570884 rec_live 2358665 disp 10109106 disp_nocut 11458807 pairs 6162145 lanes_live 70378071 disp_dead 206174 readbacks 5035 ch_diff_bits 329010 ch_diff_u8 7022 px_T_diff 156176 maxabs 0.00384 psnr_vs_4x8 81.91
+shape 1x32 rec 2831350 rec_cull 2553499 rec_live 2252603 disp 11740915 disp_nocut 13440529 pairs 6854801 lanes_live 66308207 disp_dead 204749 readbacks 5035 ch_diff_bits 303689 ch_diff_u8 7012 px_T_diff 134513 maxabs 0.00361 psnr_vs_4x8 82.11
+shape 32x1 rec 2831350 rec_cull 2563666 rec_live 2426354 disp 17291303 disp_nocut 18606252 pairs 9652761 lanes_live 73980616 disp_dead 394847 readbacks 5035 ch_diff_bits 377012 ch_diff_u8 7736 px_T_diff 178152 maxabs 0.00378 psnr_vs_4x8 81.45
