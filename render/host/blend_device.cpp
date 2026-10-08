@@ -922,6 +922,20 @@ static double process_frame_mb_devcull_resident(
         distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_yramp, yramp);
         ctx.res_ramp_uploaded = true;
     }
+    {
+        // Review #391: log which program the blend runs, on the first frame and
+        // whenever it changes, so a run proves the fused mat+blend (fz) ran.
+        static int last_fz = -1;
+        static uint64_t frames = 0;
+        if (static_cast<int>(fz) != last_fz) {
+            std::fprintf(stderr, "MATBLEND_PROGRAM fz=%d zerocopy=%d pinned=%d frame=%llu\n",
+                         fz ? 1 : 0, gsplat_tt::env_config::out_zerocopy() ? 1 : 0,
+                         gsplat_tt::env_config::out_pinned() ? 1 : 0,
+                         static_cast<unsigned long long>(frames));
+            last_fz = fz ? 1 : 0;
+        }
+        ++frames;
+    }
     if (fz) {
         pend.clear();
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.fz_workload, /*blocking=*/false);
