@@ -101,6 +101,7 @@ and every blend lever measured so far is either shipped or shelved.
 | pfwc cov2d on SFPU | +0.256 ms (slower) | measured slower | iter 197, #228 |
 | OL_MAT_SELECT big-tile parts across cores | +0.15 ms (slower) | measured slower | #121 |
 | 16 B records (R16) | +1.6 ms (slower) | record size is not the emit's cost | iter 150, #23 |
+| Sort emit straight into the owner core's L1 (skip the DRAM tile bucket) | 0.04-0.17 ms/view (model), bh-30 and p100a alike | under the 0.3 ms gate; no view fits fully (882-1128 KB/core plus working sets); a 512 KB region needs the sort program to shrink 164-264 KB and a device-side LPT; the emit is pack-bound, not write-bound | `docs/emit-to-l1-model/`, #385 |
 | Closing inter-program idle by merging launches | −0.1 ms, flat frame | no frame gain then; later recovered by the 2-CQ bridge and fusion | iter 158, #31 |
 | contrib floor 1/1024 (accuracy mode) | +0.98 ms, +4.7 dB | a quality choice for the user; available as opt-in `GSPLAT_TT_CONTRIB_FLOOR_INV=1024` | `docs/floor-ab-t260.md` |
 | contrib floor 1/255 with microblock cull (no pixel floor) | −6.6 ms then | visible artifacts on thin spokes | iter 152, #28 |
