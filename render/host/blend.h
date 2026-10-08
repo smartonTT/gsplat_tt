@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -52,6 +53,15 @@ struct OutImageView {
     std::size_t pitch = 0;
 };
 OutImageView blend_out_zerocopy_last();
+
+// Task #379 (GSPLAT_TT_XVIEW_OVERLAP): a one-shot callback the resident blend
+// runs right after it enqueues the frame's blend (and, without pinned output,
+// the non-blocking image read), before it waits for the device. The caller
+// enqueues the next view's first program there so the device does not idle
+// while the host reads this frame. The blend clears it when taken; set it
+// before sort_and_bin_tt and clear it (nullptr) after, so it never outlives
+// the call. Its host time is booked to stagetimers xview, not blend.
+void blend_set_after_enqueue_hook(std::function<void()> hook);
 
 void device_shutdown();
 

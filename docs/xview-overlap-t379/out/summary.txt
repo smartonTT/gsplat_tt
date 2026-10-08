@@ -1,0 +1,4 @@
+ARM base mean_ms_view=10.940 n=3 rounds: 10.949 10.891 10.979
+ARM xv mean_ms_view=9.169 n=3 rounds: 9.113 9.207 9.187
+ARM xvpin mean_ms_view=8.934 n=3 rounds: 8.940 8.936 8.926
+ARM xvzc mean_ms_view=9.409 n=3 rounds: 9.427 9.371 9.428

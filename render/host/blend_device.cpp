@@ -14,6 +14,7 @@
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -51,6 +52,7 @@
 
 #include <cstdio>
 #include <deque>
+#include "pair_guard.h"
 
 using namespace tt;
 using namespace tt::tt_metal;
@@ -59,6 +61,10 @@ using namespace gsplat;
 #ifndef OVERRIDE_KERNEL_PREFIX
 #define OVERRIDE_KERNEL_PREFIX ""
 #endif
+
+// Task #379: the one-shot hook blend_set_after_enqueue_hook() sets; taken (and
+// cleared) by the next resident frame end.
+static std::function<void()> g_after_enqueue_hook;
 
 // Tasks #367/#374: one pinned output image. The caller's lease is the host
 // memory only; the pin (NoC mapping) belongs to the ring slot, so a frame the
@@ -942,12 +948,6 @@ static double process_frame_mb_devcull_resident(
     } else {
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     }
-    {
-        GSPLAT_HOST_ZONE("host_finish_blend");
-        distributed::Finish(*ctx.cq);
-    }
-    gsplat_tt::hostprof::on_blend_device_done();
-    gsplat_tt::device_state::clear_sort_publish_pending();
     // Per-stage attribution (stage_timers.h): the D2H readback and the host
     // assemble are separate buckets; the caller derives the pure device blend
     // window as (returned ms - d2h). The writer already packed the final u8
@@ -957,14 +957,49 @@ static double process_frame_mb_devcull_resident(
     const size_t row_bytes = static_cast<size_t>(image_w) * 3;
     const bool direct = (out_pitch == row_bytes) &&
                         (ctx.res_out_bytes == static_cast<size_t>(image_h) * row_bytes);
-    gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
     const bool pinned = gsplat_tt::env_config::out_pinned() && ctx.out_pin_bytes == ctx.res_out_bytes;
+    // Task #379: with a next-view hook, the frame ends on an event instead of a
+    // Finish: [blend][read res_out unless pinned][event] are queued, the hook
+    // queues the next view's pfwc behind them, and only then does the host wait
+    // (for the event, not the pfwc). The image is then copied while the device
+    // runs the next pfwc. In-order CQ: the pfwc starts after the blend and the
+    // read are done, so nothing this frame reads is overwritten under it.
+    std::function<void()> hook = std::move(g_after_enqueue_hook);
+    g_after_enqueue_hook = nullptr;
+    double hook_ms = 0.0;
+    bool read_queued = false;
+    if (hook) {
+        gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
+        if (!pinned) {
+            ctx.res_out_host.resize(ctx.res_out_bytes);
+            distributed::ReadShard(*ctx.cq, ctx.res_out_host, ctx.res_out,
+                                   distributed::MeshCoordinate(0, 0), /*blocking=*/false);
+            read_queued = true;
+        }
+        const distributed::MeshEvent frame_done = ctx.cq->enqueue_record_event_to_host();
+        d2h_span.stop();
+        {
+            const auto h0 = std::chrono::steady_clock::now();
+            // The queued read targets res_out_host: drain before a throw leaves.
+            gsplat_tt::pair_guard::drain_on_throw(hook, [&] { distributed::Finish(*ctx.cq); });
+            hook_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
+            gsplat_tt::stagetimers::acc().xview += hook_ms;
+        }
+        GSPLAT_HOST_ZONE("host_wait_blend_event");
+        distributed::EventSynchronize(frame_done);
+    } else {
+        GSPLAT_HOST_ZONE("host_finish_blend");
+        distributed::Finish(*ctx.cq);
+    }
+    gsplat_tt::hostprof::on_blend_device_done();
+    gsplat_tt::device_state::clear_sort_publish_pending();
+    gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
     if (pinned && image_out == nullptr) {
         // Task #374 (zero-copy): the caller takes this slot's lease
         // (blend_out_zerocopy_last); nothing to copy.
     } else if (pinned) {
         // The writer already put the image in host memory (write acks barriered
-        // before it exited, Finish above); only the host copy remains.
+        // before it exited, Finish/event above); only the host copy remains.
         const auto* src = reinterpret_cast<const uint8_t*>(ctx.out_ring.at(ctx.out_pin_slot).lease->mem.get());
         if (direct) {
             std::memcpy(image_out, src, static_cast<size_t>(image_h) * row_bytes);
@@ -972,6 +1007,11 @@ static double process_frame_mb_devcull_resident(
             for (uint32_t y = 0; y < image_h; y++) {
                 std::memcpy(image_out + y * row_bytes, src + static_cast<size_t>(y) * out_pitch, row_bytes);
             }
+        }
+    } else if (read_queued) {
+        // Task #379: the read already landed in res_out_host (event above).
+        if (direct) {
+            std::memcpy(image_out, ctx.res_out_host.data(), static_cast<size_t>(image_h) * row_bytes);
         }
     } else if (direct) {
         ctx.cq->enqueue_read_mesh_buffer(image_out, ctx.res_out, /*blocking=*/true);
@@ -992,7 +1032,7 @@ static double process_frame_mb_devcull_resident(
         }
     }
     gsplat_tt::hostprof::on_blend_unpack_done();
-    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    return std::chrono::duration<double, std::milli>(t_end - t_start).count() - hook_ms;
 }
 
 // ===========================================================================
@@ -1686,6 +1726,10 @@ double blend_mb_devcull_resident(
         st.blend += blend_ms - (st.d2h - d2h_before);
     }
     return cull_ms + blend_ms;
+}
+
+void blend_set_after_enqueue_hook(std::function<void()> hook) {
+    g_after_enqueue_hook = std::move(hook);
 }
 
 OutImageView blend_out_zerocopy_last() {

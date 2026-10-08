@@ -1,19 +1,25 @@
 // Syntax-only stub of the tt-metal host API used by render/host (task #99).
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
+#ifndef TT_FATAL
+#define TT_FATAL(cond, ...) ((void)(cond))
+#endif
 namespace tt {
 enum class DataFormat { Float32, UInt32, Float16_b, Int32, UInt8 };
 namespace tt_metal {
 using KernelHandle = uint32_t;
 struct CoreCoord { std::size_t x = 0, y = 0; CoreCoord() = default; CoreCoord(std::size_t a, std::size_t b) : x(a), y(b) {} };
-struct CoreRange { CoreRange(CoreCoord, CoreCoord) {} };
-struct CoreRangeSet { CoreRangeSet() = default; CoreRangeSet(CoreRange) {} CoreRangeSet(CoreCoord) {} };
+struct CoreRange { CoreCoord start_coord, end_coord; CoreRange(CoreCoord a, CoreCoord b) : start_coord(a), end_coord(b) {} };
+struct CoreRangeSet { CoreRangeSet() = default; CoreRangeSet(CoreRange) {} CoreRangeSet(CoreCoord) {}
+    std::size_t num_cores() const; const std::vector<CoreRange>& ranges() const; };
 enum class MathFidelity { LoFi, HiFi2, HiFi3, HiFi4 };
 enum class UnpackToDestMode { Default, UnpackToDestFp32 };
 enum class DataMovementProcessor { RISCV_0, RISCV_1 };
@@ -55,16 +61,21 @@ struct TensorAccessorArgs {
 class Allocator { public: uint32_t get_num_banks(const BufferType&) const; };
 namespace distributed {
 struct MeshShape {};
+struct IDevice { int id() const; };
 class MeshDevice { public: CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const;
+    std::vector<IDevice*> get_devices() const;
     CoreCoord worker_core_from_logical_core(const CoreCoord&) const;
     uint32_t num_dram_channels() const;
     const std::unique_ptr<Allocator>& allocator() const; };
 class MeshEvent {};
 class MeshCommandQueue { public:
     MeshEvent enqueue_record_event(); MeshEvent enqueue_record_event_to_host();
-    void enqueue_wait_for_event(const MeshEvent&); void finish(); };
+    void enqueue_wait_for_event(const MeshEvent&); void finish();
+    template <class B> void enqueue_read_mesh_buffer(void*, const B&, bool); };
 struct MeshCoordinate { MeshCoordinate(uint32_t, uint32_t) {} };
-struct MeshCoordinateRange { explicit MeshCoordinateRange(MeshShape) {} };
+struct MeshCoordinateRange { explicit MeshCoordinateRange(MeshShape) {}
+    bool operator<(const MeshCoordinateRange&) const { return false; } };
+struct MeshCoordinateRangeSet { explicit MeshCoordinateRangeSet(MeshCoordinateRange) {} };
 struct DeviceLocalBufferConfig { uint64_t page_size = 0; BufferType buffer_type = BufferType::DRAM; };
 struct ReplicatedBufferConfig { std::size_t size = 0; };
 class MeshBuffer { public:
@@ -73,10 +84,10 @@ class MeshBuffer { public:
 };
 struct MeshWorkload {
     void add_program(const MeshCoordinateRange&, Program&&);
-    std::map<int, Program>& get_programs();
+    std::map<MeshCoordinateRange, Program>& get_programs();
 };
-template <class T> void EnqueueWriteMeshBuffer(MeshCommandQueue&, std::shared_ptr<MeshBuffer>, std::vector<T>&, bool);
-template <class T> void EnqueueWriteMeshBuffer(MeshCommandQueue&, std::shared_ptr<MeshBuffer>, const std::vector<T>&, bool);
+template <class T> void EnqueueWriteMeshBuffer(MeshCommandQueue&, std::shared_ptr<MeshBuffer>, std::vector<T>&, bool = false);
+template <class T> void EnqueueWriteMeshBuffer(MeshCommandQueue&, std::shared_ptr<MeshBuffer>, const std::vector<T>&, bool = false);
 template <class T> void EnqueueReadMeshBuffer(MeshCommandQueue&, std::vector<T>&, std::shared_ptr<MeshBuffer>, bool);
 void EnqueueMeshWorkload(MeshCommandQueue&, MeshWorkload&, bool);
 void Finish(MeshCommandQueue&);

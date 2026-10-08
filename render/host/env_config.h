@@ -221,9 +221,20 @@ inline bool out_zerocopy() {
     static const bool v = env_uint("GSPLAT_TT_OUT_ZEROCOPY", 0u) != 0u;
     return v;
 }
-// Task #367 (+ #374 zero-copy, which needs it).
+// Task #367 (+ #374 zero-copy, which needs it). Default on since task #393
+// (with the cross-view overlap: 8.934 vs 10.940 ms/view on p100a, #388);
+// GSPLAT_TT_OUT_PINNED=0 opts out.
 inline bool out_pinned() {
-    static const bool v = env_uint("GSPLAT_TT_OUT_PINNED", 0u) != 0u || out_zerocopy();
+    static const bool v = env_uint("GSPLAT_TT_OUT_PINNED", 1u) != 0u || out_zerocopy();
+    return v;
+}
+// Task #379: cross-view overlap. render_view(next_extrinsics=...) enqueues the
+// next view's fused pfwc right behind this view's blend, before the host waits
+// for and reads this view's image (xview.h). Default on since task #393;
+// GSPLAT_TT_XVIEW_OVERLAP=0 opts out. Without a next_extrinsics hint (viewer,
+// single view) a frame ends on a Finish exactly as with the flag off.
+inline bool xview_overlap() {
+    static const bool v = env_uint("GSPLAT_TT_XVIEW_OVERLAP", 1u) != 0u;
     return v;
 }
 // Task #374: most pinned image buffers the zero-copy ring keeps (out_ring.h).
