@@ -18,7 +18,7 @@ hang() { if [ $1 = 124 ] || [ $1 = 137 ]; then echo "HANG: tt-smi -r"; tt-smi -r
 armenv() {  # armenv <E|W|X> -> env assignments
   case $1 in E) echo GSPLAT_TT_GRID_X=11 ;; W) echo GSPLAT_TT_DISPATCH=worker ;; X) echo ${EXTRA_X:-GSPLAT_X=0} ;; esac
 }
-armwant() { case $1 in E) echo 'dispatch eth .*compute grid 11x10' ;; W) echo 'dispatch worker .*compute grid 11x10' ;; X) echo 'dispatch eth .*compute grid 12x10' ;; esac; }
+armwant() { case $1 in E) echo 'dispatch eth .*stage grid capped to 11x10' ;; W) echo 'dispatch worker .*compute grid 11x10' ;; X) echo 'dispatch eth .*compute grid 12x10' ;; esac; }
 for a in $ARMS; do
   echo "=== s0-$a start $(date -u +%T) env: $(armenv $a)"
   env $(armenv $a) timeout 300 python3 render/run.py --no-ref --view-range 0:1 --iter-dir t410-s0-$a > $O/s0-$a.log 2>&1; s0=$?
