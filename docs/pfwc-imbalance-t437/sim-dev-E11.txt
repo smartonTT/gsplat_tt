@@ -1,0 +1,13 @@
+measured: max-core 1.891, mean-core 1.766, model coef a=25.2 us/chunk b=0.0335 us/visible
+residual: std 33.7 us, per-core mean std 24.1 us
+strided (current, model+resid)             max-core 1.891 ms  gain vs measured +0.000
+strided, no residual                       max-core 1.887 ms  gain vs measured +0.004
+LPT oracle (same view weights)             max-core 1.861 ms  gain vs measured +0.030
+LPT oracle, no residual                    max-core 1.781 ms  gain vs measured +0.111
+LPT prev view (temporal, view v-1)         max-core 1.862 ms  gain vs measured +0.030
+LPT static, mean of 30 views               max-core 1.864 ms  gain vs measured +0.027
+LPT static, hero view only                 max-core 1.861 ms  gain vs measured +0.030
+contiguous blocks (legacy split)           max-core 2.374 ms  gain vs measured -0.483
+random static shuffle (strided over perm)  max-core 1.950 ms  gain vs measured -0.058
+equal-count LPT static hero                max-core 1.855 ms  gain vs measured +0.037
+equal-count LPT static hero, no residual   max-core 1.791 ms  gain vs measured +0.101
