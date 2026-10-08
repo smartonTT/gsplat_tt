@@ -1,0 +1,6 @@
+docs/p150-tracy-210/out/tracy-u.csv.gz: frames=31 (stats over frames 1..)
+zone                  window core_mean core_min core_max end_spread start_spread ncores
+mat_cull_mask          2.822     2.286    1.885    2.821      0.936        0.001 330
+sort_subchunk_mat      2.822     2.123    1.682    2.821      1.140        0.000 220
+tile_blend_load        4.160     3.616    3.065    4.092      0.112        1.012 110
+tile_blend_sfpu        4.161     3.682    3.131    4.093      0.133        0.936 330

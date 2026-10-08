@@ -1,0 +1,50 @@
+bh30-210: frames=30 (of 31); device ms from the view's first pfwc start
+zone                        start      end   window
+BRISC-FW                   -0.001   10.913   10.914
+NCRISC-FW                  -0.001   10.759   10.760
+TRISC-FW                   -0.001   10.836   10.837
+pfwc                        0.000    1.835    1.835
+k2_pairs                    1.905    2.719    0.814
+k2_rows                     2.354    2.725    0.371
+sort_ol_prefix              2.740    2.823    0.082
+sort_ol_barrier             2.741    2.886    0.145
+sort_ol_fillb               2.741    2.886    0.145
+sort_ol_fill                2.742    2.866    0.123
+sort_ol_emit                2.838    4.126    1.288
+sort_ol_town                2.856    4.058    1.203
+mat_cull_mask               4.789    7.611    2.822
+sort_subchunk_mat           4.790    7.611    2.822
+tile_blend_load             6.599   10.759    4.160
+tile_blend_sfpu             6.675   10.836    4.161
+
+host zones (host clock, ms from the view's first EnqueueProgram; 31 views)
+EnqueueProgram#0            0.000    0.064    0.064
+EnqueueProgram#1            0.176    0.192    0.016
+EnqueueProgram#2            0.267    0.288    0.021
+host_cq1_proj_m             0.291    2.812    2.520
+host_cq1_k2_rows            3.803    3.912    0.109
+host_finish_cq1_bridge      4.655    4.704    0.049
+host_finish_blend           4.690   10.850    6.159
+host_blend_setup            4.715    4.801    0.085
+EnqueueProgram#3            4.816    4.846    0.030
+
+gaps (mean min max, ms; negative = overlap)
+  pfwc end -> k2_pairs start                       0.071   0.052   0.091
+  k2_rows end -> sort prefix start                 0.016   0.015   0.016
+  emit end -> mat start                            0.664   0.409   0.994
+  town end -> mat start                            0.731   0.477   1.059
+  mat end -> blend end                             3.225   2.277   4.297
+  blend sfpu end -> last BRISC-FW end              0.077   0.063   0.113
+
+device span pfwc start -> last blend sfpu end  10.836 (min 9.434 max 12.441)
+device span pfwc start -> last BRISC-FW end    10.913 (min 9.524 max 12.504)
+traced view period (pfwc start -> next)        57.460; device idle between views 46.500 (traced: includes the mid-run profiler dump)
+
+per-core busy, ms (mean over frames of per-frame mean/min/max over cores; core = max over its RISCs)
+zone                                  mean     min     max  cores  sum/110  window
+mat_cull_mask                        2.286   1.885   2.821    110    2.286   2.822
+sort_subchunk_mat                    2.286   1.885   2.821    110    2.286   2.822
+tile_blend_sfpu                      3.682   3.131   4.093    110    3.682   4.161
+tile_blend_load                      3.616   3.065   4.092    110    3.616   4.160
+mat+blend (TRISC busy)               5.968   5.914   6.046    110    5.968   6.047
+mat start->blend end span            5.968   5.914   6.046    110    5.968   6.047
