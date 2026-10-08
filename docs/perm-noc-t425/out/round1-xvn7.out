@@ -12,7 +12,7 @@
 [ttw 2026-10-07T23:31:03-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #125 sha=d4b7abd9 bin=20b4fcb5a32e4a7b t425 d4b7abd9 NoC perm (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t425-r1-xvn7  timeout=420s  worry=600s  ts=2026-10-07T23:31:04-0400
 cmd: T=/localdev/smarton/gstt2-t425 bash /localdev/smarton/gstt2-t425/tmp/t379_remote_time.sh 1 xvn7:
