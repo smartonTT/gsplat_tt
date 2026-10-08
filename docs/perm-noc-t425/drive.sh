@@ -1,8 +1,10 @@
 #!/bin/bash
 # t425 (copy of docs/mover-sortperm/drive.sh): one `ttp lock p100` around: ssh preflight, sync + build of <rev> on the measurement box,
-# 3 alternating untraced 30-view rounds of xvn3 (default: NoC perm + NoC big gather), xvn1
-# (GSPLAT_TT_PERM_NOC=1, perm only) and xvcpu (=0, RISC copy), md5 vs golden 906e0435 per arm,
-# Tracy capture of xvn3 views 0:10 with GSPLAT_TT_MATCULL_PROF=1,
+# the sort unit test (both SORT_RECS_PACKED settings), 3 alternating untraced 30-view rounds of
+# xvn7 (default: NoC perm + NoC big gather + packed big-tile sort), xvn3 (GSPLAT_TT_PERM_NOC=3,
+# no packed big sort) and xvcpu (=0, RISC copy, pair big sort), md5 vs golden 906e0435 per arm
+# (ARM_A/B/C override; run 1 at 8353878c was n3 / n1 / cpu), Tracy capture of the default
+# arm views 0:10 with GSPLAT_TT_MATCULL_PROF=1,
 # the fetch of logs/CSVs, and the device hero screenshot (default config).
 #   ttp detach t425 -- docs/perm-noc-t425/drive.sh <rev>   (Mac, repo root)
 # Restrictions: only the existing measurement reservation (no ird reserve/extend/release),
@@ -35,10 +37,13 @@ opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.
 tail -2 "$O/sync.log"
 ~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t425 $sha NoC perm ($H)"
 scp -q -o BatchMode=yes docs/xview-overlap-t379/remote_time.sh "$H:$T/tmp/t379_remote_time.sh" || exit 3
+$SSH "$H" "cd $T && for p in 1 0; do c++ -O2 -std=c++17 -DSORT_RECS_PACKED=\$p -Irender/kernels/dataflow tests/unit/test_sort_radix_tile.cpp -o tmp/tsrt\$p && ./tmp/tsrt\$p | tail -1; done" 2>&1 | tee "$O/unit.out" || exit 5
+grep -q "fails=0" "$O/unit.out" && [ "$(grep -c 'fails=0' "$O/unit.out")" = 2 ] || { echo "=== unit test failed"; exit 5; }
 [ "$MODE" = rounds ] && keep="" || keep=" $T/tmp/t425"
 $SSH "$H" "rm -rf $T/tmp/t379/run-r*.log $T/tmp/t379/md5-r*.txt$keep; mkdir -p $T/tmp/t425"
 pat="^(===|run rc|tracy |STAGES|SUMMARY|ALL_|VIEWS|XVIEW_|HANG|device csv|no device|DRAM|Trace|TT_FATAL)"
-N3=xvn3: N1=xvn1:GSPLAT_TT_PERM_NOC=1 CPU=xvcpu:GSPLAT_TT_PERM_NOC=0
+ARM_A=${ARM_A:-xvn7:} ARM_B=${ARM_B:-xvn3:GSPLAT_TT_PERM_NOC=3} ARM_C=${ARM_C:-xvcpu:GSPLAT_TT_PERM_NOC=0}
+N3=$ARM_A N1=$ARM_B CPU=$ARM_C
 rc=0
 for r in 1 2 3; do
   if [ $((r % 2)) = 1 ]; then arms="$N3 $N1 $CPU"; else arms="$CPU $N1 $N3"; fi
@@ -53,7 +58,7 @@ if [ "$MODE" = rounds ]; then
   echo "=== drive t425 rounds done rc=$rc $(date)"; exit $rc
 fi
 $DEVRUN --host "$H" --no-verify --timeout 540 --tag t425-T0 -- \
-  "T=$T bash $T/$D/remote_tracy.sh 0 n3" 2>&1 | tee "$O/tracy-n3-c0.out" | grep -E "$pat"
+  "T=$T bash $T/$D/remote_tracy.sh 0 ${ARM_A%%:*}" 2>&1 | tee "$O/tracy-${ARM_A%%:*}-c0.out" | grep -E "$pat"
 [ "${PIPESTATUS[0]}" -eq 0 ] || rc=2
 scp -q -o BatchMode=yes "$H:$T/tmp/t379/run-r*.log" "$H:$T/tmp/t379/md5-r*.txt" \
   "$H:$T/tmp/t425/T-*.log" "$H:$T/tmp/t425/*.csv.gz" "$O/" || rc=4

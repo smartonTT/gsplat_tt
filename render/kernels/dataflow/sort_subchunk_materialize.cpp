@@ -110,9 +110,10 @@ inline uint32_t f_to_bits(float f) {
 // 32 B loopback NoC read per record (source and destination in this core's L1)
 // instead: the RISC writes three command registers per record and the NoC
 // moves the bytes, rather than 8 loads + 8 stores at ~2.5 cycles each. Bit 1:
-// the same for the big-tile gather (mat_ol_gather).
+// the same for the big-tile gather (mat_ol_gather). Bit 2: the big-tile
+// whole-tile sort uses the packed id sort (sort_ids_gathered) too.
 #ifndef PERM_NOC
-#define PERM_NOC 3
+#define PERM_NOC 7
 #endif
 inline void permute_records(uint32_t buck, uint32_t slab, const uint32_t* sorted,
                             uint32_t n) {
@@ -734,6 +735,7 @@ void kernel_main() {
                     }
                 }
             } else {
+            uint32_t kmin = 0xFFFFFFFFu, kmax = 0u;
             {
                 MAT_PZ("mat_ol_keys");
                 FZ_ACC(fz_big);
@@ -741,7 +743,12 @@ void kernel_main() {
                     const uint32_t nr = (N - r0 < ov_cap) ? (N - r0) : ov_cap;
                     read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, buck);
                     auto rw = reinterpret_cast<const volatile uint32_t*>(buck);
-                    for (uint32_t i = 0; i < nr; ++i) k[r0 + i] = rw[i * 8u + 3u];
+                    for (uint32_t i = 0; i < nr; ++i) {
+                        const uint32_t x = rw[i * 8u + 3u];
+                        k[r0 + i] = x;
+                        kmin = x < kmin ? x : kmin;
+                        kmax = x > kmax ? x : kmax;
+                    }
                 }
             }
 #if defined(OL_MAT_SELECT) && OL_MAT_SELECT
@@ -761,11 +768,18 @@ void kernel_main() {
             uint32_t* v = reinterpret_cast<uint32_t*>(buck);
             uint32_t* k2 = v + N;
             uint32_t* v2 = k2 + N;
-            for (uint32_t i = 0; i < N; ++i) v[i] = i;
             {
                 MAT_PZ("mat_ol_sort");
                 FZ_ACC(fz_big);
+#if SORT_RECS_PACKED && (PERM_NOC & 4)
+                // Task #425: the packed id sort of the whole-tile path (N > ol_whole_cap > 16).
+                const uint32_t* res =
+                    sort_radix_tile::sort_ids_gathered(k, N, kmin, kmax, v, k2, v2, hist);
+#else
+                (void)kmin; (void)kmax;
+                for (uint32_t i = 0; i < N; ++i) v[i] = i;
                 const uint32_t* res = sort_radix_tile::sort_pairs(k, v, k2, v2, N, hist) ? v2 : v;
+#endif
                 for (uint32_t i = 0; i < L_sub; ++i) k[i] = res[sc_off + i];
             }
 #endif

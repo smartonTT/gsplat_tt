@@ -1,0 +1,96 @@
+SSH_PREFLIGHT=ok
+=== drive t425 8353878c on yyzo-bh-04:/localdev/smarton/gstt2-t425 Wed Oct  7 23:22:37 EDT 2026
+[sync_remote] built _gsplat_cpu
+[sync_remote] sha=8353878c55cccb5304e1d23a84f1a6c100297810 so_md5=b49d75b616ce6f51550d8a66bfa38c0a 
+cpp#124 8353878c t425 8353878c NoC perm (yyzo-bh-04) bin=2ccf60bf72cdfb62
+================ BUILD ID ================
+=========================================
+=== r1-xvn3 8353878  03:23:29
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.2 min_ms=6.6 max_ms=10.8 n_views=30 warmup_s=8.4 out=/localdev/smarton/gstt2-t425/tmp/t379-r1-xvn3
+STAGES n=30 head=0.003 project=1.096 tile_assign=0.004 sort=0.473 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.432 d2h=0.004 assemble=0.000 tail=0.003 xview=0.059 | sum=8.074 view_total=8.075 resid_in_view=+0.001 avg_frame_ms=8.111 resid_vs_frame=+0.037 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 1 03:23:46
+================ BUILD ID ================
+=========================================
+=== r1-xvn1 8353878 GSPLAT_TT_PERM_NOC=1 03:23:50
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.2 p50_ms=8.2 min_ms=6.7 max_ms=10.8 n_views=30 warmup_s=2.8 out=/localdev/smarton/gstt2-t425/tmp/t379-r1-xvn1
+STAGES n=30 head=0.004 project=1.116 tile_assign=0.005 sort=0.516 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.397 d2h=0.003 assemble=0.000 tail=0.004 xview=0.064 | sum=8.108 view_total=8.110 resid_in_view=+0.002 avg_frame_ms=8.155 resid_vs_frame=+0.047 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 1 03:24:02
+================ BUILD ID ================
+=========================================
+=== r1-xvcpu 8353878 GSPLAT_TT_PERM_NOC=0 03:24:21
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.3 p50_ms=8.3 min_ms=6.7 max_ms=10.9 n_views=30 warmup_s=2.7 out=/localdev/smarton/gstt2-t425/tmp/t379-r1-xvcpu
+STAGES n=30 head=0.003 project=1.095 tile_assign=0.004 sort=0.495 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.564 d2h=0.003 assemble=0.000 tail=0.003 xview=0.055 | sum=8.223 view_total=8.225 resid_in_view=+0.001 avg_frame_ms=8.264 resid_vs_frame=+0.040 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 1 03:24:32
+================ BUILD ID ================
+=========================================
+=== r2-xvcpu 8353878 GSPLAT_TT_PERM_NOC=0 03:24:42
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.2 p50_ms=8.3 min_ms=6.7 max_ms=10.9 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t425/tmp/t379-r2-xvcpu
+STAGES n=30 head=0.003 project=1.081 tile_assign=0.004 sort=0.470 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.584 d2h=0.003 assemble=0.000 tail=0.003 xview=0.053 | sum=8.202 view_total=8.203 resid_in_view=+0.001 avg_frame_ms=8.239 resid_vs_frame=+0.037 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 2 03:24:52
+================ BUILD ID ================
+=========================================
+=== r2-xvn1 8353878 GSPLAT_TT_PERM_NOC=1 03:25:03
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=6.6 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t425/tmp/t379-r2-xvn1
+STAGES n=30 head=0.003 project=1.099 tile_assign=0.004 sort=0.492 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.422 d2h=0.003 assemble=0.000 tail=0.003 xview=0.055 | sum=8.081 view_total=8.082 resid_in_view=+0.001 avg_frame_ms=8.119 resid_vs_frame=+0.038 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 2 03:25:13
+================ BUILD ID ================
+=========================================
+=== r2-xvn3 8353878  03:25:24
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=6.6 max_ms=10.7 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t425/tmp/t379-r2-xvn3
+STAGES n=30 head=0.003 project=1.100 tile_assign=0.004 sort=0.486 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.420 d2h=0.004 assemble=0.000 tail=0.003 xview=0.054 | sum=8.073 view_total=8.075 resid_in_view=+0.001 avg_frame_ms=8.114 resid_vs_frame=+0.041 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 2 03:25:35
+================ BUILD ID ================
+=========================================
+=== r3-xvn3 8353878  03:25:46
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=6.6 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t425/tmp/t379-r3-xvn3
+STAGES n=30 head=0.003 project=1.090 tile_assign=0.003 sort=0.481 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.438 d2h=0.003 assemble=0.000 tail=0.003 xview=0.052 | sum=8.074 view_total=8.075 resid_in_view=+0.001 avg_frame_ms=8.109 resid_vs_frame=+0.035 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 3 03:25:56
+================ BUILD ID ================
+=========================================
+=== r3-xvn1 8353878 GSPLAT_TT_PERM_NOC=1 03:26:07
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=6.6 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t425/tmp/t379-r3-xvn1
+STAGES n=30 head=0.003 project=1.095 tile_assign=0.004 sort=0.483 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.432 d2h=0.004 assemble=0.000 tail=0.003 xview=0.053 | sum=8.076 view_total=8.078 resid_in_view=+0.001 avg_frame_ms=8.115 resid_vs_frame=+0.038 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 3 03:26:18
+================ BUILD ID ================
+=========================================
+=== r3-xvcpu 8353878 GSPLAT_TT_PERM_NOC=0 03:26:29
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.2 p50_ms=8.3 min_ms=6.7 max_ms=10.9 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t425/tmp/t379-r3-xvcpu
+STAGES n=30 head=0.003 project=1.075 tile_assign=0.004 sort=0.481 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.583 d2h=0.003 assemble=0.000 tail=0.003 xview=0.050 | sum=8.202 view_total=8.203 resid_in_view=+0.001 avg_frame_ms=8.238 resid_vs_frame=+0.036 xview_hits=29 xview_misses=0
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 3 03:26:39
+================ BUILD ID ================
+=========================================
+=== tracy n3 c0 8353878c 03:26:50
+tracy n3 c0 rc=0 03:27:13
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=169.4 p50_ms=9.9 min_ms=8.3 max_ms=1606.9 n_views=10 warmup_s=11.3 out=/localdev/smarton/gstt2-t425/tmp/t425-n3-T0
+STAGES n=10 head=0.002 project=2.876 tile_assign=0.004 sort=0.516 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.440 d2h=0.003 assemble=0.000 tail=159.534 xview=0.037 | sum=169.412 view_total=169.413 resid_in_view=+0.001 avg_frame_ms=169.443 resid_vs_frame=+0.031 xview_hits=9 xview_misses=0
+XVIEW_HITS c0 9/10
+device csv c0 rows 555252 mj_zones 152568
+/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t425/docs/perm-noc-t425/drive.sh: line 60: syntax error near unexpected token `||'
+/Users/smarton/dev/gsplat_tt/tt-project/worktrees/t425/docs/perm-noc-t425/drive.sh: line 60: ` || rc=1'

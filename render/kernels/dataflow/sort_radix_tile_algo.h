@@ -299,6 +299,31 @@ inline void sort_ids_packed(uint32_t* k, uint32_t* out, uint32_t* w2, uint32_t n
     }
 }
 
+// Ids of the stable order of the n keys k[0, n) with min kmin and max kmax,
+// always into v (k is clobbered; k2, v2 n u32 each of scratch). The packed
+// sort when the key range allows it, else the pair sort. Task #425: also the
+// whole-tile sort of sort_subchunk_materialize.cpp's big-tile items.
+inline uint32_t* sort_ids_gathered(uint32_t* k, uint32_t n, uint32_t kmin, uint32_t kmax,
+                                   uint32_t* v, uint32_t* k2, uint32_t* v2, hist_t* hist) {
+    uint32_t i;
+    if (kmin == kmax) {
+        for (i = 0; i < n; i++) v[i] = i;
+        return v;
+    }
+    const uint32_t B = bit_length(kmax - kmin);
+    const Plan pl = choose_plan(n, B);
+    const uint32_t ib = bit_length(n - 1u);
+    if (n > 16u && (pl.passes == 1u || B - pl.bits + ib <= 32u)) {
+        sort_ids_packed(k, v, k2, n, kmin, pl, ib, hist);
+        return v;
+    }
+    for (i = 0; i < n; i++) v[i] = i;  // wide key range or n <= 16: the pair sort
+    if (sort_pairs(k, v, k2, v2, n, hist)) {
+        for (i = 0; i < n; i++) v[i] = v2[i];
+    }
+    return v;
+}
+
 // Stable depth order of n 32 B records (8 u32 words, record i at words
 // [8i, 8i+8), depth key at word 3) for sort_subchunk_materialize.cpp. Returns
 // the sorted record indices, always in v. k, v, k2, v2 hold n entries each.
@@ -328,22 +353,7 @@ inline uint32_t* sort_record_ids(const volatile uint32_t* recs, uint32_t n, uint
             kmin = x < kmin ? x : kmin;
             kmax = x > kmax ? x : kmax;
         }
-        if (kmin == kmax) {
-            for (i = 0; i < n; i++) v[i] = i;
-            return v;
-        }
-        const uint32_t B = bit_length(kmax - kmin);
-        const Plan pl = choose_plan(n, B);
-        const uint32_t ib = bit_length(n - 1u);
-        if (pl.passes == 1u || B - pl.bits + ib <= 32u) {
-            sort_ids_packed(k, v, k2, n, kmin, pl, ib, hist);
-            return v;
-        }
-        for (i = 0; i < n; i++) v[i] = i;  // wide key range: the pair sort below
-        if (sort_pairs(k, v, k2, v2, n, hist)) {
-            for (i = 0; i < n; i++) v[i] = v2[i];
-        }
-        return v;
+        return sort_ids_gathered(k, n, kmin, kmax, v, k2, v2, hist);
     }
 #endif
     for (; i + UNROLL <= n; i += UNROLL) {
