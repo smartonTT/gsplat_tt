@@ -1,0 +1,120 @@
+SSH_PREFLIGHT=ok
+copied
+=== sync f70118da4c61f82fb0175fc0e9440ecff03e9f21 -> 288aeffc 2026-10-08T01:06:28Z
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+[21/21] Linking CXX shared module /localdev/smarton/p150bench/tree392/render/render_clean.cpython-310-x86_64-linux-gnu.so
+rton 1314408 Oct  8 01:06 render/render_clean.cpython-310-x86_64-linux-gnu.so
+288aeffceeebace175d43cc97c8418c2c68822cd
+=== sync rc=0 2026-10-08T01:06:53Z
+=== viewer stop 2026-10-08T01:06:57Z
+[viewer] stopped pid(s) 78222
+=== bench sha=288aeffc host=bh-30-special-smarton-for-reservation-135630 2026-10-08T01:07:31Z card=p150b aiclk=1350
+overlay rc=0
+---
+>     LONG((32 * 1024)
+overlay /localdev/smarton/p150bench/ttm-eth12v2 ready (src /localdev/smarton/viewer/tt-metal, 12 ETH dispatch cores; 3 real files, rest symlinks)
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12v2 TT_METAL_CACHE=/localdev/smarton/p150bench/cache392/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 
+=== s0 start 01:07:31
+s0 rc=0 01:07:53
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+S0_PASS
+=== r1-W dispatch=worker start 01:07:53
+run r1-W rc=0 01:08:30
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.1 p50_ms=11.3 min_ms=9.3 max_ms=13.1 n_views=30 warmup_s=21.7 out=/localdev/smarton/p150bench/tree392/tmp/t397-r1-W
+STAGES n=30 head=0.005 project=2.985 tile_assign=0.008 sort=1.021 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.508 d2h=0.552 assemble=0.000 tail=0.003 | sum=11.082 view_total=11.084 resid_in_view=+0.002 avg_frame_ms=11.145 resid_vs_frame=+0.063
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.410 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.319 publish_wait=0.000 mat=0.092 | sum=0.905 sort=1.021 resid=+0.115
+ALL_VIEWS_IDENTICAL r1-W (30)
+=== r1-E dispatch=eth start 01:08:30
+run r1-E rc=0 01:08:46
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.6 p50_ms=10.7 min_ms=9.0 max_ms=12.3 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t397-r1-E
+STAGES n=30 head=0.005 project=2.928 tile_assign=0.008 sort=1.158 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.886 d2h=0.546 assemble=0.000 tail=0.003 | sum=10.534 view_total=10.536 resid_in_view=+0.002 avg_frame_ms=10.595 resid_vs_frame=+0.061
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.512 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.335 publish_wait=0.000 mat=0.105 | sum=1.037 sort=1.158 resid=+0.121
+VIEWS_DIFFER r1-E (30)
+=== r2-E dispatch=eth start 01:08:46
+run r2-E rc=0 01:09:02
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.6 p50_ms=10.5 min_ms=8.9 max_ms=16.2 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t397-r2-E
+STAGES n=30 head=0.005 project=2.997 tile_assign=0.008 sort=1.170 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.009 d2h=0.312 assemble=0.000 tail=0.004 | sum=10.505 view_total=10.508 resid_in_view=+0.003 avg_frame_ms=10.576 resid_vs_frame=+0.070
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.513 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.333 publish_wait=0.000 mat=0.113 | sum=1.045 sort=1.170 resid=+0.125
+VIEWS_DIFFER r2-E (30)
+=== r2-W dispatch=worker start 01:09:02
+run r2-W rc=0 01:09:19
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.1 p50_ms=11.3 min_ms=9.4 max_ms=13.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree392/tmp/t397-r2-W
+STAGES n=30 head=0.005 project=2.980 tile_assign=0.008 sort=1.059 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.480 d2h=0.523 assemble=0.000 tail=0.003 | sum=11.057 view_total=11.059 resid_in_view=+0.002 avg_frame_ms=11.117 resid_vs_frame=+0.060
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.448 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.318 publish_wait=0.000 mat=0.096 | sum=0.947 sort=1.059 resid=+0.112
+ALL_VIEWS_IDENTICAL r2-W (30)
+=== r3-W dispatch=worker start 01:09:19
+run r3-W rc=0 01:09:35
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.1 p50_ms=11.3 min_ms=9.4 max_ms=13.1 n_views=30 warmup_s=1.8 out=/localdev/smarton/p150bench/tree392/tmp/t397-r3-W
+STAGES n=30 head=0.005 project=2.970 tile_assign=0.007 sort=1.054 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.489 d2h=0.559 assemble=0.000 tail=0.003 | sum=11.088 view_total=11.090 resid_in_view=+0.002 avg_frame_ms=11.150 resid_vs_frame=+0.062
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.080 upload=0.000 bin_emit=0.447 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.325 publish_wait=0.000 mat=0.089 | sum=0.945 sort=1.054 resid=+0.110
+ALL_VIEWS_IDENTICAL r3-W (30)
+=== r3-E dispatch=eth start 01:09:36
+run r3-E rc=0 01:09:51
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.6 p50_ms=10.6 min_ms=8.9 max_ms=12.2 n_views=30 warmup_s=1.1 out=/localdev/smarton/p150bench/tree392/tmp/t397-r3-E
+STAGES n=30 head=0.006 project=2.951 tile_assign=0.009 sort=0.995 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.034 d2h=0.492 assemble=0.000 tail=0.004 | sum=10.489 view_total=10.491 resid_in_view=+0.002 avg_frame_ms=10.561 resid_vs_frame=+0.072
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.365 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.330 publish_wait=0.000 mat=0.090 | sum=0.871 sort=0.995 resid=+0.123
+VIEWS_DIFFER r3-E (30)
+eth env: TT_METAL_RUNTIME_ROOT=/localdev/smarton/p150bench/ttm-eth12v2 TT_METAL_CACHE=/localdev/smarton/p150bench/cache392-prof/{prod,render} src=/localdev/smarton/viewer/tt-metal n_eth=12 
+=== tracy (eth) start 01:09:52
+tracy eth rc=0 01:10:02
+Traceback (most recent call last):
+Traceback (most recent call last):
+tracy csv eth 5774 B
+=== tracy (worker) start 01:10:02
+tracy worker rc=0 01:10:48
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=57.0 p50_ms=56.6 min_ms=53.5 max_ms=63.2 n_views=30 warmup_s=22.6 out=/localdev/smarton/p150bench/tree392/tmp/t397-T-worker
+STAGES n=30 head=0.009 project=2.975 tile_assign=0.009 sort=2.089 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.194 d2h=0.546 assemble=0.000 tail=45.029 | sum=56.851 view_total=56.855 resid_in_view=+0.004 avg_frame_ms=56.962 resid_vs_frame=+0.111
+tracy csv worker 5704831 B
+2026-10-08 01:07:56.316 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 01:07:56.323 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+
+arton    4096 Oct  8 01:10 .
+arton    4096 Oct  8 01:10 ..
+arton   13164 Oct  8 01:10 T-eth.log
+arton   87018 Oct  8 01:10 T-worker.log
+arton 1703259 Oct  8 01:08 hero-r1-E.png
+arton 1703239 Oct  8 01:08 hero-r1-W.png
+arton 1703259 Oct  8 01:09 hero-r2-E.png
+arton 1703239 Oct  8 01:09 hero-r2-W.png
+arton 1703259 Oct  8 01:09 hero-r3-E.png
+arton 1703239 Oct  8 01:09 hero-r3-W.png
+arton    1558 Oct  8 01:08 md5-r1-E.txt
+arton    1558 Oct  8 01:08 md5-r1-W.txt
+arton    1558 Oct  8 01:09 md5-r2-E.txt
+arton    1558 Oct  8 01:09 md5-r2-W.txt
+arton    1558 Oct  8 01:09 md5-r3-E.txt
+arton    1558 Oct  8 01:09 md5-r3-W.txt
+arton    2042 Oct  8 01:07 overlay.log
+arton   26293 Oct  8 01:08 r1-E.log
+arton   26679 Oct  8 01:08 r1-W.log
+arton   26289 Oct  8 01:09 r2-E.log
+arton   26996 Oct  8 01:09 r2-W.log
+arton   26294 Oct  8 01:09 r3-E.log
+arton   26997 Oct  8 01:09 r3-W.log
+arton   10681 Oct  8 01:07 s0.log
+arton    5774 Oct  8 01:10 tracy-u-eth.csv.gz
+arton 5704831 Oct  8 01:10 tracy-u-worker.csv.gz
+=== bench end rc=0 2026-10-08T01:10:49Z
+=== viewer start (remote) 2026-10-08T01:10:49Z
+[viewer] started pid 85037 supervisor 85030 sha 8329be508584ee7d369eac1ae6555097a8b08bf8 port 8080 (log /localdev/smarton/viewer/viewer.log)
+[viewer_clean] SELFTEST hero 1024x1024 n=30 median=11.52 ms (86.8 FPS) min=11.49 max=11.86
+[viewer_clean] READY port=8080
+SHA=8329be508584ee7d369eac1ae6555097a8b08bf8
+=== viewer ready 2026-10-08T01:10:58Z localhost:8091 -> 200
+=== drive end 2026-10-08T01:11:23Z
