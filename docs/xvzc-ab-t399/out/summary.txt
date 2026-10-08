@@ -1,0 +1,2 @@
+ARM xvpin mean_ms_view=9.146 n=3 rounds: 9.273 9.091 9.073 | blend=7.083 d2h=0.430 project=1.082 sort=0.445 xview=0.055
+ARM xvzc mean_ms_view=8.735 n=3 rounds: 8.759 8.717 8.730 | blend=6.981 d2h=0.004 project=1.094 sort=0.530 xview=0.069

@@ -1,0 +1,8 @@
+FZ_OK run-r0-xvpin.log MATBLEND_PROGRAM fz=1 zerocopy=0 pinned=1 frame=0
+FZ_OK run-r0-xvzc.log MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+FZ_OK run-r1-xvpin.log MATBLEND_PROGRAM fz=1 zerocopy=0 pinned=1 frame=0
+FZ_OK run-r1-xvzc.log MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+FZ_OK run-r2-xvpin.log MATBLEND_PROGRAM fz=1 zerocopy=0 pinned=1 frame=0
+FZ_OK run-r2-xvzc.log MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+FZ_OK run-r3-xvpin.log MATBLEND_PROGRAM fz=1 zerocopy=0 pinned=1 frame=0
+FZ_OK run-r3-xvzc.log MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
