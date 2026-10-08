@@ -12,7 +12,7 @@
 [ttw 2026-10-07T23:54:46-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=be4b6f91 bin=971ba4aa2e19a355 t433 be4b6f91 chunk cull A/B (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t433-r2-ro  timeout=420s  worry=600s  ts=2026-10-07T23:54:46-0400
 cmd: T=/localdev/smarton/gstt2-t433 bash /localdev/smarton/gstt2-t433/tmp/t379_remote_time.sh 2 ro:GSPLAT_TT_CHUNK_CULL=1,GSPLAT_TT_CHUNK_SKIP=0
