@@ -23,6 +23,7 @@
 // behavior, just with cov2d/radii instead of cov_cam).
 
 #include "pfwc.h"
+#include "chunk_cull.h"
 #include "device_state.h"
 #include "env_config.h"
 #include "gather_visible.h"
@@ -117,6 +118,11 @@ constexpr uint32_t CB_AABB   = 36;
 constexpr uint32_t CB_VMASK  = 37;  // 128 B mask staging
 constexpr uint32_t CB_VCNT   = 38;  // per-tile counts staging
 constexpr uint32_t CB_VOP    = 39;  // opacity tile for RECHECK
+// Task #433 chunk cull (split writer only, reuses the CB_VCNT index, unused when
+// fused): each writer_pfwc_split.cpp role reads this core's tile list into its
+// own TLIST_MAX_PAGE half.
+constexpr uint32_t CB_TLIST = 38;
+constexpr uint32_t TLIST_MAX_PAGE = 1024;  // <= 256 tiles per core
 constexpr uint32_t VIS_MASK_BYTES = 128;
 constexpr uint32_t VIS_COUNTS_PAGE = 1024;  // vis_tile::COUNTS_PAGE_BYTES
 constexpr uint32_t VIS_CNT_STAGING = 16 * 1024;  // up to ~1900 tiles per core
@@ -194,7 +200,29 @@ struct PfwcDeviceContext {
     bool fuse_wsplit = false;
     bool fuse_rd_brisc = false;  // task #232: BRISC reads some input tiles (PFWC_RD_COLS)
     uint32_t fsem[pfwc_wsplit::NUM_SEMS] = {};
+    bool fuse_tlist = false;  // task #433: built with PFWC_TILE_LIST
+    // Task #433: per-core tile lists, one DRAM page per core, double-buffered
+    // (with the cross-view overlap pfwc N+1 is queued while N may still read).
+    std::shared_ptr<distributed::MeshBuffer> buf_tlist[2];
+    uint32_t tlist_page = 0;
+    uint32_t tlist_cur = 0;
+    std::vector<uint32_t> tlist_host;
 };
+
+// Task #433 chunk frustum cull (chunk_cull.h; GSPLAT_TT_CHUNK_CULL=1, default 0;
+// run.py Morton-orders the scene under the same flag). GSPLAT_TT_CHUNK_SKIP=0
+// keeps every tile (reorder + tile list only, the stage A diagnostic).
+static bool chunk_cull_on() {
+    static const bool v = vis_env_u32("GSPLAT_TT_CHUNK_CULL", 0) != 0;
+    return v;
+}
+static float chunk_cull_k() {
+    static const float k = [] {
+        const char* e = std::getenv("GSPLAT_TT_CHUNK_K");
+        return (e != nullptr && *e != '\0') ? std::strtof(e, nullptr) : 1.5f;
+    }();
+    return k;
+}
 
 static gsplat_cpu::ThreadPool& soa_pool() {
     static gsplat_cpu::ThreadPool pool(
@@ -370,6 +398,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             cb_raw(pfwc_wsplit::CB_STG_ODD, pfwc_wsplit::STG_BYTES);
             cb_raw(pfwc_wsplit::CB_MBX, pfwc_wsplit::MBX_BYTES);
             for (uint32_t i = 0; i < pfwc_wsplit::NUM_SEMS; ++i) ctx.fsem[i] = CreateSemaphore(program, cores, 0);
+            if (chunk_cull_on()) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
         }
     }
     // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 records per-step wall cycles (profiler builds) from the
@@ -393,6 +422,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (stepcyc != 0 && (steprisc == 3 || steprisc == 9))
             split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
         if (rd_brisc) split_defines["PFWC_RD_COLS"] = "1";
+        if (chunk_cull_on()) split_defines["PFWC_TILE_LIST"] = "1";
     }
     // Task #206: GSPLAT_TT_PFWC_COVCAM_SFPU=1 runs cov_cam as one SFPU pass over the six
     // cov3d tiles in DEST (6 copy_tile instead of 36, no mul_unary/add_binary), same
@@ -480,6 +510,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         writer_defines["WSPLIT_ROLE"] = "0";
         // Task #232: BRISC reads the GSPLAT_TT_PFWC_RD_* input tiles.
         if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
+        if (chunk_cull_on()) writer_defines["PFWC_TILE_LIST"] = "1";
     }
     const KernelHandle writer = CreateKernel(
         program,
@@ -502,6 +533,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         ctx.fwriter = writer;
         ctx.fuse_wsplit = wsplit;
         ctx.fuse_rd_brisc = rd_brisc;
+        ctx.fuse_tlist = wsplit && chunk_cull_on();
         ctx.wl_fuse.add_program(device_range, std::move(program));
         ctx.fuse_built = true;
     } else if (vis) {
@@ -836,6 +868,44 @@ double pfwc_tt(
     // compaction order (vis_tile::SeqMap).
     vis_tile::SeqMap seq;
     seq.init(num_tiles, num_cores);
+    // Task #433: the surviving tiles, dealt strided like the full scene
+    // (chunk_cull::list_count <= seq.count(c), so seg_base(c) holds).
+    const bool tile_list = fuse_on && ctx->fuse_tlist;
+    std::vector<uint32_t> surv;
+    std::shared_ptr<distributed::MeshBuffer> tlist_buf;
+    if (tile_list) {
+        stagetimers::Span cull_span(st_acc.project_pfwc_chunkcull);
+        static chunk_cull::Table tab;
+        if (tab.means != means || tab.cov != cov3d_unique || tab.N != N)
+            chunk_cull::build(tab, means, cov3d_unique, N, num_tiles, ELEMS_PER_TILE, chunk_cull_k());
+        if (vis_env_u32("GSPLAT_TT_CHUNK_SKIP", 1) != 0) {
+            const float tr[3] = {t0, t1, t2};
+            chunk_cull::survivors(tab, r, tr, fx, fy, cx, cy, vis->image_width, vis->image_height,
+                                  vis->k_near, surv);
+        } else {
+            surv.resize(num_tiles);
+            for (uint32_t t = 0; t < num_tiles; ++t) surv[t] = t;
+        }
+        if (vis_env_u32("GSPLAT_TT_CHUNK_LOG", 0) != 0)
+            std::cerr << "[gsplat_tt::pfwc] chunk cull: " << surv.size() << "/" << num_tiles
+                      << " tiles kept\n";
+        // One single-page DRAM buffer (all in bank 0), core c's ids at c * page.
+        const uint32_t page = (seq.count(0) * 4u + 63u) & ~63u;
+        if (page > TLIST_MAX_PAGE)
+            throw std::runtime_error("[gsplat_tt::pfwc] chunk cull: " + std::to_string(seq.count(0)) +
+                                     " tiles per core, over the tile-list page");
+        if (!ctx->buf_tlist[0] || ctx->tlist_page != page) {
+            distributed::DeviceLocalBufferConfig cfg{.page_size = page * num_cores,
+                                                     .buffer_type = BufferType::DRAM};
+            distributed::ReplicatedBufferConfig rep{.size = std::size_t{page} * num_cores};
+            for (auto& b : ctx->buf_tlist) b = distributed::MeshBuffer::create(rep, cfg, ctx->mesh_device.get());
+            ctx->tlist_page = page;
+        }
+        ctx->tlist_cur ^= 1u;
+        tlist_buf = ctx->buf_tlist[ctx->tlist_cur];
+        chunk_cull::deal(surv, num_cores, page / 4u, ctx->tlist_host);
+        distributed::EnqueueWriteMeshBuffer(*ctx->cq, tlist_buf, ctx->tlist_host, /*blocking=*/false);
+    }
     auto fbuf = [](const char* name) {
         auto b = device_state::get_buffer(name);
         if (!b) throw std::runtime_error(std::string("[gsplat_tt::pfwc] missing ") + name);
@@ -898,7 +968,8 @@ double pfwc_tt(
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t chunk_start = fuse_on ? c : ws.chunk_start[c];
-        const uint32_t num_chunks  = fuse_on ? seq.count(c) : ws.num_chunks[c];
+        const uint32_t num_chunks  = tile_list ? chunk_cull::list_count(surv.size(), c, num_cores)
+                                     : (fuse_on ? seq.count(c) : ws.num_chunks[c]);
 
         std::vector<uint32_t> reader_args = {
              static_cast<uint32_t>(buf_mx->address()),
@@ -965,6 +1036,12 @@ double pfwc_tt(
                     nw.push_back(env_config::pfwc_rd_set());
                     nw.push_back(env_config::pfwc_rd_rest());
                     fw = nw;
+                }
+                if (tile_list) {  // task #433: last two args, bank-0 offset and page bytes
+                    for (auto* a : {&nw, &fw}) {
+                        a->push_back(static_cast<uint32_t>(tlist_buf->address()) + c * ctx->tlist_page);
+                        a->push_back(ctx->tlist_page);
+                    }
                 }
                 SetRuntimeArgs(program, k_reader, core, nw);
             }
