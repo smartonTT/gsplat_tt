@@ -1,0 +1,6 @@
+RAMP_LOG xvr0 
+ARM xvr0 mean_ms_view=8.741 n=3 rounds: 8.765 8.742 8.715 | blend=6.983 d2h=0.004 project=1.099 sort=0.532 xview=0.065
+RAMP_LOG xvr1    3 MAT_RAMP n=1 
+ARM xvr1 mean_ms_view=8.711 n=3 rounds: 8.716 8.709 8.707 | blend=7.027 d2h=0.004 project=1.091 sort=0.483 xview=0.055
+RAMP_LOG xvr3    3 MAT_RAMP n=3 
+ARM xvr3 mean_ms_view=8.722 n=3 rounds: 8.722 8.716 8.728 | blend=7.038 d2h=0.004 project=1.090 sort=0.481 xview=0.056
