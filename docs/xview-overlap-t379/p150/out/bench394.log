@@ -1,0 +1,68 @@
+=== bench sha=1993cce7 host=bh-30-special-smarton-for-reservation-135630 2026-10-08T00:54:22Z aiclk=1350
+=== r1 base start 00:54:22 defaults
+run r1 base rc=0 00:54:59
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.0 p50_ms=11.1 min_ms=9.2 max_ms=12.7 n_views=30 warmup_s=21.5 out=/localdev/smarton/p150bench/tree394/tmp/t394-r1-base
+STAGES n=30 head=0.005 project=2.982 tile_assign=0.008 sort=1.084 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.456 d2h=0.357 assemble=0.000 tail=0.004 xview=0.000 | sum=10.896 view_total=10.899 resid_in_view=+0.003 avg_frame_ms=10.966 resid_vs_frame=+0.070 xview_hits=0 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.084 upload=0.000 bin_emit=0.437 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.326 publish_wait=0.000 mat=0.114 | sum=0.964 sort=1.084 resid=+0.121
+ALL_VIEWS_IDENTICAL r1 base (30)
+=== r1 xv start 00:54:59 GSPLAT_TT_XVIEW_OVERLAP=1
+run r1 xv rc=0 00:55:15
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.6 p50_ms=9.6 min_ms=7.6 max_ms=12.0 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r1-xv
+STAGES n=30 head=0.008 project=1.165 tile_assign=0.009 sort=1.099 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.662 d2h=0.398 assemble=0.000 tail=0.004 xview=0.145 | sum=9.490 view_total=9.493 resid_in_view=+0.003 avg_frame_ms=9.578 resid_vs_frame=+0.088 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.453 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.321 publish_wait=0.000 mat=0.123 | sum=0.983 sort=1.099 resid=+0.115
+ALL_VIEWS_IDENTICAL r1 xv (30)
+XVIEW_HITS_OK r1 xv hits=29 views=30
+=== r1 xvpin start 00:55:16 GSPLAT_TT_XVIEW_OVERLAP=1 GSPLAT_TT_OUT_PINNED=1
+run r1 xvpin rc=0 00:55:34
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.3 min_ms=7.7 max_ms=11.7 n_views=30 warmup_s=3.4 out=/localdev/smarton/p150bench/tree394/tmp/t394-r1-xvpin
+STAGES n=30 head=0.009 project=1.183 tile_assign=0.009 sort=0.963 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.514 d2h=0.311 assemble=0.000 tail=0.005 xview=0.133 | sum=9.127 view_total=9.130 resid_in_view=+0.003 avg_frame_ms=9.224 resid_vs_frame=+0.097 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.351 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.325 publish_wait=0.000 mat=0.079 | sum=0.841 sort=0.963 resid=+0.122
+ALL_VIEWS_IDENTICAL r1 xvpin (30)
+XVIEW_HITS_OK r1 xvpin hits=29 views=30
+=== r2 xvpin start 00:55:34 GSPLAT_TT_XVIEW_OVERLAP=1 GSPLAT_TT_OUT_PINNED=1
+run r2 xvpin rc=0 00:55:50
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.2 min_ms=7.6 max_ms=11.7 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r2-xvpin
+STAGES n=30 head=0.007 project=1.157 tile_assign=0.009 sort=1.082 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.398 d2h=0.284 assemble=0.000 tail=0.004 xview=0.131 | sum=9.072 view_total=9.075 resid_in_view=+0.003 avg_frame_ms=9.156 resid_vs_frame=+0.084 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.461 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.324 publish_wait=0.000 mat=0.097 | sum=0.967 sort=1.082 resid=+0.115
+ALL_VIEWS_IDENTICAL r2 xvpin (30)
+XVIEW_HITS_OK r2 xvpin hits=29 views=30
+=== r2 base start 00:55:50 defaults
+run r2 base rc=0 00:56:07
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.1 p50_ms=11.2 min_ms=9.3 max_ms=12.9 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r2-base
+STAGES n=30 head=0.005 project=2.965 tile_assign=0.007 sort=1.051 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.488 d2h=0.490 assemble=0.000 tail=0.003 xview=0.000 | sum=11.009 view_total=11.011 resid_in_view=+0.002 avg_frame_ms=11.067 resid_vs_frame=+0.059 xview_hits=0 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.081 upload=0.000 bin_emit=0.425 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.332 publish_wait=0.000 mat=0.095 | sum=0.935 sort=1.051 resid=+0.116
+ALL_VIEWS_IDENTICAL r2 base (30)
+=== r2 xv start 00:56:07 GSPLAT_TT_XVIEW_OVERLAP=1
+run r2 xv rc=0 00:56:23
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.6 p50_ms=9.6 min_ms=7.7 max_ms=12.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r2-xv
+STAGES n=30 head=0.007 project=1.149 tile_assign=0.008 sort=1.094 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.721 d2h=0.364 assemble=0.000 tail=0.004 xview=0.135 | sum=9.481 view_total=9.484 resid_in_view=+0.003 avg_frame_ms=9.561 resid_vs_frame=+0.079 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.083 upload=0.000 bin_emit=0.473 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.328 publish_wait=0.000 mat=0.094 | sum=0.981 sort=1.094 resid=+0.113
+ALL_VIEWS_IDENTICAL r2 xv (30)
+XVIEW_HITS_OK r2 xv hits=29 views=30
+=== r3 xv start 00:56:23 GSPLAT_TT_XVIEW_OVERLAP=1
+run r3 xv rc=0 00:56:40
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.6 p50_ms=9.6 min_ms=7.9 max_ms=12.1 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r3-xv
+STAGES n=30 head=0.007 project=1.156 tile_assign=0.008 sort=1.082 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.707 d2h=0.390 assemble=0.000 tail=0.004 xview=0.135 | sum=9.490 view_total=9.492 resid_in_view=+0.003 avg_frame_ms=9.569 resid_vs_frame=+0.080 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.464 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.320 publish_wait=0.000 mat=0.100 | sum=0.969 sort=1.082 resid=+0.113
+ALL_VIEWS_IDENTICAL r3 xv (30)
+XVIEW_HITS_OK r3 xv hits=29 views=30
+=== r3 xvpin start 00:56:40 GSPLAT_TT_XVIEW_OVERLAP=1 GSPLAT_TT_OUT_PINNED=1
+run r3 xvpin rc=0 00:56:56
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.1 p50_ms=9.2 min_ms=7.6 max_ms=11.7 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r3-xvpin
+STAGES n=30 head=0.007 project=1.152 tile_assign=0.008 sort=1.085 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.397 d2h=0.280 assemble=0.000 tail=0.004 xview=0.130 | sum=9.064 view_total=9.066 resid_in_view=+0.003 avg_frame_ms=9.147 resid_vs_frame=+0.083 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.081 upload=0.000 bin_emit=0.470 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.319 publish_wait=0.000 mat=0.094 | sum=0.968 sort=1.085 resid=+0.117
+ALL_VIEWS_IDENTICAL r3 xvpin (30)
+XVIEW_HITS_OK r3 xvpin hits=29 views=30
+=== r3 base start 00:56:57 defaults
+run r3 base rc=0 00:57:13
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.0 p50_ms=11.2 min_ms=9.3 max_ms=12.8 n_views=30 warmup_s=1.7 out=/localdev/smarton/p150bench/tree394/tmp/t394-r3-base
+STAGES n=30 head=0.006 project=2.977 tile_assign=0.007 sort=1.026 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.527 d2h=0.436 assemble=0.000 tail=0.004 xview=0.000 | sum=10.983 view_total=10.986 resid_in_view=+0.003 avg_frame_ms=11.048 resid_vs_frame=+0.065 xview_hits=0 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.080 upload=0.000 bin_emit=0.391 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.316 publish_wait=0.000 mat=0.121 | sum=0.910 sort=1.026 resid=+0.116
+ALL_VIEWS_IDENTICAL r3 base (30)
+ARM base mean_ms_view=11.027 n=3 rounds: 10.966 11.067 11.048
+ARM xv mean_ms_view=9.569 n=3 rounds: 9.578 9.561 9.569
+ARM xvpin mean_ms_view=9.176 n=3 rounds: 9.224 9.156 9.147
+2026-10-08 00:54:25.541 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+2026-10-08 00:54:25.547 | info     |             UMD | Established firmware bundle version: 19.13.2 (topology_discovery.cpp:544)
+=== bench end rc=0 2026-10-08T00:57:13Z
+=== viewer restarted pid 78222 2026-10-08T00:57:13Z
