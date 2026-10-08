@@ -35,15 +35,16 @@ inline std::string lower_trim(const std::string& s) {
     return out;
 }
 
-// GSPLAT_TT_DISPATCH (nullptr if unset). Unset or empty = worker; *bad is set for an
-// unknown value, which also falls back to worker.
+// GSPLAT_TT_DISPATCH (nullptr if unset). Unset or empty = auto (task #409: ETH on a p150
+// whose TT_METAL_RUNTIME_ROOT is an opt/eth overlay, else worker); *bad is set for an
+// unknown value, which falls back to worker.
 inline Mode mode_from_env(const char* s, bool* bad) {
     *bad = false;
-    if (s == nullptr) return Mode::kWorker;
+    if (s == nullptr) return Mode::kAuto;
     const std::string v = lower_trim(s);
-    if (v.empty() || v == "worker") return Mode::kWorker;
+    if (v.empty() || v == "auto") return Mode::kAuto;
+    if (v == "worker") return Mode::kWorker;
     if (v == "eth") return Mode::kEth;
-    if (v == "auto") return Mode::kAuto;
     *bad = true;
     return Mode::kWorker;
 }
@@ -54,8 +55,19 @@ inline bool card_has_eth(const std::string& card_type) {
     return c.rfind("p150", 0) == 0 || c.rfind("p300", 0) == 0;
 }
 
-// num_cqs: the descriptor has 1- and 2-CQ entries only.
-inline Choice resolve(Mode mode, const std::string& card_type, uint32_t num_cqs) {
+// Marker opt/eth/make_overlay.sh writes into the overlay root. Stock tt-metal cannot open
+// ETH dispatch on a p150 (14-core yaml lists, 24 KB idle-ERISC .ld), so auto needs it.
+inline const char* kOverlayMarker = ".gsplat-eth-overlay";
+
+// True if `runtime_root` (TT_METAL_RUNTIME_ROOT, nullptr if unset) holds the marker.
+inline bool overlay_active(const char* runtime_root) {
+    if (runtime_root == nullptr || *runtime_root == '\0') return false;
+    std::ifstream f(std::string(runtime_root) + "/" + kOverlayMarker);
+    return static_cast<bool>(f);
+}
+
+// num_cqs: the descriptor has 1- and 2-CQ entries only. overlay: overlay_active().
+inline Choice resolve(Mode mode, const std::string& card_type, uint32_t num_cqs, bool overlay) {
     switch (mode) {
         case Mode::kWorker: return {Kind::kWorker, "worker"};
         case Mode::kEth: return {Kind::kEth, "eth (forced)"};
@@ -64,7 +76,8 @@ inline Choice resolve(Mode mode, const std::string& card_type, uint32_t num_cqs)
     if (num_cqs > 2) return {Kind::kWorker, "auto: ETH descriptor has 1-2 CQs only"};
     if (card_type.empty()) return {Kind::kWorker, "auto: card type unknown"};
     if (!card_has_eth(card_type)) return {Kind::kWorker, "auto: card has no ETH cores"};
-    return {Kind::kEth, "auto: card has ETH cores"};
+    if (!overlay) return {Kind::kWorker, "auto: TT_METAL_RUNTIME_ROOT is not an opt/eth overlay, falling back"};
+    return {Kind::kEth, "auto: card has ETH cores, overlay active"};
 }
 
 // tt-kmd's card type attribute ("p150a", "p100a", ...) of /dev/tenstorrent/<id>.

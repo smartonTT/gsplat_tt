@@ -98,8 +98,9 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
             kcfg_profiler_on(std::getenv("TT_METAL_DEVICE_PROFILER")));
         // Task #198 (GSPLAT_TT_MAT_CQ1): a second command queue for the sort -> mat bridge.
         const size_t num_cqs = env_config::mat_cq1() ? 2 : 1;
-        // Task #383 (GSPLAT_TT_DISPATCH=worker|eth|auto, default worker): Ethernet dispatch
-        // frees the Tensix column worker dispatch takes (p150: 12x10 instead of 11x10).
+        // Task #383 (GSPLAT_TT_DISPATCH=worker|eth|auto): Ethernet dispatch frees the Tensix
+        // column worker dispatch takes (p150: 12x10 instead of 11x10). Task #409: default auto,
+        // which needs the opt/eth overlay as TT_METAL_RUNTIME_ROOT (render/eth_default.py).
         bool bad_mode = false;
         const dispatch::Mode mode = dispatch::mode_from_env(std::getenv("GSPLAT_TT_DISPATCH"), &bad_mode);
         if (bad_mode) {
@@ -109,7 +110,9 @@ std::shared_ptr<tt::tt_metal::distributed::MeshDevice> get_device() {
         const std::string card = mode == dispatch::Mode::kAuto
                                      ? dispatch::read_card_type_file(dispatch::card_type_path(device_id))
                                      : std::string();
-        const dispatch::Choice dc = dispatch::resolve(mode, card, static_cast<uint32_t>(num_cqs));
+        const dispatch::Choice dc =
+            dispatch::resolve(mode, card, static_cast<uint32_t>(num_cqs),
+                              dispatch::overlay_active(std::getenv("TT_METAL_RUNTIME_ROOT")));
         const bool eth = dc.kind == dispatch::Kind::kEth;
         const tt::tt_metal::DispatchCoreConfig dispatch_cfg =
             eth ? tt::tt_metal::DispatchCoreConfig{tt::tt_metal::DispatchCoreType::ETH}

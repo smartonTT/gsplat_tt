@@ -407,6 +407,11 @@ def _main():
               "one-off manual human run.", file=sys.stderr, flush=True)
         sys.exit(3)
 
+    # Task #409: ETH dispatch (12x10) on a p150, worker elsewhere; before the device opens.
+    if args.ref_only is None:
+        from eth_default import setup as eth_setup
+        eth_setup(os.environ, REPO_ROOT, log=lambda m: print(m, flush=True))
+
     import json
     cam = json.loads(args.cameras.read_text())[args.scene]
     fov_deg = float(cam["fov_deg"])
@@ -448,7 +453,7 @@ def _main():
         ref = np.load(ref_npy)
 
     # render_clean JIT cache must not share prod kernels.
-    os.environ["TT_METAL_CACHE"] = _CACHE_RENDER
+    os.environ["TT_METAL_CACHE"] = os.environ.get("TT_METAL_CACHE_RENDER", _CACHE_RENDER)
     clean_backend = CleanBackend()
     clean_pipeline = Pipeline(clean_backend, tile_size=32, contrib_floor=contrib_floor)
 
