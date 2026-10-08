@@ -144,10 +144,22 @@ def test_render_fused_ignores_hint_when_flag_off():
     assert "next_extrinsics" not in b._clean.calls[0] and b.next_extrinsics is None
 
 
+def test_xview_flag_default_on_and_opt_out():
+    """Task #393: the overlap is the default; only a value atoi() reads as 0
+    turns it off, as env_config::env_uint does in C++."""
+    run = _load_run()
+    assert run._env_flag_on({}, "GSPLAT_TT_XVIEW_OVERLAP")
+    assert run._env_flag_on({"GSPLAT_TT_XVIEW_OVERLAP": ""}, "GSPLAT_TT_XVIEW_OVERLAP")
+    assert run._env_flag_on({"GSPLAT_TT_XVIEW_OVERLAP": "1"}, "GSPLAT_TT_XVIEW_OVERLAP")
+    assert not run._env_flag_on({"GSPLAT_TT_XVIEW_OVERLAP": "0"}, "GSPLAT_TT_XVIEW_OVERLAP")
+    assert not run._env_flag_on({"GSPLAT_TT_XVIEW_OVERLAP": " 0 "}, "GSPLAT_TT_XVIEW_OVERLAP")
+
+
 if __name__ == "__main__":
     test_b2b_hints_next_view_and_wraps_between_passes()
     test_b2b_no_hints_when_flag_off()
     test_latency_view_hint()
     test_render_fused_passes_and_clears_hint()
     test_render_fused_ignores_hint_when_flag_off()
+    test_xview_flag_default_on_and_opt_out()
     print("ok")

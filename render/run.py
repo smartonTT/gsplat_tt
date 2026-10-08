@@ -24,6 +24,7 @@ import argparse
 import importlib.util
 import math
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -98,14 +99,27 @@ def _load_render_clean():
 
 # Task #379 (GSPLAT_TT_XVIEW_OVERLAP=1): the loops tell the backend the next
 # view's w2c (backend.next_extrinsics); render_view enqueues that view's pfwc
-# behind this view's blend (render/host/xview.h).
-_XVIEW = os.environ.get("GSPLAT_TT_XVIEW_OVERLAP", "").strip() not in ("", "0")
+# behind this view's blend (render/host/xview.h). Default on since task #393;
+# GSPLAT_TT_XVIEW_OVERLAP=0 opts out.
+def _env_flag_on(env, name, default=True):
+    """A default-on flag read like env_config::env_uint in C++: unset or empty
+    keeps the default, else on unless the value reads as integer 0."""
+    v = env.get(name, "")
+    if v == "":
+        return default
+    m = re.match(r"\s*[+-]?\d+", v)
+    return m is not None and int(m.group()) != 0
+
+
+_XVIEW = _env_flag_on(os.environ, "GSPLAT_TT_XVIEW_OVERLAP")
 
 
 def _set_next_extr(pipeline, extr):
-    """Hint the next view's w2c to the backend (no-op unless _XVIEW)."""
-    if _XVIEW:
-        pipeline.backend.next_extrinsics = extr
+    """Hint the next view's w2c to the backend (no-op unless _XVIEW, or when
+    the backend takes no hint: only CleanBackend does)."""
+    backend = getattr(pipeline, "backend", None)
+    if _XVIEW and hasattr(backend, "next_extrinsics"):
+        backend.next_extrinsics = extr
 
 
 class CleanBackend(CpuCppBackend):
