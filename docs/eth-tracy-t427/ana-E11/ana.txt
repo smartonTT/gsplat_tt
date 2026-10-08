@@ -1,0 +1,277 @@
+# ana407: raw/stitched-E11.csv
+views=30 cores=110 transitions inside chunks=27; ms at 1350 MHz
+
+zone -> program (from FW containment): k2_pairs: k2; k2_rows: k2; mat_cull_mask: mat+blend; mat_cull_wait: mat+blend; mat_meta: mat+blend; mat_ol_gather: mat+blend; mat_ol_keys: mat+blend; mat_ol_perm: mat+blend; mat_ol_rd: mat+blend; mat_ol_sort: mat+blend; mat_ol_wr: mat+blend; mj_job: mat+blend; mj_wait: mat+blend; pfwc: pfwc; rd_l1_bulk: mat+blend; sort_ol_barrier: sort; sort_ol_emit: sort; sort_ol_fill: sort; sort_ol_fillb: sort; sort_ol_prefix: sort; sort_ol_town: sort; sort_subchunk_mat: mat+blend; tile_blend_load: mat+blend; tile_blend_sfpu: mat+blend
+TRISC-FW programs: mat+blend, pfwc, sort
+
+## Per-view program windows (ms from the view's first pfwc FW start; window = first start on any core -> last end on any core)
+
+view       pfwc s/len         k2 s/len       sort s/len  mat+blend s/len    span  period
+   0    0.000/  1.986    1.993/  0.915    2.922/  1.514    4.446/  6.204  10.649  10.664
+   1    0.000/  1.748    1.755/  0.642    2.412/  1.155    3.680/  4.915   8.594   8.611
+   2    0.000/  1.749    1.756/  0.674    2.444/  1.169    3.796/  5.056   8.852   8.868
+   3    0.000/  1.752    1.759/  0.707    2.480/  1.243    3.732/  5.146   8.878   8.893
+   4    0.000/  1.765    1.772/  0.745    2.531/  1.294    3.833/  5.361   9.195   9.209
+   5    0.000/  1.827    1.834/  0.775    2.623/  1.356    3.988/  5.578   9.566   9.580
+   6    0.000/  1.849    1.856/  0.842    2.712/  1.426    4.147/  5.864  10.012  10.026
+   7    0.000/  1.911    1.918/  0.914    2.846/  1.507    4.362/  6.239  10.600  10.615
+   8    0.000/  1.998    2.005/  0.973    2.992/  1.598    4.599/  6.513  11.112  11.126
+   9    0.000/  2.038    2.044/  1.013    3.071/  1.608    4.688/  6.682  11.370     nan
+  10    0.000/  2.060    2.067/  1.026    3.107/  1.627    4.744/  6.745  11.489  11.505
+  11    0.000/  2.088    2.095/  1.016    3.125/  1.637    4.771/  6.691  11.462  11.477
+  12    0.000/  2.031    2.038/  0.990    3.043/  1.599    4.651/  6.549  11.200  11.214
+  13    0.000/  1.988    1.994/  0.962    2.970/  1.547    4.527/  6.318  10.845  10.859
+  14    0.000/  1.950    1.956/  0.933    2.903/  1.504    4.417/  6.132  10.549  10.563
+  15    0.000/  1.925    1.932/  0.898    2.844/  1.474    4.327/  5.981  10.307  10.322
+  16    0.000/  1.898    1.905/  0.871    2.790/  1.437    4.235/  5.884  10.120  10.134
+  17    0.000/  1.912    1.919/  0.855    2.787/  1.450    4.247/  5.867  10.114  10.128
+  18    0.000/  1.927    1.933/  0.855    2.803/  1.421    4.233/  5.860  10.093  10.107
+  19    0.000/  1.933    1.940/  0.860    2.814/  1.422    4.245/  5.927  10.173     nan
+  20    0.000/  1.953    1.960/  0.858    2.833/  1.438    4.280/  5.888  10.168  10.184
+  21    0.000/  1.939    1.946/  0.847    2.808/  1.423    4.252/  5.897  10.149  10.165
+  22    0.000/  1.938    1.945/  0.836    2.795/  1.422    4.226/  5.843  10.069  10.084
+  23    0.000/  1.900    1.907/  0.802    2.722/  1.379    4.110/  5.757   9.868   9.882
+  24    0.000/  1.868    1.875/  0.770    2.659/  1.327    3.995/  5.528   9.523   9.538
+  25    0.000/  1.807    1.813/  0.713    2.541/  1.246    3.796/  5.466   9.262   9.277
+  26    0.000/  1.777    1.784/  0.672    2.471/  1.176    3.656/  5.096   8.752   8.767
+  27    0.000/  1.757    1.764/  0.644    2.422/  1.162    3.593/  4.971   8.564   8.579
+  28    0.000/  1.751    1.757/  0.632    2.404/  1.144    3.558/  4.915   8.472   8.487
+  29    0.000/  1.747    1.754/  0.628    2.397/  1.137    3.543/  4.924   8.468     nan
+mean   0.000/  1.892   1.899/  0.829   2.742/  1.395   4.156/  5.793   9.949   9.958
+
+per-core program length (core's first FW start -> last FW end, any RISC; mean over views of mean/max over cores):
+  pfwc       mean  1.767  max  1.892
+  k2         mean  0.774  max  0.829
+  sort       mean  1.325  max  1.395
+  mat+blend  mean  5.650  max  5.793
+
+## Zone windows (mean over views; ms from view start; busy = per-core summed zone time, core = max over its RISCs)
+
+zone                        prog   start     end  window busy mean busy max n/core
+pfwc                        pfwc   0.001   1.834   1.834     1.718    1.834   1.00
+k2_pairs                      k2   1.909   2.722   0.813     0.749    0.798   1.00
+k2_rows                       k2   2.356   2.728   0.372     0.006    0.006   1.00
+sort_ol_prefix              sort   2.744   2.827   0.083     0.040    0.082   1.00
+sort_ol_barrier             sort   2.744   2.890   0.146     0.074    0.093   1.00
+sort_ol_fillb               sort   2.745   2.890   0.145     0.070    0.090   1.00
+sort_ol_fill                sort   2.746   2.870   0.123     0.080    0.100   1.00
+sort_ol_emit                sort   2.842   4.137   1.295     1.189    1.282   1.00
+sort_ol_town                sort   2.860   4.068   1.209     1.089    1.206   1.00
+mat_cull_mask          mat+blend   4.157   6.682   2.526     1.830    2.526   1.00
+sort_subchunk_mat      mat+blend   4.157   6.682   2.525     1.830    2.525   1.00
+mj_wait                mat+blend   4.157   6.682   2.525     0.779    1.637  11.02
+mat_meta               mat+blend   4.157   5.943   1.786     0.008    0.015  14.05
+mat_ol_rd              mat+blend   4.158   5.945   1.787     0.101    0.157   4.64
+mat_ol_keys            mat+blend   4.158   4.441   0.283     0.237    0.283   1.00
+mat_ol_sort            mat+blend   4.166   6.107   1.941     0.927    1.612   4.68
+mat_ol_perm            mat+blend   4.380   6.126   1.746     0.411    0.469   4.97
+mj_job                 mat+blend   4.476   6.676   2.200     1.083    1.226  10.02
+mat_cull_wait          mat+blend   4.740   6.676   1.937     0.400    0.611   5.01
+mat_ol_wr              mat+blend   4.740   6.682   1.942     0.017    0.034   5.01
+tile_blend_load        mat+blend   5.680   9.675   3.995     3.622    3.948   1.00
+tile_blend_sfpu        mat+blend   5.691   9.752   4.061     3.687    4.007   1.00
+rd_l1_bulk             mat+blend   5.801   9.567   3.766     0.054    1.202  10.02
+mat_ol_gather          mat+blend   5.829   6.374   0.545     0.244    0.324   1.00
+per-view zone windows: ana-E11/zones-per-view.csv
+
+## Device idle (no FW program on any core): gaps in the union of all FW intervals, per view period
+
+all-core idle per view period: mean 0.056 min 0.044 max 0.220 ms (27 periods)
+  sort end -> mat+blend start        mean 0.020  max 0.183
+  mat+blend end -> pfwc start        mean 0.015  max 0.016
+  k2 end -> sort start               mean 0.014  max 0.014
+  pfwc end -> k2 start               mean 0.007  max 0.007
+
+## Per-core idle (core runs no FW program on any RISC), between its own programs; mean over views of mean/max over cores
+
+gap (negative = overlap on that core)     mean     max     min
+pfwc -> k2                               0.132   0.220   0.007
+k2 -> sort                               0.069   0.160   0.014
+sort -> mat+blend                        0.089   0.206   0.019
+mat+blend N -> pfwc N+1                  0.157   0.258   0.015
+per-core idle per view period (mean core): 0.448 ms
+
+## Program overlap
+
+  global pfwc last end -> k2 first start: mean 0.007 min 0.007 max 0.007
+  global k2 last end -> sort first start: mean 0.014 min 0.014 max 0.014
+  global sort last end -> mat+blend first start: mean 0.019 min 0.009 max 0.183
+  global mat+blend N last end -> pfwc N+1 first start: mean 0.015 min 0.014 max 0.016
+  per-core overlaps (a core starts a program before it finished the previous one): 0
+
+## (b) emit end -> mat start, per view (ms from view start; idle = all-core / mean per-core idle inside [last emit end, first mat start])
+
+view emit_end town_end sort_end mb_start  scm_st mat_min mat_mean    gap dev_idle core_idle gap_mean
+   0    4.436    4.368    4.436    4.446   4.447   4.447    4.447  0.010    0.009    0.009    0.010
+   1    3.567    3.502    3.567    3.680   3.681   3.681    3.681  0.114    0.113    0.113    0.114
+   2    3.613    3.516    3.613    3.796   3.797   3.797    3.797  0.184    0.183    0.183    0.184
+   3    3.723    3.657    3.723    3.732   3.733   3.733    3.733  0.010    0.009    0.009    0.010
+   4    3.824    3.761    3.824    3.833   3.835   3.834    3.834  0.010    0.009    0.009    0.010
+   5    3.979    3.911    3.979    3.988   3.989   3.989    3.989  0.010    0.009    0.009    0.010
+   6    4.138    4.072    4.139    4.147   4.149   4.148    4.149  0.010    0.009    0.009    0.010
+   7    4.352    4.282    4.353    4.362   4.363   4.363    4.363  0.010    0.009    0.010    0.010
+   8    4.590    4.523    4.590    4.599   4.600   4.600    4.600  0.010    0.009    0.009    0.010
+   9    4.679    4.598    4.679    4.688   4.689   4.689    4.689  0.010    0.009    0.010    0.010
+  10    4.735    4.663    4.735    4.744   4.745   4.745    4.745  0.010    0.009    0.009    0.010
+  11    4.762    4.694    4.762    4.771   4.773   4.772    4.773  0.010    0.009    0.010    0.010
+  12    4.642    4.573    4.642    4.651   4.652   4.652    4.652  0.010    0.009    0.009    0.010
+  13    4.517    4.449    4.518    4.527   4.528   4.528    4.528  0.010    0.009    0.009    0.010
+  14    4.408    4.340    4.408    4.417   4.418   4.418    4.418  0.010    0.009    0.009    0.010
+  15    4.317    4.249    4.317    4.327   4.328   4.327    4.328  0.010    0.009    0.009    0.010
+  16    4.226    4.111    4.227    4.235   4.237   4.236    4.237  0.010    0.009    0.009    0.010
+  17    4.238    4.171    4.238    4.247   4.248   4.248    4.248  0.010    0.009    0.010    0.010
+  18    4.224    4.158    4.224    4.233   4.234   4.234    4.234  0.010    0.009    0.009    0.010
+  19    4.236    4.166    4.236    4.245   4.247   4.246    4.246  0.010    0.009    0.009    0.010
+  20    4.270    4.206    4.270    4.280   4.281   4.281    4.281  0.010    0.009    0.009    0.010
+  21    4.230    4.167    4.230    4.252   4.253   4.253    4.253  0.023    0.021    0.022    0.023
+  22    4.217    4.154    4.217    4.226   4.228   4.227    4.228  0.010    0.009    0.009    0.010
+  23    4.101    4.038    4.101    4.110   4.112   4.111    4.111  0.010    0.009    0.009    0.010
+  24    3.986    3.925    3.986    3.995   3.996   3.996    3.996  0.010    0.009    0.009    0.010
+  25    3.787    3.727    3.787    3.796   3.797   3.797    3.797  0.010    0.009    0.009    0.010
+  26    3.647    3.588    3.647    3.656   3.657   3.657    3.657  0.010    0.009    0.009    0.010
+  27    3.584    3.523    3.584    3.593   3.594   3.594    3.594  0.010    0.009    0.009    0.010
+  28    3.548    3.488    3.548    3.558   3.559   3.559    3.559  0.010    0.009    0.009    0.010
+  29    3.534    3.469    3.534    3.543   3.544   3.544    3.544  0.010    0.009    0.009    0.010
+mean    4.137    4.068    4.137    4.156   4.157   4.157    4.157  0.020    0.019    0.019    0.020
+
+## mat+blend N end -> pfwc N+1 start (ms; window = first core's mat+blend end -> last core's pfwc N+1 start)
+
+view mb_end_min mb_end_mean mb_end_max pfwc1_min pfwc1_max    gap dev_idle core_idle
+   0     10.449      10.541     10.649    10.664    10.664  0.014    0.014     0.123
+   1      8.330       8.442      8.594     8.611     8.611  0.016    0.016     0.169
+   2      8.597       8.697      8.852     8.868     8.868  0.016    0.016     0.171
+   3      8.685       8.769      8.878     8.893     8.893  0.015    0.015     0.124
+   4      8.999       9.090      9.195     9.209     9.209  0.015    0.015     0.119
+   5      9.377       9.459      9.566     9.580     9.580  0.015    0.015     0.121
+   6      9.823       9.906     10.012    10.026    10.026  0.014    0.014     0.120
+   7     10.395      10.484     10.600    10.615    10.615  0.014    0.014     0.131
+   8     10.899      10.985     11.112    11.126    11.126  0.014    0.014     0.141
+  10     11.292      11.383     11.489    11.505    11.505  0.016    0.016     0.121
+  11     11.251      11.337     11.462    11.477    11.477  0.014    0.014     0.140
+  12     10.995      11.088     11.200    11.214    11.214  0.014    0.014     0.126
+  13     10.622      10.720     10.845    10.859    10.859  0.014    0.014     0.139
+  14     10.353      10.439     10.549    10.563    10.564  0.015    0.015     0.125
+  15     10.109      10.198     10.307    10.322    10.322  0.015    0.015     0.124
+  16      9.921      10.011     10.120    10.134    10.135  0.015    0.015     0.124
+  17      9.864       9.955     10.114    10.128    10.129  0.014    0.014     0.173
+  18      9.844       9.938     10.093    10.107    10.107  0.014    0.014     0.169
+  20      9.928      10.022     10.168    10.184    10.184  0.016    0.016     0.162
+  21      9.906      10.001     10.149    10.165    10.165  0.016    0.016     0.164
+  22      9.823       9.921     10.069    10.084    10.084  0.014    0.014     0.163
+  23      9.553       9.674      9.868     9.882     9.882  0.015    0.015     0.209
+  24      9.240       9.359      9.523     9.538     9.538  0.015    0.015     0.179
+  25      8.804       9.009      9.262     9.277     9.277  0.015    0.015     0.267
+  26      8.438       8.563      8.752     8.767     8.767  0.015    0.015     0.204
+  27      8.242       8.368      8.564     8.579     8.579  0.015    0.015     0.211
+  28      8.162       8.279      8.472     8.487     8.487  0.014    0.014     0.208
+mean      9.700       9.801      9.943     9.958     9.958  0.015    0.015     0.157
+
+## Per-core busy in mat+blend (ms; mean over views of mean / max over cores)
+
+metric                                      mean     min     max
+mat TRISC_0                                1.829   1.533   2.525
+mat TRISC_1                                1.830   1.534   2.526
+mat TRISC_2                                1.830   1.534   2.525
+T1 mat end -> blend start                  0.000   0.000   0.000
+blend TRISC_0                              3.687   2.978   4.007
+blend TRISC_1                              3.687   2.978   4.007
+blend TRISC_2                              3.687   2.978   4.007
+blend_load NCRISC                          3.622   2.909   3.948
+movers sort_subchunk_mat NCRISC            1.827   1.523   2.525
+movers sort_subchunk_mat BRISC             1.557   1.334   1.728
+writer BRISC (scm end -> kernel end)       4.091   3.867   4.417
+mat+blend core length                      5.650   5.549   5.793
+n_blend_jobs                              10.022   7.167  12.000
+
+## Mover sort / permute per core from fz_mv_* (ms; mean over views of mean / max over cores)
+
+metric                   NCRISC mean    NCRISC max    BRISC mean     BRISC max
+fz_mv_sort                     0.783         1.048         0.843         0.874
+fz_mv_perm                     0.382         0.469         0.345         0.412
+fz_mv_rd                       0.093         0.156         0.044         0.070
+fz_mv_wr                       0.014         0.034         0.015         0.022
+fz_mv_dw                       0.368         0.611         0.300         0.490
+fz_mv_big                      0.174         2.141         0.000         0.000
+fz_mv_meta                     0.004         0.014         0.007         0.008
+sort+perm per mover (mean over both movers): 1.176 ms
+
+## (a) TRISC1 idle in mat, bound from fz totals (per core; mean over views of mean / max over cores)
+
+metric                                           mean      max
+t1 mat total (fz_m_tot)                         1.830    2.525
+t1 band_batch                                   1.053    1.191
+t1 copy_tile                                    0.012    0.014
+t1 mailbox wait (fz_m_mbw)                      0.753    1.612
+t1 idle bound (tot-band-copy)                   0.765    1.622
+t0 pick_job wait (fz_u_pick)                    0.780    1.637
+t1 blend tile_blend_sfpu                        3.687    4.007
+blend jobs (rd_l1_bulk)                        10.022   12.000
+blend per job (ms)                              0.371    0.513
+blend per 32x32 tile (ms, 1024/110 tiles)       0.396    0.430
+idle bound in blend jobs                        2.104    5.342
+idle / blend busy                               0.214    0.571
+mat batches (fz_u_nb)                         192.068  221.800
+idle per batch (us)                             4.144   11.870
+slowest-core mat+blend length 5.793 ms; if every core's T1 mat idle were filled with its own blend work: 5.135 ms (upper bound on the gain: 0.658 ms/view)
+
+## (c) TRISC1 idle in mat from per-job zones (t413; per core, ms; mean over views of mean / max over cores)
+
+metric                                           mean      max
+mat length (T1 mat_cull_mask)                   1.830    2.526
+jobs (mj_job)                                  10.022   13.433
+start gap (mat start -> 1st job)                0.431    0.569
+between-job gaps (sum)                          0.318    1.046
+between-job gap max                             0.168    0.841
+between-job gap mean                            0.040    0.185
+tail gap (last job -> mat end)                  0.005    0.020
+idle outside jobs (start+between+tail)          0.754    1.613
+in-job idle (job - band - copy)                 0.012    0.013
+band_batch (fz_m_band)                          1.053    1.191
+T1 idle total (outside + in-job)                0.765    1.623
+
+What the movers do during the TRISC1 gaps (share of gap time; overlap of NCRISC/BRISC MAT_PZ zones, each mover counted on its own, so a part sums to <= 200%):
+  start    (0.431 ms per core-view): NCRISC:mat_ol_sort 72%, BRISC:mat_ol_sort 63%, BRISC:mat_ol_perm 28%, NCRISC:mat_ol_rd 21%, BRISC:mat_ol_rd 9%, NCRISC:mat_ol_keys 5%, BRISC:mat_meta 0%, NCRISC:mat_meta 0%, NCRISC:mat_ol_perm 0%
+  between  (0.318 ms per core-view): NCRISC:mat_ol_perm 50%, BRISC:mat_ol_perm 50%, NCRISC:mat_ol_sort 41%, BRISC:mat_ol_sort 10%, NCRISC:mat_ol_gather 7%, BRISC:mat_ol_wr 4%, NCRISC:mat_ol_wr 1%, BRISC:mat_cull_wait 1%, NCRISC:mat_cull_wait 0%, BRISC:mat_meta 0%
+  tail     (0.005 ms per core-view): NCRISC:mat_ol_wr 71%, NCRISC:mat_cull_wait 20%, BRISC:mat_cull_wait 2%, BRISC:mat_ol_wr 2%
+
+Blend fill (per core, ms/view; gap time in gaps >= the threshold; 'blend job' = whole blend jobs (tile_blend_sfpu / rd_l1_bulk count) that fit in each gap). crit = change of the slowest core's mat+blend length if every core filled that much of its gaps with its own blend work:
+  >= 5 us            fillable 0.751 mean-core; crit -0.641 ms/view
+  >= 20 us           fillable 0.722 mean-core; crit -0.623 ms/view
+  >= 50 us           fillable 0.673 mean-core; crit -0.590 ms/view
+  >= 100 us          fillable 0.589 mean-core; crit -0.521 ms/view
+  whole blend jobs   fillable 0.316 mean-core; crit -0.081 ms/view
+
+## Host zones (tracy -u, host clock; per view = between consecutive host_cq1_proj_m starts; warmup and last view dropped)
+
+views=27; host view period (proj_m -> next proj_m) mean 9.973 ms
+zone                                 n/view  ms/view  max one first st last end
+host_cq1_proj_m                         1.0    2.367    2.367    0.000    2.367
+EnqueueProgram                          4.0    0.089    0.027    3.431    9.971
+host_cq1_k2_rows                        1.0    0.122    0.122    2.452    2.574
+host_finish_cq1_bridge                  1.0    0.028    0.028    3.218    3.246
+host_blend_setup                        1.0    0.078    0.078    3.340    3.418
+host_wait_blend_event                   1.0    5.995    5.995    3.573    9.568
+FDMeshCommandQueue::finish              1.0    0.028    0.028    3.218    3.246
+FDMeshCommandQueue::finish_nolock       3.0    2.501    2.359    0.008    3.245
+wait_for_fetch_q_space                  0.3    0.001    0.004    3.166    6.637
+EnqueueProgram starts (ms from proj_m start): #0 3.431, #1 3.551, #2 9.875, #3 9.953
+not Tracy zones in this build (TTW_TIMING stage timers only, see the reconciliation): xview hook, EventSynchronize, gather_wait, bin_layout, publish_host
+
+## Reconciliation: untraced stage means vs traced device span (ms/view)
+
+untraced: 1 rounds x 30 views; traced: the 27 views that have a next view in their chunk
+untraced host stage (r1-r3 mean)         ms   traced device (stitched, same view set where noted)     ms
+avg_frame_ms                          7.941   device period pfwc N -> pfwc N+1              9.958
+view_total                            7.870   pfwc window                                   1.891
+  head                                0.006   pfwc -> k2 gap                                0.007
+  project (gather_wait inside)        1.065   k2 window                                     0.829
+  tile_assign                         0.008   k2 -> sort gap                                0.014
+  sort                                1.210   sort window                                   1.395
+  blend (mat+blend wait)              5.429   sort -> mat+blend gap                         0.020
+  d2h                                 0.009   mat+blend window                              5.787
+  xview                               0.134   mat+blend -> pfwc N+1 gap                     0.015
+  tail                                0.006   sum of the above                              9.958
+frame - view_total (pybind etc.)      0.071   traced device - untraced per-view             2.013
+per-view mean, 27 views               7.944   traced host - traced device                  -0.136
+traced host per-view, 27 views        9.822                                                      
+                                                                                                 
