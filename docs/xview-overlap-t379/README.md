@@ -145,9 +145,9 @@ Correctness:
 Findings:
 - The gain is about 5× the model (1.77 ms vs ~0.3-0.4 ms/view). The model assumed pfwc was
   short. In fact base `project` is 3.05 ms/view on this box, mostly `gather_wait` on pfwc
-  device time. With the overlap, pfwc N+1 runs while view N finishes (blend tail, D2H, host
+  device time (`gather_wait` 2.94 → 1.10 ms in round 1). With the overlap, pfwc N+1 runs while view N finishes (blend tail, D2H, host
   tail), and `project` drops to ~1.1 ms (the remaining `gather_wait`).
-- Plain `xv` costs blend about +0.16 ms. The pfwc N+1 enqueue sits in the same queue as
+- Plain `xv` costs blend about +0.16 ms. Untested guess: the pfwc N+1 enqueue contends with
   view N's output readback. `xvpin` (pinned output) removes that cost (blend 7.06 vs 7.08 base)
   and is the best arm: **8.934 ms/view, −18.3 % vs base**.
 - `xvzc` (zero-copy output) slows blend by ~0.5 ms, as earlier zero-copy runs did, and loses
