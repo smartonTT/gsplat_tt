@@ -53,3 +53,44 @@ path itself and this flag may recover it; only a p150 A/B can tell.
 The bigger lever is the copy: handing the pinned buffer out directly
 (zero-copy, double-buffered so the next frame does not overwrite the one the
 caller still holds) would remove the ~0.25 ms memcpy on both boxes.
+
+## p150 bh-30 A/B (#373, 2026-10-07)
+
+Branch ttp/t373-pinned-out-p150-ab = #367's flag merged with smarton/tt-project-opt
+(iter-210, 513-page tile stride). bh-30 (p150b, tt_aus) under the existing viewer
+reservation; the live viewer was stopped 23:54:28Z-23:56:50Z for the bench only
+and came back (selftest 11.51 ms, localhost:8091 -> 200). Driver
+`drive_bh30.sh bench 3`, remote half `bench_bh30.sh`; raw logs in `out-p150/`.
+Stage means over 30 views (`GSPLAT_PER_VIEW_STAGES=1`):
+
+| run | avg_frame | project | sort | blend | d2h |
+|---|---|---|---|---|---|
+| r1 base | 11.338 | 3.051 | 1.269 | 6.403 | 0.523 |
+| r1 pin  | 11.044 | 3.013 | 1.120 | 6.536 | 0.283 |
+| r2 pin  | 11.070 | 3.012 | 1.151 | 6.530 | 0.281 |
+| r2 base | 11.082 | 2.989 | 1.121 | 6.407 | 0.486 |
+| r3 base | 11.178 | 2.988 | 1.094 | 6.448 | 0.566 |
+| r3 pin  | 11.072 | 3.012 | 1.157 | 6.511 | 0.294 |
+| **base mean** | **11.199** | 3.009 | 1.161 | 6.419 | 0.525 |
+| **pin mean**  | **11.062** | 3.012 | 1.143 | 6.526 | 0.286 |
+| delta | -0.137 (-1.2%) | +0.003 | -0.018 | +0.107 | -0.239 |
+
+Per-view median of the 3 rounds, then mean over views: base 11.133, pin 11.055
+(-0.078, -0.7%). Rounds 2-3 only: base 11.130, pin 11.071 (-0.5%). The -1.2% mean
+leans on r1 base (one 15.3 ms view). md5: all 6 runs give the 906e0435 sweep
+(30/30 views identical to the golden list) with the flag on and off. Device hero
+(r1 pin, `out-p150/hero.png`, identical bytes in all 6 runs): PSNR 42.51 dB vs
+benchmarks/reference_v2/hero.png, golden_match true; `hero_diff10.png` checked by
+eye: no tile seams or blocky tiles, the error sits on edges (spokes, foliage).
+
+Reading: on the p150 the read path is real. The flag cuts d2h by 0.24 ms
+(0.525 -> 0.286, the remaining part is the host memcpy, as on the p100a) and makes
+it steadier (base d2h 0.49-0.57 across rounds, pin 0.28-0.29). But the blend
+writer's PCIe writes cost +0.11 ms of blend, so the net frame gain is ~0.08-0.14 ms
+(0.7-1.2% depending on the statistic), not clearly >= 1%. The p100a was neutral.
+
+Decision: GSPLAT_TT_OUT_PINNED stays default off; not a new iteration. The code
+stays on this branch as the base for the zero-copy hand-out (#374): with the image
+already in pinned host memory, handing that buffer out directly removes the
+remaining ~0.25-0.29 ms memcpy on both boxes, which together with this flag would
+be ~0.3 ms (~3%) on bh-30.
