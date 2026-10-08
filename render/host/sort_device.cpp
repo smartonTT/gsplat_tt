@@ -855,8 +855,9 @@ static bool launch_subchunk_materialize(
     const bool flags_fit =
         (g_ol_tile_cap + render_config::kBucketFit - 1u) / render_config::kBucketFit <=
         mbf::kReadyPagesPerTile;
-    const bool fused = flags_fit && mbf::enabled() && ctx->ol_frame && cont != nullptr &&
-                       cont->image_out != nullptr && !stagetimers::split_blend() &&
+    const bool fused = flags_fit && mbf::enabled() && ctx->ol_frame &&
+                       sort_blend_has_output(cont, gsplat_tt::env_config::out_zerocopy()) &&
+                       !stagetimers::split_blend() &&
                        sort_matcull_fused() && sort_onelaunch_enabled() &&
                        !gsplat_tt::env_config::ol_mat_select();
     mbf::Pending& pend = mbf::pending();
@@ -2107,7 +2108,7 @@ static void maybe_run_sort_blend_continuation(
     SortBlendContinuation* cont, int tiles_x, uint32_t num_tiles) {
     // Task #374: with zero-copy output the caller passes no image buffer and
     // takes the pinned one afterwards (blend_out_zerocopy_last).
-    if (cont == nullptr || (cont->image_out == nullptr && !gsplat_tt::env_config::out_zerocopy())) {
+    if (!sort_blend_has_output(cont, gsplat_tt::env_config::out_zerocopy())) {
         return;
     }
     if (!sort_blend_pipe_enabled() || !resident_blend_chain_enabled()) {

@@ -51,6 +51,9 @@
 #include "out_ring.h"
 #include "pair_guard.h"
 
+#include <cstdio>
+#include <deque>
+
 using namespace tt;
 using namespace tt::tt_metal;
 using namespace gsplat;
@@ -123,6 +126,9 @@ struct DeviceContext {
     // One slot, copied into image_out; task #374 (GSPLAT_TT_OUT_ZEROCOPY): a
     // ring the caller takes frames from without a copy (out_ring.h).
     gsplat_tt::OutRing<OutPinImage, OutPinMap> out_ring;
+    // Diagnostic (GSPLAT_TT_OUT_PIN_HOLD=N, copy mode): the last N leases kept
+    // here, so the copied-out path rotates through N+1 slots like zero-copy.
+    std::deque<std::shared_ptr<OutPinImage>> out_pin_held;
     size_t out_pin_bytes = 0;
     size_t out_pin_pitch = 0;  // row pitch of the pinned image (bytes)
     size_t out_pin_slot = 0;  // the slot the frame being set up writes
@@ -748,7 +754,8 @@ static double process_frame_mb_devcull_resident(
     if (out_pinned) {
         if (ctx.out_pin_bytes != out_bytes) {
             ctx.out_ring = gsplat_tt::OutRing<OutPinImage, OutPinMap>(
-                gsplat_tt::env_config::out_zerocopy() ? gsplat_tt::env_config::out_zerocopy_slots() : 1u);
+                gsplat_tt::env_config::out_zerocopy() ? gsplat_tt::env_config::out_zerocopy_slots()
+                                                      : 1u + gsplat_tt::env_config::out_pin_hold());
             ctx.out_pin_bytes = out_bytes;
             ctx.out_pin_pitch = pitch;
         }
@@ -770,7 +777,14 @@ static double process_frame_mb_devcull_resident(
             slot.extra.xy = noc->pcie_xy_enc;
             slot.extra.addr = noc->addr;
             slot.lease = std::make_shared<OutPinImage>(OutPinImage{std::move(mem)});
+            std::fprintf(stderr, "OUT_RING new pinned slot (slots=%zu grows=%zu replaced=%zu)\n",
+                         ctx.out_ring.size(), ctx.out_ring.grows(), ctx.out_ring.replaced());
         });
+        if (const uint32_t hold = gsplat_tt::env_config::out_pin_hold();
+            hold > 0 && !gsplat_tt::env_config::out_zerocopy()) {
+            ctx.out_pin_held.push_back(ctx.out_ring.at(ctx.out_pin_slot).lease);
+            while (ctx.out_pin_held.size() > hold) ctx.out_pin_held.pop_front();
+        }
         const OutPinMap& m = ctx.out_ring.at(ctx.out_pin_slot).extra;
         out_pin_xy = m.xy;
         out_pin_addr = m.addr;
@@ -913,6 +927,20 @@ static double process_frame_mb_devcull_resident(
         distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_xramp, xramp);
         distributed::EnqueueWriteMeshBuffer(*ctx.cq, ctx.res_yramp, yramp);
         ctx.res_ramp_uploaded = true;
+    }
+    {
+        // Review #391: log which program the blend runs, on the first frame and
+        // whenever it changes, so a run proves the fused mat+blend (fz) ran.
+        static int last_fz = -1;
+        static uint64_t frames = 0;
+        if (static_cast<int>(fz) != last_fz) {
+            std::fprintf(stderr, "MATBLEND_PROGRAM fz=%d zerocopy=%d pinned=%d frame=%llu\n",
+                         fz ? 1 : 0, gsplat_tt::env_config::out_zerocopy() ? 1 : 0,
+                         gsplat_tt::env_config::out_pinned() ? 1 : 0,
+                         static_cast<unsigned long long>(frames));
+            last_fz = fz ? 1 : 0;
+        }
+        ++frames;
     }
     if (fz) {
         pend.clear();

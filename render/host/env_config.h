@@ -243,6 +243,12 @@ inline uint32_t out_zerocopy_slots() {
     static const uint32_t v = n < 1u ? 1u : n;
     return v;
 }
+// Diagnostic (task #374): copy mode keeps the last N pinned frames, so the
+// writer rotates through N+1 pinned buffers. Default 0.
+inline uint32_t out_pin_hold() {
+    static const uint32_t v = env_uint("GSPLAT_TT_OUT_PIN_HOLD", 0u);
+    return v;
+}
 // Test only (task #213): allocate the pair buffers for this many pairs
 // instead of pair_ceiling(), so a view over it takes the K2 pair-overflow
 // regrow path. 0 (default) = off.

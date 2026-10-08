@@ -19,7 +19,7 @@ run() {  # tag [ENV=V ...]
     python3 render/run.py --no-ref --iter-dir t374-$tag --dump-views t374-dump-$tag > $S/run-$tag.log 2>&1
   local rc=$?
   echo "run rc=$rc"
-  grep -E "^([A-Z_]*STAGES|SUMMARY)|Traceback|TT_THROW|TT_FATAL|Error|error:" $S/run-$tag.log | head -20
+  grep -E "^([A-Z_]*STAGES|SUMMARY|MATBLEND_PROGRAM)|Traceback|TT_THROW|TT_FATAL|Error|error:" $S/run-$tag.log | head -20
   local d; d=$(find . -maxdepth 3 -type d -name t374-dump-$tag | head -1)
   if [ -n "$d" ]; then
     (cd "$d" && md5sum * | sort -k2) > $S/md5-$tag.txt
