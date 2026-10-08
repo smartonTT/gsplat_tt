@@ -1,0 +1,30 @@
+[ttw 2026-10-07T23:33:33-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=420s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T23:33:33-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 420s.
+[ttw 2026-10-07T23:33:33-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T23:33:33-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T23:33:33-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T23:33:33-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T23:33:33-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T23:33:33-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T23:33:33-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T23:33:33-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T23:33:33-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T23:33:33-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=d4b7abd9 bin=20b4fcb5a32e4a7b t425 d4b7abd9 NoC perm (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t425-r3-xvn3  timeout=420s  worry=600s  ts=2026-10-07T23:33:33-0400
+cmd: T=/localdev/smarton/gstt2-t425 bash /localdev/smarton/gstt2-t425/tmp/t379_remote_time.sh 3 xvn3:GSPLAT_TT_PERM_NOC=3
+-----------------------------------------
+=== r3-xvn3 d4b7abd GSPLAT_TT_PERM_NOC=3 03:33:33
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.2 p50_ms=8.3 min_ms=6.7 max_ms=11.5 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t425/tmp/t379-r3-xvn3
+STAGES n=30 head=0.006 project=1.158 tile_assign=0.006 sort=0.711 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.192 d2h=0.005 assemble=0.000 tail=0.006 xview=0.085 | sum=8.169 view_total=8.171 resid_in_view=+0.002 avg_frame_ms=8.239 resid_vs_frame=+0.070 xview_hits=29 xview_misses=0
+SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.057 upload=0.000 bin_emit=0.313 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.215 publish_wait=0.000 mat=0.043 | sum=0.631 sort=0.711 resid=+0.080
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.006 pfwc_rtargs=0.060 pfwc_enqueue=0.020 pfwc_finish=0.000 gather_setup=0.004 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=1.149 gather_result=0.000 | sum=1.240 project=1.158 resid=-0.082
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.006 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+XVIEW_HITS_OK hits=29 views=30
+=== done round 3 03:33:45
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t425/tmp/ttw-state/logs/t425-r3-xvn3-20261007-233333.log
