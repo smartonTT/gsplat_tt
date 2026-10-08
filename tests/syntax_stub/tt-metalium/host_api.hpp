@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -51,10 +52,13 @@ struct TensorAccessorArgs {
     static TensorAccessorArgs create_dram_interleaved();
     void append_to(std::vector<uint32_t>&) const;
 };
+class Allocator { public: uint32_t get_num_banks(const BufferType&) const; };
 namespace distributed {
 struct MeshShape {};
 class MeshDevice { public: CoreCoord compute_with_storage_grid_size() const; MeshShape shape() const;
-    CoreCoord worker_core_from_logical_core(const CoreCoord&) const; };
+    CoreCoord worker_core_from_logical_core(const CoreCoord&) const;
+    uint32_t num_dram_channels() const;
+    const std::unique_ptr<Allocator>& allocator() const; };
 class MeshEvent {};
 class MeshCommandQueue { public:
     MeshEvent enqueue_record_event(); MeshEvent enqueue_record_event_to_host();
@@ -64,7 +68,7 @@ struct MeshCoordinateRange { explicit MeshCoordinateRange(MeshShape) {} };
 struct DeviceLocalBufferConfig { uint64_t page_size = 0; BufferType buffer_type = BufferType::DRAM; };
 struct ReplicatedBufferConfig { std::size_t size = 0; };
 class MeshBuffer { public:
-    static std::shared_ptr<MeshBuffer> create(const ReplicatedBufferConfig&, const DeviceLocalBufferConfig&, MeshDevice*);
+    static std::shared_ptr<MeshBuffer> create(const ReplicatedBufferConfig&, const DeviceLocalBufferConfig&, MeshDevice*, std::optional<uint64_t> address = std::nullopt);
     uint64_t address() const; std::size_t size() const;
 };
 struct MeshWorkload {
