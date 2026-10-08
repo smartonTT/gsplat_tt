@@ -1,0 +1,68 @@
+[ttw 2026-10-07T20:17:46-0400] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=600s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-07T20:17:46-0400]   timeout_sec IS the reservation: a crash squats on the shared device for the full 600s.
+[ttw 2026-10-07T20:17:46-0400]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-07T20:17:46-0400]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-07T20:17:46-0400]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-07T20:17:46-0400]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-07T20:17:46-0400]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-07T20:17:46-0400]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-07T20:17:46-0400]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-07T20:17:46-0400]       long sweep             -> several shorter jobs
+[ttw 2026-10-07T20:17:46-0400]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-07T20:17:46-0400]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=a963af6b bin=23030a0671f336a3 t374 diag a963af6b (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t374-diag-r11  timeout=600s  worry=600s  ts=2026-10-07T20:17:46-0400
+cmd: T=/localdev/smarton/gstt2-t374 bash /localdev/smarton/gstt2-t374/tmp/t374_remote_time.sh 11 pin zc pinhold:GSPLAT_TT_OUT_PINNED=1,GSPLAT_TT_OUT_PIN_HOLD=2 zcpv:GSPLAT_TT_OUT_ZEROCOPY=1,GSPLAT_PER_VIEW_STAGES=1
+-----------------------------------------
+=== r11-pin a963af6 GSPLAT_TT_OUT_PINNED=1 00:17:47
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=10.9 p50_ms=11.0 min_ms=9.1 max_ms=12.7 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t374/tmp/t374-r11-pin
+STAGES n=30 head=0.003 project=3.022 tile_assign=0.004 sort=0.455 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.135 d2h=0.208 assemble=0.000 tail=0.002 | sum=10.828 view_total=10.830 resid_in_view=+0.001 avg_frame_ms=10.865 resid_vs_frame=+0.037
+SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.044 upload=0.000 bin_emit=0.180 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.148 publish_wait=0.000 mat=0.036 | sum=0.409 sort=0.455 resid=+0.046
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.043 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=2.940 gather_result=0.000 | sum=3.021 project=3.022 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.003 tile_assign=0.004 resid=+0.000
+ALL_VIEWS_IDENTICAL (30 views)
+=== r11-zc a963af6 GSPLAT_TT_OUT_ZEROCOPY=1 00:17:57
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.3 p50_ms=11.5 min_ms=9.7 max_ms=12.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t374/tmp/t374-r11-zc
+STAGES n=30 head=0.003 project=3.034 tile_assign=0.005 sort=0.532 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.675 d2h=0.000 assemble=0.000 tail=0.004 | sum=11.254 view_total=11.255 resid_in_view=+0.002 avg_frame_ms=11.290 resid_vs_frame=+0.037
+SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.052 upload=0.000 bin_emit=0.195 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.173 publish_wait=0.000 mat=0.064 | sum=0.486 sort=0.532 resid=+0.046
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.004 pfwc_rtargs=0.040 pfwc_enqueue=0.033 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=2.954 gather_result=0.000 | sum=3.033 project=3.034 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.003 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.004 tile_assign=0.005 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r11-pinhold a963af6 GSPLAT_TT_OUT_PINNED=1 GSPLAT_TT_OUT_PIN_HOLD=2 00:18:08
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.0 p50_ms=11.2 min_ms=9.2 max_ms=12.9 n_views=30 warmup_s=1.7 out=/localdev/smarton/gstt2-t374/tmp/t374-r11-pinhold
+STAGES n=30 head=0.003 project=3.043 tile_assign=0.005 sort=0.583 blend_setup=0.000 mat=0.000 cull=0.000 blend=7.006 d2h=0.365 assemble=0.000 tail=0.002 | sum=11.008 view_total=11.010 resid_in_view=+0.002 avg_frame_ms=11.048 resid_vs_frame=+0.040
+SORT_STAGES n=30 pread=0.002 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.058 upload=0.000 bin_emit=0.217 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.197 publish_wait=0.000 mat=0.041 | sum=0.516 sort=0.583 resid=+0.068
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.005 pfwc_rtargs=0.045 pfwc_enqueue=0.039 pfwc_finish=0.000 gather_setup=0.001 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=2.952 gather_result=0.000 | sum=3.042 project=3.043 resid=+0.001
+TILE_ASSIGN_STAGES n=30 setup=0.004 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.005 tile_assign=0.005 resid=+0.001
+ALL_VIEWS_IDENTICAL (30 views)
+=== r11-zcpv a963af6 GSPLAT_TT_OUT_ZEROCOPY=1 GSPLAT_PER_VIEW_STAGES=1 00:18:19
+run rc=0
+VIEW_STAGES i=0 name=hero wall=11.96 project=3.22 sort=0.56 blend=8.13 view_total=11.92 sort_bin_emit=0.19 sort_publish_host=0.14 project_pfwc_rtargs=0.06 project_gather_wait=3.12
+VIEW_STAGES i=1 name=orb_00 wall=9.89 project=2.65 sort=0.58 blend=6.61 view_total=9.85 sort_bin_emit=0.19 sort_publish_host=0.14 sort_mat=0.06 project_pfwc_rtargs=0.06 project_pfwc_enqueue=0.05 project_gather_wait=2.53
+VIEW_STAGES i=2 name=orb_01 wall=10.01 project=2.65 sort=0.46 blend=6.86 view_total=9.98 sort_bin_emit=0.16 sort_publish_host=0.14 project_gather_wait=2.58
+VIEW_STAGES i=3 name=orb_02 wall=10.45 project=2.78 sort=0.64 blend=6.99 view_total=10.42 sort_bin_layout=0.06 sort_bin_emit=0.24 sort_publish_host=0.21 sort_mat=0.08 project_gather_wait=2.69
+VIEW_STAGES i=4 name=orb_03 wall=10.61 project=2.79 sort=0.45 blend=7.33 view_total=10.58 sort_bin_emit=0.16 sort_publish_host=0.15 sort_mat=0.06 project_gather_wait=2.72
+VIEW_STAGES i=5 name=orb_04 wall=10.91 project=2.92 sort=0.43 blend=7.53 view_total=10.89 sort_bin_emit=0.16 sort_publish_host=0.14 project_gather_wait=2.85
+VIEW_STAGES i=6 name=orb_05 wall=11.65 project=3.10 sort=0.44 blend=8.09 view_total=11.63 sort_bin_emit=0.17 sort_publish_host=0.14 sort_mat=0.05 project_gather_wait=3.03
+VIEW_STAGES i=7 name=orb_06 wall=12.07 project=3.20 sort=0.46 blend=8.35 view_total=12.03 sort_bin_emit=0.17 sort_publish_host=0.14 sort_mat=0.07 project_gather_wait=3.12
+VIEW_STAGES i=8 name=orb_07 wall=12.38 project=3.28 sort=0.64 blend=8.41 view_total=12.36 sort_bin_layout=0.07 sort_bin_emit=0.23 sort_publish_host=0.22 sort_mat=0.07 project_gather_wait=3.21
+VIEW_STAGES i=9 name=orb_08 wall=12.71 project=3.35 sort=0.59 blend=8.73 view_total=12.68 sort_bin_layout=0.06 sort_bin_emit=0.21 sort_publish_host=0.21 sort_mat=0.06 project_gather_wait=3.28
+VIEW_STAGES i=10 name=orb_09 wall=12.73 project=3.37 sort=0.43 blend=8.87 view_total=12.70 sort_bin_emit=0.16 sort_publish_host=0.15 project_gather_wait=3.31
+VIEW_STAGES i=11 name=orb_10 wall=12.69 project=3.37 sort=0.61 blend=8.67 view_total=12.66 sort_bin_layout=0.06 sort_bin_emit=0.21 sort_publish_host=0.22 sort_mat=0.08 project_gather_wait=3.31
+VIEW_STAGES i=12 name=orb_11 wall=12.42 project=3.31 sort=0.52 blend=8.55 view_total=12.39 sort_bin_layout=0.05 sort_bin_emit=0.20 sort_publish_host=0.17 sort_mat=0.06 project_gather_wait=3.23
+VIEW_STAGES i=13 name=orb_12 wall=12.26 project=3.29 sort=0.66 blend=8.24 view_total=12.20 sort_bin_layout=0.07 sort_bin_emit=0.21 sort_publish_host=0.22 sort_mat=0.10 project_pfwc_enqueue=0.08 project_gather_wait=3.15
+VIEW_STAGES i=14 name=orb_13 wall=11.97 project=3.21 sort=0.42 blend=8.29 view_total=11.94 sort_bin_emit=0.16 sort_publish_host=0.14 project_gather_wait=3.13
+VIEW_STAGES i=15 name=orb_14 wall=11.63 project=3.16 sort=0.42 blend=8.02 view_total=11.61 sort_bin_emit=0.16 sort_publish_host=0.14 project_gather_wait=3.09
+VIEW_STAGES i=16 name=orb_15 wall=11.58 project=3.13 sort=0.60 blend=7.80 view_total=11.55 sort_bin_emit=0.23 sort_publish_host=0.20 sort_mat=0.07 project_gather_wait=3.04
+VIEW_STAGES i=17 name=orb_16 wall=11.48 project=3.14 sort=0.63 blend=7.68 view_total=11.45 sort_bin_layout=0.06 sort_bin_emit=0.23 sort_publish_host=0.22 sort_mat=0.07 project_gather_wait=3.07
+VIEW_STAGES i=18 name=orb_17 wall=11.46 project=3.13 sort=0.50 blend=7.77 view_total=11.42 sort_bin_emit=0.19 sort_publish_host=0.15 sort_mat=0.07 project_pfwc_rtargs=0.05 project_pfwc_enqueue=0.07 project_gather_wait=3.00
+VIEW_STAGES i=19 name=orb_18 wall=11.48 project=3.16 sort=0.44 blend=7.84 view_total=11.45 sort_bin_emit=0.17 sort_publish_host=0.14 sort_mat=0.05 project_gather_wait=3.08
+ALL_VIEWS_IDENTICAL (30 views)
+=== done round 11 00:18:29
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t374/tmp/ttw-state/logs/t374-diag-r11-20261007-201746.log
