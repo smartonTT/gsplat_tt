@@ -40,7 +40,23 @@ gets slower (d2h 0.37-0.58 ms); zero-copy (4 slots) has blend 7.64-7.73 ms.
 | pinhold=2 (3 bufs) | 11.01 / 7.006 / 0.365 | 11.21 / 7.056 / 0.580 |
 | zc (4 slots) | 11.25 / 7.675 / 0 | 11.26 / 7.639 / 0 |
 
-DIAG2_PLACEHOLDER
+Diag2, rounds 13-14 (build bafe19ae): zero-copy with 3 slots vs 4 slots, and
+copy mode rotating the writer through 4 pinned buffers (`GSPLAT_TT_OUT_PIN_HOLD=3`).
+md5 906e0435 on 30/30 views in all 8 runs.
+
+| arm | r13 frame / blend / d2h | r14 frame / blend / d2h |
+|---|---|---|
+| pin | 10.92 / 7.076 / 0.262 | 10.85 / 7.076 / 0.191 |
+| pinhold=3 (4 bufs) | 11.20 / 7.099 / 0.540 | 11.21 / 7.088 / 0.557 |
+| zc (4 slots) | 11.27 / 7.665 / 0 | 11.29 / 7.690 / 0 |
+| zc (3 slots) | 11.29 / 7.681 / 0 | 11.30 / 7.671 / 0 |
+
+Slot count does not matter: zero-copy's blend is +0.6 ms with 3 or 4 slots.
+Rotating buffers in copy mode leaves blend alone but doubles the copy, so
+spreading writes over more pinned pages costs ~0.3 ms either way: in the copy
+(cold source) or in the blend span (zero-copy, where the caller's read of the
+previous image overlaps the next frame's NoC writes). Neither beats one hot
+pinned buffer or the base readback.
 
 ## Recommendation
 
