@@ -226,6 +226,13 @@ inline bool out_pinned() {
     static const bool v = env_uint("GSPLAT_TT_OUT_PINNED", 0u) != 0u || out_zerocopy();
     return v;
 }
+// Task #379: cross-view overlap. render_view(next_extrinsics=...) enqueues the
+// next view's fused pfwc right behind this view's blend, before the host waits
+// for and reads this view's image (xview.h). Default off.
+inline bool xview_overlap() {
+    static const bool v = env_uint("GSPLAT_TT_XVIEW_OVERLAP", 0u) != 0u;
+    return v;
+}
 // Task #374: most pinned image buffers the zero-copy ring keeps (out_ring.h).
 inline uint32_t out_zerocopy_slots() {
     static const uint32_t n = env_uint("GSPLAT_TT_OUT_ZEROCOPY_SLOTS", 4u);
