@@ -95,6 +95,7 @@ and every blend lever measured so far is either shipped or shelved.
 | Radix sort on TRISC1 | unknown | needs TRISC1 idle ≥ 2 ms; measured 1.10 ms | #319 rule (d) |
 | Small-first mat order | +0.011 ms (slower) | does not change any slot's total work | #303 |
 | Lever B: fold K2 into sort_ol | +0.19 ms (slower) | measured slower | #298 |
+| pfwc writers emit the K2 pairs (unit count rows, no K2 launch) | −0.05 ms central (model; +0.09..+0.11 only if writer pair cost ≤ 0.6 × K2) | writer pair work lands on the pfwc critical path (max-core writers 1.67 vs TRISC 1.82 ms); md5 keepable | `docs/pfwc-pairs-model/`, #384 |
 | C: dynamic chunk claim for pfwc/emit/town tails | < 0.3 ms | tails 0.08-0.30 ms each | t297 |
 | Host serial path (d2h, publish, pfwc dispatch) | each < 0.3 ms | below the gate each | t297, #171 |
 | FPU quadratic-form blend | ≤ 0.7 ms ceiling | not md5-safe; blend has shrunk from 10.6 to 3.7 ms since the estimate | #111 |

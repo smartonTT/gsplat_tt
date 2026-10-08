@@ -1,0 +1,34 @@
+# t197 p100a: 110 cores, 5 views; P/view 2460425 M/view 1570294 pairs/visible 1.567
+
+## 1. K2 cycles per pair (speed-split ranges, count rows on)
+p100a t197: k2_pairs mover mean 0.801 ms max 0.868; cycles/pair mean 96.7 (p10 92.6, p90 100.5)  [bh-30 assumes the same P]
+bh-30 t366: k2_pairs mover mean 0.726 ms max 0.776; cycles/pair mean 87.7 (p10 83.7, p90 90.6)  [bh-30 assumes the same P]
+
+## 2. pfwc writers + pair emission (per core, split writer: each writer p_c/2 pairs)
+single-writer busy (t197) mean 2.035 max 2.322; split scale 0.719; bh-30 pfwc TRISC mean 1.712 max 1.823
+per-core pairs mean 22367 max 26717 (max/mean 1.194)
+  per-pair cost 0.60 x K2 (58 cyc): heaviest writer 2.236 ms -> pfwc +0.413 ms
+  per-pair cost 0.75 x K2 (73 cyc): heaviest writer 2.377 ms -> pfwc +0.554 ms
+  per-pair cost 0.90 x K2 (87 cyc): heaviest writer 2.519 ms -> pfwc +0.696 ms
+  per-pair cost 1.00 x K2 (97 cyc): heaviest writer 2.613 ms -> pfwc +0.790 ms
+
+## 3. sort emit makespan, unit-locked vs dense speed split (bh-30 effective speeds)
+bh-30 emit per mover mean 1.697 max 2.646 ms (table-speed split today)
+  dense split, today's table : 2.646 ms
+  dense split, bh-30-calibrated : 1.609 ms  (separate lever, see README)
+  unit-locked halves   (220 units, LPT on bh-30 speeds): 1.467x calibrated dense, 0.892x today -> 2.361 ms
+  unit-locked quarters (440 units, LPT on bh-30 speeds): 1.156x calibrated dense, 0.703x today -> 1.859 ms
+  unit-locked eighths  (880 units, LPT on bh-30 speeds): 1.045x calibrated dense, 0.636x today -> 1.682 ms
+
+## 4. net on bh-30 (ms/view; + = faster)
+gross (sort starts where K2 starts today): 0.835
+prefix today (220 rows): max mover 0.081 ms; scales with rows (units x 1)
+baseline = calibrated dense emit (the speed-table lever is taken on its own either way)
+ pair cost  pfwc + | halves: emit + / prefix + / NET | quarters: emit + / prefix + / NET | eighths: emit + / prefix + / NET
+      0.30   0.130 | 0.752 / 0.000 / -0.046 | 0.250 / 0.081 / +0.373 | 0.073 / 0.244 / +0.388
+      0.45   0.271 | 0.752 / 0.000 / -0.188 | 0.250 / 0.081 / +0.232 | 0.073 / 0.244 / +0.246
+      0.60   0.413 | 0.752 / 0.000 / -0.329 | 0.250 / 0.081 / +0.091 | 0.073 / 0.244 / +0.105
+      0.75   0.554 | 0.752 / 0.000 / -0.471 | 0.250 / 0.081 / -0.051 | 0.073 / 0.244 / -0.036
+      0.90   0.696 | 0.752 / 0.000 / -0.612 | 0.250 / 0.081 / -0.192 | 0.073 / 0.244 / -0.178
+      1.00   0.790 | 0.752 / 0.000 / -0.706 | 0.250 / 0.081 / -0.287 | 0.073 / 0.244 / -0.272
+gate: NET >= 0.15 ms

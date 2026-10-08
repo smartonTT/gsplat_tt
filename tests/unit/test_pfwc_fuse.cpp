@@ -13,8 +13,22 @@
 // written once; the pair list equals the legacy one after mapping the storage
 // index back to the dense compact index (gid), tid identical, padding (0, 0);
 // depth by gid equals the legacy depth by dense gid.
+//
+// Task #384 (host model, no kernel): the pfwc writers emit the (gid, tid) pairs
+// themselves into per-core fixed-capacity segments (core c at c * cap + lofs),
+// plus per-unit per-tile count rows, and the sort skips K2. check_writer_pairs:
+// a unit is a contiguous run of a core's chunks (chunk-order split into U parts;
+// chunk k is written by writer k & 1, both writers count into the unit's row);
+// the sort prefix runs over units in global (core, unit) order and the movers
+// process whole units in any order. Checks: the final (tile, depth, gid) order
+// equals the legacy K2 + sort order exactly, ties included; per-writer-parity
+// units change it exactly where same-tile equal-depth pairs from different-parity
+// chunks of one core meet; overflow sets a flag, grow + rerun gives the same
+// result. Prints the per-writer pair / page / count work.
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
+#include <numeric>
 #include <random>
 #include <vector>
 
@@ -334,6 +348,204 @@ void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint
     check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, &speed);
 }
 
+
+// ---- task #384: writers emit pairs (host model) --------------------------------
+struct WriterPairs {
+    uint32_t cap = 0, nunits = 0, T = 0;
+    std::vector<uint32_t> gid, tid;            // C * cap slots (storage gid, tile)
+    std::vector<uint32_t> cnt;                 // nunits * T, both writers summed
+    std::vector<std::vector<uint32_t>> upos;   // unit -> pair slots in storage order
+    std::vector<uint8_t> ovf;                  // per core
+    std::vector<uint32_t> pc;                  // per core pairs
+    uint64_t w_pairs[2] = {0, 0}, w_pages[2] = {0, 0}, max_core_writer_pairs = 0;
+};
+
+// parity_units: unit = (core, writer k & 1) instead of a chunk-order run.
+WriterPairs writer_pairs(const Scene& s, uint32_t C, uint32_t U, uint32_t cap, uint32_t T,
+                         bool parity_units) {
+    WriterPairs w;
+    w.cap = cap;
+    w.T = T;
+    w.nunits = C * (parity_units ? 2u : U);
+    const uint32_t upc = parity_units ? 2u : U;
+    w.gid.assign(static_cast<size_t>(C) * cap, 0xFFFFFFFFu);
+    w.tid.assign(static_cast<size_t>(C) * cap, 0xFFFFFFFFu);
+    w.cnt.assign(static_cast<size_t>(w.nunits) * T, 0);
+    w.upos.assign(w.nunits, {});
+    w.ovf.assign(C, 0);
+    w.pc.assign(C, 0);
+    vis_tile::SeqMap sm;
+    sm.init(s.num_tiles, C);
+    for (uint32_t c = 0; c < C; c++) {
+        const uint32_t sb = pfwc_fuse::seg_base(s.num_tiles, C, c);
+        uint32_t m = 0, pr = 0;
+        uint64_t wp[2] = {0, 0};
+        for (uint32_t k = 0; k < sm.count(c); k++) {
+            const uint32_t wr = k & 1u;  // pfwc_wsplit owner(k)
+            const uint32_t u = c * upc + (parity_units ? wr : (k * U) / sm.count(c));
+            const uint32_t t = c + k * C;
+            for (uint32_t il = 0; il < vis_tile::TILE_ELEMS; il++) {
+                const uint32_t i = t * vis_tile::TILE_ELEMS + il;
+                if (!s.vis[i]) continue;
+                const uint32_t st = sb + m++;
+                const uint32_t b = s.box[i], bw = vis_tile::aabb_w(b);
+                // AABB walk: row-major over the rectangle, as K2 does.
+                for (uint32_t l = 0; l < s.pairs[i]; l++, pr++) {
+                    const uint32_t tt =
+                        (vis_tile::aabb_min_y(b) + l / bw) * s.tiles_x + vis_tile::aabb_min_x(b) + l % bw;
+                    if (tt >= T) fail("tile out of range", tt, T);
+                    wp[wr]++;
+                    if (pr >= cap) {  // segment full: flag, keep counting for the host
+                        w.ovf[c] = 1;
+                        continue;
+                    }
+                    const size_t slot = static_cast<size_t>(c) * cap + pr;
+                    w.gid[slot] = st;
+                    w.tid[slot] = tt;
+                    w.cnt[static_cast<size_t>(u) * T + tt]++;
+                    w.upos[u].push_back(static_cast<uint32_t>(slot));
+                }
+            }
+        }
+        w.pc[c] = pr;
+        for (uint32_t r = 0; r < 2; r++) {
+            w.w_pairs[r] += wp[r];
+            w.w_pages[r] += 2 * ((wp[r] + pfwc_fuse::PAGE_WORDS - 1) / pfwc_fuse::PAGE_WORDS);
+            w.max_core_writer_pairs = std::max<uint64_t>(w.max_core_writer_pairs, wp[r]);
+        }
+    }
+    return w;
+}
+
+struct Sorted {
+    std::vector<uint32_t> tid, depth, g;  // g: dense gid
+};
+
+// One-launch sort over writer units: prefix in (core, unit) order, movers take
+// whole units in `order`, bucket fill, then a stable depth sort per tile bucket.
+Sorted sort_units(const WriterPairs& w, const Fused& f, const std::vector<uint32_t>& src2g,
+                  const std::vector<uint32_t>& order) {
+    const uint32_t T = w.T;
+    std::vector<uint64_t> base(static_cast<size_t>(w.nunits) * T);
+    uint64_t run = 0;
+    for (uint32_t t = 0; t < T; t++)
+        for (uint32_t u = 0; u < w.nunits; u++) {
+            base[static_cast<size_t>(u) * T + t] = run;
+            run += w.cnt[static_cast<size_t>(u) * T + t];
+        }
+    std::vector<uint32_t> bstart(T + 1, 0);
+    for (uint32_t t = 0; t < T; t++)
+        bstart[t] = static_cast<uint32_t>(base[t]);  // unit 0, tile t
+    bstart[T] = static_cast<uint32_t>(run);
+    std::vector<uint32_t> out_slot(run, 0xFFFFFFFFu);
+    for (uint32_t u : order) {
+        std::vector<uint64_t> cur(base.begin() + static_cast<size_t>(u) * T,
+                                  base.begin() + static_cast<size_t>(u + 1) * T);
+        for (uint32_t slot : w.upos[u]) {
+            const uint64_t pos = cur[w.tid[slot]]++;
+            if (out_slot[pos] != 0xFFFFFFFFu) fail("sort slot written twice", pos, u);
+            out_slot[pos] = slot;
+        }
+    }
+    Sorted r;
+    for (uint32_t t = 0; t < T; t++) {
+        std::vector<uint32_t> b(out_slot.begin() + bstart[t], out_slot.begin() + bstart[t + 1]);
+        std::stable_sort(b.begin(), b.end(), [&](uint32_t a, uint32_t c) {
+            return f.depth[w.gid[a]] < f.depth[w.gid[c]];
+        });
+        for (uint32_t slot : b) {
+            r.tid.push_back(w.tid[slot]);
+            r.depth.push_back(f.depth[w.gid[slot]]);
+            r.g.push_back(src2g[f.s2src[w.gid[slot]]]);
+        }
+    }
+    return r;
+}
+
+uint64_t wp_cases = 0, wp_parity_diff_cases = 0, wp_parity_diff_pairs = 0, wp_grow = 0;
+uint64_t wp_pairs[2] = {0, 0}, wp_pages[2] = {0, 0};
+
+void check_writer_pairs(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C,
+                        std::mt19937& rng) {
+    uint32_t T = 1;
+    for (uint32_t t : ref.tid) T = std::max(T, t + 1);
+    // Reference: legacy K2 order, then the sort (tile buckets in pair order,
+    // stable by depth).
+    std::vector<uint32_t> idx(ref.P);
+    std::iota(idx.begin(), idx.end(), 0u);
+    std::stable_sort(idx.begin(), idx.end(), [&](uint32_t a, uint32_t b) {
+        if (ref.tid[a] != ref.tid[b]) return ref.tid[a] < ref.tid[b];
+        return s.depth[ref.src[ref.gid[a]]] < s.depth[ref.src[ref.gid[b]]];
+    });
+    std::vector<uint32_t> src2g(s.num_tiles * vis_tile::TILE_ELEMS, 0xFFFFFFFFu);
+    for (uint32_t g = 0; g < ref.M; g++) src2g[ref.src[g]] = g;
+    auto same = [&](const Sorted& r, uint64_t* ndiff) {
+        if (r.g.size() != ref.P) {
+            if (!ndiff) fail("sorted size", r.g.size(), ref.P);
+            return false;
+        }
+        uint64_t d = 0;
+        for (uint32_t i = 0; i < ref.P; i++) {
+            const uint32_t p = idx[i];
+            if (r.tid[i] != ref.tid[p] || r.g[i] != ref.gid[p]) {
+                if (r.tid[i] != ref.tid[p] || r.depth[i] != s.depth[ref.src[ref.gid[p]]])
+                    fail("order differs outside a (tile, depth) tie", i, r.g[i]);
+                d++;
+            }
+        }
+        if (ndiff) *ndiff = d;
+        else if (d) fail("sorted order differs (ties)", d, ref.P);
+        return d == 0;
+    };
+    uint32_t pmax = 0, psum = 0;
+    for (uint32_t c = 0; c < C; c++) psum += f.cnt[c * pfwc_fuse::PAGE_WORDS + pfwc_fuse::T_P];
+    for (uint32_t c = 0; c < C; c++)
+        pmax = std::max(pmax, f.cnt[c * pfwc_fuse::PAGE_WORDS + pfwc_fuse::T_P]);
+    for (uint32_t U : {1u, 2u, 4u, 8u}) {
+        // Capacity: start at the mean per-core pairs (page rounded); on overflow the
+        // host grows it to the reported max and reruns (pair-overflow-t213 style).
+        uint32_t cap = ((psum / C + 15) / 16) * 16;
+        WriterPairs w = writer_pairs(s, C, U, cap, T, false);
+        bool any = false;
+        uint32_t need = 0;
+        for (uint32_t c = 0; c < C; c++) {
+            if (w.ovf[c] != (w.pc[c] > cap)) fail("overflow flag", c, w.pc[c]);
+            any |= w.ovf[c] != 0;
+            need = std::max(need, w.pc[c]);
+        }
+        if (need != pmax) fail("reported per-core max pairs", need, pmax);
+        if (any) {
+            wp_grow++;
+            cap = ((need + 15) / 16) * 16;
+            w = writer_pairs(s, C, U, cap, T, false);
+            for (uint32_t c = 0; c < C; c++)
+                if (w.ovf[c]) fail("overflow after grow", c, w.pc[c]);
+        }
+        // Movers take whole units in any order: canonical, reversed, shuffled.
+        std::vector<uint32_t> order(w.nunits);
+        std::iota(order.begin(), order.end(), 0u);
+        same(sort_units(w, f, src2g, order), nullptr);
+        std::shuffle(order.begin(), order.end(), rng);
+        same(sort_units(w, f, src2g, order), nullptr);
+        if (U == 2) {
+            for (uint32_t r = 0; r < 2; r++) {
+                wp_pairs[r] += w.w_pairs[r];
+                wp_pages[r] += w.w_pages[r];
+            }
+        }
+        wp_cases++;
+    }
+    // Per-writer-parity units: rows (core, BRISC) then (core, NCRISC).
+    const WriterPairs wpar = writer_pairs(s, C, 2, ((pmax + 15) / 16) * 16 + 16, T, true);
+    std::vector<uint32_t> order(wpar.nunits);
+    std::iota(order.begin(), order.end(), 0u);
+    uint64_t d = 0;
+    same(sort_units(wpar, f, src2g, order), &d);
+    if (d) {
+        wp_parity_diff_cases++;
+        wp_parity_diff_pairs += d;
+    }
+}
 }  // namespace
 
 int main() {
@@ -353,6 +565,13 @@ int main() {
             const uint32_t p_cap = (trial % 5 == 3 && ref.P > 1) ? ref.P / 2 + 1 : ref.P + 64;
             check_k2(s, ref, f, C, K, trial % 3 != 0, permille, p_cap);
             cases++;
+            if (trial % 2 == 0 && num_tiles <= 120) {
+                // Forced depth ties (t384): few distinct depth keys.
+                Scene st = s;
+                if (trial % 4 == 0)
+                    for (auto& d : st.depth) d &= 3u;
+                check_writer_pairs(st, ref, fused_writer(st, C), C, rng);
+            }
         }
     }
     // Empty scene: M = P = 0, no pages.
@@ -370,5 +589,12 @@ int main() {
     }
     std::printf("test_pfwc_fuse: %d cases OK (diet start search: <= %u read rounds)\n", cases,
                 max_search_waits);
+    std::printf("t384 writer pairs: %llu unit cases md5-identical (U = 1, 2, 4, 8; canonical + shuffled mover order),"
+                " %llu overflow grow+rerun; parity units reorder ties in %llu scenes (%llu pairs);"
+                " U=2 writer pairs B %llu N %llu, pair pages B %llu N %llu\n",
+                (unsigned long long)wp_cases, (unsigned long long)wp_grow,
+                (unsigned long long)wp_parity_diff_cases, (unsigned long long)wp_parity_diff_pairs,
+                (unsigned long long)wp_pairs[0], (unsigned long long)wp_pairs[1],
+                (unsigned long long)wp_pages[0], (unsigned long long)wp_pages[1]);
     return 0;
 }
