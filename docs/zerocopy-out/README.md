@@ -1,6 +1,6 @@
 # Zero-copy pinned output (tasks #374, #395)
 
-`GSPLAT_TT_OUT_ZEROCOPY=1` (implies `GSPLAT_TT_OUT_PINNED=1`, default off): the
+`GSPLAT_TT_OUT_ZEROCOPY=1` (implies `GSPLAT_TT_OUT_PINNED=1`; default on since #399, iter 213): the
 blend writer writes the u8 image into a ring of pinned, NoC-mapped host buffers
 (`render/host/out_ring.h`) and `render_view` returns a numpy view of that buffer
 instead of copying it out. The view holds the slot's lease, so the ring never
@@ -61,10 +61,36 @@ ms with one hot buffer), because the copy reads a colder source.
 | pinhold=2 (3 bufs) | 11.01 / 7.006 / 0.365 | 11.21 / 7.056 / 0.580 | | |
 | pinhold=3 (4 bufs) | | | 11.20 / 7.099 / 0.540 | 11.21 / 7.088 / 0.557 |
 
-## Recommendation
+## Recommendation (#395, superseded by #399 above)
 
 Zero-copy gains 2.5% of the frame on the p100a (iter 211, flag on). The flag
 stays off by default here: it changes what `render_view` returns (a strided
 view into a pinned ring slot instead of a fresh array), and the cross-view
 overlap default (#388/#393, xv + pinned output) also touches the output path.
 Next: A/B xv + zero-copy against xvpin on the same box, then decide the default.
+
+## Default since #399 (iter 213): xv + zero-copy vs xvpin on yyzo-bh-04 (p100a)
+
+One build (7623475d: opt tip + #393 xvpin default + #395 fused-gate fix d56cc59f),
+3 alternating rounds x 30 views under one `ttp lock p100`
+(`docs/xvzc-ab-t399/drive.sh`, outputs in `docs/xvzc-ab-t399/out/`):
+
+| arm | r1 | r2 | r3 | mean ms/view | blend ms | d2h ms | project ms | sort ms |
+|---|---|---|---|---|---|---|---|---|
+| xvpin (xv + pinned copy) | 9.273 | 9.091 | 9.073 | 9.146 | 7.083 | 0.430 | 1.082 | 0.445 |
+| xvzc (xv + zero-copy) | 8.759 | 8.717 | 8.730 | **8.735** (-4.5%) | 6.981 | 0.004 | 1.094 | 0.530 |
+
+`MATBLEND_PROGRAM fz=1` from frame 0 in all 8 runs (smoke + 6), md5 906e0435 on
+30/30 views and `XVIEW_HITS` 29/30 in all. Zero-copy won by more than 1%, so it is
+the default now (`env_config::out_zerocopy()`); `GSPLAT_TT_OUT_ZEROCOPY=0` gives
+the pinned copy, `GSPLAT_TT_OUT_PINNED=0` neither. Callers checked: `render/run.py`
+(md5 via `tobytes()`, PNG dump), the viewer (`letterbox_for_aspect` slices, the JPEG
+sender takes `np.ascontiguousarray`, the viser fallback copies) all take the
+strided ring-slot view; the returned array holds the slot's lease.
+
+Confirmed at the default commit 32f91f6f (`drive_default.sh`, `out-default/`,
+2 alternating rounds, same binary): default 8.720/8.711 mean 8.716 vs
+`GSPLAT_TT_OUT_ZEROCOPY=0` 8.989/8.971 mean 8.980 ms/view (d2h 0.004 vs 0.247),
+fz=1 with zerocopy=1/0 as expected, md5 906e0435 30/30. Device hero
+`opt/metal-screenshots/ttw-213/hero.png` 42.51 dB vs `benchmarks/reference_v2/hero.png`,
+golden match; hero and diff viewed, no seams.

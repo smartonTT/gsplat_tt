@@ -1,0 +1,2 @@
+ARM xvdef mean_ms_view=8.716 n=2 rounds: 8.720 8.711 | blend=7.070 d2h=0.004 project=1.082 sort=0.460 xview=0.053
+ARM xvzc0 mean_ms_view=8.980 n=2 rounds: 8.989 8.971 | blend=7.072 d2h=0.247 project=1.094 sort=0.455 xview=0.058
