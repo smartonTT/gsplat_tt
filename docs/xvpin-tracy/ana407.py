@@ -134,13 +134,17 @@ def main():
     ap.add_argument("csv")
     ap.add_argument("--zone-csv", help="write per-view zone windows here")
     ap.add_argument("--out", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))
+    ap.add_argument("--job-csv", help="t413: write the per-core TRISC1 idle gaps (per view) here")
+    ap.add_argument("--mhz", type=float, default=1350.0, help="device clock (aiclk) in MHz")
     a = ap.parse_args()
+    global CYC_MS
+    CYC_MS = a.mhz * 1000.0
     iv, td = load_dev(a.csv)
     FWI, Z, D, NV, cores = assign(iv, td)
     NC = len(cores)
     chunk = lambda v: v // VIEWS_PER_CHUNK
     nxt = [v for v in range(NV - 1) if chunk(v) == chunk(v + 1)]
-    print(f"# ana407: {a.csv}\nviews={NV} cores={NC} transitions inside chunks={len(nxt)}; ms at 1.35 GHz")
+    print(f"# ana407: {a.csv}\nviews={NV} cores={NC} transitions inside chunks={len(nxt)}; ms at {a.mhz:.0f} MHz")
 
     # zone -> program check
     zp = defaultdict(set)
@@ -427,9 +431,133 @@ def main():
     print(f"slowest-core mat+blend length {np.mean(real_end):.3f} ms; if every core's T1 mat idle were filled with its own "
           f"blend work: {np.mean(bound_end):.3f} ms (upper bound on the gain: {np.mean(real_end) - np.mean(bound_end):.3f} ms/view)")
 
+    job_gaps(Z, D, CL, NV, cores, a.job_csv)
+
     # ---- host zones
     host_zones(a.out)
     reconcile(a.out, NV, nxt, V0, PW)
+
+
+MOVERS = ("NCRISC", "BRISC")
+GAP_MIN_US = (5, 20, 50, 100)
+
+
+def job_gaps(Z, D, CL, NV, cores, job_csv=None):
+    """t413: where TRISC1 idles in mat, from the per-job zones (GSPLAT_TT_MATCULL_PROF=1 capture).
+    Per core: mat = TRISC1 mat_cull_mask zone; jobs = TRISC1 mj_job zones. start = mat start ->
+    first job start; between = sum of job[i] end -> job[i+1] start; tail = last job end -> mat end
+    (the final mj_wait for both streams to end); in-job = job time - band - copy (fz_m_*). For the
+    start/between/tail gaps, the mover zones (per-subchunk MAT_PZ zones) that overlap them say what
+    the movers were doing. Fill: gap time blend work could take at a given granularity."""
+    if not any(Z.get((v, 3, "mj_job")) for v in range(NV)):
+        print("\n(no mj_job zones: capture without GSPLAT_TT_MATCULL_PROF=1; per-job gaps skipped)")
+        return
+    hdr("(c) TRISC1 idle in mat from per-job zones (t413; per core, ms; mean over views of mean / max over cores)")
+    A = defaultdict(lambda: defaultdict(list))
+    MV = defaultdict(lambda: defaultdict(float))  # part -> mover zone -> cycles (summed over cores/views)
+    GT = defaultdict(float)                        # part -> gap cycles (same sums)
+    fill = defaultdict(list)                       # threshold -> per view mean-core fillable
+    crit = defaultdict(list)                       # threshold -> per view slowest-core mat+blend if filled
+    rows, njobs_bad = [], 0
+    for v in range(NV):
+        mz = {c: (s, e) for c, r, s, e in Z[(v, 3, "mat_cull_mask")] if r == "TRISC_1"}
+        jobs, waits = defaultdict(list), defaultdict(list)
+        for c, r, s, e in Z[(v, 3, "mj_job")]:
+            if r == "TRISC_1":
+                jobs[c].append((s, e))
+        for c, r, s, e in Z[(v, 3, "mj_wait")]:
+            if r == "TRISC_1":
+                waits[c].append((s, e))
+        mvz = defaultdict(list)
+        for (vv, p, z), L in Z.items():
+            if vv == v and p == 3 and (z.startswith("mat_") and z != "mat_cull_mask"):
+                for c, r, s, e in L:
+                    if r in MOVERS:
+                        mvz[c].append((z, r, s, e))
+        bl = {c: e - s for c, r, s, e in Z[(v, 3, "tile_blend_sfpu")] if r == "TRISC_1"}
+        pc, fl = {}, defaultdict(dict)
+        for c in cores:
+            if c not in mz or not jobs[c]:
+                continue
+            ms0, me0 = mz[c]
+            J = sorted(jobs[c])
+            g = lambda n, r="TRISC_1": D[v].get((c, r, n), 0)
+            nj_fz = g("fz_u_nj", "TRISC_0")
+            if nj_fz and nj_fz != len(J):
+                njobs_bad += 1
+            start = J[0][0] - ms0
+            betw = [J[i + 1][0] - J[i][1] for i in range(len(J) - 1)]
+            tail = me0 - J[-1][1]
+            jt = sum(e - s for s, e in J)
+            band, copy = g("fz_m_band"), g("fz_m_copy")
+            injob = jt - band - copy
+            parts = {"start": [(ms0, J[0][0])], "between": [(J[i][1], J[i + 1][0]) for i in range(len(J) - 1)],
+                     "tail": [(J[-1][1], me0)]}
+            for part, ivs in parts.items():
+                for a0, b0 in ivs:
+                    GT[part] += b0 - a0
+                    for z, r, s, e in mvz[c]:
+                        o = min(e, b0) - max(s, a0)
+                        if o > 0:
+                            MV[part][f"{r}:{z}"] += o
+            gl = [start] + betw + [tail]
+            for us in GAP_MIN_US:
+                fl[us][c] = sum(x for x in gl if x >= us * CYC_MS / 1000.0)
+            per_job = None
+            nbj = sum(1 for cc, r, s, e in Z[(v, 3, "rd_l1_bulk")] if cc == c)
+            if c in bl and nbj:
+                per_job = bl[c] / nbj
+                fl["blend job"][c] = sum((x // per_job) * per_job for x in gl)
+            mlen = me0 - ms0
+            pc[c] = {"mat length (T1 mat_cull_mask)": ms(mlen), "jobs (mj_job)": len(J),
+                     "start gap (mat start -> 1st job)": ms(start), "between-job gaps (sum)": ms(sum(betw)),
+                     "between-job gap max": ms(max(betw) if betw else 0),
+                     "between-job gap mean": ms(np.mean(betw) if betw else 0),
+                     "tail gap (last job -> mat end)": ms(tail),
+                     "idle outside jobs (start+between+tail)": ms(start + sum(betw) + tail),
+                     "in-job idle (job - band - copy)": ms(injob), "band_batch (fz_m_band)": ms(band),
+                     "T1 idle total (outside + in-job)": ms(start + sum(betw) + tail + injob)}
+            rows.append([v, c[0], c[1], len(J), ms(mlen), ms(start), ms(sum(betw)), ms(max(betw) if betw else 0),
+                         ms(tail), ms(injob), ms(band)])
+        if not pc:
+            continue
+        for k in next(iter(pc.values())):
+            x = np.array([d[k] for d in pc.values()], float)
+            A[k]["mean"].append(x.mean())
+            A[k]["max"].append(x.max())
+        L = CL[(v, 3)]
+        real = max(L[c][1] - L[c][0] for c in pc)
+        for key, d in fl.items():
+            fill[key].append(ms(np.mean([d.get(c, 0) for c in pc])))
+            crit[key].append(ms(max(L[c][1] - L[c][0] - min(d.get(c, 0), bl.get(c, 0)) for c in pc)) - ms(real))
+    print(f"{'metric':<44}{'mean':>9}{'max':>9}")
+    for k, d in A.items():
+        print(f"{k:<44}{np.mean(d['mean']):9.3f}{np.mean(d['max']):9.3f}")
+    if njobs_bad:
+        print(f"WARNING: {njobs_bad} core-views where mj_job count != fz_u_nj (dropped markers?)")
+    print("\nWhat the movers do during the TRISC1 gaps (share of gap time; overlap of NCRISC/BRISC MAT_PZ zones,"
+          " each mover counted on its own, so a part sums to <= 200%):")
+    for part in ("start", "between", "tail"):
+        tot = GT[part]
+        if not tot:
+            continue
+        top = sorted(MV[part].items(), key=lambda kv: -kv[1])[:10]
+        print(f"  {part:<8} ({ms(tot) / max(1, NV) / max(1, len(cores)):.3f} ms per core-view): " +
+              ", ".join(f"{k} {100 * x / tot:.0f}%" for k, x in top))
+    print("\nBlend fill (per core, ms/view; gap time in gaps >= the threshold; 'blend job' = whole blend jobs"
+          " (tile_blend_sfpu / rd_l1_bulk count) that fit in each gap). crit = change of the slowest core's"
+          " mat+blend length if every core filled that much of its gaps with its own blend work:")
+    for key in list(GAP_MIN_US) + ["blend job"]:
+        if fill.get(key):
+            lab = f">= {key} us" if key != "blend job" else "whole blend jobs"
+            print(f"  {lab:<18} fillable {np.mean(fill[key]):.3f} mean-core; crit {np.mean(crit[key]):+.3f} ms/view")
+    if job_csv:
+        with open(job_csv, "w") as f:
+            w = csv.writer(f)
+            w.writerow(["view", "core_x", "core_y", "jobs", "mat_ms", "start_ms", "between_ms", "between_max_ms",
+                        "tail_ms", "injob_idle_ms", "band_ms"])
+            for r in rows:
+                w.writerow([f"{x:.4f}" if isinstance(x, float) else x for x in r])
 
 
 HOST = ["host_cq1_proj_m", "EnqueueProgram", "host_cq1_k2_rows", "host_finish_cq1_bridge", "host_blend_setup",
