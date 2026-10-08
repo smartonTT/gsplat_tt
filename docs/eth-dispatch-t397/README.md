@@ -61,13 +61,40 @@ Most likely cause: some step partitions work by core count (110 vs 120) and that
 float/tie order for a few pixels. The run logs show no capacity or overflow messages, and the only
 log difference is `cores 110` -> `cores 120` in the sort ONELAUNCH lines. Not isolated yet.
 
+## Why eth differs: core count, not eth dispatch (attempt 2, commits 2b4f093f + 758ea493)
+
+`GSPLAT_TT_GRID_X` / `GSPLAT_TT_GRID_Y` (new, default off) cap the compute grid every stage partitions
+over (`device_state::cap_grid`, applied at all 8 `ctx.grid` sites). Built at 758ea493 in tree392 (nice 19,
+ionice -c3, half the cores, viewer running), then one viewer-down window on bh-30 (`drive397b.sh`,
+`bench397b.sh`; same overlay and JIT cache as the A/B; untraced, 30 views per run, one run per arm):
+
+| run | dispatch | stage grid | ms/view | project | sort (bin_emit) | blend | d2h | view md5 list | hero md5 |
+|---|---|---|---|---|---|---|---|---|---|
+| E11 | eth | 11x10 (capped) | 11.338 | 3.072 | 1.217 (0.593) | 6.509 | 0.464 | **906e0435, 30/30 = golden** | 86524912 |
+| W11 | worker | 11x10 | 11.152 | 2.980 | 1.114 (0.451) | 6.430 | 0.549 | 906e0435, 30/30 = golden | 86524912 |
+| E12 | eth | 12x10 | 10.592 | 2.942 | 1.199 (0.526) | 5.867 | 0.489 | 39d84b28 (= A/B eth list) | c07dfb8d |
+| W10 | worker | 10x10 (capped) | 12.024 | 3.244 | 1.017 (0.415) | 7.159 | 0.526 | e1bd4bfc (all 30 differ) | 739127f8 |
+
+- Eth dispatch on the worker-dispatch shape (11x10) is **bit-identical** to worker dispatch: all 30 views
+  and the hero match the 906e0435 golden.
+- Changing the core count alone changes bits under worker dispatch too (10x10 -> e1bd4bfc). So some stage
+  partitions work by core count in a way that changes rounding or tie order for a few pixels. That is a
+  property of the existing pipeline, not an eth dispatch bug. 39d84b28 is the legitimate 12x10 golden
+  (reproduced in 4 of 4 eth runs).
+- At equal core count, eth dispatch is ~0.19 ms/view slower than worker (single run each: sort/bin_emit
+  +0.14, project +0.09, d2h -0.09). At 12x10 the 10 extra blend cores more than pay for it (-0.56 ms).
+  A launch-overhead cut for sort/project under eth dispatch is a possible further gain.
+- Viewer (second window): stopped 2026-10-08T01:31:53Z, restarted 01:33:33Z, READY and
+  localhost:8091 -> 200 at 01:33:42Z (selftest 11.55 ms/view, sha 8329be50). Down ~1 min 50 s.
+  Logs: `out397b/` (`drv397b.log`, `E11/W11/E12/W10.log`, `md5-*.txt`).
+
 ## Recommendation
 
-Eth dispatch is a real -5.0% on the p150 (gate is 1%) and the image is visually clean at the same PSNR.
-Do **not** make it the default yet: the md5 gate (906e0435 30/30) fails, so first show the
-difference comes from the core count and not from eth dispatch. Follow-up: add a grid-column cap
-(e.g. `GSPLAT_TT_GRID_X`) and run eth at 11x10. If that reproduces 906e0435 30/30, the 12x10 output
-is a legitimate per-grid golden (39d84b28) and eth can be made the p150 default after review.
+Eth dispatch is a real -5.0% on the p150 (gate is 1%; 10.577 vs 11.137 ms/view) and the image is visually
+clean at the same PSNR (42.513 vs 42.512 dB against reference_v2). The md5 gap is explained: it comes from
+the core count, not from eth dispatch (eth at 11x10 = 906e0435 30/30). Recommend making eth the p150 default
+in a separate reviewed landing task, with a per-grid golden (11x10: 906e0435, 12x10: 39d84b28) and a new
+iteration with its own device hero. Not landed, tagged or made default here.
 
 Files: `out/drv397.log` (driver, viewer stop/start), `out/r*-{W,E}.log`, `out/md5-*.txt`,
 `out/s0.log` (eth smoke, S0_PASS, grid 12x10), `hero/hero.png` (eth device render),
