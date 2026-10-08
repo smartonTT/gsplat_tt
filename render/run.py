@@ -96,6 +96,18 @@ def _load_render_clean():
         f"render_clean*.so not found in {here}; build render/build-tt first")
 
 
+# Task #379 (GSPLAT_TT_XVIEW_OVERLAP=1): the loops tell the backend the next
+# view's w2c (backend.next_extrinsics); render_view enqueues that view's pfwc
+# behind this view's blend (render/host/xview.h).
+_XVIEW = os.environ.get("GSPLAT_TT_XVIEW_OVERLAP", "").strip() not in ("", "0")
+
+
+def _set_next_extr(pipeline, extr):
+    """Hint the next view's w2c to the backend (no-op unless _XVIEW)."""
+    if _XVIEW:
+        pipeline.backend.next_extrinsics = extr
+
+
 class CleanBackend(CpuCppBackend):
     def __init__(self, **kwargs):
         kwargs.setdefault("microblock", True)
@@ -103,6 +115,9 @@ class CleanBackend(CpuCppBackend):
         kwargs["render_fused"] = True
         super().__init__(**kwargs)
         self._clean = _load_render_clean()
+        # Next view's w2c (torch 4x4) for the cross-view overlap; set by the
+        # loops before a render, used by that render only.
+        self.next_extrinsics = None
 
     def has_render_fused(self) -> bool:
         return True
@@ -117,13 +132,19 @@ class CleanBackend(CpuCppBackend):
         effective_contrib_floor = (
             float(self._mb_contrib_floor) if self.contrib_floor_override is None
             else float(self.contrib_floor_override))
+        nxt, self.next_extrinsics = self.next_extrinsics, None
+        kw = {}
+        if _XVIEW and nxt is not None:
+            # Same conversion as extr_np: the C++ prefetch key is bitwise.
+            kw["next_extrinsics"] = np.ascontiguousarray(
+                nxt.detach().cpu().numpy().astype(np.float32, copy=False))
         image, stats = self._clean.render_view(
             gnp["means"], cov3d, gnp["opacities"], gnp["colors"],
             extr_np, intr_np, int(image_height), int(image_width), 32,
             float(self.min_opacity), effective_contrib_floor,
             float(self._mb_contrib_floor), bool(self.cull_disabled),
             float(self.transmittance_threshold), int(self.max_radius),
-            float(self.k_cap), bool(self.use_isoellipse), 2)
+            float(self.k_cap), bool(self.use_isoellipse), 2, **kw)
         return np.asarray(image), dict(stats)
 
     def close(self):
@@ -226,9 +247,15 @@ def _spawn_ref_hero(out_npy: Path, scene: str, cameras: Path, iter_dir: str) -> 
 _HOST_PROFILE = bool(os.environ.get("GSPLAT_TT_HOST_PROFILE", "").strip() not in ("", "0"))
 
 
-def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
+def render_clean_view_timed(pipeline, gauss, c2w, K, H, W, next_c2w=None):
+    """next_c2w: the view rendered after this one (cross-view overlap hint,
+    used only with GSPLAT_TT_XVIEW_OVERLAP=1); its w2c is built outside the
+    timed window, like this view's."""
     t_c2w = time.perf_counter()
     extr = c2w_to_w2c(torch.from_numpy(np.asarray(c2w, dtype=np.float32)))
+    if _XVIEW and next_c2w is not None:
+        _set_next_extr(pipeline, c2w_to_w2c(torch.from_numpy(
+            np.asarray(next_c2w, dtype=np.float32))))
     c2w_ms = (time.perf_counter() - t_c2w) * 1000.0
     t = time.perf_counter()
     res = pipeline.render(gauss, extr, K, H, W)
@@ -238,6 +265,18 @@ def render_clean_view_timed(pipeline, gauss, c2w, K, H, W):
         to_img_ms = (time.perf_counter() - t) * 1000.0 - wall_ms
         print(f"HPPY c2w_ms={c2w_ms:.3f} to_image_ms={to_img_ms:.3f}", flush=True)
     return img, wall_ms
+
+
+def _xview_counts(pipeline):
+    """'xview_hits=H xview_misses=M ' from the C++ prefetch (cumulative since
+    the module loaded), or '' when the flag is off or the module lacks them."""
+    clean = getattr(getattr(pipeline, "backend", None), "_clean", None)
+    if not _XVIEW or not hasattr(clean, "stage_timings"):
+        return ""
+    st = clean.stage_timings()
+    if "xview_hits" not in st:
+        return ""
+    return f"xview_hits={int(st['xview_hits'])} xview_misses={int(st['xview_misses'])} "
 
 
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
@@ -251,7 +290,11 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
     are the measured ones (ms_frame = their mean): by default they keep their
     frames and must match pass 0 byte for byte; --b2b-drop drops each frame as
     soon as render() returns, like a viewer (no compare). Returns the exit code
-    (5 when a measured pass differs from the check pass)."""
+    (5 when a measured pass differs from the check pass).
+
+    GSPLAT_TT_XVIEW_OVERLAP=1: each render is told the next view's w2c (the
+    first view's at the end of a pass that another pass follows), so every
+    render but the very last prefetches the next one."""
     import hashlib
     extrs = [c2w_to_w2c(torch.from_numpy(np.asarray(cam["views"][n]["c2w"],
                                                      dtype=np.float32)))
@@ -259,15 +302,21 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
     pass_ms = []
     digests0 = None
     identical = True
-    for p in range(1 + max(0, args.b2b_passes)):
+    n_passes = 1 + max(0, args.b2b_passes)
+    for p in range(n_passes):
         keep = p == 0 or not args.b2b_drop
+        # Next-view hints for this pass (None when _XVIEW is off).
+        nexts = ([None] * len(extrs) if not _XVIEW else
+                 extrs[1:] + [extrs[0] if p + 1 < n_passes else None])
         imgs = []
         t0 = time.perf_counter()
         if keep:
-            for extr in extrs:
+            for extr, nxt in zip(extrs, nexts):
+                _set_next_extr(pipeline, nxt)
                 imgs.append(_to_image(pipeline.render(gauss, extr, K, H, W)))
         else:
-            for extr in extrs:
+            for extr, nxt in zip(extrs, nexts):
+                _set_next_extr(pipeline, nxt)
                 _to_image(pipeline.render(gauss, extr, K, H, W))
         wall_ms = (time.perf_counter() - t0) * 1000.0
         pass_ms.append(wall_ms / len(order))
@@ -298,6 +347,7 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
           f"ms_frame={ms_frame:.3f} fps={1000.0 / ms_frame:.2f} "
           f"pass_ms_frame={','.join(f'{x:.3f}' for x in timed)} "
           f"check_pass_ms_frame={pass_ms[0]:.3f} raw_md5={raw_md5} "
+          f"{_xview_counts(pipeline)}"
           f"identical_across_passes="
           f"{('yes' if identical else 'NO') if not args.b2b_drop else 'unchecked'} "
           f"out={out_dir}", flush=True)
@@ -418,8 +468,9 @@ def _main():
         sys.stderr.flush()
         os._exit(rc)
     for i, name in enumerate(order):
+        nxt = cam["views"][order[i + 1]]["c2w"] if i + 1 < len(order) else None
         img, wall_ms = render_clean_view_timed(
-            clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W)
+            clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W, next_c2w=nxt)
         per_view_ms.append(wall_ms)
         if pv_stages:
             st_now = clean_backend._clean.stage_timings()
@@ -506,7 +557,7 @@ def _main():
     # their meaning (both = avg frame time) for the existing report tooling.
     # mat is 0 unless GSPLAT_TT_SPLIT_BLEND=1 (else blend holds mat+cull+blend).
     _STAGE_ORDER = ["head", "project", "tile_assign", "sort", "blend_setup",
-                    "mat", "cull", "blend", "d2h", "assemble", "tail"]
+                    "mat", "cull", "blend", "d2h", "assemble", "tail", "xview"]
     if hasattr(clean_backend._clean, "stage_timings"):
         st = clean_backend._clean.stage_timings()
         n = max(1, int(st.get("views", 0)))
@@ -527,7 +578,9 @@ def _main():
               + f" | sum={stage_sum:.3f} view_total={view_total:.3f}"
               + f" resid_in_view={view_total - stage_sum:+.3f}"
               + f" avg_frame_ms={avg_ms:.3f}"
-              + f" resid_vs_frame={avg_ms - stage_sum:+.3f}", flush=True)
+              + f" resid_vs_frame={avg_ms - stage_sum:+.3f}"
+              + (f" xview_hits={int(st['xview_hits'])} xview_misses={int(st['xview_misses'])}"
+                 if "xview_hits" in st else ""), flush=True)
 
         # Leaf split of `sort` (SortCallTimings, render/host/sort.h). bin_* are
         # the Pass A count kernel, the histogram D2H, the host layout and the

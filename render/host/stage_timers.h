@@ -57,6 +57,9 @@ struct Acc {
     double d2h = 0.0;
     double assemble = 0.0;
     double tail = 0.0;
+    // Task #379: host time of the next view's pfwc enqueued inside this view's
+    // blend (GSPLAT_TT_XVIEW_OVERLAP); not part of sort/blend.
+    double xview = 0.0;
     double view_total = 0.0;
     // Sub-buckets of `sort`, booked by render.cpp from SortCallTimings. They
     // partition the sort span; sort - sum(sort_*) is the unattributed rest.

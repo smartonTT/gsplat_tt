@@ -25,6 +25,7 @@
 #include <pybind11/stl.h>
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -45,6 +46,7 @@
 #include "blend.h"
 #include "config.h"
 #include "device_state.h"
+#include "env_config.h"
 #include "gather_visible.h"
 #include "vis_mode.h"
 #include "host_profile.h"
@@ -55,6 +57,7 @@
 #include "sort.h"
 #include "stage_timers.h"
 #include "tile_assign.h"
+#include "xview.h"
 
 #include "gsplat_cpu/project.h"
 #include "gsplat_cpu/sort.h"
@@ -68,6 +71,10 @@ namespace {
 // Serializes render_view and device_shutdown (review #269, task #307).
 // Lock order everywhere: release the GIL first, then take this mutex.
 std::mutex render_view_mutex;
+
+// Task #379 (GSPLAT_TT_XVIEW_OVERLAP, xview.h): the pfwc a view enqueued for
+// the next view, consumed by the next run_project. Guarded by render_view_mutex.
+gsplat_tt::xview::Prefetch g_xview;
 
 // Single shared worker pool for the host-side bridges (SoA pack, etc.). The
 // production renderer caps at 48 workers on the 96-thread bh hosts (measured
@@ -128,15 +135,13 @@ void maybe_dump_device_profiler() {
 // Gaussian attributes resident in DRAM (proj_m_* + proj_M). Returns the
 // M-only ProjectResult (depths sized M); means_2d/covs_2d/colors stay empty
 // because the resident downstream stages read them from the resident buffers.
-gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
-                                      const float* extrinsics,
-                                      const float* intrinsics,
-                                      const float* colors,
-                                      const float* opacities, float min_opacity,
-                                      std::size_t N, int image_height,
-                                      int image_width, int max_radius,
-                                      int tile_size, float mb_contrib_floor,
-                                      bool cull_disabled) {
+// Stage 1a+1b: enqueue the fused project+pfwc for one pose (no host sync in
+// the default fused mode). run_project calls it, and with the cross-view
+// overlap (task #379) the previous view's blend calls it for the next pose.
+void enqueue_pfwc(const float* means, const float* cov3d, const float* extrinsics,
+                  const float* intrinsics, const float* colors, const float* opacities,
+                  float min_opacity, std::size_t N, int image_height, int image_width,
+                  int max_radius, int tile_size, float mb_contrib_floor, bool cull_disabled) {
     // 1a+1b. FUSED project(means_cam)+pfwc (iter-133): one device program runs
     //     the world→camera means transform in L1 and then mean_2d / depth /
     //     cov2d(a,b,c) / radii, all resident (null host outputs => nothing read
@@ -181,6 +186,27 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
     gsplat_tt::pfwc_tt(means, cov_u.data(), extrinsics, intrinsics, N,
                        /*mean_2d=*/nullptr, /*depth=*/nullptr, /*cov2d=*/nullptr,
                        /*radii=*/nullptr, /*timings_out=*/nullptr, vis);
+}
+
+gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
+                                      const float* extrinsics,
+                                      const float* intrinsics,
+                                      const float* colors,
+                                      const float* opacities, float min_opacity,
+                                      std::size_t N, int image_height,
+                                      int image_width, int max_radius,
+                                      int tile_size, float mb_contrib_floor,
+                                      bool cull_disabled) {
+    // Task #379: the previous view may already have enqueued this view's pfwc
+    // (xview.h); then its outputs and the pfwc globals are this view's.
+    if (!g_xview.consume(gsplat_tt::xview::make_key(
+            means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
+            image_height, image_width, max_radius, tile_size, mb_contrib_floor,
+            cull_disabled))) {
+        enqueue_pfwc(means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
+                     image_height, image_width, max_radius, tile_size, mb_contrib_floor,
+                     cull_disabled);
+    }
 
     // 1c. gather the M visible Gaussians into resident M-compact SoA buffers.
     //     downstream_resident=true: the resident tile_assign/sort/blend read
@@ -211,7 +237,7 @@ py::tuple render_view(
     int image_height, int image_width, int tile_size, float min_opacity,
     float contrib_floor, float mb_contrib_floor, bool cull_disabled,
     float transmittance_threshold, int max_radius, float k_cap,
-    bool use_isoellipse, int blend_mode) {
+    bool use_isoellipse, int blend_mode, py::object next_extrinsics) {
     (void)contrib_floor;
     (void)transmittance_threshold;
     (void)k_cap;
@@ -238,11 +264,36 @@ py::tuple render_view(
     const int tiles_x = (image_width + tile_size - 1) / tile_size;
     const int tiles_y = (image_height + tile_size - 1) / tile_size;
 
+    // Task #379 (GSPLAT_TT_XVIEW_OVERLAP=1): the caller's next pose (4x4 w2c).
+    // This view's blend enqueues its pfwc behind the blend (xview.h). Off for
+    // the first-frame GSPLAT_TT_DUMP_PROJ dump, which reads pfwc outputs late.
+    std::array<float, 16> next_extr{};
+    bool have_next = false;
+    if (gsplat_tt::env_config::xview_overlap() && !next_extrinsics.is_none()) {
+        const char* dp = std::getenv("GSPLAT_TT_DUMP_PROJ");
+        if (dp == nullptr || *dp == '\0') {
+            auto ne = py::array_t<float, py::array::c_style | py::array::forcecast>::ensure(
+                next_extrinsics);
+            if (!ne || ne.size() != 16) {
+                throw std::invalid_argument("render_view: next_extrinsics must be 16 floats (4x4)");
+            }
+            std::memcpy(next_extr.data(), ne.data(), sizeof(float) * 16);
+            have_next = true;
+        }
+    }
+    const float mb_contrib_floor_arg = mb_contrib_floor;
+
     // Output image (H, W, 3) uint8 = uint8(clip(rgb, 0, 1) * 255), packed on
     // device by the blend writer (task #61), which fully overwrites it.
-    py::array_t<uint8_t> image({static_cast<py::ssize_t>(image_height),
-                                static_cast<py::ssize_t>(image_width),
-                                static_cast<py::ssize_t>(3)});
+    // Task #374 (GSPLAT_TT_OUT_ZEROCOPY=1): no array here; the returned image is
+    // a view of the pinned buffer the writer wrote (see the end of render_view).
+    const bool zerocopy = gsplat_tt::env_config::out_zerocopy();
+    const auto new_image = [&] {
+        return py::array_t<uint8_t>({static_cast<py::ssize_t>(image_height),
+                                     static_cast<py::ssize_t>(image_width),
+                                     static_cast<py::ssize_t>(3)});
+    };
+    py::array_t<uint8_t> image = zerocopy ? py::array_t<uint8_t>() : new_image();
     const std::size_t image_bytes = static_cast<std::size_t>(image_height) *
                                     static_cast<std::size_t>(image_width) * 3;
 
@@ -283,6 +334,7 @@ py::tuple render_view(
         M = proj.depths.empty() ? proj.num_visible : proj.depths.size();
 
         if (M == 0) {
+            if (zerocopy) image = new_image();
             std::memset(image.mutable_data(), 0, image_bytes);
             stats["num_visible"] = 0;
             stats["num_entries"] = 0;
@@ -319,7 +371,7 @@ py::tuple render_view(
         sort_ok = false;
         blend_ok = false;
         gsplat_tt::SortBlendContinuation sort_blend;
-        sort_blend.image_out = image.mutable_data();
+        sort_blend.image_out = zerocopy ? nullptr : image.mutable_data();
         sort_blend.image_height = image_height;
         sort_blend.image_width = image_width;
         sort_blend.mb_contrib_floor = mb_contrib_floor;
@@ -331,6 +383,23 @@ py::tuple render_view(
         // are subtracted back out so `sort` is the sort work alone.
         const st::Acc fused_before = st::acc();
         gsplat_tt::SortCallTimings sort_t;
+        // Task #379: the next view's pfwc goes on the queue right behind this
+        // view's blend. Keyed with this call's own (pre-retry) floor, as the next
+        // call passes it; never left set past this call.
+        struct HookReset {
+            ~HookReset() { gsplat_tt::blend_set_after_enqueue_hook(nullptr); }
+        } hook_reset;
+        if (have_next) {
+            gsplat_tt::blend_set_after_enqueue_hook([&] {
+                enqueue_pfwc(means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr,
+                             opacities_ptr, min_opacity, N, image_height, image_width,
+                             max_radius, tile_size, mb_contrib_floor_arg, cull_disabled);
+                g_xview.set(gsplat_tt::xview::make_key(
+                    means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr, opacities_ptr,
+                    min_opacity, N, image_height, image_width, max_radius, tile_size,
+                    mb_contrib_floor_arg, cull_disabled));
+            });
+        }
         {
             py::gil_scoped_release nogil;
             st::Span s(st::acc().sort);
@@ -347,7 +416,8 @@ py::tuple render_view(
                       (a.cull - fused_before.cull) +
                       (a.blend - fused_before.blend) +
                       (a.d2h - fused_before.d2h) +
-                      (a.assemble - fused_before.assemble);
+                      (a.assemble - fused_before.assemble) +
+                      (a.xview - fused_before.xview);
             // The sort driver's own leaf spans (SortCallTimings) as sort_* buckets.
             a.sort_pread += sort_t.pread_ms;
             a.sort_bin_count += sort_t.bin_count_ms;
@@ -420,6 +490,21 @@ py::tuple render_view(
     // unless TT_METAL_DEVICE_PROFILER=1). See above.
     maybe_dump_device_profiler();
     gsplat_tt::hostprof::on_view_return();
+    if (zerocopy) {
+        // The array keeps the ring slot's lease, so the ring never writes this
+        // buffer again while Python holds the image (or any view of it).
+        gsplat_tt::OutImageView v = gsplat_tt::blend_out_zerocopy_last();
+        if (v.data == nullptr) {
+            throw std::runtime_error("render_clean: zero-copy output has no image");
+        }
+        auto* owner = new std::shared_ptr<const void>(std::move(v.owner));
+        py::capsule keep(owner, [](void* p) { delete static_cast<std::shared_ptr<const void>*>(p); });
+        image = py::array_t<uint8_t>(
+            {static_cast<py::ssize_t>(image_height), static_cast<py::ssize_t>(image_width),
+             static_cast<py::ssize_t>(3)},
+            {static_cast<py::ssize_t>(v.pitch), static_cast<py::ssize_t>(3), static_cast<py::ssize_t>(1)},
+            v.data, keep);
+    }
     st::acc().views++;
     return py::make_tuple(image, stats);
 }
@@ -435,13 +520,15 @@ PYBIND11_MODULE(render_clean, m) {
           py::arg("min_opacity"), py::arg("contrib_floor"),
           py::arg("mb_contrib_floor"), py::arg("cull_disabled"),
           py::arg("transmittance_threshold"), py::arg("max_radius"),
-          py::arg("k_cap"), py::arg("use_isoellipse"), py::arg("blend_mode") = 2);
+          py::arg("k_cap"), py::arg("use_isoellipse"), py::arg("blend_mode") = 2,
+          py::arg("next_extrinsics") = py::none());
     m.def("device_shutdown", []() {
         // Same lock order as render_view: GIL released, then the mutex, so a
         // close() waits for an in-flight viewer frame instead of freeing
         // device state under it.
         py::gil_scoped_release nogil;
         std::lock_guard<std::mutex> lock(render_view_mutex);
+        g_xview.clear();
         gsplat_tt::device_state::shutdown();
     });
     // Per-stage host attribution. Totals in ms accumulated over every
@@ -461,6 +548,9 @@ PYBIND11_MODULE(render_clean, m) {
         d["d2h"] = a.d2h;
         d["assemble"] = a.assemble;
         d["tail"] = a.tail;
+        d["xview"] = a.xview;
+        d["xview_hits"] = static_cast<int64_t>(g_xview.hits());
+        d["xview_misses"] = static_cast<int64_t>(g_xview.misses());
         d["view_total"] = a.view_total;
         d["sort_pread"] = a.sort_pread;
         d["sort_bin_count"] = a.sort_bin_count;

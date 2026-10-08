@@ -1,6 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <memory>
 #include <vector>
 
 namespace gsplat_tt {
@@ -37,6 +40,28 @@ double blend_mb_devcull_resident(
     // "Transmittance threshold" slider). 0 => kernel keeps its compile-time
     // default (iter-107 baseline).
     float transmittance_threshold = 0.0f);
+
+// Task #374 (GSPLAT_TT_OUT_ZEROCOPY=1): the last blended frame, still in the
+// pinned buffer the blend writer wrote (rows of `pitch` bytes, W*3 used); the
+// blend skips the host copy when image_out is null. `owner` is the caller's
+// lease: the ring never writes a buffer whose lease is still held, so the image
+// stays valid as long as the caller keeps `owner` (and at least until the frame
+// after next even if the ring has to replace slots). Empty when off.
+struct OutImageView {
+    std::shared_ptr<const void> owner;
+    const uint8_t* data = nullptr;
+    std::size_t pitch = 0;
+};
+OutImageView blend_out_zerocopy_last();
+
+// Task #379 (GSPLAT_TT_XVIEW_OVERLAP): a one-shot callback the resident blend
+// runs right after it enqueues the frame's blend (and, without pinned output,
+// the non-blocking image read), before it waits for the device. The caller
+// enqueues the next view's first program there so the device does not idle
+// while the host reads this frame. The blend clears it when taken; set it
+// before sort_and_bin_tt and clear it (nullptr) after, so it never outlives
+// the call. Its host time is booked to stagetimers xview, not blend.
+void blend_set_after_enqueue_hook(std::function<void()> hook);
 
 void device_shutdown();
 

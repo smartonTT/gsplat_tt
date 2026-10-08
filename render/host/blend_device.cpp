@@ -14,6 +14,7 @@
 #include <cstring>
 #include <exception>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -21,6 +22,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -28,6 +30,8 @@
 #include <tt-metalium/core_coord.hpp>
 #include <tt-metalium/device.hpp>
 #include <tt-metalium/distributed.hpp>
+#include <tt-metalium/experimental/pinned_memory.hpp>
+#include <tt-metalium/host_buffer.hpp>
 #include <tt-metalium/host_api.hpp>
 #include <tt-metalium/tensor_accessor_args.hpp>
 #include <tt-metalium/work_split.hpp>
@@ -44,6 +48,8 @@
 #include "config.h"
 #include "device_state.h"
 #include "matblend_fuse.h"
+#include "out_ring.h"
+#include "pair_guard.h"
 
 using namespace tt;
 using namespace tt::tt_metal;
@@ -52,6 +58,22 @@ using namespace gsplat;
 #ifndef OVERRIDE_KERNEL_PREFIX
 #define OVERRIDE_KERNEL_PREFIX ""
 #endif
+
+// Task #379: the one-shot hook blend_set_after_enqueue_hook() sets; taken (and
+// cleared) by the next resident frame end.
+static std::function<void()> g_after_enqueue_hook;
+
+// Tasks #367/#374: one pinned output image. The caller's lease is the host
+// memory only; the pin (NoC mapping) belongs to the ring slot, so a frame the
+// caller keeps past a slot replacement no longer holds a device mapping.
+struct OutPinImage {
+    std::shared_ptr<uint32_t[]> mem;
+};
+struct OutPinMap {
+    std::shared_ptr<experimental::PinnedMemory> pin;
+    uint32_t xy = 0;
+    uint64_t addr = 0;
+};
 
 // ---------------------------------------------------------------------------
 // Device + program reusable context
@@ -96,6 +118,14 @@ struct DeviceContext {
     size_t res_out_bytes = 0;
     // Host bounce buffer, only used when the device row pitch != W*3.
     std::vector<uint8_t> res_out_host;
+    // Task #367 (GSPLAT_TT_OUT_PINNED): page-aligned host image buffers with the
+    // res_out layout, pinned and NoC-mapped; the writer writes the rows there.
+    // One slot, copied into image_out; task #374 (GSPLAT_TT_OUT_ZEROCOPY): a
+    // ring the caller takes frames from without a copy (out_ring.h).
+    gsplat_tt::OutRing<OutPinImage, OutPinMap> out_ring;
+    size_t out_pin_bytes = 0;
+    size_t out_pin_pitch = 0;  // row pitch of the pinned image (bytes)
+    size_t out_pin_slot = 0;  // the slot the frame being set up writes
     size_t res_tile_ids_bytes = 0;
     bool res_ramp_uploaded = false;
 
@@ -270,6 +300,9 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
     const bool blend_prof_on = blend_prof != nullptr && (blend_prof[0] == '1' || blend_prof[0] == '2');
     const std::string blend_prof_level = blend_prof_on ? std::string(1, blend_prof[0]) : "0";
     std::map<std::string, std::string> writer_defines;
+    if (gsplat_tt::env_config::out_pinned()) {
+        writer_defines["OUT_PINNED"] = "1";
+    }
     if (blend_prof_on) {
         reader_defines["BLEND_PROF"] = "1";
         writer_defines["BLEND_PROF"] = "1";
@@ -709,6 +742,39 @@ static double process_frame_mb_devcull_resident(
         ctx.res_out = make_dram(out_bytes, pitch);
         ctx.res_out_bytes = out_bytes;
     }
+    const bool out_pinned = gsplat_tt::env_config::out_pinned();
+    uint32_t out_pin_xy = 0;
+    uint64_t out_pin_addr = 0;
+    if (out_pinned) {
+        if (ctx.out_pin_bytes != out_bytes) {
+            ctx.out_ring = gsplat_tt::OutRing<OutPinImage, OutPinMap>(
+                gsplat_tt::env_config::out_zerocopy() ? gsplat_tt::env_config::out_zerocopy_slots() : 1u);
+            ctx.out_pin_bytes = out_bytes;
+            ctx.out_pin_pitch = pitch;
+        }
+        // Task #374: the slot no caller holds (zero-copy); always slot 0 when
+        // the frame is copied out (ring of one).
+        ctx.out_pin_slot = ctx.out_ring.acquire([&](auto& slot) {
+            const size_t page = static_cast<size_t>(sysconf(_SC_PAGESIZE));
+            const size_t alloc = (out_bytes + page - 1) / page * page;
+            auto mem = std::shared_ptr<uint32_t[]>(
+                static_cast<uint32_t*>(std::aligned_alloc(page, alloc)), [](uint32_t* p) { std::free(p); });
+            TT_FATAL(mem != nullptr, "GSPLAT_TT_OUT_PINNED: host alloc of {} B failed", alloc);
+            HostBuffer view(tt::stl::Span<uint32_t>(mem.get(), alloc / sizeof(uint32_t)), MemoryPin(mem));
+            distributed::MeshCoordinateRangeSet range_set(
+                distributed::MeshCoordinateRange(ctx.mesh_device->shape()));
+            slot.extra.pin =
+                experimental::PinnedMemory::Create(*ctx.mesh_device, range_set, view, /*map_to_noc=*/true);
+            const auto noc = slot.extra.pin->get_noc_addr(ctx.mesh_device->get_devices().front()->id());
+            TT_FATAL(noc.has_value(), "GSPLAT_TT_OUT_PINNED: pinned image buffer is not NoC-mapped");
+            slot.extra.xy = noc->pcie_xy_enc;
+            slot.extra.addr = noc->addr;
+            slot.lease = std::make_shared<OutPinImage>(OutPinImage{std::move(mem)});
+        });
+        const OutPinMap& m = ctx.out_ring.at(ctx.out_pin_slot).extra;
+        out_pin_xy = m.xy;
+        out_pin_addr = m.addr;
+    }
 
     Program& program = get_program_for_workload(ctx);
     Program* fz_program = nullptr;
@@ -797,6 +863,10 @@ static double process_frame_mb_devcull_resident(
                         m0.resize(mbf::kDmRtaBase, 0u);
                         m0.insert(m0.end(), {out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                                              tiles_x, pitch});
+                        if (out_pinned) {
+                            m0.insert(m0.end(), {out_pin_xy, static_cast<uint32_t>(out_pin_addr),
+                                                 static_cast<uint32_t>(out_pin_addr >> 32)});
+                        }
                         std::vector<uint32_t> cp = ma.cp;
                         cp.resize(mbf::kCpRtaBase, 0u);
                         cp.push_back(blend_eps_bits);
@@ -809,10 +879,15 @@ static double process_frame_mb_devcull_resident(
                     }
                     SetRuntimeArgs(program, ctx.reader, core, reader_args);
                     SetRuntimeArgs(program, ctx.compute, core, {blend_eps_bits, floor_bits});
-                    SetRuntimeArgs(program, ctx.writer, core, {
+                    std::vector<uint32_t> writer_args = {
                         out_addr, tile_ids_addr, lpt_meta_addr, core_index,
                         tiles_x, pitch,
-                    });
+                    };
+                    if (out_pinned) {
+                        writer_args.insert(writer_args.end(), {out_pin_xy, static_cast<uint32_t>(out_pin_addr),
+                                                               static_cast<uint32_t>(out_pin_addr >> 32)});
+                    }
+                    SetRuntimeArgs(program, ctx.writer, core, writer_args);
                     core_index++;
                 }
             }
@@ -845,12 +920,6 @@ static double process_frame_mb_devcull_resident(
     } else {
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
     }
-    {
-        GSPLAT_HOST_ZONE("host_finish_blend");
-        distributed::Finish(*ctx.cq);
-    }
-    gsplat_tt::hostprof::on_blend_device_done();
-    gsplat_tt::device_state::clear_sort_publish_pending();
     // Per-stage attribution (stage_timers.h): the D2H readback and the host
     // assemble are separate buckets; the caller derives the pure device blend
     // window as (returned ms - d2h). The writer already packed the final u8
@@ -860,8 +929,63 @@ static double process_frame_mb_devcull_resident(
     const size_t row_bytes = static_cast<size_t>(image_w) * 3;
     const bool direct = (out_pitch == row_bytes) &&
                         (ctx.res_out_bytes == static_cast<size_t>(image_h) * row_bytes);
+    const bool pinned = gsplat_tt::env_config::out_pinned() && ctx.out_pin_bytes == ctx.res_out_bytes;
+    // Task #379: with a next-view hook, the frame ends on an event instead of a
+    // Finish: [blend][read res_out unless pinned][event] are queued, the hook
+    // queues the next view's pfwc behind them, and only then does the host wait
+    // (for the event, not the pfwc). The image is then copied while the device
+    // runs the next pfwc. In-order CQ: the pfwc starts after the blend and the
+    // read are done, so nothing this frame reads is overwritten under it.
+    std::function<void()> hook = std::move(g_after_enqueue_hook);
+    g_after_enqueue_hook = nullptr;
+    double hook_ms = 0.0;
+    bool read_queued = false;
+    if (hook) {
+        gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
+        if (!pinned) {
+            ctx.res_out_host.resize(ctx.res_out_bytes);
+            distributed::ReadShard(*ctx.cq, ctx.res_out_host, ctx.res_out,
+                                   distributed::MeshCoordinate(0, 0), /*blocking=*/false);
+            read_queued = true;
+        }
+        const distributed::MeshEvent frame_done = ctx.cq->enqueue_record_event_to_host();
+        d2h_span.stop();
+        {
+            const auto h0 = std::chrono::steady_clock::now();
+            // The queued read targets res_out_host: drain before a throw leaves.
+            gsplat_tt::pair_guard::drain_on_throw(hook, [&] { distributed::Finish(*ctx.cq); });
+            hook_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
+            gsplat_tt::stagetimers::acc().xview += hook_ms;
+        }
+        GSPLAT_HOST_ZONE("host_wait_blend_event");
+        distributed::EventSynchronize(frame_done);
+    } else {
+        GSPLAT_HOST_ZONE("host_finish_blend");
+        distributed::Finish(*ctx.cq);
+    }
+    gsplat_tt::hostprof::on_blend_device_done();
+    gsplat_tt::device_state::clear_sort_publish_pending();
     gsplat_tt::stagetimers::Span d2h_span(gsplat_tt::stagetimers::acc().d2h);
-    if (direct) {
+    if (pinned && image_out == nullptr) {
+        // Task #374 (zero-copy): the caller takes this slot's lease
+        // (blend_out_zerocopy_last); nothing to copy.
+    } else if (pinned) {
+        // The writer already put the image in host memory (write acks barriered
+        // before it exited, Finish/event above); only the host copy remains.
+        const auto* src = reinterpret_cast<const uint8_t*>(ctx.out_ring.at(ctx.out_pin_slot).lease->mem.get());
+        if (direct) {
+            std::memcpy(image_out, src, static_cast<size_t>(image_h) * row_bytes);
+        } else {
+            for (uint32_t y = 0; y < image_h; y++) {
+                std::memcpy(image_out + y * row_bytes, src + static_cast<size_t>(y) * out_pitch, row_bytes);
+            }
+        }
+    } else if (read_queued) {
+        // Task #379: the read already landed in res_out_host (event above).
+        if (direct) {
+            std::memcpy(image_out, ctx.res_out_host.data(), static_cast<size_t>(image_h) * row_bytes);
+        }
+    } else if (direct) {
         ctx.cq->enqueue_read_mesh_buffer(image_out, ctx.res_out, /*blocking=*/true);
     } else {
         ctx.res_out_host.resize(ctx.res_out_bytes);
@@ -871,7 +995,7 @@ static double process_frame_mb_devcull_resident(
     d2h_span.stop();
     gsplat_tt::hostprof::on_blend_readback_done();
 
-    if (!direct) {
+    if (!direct && !pinned) {
         gsplat_tt::stagetimers::Span assemble_span(
             gsplat_tt::stagetimers::acc().assemble);
         for (uint32_t y = 0; y < image_h; y++) {
@@ -880,7 +1004,7 @@ static double process_frame_mb_devcull_resident(
         }
     }
     gsplat_tt::hostprof::on_blend_unpack_done();
-    return std::chrono::duration<double, std::milli>(t_end - t_start).count();
+    return std::chrono::duration<double, std::milli>(t_end - t_start).count() - hook_ms;
 }
 
 // ===========================================================================
@@ -1574,6 +1698,20 @@ double blend_mb_devcull_resident(
         st.blend += blend_ms - (st.d2h - d2h_before);
     }
     return cull_ms + blend_ms;
+}
+
+void blend_set_after_enqueue_hook(std::function<void()> hook) {
+    g_after_enqueue_hook = std::move(hook);
+}
+
+OutImageView blend_out_zerocopy_last() {
+    OutImageView v;
+    if (!env_config::out_zerocopy() || !g_ctx_mb || g_ctx_mb->out_ring.size() == 0) return v;
+    const auto& lease = g_ctx_mb->out_ring.at(g_ctx_mb->out_pin_slot).lease;
+    v.owner = lease;
+    v.data = reinterpret_cast<const uint8_t*>(lease->mem.get());
+    v.pitch = g_ctx_mb->out_pin_pitch;
+    return v;
 }
 
 void device_shutdown() {
