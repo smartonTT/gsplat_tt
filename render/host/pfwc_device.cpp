@@ -24,6 +24,7 @@
 
 #include "pfwc.h"
 #include "chunk_cull.h"
+#include "pfwc_deal.h"
 #include "device_state.h"
 #include "env_config.h"
 #include "gather_visible.h"
@@ -216,6 +217,18 @@ static bool chunk_cull_on() {
     static const bool v = vis_env_u32("GSPLAT_TT_CHUNK_CULL", 0) != 0;
     return v;
 }
+// Task #439 weighted tile deal (pfwc_deal.h): GSPLAT_TT_PFWC_DEAL=lpt deals the tiles by
+// the per-tile weights in GSPLAT_TT_PFWC_DEAL_W (one number per 1024-gaussian tile) through
+// the #433 tile list; default (unset / 0 / strided) keeps the strided deal. Ignored under
+// GSPLAT_TT_CHUNK_CULL (that path owns the tile list).
+static bool pfwc_deal_on() {
+    static const bool v = [] {
+        const char* e = std::getenv("GSPLAT_TT_PFWC_DEAL");
+        return e != nullptr && std::string(e) == "lpt" && !chunk_cull_on();
+    }();
+    return v;
+}
+static bool tile_list_on() { return chunk_cull_on() || pfwc_deal_on(); }
 static float chunk_cull_k() {
     static const float k = [] {
         const char* e = std::getenv("GSPLAT_TT_CHUNK_K");
@@ -398,7 +411,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             cb_raw(pfwc_wsplit::CB_STG_ODD, pfwc_wsplit::STG_BYTES);
             cb_raw(pfwc_wsplit::CB_MBX, pfwc_wsplit::MBX_BYTES);
             for (uint32_t i = 0; i < pfwc_wsplit::NUM_SEMS; ++i) ctx.fsem[i] = CreateSemaphore(program, cores, 0);
-            if (chunk_cull_on()) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
+            if (tile_list_on()) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
         }
     }
     // Task #197: GSPLAT_TT_PFWC_STEPCYC=1|2 records per-step wall cycles (profiler builds) from the
@@ -422,7 +435,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (stepcyc != 0 && (steprisc == 3 || steprisc == 9))
             split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
         if (rd_brisc) split_defines["PFWC_RD_COLS"] = "1";
-        if (chunk_cull_on()) split_defines["PFWC_TILE_LIST"] = "1";
+        if (tile_list_on()) split_defines["PFWC_TILE_LIST"] = "1";
     }
     // Task #206: GSPLAT_TT_PFWC_COVCAM_SFPU=1 runs cov_cam as one SFPU pass over the six
     // cov3d tiles in DEST (6 copy_tile instead of 36, no mul_unary/add_binary), same
@@ -510,7 +523,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         writer_defines["WSPLIT_ROLE"] = "0";
         // Task #232: BRISC reads the GSPLAT_TT_PFWC_RD_* input tiles.
         if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
-        if (chunk_cull_on()) writer_defines["PFWC_TILE_LIST"] = "1";
+        if (tile_list_on()) writer_defines["PFWC_TILE_LIST"] = "1";
     }
     const KernelHandle writer = CreateKernel(
         program,
@@ -533,7 +546,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         ctx.fwriter = writer;
         ctx.fuse_wsplit = wsplit;
         ctx.fuse_rd_brisc = rd_brisc;
-        ctx.fuse_tlist = wsplit && chunk_cull_on();
+        ctx.fuse_tlist = wsplit && tile_list_on();
         ctx.wl_fuse.add_program(device_range, std::move(program));
         ctx.fuse_built = true;
     } else if (vis) {
@@ -873,7 +886,38 @@ double pfwc_tt(
     const bool tile_list = fuse_on && ctx->fuse_tlist;
     std::vector<uint32_t> surv;
     std::shared_ptr<distributed::MeshBuffer> tlist_buf;
-    if (tile_list) {
+    // Task #439: the static weighted deal, built and uploaded once per (tiles, cores).
+    const bool deal_list = tile_list && pfwc_deal_on();
+    if (deal_list) {
+        static std::vector<std::vector<uint32_t>> lists;
+        static uint32_t built_tiles = 0, built_cores = 0;
+        if (!ctx->buf_tlist[0] || built_tiles != num_tiles || built_cores != num_cores) {
+            std::vector<double> w;
+            const char* wp = std::getenv("GSPLAT_TT_PFWC_DEAL_W");
+            if (wp == nullptr || !pfwc_deal::load_weights(wp, w) || w.size() != num_tiles)
+                throw std::runtime_error(std::string("[gsplat_tt::pfwc] GSPLAT_TT_PFWC_DEAL=lpt: GSPLAT_TT_PFWC_DEAL_W ") +
+                                         (wp ? wp : "(unset)") + " must hold " + std::to_string(num_tiles) +
+                                         " tile weights (got " + std::to_string(w.size()) + ")");
+            lists = pfwc_deal::lpt(w, num_cores);
+            const uint32_t page = (seq.count(0) * 4u + 63u) & ~63u;
+            if (page > TLIST_MAX_PAGE)
+                throw std::runtime_error("[gsplat_tt::pfwc] pfwc deal: " + std::to_string(seq.count(0)) +
+                                         " tiles per core, over the tile-list page");
+            distributed::DeviceLocalBufferConfig cfg{.page_size = page * num_cores,
+                                                     .buffer_type = BufferType::DRAM};
+            distributed::ReplicatedBufferConfig rep{.size = std::size_t{page} * num_cores};
+            ctx->buf_tlist[0] = distributed::MeshBuffer::create(rep, cfg, ctx->mesh_device.get());
+            ctx->tlist_page = page;
+            ctx->tlist_cur = 0;
+            pfwc_deal::pack(lists, page / 4u, ctx->tlist_host);
+            distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_tlist[0], ctx->tlist_host, /*blocking=*/true);
+            built_tiles = num_tiles;
+            built_cores = num_cores;
+            std::cerr << "[gsplat_tt::pfwc] pfwc deal lpt: " << num_tiles << " tiles on " << num_cores
+                      << " cores, weights " << wp << "\n";
+        }
+        tlist_buf = ctx->buf_tlist[0];
+    } else if (tile_list) {
         stagetimers::Span cull_span(st_acc.project_pfwc_chunkcull);
         static chunk_cull::Table tab;
         if (tab.means != means || tab.cov != cov3d_unique || tab.N != N)
@@ -968,7 +1012,7 @@ double pfwc_tt(
     for (uint32_t c = 0; c < num_cores; ++c) {
         CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
         const uint32_t chunk_start = fuse_on ? c : ws.chunk_start[c];
-        const uint32_t num_chunks  = tile_list ? chunk_cull::list_count(surv.size(), c, num_cores)
+        const uint32_t num_chunks  = (tile_list && !deal_list) ? chunk_cull::list_count(surv.size(), c, num_cores)
                                      : (fuse_on ? seq.count(c) : ws.num_chunks[c]);
 
         std::vector<uint32_t> reader_args = {
