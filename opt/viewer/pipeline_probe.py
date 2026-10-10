@@ -7,7 +7,10 @@ bench views in bench order through FastRenderer.render_once("move") with a clien
 whose camera walks the bench poses, so the pipelined mode latches and hints
 exactly the next bench view. Prints per mode: ms/view (render loop wall / views),
 xview hits/misses (delta of the C++ counters) and the list md5 computed like
-render/run.py's raw_md5 (39d84b28 on a p150 with eth 12x10 dispatch). Saves the
+render/run.py's raw_md5, plus the opt/md5_golden.py list md5 of the same frames (the
+'md5sum *' lines of the view PNGs sorted by name; 39d84b28 on a p150 with eth 12x10).
+The two are different hashes of the same frames: raw_md5 d9a60a3c pairs with golden
+39d84b28 (t460). Saves the
 pipelined hero frame as hero.png, a x4 diff and the PSNR vs the reference render.
   venv/bin/python opt/viewer/pipeline_probe.py --out DIR [--passes 4] [--port 8097]
 """
@@ -29,6 +32,20 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO))
 sys.path.insert(0, str(REPO / "opt" / "viewer"))
+
+
+def golden_list_md5(u8_frames, order) -> str:
+    """opt/md5_golden.py's list md5 of frames saved as render/run.py --dump does:
+    view{i:02d}_{name}.png, `md5sum *` lines sorted by name, md5 of that text (8 hex)."""
+    import io
+    from PIL import Image
+    lines = []
+    for i, (name, f) in enumerate(zip(order, u8_frames)):
+        buf = io.BytesIO()
+        Image.fromarray(np.asarray(f, dtype=np.uint8)).save(buf, format="PNG")
+        lines.append((f"view{i:02d}_{name}.png", hashlib.md5(buf.getvalue()).hexdigest()))
+    text = "".join(f"{h}  {fn}\n" for fn, h in sorted(lines))
+    return hashlib.md5(text.encode()).hexdigest()[:8]
 
 
 def main() -> int:
@@ -111,15 +128,17 @@ def main() -> int:
     print(f"PIPE K_view==K_bench {bool(np.array_equal(np.asarray(K_view), np.asarray(K_bench)))}",
           flush=True)
 
-    def report(mode, ms, digests, h, m, **extra):
+    def report(mode, ms, digests, h, m, u8_0, **extra):
         raw = hashlib.md5("".join(digests[0]).encode()).hexdigest()[:8]
+        golden = golden_list_md5(u8_0, order)
         timed = ms[1:] or ms
         results[mode] = dict(ms_view=statistics.mean(timed), passes_ms=[round(x, 3) for x in ms],
-                             raw_md5=raw, identical_across_passes=all(d == digests[0] for d in digests),
+                             raw_md5=raw, golden_list_md5=golden,
+                             identical_across_passes=all(d == digests[0] for d in digests),
                              xview_hits=h, xview_misses=m, **extra)
         print(f"PIPE mode={mode} ms_view={results[mode]['ms_view']:.3f} "
               f"fps={1000.0 / results[mode]['ms_view']:.1f} passes_ms={results[mode]['passes_ms']} "
-              f"raw_md5={raw} identical_across_passes={results[mode]['identical_across_passes']} "
+              f"raw_md5={raw} golden_list_md5={golden} identical_across_passes={results[mode]['identical_across_passes']} "
               f"xview_hits={h} xview_misses={m}", flush=True)
 
     def viewer_loop(mode, pipelined):
@@ -141,9 +160,10 @@ def main() -> int:
             digests.append([hashlib.md5(f.tobytes()).hexdigest() for f in frames])
             if p == 0:
                 shots[mode] = frames[0].copy()
+                u8_0 = [f.copy() for f in frames]
         fr.running = False
         h1, m1 = xv()
-        report(mode, ms, digests, h1 - h0, m1 - m0, shape=list(frames[0].shape))
+        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0, shape=list(frames[0].shape))
 
     def bench_loop(mode, pipeline, hinted):
         """render/run.py's b2b loop: pipeline.render + _to_image only, bench K."""
@@ -157,10 +177,13 @@ def main() -> int:
                     run._set_next_extr(pipeline, w2cs[(i + 1) % len(w2cs)])
                 imgs.append(run._to_image(pipeline.render(gauss, w2c, K_bench, H, W)))
             ms.append((time.perf_counter() - t0) * 1000.0 / len(w2cs))
-            digests.append([hashlib.md5(run._to_u8(im).tobytes()).hexdigest() for im in imgs])
+            u8 = [run._to_u8(im) for im in imgs]
+            digests.append([hashlib.md5(x.tobytes()).hexdigest() for x in u8])
+            if p == 0:
+                u8_0 = u8
         pipeline.backend.next_extrinsics = None
         h1, m1 = xv()
-        report(mode, ms, digests, h1 - h0, m1 - m0)
+        report(mode, ms, digests, h1 - h0, m1 - m0, u8_0)
 
     def settings(pl):
         return {k: getattr(pl, k, None) for k in ("contrib_floor", "transmittance_threshold",

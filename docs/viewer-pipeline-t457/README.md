@@ -40,11 +40,14 @@ with a client whose camera walks the bench poses; "bench loop" is render/run.py'
 - Same image: raw_md5 **d9a60a3c** in all 8 modes, every pass identical, pipelined or not. The
   viewer and bench settings are identical (floor, transmittance, min_opacity 1/255, max_radius 0,
   k_cap 3; K equal).
-- The md5 is not the bench golden 39d84b28, but the plain bench loop in the same process gives
-  the same d9a60a3c, so the difference is the viewer process's environment (its own tt-metal
-  build and ETH overlay, or run.py env defaults the viewer env overrides), not pipelining.
-  Follow-up filed. The same environment explains why the in-process floor is ~9.3 ms, not the
-  bench's 7.7 ms (130 FPS).
+- d9a60a3c **is** the bench golden (corrected by t460/t463). raw_md5 (md5 of the joined
+  raw-pixel digests, from `run.py --back-to-back`) and the opt/md5_golden.py list md5 39d84b28
+  (md5 of the `md5sum *` lines of the view PNGs, sorted by name) are two hashes of the same 30
+  frames. pipeline_probe.py now prints both (`raw_md5=` and `golden_list_md5=`).
+- FPS basis: the bench's 7.7 ms/view (130 FPS) is latency mode, with the device idle between
+  views. Sustained back-to-back rendering is ~9.3-9.4 ms/view (~106 FPS) on bh-30 p150, eth
+  12x10, in the bench and the viewer alike, so the viewer's ~9.3 ms is not an environment gap.
+  The page-FPS target stays >= 117 (user, 2026-10-10); the back-to-back gap is being profiled.
 - Hero (pipelined viewer path, bench settings): `hero.png`, `diff.png` (|diff| x4), PSNR
   **42.513 dB** against `benchmarks/reference_v2/hero.png`, max abs diff 46. That matches the
   42.51 dB of earlier p150 bench heroes. Checked by eye: no tile seams or block artifacts; the
@@ -72,7 +75,7 @@ page can never get much above ~57 FPS, and a window that misses a frame gives 35
 Next lever: patch viser's flush window in `gsplat/viser_patches.py` (a ~1-2 ms window, or flush
 at once when a background image is queued), then sweep again. Expected ceiling after that: the
 pipelined device rate (~107 FPS in this viewer environment); reaching 117+ also needs the
-viewer process to match the bench's 7.7 ms/view (see the md5 follow-up above).
+back-to-back device rate (~9.3 ms/view) to drop below ~8.5 ms (see FPS basis above).
 
 Viewer downtime: probes 44 s, 51 s, 56 s; deploy restart a few seconds (stop + start).
 
@@ -109,8 +112,9 @@ Viewer downtime: probes 44 s, 51 s, 56 s; deploy restart a few seconds (stop + s
   device time, so the moving page gets the whole device: the 11.3 ms device render seen
   before was two clients sharing it, the real per-frame device time is 8.96 ms.
 - Frame intervals (p50 9.38 ms) now track the device render, so the device is the limit.
-  The rest of the gap to 130 FPS is the viewer process's ~9.0 ms vs the bench's 7.7 ms/view,
-  which task #460 (viewer environment md5/ms gap) is working on.
+  The rest of the gap to the >= 117 target is the sustained back-to-back device rate
+  (~9.0-9.4 ms); the bench's 7.7 ms is latency mode, not back-to-back (see FPS basis above).
+  The target stays >= 117; that gap is being profiled.
 - HUD "End-to-end frame" 12.69 ms is latency (render + host + encode), not throughput:
   encode overlaps the next frame's device work.
 - The heartbeat's `page_fps` is not available for this run: it comes from a browser page's
