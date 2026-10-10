@@ -128,7 +128,7 @@
 </head>
 <body>
 <h1>gstt2 — Optimization Report</h1>
-<p class='report-meta'>Generated 2026-10-10 06:44 PDT · 74 metal + 216 ttw + 58 cpu ledger rows</p>
+<p class='report-meta'>Generated 2026-10-10 07:00 PDT · 74 metal + 216 ttw + 58 cpu ledger rows</p>
 
 <section class='b2b-headline' style='border-left:4px solid #1d6fa5;background:#f2f8fc;padding:12px 16px'>
   <h2 style='margin-top:0'>Headline: back-to-back ms/view</h2>
@@ -137,8 +137,10 @@
   the passes are listed. Latency (no <code>--dump-views</code>) is a secondary column. Iterations
   before #465 were measured only in latency; their cards and the trajectory below say
   <b>latency (legacy)</b>, and no b2b number is filled in for them.</p>
-  <h3>Best b2b per board</h3>
-  <ul><li><b>bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only): 9.397 ms/view b2b (106.4 FPS)</b>, iter 218 @ <code>13ce253e</code>; latency 9.134 ms/view (secondary). vs GPU G1 10.75 ms/view (RTX A6000, <b>published, not measured</b>): <b>1.14&times;</b> faster.</li><li><b>yyzo-bh-04 (Blackhole p100a, measurement box): 9.818 ms/view b2b (101.9 FPS)</b>, iter 220 @ <code>13ce253e</code>; latency 9.798 ms/view (secondary). vs GPU G1 10.75 ms/view (RTX A6000, <b>published, not measured</b>): <b>1.09&times;</b> faster.</li></ul>
+  <h3>Current b2b per board</h3>
+  <p>Per board: the newest kept or re-baseline row (not the lowest value, which on a noisy
+  board picks noise), with the min-max spread of its passes.</p>
+  <ul><li><b>bh-30: 9.397 ms/view b2b (106.4 FPS)</b> (passes 9.261-10.054), iter 218 @ <code>13ce253e</code>; latency 9.134 ms/view (secondary). vs GPU G1 10.75 ms/view (RTX A6000, <b>published, not measured</b>): <b>1.14&times;</b> faster.</li><li><b>yyzo-bh-04: 9.818 ms/view b2b (101.9 FPS)</b> (passes 9.812-9.841), iter 220 @ <code>13ce253e</code>; latency 9.798 ms/view (secondary). vs GPU G1 10.75 ms/view (RTX A6000, <b>published, not measured</b>): <b>1.09&times;</b> faster.</li></ul>
   <table class='rows'><tr><th>iter</th><th>row</th><th>board</th><th>build</th><th>b2b ms/view (headline): median, passes</th><th>latency ms/view (secondary, no dump)</th><th>sweep md5</th><th>hero PSNR vs reference_v2</th></tr><tr><td>220</td><td>rebaseline</td><td>yyzo-bh-04 (Blackhole p100a, measurement box)</td><td>opt tip c7232e14 + #465 run.py b2b print <code>13ce253e</code></td><td><b>9.818</b> (101.9 FPS)<br><small>passes 9.840, 9.812, 9.818, 9.813, 9.818, 9.813, 9.828, 9.835, 9.841</small></td><td>9.798<br><small>9.804, 9.798, 9.793</small></td><td><code>906e0435</code></td><td>42.51 dB</td></tr><tr><td>219</td><td>rebaseline</td><td>yyzo-bh-04 (Blackhole p100a, measurement box)</td><td>best-iter-216 <code>e13e9f6b</code></td><td><b>9.821</b> (101.8 FPS)<br><small>passes 9.841, 9.821, 9.818, 9.848, 9.818, 9.825, 9.822, 9.820, 9.818</small></td><td>9.796<br><small>9.783, 9.796, 9.797</small></td><td><code>906e0435</code></td><td>42.51 dB</td></tr><tr><td>218</td><td>rebaseline</td><td>bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only)</td><td>opt tip c7232e14 + #465 run.py b2b print <code>13ce253e</code></td><td><b>9.397</b> (106.4 FPS)<br><small>passes 10.054, 9.500, 9.300, 9.929, 9.397, 9.422, 9.297, 9.385, 9.261</small></td><td>9.134<br><small>9.124, 9.181, 9.134</small></td><td><code>39d84b28</code></td><td>42.51 dB</td></tr><tr><td>217</td><td>rebaseline</td><td>bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only)</td><td>best-iter-216 <code>e13e9f6b</code></td><td><b>9.574</b> (104.4 FPS)<br><small>passes 10.036, 10.071, 9.310, 9.334, 9.661, 9.306, 9.904, 9.574, 9.347</small></td><td>9.147<br><small>9.156, 9.139, 9.147</small></td><td><code>39d84b28</code></td><td>42.51 dB</td></tr></table>
   <p><b>Keep gate:</b> A lever is kept if it saves at least 0.1 ms/view back-to-back, taken as the median of at least 3 alternating A/B passes in one session on one board, with the same sweep md5 (or hero PSNR at least 42.4 dB vs benchmarks/reference_v2/hero.png) and no tile seams in the device hero. Latency with --dump-views hides about 1.7 ms of pfwc device time (#464) and never keeps or shelves a lever.</p>
 </section>
@@ -221,7 +223,7 @@
   bicycle vs our 6,131,954-Gaussian <code>bicycle.ply</code>), full SH vs our
   SH-degree-0 colors, and a different camera set.</p>
   <p><b>TT anchor:</b> 9.397 ms/view (106.42 FPS)
-  &mdash; bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only), back-to-back (headline), iter-218 opt tip c7232e14 + #465 run.py b2b print @ 13ce253e. Detail, sources and caveats: <a href='../cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; Published GPU reference rows.</p>
+  &mdash; bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only), back-to-back (headline), iter-218 opt tip c7232e14 + #465 run.py b2b print @ 13ce253e, passes 9.261-10.054 ms. Detail, sources and caveats: <a href='../cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; Published GPU reference rows.</p>
 </section>
 
 
@@ -246,7 +248,7 @@
   Detail and the full search log: <a href='../cpu-vs-tt-comparison.md'>cpu-vs-tt-comparison.md</a> &sect; GPU reference.</p>
   <table class='kv'>
     <tr><th>TT anchor for the eventual ratio</th>
-        <td>9.397 ms/view (106.42 FPS) &mdash; bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only), back-to-back (headline), iter-218 opt tip c7232e14 + #465 run.py b2b print @ 13ce253e</td></tr>
+        <td>9.397 ms/view (106.42 FPS) &mdash; bh-30 (Blackhole p150, ETH dispatch 12x10, viewer reservation; viewer stopped for the bench only), back-to-back (headline), iter-218 opt tip c7232e14 + #465 run.py b2b print @ 13ce253e, passes 9.261-10.054 ms</td></tr>
   </table>
 </section>
 

@@ -157,3 +157,26 @@ def test_legacy_cards_say_latency_legacy():
     assert r["ms_view_b2b"] is None
     r2 = b.normalize_ttw_row(_b2b_row(217, 9.5, [9.4, 9.5, 9.6]))
     assert r2["ms_view_b2b"] == 9.5 and r2["ms_view_latency"] == 7.8
+
+
+def test_b2b_headline_newest_not_minimum():
+    # #475: same short board id, different free text; the newer (slower, noisy) row wins.
+    rows = [
+        _b2b_row(217, 9.1, [9.0, 9.1, 9.3], board="bh-30 (p150, old text)"),
+        _b2b_row(218, 9.5, [9.26, 9.5, 10.07], board="bh-30 (p150, new text)"),
+        _b2b_row(219, 9.8, [9.7, 9.8, 9.9], board="yyzo-bh-04 p100a"),
+        dict(_b2b_row(221, 8.0, [7.9, 8.0, 8.1], board="bh-30 x"), decision="reject"),
+    ]
+    orig = b.load_ttw_iters
+    b.load_ttw_iters = lambda: rows
+    try:
+        bb = b.b2b_best()
+        ms, label = b.tt_anchor()
+        sec = b.b2b_headline_section()
+    finally:
+        b.load_ttw_iters = orig
+    assert sorted(bb) == ["bh-30", "yyzo-bh-04"], bb
+    assert bb["bh-30"]["iter"] == 218, bb
+    assert ms == 9.5 and "iter-218" in label and "passes 9.260-10.070" in label, (ms, label)
+    assert "9.500 ms/view b2b" in sec and "(passes 9.260-10.070)" in sec, sec
+    assert "9.100 ms/view b2b" not in sec and "published, not measured" in sec, sec
