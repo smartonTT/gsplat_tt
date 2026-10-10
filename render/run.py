@@ -306,7 +306,9 @@ def _spin_ms(ms):
 _B2B_STAGE_KEYS = ["project", "sort", "blend", "d2h", "tail", "xview", "view_total",
                    "project_pfwc_rtargs", "project_pfwc_enqueue", "project_gather_wait",
                    "sort_bin_count", "sort_bin_hist_d2h", "sort_bin_layout",
-                   "sort_bin_emit", "sort_publish_host", "sort_publish_wait", "sort_mat"]
+                   "sort_bin_emit", "sort_publish_host", "sort_publish_wait", "sort_mat",
+                   "sort_pre", "sort_log", "sort_cont_prep", "sort_cont_rtargs",
+                   "sort_cont_other"]
 
 
 def _b2b_stage_keys(st):
@@ -317,6 +319,21 @@ def _b2b_stage_keys(st):
         return _B2B_STAGE_KEYS
     skip = ("views", "xview_hits", "xview_misses")
     return [k for k in st if k not in skip and isinstance(st[k], (int, float))]
+
+
+def _b2b_keep_out_slots(args, n_views, env=os.environ):
+    """Task #485: b2b keep mode holds all n_views frames of a pass (and the
+    hero_clean frame), so with the default 4-slot zero-copy ring (out_ring.h)
+    26 of 30 views replaced a slot: aligned_alloc + PinnedMemory::Create per
+    frame, booked as sort_cont_prep. Size the ring to n_views + 2 so measured
+    passes only reuse slots. Must run before the first render (env_config reads
+    it once). An explicit GSPLAT_TT_OUT_ZEROCOPY_SLOTS wins; --b2b-drop keeps
+    the viewer-like default. Returns the value set, else None."""
+    k = "GSPLAT_TT_OUT_ZEROCOPY_SLOTS"
+    if not getattr(args, "back_to_back", False) or args.b2b_drop or k in env:
+        return None
+    env[k] = str(n_views + 2)
+    return env[k]
 
 
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
@@ -541,6 +558,15 @@ def _main():
         _spawn_ref_hero(ref_npy, args.scene, args.cameras, args.iter_dir)
         ref = np.load(ref_npy)
 
+    if args.view_range:
+        a, b = args.view_range.split(":")
+        order = order[int(a) if a else None:int(b) if b else None]
+        if not order:
+            sys.exit(f"[run] --view-range {args.view_range} selects no views")
+    slots = _b2b_keep_out_slots(args, len(order))
+    if slots is not None:
+        print(f"[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS={slots}", flush=True)
+
     # render_clean JIT cache must not share prod kernels.
     os.environ["TT_METAL_CACHE"] = os.environ.get("TT_METAL_CACHE_RENDER", _CACHE_RENDER)
     clean_backend = CleanBackend()
@@ -552,11 +578,6 @@ def _main():
     warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
     warmup_s = time.perf_counter() - t_warm
 
-    if args.view_range:
-        a, b = args.view_range.split(":")
-        order = order[int(a) if a else None:int(b) if b else None]
-        if not order:
-            sys.exit(f"[run] --view-range {args.view_range} selects no views")
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
     # Zero the C++ per-stage accumulators so they cover the timed views only.
     if hasattr(clean_backend._clean, "reset_stage_timings"):
@@ -696,7 +717,8 @@ def _main():
         # Pass B emit kernel; publish_wait is the drain of radix+publish+dir.
         _SORT_ORDER = ["pread", "bin_count", "bin_hist_d2h", "bin_layout",
                        "upload", "bin_emit", "kernel", "d2h", "compact",
-                       "publish_host", "publish_wait", "mat"]
+                       "publish_host", "publish_wait", "mat",
+                       "pre", "log", "cont_prep", "cont_rtargs", "cont_other"]
         sort_parts = []
         sort_sum = 0.0
         for k in _SORT_ORDER:
@@ -713,7 +735,7 @@ def _main():
         # Leaf split of `project` and `tile_assign` (stage_timers.h): host setup
         # / SetRuntimeArgs / enqueue / Finish-or-blocking-read per device driver.
         _SUB_ORDER = {
-            "project": ["cov3d", "pfwc_setup", "pfwc_rtargs", "pfwc_enqueue",
+            "project": ["cov3d", "pfwc_setup", "pfwc_rtargs", "pfwc_chunkcull", "pfwc_enqueue",
                         "pfwc_finish", "gather_setup", "gather_rtargs",
                         "gather_enqueue", "gather_wait", "gather_result"],
             "tile_assign": ["setup", "rtargs", "enqueue", "scan_finish",

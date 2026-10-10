@@ -1,0 +1,124 @@
+=== bench host=bh-30-special-smarton-for-reservation-135630 2026-10-10T13:59:14Z card=p150b aiclk=1350 load=3.91 5.67 6.56
+tree=/localdev/smarton/p150bench/tree470 sha=13ce253e
+=== s0-off start 13:59:14 arm=off env=[] load=3.91
+s0-off rc=0 13:59:36
+TTW_TIMING ms_view=10.376
+=== s0-ro start 13:59:36 arm=ro env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0] load=4.38
+s0-ro rc=0 13:59:50
+TTW_TIMING ms_view=11.117
+=== s0-cull start 13:59:50 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_LOG=1] load=4.24
+s0-cull rc=0 13:59:56
+TTW_TIMING ms_view=10.785
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+=== r1-off start 13:59:56 arm=off env=[] load=4.92
+r1-off rc=0 14:00:14
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.440 render=10.440 py_resid=0.057 project=2.690 sort=2.405 blend=5.147 d2h=0.010 tail=0.005 xview=0.115 view_total=10.383 project_pfwc_rtargs=0.092 project_pfwc_enqueue=0.025 project_gather_wait=2.681 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.738 sort_publish_host=0.328 sort_publish_wait=0.000 sort_mat=0.074
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.081 render=10.081 py_resid=0.057 project=2.625 sort=2.081 blend=5.180 d2h=0.010 tail=0.004 xview=0.115 view_total=10.024 project_pfwc_rtargs=0.088 project_pfwc_enqueue=0.023 project_gather_wait=2.622 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.432 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.080
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.614 render=9.614 py_resid=0.083 project=2.523 sort=1.582 blend=5.268 d2h=0.012 tail=0.008 xview=0.127 view_total=9.530 project_pfwc_rtargs=0.094 project_pfwc_enqueue=0.027 project_gather_wait=2.520 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.446 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.087
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.477 render=9.477 py_resid=0.058 project=2.616 sort=1.346 blend=5.320 d2h=0.009 tail=0.004 xview=0.114 view_total=9.419 project_pfwc_rtargs=0.087 project_pfwc_enqueue=0.023 project_gather_wait=2.613 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.327 sort_publish_host=0.328 sort_publish_wait=0.000 sort_mat=0.071
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.724 fps=102.84 ms_frame_median=9.614 pass_ms_frame=10.081,9.614,9.477 check_pass_ms_frame=10.440 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.724 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r1-off
+TTW_TIMING b2b_ms_frame=9.724
+TTW_TIMING b2b_ms_frame_median=9.614
+LIST_MD5 r1-off 39d84b28 views=30
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== r1-ro start 14:00:14 arm=ro env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0] load=4.94
+r1-ro rc=0 14:00:34
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=11.055 render=11.055 py_resid=0.057 project=3.028 sort=2.612 blend=5.155 d2h=0.017 tail=0.004 xview=0.171 view_total=10.999 project_pfwc_rtargs=0.096 project_pfwc_enqueue=0.028 project_gather_wait=3.018 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=1.253 sort_publish_host=0.338 sort_publish_wait=0.000 sort_mat=0.081
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.799 render=10.799 py_resid=0.059 project=2.952 sort=2.303 blend=5.288 d2h=0.010 tail=0.005 xview=0.173 view_total=10.740 project_pfwc_rtargs=0.094 project_pfwc_enqueue=0.027 project_gather_wait=2.949 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.441 sort_publish_host=0.337 sort_publish_wait=0.000 sort_mat=0.082
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=10.431 render=10.431 py_resid=0.059 project=2.954 sort=1.583 blend=5.641 d2h=0.010 tail=0.005 xview=0.172 view_total=10.372 project_pfwc_rtargs=0.094 project_pfwc_enqueue=0.027 project_gather_wait=2.951 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.439 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.079
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=10.182 render=10.182 py_resid=0.058 project=2.952 sort=1.270 blend=5.711 d2h=0.009 tail=0.004 xview=0.168 view_total=10.123 project_pfwc_rtargs=0.090 project_pfwc_enqueue=0.028 project_gather_wait=2.950 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.435 sort_publish_host=0.340 sort_publish_wait=0.000 sort_mat=0.080
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=10.471 fps=95.51 ms_frame_median=10.431 pass_ms_frame=10.799,10.431,10.182 check_pass_ms_frame=11.055 raw_md5=6a3ccbab gap_ms=0.00 render_ms_frame=10.471 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r1-ro
+TTW_TIMING b2b_ms_frame=10.471
+TTW_TIMING b2b_ms_frame_median=10.431
+LIST_MD5 r1-ro dd46d8cb views=30
+MD5_GOLDEN_FAIL grid 12x10: list dd46d8cb != golden 39d84b28 (30 views)
+=== r1-cull start 14:00:34 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_LOG=1] load=6.77
+r1-cull rc=0 14:00:54
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.302 render=10.302 py_resid=0.058 project=2.442 sort=2.415 blend=5.038 d2h=0.010 tail=0.005 xview=0.324 view_total=10.244 project_pfwc_rtargs=0.097 project_pfwc_enqueue=0.028 project_gather_wait=2.426 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.462 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.080
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.181 render=10.181 py_resid=0.060 project=2.381 sort=2.110 blend=5.283 d2h=0.010 tail=0.005 xview=0.324 view_total=10.122 project_pfwc_rtargs=0.093 project_pfwc_enqueue=0.028 project_gather_wait=2.378 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.438 sort_publish_host=0.329 sort_publish_wait=0.000 sort_mat=0.082
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.870 render=9.870 py_resid=0.058 project=2.384 sort=1.581 blend=5.503 d2h=0.010 tail=0.004 xview=0.321 view_total=9.812 project_pfwc_rtargs=0.093 project_pfwc_enqueue=0.028 project_gather_wait=2.381 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.440 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.083
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.671 render=9.671 py_resid=0.058 project=2.382 sort=1.310 blend=5.585 d2h=0.009 tail=0.005 xview=0.313 view_total=9.613 project_pfwc_rtargs=0.091 project_pfwc_enqueue=0.027 project_gather_wait=2.379 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.432 sort_publish_host=0.329 sort_publish_wait=0.000 sort_mat=0.080
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.908 fps=100.93 ms_frame_median=9.870 pass_ms_frame=10.181,9.870,9.671 check_pass_ms_frame=10.302 raw_md5=3b84729c gap_ms=0.00 render_ms_frame=9.908 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r1-cull
+TTW_TIMING b2b_ms_frame=9.908
+TTW_TIMING b2b_ms_frame_median=9.870
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3513/5989 tiles kept
+LIST_MD5 r1-cull 5dbc0cc9 views=30
+MD5_GOLDEN_FAIL grid 12x10: list 5dbc0cc9 != golden 39d84b28 (30 views)
+=== r2-ro start 14:00:54 arm=ro env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0] load=6.13
+r2-ro rc=0 14:01:14
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.974 render=10.974 py_resid=0.080 project=2.999 sort=2.479 blend=5.204 d2h=0.010 tail=0.008 xview=0.180 view_total=10.894 project_pfwc_rtargs=0.101 project_pfwc_enqueue=0.030 project_gather_wait=2.988 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.082 sort_bin_emit=0.499 sort_publish_host=0.353 sort_publish_wait=0.000 sort_mat=0.083
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.694 render=10.694 py_resid=0.059 project=2.951 sort=2.037 blend=5.449 d2h=0.010 tail=0.004 xview=0.175 view_total=10.636 project_pfwc_rtargs=0.096 project_pfwc_enqueue=0.027 project_gather_wait=2.949 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.439 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.082
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=10.395 render=10.395 py_resid=0.057 project=2.954 sort=1.509 blend=5.679 d2h=0.010 tail=0.004 xview=0.173 view_total=10.338 project_pfwc_rtargs=0.095 project_pfwc_enqueue=0.028 project_gather_wait=2.951 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.442 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.081
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=10.165 render=10.165 py_resid=0.057 project=2.954 sort=1.218 blend=5.748 d2h=0.009 tail=0.004 xview=0.166 view_total=10.108 project_pfwc_rtargs=0.092 project_pfwc_enqueue=0.025 project_gather_wait=2.951 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.422 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.079
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=10.418 fps=95.99 ms_frame_median=10.395 pass_ms_frame=10.694,10.395,10.165 check_pass_ms_frame=10.974 raw_md5=6a3ccbab gap_ms=0.00 render_ms_frame=10.418 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r2-ro
+TTW_TIMING b2b_ms_frame=10.418
+TTW_TIMING b2b_ms_frame_median=10.395
+LIST_MD5 r2-ro dd46d8cb views=30
+MD5_GOLDEN_FAIL grid 12x10: list dd46d8cb != golden 39d84b28 (30 views)
+=== r2-cull start 14:01:14 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_LOG=1] load=6.97
+r2-cull rc=0 14:01:34
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.429 render=10.429 py_resid=0.059 project=2.435 sort=2.512 blend=5.078 d2h=0.010 tail=0.005 xview=0.320 view_total=10.371 project_pfwc_rtargs=0.098 project_pfwc_enqueue=0.028 project_gather_wait=2.420 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=1.147 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.076
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.059 render=10.059 py_resid=0.061 project=2.376 sort=1.931 blend=5.345 d2h=0.009 tail=0.005 xview=0.324 view_total=9.998 project_pfwc_rtargs=0.096 project_pfwc_enqueue=0.027 project_gather_wait=2.373 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.327 sort_publish_host=0.328 sort_publish_wait=0.000 sort_mat=0.077
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=10.088 render=10.088 py_resid=0.060 project=2.379 sort=1.990 blend=5.314 d2h=0.010 tail=0.005 xview=0.323 view_total=10.029 project_pfwc_rtargs=0.095 project_pfwc_enqueue=0.027 project_gather_wait=2.376 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.328 sort_publish_host=0.331 sort_publish_wait=0.000 sort_mat=0.073
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.649 render=9.649 py_resid=0.058 project=2.378 sort=1.212 blend=5.670 d2h=0.009 tail=0.005 xview=0.310 view_total=9.591 project_pfwc_rtargs=0.093 project_pfwc_enqueue=0.025 project_gather_wait=2.375 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.349 sort_publish_host=0.329 sort_publish_wait=0.000 sort_mat=0.073
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.932 fps=100.68 ms_frame_median=10.059 pass_ms_frame=10.059,10.088,9.649 check_pass_ms_frame=10.429 raw_md5=3b84729c gap_ms=0.00 render_ms_frame=9.932 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r2-cull
+TTW_TIMING b2b_ms_frame=9.932
+TTW_TIMING b2b_ms_frame_median=10.059
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3513/5989 tiles kept
+LIST_MD5 r2-cull 5dbc0cc9 views=30
+MD5_GOLDEN_FAIL grid 12x10: list 5dbc0cc9 != golden 39d84b28 (30 views)
+=== r2-off start 14:01:34 arm=off env=[] load=9.18
+r2-off rc=0 14:01:51
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.504 render=10.504 py_resid=0.057 project=2.695 sort=2.468 blend=5.143 d2h=0.010 tail=0.005 xview=0.115 view_total=10.447 project_pfwc_rtargs=0.090 project_pfwc_enqueue=0.026 project_gather_wait=2.686 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.835 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.076
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=9.914 render=9.914 py_resid=0.059 project=2.612 sort=1.900 blend=5.201 d2h=0.011 tail=0.005 xview=0.117 view_total=9.854 project_pfwc_rtargs=0.087 project_pfwc_enqueue=0.025 project_gather_wait=2.609 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.442 sort_publish_host=0.333 sort_publish_wait=0.000 sort_mat=0.081
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.561 render=9.561 py_resid=0.058 project=2.612 sort=1.535 blend=5.214 d2h=0.010 tail=0.005 xview=0.119 view_total=9.503 project_pfwc_rtargs=0.088 project_pfwc_enqueue=0.026 project_gather_wait=2.609 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.440 sort_publish_host=0.338 sort_publish_wait=0.000 sort_mat=0.082
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.286 render=9.286 py_resid=0.058 project=2.616 sort=1.272 blend=5.204 d2h=0.009 tail=0.004 xview=0.114 view_total=9.228 project_pfwc_rtargs=0.085 project_pfwc_enqueue=0.025 project_gather_wait=2.613 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.435 sort_publish_host=0.329 sort_publish_wait=0.000 sort_mat=0.083
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.587 fps=104.31 ms_frame_median=9.561 pass_ms_frame=9.914,9.561,9.286 check_pass_ms_frame=10.504 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.587 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r2-off
+TTW_TIMING b2b_ms_frame=9.587
+TTW_TIMING b2b_ms_frame_median=9.561
+LIST_MD5 r2-off 39d84b28 views=30
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== r3-cull start 14:01:52 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_LOG=1] load=8.43
+r3-cull rc=0 14:02:11
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.265 render=10.265 py_resid=0.058 project=2.438 sort=2.315 blend=5.109 d2h=0.010 tail=0.005 xview=0.320 view_total=10.207 project_pfwc_rtargs=0.097 project_pfwc_enqueue=0.028 project_gather_wait=2.422 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.354 sort_publish_host=0.329 sort_publish_wait=0.000 sort_mat=0.073
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.036 render=10.036 py_resid=0.058 project=2.377 sort=1.899 blend=5.358 d2h=0.011 tail=0.005 xview=0.319 view_total=9.977 project_pfwc_rtargs=0.092 project_pfwc_enqueue=0.027 project_gather_wait=2.374 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.334 sort_publish_host=0.325 sort_publish_wait=0.000 sort_mat=0.074
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.709 render=9.709 py_resid=0.057 project=2.379 sort=1.198 blend=5.732 d2h=0.010 tail=0.004 xview=0.320 view_total=9.652 project_pfwc_rtargs=0.092 project_pfwc_enqueue=0.029 project_gather_wait=2.377 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.331 sort_publish_host=0.328 sort_publish_wait=0.000 sort_mat=0.073
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.750 render=9.750 py_resid=0.058 project=2.378 sort=1.247 blend=5.736 d2h=0.009 tail=0.005 xview=0.309 view_total=9.692 project_pfwc_rtargs=0.089 project_pfwc_enqueue=0.027 project_gather_wait=2.375 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.075 sort_bin_emit=0.333 sort_publish_host=0.325 sort_publish_wait=0.000 sort_mat=0.072
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.832 fps=101.71 ms_frame_median=9.750 pass_ms_frame=10.036,9.709,9.750 check_pass_ms_frame=10.265 raw_md5=3b84729c gap_ms=0.00 render_ms_frame=9.832 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r3-cull
+TTW_TIMING b2b_ms_frame=9.832
+TTW_TIMING b2b_ms_frame_median=9.750
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3704/5989 tiles kept
+[gsplat_tt::pfwc] chunk cull: 3513/5989 tiles kept
+LIST_MD5 r3-cull 5dbc0cc9 views=30
+MD5_GOLDEN_FAIL grid 12x10: list 5dbc0cc9 != golden 39d84b28 (30 views)
+=== r3-off start 14:02:11 arm=off env=[] load=8.34
+r3-off rc=0 14:02:29
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=10.521 render=10.521 py_resid=0.057 project=2.683 sort=2.489 blend=5.147 d2h=0.010 tail=0.004 xview=0.119 view_total=10.464 project_pfwc_rtargs=0.094 project_pfwc_enqueue=0.027 project_gather_wait=2.675 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.855 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.085
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.117 render=10.117 py_resid=0.058 project=2.624 sort=2.105 blend=5.185 d2h=0.009 tail=0.010 xview=0.117 view_total=10.058 project_pfwc_rtargs=0.089 project_pfwc_enqueue=0.024 project_gather_wait=2.621 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.428 sort_publish_host=0.336 sort_publish_wait=0.000 sort_mat=0.092
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.494 render=9.494 py_resid=0.057 project=2.630 sort=1.433 blend=5.234 d2h=0.009 tail=0.004 xview=0.119 view_total=9.437 project_pfwc_rtargs=0.089 project_pfwc_enqueue=0.025 project_gather_wait=2.627 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.430 sort_publish_host=0.328 sort_publish_wait=0.000 sort_mat=0.081
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.295 render=9.295 py_resid=0.060 project=2.625 sort=1.260 blend=5.207 d2h=0.009 tail=0.005 xview=0.120 view_total=9.235 project_pfwc_rtargs=0.091 project_pfwc_enqueue=0.026 project_gather_wait=2.622 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.077 sort_bin_emit=0.447 sort_publish_host=0.334 sort_publish_wait=0.000 sort_mat=0.084
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.635 fps=103.78 ms_frame_median=9.494 pass_ms_frame=10.117,9.494,9.295 check_pass_ms_frame=10.521 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.635 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r3-off
+TTW_TIMING b2b_ms_frame=9.635
+TTW_TIMING b2b_ms_frame_median=9.494
+LIST_MD5 r3-off 39d84b28 views=30
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== r3-ro start 14:02:29 arm=ro env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0] load=7.86
+r3-ro rc=0 14:02:49
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=11.120 render=11.120 py_resid=0.071 project=3.010 sort=2.623 blend=5.208 d2h=0.010 tail=0.006 xview=0.179 view_total=11.049 project_pfwc_rtargs=0.102 project_pfwc_enqueue=0.030 project_gather_wait=2.998 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.079 sort_bin_emit=1.259 sort_publish_host=0.347 sort_publish_wait=0.000 sort_mat=0.082
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=10.678 render=10.678 py_resid=0.058 project=2.951 sort=2.019 blend=5.454 d2h=0.010 tail=0.005 xview=0.173 view_total=10.620 project_pfwc_rtargs=0.095 project_pfwc_enqueue=0.028 project_gather_wait=2.949 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.448 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.080
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=10.320 render=10.320 py_resid=0.059 project=2.951 sort=1.442 blend=5.669 d2h=0.009 tail=0.004 xview=0.176 view_total=10.261 project_pfwc_rtargs=0.095 project_pfwc_enqueue=0.029 project_gather_wait=2.949 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.078 sort_bin_emit=0.445 sort_publish_host=0.330 sort_publish_wait=0.000 sort_mat=0.079
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=10.181 render=10.181 py_resid=0.058 project=2.949 sort=1.267 blend=5.720 d2h=0.009 tail=0.005 xview=0.165 view_total=10.123 project_pfwc_rtargs=0.091 project_pfwc_enqueue=0.026 project_gather_wait=2.946 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.076 sort_bin_emit=0.438 sort_publish_host=0.332 sort_publish_wait=0.000 sort_mat=0.079
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=10.393 fps=96.22 ms_frame_median=10.320 pass_ms_frame=10.678,10.320,10.181 check_pass_ms_frame=11.120 raw_md5=6a3ccbab gap_ms=0.00 render_ms_frame=10.393 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tree470/tmp/t470-r3-ro
+TTW_TIMING b2b_ms_frame=10.393
+TTW_TIMING b2b_ms_frame_median=10.320
+LIST_MD5 r3-ro dd46d8cb views=30
+MD5_GOLDEN_FAIL grid 12x10: list dd46d8cb != golden 39d84b28 (30 views)
+=== bench end rc=0 2026-10-10T14:02:49Z
+=== viewer start 2026-10-10T14:02:49Z
+[viewer] started pid 181382 supervisor 181375 sha 45e6ab92d49dd3f881c4b25fce7231ba0aeea23f port 8080 (log /localdev/smarton/viewer/viewer.log)
