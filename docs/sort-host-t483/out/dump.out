@@ -1,0 +1,16 @@
+================ BUILD ID ================
+  cpp : #124 sha=5edea09e bin=184a6e6c74eb292a t483 5edea09e sort host timers (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t483-dump  timeout=380s  worry=600s  ts=2026-10-10T08:08:50-0700
+cmd: T=/localdev/smarton/gstt2-t483 bash /localdev/smarton/gstt2-t483/docs/sort-host-t483/remote.sh 9 dump
+-----------------------------------------
+=== r9-dump 5edea09 15:08:52 load=2.71
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.9 min_ms=6.3 max_ms=10.2 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t483/tmp/t483-r9-dump
+TTW_TIMING ms_view=7.831
+SORT_STAGES n=30 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.045 upload=0.000 bin_emit=0.195 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.164 publish_wait=0.000 mat=0.034 pre=0.001 log=0.005 cont_prep=0.012 cont_rtargs=0.032 cont_other=0.001 | sum=0.491 sort=0.494 resid=+0.003
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 9 dump 15:09:02
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t483/tmp/ttw-state/logs/t483-dump-20261010-080850.log
