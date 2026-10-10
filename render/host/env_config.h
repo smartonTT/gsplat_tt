@@ -292,6 +292,14 @@ inline bool pfwc_rec32() {
     return v;
 }
 
+// Task #481: with REC32 and the per-scene UNORM16 packs, the pfwc writer no longer reads the
+// fp32 colour tiles (12 B per Gaussian of DRAM reads per view); the writer still reads them
+// when the packs are absent (NaN scene). GSPLAT_TT_PFWC_SKIP_RGB=0 restores the reads.
+inline bool pfwc_skip_rgb() {
+    static const bool v = env_uint("GSPLAT_TT_PFWC_SKIP_RGB", 0u) != 0u && pfwc_rec32();
+    return v;
+}
+
 // Task #206: single-pass SFPU cov_cam in the pfwc compute kernel. Default on since
 // task #221 (=0 off). Alone it needs ~4 KB more kernel config buffer (8 KB is opened).
 inline bool pfwc_covcam_sfpu() {

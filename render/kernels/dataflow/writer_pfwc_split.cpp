@@ -38,6 +38,12 @@
 #include "sort_bin_fp32.h"
 #include "vis_tile.h"
 
+#if defined(PFWC_SKIP_RGB) && !(PFWC_REC32 && EMIT_PUBOC)
+#error "PFWC_SKIP_RGB needs PFWC_REC32 and EMIT_PUBOC (the 64 B record writes the fp32 colours)"
+#endif
+#ifndef PFWC_SKIP_RGB
+#define PFWC_SKIP_RGB 0
+#endif
 #ifndef WSPLIT_ROLE
 #define WSPLIT_ROLE 0
 #endif
@@ -325,9 +331,14 @@ void kernel_main() {
     for (uint32_t k = ROLE; k < num_chunks; k += 2) {
         const uint32_t t = tile_of(k);
         noc_async_read_tile(t, i_op, l1_op);
-        noc_async_read_tile(t, i_cr, l1_cr);
-        noc_async_read_tile(t, i_cg, l1_cg);
-        noc_async_read_tile(t, i_cb, l1_cb);
+#if PFWC_SKIP_RGB
+        if (pub01 == 0)  // task #481: the fp32 colours feed only the on-device pack
+#endif
+        {
+            noc_async_read_tile(t, i_cr, l1_cr);
+            noc_async_read_tile(t, i_cg, l1_cg);
+            noc_async_read_tile(t, i_cb, l1_cb);
+        }
 #if EMIT_PUBOC
         if (pub01 != 0) {
             noc_async_read_tile(t, i_q01, l1_q01);

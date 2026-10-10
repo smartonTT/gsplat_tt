@@ -442,6 +442,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         split_defines["WSPLIT_ROLE"] = "1";
         if (env_config::emit_puboc()) split_defines["EMIT_PUBOC"] = "1";
         if (rec32) split_defines["PFWC_REC32"] = "1";
+        if (env_config::pfwc_skip_rgb()) split_defines["PFWC_SKIP_RGB"] = "1";
         if (stepcyc != 0 && (steprisc == 3 || steprisc == 9))
             split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
         if (rd_brisc) split_defines["PFWC_RD_COLS"] = "1";
@@ -532,6 +533,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
             std::cerr << "[gsplat_tt::pfwc] GSPLAT_TT_FUSE_ABL is ignored with GSPLAT_TT_PFWC_WRITER_SPLIT=1\n";
         writer_defines["WSPLIT_ROLE"] = "0";
         if (rec32) writer_defines["PFWC_REC32"] = "1";
+        if (env_config::pfwc_skip_rgb()) writer_defines["PFWC_SKIP_RGB"] = "1";
         // Task #232: BRISC reads the GSPLAT_TT_PFWC_RD_* input tiles.
         if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
         if (tile_list_on()) writer_defines["PFWC_TILE_LIST"] = "1";
