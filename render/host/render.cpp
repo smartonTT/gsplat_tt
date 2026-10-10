@@ -425,13 +425,14 @@ py::tuple render_view(
         }
         {
             st::Acc& a = st::acc();
-            a.sort -= (a.blend_setup - fused_before.blend_setup) +
-                      (a.mat - fused_before.mat) +
-                      (a.cull - fused_before.cull) +
-                      (a.blend - fused_before.blend) +
-                      (a.d2h - fused_before.d2h) +
-                      (a.assemble - fused_before.assemble) +
-                      (a.xview - fused_before.xview);
+            const double fused = (a.blend_setup - fused_before.blend_setup) +
+                                 (a.mat - fused_before.mat) +
+                                 (a.cull - fused_before.cull) +
+                                 (a.blend - fused_before.blend) +
+                                 (a.d2h - fused_before.d2h) +
+                                 (a.assemble - fused_before.assemble) +
+                                 (a.xview - fused_before.xview);
+            a.sort -= fused;
             // The sort driver's own leaf spans (SortCallTimings) as sort_* buckets.
             a.sort_pread += sort_t.pread_ms;
             a.sort_bin_count += sort_t.bin_count_ms;
@@ -445,6 +446,12 @@ py::tuple render_view(
             a.sort_publish_host += sort_t.publish_host_ms;
             a.sort_publish_wait += sort_t.publish_wait_ms;
             a.sort_mat += sort_t.materialize_ms;
+            // Task #483: sort_cont_prep/rtargs are booked inside the blend driver.
+            a.sort_pre += sort_t.pre_ms;
+            a.sort_log += sort_t.log_ms;
+            a.sort_cont_other += sort_t.cont_ms - fused -
+                                 (a.sort_cont_prep - fused_before.sort_cont_prep) -
+                                 (a.sort_cont_rtargs - fused_before.sort_cont_rtargs);
         }
 
         // Task #270: a tile over the sort bucket capacity failed the sort. Re-run
@@ -578,6 +585,11 @@ PYBIND11_MODULE(render_clean, m) {
         d["sort_publish_host"] = a.sort_publish_host;
         d["sort_publish_wait"] = a.sort_publish_wait;
         d["sort_mat"] = a.sort_mat;
+        d["sort_pre"] = a.sort_pre;
+        d["sort_log"] = a.sort_log;
+        d["sort_cont_prep"] = a.sort_cont_prep;
+        d["sort_cont_rtargs"] = a.sort_cont_rtargs;
+        d["sort_cont_other"] = a.sort_cont_other;
         d["project_cov3d"] = a.project_cov3d;
         d["project_pfwc_setup"] = a.project_pfwc_setup;
         d["project_pfwc_rtargs"] = a.project_pfwc_rtargs;

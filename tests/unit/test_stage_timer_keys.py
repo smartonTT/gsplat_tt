@@ -44,6 +44,25 @@ def test_stage_timer_keys_consistent():
     assert acc == run_py, (acc ^ run_py)
 
 
+def test_sort_timer_keys_consistent():
+    """Task #483: the sort_* leaves too (Acc, binding dict, run.py _SORT_ORDER), so
+    stage_sort_other in TTW_TIMING is the truly unattributed rest."""
+    acc = set(re.findall(r"double (sort_\w+) = 0\.0;",
+                         (ROOT / "render/host/stage_timers.h").read_text()))
+    pairs = re.findall(r'd\["(sort_\w+)"\] = a\.(\w+);',
+                       (ROOT / "render/host/render.cpp").read_text())
+    for key, field in pairs:
+        assert key == field, (key, field)
+    binding = {k for k, _ in pairs}
+    m = re.search(r"_SORT_ORDER = \[(.*?)\]", (ROOT / "render/run.py").read_text(), re.S)
+    assert m, "_SORT_ORDER not found in render/run.py"
+    run_py = {f"sort_{k}" for k in re.findall(r'"(\w+)"', m.group(1))}
+    assert {"sort_pre", "sort_log", "sort_cont_prep", "sort_cont_rtargs",
+            "sort_cont_other"} <= acc
+    assert acc == binding, (acc ^ binding)
+    assert acc == run_py, (acc ^ run_py)
+
+
 _SUB_PREFIXES = ("sort_", "project_", "tile_assign_")
 
 
@@ -70,4 +89,5 @@ def test_top_level_stage_keys_consistent():
 if __name__ == "__main__":
     test_stage_timer_keys_consistent()
     test_top_level_stage_keys_consistent()
+    test_sort_timer_keys_consistent()
     print(f"OK {len(_acc_fields())} sub-bucket keys + top-level stages consistent")

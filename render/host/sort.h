@@ -98,6 +98,10 @@ struct SortCallTimings {
     double bin_emit_ms = 0.0;      // Pass B device scatter/emit kernel: launch + Finish
     double publish_host_ms = 0.0;  // publish: host prep + enqueues before the drain
     double publish_wait_ms = 0.0;  // publish: Finish draining radix+publish+directory
+    // Task #483: the rest of the one-launch path, so sort - sum(leaves) ~ 0.
+    double pre_ms = 0.0;   // after the P read, before the emit: buffer checks/grows + registers
+    double log_ms = 0.0;   // the per-frame [SORT] stderr line
+    double cont_ms = 0.0;  // fused cull/blend continuation + parked-mat fallback (wall)
 };
 
 // Device sort. Same signature shape as gsplat_cpu::sort_and_bin. On success
