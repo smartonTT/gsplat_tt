@@ -1,0 +1,33 @@
+=== host bh-30-special-smarton-for-reservation-135630 2026-10-10T14:31:34Z nproc=24 cpuset=0-23
+gov=performance aiclk=1350 load=2.26 3.69 5.02 2/2329 187720
+    PID USER     %CPU     ELAPSED NLWP COMMAND
+ 144586 smarton   122    02:56:53   33 mutagen-agent
+ 144475 smarton   0.1    02:57:01    1 sshd
+      1 root      0.0  3-12:05:25    1 bash
+     15 root      0.0  3-12:05:25    1 sshd
+ 144470 root      0.0    02:57:02    1 sshd
+ 144472 root      0.0    02:57:02    1 sshd
+ 144476 smarton   0.0    02:57:00    1 sshd
+=== base1 start 14:31:34 1791642694.821733517 load=2.26 pre='' extra='--back-to-back --b2b-passes 20'
+base1 rc=0 end 1791642708.525037744
+B2B scene=bicycle n_views=30 passes=20 drop=no ms_frame=9.368 fps=106.75 ms_frame_median=9.289 pass_ms_frame=9.562,9.412,9.282,9.490,9.302,9.465,9.281,9.541,9.276,9.467,9.285,9.498,9.260,9.284,9.256,9.247,9.611,9.259,9.292,9.286 check_pass_ms_frame=10.504 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.368 xview_hits=629 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tre
+=== base2 start 14:31:48 1791642708.534938846 load=2.42 pre='' extra='--back-to-back --b2b-passes 20'
+base2 rc=0 end 1791642722.235897173
+B2B scene=bicycle n_views=30 passes=20 drop=no ms_frame=9.434 fps=106.01 ms_frame_median=9.319 pass_ms_frame=9.827,9.740,9.659,9.280,9.334,9.271,9.465,9.281,9.467,9.457,9.338,10.253,9.256,9.323,9.278,9.312,9.255,9.276,9.283,9.315 check_pass_ms_frame=10.554 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.434 xview_hits=629 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tr
+=== base3 start 14:32:02 1791642722.245983644 load=2.49 pre='' extra='--back-to-back --b2b-passes 20'
+base3 rc=0 end 1791642735.833048371
+B2B scene=bicycle n_views=30 passes=20 drop=no ms_frame=9.408 fps=106.29 ms_frame_median=9.347 pass_ms_frame=9.345,9.365,9.332,9.350,9.317,9.321,9.334,9.370,9.503,9.323,9.476,9.322,10.278,9.309,9.431,9.371,9.368,9.310,9.317,9.425 check_pass_ms_frame=9.475 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.408 xview_hits=629 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tre
+=== nice1 start 14:32:15 1791642735.843556331 load=2.60 pre='nice -n 0' extra='--back-to-back --b2b-passes 20'
+nice=-10 autogroup=/autogroup-51135 nice -10
+nice1 rc=0 end 1791642749.571861081
+B2B scene=bicycle n_views=30 passes=20 drop=no ms_frame=9.348 fps=106.97 ms_frame_median=9.300 pass_ms_frame=10.156,9.347,9.503,9.418,9.247,9.299,9.301,9.246,9.312,9.246,9.249,9.252,9.246,9.261,9.270,9.429,9.302,9.315,9.251,9.318 check_pass_ms_frame=10.354 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.348 xview_hits=629 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tr
+=== nice2 start 14:32:29 1791642749.584189444 load=2.50 pre='nice -n 0' extra='--back-to-back --b2b-passes 20'
+nice=-10 autogroup=/autogroup-51135 nice -10
+nice2 rc=0 end 1791642763.295234141
+B2B scene=bicycle n_views=30 passes=20 drop=no ms_frame=9.385 fps=106.56 ms_frame_median=9.352 pass_ms_frame=9.469,9.462,9.301,9.302,9.448,9.350,9.302,9.280,9.517,9.291,9.491,9.294,9.500,9.281,9.554,9.355,9.501,9.363,9.336,9.297 check_pass_ms_frame=10.545 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.385 xview_hits=629 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tre
+=== nice3 start 14:32:43 1791642763.304636065 load=2.47 pre='nice -n 0' extra='--back-to-back --b2b-passes 20'
+nice=-10 autogroup=/autogroup-51135 nice -10
+nice3 rc=0 end 1791642777.041368563
+B2B scene=bicycle n_views=30 passes=20 drop=no ms_frame=9.324 fps=107.25 ms_frame_median=9.299 pass_ms_frame=9.615,9.346,9.310,9.315,9.296,9.334,9.455,9.265,9.257,9.312,9.319,9.289,9.301,9.291,9.286,9.290,9.281,9.288,9.283,9.343 check_pass_ms_frame=10.543 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=9.324 xview_hits=629 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150bench/tre
+=== diag end rc=0 2026-10-10T14:32:57Z
+[viewer] started pid 190857 supervisor 190850 sha 45e6ab92d49dd3f881c4b25fce7231ba0aeea23f port 8080 (log /localdev/smarton/viewer/viewer.log)

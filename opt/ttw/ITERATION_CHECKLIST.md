@@ -6,16 +6,18 @@ carry these before the iteration is done. `python3 opt/build_report.py` and
 
 1. Measure on the p150/p100 device with the bicycle reference (ms/view, md5).
    **Headline = back-to-back ms/view (user 2026-10-10, task #465).** Run
-   `render/run.py --back-to-back --b2b-passes 3` and record in `metrics`:
-   `ms_view_b2b` (median of all measured passes), `ms_view_b2b_passes` (every
-   pass value, at least 3), `ms_view_latency` (secondary: run.py without
+   `render/run.py --back-to-back` with its defaults (task #474: 1 check pass,
+   1 untimed warm-up pass, 20 measured passes; do not pass `--b2b-passes 3`)
+   and record in `metrics`: `ms_view_b2b` (median of the run medians, see the
+   keep gate), `ms_view_b2b_passes` (every run's `ms_frame_median`, at least 3), `ms_view_latency` (secondary: run.py without
    `--back-to-back` and without `--dump-views`), plus `board`, `commit`, `build`.
    The validator fails any iteration above 216 without them. Rows up to 216
    keep their latency number, shown as "latency (legacy)"; never invent b2b
    numbers for them. Template: `docs/b2b-rebaseline-t465/bench465.sh`.
    **Keep gate:** a lever is kept if it saves at least 0.1 ms/view b2b, taken
-   as the median of at least 3 alternating A/B passes in one session on one
-   board, with the same sweep md5 (or hero PSNR at least 42.4 dB vs
+   as the median of at least 3 run medians per tree (one run.py run each,
+   alternating A B B A A B in one session on one board; no nice or CPU pinning,
+   task #474 found neither helps and pinning hurts), with the same sweep md5 (or hero PSNR at least 42.4 dB vs
    `benchmarks/reference_v2/hero.png`) and no tile seams. Latency with
    `--dump-views` hides about 1.7 ms of pfwc device time (#464) and never
    keeps or shelves a lever.
