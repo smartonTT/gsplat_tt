@@ -116,6 +116,58 @@ void sfpu_model(float tz, float op, float mx, float my, float rx, float ry, cons
     *tpg_word = w;
 }
 
+// pfwc_vis_one under PFWC_VIS_FAST (task #488), one lane, in the kernel's
+// order: the 10 fail tests as min / max reductions (min of the "<= 0 fails"
+// terms, max of the "> 0 fails" terms; both pick one of their inputs, so the
+// sign / zero test is exact), the non-finite flag from the exponent of
+// tz + op + sx + sy (inf / NaN propagate; an overflow only adds RECHECK
+// lanes), and both axes' edge-tau tests as one min under one not-failed test.
+// Keep in step with the kernel.
+bool g_fast = false;
+void sfpu_model_fast(float tz, float op, float mx, float my, float rx, float ry,
+                     const SfpuParams& P, uint32_t* tpg_word, uint32_t* aabb_word) {
+    constexpr float TWO23 = 8388608.0f;
+    auto cell = [&](float q, float hi) {
+        q = vmax(q, 0.0f);
+        q = vmin(q, hi);
+        float r = (q + TWO23) - TWO23;
+        if (gt0(r - q)) r = r - 1.0f;
+        return r;
+    };
+    float s = tz + op;
+    float m1 = tz - P.kn;
+    float m2 = vmax(vmax(P.mo - op, rx - P.R), ry - P.R);
+    if (gt0(m2)) m1 = 0.0f;
+    const float sx = g_rtz ? add_rtz(mx, rx) : mx + rx;
+    const float dx = mx - rx;
+    s = s + sx;
+    m1 = vmin(vmin(vmin(m1, rx), sx), P.W - dx);
+    const float sy = g_rtz ? add_rtz(my, ry) : my + ry;
+    const float dy = my - ry;
+    s = s + sy;
+    m1 = vmin(vmin(vmin(m1, ry), sy), P.H - dy);
+    const float x0 = cell(dx * P.inv, P.tx1);
+    const float qx = sx * P.inv;
+    const float x1 = cell(qx, P.tx1);
+    const float ddx = x1 + 1.0f - qx;
+    const float ex = vmin(qx - x1 - g_tau, vmax(ddx - g_tau, -ddx));
+    const float y0 = cell(dy * P.inv, P.ty1);
+    const float qy = sy * P.inv;
+    const float y1 = cell(qy, P.ty1);
+    const float ddy = y1 + 1.0f - qy;
+    const float ey = vmin(qy - y1 - g_tau, vmax(ddy - g_tau, -ddy));
+    bool rck = ((u(s) >> 23) & 0xFFu) == 0xFFu;
+    if (gt0(m1) && le0(vmin(ex, ey))) rck = true;
+    const float wm1 = x1 - x0, hm1 = y1 - y0;
+    const float low = x0 + y0 * 1024.0f;
+    *aabb_word = (u(low + TWO23) - 0x0B000000u) + ((u(wm1 + TWO23) - 0x4B000000u) << 20);
+    const float tpg = (wm1 + 1.0f) * (hm1 + 1.0f);
+    uint32_t w = u(tpg + TWO23) - 0x0B000000u;
+    if (le0(m1)) w = 0;
+    if (rck) w = vis_tile::RECHECK;
+    *tpg_word = w;
+}
+
 Params make_params(uint32_t W, uint32_t H, uint32_t tile, float max_r, float min_op) {
     Params p;
     p.k_near = u(0.2f);
@@ -206,8 +258,8 @@ Tiles run_pfwc(const Scene& s, const Params& p, uint64_t* recheck) {
     t.counts.assign(nt * 2, 0);
     const SfpuParams P = sfpu_params(p);
     for (uint32_t i = 0; i < s.N; i++) {
-        sfpu_model(f(s.tz[i]), f(s.op[i]), f(s.mx[i]), f(s.my[i]), f(s.rx[i]), f(s.ry[i]), P,
-                   &t.tpg[i], &t.aabb[i]);
+        (g_fast ? sfpu_model_fast : sfpu_model)(f(s.tz[i]), f(s.op[i]), f(s.mx[i]), f(s.my[i]),
+                                                f(s.rx[i]), f(s.ry[i]), P, &t.tpg[i], &t.aabb[i]);
         if (t.tpg[i] == vis_tile::RECHECK) (*recheck)++;
     }
     for (uint32_t k = 0; k < nt; k++) {
@@ -400,9 +452,11 @@ int main() {
         const uint32_t N = 1 + rng() % (1024 * (trial < 4 ? 300 : 40));
         const Scene s = make_scene(rng, N, p, trial % 2 == 1);
         g_rtz = (trial % 3 == 2);  // also model a round-toward-zero SFPMAD
+        g_fast = ((trial >> 1) & 1) != 0;  // PFWC_VIS_FAST on half the trials
         const Tiles t = run_pfwc(s, p, &recheck);
         check_words(s, p, t, &visible);
         g_rtz = false;
+        g_fast = false;
         gaussians += N;
         const uint32_t nt = (N + 1023) / 1024;
         for (uint32_t cores : {1u, 3u, 13u, 110u}) {
@@ -421,14 +475,16 @@ int main() {
         }
     }
     // Recheck rate on a scene without planted ties (the writer's extra work).
-    {
+    for (int fast = 0; fast < 2; fast++) {
+        g_fast = fast != 0;
         uint64_t rk = 0, vis2 = 0;
         const Params p = make_params(1024, 1024, 32, 512.0f, 1.0f / 255.0f);
         const Scene s = make_scene(rng, 1024 * 400, p, false, false);
         const Tiles t = run_pfwc(s, p, &rk);
         check_words(s, p, t, &vis2);
-        std::printf("natural scene: %llu visible, %llu recheck (%.3f%% of visible)\n",
-                    (unsigned long long)vis2, (unsigned long long)rk, 100.0 * rk / (vis2 ? vis2 : 1));
+        std::printf("natural scene%s: %llu visible, %llu recheck (%.3f%% of visible)\n",
+                    fast ? " (fast)" : "", (unsigned long long)vis2, (unsigned long long)rk, 100.0 * rk / (vis2 ? vis2 : 1));
+        g_fast = false;
     }
     // Sensitivity: without the edge recheck a round-toward-zero adder must
     // break some rectangles (otherwise the RTZ runs above prove nothing).

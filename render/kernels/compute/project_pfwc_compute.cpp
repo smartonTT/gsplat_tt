@@ -378,6 +378,123 @@ sfpi_inline sfpi::vFloat pfwc_vis_cell(sfpi::vFloat q, sfpi::vFloat hi) {
 // input rows are reused for intermediates (DEST round-trips fp32 exactly) and
 // at most ~6 vectors are live: slot 7 = recheck flag, then x0 -> slot 0,
 // y0 -> slot 1, x1 - x0 -> slot 2, y1 - y0 -> slot 3, sx / sy parked in 4 / 5.
+#ifdef PFWC_VIS_FAST
+// Task #488 (GSPLAT_TT_PFWC_VIS_FAST): the same words after the writer with
+// 9 v_ifs instead of 25 (lane model: tests/unit/test_vis_lever2.cpp
+// sfpu_model_fast). The "<= 0 fails" terms are folded with vec_min_max into
+// m1 and the "> 0 fails" terms into m2; min / max return one of their inputs,
+// so the sign / zero test of the result is exact. Lanes fail iff m1 <= 0.
+// The non-finite flag is the exponent of s = tz + op + sx + sy (inf / NaN
+// propagate; an overflow only adds RECHECK lanes). Both axes' edge-tau tests
+// become e = min over (q - x1 - tau, max(d - tau, -d)), one test under
+// "not failed"; RCK holds s, and inf once flagged.
+// Slots after A: 1 m1, 2 dx, 3 dy, 4 sx, 5 sy, 7 s. After B: 0 x0, 2 w - 1,
+// 3 h - 1, 4 e_x, 5 y0.
+template <uint32_t V>
+__attribute__((noinline, noipa)) void pfwc_vis_one() {
+    using namespace sfpi;
+    using ckernel::sfpu::Converter;
+    constexpr uint32_t TZ = 0 * 32 + V, OP = 1 * 32 + V, MX = 2 * 32 + V, MY = 3 * 32 + V,
+                       RX = 4 * 32 + V, RY = 5 * 32 + V, RCK = 7 * 32 + V;
+    // A. Predicate terms.
+    {
+        vFloat m1;
+        {
+            vFloat tz = dst_reg[TZ];
+            vFloat op = dst_reg[OP];
+            dst_reg[RCK] = tz + op;
+            m1 = tz - vFloat(dst_reg[DR_VP + VP_KN]);
+            vFloat m2 = vFloat(dst_reg[DR_VP + VP_MO]) - op;
+            vFloat t = vFloat(dst_reg[RX]) - vFloat(dst_reg[DR_VP + VP_R]);
+            vec_min_max(t, m2);
+            t = vFloat(dst_reg[RY]) - vFloat(dst_reg[DR_VP + VP_R]);
+            vec_min_max(t, m2);
+            v_if(m2 > 0.0f) { m1 = 0.0f; }
+            v_endif;
+        }
+        {
+            vFloat rx = dst_reg[RX];
+            vFloat mx = dst_reg[MX];
+            vFloat sx = mx + rx;
+            vFloat dx = mx - rx;
+            dst_reg[RX] = sx;
+            dst_reg[MX] = dx;
+            dst_reg[RCK] = vFloat(dst_reg[RCK]) + sx;
+            vec_min_max(m1, rx);
+            vec_min_max(m1, sx);
+            vFloat t = vFloat(dst_reg[DR_VP + VP_W]) - dx;
+            vec_min_max(m1, t);
+        }
+        {
+            vFloat ry = dst_reg[RY];
+            vFloat my = dst_reg[MY];
+            vFloat sy = my + ry;
+            vFloat dy = my - ry;
+            dst_reg[RY] = sy;
+            dst_reg[MY] = dy;
+            dst_reg[RCK] = vFloat(dst_reg[RCK]) + sy;
+            vec_min_max(m1, ry);
+            vec_min_max(m1, sy);
+            vFloat t = vFloat(dst_reg[DR_VP + VP_H]) - dy;
+            vec_min_max(m1, t);
+        }
+        dst_reg[OP] = m1;
+    }
+    // B. Cells and the edge-tau term per axis.
+    {
+        vFloat x0 = pfwc_vis_cell(vFloat(dst_reg[MX]) * vFloat(dst_reg[DR_VP + VP_INV]),
+                                  vFloat(dst_reg[DR_VP + VP_TX1]));
+        dst_reg[TZ] = x0;
+        vFloat q0 = vFloat(dst_reg[RX]) * vFloat(dst_reg[DR_VP + VP_INV]);
+        vFloat x1 = pfwc_vis_cell(q0, vFloat(dst_reg[DR_VP + VP_TX1]));
+        dst_reg[MX] = x1 - x0;
+        vFloat tau = dst_reg[DR_VP + VP_TAU];
+        vFloat d = x1 + 1.0f - q0;
+        vFloat e = q0 - x1 - tau;
+        vFloat e2 = d - tau;
+        d = -d;
+        vec_min_max(d, e2);  // e2 = max(d - tau, -d)
+        vec_min_max(e, e2);  // e = min(e, e2)
+        dst_reg[RX] = e;
+    }
+    {
+        vFloat y0 = pfwc_vis_cell(vFloat(dst_reg[MY]) * vFloat(dst_reg[DR_VP + VP_INV]),
+                                  vFloat(dst_reg[DR_VP + VP_TY1]));
+        vFloat q0 = vFloat(dst_reg[RY]) * vFloat(dst_reg[DR_VP + VP_INV]);
+        dst_reg[RY] = y0;
+        vFloat y1 = pfwc_vis_cell(q0, vFloat(dst_reg[DR_VP + VP_TY1]));
+        dst_reg[MY] = y1 - y0;
+        vFloat tau = dst_reg[DR_VP + VP_TAU];
+        vFloat d = y1 + 1.0f - q0;
+        vFloat e = q0 - y1 - tau;
+        vFloat e2 = d - tau;
+        d = -d;
+        vec_min_max(d, e2);
+        vec_min_max(e, e2);
+        vFloat ex = dst_reg[RX];
+        vec_min_max(e, ex);
+        v_if(vFloat(dst_reg[OP]) > 0.0f && e <= 0.0f) {
+            dst_reg[RCK] = Converter::as_float(0x7F800000u);
+        }
+        v_endif;
+    }
+    // C. Words (as below).
+    {
+        vFloat low = vFloat(dst_reg[TZ]) + vFloat(dst_reg[RY]) * 1024.0f;  // x0 | y0 << 10
+        vInt aw = reinterpret<vInt>(low + 8388608.0f) - vInt(0x0B000000);
+        vInt wb = reinterpret<vInt>(vFloat(dst_reg[MX]) + 8388608.0f) - vInt(0x4B000000);
+        aw = aw + reinterpret<vInt>(reinterpret<vUInt>(wb) << 20);
+        vFloat tpg = (vFloat(dst_reg[MX]) + 1.0f) * (vFloat(dst_reg[MY]) + 1.0f);
+        vFloat tw = reinterpret<vFloat>(reinterpret<vInt>(tpg + 8388608.0f) - vInt(0x0B000000));
+        v_if(vFloat(dst_reg[OP]) <= 0.0f) { tw = 0.0f; }
+        v_endif;
+        v_if(exexp(vFloat(dst_reg[RCK])) >= 128) { tw = Converter::as_float(0x20000000u); }
+        v_endif;
+        dst_reg[OP] = reinterpret<vFloat>(aw);  // output slot 1: aabb word
+        dst_reg[TZ] = tw;                       // output slot 0: tpg word
+    }
+}
+#else
 template <uint32_t V>
 __attribute__((noinline, noipa)) void pfwc_vis_one() {
     using namespace sfpi;
@@ -490,6 +607,7 @@ __attribute__((noinline, noipa)) void pfwc_vis_one() {
         dst_reg[TZ] = tw;  // output slot 0: tpg word
     }
 }
+#endif  // PFWC_VIS_FAST
 #ifdef PFWC_PRECULL
 // Lever C (task #140). Runs in step 11.5's DEST acquire, before the TZ / MX /
 // MY loads (task #142: a separate step with its own radii repack put the

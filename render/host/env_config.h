@@ -300,6 +300,13 @@ inline bool pfwc_skip_rgb() {
     return v;
 }
 
+// Task #488: pfwc_vis_one with the fail tests as min / max reductions and one edge-tau test
+// (PFWC_VIS_FAST; same words after the writer). GSPLAT_TT_PFWC_VIS_FAST=1 enables it.
+inline bool pfwc_vis_fast() {
+    static const bool v = env_uint("GSPLAT_TT_PFWC_VIS_FAST", 0u) != 0u;
+    return v;
+}
+
 // Task #206: single-pass SFPU cov_cam in the pfwc compute kernel. Default on since
 // task #221 (=0 off). Alone it needs ~4 KB more kernel config buffer (8 KB is opened).
 inline bool pfwc_covcam_sfpu() {
