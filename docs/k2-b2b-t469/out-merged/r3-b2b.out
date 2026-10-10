@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #127 sha=ed3d3baf bin=6dea21cfb9e76223 t469 ed3d3baf K2_TRISC b2b A/B (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t469-r3-b2b  timeout=380s  worry=600s  ts=2026-10-10T07:22:04-0700
 cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/k2-b2b-t469/remote_ab.sh 3 b2b off def

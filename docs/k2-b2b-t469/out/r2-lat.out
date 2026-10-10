@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=8db9efa9 bin=1847c579dc3c625b t469 8db9efa9 K2_TRISC b2b A/B (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t469-r2-lat  timeout=380s  worry=600s  ts=2026-10-10T06:57:06-0700
 cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/k2-b2b-t469/remote_ab.sh 2 lat on off
