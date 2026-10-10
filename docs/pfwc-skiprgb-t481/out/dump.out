@@ -1,0 +1,23 @@
+================ BUILD ID ================
+  cpp : #124 sha=f69be1d7 bin=63d50f1340544ab3 t481 2b55e3a6 PFWC_SKIP_RGB b2b A/B (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t481-dump  timeout=380s  worry=600s  ts=2026-10-10T08:02:36-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-skiprgb-t481/remote_ab.sh 9 dump off on
+-----------------------------------------
+=== r9-dump-off 2b55e3a SKIP_RGB=0 15:02:36 load=3.93
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.3 max_ms=10.2 n_views=30 warmup_s=1.9 out=/localdev/smarton/gstt2-t469/tmp/t481-r9-dump-off
+TTW_TIMING ms_view=7.808
+STAGES n=30 head=0.003 project=0.811 tile_assign=0.004 sort=0.460 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.428 d2h=0.003 assemble=0.000 tail=0.003 xview=0.059 | sum=7.771 view_total=7.772 resid_in_view=+0.001 avg_frame_ms=7.808 resid_vs_frame=+0.038 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== r9-dump-on 2b55e3a SKIP_RGB=1 15:02:47 load=3.86
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.4 max_ms=10.1 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t469/tmp/t481-r9-dump-on
+TTW_TIMING ms_view=7.805
+STAGES n=30 head=0.003 project=0.815 tile_assign=0.004 sort=0.468 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.416 d2h=0.004 assemble=0.000 tail=0.003 xview=0.053 | sum=7.766 view_total=7.768 resid_in_view=+0.001 avg_frame_ms=7.805 resid_vs_frame=+0.039 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 9 dump 15:02:58
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t481/tmp/ttw-state/logs/t481-dump-20261010-080236.log

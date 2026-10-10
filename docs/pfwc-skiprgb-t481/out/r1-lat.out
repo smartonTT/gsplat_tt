@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=f69be1d7 bin=63d50f1340544ab3 t481 2b55e3a6 PFWC_SKIP_RGB b2b A/B (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t481-r1-lat  timeout=380s  worry=600s  ts=2026-10-10T08:00:40-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-skiprgb-t481/remote_ab.sh 1 lat off on
+-----------------------------------------
+=== r1-lat-off 2b55e3a SKIP_RGB=0 15:00:40 load=4.20
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.4 p50_ms=9.5 min_ms=7.9 max_ms=10.9 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t481-r1-lat-off
+TTW_TIMING ms_view=9.367
+STAGES n=30 head=0.002 project=2.389 tile_assign=0.003 sort=0.490 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.405 d2h=0.004 assemble=0.000 tail=0.003 xview=0.044 | sum=9.339 view_total=9.340 resid_in_view=+0.001 avg_frame_ms=9.367 resid_vs_frame=+0.028 xview_hits=29 xview_misses=0
+=== r1-lat-on 2b55e3a SKIP_RGB=1 15:00:44 load=4.20
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.3 p50_ms=9.4 min_ms=7.9 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t481-r1-lat-on
+TTW_TIMING ms_view=9.313
+STAGES n=30 head=0.002 project=2.330 tile_assign=0.003 sort=0.455 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.448 d2h=0.003 assemble=0.000 tail=0.003 xview=0.041 | sum=9.286 view_total=9.287 resid_in_view=+0.001 avg_frame_ms=9.313 resid_vs_frame=+0.028 xview_hits=29 xview_misses=0
+=== done 1 lat 15:00:47
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t481/tmp/ttw-state/logs/t481-r1-lat-20261010-080039.log
