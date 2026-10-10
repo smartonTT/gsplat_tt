@@ -1,0 +1,10 @@
+town_pc: 330 (core, TRISC) streams, 3630 launches, 10 views
+              tot       go     proc      wfl       wq      rdy      rec      run       nb       ng   (cycle columns: ms per launch, mean over cores)
+TRISC_0     1.289    0.149    1.123    0.061    0.000    0.006     8002      999      188     7357
+         cycles/record: net 179.1, with waits 189.4
+TRISC_1     1.288    0.149    1.122    0.066    0.000    0.006     7985      997      188     7343
+         cycles/record: net 178.7, with waits 189.8
+TRISC_2     1.289    0.149    1.124    0.063    0.000    0.006     8019     1001      188     7374
+         cycles/record: net 178.6, with waits 189.2
+ALL      cycles/owned record (gate <= 270): 178.8  (with waits 189.5; wfl 10.7, wq 0.0)
+busy (tot - go - rdy) per launch: max core 1.285 ms, mean core 1.139 ms
