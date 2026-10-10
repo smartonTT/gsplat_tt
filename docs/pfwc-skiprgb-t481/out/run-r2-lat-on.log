@@ -34,23 +34,23 @@
 2026-10-10 15:01:27.320 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
 2026-10-10 15:01:27.321 | warning  |          Always | Unknown motherboard 'X670E GAMING PLUS WIFI (MS-7E16)' for chip_id=0 (bus_id=0x1) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
 2026-10-10 15:01:27.321 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
-2026-10-10 15:01:27.322 | info     |          Fabric | 
+2026-10-10 15:01:27.322 | info     |          Fabric |
 === Logical Mesh-Level Graph Adjacency Map ===
 Total nodes: 1
 Degree histogram: {0:1}
  (topology_solver.tpp:94)
-2026-10-10 15:01:27.322 | info     |          Fabric | 
+2026-10-10 15:01:27.322 | info     |          Fabric |
 === Logical Mesh 0 Internal Graph Adjacency Map ===
 Total nodes: 1
 Degree histogram: {0:1}
  (topology_solver.tpp:94)
 2026-10-10 15:01:27.322 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
-2026-10-10 15:01:27.322 | info     |          Fabric | 
+2026-10-10 15:01:27.322 | info     |          Fabric |
 === Physical Mesh-Level Graph Adjacency Map ===
 Total nodes: 1
 Degree histogram: {0:1}
  (topology_solver.tpp:94)
-2026-10-10 15:01:27.322 | info     |          Fabric | 
+2026-10-10 15:01:27.322 | info     |          Fabric |
 === Physical Mesh 0 Internal Graph Adjacency Map ===
 Total nodes: 1
 Degree histogram: {0:1}

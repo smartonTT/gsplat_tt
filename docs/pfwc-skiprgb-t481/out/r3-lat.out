@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=f69be1d7 bin=63d50f1340544ab3 t481 2b55e3a6 PFWC_SKIP_RGB b2b A/B (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t481-r3-lat  timeout=380s  worry=600s  ts=2026-10-10T08:02:15-0700
 cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-skiprgb-t481/remote_ab.sh 3 lat off on
