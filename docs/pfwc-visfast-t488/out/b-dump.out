@@ -1,0 +1,23 @@
+================ BUILD ID ================
+  cpp : #125 sha=fc08a58d bin=12419658c55c6086 t488 fc08a58d PFWC_VIS_FAST b2b A/B (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t488-b-dump  timeout=380s  worry=600s  ts=2026-10-10T09:23:10-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-visfast-t488/remote_ab.sh 29 dump base bun
+-----------------------------------------
+=== r29-dump-base fc08a58 VIS_FAST=0 SKIP_RGB=unset 16:23:10 load=2.81
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.3 max_ms=10.2 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t488-r29-dump-base
+TTW_TIMING ms_view=7.799
+STAGES n=30 head=0.003 project=0.811 tile_assign=0.004 sort=0.460 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.426 d2h=0.003 assemble=0.000 tail=0.003 xview=0.052 | sum=7.762 view_total=7.763 resid_in_view=+0.001 avg_frame_ms=7.799 resid_vs_frame=+0.037 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== r29-dump-bun fc08a58 VIS_FAST=1 SKIP_RGB=1 16:23:20 load=2.75
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.4 max_ms=10.1 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t488-r29-dump-bun
+TTW_TIMING ms_view=7.797
+STAGES n=30 head=0.003 project=0.813 tile_assign=0.004 sort=0.486 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.395 d2h=0.004 assemble=0.000 tail=0.003 xview=0.051 | sum=7.758 view_total=7.760 resid_in_view=+0.001 avg_frame_ms=7.797 resid_vs_frame=+0.038 xview_hits=29 xview_misses=0
+MD5_GOLDEN_FAIL grid 11x10: list 0a790b06 != golden 906e0435 (30 views)
+=== done 29 dump 16:23:31
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t488/tmp/ttw-state/logs/t488-b-dump-20261010-092309.log
