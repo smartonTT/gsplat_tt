@@ -23,7 +23,7 @@ for arm in "$@"; do
   case $mode in b2b) args+=(--back-to-back) ;; dump) args+=(--dump-views t469-dump-$tag) ;; esac
   echo "=== $tag $(cut -c1-7 SHA) K2_TRISC=${k:-unset} $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   rm -rf tmp/t469-dump-$tag
-  ${k:+env GSPLAT_TT_K2_TRISC=$k} TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t469 timeout ${RUN_TIMEOUT:-150} \
+  env ${k:+GSPLAT_TT_K2_TRISC=$k} TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t469 timeout ${RUN_TIMEOUT:-150} \
     python3 render/run.py "${args[@]}" > $S/run-$tag.log 2>&1
   rc=$?
   echo "run rc=$rc"
