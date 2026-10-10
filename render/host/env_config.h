@@ -327,12 +327,12 @@ inline bool pfwc_recip_newton() {
     return v;
 }
 
-// Task #489: fewer pfwc compute acquires (pfwc_fuse_sfpu.h), bit-identical. Bit 0: steps
+// Task #489 (GSPLAT_TT_PFWC_ACQ_FUSE; not lever B's PFWC_FUSE): fewer pfwc compute acquires (pfwc_fuse_sfpu.h), bit-identical. Bit 0: steps
 // 1-5 (transform, 1/tz, depth, means) in one acquire instead of seven. Bit 1 (needs
 // COVCAM_SFPU and COV2D_SFPU): cov_cam and S_AC in one acquire. Default 0 (A/B).
-inline uint32_t pfwc_fuse() {
+inline uint32_t pfwc_acq_fuse() {
     static const uint32_t v = [] {
-        uint32_t m = env_uint("GSPLAT_TT_PFWC_FUSE", 0u) & 3u;
+        uint32_t m = env_uint("GSPLAT_TT_PFWC_ACQ_FUSE", 0u) & 3u;
         if (!(pfwc_covcam_sfpu() && pfwc_cov2d_sfpu())) m &= ~2u;
         return m;
     }();

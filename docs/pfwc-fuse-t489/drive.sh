@@ -1,7 +1,7 @@
 #!/bin/bash
 # t489: one `ttp lock p100` around: ssh preflight, sync + build of <rev> on the measurement box,
 # a discarded warm-up (JIT for all arms), 3 alternating rounds of b2b + latency for
-# off (GSPLAT_TT_PFWC_FUSE=0) / on (=3) / p (=1), GSPLAT_TT_PFWC_SKIP_RGB=1 in every arm, then
+# off (GSPLAT_TT_PFWC_ACQ_FUSE=0) / on (=3) / p (=1), GSPLAT_TT_PFWC_SKIP_RGB=1 in every arm, then
 # one --dump-views md5 pass per arm.
 #   ttp detach t489 -- docs/pfwc-fuse-t489/drive.sh <rev>   (Mac, worktree root; O=<out dir> ON=on|def)
 # Restrictions: only the existing measurement reservation (no ird reserve/extend/release),
@@ -31,7 +31,7 @@ sha=$(git rev-parse --short "$rev")
 echo "=== drive t489 $sha on $H:$T $(date)"
 opt/sync_remote.sh "$H" "$T" "$rev" > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 3; }
 tail -2 "$O/sync.log"
-~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t489 $sha PFWC_FUSE b2b A/B ($H)"
+~/dev/tt-workflows/scripts/buildid.sh stamp cpp "t489 $sha PFWC_ACQ_FUSE b2b A/B ($H)"
 $SSH "$H" "rm -rf $T/tmp/t489; mkdir -p $T/tmp/t489"
 pat="^(===|run rc|B2B |SUMMARY|MD5_GOLDEN|HANG|NO_DUMP|Trace|TT_FATAL|TT_THROW)"
 rc=0

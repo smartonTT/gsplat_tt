@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
-// Task #489 (GSPLAT_TT_PFWC_FUSE, math thread): fewer pfwc acquires.
+// Task #489 (GSPLAT_TT_PFWC_ACQ_FUSE, math thread): fewer pfwc acquires.
 //
 // Bit 0 (projection): steps 1-5 (world->camera transform, 1/tz, depth, mean_x,
 // mean_y) were seven acquires of tile ops with 15 copy_tile and 9 packs. Here they

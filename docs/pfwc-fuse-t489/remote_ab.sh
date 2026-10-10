@@ -1,7 +1,7 @@
 #!/bin/bash
-# t489: one round of the PFWC_FUSE A/B under the back-to-back headline metric.
+# t489: one round of the PFWC_ACQ_FUSE A/B under the back-to-back headline metric.
 #   remote_ab.sh <round> <mode> <arm> ...   mode: b2b | lat | dump   arm: off | on | p | def
-#   off = GSPLAT_TT_PFWC_FUSE=0, on = =3, p = =1, def = unset (the default); every arm
+#   off = GSPLAT_TT_PFWC_ACQ_FUSE=0, on = =3, p = =1, def = unset (the default); every arm
 #   GSPLAT_TT_PFWC_SKIP_RGB=1, otherwise defaults (env as probe464.sh).
 #   b2b: render/run.py --no-ref --back-to-back (1 warm-up + 20 timed passes, run.py default over the 30 views)
 #   lat: render/run.py --no-ref (latency, no --dump-views)
@@ -11,7 +11,7 @@ set -u
 export TT_METAL_HOME=/localdev/smarton/tt-metal TT_METAL_RUNTIME_ROOT=/localdev/smarton/tt-metal
 export TT_METAL_ARCH_NAME=blackhole MESH_DEVICE=${MESH_DEVICE:-P100} TTW_DEVRUN=1 PYTHONDONTWRITEBYTECODE=1
 unset GSPLAT_TT_DISPATCH GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACHE GSPLAT_PER_VIEW_STAGES \
-  GSPLAT_TT_HOST_PROFILE GSPLAT_TT_XVIEW_OVERLAP GSPLAT_TT_PFWC_FUSE
+  GSPLAT_TT_HOST_PROFILE GSPLAT_TT_XVIEW_OVERLAP GSPLAT_TT_PFWC_ACQ_FUSE GSPLAT_TT_PFWC_FUSE
 export GSPLAT_TT_PFWC_SKIP_RGB=1
 T=${T:-/localdev/smarton/gstt2-t469}; cd "$T" || exit 1; source .venv/bin/activate
 S=$T/tmp/t489; mkdir -p $S
@@ -22,9 +22,9 @@ for arm in "$@"; do
   tag=r$r-$mode-$arm
   args=(--no-ref --iter-dir t489-$tag)
   case $mode in b2b) args+=(--back-to-back) ;; dump) args+=(--dump-views t489-dump-$tag) ;; esac
-  echo "=== $tag $(cut -c1-7 SHA) FUSE=${k:-unset} SKIP_RGB=1 $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
+  echo "=== $tag $(cut -c1-7 SHA) ACQ_FUSE=${k:-unset} SKIP_RGB=1 $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   rm -rf tmp/t489-dump-$tag
-  env ${k:+GSPLAT_TT_PFWC_FUSE=$k} TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t489 timeout ${RUN_TIMEOUT:-150} \
+  env ${k:+GSPLAT_TT_PFWC_ACQ_FUSE=$k} TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t489 timeout ${RUN_TIMEOUT:-150} \
     python3 render/run.py "${args[@]}" > $S/run-$tag.log 2>&1
   rc=$?
   echo "run rc=$rc"
