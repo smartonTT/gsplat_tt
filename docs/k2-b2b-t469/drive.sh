@@ -2,7 +2,7 @@
 # t469: one `ttp lock p100` around: ssh preflight, sync + build of <rev> on the measurement box,
 # a discarded warm-up (JIT for both arms), 3 alternating rounds of b2b + latency for
 # off (GSPLAT_TT_K2_TRISC=0) / on (GSPLAT_TT_K2_TRISC=1), then one --dump-views md5 pass per arm.
-#   ttp detach t469 -- docs/k2-b2b-t469/drive.sh <rev>   (Mac, worktree root)
+#   ttp detach t469 -- docs/k2-b2b-t469/drive.sh <rev>   (Mac, worktree root; O=<out dir> ON=on|def)
 # Restrictions: only the existing measurement reservation (no ird reserve/extend/release),
 # never the viewer box; every ssh/scp goes through shims forcing StrictHostKeyChecking=yes.
 set -u
@@ -11,7 +11,7 @@ rev=${1:?rev}
 export H=${H:-yyzo-bh-04} T=${T:-/localdev/smarton/gstt2-t469}
 DEVRUN=${DEVRUN:-$HOME/dev/tt-workflows/scripts/devrun.sh}
 PRE=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
-D=docs/k2-b2b-t469; O=$D/out; mkdir -p "$O" tmp/ttw-state tmp/t469-bin
+D=docs/k2-b2b-t469; O=${O:-$D/out}; ON=${ON:-on}; mkdir -p "$O" tmp/ttw-state tmp/t469-bin
 if [ "${2:-}" != --locked ]; then
   exec ttp lock p100 -- "$PWD/$D/drive.sh" "$rev" --locked
 fi
@@ -51,13 +51,14 @@ if [ "${MODE:-ab}" = confirm ]; then
   echo "=== drive t469 confirm done rc=$rc $(date)"
   exit $rc
 fi
-step warm 0 b2b off on
+step warm 0 b2b off $ON
 for r in 1 2 3; do
-  case $r in 2) arms="on off" ;; *) arms="off on" ;; esac
+  case $r in 2) arms="$ON off" ;; *) arms="off $ON" ;; esac
   step r$r-b2b $r b2b $arms
   step r$r-lat $r lat $arms
 done
-step dump 9 dump off on
+step dump 9 dump off $ON
 scp -q -o BatchMode=yes "$H:$T/tmp/t469/run-*.log" "$H:$T/tmp/t469/md5-*.txt" "$O/" || rc=4
+scp -q -o BatchMode=yes "$H:$T/tmp/t469-r9-dump-$ON/hero_clean.png" "$O/hero-$ON.png" || rc=4
 echo "=== drive t469 done rc=$rc $(date)"
 exit $rc
