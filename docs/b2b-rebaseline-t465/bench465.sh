@@ -6,12 +6,16 @@
 # (odd A then B, even B then A); each round: b2b A/B, then latency A/B. b2b dumps pass 0 (untimed)
 # for the md5 list. Writes $O/*.log, md5-*.txt, hero-<arm>.png, bench.rc; with VSTART set it runs
 # that viewer start script at exit and touches $O/vstarted.
-#   bench465.sh <p100|p150> <out dir> <tree A> <tree B> [rounds=3]
+#   bench465.sh <p100|p150> <out dir> <tree A> <tree B> [rounds=3 | "<step tag>..."]
+# Step mode (devrun's 600 s reservation ceiling): the 5th arg lists tags (init, s0-A, r2-lat-B, ...);
+# init clears $O; the result goes to $O/step.rc, and the last step ending the plan writes bench.rc.
 set -u
-BOARD=$1; O=$2; TA=$3; TB=$4; ROUNDS=${5:-3}
+BOARD=$1; O=$2; TA=$3; TB=$4; ROUNDS=${5:-3}; STEPS=
+case $ROUNDS in *[!0-9]*) STEPS=$ROUNDS ;; esac
+RCF=$O/bench.rc; [ -n "$STEPS" ] && RCF=$O/step.rc
 rc=99
-rm -rf $O; mkdir -p $O
-trap 'echo "=== bench end rc=$rc $(date -u +%FT%TZ)"; echo $rc > $O/bench.rc
+case " ${STEPS:-init} " in *" init "*) rm -rf $O ;; esac; mkdir -p $O
+trap 'echo "=== bench end rc=$rc $(date -u +%FT%TZ)"; echo $rc > $RCF
   if [ -n "${VSTART:-}" ]; then echo "=== viewer start $(date -u +%FT%TZ)"; bash $VSTART > $O/vstart.log 2>&1; cat $O/vstart.log; touch $O/vstarted; fi' EXIT
 unset GSPLAT_TT_DISPATCH GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE TT_METAL_CACHE GSPLAT_PER_VIEW_STAGES \
   GSPLAT_TT_HOST_PROFILE GSPLAT_TT_XVIEW_OVERLAP GSPLAT_TT_PFWC_DEAL GSPLAT_TT_PERM_NOC GSPLAT_TT_SORT_PACKED
@@ -36,7 +40,7 @@ run() {  # run <tag> <A|B> <smoke|b2b|lat>
   esac
   echo "=== $tag start $(date -u +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   ( cd $T || exit 9; source .venv/bin/activate; rm -rf tmp/$it tmp/$it-dump
-    TT_METAL_CACHE_RENDER=$CACHE-$arm/render timeout $([ $mode = smoke ] && echo 900 || echo 300) \
+    TT_METAL_CACHE_RENDER=$CACHE-$arm/render timeout $([ $mode = smoke ] && echo ${SMOKE_TO:-900} || echo ${RUN_TO:-300}) \
       python3 render/run_t465.py --no-ref --iter-dir $it $args > $O/$tag.log 2>&1 ); rr=$?
   echo "$tag rc=$rr $(date -u +%T)"
   grep -E "^\[DEV\] dispatch|^B2B scene|TTW_TIMING (ms_view|b2b_ms_frame(_median)?)=|$BAD" $O/$tag.log | cut -c1-500 | head -8
@@ -50,6 +54,14 @@ run() {  # run <tag> <A|B> <smoke|b2b|lat>
   fi
   rm -rf $T/tmp/$it $T/tmp/$it-dump
 }
+if [ -n "$STEPS" ]; then
+  rc=0
+  for t in $STEPS; do
+    case $t in init) continue ;; s0-?) m=smoke ;; *) m=$(echo $t | cut -d- -f2) ;; esac
+    run $t ${t##*-} $m || { rc=20; [ $m = smoke ] && rc=10; exit; }
+  done
+  exit
+fi
 rc=10
 run s0-A A smoke && run s0-B B smoke || exit
 rc=0

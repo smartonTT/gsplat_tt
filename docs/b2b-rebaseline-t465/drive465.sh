@@ -19,8 +19,22 @@ if [ $LEGS != p150 ]; then
   for T in $TA $TB; do put $H render/run.py $T/render/run_t465.py; done
   put $H $D/bench465.sh $R/t465-bench465.sh
   echo "=== p100 bench $(date -u +%FT%TZ)"
-  $HOME/dev/tt-workflows/scripts/devrun.sh --host $H --no-verify --timeout 2400 --tag t465-p100 -- \
-    "bash $R/t465-bench465.sh p100 $O $TA $TB 3" > tmp/t465-p100.out 2>&1 || echo "p100 devrun rc=$?"
+  # devrun refuses a --timeout over the 600 s reservation ceiling: one devrun per chunk (a smoke,
+  # or one A/B pair of a round). Its bare ssh gets a shim that keeps host-key checking on.
+  SHIM=${TMPDIR:-/tmp}/t465-sshshim; mkdir -p $SHIM
+  printf '#!/bin/sh\nexec /usr/bin/ssh -o StrictHostKeyChecking=yes "$@"\n' > $SHIM/ssh; chmod +x $SHIM/ssh
+  CH=("init s0-A" "s0-B"); for r in 1 2 3; do o="A B"; [ $r = 2 ] && o="B A"
+    for m in b2b lat; do CH+=("$(for a in $o; do printf 'r%s-%s-%s ' $r $m $a; done)"); done; done
+  : > tmp/t465-p100.out; prc=0; i=0
+  for c in "${CH[@]}"; do i=$((i+1))
+    to=560; case "$c" in *s0-*) to=590 ;; esac
+    echo "--- p100 chunk $i [$c] $(date -u +%T)"; ssh "${SSHO[@]}" $H "rm -f $O/step.rc"
+    PATH=$SHIM:$PATH $HOME/dev/tt-workflows/scripts/devrun.sh --host $H --no-verify --timeout $to --tag t465-p100-$i -- \
+      "SMOKE_TO=540 RUN_TO=250 bash $R/t465-bench465.sh p100 $O $TA $TB '$c'" >> tmp/t465-p100.out 2>&1 || prc=$?
+    src=$(ssh "${SSHO[@]}" $H "cat $O/step.rc 2>/dev/null || echo 98")
+    echo "chunk $i devrun rc=$prc step rc=$src"; [ "$prc" = 0 ] && [ "$src" = 0 ] || break
+  done
+  brc=$src; [ "$prc" = 0 ] || brc=$prc; ssh "${SSHO[@]}" $H "echo $brc > $O/bench.rc"
   mkdir -p $D/out-p100; scp -q "${SSHO[@]}" "$H:$O/*" $D/out-p100/
   cat $D/out-p100/bench.rc
 fi
