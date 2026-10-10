@@ -1,0 +1,132 @@
+{
+ "viewer_off": {
+  "ms_view": 10.208481788868085,
+  "passes_ms": [
+   10.888,
+   9.813,
+   9.825,
+   10.988
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 0,
+  "xview_misses": 0,
+  "shape": [
+   1024,
+   1024,
+   3
+  ]
+ },
+ "viewer_on": {
+  "ms_view": 9.348251488861731,
+  "passes_ms": [
+   9.476,
+   9.385,
+   9.31,
+   9.349
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 119,
+  "xview_misses": 0,
+  "shape": [
+   1024,
+   1024,
+   3
+  ]
+ },
+ "viewer_settings_bench_off": {
+  "ms_view": 9.659360800611063,
+  "passes_ms": [
+   11.016,
+   9.502,
+   9.639,
+   9.837
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 1,
+  "xview_misses": 0
+ },
+ "viewer_settings_bench_on": {
+  "ms_view": 9.423350188363758,
+  "passes_ms": [
+   9.649,
+   9.437,
+   9.46,
+   9.373
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 119,
+  "xview_misses": 0
+ },
+ "bench_off": {
+  "ms_view": 9.599451466541115,
+  "passes_ms": [
+   10.336,
+   9.754,
+   9.497,
+   9.547
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 1,
+  "xview_misses": 0
+ },
+ "bench_on": {
+  "ms_view": 9.266032033418822,
+  "passes_ms": [
+   9.313,
+   9.239,
+   9.309,
+   9.25
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 119,
+  "xview_misses": 0
+ },
+ "bench_settings_viewer_off": {
+  "ms_view": 9.777154867252749,
+  "passes_ms": [
+   9.81,
+   9.72,
+   9.805,
+   9.807
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 0,
+  "xview_misses": 0,
+  "shape": [
+   1024,
+   1024,
+   3
+  ]
+ },
+ "bench_settings_viewer_on": {
+  "ms_view": 9.303148333371306,
+  "passes_ms": [
+   9.326,
+   9.275,
+   9.272,
+   9.363
+  ],
+  "raw_md5": "d9a60a3c",
+  "identical_across_passes": true,
+  "xview_hits": 119,
+  "xview_misses": 0,
+  "shape": [
+   1024,
+   1024,
+   3
+  ]
+ },
+ "hero": {
+  "psnr_vs": "benchmarks/reference_v2/hero.png",
+  "psnr_db": 42.513,
+  "max_abs_diff": 46,
+  "md5": "6f0e20e2"
+ }
+}
