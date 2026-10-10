@@ -294,9 +294,10 @@ inline bool pfwc_rec32() {
 
 // Task #481: with REC32 and the per-scene UNORM16 packs, the pfwc writer no longer reads the
 // fp32 colour tiles (12 B per Gaussian of DRAM reads per view); the writer still reads them
-// when the packs are absent (NaN scene). GSPLAT_TT_PFWC_SKIP_RGB=0 restores the reads.
+// when the packs are absent (NaN scene). Default on since task #489 (bundled with
+// PFWC_ACQ_FUSE=3, docs/pfwc-fuse-t489); GSPLAT_TT_PFWC_SKIP_RGB=0 restores the reads.
 inline bool pfwc_skip_rgb() {
-    static const bool v = env_uint("GSPLAT_TT_PFWC_SKIP_RGB", 0u) != 0u && pfwc_rec32();
+    static const bool v = env_uint("GSPLAT_TT_PFWC_SKIP_RGB", 1u) != 0u && pfwc_rec32();
     return v;
 }
 
@@ -331,6 +332,19 @@ inline bool pfwc_cov2d_sfpu() {
 // (hero 41.16 -> 42.51 dB vs reference_v2, cost noise); =0 restores recip_tile.
 inline bool pfwc_recip_newton() {
     static const bool v = env_uint("GSPLAT_TT_PFWC_RECIP_NEWTON", 1u) != 0u;
+    return v;
+}
+
+// Task #489 (GSPLAT_TT_PFWC_ACQ_FUSE; not lever B's PFWC_FUSE): fewer pfwc compute acquires (pfwc_fuse_sfpu.h), bit-identical. Bit 0: steps
+// 1-5 (transform, 1/tz, depth, means) in one acquire instead of seven. Bit 1 (needs
+// COVCAM_SFPU and COV2D_SFPU): cov_cam and S_AC in one acquire. Default 3 since the
+// p100a A/B (b2b 9.347 -> 9.241 ms/view, docs/pfwc-fuse-t489); =0 restores the old path.
+inline uint32_t pfwc_acq_fuse() {
+    static const uint32_t v = [] {
+        uint32_t m = env_uint("GSPLAT_TT_PFWC_ACQ_FUSE", 3u) & 3u;
+        if (!(pfwc_covcam_sfpu() && pfwc_cov2d_sfpu())) m &= ~2u;
+        return m;
+    }();
     return v;
 }
 
