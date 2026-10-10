@@ -361,6 +361,12 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     const bool wsplit = fuse && env_config::pfwc_writer_split();
     // Task #467: 32 B blend records (pfwc_rec32() implies the writer split).
     const bool rec32 = wsplit && env_config::pfwc_rec32();
+    // Task #471: one line so an A/B can tell the lever is really on (it falls back silently).
+    static bool rec32_logged = false;
+    if (rec32 && !rec32_logged) {
+        rec32_logged = true;
+        std::cerr << "[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page" << std::endl;
+    }
     const uint32_t stg_bytes = rec32 ? pfwc_wsplit::STG_BYTES_REC32 : pfwc_wsplit::STG_BYTES;
     const bool rd_brisc = wsplit && env_config::pfwc_rd_brisc();
     const uint32_t in_depth = wsplit ? 3u : 2u;
