@@ -644,6 +644,8 @@ static double process_frame_mb_devcull_resident(
     bool* ok,
     float transmittance_threshold = 0.0f,
     ResidentBlendPhase phase = ResidentBlendPhase::Complete) {
+    // Task #483: host prep + rtargs before t_start, booked as sort_cont_*.
+    const auto t_prep0 = std::chrono::steady_clock::now();
     // Saturation epsilon bits forwarded to the blend compute kernel as runtime
     // arg 0 (viewer "Transmittance threshold" slider). 0 bits => the kernel keeps
     // its compile-time default, so callers passing 0 reproduce iter-107 exactly.
@@ -829,6 +831,7 @@ static double process_frame_mb_devcull_resident(
     const uint32_t num_cores = static_cast<uint32_t>(ctx.all_cores.num_cores());
     const CoreCoord ctr_core =
         ctx.mesh_device->worker_core_from_logical_core(ctx.all_cores.ranges()[0].start_coord);
+    const auto t_rt0 = std::chrono::steady_clock::now();
     {
         GSPLAT_HOST_ZONE("host_blend_setup");
         for (const auto& range : ctx.all_cores.ranges()) {
@@ -914,7 +917,13 @@ static double process_frame_mb_devcull_resident(
     }
 
     if (phase == ResidentBlendPhase::SetupRuntimeArgsOnly) {
-        return 0.0;
+        return 0.0;  // the caller books this call into blend_setup
+    }
+    {
+        using ms_t = std::chrono::duration<double, std::milli>;
+        auto& st = gsplat_tt::stagetimers::acc();
+        st.sort_cont_prep += ms_t(t_rt0 - t_prep0).count();
+        st.sort_cont_rtargs += ms_t(std::chrono::steady_clock::now() - t_rt0).count();
     }
     } else {
         if (!ctx.res_out || !ctx.res_xramp || !ctx.res_yramp) {

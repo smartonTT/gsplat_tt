@@ -306,7 +306,9 @@ def _spin_ms(ms):
 _B2B_STAGE_KEYS = ["project", "sort", "blend", "d2h", "tail", "xview", "view_total",
                    "project_pfwc_rtargs", "project_pfwc_enqueue", "project_gather_wait",
                    "sort_bin_count", "sort_bin_hist_d2h", "sort_bin_layout",
-                   "sort_bin_emit", "sort_publish_host", "sort_publish_wait", "sort_mat"]
+                   "sort_bin_emit", "sort_publish_host", "sort_publish_wait", "sort_mat",
+                   "sort_pre", "sort_log", "sort_cont_prep", "sort_cont_rtargs",
+                   "sort_cont_other"]
 
 
 def _b2b_stage_keys(st):
@@ -696,7 +698,8 @@ def _main():
         # Pass B emit kernel; publish_wait is the drain of radix+publish+dir.
         _SORT_ORDER = ["pread", "bin_count", "bin_hist_d2h", "bin_layout",
                        "upload", "bin_emit", "kernel", "d2h", "compact",
-                       "publish_host", "publish_wait", "mat"]
+                       "publish_host", "publish_wait", "mat",
+                       "pre", "log", "cont_prep", "cont_rtargs", "cont_other"]
         sort_parts = []
         sort_sum = 0.0
         for k in _SORT_ORDER:
@@ -713,7 +716,7 @@ def _main():
         # Leaf split of `project` and `tile_assign` (stage_timers.h): host setup
         # / SetRuntimeArgs / enqueue / Finish-or-blocking-read per device driver.
         _SUB_ORDER = {
-            "project": ["cov3d", "pfwc_setup", "pfwc_rtargs", "pfwc_enqueue",
+            "project": ["cov3d", "pfwc_setup", "pfwc_rtargs", "pfwc_chunkcull", "pfwc_enqueue",
                         "pfwc_finish", "gather_setup", "gather_rtargs",
                         "gather_enqueue", "gather_wait", "gather_result"],
             "tile_assign": ["setup", "rtargs", "enqueue", "scan_finish",
