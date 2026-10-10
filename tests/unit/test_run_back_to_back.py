@@ -138,6 +138,10 @@ def test_back_to_back_gap_and_stages(capsys):
     summary = [l for l in out.splitlines() if l.startswith("B2B scene=")][0]
     sk = dict(t.split("=", 1) for t in summary.split() if "=" in t)
     assert float(sk["ms_frame"]) >= float(sk["render_ms_frame"]) + 2.0
+    passes = [float(x) for x in sk["pass_ms_frame"].split(",")]
+    assert len(passes) == 2
+    assert abs(float(sk["ms_frame_median"]) - sorted(passes)[0] / 2 - sorted(passes)[1] / 2) < 2e-3
+    assert any(l.startswith("TTW_TIMING b2b_ms_frame_median=") for l in out.splitlines())
 
 
 def test_spin_ms_waits():

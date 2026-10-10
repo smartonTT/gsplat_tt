@@ -24,6 +24,7 @@ b.load_ttw_iters = lambda: [
 ms, label = b.tt_anchor()
 b.load_ttw_iters = _orig
 assert ms == 14.5 and "bh-x p100a" in label and "iter-7" in label, (ms, label)
+assert "latency (legacy)" in label, label
 
 # Throughput (task #275) is a separate, labeled secondary table; empty without rows.
 _orig = b._read_jsonl
@@ -36,7 +37,7 @@ b._read_jsonl = lambda p: [{"ts": "2026-10-05T14:58:00-0400", "iter_ref": 199,
     "source": "docs/throughput-t275.md"}] if p == b.THROUGHPUT_JSONL else _orig(p)
 sec = b.throughput_section()
 b._read_jsonl = _orig
-assert "Throughput, back-to-back" in sec and "SECONDARY METRIC" in sec, sec
+assert "Throughput, back-to-back" in sec and "HISTORY (before #465)" in sec, sec
 assert "11.618" in sec and "86.1 FPS" in sec and "11.639" in sec and "46a725ab" in sec, sec
 assert "href='../docs/throughput-t275.md'" in sec, sec
 print("ok")
@@ -113,3 +114,46 @@ def test_stop_line_section_final_best_levers_and_gate():
         assert "GSPLAT_TT_PFWC_DEAL=lpt" in sec and "7.807" in sec and "8.95" in sec, sec
     finally:
         br.load_ttw_iters = orig
+
+
+def _b2b_row(it, b2b, passes, board="bh-x p100a", **kw):
+    m = {"board": board, "ms_view_b2b": b2b, "ms_view_b2b_passes": passes,
+         "ms_view_latency": 7.8, "commit": "abc1234", "build": "tip", "md5": "906e0435"}
+    m.update(kw)
+    return {"iter": it, "decision": "rebaseline", "metrics": m}
+
+
+def test_b2b_anchor_headline_and_validator_rule():
+    rows = [
+        {"iter": 216, "decision": "keep", "timings": {"ms_view": 8.0}, "metrics": {"board": "p"}},
+        _b2b_row(217, 9.5, [9.4, 9.5, 9.6]),
+        _b2b_row(218, 9.1, [9.0, 9.1, 9.3], board="bh-30 p150"),
+    ]
+    orig = b.load_ttw_iters
+    b.load_ttw_iters = lambda: rows
+    try:
+        ms, label = b.tt_anchor()
+        sec = b.b2b_headline_section()
+    finally:
+        b.load_ttw_iters = orig
+    # The anchor is the best b2b, not the (lower) legacy latency of iter 216.
+    assert ms == 9.1 and "bh-30 p150" in label and "back-to-back" in label, (ms, label)
+    assert "Headline: back-to-back ms/view" in sec and "9.100 ms/view b2b" in sec, sec
+    assert "published, not measured" in sec and "1.18&times;</b> faster" in sec, sec
+    assert "passes 9.000, 9.100, 9.300" in sec and "latency (legacy)" in sec, sec
+    assert str(b.KEEP_GATE_MS) in sec and "42.4" in sec, sec
+    # Validator rule: rows up to 216 need nothing; newer rows need >= 3 passes
+    # whose median is the headline value.
+    assert b.check_b2b(rows) == []
+    assert b.check_b2b([{"iter": 200, "decision": "keep", "metrics": {}}]) == []
+    assert b.check_b2b([{"iter": 219, "decision": "reject", "metrics": {}}]) == []
+    assert "no metrics.ms_view_b2b" in b.check_b2b([{"iter": 219, "decision": "keep", "metrics": {}}])[0]
+    assert ">= 3" in b.check_b2b([_b2b_row(219, 9.0, [9.0, 9.0])])[0]
+    assert "not the median" in b.check_b2b([_b2b_row(219, 9.0, [9.1, 9.2, 9.3])])[0]
+
+
+def test_legacy_cards_say_latency_legacy():
+    r = b.normalize_ttw_row({"iter": 210, "decision": "keep", "timings": {"ms_view": 8.2}})
+    assert r["ms_view_b2b"] is None
+    r2 = b.normalize_ttw_row(_b2b_row(217, 9.5, [9.4, 9.5, 9.6]))
+    assert r2["ms_view_b2b"] == 9.5 and r2["ms_view_latency"] == 7.8

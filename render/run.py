@@ -402,10 +402,13 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
     Image.fromarray(_to_u8(hero_clean)).save(out_dir / "hero_clean.png")
     timed = pass_ms[1:] or pass_ms
     ms_frame = statistics.mean(timed)
+    # Task #465: the headline b2b metric is the median of the measured passes.
+    ms_median = statistics.median(timed)
     raw_md5 = hashlib.md5("".join(digests0).encode()).hexdigest()[:8]
     print(f"B2B scene={args.scene} n_views={len(order)} passes={len(timed)} "
           f"drop={'yes' if args.b2b_drop else 'no'} "
           f"ms_frame={ms_frame:.3f} fps={1000.0 / ms_frame:.2f} "
+          f"ms_frame_median={ms_median:.3f} "
           f"pass_ms_frame={','.join(f'{x:.3f}' for x in timed)} "
           f"check_pass_ms_frame={pass_ms[0]:.3f} raw_md5={raw_md5} "
           f"gap_ms={getattr(args, 'view_gap_ms', 0.0):.2f} "
@@ -415,6 +418,7 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
           f"{('yes' if identical else 'NO') if not args.b2b_drop else 'unchecked'} "
           f"out={out_dir}", flush=True)
     print(f"TTW_TIMING b2b_ms_frame={ms_frame:.3f}", flush=True)
+    print(f"TTW_TIMING b2b_ms_frame_median={ms_median:.3f}", flush=True)
     return 0 if identical else 5
 
 
@@ -437,7 +441,8 @@ def _main():
                     help="throughput mode (task #275): render the sweep continuously, "
                          "no per-view host work beyond render() (no prints, PNG saves "
                          "or hashing inside the timed window), and report wall / views "
-                         "as ms/frame. Secondary metric; ms_view latency stays primary.")
+                         "as ms/frame. The headline metric since task #465 (median of the "
+                         "measured passes); latency ms_view is secondary.")
     ap.add_argument("--b2b-passes", type=int, default=3,
                     help="measured back-to-back passes over the sweep, after one "
                          "check pass (each timed separately)")
