@@ -271,15 +271,24 @@ inline bool pfwc_writer_split() {
     return v;
 }
 
-// Task #467 (docs/pfwc-rec32-t467): GSPLAT_TT_PFWC_REC32=1 writes the fused split
-// pfwc's blend records as 32 B [a, b, c, mx, my, u01, u23, dep], two per 64 B
-// page (gaussian g: page g / 2, half g % 2), instead of one 64 B page each; the
-// one-launch emit reads half the pages. Only the words the emit uses are kept.
-// Needs the default chain (writer split, EMIT_PUBOC, the TOWN emit); off when any
-// is off. Default off; same output either way.
+// Task #467 (docs/pfwc-rec32-t467): the fused split pfwc writes its blend records
+// as 32 B [a, b, c, mx, my, u01, u23, dep], two per 64 B page (gaussian g: page
+// g / 2, half g % 2), instead of one 64 B page each; the one-launch emit reads
+// half the pages. Only the words the emit uses are kept. Default on since task
+// #471 (p150 b2b 9.495 -> 9.356 ms/view, same md5); GSPLAT_TT_PFWC_REC32=0 is the
+// kill switch. Needs the default chain: off (not refused) when any kill switch
+// of it is set (writer split, EMIT_PUBOC, TOWN emit, one-launch sort, bulk brec,
+// fused pfwc, OL_PB * 16 <= sort_ol_town::LIST_MAX).
 inline bool pfwc_rec32() {
-    static const bool v = env_uint("GSPLAT_TT_PFWC_REC32", 0u) != 0u && pfwc_writer_split() &&
-                          emit_puboc() && ol_emit_town();
+    static const bool v = [] {
+        if (env_uint("GSPLAT_TT_PFWC_REC32", 1u) == 0u) return false;
+        if (!pfwc_writer_split() || !emit_puboc() || !ol_emit_town()) return false;
+        if (env_uint("GSPLAT_TT_SORT_ONELAUNCH", 1u) == 0u) return false;
+        if (env_uint("GSPLAT_TT_OL_BREC_BULK", 1u) == 0u) return false;
+        if (env_uint("GSPLAT_TT_PFWC_FUSE", 1u) == 0u) return false;
+        if (env_uint("GSPLAT_TT_SFPU_VIS", 1u) != 1u) return false;  // fuse needs SFPU_VIS=1
+        return ol_pair_batch() * 16u <= 128u;                     // sort_ol_town::LIST_MAX
+    }();
     return v;
 }
 
