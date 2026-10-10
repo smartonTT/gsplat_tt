@@ -309,6 +309,16 @@ _B2B_STAGE_KEYS = ["project", "sort", "blend", "d2h", "tail", "xview", "view_tot
                    "sort_bin_emit", "sort_publish_host", "sort_publish_wait", "sort_mat"]
 
 
+def _b2b_stage_keys(st):
+    """B2B_STAGES keys: the fixed list, or with GSPLAT_B2B_ALL_STAGES=1 (task #474)
+    every per-view timer the module reports (counters such as views and xview_*
+    left out)."""
+    if os.environ.get("GSPLAT_B2B_ALL_STAGES") != "1":
+        return _B2B_STAGE_KEYS
+    skip = ("views", "xview_hits", "xview_misses")
+    return [k for k in st if k not in skip and isinstance(st[k], (int, float))]
+
+
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                   hero_clean, dump_dir, out_dir):
     """Throughput mode: render `order` back to back, 1 + args.b2b_passes times.
@@ -376,11 +386,13 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
         if clean is not None:
             st = clean.stage_timings()
             nv = max(1, int(st.get("views", 0)))
-            print(f"B2B_STAGES pass={p} views={nv} gap_ms={gap:.2f} "
+            stamp = (f"t_end={time.time():.3f} "
+                     if os.environ.get("GSPLAT_B2B_ALL_STAGES") == "1" else "")
+            print(f"B2B_STAGES pass={p} views={nv} gap_ms={gap:.2f} {stamp}"
                   f"period={pass_ms[-1]:.3f} render={render_frame[-1]:.3f} "
                   f"py_resid={render_frame[-1] - float(st.get('view_total', 0.0)) / nv:.3f} "
                   + " ".join(f"{k}={float(st.get(k, 0.0)) / nv:.3f}"
-                             for k in _B2B_STAGE_KEYS), flush=True)
+                             for k in _b2b_stage_keys(st)), flush=True)
         if keep:
             digests = [hashlib.md5(_to_u8(im).tobytes()).hexdigest() for im in imgs]
         if p == 0:
