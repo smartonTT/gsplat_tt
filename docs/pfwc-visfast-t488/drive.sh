@@ -51,6 +51,22 @@ if [ "${MODE:-ab}" = confirm ]; then
   echo "=== drive t488 confirm done rc=$rc $(date)"
   exit $rc
 fi
+if [ "${MODE:-ab}" = bundle ]; then
+  # Bundle A/B (#481 decision): base (SKIP_RGB unset, VIS_FAST=0) vs bun (both levers), 3 alternating
+  # b2b rounds, then a dump pass per arm keeping views 27/29 (the two views VIS_FAST changed).
+  step b-warm 20 b2b base bun
+  [ "$rc" = 0 ] || { echo "=== warm-up failed rc=$rc: stop"; exit $rc; }
+  for r in 21 22 23; do
+    case $r in 22) arms="bun base" ;; *) arms="base bun" ;; esac
+    step r$r-b2b $r b2b $arms
+  done
+  step b-dump 29 dump base bun
+  scp -q -o BatchMode=yes "$H:$T/tmp/t488/run-r2[0-9]-*.log" "$H:$T/tmp/t488/md5-r29-*.txt" "$O/" || rc=4
+  scp -q -r -o BatchMode=yes "$H:$T/tmp/t488/views-r29-dump-base" "$H:$T/tmp/t488/views-r29-dump-bun" "$O/" || rc=4
+  scp -q -o BatchMode=yes "$H:$T/tmp/t488-r29-dump-bun/hero_clean.png" "$O/hero-bun.png" || rc=4
+  echo "=== drive t488 bundle done rc=$rc $(date)"
+  exit $rc
+fi
 step warm 0 b2b off $ON
 [ "$rc" = 0 ] || { echo "=== warm-up failed rc=$rc: stop"; exit $rc; }
 # Static size of the vis function per TRISC1 build in this cache (both arms).

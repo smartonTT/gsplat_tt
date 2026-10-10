@@ -1,0 +1,23 @@
+================ BUILD ID ================
+  cpp : #124 sha=e95fa858 bin=5536bf011a9df6dc t488 e95fa858 PFWC_VIS_FAST b2b A/B (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t488-dump  timeout=380s  worry=600s  ts=2026-10-10T09:09:30-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-visfast-t488/remote_ab.sh 9 dump off on
+-----------------------------------------
+=== r9-dump-off e95fa85 VIS_FAST=0 SKIP_RGB=1 16:09:31 load=2.85
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.4 max_ms=10.2 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t488-r9-dump-off
+TTW_TIMING ms_view=7.805
+STAGES n=30 head=0.003 project=0.812 tile_assign=0.003 sort=0.459 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.430 d2h=0.003 assemble=0.000 tail=0.003 xview=0.053 | sum=7.767 view_total=7.768 resid_in_view=+0.001 avg_frame_ms=7.805 resid_vs_frame=+0.038 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== r9-dump-on e95fa85 VIS_FAST=1 SKIP_RGB=1 16:09:41 load=2.80
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.9 min_ms=6.4 max_ms=10.1 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t488-r9-dump-on
+TTW_TIMING ms_view=7.813
+STAGES n=30 head=0.004 project=0.813 tile_assign=0.004 sort=0.482 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.407 d2h=0.004 assemble=0.000 tail=0.004 xview=0.055 | sum=7.772 view_total=7.773 resid_in_view=+0.001 avg_frame_ms=7.813 resid_vs_frame=+0.041 xview_hits=29 xview_misses=0
+MD5_GOLDEN_FAIL grid 11x10: list 0a790b06 != golden 906e0435 (30 views)
+=== done 9 dump 16:09:52
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t488/tmp/ttw-state/logs/t488-dump-20261010-090930.log

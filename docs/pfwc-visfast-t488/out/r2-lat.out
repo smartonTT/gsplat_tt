@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=e95fa858 bin=5536bf011a9df6dc t488 e95fa858 PFWC_VIS_FAST b2b A/B (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t488-r2-lat  timeout=380s  worry=600s  ts=2026-10-10T09:08:37-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-visfast-t488/remote_ab.sh 2 lat on off
+-----------------------------------------
+=== r2-lat-on e95fa85 VIS_FAST=1 SKIP_RGB=1 16:08:38 load=2.94
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.3 p50_ms=9.4 min_ms=7.8 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t488-r2-lat-on
+TTW_TIMING ms_view=9.268
+STAGES n=30 head=0.002 project=2.284 tile_assign=0.003 sort=0.484 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.417 d2h=0.003 assemble=0.000 tail=0.003 xview=0.044 | sum=9.240 view_total=9.241 resid_in_view=+0.001 avg_frame_ms=9.268 resid_vs_frame=+0.028 xview_hits=29 xview_misses=0
+=== r2-lat-off e95fa85 VIS_FAST=0 SKIP_RGB=1 16:08:41 load=2.94
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.3 p50_ms=9.4 min_ms=7.9 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t488-r2-lat-off
+TTW_TIMING ms_view=9.323
+STAGES n=30 head=0.002 project=2.335 tile_assign=0.003 sort=0.483 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.419 d2h=0.004 assemble=0.000 tail=0.003 xview=0.047 | sum=9.296 view_total=9.297 resid_in_view=+0.001 avg_frame_ms=9.323 resid_vs_frame=+0.027 xview_hits=29 xview_misses=0
+=== done 2 lat 16:08:45
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t488/tmp/ttw-state/logs/t488-r2-lat-20261010-090837.log
