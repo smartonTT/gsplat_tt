@@ -51,10 +51,13 @@ if [ -n "${ARMS-off ro}" ]; then
 fi
 # BENCH="arms" (e.g. "off cull cull48 off48"): b2b A/B through bench479.sh, ROUNDS rotated rounds.
 if [ -n "${BENCH:-}" ]; then
-  $DEVRUN --host "$H" --no-verify --timeout ${BENCH_TIMEOUT:-3600} --tag t479-b2b -- \
-    "T=$T bash $T/$D/bench479.sh $T/tmp/t479b ${ROUNDS:-3} '$BENCH'" 2>&1 | tee "$O/bench.out" | \
-    grep -E "^(===|TOWN_|r[0-9]|s0-|LIST_MD5|B2B |TTW_TIMING|HANG)"
-  [ "${PIPESTATUS[0]}" -eq 0 ] || rc=5
+  : > "$O/bench.out"  # one devrun per phase: each fits the 540 s reservation ceiling
+  for ph in smoke $(seq 1 ${ROUNDS:-3}); do
+    $DEVRUN --host "$H" --no-verify --timeout 540 --tag t479-b2b-$ph -- \
+      "T=$T bash $T/$D/bench479.sh $T/tmp/t479b ${ROUNDS:-3} '$BENCH' $ph" 2>&1 | tee -a "$O/bench.out" | \
+      grep -E "^(===|TOWN_|r[0-9]|s0-|LIST_MD5|B2B |TTW_TIMING|HANG)"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { rc=5; break; }
+  done
   mkdir -p "$O/b2b"; scp -q -o BatchMode=yes "$H:$T/tmp/t479b/*" "$O/b2b/" || rc=6
 fi
 echo "=== drive t479 done rc=$rc $(date)"
