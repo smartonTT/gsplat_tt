@@ -92,6 +92,23 @@ def pick_jpeg_encoder(name: Optional[str] = None) -> tuple[str, Callable[[np.nda
     raise AssertionError("viser encoder is always importable")
 
 
+def burst_client_ids(viewer, now: Optional[float] = None) -> list[int]:
+    """Clients whose own camera moved within the burst window."""
+    now = time.time() if now is None else now
+    return [cid for cid, d in tuple(getattr(viewer, "_client_active_deadline", {}).items())
+            if now < d]
+
+
+def burst_active(viewer, client_id: Optional[int] = None, now: Optional[float] = None) -> bool:
+    """True while ``client_id`` (None: any client) should render back to back: a
+    viewer-wide burst (render settings changed) or that client's camera moved."""
+    now = time.time() if now is None else now
+    if now < viewer._ui_active_deadline:
+        return True
+    ids = burst_client_ids(viewer, now)
+    return bool(ids) if client_id is None else client_id in ids
+
+
 class FastRenderer(Renderer):
     """nerfview's Renderer without its two serial costs on every frame.
 
@@ -149,7 +166,7 @@ class FastRenderer(Renderer):
         while self.running:
             while not self.is_prepared_fn():
                 time.sleep(0.1)
-            if time.time() < self.viewer._ui_active_deadline:
+            if burst_active(self.viewer, self.client.client_id):
                 # UI burst: render back to back at device speed instead of
                 # waiting for the next 16 ms burst tick (that capped ~60 FPS).
                 if not self._render_event.is_set():
@@ -252,7 +269,10 @@ class GsplatViewer(nerfview.Viewer):
         self.frame_post_fn: Optional[Callable] = None
         self._default_render_width = default_render_width
         self._default_render_height = default_render_height
-        self._ui_active_deadline = 0.0
+        self._ui_active_deadline = 0.0  # all clients (render settings changed)
+        # Per client: its own camera moved. Only that client renders back to back, so an
+        # idle page in another tab does not take half the device (task #459).
+        self._client_active_deadline: dict[int, float] = {}
         self._burst_running = True
         jpeg_encoder_from_env()  # warn on a bad GSPLAT_VIEWER_JPEG now, not at first connect
         super().__init__(**kwargs)
@@ -263,17 +283,32 @@ class GsplatViewer(nerfview.Viewer):
         )
         self._burst_thread.start()
 
-    def mark_ui_active(self) -> None:
-        """Extend the post-action render burst window (now + 1 s)."""
-        self._ui_active_deadline = time.time() + _UI_BURST_SEC
+    def mark_ui_active(self, client_id: Optional[int] = None) -> None:
+        """Extend the post-action render burst window (now + 1 s): for every client,
+        or only for ``client_id`` (its camera moved)."""
+        if client_id is None:
+            self._ui_active_deadline = time.time() + _UI_BURST_SEC
+        else:
+            self._client_active_deadline[client_id] = time.time() + _UI_BURST_SEC
+
+    def ui_active(self) -> bool:
+        """True while any client is in its render burst."""
+        return burst_active(self)
 
     # Back-compat alias.
     mark_camera_active = mark_ui_active
 
     def _ui_burst_loop(self) -> None:
         while self._burst_running:
-            if self._renderers and time.time() < self._ui_active_deadline:
-                self.rerender(None)
+            if self._renderers:
+                if time.time() < self._ui_active_deadline:
+                    self.rerender(None)
+                else:
+                    clients = self.server.get_clients()
+                    for client_id in burst_client_ids(self):
+                        r, c = self._renderers.get(client_id), clients.get(client_id)
+                        if r is not None and c is not None:
+                            r.submit(RenderTask("rerender", self.get_camera_state(c)))
             time.sleep(_UI_BURST_POLL_SEC)
 
     def _connect_client(self, client: viser.ClientHandle) -> None:
@@ -286,10 +321,14 @@ class GsplatViewer(nerfview.Viewer):
         @client.camera.on_update
         def _(_: viser.CameraHandle) -> None:
             self._last_move_time = time.time()
-            self.mark_ui_active()
+            self.mark_ui_active(client_id)
             with self.server.atomic():
                 camera_state = self.get_camera_state(client)
                 self._renderers[client_id].submit(RenderTask("move", camera_state))
+
+    def _disconnect_client(self, client: viser.ClientHandle) -> None:
+        self._client_active_deadline.pop(client.client_id, None)
+        super()._disconnect_client(client)
 
     def stop_burst(self) -> None:
         self._burst_running = False

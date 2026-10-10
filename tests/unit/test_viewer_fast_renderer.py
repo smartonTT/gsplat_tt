@@ -8,6 +8,8 @@ from __future__ import annotations
 import io
 import sys
 import threading
+import time
+import types
 from pathlib import Path
 
 import numpy as np
@@ -312,6 +314,45 @@ def test_hint_next_pose_matches_bench_extrinsics():
     gv.viewer.next_camera_state = None
     GaussianViewer._hint_next_pose(gv, 320, 256, K)
     assert backend.next_extrinsics is None and gv._hints == 1
+
+
+def test_camera_burst_renders_only_the_moving_client():
+    """One client's camera drag bursts only that client: an idle page in another tab
+    must not render back to back and take half the device (task #459). A render
+    settings change (no client id) still bursts every client."""
+    from gsplat.nerfview_viewer import GsplatViewer, burst_active
+
+    v = types.SimpleNamespace(_ui_active_deadline=0.0, _client_active_deadline={})
+    GsplatViewer.mark_ui_active(v, 1)
+    assert burst_active(v, 1) and not burst_active(v, 0) and burst_active(v)
+    assert not burst_active(v, 1, now=time.time() + 2.0)
+    GsplatViewer.mark_ui_active(v)
+    assert burst_active(v, 0) and burst_active(v, 1)
+
+    tasks = {0: [], 1: []}
+
+    class _R:
+        def __init__(self, cid):
+            self.cid = cid
+
+        def submit(self, task):
+            tasks[self.cid].append(task.action)
+
+    v = types.SimpleNamespace(
+        _ui_active_deadline=0.0, _client_active_deadline={}, _burst_running=True,
+        _renderers={0: _R(0), 1: _R(1)},
+        server=types.SimpleNamespace(get_clients=lambda: {0: "c0", 1: "c1"}),
+        get_camera_state=lambda c: c)
+    v.rerender = lambda _e: [r.submit(types.SimpleNamespace(action="rerender"))
+                             for r in v._renderers.values()]
+    GsplatViewer.mark_ui_active(v, 1)
+    th = threading.Thread(target=GsplatViewer._ui_burst_loop, args=(v,), daemon=True)
+    th.start()
+    time.sleep(0.2)
+    v._burst_running = False
+    th.join(2.0)
+    assert tasks[1] and set(tasks[1]) == {"rerender"}, tasks
+    assert tasks[0] == [], tasks
 
 
 if __name__ == "__main__":

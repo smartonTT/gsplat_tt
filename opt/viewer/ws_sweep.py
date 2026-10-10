@@ -62,13 +62,20 @@ def camera_messages(width: int, height: int) -> list[dict]:
     return out
 
 
-def parse_frame(raw: bytes, zd) -> list[bytes]:
-    """JPEG payloads of the BackgroundImageMessages in one server window."""
+def parse_frame(raw: bytes, zd, huds: list[str] | None = None) -> list[bytes]:
+    """JPEG payloads of the BackgroundImageMessages in one server window.
+    The viewer's stats HUD text (GuiUpdateMessage _markdown) goes to ``huds``."""
     import msgspec
     n_raw = int.from_bytes(raw[0:8], "little")
     n_z = int.from_bytes(raw[8:16], "little")
     inner = msgspec.msgpack.decode(zd.decompress(raw[16:16 + n_z], max_output_size=n_raw))
-    return [m["rgb_data"] for m in inner.get("messages", ())
+    msgs = inner.get("messages", ())
+    if huds is not None:
+        for m in msgs:
+            c = (m.get("updates") or {}).get("_markdown") if m.get("type") == "GuiUpdateMessage" else None
+            if isinstance(c, str) and "Device render" in c:
+                huds.append(c)
+    return [m["rgb_data"] for m in msgs
             if m.get("type") == "BackgroundImageMessage" and m.get("rgb_data")]
 
 
@@ -84,6 +91,7 @@ async def sweep(args) -> dict:
     t_frames: list[float] = []
     dec_ms: list[float] = []
     sizes: list[int] = []
+    huds: list[str] = []
     sent = 0
     async with wsc.connect(args.url, subprotocols=[f"viser-v{viser.__version__}"],
                            max_size=64 * 1024 * 1024, compression=None) as ws:
@@ -108,7 +116,7 @@ async def sweep(args) -> dict:
                     break
                 if not isinstance(raw, bytes):
                     continue
-                for jpg in parse_frame(raw, zd):
+                for jpg in parse_frame(raw, zd, huds):
                     t = time.perf_counter()
                     simplejpeg.decode_jpeg(jpg)
                     dec_ms.append((time.perf_counter() - t) * 1000.0)
@@ -126,7 +134,8 @@ async def sweep(args) -> dict:
                 interval_ms_p90=round(float(np.percentile(iv, 90)), 2),
                 interval_ms_p99=round(float(np.percentile(iv, 99)), 2),
                 jpeg_kb_median=round(statistics.median(sizes) / 1024.0, 1) if sizes else 0.0,
-                decode_ms_median=round(statistics.median(dec_ms), 2) if dec_ms else 0.0)
+                decode_ms_median=round(statistics.median(dec_ms), 2) if dec_ms else 0.0,
+                hud=huds[-1].replace("**", "").replace("  \n", " | ") if huds else "")
 
 
 def main() -> int:

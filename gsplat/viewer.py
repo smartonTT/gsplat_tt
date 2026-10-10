@@ -874,7 +874,7 @@ class GaussianViewer:
         instant_fps = 1.0 / elapsed if elapsed > 0 else 0.0
         # nerfview's trailing static/high pass after the UI burst ends is
         # slower than the move/burst frames — exclude it from the average.
-        if time.time() <= self.viewer._ui_active_deadline:
+        if self.viewer.ui_active():
             self._fps_samples.append(instant_fps)
         if self._fps_samples:
             smoothed_fps = sum(self._fps_samples) / len(self._fps_samples)
