@@ -321,13 +321,17 @@ def _b2b_stage_keys(st):
 
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                   hero_clean, dump_dir, out_dir):
-    """Throughput mode: render `order` back to back, 1 + args.b2b_passes times.
+    """Throughput mode: render `order` back to back, 1 + args.b2b_warmup +
+    args.b2b_passes times.
 
     The timed window of a pass holds only pipeline.render() + _to_image() per
     view (extrinsics are built before it). Pass 0 is the check pass: its frames
     are md5'd after the pass and written to --dump-views with the latency
     mode's file names, so the sweep md5 is computed the same way. Passes 1..N
-    are the measured ones (ms_frame = their mean): by default they keep their
+    are the measured ones (ms_frame = their mean), after args.b2b_warmup
+    untimed warm-up passes (task #474: on bh-30 the first pass after the check
+    pass runs 0.2-0.9 ms slow; it is rendered and compared, not timed). By
+    default measured passes keep their
     frames and must match pass 0 byte for byte; --b2b-drop drops each frame as
     soon as render() returns, like a viewer (no compare). Returns the exit code
     (5 when a measured pass differs from the check pass).
@@ -346,7 +350,8 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
         clean = None
     digests0 = None
     identical = True
-    n_passes = 1 + max(0, args.b2b_passes)
+    n_warm = max(0, getattr(args, "b2b_warmup", 0))
+    n_passes = 1 + n_warm + max(0, args.b2b_passes)
     for p in range(n_passes):
         keep = p == 0 or not args.b2b_drop
         # Next-view hints for this pass (None when _XVIEW is off).
@@ -408,23 +413,25 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
             print(f"[run] B2B pass {p}: {len(bad)} views differ from pass 0: {bad[:5]}",
                   file=sys.stderr, flush=True)
         print(f"[run] B2B pass {p}{' (check)' if p == 0 else ''}"
+              f"{' (warm-up)' if 0 < p <= n_warm else ''}"
               f"{'' if keep else ' (drop)'}: {wall_ms:.1f} ms for {len(order)} views "
               f"= {pass_ms[-1]:.3f} ms/frame", flush=True)
         del imgs
     Image.fromarray(_to_u8(hero_clean)).save(out_dir / "hero_clean.png")
-    timed = pass_ms[1:] or pass_ms
+    timed = pass_ms[1 + n_warm:] or pass_ms
     ms_frame = statistics.mean(timed)
     # Task #465: the headline b2b metric is the median of the measured passes.
     ms_median = statistics.median(timed)
     raw_md5 = hashlib.md5("".join(digests0).encode()).hexdigest()[:8]
     print(f"B2B scene={args.scene} n_views={len(order)} passes={len(timed)} "
+          f"warmup={n_warm} "
           f"drop={'yes' if args.b2b_drop else 'no'} "
           f"ms_frame={ms_frame:.3f} fps={1000.0 / ms_frame:.2f} "
           f"ms_frame_median={ms_median:.3f} "
           f"pass_ms_frame={','.join(f'{x:.3f}' for x in timed)} "
           f"check_pass_ms_frame={pass_ms[0]:.3f} raw_md5={raw_md5} "
           f"gap_ms={getattr(args, 'view_gap_ms', 0.0):.2f} "
-          f"render_ms_frame={statistics.mean(render_frame[1:] or render_frame):.3f} "
+          f"render_ms_frame={statistics.mean(render_frame[1 + n_warm:] or render_frame):.3f} "
           f"{_xview_counts(pipeline)}"
           f"identical_across_passes="
           f"{('yes' if identical else 'NO') if not args.b2b_drop else 'unchecked'} "
@@ -455,9 +462,14 @@ def _main():
                          "or hashing inside the timed window), and report wall / views "
                          "as ms/frame. The headline metric since task #465 (median of the "
                          "measured passes); latency ms_view is secondary.")
-    ap.add_argument("--b2b-passes", type=int, default=3,
+    ap.add_argument("--b2b-passes", type=int, default=20,
                     help="measured back-to-back passes over the sweep, after one "
-                         "check pass (each timed separately)")
+                         "check pass and --b2b-warmup warm-up passes (each timed "
+                         "separately). Task #474: 20 so the median is stable to "
+                         "~0.03 ms on bh-30, where single passes jitter 0.2-1 ms")
+    ap.add_argument("--b2b-warmup", type=int, default=1,
+                    help="untimed passes after the check pass (task #474: the "
+                         "first one after it is often slow on bh-30)")
     ap.add_argument("--b2b-drop", action="store_true",
                     help="measured passes drop each frame when render() returns "
                          "(viewer-like; no compare against the check pass)")
