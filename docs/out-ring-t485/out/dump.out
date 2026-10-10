@@ -1,0 +1,20 @@
+================ BUILD ID ================
+  cpp : #124 sha=811121cd bin=184a6e6c74eb292a t485 811121cd b2b out ring (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t485-dump  timeout=380s  worry=600s  ts=2026-10-10T08:26:05-0700
+cmd: T=/localdev/smarton/gstt2-t483 bash /localdev/smarton/gstt2-t483/docs/out-ring-t485/remote.sh 9 dump B
+-----------------------------------------
+=== r9-dump-B 811121c 15:26:05 load=3.06
+run rc=0 out_ring_new_slots=33 last: OUT_RING new pinned slot (slots=32 grows=32 replaced=0)
+[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=32
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=9.584 render=9.584 py_resid=0.040 project=2.467 sort=1.361 blend=5.634 d2h=0.005 tail=0.003 xview=0.067 view_total=9.545 project_pfwc_rtargs=0.056 project_pfwc_enqueue=0.012 project_gather_wait=2.461 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.052 sort_bin_emit=0.420 sort_publish_host=0.232 sort_publish_wait=0.000 sort_mat=0.044 sort
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=9.409 render=9.409 py_resid=0.037 project=2.427 sort=0.619 blend=6.250 d2h=0.004 tail=0.003 xview=0.063 view_total=9.372 project_pfwc_rtargs=0.049 project_pfwc_enqueue=0.011 project_gather_wait=2.425 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.056 sort_bin_emit=0.232 sort_publish_host=0.207 sort_publish_wait=0.000 sort_mat=0.042 sort
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.403 render=9.403 py_resid=0.032 project=2.414 sort=0.481 blend=6.420 d2h=0.003 tail=0.003 xview=0.046 view_total=9.371 project_pfwc_rtargs=0.035 project_pfwc_enqueue=0.009 project_gather_wait=2.412 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.044 sort_bin_emit=0.189 sort_publish_host=0.166 sort_publish_wait=0.000 sort_mat=0.036 sort
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.410 render=9.410 py_resid=0.032 project=2.417 sort=0.463 blend=6.445 d2h=0.003 tail=0.003 xview=0.043 view_total=9.377 project_pfwc_rtargs=0.032 project_pfwc_enqueue=0.008 project_gather_wait=2.415 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.042 sort_bin_emit=0.185 sort_publish_host=0.159 sort_publish_wait=0.000 sort_mat=0.035 sort
+B2B scene=bicycle n_views=30 passes=2 warmup=1 drop=no ms_frame=9.406 fps=106.31 ms_frame_median=9.406 pass_ms_frame=9.403,9.410 check_pass_ms_frame=9.584 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.406 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t483/tmp/t485-r9-dump-B
+TTW_TIMING b2b_ms_frame=9.406
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 9 dump 15:26:17
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t485/tmp/ttw-state/logs/t485-dump-20261010-082605.log
