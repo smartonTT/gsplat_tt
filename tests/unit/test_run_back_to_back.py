@@ -153,8 +153,25 @@ def test_spin_ms_waits():
     run._spin_ms(0.0)
 
 
+def test_b2b_keep_mode_sizes_out_ring():
+    """Task #485: keep mode holds every frame of a pass (+ hero_clean), so the
+    zero-copy ring gets n_views + 2 slots and never re-pins a slot mid-pass."""
+    run = _load_run()
+    ns = argparse.Namespace
+    env = {}
+    assert run._b2b_keep_out_slots(ns(back_to_back=True, b2b_drop=False), 30, env) == "32"
+    assert env == {"GSPLAT_TT_OUT_ZEROCOPY_SLOTS": "32"}
+    env = {"GSPLAT_TT_OUT_ZEROCOPY_SLOTS": "4"}  # an explicit setting wins
+    assert run._b2b_keep_out_slots(ns(back_to_back=True, b2b_drop=False), 30, env) is None
+    assert env == {"GSPLAT_TT_OUT_ZEROCOPY_SLOTS": "4"}
+    for a in (ns(back_to_back=True, b2b_drop=True), ns(back_to_back=False, b2b_drop=False)):
+        env = {}
+        assert run._b2b_keep_out_slots(a, 30, env) is None and env == {}
+
+
 if __name__ == "__main__":
     test_back_to_back_passes_and_dump()
     test_back_to_back_detects_differing_frame()
     test_back_to_back_drop_skips_compare()
+    test_b2b_keep_mode_sizes_out_ring()
     print("ok")
