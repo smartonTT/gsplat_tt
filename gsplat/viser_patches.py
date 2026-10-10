@@ -26,6 +26,14 @@ longer keepalive (``GSPLAT_VIEWER_WS_PING_INTERVAL``/``_TIMEOUT``, default
 20 s / 60 s) for the two-hop ssh tunnel, and injects ``RECONNECT_SHIM`` into
 the served page: the viser 1.0.27 client retries only while the page has
 focus, so a page left in the background never came back by itself.
+
+**Page FPS (task #457).** ``PAGEFPS_SHIM`` (injected with the reconnect shim)
+counts the frames the page really shows: viser hands each JPEG frame to three.js
+as a blob URL and revokes it once the image has loaded, so the shim times
+``URL.createObjectURL`` -> ``URL.revokeObjectURL`` for image/jpeg blobs. Once a
+second it shows "page N FPS" in a corner and GETs
+``/gsplat/pagestats?fps=..&dec=..&n=..``; the server answers 204 and keeps the
+numbers in ``PAGE_STATS`` for the HUD and the heartbeat log.
 """
 from __future__ import annotations
 
@@ -34,8 +42,10 @@ import dataclasses
 import gzip
 import inspect
 import os
+import threading
 import time
 import traceback
+import urllib.parse
 
 import numpy as np
 
@@ -83,15 +93,114 @@ RECONNECT_SHIM = b"""<script>/* gsplat-reconnect-shim (task #347) */
 """
 
 
+# Frames the page received and loaded per second (task #457). Wraps the blob URL
+# viser makes for each BackgroundImageMessage; viser revokes it in the texture's
+# onLoad, so create -> revoke is receive -> image loaded.
+PAGEFPS_SHIM = b"""<script>/* gsplat-pagefps-shim (task #457) */
+(function () {
+  var U = window.URL;
+  if (!U || !U.createObjectURL || !U.revokeObjectURL) return;
+  var create = U.createObjectURL.bind(U), revoke = U.revokeObjectURL.bind(U);
+  var pending = new Map(), done = [], decSum = 0, decN = 0, total = 0, last = 0, box = null;
+  U.createObjectURL = function (obj) {
+    var url = create(obj);
+    if (obj && obj.type === "image/jpeg") {
+      if (pending.size > 256) pending.clear();
+      pending.set(url, performance.now());
+    }
+    return url;
+  };
+  U.revokeObjectURL = function (url) {
+    var t0 = pending.get(url);
+    if (t0 !== undefined) {
+      pending.delete(url);
+      var t = performance.now();
+      done.push(t); decSum += t - t0; decN += 1; total += 1;
+    }
+    return revoke(url);
+  };
+  setInterval(function () {
+    var now = performance.now();
+    while (done.length && done[0] < now - 1000) done.shift();
+    var fps = done.length, dec = decN ? decSum / decN : 0;
+    decSum = 0; decN = 0;
+    window.__gsplatPage = {fps: fps, dec: dec, total: total, t: Date.now()};
+    if (!box && document.body) {
+      box = document.createElement("div");
+      box.id = "gsplat-pagefps";
+      box.style.cssText = "position:fixed;left:8px;bottom:8px;z-index:99999;padding:2px 6px;" +
+        "font:12px monospace;color:#fff;background:rgba(0,0,0,.55);border-radius:3px;" +
+        "pointer-events:none";
+      document.body.appendChild(box);
+    }
+    if (box) box.textContent = "page " + fps + " FPS \u00b7 load " + dec.toFixed(1) + " ms";
+    if (fps > 0 || last > 0) {
+      fetch("/gsplat/pagestats?fps=" + fps + "&dec=" + dec.toFixed(2) + "&n=" + total,
+            {cache: "no-store"}).catch(function () {});
+    }
+    last = fps;
+  }, 1000);
+})();
+</script>
+"""
+
+
 def inject_reconnect_shim(html: bytes) -> bytes:
-    """Insert ``RECONNECT_SHIM`` right after ``<head>`` (idempotent)."""
+    """Insert ``RECONNECT_SHIM`` and ``PAGEFPS_SHIM`` right after ``<head>`` (idempotent)."""
     if _SHIM_MARKER in html:
         return html
     i = html.find(b"<head>")
     if i < 0:
         return html
     i += len(b"<head>")
-    return html[:i] + b"\n" + RECONNECT_SHIM + html[i:]
+    return html[:i] + b"\n" + RECONNECT_SHIM + PAGEFPS_SHIM + html[i:]
+
+
+class PageStats:
+    """Latest page-side frame rate reported through /gsplat/pagestats (task #457)."""
+
+    STALE_S = 3.0
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._last: dict | None = None
+
+    def update(self, query: str, remote: str = "?", now: float | None = None) -> bool:
+        q = urllib.parse.parse_qs(query)
+        try:
+            fps = float(q["fps"][0])
+            dec = float(q.get("dec", ["0"])[0])
+            n = int(float(q.get("n", ["0"])[0]))
+        except (KeyError, ValueError, IndexError):
+            return False
+        with self._lock:
+            self._last = {"fps": fps, "dec": dec, "n": n, "remote": remote,
+                          "t": time.monotonic() if now is None else now}
+        return True
+
+    def latest(self, now: float | None = None) -> dict | None:
+        """The last report, or None once it is older than STALE_S."""
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            last = self._last
+        if last is None or now - last["t"] > self.STALE_S:
+            return None
+        return dict(last)
+
+
+PAGE_STATS = PageStats()
+_PAGESTATS_PATH = "/gsplat/pagestats"
+
+
+def _pagestats_response(connection, request):
+    """204 for the page shim's report, or None for any other path."""
+    path = getattr(request, "path", "") or ""
+    if not path.startswith(_PAGESTATS_PATH):
+        return None
+    _, _, query = path.partition("?")
+    PAGE_STATS.update(query, str(getattr(connection, "remote_address", "?")))
+    import http
+    return connection.respond(http.HTTPStatus.NO_CONTENT, "")
 
 
 _shim_cache: dict = {}
@@ -158,6 +267,9 @@ def _wrap_handler(handler):
 
 def _wrap_process_request(process_request):
     def shimmed(connection, request):
+        stats = _pagestats_response(connection, request)
+        if stats is not None:
+            return stats
         r = process_request(connection, request)
         if inspect.isawaitable(r):
             async def later():

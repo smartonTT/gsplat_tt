@@ -181,7 +181,7 @@ def main():
         sent: list[tuple[float, float, float]] = []
         done = threading.Event()
 
-        def on_sent(t0, t1, t2):
+        def on_sent(t0, t1, t2, *_):
             sent.append((t0, t1, t2))
             if len(sent) >= args.n + 3:
                 done.set()

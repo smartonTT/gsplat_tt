@@ -22,7 +22,7 @@ from backends import get_backend
 # `viser_patches` MUST be imported before any viser/nerfview machinery is
 # touched so the monkey-patches are in place when the server is created.
 import gsplat.viser_patches  # noqa: F401
-from gsplat.viser_patches import LIVE_CONNECTIONS
+from gsplat.viser_patches import LIVE_CONNECTIONS, PAGE_STATS
 from gsplat.camera_controls import ClientCameraController
 from gsplat.data_structures import Gaussians
 from gsplat.letterbox import letterbox_for_aspect
@@ -36,6 +36,7 @@ from gsplat.viewer_session import Heartbeat, PoseMemory, log
 # kernel renders use the same tiling and are directly comparable.
 TILE_SIZE = 32
 _FPS_WINDOW = 10
+_HUD_PERIOD_S = 0.25
 
 # Pipeline stages, in execution order — used to lay out the benchmark table.
 _STAGE_KEYS = ("project", "tile_assign", "sort", "blend")
@@ -298,6 +299,13 @@ class GaussianViewer:
         self._render_ms: deque[float] = deque(maxlen=30)
         self._e2e_ms: deque[float] = deque(maxlen=30)
         self._interval_ms: deque[float] = deque(maxlen=30)
+        # Task #457: render_fn wall minus device render (host callback ms), the
+        # sender's letterbox+encode+queue ms, and the next-pose hints given.
+        self._host_ms: deque[float] = deque(maxlen=30)
+        self._encode_ms: deque[float] = deque(maxlen=30)
+        self._hints = 0
+        self._last_hud = 0.0
+        self._hud_args: tuple | None = None
         self._last_sent = 0.0
         self._session_start = datetime.now()
         # Called on a clean stop before the pipeline closes (render watchdog pose log).
@@ -507,6 +515,8 @@ class GaussianViewer:
             default_render_height=render_height,
             on_frame_sent=self._on_frame_sent,
         )
+        # Letterbox on the sender thread, not between device frames (task #457).
+        self.viewer.frame_post_fn = lambda img, cs: letterbox_for_aspect(img, cs.aspect)
         _sync_sliders_to_pipeline()
         self._request_rerender()
 
@@ -775,6 +785,7 @@ class GaussianViewer:
         # Invert in float32 torch exactly as the bench (render/run.py) does, so a
         # viewer frame is bit-identical to the bench's for the same camera.
         extrinsics = c2w_to_w2c(torch.from_numpy(np.asarray(render_c2w, dtype=np.float32)))
+        self._hint_next_pose(W, H, intrinsics)
 
         try:
             result = self.pipeline.render(
@@ -799,13 +810,36 @@ class GaussianViewer:
                 height=H,
             ))
 
-        display = letterbox_for_aspect(image_np, camera_state.aspect)
+        # FastRenderer letterboxes on its sender thread (frame_post_fn).
+        display = (image_np if getattr(self.viewer, "frame_post_fn", None) is not None
+                   else letterbox_for_aspect(image_np, camera_state.aspect))
 
         wall_elapsed = time.perf_counter() - wall_start
+        self._host_ms.append(wall_elapsed * 1000.0 - result.timings.get("total", 0.0))
         if self.verbose:
             self._log_verbose(W, H, result, wall_elapsed)
         self._update_stats(wall_elapsed, W, H, result.num_visible)
         return display
+
+    def _hint_next_pose(self, W: int, H: int, intrinsics: torch.Tensor) -> None:
+        """Tell the backend the next frame's w2c (task #457, the bench's xview hint).
+
+        FastRenderer sets ``viewer.next_camera_state`` to the pose it will render
+        next; the backend enqueues that pose's front stages behind this frame's
+        blend. Built exactly like this frame's extrinsics, so the next render's
+        prefetch key matches bit for bit. A different K (fov or size change)
+        would only miss, so no hint is given then.
+        """
+        nxt = getattr(self.viewer, "next_camera_state", None)
+        backend = self.pipeline.backend
+        if nxt is None or not hasattr(backend, "next_extrinsics"):
+            return
+        k_next = torch.tensor(nxt.get_K((W, H)), dtype=torch.float32)
+        if not torch.equal(k_next, intrinsics):
+            return
+        backend.next_extrinsics = c2w_to_w2c(
+            torch.from_numpy(np.asarray(nxt.c2w, dtype=np.float32)))
+        self._hints += 1
 
     def _log_verbose(
         self,
@@ -823,9 +857,11 @@ class GaussianViewer:
         print(format_timings(result), flush=True)
         print(f"[wall]  {wall_elapsed * 1000:6.1f} ms", flush=True)
 
-    def _on_frame_sent(self, t_start: float, t_rendered: float, t_sent: float) -> None:
+    def _on_frame_sent(self, t_start: float, t_rendered: float, t_sent: float,
+                       encode_s: float = 0.0) -> None:
         """FastRenderer callback after a frame's JPEG went out (perf_counter s)."""
         self._frames_sent += 1
+        self._encode_ms.append(encode_s * 1000.0)
         self._e2e_ms.append((t_sent - t_start) * 1000.0)
         gap = t_sent - self._last_sent
         if gap < 0.25:  # continuous frames only, not the idle gap before them
@@ -844,15 +880,29 @@ class GaussianViewer:
             smoothed_fps = sum(self._fps_samples) / len(self._fps_samples)
         else:
             smoothed_fps = instant_fps
+        # One GUI message per frame competed with the frames themselves: 4 Hz is
+        # plenty for a readout (task #457).
+        self._hud_args = (elapsed, width, height, num_visible)
+        now = time.perf_counter()
+        if now - self._last_hud < _HUD_PERIOD_S:
+            return
+        self._last_hud = now
+
         def med(d: deque[float]) -> str:
             return f"{statistics.median(d):.2f}" if d else "--"
         if self._interval_ms:  # sent frames per second (render overlaps encode)
             smoothed_fps = 1000.0 / statistics.median(self._interval_ms)
+        page = PAGE_STATS.latest()
+        page_txt = (f"{page['fps']:.1f} FPS (decode {page['dec']:.1f} ms)"
+                    if page is not None else "--")
         self._stats_display.content = (
-            f"**FPS:** {smoothed_fps:.1f} | "
+            f"**Page:** {page_txt} | "
+            f"**Sent:** {smoothed_fps:.1f} FPS | "
             f"**Render:** {width}x{height} | "
             f"**Visible:** {num_visible:,}  \n"
             f"**Device render:** {med(self._render_ms)} ms | "
+            f"**Host:** {med(self._host_ms)} ms | "
+            f"**Encode:** {med(self._encode_ms)} ms | "
             f"**End-to-end frame:** {med(self._e2e_ms)} ms"
         )
 
@@ -950,8 +1000,15 @@ class GaussianViewer:
                 time.sleep(1.0)
                 line = self._heartbeat.line(self._frames_rendered, self._frames_sent,
                                             len(self.server.get_clients()))
+                if self._hud_args is not None:  # page FPS arrives between frames
+                    self._last_hud = 0.0
+                    self._update_stats(*self._hud_args)
                 if line is not None:
-                    log(f"{line} open_connections={len(LIVE_CONNECTIONS)}")
+                    page = PAGE_STATS.latest()
+                    log(f"{line} open_connections={len(LIVE_CONNECTIONS)}"
+                        + (f" page_fps={page['fps']:.1f} page_decode_ms={page['dec']:.1f}"
+                           if page is not None else "")
+                        + f" next_pose_hints={self._hints}")
         except KeyboardInterrupt:
             print("\nViewer stopped.")
         finally:

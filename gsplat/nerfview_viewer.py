@@ -26,6 +26,11 @@ _UI_BURST_POLL_SEC = 0.016
 JPEG_ENCODERS = ("simplejpeg", "turbojpeg", "cv2", "viser")
 
 
+def pipeline_frames_from_env() -> bool:
+    """GSPLAT_VIEWER_PIPELINE (default on; "0" turns the next-pose hint off, task #457)."""
+    return os.environ.get("GSPLAT_VIEWER_PIPELINE", "1").strip() not in ("0", "off", "false")
+
+
 def make_jpeg_encoder(name: str) -> Callable[[np.ndarray, int], bytes]:
     """Return ``encode(rgb_uint8_hwc, quality) -> jpeg bytes``; ImportError if unusable."""
     if name == "simplejpeg":
@@ -100,16 +105,28 @@ class FastRenderer(Renderer):
       (``pick_jpeg_encoder``) so it does not slow the render thread.
     * During the 1 s UI burst it renders back to back rather than at the
       burst thread's 16 ms tick, so the FPS readout shows the device speed.
+    * Frames are pipelined across device stages like the bench (task #457):
+      while the camera moves, each render is told the newest camera pose as
+      ``viewer.next_camera_state`` and the render_fn hints it to the backend,
+      which enqueues that pose's front stages (pfwc) behind this frame's blend
+      (render/host/xview.h). The next frame renders exactly that latched pose,
+      so the device prefetch always hits; the cost is one frame of pose
+      latency. Off with GSPLAT_VIEWER_PIPELINE=0.
+    * ``viewer.frame_post_fn(img, camera_state)`` (if set) runs on the sender
+      thread before the encode (the letterbox), off the render thread.
 
-    ``on_frame_sent(t_render_start, t_render_end, t_sent)`` (perf_counter
-    seconds) is called after each send, for the viewer's on-screen stats.
+    ``on_frame_sent(t_render_start, t_render_end, t_sent, encode_s)``
+    (perf_counter seconds) is called after each send, for the on-screen stats.
     """
 
-    def __init__(self, *args, on_frame_sent: Optional[Callable[[float, float, float], None]] = None,
+    def __init__(self, *args,
+                 on_frame_sent: Optional[Callable[[float, float, float, float], None]] = None,
                  **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.on_frame_sent = on_frame_sent
         self.jpeg_encoder_name, self._encode_jpeg = pick_jpeg_encoder()
+        self.pipeline_frames = pipeline_frames_from_env()
+        self._latched = None  # pose hinted to the device with the last frame
         self._out = None
         self._out_cv = threading.Condition()
         self._sender = threading.Thread(target=self._send_loop, name="gsplat-send", daemon=True)
@@ -154,19 +171,32 @@ class FastRenderer(Renderer):
 
     def render_once(self, task: RenderTask) -> None:
         """Render one task under the viewer lock and queue it for sending."""
+        cs, nxt = task.camera_state, None
+        get_cs = getattr(self.viewer, "get_camera_state", None)
+        if self.pipeline_frames and task.action in ("move", "rerender") and get_cs is not None:
+            # Continuous motion: render the pose hinted last frame (its pfwc is already
+            # on the device) and hint the newest pose for the next frame.
+            if self._latched is not None:
+                cs = self._latched
+            nxt = get_cs(self.client)
         with self.lock:
             t0 = time.perf_counter()
-            W, H = self._get_img_wh(task.camera_state.aspect)
+            W, H = self._get_img_wh(cs.aspect)
             self.viewer.render_tab_state.viewer_width = W
             self.viewer.render_tab_state.viewer_height = H
-            rendered = self.viewer.render_fn(task.camera_state, self.viewer.render_tab_state)
+            self.viewer.next_camera_state = nxt
+            try:
+                rendered = self.viewer.render_fn(cs, self.viewer.render_tab_state)
+            finally:
+                self.viewer.next_camera_state = None
             self.viewer._after_render()
             t1 = time.perf_counter()
             self.viewer.render_tab_state.num_view_rays_per_sec = (W * H) / max(t1 - t0, 1e-10)
+        self._latched = nxt
         img, depth = rendered if isinstance(rendered, tuple) else (rendered, None)
         quality = 70 if task.action in ("static", "update") else 40
         with self._out_cv:
-            self._out = (img, depth, quality, t0, t1)
+            self._out = (img, depth, quality, t0, t1, cs)
             self._out_cv.notify()
 
     def _send_loop(self) -> None:
@@ -176,9 +206,13 @@ class FastRenderer(Renderer):
                     self._out_cv.wait(0.5)  # recheck running: no leak on disconnect
                 if self._out is None:
                     break
-                img, depth, quality, t0, t1 = self._out
+                img, depth, quality, t0, t1, cs = self._out
                 self._out = None
+            te = time.perf_counter()
             try:
+                post = getattr(self.viewer, "frame_post_fn", None)
+                if post is not None:
+                    img = post(img, cs)
                 if depth is None and img.dtype == np.uint8 and self.jpeg_encoder_name != "viser":
                     # set_background_image minus viser's encode: same message.
                     data = self._encode_jpeg(np.ascontiguousarray(img), quality)
@@ -191,7 +225,8 @@ class FastRenderer(Renderer):
                 traceback.print_exc()
                 continue
             if self.on_frame_sent is not None:
-                self.on_frame_sent(t0, t1, time.perf_counter())
+                t_sent = time.perf_counter()
+                self.on_frame_sent(t0, t1, t_sent, t_sent - te)
 
 
 class GsplatViewer(nerfview.Viewer):
@@ -206,10 +241,15 @@ class GsplatViewer(nerfview.Viewer):
         *,
         default_render_width: int = 1024,
         default_render_height: int = 1024,
-        on_frame_sent: Optional[Callable[[float, float, float], None]] = None,
+        on_frame_sent: Optional[Callable[[float, float, float, float], None]] = None,
         **kwargs,
     ) -> None:
         self._on_frame_sent = on_frame_sent
+        # Set by FastRenderer around each render_fn call (task #457): the pose the next
+        # frame will render, or None. The render_fn hints it to the backend.
+        self.next_camera_state = None
+        # Optional (img, camera_state) -> img run on the sender thread (letterbox).
+        self.frame_post_fn: Optional[Callable] = None
         self._default_render_width = default_render_width
         self._default_render_height = default_render_height
         self._ui_active_deadline = 0.0
