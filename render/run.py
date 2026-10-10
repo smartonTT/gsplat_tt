@@ -321,6 +321,21 @@ def _b2b_stage_keys(st):
     return [k for k in st if k not in skip and isinstance(st[k], (int, float))]
 
 
+def _b2b_keep_out_slots(args, n_views, env=os.environ):
+    """Task #485: b2b keep mode holds all n_views frames of a pass (and the
+    hero_clean frame), so with the default 4-slot zero-copy ring (out_ring.h)
+    26 of 30 views replaced a slot: aligned_alloc + PinnedMemory::Create per
+    frame, booked as sort_cont_prep. Size the ring to n_views + 2 so measured
+    passes only reuse slots. Must run before the first render (env_config reads
+    it once). An explicit GSPLAT_TT_OUT_ZEROCOPY_SLOTS wins; --b2b-drop keeps
+    the viewer-like default. Returns the value set, else None."""
+    k = "GSPLAT_TT_OUT_ZEROCOPY_SLOTS"
+    if not getattr(args, "back_to_back", False) or args.b2b_drop or k in env:
+        return None
+    env[k] = str(n_views + 2)
+    return env[k]
+
+
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                   hero_clean, dump_dir, out_dir):
     """Throughput mode: render `order` back to back, 1 + args.b2b_warmup +
@@ -543,6 +558,15 @@ def _main():
         _spawn_ref_hero(ref_npy, args.scene, args.cameras, args.iter_dir)
         ref = np.load(ref_npy)
 
+    if args.view_range:
+        a, b = args.view_range.split(":")
+        order = order[int(a) if a else None:int(b) if b else None]
+        if not order:
+            sys.exit(f"[run] --view-range {args.view_range} selects no views")
+    slots = _b2b_keep_out_slots(args, len(order))
+    if slots is not None:
+        print(f"[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS={slots}", flush=True)
+
     # render_clean JIT cache must not share prod kernels.
     os.environ["TT_METAL_CACHE"] = os.environ.get("TT_METAL_CACHE_RENDER", _CACHE_RENDER)
     clean_backend = CleanBackend()
@@ -554,11 +578,6 @@ def _main():
     warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
     warmup_s = time.perf_counter() - t_warm
 
-    if args.view_range:
-        a, b = args.view_range.split(":")
-        order = order[int(a) if a else None:int(b) if b else None]
-        if not order:
-            sys.exit(f"[run] --view-range {args.view_range} selects no views")
     print(f"[run] timing {len(order)} views (warmup excluded)", flush=True)
     # Zero the C++ per-stage accumulators so they cover the timed views only.
     if hasattr(clean_backend._clean, "reset_stage_timings"):
