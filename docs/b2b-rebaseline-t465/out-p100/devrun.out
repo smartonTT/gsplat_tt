@@ -12,7 +12,7 @@
 [ttw 2026-10-10T06:30:41-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-1  timeout=590s  worry=472s  ts=2026-10-10T06:30:42-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'init s0-A'
@@ -39,7 +39,7 @@ TTW_TIMING ms_view=10.727
 [ttw 2026-10-10T06:30:58-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-2  timeout=590s  worry=472s  ts=2026-10-10T06:30:58-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 's0-B'
@@ -66,7 +66,7 @@ TTW_TIMING ms_view=10.748
 [ttw 2026-10-10T06:31:12-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-3  timeout=560s  worry=448s  ts=2026-10-10T06:31:12-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'r1-b2b-A r1-b2b-B '
@@ -105,7 +105,7 @@ MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
 [ttw 2026-10-10T06:31:37-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-4  timeout=560s  worry=448s  ts=2026-10-10T06:31:37-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'r1-lat-A r1-lat-B '
@@ -136,7 +136,7 @@ TTW_TIMING ms_view=9.804
 [ttw 2026-10-10T06:31:46-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-5  timeout=560s  worry=448s  ts=2026-10-10T06:31:46-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'r2-b2b-B r2-b2b-A '
@@ -175,7 +175,7 @@ MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
 [ttw 2026-10-10T06:32:11-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-6  timeout=560s  worry=448s  ts=2026-10-10T06:32:12-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'r2-lat-B r2-lat-A '
@@ -206,7 +206,7 @@ TTW_TIMING ms_view=9.796
 [ttw 2026-10-10T06:32:21-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-7  timeout=560s  worry=448s  ts=2026-10-10T06:32:22-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'r3-b2b-A r3-b2b-B '
@@ -245,7 +245,7 @@ MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
 [ttw 2026-10-10T06:32:48-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #123 sha=3f4759e bin=b4836c7dfcff6ca2 iter-140 Stage-0 NCRISC<->SFPU overlap probe (gated store-stress in cull reader)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t465-p100-8  timeout=560s  worry=448s  ts=2026-10-10T06:32:50-0700
 cmd: SMOKE_TO=540 RUN_TO=250 bash /localdev/smarton/t465-bench465.sh p100 /localdev/smarton/t465-out-p100 /localdev/smarton/t465-216 /localdev/smarton/t465-tip 'r3-lat-A r3-lat-B '
