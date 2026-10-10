@@ -40,3 +40,29 @@ avg_frame_ms off 9.8/9.8/9.8 vs on 9.5/9.5/9.5 (p50 10.0 vs 9.7).
 Keep: default flipped to on in `render/host/tile_assign_device.cpp` (`=0` restores the mover-only
 K2); `tests/unit/test_k2_trisc_default.py`. Measured on p100a only; not yet measured on p150 with
 ETH dispatch (12x10).
+
+## Re-A/B on the merged opt tip (iter 221 REC32 on)
+
+The opt tip moved (iter 221: REC32 default on, also in pfwc), so the A/B was re-run on
+ed3d3baf = opt 48d942a0 + t274 + default flip. Same box (yyzo-bh-04, p100a 11x10), one build
+(so md5 c0933598), env unset (default, K2 on TRISCs) vs `GSPLAT_TT_K2_TRISC=0`. Outputs in
+`out-merged/`.
+
+| round | off (=0) passes | off | default (on) passes | on | delta |
+|---|---|---|---|---|---|
+| r0 warm-up (not counted) | 9.718 9.703 9.704 | 9.704 | 9.420 9.408 9.411 | 9.411 | -0.293 |
+| r1 | 9.735 9.707 9.704 | 9.707 | 9.418 9.415 9.426 | 9.418 | -0.289 |
+| r2 | 9.708 9.706 9.704 | 9.706 | 9.417 9.409 9.406 | 9.409 | -0.297 |
+| r3 | 9.710 9.714 9.702 | 9.710 | 9.409 9.408 9.403 | 9.408 | -0.302 |
+
+Paired median delta (r1-r3): **-0.297 ms/view (-3.1%)**, 103.0 -> 106.3 FPS. Median of the 9
+measured passes 9.707 vs 9.409. B2B_STAGES per-pass medians: project (pfwc gather wait)
+2.716 -> 2.417, sort 0.607 -> 0.596, blend 6.290 -> 6.305.
+
+Latency (secondary, no dumps): off 9.669/9.605/9.647 vs on 9.376/9.373/9.353 ms/view.
+
+Image: `--dump-views` md5 906e0435 = 11x10 golden on 30/30 views in both arms. Device hero
+(default arm, dump pass): bit-exact vs `hero_golden_8bit.png`, PSNR vs
+`benchmarks/reference_v2/hero.png` 42.51 dB. Looked at the hero and the x10 diff: no tile seams,
+blocky or empty tiles, no color shift; diff only on thin edges (spokes, frame, bench slats,
+foliage). Kept as iter 222.
