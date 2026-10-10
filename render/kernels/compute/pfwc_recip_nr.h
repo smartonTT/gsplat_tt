@@ -16,16 +16,17 @@ inline V pfwc_recip_nr_step(V x, V y) {
 }
 
 #ifdef TRISC_MATH
-// In place on DEST tile 0 (32 vectors). Call between SFPU start(0) and done.
+// In place on DEST tile TILE (32 vectors). Call between SFPU start(0) and done.
+template <uint32_t TILE = 0>
 inline void pfwc_inv_tz_nr() {
     using namespace sfpi;
 #pragma GCC unroll 0
     for (uint32_t v = 0; v < 32; v++) {
-        vFloat x = dst_reg[0];
+        vFloat x = dst_reg[TILE * 32];
         vFloat y = approx_recip(x);
         y = pfwc_recip_nr_step(x, y);
         y = pfwc_recip_nr_step(x, y);
-        dst_reg[0] = y;
+        dst_reg[TILE * 32] = y;
         dst_reg++;
     }
 }

@@ -327,6 +327,18 @@ inline bool pfwc_recip_newton() {
     return v;
 }
 
+// Task #489: fewer pfwc compute acquires (pfwc_fuse_sfpu.h), bit-identical. Bit 0: steps
+// 1-5 (transform, 1/tz, depth, means) in one acquire instead of seven. Bit 1 (needs
+// COVCAM_SFPU and COV2D_SFPU): cov_cam and S_AC in one acquire. Default 0 (A/B).
+inline uint32_t pfwc_fuse() {
+    static const uint32_t v = [] {
+        uint32_t m = env_uint("GSPLAT_TT_PFWC_FUSE", 0u) & 3u;
+        if (!(pfwc_covcam_sfpu() && pfwc_cov2d_sfpu())) m &= ~2u;
+        return m;
+    }();
+    return v;
+}
+
 // Task #232: with the writer split, BRISC / NoC0 instead of NCRISC / NoC1 reads a set of
 // the 10 pfwc input tiles (bit o = tile o: mx my mz c00 c01 c02 c11 c12 c22 opacity):
 // GSPLAT_TT_PFWC_RD_SET on the cores in physical NoC0 column x where bit x of

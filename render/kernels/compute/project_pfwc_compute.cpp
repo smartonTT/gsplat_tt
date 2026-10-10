@@ -104,6 +104,12 @@
 #ifdef PFWC_RECIP_NEWTON
 #include "pfwc_recip_nr.h"
 #endif
+#if defined(PFWC_FUSE_PROJ) || defined(PFWC_FUSE_CCAC)
+#include "pfwc_fuse_sfpu.h"
+#endif
+#if defined(PFWC_FUSE_CCAC) && !(defined(PFWC_COVCAM_SFPU) && defined(PFWC_COV2D_SFPU))
+#error "PFWC_FUSE_CCAC needs PFWC_COVCAM_SFPU and PFWC_COV2D_SFPU"
+#endif
 #endif
 
 namespace {
@@ -656,6 +662,59 @@ void kernel_main() {
         cb_wait_front(CB_C22, 1);
         PC_MARK(0);
 
+#ifdef PFWC_FUSE_PROJ
+        // ── 1-5 (task #489, GSPLAT_TT_PFWC_FUSE bit 0): one acquire. 3 copies,
+        //      R·means + t, 1/tz, mean_x / mean_y in DEST (pfwc_fuse_sfpu.h), then
+        //      the same 9 packs. Bit-identical to the seven acquires below.
+        {
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(CB_MX);
+            copy_tile(CB_MX, 0, 0);
+            copy_tile(CB_MY, 0, 1);
+            copy_tile(CB_MZ, 0, 2);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_fuse::xform<3, 3>(r_bits[0], r_bits[1], r_bits[2], t_bits[0])));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_fuse::xform<4, 4>(r_bits[3], r_bits[4], r_bits[5], t_bits[1])));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_fuse::xform<5, 6>(r_bits[6], r_bits[7], r_bits[8], t_bits[2])));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#ifdef PFWC_RECIP_NEWTON
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_inv_tz_nr<6>()));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+#else
+            recip_tile(6);
+#endif
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_fuse::run_mean(fx, cx, fy, cy)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_scratch(3, CB_TMP_TX);
+            emit_scratch(4, CB_TMP_TY);
+            emit_scratch(5, CB_TMP_TZ);
+            emit_scratch(6, CB_TMP_INV_TZ);
+            emit_dst(5, OCB(CB_DEP));
+            emit_dst(0, OCB(CB_M2X));
+#ifdef PFWC_VIS
+            emit_scratch(0, CB_TMP_MX);
+#endif
+            emit_dst(1, OCB(CB_M2Y));
+#ifdef PFWC_VIS
+            emit_scratch(1, CB_TMP_MY);
+#endif
+            tile_regs_release();
+        }
+        cb_pop_front(CB_MX, 1);
+        cb_pop_front(CB_MY, 1);
+        cb_pop_front(CB_MZ, 1);
+        PC_MARK(1);
+        PC_MARK(2);
+        PC_MARK(3);
+#else
         // ── 1. FUSED transform: tx/ty/tz = R · means + t  (means_cam folded
         //      with the pfwc translation; L1 bridge into the pfwc body below).
         //      Per j the sum mx*r_j0 + my*r_j1 + mz*r_j2 is computed by the SAME
@@ -759,7 +818,63 @@ void kernel_main() {
             tile_regs_release();
         }
 
+#endif  // PFWC_FUSE_PROJ
         PC_MARK(4);
+#ifdef PFWC_FUSE_CCAC
+        // ── 6-7 (task #489, GSPLAT_TT_PFWC_FUSE bit 1): cov_cam and S_AC in one
+        //      acquire. cc00 / cc11 stay in DEST (S_AC was their only reader); the
+        //      other four cc entries, a, c and the radii are packed as before.
+        {
+            tile_regs_acquire();
+            copy_tile_to_dst_init_short(COV3D_CB[0]);
+            for (uint32_t k = 0; k < 6; k++) copy_tile(COV3D_CB[k], 0, k);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((covcam_sfpu_math()));    // cc00..cc22 -> tiles 0..5
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            copy_tile_to_dst_init_short(CB_TMP_INV_TZ);
+            copy_tile(CB_TMP_INV_TZ, 0, 6);
+            copy_tile(CB_TMP_TX, 0, 7);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_fuse::run_a(fx, neg_fx_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            copy_tile(CB_TMP_TY, 0, 7);
+            MATH((_llk_math_eltwise_unary_sfpu_start_(0)));
+            MATH((pfwc_fuse::run_c(fy, neg_fy_bits)));
+            MATH((_llk_math_eltwise_unary_sfpu_done_()));
+            relu_tile(6);
+            sqrt_tile(6);
+            mul_unary_tile(6, k_bits);
+            ceil_tile(6);
+            relu_tile(7);
+            sqrt_tile(7);
+            mul_unary_tile(7, k_bits);
+            ceil_tile(7);
+            tile_regs_commit();
+            tile_regs_wait();
+            emit_scratch(1, CB_TMP_CC01);
+            emit_scratch(2, CB_TMP_CC02);
+            emit_scratch(4, CB_TMP_CC12);
+            emit_scratch(5, CB_TMP_CC22);
+            emit_scratch(0, CB_TMP_A);
+            emit_scratch(3, CB_TMP_C);
+            emit_dst(6, OCB(CB_RX));
+#ifdef PFWC_VIS
+            emit_scratch(6, CB_TMP_RX);
+#endif
+            emit_dst(7, OCB(CB_RY));
+#ifdef PFWC_VIS
+            emit_scratch(7, CB_TMP_RY);
+#endif
+            tile_regs_release();
+        }
+        cb_pop_front(CB_C00, 1);
+        cb_pop_front(CB_C01, 1);
+        cb_pop_front(CB_C02, 1);
+        cb_pop_front(CB_C11, 1);
+        cb_pop_front(CB_C12, 1);
+        cb_pop_front(CB_C22, 1);
+        PC_MARK(5);
+#else
         // ── 6. cov_cam (6 unique entries) → scratch CBs
 #ifdef PFWC_COVCAM_SFPU
         covcam_sfpu_to_scratch();
@@ -778,7 +893,9 @@ void kernel_main() {
         cb_pop_front(CB_C22, 1);
 
         PC_MARK(5);
+#endif  // PFWC_FUSE_CCAC
 #ifdef PFWC_COV2D_SFPU
+#ifndef PFWC_FUSE_CCAC
         // ── 7-11 (task #228, P2): two acquires instead of six. S_AC: a, c and
         //      the radii (pfwc_cov2d::run_ac, then the same relu / sqrt / k /
         //      ceil tile ops on copies of a and c in slots 6 / 7).
@@ -818,6 +935,7 @@ void kernel_main() {
 #endif
             tile_regs_release();
         }
+#endif  // !PFWC_FUSE_CCAC
 
         PC_MARK(6);
         // S_BC: b (pfwc_cov2d::run_b), then the conic fold of a, b, c.
@@ -1186,10 +1304,14 @@ void kernel_main() {
         cb_pop_front(CB_TMP_TY, 1);
         cb_pop_front(CB_TMP_TZ, 1);
         cb_pop_front(CB_TMP_INV_TZ, 1);
+#ifndef PFWC_FUSE_CCAC
         cb_pop_front(CB_TMP_CC00, 1);
+#endif
         cb_pop_front(CB_TMP_CC01, 1);
         cb_pop_front(CB_TMP_CC02, 1);
+#ifndef PFWC_FUSE_CCAC
         cb_pop_front(CB_TMP_CC11, 1);
+#endif
         cb_pop_front(CB_TMP_CC12, 1);
         cb_pop_front(CB_TMP_CC22, 1);
         cb_pop_front(CB_TMP_A, 1);
