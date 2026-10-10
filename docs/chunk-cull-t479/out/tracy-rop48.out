@@ -12,7 +12,7 @@
 [ttw 2026-10-10T07:49:25-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #126 sha=a95a3714 bin=e846f978141865a4 t479 90f1d2ef chunk cull profile (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t479-Trop48  timeout=540s  worry=600s  ts=2026-10-10T07:49:25-0700
 cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/remote_tracy.sh 0 rop48 'GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0 GSPLAT_TT_OL_EMIT_PROF=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8'

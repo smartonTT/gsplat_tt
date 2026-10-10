@@ -12,7 +12,7 @@
 [ttw 2026-10-10T08:12:10-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t479-b2b-smoke  timeout=540s  worry=600s  ts=2026-10-10T08:12:11-0700
 cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' smoke
@@ -48,7 +48,7 @@ s0-off48 rc=0 15:12:43
 [ttw 2026-10-10T08:12:52-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t479-b2b-1  timeout=540s  worry=600s  ts=2026-10-10T08:12:52-0700
 cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' 1
@@ -94,7 +94,7 @@ LIST_MD5 r1-off48 906e0435 views=30 hero=86524912
 [ttw 2026-10-10T08:13:44-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t479-b2b-2  timeout=540s  worry=600s  ts=2026-10-10T08:13:45-0700
 cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' 2
@@ -140,7 +140,7 @@ LIST_MD5 r2-off 906e0435 views=30 hero=86524912
 [ttw 2026-10-10T08:14:36-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t479-b2b-3  timeout=540s  worry=600s  ts=2026-10-10T08:14:37-0700
 cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' 3
