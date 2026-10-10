@@ -329,6 +329,34 @@ def _patch_message_producer() -> None:
     infra._message_producer = _message_producer
 
 
+def _patch_message_buffer_flush() -> None:
+    """Send each background image at once instead of on viser's 1/60 s window.
+
+    viser 1.0.27's AsyncMessageBuffer.window_generator sleeps window_duration_sec
+    (1/60 s) after every window unless flush() is pulsed, and frames pushed in
+    that sleep collapse to the newest by redundancy key: the page got at most
+    60 frames/s and saw 17.7/35 ms intervals (43 FPS, task #458). A flush per
+    BackgroundImageMessage ends the sleep; other messages keep the window.
+    GSPLAT_VIEWER_FRAME_FLUSH=0 restores viser's pacing.
+    """
+    from viser._messages import BackgroundImageMessage
+    from viser.infra._async_message_buffer import AsyncMessageBuffer
+
+    if getattr(AsyncMessageBuffer.push, "_gsplat_wrapped", False):
+        return
+    if os.environ.get("GSPLAT_VIEWER_FRAME_FLUSH", "1") == "0":
+        return
+    orig_push = AsyncMessageBuffer.push
+
+    def push(self, message) -> None:
+        orig_push(self, message)
+        if isinstance(message, BackgroundImageMessage):
+            self.flush()
+
+    push._gsplat_wrapped = True  # type: ignore[attr-defined]
+    AsyncMessageBuffer.push = push  # type: ignore[assignment]
+
+
 def _patch_viser_camera_handle_gimbal() -> None:
     import viser._viser as viser_internals  # type: ignore[attr-defined]
     import viser.transforms as vt
@@ -377,6 +405,7 @@ def install_all() -> None:
     _patch_viser_camera_handle_gimbal()
     _patch_websocket_serve()
     _patch_message_producer()
+    _patch_message_buffer_flush()
 
 
 install_all()

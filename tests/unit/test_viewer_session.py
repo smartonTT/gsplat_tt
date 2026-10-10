@@ -151,13 +151,54 @@ def test_live_server_logs_session_and_serves_shim() -> None:
     assert line.startswith("[viewer 20") and "Z]" in line, line
 
 
+@needs_viewer
+def test_background_image_skips_message_window() -> None:
+    """A frame pushed while viser's window sleep runs goes out at once, not
+    after window_duration_sec (1/60 s); a plain message still waits (task #459)."""
+    import threading
+
+    import gsplat.viser_patches  # noqa: F401 - installs the patches
+    from viser._messages import BackgroundImageMessage, RemoveSceneNodeMessage
+    from viser.infra._async_message_buffer import AsyncMessageBuffer
+
+    def gap_after_first(make) -> float:
+        async def run() -> float:
+            buf = AsyncMessageBuffer(asyncio.get_running_loop(), persistent_messages=False)
+            buf.window_duration_sec = 0.2  # wide enough to tell apart on a busy host
+            gen = buf.window_generator(client_id=0)
+            buf.push(make(0))
+            await gen.__anext__()
+            # Let the generator reach its window sleep (no timed sleep here: a
+            # background-QoS macOS process stretches 10 ms to ~200 ms), then push
+            # from another thread like the viewer's sender.
+            nxt = asyncio.ensure_future(gen.__anext__())
+            for _ in range(10):
+                await asyncio.sleep(0)
+            assert not nxt.done()
+            t0 = time.perf_counter()
+            threading.Thread(target=buf.push, args=(make(1),)).start()
+            await nxt
+            buf.set_done()
+            return time.perf_counter() - t0
+        return asyncio.run(run())
+
+    def frame(i):
+        return BackgroundImageMessage(format="jpeg", rgb_data=bytes([i]), depth_data=None)
+
+    gap = gap_after_first(frame)
+    assert gap < 0.1, f"frame waited {gap * 1e3:.1f} ms for the message window"
+    gap = gap_after_first(lambda i: RemoveSceneNodeMessage(name=f"/n{i}"))
+    assert gap >= 0.15, f"plain message skipped the window ({gap * 1e3:.1f} ms)"
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
             if not HAVE_VIEWER and name in ("test_inject_reconnect_shim",
                                             "test_page_stats_parse_and_stale",
-                                            "test_live_server_logs_session_and_serves_shim"):
+                                            "test_live_server_logs_session_and_serves_shim",
+                                            "test_background_image_skips_message_window"):
                 print(f"SKIP {name}")
                 continue
             try:
