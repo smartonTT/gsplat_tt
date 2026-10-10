@@ -149,6 +149,11 @@ void kernel_main() {
     const uint32_t l1_pg = l1_rec + NB_MAX * RL * PB;  // dep, offs, aabb, counts, head dep, offs, aabb
     const uint32_t l1_mask = l1_pg + 7 * PB;
     const uint32_t l1_mbx = get_write_ptr(CB_MBX);
+#if PFWC_REC32
+    static_assert(EMIT_PUBOC, "PFWC_REC32 keeps the PUBOC words only");
+    // Task #467: the head record page after the mask (STG_BYTES_REC32).
+    auto w_hrec = reinterpret_cast<volatile uint32_t*>(l1_mask + 128);
+#endif
 
     auto mw = reinterpret_cast<volatile uint32_t*>(l1_mask);
     auto opw = reinterpret_cast<volatile uint32_t*>(l1_op);
@@ -279,7 +284,11 @@ void kernel_main() {
     }
     const bool per_page = nb > NB_MAX;
     if (per_page) nb = NB_MAX;  // staging layout only
+#if PFWC_REC32
+    Rec32Stage rs;  // pages g / 2 (seg_base is even); bank count as above
+#else
     RecStage rs;
+#endif
     rs.init(nb);
     // Staged records [gs, ge) of group G0, one write per bank.
     auto flush_rec = [&](uint32_t G0, uint32_t gs, uint32_t ge) {
@@ -410,7 +419,11 @@ void kernel_main() {
                 const uint32_t dep = p_dep[il], aabb = p_aabb[il], tpg = p_tpg[il];
                 pg.put(dep, pr, aabb & vis_tile::PAYLOAD, flush_pg);
                 pr += tpg & vis_tile::PAYLOAD;
+#if PFWC_REC32
+                volatile uint32_t* r = rs.in_head() ? w_hrec + RW : w_rec + rs.stage_word();
+#else
                 volatile uint32_t* r = w_rec + rs.slot() * PW;
+#endif
                 {
                     const uint32_t a = p_a[il], b = p_b[il], cc = p_c[il];
                     const uint32_t mx = p_m2x[il], my = p_m2y[il];
@@ -421,6 +434,13 @@ void kernel_main() {
                     r[4] = my;
                 }
                 {
+#if PFWC_REC32
+                    // Task #467: the emit's words only (no fp32 op / colour).
+                    const uint32_t u01 = q01[il], u23 = q23[il];
+                    r[5] = u01;
+                    r[6] = u23;
+                    r[7] = dep;
+#else
                     const uint32_t op = opw[il], cr = p_cr[il], cg = p_cg[il], cb = p_cb[il];
 #if EMIT_PUBOC
                     const uint32_t u01 = q01[il], u23 = q23[il];
@@ -434,6 +454,7 @@ void kernel_main() {
                     r[11] = u23;
                     r[12] = dep;
 #endif
+#endif  // PFWC_REC32
                 }
                 rs.next(flush_rec);
             }
@@ -446,6 +467,18 @@ void kernel_main() {
             volatile tt_l1_ptr uint32_t* f = flag_of(k);
             wait_until([&] { return *f == F_OPEN; });
             pg.finish(msg_of(k), flush_pg);
+#if PFWC_REC32
+            if (rs.head) {
+                const volatile uint32_t* msg = msg_of(k);
+                for (uint32_t i = 0; i < RW; i++) w_hrec[i] = msg[MSG_REC + i];
+                if (rs.head_used) {
+                    WS_FL_BEGIN();
+                    noc_async_write(l1a(w_hrec), get_noc_addr(rs.head_page, o_rec), PB);
+                    noc_async_writes_flushed();
+                    WS_FL_END();
+                }
+            }
+#endif
             asm volatile("fence" ::: "memory");  // message loads before EMPTY
             noc_semaphore_set(f, F_EMPTY);
         }
@@ -453,11 +486,30 @@ void kernel_main() {
         if (k + 1 < num_chunks) {
             if (pg.slot != 0) {
                 pg.export_open(msg_of(k + 1));
+#if PFWC_REC32
+                // m_{k+1} odd: the open half page's record (staged, or the
+                // head's lower half passed through an empty chunk).
+                volatile uint32_t* msg = msg_of(k + 1);
+                const volatile uint32_t* src = rs.half ? w_rec + rs.open_word() : w_hrec;
+                if (rs.half || rs.in_head())
+                    for (uint32_t i = 0; i < RW; i++) msg[MSG_REC + i] = src[i];
+#endif
                 asm volatile("fence" ::: "memory");
                 noc_semaphore_set(flag_of(k + 1), F_OPEN);
             }
         } else {
             pg.close(pr, flush_pg);
+#if PFWC_REC32
+            // The core's last page, when it holds one record: upper half 0.
+            if (rs.half || rs.in_head()) {
+                volatile uint32_t* p = rs.half ? w_rec + rs.open_word() : w_hrec;
+                for (uint32_t i = RW; i < PW; i++) p[i] = 0;
+                WS_FL_BEGIN();
+                noc_async_write(l1a(p), get_noc_addr(rs.half ? rs.open_page() : rs.head_page, o_rec), PB);
+                noc_async_writes_flushed();
+                WS_FL_END();
+            }
+#endif
             write_counts(m0 + vc, pr);
         }
         for (uint32_t o = 0; o < 10; o++) cb_pop_front(OUT_CB[o], 1);

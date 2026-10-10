@@ -20,6 +20,7 @@
 #include "blend.h"
 #include "config.h"
 #include "env_config.h"
+#include <stdexcept>
 #include "sort.h"
 #include "sort_mover_speed.h"
 #include "blend_claim_order.h"
@@ -990,6 +991,10 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     // (14) per mover. Same output.
     const bool town = gsplat_tt::env_config::ol_emit_town() && pb * 16u <= sort_ol_town::LIST_MAX;
     const uint32_t brec_slots = town ? sort_ol_town::SLOTS : 2u;
+    // Task #467: 32 B blend records, two per page (the TOWN emit and the bulk reads).
+    const bool rec32 = gsplat_tt::env_config::pfwc_rec32();
+    if (rec32 && (!town || !brec_bulk))
+        throw std::runtime_error("[gsplat_tt::sort] GSPLAT_TT_PFWC_REC32=1 needs OL_EMIT_TOWN and OL_BREC_BULK");
     uint32_t mover_bytes = 0;
     for (const uint32_t off : {0u, 16u}) {
         mover_bytes = 0;
@@ -1034,6 +1039,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["OL_WIN_PAGES"] = std::to_string(win) + "u";
     defines["OL_BREC_BULK"] = brec_bulk ? "1" : "0";
     defines["OL_BREC_HALF"] = std::to_string(brec_half) + "u";
+    if (rec32) defines["PFWC_REC32"] = "1";
     // Task #154: GSPLAT_TT_OL_EMIT_PROF=1 (profiling only) records the emit's
     // per-part cycle totals as Tracy "ep_*" markers. Unset: no define, the same
     // kernel binary as before.
@@ -1057,6 +1063,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         defines["OL_EMIT_TOWN"] = "1";
         std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"}};
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
+        if (rec32) tdef["PFWC_REC32"] = "1";
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,
                      ComputeConfig{.defines = tdef});
     }
@@ -2387,6 +2394,10 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         // no layout and launches no radix or publish.
         const bool onelaunch = sort_onelaunch_enabled() && tile_bucket && !need_host_sorted_ids &&
                                resident_blend_chain_enabled() && sort_device_publish_enabled();
+        if (gsplat_tt::env_config::pfwc_rec32() && !onelaunch) {
+            // Task #467: only the one-launch emit reads the 32 B blend records.
+            throw std::runtime_error("[gsplat_tt::sort] GSPLAT_TT_PFWC_REC32=1 needs the one-launch sort");
+        }
         if (early && (!onelaunch || ctx->ol_early_tiles != num_tiles ||
                       ctx->ol_early_tiles_x != static_cast<uint32_t>(tiles_x) ||
                       k2rows.num_cores != num_cores || k2rows.num_tiles != num_tiles)) {

@@ -271,6 +271,18 @@ inline bool pfwc_writer_split() {
     return v;
 }
 
+// Task #467 (docs/pfwc-rec32-t467): GSPLAT_TT_PFWC_REC32=1 writes the fused split
+// pfwc's blend records as 32 B [a, b, c, mx, my, u01, u23, dep], two per 64 B
+// page (gaussian g: page g / 2, half g % 2), instead of one 64 B page each; the
+// one-launch emit reads half the pages. Only the words the emit uses are kept.
+// Needs the default chain (writer split, EMIT_PUBOC, the TOWN emit); off when any
+// is off. Default off; same output either way.
+inline bool pfwc_rec32() {
+    static const bool v = env_uint("GSPLAT_TT_PFWC_REC32", 0u) != 0u && pfwc_writer_split() &&
+                          emit_puboc() && ol_emit_town();
+    return v;
+}
+
 // Task #206: single-pass SFPU cov_cam in the pfwc compute kernel. Default on since
 // task #221 (=0 off). Alone it needs ~4 KB more kernel config buffer (8 KB is opened).
 inline bool pfwc_covcam_sfpu() {
