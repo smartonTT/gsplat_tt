@@ -93,3 +93,26 @@ Viewer downtime: probes 44 s, 51 s, 56 s; deploy restart a few seconds (stop + s
 - Fix in 68ae2556 (not yet deployed or measured): a camera move bursts only that client;
   settings changes still burst all clients. Test `test_camera_burst_renders_only_the_moving_client`.
   Expected: about 82 FPS for the moving page while another tab is idle.
+
+## Task #462: per-client burst deployed and measured
+
+- Deployed 1d1598ec (includes 68ae2556) to bh-30; the user's tab (client 0) stayed open and idle
+  during the sweep. Viewer downtime: the deploy restart only (stop + start, a few seconds).
+- `ws_sweep.py --label t459-burst` (240 Hz poses, 20 s steady window):
+
+| Viewer build | Decoded FPS | Interval p50 / p90 / p99 | HUD Sent | HUD device render | Encode |
+|---|---|---|---|---|---|
+| de3cc41b (flush patch) | 43.0 | 23.28 / 24.72 / 25.38 ms | 82.3 FPS | 11.3 ms | 4.0 ms |
+| **1d1598ec (per-client burst)** | **107.8** | **9.38 / 10.54 / 10.90 ms** | **106.1 FPS** | **8.96 ms** | 3.18 ms |
+
+- Page FPS 43 -> **107.8** (2.5x), now 92% of the 117 target. The idle tab no longer takes
+  device time, so the moving page gets the whole device: the 11.3 ms device render seen
+  before was two clients sharing it, the real per-frame device time is 8.96 ms.
+- Frame intervals (p50 9.38 ms) now track the device render, so the device is the limit.
+  The rest of the gap to 130 FPS is the viewer process's ~9.0 ms vs the bench's 7.7 ms/view,
+  which task #460 (viewer environment md5/ms gap) is working on.
+- HUD "End-to-end frame" 12.69 ms is latency (render + host + encode), not throughput:
+  encode overlaps the next frame's device work.
+- The heartbeat's `page_fps` is not available for this run: it comes from a browser page's
+  stats report, and the sweep client sends none (the open tab was idle). The decoded FPS is
+  the page-side number.
