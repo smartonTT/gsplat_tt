@@ -142,6 +142,18 @@ inline unsigned int ol_ring() {
     }();
     return v;
 }
+// Task #479: emit ring records per tile, a power of two >= ol_ring() (<= 16), so
+// depth / ring runs of a tile can be in flight. Default (unset) = ol_ring(): one
+// run, today's layout. Same output either way; Morton-ordered scenes (chunk cull)
+// fill a tile's run faster than the mover drains it.
+inline unsigned int ol_ring_depth() {
+    static const unsigned int v = [] {
+        const unsigned int r = ol_ring();
+        const unsigned int d = env_uint("GSPLAT_TT_OL_RING_DEPTH", r);
+        return (r != 0u && d >= r && d <= 16u && (d & (d - 1u)) == 0u) ? d : r;
+    }();
+    return v;
+}
 // Big-tile materialize items sort only the depth bins holding their own ranks
 // (sort_onelaunch_algo.h select_ranks), not the whole tile. Default off: task
 // #121 measured it 0.15 ms/view slower on bicycle (24.69 vs 24.55, 3 rounds,

@@ -1,7 +1,7 @@
 #!/bin/bash
 # t479 profile driver (Mac, repo root): one `ttp lock p100` around ssh preflight, sync + build of <rev>
 # on the measurement box (p100 yyzo-bh-04, the existing reservation) and one Tracy device capture per
-# arm (views 0:10): off (defaults) and ro (GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0, Morton gids,
+# arm (views 0:10; ARMS="" for none): off (defaults) and ro (GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0, Morton gids,
 # every tile kept). Extra arms: ARMS="off ro x:ENV=V,ENV=V". Device CSVs land in out/.
 #   ttp detach t479p -- docs/chunk-cull-t479/drive479.sh <rev>
 # Restrictions: no ird reserve/extend/release, never the viewer box; every ssh/scp forces
@@ -36,7 +36,7 @@ tail -2 "$O/sync.log"
 ssh -o BatchMode=yes "$H" "mkdir -p $T/tmp/t479"
 pat="^(===|tracy |STAGES|SUMMARY|XVIEW_|HANG|device csv|no device|DRAM|Trace|TT_FATAL)"
 rc=0
-for arm in ${ARMS:-off ro}; do
+for arm in ${ARMS-off ro}; do
   case $arm in
     off) name=off; env= ;;
     ro) name=ro; env="GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0" ;;
@@ -46,6 +46,16 @@ for arm in ${ARMS:-off ro}; do
     "T=$T bash $T/$D/remote_tracy.sh 0 $name '$env'" 2>&1 | tee "$O/tracy-$name.out" | grep -E "$pat"
   [ "${PIPESTATUS[0]}" -eq 0 ] || rc=2
 done
-scp -q -o BatchMode=yes "$H:$T/tmp/t479/T-*.log" "$H:$T/tmp/t479/dev-*.csv.gz" "$O/" || rc=4
+if [ -n "${ARMS-off ro}" ]; then
+  scp -q -o BatchMode=yes "$H:$T/tmp/t479/T-*.log" "$H:$T/tmp/t479/dev-*.csv.gz" "$O/" || rc=4
+fi
+# BENCH="arms" (e.g. "off cull cull48 off48"): b2b A/B through bench479.sh, ROUNDS rotated rounds.
+if [ -n "${BENCH:-}" ]; then
+  $DEVRUN --host "$H" --no-verify --timeout ${BENCH_TIMEOUT:-3600} --tag t479-b2b -- \
+    "T=$T bash $T/$D/bench479.sh $T/tmp/t479b ${ROUNDS:-3} '$BENCH'" 2>&1 | tee "$O/bench.out" | \
+    grep -E "^(===|TOWN_|r[0-9]|s0-|LIST_MD5|B2B |TTW_TIMING|HANG)"
+  [ "${PIPESTATUS[0]}" -eq 0 ] || rc=5
+  mkdir -p "$O/b2b"; scp -q -o BatchMode=yes "$H:$T/tmp/t479b/*" "$O/b2b/" || rc=6
+fi
 echo "=== drive t479 done rc=$rc $(date)"
 exit $rc

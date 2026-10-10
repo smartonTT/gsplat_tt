@@ -15,7 +15,9 @@
 //    bucket image as the sequential emit: bulk and per-g blendrec batches, the
 //    per-g fallback for pairs that are not g-sorted, tiles past tile_cap, a
 //    queue of 4 words (TRISCs wait for space), 2..4 slots; no ring entry
-//    changes between a run's write issue and its flush.
+//    changes between a run's write issue and its flush; run length R and ring
+//    depth D (task #479: D / R runs of a tile in flight), also with bursts into
+//    few tiles (Morton-ordered scenes).
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -37,7 +39,7 @@ static int g_fail = 0;
         }                                                                \
     } while (0)
 
-constexpr uint32_t PAGE = 64, BE = 128, R = 8, HALF = 256;
+constexpr uint32_t PAGE = 64, BE = 128, HALF = 256, DMAX = 16;
 
 // Page j of a bulk run at slot (j % nb) * sf + j / nb (issue_brec).
 static uint32_t bulk_slot_page(uint32_t j, uint32_t nb, uint32_t sf) { return (j % nb) * sf + j / nb; }
@@ -45,6 +47,7 @@ static uint32_t bulk_slot_page(uint32_t j, uint32_t nb, uint32_t sf) { return (j
 struct Sim {
     // inputs: one pair stream per mover
     uint32_t ntiles, cap, slots, qcap, bk_nb;
+    uint32_t R = 8, D = 8;  // run length, ring records per tile (task #479: D / R runs in flight)
     std::array<std::vector<uint32_t>, 2> g, t;
     // bucket image written by both movers (each tile: mover 0 cursors, then mover 1)
     std::vector<uint64_t> bucket;
@@ -54,7 +57,7 @@ struct Sim {
     struct Stream {
         uint32_t nb = 0;
         std::vector<uint32_t> cur, startp, fl;
-        std::vector<std::array<uint64_t, R>> ring;
+        std::vector<std::array<uint64_t, DMAX>> ring;
         std::vector<std::vector<uint32_t>> slot_mem;  // page index in slot -> g
         std::vector<std::array<std::vector<uint32_t>, 3>> lists;
         std::vector<uint32_t> bkn;
@@ -149,7 +152,7 @@ struct Sim {
                     const uint32_t tt = tw::run_tile(w), last = tw::run_last(w);
                     const uint32_t s0 = sort_ol::ring_run_start(s.startp[tt], last, R);
                     Write wr{tt, s0, last, {}};
-                    for (uint32_t c = s0; c <= last; c++) wr.snap.push_back(s.ring[tt][c % R]);
+                    for (uint32_t c = s0; c <= last; c++) wr.snap.push_back(s.ring[tt][c % D]);
                     s.inflight.push_back(wr);
                     any = true;
                 }
@@ -189,7 +192,7 @@ struct Sim {
                     uint32_t last;
                     if (sort_ol::ring_drain(s.startp[tt], s.cur[tt], cap, R, &last)) {
                         const uint32_t s0 = sort_ol::ring_run_start(s.startp[tt], last, R);
-                        for (uint32_t c = s0; c <= last; c++) bucket[tt * cap + c] = s.ring[tt][c % R];
+                        for (uint32_t c = s0; c <= last; c++) bucket[tt * cap + c] = s.ring[tt][c % D];
                     }
                 }
                 s.phase = 4;
@@ -197,7 +200,7 @@ struct Sim {
             case 3: {  // writes flushed: check, land, free the rings, consume the words
                 for (const Write& wr : s.inflight) {
                     for (uint32_t c = wr.s0; c <= wr.last; c++) {
-                        CHECK(s.ring[wr.t][c % R] == wr.snap[c - wr.s0]);  // not overwritten in flight
+                        CHECK(s.ring[wr.t][c % D] == wr.snap[c - wr.s0]);  // not overwritten in flight
                         bucket[wr.t * cap + c] = wr.snap[c - wr.s0];
                     }
                 }
@@ -234,9 +237,10 @@ struct Sim {
                 const uint32_t c = s.cur[tt];
                 if (c < cap) {
                     const uint32_t ri = c & (R - 1u);
-                    if (ri == 0u && s.fl[tt] != c) return false;  // previous run still in flight
+                    // the run D records back still in flight (sort_ol_town_compute.cpp)
+                    if (ri == 0u && s.fl[tt] + (D - R) < c) return false;
                     if (ri == R - 1u && s.tqwp[i] - s.qrd[i] >= qcap) return false;  // queue full
-                    s.ring[tt][ri] = rec(gg, tt);
+                    s.ring[tt][c % D] = rec(gg, tt);
                     if (ri == R - 1u) {
                         s.q[i][s.tqwp[i] % qcap] = tw::run_word(tt, c);
                         s.qwp[i] = ++s.tqwp[i];
@@ -341,13 +345,17 @@ int main() {
         sim.slots = 2 + r() % 3;
         sim.qcap = (seed % 3 == 0) ? 4u : 256u;
         sim.bk_nb = (seed % 5 == 0) ? 0u : 1 + r() % 12;
+        static const uint32_t rd[4][2] = {{8, 8}, {4, 8}, {8, 16}, {2, 8}};
+        sim.R = rd[seed % 4][0];
+        sim.D = rd[seed % 4][1];
+        const uint32_t span = (seed % 8 < 4) ? sim.ntiles : 3u;  // 4 of 8 seeds: bursts into few tiles
         const bool unsorted = seed % 7 == 0;
         for (uint32_t m = 0; m < 2; m++) {
             const uint32_t ng = r() % 700;
             uint32_t gg = r() % 50;
             for (uint32_t i = 0; i < ng; i++) {
                 gg += 1 + (r() % 4 == 0 ? r() % 6 : 0);  // near-dense g
-                const uint32_t k = 1 + r() % 6, c0 = r() % sim.ntiles;
+                const uint32_t k = 1 + r() % 6, c0 = r() % span;
                 for (uint32_t a = 0; a < k; a++) {
                     sim.g[m].push_back(gg);
                     sim.t[m].push_back((c0 + a * (1 + r() % 3)) % sim.ntiles);

@@ -975,7 +975,8 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const uint32_t pb = gsplat_tt::env_config::ol_pair_batch();
     const uint32_t ring = gsplat_tt::env_config::ol_ring();
     const uint32_t win = gsplat_tt::env_config::ol_win_pages();
-    const uint32_t ring_bytes = kOneLaunchRingTiles * (ring * 32u + 4u);
+    const uint32_t depth = gsplat_tt::env_config::ol_ring_depth();
+    const uint32_t ring_bytes = kOneLaunchRingTiles * (depth * 32u + 4u);
     // Task #196: GSPLAT_TT_OL_BREC_BULK=0 is the kill switch of the fast fold
     // emit's per-bank blendrec reads (default on; same output either way). On:
     // ring halves of 256 pages, so a batch's g run may have gaps.
@@ -1016,9 +1017,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     if (!logged) {
         logged = true;
         std::fprintf(stderr,
-                     "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
+                     "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_RING_DEPTH=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
                      "OL_BREC_BULK=%u OL_EMIT_TOWN=%u cb_bytes/mover=%u shared=%u\n",
-                     pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
+                     pb, ring, depth, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
                      town ? 1u : 0u, mover_bytes,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
@@ -1030,6 +1031,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["EMIT_PUBOC"] = gsplat_tt::env_config::emit_puboc() ? "1u" : "0u";
     defines["OL_PB"] = std::to_string(pb) + "u";
     defines["OL_RING"] = std::to_string(ring) + "u";
+    defines["OL_RING_DEPTH"] = std::to_string(depth) + "u";
     defines["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
     defines["OL_WIN_PAGES"] = std::to_string(win) + "u";
     defines["OL_BREC_BULK"] = brec_bulk ? "1" : "0";
@@ -1055,7 +1057,8 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     }
     if (town) {
         defines["OL_EMIT_TOWN"] = "1";
-        std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"}};
+        std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"},
+                                                    {"OL_RING_DEPTH", std::to_string(depth) + "u"}};
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,
                      ComputeConfig{.defines = tdef});

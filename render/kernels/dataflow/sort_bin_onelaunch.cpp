@@ -89,6 +89,9 @@
 #ifndef OL_RING_TILES
 #define OL_RING_TILES 1024u  // tiles with a ring (CB_RING size); more: rings off
 #endif
+#ifndef OL_RING_DEPTH
+#define OL_RING_DEPTH OL_RING  // task #479: ring records per tile (a multiple of OL_RING)
+#endif
 // Task #181 (host knob GSPLAT_TT_OL_FILL_BULK=0 turns it off): the fold's
 // window fill reads one run per DRAM bank, see fill_window below.
 #ifndef OL_FILL_BULK
@@ -552,11 +555,14 @@ void kernel_main() {
     constexpr uint32_t PB = OL_PB;
     constexpr uint32_t BATCH_ELEMS = PB * ELEMS_PER_PAGE;
     constexpr uint32_t R = OL_RING;
+    constexpr uint32_t D = OL_RING_DEPTH;
     constexpr bool PUBOC = EMIT_PUBOC != 0u;
     static_assert(PB >= 1u && PB <= 16u && (PB & (PB - 1u)) == 0u && CNT_BATCH % PB == 0u,
                   "OL_PB: power of two <= 16 (batches never straddle the window)");
     static_assert(R == 0u || ((R & (R - 1u)) == 0u && R <= 16u && REC_PAGE_RECS % (R ? R : 1u) == 0u),
                   "OL_RING: power of two dividing the record page");
+    static_assert(R == 0u ? D == 0u : ((D & (D - 1u)) == 0u && D >= R && D <= 16u),
+                  "OL_RING_DEPTH: power of two >= OL_RING");
     const bool ring_on = (R != 0u) && num_tiles <= OL_RING_TILES && (tile_cap % REC_PAGE_RECS) == 0u;
 
     const bool tx_is_pow2 = (tiles_x != 0u) && ((tiles_x & (tiles_x - 1u)) == 0u);
@@ -598,10 +604,11 @@ void kernel_main() {
         nbrec = 0;
     };
 
-    // OL_RING: tile t's run at ring_l1 + (t*R + c%R)*32, its first cursor of
-    // this mover in startp[t].
+    // OL_RING: tile t's run at ring_l1 + (t*D + c%D)*32, its first cursor of
+    // this mover in startp[t]. Task #479: D = OL_RING_DEPTH records per tile, so
+    // D / R runs of a tile can be in flight (D == R: one).
     const uint32_t ring_l1 = (R != 0u) ? get_write_ptr(CB_RING + cbo) : 0u;
-    auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + OL_RING_TILES * R * REC_BYTES);
+    auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + OL_RING_TILES * D * REC_BYTES);
     // Task #160 fast emit (the default: rings, PUBOC, tiles_x a power of two):
     // one loop with register locals and the sub_int fast path inlined. Same
     // records, same slots, same writes. Its per-tile cursors are curp itself
@@ -616,7 +623,7 @@ void kernel_main() {
     const uint32_t tile_pages = tile_cap / REC_PAGE_RECS;
     auto flush_run = [&](uint32_t t, uint32_t last) {
         const uint32_t s0 = sort_ol::ring_run_start(startp[t], last, R);
-        noc_async_write(ring_l1 + (t * R + (s0 & (R - 1u))) * REC_BYTES,
+        noc_async_write(ring_l1 + (t * D + (s0 & (D - 1u))) * REC_BYTES,
                         get_noc_addr(t * tile_pages + s0 / REC_PAGE_RECS, bucket_acc) +
                             (s0 % REC_PAGE_RECS) * REC_BYTES,
                         (last + 1u - s0) * REC_BYTES);
@@ -827,7 +834,7 @@ void kernel_main() {
                         noc_async_writes_flushed();
                         EP_ADD(ep_wfl, ep_t);
                     }
-                    pack_rec(reinterpret_cast<volatile uint32_t*>(ring_l1 + (t * R + ri) * REC_BYTES), t);
+                    pack_rec(reinterpret_cast<volatile uint32_t*>(ring_l1 + (t * D + (c & (D - 1u))) * REC_BYTES), t);
                     if (ri == R - 1u) {
                         EP_T0(ep_t);
                         flush_run(t, c);
@@ -1162,7 +1169,7 @@ void kernel_main() {
                             EP_CNT(ep_ncold, 1u);
                         }
                     }
-                    auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * R + ri) * REC_BYTES);
+                    auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * D + (c & (D - 1u))) * REC_BYTES);
                     d[0] = cov0;
                     d[1] = cov1;
                     d[2] = cov2;
