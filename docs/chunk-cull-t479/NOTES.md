@@ -33,3 +33,14 @@ State at hand-off 2 (run 1294):
   tiles; the Mac linker is broken (SDK tbd), so bench479.sh compiles and runs it on the box, plus a
   too-lax-wait mutant that must fail.
 - Running: drive479 t479b (run dir 1294): Tracy counters rop48, then b2b off/cull/cull48/off48.
+
+State at hand-off 3 (run 1306):
+- t479b ran the rop48 Tracy capture (90f1d2ef), but its b2b step was refused by devrun (3600 s timeout over
+  the 600 s reservation ceiling). bench479.sh now takes a phase (smoke, or one round), and drive479.sh runs
+  one 540 s devrun per phase (bda3949b).
+- Ring depth R=4 D=8 under ro (out/dev-rop48-c0.csv.gz), max-core ms/view, off / ro / ro48:
+  sort_ol_town 1.32 / 2.01 / 1.83, sort_ol_emit 1.42 / 2.07 / 1.88, pfwc 2.09 / 2.38 / 2.38,
+  tile_blend_sfpu 4.29 / 4.29 / 4.28. Emit counters per TRISC launch: wfl 0.06 / 0.46 / 0.25 ms,
+  rdy 0.006 / 0.22 / 0.18, net cycles/record 178.8 / 179.2 / 186.9 (2x runs). The deeper ring removes
+  about half of the run wait; about 0.5 ms of sort makespan stays above off.
+- Running: t479c (run dir 1306): b2b off/cull/cull48/off48, 3 rotated rounds, md5s.
