@@ -42,8 +42,10 @@ step() {  # arm [env...]
   return $s
 }
 for a in $ARMS; do
-  if ! step $a && [ "$a" = s ] && grep -q "TT_FATAL\|TT_THROW" "$O/s.out"; then
-    echo "=== retry s with KX=56"; rc=0; step s KX=56 || true
+  if ! step $a && [ "$a" = s ]; then
+    if grep -q "state.offset\|too large" "$O/s.out"; then echo "=== retry s with KX=34"; rc=0; step s KX=34 && continue; fi
+    echo "=== s (all RISCs) failed: per-RISC fallback"; rc=0
+    for r in 1 4 3; do step s SR=$r; cp "$O/s.out" "$O/s$r.out"; ssh -o BatchMode=yes "$H" "cd $T/tmp/t484 && for f in dev-s.csv.gz run-s.log; do [ -f \$f ] && mv \$f \${f/-s/-s$r}; done"; done
   fi
 done
 scp -q -o BatchMode=yes "$H:$T/tmp/t484/run-*.log" "$H:$T/tmp/t484/dev-*.csv.gz" "$O/" || rc=4

@@ -26,15 +26,32 @@ case $arm in
     cache=ttmc-gstt2-t484-prof
     args+=(--b2b-passes 1 --b2b-warmup 0)
     rm -rf $S/prof-$arm; mkdir -p $S/prof-$arm
-    envs+=(TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$S/prof-$arm)
-    case $arm in s|sr) envs+=(GSPLAT_TT_PFWC_STEPCYC=1 GSPLAT_TT_PFWC_STEPRISC=9 GSPLAT_TT_KCFG_EXTRA_KB=${KX:-40}) ;; esac
+    # The device CSV only reaches disk through the Tracy mid-run dump (as opt/profiler/capture_tracy.sh):
+    # render_clean never closes the device. Output: $S/prof-$arm/.logs/profile_log_device.csv.
+    envs+=(TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1)
+    # KCFG: host default with the profiler is +32 KB; the fused programs' static CBs overflow L1
+    # above ~+34 KB, so only KX (one retry on a too-large pfwc) overrides it.
+    case $arm in s|sr) envs+=(GSPLAT_TT_PFWC_STEPCYC=1 GSPLAT_TT_PFWC_STEPRISC=${SR:-9})
+      [ -n "${KX:-}" ] && envs+=(GSPLAT_TT_KCFG_EXTRA_KB=$KX) ;; esac
     [ $arm = sr ] && envs+=(GSPLAT_TT_PFWC_SKIP_RGB=1) ;;
   *) echo "bad arm $arm"; exit 2 ;;
 esac
 echo "=== $arm $(cut -c1-7 SHA) ${envs[*]} $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
-env "${envs[@]}" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/$cache timeout ${RUN_TIMEOUT:-500} \
-  python3 render/run.py "${args[@]}" > $S/run-$arm.log 2>&1
-rc=$?
+if [ $arm = u ]; then
+  env "${envs[@]}" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/$cache timeout ${RUN_TIMEOUT:-500} \
+    python3 render/run.py "${args[@]}" > $S/run-$arm.log 2>&1
+  rc=$?
+else
+  printf '#!/bin/bash\ncd %q && exec python3 render/run.py %s\n' "$T" "${args[*]}" > $S/inner-$arm.sh
+  chmod +x $S/inner-$arm.sh
+  # Own session so a lingering capture-release is stopped by our pgid, never by name.
+  env "${envs[@]}" TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/$cache setsid timeout ${RUN_TIMEOUT:-500} \
+    python3 -m tracy -r -p -v --dump-device-data-mid-run -o $S/prof-$arm $S/inner-$arm.sh \
+    > $S/run-$arm.log 2>&1 < /dev/null &
+  pg=$!; wait $pg; rc=$?
+  kill -- -$pg 2>/dev/null
+  grep -q 'Traceback' $S/run-$arm.log && rc=1
+fi
 echo "run rc=$rc"
 grep -E "^(B2B |B2B_STAGES|SUMMARY)|\[run\] B2B pass|TTW_TIMING (ms_view|b2b_ms_frame)=|Traceback|TT_THROW|TT_FATAL|error:" $S/run-$arm.log | cut -c1-600 | head -40
 if [ $rc = 124 ] || [ $rc = 137 ]; then echo "HANG in $arm: tt-smi -r"; tt-smi -r > $S/reset-$arm.log 2>&1; echo "reset rc=$?"; exit 124; fi
