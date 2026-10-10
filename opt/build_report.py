@@ -179,6 +179,10 @@ def normalize_ttw_row(r: dict) -> dict:
         "tracy": r.get("tracy") or "",
         "iter": n,
         "device_screenshot": r.get("device_screenshot"),
+        # Task #465: back-to-back ms/view is the headline; rows before it carry
+        # only the per-view latency, shown as 'latency (legacy)'.
+        "ms_view_b2b": metrics.get("ms_view_b2b"),
+        "ms_view_latency": metrics.get("ms_view_latency"),
     }
 
 
@@ -1199,6 +1203,15 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
         sum_ms_str = f"{sum_ms_30 / VIEWS_PER_RUN:.2f} ms/frame"
     else:
         sum_ms_str = "n/a"
+    b2b = r.get("ms_view_b2b")
+    if isinstance(b2b, (int, float)):
+        lat = r.get("ms_view_latency")
+        lat_s = f", latency {lat:.3f}" if isinstance(lat, (int, float)) else ""
+        ms_line = f"<b>b2b {b2b:.3f} ms/view</b> ({1000.0 / b2b:.1f} FPS){lat_s}"
+    elif r.get("_source") == "ttw" and sum_ms_str != "n/a":
+        ms_line = f"latency (legacy) {sum_ms_str}"
+    else:
+        ms_line = f"ms_per_frame={sum_ms_str}"
 
     ensure_hero_diff10(iter_dir)
     preview_paths = _find_hero_paths(iter_dir, runtime)
@@ -1339,7 +1352,7 @@ def _iter_card_html(r: dict, runtime: str, position_label: str = "") -> str:
   <div class='backburner-meta'>
     <h3>{pos_html}{priority} {iter_dir} — {verdict}</h3>
     <p class='iter-ts'>{ts_disp}</p>
-    <p>ms_per_frame={sum_ms_str}, psnr={psnr_min_str}</p>
+    <p>{ms_line}, psnr={psnr_min_str}</p>
     {caveat_html}
     {desc_html}
     {build_html}
@@ -1373,10 +1386,10 @@ THROUGHPUT_JSONL = OPT_DIR / "ttw" / "throughput.jsonl"
 
 
 def throughput_section() -> str:
-    """Secondary metric (task #275): back-to-back throughput, ms/frame.
+    """Older back-to-back throughput rows (task #275), from opt/ttw/throughput.jsonl.
 
-    Rows come from opt/ttw/throughput.jsonl (render/run.py --back-to-back). They
-    never feed the primary ms/view latency, the iteration ledger or the GPU anchor."""
+    Since task #465 b2b is the headline (b2b_headline_section, from iters.jsonl
+    metrics.ms_view_b2b); these older rows stay as history only."""
     rows = _read_jsonl(THROUGHPUT_JSONL)
     if not rows:
         return ""
@@ -1402,11 +1415,11 @@ def throughput_section() -> str:
 <section style='border-left:4px solid #8d99ae;padding:8px 16px'>
   <h2 style='margin-top:0'>Throughput, back-to-back
     <span style='background:#8d99ae;color:#fff;padding:1px 8px;border-radius:10px;
-      font-size:12px'>SECONDARY METRIC</span></h2>
+      font-size:12px'>HISTORY (before #465)</span></h2>
   <p>Frames rendered back to back with no host work between views
-  (<code>render/run.py --back-to-back</code>): wall time / frames. The <b>primary
-  metric stays per-view latency</b> (ms/view, as in the ledger and the GPU comparison);
-  this table does not change it. All rows measured on device, 3 untraced rounds.
+  (<code>render/run.py --back-to-back</code>): wall time / frames. Since task #465 back-to-back
+  ms/view is the <b>headline metric</b> (see the headline section at the top); these are
+  the older #275 throughput rows, kept as history. All rows measured on device, 3 untraced rounds.
   Kept = frames kept and checked byte for byte against a check pass;
   dropped = frames dropped as <code>render()</code> returns, like a viewer.</p>
   <table class='rows'>
@@ -1673,11 +1686,133 @@ def cull_tune_section() -> str:
 """
 
 
-# TT anchor for the GPU ratio: the newest measured tip, i.e. the highest-numbered
-# 'keep' row in opt/ttw/iters.jsonl with a measured 30-view 1024x1024 bicycle
-# timings.ms_view, labelled with its board. Falls back to iter-180 (19.65 ms,
-# docs/blend-diet-t146) only if no such row exists.
+# --- Headline metric: back-to-back ms/view (user, 2026-10-10; task #465) ------
+# render/run.py --back-to-back over the 30 bicycle views; the row value is the
+# median of all measured passes (metrics.ms_view_b2b, passes in
+# metrics.ms_view_b2b_passes). Latency without --dump-views is secondary
+# (metrics.ms_view_latency). Rows before #465 carry only latency, shown as
+# 'latency (legacy)'; no b2b number is ever filled in for them.
+B2B_REQUIRED_AFTER = 216   # iters above this must record b2b (validator)
+B2B_MIN_PASSES = 3
+KEEP_GATE_MS = 0.1         # b2b ms/view a lever must save to be kept
+KEEP_GATE_PSNR = 42.4      # hero PSNR vs reference_v2 when the md5 changes
+KEEP_GATE_TEXT = (
+    f"A lever is kept if it saves at least {KEEP_GATE_MS} ms/view back-to-back, taken as the "
+    f"median of at least {B2B_MIN_PASSES} alternating A/B passes in one session on one board, "
+    f"with the same sweep md5 (or hero PSNR at least {KEEP_GATE_PSNR} dB vs "
+    f"benchmarks/reference_v2/hero.png) and no tile seams in the device hero. Latency "
+    f"with --dump-views hides about 1.7 ms of pfwc device time (#464) and never keeps or shelves a lever.")
+
+
+def b2b_problems(r: dict) -> list[str]:
+    """Problems with a row's b2b headline fields (empty list = fine).
+
+    Required for every non-blocked, non-reject ttw iter > B2B_REQUIRED_AFTER:
+    metrics.ms_view_b2b > 0, metrics.ms_view_b2b_passes with at least
+    B2B_MIN_PASSES positive values whose median is ms_view_b2b (within 2e-3)."""
+    it = r.get("iter")
+    if not isinstance(it, int) or it <= B2B_REQUIRED_AFTER:
+        return []
+    if str(r.get("decision") or "").lower() in ("blocked", "reject"):
+        return []
+    m = r.get("metrics") if isinstance(r.get("metrics"), dict) else {}
+    b2b, passes = m.get("ms_view_b2b"), m.get("ms_view_b2b_passes")
+    if not isinstance(b2b, (int, float)) or b2b <= 0:
+        return [f"iter {it}: no metrics.ms_view_b2b (back-to-back is the headline since #465)"]
+    if not (isinstance(passes, list) and len(passes) >= B2B_MIN_PASSES
+            and all(isinstance(x, (int, float)) and x > 0 for x in passes)):
+        return [f"iter {it}: metrics.ms_view_b2b_passes needs >= {B2B_MIN_PASSES} positive values"]
+    med = statistics.median(passes)
+    if abs(med - b2b) > 2e-3:
+        return [f"iter {it}: ms_view_b2b {b2b} is not the median of its passes ({med:.3f})"]
+    lat = m.get("ms_view_latency")
+    if lat is not None and not (isinstance(lat, (int, float)) and lat > 0):
+        return [f"iter {it}: metrics.ms_view_latency {lat!r} is not a positive number"]
+    return []
+
+
+def check_b2b(rows: list[dict]) -> list[str]:
+    return [p for r in rows for p in b2b_problems(r)]
+
+
+def b2b_rows() -> list[dict]:
+    """ttw rows that carry a measured b2b headline, oldest first."""
+    return [r for r in load_ttw_iters()
+            if isinstance((r.get("metrics") or {}).get("ms_view_b2b"), (int, float))]
+
+
+def b2b_best() -> dict[str, dict]:
+    """Per board, the row with the lowest b2b ms/view."""
+    best: dict[str, dict] = {}
+    for r in b2b_rows():
+        b = (r.get("metrics") or {}).get("board") or "board not recorded"
+        if b not in best or r["metrics"]["ms_view_b2b"] < best[b]["metrics"]["ms_view_b2b"]:
+            best[b] = r
+    return best
+
+
+def b2b_headline_section() -> str:
+    """Headline: back-to-back ms/view, best per board, GPU G1 (published), keep gate."""
+    rows = b2b_rows()
+    g1 = next(r["ms"] for r in PUBLISHED_GPU_ROWS if r["id"] == "G1")
+    best_lines = []
+    for board, r in sorted(b2b_best().items(), key=lambda kv: kv[1]["metrics"]["ms_view_b2b"]):
+        m = r["metrics"]
+        b2b, lat = m["ms_view_b2b"], m.get("ms_view_latency")
+        lat_s = f"; latency {lat:.3f} ms/view (secondary)" if isinstance(lat, (int, float)) else ""
+        best_lines.append(
+            f"<li><b>{html_escape(board)}: {b2b:.3f} ms/view b2b ({1000.0 / b2b:.1f} FPS)</b>, "
+            f"iter {r.get('iter')} @ <code>{html_escape(str(m.get('commit', '')))}</code>{lat_s}. "
+            f"vs GPU G1 {g1} ms/view (RTX A6000, <b>published, not measured</b>): "
+            f"<b>{g1 / b2b:.2f}&times;</b> {'faster' if b2b < g1 else 'slower'}.</li>")
+    body = []
+    for r in sorted(rows, key=lambda r: r.get("iter") or 0, reverse=True):
+        m = r["metrics"]
+        passes = ", ".join(f"{x:.3f}" for x in m.get("ms_view_b2b_passes", []))
+        lat = m.get("ms_view_latency")
+        lat_runs = ", ".join(f"{x:.3f}" for x in m.get("ms_view_latency_runs", []))
+        shot = r.get("device_screenshot") or {}
+        psnr = shot.get("psnr_vs_ref")
+        body.append(
+            f"<tr><td>{r.get('iter')}</td><td>{html_escape(str(r.get('decision', '')))}</td>"
+            f"<td>{html_escape(str(m.get('board', '')))}</td>"
+            f"<td>{html_escape(str(m.get('build', '')))} <code>{html_escape(str(m.get('commit', '')))}</code></td>"
+            f"<td><b>{m['ms_view_b2b']:.3f}</b> ({1000.0 / m['ms_view_b2b']:.1f} FPS)<br><small>passes {passes}</small></td>"
+            f"<td>{'&mdash;' if lat is None else f'{float(lat):.3f}'}<br><small>{lat_runs}</small></td>"
+            f"<td><code>{html_escape(str(m.get('md5', '')))}</code></td>"
+            f"<td>{'&mdash;' if psnr is None else f'{psnr} dB'}</td></tr>")
+    table = ("<p>No b2b rows yet.</p>" if not body else
+             "<table class='rows'><tr><th>iter</th><th>row</th><th>board</th><th>build</th>"
+             "<th>b2b ms/view (headline): median, passes</th><th>latency ms/view (secondary, no dump)</th>"
+             "<th>sweep md5</th><th>hero PSNR vs reference_v2</th></tr>" + "".join(body) + "</table>")
+    return f"""
+<section class='b2b-headline' style='border-left:4px solid #1d6fa5;background:#f2f8fc;padding:12px 16px'>
+  <h2 style='margin-top:0'>Headline: back-to-back ms/view</h2>
+  <p>Sustained rendering, <code>render/run.py --back-to-back</code> over the 30 bicycle views at
+  1024&times;1024: what the viewer and real use get. Each value is the median of all measured passes;
+  the passes are listed. Latency (no <code>--dump-views</code>) is a secondary column. Iterations
+  before #465 were measured only in latency; their cards and the trajectory below say
+  <b>latency (legacy)</b>, and no b2b number is filled in for them.</p>
+  <h3>Best b2b per board</h3>
+  <ul>{''.join(best_lines) or '<li>none measured yet</li>'}</ul>
+  {table}
+  <p><b>Keep gate:</b> {html_escape(KEEP_GATE_TEXT)}</p>
+</section>
+"""
+
+
+# TT anchor for the GPU ratio: the best (lowest) back-to-back ms/view in
+# opt/ttw/iters.jsonl (headline since #465), labelled with its board. Without
+# any b2b row it falls back to the newest kept row's latency, labelled
+# 'latency (legacy)', and to iter-180 (19.65 ms, docs/blend-diet-t146) last.
 def tt_anchor() -> tuple[float, str]:
+    bb = b2b_best()
+    if bb:
+        r = min(bb.values(), key=lambda r: r["metrics"]["ms_view_b2b"])
+        m = r["metrics"]
+        return float(m["ms_view_b2b"]), (
+            f"{m.get('board') or 'board not recorded'}, back-to-back (headline), iter-{r.get('iter')} "
+            f"{m.get('build') or ''} @ {m.get('commit') or ''}")
     best = None
     for r in load_ttw_iters():
         ms = (r.get("timings") or {}).get("ms_view")
@@ -1690,7 +1825,7 @@ def tt_anchor() -> tuple[float, str]:
     m = best.get("metrics") if isinstance(best.get("metrics"), dict) else {}
     board = m.get("board") or "board not recorded"
     commit = (best.get("buildid") or {}).get("cpp", "")
-    label = f"{board}, iter-{best.get('iter')} measured tip"
+    label = f"{board}, iter-{best.get('iter')} measured tip, latency (legacy)"
     if commit:
         label += f" ({commit})"
     return float(best["timings"]["ms_view"]), label
@@ -1861,11 +1996,13 @@ def stop_line_section() -> str:
 <section class='stop-line' style='border-left:4px solid #2a7;background:#f3fbf6;padding:12px 16px'>
   <h2 style='margin-top:0'>Conclusions / stop line</h2>
   <p><b>Final best: iter {STOP_ITER}</b> (tag <code>{STOP_TAG}</code>, commit <code>{STOP_COMMIT}</code>,
-  <code>GSPLAT_TT_PERM_NOC=7</code>): {best}</p>
+  <code>GSPLAT_TT_PERM_NOC=7</code>), latency (legacy): {best} Its back-to-back numbers are in the
+  headline section above.</p>
   <h3>Trajectory since this project started (2026-09-29)</h3>
-  <p>Running-best milestones from the ledger; speedup is against iter {STOP_TRAJECTORY_ITERS[0]},
+  <p>Running-best milestones from the ledger, in per-view latency (legacy metric; the b2b
+  headline is above); speedup is against iter {STOP_TRAJECTORY_ITERS[0]},
   the best when the project started. Boards differ between rows; every A/B ran both arms on one box.</p>
-  <table class='rows'><tr><th>iter</th><th>ms/view</th><th>FPS</th><th>vs start</th><th>board</th></tr>
+  <table class='rows'><tr><th>iter</th><th>latency (legacy) ms/view</th><th>FPS</th><th>vs start</th><th>board</th></tr>
   {''.join(traj)}</table>
   <h3>Closed levers (gate: a lever must be worth at least {STOP_GATE_MS} ms/view)</h3>
   <table class='rows'><tr><th>task</th><th>lever</th><th>number</th><th>outcome</th></tr>
@@ -1893,7 +2030,8 @@ def published_gpu_section() -> str:
         ratio = (
             "&mdash;"
             if r["ms"] is None
-            else f"GPU <b>{TT_ANCHOR_MS / r['ms']:.1f}&times;</b> faster"
+            else (f"GPU <b>{TT_ANCHOR_MS / r['ms']:.2f}&times;</b> faster" if TT_ANCHOR_MS > r["ms"]
+                  else f"TT <b>{r['ms'] / TT_ANCHOR_MS:.2f}&times;</b> faster")
         )
         src = (
             f"<a href='{r['src']}' target='_blank'>{r['src_label']}</a>"
@@ -2210,6 +2348,7 @@ def build_html(rows: list[dict]) -> str:
 <body>
 <h1>gstt2 — Optimization Report</h1>
 {meta}
+{b2b_headline_section()}
 {conclusion_section()}
 {stop_line_section()}
 {in_flight_section()}

@@ -5,6 +5,20 @@ carry these before the iteration is done. `python3 opt/build_report.py` and
 `python3 opt/validate_report.py` fail when the device screenshot is missing.
 
 1. Measure on the p150/p100 device with the bicycle reference (ms/view, md5).
+   **Headline = back-to-back ms/view (user 2026-10-10, task #465).** Run
+   `render/run.py --back-to-back --b2b-passes 3` and record in `metrics`:
+   `ms_view_b2b` (median of all measured passes), `ms_view_b2b_passes` (every
+   pass value, at least 3), `ms_view_latency` (secondary: run.py without
+   `--back-to-back` and without `--dump-views`), plus `board`, `commit`, `build`.
+   The validator fails any iteration above 216 without them. Rows up to 216
+   keep their latency number, shown as "latency (legacy)"; never invent b2b
+   numbers for them. Template: `docs/b2b-rebaseline-t465/bench465.sh`.
+   **Keep gate:** a lever is kept if it saves at least 0.1 ms/view b2b, taken
+   as the median of at least 3 alternating A/B passes in one session on one
+   board, with the same sweep md5 (or hero PSNR at least 42.4 dB vs
+   `benchmarks/reference_v2/hero.png`) and no tile seams. Latency with
+   `--dump-views` hides about 1.7 ms of pfwc device time (#464) and never
+   keeps or shelves a lever.
 2. **Device screenshot (required, user 2026-10-05).** Render the bicycle hero
    view on the device at the iteration's commit and config (never the CPU
    reference) and save it as `opt/metal-screenshots/ttw-<NNN>/hero.png`.
