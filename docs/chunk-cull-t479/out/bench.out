@@ -1,15 +1,174 @@
-[ttw 2026-10-10T07:50:08-0700] REFUSED: devrun (--timeout / ttw.toml timeout_s) timeout=3600s is over the 600s reservation ceiling.
-[ttw 2026-10-10T07:50:08-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 3600s.
-[ttw 2026-10-10T07:50:08-0700]   A run that cannot fit under 600s is parking HOST work on a shared box.
-[ttw 2026-10-10T07:50:08-0700]   This is NOT 'do not run it' — restructure the run and resubmit. The measurement still happens.
-[ttw 2026-10-10T07:50:08-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
-[ttw 2026-10-10T07:50:08-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
-[ttw 2026-10-10T07:50:08-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
-[ttw 2026-10-10T07:50:08-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
-[ttw 2026-10-10T07:50:08-0700]       CPU reference / PCC    -> run the oracle off-reservation
-[ttw 2026-10-10T07:50:08-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
-[ttw 2026-10-10T07:50:08-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
-[ttw 2026-10-10T07:50:08-0700]       long sweep             -> several shorter jobs
-[ttw 2026-10-10T07:50:08-0700]       untraced/eager gen     -> the traced/warm path
-[ttw 2026-10-10T07:50:08-0700]   Then size the timeout from the MEASURED device-held time (aim <=400s).
-[ttw 2026-10-10T07:50:08-0700] ERROR: reservation over the 600s ceiling — see knowledge/reservation-budget.md
+[ttw 2026-10-10T08:12:10-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=540s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T08:12:10-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 540s.
+[ttw 2026-10-10T08:12:10-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T08:12:10-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T08:12:10-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T08:12:10-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T08:12:10-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T08:12:10-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T08:12:10-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T08:12:10-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T08:12:10-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T08:12:10-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t479-b2b-smoke  timeout=540s  worry=600s  ts=2026-10-10T08:12:11-0700
+cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' smoke
+-----------------------------------------
+=== bench host=yyzo-bh-04-special-smarton-for-reservation-244892 2026-10-10T15:12:11Z card=p100a load=4.28 3.16 2.82 sha=bda3949b
+TOWN_TEST OK: 300 protocol runs
+TOWN_MUTANT fails as expected: 21 FAIL lines
+=== s0-off start 15:12:12 arm=off env=[]
+s0-off rc=0 15:12:25
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+=== s0-cull start 15:12:25 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1]
+s0-cull rc=0 15:12:33
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+=== s0-cull48 start 15:12:33 arm=cull48 env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+s0-cull48 rc=0 15:12:40
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+=== s0-off48 start 15:12:40 arm=off48 env=[GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+s0-off48 rc=0 15:12:43
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+=== bench end phase=smoke rc=0 2026-10-10T15:12:43Z
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t479/tmp/ttw-state/logs/t479-b2b-smoke-20261010-081210.log
+[ttw 2026-10-10T08:12:52-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=540s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T08:12:52-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 540s.
+[ttw 2026-10-10T08:12:52-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T08:12:52-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T08:12:52-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T08:12:52-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T08:12:52-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T08:12:52-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T08:12:52-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T08:12:52-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T08:12:52-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T08:12:52-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t479-b2b-1  timeout=540s  worry=600s  ts=2026-10-10T08:12:52-0700
+cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' 1
+-----------------------------------------
+=== bench host=yyzo-bh-04-special-smarton-for-reservation-244892 2026-10-10T15:12:53Z card=p100a load=4.57 3.41 2.92 sha=bda3949b
+=== r1-off start 15:12:53 arm=off env=[]
+r1-off rc=0 15:13:05
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.826 fps=101.77 pass_ms_frame=9.833,9.822,9.825 check_pass_ms_frame=9.882 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.826 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r1-off
+TTW_TIMING b2b_ms_frame=9.826
+LIST_MD5 r1-off 906e0435 views=30 hero=86524912
+=== r1-cull start 15:13:05 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1]
+r1-cull rc=0 15:13:18
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=10.252 fps=97.54 pass_ms_frame=10.252,10.248,10.256 check_pass_ms_frame=10.307 raw_md5=e9bee2cf gap_ms=0.00 render_ms_frame=10.252 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r1-cull
+TTW_TIMING b2b_ms_frame=10.252
+LIST_MD5 r1-cull 5f542ec0 views=30 hero=aa232dbd
+=== r1-cull48 start 15:13:18 arm=cull48 env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+r1-cull48 rc=0 15:13:31
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.988 fps=100.12 pass_ms_frame=9.988,9.986,9.990 check_pass_ms_frame=10.048 raw_md5=e9bee2cf gap_ms=0.00 render_ms_frame=9.988 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r1-cull48
+TTW_TIMING b2b_ms_frame=9.988
+LIST_MD5 r1-cull48 5f542ec0 views=30 hero=aa232dbd
+=== r1-off48 start 15:13:32 arm=off48 env=[GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+r1-off48 rc=0 15:13:43
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.769 fps=102.36 pass_ms_frame=9.773,9.770,9.765 check_pass_ms_frame=9.851 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.769 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r1-off48
+TTW_TIMING b2b_ms_frame=9.769
+LIST_MD5 r1-off48 906e0435 views=30 hero=86524912
+=== bench end phase=1 rc=0 2026-10-10T15:13:43Z
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t479/tmp/ttw-state/logs/t479-b2b-1-20261010-081252.log
+[ttw 2026-10-10T08:13:44-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=540s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T08:13:44-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 540s.
+[ttw 2026-10-10T08:13:44-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T08:13:44-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T08:13:44-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T08:13:44-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T08:13:44-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T08:13:44-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T08:13:44-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T08:13:44-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T08:13:44-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T08:13:44-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t479-b2b-2  timeout=540s  worry=600s  ts=2026-10-10T08:13:45-0700
+cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' 2
+-----------------------------------------
+=== bench host=yyzo-bh-04-special-smarton-for-reservation-244892 2026-10-10T15:13:45Z card=p100a load=4.37 3.54 2.99 sha=bda3949b
+=== r2-cull start 15:13:45 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1]
+r2-cull rc=0 15:13:58
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=10.254 fps=97.52 pass_ms_frame=10.254,10.252,10.256 check_pass_ms_frame=10.324 raw_md5=e9bee2cf gap_ms=0.00 render_ms_frame=10.254 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r2-cull
+TTW_TIMING b2b_ms_frame=10.254
+LIST_MD5 r2-cull 5f542ec0 views=30 hero=aa232dbd
+=== r2-cull48 start 15:13:58 arm=cull48 env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+r2-cull48 rc=0 15:14:12
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.984 fps=100.16 pass_ms_frame=9.988,9.984,9.979 check_pass_ms_frame=10.047 raw_md5=e9bee2cf gap_ms=0.00 render_ms_frame=9.984 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r2-cull48
+TTW_TIMING b2b_ms_frame=9.984
+LIST_MD5 r2-cull48 5f542ec0 views=30 hero=aa232dbd
+=== r2-off48 start 15:14:12 arm=off48 env=[GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+r2-off48 rc=0 15:14:24
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.767 fps=102.39 pass_ms_frame=9.784,9.763,9.754 check_pass_ms_frame=9.850 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.767 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r2-off48
+TTW_TIMING b2b_ms_frame=9.767
+LIST_MD5 r2-off48 906e0435 views=30 hero=86524912
+=== r2-off start 15:14:24 arm=off env=[]
+r2-off rc=0 15:14:35
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.840 fps=101.62 pass_ms_frame=9.850,9.848,9.822 check_pass_ms_frame=9.907 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.840 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r2-off
+TTW_TIMING b2b_ms_frame=9.840
+LIST_MD5 r2-off 906e0435 views=30 hero=86524912
+=== bench end phase=2 rc=0 2026-10-10T15:14:35Z
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t479/tmp/ttw-state/logs/t479-b2b-2-20261010-081344.log
+[ttw 2026-10-10T08:14:36-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=540s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T08:14:36-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 540s.
+[ttw 2026-10-10T08:14:36-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T08:14:36-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T08:14:36-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T08:14:36-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T08:14:36-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T08:14:36-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T08:14:36-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T08:14:36-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T08:14:36-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T08:14:36-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #127 sha=e15c6312 bin=e846f978141865a4 t479 bda3949b chunk cull profile (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t479-b2b-3  timeout=540s  worry=600s  ts=2026-10-10T08:14:37-0700
+cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/bench479.sh /localdev/smarton/gstt2-t479/tmp/t479b 3 'off cull cull48 off48' 3
+-----------------------------------------
+=== bench host=yyzo-bh-04-special-smarton-for-reservation-244892 2026-10-10T15:14:37Z card=p100a load=4.23 3.65 3.06 sha=bda3949b
+=== r3-cull48 start 15:14:37 arm=cull48 env=[GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+r3-cull48 rc=0 15:14:51
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.983 fps=100.17 pass_ms_frame=9.982,9.983,9.984 check_pass_ms_frame=10.044 raw_md5=e9bee2cf gap_ms=0.00 render_ms_frame=9.983 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r3-cull48
+TTW_TIMING b2b_ms_frame=9.983
+LIST_MD5 r3-cull48 5f542ec0 views=30 hero=aa232dbd
+=== r3-off48 start 15:14:51 arm=off48 env=[GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8]
+r3-off48 rc=0 15:15:02
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=4 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.781 fps=102.24 pass_ms_frame=9.801,9.776,9.765 check_pass_ms_frame=9.844 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.781 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r3-off48
+TTW_TIMING b2b_ms_frame=9.781
+LIST_MD5 r3-off48 906e0435 views=30 hero=86524912
+=== r3-off start 15:15:02 arm=off env=[]
+r3-off rc=0 15:15:14
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.844 fps=101.59 pass_ms_frame=9.831,9.853,9.847 check_pass_ms_frame=9.888 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.844 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r3-off
+TTW_TIMING b2b_ms_frame=9.844
+LIST_MD5 r3-off 906e0435 views=30 hero=86524912
+=== r3-cull start 15:15:14 arm=cull env=[GSPLAT_TT_CHUNK_CULL=1]
+r3-cull rc=0 15:15:28
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=10.253 fps=97.54 pass_ms_frame=10.255,10.255,10.248 check_pass_ms_frame=10.312 raw_md5=e9bee2cf gap_ms=0.00 render_ms_frame=10.253 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t479/tmp/t479-r3-cull
+TTW_TIMING b2b_ms_frame=10.253
+LIST_MD5 r3-cull 5f542ec0 views=30 hero=aa232dbd
+=== bench end phase=3 rc=0 2026-10-10T15:15:28Z
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t479/tmp/ttw-state/logs/t479-b2b-3-20261010-081436.log
