@@ -15,7 +15,7 @@ put() { scp -q "${SSHO[@]}" "$1" "$H:$2.tmp470" && "${SSH[@]}" "mv $2.tmp470 $2"
 VSH=${TMPDIR:-/tmp}/viewer-t470.sh; git show origin/smarton/tt-project-opt:opt/viewer/viewer.sh > $VSH
 "$TTP_PROJECT/harness/bin/ssh-preflight" $H
 echo "=== prep $(date -u +%FT%TZ)"
-"${SSH[@]}" "df -h /localdev | tail -1; ls -d $T $SRC 2>&1"
+"${SSH[@]}" "df -h /localdev | tail -1; ls -d $T $SRC 2>&1; true"
 base=$("${SSH[@]}" "cat $T/SHA 2>/dev/null || cat $SRC/SHA")
 dev=$(git diff --name-only "$base" HEAD -- render | grep -v '^render/run.py$' || true)
 [ -z "$dev" ] || { echo "device code differs from tree base ${base:0:8}: $dev"; exit 6; }
@@ -32,7 +32,7 @@ echo "=== viewer stop $(date -u +%FT%TZ)"
 VIEWER_HOST=$H bash $VSH stop
 trap 'rc=$?; restart_fallback; echo "drive470 exit $rc"; echo $rc > "$MARK"' EXIT
 "${SSH[@]}" "VSTART=$P/vstart470.sh setsid nohup bash $P/bench470.sh $O $T 3 > $P/bench470.log 2>&1 < /dev/null &"
-for _ in $(seq 400); do "${SSH[@]}" "test -e $O/vstarted" && break; sleep 5; done
+for _ in $(seq 1200); do "${SSH[@]}" "test -e $O/vstarted" && break; sleep 5; done
 "${SSH[@]}" "test -e $O/vstarted" || restart_fallback
 trap 'rc=$?; echo "drive470 exit $rc"; echo $rc > "$MARK"' EXIT
 for _ in $(seq 60); do "${SSH[@]}" "grep -q READY $VDIR/viewer.log" && break; sleep 3; done
