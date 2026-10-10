@@ -12,7 +12,7 @@
 [ttw 2026-10-10T09:17:10-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #125 sha=d866a6c9 bin=f70471ac80e64c93 t489 d866a6c9 PFWC_ACQ_FUSE b2b A/B (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t489-dump  timeout=560s  worry=600s  ts=2026-10-10T09:17:11-0700
 cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-fuse-t489/remote_ab.sh 9 dump off on p
