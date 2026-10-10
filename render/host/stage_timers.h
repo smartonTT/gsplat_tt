@@ -75,6 +75,18 @@ struct Acc {
     double sort_publish_host = 0.0;
     double sort_publish_wait = 0.0;
     double sort_mat = 0.0;
+    // Task #483: the host steps the leaves above left out (one-launch path).
+    //   pre          P read -> emit: buffer grow checks + device_state registers
+    //   log          the per-frame [SORT] stderr line
+    //   cont_prep    blend host prep before its rtargs: buffer lookups, out ring,
+    //                parked-mat fallback (inside the fused continuation)
+    //   cont_rtargs  blend per-core runtime-arg build + SetRuntimeArgs
+    //   cont_other   continuation wall minus its booked buckets and the two above
+    double sort_pre = 0.0;
+    double sort_log = 0.0;
+    double sort_cont_prep = 0.0;
+    double sort_cont_rtargs = 0.0;
+    double sort_cont_other = 0.0;
     // Sub-buckets of `project` (render.cpp run_project + pfwc_device +
     // gather_visible_device). Disjoint; project - sum(project_*) is the rest.
     //   cov3d           scene cov3d 9->6 repack (cached after the first view)

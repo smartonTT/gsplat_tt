@@ -976,7 +976,8 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     const uint32_t pb = gsplat_tt::env_config::ol_pair_batch();
     const uint32_t ring = gsplat_tt::env_config::ol_ring();
     const uint32_t win = gsplat_tt::env_config::ol_win_pages();
-    const uint32_t ring_bytes = kOneLaunchRingTiles * (ring * 32u + 4u);
+    const uint32_t depth = gsplat_tt::env_config::ol_ring_depth();
+    const uint32_t ring_bytes = kOneLaunchRingTiles * (depth * 32u + 4u);
     // Task #196: GSPLAT_TT_OL_BREC_BULK=0 is the kill switch of the fast fold
     // emit's per-bank blendrec reads (default on; same output either way). On:
     // ring halves of 256 pages, so a batch's g run may have gaps.
@@ -1021,9 +1022,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     if (!logged) {
         logged = true;
         std::fprintf(stderr,
-                     "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
+                     "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_RING_DEPTH=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
                      "OL_BREC_BULK=%u OL_EMIT_TOWN=%u cb_bytes/mover=%u shared=%u\n",
-                     pb, ring, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
+                     pb, ring, depth, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
                      town ? 1u : 0u, mover_bytes,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
@@ -1035,6 +1036,7 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     defines["EMIT_PUBOC"] = gsplat_tt::env_config::emit_puboc() ? "1u" : "0u";
     defines["OL_PB"] = std::to_string(pb) + "u";
     defines["OL_RING"] = std::to_string(ring) + "u";
+    defines["OL_RING_DEPTH"] = std::to_string(depth) + "u";
     defines["OL_RING_TILES"] = std::to_string(kOneLaunchRingTiles) + "u";
     defines["OL_WIN_PAGES"] = std::to_string(win) + "u";
     defines["OL_BREC_BULK"] = brec_bulk ? "1" : "0";
@@ -1061,7 +1063,8 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
     }
     if (town) {
         defines["OL_EMIT_TOWN"] = "1";
-        std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"}};
+        std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"},
+                                                    {"OL_RING_DEPTH", std::to_string(depth) + "u"}};
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
         if (rec32) tdef["PFWC_REC32"] = "1";
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,
@@ -2270,8 +2273,8 @@ static gsplat_cpu::SortResult sort_resident_pairs(
         } else {
             distributed::EnqueueReadMeshBuffer(*ctx->cq, pbuf, bP, true);
         }
-        T.pread_ms =
-            std::chrono::duration<double, std::milli>(clk::now() - t_total0_rp).count();
+        const auto t_pre0 = clk::now();
+        T.pread_ms = std::chrono::duration<double, std::milli>(t_pre0 - t_total0_rp).count();
         const uint32_t P_full = pbuf[0];
         const uint32_t P_pad = pbuf[1];
         // S5.3 host-free overflow guard: tile_assign's scan_bases CLAMPS the
@@ -2415,6 +2418,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             ensure_onelaunch_buffers(ctx, num_tiles, num_cores, stride);
             bool fold = true;
             const auto t_e0 = clk::now();
+            T.pre_ms = ms_t(t_e0 - t_pre0).count();
             if (early) {
                 static bool logged = false;
                 if (!logged) {
@@ -2665,11 +2669,14 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             T.publish_host_ms = ms_t(clk::now() - t_l1).count();
             T.publish_ms = T.publish_host_ms;
             T.total_ms = ms_t(clk::now() - t_total0_rp).count();
-            std::fprintf(stderr,
-                "[SORT] stage=ONELAUNCH P=%u P_kept=%u num_tiles=%u max_tile_n=%u "
-                "onelaunch=%.2f layout=%.2f pub_host=%.2f total=%.2fms\n",
-                P_full, P_kept, num_tiles, max_n, T.bin_emit_ms, T.bin_layout_ms,
-                T.publish_host_ms, T.total_ms);
+            {
+                stagetimers::Span log_span(T.log_ms);
+                std::fprintf(stderr,
+                    "[SORT] stage=ONELAUNCH P=%u P_kept=%u num_tiles=%u max_tile_n=%u "
+                    "onelaunch=%.2f layout=%.2f pub_host=%.2f total=%.2fms\n",
+                    P_full, P_kept, num_tiles, max_n, T.bin_emit_ms, T.bin_layout_ms,
+                    T.publish_host_ms, T.total_ms);
+            }
             if (device_ok) *device_ok = true;
             // Materialize as the legacy path does (piped: before the blend, no
             // drain unless GSPLAT_TT_SPLIT_BLEND=1).
@@ -2704,9 +2711,11 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 std::cerr << "[gsplat_tt::sort] subchunk materialize launch failed\n";
                 return fail();
             }
+            stagetimers::Span cont_span(T.cont_ms);
             maybe_run_sort_blend_continuation(sort_blend, tiles_x, num_tiles);
             // Task #285: a parked mat launch the blend did not take still runs.
             gsplat_tt::matblend_fuse::pending().run_fallback();
+            cont_span.stop();
             return result;
         }
 

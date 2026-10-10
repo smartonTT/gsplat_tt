@@ -458,6 +458,9 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     if (env_config::pfwc_cov2d_sfpu()) vis_defines["PFWC_COV2D_SFPU"] = "1";
     // Task #266: GSPLAT_TT_PFWC_RECIP_NEWTON=1, accurate 1/tz (pfwc_recip_nr.h).
     if (env_config::pfwc_recip_newton()) vis_defines["PFWC_RECIP_NEWTON"] = "1";
+    // Task #489: GSPLAT_TT_PFWC_ACQ_FUSE bit 0 / 1 (pfwc_fuse_sfpu.h), bit-identical.
+    if (env_config::pfwc_acq_fuse() & 1u) vis_defines["PFWC_FUSE_PROJ"] = "1";
+    if (env_config::pfwc_acq_fuse() & 2u) vis_defines["PFWC_FUSE_CCAC"] = "1";
 
     // Reader: 9 input streams (mx,my,mz + cov3d). Same 9-stream DRAM-interleaved
     // layout as before; the fused kernel just reads world means in slots 0..2

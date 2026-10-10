@@ -1,0 +1,28 @@
+[ttw 2026-10-10T07:49:25-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=540s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T07:49:25-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 540s.
+[ttw 2026-10-10T07:49:25-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T07:49:25-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T07:49:25-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T07:49:25-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T07:49:25-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T07:49:25-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T07:49:25-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T07:49:25-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T07:49:25-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T07:49:25-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #126 sha=a95a3714 bin=e846f978141865a4 t479 90f1d2ef chunk cull profile (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t479-Trop48  timeout=540s  worry=600s  ts=2026-10-10T07:49:25-0700
+cmd: T=/localdev/smarton/gstt2-t479 bash /localdev/smarton/gstt2-t479/docs/chunk-cull-t479/remote_tracy.sh 0 rop48 'GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_CHUNK_SKIP=0 GSPLAT_TT_OL_EMIT_PROF=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8'
+-----------------------------------------
+=== tracy rop48 c0 90f1d2ef 14:49:26
+tracy rop48 c0 rc=0 14:49:39
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=142.5 p50_ms=10.7 min_ms=9.2 max_ms=1329.6 n_views=10 warmup_s=2.8 out=/localdev/smarton/gstt2-t479/tmp/t479-rop48-T0
+STAGES n=10 head=0.002 project=3.305 tile_assign=0.005 sort=0.462 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.876 d2h=0.003 assemble=0.000 tail=131.725 xview=0.055 | sum=142.432 view_total=142.433 resid_in_view=+0.001 avg_frame_ms=142.463 resid_vs_frame=+0.031 xview_hits=9 xview_misses=0
+SORT_STAGES n=10 pread=0.001 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.041 upload=0.000 bin_emit=0.184 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.142 publish_wait=0.000 mat=0.034 | sum=0.402 sort=0.462 resid=+0.060
+XVIEW_HITS c0 9/10
+device csv c0 rows 295260 mj_zones 0
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t479/tmp/ttw-state/logs/t479-Trop48-20261010-074925.log

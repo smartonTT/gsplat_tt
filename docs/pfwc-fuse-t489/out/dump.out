@@ -1,0 +1,42 @@
+[ttw 2026-10-10T09:17:10-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T09:17:10-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-10T09:17:10-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T09:17:10-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T09:17:10-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T09:17:10-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T09:17:10-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T09:17:10-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T09:17:10-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T09:17:10-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T09:17:10-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T09:17:10-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=d866a6c9 bin=f70471ac80e64c93 t489 d866a6c9 PFWC_ACQ_FUSE b2b A/B (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t489-dump  timeout=560s  worry=600s  ts=2026-10-10T09:17:11-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-fuse-t489/remote_ab.sh 9 dump off on p
+-----------------------------------------
+=== r9-dump-off d866a6c ACQ_FUSE=0 SKIP_RGB=1 16:17:11 load=2.79
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.4 max_ms=10.1 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t489-r9-dump-off
+TTW_TIMING ms_view=7.795
+STAGES n=30 head=0.003 project=0.808 tile_assign=0.004 sort=0.462 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.413 d2h=0.003 assemble=0.000 tail=0.003 xview=0.062 | sum=7.758 view_total=7.760 resid_in_view=+0.002 avg_frame_ms=7.795 resid_vs_frame=+0.037 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== r9-dump-on d866a6c ACQ_FUSE=3 SKIP_RGB=1 16:17:22 load=2.75
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.9 min_ms=6.5 max_ms=10.0 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t489-r9-dump-on
+TTW_TIMING ms_view=7.827
+STAGES n=30 head=0.004 project=0.825 tile_assign=0.004 sort=0.490 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.388 d2h=0.004 assemble=0.000 tail=0.004 xview=0.061 | sum=7.779 view_total=7.780 resid_in_view=+0.001 avg_frame_ms=7.827 resid_vs_frame=+0.048 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== r9-dump-p d866a6c ACQ_FUSE=1 SKIP_RGB=1 16:17:32 load=2.70
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.8 min_ms=6.3 max_ms=10.1 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t489-r9-dump-p
+TTW_TIMING ms_view=7.797
+STAGES n=30 head=0.003 project=0.803 tile_assign=0.004 sort=0.454 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.443 d2h=0.003 assemble=0.000 tail=0.003 xview=0.050 | sum=7.762 view_total=7.764 resid_in_view=+0.001 avg_frame_ms=7.797 resid_vs_frame=+0.035 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 9 dump 16:17:42
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t489/tmp/ttw-state/logs/t489-dump-20261010-091710.log

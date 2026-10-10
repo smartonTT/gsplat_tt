@@ -1,0 +1,33 @@
+[ttw 2026-10-10T09:36:19-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T09:36:19-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-10T09:36:19-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T09:36:19-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T09:36:19-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T09:36:19-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T09:36:19-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T09:36:19-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T09:36:19-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T09:36:19-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T09:36:19-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T09:36:19-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=4b110d78 bin=1e08df07db39877b t490 4b110d78 land #489 b2b A/B (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t490-r3-lat  timeout=560s  worry=600s  ts=2026-10-10T09:36:20-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/land-t490/remote_ab.sh 3 lat off def
+-----------------------------------------
+=== r3-lat-off 4b110d7 ACQ_FUSE=0 SKIP_RGB=0 16:36:20 load=3.23
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.4 p50_ms=9.5 min_ms=7.9 max_ms=10.9 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t490-r3-lat-off
+TTW_TIMING ms_view=9.375
+STAGES n=30 head=0.002 project=2.397 tile_assign=0.003 sort=0.458 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.439 d2h=0.003 assemble=0.000 tail=0.003 xview=0.043 | sum=9.348 view_total=9.349 resid_in_view=+0.001 avg_frame_ms=9.375 resid_vs_frame=+0.027 xview_hits=29 xview_misses=0
+=== r3-lat-def 4b110d7 ACQ_FUSE=unset SKIP_RGB=unset 16:36:24 load=3.23
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.3 min_ms=7.7 max_ms=10.7 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t490-r3-lat-def
+TTW_TIMING ms_view=9.197
+STAGES n=30 head=0.002 project=2.226 tile_assign=0.004 sort=0.522 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.364 d2h=0.004 assemble=0.000 tail=0.003 xview=0.044 | sum=9.168 view_total=9.170 resid_in_view=+0.001 avg_frame_ms=9.197 resid_vs_frame=+0.029 xview_hits=29 xview_misses=0
+=== done 3 lat 16:36:27
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/runs/1342/wt/tmp/ttw-state/logs/t490-r3-lat-20261010-093619.log

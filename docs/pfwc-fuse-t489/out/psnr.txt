@@ -1,0 +1,1 @@
+hero-on.png vs benchmarks/reference_v2/hero.png: PSNR 42.51 dB

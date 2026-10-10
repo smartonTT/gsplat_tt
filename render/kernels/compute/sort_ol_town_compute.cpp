@@ -26,6 +26,9 @@
 #ifndef OL_RING
 #define OL_RING 8u
 #endif
+#ifndef OL_RING_DEPTH
+#define OL_RING_DEPTH OL_RING  // task #479: ring records per tile (== the movers')
+#endif
 #ifndef PFWC_REC32
 #define PFWC_REC32 0
 #endif
@@ -40,7 +43,9 @@ using namespace sort_ol_town;
 constexpr uint32_t REC_BYTES = 32;
 constexpr uint32_t L1_TILE_SIZE = 32u;
 constexpr uint32_t R = OL_RING;
+constexpr uint32_t D = OL_RING_DEPTH;
 static_assert(R >= 2u && R <= 16u && (R & (R - 1u)) == 0u, "OL_RING");
+static_assert(D >= R && D <= 16u && (D & (D - 1u)) == 0u, "OL_RING_DEPTH");
 
 // Counters (OL_EMIT_PROF): wall cycles from kernel start to the end, waiting
 // for the first GO, in process() (all of it), of which waiting for a tile's
@@ -127,12 +132,14 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
         TP_CNT(TP_REC, 1u);
         if (c >= cap) continue;  // past capacity: dropped, host fails the frame
         const uint32_t ri = c & (R - 1u);
-        if (ri == 0u && fl[t] != c) {  // the tile's previous run has not left L1 yet
+        // A run reuses the slots of the run D records back: it must have left L1
+        // (fl[t] = its last cursor + 1; D == R: the tile's previous run).
+        if (ri == 0u && fl[t] + (D - R) < c) {
             TP_T0(t0);
             do {
                 spin_pause();
                 l1_fence();
-            } while (fl[t] != c);
+            } while (fl[t] + (D - R) < c);
             TP_ADD(TP_WFL, t0);
         }
         const uint32_t kx = (t & msk) * L1_TILE_SIZE;
@@ -144,7 +151,7 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
             const uint32_t ky = tyi * L1_TILE_SIZE;
             if (!sort_bin_fp32::sub_int32(myb, ky, &myt)) myt = sub_int_cold(myb, ky);
         }
-        auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * R + ri) * REC_BYTES);
+        auto d = reinterpret_cast<volatile uint32_t*>(ring + (t * D + (c & (D - 1u))) * REC_BYTES);
         d[0] = cov0;
         d[1] = cov1;
         d[2] = cov2;
