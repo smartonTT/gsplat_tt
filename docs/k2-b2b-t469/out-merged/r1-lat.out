@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #127 sha=ed3d3baf bin=6dea21cfb9e76223 t469 ed3d3baf K2_TRISC b2b A/B (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t469-r1-lat  timeout=380s  worry=600s  ts=2026-10-10T07:21:32-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/k2-b2b-t469/remote_ab.sh 1 lat off def
+-----------------------------------------
+=== r1-lat-off ed3d3ba K2_TRISC=0 14:21:32 load=3.37
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.7 p50_ms=9.8 min_ms=8.1 max_ms=11.4 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t469-r1-lat-off
+TTW_TIMING ms_view=9.669
+STAGES n=30 head=0.002 project=2.684 tile_assign=0.003 sort=0.490 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.413 d2h=0.003 assemble=0.000 tail=0.003 xview=0.043 | sum=9.641 view_total=9.642 resid_in_view=+0.001 avg_frame_ms=9.669 resid_vs_frame=+0.028 xview_hits=29 xview_misses=0
+=== r1-lat-def ed3d3ba K2_TRISC=unset 14:21:36 load=3.34
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.4 p50_ms=9.5 min_ms=7.9 max_ms=10.9 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t469-r1-lat-def
+TTW_TIMING ms_view=9.376
+STAGES n=30 head=0.002 project=2.396 tile_assign=0.004 sort=0.538 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.344 d2h=0.004 assemble=0.000 tail=0.003 xview=0.055 | sum=9.345 view_total=9.347 resid_in_view=+0.002 avg_frame_ms=9.376 resid_vs_frame=+0.031 xview_hits=29 xview_misses=0
+=== done 1 lat 14:21:39
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t469/tmp/ttw-state/logs/t469-r1-lat-20261010-072131.log

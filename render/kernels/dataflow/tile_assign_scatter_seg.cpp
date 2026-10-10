@@ -55,8 +55,37 @@
 #ifndef K2_DIET
 #define K2_DIET 0
 #endif
+#ifndef K2_TRISC
+#define K2_TRISC 0  // task #274: TRISC jobs (host GSPLAT_TT_K2_TRISC=1, needs K2_DIET)
+#endif
+#if K2_TRISC
+#include "k2_trisc.h"
+#ifndef K2_TJ0
+#define K2_TJ0 430u  // permille of the range for job 0 (TRISC 0 / 2)
+#endif
+#ifndef K2_TJ1
+#define K2_TJ1 215u  // permille for job 1 (TRISC 1, runs both movers' jobs)
+#endif
+#endif
 #ifndef K2_FOLD_TILES
 #define K2_FOLD_TILES 1024u  // tiles a count row can hold (local memory)
+#endif
+// Task #274 (host knob GSPLAT_TT_K2_PROF=1, profiling only): each mover sums
+// wall-clock cycles per part (K2P_* below) and records the totals as Tracy
+// timestamped-data markers "k2p_*" at its end (value = cycles over the launch).
+// Off: the macros are empty and the binary is the same as before.
+#ifndef K2_PROF
+#define K2_PROF 0
+#endif
+#if K2_PROF
+enum { K2P_SETUP, K2P_RISS, K2P_RDW, K2P_WISS, K2P_WFL, K2P_PAIRS, K2P_ROWS, K2P_WBAR, K2P_TOT, K2P_N };
+uint32_t g_k2p[K2P_N];
+#define K2P_NOW() (reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0])
+#define K2P_T0(v) const uint32_t v = K2P_NOW()
+#define K2P_ADD(i, t0) g_k2p[i] += K2P_NOW() - (t0)
+#else
+#define K2P_T0(v)
+#define K2P_ADD(i, t0)
 #endif
 
 #if K2_DIET
@@ -72,15 +101,21 @@ struct DietIo {
     const TA& tids_acc;
     uint32_t ra_lofs, ra_box, st_gid, st_tid;
     void issue_lofs(uint32_t page, uint32_t slot) const {
+        K2P_T0(t0);
         noc_async_read(get_noc_addr(page, lofs_acc), ra_lofs + slot * 64u, 64u);
+        K2P_ADD(K2P_RISS, t0);
     }
     void issue(uint32_t page, uint32_t slot) const {
+        K2P_T0(t0);
         noc_async_read(get_noc_addr(page, lofs_acc), ra_lofs + slot * 64u, 64u);
         noc_async_read(get_noc_addr(page, box_acc), ra_box + slot * 64u, 64u);
+        K2P_ADD(K2P_RISS, t0);
     }
     void wait_reads() const {
+        K2P_T0(t0);
         noc_async_read_barrier();
         asm volatile("" ::: "memory");
+        K2P_ADD(K2P_RDW, t0);
     }
     const uint32_t* lofs_slot(uint32_t slot) const {
         return reinterpret_cast<const uint32_t*>(ra_lofs + slot * 64u);
@@ -92,18 +127,26 @@ struct DietIo {
     uint32_t* tid_slot(uint32_t o) const { return reinterpret_cast<uint32_t*>(st_tid + o * 64u); }
     void write_page(uint32_t page, uint32_t o) const {
         asm volatile("" ::: "memory");
+        K2P_T0(t0);
         noc_async_write(st_gid + o * 64u, get_noc_addr(page, gids_acc), 64u);
         noc_async_write(st_tid + o * 64u, get_noc_addr(page, tids_acc), 64u);
+        K2P_ADD(K2P_WISS, t0);
     }
     void writes_flushed() const {
+        K2P_T0(t0);
         noc_async_writes_flushed();
         asm volatile("" ::: "memory");
+        K2P_ADD(K2P_WFL, t0);
     }
 };
 }  // namespace
 #endif
 
 void kernel_main() {
+    K2P_T0(t_tot);
+#if K2_PROF
+    for (uint32_t i = 0; i < K2P_N; i++) g_k2p[i] = 0;
+#endif
     constexpr uint32_t PW = pfwc_fuse::PAGE_WORDS;
     constexpr uint32_t PB = PW * 4;
     uint32_t addr[7];
@@ -180,24 +223,125 @@ void kernel_main() {
     const DietIo<decltype(lofs_acc), decltype(box_acc), decltype(gids_acc), decltype(tids_acc)> io{
         lofs_acc, box_acc, gids_acc, tids_acc, l1_ra_lofs, l1_ra_box, l1_st_gid, l1_st_tid};
     const uint32_t span = row_pages * PW;  // >= screen tiles
+#if K2_TRISC
+    // Task #274: jobs for the idle TRISCs (k2_trisc.h). Header first, then GO2, GO.
+    const uint32_t l1_cbj = get_write_ptr(k2_trisc::CB_JOB + TA_CB_OFFSET);
+    auto job_post = [&](uint32_t j, uint32_t jpg0, uint32_t jn, uint32_t jc, uint32_t jlo,
+                        uint32_t jnin, uint32_t jspan) {
+        auto h = reinterpret_cast<volatile uint32_t*>(k2_trisc::job_addr(l1_cbj, j));
+        h[k2_trisc::H_DONE] = 0;
+        h[k2_trisc::H_PG0] = jpg0;
+        h[k2_trisc::H_NPG] = jn;
+        h[k2_trisc::H_C] = jc;
+        h[k2_trisc::H_LO] = jlo;
+        h[k2_trisc::H_NIN] = jnin;
+        h[k2_trisc::H_PPUB] = P_pub;
+        h[k2_trisc::H_TX] = tiles_x;
+        h[k2_trisc::H_NSEG] = nseg;
+        h[k2_trisc::H_TAB] = l1_tab;
+        h[k2_trisc::H_SPAN] = jspan;
+        asm volatile("fence" ::: "memory");
+        h[k2_trisc::H_GO2] = k2_trisc::MAGIC2;
+        asm volatile("fence" ::: "memory");
+        h[k2_trisc::H_GO] = k2_trisc::MAGIC;
+        asm volatile("fence" ::: "memory");
+    };
+    auto job_wait = [&](uint32_t j) -> uint32_t {
+        const uint32_t w = k2_trisc::job_addr(l1_cbj, j);
+        auto h = reinterpret_cast<volatile uint32_t*>(w);
+        for (;;) {
+            invalidate_l1_cache();
+            if (h[k2_trisc::H_DONE] == k2_trisc::MAGIC) break;
+        }
+        invalidate_l1_cache();
+        return w;
+    };
+    auto job_clear = [&](uint32_t j) {
+        auto h = reinterpret_cast<volatile uint32_t*>(k2_trisc::job_addr(l1_cbj, j));
+        h[k2_trisc::H_GO] = 0;
+        h[k2_trisc::H_GO2] = 0;
+        h[k2_trisc::H_DONE] = 0;
+        asm volatile("fence" ::: "memory");
+    };
+#endif
     if (row_pages != 0 && span <= K2_FOLD_TILES) {
         uint32_t cnt[K2_FOLD_TILES];
         for (uint32_t t = 0; t < span; t++) cnt[t] = 0;
+        K2P_ADD(K2P_SETUP, t_tot);
         {
             DeviceZoneScopedN("k2_pairs");
+            K2P_T0(t_pairs);
+#if K2_TRISC
+            uint32_t n[2] = {0, 0}, st[3] = {pg0, pg0, pg0}, c[3] = {0, 0, 0}, lo[3] = {0, 0, 0};
+            uint32_t n_in[2] = {0, 0};
+            if (npg != 0) {
+                pfwc_fuse::k2_jobs(npg, K2_TJ0, K2_TJ1, K2_TCAP, &n[0], &n[1]);
+                st[1] = pg0 + n[0];
+                st[2] = st[1] + n[1];
+                for (uint32_t i = 0; i < 3; i++)
+                    if (st[i] * PW < P_pub) pfwc_fuse::diet_start(tab, nseg, st[i] * PW, io, &c[i], &lo[i]);
+                bool fit = true;
+                for (uint32_t j = 0; j < 2 && fit; j++) {
+                    if (n[j] == 0 || st[j] * PW >= P_pub) continue;
+                    const bool to_end = st[j + 1] * PW >= P_pub;
+                    const uint32_t w = k2_trisc::job_addr(l1_cbj, j);
+                    n_in[j] = pfwc_fuse::diet_window(
+                        tab, nseg, c[j], lo[j], to_end, c[j + 1], lo[j + 1], K2_TCAP,
+                        [&](uint32_t k, uint32_t page) {
+                            noc_async_read(get_noc_addr(page, lofs_acc), w + k2_trisc::LOFS_OFF + k * PB, PB);
+                            noc_async_read(get_noc_addr(page, box_acc), w + k2_trisc::BOX_OFF + k * PB, PB);
+                        });
+                    if (n_in[j] > K2_TCAP) fit = false;
+                }
+                noc_async_read_barrier();
+                if (!fit) {
+                    n[0] = n[1] = 0;
+                    st[1] = st[2] = pg0;
+                    c[2] = c[0];
+                    lo[2] = lo[0];
+                }
+            }
+            for (uint32_t j = 0; j < 2; j++) job_post(j, st[j], n[j], c[j], lo[j], n_in[j], n[j] ? span : 0u);
+            if (pg0 + npg > st[2])
+                pfwc_fuse::emit_pairs_diet_from<true>(tab, nseg, P_pub, tiles_x, st[2], pg0 + npg - st[2],
+                                                      c[2], lo[2], io, cnt);
+            K2P_ADD(K2P_PAIRS, t_pairs);
+            for (uint32_t j = 0; j < 2; j++) {
+                const uint32_t w = job_wait(j);
+                for (uint32_t q = 0; q < n[j]; q++) {
+                    noc_async_write(w + k2_trisc::GID_OFF + q * PB, get_noc_addr(st[j] + q, gids_acc), PB);
+                    noc_async_write(w + k2_trisc::TID_OFF + q * PB, get_noc_addr(st[j] + q, tids_acc), PB);
+                }
+                if (n[j] != 0) {
+                    auto jc = reinterpret_cast<volatile uint32_t*>(w + k2_trisc::CNT_OFF);
+                    for (uint32_t t = 0; t < span; t++) cnt[t] += jc[t];
+                }
+            }
+            noc_async_writes_flushed();
+            for (uint32_t j = 0; j < 2; j++) job_clear(j);
+#else
             pfwc_fuse::emit_pairs_diet<true>(tab, nseg, P_pub, tiles_x, pg0, npg, io, cnt);
+            K2P_ADD(K2P_PAIRS, t_pairs);
+#endif
         }
         DeviceZoneScopedN("k2_rows");
+        K2P_T0(t_rows);
         auto rowp = reinterpret_cast<volatile uint32_t*>(l1_row);
         for (uint32_t t = 0; t < span; t++) rowp[t] = cnt[t];
         asm volatile("fence" ::: "memory");
         const uint32_t r0 = (kc * 2u + mover) * row_pages;
         for (uint32_t q = 0; q < row_pages; q++)
             noc_async_write(l1_row + q * PB, get_noc_addr(r0 + q, row_acc), PB);
+        K2P_ADD(K2P_ROWS, t_rows);
     } else {
         DeviceZoneScopedN("k2_pairs");
         pfwc_fuse::emit_pairs_diet<false>(tab, nseg, P_pub, tiles_x, pg0, npg, io,
                                           static_cast<uint32_t*>(nullptr));
+#if K2_TRISC
+        for (uint32_t j = 0; j < 2; j++) job_post(j, 0, 0, 0, 0, 0, 0);
+        for (uint32_t j = 0; j < 2; j++) job_wait(j);
+        for (uint32_t j = 0; j < 2; j++) job_clear(j);
+#endif
     }
 #else
     const uint32_t l1_lofs = l1_pub + PB;
@@ -244,5 +388,20 @@ void kernel_main() {
                               read_box, out);
     }
 #endif
+    K2P_T0(t_wbar);
     noc_async_write_barrier();
+#if K2_PROF
+    K2P_ADD(K2P_WBAR, t_wbar);
+    K2P_ADD(K2P_TOT, t_tot);
+    DeviceTimestampedData("k2p_setup", g_k2p[K2P_SETUP]);
+    DeviceTimestampedData("k2p_riss", g_k2p[K2P_RISS]);
+    DeviceTimestampedData("k2p_rdw", g_k2p[K2P_RDW]);
+    DeviceTimestampedData("k2p_wiss", g_k2p[K2P_WISS]);
+    DeviceTimestampedData("k2p_wfl", g_k2p[K2P_WFL]);
+    DeviceTimestampedData("k2p_pairs", g_k2p[K2P_PAIRS]);
+    DeviceTimestampedData("k2p_rows", g_k2p[K2P_ROWS]);
+    DeviceTimestampedData("k2p_wbar", g_k2p[K2P_WBAR]);
+    DeviceTimestampedData("k2p_tot", g_k2p[K2P_TOT]);
+    DeviceTimestampedData("k2p_npg", npg);
+#endif
 }

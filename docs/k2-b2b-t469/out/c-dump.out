@@ -1,0 +1,16 @@
+================ BUILD ID ================
+  cpp : #126 sha=0f4e5037 bin=689c452581126df2 t469 0f4e5037 K2_TRISC b2b A/B (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t469-c-dump  timeout=380s  worry=600s  ts=2026-10-10T07:11:49-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/k2-b2b-t469/remote_ab.sh 11 dump def
+-----------------------------------------
+=== r11-dump-def 0f4e503 K2_TRISC=unset 14:11:50 load=3.04
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.9 p50_ms=7.9 min_ms=6.5 max_ms=10.5 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t469-r11-dump-def
+TTW_TIMING ms_view=7.887
+STAGES n=30 head=0.005 project=0.886 tile_assign=0.006 sort=0.519 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.338 d2h=0.004 assemble=0.000 tail=0.004 xview=0.065 | sum=7.828 view_total=7.830 resid_in_view=+0.002 avg_frame_ms=7.887 resid_vs_frame=+0.059 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 11 dump 14:12:00
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t469/tmp/ttw-state/logs/t469-c-dump-20261010-071149.log
