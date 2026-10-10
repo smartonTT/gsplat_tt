@@ -1,6 +1,7 @@
 # t467: narrower pfwc record (GSPLAT_TT_PFWC_REC32), code-only
 
-Status: implemented behind `GSPLAT_TT_PFWC_REC32=1` (default 0). Not measured on device yet.
+Status: kept as iter 221 (task #471). Default on; `GSPLAT_TT_PFWC_REC32=0`, or any kill switch of the chain
+below, turns it off (env_config::pfwc_rec32(), tests/unit/test_pfwc_rec32_default_t471.cpp).
 
 ## Bytes per survivor (default chain: fused pfwc, writer split, EMIT_PUBOC, one-launch town sort, bulk brec)
 
@@ -55,3 +56,22 @@ ttp lock p100 -- env GSPLAT_TT_PFWC_REC32=1 python3 render/run.py --back-to-back
 Keep it only if b2b ms/view drops, md5 matches 39d84b28 (or hero PSNR >= 42.4 dB vs benchmarks/reference_v2/hero.png),
 and the hero.png screenshot and diff, rendered on device, are checked by eye for tile artifacts. Also record
 pfwc and sort device time per pass (B2B_STAGES) to see where the gain lands.
+
+## Device A/B (task #471, p150 bh-30, back-to-back = headline)
+
+bh-30 (Blackhole p150, 12x10, viewer stopped for the bench only; the only p150 held), tree afc99e56, one build,
+3 alternating rounds of `render/run.py --back-to-back` (30 bicycle views, 1 check + 5 measured passes).
+Scripts and logs: ab-t471/ (drive471.sh, bench471.sh).
+
+| round | b2b off (ms/view) | b2b REC32 | delta | latency off | latency REC32 |
+|---|---|---|---|---|---|
+| 1 | 9.449 | 9.356 | -0.093 | 9.156 | 8.969 |
+| 2 | 9.495 | 9.353 | -0.142 | 9.146 | 8.967 |
+| 3 | 9.679 | 9.517 | -0.162 | 9.155 | 8.990 |
+| median | 9.495 | 9.356 | -0.139 | 9.155 | 8.969 |
+
+Median of the 15 measured passes: 9.434 vs 9.229 (-0.205). B2B_STAGES medians (off -> REC32): project / pfwc gather
+wait 2.619 -> 2.445, sort 1.390 -> 1.367 (bin emit 0.430 -> 0.353), blend 5.228 -> 5.262. md5 39d84b28 (12x10 golden)
+on 30/30 views in all 6 b2b runs; hero bit-exact vs hero_golden_8bit_12x10 and identical across arms, PSNR vs
+reference_v2 42.51 dB; hero and diff x10 checked by eye: no tile seams. Host load average was 9-14 during the bench,
+but every round favoured REC32. Gate (>= 0.1 ms/view b2b, same output): passed. Not yet run on the p100.
