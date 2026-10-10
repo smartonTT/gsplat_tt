@@ -1,0 +1,23 @@
+================ BUILD ID ================
+  cpp : #124 sha=b03c5ce8 bin=2036d79c338f0a24 t477 b03c5ce8 REC32 default p100 check (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t477-dump  timeout=380s  worry=600s  ts=2026-10-10T07:17:27-0700
+cmd: T=/localdev/smarton/gstt2-t477 bash /localdev/smarton/gstt2-t477/docs/rec32-p100-t477/remote_ab.sh 9 dump def off
+-----------------------------------------
+=== r9-dump-def b03c5ce PFWC_REC32=unset 14:17:27 load=4.06
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=6.6 max_ms=10.5 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t477/tmp/t477-r9-dump-def
+TTW_TIMING ms_view=8.059
+STAGES n=30 head=0.003 project=1.072 tile_assign=0.004 sort=0.459 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.419 d2h=0.004 assemble=0.000 tail=0.003 xview=0.055 | sum=8.019 view_total=8.021 resid_in_view=+0.001 avg_frame_ms=8.059 resid_vs_frame=+0.040 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== r9-dump-off b03c5ce PFWC_REC32=0 14:17:37 load=3.90
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.1 p50_ms=8.1 min_ms=6.6 max_ms=10.7 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t477/tmp/t477-r9-dump-off
+TTW_TIMING ms_view=8.064
+STAGES n=30 head=0.003 project=1.080 tile_assign=0.004 sort=0.470 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.411 d2h=0.004 assemble=0.000 tail=0.003 xview=0.052 | sum=8.027 view_total=8.028 resid_in_view=+0.001 avg_frame_ms=8.064 resid_vs_frame=+0.037 xview_hits=29 xview_misses=0
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== done 9 dump 14:17:48
+[ttw] log: /Users/smarton/dev/gstt2-wt/t477/tmp/ttw-state/logs/t477-dump-20261010-071726.log

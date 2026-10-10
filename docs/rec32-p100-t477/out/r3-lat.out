@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=b03c5ce8 bin=2036d79c338f0a24 t477 b03c5ce8 REC32 default p100 check (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t477-r3-lat  timeout=380s  worry=600s  ts=2026-10-10T07:17:16-0700
+cmd: T=/localdev/smarton/gstt2-t477 bash /localdev/smarton/gstt2-t477/docs/rec32-p100-t477/remote_ab.sh 3 lat def off
+-----------------------------------------
+=== r3-lat-def b03c5ce PFWC_REC32=unset 14:17:16 load=3.49
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.6 p50_ms=9.8 min_ms=8.1 max_ms=11.3 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t477/tmp/t477-r3-lat-def
+TTW_TIMING ms_view=9.631
+STAGES n=30 head=0.002 project=2.651 tile_assign=0.003 sort=0.434 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.467 d2h=0.003 assemble=0.000 tail=0.003 xview=0.041 | sum=9.604 view_total=9.605 resid_in_view=+0.001 avg_frame_ms=9.631 resid_vs_frame=+0.027 xview_hits=29 xview_misses=0
+=== r3-lat-off b03c5ce PFWC_REC32=0 14:17:20 load=3.37
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.8 p50_ms=9.9 min_ms=8.1 max_ms=11.5 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t477/tmp/t477-r3-lat-off
+TTW_TIMING ms_view=9.771
+STAGES n=30 head=0.002 project=2.796 tile_assign=0.003 sort=0.443 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.445 d2h=0.003 assemble=0.000 tail=0.004 xview=0.042 | sum=9.738 view_total=9.740 resid_in_view=+0.001 avg_frame_ms=9.771 resid_vs_frame=+0.033 xview_hits=29 xview_misses=0
+=== done 3 lat 14:17:23
+[ttw] log: /Users/smarton/dev/gstt2-wt/t477/tmp/ttw-state/logs/t477-r3-lat-20261010-071715.log

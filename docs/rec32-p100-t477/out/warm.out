@@ -1,0 +1,27 @@
+================ BUILD ID ================
+  cpp : #124 sha=b03c5ce8 bin=2036d79c338f0a24 t477 b03c5ce8 REC32 default p100 check (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t477-warm  timeout=380s  worry=600s  ts=2026-10-10T07:15:41-0700
+cmd: T=/localdev/smarton/gstt2-t477 bash /localdev/smarton/gstt2-t477/docs/rec32-p100-t477/remote_ab.sh 0 b2b def off
+-----------------------------------------
+=== r0-b2b-def b03c5ce PFWC_REC32=unset 14:15:42 load=3.70
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=9.900 render=9.900 py_resid=0.043 project=2.722 sort=1.461 blend=5.589 d2h=0.005 tail=0.004 xview=0.068 view_total=9.857 project_pfwc_rtargs=0.056 project_pfwc_enqueue=0.012 project_gather_wait=2.718 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.051 sort_bin_emit=0.448 sort_publish_host=0.214 sort_publish_wait=0.000 sort_mat=0.043
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=9.773 render=9.773 py_resid=0.039 project=2.665 sort=1.370 blend=5.621 d2h=0.005 tail=0.004 xview=0.064 view_total=9.735 project_pfwc_rtargs=0.051 project_pfwc_enqueue=0.011 project_gather_wait=2.664 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.050 sort_bin_emit=0.232 sort_publish_host=0.209 sort_publish_wait=0.000 sort_mat=0.043
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.697 render=9.697 py_resid=0.039 project=2.668 sort=0.861 blend=6.046 d2h=0.005 tail=0.004 xview=0.068 view_total=9.658 project_pfwc_rtargs=0.054 project_pfwc_enqueue=0.011 project_gather_wait=2.666 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.051 sort_bin_emit=0.238 sort_publish_host=0.219 sort_publish_wait=0.000 sort_mat=0.044
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.682 render=9.682 py_resid=0.038 project=2.661 sort=0.793 blend=6.113 d2h=0.005 tail=0.004 xview=0.063 view_total=9.644 project_pfwc_rtargs=0.049 project_pfwc_enqueue=0.010 project_gather_wait=2.659 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.050 sort_bin_emit=0.232 sort_publish_host=0.214 sort_publish_wait=0.000 sort_mat=0.043
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.717 fps=102.91 ms_frame_median=9.697 pass_ms_frame=9.773,9.697,9.682 check_pass_ms_frame=9.900 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.717 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t477/tmp/t477-r0-b2b-def
+TTW_TIMING b2b_ms_frame=9.717
+=== r0-b2b-off b03c5ce PFWC_REC32=0 14:15:55 load=3.95
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B_STAGES pass=0 views=30 gap_ms=0.00 period=9.885 render=9.885 py_resid=0.032 project=2.910 sort=0.556 blend=6.331 d2h=0.004 tail=0.003 xview=0.043 view_total=9.853 project_pfwc_rtargs=0.034 project_pfwc_enqueue=0.010 project_gather_wait=2.906 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.040 sort_bin_emit=0.187 sort_publish_host=0.145 sort_publish_wait=0.000 sort_mat=0.041
+B2B_STAGES pass=1 views=30 gap_ms=0.00 period=9.832 render=9.832 py_resid=0.033 project=2.849 sort=0.528 blend=6.367 d2h=0.004 tail=0.003 xview=0.044 view_total=9.799 project_pfwc_rtargs=0.032 project_pfwc_enqueue=0.009 project_gather_wait=2.847 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.040 sort_bin_emit=0.175 sort_publish_host=0.144 sort_publish_wait=0.000 sort_mat=0.043
+B2B_STAGES pass=2 views=30 gap_ms=0.00 period=9.809 render=9.809 py_resid=0.032 project=2.829 sort=0.526 blend=6.367 d2h=0.004 tail=0.003 xview=0.043 view_total=9.777 project_pfwc_rtargs=0.032 project_pfwc_enqueue=0.009 project_gather_wait=2.828 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.041 sort_bin_emit=0.177 sort_publish_host=0.144 sort_publish_wait=0.000 sort_mat=0.044
+B2B_STAGES pass=3 views=30 gap_ms=0.00 period=9.837 render=9.837 py_resid=0.031 project=2.844 sort=0.623 blend=6.287 d2h=0.004 tail=0.003 xview=0.041 view_total=9.806 project_pfwc_rtargs=0.030 project_pfwc_enqueue=0.008 project_gather_wait=2.843 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.041 sort_bin_emit=0.175 sort_publish_host=0.145 sort_publish_wait=0.000 sort_mat=0.045
+B2B scene=bicycle n_views=30 passes=3 drop=no ms_frame=9.826 fps=101.77 ms_frame_median=9.832 pass_ms_frame=9.832,9.809,9.837 check_pass_ms_frame=9.885 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=9.826 xview_hits=119 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t477/tmp/t477-r0-b2b-off
+TTW_TIMING b2b_ms_frame=9.826
+=== done 0 b2b 14:16:02
+[ttw] log: /Users/smarton/dev/gstt2-wt/t477/tmp/ttw-state/logs/t477-warm-20261010-071541.log
