@@ -75,3 +75,21 @@ pipelined device rate (~107 FPS in this viewer environment); reaching 117+ also 
 viewer process to match the bench's 7.7 ms/view (see the md5 follow-up above).
 
 Viewer downtime: probes 44 s, 51 s, 56 s; deploy restart a few seconds (stop + start).
+
+## Task #459: viser flush patch and the real cap (two clients sharing the device)
+
+- `gsplat/viser_patches.py` now pulses `AsyncMessageBuffer.flush()` on every
+  `BackgroundImageMessage` (off with `GSPLAT_VIEWER_FRAME_FLUSH=0`); unit test
+  `test_background_image_skips_message_window` fails without it.
+- Deployed de3cc41b to bh-30 (hero 42.51 dB). Sweep: **43.0 FPS**, but intervals are now a
+  steady 23.3 ms (p50/p90/p99 23.28/24.72/25.38) instead of 17.7/35 ms. So the window only
+  quantized the frames; it was not what capped them.
+- `ws_sweep.py` now records the viewer HUD. It reads `Sent: 82.3 FPS`, device render 11.3 ms
+  at 1024x1024, encode 4.0 ms. 82 sent but 43 received per client: py-spy on the viewer shows
+  **two render threads both busy** (the user's open page and the sweep client). The UI burst
+  was viewer-wide, so one client's camera drag made every client render back to back, and
+  the device was split between them. The camera message rate made no difference (60/120/240 Hz
+  all gave 43 FPS).
+- Fix in 68ae2556 (not yet deployed or measured): a camera move bursts only that client;
+  settings changes still burst all clients. Test `test_camera_burst_renders_only_the_moving_client`.
+  Expected: about 82 FPS for the moving page while another tab is idle.
