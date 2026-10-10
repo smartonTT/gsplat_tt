@@ -1741,12 +1741,27 @@ def b2b_rows() -> list[dict]:
             if isinstance((r.get("metrics") or {}).get("ms_view_b2b"), (int, float))]
 
 
+def board_id(board: str | None) -> str:
+    """Short board id (host) from the free-text board string: 'bh-30 (Blackhole ...)' -> 'bh-30'."""
+    return (board or "").split()[0] if (board or "").strip() else "board not recorded"
+
+
+def b2b_spread(m: dict) -> str:
+    """'min-max' of the b2b passes, or '' without passes."""
+    ps = [x for x in m.get("ms_view_b2b_passes") or [] if isinstance(x, (int, float))]
+    return f"{min(ps):.3f}-{max(ps):.3f}" if ps else ""
+
+
 def b2b_best() -> dict[str, dict]:
-    """Per board, the row with the lowest b2b ms/view."""
+    """Per short board id, the newest (highest iter) kept or rebaseline row with a b2b
+    value. Not the lowest value: on a noisy board (bh-30 passes span ~0.8 ms) the
+    minimum picks noise (#472/#475)."""
     best: dict[str, dict] = {}
     for r in b2b_rows():
-        b = (r.get("metrics") or {}).get("board") or "board not recorded"
-        if b not in best or r["metrics"]["ms_view_b2b"] < best[b]["metrics"]["ms_view_b2b"]:
+        if r.get("decision") not in ("keep", "rebaseline"):
+            continue
+        b = board_id((r.get("metrics") or {}).get("board"))
+        if b not in best or int(r.get("iter") or 0) >= int(best[b].get("iter") or 0):
             best[b] = r
     return best
 
@@ -1760,8 +1775,10 @@ def b2b_headline_section() -> str:
         m = r["metrics"]
         b2b, lat = m["ms_view_b2b"], m.get("ms_view_latency")
         lat_s = f"; latency {lat:.3f} ms/view (secondary)" if isinstance(lat, (int, float)) else ""
+        sp = b2b_spread(m)
+        sp_s = f" (passes {sp})" if sp else ""
         best_lines.append(
-            f"<li><b>{html_escape(board)}: {b2b:.3f} ms/view b2b ({1000.0 / b2b:.1f} FPS)</b>, "
+            f"<li><b>{html_escape(board)}: {b2b:.3f} ms/view b2b ({1000.0 / b2b:.1f} FPS)</b>{sp_s}, "
             f"iter {r.get('iter')} @ <code>{html_escape(str(m.get('commit', '')))}</code>{lat_s}. "
             f"vs GPU G1 {g1} ms/view (RTX A6000, <b>published, not measured</b>): "
             f"<b>{g1 / b2b:.2f}&times;</b> {'faster' if b2b < g1 else 'slower'}.</li>")
@@ -1793,7 +1810,9 @@ def b2b_headline_section() -> str:
   the passes are listed. Latency (no <code>--dump-views</code>) is a secondary column. Iterations
   before #465 were measured only in latency; their cards and the trajectory below say
   <b>latency (legacy)</b>, and no b2b number is filled in for them.</p>
-  <h3>Best b2b per board</h3>
+  <h3>Current b2b per board</h3>
+  <p>Per board: the newest kept or re-baseline row (not the lowest value, which on a noisy
+  board picks noise), with the min-max spread of its passes.</p>
   <ul>{''.join(best_lines) or '<li>none measured yet</li>'}</ul>
   {table}
   <p><b>Keep gate:</b> {html_escape(KEEP_GATE_TEXT)}</p>
@@ -1801,8 +1820,9 @@ def b2b_headline_section() -> str:
 """
 
 
-# TT anchor for the GPU ratio: the best (lowest) back-to-back ms/view in
-# opt/ttw/iters.jsonl (headline since #465), labelled with its board. Without
+# TT anchor for the GPU ratio: across boards, the fastest per-board headline
+# from b2b_best() (newest kept/rebaseline row per board, #475), labelled with
+# its board and pass spread. Without
 # any b2b row it falls back to the newest kept row's latency, labelled
 # 'latency (legacy)', and to iter-180 (19.65 ms, docs/blend-diet-t146) last.
 def tt_anchor() -> tuple[float, str]:
@@ -1810,9 +1830,10 @@ def tt_anchor() -> tuple[float, str]:
     if bb:
         r = min(bb.values(), key=lambda r: r["metrics"]["ms_view_b2b"])
         m = r["metrics"]
+        sp = b2b_spread(m)
         return float(m["ms_view_b2b"]), (
             f"{m.get('board') or 'board not recorded'}, back-to-back (headline), iter-{r.get('iter')} "
-            f"{m.get('build') or ''} @ {m.get('commit') or ''}")
+            f"{m.get('build') or ''} @ {m.get('commit') or ''}" + (f", passes {sp} ms" if sp else ""))
     best = None
     for r in load_ttw_iters():
         ms = (r.get("timings") or {}).get("ms_view")
