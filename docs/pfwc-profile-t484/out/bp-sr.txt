@@ -1,0 +1,2 @@
+step-4 floor (p5) 0.070 ms; back-pressure mean 0.012 ms, p90 0.040, max 0.124; core-launches with >0.05 ms: 6.2%
+TRISC_1 wall: slowest core 1.715 ms, slowest core minus its back-pressure 1.668 ms (-0.047), mean core 1.655 ms

@@ -1,0 +1,186 @@
+
+== dev-z: 60 pfwc launches, 110 cores
+  window (first start -> last end) mean 1.827 ms  p50 1.831  min 1.735 max 1.966
+  mean core end 1.720 ms   imbalance max/mean 1.062   last-core start skew 0.000 ms
+  BRISC    kernel span mean 1.699  p90 1.787  max 1.965
+  NCRISC   kernel span mean 1.705  p90 1.769  max 1.919
+  TRISC_0  kernel span mean 1.670  p90 1.741  max 1.908
+  TRISC_1  kernel span mean 1.678  p90 1.749  max 1.915
+  TRISC_2  kernel span mean 1.666  p90 1.737  max 1.904
+  RISC that ends last on the slowest core: {'BRISC': 53, 'NCRISC': 7}
+
+== dev-s: 60 pfwc launches, 110 cores
+  window (first start -> last end) mean 1.831 ms  p50 1.836  min 1.733 max 2.035
+  mean core end 1.722 ms   imbalance max/mean 1.063   last-core start skew 0.000 ms
+  BRISC    kernel span mean 1.701  p90 1.791  max 2.034
+  NCRISC   kernel span mean 1.706  p90 1.774  max 1.988
+  TRISC_0  kernel span mean 1.672  p90 1.745  max 1.961
+  TRISC_1  kernel span mean 1.679  p90 1.752  max 1.969
+  TRISC_2  kernel span mean 1.667  p90 1.741  max 1.957
+  RISC that ends last on the slowest core: {'BRISC': 56, 'NCRISC': 4}
+
+== dev-s: in-kernel split, ms per launch (mean over cores; [p90 core]; slowest-wall core)
+  TRISC_0 pfwc_pc (6600 core-launches, chunks/core 54.4)
+    wall               1.671  [1.744]  1.961
+    init               0.000  [0.000]  0.000
+    in_wait            0.034  [0.041]  0.039
+    xform              0.494  [0.499]  0.499
+    recip              0.044  [0.045]  0.045
+    depth              0.029  [0.029]  0.029
+    means              0.078  [0.137]  0.346
+    cov_cam            0.064  [0.065]  0.065
+    cov2d a,c+radii    0.271  [0.274]  0.274
+    cov2d b+conic      0.353  [0.357]  0.357
+    s8                 0.000  [0.000]  0.000
+    s9                 0.000  [0.000]  0.000
+    s10                0.000  [0.000]  0.000
+    s11                0.000  [0.000]  0.000
+    vis+pops           0.303  [0.306]  0.306
+  TRISC_1 pfwc_pc (6600 core-launches, chunks/core 54.4)
+    wall               1.679  [1.752]  1.969
+    init               0.000  [0.000]  0.000
+    in_wait            0.001  [0.001]  0.001
+    xform              0.204  [0.213]  0.211
+    recip              0.028  [0.029]  0.029
+    depth              0.007  [0.007]  0.007
+    means              0.099  [0.157]  0.367
+    cov_cam            0.256  [0.259]  0.259
+    cov2d a,c+radii    0.290  [0.293]  0.293
+    cov2d b+conic      0.170  [0.172]  0.172
+    s8                 0.000  [0.001]  0.001
+    s9                 0.001  [0.001]  0.001
+    s10                0.000  [0.001]  0.000
+    s11                0.000  [0.000]  0.000
+    vis+pops           0.621  [0.627]  0.627
+  TRISC_2 pfwc_pc (6600 core-launches, chunks/core 54.4)
+    wall               1.667  [1.740]  1.957
+    init               0.000  [0.000]  0.000
+    in_wait            0.001  [0.001]  0.001
+    xform              0.745  [0.759]  0.757
+    recip              0.057  [0.058]  0.058
+    depth              0.050  [0.110]  0.323
+    means              0.052  [0.054]  0.048
+    cov_cam            0.298  [0.301]  0.301
+    cov2d a,c+radii    0.289  [0.292]  0.292
+    cov2d b+conic      0.166  [0.168]  0.168
+    s8                 0.000  [0.000]  0.000
+    s9                 0.000  [0.000]  0.000
+    s10                0.000  [0.000]  0.000
+    s11                0.000  [0.000]  0.000
+    vis+pops           0.008  [0.008]  0.008
+  BRISC pfwc_ws role 0 (6600 core-launches, chunks/core 27.4, survivors/core 7869 (max 12281))
+    wall   1.697  [1.787]  2.030
+    wait   0.433  [0.627]  0.200
+    cls    0.422  [0.441]  0.442
+    pfx    0.008  [0.013]  0.038
+    rec    0.755  [0.954]  0.975
+    opn    0.065  [0.133]  0.359
+    tail   0.014  [0.015]  0.015
+    rd     0.340  [0.457]  0.421
+    fl     0.100  [0.149]  0.177
+    busy(cls+pfx+rec+opn+tail) 1.264; rec minus flush per survivor 112 cyc; cls per chunk 20738 cyc
+    corr(wall, survivors) 0.62
+  NCRISC pfwc_ws role 1 (6600 core-launches, chunks/core 27.0, survivors/core 7536 (max 11969))
+    wall   1.703  [1.770]  1.984
+    wait   0.448  [0.645]  0.170
+    cls    0.408  [0.424]  0.436
+    pfx    0.015  [0.021]  0.020
+    rec    0.747  [0.929]  1.273
+    opn    0.071  [0.155]  0.071
+    tail   0.014  [0.015]  0.015
+    rd     0.412  [0.548]  0.201
+    fl     0.097  [0.130]  0.249
+    busy(cls+pfx+rec+opn+tail) 1.254; rec minus flush per survivor 117 cyc; cls per chunk 20379 cyc
+    corr(wall, survivors) 0.62
+  per core: survivors mean 15405 max 22489 (max/mean 1.460); corr(TRISC_1 wall, survivors) 0.66; TRISC_1 wall minus input wait mean 1.678 max 1.967
+  busiest unit per core-launch (TRISC_1 busy / BRISC busy / NCRISC busy): [6600, 0, 0]
+
+== dev-sr: 60 pfwc launches, 110 cores
+  window (first start -> last end) mean 1.772 ms  p50 1.770  min 1.727 max 1.839
+  mean core end 1.697 ms   imbalance max/mean 1.044   last-core start skew 0.000 ms
+  BRISC    kernel span mean 1.676  p90 1.732  max 1.839
+  NCRISC   kernel span mean 1.681  p90 1.714  max 1.813
+  TRISC_0  kernel span mean 1.648  p90 1.688  max 1.777
+  TRISC_1  kernel span mean 1.655  p90 1.695  max 1.784
+  TRISC_2  kernel span mean 1.644  p90 1.684  max 1.773
+  RISC that ends last on the slowest core: {'NCRISC': 25, 'BRISC': 35}
+
+== dev-sr: in-kernel split, ms per launch (mean over cores; [p90 core]; slowest-wall core)
+  TRISC_0 pfwc_pc (6600 core-launches, chunks/core 54.4)
+    wall               1.647  [1.687]  1.776
+    init               0.000  [0.000]  0.000
+    in_wait            0.027  [0.033]  0.027
+    xform              0.494  [0.499]  0.499
+    recip              0.044  [0.045]  0.045
+    depth              0.029  [0.029]  0.029
+    means              0.062  [0.089]  0.173
+    cov_cam            0.064  [0.065]  0.065
+    cov2d a,c+radii    0.271  [0.273]  0.274
+    cov2d b+conic      0.353  [0.357]  0.357
+    s8                 0.000  [0.000]  0.000
+    s9                 0.000  [0.000]  0.000
+    s10                0.000  [0.000]  0.000
+    s11                0.000  [0.000]  0.000
+    vis+pops           0.303  [0.306]  0.307
+  TRISC_1 pfwc_pc (6600 core-launches, chunks/core 54.4)
+    wall               1.655  [1.695]  1.784
+    init               0.000  [0.000]  0.000
+    in_wait            0.001  [0.001]  0.001
+    xform              0.197  [0.204]  0.199
+    recip              0.028  [0.029]  0.029
+    depth              0.007  [0.007]  0.007
+    means              0.082  [0.110]  0.194
+    cov_cam            0.256  [0.259]  0.259
+    cov2d a,c+radii    0.290  [0.293]  0.293
+    cov2d b+conic      0.170  [0.172]  0.172
+    s8                 0.000  [0.001]  0.000
+    s9                 0.001  [0.001]  0.001
+    s10                0.000  [0.001]  0.000
+    s11                0.000  [0.000]  0.000
+    vis+pops           0.621  [0.627]  0.627
+  TRISC_2 pfwc_pc (6600 core-launches, chunks/core 54.4)
+    wall               1.643  [1.683]  1.772
+    init               0.000  [0.000]  0.000
+    in_wait            0.001  [0.001]  0.001
+    xform              0.738  [0.750]  0.745
+    recip              0.057  [0.058]  0.058
+    depth              0.034  [0.062]  0.147
+    means              0.053  [0.054]  0.051
+    cov_cam            0.297  [0.301]  0.301
+    cov2d a,c+radii    0.288  [0.292]  0.292
+    cov2d b+conic      0.165  [0.167]  0.167
+    s8                 0.000  [0.000]  0.000
+    s9                 0.000  [0.000]  0.000
+    s10                0.000  [0.000]  0.000
+    s11                0.000  [0.000]  0.000
+    vis+pops           0.008  [0.008]  0.008
+  BRISC pfwc_ws role 0 (6600 core-launches, chunks/core 27.4, survivors/core 7869 (max 12281))
+    wall   1.672  [1.728]  1.835
+    wait   0.462  [0.652]  0.148
+    cls    0.425  [0.444]  0.461
+    pfx    0.007  [0.009]  0.008
+    rec    0.711  [0.890]  1.062
+    opn    0.054  [0.108]  0.141
+    tail   0.014  [0.015]  0.015
+    rd     0.361  [0.474]  0.226
+    fl     0.079  [0.096]  0.111
+    busy(cls+pfx+rec+opn+tail) 1.210; rec minus flush per survivor 109 cyc; cls per chunk 20889 cyc
+    corr(wall, survivors) 0.54
+  NCRISC pfwc_ws role 1 (6600 core-launches, chunks/core 27.0, survivors/core 7536 (max 11969))
+    wall   1.677  [1.711]  1.809
+    wait   0.475  [0.662]  0.265
+    cls    0.411  [0.426]  0.422
+    pfx    0.014  [0.016]  0.021
+    rec    0.707  [0.869]  0.861
+    opn    0.057  [0.126]  0.225
+    tail   0.014  [0.015]  0.014
+    rd     0.436  [0.564]  0.399
+    fl     0.081  [0.096]  0.092
+    busy(cls+pfx+rec+opn+tail) 1.202; rec minus flush per survivor 112 cyc; cls per chunk 20549 cyc
+    corr(wall, survivors) 0.56
+  per core: survivors mean 15405 max 22489 (max/mean 1.460); corr(TRISC_1 wall, survivors) 0.56; TRISC_1 wall minus input wait mean 1.654 max 1.783
+  busiest unit per core-launch (TRISC_1 busy / BRISC busy / NCRISC busy): [6600, 0, 0]
+
+dev-s - dev-z: window +0.004 ms, mean core end +0.002 ms
+
+dev-sr - dev-z: window -0.056 ms, mean core end -0.023 ms

@@ -1,0 +1,31 @@
+[ttw 2026-10-10T08:29:16-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T08:29:16-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-10T08:29:16-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T08:29:16-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T08:29:16-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T08:29:16-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T08:29:16-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T08:29:16-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T08:29:16-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T08:29:16-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T08:29:16-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T08:29:16-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=dfb73a74 bin=63d50f1340544ab3 t484 dfb73a74 pfwc b2b profile (yyzo-bh-04)
+  data: # sha=
+=========================================
+host=yyzo-bh-04  tag=t484-z  timeout=560s  worry=600s  ts=2026-10-10T08:29:16-0700
+cmd:  T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-profile-t484/remote_prof.sh z
+-----------------------------------------
+[zone_hash_check] OK: 160 zones, no 16-bit hash collisions at /localdev/smarton/gstt2-t469
+=== z dfb73a7 GSPLAT_B2B_ALL_STAGES=1 TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 15:29:17 load=3.38
+run rc=0
+B2B_STAGES pass=0 views=30 gap_ms=0.00 t_end=1791646163.870 period=28.130 render=28.130 py_resid=0.099 head=0.004 project=0.843 tile_assign=0.005 sort=0.808 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.108 d2h=0.004 assemble=0.000 tail=20.185 xview=0.072 view_total=28.031 sort_pread=0.002 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.047 sort_upload=0.000 sort_bin_emit=0.331 sort_kernel=0.000 sort_d2h=0.000 sort_compact=0.000 sort_publish_host=0.150 sort_publish_wait=0.000 sort_mat=0.034 project_cov3d=0.000 project_pfwc_setup=0.007 project_pfwc_rtargs=0.050 project_pfwc_chun
+[run] B2B pass 0 (check): 843.9 ms for 30 views = 28.130 ms/frame
+B2B_STAGES pass=1 views=30 gap_ms=0.00 t_end=1791646164.788 period=27.047 render=27.047 py_resid=0.093 head=0.004 project=0.781 tile_assign=0.003 sort=1.231 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.711 d2h=0.004 assemble=0.000 tail=19.143 xview=0.076 view_total=26.955 sort_pread=0.002 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_layout=0.047 sort_upload=0.000 sort_bin_emit=0.249 sort_kernel=0.000 sort_d2h=0.000 sort_compact=0.000 sort_publish_host=0.152 sort_publish_wait=0.000 sort_mat=0.035 project_cov3d=0.000 project_pfwc_setup=0.009 project_pfwc_rtargs=0.051 project_pfwc_chun
+[run] B2B pass 1: 811.4 ms for 30 views = 27.047 ms/frame
+B2B scene=bicycle n_views=30 passes=1 warmup=0 drop=no ms_frame=27.047 fps=36.97 ms_frame_median=27.047 pass_ms_frame=27.047 check_pass_ms_frame=28.130 raw_md5=5a438f5a gap_ms=0.00 render_ms_frame=27.047 xview_hits=59 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t469/tmp/t484-z
+TTW_TIMING b2b_ms_frame=27.047
+csv rows 1335614
+=== done z rc=0 15:29:42
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t484/tmp/ttw-state/logs/t484-z-20261010-082916.log
