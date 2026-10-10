@@ -1,5 +1,5 @@
 tile cull share with sub-boxes of S gaussians (1024 = today's chunk_cull.h test)
-view     morton:S1024  morton:S256   morton:S64    core:S1024  core:S256   core:S64   
+view     morton:S1024  morton:S256   morton:S64    core:S1024  core:S256   core:S64
 hero             0.382         0.391         0.396         0.028         0.061         0.118
 orb_04           0.371         0.383         0.390         0.023         0.032         0.069
 orb_09           0.354         0.364         0.368         0.024         0.036         0.081
