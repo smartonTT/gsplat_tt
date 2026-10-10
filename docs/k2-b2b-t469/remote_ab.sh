@@ -1,7 +1,8 @@
 #!/bin/bash
 # t469: one round of the #274 K2-on-idle-TRISCs A/B under the back-to-back headline metric.
 #   remote_ab.sh <round> <mode> <arm> ...   mode: b2b | lat | dump   arm: off | on
-#   off = GSPLAT_TT_K2_TRISC=0, on = GSPLAT_TT_K2_TRISC=1; otherwise defaults (env as probe464.sh).
+#   off = GSPLAT_TT_K2_TRISC=0, on = GSPLAT_TT_K2_TRISC=1, def = unset (the default); otherwise
+#   defaults (env as probe464.sh).
 #   b2b: render/run.py --no-ref --back-to-back (1 check + 3 timed passes over the 30 views)
 #   lat: render/run.py --no-ref (latency, no --dump-views)
 #   dump: render/run.py --no-ref --dump-views, md5 list checked with opt/md5_golden.py
@@ -16,13 +17,13 @@ S=$T/tmp/t469; mkdir -p $S
 r=${1:?round}; mode=${2:?mode}; shift 2
 fail=0
 for arm in "$@"; do
-  case $arm in off) k=0 ;; on) k=1 ;; *) echo "bad arm $arm"; exit 2 ;; esac
+  case $arm in off) k=0 ;; on) k=1 ;; def) k= ;; *) echo "bad arm $arm"; exit 2 ;; esac
   tag=r$r-$mode-$arm
   args=(--no-ref --iter-dir t469-$tag)
   case $mode in b2b) args+=(--back-to-back) ;; dump) args+=(--dump-views t469-dump-$tag) ;; esac
-  echo "=== $tag $(cut -c1-7 SHA) K2_TRISC=$k $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
+  echo "=== $tag $(cut -c1-7 SHA) K2_TRISC=${k:-unset} $(date +%T) load=$(cut -d' ' -f1 /proc/loadavg)"
   rm -rf tmp/t469-dump-$tag
-  GSPLAT_TT_K2_TRISC=$k TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t469 timeout ${RUN_TIMEOUT:-150} \
+  ${k:+env GSPLAT_TT_K2_TRISC=$k} TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t469 timeout ${RUN_TIMEOUT:-150} \
     python3 render/run.py "${args[@]}" > $S/run-$tag.log 2>&1
   rc=$?
   echo "run rc=$rc"

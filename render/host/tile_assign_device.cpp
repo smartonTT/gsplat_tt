@@ -505,10 +505,11 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
     // per-part cycle totals as Tracy "k2p_*" markers. Unset: no define.
     if (const char* e = std::getenv("GSPLAT_TT_K2_PROF"); e != nullptr && std::atoi(e) != 0)
         defines["K2_PROF"] = "1";
-    // Task #274: GSPLAT_TT_K2_TRISC=1 (default off) hands two slices of each
-    // mover's pages to the idle TRISCs (k2_trisc.h, k2_trisc_compute.cpp).
+    // Task #274: GSPLAT_TT_K2_TRISC hands two slices of each mover's pages to
+    // the idle TRISCs (k2_trisc.h, k2_trisc_compute.cpp). Default on since #469
+    // (b2b -0.305 ms/view on p100a, md5-exact); =0 restores the mover-only K2.
     const char* et = std::getenv("GSPLAT_TT_K2_TRISC");
-    const bool trisc = diet && ctx.dual && et != nullptr && std::atoi(et) != 0;
+    const bool trisc = diet && ctx.dual && (et == nullptr || std::atoi(et) != 0);
     if (trisc) {
         defines["K2_TRISC"] = "1";
         for (uint32_t id : {k2_trisc::CB_JOB, k2_trisc::CB_JOB + TA_MOVER0_CB_OFFSET}) {

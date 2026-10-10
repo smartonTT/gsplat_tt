@@ -41,6 +41,16 @@ step() {  # name round mode arms...
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
 }
+if [ "${MODE:-ab}" = confirm ]; then
+  # Kept-default check on the landing commit: env unset (default on) vs =0, then a dump pass
+  # (md5 + hero) for the default.
+  step c-b2b 10 b2b def off
+  step c-dump 11 dump def
+  scp -q -o BatchMode=yes "$H:$T/tmp/t469/run-r1[01]-*.log" "$H:$T/tmp/t469/md5-r11-*.txt" "$O/" || rc=4
+  scp -q -o BatchMode=yes "$H:$T/tmp/t469-r11-dump-def/hero_clean.png" "$O/hero-def.png" || rc=4
+  echo "=== drive t469 confirm done rc=$rc $(date)"
+  exit $rc
+fi
 step warm 0 b2b off on
 for r in 1 2 3; do
   case $r in 2) arms="on off" ;; *) arms="off on" ;; esac
