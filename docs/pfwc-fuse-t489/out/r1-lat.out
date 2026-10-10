@@ -1,0 +1,39 @@
+[ttw 2026-10-10T09:14:42-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-10T09:14:42-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-10T09:14:42-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-10T09:14:42-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-10T09:14:42-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-10T09:14:43-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-10T09:14:43-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-10T09:14:43-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-10T09:14:43-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-10T09:14:43-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-10T09:14:43-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-10T09:14:43-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=d866a6c9 bin=f70471ac80e64c93 t489 d866a6c9 PFWC_ACQ_FUSE b2b A/B (yyzo-bh-04)
+  data: # sha= 
+=========================================
+host=yyzo-bh-04  tag=t489-r1-lat  timeout=560s  worry=600s  ts=2026-10-10T09:14:43-0700
+cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-fuse-t489/remote_ab.sh 1 lat off on p
+-----------------------------------------
+=== r1-lat-off d866a6c ACQ_FUSE=0 SKIP_RGB=1 16:14:43 load=3.30
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.3 p50_ms=9.4 min_ms=7.9 max_ms=10.8 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t489-r1-lat-off
+TTW_TIMING ms_view=9.314
+STAGES n=30 head=0.002 project=2.333 tile_assign=0.003 sort=0.444 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.459 d2h=0.003 assemble=0.000 tail=0.003 xview=0.040 | sum=9.287 view_total=9.288 resid_in_view=+0.001 avg_frame_ms=9.314 resid_vs_frame=+0.027 xview_hits=29 xview_misses=0
+=== r1-lat-on d866a6c ACQ_FUSE=3 SKIP_RGB=1 16:14:47 load=3.28
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.3 min_ms=7.7 max_ms=10.7 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t469/tmp/t489-r1-lat-on
+TTW_TIMING ms_view=9.202
+STAGES n=30 head=0.002 project=2.217 tile_assign=0.003 sort=0.458 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.446 d2h=0.003 assemble=0.000 tail=0.003 xview=0.042 | sum=9.174 view_total=9.175 resid_in_view=+0.001 avg_frame_ms=9.202 resid_vs_frame=+0.028 xview_hits=29 xview_misses=0
+=== r1-lat-p d866a6c ACQ_FUSE=1 SKIP_RGB=1 16:14:51 load=3.25
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.2 p50_ms=9.3 min_ms=7.8 max_ms=10.7 n_views=30 warmup_s=1.6 out=/localdev/smarton/gstt2-t469/tmp/t489-r1-lat-p
+TTW_TIMING ms_view=9.222
+STAGES n=30 head=0.002 project=2.236 tile_assign=0.003 sort=0.455 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.449 d2h=0.003 assemble=0.000 tail=0.003 xview=0.043 | sum=9.194 view_total=9.196 resid_in_view=+0.001 avg_frame_ms=9.222 resid_vs_frame=+0.028 xview_hits=29 xview_misses=0
+=== done 1 lat 16:14:54
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t489/tmp/ttw-state/logs/t489-r1-lat-20261010-091443.log
