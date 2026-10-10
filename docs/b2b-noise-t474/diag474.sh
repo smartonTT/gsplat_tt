@@ -3,6 +3,7 @@
 # (GSPLAT_B2B_ALL_STAGES=1: every stage timer per pass + pass end time), a 0.5 s host sampler
 # (loadavg, aiclk, per-process CPU of the busiest other processes) and the listed variants.
 #   diag474.sh <out dir> <tree> "<variant>..."   variants: base* | drop* (--b2b-drop) | pinN-M (taskset -c N-M)
+#   | nice* (bench at nice -10 and session autogroup nice -10, via sudo -n; reverts when the session ends)
 # With VSTART set it runs that viewer start script at exit and touches $O/vstarted.
 set -u
 O=$1; T=$2; VARS=$3; rc=99
@@ -38,10 +39,13 @@ for v in $VARS; do
     base*) ;;
     drop*) extra="$extra --b2b-drop" ;;
     pin*) r=${v#pin}; pre="taskset -c ${r%%_*}" ;;
+    nice*) pre="nice -n 0" ;;  # niceness -10 + autogroup -10 set on the subshell below (sudo -n)
   esac
   it=t474-$v
   echo "=== $v start $(date -u +%T) $(date +%s.%N) load=$(cut -d' ' -f1 /proc/loadavg) pre='$pre' extra='$extra'"
   ( cd $T || exit 9; source .venv/bin/activate; rm -rf tmp/$it
+    case $v in nice*) sudo -n renice -n -10 -p $BASHPID >/dev/null && echo -10 | sudo -n tee /proc/$BASHPID/autogroup >/dev/null
+      echo "nice=$(ps -o ni= -p $BASHPID) autogroup=$(cat /proc/$BASHPID/autogroup)" ;; esac
     env $envs TT_METAL_CACHE_RENDER=$CACHE/render timeout 300 $pre python3 render/run_t474.py --no-ref --iter-dir $it $extra > $O/$v.log 2>&1 ); r=$?
   echo "$v rc=$r end $(date +%s.%N)"
   grep -E "^B2B scene|TT_FATAL|TT_THROW|Traceback" $O/$v.log | cut -c1-400
