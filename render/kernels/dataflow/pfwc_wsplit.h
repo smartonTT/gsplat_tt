@@ -191,4 +191,56 @@ struct RecStage {
     }
 };
 
+// Task #467 (PFWC_REC32, docs/pfwc-rec32-t467): 32 B records, RW words
+// [a, b, c, mx, my, u01, u23, dep], two per 64 B page (gaussian g: page g / 2,
+// words (g % 2) * RW). RecStage then stages pages. A chunk starting at an odd g
+// shares its first page with chunk k - 1: chunk k - 1 sends its last record in
+// the OPEN message (words MSG_REC ..; OPEN is sent whenever m_k % 16, so always
+// when m_k is odd) and chunk k writes the whole page from its head page. A chunk
+// ending at an odd g sends that half page on, or (the core's last chunk) writes
+// it with the upper half zero. Every page is written once, by one writer.
+constexpr uint32_t RW = 8, MSG_REC = 2;
+static_assert(MSG_REC + RW <= MSG_DEP, "OPEN record words overlap the dep words");
+constexpr uint32_t STG_BYTES_REC32 = STG_BYTES + PW * 4;  // + the head record page
+struct Rec32Stage {
+    RecStage rs;
+    uint32_t head_page;
+    bool head;  // the chunk starts at an odd g: its first record is the head page's upper half
+    bool head_used, half;
+    void init(uint32_t nbanks) { rs.init(nbanks); }
+    void begin(uint32_t g) {
+        head = (g & 1u) != 0u;
+        head_used = false;
+        half = false;
+        head_page = g >> 1;
+        rs.begin((g + 1u) >> 1);
+    }
+    bool in_head() const { return head && !head_used; }
+    // Word offset of the next record in the staging (when !in_head()).
+    uint32_t stage_word() const { return rs.slot() * PW + (half ? RW : 0u); }
+    template <class F>
+    inline void next(F&& flush_rec) {
+        if (in_head()) {
+            head_used = true;
+        } else if (half) {
+            half = false;
+            rs.next(flush_rec);
+        } else {
+            half = true;
+        }
+    }
+    // Flushes the complete staged pages; an open half page (half) stays staged.
+    template <class F>
+    void end(F&& flush_rec) {
+        rs.end(flush_rec);
+    }
+    template <class W>
+    void writes(uint32_t G0_, uint32_t gs_, uint32_t ge_, bool per_page, W&& write) const {
+        rs.writes(G0_, gs_, ge_, per_page, write);
+    }
+    // The page of the open staged half page (half) and its staging slot.
+    uint32_t open_page() const { return rs.G0 + rs.rl * rs.nb + rs.rb; }
+    uint32_t open_word() const { return rs.slot() * PW; }
+};
+
 }  // namespace pfwc_wsplit

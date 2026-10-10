@@ -24,6 +24,8 @@ chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_HALF256" $DF -DEMIT_PUBOC=1u -DOL_
 chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_BULK=0" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=0 -DOL_BREC_HALF=128u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_HALF256 EMIT_TOWN" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 EMIT_TOWN EMIT_PROF" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 -DOL_EMIT_PROF=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 EMIT_TOWN PFWC_REC32" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 -DPFWC_REC32=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 PFWC_REC32 no TOWN" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DPFWC_REC32=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp OL_MAT_SELECT" $DF -DSORT_ONELAUNCH=1 -DOL_MAT_SELECT=1 -DOL_MAT_PART=4096u render/kernels/dataflow/sort_subchunk_materialize.cpp
@@ -50,6 +52,7 @@ for r in 0 1; do
   chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_RD_COLS PFWC_STEPCYC" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_RD_COLS=1 -DPFWC_STEPCYC=1 render/kernels/dataflow/writer_pfwc_split.cpp
   chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_TILE_LIST" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_TILE_LIST=1 render/kernels/dataflow/writer_pfwc_split.cpp
   chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_RD_COLS PFWC_TILE_LIST" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_RD_COLS=1 -DPFWC_TILE_LIST=1 render/kernels/dataflow/writer_pfwc_split.cpp
+  chk "writer_pfwc_split.cpp ROLE $r EMIT_PUBOC PFWC_RD_COLS PFWC_REC32" $DF -DWSPLIT_ROLE=$r -DEMIT_PUBOC=1 -DPFWC_RD_COLS=1 -DPFWC_REC32=1 render/kernels/dataflow/writer_pfwc_split.cpp
 done
 CP="-std=c++20 -DTRISC_MATH=1 -I$ST -I$ST/api -Wno-unknown-attributes"
 chk "project_pfwc_compute.cpp" $CP render/kernels/compute/project_pfwc_compute.cpp
@@ -59,6 +62,7 @@ chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC" $CP -DPFWC_VIS=1
 for tr in TRISC_UNPACK TRISC_MATH TRISC_PACK; do
   chk "sort_ol_town_compute.cpp $tr" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u render/kernels/compute/sort_ol_town_compute.cpp
   chk "sort_ol_town_compute.cpp $tr EMIT_PROF" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DOL_EMIT_PROF=1 render/kernels/compute/sort_ol_town_compute.cpp
+  chk "sort_ol_town_compute.cpp $tr PFWC_REC32" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DPFWC_REC32=1 render/kernels/compute/sort_ol_town_compute.cpp
 done
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC PFWC_WSPLIT" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_COVCAM_SFPU" $CP -DPFWC_COVCAM_SFPU=1 render/kernels/compute/project_pfwc_compute.cpp
