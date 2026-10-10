@@ -128,6 +128,15 @@
 #ifndef OL_EMIT_TOWN
 #define OL_EMIT_TOWN 0
 #endif
+// Task #467 (host knob GSPLAT_TT_PFWC_REC32=1, docs/pfwc-rec32-t467): 32 B
+// blend records [a, b, c, mx, my, u01, u23, dep], two per 64 B page: gaussian
+// g is page brec_pg(g), byte brec_ho(g) in it. Off: the 64 B page per g.
+#ifndef PFWC_REC32
+#define PFWC_REC32 0
+#endif
+constexpr uint32_t BW_OP = PFWC_REC32 ? 5u : 10u, BW_CG = PFWC_REC32 ? 6u : 11u, BW_DEP = PFWC_REC32 ? 7u : 12u;
+inline uint32_t brec_pg(uint32_t g) { return PFWC_REC32 ? g >> 1 : g; }
+inline uint32_t brec_ho(uint32_t g) { return PFWC_REC32 ? (g & 1u) * 32u : 0u; }
 #if OL_EMIT_TOWN
 #include "sort_ol_town.h"
 #endif
@@ -646,8 +655,8 @@ void kernel_main() {
         __builtin_memcpy(&inv_my, &inv_my_bits, 4);
         c_ty = 0xFFFFFFFFu;
         if constexpr (PUBOC) {
-            inv_opr = cachep[10];
-            inv_cgb = cachep[11];
+            inv_opr = cachep[BW_OP];
+            inv_cgb = cachep[BW_CG];
         } else {
             inv_opr = sort_bin_fp32::to_unorm16(cachep[5]) | (sort_bin_fp32::to_unorm16(cachep[6]) << 16);
             inv_cgb = sort_bin_fp32::to_unorm16(cachep[7]) | (sort_bin_fp32::to_unorm16(cachep[8]) << 16);
@@ -744,11 +753,11 @@ void kernel_main() {
     // A g outside its batch's bulk run (only if the pairs were not g-sorted):
     // one blocking read into the scratch page (unused with rings).
     auto brec_now = [&](int32_t g) -> const uint32_t* {
-        noc_async_read(get_noc_addr(static_cast<uint32_t>(g), brec_acc), l1_scratch, PAGE_BYTES);
+        noc_async_read(get_noc_addr(brec_pg(static_cast<uint32_t>(g)), brec_acc), l1_scratch, PAGE_BYTES);
         noc_async_read_barrier();
         asm volatile("" ::: "memory");
         EP_CNT(ep_npf, 1u);
-        return reinterpret_cast<const uint32_t*>(l1_scratch);
+        return reinterpret_cast<const uint32_t*>(l1_scratch + brec_ho(static_cast<uint32_t>(g)));
     };
     // One blendrec page per run of equal kept g (scan_g carries the last kept
     // g across batches, the same test process_batch uses) into ring half h.
@@ -762,12 +771,13 @@ void kernel_main() {
         if (bk_nb != 0u && p0 < P) {
             const uint32_t m = (p0 + n_el > P) ? P - p0 : n_el;
             const int32_t ga = pl.g[0], gb = pl.g[m - 1u];
-            const uint32_t n = static_cast<uint32_t>(gb - ga) + 1u;
+            // n: pages of the run (REC32: g / 2 from ga / 2).
+            const uint32_t n = brec_pg(static_cast<uint32_t>(gb)) - brec_pg(static_cast<uint32_t>(ga)) + 1u;
             if (gb >= ga && n <= bk_cap) {
                 const uint32_t q = n / bk_nb, rem = n - q * bk_nb;
                 const uint32_t nr = (n < bk_nb) ? n : bk_nb;
                 for (uint32_t r = 0; r < nr; r++) {
-                    noc_async_read(get_noc_addr(static_cast<uint32_t>(ga) + r, brec_acc),
+                    noc_async_read(get_noc_addr(brec_pg(static_cast<uint32_t>(ga)) + r, brec_acc),
                                    dst0 + r * bk_sf * PAGE_BYTES, (q + (r < rem ? 1u : 0u)) * PAGE_BYTES);
                 }
                 bk_a[h] = static_cast<uint32_t>(ga);
@@ -784,7 +794,7 @@ void kernel_main() {
             if (pl.k[j] == 0) continue;
             const int32_t gj = pl.g[j];
             if (gj != scan_g) {
-                noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc), dst0 + n_pf * PAGE_BYTES,
+                noc_async_read(get_noc_addr(brec_pg(static_cast<uint32_t>(gj)), brec_acc), dst0 + n_pf * PAGE_BYTES,
                                PAGE_BYTES);
                 n_pf++;
                 scan_g = gj;
@@ -804,12 +814,12 @@ void kernel_main() {
             const uint32_t g = static_cast<uint32_t>(pl.g[j]);
             const uint32_t t = static_cast<uint32_t>(pl.t[j]);
             if (static_cast<int32_t>(g) != blendrec_cached_g) {
-                cachep = reinterpret_cast<volatile uint32_t*>(ring0 + rec_slot * PAGE_BYTES);
+                cachep = reinterpret_cast<volatile uint32_t*>(ring0 + rec_slot * PAGE_BYTES + brec_ho(g));
                 rec_slot++;
                 blendrec_cached_g = static_cast<int32_t>(g);
                 uint32_t key;
                 if constexpr (PUBOC) {
-                    key = cachep[12];
+                    key = cachep[BW_DEP];
                 } else {
                     const int32_t dpg = static_cast<int32_t>(g / ELEMS_PER_PAGE);
                     if (dpg != dep_cached_page) {
@@ -969,8 +979,8 @@ void kernel_main() {
                 if (g != g_c) {
                     g_c = g;
                     if (bn != 0u) {
-                        const uint32_t jg = static_cast<uint32_t>(g) - ba;
-                        if (jg >= bn) return false;
+                        const uint32_t jg = brec_pg(static_cast<uint32_t>(g)) - brec_pg(ba);
+                        if (static_cast<uint32_t>(g) < ba || jg >= bn) return false;
                         if (jg < jl) {
                             jl = 0;
                             jr = 0;
@@ -988,7 +998,7 @@ void kernel_main() {
                         npg++;
                     }
                 }
-                *lw[tw::owner(t)]++ = tw::entry(t, off);
+                *lw[tw::owner(t)]++ = tw::entry(t, off + brec_ho(static_cast<uint32_t>(g)));
             }
             auto desc = reinterpret_cast<volatile uint32_t*>(twn + tw::desc_off(s));
             desc[0] = static_cast<uint32_t>(lw[0] - l0);
@@ -1015,7 +1025,7 @@ void kernel_main() {
                 if (p0 + j >= P) break;
                 const int32_t gj = pl.g[j];
                 if (gj != sg) {
-                    noc_async_read(get_noc_addr(static_cast<uint32_t>(gj), brec_acc), dst0 + n_pf * PAGE_BYTES,
+                    noc_async_read(get_noc_addr(brec_pg(static_cast<uint32_t>(gj)), brec_acc), dst0 + n_pf * PAGE_BYTES,
                                    PAGE_BYTES);
                     n_pf++;
                     sg = gj;
@@ -1112,8 +1122,8 @@ void kernel_main() {
                     if (g != g_c) {
                         g_c = g;
                         const uint32_t* cp;
-                        const uint32_t jg = static_cast<uint32_t>(g) - ba;
-                        if (jg < bn) {
+                        const uint32_t jg = brec_pg(static_cast<uint32_t>(g)) - brec_pg(ba);
+                        if (static_cast<uint32_t>(g) >= ba && jg < bn) {
                             if (jg < jl) {
                                 jl = 0;
                                 jr = 0;
@@ -1126,9 +1136,9 @@ void kernel_main() {
                                     rp -= bk_wrap;
                                 }
                             }
-                            cp = reinterpret_cast<const uint32_t*>(rp);
+                            cp = reinterpret_cast<const uint32_t*>(rp + brec_ho(static_cast<uint32_t>(g)));
                         } else if (bn == 0u) {
-                            cp = reinterpret_cast<const uint32_t*>(bp);
+                            cp = reinterpret_cast<const uint32_t*>(bp + brec_ho(static_cast<uint32_t>(g)));
                             bp += PAGE_BYTES;
                         } else {
                             cp = brec_now(g);
@@ -1138,9 +1148,9 @@ void kernel_main() {
                         cov2 = cp[2];
                         mxb = cp[3];
                         myb = cp[4];
-                        opr = cp[10];
-                        cgb = cp[11];
-                        dep = cp[12];
+                        opr = cp[BW_OP];
+                        cgb = cp[BW_CG];
+                        dep = cp[BW_DEP];
                         ty_c = 0xFFFFFFFFu;
                     }
                     const uint32_t c = cur_lm[t];

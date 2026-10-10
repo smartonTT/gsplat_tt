@@ -29,6 +29,9 @@
 #ifndef OL_RING_DEPTH
 #define OL_RING_DEPTH OL_RING  // task #479: ring records per tile (== the movers')
 #endif
+#ifndef PFWC_REC32
+#define PFWC_REC32 0
+#endif
 #ifndef OL_EMIT_PROF
 #define OL_EMIT_PROF 0
 #endif
@@ -117,9 +120,10 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
             cov2 = cp[2];
             mxb = cp[3];
             myb = cp[4];
-            opr = cp[10];
-            cgb = cp[11];
-            dep = cp[12];
+            // Task #467 PFWC_REC32: 32 B records [a, b, c, mx, my, u01, u23, dep].
+            opr = cp[PFWC_REC32 ? 5 : 10];
+            cgb = cp[PFWC_REC32 ? 6 : 11];
+            dep = cp[PFWC_REC32 ? 7 : 12];
             ty_c = 0xFFFFFFFFu;
             TP_CNT(TP_NG, 1u);
         }

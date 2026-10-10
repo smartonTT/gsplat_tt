@@ -30,6 +30,9 @@ Checks
      PSNR and diff name the same reference and are recomputed from the images;
      older iters without one predate the rule and show no placeholder
      (opt/ttw/ITERATION_CHECKLIST.md).
+  9. Back-to-back headline (#465): every ttw iter > 216 records
+     metrics.ms_view_b2b as the median of >= 3 listed passes; the report has the
+     headline section. Older rows show latency (legacy).
 
 Usage:  python3 opt/validate_report.py   (exit 0 = valid, non-zero = invalid)
 """
@@ -330,6 +333,17 @@ def main() -> int:
             f"every ttw iter > {br.SCREENSHOT_REQUIRED_AFTER} has a device screenshot + visual check; "
             f"{n_shots} screenshots: PSNR and diff recomputed against the one named reference"
         )
+
+        # --- 9. Back-to-back headline (user, 2026-10-10; task #465) ---------
+        # Iters > br.B2B_REQUIRED_AFTER record metrics.ms_view_b2b (median of
+        # >= 3 passes, passes listed); older rows stay latency (legacy).
+        b2b_errors = br.check_b2b(ttw_rows)
+        if b2b_errors:
+            raise Invalid(f"{len(b2b_errors)} b2b headline problem(s): " + "; ".join(b2b_errors))
+        if "Headline: back-to-back ms/view" not in html:
+            raise Invalid("REPORT.html has no back-to-back headline section")
+        checks.append(f"every ttw iter > {br.B2B_REQUIRED_AFTER} records b2b ms/view "
+                      f"(median of >= {br.B2B_MIN_PASSES} passes); headline section present")
 
         # 6. Every <img src> and viewer image path in REPORT.html and the
         # opt/ttw/ mirror resolves; nothing loads from outside the repo.

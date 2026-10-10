@@ -189,9 +189,46 @@ constexpr uint32_t RA_SLOTS = 2 * RA_HALF;
 constexpr uint32_t OUT_HALF = 8;
 constexpr uint32_t OUT_SLOTS = 2 * OUT_HALF;
 
+// Start of the stream for pair p (< P_pub): the last segment with gaussians
+// whose pair base is <= p, and the last page (segment-local) of that segment
+// whose first lofs is <= p - pair base (lofs[sb] == 0 <= key, lofs is
+// non-decreasing). Each round reads up to RA_SLOTS probe pages of (lo, hi] at
+// once (io.issue_lofs into ring slots 0.., then io.wait_reads).
+template <class Io>
+inline void diet_start(const volatile uint32_t* tab, uint32_t nseg, uint32_t p, Io& io,
+                       uint32_t* c_out, uint32_t* lo_out) {
+    uint32_t c = 0;
+    for (uint32_t cc = 0; cc < nseg; cc++) {
+        const volatile uint32_t* t = tab + cc * PAGE_WORDS;
+        if (t[T_M] != 0 && t[T_PB] <= p) c = cc;
+    }
+    const volatile uint32_t* t = tab + c * PAGE_WORDS;
+    const uint32_t m = t[T_M];
+    const uint32_t key = p - t[T_PB];
+    const uint32_t sp = t[T_SB] / PAGE_WORDS;
+    uint32_t lo = 0, hi = (m - 1) / PAGE_WORDS;
+    while (lo < hi) {
+        const uint32_t d = hi - lo;
+        const uint32_t n = d < RA_SLOTS ? d : RA_SLOTS;
+        for (uint32_t i = 0; i < n; i++) io.issue_lofs(sp + lo + 1 + (i * d) / n, i);
+        io.wait_reads();
+        uint32_t i = 0;
+        while (i < n && io.lofs_slot(i)[0] <= key) i++;
+        // Probes [0, i) are <= key: the page is in [q(i-1), q(i) - 1].
+        const uint32_t nlo = (i == 0) ? lo : lo + 1 + ((i - 1) * d) / n;
+        if (i < n) hi = lo + (i * d) / n;  // q(i) - 1
+        lo = nlo;
+    }
+    *c_out = c;
+    *lo_out = lo;
+}
+
+// emit_pairs_diet from a known stream start (c0, lo0) = diet_start(pg0 * 16)
+// (unused when pg0 * 16 >= P_pub: padding only).
 template <bool COUNT, class Io>
-inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
-                            uint32_t tiles_x, uint32_t pg0, uint32_t npg, Io& io, uint32_t* cnt) {
+inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
+                                 uint32_t tiles_x, uint32_t pg0, uint32_t npg, uint32_t c0,
+                                 uint32_t lo0, Io& io, uint32_t* cnt) {
     if (npg == 0) return;
     const uint32_t p_end = (pg0 + npg) * PAGE_WORDS;
     const uint32_t p_real = p_end < P_pub ? p_end : P_pub;
@@ -208,12 +245,7 @@ inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_
         tp = io.tid_slot(oslot);
     };
     if (p < p_real) {
-        // Start segment: the last one with gaussians whose pair base is <= p.
-        uint32_t c = 0;
-        for (uint32_t cc = 0; cc < nseg; cc++) {
-            const volatile uint32_t* t = tab + cc * PAGE_WORDS;
-            if (t[T_M] != 0 && t[T_PB] <= p) c = cc;
-        }
+        uint32_t c = c0;
         uint32_t m = 0, pc = 0, pb = 0, sb = 0;
         auto set_seg = [&](uint32_t cc) {
             const volatile uint32_t* t = tab + cc * PAGE_WORDS;
@@ -224,24 +256,9 @@ inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_
             sb = t[T_SB];
         };
         set_seg(c);
-        // Start page: the last page of the segment whose first lofs is <= key
-        // (lofs[sb] == 0 <= key, lofs is non-decreasing). Each round reads
-        // up to RA_SLOTS probe pages of (lo, hi] at once.
         const uint32_t key = p - pb;
         const uint32_t sp = sb / PAGE_WORDS;
-        uint32_t lo = 0, hi = (m - 1) / PAGE_WORDS;
-        while (lo < hi) {
-            const uint32_t d = hi - lo;
-            const uint32_t n = d < RA_SLOTS ? d : RA_SLOTS;
-            for (uint32_t i = 0; i < n; i++) io.issue_lofs(sp + lo + 1 + (i * d) / n, i);
-            io.wait_reads();
-            uint32_t i = 0;
-            while (i < n && io.lofs_slot(i)[0] <= key) i++;
-            // Probes [0, i) are <= key: the page is in [q(i-1), q(i) - 1].
-            const uint32_t nlo = (i == 0) ? lo : lo + 1 + ((i - 1) * d) / n;
-            if (i < n) hi = lo + (i * d) / n;  // q(i) - 1
-            lo = nlo;
-        }
+        const uint32_t lo = lo0;
         // Read-ahead stream: pages [iq, iq_end] of segment ic, then the pages
         // of the next segments with gaussians.
         uint32_t ic = c, iq = sp + lo, iq_end = sp + (m - 1) / PAGE_WORDS;
@@ -357,5 +374,94 @@ inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_
         if (++oi == PAGE_WORDS) next_out();
     }
 }
+
+template <bool COUNT, class Io>
+inline void emit_pairs_diet(const volatile uint32_t* tab, uint32_t nseg, uint32_t P_pub,
+                            uint32_t tiles_x, uint32_t pg0, uint32_t npg, Io& io, uint32_t* cnt) {
+    if (npg == 0) return;
+    const uint32_t p = pg0 * PAGE_WORDS;
+    uint32_t c = 0, lo = 0;
+    if (p < P_pub) diet_start(tab, nseg, p, io, &c, &lo);
+    emit_pairs_diet_from<COUNT>(tab, nseg, P_pub, tiles_x, pg0, npg, c, lo, io, cnt);
+}
+
+// Task #274 (GSPLAT_TT_K2_TRISC=1): the core's TRISCs run emit_pairs_diet_from
+// over L1 windows the mover read for them (no NoC on a TRISC). A mover range
+// [pg0, pg0 + npg) splits into job 0 (n0 pages), job 1 (n1 pages), then the
+// mover's own pages; pm0 / pm1 are permille of npg, each capped at cap pages.
+inline void k2_jobs(uint32_t npg, uint32_t pm0, uint32_t pm1, uint32_t cap, uint32_t* n0,
+                    uint32_t* n1) {
+    uint32_t a = npg * pm0 / 1000u, b = npg * pm1 / 1000u;
+    if (a > cap) a = cap;
+    if (b > cap) b = cap;
+    if (a + b > npg) b = npg - a;
+    *n0 = a;
+    *n1 = b;
+}
+
+// The stream pages emit_pairs_diet_from reads from (c, lo) until the part's
+// end: through page lo_n + 1 (segment-local, clipped to the segment) of
+// segment c_n, the start (diet_start) of the next part, or with to_end to the
+// end of the stream. visit(k, storage page) for the k-th; returns the count,
+// or cap + 1 as soon as it would pass cap (nothing visited past cap).
+template <class Visit>
+inline uint32_t diet_window(const volatile uint32_t* tab, uint32_t nseg, uint32_t c, uint32_t lo,
+                            bool to_end, uint32_t c_n, uint32_t lo_n, uint32_t cap,
+                            Visit&& visit) {
+    uint32_t ic = c;
+    uint32_t sb = tab[ic * PAGE_WORDS + T_SB];
+    uint32_t iq = sb / PAGE_WORDS + lo;
+    uint32_t iq_end = (sb + tab[ic * PAGE_WORDS + T_M] - 1) / PAGE_WORDS;
+    uint32_t n = 0;
+    for (;;) {
+        if (n == cap) return cap + 1u;
+        visit(n++, iq);
+        if (!to_end && ic == c_n) {
+            const uint32_t sp = sb / PAGE_WORDS;
+            const uint32_t stop = sp + lo_n + 1u < iq_end ? sp + lo_n + 1u : iq_end;
+            if (iq >= stop) return n;
+        }
+        if (iq != iq_end) {
+            iq++;
+            continue;
+        }
+        do {
+            if (++ic == nseg) return n;
+        } while (tab[ic * PAGE_WORDS + T_M] == 0);
+        if (!to_end && ic > c_n) return n;
+        sb = tab[ic * PAGE_WORDS + T_SB];
+        iq = sb / PAGE_WORDS;
+        iq_end = (sb + tab[ic * PAGE_WORDS + T_M] - 1) / PAGE_WORDS;
+    }
+}
+
+// emit_pairs_diet_from's Io over a diet_window in L1: the k-th issued stream
+// page is window page k (past the window: the poison page, never consumed);
+// pair pages go to consecutive pages of gid / tid. No reads to wait for, no
+// writes to flush.
+struct WinIo {
+    const uint32_t* lofs;
+    const uint32_t* box;
+    const uint32_t* poison;
+    uint32_t n_in;
+    uint32_t* gid;
+    uint32_t* tid;
+    uint32_t k = 0, out_k = 0;
+    const uint32_t* sl[RA_SLOTS] = {};
+    const uint32_t* sb[RA_SLOTS] = {};
+    void issue_lofs(uint32_t, uint32_t) {}
+    void issue(uint32_t, uint32_t slot) {
+        sl[slot] = k < n_in ? lofs + k * PAGE_WORDS : poison;
+        sb[slot] = k < n_in ? box + k * PAGE_WORDS : poison;
+        k++;
+    }
+    void wait_reads() {}
+    const uint32_t* lofs_slot(uint32_t s) const { return sl[s]; }
+    const uint32_t* box_slot(uint32_t s) const { return sb[s]; }
+    uint32_t* gid_slot(uint32_t) { return gid + out_k * PAGE_WORDS; }
+    uint32_t* tid_slot(uint32_t) { return tid + out_k * PAGE_WORDS; }
+    void write_page(uint32_t, uint32_t) { out_k++; }
+    void writes_flushed() {}
+};
 
 }  // namespace pfwc_fuse

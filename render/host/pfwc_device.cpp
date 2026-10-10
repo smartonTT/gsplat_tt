@@ -359,6 +359,15 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
     // Task #207: with the split writer (fused program only) NCRISC reads between
     // its own chunks, so the 10 inputs get a third slot.
     const bool wsplit = fuse && env_config::pfwc_writer_split();
+    // Task #467: 32 B blend records (pfwc_rec32() implies the writer split).
+    const bool rec32 = wsplit && env_config::pfwc_rec32();
+    // Task #471: one line so an A/B can tell the lever is really on (it falls back silently).
+    static bool rec32_logged = false;
+    if (rec32 && !rec32_logged) {
+        rec32_logged = true;
+        std::cerr << "[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page" << std::endl;
+    }
+    const uint32_t stg_bytes = rec32 ? pfwc_wsplit::STG_BYTES_REC32 : pfwc_wsplit::STG_BYTES;
     const bool rd_brisc = wsplit && env_config::pfwc_rd_brisc();
     const uint32_t in_depth = wsplit ? 3u : 2u;
 
@@ -402,13 +411,13 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (!wsplit) cb_raw(CB_VMASK, VIS_MASK_BYTES);  // writer_pfwc_split.cpp uses neither
         if (!fuse) cb_raw(CB_VCNT, VIS_CNT_STAGING + 64);
         if (!wsplit) cb_raw(CB_VOP, TILE_BYTES_FP32);
-        if (fuse) cb_raw(CB_FUSE, wsplit ? pfwc_wsplit::STG_BYTES : FUSE_CB_BYTES);
+        if (fuse) cb_raw(CB_FUSE, wsplit ? stg_bytes : FUSE_CB_BYTES);
         if (wsplit) {
             // The odd chunks' outputs (project_pfwc_compute.cpp OCB), NCRISC's
             // staging and the chunk handoff mailbox (pfwc_wsplit.h).
             for (uint32_t cb : {CB_M2X, CB_M2Y, CB_DEP, CB_A, CB_B, CB_C, CB_RX, CB_RY, CB_TPG, CB_AABB})
                 cb_fp32(pfwc_wsplit::odd_cb(cb), 2);
-            cb_raw(pfwc_wsplit::CB_STG_ODD, pfwc_wsplit::STG_BYTES);
+            cb_raw(pfwc_wsplit::CB_STG_ODD, stg_bytes);
             cb_raw(pfwc_wsplit::CB_MBX, pfwc_wsplit::MBX_BYTES);
             for (uint32_t i = 0; i < pfwc_wsplit::NUM_SEMS; ++i) ctx.fsem[i] = CreateSemaphore(program, cores, 0);
             if (tile_list_on()) cb_raw(CB_TLIST, 2 * TLIST_MAX_PAGE);
@@ -432,6 +441,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         vis_defines["PFWC_WSPLIT"] = "1";
         split_defines["WSPLIT_ROLE"] = "1";
         if (env_config::emit_puboc()) split_defines["EMIT_PUBOC"] = "1";
+        if (rec32) split_defines["PFWC_REC32"] = "1";
         if (stepcyc != 0 && (steprisc == 3 || steprisc == 9))
             split_defines["PFWC_STEPCYC"] = std::to_string(stepcyc);
         if (rd_brisc) split_defines["PFWC_RD_COLS"] = "1";
@@ -521,6 +531,7 @@ static void build_program(PfwcDeviceContext& ctx, bool vis = false, bool fuse = 
         if (writer_defines.erase("FUSE_ABL") != 0)
             std::cerr << "[gsplat_tt::pfwc] GSPLAT_TT_FUSE_ABL is ignored with GSPLAT_TT_PFWC_WRITER_SPLIT=1\n";
         writer_defines["WSPLIT_ROLE"] = "0";
+        if (rec32) writer_defines["PFWC_REC32"] = "1";
         // Task #232: BRISC reads the GSPLAT_TT_PFWC_RD_* input tiles.
         if (rd_brisc) writer_defines["PFWC_RD_COLS"] = "1";
         if (tile_list_on()) writer_defines["PFWC_TILE_LIST"] = "1";
@@ -827,6 +838,11 @@ double pfwc_tt(
                           << "); running the PFWC_VIS program\n";
             }
         }
+    }
+    if (vis != nullptr && env_config::pfwc_rec32() && !fuse_on) {
+        // Task #467: the emit reads 32 B records, which only the fused split writer makes.
+        throw std::runtime_error("[gsplat_tt::pfwc] GSPLAT_TT_PFWC_REC32=1 needs the fused pfwc "
+                                 "(GSPLAT_TT_PFWC_FUSE=1), which did not run");
     }
     if (vis != nullptr && !fuse_on) {
         // The PFWC_VIS writer stages the 1 KB count pages spanned by its tile

@@ -216,6 +216,80 @@ struct ModelIo {
     }
 };
 
+// Task #274 (K2_TRISC): one mover range as tile_assign_scatter_seg.cpp and
+// k2_trisc_compute.cpp run it. The mover searches the three part starts,
+// reads job windows (diet_window, at most jobs[3] pages, else no jobs), the
+// TRISCs run emit_pairs_diet_from over WinIo, the mover runs its own pages
+// and writes the jobs' pages and adds their counts. jobs: pm0, pm1, out cap,
+// in cap.
+uint32_t jobs_run = 0, jobs_fallback = 0;
+template <bool COUNT>
+void run_jobs(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab, uint32_t C,
+              uint32_t P_pub, uint32_t pg0, uint32_t npg, const uint32_t* jobs, ModelIo& io,
+              std::vector<uint32_t>& dg, std::vector<uint32_t>& dt,
+              std::vector<uint32_t>& written, uint32_t* cnt) {
+    if (npg == 0) return;
+    uint32_t n[2];
+    pfwc_fuse::k2_jobs(npg, jobs[0], jobs[1], jobs[2], &n[0], &n[1]);
+    uint32_t st[3] = {pg0, pg0 + n[0], pg0 + n[0] + n[1]};
+    uint32_t c[3] = {0, 0, 0}, lo[3] = {0, 0, 0};
+    for (uint32_t i = 0; i < 3; i++)
+        if (st[i] * 16 < P_pub) pfwc_fuse::diet_start(tab.data(), C, st[i] * 16, io, &c[i], &lo[i]);
+    std::vector<uint32_t> wl[2], wb[2];
+    uint32_t n_in[2] = {0, 0};
+    bool fit = true;
+    for (uint32_t j = 0; j < 2; j++) {
+        if (n[j] == 0 || st[j] * 16 >= P_pub) continue;
+        const bool to_end = st[j + 1] * 16 >= P_pub;
+        n_in[j] = pfwc_fuse::diet_window(tab.data(), C, c[j], lo[j], to_end, c[j + 1], lo[j + 1],
+                                         jobs[3], [&](uint32_t k, uint32_t page) {
+                                             if (k != wl[j].size() / 16) fail("window order", k, 0);
+                                             for (uint32_t w = 0; w < 16; w++) {
+                                                 wl[j].push_back(f.lofs.at(page * 16 + w));
+                                                 wb[j].push_back(f.box.at(page * 16 + w));
+                                             }
+                                         });
+        if (n_in[j] > jobs[3]) fit = false;
+    }
+    if (!fit) {
+        jobs_fallback++;
+        n[0] = n[1] = 0;
+        st[1] = st[2] = pg0;
+        c[2] = c[0];
+        lo[2] = lo[0];
+    }
+    const uint32_t poison[16] = {0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u,
+                                 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u,
+                                 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u,
+                                 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u, 0xA5A5A5A5u};
+    for (uint32_t j = 0; j < 2; j++) {
+        if (n[j] == 0) continue;
+        jobs_run++;
+        std::vector<uint32_t> og(n[j] * 16, 0xFFFFFFFFu), ot(n[j] * 16, 0xFFFFFFFFu);
+        pfwc_fuse::WinIo w{wl[j].data(), wb[j].data(), poison, n_in[j], og.data(), ot.data()};
+        std::vector<uint32_t> jc(s.tiles_x * 64u, 0u);  // tids < tiles_x * tiles_y (tiles_y < 50)
+        pfwc_fuse::emit_pairs_diet_from<COUNT>(tab.data(), C, P_pub, s.tiles_x, st[j], n[j], c[j],
+                                               lo[j], w, COUNT ? jc.data() : nullptr);
+        if (w.out_k != n[j]) fail("job pages", w.out_k, n[j]);
+        for (uint32_t q = 0; q < n[j]; q++) {
+            const uint32_t pg = st[j] + q;
+            if (pg >= written.size()) {
+                fail("job page past the pair pages", pg, written.size());
+                continue;
+            }
+            written[pg]++;
+            for (uint32_t x = 0; x < 16; x++) {
+                dg[pg * 16 + x] = og[q * 16 + x];
+                dt[pg * 16 + x] = ot[q * 16 + x];
+            }
+        }
+        if (COUNT)
+            for (uint32_t t = 0; t < jc.size(); t++) cnt[t] += jc[t];
+    }
+    pfwc_fuse::emit_pairs_diet_from<COUNT>(tab.data(), C, P_pub, s.tiles_x, st[2],
+                                           pg0 + npg - st[2], c[2], lo[2], io, cnt);
+}
+
 // emit_pairs_diet per (K2 core, mover) must give emit_pairs' pages (gid, tid)
 // and, with COUNT, the per-tile pair counts of its range.
 uint32_t max_search_waits = 0;
@@ -225,7 +299,7 @@ template <bool COUNT>
 void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab, uint32_t C,
                 uint32_t K, uint32_t dual, uint32_t permille, uint32_t P_pub,
                 const std::vector<uint32_t>& gid, const std::vector<uint32_t>& tid,
-                const std::vector<uint32_t>* speed = nullptr) {
+                const std::vector<uint32_t>* speed = nullptr, const uint32_t* jobs = nullptr) {
     std::vector<uint32_t> acc, sb;
     if (speed != nullptr) {
         acc.assign(speed->size() + 1u, 0u);
@@ -254,8 +328,13 @@ void check_diet(const Scene& s, const Fused& f, const std::vector<uint32_t>& tab
             io.tid = &dt;
             io.written = &written;
             std::fill(cnt.begin(), cnt.end(), 0u);
-            pfwc_fuse::emit_pairs_diet<COUNT>(tab.data(), C, P_pub, s.tiles_x, pg0, npg, io,
-                                              COUNT ? cnt.data() : nullptr);
+            if (jobs == nullptr) {
+                pfwc_fuse::emit_pairs_diet<COUNT>(tab.data(), C, P_pub, s.tiles_x, pg0, npg, io,
+                                                  COUNT ? cnt.data() : nullptr);
+            } else {
+                run_jobs<COUNT>(s, f, tab, C, P_pub, pg0, npg, jobs, io, dg, dt, written,
+                                COUNT ? cnt.data() : nullptr);
+            }
             if (!io.rd.empty()) fail("reads in flight at the end", k, io.rd.size());
             io.writes_flushed();  // the kernel's final write barrier
             if (io.streaming && io.first_issue_wait > max_search_waits)
@@ -332,6 +411,10 @@ void check_k2(const Scene& s, const Pairs& ref, const Fused& f, uint32_t C, uint
     std::vector<uint32_t> speed(2u * K);
     for (uint32_t k = 0; k < 2u * K; k++) speed[k] = 650u + (k * 2654435761u >> 7) % 500u;
     check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, &speed);
+    // Task #274 TRISC jobs: default split, small caps (out and in fallbacks).
+    const uint32_t jd[4] = {430, 215, 640, 640}, js[4] = {300, 300, 3, 4};
+    check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, &speed, jd);
+    check_diet<true>(s, f, tab, C, K, dual, permille, P_pub, gid, tid, nullptr, js);
 }
 
 }  // namespace
@@ -364,11 +447,13 @@ int main() {
         check_k2(e, legacy(e, 110), fused_writer(e, 110), 110, 110, 1, 500, 1000);
         cases++;
     }
+    if (jobs_run == 0 || jobs_fallback == 0) fail("TRISC jobs not exercised", jobs_run, jobs_fallback);
     if (failures) {
         std::fprintf(stderr, "test_pfwc_fuse: %d failures in %d cases\n", failures, cases);
         return 1;
     }
-    std::printf("test_pfwc_fuse: %d cases OK (diet start search: <= %u read rounds)\n", cases,
-                max_search_waits);
+    std::printf("test_pfwc_fuse: %d cases OK (diet start search: <= %u read rounds; %u TRISC jobs, "
+                "%u window fallbacks)\n",
+                cases, max_search_waits, jobs_run, jobs_fallback);
     return 0;
 }
