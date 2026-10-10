@@ -133,7 +133,7 @@ PAGEFPS_SHIM = b"""<script>/* gsplat-pagefps-shim (task #457) */
         "pointer-events:none";
       document.body.appendChild(box);
     }
-    if (box) box.textContent = "page " + fps + " FPS \u00b7 load " + dec.toFixed(1) + " ms";
+    if (box) box.textContent = "page " + fps + " FPS \\u00b7 load " + dec.toFixed(1) + " ms";
     if (fps > 0 || last > 0) {
       fetch("/gsplat/pagestats?fps=" + fps + "&dec=" + dec.toFixed(2) + "&n=" + total,
             {cache: "no-store"}).catch(function () {});

@@ -76,6 +76,24 @@ def test_inject_reconnect_shim() -> None:
     assert b"document.hasFocus" in out and b'msg.type === "retry"' in out
     assert inject_reconnect_shim(out) == out  # idempotent
     assert inject_reconnect_shim(b"<html>no head</html>") == b"<html>no head</html>"
+    # Task #457: the page FPS shim rides along, once, before the page's own head.
+    assert out.count(b"gsplat-pagefps-shim") == 1
+    assert out.index(b"gsplat-pagefps-shim") < out.index(b"<title>")
+
+
+@needs_viewer
+def test_page_stats_parse_and_stale() -> None:
+    from gsplat.viser_patches import PageStats
+    ps = PageStats()
+    assert ps.latest(now=0.0) is None
+    assert not ps.update("dec=1.0&n=3", now=10.0)  # no fps: rejected
+    assert not ps.update("fps=abc", now=10.0)
+    assert ps.latest(now=10.0) is None
+    assert ps.update("fps=118&dec=2.25&n=7.0", remote="1.2.3.4", now=10.0)
+    got = ps.latest(now=11.0)
+    assert got == {"fps": 118.0, "dec": 2.25, "n": 7, "remote": "1.2.3.4", "t": 10.0}
+    assert ps.update("fps=5", now=12.0) and ps.latest(now=12.0)["dec"] == 0.0
+    assert ps.latest(now=12.0 + PageStats.STALE_S + 0.01) is None
 
 
 def _free_port() -> int:
@@ -105,6 +123,14 @@ def test_live_server_logs_session_and_serves_shim() -> None:
                 body = r.read()
                 assert int(r.headers["Content-Length"]) == len(body)
             assert b"gsplat-reconnect-shim" in gzip.decompress(body)
+            assert b"gsplat-pagefps-shim" in page
+            # Page FPS report (task #457): 204, numbers land in PAGE_STATS.
+            from gsplat.viser_patches import PAGE_STATS
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/gsplat/pagestats"
+                                        "?fps=117&dec=1.5&n=42", timeout=10) as r:
+                assert r.status == 204
+            got = PAGE_STATS.latest()
+            assert got is not None and got["fps"] == 117.0 and got["n"] == 42
 
             async def session() -> None:
                 async with wsc.connect(f"ws://127.0.0.1:{port}",
@@ -130,6 +156,7 @@ if __name__ == "__main__":
     for name, fn in list(globals().items()):
         if name.startswith("test_") and callable(fn):
             if not HAVE_VIEWER and name in ("test_inject_reconnect_shim",
+                                            "test_page_stats_parse_and_stale",
                                             "test_live_server_logs_session_and_serves_shim"):
                 print(f"SKIP {name}")
                 continue

@@ -184,6 +184,136 @@ def test_bad_jpeg_env_falls_back_to_auto(monkeypatch=None):
             os.environ["GSPLAT_VIEWER_JPEG"] = old
 
 
+class _PoseViewer(_Viewer):
+    """_Viewer whose client camera walks through poses 1, 2, 3, ... (task #457)."""
+
+    def __init__(self, render_fn):
+        super().__init__(render_fn)
+        self.next_camera_state = None
+        self.frame_post_fn = None
+        self.polled = 0
+
+    def get_camera_state(self, client):
+        import nerfview
+        self.polled += 1
+        c2w = np.eye(4)
+        c2w[0, 3] = float(self.polled)
+        return nerfview.CameraState(fov=1.0, aspect=320 / 256, c2w=c2w)
+
+
+def _pose_id(cs) -> float:
+    return float(cs.c2w[0, 3])
+
+
+def test_next_pose_hint_latching():
+    """While moving, frame k renders the pose hinted with frame k-1, so the device's
+    prefetched front stages always match; a static frame renders its own pose and
+    drops the latch (task #457)."""
+    import os
+    from nerfview._renderer import RenderTask
+    from gsplat.nerfview_viewer import FastRenderer
+    import nerfview
+
+    calls = []
+    holder = {}
+
+    def render_fn(camera_state, tab_state):
+        nxt = holder["v"].next_camera_state
+        calls.append((_pose_id(camera_state), None if nxt is None else _pose_id(nxt)))
+        return _test_image()
+
+    v = _PoseViewer(render_fn)
+    holder["v"] = v
+
+    def task_cs(x):
+        c2w = np.eye(4)
+        c2w[0, 3] = x
+        return nerfview.CameraState(fov=1.0, aspect=320 / 256, c2w=c2w)
+
+    old = os.environ.pop("GSPLAT_VIEWER_PIPELINE", None)
+    try:
+        fr = FastRenderer(viewer=v, client=_Client(), lock=threading.Lock())
+        assert fr.pipeline_frames
+        fr.render_once(RenderTask("move", task_cs(-1.0)))    # own pose, hints pose 1
+        fr.render_once(RenderTask("move", task_cs(-2.0)))    # pose 1 (latched), hints 2
+        fr.render_once(RenderTask("rerender", task_cs(-3.0)))  # pose 2, hints 3
+        fr.render_once(RenderTask("static", task_cs(-4.0)))  # own pose, no hint, latch reset
+        fr.render_once(RenderTask("move", task_cs(-5.0)))    # own pose again, hints 4
+        assert calls == [(-1.0, 1.0), (1.0, 2.0), (2.0, 3.0), (-4.0, None), (-5.0, 4.0)], calls
+        assert v.next_camera_state is None  # cleared after every render
+        fr.running = False
+
+        os.environ["GSPLAT_VIEWER_PIPELINE"] = "0"
+        calls.clear()
+        fr = FastRenderer(viewer=v, client=_Client(), lock=threading.Lock())
+        assert not fr.pipeline_frames
+        fr.render_once(RenderTask("move", task_cs(-6.0)))
+        fr.render_once(RenderTask("move", task_cs(-7.0)))
+        assert calls == [(-6.0, None), (-7.0, None)], calls
+        fr.running = False
+    finally:
+        os.environ.pop("GSPLAT_VIEWER_PIPELINE", None)
+        if old is not None:
+            os.environ["GSPLAT_VIEWER_PIPELINE"] = old
+
+
+def test_frame_post_fn_runs_on_sender_thread():
+    """The letterbox (viewer.frame_post_fn) runs on the sender thread with the
+    rendered frame's camera, and the sent JPEG is its output (task #457)."""
+    from nerfview._renderer import RenderTask
+    from gsplat.nerfview_viewer import FastRenderer
+    import nerfview
+
+    img = _test_image()
+    seen = []
+
+    def post(frame, cs):
+        seen.append((threading.current_thread().name, _pose_id(cs), frame.shape))
+        return np.pad(frame, ((32, 32), (0, 0), (0, 0)))  # letterbox bars
+
+    v = _PoseViewer(lambda cs, ts: img)
+    v.frame_post_fn = post
+    sent = threading.Event()
+    fr = FastRenderer(viewer=v, client=_Client(), lock=threading.Lock(),
+                      on_frame_sent=lambda *a: sent.set())
+    c2w = np.eye(4)
+    c2w[0, 3] = 9.0
+    fr.render_once(RenderTask("static", nerfview.CameraState(fov=1.0, aspect=320 / 256, c2w=c2w)))
+    assert sent.wait(5.0)
+    fr.running = False
+    assert seen == [("gsplat-send", 9.0, img.shape)], seen
+    msgs = fr.client.scene._websock_interface.messages
+    assert len(msgs) == 1 and _decode(msgs[0].rgb_data).shape == (256 + 64, 320, 3)
+
+
+def test_hint_next_pose_matches_bench_extrinsics():
+    """GaussianViewer._hint_next_pose hands the backend the next pose's w2c built
+    like the render's own (bitwise prefetch key), and no hint when K differs."""
+    import types
+    import torch
+    import nerfview
+    from gsplat.utils import c2w_to_w2c
+    from gsplat.viewer import GaussianViewer
+
+    c2w = np.eye(4)
+    c2w[:3, 3] = [0.25, -1.5, 3.0]
+    nxt = nerfview.CameraState(fov=0.9, aspect=320 / 256, c2w=c2w)
+    backend = types.SimpleNamespace(next_extrinsics=None)
+    gv = types.SimpleNamespace(viewer=types.SimpleNamespace(next_camera_state=nxt),
+                               pipeline=types.SimpleNamespace(backend=backend), _hints=0)
+    K = torch.tensor(nxt.get_K((320, 256)), dtype=torch.float32)
+    GaussianViewer._hint_next_pose(gv, 320, 256, K)
+    want = c2w_to_w2c(torch.from_numpy(np.asarray(c2w, dtype=np.float32)))
+    assert gv._hints == 1 and torch.equal(backend.next_extrinsics, want)
+
+    backend.next_extrinsics = None
+    GaussianViewer._hint_next_pose(gv, 320, 256, K * 1.01)  # fov/size change: would miss
+    assert backend.next_extrinsics is None and gv._hints == 1
+    gv.viewer.next_camera_state = None
+    GaussianViewer._hint_next_pose(gv, 320, 256, K)
+    assert backend.next_extrinsics is None and gv._hints == 1
+
+
 if __name__ == "__main__":
     if not HAVE_VIEWER:
         print("skip: needs viser + nerfview")
