@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=e95fa858 bin=5536bf011a9df6dc t488 e95fa858 PFWC_VIS_FAST b2b A/B (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t488-r2-lat  timeout=380s  worry=600s  ts=2026-10-10T09:08:37-0700
 cmd: T=/localdev/smarton/gstt2-t469 bash /localdev/smarton/gstt2-t469/docs/pfwc-visfast-t488/remote_ab.sh 2 lat on off
