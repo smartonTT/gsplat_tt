@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=811121cd bin=184a6e6c74eb292a t485 811121cd b2b out ring (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t485-r5-A  timeout=380s  worry=600s  ts=2026-10-10T08:25:23-0700
 cmd: T=/localdev/smarton/gstt2-t483 bash /localdev/smarton/gstt2-t483/docs/out-ring-t485/remote.sh 5 b2b A
