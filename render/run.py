@@ -293,6 +293,22 @@ def _xview_counts(pipeline):
     return f"xview_hits={int(st['xview_hits'])} xview_misses={int(st['xview_misses'])} "
 
 
+def _spin_ms(ms):
+    """Busy-wait `ms` ms (task #464 --view-gap-ms); a spin, not a sleep, so the
+    gap is exact and the host core stays busy like real per-view host work."""
+    if ms <= 0.0:
+        return
+    end = time.perf_counter() + ms / 1000.0
+    while time.perf_counter() < end:
+        pass
+
+
+_B2B_STAGE_KEYS = ["project", "sort", "blend", "d2h", "tail", "xview", "view_total",
+                   "project_pfwc_rtargs", "project_pfwc_enqueue", "project_gather_wait",
+                   "sort_bin_count", "sort_bin_hist_d2h", "sort_bin_layout",
+                   "sort_bin_emit", "sort_publish_host", "sort_publish_wait", "sort_mat"]
+
+
 def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                   hero_clean, dump_dir, out_dir):
     """Throughput mode: render `order` back to back, 1 + args.b2b_passes times.
@@ -314,6 +330,10 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
                                                      dtype=np.float32)))
              for n in order]
     pass_ms = []
+    render_frame = []  # task #464: per-pass mean render window (= pass_ms when no gap)
+    clean = getattr(getattr(pipeline, "backend", None), "_clean", None)
+    if not hasattr(clean, "stage_timings"):
+        clean = None
     digests0 = None
     identical = True
     n_passes = 1 + max(0, args.b2b_passes)
@@ -323,17 +343,44 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
         nexts = ([None] * len(extrs) if not _XVIEW else
                  extrs[1:] + [extrs[0] if p + 1 < n_passes else None])
         imgs = []
-        t0 = time.perf_counter()
-        if keep:
-            for extr, nxt in zip(extrs, nexts):
-                _set_next_extr(pipeline, nxt)
-                imgs.append(_to_image(pipeline.render(gauss, extr, K, H, W)))
+        gap = getattr(args, "view_gap_ms", 0.0)
+        if clean is not None:
+            clean.reset_stage_timings()
+        if gap <= 0.0:
+            t0 = time.perf_counter()
+            if keep:
+                for extr, nxt in zip(extrs, nexts):
+                    _set_next_extr(pipeline, nxt)
+                    imgs.append(_to_image(pipeline.render(gauss, extr, K, H, W)))
+            else:
+                for extr, nxt in zip(extrs, nexts):
+                    _set_next_extr(pipeline, nxt)
+                    _to_image(pipeline.render(gauss, extr, K, H, W))
+            wall_ms = (time.perf_counter() - t0) * 1000.0
+            render_ms = wall_ms
         else:
+            # Task #464: render windows are timed per view; the spin gap is not.
+            render_ms = 0.0
+            t0 = time.perf_counter()
             for extr, nxt in zip(extrs, nexts):
                 _set_next_extr(pipeline, nxt)
-                _to_image(pipeline.render(gauss, extr, K, H, W))
-        wall_ms = (time.perf_counter() - t0) * 1000.0
+                tr = time.perf_counter()
+                im = _to_image(pipeline.render(gauss, extr, K, H, W))
+                render_ms += (time.perf_counter() - tr) * 1000.0
+                if keep:
+                    imgs.append(im)
+                _spin_ms(gap)
+            wall_ms = (time.perf_counter() - t0) * 1000.0
         pass_ms.append(wall_ms / len(order))
+        render_frame.append(render_ms / len(order))
+        if clean is not None:
+            st = clean.stage_timings()
+            nv = max(1, int(st.get("views", 0)))
+            print(f"B2B_STAGES pass={p} views={nv} gap_ms={gap:.2f} "
+                  f"period={pass_ms[-1]:.3f} render={render_frame[-1]:.3f} "
+                  f"py_resid={render_frame[-1] - float(st.get('view_total', 0.0)) / nv:.3f} "
+                  + " ".join(f"{k}={float(st.get(k, 0.0)) / nv:.3f}"
+                             for k in _B2B_STAGE_KEYS), flush=True)
         if keep:
             digests = [hashlib.md5(_to_u8(im).tobytes()).hexdigest() for im in imgs]
         if p == 0:
@@ -361,6 +408,8 @@ def _back_to_back(args, pipeline, gauss, cam, order, K, H, W, hero_name,
           f"ms_frame={ms_frame:.3f} fps={1000.0 / ms_frame:.2f} "
           f"pass_ms_frame={','.join(f'{x:.3f}' for x in timed)} "
           f"check_pass_ms_frame={pass_ms[0]:.3f} raw_md5={raw_md5} "
+          f"gap_ms={getattr(args, 'view_gap_ms', 0.0):.2f} "
+          f"render_ms_frame={statistics.mean(render_frame[1:] or render_frame):.3f} "
           f"{_xview_counts(pipeline)}"
           f"identical_across_passes="
           f"{('yes' if identical else 'NO') if not args.b2b_drop else 'unchecked'} "
@@ -395,6 +444,10 @@ def _main():
     ap.add_argument("--b2b-drop", action="store_true",
                     help="measured passes drop each frame when render() returns "
                          "(viewer-like; no compare against the check pass)")
+    ap.add_argument("--view-gap-ms", type=float, default=0.0,
+                    help="task #464: spin this many ms of host time after each view, "
+                         "outside the timed render window (both loops), to measure "
+                         "how much device work a host gap hides")
     ap.add_argument("--ref-only", nargs=1, metavar="OUT_NPY",
                     help=argparse.SUPPRESS)
     args = ap.parse_args()
@@ -498,6 +551,7 @@ def _main():
         img, wall_ms = render_clean_view_timed(
             clean_pipeline, gauss, cam["views"][name]["c2w"], K, H, W, next_c2w=nxt)
         per_view_ms.append(wall_ms)
+        _spin_ms(args.view_gap_ms)
         if pv_stages:
             st_now = clean_backend._clean.stage_timings()
             d = {k: float(st_now[k]) - float(st_prev[k]) for k in st_now
