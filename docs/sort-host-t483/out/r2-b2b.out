@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=5edea09e bin=184a6e6c74eb292a t483 5edea09e sort host timers (yyzo-bh-04)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=yyzo-bh-04  tag=t483-r2-b2b  timeout=380s  worry=600s  ts=2026-10-10T08:08:08-0700
 cmd: T=/localdev/smarton/gstt2-t483 bash /localdev/smarton/gstt2-t483/docs/sort-host-t483/remote.sh 2 b2b
