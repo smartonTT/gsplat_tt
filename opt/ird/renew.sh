@@ -11,7 +11,8 @@
 # setup still running, or viewer waiting for bh-30 to expire: rerun later); 5 no free box;
 # 6 setup/deploy/sync/release failed;
 # 10-13 ssh-preflight classes (10 = host key changed or unknown and not verified: the JSON then
-# carries presented/stored fingerprints; the extend step has run, nothing is deployed).
+# carries presented/stored fingerprints; the extend step has run, nothing is deployed. Also 10,
+# status jump_host_key_changed, when any strict jump call is refused on the jump host's key).
 set -uo pipefail
 
 JUMP=${IRD_JUMP:-yyz-ird}
@@ -46,11 +47,11 @@ while [ $# -gt 0 ]; do
     --stay) STAY=1 ;;
     --no-deploy) DEPLOY=0 ;;
     --rev) REV=${2:?--rev needs a value}; shift ;;
-    *) sed -n 2,13p "$0" >&2; exit 2 ;;
+    *) sed -n 2,14p "$0" >&2; exit 2 ;;
   esac
   shift
 done
-[ -n "$ROLE" ] || { sed -n 2,13p "$0" >&2; exit 2; }
+[ -n "$ROLE" ] || { sed -n 2,14p "$0" >&2; exit 2; }
 OTHER_ROLE=measure; [ "$ROLE" = measure ] && OTHER_ROLE=viewer
 cd "$(git rev-parse --show-toplevel)" || exit 2
 # Per-role state lives in the repository's common git dir, which every worktree shares.
@@ -62,7 +63,25 @@ act() {
   if [ "$DRY" = 1 ]; then printf '[dry-run] would run:' >&2; printf ' %q' "$@" >&2; echo >&2; return 0; fi
   log "run: $*"; "$@"
 }
-jump() { "${JUMP_SSH[@]}" "$JUMP" "$@" 2>&1 | sed '/Pseudo-terminal/d'; }
+# A jump call that fails on the jump host's key ends the run: exit 10, HIGH SEVERITY, from any
+# subshell. ssh-preflight can pass on a live mux (#499) that the strict calls here do not use.
+JUMP_KEY_ERR=$(mktemp "${TMPDIR:-/tmp}/renew-jumpkey.XXXXXX") || exit 2
+trap 'rm -f "$JUMP_KEY_ERR"' EXIT
+trap 'STATUS=jump_host_key_changed; ACTION=none
+  NOTE="HIGH SEVERITY ALERT: ssh host key changed for $JUMP (strict ssh refused its key): $(tail -3 "$JUMP_KEY_ERR" | tr "\n" " ")"
+  emit 10' USR1
+jump_key_check() {  # jump_key_check <ssh output>: signal the main shell on a host-key failure
+  case $1 in *"IDENTIFICATION HAS CHANGED"*|*"Host key verification failed"*)
+    printf '%s\n' "$1" > "$JUMP_KEY_ERR"; kill -USR1 $$; return 10 ;;
+  esac
+}
+jump() {
+  local out rc
+  out=$("${JUMP_SSH[@]}" "$JUMP" "$@" 2>&1); rc=$?
+  jump_key_check "$out" || return 10
+  sed '/Pseudo-terminal/d' <<<"$out"
+  return $rc
+}
 box() { local h=$1; shift; "${BOX_SSH[@]}" "$h" "$@"; }
 
 # "13:49:03", "49:03" or "1-02:03:04" -> seconds
@@ -216,6 +235,7 @@ reserve() {
   before=" $(awk '{printf "%s ", $2}' <<<"$SLURM")"
   # ird reserve blocks while the request is queued; the output carries a container password: never log it.
   out=$(timeout "$RESERVE_WAIT" ssh "${SSH_OPTS[@]}" "$JUMP" "$cmd" 2>&1 | grep -vi password)
+  jump_key_check "$out" || return 10
   tail -4 <<<"$out" | sed 's/^/[ird] /' >&2
   job=$(grep -oE '[0-9]+ on [^ :]+: Reservation complete' <<<"$out" | awk '{print $1}' | tail -1)
   refresh

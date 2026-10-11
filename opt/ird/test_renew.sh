@@ -32,6 +32,12 @@ if [ "$host" != yyz-ird ]; then
   esac
   exit 0
 fi
+# With $F/jump_key_bad, the jump host presents a changed key (a stale mux let ssh-preflight pass).
+if [ -e "$F/jump_key_bad" ]; then
+  echo '@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @' >&2
+  echo 'Host key for yyz-ird has changed and you have requested strict checking.' >&2
+  echo 'Host key verification failed.' >&2; exit 255
+fi
 case $cmd in
   "ird list")
     echo "SELECTION ID USER CLUSTER PARTITION MACHINE TIME LEFT CPU_IDS MEMORY BOARDS JOB ID SSH PORT"
@@ -234,6 +240,27 @@ c() { [ "$(j .stored)" = "$(fp "$T/old.pub")" ] && [[ $(j .note) == *refreshed* 
 key_case key_verified_dry "$T/new.pub"; run viewer --dry-run
 c() { [ "$RC" = 0 ] \
   && [ "$(j .status)" = host_key_verified ] && cmp -s "$F/known_hosts" "$F/kh.before" && [ "$(calls 'ssh bh-30 test')" = 0 ]; }; check "dry-run verified: exit 0 host_key_verified, known_hosts untouched, no box commands" c
+
+# 9c. The jump host's key changed but ssh-preflight passed (it rode a live ControlMaster mux, #499):
+# the first strict jump call fails on the key. Exit 10 HIGH SEVERITY naming yyz-ird, not 13.
+for role in measure viewer; do
+  new_case "jump_key_changed_$role"; : > "$F/jump_key_bad"; run "$role"
+  c() { [ "$RC" = 10 ] && [ "$(j .status)" = jump_host_key_changed ] \
+    && [[ $(j .note) == "HIGH SEVERITY ALERT: ssh host key changed for yyz-ird"* ]]; }; check "exit 10 jump_host_key_changed, HIGH SEVERITY note names yyz-ird" c
+  c() { [ "$(grep -c '^ssh yyz-ird ' "$F/calls")" = 1 ] && [ "$(grep -vc '^ssh yyz-ird ird list$' "$F/calls")" = 0 ]; }; check "stops at the first jump call: nothing extended, reserved or deployed" c
+done
+
+# 9d. ssh-preflight itself opens its own strictly checked connection, never a ControlMaster mux.
+CASE=ssh_preflight; OUT=; PF=${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight
+if [ -x "$PF" ]; then
+  F=$T/pf; mkdir -p "$F"; : > "$F/calls"; cp "$T/opts" "$T/opts.keep"   # case 10 checks renew.sh's calls only
+  PATH="$T/bin:$PATH" "$PF" yyz-ird > "$F/out" 2>&1; prc=$?
+  pfo=$(tail -1 "$T/opts")
+  c() { [ "$prc" = 0 ] && [[ $pfo == *ControlMaster=no* && $pfo == *ControlPath=none* && $pfo == *StrictHostKeyChecking=yes* ]]; }; check "ssh-preflight: ControlMaster=no ControlPath=none, strict" c
+  : > "$F/jump_key_bad"; PATH="$T/bin:$PATH" "$PF" yyz-ird > "$F/out" 2>&1; prc=$?
+  check "ssh-preflight: changed key is exit 10" [ "$prc" = 10 ]
+  mv "$T/opts.keep" "$T/opts"
+else echo "skip $CASE: $PF not found"; fi
 
 # 10. Every ssh and scp in all cases above: own connection (no ~/.ssh/config mux), strict host-key
 # check, batch mode, a connect timeout and an outer timeout.
