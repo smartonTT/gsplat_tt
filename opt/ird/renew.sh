@@ -10,7 +10,8 @@
 # Exit: 0 ok; 2 usage; 3 extend refused while the job is alive; 4 pending (queued request, box
 # setup still running, or viewer waiting for bh-30 to expire: rerun later); 5 no free box;
 # 6 setup/deploy/sync/release failed;
-# 10-13 ssh-preflight classes (10 = host key changed or unknown and not verified).
+# 10-13 ssh-preflight classes (10 = host key changed or unknown and not verified: the JSON then
+# carries presented/stored fingerprints; the extend step has run, nothing is deployed).
 set -uo pipefail
 
 JUMP=${IRD_JUMP:-yyz-ird}
@@ -23,9 +24,17 @@ RESERVE_WAIT=${IRD_RESERVE_WAIT:-240}
 PREFLIGHT=${SSH_PREFLIGHT:-${TTP_PROJECT:-$HOME/dev/gsplat_tt/tt-project}/harness/bin/ssh-preflight}
 # bicycle.ply (md5 3745b7a6) is not in git: worktrees take the main checkout's copy.
 SCENE=${IRD_SCENE:-scenes/bicycle.ply}; [ -s "$SCENE" ] || SCENE=$HOME/dev/gstt2/scenes/bicycle.ply
-# Host-key checking stays on everywhere. ~/.ssh/config sets StrictHostKeyChecking=no for bh-*;
-# a command-line -o wins over it, so every ssh to a box goes through BOX_SSH.
-BOX_SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
+# Host-key checking stays on everywhere. ~/.ssh/config sets StrictHostKeyChecking=no for bh-* and
+# a ControlMaster mux for bh-* and yyz-ird: a connection over a master socket that a non-strict
+# ssh opened checks no key at all (#496). A command-line -o wins over the config, so every ssh
+# and scp here gets SSH_OPTS (own connection, strict check) under an outer timeout.
+KNOWN_HOSTS=${IRD_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}
+SSH_T=${IRD_SSH_TIMEOUT:-120}
+SSH_OPTS=(-o ControlMaster=no -o ControlPath=none -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20)
+[ -n "${IRD_KNOWN_HOSTS:-}" ] && SSH_OPTS+=(-o "UserKnownHostsFile=$KNOWN_HOSTS")
+BOX_SSH=(timeout "$SSH_T" ssh "${SSH_OPTS[@]}")
+JUMP_SSH=(timeout "$SSH_T" ssh "${SSH_OPTS[@]}")
+# opt/viewer/viewer.sh and opt/sync_remote.sh add the same mux-free options themselves.
 
 ROLE=; DRY=0; HOST_ARG=; FP_ARG=; STAY=0; DEPLOY=1; REV=origin/smarton/tt-project-opt
 while [ $# -gt 0 ]; do
@@ -53,7 +62,7 @@ act() {
   if [ "$DRY" = 1 ]; then printf '[dry-run] would run:' >&2; printf ' %q' "$@" >&2; echo >&2; return 0; fi
   log "run: $*"; "$@"
 }
-jump() { ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15 "$JUMP" "$@" 2>&1 | sed '/Pseudo-terminal/d'; }
+jump() { "${JUMP_SSH[@]}" "$JUMP" "$@" 2>&1 | sed '/Pseudo-terminal/d'; }
 box() { local h=$1; shift; "${BOX_SSH[@]}" "$h" "$@"; }
 
 # "13:49:03", "49:03" or "1-02:03:04" -> seconds
@@ -82,6 +91,7 @@ OLD_JOB=$(st "$ROLE" release_job); OLD_HOST=$(st "$ROLE" release_host)
 
 # Result fields
 HOST=$CUR; JOB=; CLUSTER=; LEFT_S=0; ACTION=none; STATUS=ok; DEPLOY_MSG=; DEPLOY_SHA=; NOTE=; BOX_TYPE=
+KEY_PRESENTED=; KEY_STORED=; KEY_IRD=
 emit() {  # emit <exit code>; writes state unless --dry-run, prints the one JSON line
   local rc=$1 changed=false exp=
   [ "$HOST" != "$CUR" ] && changed=true
@@ -91,12 +101,14 @@ emit() {  # emit <exit code>; writes state unless --dry-run, prints the one JSON
     --arg exp "$exp" --arg type "$BOX_TYPE" --argjson changed "$changed" --arg prev "$CUR" \
     --arg action "$ACTION" --arg status "$STATUS" --arg cluster "$CLUSTER" --arg deploy "$DEPLOY_MSG" --arg dsha "${DEPLOY_SHA:-}" \
     --arg note "$NOTE" --argjson dry "$([ "$DRY" = 1 ] && echo true || echo false)" \
+    --arg kp "$KEY_PRESENTED" --arg ks "$KEY_STORED" --arg ki "$KEY_IRD" \
     --arg pm "${PENDING:-}" --arg pj "${PENDING_JOB:-}" --arg pc "${PENDING_CL:-}" --arg rj "${OLD_JOB:-}" --arg rh "${OLD_HOST:-}" --argjson rc "$rc" \
     '{role:$role, host:$host, job_id:$job, port:($port|tonumber), expiry_utc:$exp, box_type:$type,
       box_changed:$changed, prev_host:$prev, cluster:$cluster, action:$action, status:$status,
       deploy:$deploy, deployed_sha:$dsha, note:($note|sub("; *$";"")), dry_run:$dry, exit:$rc}
      + (if $pm != "" then {pending_machine:$pm, pending_job:$pj, pending_cluster:$pc} else {} end)
-     + (if $rj != "" then {release_job:$rj, release_host:$rh} else {} end)')
+     + (if $rj != "" then {release_job:$rj, release_host:$rh} else {} end)
+     + (if $kp != "" or $ks != "" then {presented:$kp, stored:$ks, ird_fp:$ki} else {} end)')
   # HOST changes only once a reservation on it exists, so the next run finds the job it holds.
   [ "$DRY" = 0 ] && mkdir -p "$STATE_DIR" && echo "$j" > "$STATE_DIR/$ROLE.json"
   echo "$j"
@@ -199,11 +211,11 @@ cands() {
 reserve() {
   local m=$1 c=$2 out job before
   local cmd="ird reserve --cluster $c --ssh-port $PORT --timeout $TIMEOUT --no-shell blackhole --machine $m"
-  if [ "$DRY" = 1 ]; then act ssh "$JUMP" "$cmd"; HOST=$m; CLUSTER=$c; JOB=planned; ROW=; LEFT_S=$(secs_of "$TIMEOUT"); return 0; fi
+  if [ "$DRY" = 1 ]; then act "${JUMP_SSH[@]}" "$JUMP" "$cmd"; HOST=$m; CLUSTER=$c; JOB=planned; ROW=; LEFT_S=$(secs_of "$TIMEOUT"); return 0; fi
   log "reserving $m ($c)"
   before=" $(awk '{printf "%s ", $2}' <<<"$SLURM")"
   # ird reserve blocks while the request is queued; the output carries a container password: never log it.
-  out=$(timeout "$RESERVE_WAIT" ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$JUMP" "$cmd" 2>&1 | grep -vi password)
+  out=$(timeout "$RESERVE_WAIT" ssh "${SSH_OPTS[@]}" "$JUMP" "$cmd" 2>&1 | grep -vi password)
   tail -4 <<<"$out" | sed 's/^/[ird] /' >&2
   job=$(grep -oE '[0-9]+ on [^ :]+: Reservation complete' <<<"$out" | awk '{print $1}' | tail -1)
   refresh
@@ -246,7 +258,7 @@ fi
 if [ -n "$ROW" ] && [ "$HOST" = "$CUR" ] && [ "$ACTION" != moved ] && [ "$ACTION" != adopted ]; then
   read -r sel _ _ left _ _ <<<"$ROW"
   before=$(secs_of "$left")
-  if [ "$DRY" = 1 ]; then act ssh "$JUMP" "ird change-timeout $sel $TIMEOUT"; ACTION=extend; LEFT_S=$(secs_of "$TIMEOUT")
+  if [ "$DRY" = 1 ]; then act "${JUMP_SSH[@]}" "$JUMP" "ird change-timeout $sel $TIMEOUT"; ACTION=extend; LEFT_S=$(secs_of "$TIMEOUT")
   else
     log "run: ird change-timeout $sel $TIMEOUT (job on $CUR, $left left)"
     jump "ird change-timeout $sel $TIMEOUT" | grep -vE 'Responsive clusters|Using clusters' | tail -3 >&2
@@ -288,7 +300,7 @@ BOX_TYPE=$(type_of "$HOST")
 if [ -n "$OLD_JOB" ]; then
   osel=$(awk '{print $1}' <<<"$(row_j "$OLD_JOB")")
   if [ -z "$osel" ]; then log "old job $OLD_JOB on $OLD_HOST is gone already"
-  elif [ "$DRY" = 1 ]; then act ssh "$JUMP" "ird change-timeout $osel $TIMEOUT"
+  elif [ "$DRY" = 1 ]; then act "${JUMP_SSH[@]}" "$JUMP" "ird change-timeout $osel $TIMEOUT"
   else
     log "run: ird change-timeout $osel $TIMEOUT (old job $OLD_JOB on $OLD_HOST, kept until $HOST is built)"
     jump "ird change-timeout $osel $TIMEOUT" | grep -vE 'Responsive clusters|Using clusters' | tail -3 >&2
@@ -298,27 +310,43 @@ fi
 # A box that --dry-run only plans to reserve is not ours yet: no ssh to it at all.
 PLANNED=0; [ "$DRY" = 1 ] && [ "$HOST" != "$CUR" ] && PLANNED=1
 
-# 5. Host key: a strict check first. A plain ssh (as ssh-preflight runs) would, under the
-# StrictHostKeyChecking=no in ~/.ssh/config, store an unknown key unverified.
+# 5. Host key: a strict check first, over a connection of its own (SSH_OPTS: no mux). A plain
+# ssh (as ssh-preflight runs) would, under the StrictHostKeyChecking=no in ~/.ssh/config, store
+# an unknown key unverified, and one over the mux checks nothing.
+stored_fp() { ssh-keygen -l -F "[$1]:$PORT" -f "$KNOWN_HOSTS" 2>/dev/null | awk '$2 == "ED25519" {print $3}' | head -1; }
+# ird connect-to wants a terminal: without one it fails ("There was a problem connecting to/logging
+# out of your container"). ssh -tt gives it one on the jump host; the commands go in once the
+# container shell is up (25 s, as tried by hand in #497), and an outer timeout ends it whatever
+# ird does. Only the key blob is kept: ird's own output (which may hold a password) is never logged.
+IRD_PTY_DELAY=${IRD_PTY_DELAY:-25}
+IRD_VERIFY_T=${IRD_VERIFY_TIMEOUT:-120}
+ird_box_key() {  # ird_box_key <selection id>: the box's ed25519 public key, read inside our container
+  local d=$IRD_PTY_DELAY
+  { sleep "$d"; printf 'cat /etc/ssh/ssh_host_ed25519_key.pub\n'; sleep $((d * 3 / 5)); printf 'exit\n'; sleep $((d / 5)); } |
+    timeout "$IRD_VERIFY_T" ssh -tt "${SSH_OPTS[@]}" "$JUMP" "ird connect-to $1" 2>/dev/null |
+    tr -d '\r' | grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+' | head -1
+}
 verify_key() {  # refresh known_hosts only if the box's own key (via IRD) matches what the network offers
   local h=$1 sel offered trusted ofp tfp
   offered=$(jump "ssh-keyscan -T 10 -p $PORT -t ed25519 $h 2>/dev/null" | grep -E '^[^#].* ssh-ed25519 ' | head -1)
   ofp=$(ssh-keygen -lf /dev/stdin <<<"$offered" 2>/dev/null | awk '{print $2}')
+  [ -n "$KEY_PRESENTED" ] || KEY_PRESENTED=$ofp
   if [ -n "$FP_ARG" ]; then tfp=$FP_ARG
   else
     sel=$(awk '{print $1}' <<<"$(row_m "$h")")
     [ -n "$sel" ] || { log "no ird selection for $h"; return 1; }
     # ird connect-to opens a shell in our own container over IRD's channel, not the box's sshd.
-    trusted=$(printf 'cat /etc/ssh/ssh_host_ed25519_key.pub; exit\n' |
-      timeout 120 ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$JUMP" "ird connect-to $sel" 2>/dev/null |
-      grep -oE 'ssh-ed25519 [A-Za-z0-9+/=]+' | head -1)
+    trusted=$(ird_box_key "$sel")
     tfp=$(ssh-keygen -lf /dev/stdin <<<"$trusted" 2>/dev/null | awk '{print $2}')
   fi
-  log "offered ed25519 key $h:$PORT ${ofp:-none}; trusted ${tfp:-none}"
+  KEY_IRD=$tfp
+  log "offered ed25519 key $h:$PORT ${ofp:-none}; trusted ${tfp:-none}; stored ${KEY_STORED:-none}"
   [ -n "$ofp" ] && [ "$ofp" = "$tfp" ] || return 1
-  act ssh-keygen -R "[$h]:$PORT" >/dev/null 2>&1
-  if [ "$DRY" = 0 ]; then printf '[%s]:%s %s\n' "$h" "$PORT" "$(awk '{print $2, $3}' <<<"$offered")" >> "$HOME/.ssh/known_hosts"
-  else echo "[dry-run] would append the verified key for [$h]:$PORT to ~/.ssh/known_hosts" >&2; fi
+  # known_hosts changes only when the key really differs from the stored one.
+  [ "$ofp" != "$KEY_STORED" ] || { log "offered key equals the stored one: known_hosts left as is"; return 1; }
+  act ssh-keygen -R "[$h]:$PORT" -f "$KNOWN_HOSTS" >/dev/null 2>&1
+  if [ "$DRY" = 0 ]; then printf '[%s]:%s %s\n' "$h" "$PORT" "$(awk '{print $2, $3}' <<<"$offered")" >> "$KNOWN_HOSTS"
+  else echo "[dry-run] would append the verified key for [$h]:$PORT to $KNOWN_HOSTS" >&2; fi
 }
 krc=0; kerr=
 if [ $PLANNED = 1 ]; then echo "[dry-run] would check the host key of $HOST strictly, then run ssh-preflight $HOST" >&2
@@ -326,19 +354,24 @@ else kerr=$(box "$HOST" true 2>&1 >/dev/null); krc=$?; fi
 if [ $krc -ne 0 ]; then
   case $kerr in
     *"IDENTIFICATION HAS CHANGED"*|*"Host key verification failed"*|*"host key is known"*)
-      log "host key of $HOST changed or unknown: verifying the fingerprint through IRD"
-      if [ "$DRY" = 1 ]; then
-        echo "[dry-run] would compare ssh-keyscan via $JUMP with the key read through 'ird connect-to' (or --fingerprint), then refresh [$HOST]:$PORT in ~/.ssh/known_hosts only on a match" >&2
-        NOTE="${NOTE}host key of $HOST needs verification; "
-      elif ! verify_key "$HOST" || ! box "$HOST" true; then
-        STATUS=host_key_changed; NOTE="HIGH SEVERITY ALERT: ssh host key changed for $HOST and it could not be verified: $(tail -2 <<<"$kerr" | tr '\n' ' ')"
+      KEY_PRESENTED=$(grep -oE 'SHA256:[A-Za-z0-9+/=]+' <<<"$kerr" | head -1); KEY_STORED=$(stored_fp "$HOST")
+      log "host key of $HOST changed or unknown (presented ${KEY_PRESENTED:-?}, stored ${KEY_STORED:-none}): verifying the fingerprint through IRD"
+      # Nothing past this point (setup, deploy, sync) runs on a box whose key is not verified.
+      if ! verify_key "$HOST" || { [ "$DRY" = 0 ] && ! box "$HOST" true; }; then
+        STATUS=host_key_changed
+        NOTE="HIGH SEVERITY ALERT: ssh host key changed for $HOST and it could not be verified (presented ${KEY_PRESENTED:-?}, stored ${KEY_STORED:-none}, via ird ${KEY_IRD:-none}): $(tail -2 <<<"$kerr" | tr '\n' ' ')"
         emit 10
+      fi
+      NOTE="${NOTE}host key of $HOST changed (stored ${KEY_STORED:-none}) and matched the key read through ird (${KEY_IRD}): refreshed [$HOST]:$PORT in known_hosts; "
+      if [ "$DRY" = 1 ]; then
+        # The box stays unreadable until known_hosts is refreshed: plan nothing on it.
+        STATUS=host_key_verified; NOTE="${NOTE/refreshed/would refresh}box steps not planned; "; emit 0
       fi ;;
     *) pf=$("$PREFLIGHT" "$HOST" 2>&1); prc=$?
        [ $prc -ne 0 ] && { STATUS="box_${pf##*SSH_PREFLIGHT=}"; NOTE="${NOTE}ssh to $HOST failed: $(tail -2 <<<"$kerr" | tr '\n' ' ')"; emit $prc; } ;;
   esac
 fi
-if [ $PLANNED = 0 ] && { [ "$DRY" = 0 ] || [ $krc = 0 ]; }; then
+if [ $PLANNED = 0 ]; then
   pf=$("$PREFLIGHT" "$HOST" 2>&1); prc=$?
   [ $prc -ne 0 ] && { STATUS="box_${pf##*SSH_PREFLIGHT=}"; NOTE="${NOTE}ssh-preflight $HOST: $(tail -2 <<<"$pf" | tr '\n' ' ')"; emit $prc; }
 fi
@@ -361,7 +394,7 @@ ensure_setup() {  # ensure_setup <tt dir> <venv> <scenes dir> [lock cmd...]
   log "box $HOST lacks tt-metal/venv/scenes (last setup.rc: ${s:-none}): starting setup"
   act "$@" "${BOX_SSH[@]}" "$HOST" "mkdir -p $RROOT/viewer $scenes && cat > $RROOT/viewer/setup_box.sh" < opt/viewer/setup_box.sh
   if [ $PLANNED = 1 ] || ! box "$HOST" "test -s $scenes/bicycle.ply" 2>/dev/null; then
-    act "$@" scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$SCENE" "$HOST:$scenes/bicycle.ply"
+    act "$@" timeout 1800 scp -q "${SSH_OPTS[@]}" "$SCENE" "$HOST:$scenes/bicycle.ply"
   fi
   act "$@" "${BOX_SSH[@]}" "$HOST" "(TT=$tt VENV=$venv setsid nohup bash $RROOT/viewer/setup_box.sh > $RROOT/viewer/setup.log 2>&1 < /dev/null &)"
   STATUS=setup_running; NOTE="${NOTE}started setup_box.sh on $HOST; rerun when $RROOT/viewer/setup.rc exists (0 = ok); "
@@ -407,7 +440,7 @@ if [ "$DEPLOY" = 1 ] && [ "$ROLE" = measure ] && { [ "$HOST" != "$CUR" ] || [ -n
   if [ -n "$OLD_JOB" ]; then
     osel=$(awk '{print $1}' <<<"$(row_j "$OLD_JOB")")
     if [ -n "$osel" ]; then
-      act ttp lock p100 -- ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$JUMP" "echo y | ird release $osel" >&2 ||
+      act ttp lock p100 -- "${JUMP_SSH[@]}" "$JUMP" "echo y | ird release $osel" >&2 ||
         { STATUS=release_failed; NOTE="${NOTE}ird release of job $OLD_JOB on $OLD_HOST failed"; emit 6; }
       NOTE="${NOTE}released old job $OLD_JOB on $OLD_HOST; "
     fi

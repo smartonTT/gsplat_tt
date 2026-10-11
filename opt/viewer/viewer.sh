@@ -22,8 +22,9 @@ VDIR=${VIEWER_DIR:-/localdev/$USER/viewer}
 TTMH=${VIEWER_TT_METAL_HOME:-$VDIR/tt-metal}
 DIR=$VDIR/tree
 ETHOV=${VIEWER_ETH_OVERLAY:-/localdev/$USER/viewer-eth-overlay}
-# Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key.
-SSH=(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
+# Host-key checking stays on: StrictHostKeyChecking=yes fails on a changed key. ControlMaster=no
+# and ControlPath=none keep ssh off the ~/.ssh/config mux, over which no key is checked (#496).
+SSH=(ssh -o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
 cd "$(git rev-parse --show-toplevel)"
 
 rsh() { "${SSH[@]}" "$HOST" "$@"; }

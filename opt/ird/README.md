@@ -32,13 +32,17 @@ manual steps the renewal tasks (#263, #316, #318, #320, #321, #325) worked out a
      - still queued: no new `ird reserve` for any machine while it waits; the current job is
        extended, or the run exits 4 when it is gone.
      - gone (crashed, cancelled or expired): forget it and continue (re-reserve if the job is gone).
-3. Host key: strict `ssh -o StrictHostKeyChecking=yes` to the box. If the key changed or is
+3. Host key: strict `ssh -o StrictHostKeyChecking=yes` to the box over a connection of its own
+   (no mux, see the caveat below). If the key changed or is
    unknown, the key the box offers (ssh-keyscan via the jump host) is compared with a trusted
    fingerprint: `--fingerprint SHA256:...`, or the box's own
-   `/etc/ssh/ssh_host_ed25519_key.pub` read over IRD's channel (`ird connect-to <sel>`). Only on
-   a match is the old line removed (`ssh-keygen -R "[host]:46483"`) and the new key added. Any
-   mismatch or failure exits 10 with a `HIGH SEVERITY ALERT` note. Then it runs
-   `tt-project/harness/bin/ssh-preflight <host>`.
+   `/etc/ssh/ssh_host_ed25519_key.pub` read over IRD's channel (`ird connect-to <sel>`, run under
+   `ssh -tt` because ird needs a terminal, with a 120 s timeout). Only on a match with a key that
+   differs from the stored one is the old line removed (`ssh-keygen -R "[host]:46483"`) and the
+   new key added. Any mismatch or failure exits 10 with a `HIGH SEVERITY ALERT` note and the
+   fingerprints in the JSON (`presented`, `stored`, `ird_fp`); the extend has run, nothing is set
+   up or deployed. Under `--dry-run` a verified key gives `status: host_key_verified` and stops
+   there. Then it runs `tt-project/harness/bin/ssh-preflight <host>`.
 4. Box setup: if the box lacks tt-metal, the venv or `scenes/bicycle.ply`, it uploads and
    starts `opt/viewer/setup_box.sh` detached (log and `setup.rc` in `/localdev/$USER/viewer/`)
    and exits 4. Rerun once `setup.rc` exists. A non-zero `setup.rc` is reported (exit 6,
@@ -109,6 +113,10 @@ No network, no IRD.
 Caveat: `~/.ssh/config` sets `StrictHostKeyChecking no` for `bh-* yyzo-bh-*`. The script,
 `opt/sync_remote.sh` and `tt-project/harness/bin/ssh-preflight` override it with
 `-o StrictHostKeyChecking=yes` on every ssh, so a changed or unknown key is never accepted.
+It also sets `ControlMaster auto` for `yyz-ird` and `bh-*`: an ssh that rides a master socket a
+non-strict ssh opened checks no key at all (#496). The script, `opt/viewer/viewer.sh` and
+`opt/sync_remote.sh` add `-o ControlMaster=no -o ControlPath=none` (and the script an outer
+`timeout`) to every ssh and scp. `opt/ird/test_renew.sh` checks this for every call it stubs.
 
 ## Spec template for light-tier renewal tasks
 

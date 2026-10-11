@@ -46,10 +46,12 @@ EXCL=(":(exclude)tests/fixtures/hero/*.npz" ":(exclude)opt/profiler/ttw-*"
       ":(exclude,glob)**/*.tracy" ":(exclude,glob)**/profile_log_device*.csv"
       ":(exclude)opt/metal-screenshots")
 [ "${SYNC_ALL:-0}" = 1 ] && EXCL=()
-git archive --format=tar "$SHA" -- . "${EXCL[@]}" | ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" \
+# Own connection with a strict key check: never the ~/.ssh/config mux, which checks no key (#496).
+SSH_OPTS=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
+git archive --format=tar "$SHA" -- . "${EXCL[@]}" | ssh "${SSH_OPTS[@]}" "$HOST" \
   "mkdir -p '$DIR' && tar -m -x -C '$DIR' && echo $SHA > '$DIR/SHA'"
 # REMOTE_TT_METAL_HOME (Mac side) overrides the remote TT_METAL_HOME default below.
-ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "$HOST" "DIR='$DIR' VIEWER_BUILD=$VIEWER_BUILD JOBS='$JOBS' ${REMOTE_TT_METAL_HOME:+TT_METAL_HOME='$REMOTE_TT_METAL_HOME'}\
+ssh "${SSH_OPTS[@]}" "$HOST" "DIR='$DIR' VIEWER_BUILD=$VIEWER_BUILD JOBS='$JOBS' ${REMOTE_TT_METAL_HOME:+TT_METAL_HOME='$REMOTE_TT_METAL_HOME'}\
 ${GSTT2_BASE:+ GSTT2_BASE='$GSTT2_BASE'}${GSTT2_VENV:+ GSTT2_VENV='$GSTT2_VENV'}${GSTT2_SCENES:+ GSTT2_SCENES='$GSTT2_SCENES'} bash -s" <<'REMOTE'
 set -eu
 cd "$DIR"
