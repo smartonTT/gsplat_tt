@@ -1,0 +1,10 @@
+views used 24 (first view of each 5-view chunk dropped); M 1.27-2.07 M, P 2.05-3.19 M
+pfwc       window =  1.195 +  0.274*M[M]  r=0.947  mean 1.654  fixed share 72.3%
+pfwc       window =  1.151 +  0.193*P[M]  r=0.944  mean 1.654  fixed share 69.6%
+k2         window =  0.040 +  0.362*M[M]  r=0.994  mean 0.647  fixed share  6.2%
+k2         window = -0.021 +  0.255*P[M]  r=0.993  mean 0.647  fixed share -3.2%
+sort       window =  0.380 +  0.644*M[M]  r=0.992  mean 1.458  fixed share 26.1%
+sort       window =  0.269 +  0.455*P[M]  r=0.994  mean 1.458  fixed share 18.5%
+mat+blend  window =  1.724 +  2.154*M[M]  r=0.996  mean 5.332  fixed share 32.3%
+mat+blend  window =  1.355 +  1.521*P[M]  r=0.998  mean 5.332  fixed share 25.4%
+sum of windows = 2.754 + 2.424*P[M]  r=0.998 mean 9.091

@@ -1,0 +1,38 @@
+scene N=6131954 opacity>=floor 5559909 load 12.3s
+/Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/docs/profile-t224/xview.py:45: RuntimeWarning: divide by zero encountered in matmul
+  pc = (mu - t) @ R            # world -> camera (R^T (x - t))
+/Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/docs/profile-t224/xview.py:45: RuntimeWarning: overflow encountered in matmul
+  pc = (mu - t) @ R            # world -> camera (R^T (x - t))
+/Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/docs/profile-t224/xview.py:45: RuntimeWarning: invalid value encountered in matmul
+  pc = (mu - t) @ R            # world -> camera (R^T (x - t))
+i=0 name=hero M=1891542 P=5013755
+i=1 name=orb_00 M=1317912 P=3750778 vis_jacc=0.6002 pair_jacc=0.0096 pair_shared_of_cur=0.0221 adj_in_order=0.6565
+i=2 name=orb_01 M=1368026 P=3860581 vis_jacc=0.9622 pair_jacc=0.2971 pair_shared_of_cur=0.4516 adj_in_order=0.6835
+i=3 name=orb_02 M=1440290 P=4024245 vis_jacc=0.9365 pair_jacc=0.2303 pair_shared_of_cur=0.3668 adj_in_order=0.6692
+i=4 name=orb_03 M=1524068 P=4233683 vis_jacc=0.9213 pair_jacc=0.1810 pair_shared_of_cur=0.2989 adj_in_order=0.6652
+i=5 name=orb_04 M=1626379 P=4497137 vis_jacc=0.9116 pair_jacc=0.1403 pair_shared_of_cur=0.2389 adj_in_order=0.6697
+i=6 name=orb_05 M=1747787 P=4774824 vis_jacc=0.9032 pair_jacc=0.1112 pair_shared_of_cur=0.1943 adj_in_order=0.6768
+i=7 name=orb_06 M=1878637 P=5048419 vis_jacc=0.8969 pair_jacc=0.0938 pair_shared_of_cur=0.1668 adj_in_order=0.6744
+i=8 name=orb_07 M=1995561 P=5317852 vis_jacc=0.9120 pair_jacc=0.0844 pair_shared_of_cur=0.1517 adj_in_order=0.6761
+i=9 name=orb_08 M=2071315 P=5440173 vis_jacc=0.9340 pair_jacc=0.0811 pair_shared_of_cur=0.1484 adj_in_order=0.6724
+i=10 name=orb_09 M=2101774 P=5482414 vis_jacc=0.9448 pair_jacc=0.0863 pair_shared_of_cur=0.1583 adj_in_order=0.6695
+i=11 name=orb_10 M=2081477 P=5457549 vis_jacc=0.9464 pair_jacc=0.0936 pair_shared_of_cur=0.1716 adj_in_order=0.6658
+i=12 name=orb_11 M=2025242 P=5333521 vis_jacc=0.9415 pair_jacc=0.1085 pair_shared_of_cur=0.1981 adj_in_order=0.6591
+i=13 name=orb_12 M=1955726 P=5154033 vis_jacc=0.9382 pair_jacc=0.1360 pair_shared_of_cur=0.2436 adj_in_order=0.6555
+i=14 name=orb_13 M=1884786 P=4988080 vis_jacc=0.9474 pair_jacc=0.1817 pair_shared_of_cur=0.3126 adj_in_order=0.6494
+i=15 name=orb_14 M=1831271 P=4879229 vis_jacc=0.9631 pair_jacc=0.2305 pair_shared_of_cur=0.3789 adj_in_order=0.6485
+i=16 name=orb_15 M=1794651 P=4781740 vis_jacc=0.9777 pair_jacc=0.2713 pair_shared_of_cur=0.4311 adj_in_order=0.6626
+i=17 name=orb_16 M=1772103 P=4723726 vis_jacc=0.9686 pair_jacc=0.2434 pair_shared_of_cur=0.3939 adj_in_order=0.6646
+i=18 name=orb_17 M=1771433 P=4720005 vis_jacc=0.9509 pair_jacc=0.1898 pair_shared_of_cur=0.3192 adj_in_order=0.6490
+i=19 name=orb_18 M=1783237 P=4748693 vis_jacc=0.9402 pair_jacc=0.1495 pair_shared_of_cur=0.2594 adj_in_order=0.6449
+i=20 name=orb_19 M=1773155 P=4733315 vis_jacc=0.9322 pair_jacc=0.1185 pair_shared_of_cur=0.2122 adj_in_order=0.6433
+i=21 name=orb_20 M=1764289 P=4706018 vis_jacc=0.9429 pair_jacc=0.0996 pair_shared_of_cur=0.1816 adj_in_order=0.6501
+i=22 name=orb_21 M=1736190 P=4646358 vis_jacc=0.9471 pair_jacc=0.0894 pair_shared_of_cur=0.1653 adj_in_order=0.6542
+i=23 name=orb_22 M=1681891 P=4551301 vis_jacc=0.9431 pair_jacc=0.0877 pair_shared_of_cur=0.1629 adj_in_order=0.6534
+i=24 name=orb_23 M=1599703 P=4409947 vis_jacc=0.9287 pair_jacc=0.0937 pair_shared_of_cur=0.1741 adj_in_order=0.6555
+i=25 name=orb_24 M=1487675 P=4167556 vis_jacc=0.9055 pair_jacc=0.1065 pair_shared_of_cur=0.1981 adj_in_order=0.6529
+i=26 name=orb_25 M=1381526 P=3945362 vis_jacc=0.9012 pair_jacc=0.1213 pair_shared_of_cur=0.2225 adj_in_order=0.6534
+i=27 name=orb_26 M=1314836 P=3807288 vis_jacc=0.9261 pair_jacc=0.1480 pair_shared_of_cur=0.2625 adj_in_order=0.6530
+i=28 name=orb_27 M=1278862 P=3699970 vis_jacc=0.9308 pair_jacc=0.1865 pair_shared_of_cur=0.3189 adj_in_order=0.6521
+i=29 name=orb_28 M=1286237 P=3696607 vis_jacc=0.9381 pair_jacc=0.2362 pair_shared_of_cur=0.3823 adj_in_order=0.6531
+SUMMARY N=6131954 union_visible=2453026 (0.400) visible_in_all_30=843827 never_visible=3678928 mean_M=1705586 mean_P=4619805 mean_vis_jacc=0.924 mean_pair_jacc=0.145 mean_adj_in_order=0.6598

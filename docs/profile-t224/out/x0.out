@@ -1,0 +1,67 @@
+================ BUILD ID ================
+  cpp : #125 sha=08c6d358 bin=1d97cc6a96aa78c2 t528 08c6d358 b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t528-x0  timeout=380s  worry=600s  ts=2026-10-12T10:42:17-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t224/bench.sh tracy X0 0 5 GSPLAT_TT_K2_PROF=1 GSPLAT_TT_OL_EMIT_PROF=1
+-----------------------------------------
+=== tracy X0 0:5 [GSPLAT_TT_K2_PROF=1 GSPLAT_TT_OL_EMIT_PROF=1] 08c6d358 17:42:18 card=p100a load=2.81 1.71 1.26
+tracy X0 rc=124 17:47:18
+HANG in X0: tt-smi -r
+reset rc=0
+----- HANG/TIMEOUT (rc=124) -----
+Command exceeded 380s. Snapshotting non-destructive diagnostics.
+===== ttw diagnose host=bh-33 @ 2026-10-12T10:47:23-0700 =====
+--- device status (read-only) ---
+{
+    "time": "2026-10-12T17:47:25.603524",
+    "host_info": {
+        "OS": "Linux",
+        "Distro": "Ubuntu 22.04.5 LTS",
+        "Kernel": "6.8.0-57-generic",
+        "Hostname": "bh-33-special-smarton-for-reservation-138447",
+        "Platform": "x86_64",
+        "Python": "3.10.21",
+        "Memory": "503.72 GB",
+        "Driver": "TT-KMD 2.9.0"
+    },
+    "host_sw_vers": {
+        "tt_smi": "6.7.0",
+        "pyluwen": "0.10.0",
+        "tt_umd": "0.9.12"
+    },
+    "device_info": [
+        {
+            "smbus_telem": {
+                "BOARD_ID_HIGH": "0x432",
+                "BOARD_ID_LOW": "0x3191b040",
+                "ASIC_ID": null,
+                "HARVESTING_STATE": "0x0",
+                "UPDATE_TELEM_SPEED": "0x64",
+                "VCORE": "0x2cd",
+                "TDP": "0x10",
+                "TDC": "0x17",
+                "VDD_LIMITS": "0x38402bc",
+                "THM_LIMIT_SHUTDOWN": "0x6e",
+                "ASIC_TEMPERATURE": "0x27f5a2",
+                "VREG_TEMPERATURE": "0x0",
+                "BOARD_TEMPERATURE": "0x0",
+                "AICLK": "0x320",
+                "AXICLK": "0x3c0",
+                "ARCCLK": "0x320",
+                "L2CPUCLK0": "0x0",
+                "L2CPUCLK1": "0x0",
+                "L2CPUCLK2": "0x0",
+                "L2CPUCLK3": "0x0",
+--- uptime (recent reboot? <10min after a wedge = IRD auto-rebooted) ---
+ 17:47:26 up  8:17,  0 users,  load average: 1.64, 1.64, 1.36
+--- device processes ---
+--- JIT cache size ---
+no cache dir
+--- watcher waypoints (if any) ---
+===== end diagnose =====
+Interpretation hints: CPU climbing OR cache growing = still working, wait.
+  'Timeout waiting for ARC msg request queue' = ARC firmware wedged (needs reboot, GATED).
+  TT_FATAL / core dumped / 'daemon error' = crashed, not transient.
+Recovery beyond diagnosis is DESTRUCTIVE-GATED. See: recover.sh --help
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/tmp/ttw-state/logs/t528-x0-20261012-104216.log

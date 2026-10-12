@@ -1,0 +1,12 @@
+================ BUILD ID ================
+  cpp : #125 sha=08c6d358 bin=1d97cc6a96aa78c2 t528 08c6d358 b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t528-u0  timeout=380s  worry=600s  ts=2026-10-12T10:39:43-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t224/bench.sh chunk U0 0 5
+-----------------------------------------
+=== chunk U0 0:5 08c6d358 17:39:45 card=p100a load=1.95 0.87 0.96
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=8.218 fps=121.69 ms_frame_median=8.218 pass_ms_frame=8.218 check_pass_ms_frame=8.505 raw_md5=06fbaf11 gap_ms=0.00 render_ms_frame=8.218 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t513/tmp/t528-U0
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/tmp/ttw-state/logs/t528-u0-20261012-103942.log

@@ -1,0 +1,30 @@
+# steady506: docs/profile-t224/out/ana/p.csv.gz  views=30 cores=110  ms at 1350 MHz
+steady periods (pfwc N -> pfwc N+1, same chunk, N not first of chunk): 18
+
+## Programs (mean over views; window = first core start -> last core end)
+
+prog        window core mean core max start spr  end spr idle/core
+pfwc         1.659     1.554    1.659     0.000    0.105     0.105
+k2           0.653     0.550    0.653     0.000    0.103     0.104
+sort         1.468     1.376    1.468     0.000    0.092     0.092
+mat+blend    5.368     5.222    5.368     0.000    0.146     0.146
+
+## Boundaries (steady views; ms)
+
+boundary                   all-core    max per-core  pc max   n
+pfwc -> k2                    0.006  0.007    0.109   0.175  24
+k2 -> sort                    0.013  0.013    0.117   0.257  30
+sort -> mat+blend             0.009  0.051    0.101   0.236  30
+mat+blend -> pfwc N+1         0.013  0.016    0.160   0.263  24
+sum                           0.042           0.486
+
+## Steady period: mean 9.130 median 9.345 min 7.835 max 10.562 ms (n=18)
+  windows: pfwc 1.654  k2 0.647  sort 1.459  mat+blend 5.330  all-core gaps 0.040
+  mean core busy: pfwc 1.551  k2 0.543  sort 1.364  mat+blend 5.176  sum 8.635  -> per-core idle per period 0.495
+
+## Bounds (ms/view, upper)
+
+(a) pfwc N+1 into the mat+blend N tail: mean end spread 0.146 + all-core gap 0.013 = 0.160  (per-core idle at that boundary 0.160)
+(b) summed all-core inter-program idle: 0.042; summed per-core boundary idle (spread, needs program overlap to reclaim): 0.486
+
+gantt: docs/profile-t224/out/ana/gantt-v6-8.png

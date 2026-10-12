@@ -1,0 +1,14 @@
+================ BUILD ID ================
+  cpp : #125 sha=08c6d358 bin=1d97cc6a96aa78c2 t528 08c6d358 b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t528-p5  timeout=380s  worry=600s  ts=2026-10-12T10:40:29-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t224/bench.sh tracy P5 5 10
+-----------------------------------------
+=== tracy P5 5:10 [plain] 08c6d358 17:40:31 card=p100a load=1.70 0.96 0.99
+tracy P5 rc=0 17:40:37
+B2B_STAGES pass=0 views=5 gap_ms=0.00 period=9.798 render=9.798 py_resid=0.059 project=2.411 sort=1.093 blend=6.103 d2h=0.009 tail=0.004 xview=0.101 view_total=9.739 project_pfwc_rtargs=0.098 project_pfwc_enqueue=0.027 project_gather_wait=2.377 sort_bin_count=0.000 sort_bin_hist_d2h=0.000 sort_bin_l
+B2B scene=bicycle n_views=5 passes=1 warmup=0 drop=no ms_frame=173.472 fps=5.76 ms_frame_median=173.472 pass_ms_frame=173.472 check_pass_ms_frame=9.798 raw_md5=028419be gap_ms=0.00 render_ms_frame=173.472 xview_hits=9 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/gstt2-t513/tmp/t5
+ARCH: blackhole, CHIP_FREQ[MHz]: 1350, Max Compute Cores: 120
+device csv P5 rows 240898
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/tmp/ttw-state/logs/t528-p5-20261012-104028.log
