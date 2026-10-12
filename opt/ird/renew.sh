@@ -402,7 +402,8 @@ ensure_setup() {  # ensure_setup <tt dir> <venv> <scenes dir> [lock cmd...]
   local tt=$1 venv=$2 scenes=$3; shift 3
   local s=
   [ $PLANNED = 1 ] || s=$(box "$HOST" "test -f $tt/build/tt_metal/libtt_metal.so && test -x $venv/bin/python && test -s $scenes/bicycle.ply && echo ready;
-    pgrep -u \$USER -f setup_box.sh >/dev/null && echo running; cat $RROOT/viewer/setup.rc 2>/dev/null" 2>/dev/null)
+    pgrep -u \$USER -f '[s]etup_box.sh' >/dev/null && echo running; cat $RROOT/viewer/setup.rc 2>/dev/null" 2>/dev/null)
+  # [s]etup_box.sh: a plain pattern also matches this ssh command line and always reads "running".
   grep -qx ready <<<"$s" && return 0
   local src; src=$(grep -xE '[0-9]+' <<<"$s" | tail -1)
   if [ -n "$src" ] && [ "$src" != 0 ] && ! grep -qx running <<<"$s"; then
