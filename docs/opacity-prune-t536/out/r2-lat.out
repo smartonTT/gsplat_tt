@@ -1,0 +1,22 @@
+================ BUILD ID ================
+  cpp : #124 sha=186d6f3b bin=4fe207ab20c027d3 t536 186d6f3b opacity prune default on (bh-33)
+  data: # sha=
+=========================================
+host=bh-33  tag=t536-r2-lat  timeout=300s  worry=600s  ts=2026-10-12T11:54:46-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/opacity-prune-t536/remote_ab.sh 2 lat def off
+-----------------------------------------
+=== r2-lat-def 186d6f3 OPACITY_PRUNE=unset 18:54:48 load=1.61
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=8.9 p50_ms=9.0 min_ms=7.5 max_ms=10.3 n_views=30 warmup_s=1.8 out=/localdev/smarton/gstt2-t513/tmp/t536-r2-lat-def
+TTW_TIMING ms_view=8.876
+STAGES n=30 head=0.003 project=1.986 tile_assign=0.006 sort=0.996 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.721 d2h=0.009 assemble=0.000 tail=0.004 xview=0.099 | sum=8.825 view_total=8.827 resid_in_view=+0.002 avg_frame_ms=8.876 resid_vs_frame=+0.052 xview_hits=29 xview_misses=0
+=== r2-lat-off 186d6f3 OPACITY_PRUNE=0 18:54:53 load=1.56
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.0 p50_ms=9.1 min_ms=7.6 max_ms=10.4 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t513/tmp/t536-r2-lat-off
+TTW_TIMING ms_view=9.013
+STAGES n=30 head=0.003 project=2.120 tile_assign=0.006 sort=1.009 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.712 d2h=0.009 assemble=0.000 tail=0.005 xview=0.099 | sum=8.962 view_total=8.964 resid_in_view=+0.002 avg_frame_ms=9.013 resid_vs_frame=+0.051 xview_hits=29 xview_misses=0
+=== done 2 lat 18:54:57
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t536/tmp/ttw-state/logs/t536-r2-lat-20261012-115446.log
