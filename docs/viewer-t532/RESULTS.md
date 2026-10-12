@@ -74,7 +74,7 @@ looks better, so the ladder should drop scale before it drops quality far.
 `MotionQuality.LADDER`: full q40 -> full q30 -> 0.75x q40 -> 0.75x q30 -> 0.75x q20, one rung
 down per backlogged frame, one rung up after 60 clean frames. The page stretches 0.75x frames to
 the canvas. Still frames unchanged (full size, q70). Also fixed an order-dependent thread-count
-test flake (12/12 viewer tests pass 3x on bh-30's venv). Deployed 11:3x PDT with
+test flake (12/12 viewer tests pass 3x on bh-30's venv). Deployed 11:35 PDT with
 `opt/ird/renew.sh viewer --rev ab8f841b` (deployed_sha ab8f841b1c15).
 
 ### ab8f841b measured, Mac via 8091, 23 s runs, 11:40-12:00 PDT (`out/ab8f841b-r*.out`)
