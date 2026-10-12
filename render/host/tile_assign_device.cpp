@@ -212,6 +212,7 @@ static uint32_t ta_split_permille() {
 constexpr uint32_t K2_FOLD_TILES = 1024;  // == tile_assign_scatter_seg.cpp
 // Task #542: GSPLAT_TT_B4A_SHADOW=1 reruns each view's K2 on BRISC inside its
 // own fused mat+blend, into scratch outputs (cost of hosting K2 there).
+}  // namespace
 bool b4a_shadow_enabled() {
     static const bool on = [] {
         const char* e = std::getenv("GSPLAT_TT_B4A_SHADOW");
@@ -219,6 +220,7 @@ bool b4a_shadow_enabled() {
     }();
     return on;
 }
+namespace {
 
 static bool k2_diet_enabled() {
     static const bool v = [] {
