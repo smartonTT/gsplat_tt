@@ -1,0 +1,27 @@
+Traceback (most recent call last):
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 197, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 190, in main
+    r = asyncio.run(sweep(args))
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 151, in sweep
+    await asyncio.gather(sender(), receiver())
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 133, in receiver
+    raw = await asyncio.wait_for(ws.recv(), timeout=max(0.05, t_end - time.perf_counter()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/tasks.py", line 520, in wait_for
+    return await fut
+           ^^^^^^^^^
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/asyncio/connection.py", line 322, in recv
+    raise self.protocol.close_exc from self.recv_exc
+websockets.exceptions.ConnectionClosedError: no close frame received or sent

@@ -60,9 +60,11 @@ R
 do_start() {
   # Debug knobs (task #357), forwarded only when set here: VIEWER_STALL_FILE arms the
   # watchdog test hook, VIEWER_WATCHDOG_S changes the limit, VIEWER_PYSPY adds native stacks.
+  # VIEWER_B4A_FOLD=0 turns the B4a fold off (task #556: the fold hangs the pipelined viewer).
   rsh "VDIR=$VDIR DIR=$DIR PORT=$PORT TTMH=$TTMH ETHOV=$ETHOV DISPATCH=${VIEWER_DISPATCH:-}" \
       "GSPLAT_VIEWER_STALL_FILE=${VIEWER_STALL_FILE:-} GSPLAT_VIEWER_PYSPY=${VIEWER_PYSPY:-}" \
-      "${VIEWER_WATCHDOG_S:+GSPLAT_VIEWER_WATCHDOG_S=$VIEWER_WATCHDOG_S} bash -s" <<'R'
+      "${VIEWER_WATCHDOG_S:+GSPLAT_VIEWER_WATCHDOG_S=$VIEWER_WATCHDOG_S}" \
+      "${VIEWER_B4A_FOLD:+GSPLAT_TT_B4A_FOLD=$VIEWER_B4A_FOLD} bash -s" <<'R'
 set -eu
 pid=$(cat "$VDIR/viewer.pid" 2>/dev/null || true)
 if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then echo "[viewer] already running pid $pid"; exit 0; fi

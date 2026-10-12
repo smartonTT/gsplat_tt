@@ -1,0 +1,43 @@
+[viewer 2026-10-12T23:37:51.129Z] client 0 connected from ('127.0.0.1', 45500) open_connections=1
+[SUBCHUNK] tiles_split=69 total_subchunks=1093 max_subchunks_per_tile=2 payload_pages=42731
+[SORT] stage=ONELAUNCH P=2702054 P_kept=2702054 num_tiles=1024 max_tile_n=15283 onelaunch=1.53 layout=0.08 pub_host=0.35 total=1.99ms
+OUT_RING new pinned slot (slots=2 grows=1 replaced=0)
+[viewer 2026-10-12T23:38:46.161Z] heartbeat frames_rendered=1 (+1) frames_sent=1 (+1) clients=1 open_connections=1 next_pose_hints=0
+[viewer 2026-10-12T23:39:50.080Z] client 1 connected from ('127.0.0.1', 35294) open_connections=2
+[viewer 2026-10-12T23:39:54.998Z] client 1 disconnected after 4.9s code=1006 rcvd=- sent=- closed_by=none(abnormal, 1006) ping_latency=0ms open_connections=1
+[viewer 2026-10-12T23:40:21.422Z] client 2 connected from ('127.0.0.1', 46426) open_connections=2
+[SUBCHUNK] tiles_split=63 total_subchunks=1090 max_subchunks_per_tile=3 payload_pages=34324
+[SORT] stage=ONELAUNCH P=2164042 P_kept=2164042 num_tiles=1024 max_tile_n=18956 onelaunch=2.03 layout=0.08 pub_host=0.37 total=2.50ms
+[viewer 2026-10-12T23:40:22.268Z] heartbeat frames_rendered=2 (+1) frames_sent=1 (+0) clients=2 open_connections=2 next_pose_hints=1
+[watchdog 2026-10-12T23:40:26.861Z] render seq=36 1024x1024 stuck 5.3 s: pose and stacks in /localdev/smarton/viewer/viewer_hang.log, pose json /localdev/smarton/viewer/viewer_hang_pose_20261012T234026Z.json; exiting 86
+[supervisor 2026-10-12T23:40:29Z pid 62477] viewer exited rc=86 after 181s
+[supervisor 2026-10-12T23:40:29Z pid 62477] restart 1/6 this hour in 5s
+[supervisor 2026-10-12T23:40:34Z pid 62477] starting viewer_clean.py port 8080
+[eth] card p150b: eth dispatch, overlay /localdev/smarton/viewer-eth-overlay, JIT cache /localdev/smarton/viewer-eth-overlay-cache
+[viewer_clean] sha=9026845799508627a52d595cdbe9286b0a74d597 loading scenes/bicycle.ply
+╭────── viser (listening *:8080) ───────╮
+│             ╷                         │
+│   HTTP      │ http://localhost:8080   │
+│   Websocket │ ws://localhost:8080     │
+│             ╵                         │
+╰───────────────────────────────────────╯
+Viewer running at http://localhost:8080 (backend=tt_clean, render=1024x1024)
+[viewer_clean] watchdog limit=5 s (first render per size 600 s) stall_hook=off
+2026-10-12 23:40:38.567 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 23:40:38.567 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 23:40:38.568 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 23:40:38.568 | warning  |             UMD | TENSTORRENT_IOCTL_SET_POWER_STATE failed on device 3: Invalid argument (pci_device.cpp:1083)
+Traceback (most recent call last):
+  File "/localdev/smarton/viewer/tree/opt/viewer/viewer_clean.py", line 159, in <module>
+    main()
+  File "/localdev/smarton/viewer/tree/opt/viewer/viewer_clean.py", line 129, in main
+    viewer.pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/viewer/tree/gsplat/render_watchdog.py", line 127, in guarded
+    return render(gaussians, extrinsics, intrinsics, image_height, image_width,
+  File "/localdev/smarton/viewer/tree/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/viewer/tree/render/run.py", line 160, in render_fused
+    means, cov3d, opac, colors = self._pruned_scene(means, cov3d, opac, colors)
+  File "/localdev/smarton/viewer/tree/render/run.py", line 184, in _pruned_scene
+    ncores = int(self._clean.pfwc_num_cores())
+RuntimeError: Read 0xffffffff over PCIe ID 3: the board should be reset.

@@ -1,0 +1,50 @@
+Traceback (most recent call last):
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/http11.py", line 241, in parse
+    status_line = yield from parse_line(read_line)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/http11.py", line 309, in parse_line
+    line = yield from read_line(MAX_LINE_LENGTH)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/streams.py", line 46, in read_line
+    raise EOFError(f"stream ends after {p} bytes, before end of line")
+EOFError: stream ends after 0 bytes, before end of line
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/client.py", line 301, in parse
+    response = yield from Response.parse(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/http11.py", line 243, in parse
+    raise EOFError("connection closed while reading HTTP status line") from exc
+EOFError: connection closed while reading HTTP status line
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 197, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 190, in main
+    r = asyncio.run(sweep(args))
+        ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 195, in run
+    return runner.run(main)
+           ^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/runners.py", line 118, in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/homebrew/Cellar/python@3.12/3.12.13_2/Frameworks/Python.framework/Versions/3.12/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/smarton/dev/gstt2-wt/t556/opt/viewer/ws_sweep_t532.py", line 110, in sweep
+    async with wsc.connect(args.url, subprotocols=[proto],
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/asyncio/client.py", line 587, in __aenter__
+    return await self
+           ^^^^^^^^^^
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/asyncio/client.py", line 543, in __await_impl__
+    await self.connection.handshake(
+  File "/Users/smarton/dev/gsplat_tt/venv-macos/lib/python3.12/site-packages/websockets/asyncio/client.py", line 114, in handshake
+    raise self.protocol.handshake_exc
+websockets.exceptions.InvalidMessage: did not receive a valid HTTP response
