@@ -1,0 +1,173 @@
+[eth] card p100a: worker dispatch (ETH default is p150 only)
+[run] b2b keep mode: GSPLAT_TT_OUT_ZEROCOPY_SLOTS=32
+[run] warmup (hero='hero', 1024x1024, scene=bicycle)
+2026-10-12 15:52:03.812 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 15:52:03.812 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 15:52:03.815 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 15:52:03.816 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-12 15:52:03.816 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-12 15:52:03.816 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-12 15:52:03.817 | info     |          Device | Opening user mode device driver (tt_cluster.cpp:225)
+2026-10-12 15:52:03.817 | info     |             UMD | Cluster constructor started. (cluster.cpp:317)
+2026-10-12 15:52:03.817 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 15:52:03.817 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 15:52:03.820 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 15:52:03.821 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-12 15:52:03.821 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-12 15:52:03.821 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-12 15:52:03.821 | info     |             UMD | Harvesting masks for Chip 0: Tensix: 0xc0 DRAM: 0x8 ETH: 0x3fff PCIe: 0x2 L2CPU: 0x0 (cluster.cpp:262)
+2026-10-12 15:52:03.821 | info     |             UMD | Initializing iommu for sysmem (size: 0x40000000). (silicon_sysmem_manager.cpp:334)
+2026-10-12 15:52:03.821 | info     |             UMD | Allocating sysmem for IOMMU (size: 0x40000000). (silicon_sysmem_manager.cpp:340)
+2026-10-12 15:52:03.917 | info     |             UMD | Opening local chip ids/PCIe ids: {0}/[0] and remote chip ids {} (cluster.cpp:153)
+2026-10-12 15:52:03.917 | info     |             UMD | IOMMU: enabled (cluster.cpp:133)
+2026-10-12 15:52:03.917 | info     |             UMD | KMD version: 2.9.0 (cluster.cpp:136)
+2026-10-12 15:52:03.917 | info     |             UMD | Cluster constructor completed. (cluster.cpp:409)
+2026-10-12 15:52:03.918 | info     |             UMD | Starting devices in cluster (cluster.cpp:1044)
+2026-10-12 15:52:03.919 | info     |             UMD | Mapped sysmem without hugepages to IOVA 0x80000000; NOC address 0x1000000000000000 (silicon_sysmem_manager.cpp:391)
+2026-10-12 15:52:03.920 | info     |             UMD | Starting devices in cluster completed. (cluster.cpp:1052)
+2026-10-12 15:52:04.044 | info     |     Distributed | Using auto discovery to generate mesh graph. (metal_env.cpp:332)
+2026-10-12 15:52:04.044 | info     |     Distributed | Constructing control plane using auto-discovery (no mesh graph descriptor). (metal_env.cpp:394)
+2026-10-12 15:52:04.045 | info     |             UMD | Creating TopologyDiscovery for architecture: blackhole (topology_discovery.cpp:75)
+2026-10-12 15:52:04.045 | info     |             UMD | Starting topology discovery. (topology_discovery.cpp:92)
+2026-10-12 15:52:04.046 | warning  |             UMD | Low power mode is disabled while UMD holds open file descriptors. The device will return to low power mode once all file descriptors are closed. (topology_discovery.cpp:140)
+2026-10-12 15:52:04.047 | info     |             UMD | Established firmware bundle version: 19.11.99 (topology_discovery.cpp:544)
+2026-10-12 15:52:04.047 | info     |             UMD | Firmware bundle version 19.11.99 on the system is newer than the latest fully tested version 19.5.0 for blackhole architecture. Newest features may not be supported. (topology_discovery.cpp:570)
+2026-10-12 15:52:04.047 | info     |             UMD | Completed topology discovery. (topology_discovery.cpp:96)
+2026-10-12 15:52:04.048 | warning  |          Always | Unknown motherboard 'H12DSG-O-CPU' for chip_id=0 (bus_id=0x61) — defaulting tray_id to 0. Add this motherboard and its bus IDs to mobo_to_bus_ids in physical_system_discovery.cpp. (physical_system_discovery.cpp:56)
+2026-10-12 15:52:04.048 | info     |          Fabric | TopologyMapper: Logical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1474)
+2026-10-12 15:52:04.048 | info     |          Fabric | 
+=== Logical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 15:52:04.048 | info     |          Fabric | 
+=== Logical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 15:52:04.048 | info     |          Fabric | TopologyMapper: Physical Multi-Mesh Adjacency Map: (topology_mapper.cpp:1485)
+2026-10-12 15:52:04.048 | info     |          Fabric | 
+=== Physical Mesh-Level Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 15:52:04.048 | info     |          Fabric | 
+=== Physical Mesh 0 Internal Graph Adjacency Map ===
+Total nodes: 1
+Degree histogram: {0:1}
+ (topology_solver.tpp:94)
+2026-10-12 15:52:04.048 | info     |          Fabric | Starting multi-mesh mapping: 1 logical mesh(es) to 1 physical mesh(es) (topology_mapper_utils.cpp:1465)
+2026-10-12 15:52:04.048 | info     |          Fabric | Multi-mesh mapping attempt 1/2: Trying inter-mesh mapping (topology_mapper_utils.cpp:1506)
+2026-10-12 15:52:04.048 | info     |          Fabric | Attempt 1: Inter-mesh mapping succeeded, found 1 mesh pair(s) (topology_mapper_utils.cpp:1535)
+2026-10-12 15:52:04.048 | info     |          Fabric | Attempt 1: Mapping 1 mesh pair(s) (topology_mapper_utils.cpp:1547)
+2026-10-12 15:52:04.048 | info     |          Fabric | Attempt 1: Mapping mesh 0 -> 0 (topology_mapper_utils.cpp:1549)
+2026-10-12 15:52:04.048 | info     |          Fabric | Multi-mesh mapping succeeded after 1 attempt(s): 1 mesh pair(s) mapped (topology_mapper_utils.cpp:1682)
+2026-10-12 15:52:04.056 | info     |    BuildKernels | Using pre-compiled firmware from: /localdev/smarton/tt-metal/tt_metal/pre-compiled/5481144561508939120/ (build_env_manager.cpp:257)
+2026-10-12 15:52:04.141 | info     |           Metal | ShmResourceTracker: removed stale shm '/tt_d2h_7408_2409029864_0' (shm_resource_tracker.cpp:265)
+2026-10-12 15:52:04.141 | info     |           Metal | ShmResourceTracker: removed stale manifest '/dev/shm/tt_socket_manifest_7408' (shm_resource_tracker.cpp:275)
+2026-10-12 15:52:04.729 | info     |           Metal | [Real-time profiler] Device 0 sync complete: 100 samples, frequency=1.350051 GHz, device_time_at_sync=240118914774 cycles (realtime_profiler_manager.cpp:1075)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::sort] bucket tile stride 512 pages, 7 DRAM banks
+[JIT_WARMUP] ideal-path contexts compiled in 944.1 ms
+[gsplat_tt::pfwc] rec32 on: 32 B blend records, 2 per page
+[TA] K2 fold=1 (enabled 1 dual 1 screen tiles 1024 speed split 1)
+[SORT] ONELAUNCH early=1 why=0 (tiles 1024 row_pages 64 cores 110)
+[SORT] ONELAUNCH v2 OL_PB=8 OL_RING=8 OL_RING_DEPTH=8 OL_WIN_PAGES=1024 OL_MAT_SELECT=0 OL_BREC_BULK=1 OL_EMIT_TOWN=1 cb_bytes/mover=567680 shared=22400
+[SORT] ONELAUNCH k2_fold=1 early=1 cq1=1 (enqueued behind the K2; cores 110 row_pages 64 tiles 1024)
+[SUBCHUNK] tiles_split=86 total_subchunks=1113 max_subchunks_per_tile=3 payload_pages=45770
+[SORT] stage=ONELAUNCH P=2895629 P_kept=2895629 num_tiles=1024 max_tile_n=22979 onelaunch=0.65 layout=0.10 pub_host=0.32 total=1.16ms
+OUT_RING new pinned slot (slots=1 grows=0 replaced=0)
+MATBLEND_PROGRAM fz=1 zerocopy=1 pinned=1 frame=0
+2026-10-12 15:52:05.806 | error    |    BuildKernels | trisc2 compile failure -- cmd: cd /localdev/smarton/t511-cache/render/tt-metal-cache5481144561508939120/kernels/matblend_compute/12779824662926403383/trisc2/ && /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/riscv-tt-elf-g++ -O3 -std=c++17 -ftt-nttp -ftt-constinit -ftt-consteval -flto=auto -ffast-math -fno-exceptions -g -MMD -fno-use-cxa-atexit -Wall -Werror -Wno-error=deprecated-declarations -Wno-error=multistatement-macros -Wno-error=parentheses -Wno-error=unused-but-set-variable -Wno-unused-variable -Wno-unused-function -mcpu=tt-bh-tensix -I. -I.. -I/localdev/smarton/tt-metal/ -I/localdev/smarton/tt-metal/ttnn -I/localdev/smarton/tt-metal/ttnn/cpp -I/localdev/smarton/tt-metal/tt_metal -I/localdev/smarton/tt-metal/tt_metal/hw/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/common -I/localdev/smarton/tt-metal/tt_metal/hostdevcommon/api -I/localdev/smarton/tt-metal/tt_metal/api/ -I/localdev/smarton/tt-metal/runtime/sfpi/include -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_io -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/blackhole_defines -I/localdev/smarton/tt-metal/tt_metal/hw/inc/internal/tt-1xx/blackhole/noc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/common/inc -I/localdev/smarton/tt-metal/tt_metal/tt-llk/tt_llk_blackhole/llk_lib -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api -I/localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/llk_api/llk_sfpu -I/localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx -I/localdev/smarton/t511/render/kernels/compute -c -o /localdev/smarton/t511-cache/render/tt-metal-cache5481144561508939120/kernels/matblend_compute/12779824662926403383/trisc2/trisck.16425189626395404471.o /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc -MF /localdev/smarton/t511-cache/render/tt-metal-cache5481144561508939120/kernels/matblend_compute/12779824662926403383/trisc2/trisck.16425189626395404471.d -DIS_NOT_POW2_NUM_DRAM_BANKS=1 -DIS_NOT_POW2_NUM_L1_BANKS=1 -DNUM_DRAM_BANKS=7 -DNUM_L1_BANKS=110 -DPCIE_NOC_X=19 -DPCIE_NOC_Y=24 -DTENSIX_FIRMWARE -DLOCAL_MEM_EN=0 -DPROCESSOR_INDEX=4 -DUCK_CHLKC_PACK -DCOMPILE_FOR_TRISC=2 -DARCH_BLACKHOLE -DDISPATCH_MESSAGE_ADDR=4290184248 -DKERNEL_BUILD  (build.cpp:58)
+2026-10-12 15:52:05.806 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+                 from ../chlkc_pack.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:21,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/t511/render/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void blendk::{anonymous}::blend_da_walk(uint32_t, uint32_t, uint32_t&, uint32_t&)':
+/localdev/smarton/t511/render/kernels/compute/alpha_blend_compute_mb.cpp:1512:62: error: division by zero [-Werror=div-by-zero]
+ 1512 |             const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+      |                                                       ~~~~~~~^~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+ (assert.hpp:104)
+2026-10-12 15:52:05.808 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+                 from ../chlkc_pack.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:21,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/t511/render/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void blendk::{anonymous}::blend_da_walk(uint32_t, uint32_t, uint32_t&, uint32_t&)':
+/localdev/smarton/t511/render/kernels/compute/alpha_blend_compute_mb.cpp:1512:62: error: division by zero [-Werror=div-by-zero]
+ 1512 |             const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+      |                                                       ~~~~~~~^~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa30e97) [0x78d9ed830e97]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3fda5) [0x78d9ed83fda5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a310d) [0x78d9ed4a310d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ea8) [0x78da48d4dea8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa41b9a) [0x78d9ed841b9a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866b40) [0x78d9ed666b40]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865742) [0x78d9ed665742]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865d85) [0x78d9ed665d85]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x78da462b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94a83) [0x78da48d48a83]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268e0) [0x78da48dda8e0]
+ (assert.hpp:104)
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+info:
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+info:
+trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+                 from ../chlkc_pack.cpp:3,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/ckernels/blackhole/metal/common/chlkc_list.h:21,
+                 from /localdev/smarton/tt-metal/tt_metal/hw/firmware/src/tt-1xx/trisck.cc:13:
+/localdev/smarton/t511/render/kernels/compute/alpha_blend_compute_mb.cpp: In function 'void blendk::{anonymous}::blend_da_walk(uint32_t, uint32_t, uint32_t&, uint32_t&)':
+/localdev/smarton/t511/render/kernels/compute/alpha_blend_compute_mb.cpp:1512:62: error: division by zero [-Werror=div-by-zero]
+ 1512 |             const uint32_t to_next = kBlendTPeriod - (g_seen % kBlendTPeriod);
+      |                                                       ~~~~~~~^~~~~~~~~~~~~~~
+cc1plus: all warnings being treated as errors
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa30e97) [0x78d9ed830e97]
+ --- tt::tt_metal::JitBuildState::compile_one(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, tt::tt_metal::JitBuildSettings const*, unsigned long) const
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3fda5) [0x78d9ed83fda5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a310d) [0x78d9ed4a310d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ea8) [0x78da48d4dea8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa41b9a) [0x78d9ed841b9a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866b40) [0x78d9ed666b40]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865742) [0x78d9ed665742]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865d85) [0x78d9ed665d85]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x78da462b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94a83) [0x78da48d48a83]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268e0) [0x78da48dda8e0]
+
+backtrace:
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8502c3) [0x78d9ed6502c3]
+ --- tt::tt_metal::JitBuildCache::build_once(unsigned long, std::function<void ()> const&)
+ --- tt::tt_metal::jit_build_once(unsigned long, std::function<void ()> const&)
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x8493d3) [0x78d9ed6493d3]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa3fda5) [0x78d9ed83fda5]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x6a310d) [0x78d9ed4a310d]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x99ea8) [0x78da48d4dea8]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0xa41b9a) [0x78d9ed841b9a]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x866b40) [0x78d9ed666b40]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865742) [0x78d9ed665742]
+ --- /localdev/smarton/tt-metal/build/tt_metal/libtt_metal.so(+0x865d85) [0x78d9ed665d85]
+ --- /lib/x86_64-linux-gnu/libstdc++.so.6(+0xdc253) [0x78da462b0253]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x94a83) [0x78da48d48a83]
+ --- /lib/x86_64-linux-gnu/libc.so.6(+0x1268e0) [0x78da48dda8e0]
+
+Traceback (most recent call last):
+  File "/localdev/smarton/t511/render/run.py", line 820, in main
+    _main()
+  File "/localdev/smarton/t511/render/run.py", line 578, in _main
+    warm_img, _ = render_clean_view_timed(clean_pipeline, gauss, hero_view["c2w"], K, H, W)
+  File "/localdev/smarton/t511/render/run.py", line 275, in render_clean_view_timed
+    res = pipeline.render(gauss, extr, K, H, W)
+  File "/localdev/smarton/t511/gsplat/pipeline.py", line 151, in render
+    image, stats = self.backend.render_fused(
+  File "/localdev/smarton/t511/render/run.py", line 155, in render_fused
+    image, stats = self._clean.render_view(
+RuntimeError: render_clean: device sort failed; single-path TT, no CPU fallback

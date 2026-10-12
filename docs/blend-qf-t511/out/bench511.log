@@ -1,0 +1,130 @@
+=== host bh-33-special-smarton-for-reservation-138447 2026-10-12T15:49:36Z nproc=24 sha=96a5ab7efb2d9723df25fe81796af4dba17d2101
+card=p100a aiclk=800 load=15.39 6.84 3.28 14/2751 2820
+=== warm off b2b [] 15:49:36 load=15.39
+warm rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.359 fps=106.84 ms_frame_median=9.359 pass_ms_frame=9.354,9.351,9.364,9.358,9.357,9.365,9.375,9.371,9.350,9.364,9.380,9.342,9.355,9.352,9.351,9.359,9.367,9.352,9.362,9.361 check_pass_ms_frame=10
+=== r1-off off b2b [] 15:50:11 load=15.66
+r1-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.372 fps=106.70 ms_frame_median=9.363 pass_ms_frame=9.369,9.368,9.386,9.440,9.363,9.381,9.356,9.421,9.377,9.365,9.357,9.364,9.359,9.361,9.363,9.362,9.353,9.392,9.355,9.350 check_pass_ms_frame=10
+=== r1-f2 f2 b2b [GSPLAT_TT_BLEND_QF_PROBE=1] 15:50:26 load=17.50
+r1-f2 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.820 fps=101.84 ms_frame_median=9.819 pass_ms_frame=9.819,9.818,9.817,9.840,9.825,9.825,9.812,9.808,9.822,9.817,9.824,9.828,9.816,9.825,9.809,9.806,9.827,9.816,9.814,9.826 check_pass_ms_frame=11
+=== r1-pad32 pad32 b2b [GSPLAT_TT_BLEND_QF_PAD=32] 15:50:45 load=15.19
+r1-pad32 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.844 fps=101.58 ms_frame_median=9.827 pass_ms_frame=9.878,9.939,9.900,9.822,9.839,9.873,9.851,9.891,9.890,9.894,9.789,9.801,9.800,9.832,9.798,9.815,9.809,9.819,9.819,9.822 check_pass_ms_frame=10
+=== r1-p0 p0 b2b [BLEND_T_PERIOD=0u] 15:51:06 load=15.38
+r1-p0 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:51:10.944 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:51:15.803 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== r1-q2 q2 b2b [BLEND_T_PERIOD=0u GSPLAT_TT_BLEND_QF_PROBE=2] 15:51:15 load=15.06
+r1-q2 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:51:20.944 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:51:25.783 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== r2-f2 f2 b2b [GSPLAT_TT_BLEND_QF_PROBE=1] 15:51:25 load=16.52
+r2-f2 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.830 fps=101.73 ms_frame_median=9.827 pass_ms_frame=9.814,9.821,9.853,9.805,9.830,9.822,9.827,9.855,9.824,9.844,9.847,9.838,9.838,9.835,9.852,9.820,9.809,9.821,9.827,9.809 check_pass_ms_frame=11
+=== r2-pad32 pad32 b2b [GSPLAT_TT_BLEND_QF_PAD=32] 15:51:40 load=16.16
+r2-pad32 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.812 fps=101.92 ms_frame_median=9.812 pass_ms_frame=9.812,9.815,9.796,9.809,9.811,9.800,9.819,9.793,9.820,9.805,9.802,9.832,9.813,9.819,9.817,9.805,9.824,9.814,9.817,9.809 check_pass_ms_frame=9.
+=== r2-p0 p0 b2b [BLEND_T_PERIOD=0u] 15:51:55 load=16.24
+r2-p0 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:52:00.770 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:52:00.772 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== r2-q2 q2 b2b [BLEND_T_PERIOD=0u GSPLAT_TT_BLEND_QF_PROBE=2] 15:52:00 load=18.63
+r2-q2 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:52:05.806 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:52:05.808 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== r2-off off b2b [] 15:52:05 load=20.10
+r2-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.368 fps=106.75 ms_frame_median=9.362 pass_ms_frame=9.359,9.362,9.387,9.355,9.370,9.415,9.416,9.379,9.359,9.357,9.358,9.358,9.363,9.348,9.364,9.362,9.368,9.371,9.357,9.349 check_pass_ms_frame=10
+=== r3-pad32 pad32 b2b [GSPLAT_TT_BLEND_QF_PAD=32] 15:52:20 load=21.80
+r3-pad32 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.815 fps=101.89 ms_frame_median=9.809 pass_ms_frame=9.819,9.826,9.808,9.812,9.842,9.804,9.800,9.797,9.801,9.803,9.796,9.812,9.805,9.816,9.803,9.810,9.799,9.810,9.811,9.923 check_pass_ms_frame=9.
+=== r3-p0 p0 b2b [BLEND_T_PERIOD=0u] 15:52:35 load=21.32
+r3-p0 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:52:40.153 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:52:40.156 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== r3-q2 q2 b2b [BLEND_T_PERIOD=0u GSPLAT_TT_BLEND_QF_PROBE=2] 15:52:40 load=20.89
+r3-q2 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:52:45.207 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:52:45.209 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== r3-off off b2b [] 15:52:45 load=20.26
+r3-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.377 fps=106.64 ms_frame_median=9.372 pass_ms_frame=9.361,9.389,9.381,9.375,9.358,9.368,9.412,9.370,9.358,9.405,9.358,9.353,9.365,9.399,9.392,9.374,9.379,9.370,9.368,9.410 check_pass_ms_frame=9.
+=== r3-f2 f2 b2b [GSPLAT_TT_BLEND_QF_PROBE=1] 15:53:00 load=20.49
+r3-f2 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.817 fps=101.86 ms_frame_median=9.818 pass_ms_frame=9.829,9.815,9.804,9.807,9.812,9.807,9.813,9.821,9.806,9.818,9.812,9.823,9.831,9.823,9.825,9.817,9.820,9.826,9.815,9.824 check_pass_ms_frame=9.
+=== lat-off off lat [] 15:53:15 load=18.33
+lat-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+=== lat-f2 f2 lat [GSPLAT_TT_BLEND_QF_PROBE=1] 15:53:19 load=18.22
+lat-f2 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+=== lat-pad32 pad32 lat [GSPLAT_TT_BLEND_QF_PAD=32] 15:53:25 load=18.29
+lat-pad32 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+=== lat-p0 p0 lat [BLEND_T_PERIOD=0u] 15:53:30 load=18.10
+lat-p0 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:53:35.533 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:53:35.534 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== lat-q2 q2 lat [BLEND_T_PERIOD=0u GSPLAT_TT_BLEND_QF_PROBE=2] 15:53:35 load=17.93
+lat-q2 rc=1
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+2026-10-12 15:53:40.088 | critical |          Always | TT_THROW: trisc2 build failed. Log: In file included from /localdev/smarton/t511/render/kernels/compute/matblend_compute.cpp:44,
+2026-10-12 15:53:40.090 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+[gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+Traceback (most recent call last):
+=== dump-off off dump [] 15:53:40 load=17.06
+dump-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== dump-f2 f2 dump [GSPLAT_TT_BLEND_QF_PROBE=1] 15:53:57 load=17.41
+dump-f2 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== dump-pad32 pad32 dump [GSPLAT_TT_BLEND_QF_PAD=32] 15:54:14 load=17.44
+dump-pad32 rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== summary
+9
+=== bench end rc=20 2026-10-12T15:54:30Z

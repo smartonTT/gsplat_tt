@@ -1,4 +1,4 @@
-# t511: FPU quadratic-form blend alpha, device timing (not yet run)
+# t511: FPU quadratic-form blend alpha, device timing (run 2026-10-12: shelve)
 
 Task #511, 2026-10-12 (PDT), base best-iter-223 (5ca019ae) via cd33efcd.
 
@@ -29,8 +29,36 @@ Arms off / f2 / pad32 / p0 / q2, one warm-up, 3 rotated b2b rounds (`render/run.
 --back-to-back`, headline = median), one latency run per arm (stage split, secondary only), and
 `--dump-views` runs for off/f2/pad32 (md5; f2 must match off) with the device hero copied out.
 
-## Status
+## Result (2026-10-12 08:49-08:54 PDT, bh-33 p100a aiclk 800, IRD 138447, sha 96a5ab7e)
 
-Not run: at 02:10 PDT the bh-33 measurement reservation (IRD 138447) was gone (ssh preflight
-first unreachable, then `auth_failed`; `opt/ird/renew.sh measure --dry-run` plans a new
-reservation on bh-50). This task may not reserve, so it stopped here.
+Headline: `render/run.py --back-to-back`, 30 bicycle views, 20 passes per run, median ms/view.
+
+| arm | r1 | r2 | r3 | median | delta vs off |
+|---|---|---|---|---|---|
+| off | 9.363 | 9.362 | 9.372 | 9.363 | - |
+| f2 (front twice) | 9.819 | 9.827 | 9.818 | 9.819 | +0.456 |
+| pad32 (32 SFPNOP/record) | 9.827 | 9.812 | 9.809 | 9.812 | +0.449 |
+| p0, q2 | build failed | | | | |
+
+Latency stage split (secondary, one run each, blend ms/view): off 5.784, f2 6.099, pad32 6.158.
+Only blend moves; project/sort differences are run-to-run noise.
+
+md5: off, f2 and pad32 dump the same 30 views (list 906e0435 = golden, 30/30). Device hero
+(`out/hero-off.png`, byte-identical in all three arms) PSNR 42.51 dB vs benchmarks/reference_v2/hero.png;
+diff x10 in `out/diff-off-x10.png`: edge/spoke residue only, no tile seams.
+
+p0/q2 did not build: with `BLEND_T_PERIOD=0u` GCC flags `g_seen % kBlendTPeriod` in the dead branch at
+alpha_blend_compute_mb.cpp:1512 as division by zero under -Werror. The cross-check is not needed: f2 gives S.
+
+### Verdict: shelve
+
+- One cycle of per-record math-thread work costs 0.449 / 32 = 0.014 ms/view.
+- S (all the SFPU work an FPU quadratic form could remove: x/y loads + front) = 0.456 ms/view, i.e. about 32
+  cycles per record.
+- So the FPU form wins only if its whole per-record math-thread cost (matmul, coefficient operand build,
+  SFPU<->FPU hand-off through DEST/src) stays under about 32 cycles. #510 prices it at 59-118 cycles: a net
+  loss of about 0.38-1.2 ms/view. Even a free matmul would need a DEST->srcA move per record (~16+ cycles)
+  plus the coefficient tile build, which leaves no room.
+- A cheaper form would have to remove the front without adding per-record hand-offs, e.g. by computing
+  the exponent for a whole batch of records in one matmul ahead of blend on another core. That moves
+  the cost into data movement (one 32x32 fp16 tile per record per pixel block) and is not promising here.
