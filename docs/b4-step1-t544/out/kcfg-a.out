@@ -1,0 +1,29 @@
+[ttw 2026-10-12T13:20:14-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T13:20:14-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T13:20:14-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T13:20:14-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T13:20:14-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T13:20:14-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T13:20:14-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T13:20:14-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T13:20:14-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T13:20:14-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T13:20:14-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T13:20:14-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=e3c2470a bin=f4887805a2cc063f t544 5c34168c blend alias fifo cut (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t544-kcfg-a  timeout=590s  worry=600s  ts=2026-10-12T13:20:15-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step1-t544/remote_kcfg.sh a
+-----------------------------------------
+=== kcfg def  5c34168 20:20:17
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.9 p50_ms=9.9 min_ms=9.9 max_ms=9.9 n_views=1 warmup_s=19.7 out=/localdev/smarton/gstt
+=== kcfg x26 GSPLAT_TT_KCFG_EXTRA_KB=26 5c34168 20:20:40
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.9 p50_ms=9.9 min_ms=9.9 max_ms=9.9 n_views=1 warmup_s=1.7 out=/localdev/smarton/gstt2
+=== kcfg a done 20:20:45
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t544/tmp/ttw-state/logs/t544-kcfg-a-20261012-132015.log

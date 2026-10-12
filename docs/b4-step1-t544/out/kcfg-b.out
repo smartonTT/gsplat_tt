@@ -1,0 +1,46 @@
+[ttw 2026-10-12T13:20:46-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=590s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T13:20:46-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 590s.
+[ttw 2026-10-12T13:20:46-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T13:20:46-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T13:20:46-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T13:20:46-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T13:20:46-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T13:20:46-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T13:20:46-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T13:20:47-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T13:20:47-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T13:20:47-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #125 sha=e3c2470a bin=f4887805a2cc063f t544 5c34168c blend alias fifo cut (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t544-kcfg-b  timeout=590s  worry=600s  ts=2026-10-12T13:20:47-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4-step1-t544/remote_kcfg.sh b
+-----------------------------------------
+=== kcfg ns20 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_KCFG_EXTRA_KB=20 5c34168 20:20:49
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=11.3 p50_ms=11.3 min_ms=11.3 max_ms=11.3 n_views=1 warmup_s=9.7 out=/localdev/smarton/g
+=== kcfg ns14 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_KCFG_EXTRA_KB=14 5c34168 20:21:01
+run rc=1
+KCFG Program size (88592) too large for kernel config buffer (84992)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+=== kcfg ns8 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_KCFG_EXTRA_KB=8 5c34168 20:21:05
+run rc=1
+KCFG Program size (88592) too large for kernel config buffer (78848)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+=== kcfg ns0 GSPLAT_TT_PFWC_WRITER_SPLIT=0 GSPLAT_TT_KCFG_EXTRA_KB=0 5c34168 20:21:10
+run rc=1
+KCFG Program size (88592) too large for kernel config buffer (70656)
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+ELF matblend_ncrisc 18094973183063297369 load_total=57088 ncrisc=28540/28540 ncrisc=28540/28540
+ELF matblend_brisc 17979252346307247202 load_total=38720 brisc=19352/19352 brisc=19352/19352
+ELF matblend_compute 8246877932925746531 load_total=78880 trisc0=8112/7468 trisc0=8112/7468 trisc1=28536/27896 trisc1=28536/27896 trisc2=2784/2784 trisc2=2784/2784
+ELF sort_bin_onelaunch 16318149489671549729 load_total=44512 brisc=22252/21996 brisc=22252/21996
+ELF sort_bin_onelaunch 10791355685648916470 load_total=44544 ncrisc=22268/22012 ncrisc=22268/22012
+ELF sort_bin_onelaunch 430432708597095045 load_total=44832 brisc=22408/22152 brisc=22408/22152
+ELF sort_bin_onelaunch 88548601893927724 load_total=44864 ncrisc=22424/22168 ncrisc=22424/22168
+ELF sort_ol_town_compute 9888761142967104844 load_total=25984 trisc0=4336/4336 trisc0=4336/4336 trisc1=4328/4328 trisc1=4328/4328 trisc2=4312/4312 trisc2=4312/4312
+ELF sort_ol_town_compute 8492123982899464066 load_total=25984 trisc0=4336/4336 trisc0=4336/4336 trisc1=4328/4328 trisc1=4328/4328 trisc2=4312/4312 trisc2=4312/4312
+=== kcfg done 20:21:14
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t544/tmp/ttw-state/logs/t544-kcfg-b-20261012-132047.log
