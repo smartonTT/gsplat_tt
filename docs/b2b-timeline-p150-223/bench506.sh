@@ -12,7 +12,7 @@
 # With VSTART set it runs that viewer start script at exit and touches $O/vstarted.
 set -u
 O=$1; T=$2; rc=99
-V=/localdev/smarton/viewer; CACHE=/localdev/smarton/p150bench/cache493
+P=/localdev/smarton/p150bench; V=/localdev/smarton/viewer; CACHE=/localdev/smarton/p150bench/cache493
 rm -rf $O; mkdir -p $O
 SYS='/sys/class/tenstorrent/tenstorrent!0'
 ( while :; do echo "$(date +%s.%N | cut -c1-14) $(cat "$SYS/tt_aiclk" 2>/dev/null)"; sleep 0.1; done ) > $O/aiclk.txt 2>/dev/null &
@@ -46,25 +46,31 @@ tracy() {  # tag a b extra-env
   cat > $PR/inner.sh <<IN
 #!/bin/bash
 cd $T; source .venv/bin/activate
-env $extra TT_METAL_CACHE_RENDER=$CACHE/prof506-${extra:+mcp} GSPLAT_TT_PROFILE_READ_EVERY=11 python3 render/run.py --no-ref \
+env $extra GSPLAT_TT_PROFILE_READ_EVERY=11 python3 render/run.py --no-ref \
   --iter-dir t506-$tag --view-range $a:$b --back-to-back --b2b-passes 1 --b2b-warmup 0
 IN
   chmod +x $PR/inner.sh
   echo "=== tracy $tag $a:$b [$extra] $(date -u +%T)"; mark "$tag start"
+  # profiler cq_prefetch idle_erisc ELF overflows the default 32 KB ETH overlay: use the
+  # profiler-only overlay ttm-eth12p36 (ETH_IERISC_KB=36, made by #427) with its own JIT cache.
   ( cd $T; source .venv/bin/activate
+    unset GSPLAT_TT_ETH_OVERLAY GSPLAT_TT_ETH_CACHE
+    source opt/eth/env.sh $P/ttm-eth12p36 $P/cache506-p36${extra:+mcp} || exit 13
     TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR PYTHONPATH=$V/tt-metal/tools:${PYTHONPATH:-} \
       timeout 420 python3 -m tracy -r -p -v --dump-device-data-mid-run -o $PR $PR/inner.sh > $O/T-$tag.log 2>&1 ); tr=$?
   mark "$tag end"; echo "tracy $tag rc=$tr $(date -u +%T)"
   grep -E "^B2B scene|^B2B_STAGES|Traceback|TT_FATAL|DRAM buffers were full|buffer.*full" $O/T-$tag.log | cut -c1-300 | head -6
   [ $tr = 124 ] && { tt-smi -r > $O/reset-$tag.log 2>&1; rc=124; exit 124; }
   [ $tr = 0 ] || rc=21
+  grep -qE '^\[DEV\] dispatch eth .*compute grid 12x10' $O/T-$tag.log || echo "T-$tag NOT_ETH12"
+  grep -m1 -h "CHIP_FREQ\|ARCH" $(find $PR -name profile_log_device.csv | head -1) 2>/dev/null | cut -c1-200
   trf=$(find $PR -name '*.tracy' | head -1); dl=$(find $PR -name profile_log_device.csv | head -1)
   [ -n "$trf" ] && [ -n "$CSVX" ] && $CSVX -u "$trf" | gzip > $O/tracy-u-$tag.csv.gz
   [ -n "$dl" ] && gzip -c "$dl" > $O/dev-$tag.csv.gz && echo "device csv $tag rows $(wc -l < "$dl")"
   rm -rf $T/tmp/t506-$tag
 }
 rc=0
-b2b u1
+[ -n "$SKIP_U1" ] || b2b u1
 for a in 0 5 10 15 20 25; do tracy P$a $a $((a + 5)) ""; done
 for a in 0 10 20; do tracy M$a $a $((a + 5)) "GSPLAT_TT_MATCULL_PROF=1"; done
 b2b u2

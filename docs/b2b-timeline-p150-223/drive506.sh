@@ -42,12 +42,12 @@ restart_fallback() {
 echo "=== viewer stop $(date -u +%FT%TZ)"
 VIEWER_HOST=$H bash $VSH stop
 trap 'rc=$?; restart_fallback; echo $rc > "$MARK"' EXIT
-rsh "VSTART=$P/vstart506.sh setsid nohup bash $P/bench506.sh $O $T > $P/bench506.log 2>&1 < /dev/null &"
+rsh "SKIP_U1=${SKIP_U1:-} VSTART=$P/vstart506.sh setsid nohup bash $P/bench506.sh $O $T > $P/bench506.log 2>&1 < /dev/null &"
 for _ in $(seq 720); do rsh "test -e $O/vstarted" && break; sleep 5; done
 rsh "test -e $O/vstarted" || restart_fallback
 trap 'rc=$?; echo $rc > "$MARK"' EXIT
 for _ in $(seq 60); do rsh "grep -q READY $VDIR/viewer.log" && break; sleep 3; done
 rsh "grep -E 'SELFTEST|READY' $VDIR/viewer.log | tail -2; echo SHA=\$(cat $VDIR/tree/SHA)"
 echo "=== viewer ready $(date -u +%FT%TZ) localhost:8091 -> $(curl -s -o /dev/null -w '%{http_code}' -m 10 http://localhost:8091/)"
-mkdir -p $D/out; scp -q "${SSHO[@]}" "$H:$O/*" $D/out/; scp -q "${SSHO[@]}" "$H:$P/bench506.log" $D/out/
-cat $D/out/bench.rc; exit "$(cat $D/out/bench.rc)"
+OD=$D/${OUTSUB:-out}; mkdir -p $OD; scp -q "${SSHO[@]}" "$H:$O/*" $OD/; scp -q "${SSHO[@]}" "$H:$P/bench506.log" $OD/
+cat $OD/bench.rc; exit "$(cat $OD/bench.rc)"

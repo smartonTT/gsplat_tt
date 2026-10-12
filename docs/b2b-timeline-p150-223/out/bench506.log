@@ -1,0 +1,94 @@
+=== host bh-30-special-smarton-for-reservation-138278 2026-10-12T05:51:00Z nproc=24 sha=1753cace0857631d436546907f4169070a08a87e
+card=p150b aiclk_idle=800 load=2.04 1.83 1.79 2/1583 17779
+=== u1 b2b 05:51:00 load=2.04
+u1 rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.781 fps=113.88 ms_frame_median=8.777 pass_ms_frame=8.775,8.867,8.770,8.788,8.773,8.777,8.768,8.780,8.778,8.772,8.791,8.776,8.777,8.777,8.781,8.773,8.779,8.777,8.769,8.773 check_pass_ms_frame=8.875 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=8.781 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150b
+=== tracy P0 0:5 [] 05:51:19
+tracy P0 rc=0 05:51:30
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv P0 rows 2
+=== tracy P5 5:10 [] 05:51:30
+tracy P5 rc=0 05:51:38
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv P5 rows 2
+=== tracy P10 10:15 [] 05:51:38
+tracy P10 rc=0 05:51:46
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv P10 rows 2
+=== tracy P15 15:20 [] 05:51:46
+tracy P15 rc=0 05:51:53
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv P15 rows 2
+=== tracy P20 20:25 [] 05:51:53
+tracy P20 rc=0 05:52:01
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv P20 rows 2
+=== tracy P25 25:30 [] 05:52:01
+tracy P25 rc=0 05:52:08
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv P25 rows 2
+=== tracy M0 0:5 [GSPLAT_TT_MATCULL_PROF=1] 05:52:08
+tracy M0 rc=0 05:52:16
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv M0 rows 2
+=== tracy M10 10:15 [GSPLAT_TT_MATCULL_PROF=1] 05:52:16
+tracy M10 rc=0 05:52:24
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv M10 rows 2
+=== tracy M20 20:25 [GSPLAT_TT_MATCULL_PROF=1] 05:52:24
+tracy M20 rc=0 05:52:31
+Traceback (most recent call last):
+Traceback (most recent call last):
+device csv M20 rows 2
+=== u2 b2b 05:52:31 load=4.87
+u2 rc=0
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.840 fps=113.12 ms_frame_median=8.789 pass_ms_frame=8.785,8.787,8.796,8.782,8.792,8.789,8.800,8.800,9.784,8.782,8.782,8.781,8.788,8.787,8.789,8.804,8.785,8.791,8.788,8.816 check_pass_ms_frame=10.006 raw_md5=d9a60a3c gap_ms=0.00 render_ms_frame=8.840 xview_hits=659 xview_misses=0 identical_across_passes=yes out=/localdev/smarton/p150
+2026-10-12 05:51:02.788 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+2026-10-12 05:51:02.794 | info     |             UMD | Established firmware bundle version: 19.15.0 (topology_discovery.cpp:544)
+
+arton    4096 Oct 12 05:52 .
+arton    4096 Oct 12 05:51 ..
+arton   14726 Oct 12 05:52 T-M0.log
+arton   14734 Oct 12 05:52 T-M10.log
+arton   14734 Oct 12 05:52 T-M20.log
+arton   14726 Oct 12 05:51 T-P0.log
+arton   14734 Oct 12 05:51 T-P10.log
+arton   14734 Oct 12 05:51 T-P15.log
+arton   14734 Oct 12 05:52 T-P20.log
+arton   14734 Oct 12 05:52 T-P25.log
+arton   14727 Oct 12 05:51 T-P5.log
+arton   18468 Oct 12 05:52 aiclk.txt
+arton     222 Oct 12 05:52 dev-M0.csv.gz
+arton     222 Oct 12 05:52 dev-M10.csv.gz
+arton     222 Oct 12 05:52 dev-M20.csv.gz
+arton     222 Oct 12 05:51 dev-P0.csv.gz
+arton     222 Oct 12 05:51 dev-P10.csv.gz
+arton     222 Oct 12 05:51 dev-P15.csv.gz
+arton     222 Oct 12 05:52 dev-P20.csv.gz
+arton     222 Oct 12 05:52 dev-P25.csv.gz
+arton     222 Oct 12 05:51 dev-P5.csv.gz
+arton 1703259 Oct 12 05:51 hero-u1.png
+arton 1703259 Oct 12 05:52 hero-u2.png
+arton     188 Oct 12 05:51 host.txt
+arton     518 Oct 12 05:52 marks.txt
+arton  171518 Oct 12 05:51 run-u1.log
+arton  171522 Oct 12 05:52 run-u2.log
+arton    5684 Oct 12 05:52 tracy-u-M0.csv.gz
+arton    5625 Oct 12 05:52 tracy-u-M10.csv.gz
+arton    5621 Oct 12 05:52 tracy-u-M20.csv.gz
+arton    5722 Oct 12 05:51 tracy-u-P0.csv.gz
+arton    5652 Oct 12 05:51 tracy-u-P10.csv.gz
+arton    5603 Oct 12 05:51 tracy-u-P15.csv.gz
+arton    5652 Oct 12 05:52 tracy-u-P20.csv.gz
+arton    5646 Oct 12 05:52 tracy-u-P25.csv.gz
+arton    5663 Oct 12 05:51 tracy-u-P5.csv.gz
+=== bench end rc=0 2026-10-12T05:52:45Z
+[viewer] started pid 27973 supervisor 27966 sha feb0875bbf75324caf860c80211981875bdaf42b port 8080 (log /localdev/smarton/viewer/viewer.log)
