@@ -7,6 +7,10 @@ one SWEEP line: decoded frames/s over the steady window (after --warm s), frame
 interval percentiles, JPEG size and decode ms. Needs only the viewer venv
 (websockets, msgspec, zstandard, simplejpeg); no device access.
   venv/bin/python opt/viewer/ws_sweep.py [--url ws://127.0.0.1:8080] [--hz 240] [--secs 20]
+From the Mac through the tunnel (task #531), viser need not be installed:
+  python opt/viewer/ws_sweep.py --url ws://127.0.0.1:8091 --subprotocol viser-v1.0.27
+--hero-out F sends only the hero pose (a static camera) and saves the last JPEG received
+(the viewer's quality-70 static pass) to F.
 Wire format (viser/infra/_infra.py): client->server a plain msgpack dict with a
 "type" key; server->client [u64 raw len][u64 zstd len][zstd msgpack {messages,..}]
 [aligned binary buffers]; BackgroundImageMessage.rgb_data is inline bytes.
@@ -82,24 +86,34 @@ def parse_frame(raw: bytes, zd, huds: list[str] | None = None) -> list[bytes]:
 async def sweep(args) -> dict:
     import msgspec
     import simplejpeg
-    import viser
     import websockets.asyncio.client as wsc
     import zstandard
 
     msgs = [msgspec.msgpack.encode(m) for m in camera_messages(args.width, args.height)]
+    if args.hero_out:
+        msgs = msgs[:1]  # "hero" is first in cameras_v2.json's order
+    proto = args.subprotocol
+    if not proto:
+        import viser
+        proto = f"viser-v{viser.__version__}"
+    last_jpg = b""
     zd = zstandard.ZstdDecompressor()
     t_frames: list[float] = []
     dec_ms: list[float] = []
     sizes: list[int] = []
     huds: list[str] = []
     sent = 0
-    async with wsc.connect(args.url, subprotocols=[f"viser-v{viser.__version__}"],
+    async with wsc.connect(args.url, subprotocols=[proto],
                            max_size=64 * 1024 * 1024, compression=None) as ws:
         t_start = time.perf_counter()
         t_end = t_start + args.secs
 
         async def sender():
             nonlocal sent
+            if args.hero_out:  # one static pose; the viewer ends with its static pass
+                await ws.send(msgs[0])
+                sent = 1
+                return
             period = 1.0 / args.hz
             nxt = time.perf_counter()
             while time.perf_counter() < t_end:
@@ -109,6 +123,7 @@ async def sweep(args) -> dict:
                 await asyncio.sleep(max(0.0, nxt - time.perf_counter()))
 
         async def receiver():
+            nonlocal last_jpg
             while time.perf_counter() < t_end:
                 try:
                     raw = await asyncio.wait_for(ws.recv(), timeout=max(0.05, t_end - time.perf_counter()))
@@ -117,13 +132,17 @@ async def sweep(args) -> dict:
                 if not isinstance(raw, bytes):
                     continue
                 for jpg in parse_frame(raw, zd, huds):
+                    last_jpg = jpg
                     t = time.perf_counter()
-                    simplejpeg.decode_jpeg(jpg)
-                    dec_ms.append((time.perf_counter() - t) * 1000.0)
+                    if not args.no_decode:
+                        simplejpeg.decode_jpeg(jpg)
+                        dec_ms.append((time.perf_counter() - t) * 1000.0)
                     t_frames.append(time.perf_counter())
                     sizes.append(len(jpg))
 
         await asyncio.gather(sender(), receiver())
+    if args.hero_out and last_jpg:
+        Path(args.hero_out).write_bytes(last_jpg)
     steady = [t for t in t_frames if t >= t_start + args.warm]
     span = (steady[-1] - steady[0]) if len(steady) > 1 else 0.0
     fps = (len(steady) - 1) / span if span > 0 else 0.0
@@ -135,7 +154,8 @@ async def sweep(args) -> dict:
                 interval_ms_p99=round(float(np.percentile(iv, 99)), 2),
                 jpeg_kb_median=round(statistics.median(sizes) / 1024.0, 1) if sizes else 0.0,
                 decode_ms_median=round(statistics.median(dec_ms), 2) if dec_ms else 0.0,
-                hud=huds[-1].replace("**", "").replace("  \n", " | ") if huds else "")
+                hud=huds[-1].replace("**", "").replace("  \n", " | ") if huds else "",
+                huds=[h.replace("**", "").replace("  \n", " | ") for h in huds])
 
 
 def main() -> int:
@@ -147,6 +167,11 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=0, help="client canvas (default: bench image size)")
     ap.add_argument("--height", type=int, default=0)
     ap.add_argument("--label", default="")
+    ap.add_argument("--subprotocol", default="", help="e.g. viser-v1.0.27 (default: local viser)")
+    ap.add_argument("--no-decode", action="store_true",
+                    help="count frames as they arrive, without decoding (a slow client CPU caps "
+                         "decoded FPS; the page decodes off its socket thread)")
+    ap.add_argument("--hero-out", default="", help="send only the hero pose; save the last JPEG here")
     args = ap.parse_args()
     if not args.width or not args.height:
         cam = json.loads((REPO / "benchmarks" / "cameras_v2.json").read_text())["bicycle"]
