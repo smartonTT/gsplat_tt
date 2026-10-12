@@ -37,6 +37,10 @@
 #include "vis_mode.h"
 
 #include <algorithm>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <thread>
 #include <bit>
 #include <cerrno>
 #include <chrono>
@@ -459,6 +463,52 @@ struct SubchunkLayout {
     std::vector<uint32_t> tile_meta;   // num_tiles*2: [dir_base, num_subchunks]
     std::vector<uint32_t> prefix;      // num_tiles: payload page offset
     std::vector<uint32_t> dir;         // total_subchunks*4: page,L,flags,0
+};
+
+// Task #514: one long-lived helper thread for pure host work that overlaps the
+// main thread's enqueues (no device calls on it). run() hands a job over,
+// wait() returns once it is done.
+class HostHelper {
+public:
+    static HostHelper& get() {
+        static HostHelper h;
+        return h;
+    }
+    void run(std::function<void()> job) {
+        std::lock_guard<std::mutex> lk(m_);
+        job_ = std::move(job);
+        done_ = false;
+        cv_.notify_all();
+    }
+    void wait() {
+        std::unique_lock<std::mutex> lk(m_);
+        cv_.wait(lk, [this] { return done_; });
+    }
+
+private:
+    HostHelper() : th_([this] { loop(); }) { th_.detach(); }
+    void loop() {
+        for (;;) {
+            std::function<void()> job;
+            {
+                std::unique_lock<std::mutex> lk(m_);
+                cv_.wait(lk, [this] { return static_cast<bool>(job_); });
+                job = std::move(job_);
+                job_ = nullptr;
+            }
+            job();
+            {
+                std::lock_guard<std::mutex> lk(m_);
+                done_ = true;
+            }
+            cv_.notify_all();
+        }
+    }
+    std::mutex m_;
+    std::condition_variable cv_;
+    std::function<void()> job_;
+    bool done_ = true;
+    std::thread th_;
 };
 
 static SubchunkLayout build_subchunk_layout(
@@ -2625,6 +2675,25 @@ static gsplat_cpu::SortResult sort_resident_pairs(
                 P_kept += n;
                 max_n = std::max(max_n, n);
             }
+            // Task #514: counts is final here; with GAP_CUT the subchunk layout
+            // and mat worklist build on the helper thread under LPT/publish.
+            const bool gap_cut = gsplat_tt::env_config::gap_cut();
+            SubchunkLayout sc_layout;
+            MatWorkAssignment ol_work;
+            const uint32_t ol_movers = sort_mat_movers();
+            const bool ol_select = gsplat_tt::env_config::ol_mat_select();
+            auto build_mat_side = [&] {
+                sc_layout = build_subchunk_layout(counts, num_tiles, render_config::kBucketFit);
+                ol_work = build_mat_worklist(counts, num_tiles, num_cores,
+                                             render_config::kBucketFit, ol_movers,
+                                             kMatMover0Cap, /*onelaunch=*/true, ol_select);
+            };
+            if (gap_cut) HostHelper::get().run(build_mat_side);
+            // Never leave this scope (or unwind) while the helper still reads counts.
+            struct HelperJoin {
+                bool on;
+                ~HelperJoin() { if (on) HostHelper::get().wait(); }
+            } helper_join{gap_cut};
             distributed::EnqueueWriteMeshBuffer(*ctx->cq, ctx->buf_bucket_meta, bmeta, false);
             const LptAssignment lpt =
                 build_blend_lists(counts, pad_counts, num_tiles, num_cores);
@@ -2649,13 +2718,12 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             const auto t_l1 = clk::now();
             T.bin_layout_ms = ms_t(t_l1 - t_e1).count();
 
-            const SubchunkLayout sc_layout =
-                build_subchunk_layout(counts, num_tiles, render_config::kBucketFit);
-            log_subchunk_layout_stats(sc_layout);
-            const MatWorkAssignment ol_work =
-                build_mat_worklist(counts, num_tiles, num_cores, render_config::kBucketFit,
-                                   sort_mat_movers(), kMatMover0Cap, /*onelaunch=*/true,
-                                   gsplat_tt::env_config::ol_mat_select());
+            if (gap_cut) {
+                HostHelper::get().wait();
+            } else {
+                build_mat_side();
+                log_subchunk_layout_stats(sc_layout);
+            }
             if (ol_work.max_items_per_core > 1024u) {
                 std::cerr << "[gsplat_tt::sort] materialize work items/core "
                           << ol_work.max_items_per_core << " > MAX_WORK=1024\n";
@@ -2669,7 +2737,7 @@ static gsplat_cpu::SortResult sort_resident_pairs(
             T.publish_host_ms = ms_t(clk::now() - t_l1).count();
             T.publish_ms = T.publish_host_ms;
             T.total_ms = ms_t(clk::now() - t_total0_rp).count();
-            {
+            if (!gap_cut) {
                 stagetimers::Span log_span(T.log_ms);
                 std::fprintf(stderr,
                     "[SORT] stage=ONELAUNCH P=%u P_kept=%u num_tiles=%u max_tile_n=%u "

@@ -154,6 +154,14 @@ inline unsigned int ol_ring_depth() {
     }();
     return v;
 }
+// Task #514: cut the host time between the K2 rows read and the mat enqueue.
+// 1 = build the subchunk layout and the mat worklist on a helper thread while
+// the main thread runs LPT, publish and uploads, and skip the per-view [SORT]
+// and [SUBCHUNK] stderr lines. Default 0 (A/B gate).
+inline bool gap_cut() {
+    static const bool v = env_uint("GSPLAT_TT_GAP_CUT", 0u) != 0u;
+    return v;
+}
 // Big-tile materialize items sort only the depth bins holding their own ranks
 // (sort_onelaunch_algo.h select_ranks), not the whole tile. Default off: task
 // #121 measured it 0.15 ms/view slower on bicycle (24.69 vs 24.55, 3 rounds,
