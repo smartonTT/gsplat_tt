@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #124 sha=7acc5f92 bin=c3d3e944448c078c t538 1c9cedf4 ellipse probe (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t538-r2-lat  timeout=300s  worry=600s  ts=2026-10-12T12:46:24-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/ellipse-pairs-t538/remote_ab.sh 2 lat probe off
