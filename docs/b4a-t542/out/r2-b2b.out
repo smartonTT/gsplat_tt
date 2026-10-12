@@ -1,6 +1,6 @@
 ================ BUILD ID ================
   cpp : #126 sha=ae794619 bin=b52549531cf7a742 t542 ae794619 B4a shadow K2 (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t542-r2-b2b  timeout=300s  worry=600s  ts=2026-10-12T13:43:37-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t542/remote_ab.sh 2 b2b on off
