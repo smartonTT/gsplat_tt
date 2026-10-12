@@ -1,0 +1,110 @@
+=== host bh-30-special-smarton-for-reservation-138278 2026-10-12T00:33:00Z nproc=24 sha=9c94bea162882d6ef43e380e9194ddb678aff3e4
+aiclk=800 load=2.84 1.81 1.67 3/1578 1052
+=== warm off b2b [] 00:33:00 load=2.84
+warm rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.804 fps=113.59 ms_frame_median=8.781 pass_ms_frame=8.779,8.810,8.777,8.796,8.788,8.778,8.780,8.775,8.784,8.777,8.781,8.781,8.778,8.785,8.782,8.804,9.163,8.781,8.780,8.794 check_pass_ms_frame=10
+=== r1-off off b2b [] 00:33:33 load=5.24
+r1-off rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.794 fps=113.72 ms_frame_median=8.783 pass_ms_frame=8.796,8.794,8.802,8.784,8.800,8.980,8.782,8.774,8.774,8.778,8.771,8.779,8.781,8.781,8.784,8.778,8.783,8.776,8.784,8.791 check_pass_ms_frame=9.
+=== r1-c48 c48 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8] 00:33:47 load=4.74
+r1-c48 rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.990 fps=111.23 ms_frame_median=8.961 pass_ms_frame=9.532,8.964,8.956,8.962,8.959,8.958,8.961,8.960,8.958,8.968,8.962,8.956,8.967,8.954,8.967,8.963,8.955,8.961,8.979,8.963 check_pass_ms_frame=9.
+=== r1-c416 c416 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16] 00:34:11 load=4.02
+r1-c416 rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:34:18.959 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r1-c416s c416s b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16 GSPLAT_TT_CHUNK_SCATTER=1] 00:34:19 load=3.86
+r1-c416s rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:34:25.320 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r2-c416s c416s b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16 GSPLAT_TT_CHUNK_SCATTER=1] 00:34:25 load=3.71
+r2-c416s rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:34:31.572 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r2-c416 c416 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16] 00:34:32 load=5.14
+r2-c416 rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:34:37.878 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r2-c48 c48 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8] 00:34:38 load=4.89
+r2-c48 rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.001 fps=111.10 ms_frame_median=8.965 pass_ms_frame=8.968,8.964,8.963,8.964,8.966,8.963,9.089,8.960,8.972,8.966,8.973,8.969,8.965,8.963,8.967,9.545,8.964,8.978,8.964,8.962 check_pass_ms_frame=9.
+=== r2-off off b2b [] 00:34:54 load=4.33
+r2-off rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.840 fps=113.12 ms_frame_median=8.789 pass_ms_frame=8.789,8.788,8.780,9.822,8.773,8.777,8.779,8.783,8.807,8.793,8.786,8.794,8.794,8.814,8.792,8.789,8.795,8.784,8.773,8.792 check_pass_ms_frame=9.
+=== r3-off off b2b [] 00:35:08 load=3.97
+r3-off rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.792 fps=113.74 ms_frame_median=8.786 pass_ms_frame=8.783,8.784,8.798,8.787,8.782,8.778,8.791,8.791,8.780,8.796,8.803,8.806,8.776,8.781,8.786,8.864,8.793,8.786,8.786,8.784 check_pass_ms_frame=9.
+=== r3-c48 c48 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8] 00:35:22 load=3.83
+r3-c48 rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.969 fps=111.49 ms_frame_median=8.963 pass_ms_frame=8.968,8.964,8.963,8.964,8.961,8.965,8.960,8.960,8.963,8.958,8.966,8.962,8.962,8.961,8.968,8.960,8.965,8.972,9.085,8.963 check_pass_ms_frame=10
+=== r3-c416 c416 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16] 00:35:38 load=3.65
+r3-c416 rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:35:43.976 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r3-c416s c416s b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16 GSPLAT_TT_CHUNK_SCATTER=1] 00:35:44 load=3.52
+r3-c416s rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:35:50.254 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r4-c416s c416s b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16 GSPLAT_TT_CHUNK_SCATTER=1] 00:35:50 load=3.47
+r4-c416s rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:35:56.543 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r4-c416 c416 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16] 00:35:57 load=4.94
+r4-c416 rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:36:02.778 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== r4-c48 c48 b2b [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8] 00:36:03 load=4.71
+r4-c48 rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.033 fps=110.71 ms_frame_median=8.964 pass_ms_frame=9.122,10.169,8.959,8.964,8.962,8.966,8.965,8.966,8.970,8.966,8.973,8.971,8.971,8.961,8.961,8.963,8.962,8.960,8.956,8.963 check_pass_ms_frame=9
+=== r4-off off b2b [] 00:36:19 load=4.25
+r4-off rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=8.803 fps=113.60 ms_frame_median=8.790 pass_ms_frame=8.792,8.796,8.787,8.785,8.789,8.793,8.791,8.785,8.806,8.790,8.783,8.795,8.806,8.794,8.784,9.057,8.781,8.781,8.779,8.785 check_pass_ms_frame=9.
+=== dump-off off dump [] 00:36:33 load=3.98
+dump-off rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+MD5_GOLDEN_OK grid 12x10: list 39d84b28 = golden (30/30 views)
+=== dump-c416 c416 dump [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16] 00:36:49 load=3.91
+dump-c416 rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:36:54.954 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== dump-c416s c416s dump [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=16 GSPLAT_TT_CHUNK_SCATTER=1] 00:36:55 load=3.76
+dump-c416s rc=1
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+2026-10-12 00:37:01.270 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
+Traceback (most recent call last):
+=== dump-c48 c48 dump [GSPLAT_TT_CHUNK_CULL=1 GSPLAT_TT_OL_RING=4 GSPLAT_TT_OL_RING_DEPTH=8] 00:37:01 load=3.49
+dump-c48 rc=0
+[DEV] dispatch eth (eth (forced)), command queues 2, compute grid 12x10
+MD5_GOLDEN_FAIL grid 12x10: list 5dbc0cc9 != golden 39d84b28 (30 views)
+=== summary
+8
+=== bench end rc=20 2026-10-12T00:37:19Z
+[viewer] started pid 10684 supervisor 10677 sha feb0875bbf75324caf860c80211981875bdaf42b port 8080 (log /localdev/smarton/viewer/viewer.log)

@@ -1,0 +1,8 @@
+STAGES n=30 head=0.006 project=0.848 tile_assign=0.008 sort=1.080 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.341 d2h=0.009 assemble=0.000 tail=0.005 xview=0.138 | sum=7.434 view_total=7.437 resid_in_view=+0.002 avg_frame_ms=7.506 resid_vs_frame=+0.072 xview_hits=29 xview_misses=0
+TTW_TIMING stage_sort_bin_emit=0.407
+TTW_TIMING stage_project_pfwc_setup=0.007
+TTW_TIMING stage_project_pfwc_rtargs=0.098
+TTW_TIMING stage_project_pfwc_chunkcull=0.000
+TTW_TIMING stage_project_pfwc_enqueue=0.037
+TTW_TIMING stage_project_pfwc_finish=0.000
+PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.007 pfwc_rtargs=0.098 pfwc_chunkcull=0.000 pfwc_enqueue=0.037 pfwc_finish=0.000 gather_setup=0.004 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.837 gather_result=0.000 | sum=0.983 project=0.848 resid=-0.135

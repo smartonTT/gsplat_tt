@@ -1,0 +1,9 @@
+run-r1-off.log ms_frame_median=8.783
+run-r2-off.log ms_frame_median=8.789
+run-r3-off.log ms_frame_median=8.786
+run-r4-off.log ms_frame_median=8.790
+run-r1-c48.log ms_frame_median=8.961
+run-r2-c48.log ms_frame_median=8.965
+run-r3-c48.log ms_frame_median=8.963
+run-r4-c48.log ms_frame_median=8.964
+run-warm.log ms_frame_median=8.781

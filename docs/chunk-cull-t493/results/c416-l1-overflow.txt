@@ -1,0 +1,2 @@
+2026-10-12 00:36:54.954 | critical |          Always | TT_THROW: Statically allocated circular buffers on core range [0-0 - 11-9] grow to 1827200 B which is beyond max L1 size of 1572864 B (assert.hpp:104)
+[gsplat_tt::tile_assign] fused K2 failed: TT_THROW @ /localdev/smarton/viewer/tt-metal/tt_metal/impl/program/program.cpp:1372: tt::exception
