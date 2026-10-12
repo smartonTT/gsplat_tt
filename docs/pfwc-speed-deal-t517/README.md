@@ -41,7 +41,7 @@ locality is kept (unlike t439's LPT, which reordered gids and changed 280 hero p
 ## A/B (step 3): not run
 
 `drive517.sh` / `bench517.sh` (bh-33, 5 alternating b2b rounds off/rg + one --dump-views run per arm
-for md5 and the device hero). At 01:5x PDT `ssh-preflight bh-33` returned auth_failed (publickey
+for md5 and the device hero). At about 03:45 PDT `ssh-preflight bh-33` returned auth_failed (publickey
 denied); t514's driver on bh-33 had its connection closed by the remote host at 02:10 PDT
 (09:10Z), so the measurement reservation looks expired/released.
 Run: `ttp detach t517 -- ttp lock p100 -- docs/pfwc-speed-deal-t517/drive517.sh <rev>`.
