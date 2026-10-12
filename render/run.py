@@ -258,6 +258,10 @@ def _spawn_ref_hero(out_npy: Path, scene: str, cameras: Path, iter_dir: str) -> 
     subprocess.run(cmd, env=env, check=True)
 
 
+# GSPLAT_VIEW_COUNTS=1 (task #528, profiling only, latency loop): print each
+# view's N (scene), M (visible) and P (tile pairs) from the render stats.
+_VIEW_COUNTS = os.environ.get("GSPLAT_VIEW_COUNTS") == "1"
+_LAST_RES = [None]
 _HOST_PROFILE = bool(os.environ.get("GSPLAT_TT_HOST_PROFILE", "").strip() not in ("", "0"))
 
 
@@ -274,6 +278,7 @@ def render_clean_view_timed(pipeline, gauss, c2w, K, H, W, next_c2w=None):
     t = time.perf_counter()
     res = pipeline.render(gauss, extr, K, H, W)
     wall_ms = (time.perf_counter() - t) * 1000.0
+    _LAST_RES[0] = res
     img = _to_image(res)
     if _HOST_PROFILE:
         to_img_ms = (time.perf_counter() - t) * 1000.0 - wall_ms
@@ -609,6 +614,11 @@ def _main():
             st_prev = st_now
             print(f"VIEW_STAGES i={i} name={name} wall={wall_ms:.2f} "
                   + " ".join(f"{k}={v:.2f}" for k, v in d.items()), flush=True)
+        if _VIEW_COUNTS:
+            r = _LAST_RES[0]
+            print(f"VIEW_COUNTS i={i} name={name} N={len(gauss.means)} "
+                  f"M={int(getattr(r, 'num_visible', -1))} "
+                  f"P={int(getattr(r, 'num_entries', -1))}", flush=True)
         if name == hero_name:
             hero_clean = img
         if dump_dir is not None:
