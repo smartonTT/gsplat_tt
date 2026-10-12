@@ -1,0 +1,36 @@
+================ BUILD ID ================
+  cpp : #124 sha=0e58e251 bin=d3e38eb93c2744e1 t554 90268457 B4a fold K2(N+1) in blend(N) (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t557-verify-lat  timeout=300s  worry=600s  ts=2026-10-12T16:49:18-0700
+cmd: GSPLAT_TT_K2_DIET=0 T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/b4a-t554/remote_ab.sh 0 vlat on
+-----------------------------------------
+=== r0-vlat-on 9026845 B4A_FOLD=unset(default on) 23:49:18 load=9.14
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[run] opacity prune: kept 5559909 of 6131954 gaussians (pfwc cores 110)
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=17.0 p50_ms=11.9 min_ms=8.3 max_ms=63.7 n_views=30 warmup_s=7.8 out=/localdev/smarton/gstt2-t513/tmp/t554-r0-vlat-on
+TTW_TIMING ms_view=17.040
+STAGES n=30 head=0.004 project=5.469 tile_assign=0.006 sort=4.381 blend_setup=0.000 mat=0.000 cull=0.000 blend=6.961 d2h=0.009 assemble=0.000 tail=0.006 xview=0.142 | sum=16.979 view_total=16.981 resid_in_view=+0.003 avg_frame_ms=17.040 resid_vs_frame=+0.062 xview_hits=29 xview_misses=0
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2090575 words equal
+[B4A] fold verify tids: 2090575 words equal
+[B4A] fold verify view 1: P_pub=2090575 OK (0/1 views bad)
+[B4A] fold: view K2 from the previous blend (2 views)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2164042 words equal
+[B4A] fold verify tids: 2164042 words equal
+[B4A] fold verify view 2: P_pub=2164042 OK (0/2 views bad)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2255766 words equal
+[B4A] fold verify tids: 2255766 words equal
+[B4A] fold verify view 3: P_pub=2255766 OK (0/3 views bad)
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+=== done 0 vlat 23:49:30
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t557/tmp/ttw-state/logs/t557-verify-lat-20261012-164918.log

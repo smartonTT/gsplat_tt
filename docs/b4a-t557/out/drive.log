@@ -1,0 +1,31 @@
+SSH_PREFLIGHT=ok
+=== drive t554 90268457 on bh-33:/localdev/smarton/gstt2-t513 Mon Oct 12 16:46:01 PDT 2026
+[sync_remote] sha=9026845799508627a52d595cdbe9286b0a74d597 so_md5=683b90a16be2446537861153e0b1a2e1 
+cpp#124 0e58e251 t554 90268457 B4a fold K2(N+1) in blend(N) (bh-33) bin=d3e38eb93c2744e1
+================ BUILD ID ================
+=========================================
+=== r0-vlat-on 9026845 B4A_FOLD=unset(default on) 23:49:18 load=9.14
+run rc=0
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=17.0 p50_ms=11.9 min_ms=8.3 max_ms=63.7 n_views=30 warmup_s=7.8 out=/localdev/smarton/gstt2-t513/tmp/t554-r0-vlat-on
+[B4A] fold view 1: prepared=0 cores_with_k2_args=0/0 ran=0
+[B4A] fold view 2: prepared=1 cores_with_k2_args=110/110 ran=1
+[B4A] fold: view K2 from the previous blend (1 views)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2090575 words equal
+[B4A] fold verify tids: 2090575 words equal
+[B4A] fold verify view 1: P_pub=2090575 OK (0/1 views bad)
+[B4A] fold: view K2 from the previous blend (2 views)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2164042 words equal
+[B4A] fold verify tids: 2164042 words equal
+[B4A] fold verify view 2: P_pub=2164042 OK (0/2 views bad)
+[B4A] fold verify proj_M: 16 words equal
+[B4A] fold verify pairs_P: 16 words equal
+[B4A] fold verify gids: 2255766 words equal
+[B4A] fold verify tids: 2255766 words equal
+[B4A] fold verify view 3: P_pub=2255766 OK (0/3 views bad)
+[B4A] fold view 30: prepared=1 cores_with_k2_args=110/110 ran=1
+=== done 0 vlat 23:49:30
+=== drive t557 done rc=0 Mon Oct 12 16:49:41 PDT 2026
