@@ -1,0 +1,11 @@
+================ BUILD ID ================
+=========================================
+=== shot ttw-t544-hero sha=52c6e47 env:  20:03:58
+run rc=1
+      1 [gsplat_tt::sort] resident-pairs path failed: TT_THROW @ /localdev/smarton/tt-metal/tt_metal/impl/program/program.cpp:249: tt::exception
+      1 Traceback (most recent call last):
+      1 Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+      1 2026-10-12 20:04:12.663 | critical |          Always | TT_THROW: Failed to generate binaries for matblend_compute TT_THROW @ /localdev/smarton/tt-metal/tt_metal/jit_build/build.cpp:62: tt::exception
+      1 2026-10-12 20:04:12.661 | critical |          Always | TT_THROW: trisc1 build failed. Log: /localdev/smarton/tt-metal/runtime/sfpi/compiler/bin/../lib/gcc/riscv-tt-elf/15.1.0/../../../../riscv-tt-elf/bin/ld: /tmp/ccX4yS0P.ltrans0.ltrans.o: in function `_start':
+/usr/bin/scp: /localdev/smarton/gstt2-t513/tmp/shot/hero-ttw-t544-hero.png: No such file or directory
+SHOT_FAIL no hero (rc=1)
