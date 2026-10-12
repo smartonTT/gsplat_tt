@@ -25,6 +25,10 @@
 
 #include <tt-metalium/host_api.hpp>
 
+namespace gsplat_tt {
+bool b4a_shadow_enabled();  // tile_assign_device.cpp (task #542)
+}
+
 namespace gsplat_tt::matblend_fuse {
 
 inline bool enabled() {
@@ -48,6 +52,11 @@ constexpr uint32_t kAliasMbCounts = 3;   // on mat CB 5 (CB_BSORT)
 constexpr uint32_t kAliasScrAttr = 5;    // on mat CB 2 (REC_BATCH ring)
 constexpr uint32_t kAliasImgU8 = 8;      // on mat CB 20 (BRISC CB_BUCKET)
 constexpr uint32_t kAliasOut = 16;       // on mat CB 6 (CB_SLAB)
+// Task #542 (B4a shadow): BRISC's K2 scratch CB, aliased onto mat CB 21 (BRISC
+// CB_BSORT, 50 KB), which is dead once BRISC's mat body returned (a CB of its own
+// put the fused program 14.7 KB over L1).
+constexpr uint32_t kB4aCb = 62;
+constexpr uint32_t kB4aBytes = (128u + 6u + 128u) * 64u + 64u;
 constexpr uint32_t kOutPageBytes = 32u * 32u * 2u;  // bf16 tile
 constexpr uint32_t kImgU8Bytes = 32u * 32u * 3u;    // 32 rows x 96 B RGB
 
