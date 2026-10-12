@@ -598,7 +598,7 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     } else {
         page_cb(20, m0_cap * 32u);       // CB_BUCKET (PACK2, m0_cap recs)
     }
-    if (fused && gsplat_tt::b4a_shadow_enabled()) {  // CB_BSORT + BRISC's B4a K2 scratch
+    if (fused && gsplat_tt::b4a_k2_in_blend()) {  // CB_BSORT + BRISC's B4a K2 scratch
         static_assert(mf::kB4aBytes <= (2u * kMatMover0Cap + 256u) * 4u);
         CircularBufferConfig c((2u * m0_cap + 256u) * 4u,
                                {{21u, DataFormat::UInt32}, {mf::kB4aCb, DataFormat::UInt32}});

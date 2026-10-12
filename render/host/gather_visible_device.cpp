@@ -235,6 +235,7 @@ struct GatherDeviceContext {
     std::shared_ptr<distributed::MeshBuffer> buf_opacity;
     std::shared_ptr<distributed::MeshBuffer> buf_colors;  // AoS M*3
     std::shared_ptr<distributed::MeshBuffer> buf_blendrec; // S1: AoS blend record, 64B/gaussian
+    std::shared_ptr<distributed::MeshBuffer> buf_blendrec_alt; // #552 fold: parity copy
     std::shared_ptr<distributed::MeshBuffer> buf_M;       // uint32 count
     std::size_t cap_m_elems = 0;
 
@@ -960,6 +961,20 @@ bool readback_pfwc_resident(
     std::memcpy(depth, dep.data(), N * sizeof(float));
     std::memcpy(cov2d, cov.data(), N * 3 * sizeof(float));
     std::memcpy(radii, rad.data(), N * 2 * sizeof(float));
+    return true;
+}
+
+// Task #552 (B4a fold): the next view's pfwc is queued before this view's
+// mat+blend, which still reads proj_m_blendrec: point the registry (and the
+// next pfwc) at the other parity copy. Callers captured the old address.
+bool gather_fold_swap_blendrec() {
+    auto* ctx = context_slot().get();
+    if (!ctx || !ctx->buf_blendrec) return false;
+    const auto bytes = ctx->buf_blendrec->size();
+    if (!ctx->buf_blendrec_alt || ctx->buf_blendrec_alt->size() != bytes)
+        ctx->buf_blendrec_alt = make_dram(ctx->mesh_device.get(), bytes, PAGE_BYTES);
+    std::swap(ctx->buf_blendrec, ctx->buf_blendrec_alt);
+    device_state::register_buffer("proj_m_blendrec", ctx->buf_blendrec);
     return true;
 }
 

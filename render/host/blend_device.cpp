@@ -66,10 +66,15 @@ using namespace gsplat;
 // Task #379: the one-shot hook blend_set_after_enqueue_hook() sets; taken (and
 // cleared) by the next resident frame end.
 static std::function<void()> g_after_enqueue_hook;
+// Task #552 (B4a fold): one-shot hook run just before the fused mat+blend is
+// enqueued (after its args are set); it queues the next view's pfwc ahead of it.
+static std::function<void()> g_before_enqueue_hook;
 
 // Task #542 (B4a shadow): fused BRISC args from here are 2 x 21 K2 args.
 static constexpr uint32_t kB4aRtaBase = 48;
 using gsplat_tt::b4a_shadow_enabled;
+using gsplat_tt::b4a_fold_enabled;
+using gsplat_tt::b4a_k2_in_blend;
 using gsplat_tt::tile_assign_b4a_args;
 using gsplat_tt::tile_assign_b4a_end_view;
 
@@ -474,7 +479,7 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         for (const auto& kv : writer_defines) d[kv.first] = kv.second;
         for (const auto& kv : fz_common) d[kv.first] = kv.second;
         d["BLEND_RTA_BASE"] = std::to_string(mbf::kDmRtaBase);
-        if (b4a_shadow_enabled()) {
+        if (b4a_k2_in_blend()) {
             // Task #542 (B4a shadow): BRISC reruns this view's K2 into scratch
             // outputs, with its raw scratch CB (mbf::kB4aCb, aliased in
             // add_mat_part) and 8 accessors after ours.
@@ -703,6 +708,10 @@ static double process_frame_mb_devcull_resident(
     if (!fz) pend.run_fallback();
     if (fz && !ctx.fz_built) build_program_and_workload_mb(ctx, /*fused=*/true);
 
+    // Task #552: fused BRISC args kept to add the next view's K2 args once the
+    // before-enqueue hook has prepared them.
+    struct FoldBrisc { CoreCoord core; uint32_t kc; std::vector<uint32_t> m0; };
+    std::vector<FoldBrisc> fold_brisc;
     if (!launch_only) {
     // Post-sort subchunk meta: device-written at sort publish (iter 55 / step B).
     auto buf_sc_meta = ds::get_buffer("blend_subchunk_meta");
@@ -915,11 +924,16 @@ static double process_frame_mb_devcull_resident(
                         cp.push_back(blend_eps_bits);
                         cp.push_back(floor_bits);
                         SetRuntimeArgs(*fz_program, ctx.fz_ncrisc, core, n);
-                        if (b4a_shadow_enabled()) {
+                        if (b4a_k2_in_blend()) {
                             m0.resize(kB4aRtaBase, 0u);
                             const uint32_t kc = static_cast<uint32_t>(x) +
                                                 static_cast<uint32_t>(y) * static_cast<uint32_t>(ctx.grid.x);
-                            if (!tile_assign_b4a_args(kc, m0)) m0.resize(kB4aRtaBase + 42u, 0u);
+                            if (b4a_fold_enabled()) {
+                                fold_brisc.push_back({core, kc, m0});
+                                m0.resize(kB4aRtaBase + 42u, 0u);
+                            } else if (!tile_assign_b4a_args(kc, m0)) {
+                                m0.resize(kB4aRtaBase + 42u, 0u);
+                            }
                         }
                         SetRuntimeArgs(*fz_program, ctx.fz_brisc, core, m0);
                         SetRuntimeArgs(*fz_program, ctx.fz_compute, core, cp);
@@ -983,14 +997,33 @@ static double process_frame_mb_devcull_resident(
         }
         ++frames;
     }
+    std::function<void()> before_hook = std::move(g_before_enqueue_hook);
+    g_before_enqueue_hook = nullptr;
     if (fz) {
+        if (before_hook) {
+            // Task #552: the next view's pfwc goes ahead of this mat+blend, which
+            // then runs that view's K2 on BRISC (args prepared by the hook).
+            const auto h0 = std::chrono::steady_clock::now();
+            before_hook();
+            gsplat_tt::stagetimers::acc().xview +=
+                std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - h0).count();
+            for (auto& fb : fold_brisc) {
+                fb.m0.resize(kB4aRtaBase);
+                if (!tile_assign_b4a_args(fb.kc, fb.m0)) continue;
+                SetRuntimeArgs(ctx.fz_workload.get_programs()
+                                   .find(distributed::MeshCoordinateRange(ctx.mesh_device->shape()))
+                                   ->second,
+                               ctx.fz_brisc, fb.core, fb.m0);
+            }
+        }
         pend.clear();
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.fz_workload, /*blocking=*/false);
     } else {
         distributed::EnqueueMeshWorkload(*ctx.cq, ctx.workload, /*blocking=*/false);
+        if (before_hook) before_hook();  // no BRISC K2 here: the fold does not run
     }
     // Task #548: this view's B4a K2 args are used up (logs the core count).
-    if (b4a_shadow_enabled()) tile_assign_b4a_end_view();
+    if (b4a_k2_in_blend()) tile_assign_b4a_end_view();
     // Per-stage attribution (stage_timers.h): the D2H readback and the host
     // assemble are separate buckets; the caller derives the pure device blend
     // window as (returned ms - d2h). The writer already packed the final u8
@@ -1775,6 +1808,10 @@ double blend_mb_devcull_resident(
 
 void blend_set_after_enqueue_hook(std::function<void()> hook) {
     g_after_enqueue_hook = std::move(hook);
+}
+
+void blend_set_before_enqueue_hook(std::function<void()> hook) {
+    g_before_enqueue_hook = std::move(hook);
 }
 
 OutImageView blend_out_zerocopy_last() {

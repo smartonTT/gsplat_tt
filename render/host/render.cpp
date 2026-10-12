@@ -217,6 +217,7 @@ gsplat_cpu::ProjectResult run_project(const float* means, const float* cov3d,
             means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
             image_height, image_width, max_radius, tile_size, mb_contrib_floor,
             cull_disabled))) {
+        gsplat_tt::tile_assign_fold_cancel();  // #552: a folded K2 read another pfwc
         enqueue_pfwc(means, cov3d, extrinsics, intrinsics, colors, opacities, min_opacity, N,
                      image_height, image_width, max_radius, tile_size, mb_contrib_floor,
                      cull_disabled);
@@ -401,9 +402,32 @@ py::tuple render_view(
         // view's blend. Keyed with this call's own (pre-retry) floor, as the next
         // call passes it; never left set past this call.
         struct HookReset {
-            ~HookReset() { gsplat_tt::blend_set_after_enqueue_hook(nullptr); }
+            ~HookReset() {
+                gsplat_tt::blend_set_after_enqueue_hook(nullptr);
+                gsplat_tt::blend_set_before_enqueue_hook(nullptr);
+            }
         } hook_reset;
-        if (have_next) {
+        if (have_next && gsplat_tt::b4a_fold_enabled()) {
+            // Task #552 (B4a fold): the next view's pfwc goes ahead of this
+            // view's mat+blend (into the other proj_m_blendrec copy, as this
+            // blend still reads the current one), and the blend runs that
+            // view's K2 on BRISC. The frame still ends on an event.
+            gsplat_tt::blend_set_before_enqueue_hook([&] {
+                if (!gsplat_tt::gather_fold_swap_blendrec()) return;
+                enqueue_pfwc(means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr,
+                             opacities_ptr, min_opacity, N, image_height, image_width,
+                             max_radius, tile_size, mb_contrib_floor_arg, cull_disabled);
+                g_xview.set(gsplat_tt::xview::make_key(
+                    means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr, opacities_ptr,
+                    min_opacity, N, image_height, image_width, max_radius, tile_size,
+                    mb_contrib_floor_arg, cull_disabled));
+                gsplat_tt::PfwcFuseInfo fi;
+                if (gsplat_tt::pfwc_ran_fused(&fi))
+                    gsplat_tt::tile_assign_fold_prepare(fi.num_cores, fi.num_tiles, fi.tiles_x,
+                                                        fi.screen_tiles);
+            });
+            gsplat_tt::blend_set_after_enqueue_hook([] {});
+        } else if (have_next) {
             gsplat_tt::blend_set_after_enqueue_hook([&] {
                 enqueue_pfwc(means_ptr, cov3d_ptr, next_extr.data(), intr_ptr, colors_ptr,
                              opacities_ptr, min_opacity, N, image_height, image_width,
@@ -560,6 +584,7 @@ PYBIND11_MODULE(render_clean, m) {
         py::gil_scoped_release nogil;
         std::lock_guard<std::mutex> lock(render_view_mutex);
         g_xview.clear();
+        gsplat_tt::tile_assign_fold_cancel();
         gsplat_tt::device_state::shutdown();
     });
     // Per-stage host attribution. Totals in ms accumulated over every

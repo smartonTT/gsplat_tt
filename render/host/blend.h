@@ -62,6 +62,9 @@ OutImageView blend_out_zerocopy_last();
 // before sort_and_bin_tt and clear it (nullptr) after, so it never outlives
 // the call. Its host time is booked to stagetimers xview, not blend.
 void blend_set_after_enqueue_hook(std::function<void()> hook);
+// Task #552 (B4a fold): one-shot hook run right before the fused mat+blend is
+// enqueued (after the non-fused one); cleared when taken, like the above.
+void blend_set_before_enqueue_hook(std::function<void()> hook);
 
 void device_shutdown();
 
