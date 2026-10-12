@@ -68,3 +68,55 @@ JPEG bytes vs quality and scale, hero frame as received (re-encoded from the q70
 slightly under the live sizes): full 1024x1024 q40 97 KB, q30 86, q20 65; 0.75x (768x768,
 bilinear) q40 59, q30 50, q20 38 KB. At 0.75x even q40 is smaller than full-size q20 and
 looks better, so the ladder should drop scale before it drops quality far.
+
+## 4. Change (ab8f841b): moving-frame ladder with 0.75x scale
+
+`MotionQuality.LADDER`: full q40 -> full q30 -> 0.75x q40 -> 0.75x q30 -> 0.75x q20, one rung
+down per backlogged frame, one rung up after 60 clean frames. The page stretches 0.75x frames to
+the canvas. Still frames unchanged (full size, q70). Also fixed an order-dependent thread-count
+test flake (12/12 viewer tests pass 3x on bh-30's venv). Deployed 11:3x PDT with
+`opt/ird/renew.sh viewer --rev ab8f841b` (deployed_sha ab8f841b1c15).
+
+### ab8f841b measured, Mac via 8091, 23 s runs, 11:40-12:00 PDT (`out/ab8f841b-r*.out`)
+
+| Run | Page FPS | Interval p50/p99 ms | JPEG KB | Viewer sent FPS | Device ms |
+|---|---|---|---|---|---|
+| 1 | 63.78 | 7.8 / 142.8 | 97 | 117.7 | 7.66 |
+| 2 | 30.61 | 11.6 / 302.9 | 42 | 111.2 | 8.14 |
+| 3 | 34.65 | 12.3 / 270.1 | 42 | 119.1 | 7.81 |
+| 4 | 121.38 | 5.2 / 39.7 | 100 | 115.2 | 8.26 |
+| 5 | 70.56 | 3.4 / 99.8 | 65 | 118.1 | 7.59 |
+| 6 | 117.18 | 8.1 / 28.0 | 102 | 114.4 | 8.29 |
+| 7 | 116.50 | 8.0 / 26.2 | 103 | 115.8 | 8.20 |
+| 8 | 116.05 | 8.1 / 31.0 | 103 | 117.0 | 8.03 |
+| 9 | 105.52 | 6.5 / 59.7 | 103 | 111.6 | 8.62 |
+| **median** | **105.52** | | | | |
+
+Runs 1-3 and 5 hit VPN dips: in runs 2-3 the page got 30-35 FPS of 42 KB frames (bottom rung),
+i.e. the link carried only ~1.3-1.5 MB/s. No encoding short of ~11 KB frames fits 117 FPS in
+that. With a clean link (runs 4, 6-8) the page gets 116-121 FPS, the device cap.
+
+Controlled slow link (same method as section 3), A/B against c3c4e55a:
+
+| Cap | c3c4e55a FPS (KB) | ab8f841b FPS (KB) |
+|---|---|---|
+| 6 MB/s | 88.43 (68) | **104.74** (54) |
+| 9 MB/s | 108.58 (83) | **110.04** (89) |
+
+Static hero (`--hero-out`, `out/hero_received_ab8f841b.jpg`): md5 acede79d, byte-identical to
+c3c4e55a's and #531's checked capture (69.6 dB vs the ttw-224 hero, no seams by eye).
+
+## 5. Conclusions and what limits it now
+
+- Clean link: page FPS 116-121 = the device + host cap (~8.2 + 0.3 ms). Nothing more to gain in
+  transport; more FPS needs a faster device render.
+- Slow link: the ladder keeps 105 FPS at 6 MB/s (was 88). Below ~3 MB/s the VPN itself is the
+  limit.
+- Backlog shows late: pacing only sees viser's own buffer. Past it, the localhost socket to sshd
+  and sshd's channel window (OpenSSH 2 MB, ~20 frames) absorb the backlog, so the ladder steps
+  down only after that buffer fills; frames then arrive bursty (p99 100-300 ms in dips). A
+  signal from the far end (the page acking frames, or sshd's TCP send queue on bh-30) would let
+  the ladder react a full window earlier. Not done here: needs a client-side ack in viser or
+  reading another process's socket state.
+- A sustained link-rate probe with repeated curl fetches of the page through 8091 gave
+  implausible numbers (176-332 MB/s, likely not real transfers) and was discarded.
