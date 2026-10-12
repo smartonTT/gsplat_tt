@@ -791,6 +791,77 @@ void kernel_main() {
                     }
                 }
             }
+#if defined(MAT_EARLY_CULL) && MAT_EARLY_CULL
+            // Task #519: sort only the candidates of this subchunk's ranks
+            // (select_bins). Their records are gathered (index order) into
+            // CB_BUCKET, the TRISCs cull them while this mover sorts their
+            // keys (4 m u32 in CB_SLAB), and ranks [lo, hi) are the sorted
+            // candidates [lo - base, hi - base). Too many candidates (tied
+            // keys): the whole-tile sort below (select_bins only reads k).
+            {
+                const uint32_t lo = sc_off;
+                sort_ol::Select sel;
+                {
+                    MAT_PZ("mat_ol_sel");
+                    FZ_ACC(fz_big);
+                    sel = sort_ol::select_bins(k, N, lo, lo + L_item, hist);
+                }
+                const uint32_t bcap = get_local_cb_interface(CB_BUCKET).fifo_size / L1_SPLAT_BYTES;
+                const uint32_t scap = get_local_cb_interface(CB_SLAB).fifo_size / 16u;
+                if (sel.m <= bcap && sel.m <= scap) {
+                    uint32_t* cv = k;
+                    uint32_t m;
+                    {
+                        MAT_PZ("mat_ol_sel");
+                        FZ_ACC(fz_big);
+                        m = sort_ol::select_compact_ids(k, N, sel);
+                    }
+                    flush_pending();  // the chunk reads overwrite the slab
+                    {
+                        MAT_PZ("mat_ol_gather");
+                        FZ_ACC(fz_big);
+                        constexpr uint32_t kStage = 8192u;  // CB_SLAB records
+                        uint32_t j = 0;
+                        for (uint32_t r0 = 0; r0 < N && j < m; r0 += kStage) {
+                            const uint32_t nr = (N - r0 < kStage) ? (N - r0) : kStage;
+                            if (cv[j] - r0 >= nr) continue;  // no candidate in this chunk
+                            read_bucket(l1_recs_acc, page0 + r0 / REC_PAGE_RECS, nr, slab);
+                            noc_async_read_one_packet_set_state(
+                                NOC_XY_ADDR(my_x[noc_index], my_y[noc_index], slab), L1_SPLAT_BYTES);
+                            for (; j < m && cv[j] - r0 < nr; ++j) {
+                                noc_async_read_one_packet_with_state(
+                                    slab + (cv[j] - r0) * L1_SPLAT_BYTES, buck + j * L1_SPLAT_BYTES);
+                            }
+                            noc_async_read_barrier();  // before the next chunk overwrites the slab
+                        }
+                    }
+                    asm volatile("" ::: "memory");  // NoC filled buck behind the compiler
+                    uint32_t early_job;
+                    {
+                        MAT_PZ("mat_ol_sort");
+                        FZ_ACC(fz_big);
+                        uint32_t* ck = reinterpret_cast<uint32_t*>(slab);
+                        uint32_t cmin, cmax;
+                        sort_radix_tile::record_keys(reinterpret_cast<volatile uint32_t*>(buck), m,
+                                                     ck, &cmin, &cmax);
+                        early_job = post_job(buck, m);
+                        const uint32_t* res = sort_radix_tile::sort_ids_gathered(
+                            ck, m, cmin, cmax, ck + m, ck + 2u * m, ck + 3u * m, hist);
+                        for (uint32_t i = 0; i < L_item; ++i) k[i] = res[lo + i - sel.base];
+                    }
+                    wait_job(early_job);
+                    {
+                        MAT_PZ("mat_ol_perm");
+                        FZ_ACC(fz_perm);
+                        permute_records(buck, slab, k, L_item);
+                    }
+                    MAT_PZ("mat_ol_wr");
+                    FZ_ACC(fz_wr);
+                    emit_slab(sc, L_item);
+                    continue;
+                }
+            }
+#endif
 #if defined(OL_MAT_SELECT) && OL_MAT_SELECT
             // Task #124: the item is part `part` of its subchunk, records
             // [part * OL_MAT_PART, +OL_MAT_PART) (host kOlMatPartRecs), and
