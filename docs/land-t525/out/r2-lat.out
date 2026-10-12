@@ -1,0 +1,21 @@
+================ BUILD ID ================
+  cpp : #124 sha=31163f4b bin=a274490538d70405 t525 c3269ce7 land MAT_EARLY_CULL default on (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t525-r2-lat  timeout=300s  worry=600s  ts=2026-10-12T09:44:04-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/land-t525/remote_ab.sh 2 lat def off
+-----------------------------------------
+=== r2-lat-def c3269ce MAT_EARLY_CULL=unset 16:44:06 load=2.96
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.0 p50_ms=9.1 min_ms=7.6 max_ms=10.4 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t513/tmp/t525-r2-lat-def
+TTW_TIMING ms_view=9.004
+STAGES n=30 head=0.003 project=2.108 tile_assign=0.006 sort=0.924 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.793 d2h=0.010 assemble=0.000 tail=0.005 xview=0.103 | sum=8.952 view_total=8.954 resid_in_view=+0.002 avg_frame_ms=9.004 resid_vs_frame=+0.052 xview_hits=29 xview_misses=0
+=== r2-lat-off c3269ce MAT_EARLY_CULL=0 16:44:10 load=2.72
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=9.3 p50_ms=9.4 min_ms=7.9 max_ms=10.7 n_views=30 warmup_s=1.5 out=/localdev/smarton/gstt2-t513/tmp/t525-r2-lat-off
+TTW_TIMING ms_view=9.259
+STAGES n=30 head=0.003 project=2.129 tile_assign=0.006 sort=1.039 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.918 d2h=0.009 assemble=0.000 tail=0.004 xview=0.100 | sum=9.209 view_total=9.212 resid_in_view=+0.002 avg_frame_ms=9.259 resid_vs_frame=+0.049 xview_hits=29 xview_misses=0
+=== done 2 lat 16:44:15
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/worktrees/t525/tmp/ttw-state/logs/t525-r2-lat-20261012-094404.log

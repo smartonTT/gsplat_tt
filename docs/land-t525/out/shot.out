@@ -1,0 +1,12 @@
+================ BUILD ID ================
+=========================================
+=== shot ttw-224-hero sha=c3269ce env:  16:41:00
+run rc=0
+      1 TILE_ASSIGN_STAGES n=30 setup=0.006 rtargs=0.000 enqueue=0.000 scan_finish=0.000 p_d2h=0.000 k2_finish=0.000 publish=0.001 | sum=0.007 tile_assign=0.008 resid=+0.001
+      1 SUMMARY scene=bicycle hero='hero' hero_vs_ref=nandB(8bit-vs-golden) hero_vs_cpu=nandB(float-vs-cpu) avg_frame_ms=7.8 p50_ms=7.9 min_ms=6.4 max_ms=10.0 n_views=30 warmup_s=1.4 out=/localdev/smarton/gstt2-t513/tmp/shot-ttw-224-hero
+      1 STAGES n=30 head=0.007 project=0.890 tile_assign=0.008 sort=1.128 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.562 d2h=0.010 assemble=0.000 tail=0.005 xview=0.124 | sum=7.734 view_total=7.736 resid_in_view=+0.002 avg_frame_ms=7.805 resid_vs_frame=+0.072 xview_hits=29 xview_misses=0
+      1 SORT_STAGES n=30 pread=0.003 bin_count=0.000 bin_hist_d2h=0.000 bin_layout=0.082 upload=0.000 bin_emit=0.458 kernel=0.000 d2h=0.000 compact=0.000 publish_host=0.349 publish_wait=0.000 mat=0.095 pre=0.002 log=0.009 cont_prep=0.043 cont_rtargs=0.080 cont_other=0.002 | sum=1.122 sort=1.128 resid=+0.005
+      1 PROJECT_STAGES n=30 cov3d=0.000 pfwc_setup=0.006 pfwc_rtargs=0.094 pfwc_chunkcull=0.000 pfwc_enqueue=0.029 pfwc_finish=0.000 gather_setup=0.004 gather_rtargs=0.000 gather_enqueue=0.000 gather_wait=0.879 gather_result=0.000 | sum=1.012 project=0.890 resid=-0.122
+VIEWS=30 SWEEP_MD5=906e0435
+VIEWS_DIFFER (0 of 30)
+SHOT hero=opt/metal-screenshots/ttw-224/hero.png diff=opt/metal-screenshots/ttw-224/hero_diff10.png commit=c3269ce7 env='defaults' size=1024x1024 sweep_md5=906e0435 ref=benchmarks/reference_v2/hero.png psnr_vs_ref=42.51 golden_match=true max_lsb_vs_golden=0
