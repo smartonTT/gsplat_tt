@@ -124,6 +124,11 @@ struct TileAssignDeviceContext {
     // Task #170 K2 fold: per-mover per-tile count rows (2 per core).
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows;
     std::size_t cap_k2_rows_bytes = 0;
+    // Task #542 (B4a shadow): this view's K2 args with the outputs moved to
+    // the b4a_* scratch buffers, 2 x 21 per core (mover 0, mover 1).
+    std::shared_ptr<distributed::MeshBuffer> b4a_gids, b4a_tids, b4a_pp, b4a_mp, b4a_rows;
+    std::size_t b4a_cap_p = 0, b4a_cap_rows = 0;
+    std::vector<uint32_t> b4a_args;
     std::shared_ptr<distributed::MeshBuffer> buf_k2_rows_view;  // task #355
     uint32_t k2_rows_banks = 0;
 
@@ -205,6 +210,16 @@ static uint32_t ta_split_permille() {
 // GSPLAT_TT_K2_FOLD=0 keeps the diet but not its per-tile count rows, so the
 // one-launch sort runs its own count pass again. Read once.
 constexpr uint32_t K2_FOLD_TILES = 1024;  // == tile_assign_scatter_seg.cpp
+// Task #542: GSPLAT_TT_B4A_SHADOW=1 reruns each view's K2 on BRISC inside its
+// own fused mat+blend, into scratch outputs (cost of hosting K2 there).
+bool b4a_shadow_enabled() {
+    static const bool on = [] {
+        const char* e = std::getenv("GSPLAT_TT_B4A_SHADOW");
+        return e != nullptr && std::atoi(e) != 0;
+    }();
+    return on;
+}
+
 static bool k2_diet_enabled() {
     static const bool v = [] {
         const char* e = std::getenv("GSPLAT_TT_K2_DIET");
@@ -718,6 +733,15 @@ static void vis_check_legacy(
 
 }  // namespace
 
+bool tile_assign_b4a_args(uint32_t core, std::vector<uint32_t>& out) {
+    auto* ctx = ensure_context();
+    if (ctx == nullptr || !b4a_shadow_enabled() || !ctx->fused_ready) return false;
+    const std::size_t n = ctx->b4a_args.size() / 42u;
+    if (core >= n) return false;
+    out.insert(out.end(), ctx->b4a_args.begin() + core * 42u, ctx->b4a_args.begin() + (core + 1u) * 42u);
+    return true;
+}
+
 bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                           uint32_t screen_tiles, uint32_t* M, uint32_t* P) {
     auto* ctx = ensure_context();
@@ -817,6 +841,23 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                                                    static_cast<uint32_t>(ctx->cap_p_bytes / 4))
                               : static_cast<uint32_t>(ctx->cap_p_bytes / 4);
             Program& prog = ctx->wl_k2seg.get_programs().begin()->second;
+            const bool b4a = b4a_shadow_enabled();
+            if (b4a) {
+                if (!ctx->b4a_gids || ctx->b4a_cap_p < ctx->cap_p_bytes) {
+                    ctx->b4a_gids = make_dram(ctx->mesh_device.get(), ctx->cap_p_bytes);
+                    ctx->b4a_tids = make_dram(ctx->mesh_device.get(), ctx->cap_p_bytes);
+                    ctx->b4a_cap_p = ctx->cap_p_bytes;
+                }
+                if (!ctx->b4a_pp) {
+                    ctx->b4a_pp = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
+                    ctx->b4a_mp = make_dram(ctx->mesh_device.get(), PAGE_BYTES);
+                }
+                if (fold && ctx->b4a_cap_rows < ctx->cap_k2_rows_bytes) {
+                    ctx->b4a_rows = make_dram(ctx->mesh_device.get(), ctx->cap_k2_rows_bytes);
+                    ctx->b4a_cap_rows = ctx->cap_k2_rows_bytes;
+                }
+                ctx->b4a_args.assign(static_cast<std::size_t>(num_cores) * 42u, 0u);
+            }
             for (uint32_t c = 0; c < num_cores; c++) {
                 const CoreCoord core{c % ctx->grid.x, c / ctx->grid.x};
                 auto args = [&](uint32_t mover) -> std::vector<uint32_t> {
@@ -837,6 +878,18 @@ bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                 };
                 SetRuntimeArgs(prog, ctx->k2s, core, args(1));
                 if (ctx->dual) SetRuntimeArgs(prog, ctx->k2sb, core, args(0));
+                if (b4a) {
+                    for (uint32_t mover = 0; mover < 2u; mover++) {
+                        if (mover == 0 && !ctx->dual) continue;  // nseg 0: skipped
+                        std::vector<uint32_t> a = args(mover);
+                        a[3] = static_cast<uint32_t>(ctx->b4a_gids->address());
+                        a[4] = static_cast<uint32_t>(ctx->b4a_tids->address());
+                        a[5] = static_cast<uint32_t>(ctx->b4a_pp->address());
+                        a[6] = static_cast<uint32_t>(ctx->b4a_mp->address());
+                        a[16] = fold ? static_cast<uint32_t>(ctx->b4a_rows->address()) : 0u;
+                        std::copy(a.begin(), a.end(), ctx->b4a_args.begin() + (2u * c + mover) * 21u);
+                    }
+                }
             }
             distributed::EnqueueMeshWorkload(*ctx->cq, ctx->wl_k2seg, false);
             if (pass == 0 && want_early) {

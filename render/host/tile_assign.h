@@ -26,6 +26,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 #include "gsplat_cpu/tile_assign.h"
 
@@ -83,6 +84,12 @@ gsplat_cpu::TileAssignResult tile_assign_tt(
 // tiles_y, the size of the task #170 count rows (0: no rows).
 bool tile_assign_fused_k2(uint32_t nseg, uint32_t num_tiles, uint32_t tiles_x,
                           uint32_t screen_tiles, uint32_t* M, uint32_t* P);
+
+// Task #542 (B4a shadow, GSPLAT_TT_B4A_SHADOW=1): appends the last fused K2's
+// args for logical core index `core` (x + y * grid x), mover 0 then mover 1,
+// 21 each, outputs moved to scratch. False when off or no K2 ran.
+bool b4a_shadow_enabled();
+bool tile_assign_b4a_args(uint32_t core, std::vector<uint32_t>& out);
 
 bool tile_assign_device_ready();
 
