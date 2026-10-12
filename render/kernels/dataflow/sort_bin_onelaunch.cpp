@@ -187,6 +187,20 @@ constexpr uint32_t WIN_PAGES = OL_WIN_PAGES;
 // base row; CB_PFX stages the prefix pass (num_cores count pages, num_cores
 // base pages, the totals page and the padded-totals page).
 constexpr uint32_t CB_ROW = 10, CB_PFX = 11;
+// Task #555 (B4' step 3b): OL_ARENA=1 (the fused mat+blend program) places the
+// sort's scratch in that program's alias-cut L1 arena instead of CBs of its
+// own: g_ol_arena[id] is the L1 address of scratch buffer id (the CB ids
+// above, + 16 for mover 0), filled by the host kernel before kernel_main.
+// Every scratch buffer is reached through OL_CBP; none is used as a FIFO.
+#ifndef OL_ARENA
+#define OL_ARENA 0
+#endif
+#if OL_ARENA
+uint32_t g_ol_arena[32];
+#define OL_CBP(id) g_ol_arena[(id)]
+#else
+#define OL_CBP(id) get_write_ptr(id)
+#endif
 
 inline void sem_inc(uint32_t x, uint32_t y, uint32_t sem_id) {
     noc_semaphore_inc(get_noc_addr(x, y, get_semaphore(sem_id)), 1u);
@@ -260,18 +274,18 @@ void kernel_main() {
     if (mover != 0u) return;
 #endif
     const uint32_t cbo = (mover == 0) ? MOVER0_CB_OFFSET : 0u;
-    auto hp = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + cbo));
-    auto curp = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_CUR + cbo));
-    const uint32_t row_l1 = get_write_ptr(CB_ROW);
+    auto hp = reinterpret_cast<volatile uint32_t*>(OL_CBP(CB_H + cbo));
+    auto curp = reinterpret_cast<volatile uint32_t*>(OL_CBP(CB_CUR + cbo));
+    const uint32_t row_l1 = OL_CBP(CB_ROW);
     auto rowp = reinterpret_cast<volatile uint32_t*>(row_l1);
-    auto h0p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H + MOVER0_CB_OFFSET));
-    auto h1p = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_H));
+    auto h0p = reinterpret_cast<volatile uint32_t*>(OL_CBP(CB_H + MOVER0_CB_OFFSET));
+    auto h1p = reinterpret_cast<volatile uint32_t*>(OL_CBP(CB_H));
 
     if (P == 0xFFFFFFFFu) {
         // Early launch: the ta_pairs_P page lands in this mover's H row (the
         // fold reads no H row before NCRISC's count-row read overwrites it).
         const InterleavedAddrGen<true> pctrl{pg_lo, PAGE_BYTES};
-        noc_async_read(get_noc_addr(0, pctrl), get_write_ptr(CB_H + cbo), PAGE_BYTES);
+        noc_async_read(get_noc_addr(0, pctrl), OL_CBP(CB_H + cbo), PAGE_BYTES);
         noc_async_read_barrier();
         invalidate_l1_cache();
         P = hp[0];
@@ -286,7 +300,7 @@ void kernel_main() {
     // or all-fallback).
     const uint32_t nwin_raw = (npages < WIN_PAGES) ? npages : WIN_PAGES;
     const uint32_t nwin = (nwin_raw == npages) ? npages : (nwin_raw / CNT_BATCH) * CNT_BATCH;
-    const uint32_t win_gid = get_write_ptr(CB_WIN + cbo);
+    const uint32_t win_gid = OL_CBP(CB_WIN + cbo);
     const uint32_t win_tid = win_gid + WIN_PAGES * PAGE_BYTES;
     const uint32_t win_keep = win_tid + WIN_PAGES * PAGE_BYTES;
     // Fold: the window's gid and tid planes, read while this mover waits.
@@ -349,7 +363,7 @@ void kernel_main() {
         // Debug (GSPLAT_TT_OL_FILL_BULK=2): re-read every window page one by
         // one, count and repair the pages the bulk fill got wrong.
         {
-            const uint32_t scr = get_write_ptr(CB_SCRATCH + cbo);
+            const uint32_t scr = OL_CBP(CB_SCRATCH + cbo);
             auto sv = reinterpret_cast<volatile uint32_t*>(scr);
             uint32_t bad = 0;
             for (uint32_t w = 0; w < nwin; w++) {
@@ -380,7 +394,7 @@ void kernel_main() {
     // ── 1. count this mover's kept pairs per tile ──────────────────────────
     if (!fold) {
         DeviceZoneScopedN("sort_ol_count");
-        const uint32_t btid_l1 = get_write_ptr(CB_BATCH + cbo);
+        const uint32_t btid_l1 = OL_CBP(CB_BATCH + cbo);
         const uint32_t bkeep_l1 = btid_l1 + CNT_BATCH * PAGE_BYTES;
         auto btidp = reinterpret_cast<volatile int32_t*>(btid_l1);
         auto bkeepp = reinterpret_cast<volatile int32_t*>(bkeep_l1);
@@ -421,7 +435,7 @@ void kernel_main() {
     if (mover == 1) {
         if (fold) {
             // BRISC's count row (the K2's row 2 * core_id) for the cursors.
-            const uint32_t h_l1 = get_write_ptr(CB_H + cbo);
+            const uint32_t h_l1 = OL_CBP(CB_H + cbo);
             for (uint32_t q = 0; q < row_pages; q++) {
                 noc_async_read(get_noc_addr(core_id * 2u * row_pages + q, cnt_acc),
                                h_l1 + q * PAGE_BYTES, PAGE_BYTES);
@@ -505,7 +519,7 @@ void kernel_main() {
         // ── 3. column prefix over cores for the pages this core owns ───────
         {
             DeviceZoneScopedN("sort_ol_prefix");
-            const uint32_t pfx = get_write_ptr(CB_PFX);
+            const uint32_t pfx = OL_CBP(CB_PFX);
             const uint32_t bst = pfx + num_cores * PAGE_BYTES;
             const uint32_t tst = bst + num_cores * PAGE_BYTES;
             auto cin = reinterpret_cast<volatile uint32_t*>(pfx);
@@ -609,15 +623,15 @@ void kernel_main() {
     const uint32_t tx_mask = tiles_x - 1u;
 
     // Pair staging for pages past the window: buffer b of 3 at plane + b*PB*64.
-    const uint32_t gid_l1 = get_write_ptr(CB_GID + cbo);
-    const uint32_t tid_l1 = get_write_ptr(CB_TID + cbo);
-    const uint32_t keep_l1 = get_write_ptr(CB_KEEP + cbo);
-    const uint32_t dep_l1 = get_write_ptr(CB_DEP + cbo);
+    const uint32_t gid_l1 = OL_CBP(CB_GID + cbo);
+    const uint32_t tid_l1 = OL_CBP(CB_TID + cbo);
+    const uint32_t keep_l1 = OL_CBP(CB_KEEP + cbo);
+    const uint32_t dep_l1 = OL_CBP(CB_DEP + cbo);
     auto depp = reinterpret_cast<volatile uint32_t*>(dep_l1);
     constexpr uint32_t BREC_HALF = OL_BREC_HALF;
     static_assert(BREC_HALF >= BATCH_ELEMS, "OL_BREC_HALF: a ring half holds a page per pair of a batch");
-    const uint32_t rec_cache_l1 = get_write_ptr(CB_REC + cbo);  // 2 x BREC_HALF blendrec pages
-    const uint32_t l1_scratch = get_write_ptr(CB_SCRATCH + cbo);
+    const uint32_t rec_cache_l1 = OL_CBP(CB_REC + cbo);  // 2 x BREC_HALF blendrec pages
+    const uint32_t l1_scratch = OL_CBP(CB_SCRATCH + cbo);
     volatile uint32_t* cachep = reinterpret_cast<volatile uint32_t*>(rec_cache_l1);
     int32_t blendrec_cached_g = -1;
     int32_t dep_cached_page = -1;
@@ -642,7 +656,7 @@ void kernel_main() {
     // OL_RING: tile t's run at ring_l1 + (t*D + c%D)*32, its first cursor of
     // this mover in startp[t]. Task #479: D = OL_RING_DEPTH records per tile, so
     // D / R runs of a tile can be in flight (D == R: one).
-    const uint32_t ring_l1 = (R != 0u) ? get_write_ptr(CB_RING + cbo) : 0u;
+    const uint32_t ring_l1 = (R != 0u) ? OL_CBP(CB_RING + cbo) : 0u;
     auto startp = reinterpret_cast<volatile uint32_t*>(ring_l1 + OL_RING_TILES * D * REC_BYTES);
     // Task #160 fast emit (the default: rings, PUBOC, tiles_x a power of two):
     // one loop with register locals and the sub_int fast path inlined. Same
@@ -651,7 +665,7 @@ void kernel_main() {
     // ~0 B of stack margin (task #186), task #187 moved it here.
     constexpr bool FAST_OK = OL_EMIT_FAST && PUBOC && R != 0u;
     const bool fast = FAST_OK && ring_on && tx_is_pow2;
-    uint32_t* const cur_lm = reinterpret_cast<uint32_t*>(get_write_ptr(CB_CUR + cbo));
+    uint32_t* const cur_lm = reinterpret_cast<uint32_t*>(OL_CBP(CB_CUR + cbo));
     if (ring_on) {
         for (uint32_t t = 0; t < num_tiles; t++) startp[t] = curp[t];
     }
@@ -906,7 +920,7 @@ void kernel_main() {
     namespace tw = sort_ol_town;
     static_assert(BATCH_ELEMS <= tw::LIST_MAX && OL_RING_TILES <= tw::TILES, "TOWN list / fl sizes");
     static_assert(BREC_HALF * PAGE_BYTES <= 65536u, "TOWN: blendrec page offsets in 16 bits");
-    const uint32_t twn = get_write_ptr(tw::CB_TWN + cbo);
+    const uint32_t twn = OL_CBP(tw::CB_TWN + cbo);
     volatile uint32_t* const twh = reinterpret_cast<volatile uint32_t*>(twn);
     volatile uint32_t* const tfl = reinterpret_cast<volatile uint32_t*>(twn + tw::FL_OFF);
     const bool town = fast && fold && num_tiles <= tw::TILES && tile_cap <= (1u << 22);
@@ -916,7 +930,7 @@ void kernel_main() {
     twh[tw::H_MSK] = tx_mask;
     twh[tw::H_SH] = tx_shift;
     twh[tw::H_RING] = ring_l1;
-    twh[tw::H_CUR] = get_write_ptr(CB_CUR + cbo);  // == cur_lm
+    twh[tw::H_CUR] = OL_CBP(CB_CUR + cbo);  // == cur_lm
     for (uint32_t i = 0; i < tw::NT; i++) {
         twh[tw::H_FIN + i] = 0u;
         twh[tw::H_DONE + 4u * i] = 0u;
