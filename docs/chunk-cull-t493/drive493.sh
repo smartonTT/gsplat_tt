@@ -9,6 +9,7 @@ cd "$(git rev-parse --show-toplevel)"
 D=docs/chunk-cull-t493; REV=$(git rev-parse "${1:?rev}")
 H=bh-30; P=/localdev/smarton/p150bench; VDIR=/localdev/smarton/viewer; T=$P/tree493; O=$P/out493
 TTMH=$VDIR/tt-metal
+mkdir -p tmp
 MARK=${TTP_RUN_DIR:-tmp}/drive493.done; rm -f "$MARK"
 trap 'rc=$?; echo "drive493 exit $rc"; echo $rc > "$MARK"' EXIT
 SSHO=(-o ControlMaster=no -o ControlPath=none -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20)
