@@ -223,6 +223,50 @@ inline void diet_start(const volatile uint32_t* tab, uint32_t nseg, uint32_t p, 
     *lo_out = lo;
 }
 
+#ifdef K2_ELLIPSE_PROBE
+// Task #538 (GSPLAT_TT_ELLIPSE_PROBE=1, profiling only): the cost of lever B2's
+// exact ellipse-tile pair test in the K2 pair loop, without changing a pair.
+// Per pair of a gaussian whose rect is >= 2 x 2 tiles it runs the integer form
+// of docs/ellipse-pairs-tA's test (min of the conic over the tile's pixel-centre
+// box, two clamped face candidates) on parameters made from the box (the real
+// lever reads the conic from a new stream, which this does not cost), and adds
+// the keep flag to a sink. Pairs, counts and the image are unchanged.
+struct EllipseProbe {
+    int32_t mx = 0, my = 0, a = 0, b = 0, c = 0, nba = 0, nbc = 0, thr = 0;
+    uint32_t keep = 0;
+    void set(uint32_t box, uint32_t w, uint32_t h) {
+        // Quarter-pixel centre of the rect; conic ~ 1 / (half extent)^2 in Q12.
+        mx = static_cast<int32_t>((vis_tile::aabb_min_x(box) * 32u + w * 16u) * 4u);
+        my = static_cast<int32_t>((vis_tile::aabb_min_y(box) * 32u + h * 16u) * 4u);
+        a = static_cast<int32_t>((1u << 20) / (w * w * 64u + 1u));
+        c = static_cast<int32_t>((1u << 20) / (h * h * 64u + 1u));
+        b = (a + c) >> 3;
+        nba = -((b << 16) / (a + 1));
+        nbc = -((b << 16) / (c + 1));
+        thr = 1 << 22;
+    }
+    static inline int32_t clampi(int32_t x, int32_t lo, int32_t hi) { return x < lo ? lo : (x > hi ? hi : x); }
+    inline int32_t q(int32_t u, int32_t v) const {
+        // u, v in quarter pixels (|u| < 2^13): products in Q12 >> 12 fit int32.
+        return ((a * ((u * u) >> 12)) + (2 * b * ((u * v) >> 12)) + (c * ((v * v) >> 12))) >> 4;
+    }
+    inline void test(uint32_t t, uint32_t tiles_x) {
+        const uint32_t ty = t / tiles_x, tx = t - ty * tiles_x;
+        const int32_t ulo = static_cast<int32_t>(tx * 128u + 2u) - mx, uhi = ulo + 124;
+        const int32_t vlo = static_cast<int32_t>(ty * 128u + 2u) - my, vhi = vlo + 124;
+        const int32_t ue = clampi(0, ulo, uhi), ve = clampi(0, vlo, vhi);
+        const int32_t v1 = clampi((nbc * ue) >> 16, vlo, vhi);
+        const int32_t u2 = clampi((nba * ve) >> 16, ulo, uhi);
+        const int32_t q1 = q(ue, v1), q2 = q(u2, ve);
+        keep += static_cast<uint32_t>((q1 < q2 ? q1 : q2) <= thr);
+    }
+};
+inline volatile uint32_t& ellipse_probe_sink() {
+    static volatile uint32_t s = 0;
+    return s;
+}
+#endif
+
 // emit_pairs_diet from a known stream start (c0, lo0) = diet_start(pg0 * 16)
 // (unused when pg0 * 16 >= P_pub: padding only).
 template <bool COUNT, class Io>
@@ -244,6 +288,9 @@ inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, ui
         gp = io.gid_slot(oslot);
         tp = io.tid_slot(oslot);
     };
+#ifdef K2_ELLIPSE_PROBE
+    EllipseProbe ep;
+#endif
     if (p < p_real) {
         uint32_t c = c0;
         uint32_t m = 0, pc = 0, pb = 0, sb = 0;
@@ -330,6 +377,10 @@ inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, ui
                 }
                 uint32_t row = (vis_tile::aabb_min_y(box) + dy) * tiles_x + vis_tile::aabb_min_x(box);
                 const uint32_t gid = sb + j;
+#ifdef K2_ELLIPSE_PROBE
+                const bool ptest = w >= 2u && off1 - off0 > w;
+                if (ptest) ep.set(box, w, (off1 - off0) / w);
+#endif
                 uint32_t n = e - p;
                 p = e;
                 while (n != 0) {
@@ -341,6 +392,9 @@ inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, ui
                         gp[oi] = gid;
                         tp[oi] = t;
                         if constexpr (COUNT) cnt[t]++;
+#ifdef K2_ELLIPSE_PROBE
+                        if (ptest) ep.test(t, tiles_x);
+#endif
                         t++;
                         if (++oi == PAGE_WORDS) next_out();
                     } while (--run != 0);
@@ -366,6 +420,9 @@ inline void emit_pairs_diet_from(const volatile uint32_t* tab, uint32_t nseg, ui
         }
         io.wait_reads();  // read-ahead past the range end lands before exit
     }
+#ifdef K2_ELLIPSE_PROBE
+    ellipse_probe_sink() = ellipse_probe_sink() + ep.keep;
+#endif
     // Padding (gid = tid = 0) to the end of the last page.
     while (p < p_end) {
         gp[oi] = 0;
