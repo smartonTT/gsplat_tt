@@ -28,4 +28,34 @@ adds back, so the two match).
 
 ## A/B (render/run.py --back-to-back, 30 bicycle views, 20 passes, median ms/view)
 
-PENDING (drive docs/b4a-step1/drive.sh 28e557b9, out/)
+bh-33 (P150 measurement reservation), commit 28e557b9, drive docs/b4a-step1/drive.sh, logs in
+out/ (run-r<round>-<mode>-<arm>.log). Warm-up round r0, then 3 rotating rounds. Per-run value =
+run.py's ms_frame_median over 20 passes.
+
+| arm (GSPLAT_TT_K2_EXTRA) | r1 | r2 | r3 | median | delta vs x0 |
+|---|---|---|---|---|---|
+| x0 (unset, default) | 8.987 | 8.986 | 8.986 | **8.986** | — |
+| x1 (one extra K2) | 9.630 | 9.641 | 9.635 | **9.635** | +0.649 |
+| x2 (two extra K2) | 10.282 | 10.281 | 10.285 | **10.282** | +1.296 |
+
+- Linear: +0.648 ms/view per extra K2 (x1 +0.649, x2 +0.648 per K2). Spread within a round
+  under 0.015 ms; r2-x1 had a 6-pass excursion (mean 9.760) but its median is in line.
+- raw_md5 5a438f5a in all 11 b2b runs (x0, x1, x2): the extra K2 runs do not change the image.
+- Latency mode (secondary, no --dump-views, r1): x0 8.856, x1 9.524 ms/view (+0.668).
+- x0 (8.986) matches the t548 baseline (8.989 off / 8.992 shadow on).
+
+## Verdict: GO for the real fold (ceiling about 0.65 ms/view, 7.2 %)
+
+K2 sits fully on the critical path: about 0.65 ms/view of b2b time (the upper end of the
+0.4-0.76 ms device-time range). Step 0 (t548) showed BRISC in mat+blend runs the full K2 for free
+(8.989 vs 8.992). So a fold that moves K2(N+1) into blend(N) can save up to ~0.65 ms/view
+(8.99 -> ~8.34, 111 -> ~120 FPS b2b), far above the 0.1 ms keep gate.
+
+Not done in this task: the fold itself (the multi-file change listed above). Its b2b A/B, md5
+906e0435 30/30, device hero.png + diff + PSNR are still owed by the follow-up. The probe flag
+stays default off and changes nothing unless set.
+
+One open point for the follow-up design: in today's order the host's sort work (bin_emit
+~0.41 ms, publish_host ~0.33 ms, host stage timings) runs after K2(N+1); if the device idles
+while it runs, the fold also lets pfwc/gather(N+2) fill that gap. Check the device timeline
+(device profiler or per-stage Finish probes) before choosing the enqueue order.
