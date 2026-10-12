@@ -10,7 +10,7 @@ Code: daa86bf7 on ttp/t550 (from ttp/t544 @bedc35ac). Default config b2b sanity:
 
 ## Method
 - `GSPLAT_TT_T2_PROF=1` (profiler builds only) adds TRISC 2 (PACK) wait counters to the fused blend
-  (`render/kernels/compute/alpha_blend_compute_mb.cpp`, zone `t2_pc`). 
+  (`render/kernels/compute/alpha_blend_compute_mb.cpp`, zone `t2_pc`).
 - v1 was wrong: `tile_regs_wait()` on PACK is a Tensix SEMWAIT, so the RISC-V never blocks there. The
   real wait for MATH hid in `pack_tile` as instruction-FIFO backpressure and counted as busy (v1: busy
   3.69 of 3.73 ms, idle 0.17 ms). That would have been a false NO-GO. v1 data kept in `out/v1`.
