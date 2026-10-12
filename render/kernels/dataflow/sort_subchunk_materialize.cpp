@@ -320,6 +320,13 @@ inline void cull_end_stream() {
 #if !(defined(SORT_ONELAUNCH) && SORT_ONELAUNCH)
 #error "MATCULL_TRISC_FILL needs SORT_ONELAUNCH (the deferred emit lives on that path)"
 #endif
+#endif
+#if defined(MAT_EARLY_CULL) && MAT_EARLY_CULL
+#if !(defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL) || (defined(OL_MAT_SELECT) && OL_MAT_SELECT)
+#error "MAT_EARLY_CULL needs MATCULL_TRISC_FILL and not OL_MAT_SELECT (host sort_device.cpp)"
+#endif
+#endif
+#if defined(MATCULL_TRISC_FILL) && MATCULL_TRISC_FILL
 // Task #306: the TRISCs fill the coefficient tiles and patch word3. The mover
 // posts one 32 B job page per slab on CB_JOB ({slab, n, done, end}); TRISC0
 // fills each 128-record batch from the slab into CB_COEFF (TRISC-owned in this
@@ -658,6 +665,38 @@ void kernel_main() {
                 }
 #endif
                 const uint32_t* sorted;
+#if defined(MAT_EARLY_CULL) && MAT_EARLY_CULL
+                // Task #519: take the keys, then the TRISCs cull the bucket
+                // (word3 := mask) while this mover sorts; the masks travel
+                // with the records through the permute.
+                uint32_t early_job;
+                {
+                    MAT_PZ("mat_ol_sort");
+                    FZ_ACC(fz_sort);
+                    uint32_t kmin, kmax;
+                    sort_radix_tile::record_keys(reinterpret_cast<volatile uint32_t*>(buck), count,
+                                                 kA, &kmin, &kmax);
+                    early_job = post_job(buck, count);
+                    sorted = sort_radix_tile::sort_ids_gathered(kA, count, kmin, kmax,
+                                                                kA + ol_whole_cap, kB, kB + count, hist);
+                }
+                flush_pending();  // the permute overwrites the slab
+                wait_job(early_job);
+                const uint32_t num_sc_e = (count + bucket_fit - 1u) / bucket_fit;
+                for (uint32_t s = 0; s < num_sc_e; ++s) {
+                    const uint32_t Ls = (count - s * bucket_fit > bucket_fit)
+                        ? bucket_fit : (count - s * bucket_fit);
+                    {
+                        MAT_PZ("mat_ol_perm");
+                        FZ_ACC(fz_perm);
+                        permute_records(buck, slab, sorted + s * bucket_fit, Ls);
+                    }
+                    MAT_PZ("mat_ol_wr");
+                    FZ_ACC(fz_wr);
+                    emit_slab(s, Ls);
+                }
+                continue;
+#else
                 {
                     MAT_PZ("mat_ol_sort");
                     FZ_ACC(fz_sort);
@@ -665,6 +704,7 @@ void kernel_main() {
                         reinterpret_cast<volatile uint32_t*>(buck), count, kA, kA + ol_whole_cap,
                         kB, kB + count, hist);
                 }
+#endif
                 const uint32_t num_sc = (count + bucket_fit - 1u) / bucket_fit;
                 for (uint32_t s = 0; s < num_sc; ++s) {
                     const uint32_t Ls = (count - s * bucket_fit > bucket_fit)

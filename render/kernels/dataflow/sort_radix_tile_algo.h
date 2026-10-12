@@ -324,6 +324,33 @@ inline uint32_t* sort_ids_gathered(uint32_t* k, uint32_t n, uint32_t kmin, uint3
     return v;
 }
 
+// Task #519 (MAT_EARLY_CULL): the depth keys (word 3) of n 32 B records into
+// k, with their min and max, so the records' word 3 may be overwritten (the
+// TRISC cull) while sort_ids_gathered sorts k: same ids as sort_record_ids.
+inline void record_keys(const volatile uint32_t* recs, uint32_t n, uint32_t* k, uint32_t* kmin,
+                        uint32_t* kmax) {
+    uint32_t lo = 0xFFFFFFFFu, hi = 0u, i = 0;
+    for (; i + UNROLL <= n; i += UNROLL) {
+        uint32_t kk[UNROLL];
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) kk[u] = recs[(i + u) * 8u + 3u];
+#pragma GCC unroll 4
+        for (uint32_t u = 0; u < UNROLL; u++) {
+            k[i + u] = kk[u];
+            lo = kk[u] < lo ? kk[u] : lo;
+            hi = kk[u] > hi ? kk[u] : hi;
+        }
+    }
+    for (; i < n; i++) {
+        const uint32_t x = recs[i * 8u + 3u];
+        k[i] = x;
+        lo = x < lo ? x : lo;
+        hi = x > hi ? x : hi;
+    }
+    *kmin = lo;
+    *kmax = hi;
+}
+
 // Stable depth order of n 32 B records (8 u32 words, record i at words
 // [8i, 8i+8), depth key at word 3) for sort_subchunk_materialize.cpp. Returns
 // the sorted record indices, always in v. k, v, k2, v2 hold n entries each.
