@@ -20,12 +20,21 @@ env TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t550-prof GSPLAT_T
 IN
 chmod +x $PR/inner.sh
 echo "=== tracy $arm c$a $(cut -c1-8 SHA) $X $(date +%T)"
-TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR PYTHONPATH=$TT_METAL_HOME/tools:${PYTHONPATH:-} \
-  timeout ${TRACY_TIMEOUT:-500} python3 -m tracy -r -p -v --dump-device-data-mid-run -o $PR $PR/inner.sh > $O/$arm-T$a.log 2>&1
+# bh-33's venv (2026-10-12) lacks the tracy wrapper's python deps (loguru, pandas, click, ...). Only
+# profile_log_device.csv is needed, which tt-metal writes itself on ReadMeshDeviceProfilerResults, so
+# without them run inner.sh directly under the device profiler (no host Tracy stream, no ops report).
+if python3 -c "import loguru, pandas, click" 2>/dev/null; then
+  TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR PYTHONPATH=$TT_METAL_HOME/tools:${PYTHONPATH:-} \
+    timeout ${TRACY_TIMEOUT:-500} python3 -m tracy -r -p -v --dump-device-data-mid-run -o $PR $PR/inner.sh > $O/$arm-T$a.log 2>&1
+else
+  echo "tracy wrapper deps missing: device profiler only"
+  TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR \
+    timeout ${TRACY_TIMEOUT:-500} $PR/inner.sh > $O/$arm-T$a.log 2>&1
+fi
 rc=$?; echo "tracy $arm c$a rc=$rc $(date +%T)"
 if [ $rc = 124 ] || [ $rc = 137 ]; then echo "HANG: tt-smi -r"; tt-smi -r > $O/reset-$arm-T$a.log 2>&1; exit $rc; fi
 grep -E "^(SUMMARY|STAGES|SORT_STAGES)|Traceback|TT_FATAL|TT_THROW|error:|DRAM buffers were full" $O/$arm-T$a.log | cut -c1-300 | head -8
-dl=$(find $PR -name profile_log_device.csv | head -1)
+dl=$(find $PR $TT_METAL_HOME/generated/profiler -newer $PR/inner.sh -name profile_log_device.csv 2>/dev/null | head -1)
 [ -n "$dl" ] || { echo "no device csv $arm c$a"; exit 2; }
 gzip -c "$dl" > $O/dev-$arm-c$a.csv.gz
 echo "device csv $arm c$a rows $(wc -l < "$dl") t2_pc $(grep -c ',t2_pc,' "$dl") town_pc $(grep -c ',town_pc,' "$dl")"
