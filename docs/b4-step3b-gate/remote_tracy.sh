@@ -28,8 +28,9 @@ if python3 -c "import loguru, pandas, click" 2>/dev/null; then
     timeout ${TRACY_TIMEOUT:-500} python3 -m tracy -r -p -v --dump-device-data-mid-run -o $PR $PR/inner.sh > $O/$arm-T$a.log 2>&1
 else
   echo "tracy wrapper deps missing: device profiler only"
-  TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR \
-    timeout ${TRACY_TIMEOUT:-500} $PR/inner.sh > $O/$arm-T$a.log 2>&1
+  # the wrapper's --dump-device-data-mid-run is what makes ReadMeshDeviceProfilerResults write the csv
+  TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR TT_METAL_PROFILER_MID_RUN_DUMP=1 \
+    TT_METAL_PROFILER_NO_CACHE_OP_INFO=1 TT_METAL_PROFILER_DISABLE_PUSH_TO_TRACY=1 timeout ${TRACY_TIMEOUT:-500} $PR/inner.sh > $O/$arm-T$a.log 2>&1
 fi
 rc=$?; echo "tracy $arm c$a rc=$rc $(date +%T)"
 if [ $rc = 124 ] || [ $rc = 137 ]; then echo "HANG: tt-smi -r"; tt-smi -r > $O/reset-$arm-T$a.log 2>&1; exit $rc; fi
