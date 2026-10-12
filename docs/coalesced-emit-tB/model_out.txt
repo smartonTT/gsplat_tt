@@ -1,0 +1,33 @@
+
+TOTAL 30 views, 110 cores, even page split
+pairs/view: median 2726678 mean 2648779 max 3194685; visible gaussians median 1761132; max tile 22976
+pairs/core (even split): mean 24080, max 29056; equal-gaussian split max 63837
+tiles/core: mean 933 p95 997 max 1024
+records per (core, tile) run: mean 25.8 median 14 p95 94 max 407; record-weighted mean 66.1
+
+L1 staging bytes per core (KB): K = chunk records (0 = whole runs, contiguous)
+  even pairs      K= 8: mean   882.9 p95  1034.7 max  1048.6  cores>920KB 1135 of 3300
+  even pairs      K=16: mean  1028.0 p95  1170.1 max  1195.3  cores>920KB 2645 of 3300
+  even pairs      K=32: mean  1356.2 p95  1482.8 max  1522.9  cores>920KB 3300 of 3300
+  even pairs      K=64: mean  2107.5 p95  2248.4 max  2326.5  cores>920KB 3300 of 3300
+  even pairs      K= 0: mean   752.5 p95   905.5 max   908.0  cores>920KB 0 of 3300
+  equal gaussians K= 8: mean   883.2 p95  1046.9 max  2126.2  cores>920KB 1155 of 3300
+  equal gaussians K=16: mean  1028.7 p95  1187.2 max  2239.9  cores>920KB 2582 of 3300
+  equal gaussians K=32: mean  1357.6 p95  1505.9 max  2506.8  cores>920KB 3300 of 3300
+  equal gaussians K=64: mean  2110.4 p95  2278.4 max  3054.0  cores>920KB 3300 of 3300
+  equal gaussians K= 0: mean   752.5 p95   914.2 max  1994.9  cores>920KB 147 of 3300
+
+bursts per view and length histogram (records; edges 1,2,4,8,16,32,64,>64)
+  K= 8: writes/view mean    462873 max 539427  mean burst   5.7 rec (   183 B)  hist [1547780, 1225550, 1943845, 9169027, 0, 0, 0, 0]
+  K=16: writes/view mean    315162 max 357091  mean burst   8.4 rec (   269 B)  hist [1148121, 856438, 1287656, 1831765, 4330878, 0, 0, 0]
+  K=32: writes/view mean    250241 max 277339  mean burst  10.6 rec (   339 B)  hist [977128, 698543, 1005520, 1376895, 1658491, 1790655, 0, 0]
+  K=64: writes/view mean    227573 max 250550  mean burst  11.6 rec (   372 B)  hist [922557, 646990, 912133, 1221435, 1440421, 1172041, 511621, 0]
+  K= 0: writes/view mean    141944 max 153776  mean burst  18.7 rec (   597 B)  hist [362739, 298726, 443377, 588984, 796571, 914855, 853059, 0]
+
+predicted write time per view, mean view (ms): mover issue = writes / (2 movers x 110) x 78 cyc; chip = writes / 1.78-2.27 G/s; bw = bytes / 260-512 GB/s
+  32 B scatter (no ring) writes   2648779: mover issue 0.696, chip 1.167-1.488, bw 0.166-0.326 -> write floor 1.167-1.488
+  K=8                    writes    462873: mover issue 0.122, chip 0.204-0.260, bw 0.166-0.326 -> write floor 0.204-0.326
+  K=16                   writes    315162: mover issue 0.083, chip 0.139-0.177, bw 0.166-0.326 -> write floor 0.166-0.326
+  K=32                   writes    250241: mover issue 0.066, chip 0.110-0.141, bw 0.166-0.326 -> write floor 0.166-0.326
+  K=64                   writes    227573: mover issue 0.060, chip 0.100-0.128, bw 0.166-0.326 -> write floor 0.166-0.326
+  whole runs             writes    141944: mover issue 0.037, chip 0.063-0.080, bw 0.166-0.326 -> write floor 0.166-0.326
