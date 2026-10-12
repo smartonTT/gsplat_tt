@@ -12,7 +12,7 @@
 [ttw 2026-10-12T09:08:20-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
 ================ BUILD ID ================
   cpp : #124 sha=6340cc45 bin=8122adacb8dff86c t519 6340cc45 mat early cull A/B (bh-33)
-  data: # sha= 
+  data: # sha=
 =========================================
 host=bh-33  tag=t519-r3  timeout=560s  worry=600s  ts=2026-10-12T09:08:21-0700
 cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/mat-early-cull-t513/bench.sh b2b 3 A B
