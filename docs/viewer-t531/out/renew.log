@@ -1,0 +1,12 @@
+[renew viewer] our reservations: 1 tt_aus bh-30 13:54:28 138278 46483;2 tt_aus bh-33 13:54:16 138447 46483;
+[renew viewer] run: ird change-timeout 1 14:00:00 (job on bh-30, 13:54:28 left)
+2026-10-12 13:28:07,885 INFO     - 138278 on bh-30: Changing your container's timeout to 14 hours...
+2026-10-12 13:28:08,596 INFO     - 138278 on bh-30: Changing your reservations's timeout to 14 hours...
+2026-10-12 13:28:08,755 INFO     - 138278 on bh-30: Timeout modified!
+[renew viewer] run: ttp lock viewer -- env VIEWER_HOST=bh-30 opt/viewer/viewer.sh deploy ad647d8e682082f6746683c5a8728d097bec68b0
+[viewer] deploy ad647d8e682082f6746683c5a8728d097bec68b0 = ad647d8e682082f6746683c5a8728d097bec68b0 to bh-30:/localdev/smarton/viewer/tree
+[sync_remote] sha=ad647d8e682082f6746683c5a8728d097bec68b0 so_md5=d2a3ee999aaea4b64a24260ca7ffef24 
+[viewer] tag already has the uint8 fix: no overlay
+[viewer] stopped pid(s) 55162
+[viewer] started pid 55951 supervisor 55944 sha ad647d8e682082f6746683c5a8728d097bec68b0 port 8080 (log /localdev/smarton/viewer/viewer.log)
+{"role":"viewer","host":"bh-30","job_id":"138278","port":46483,"expiry_utc":"2026-10-13T07:36Z","box_type":"p150","box_changed":false,"prev_host":"bh-30","cluster":"tt_aus","action":"extended","status":"ok","deploy":"deployed best-iter-224 (ad647d8e682082f6746683c5a8728d097bec68b0) over feb0875bbf75324caf860c80211981875bdaf42b","deployed_sha":"ad647d8e682082f6746683c5a8728d097bec68b0","note":"","dry_run":false,"exit":0}

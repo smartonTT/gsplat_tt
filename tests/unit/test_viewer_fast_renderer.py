@@ -166,7 +166,8 @@ def test_sender_threads_exit_on_disconnect():
         fr._sender.join(2.0)
         assert not fr._sender.is_alive()
     time.sleep(0.05)
-    assert senders() == base
+    # <=: an earlier test's sender may still be exiting when base is taken; a leak only adds.
+    assert senders() <= base
 
 
 def test_bad_jpeg_env_falls_back_to_auto(monkeypatch=None):
@@ -353,6 +354,114 @@ def test_camera_burst_renders_only_the_moving_client():
     th.join(2.0)
     assert tasks[1] and set(tasks[1]) == {"rerender"}, tasks
     assert tasks[0] == [], tasks
+
+
+def test_motion_quality_steps_down_on_backlog_and_recovers():
+    """Moving frames step one rung down the (scale, quality) ladder per backlogged frame to
+    the floor and one rung back up after ``recover`` clean frames; off, they stay full
+    size at q40 (task #532)."""
+    from gsplat.nerfview_viewer import MotionQuality
+    mq = MotionQuality(recover=3)
+    assert mq.update(False) == (1.0, 40)
+    assert [mq.update(True) for _ in range(6)] == [
+        (1.0, 30), (0.75, 40), (0.75, 30), (0.75, 20), (0.75, 20), (0.75, 20)]
+    assert [mq.update(False) for _ in range(6)] == [
+        (0.75, 20), (0.75, 20), (0.75, 30), (0.75, 30), (0.75, 30), (0.75, 40)]
+    off = MotionQuality(enabled=False)
+    assert all(off.update(True) == (1.0, 40) for _ in range(5))
+
+
+def test_downscale_sizes_and_keeps_full_frames():
+    """0.75x moving frames keep the aspect; scale 1.0 returns the frame itself (#532)."""
+    from gsplat.nerfview_viewer import downscale
+    img = _test_image()
+    assert downscale(img, 1.0) is img
+    small = downscale(img, 0.75)
+    assert small.shape == (round(img.shape[0] * 0.75), round(img.shape[1] * 0.75), 3)
+    assert small.dtype == np.uint8
+
+
+class _PendingBuf:
+    """viser AsyncMessageBuffer stand-in: queued messages stay unsent until popped."""
+
+    def __init__(self):
+        self.id_from_redundancy_key, self.message_from_id, self.n = {}, {}, 0
+
+    def push(self, msg):
+        old = self.id_from_redundancy_key.pop(msg.redundancy_key(), None)
+        self.message_from_id.pop(old, None)
+        self.id_from_redundancy_key[msg.redundancy_key()] = self.n
+        self.message_from_id[self.n] = msg
+        self.n += 1
+
+
+class _PacedWs(_Ws):
+    def __init__(self):
+        super().__init__()
+        self.buf = _PendingBuf()
+
+    def get_message_buffer(self):
+        return self.buf
+
+    def queue_message(self, msg):
+        super().queue_message(msg)
+        self.buf.push(msg)
+
+
+def test_backlog_paces_sends_lowers_motion_quality_and_keeps_still_q70():
+    """A frame ready while the previous one is still unsent in viser's buffer (the link is
+    the limit) waits for it, sends the newest frame instead, and steps the moving-frame
+    quality down; a still frame is always q70, byte-identical to an unpaced send (#532)."""
+    from nerfview._renderer import RenderTask
+    from gsplat.nerfview_viewer import FastRenderer, make_jpeg_encoder
+    import nerfview
+
+    base = _test_image()
+    imgs = {k: np.clip(base.astype(np.int32) + 40 * k, 0, 255).astype(np.uint8) for k in range(4)}
+    cur = {"k": 0}
+    cs = nerfview.CameraState(fov=1.0, aspect=320 / 256, c2w=np.eye(4))
+    sent = []
+    client = _Client()
+    client.scene._websock_interface = _PacedWs()
+    fr = FastRenderer(viewer=_Viewer(lambda c, t: imgs[cur["k"]]), client=client,
+                      lock=threading.Lock(), on_frame_sent=lambda *a: sent.append(a))
+    if fr.jpeg_encoder_name == "viser":
+        fr.running = False
+        return  # the viser encoder path queues through viser itself: no pacing hook
+    ws = client.scene._websock_interface
+
+    def frame(k, action):
+        cur["k"] = k
+        fr.render_once(RenderTask(action, cs))
+
+    def wait_sent(n):
+        t = time.time() + 5.0
+        while len(sent) < n and time.time() < t:
+            time.sleep(0.005)
+        assert len(sent) >= n, (len(sent), n)
+
+    frame(0, "move")
+    wait_sent(1)
+    assert fr.motion_quality.q == 40  # nothing was pending
+    frame(1, "move")  # previous still pending: the sender waits for it ...
+    time.sleep(0.01)
+    frame(2, "move")  # ... and sends this newer frame instead of frame 1
+    wait_sent(2)
+    assert len(ws.messages) == 2
+    assert (fr.motion_quality.scale, fr.motion_quality.q) == (1.0, 30)
+    m = _decode(ws.messages[1].rgb_data)
+    assert _psnr(m, imgs[2]) > _psnr(m, imgs[1]) + 3.0
+    fr.motion_quality.rung = 2  # deeper backlog: the next moving frame goes out at 0.75x
+    frame(0, "move")
+    wait_sent(3)
+    small = _decode(ws.messages[2].rgb_data)
+    assert small.shape[:2] == (round(base.shape[0] * 0.75), round(base.shape[1] * 0.75))
+    ws.buf.message_from_id.clear()  # viser took every frame: no backlog
+    ws.buf.id_from_redundancy_key.clear()
+    frame(3, "static")
+    wait_sent(4)
+    fr.running = False
+    assert ws.messages[3].rgb_data == make_jpeg_encoder(fr.jpeg_encoder_name)(imgs[3], 70)
 
 
 if __name__ == "__main__":
