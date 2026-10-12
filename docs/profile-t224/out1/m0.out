@@ -1,0 +1,24 @@
+[ttw 2026-10-12T10:23:37-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T10:23:38-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-12T10:23:38-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T10:23:39-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T10:23:39-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T10:23:40-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T10:23:40-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T10:23:40-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T10:23:40-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T10:23:40-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T10:23:41-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T10:23:41-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=4b5664e0 bin=1d97cc6a96aa78c2 t528 b26e530e b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t528-m0  timeout=560s  worry=600s  ts=2026-10-12T10:23:46-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t224/bench.sh tracy M0 0 10 GSPLAT_TT_MATCULL_PROF=1
+-----------------------------------------
+=== tracy M0 0:10 [GSPLAT_TT_MATCULL_PROF=1] b26e530e 17:23:50 card=p100a load=0.74 0.82 1.50
+tracy M0 rc=1 17:23:50
+Traceback (most recent call last):
+no device csv M0
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/tmp/ttw-state/logs/t528-m0-20261012-102341.log

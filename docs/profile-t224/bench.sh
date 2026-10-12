@@ -57,11 +57,14 @@ env $e TT_METAL_CACHE_RENDER=$CACHE-prof GSPLAT_TT_PROFILE_READ_EVERY=11 \
 IN
   chmod +x $PR/inner.sh
   hdr "tracy $tag $a:$b [${e:-plain}]"
-  TT_METAL_DEVICE_PROFILER=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR PYTHONPATH=$TT_METAL_HOME/tools:${PYTHONPATH:-} \
-    timeout ${TRACY_TIMEOUT:-420} python3 -m tracy -r -p -v --dump-device-data-mid-run -o $PR $PR/inner.sh > $S/T-$tag.log 2>&1
+  # Device profiler only, no `python -m tracy` wrapper (this venv has no loguru/click/pandas):
+  # the same env the wrapper sets for `-p --dump-device-data-mid-run`, without a capture server.
+  TT_METAL_DEVICE_PROFILER=1 TT_METAL_PROFILER_MID_RUN_DUMP=1 TT_METAL_PROFILER_NO_CACHE_OP_INFO=1 \
+    TT_METAL_PROFILER_DISABLE_PUSH_TO_TRACY=1 GSPLAT_TT_PROFILE=1 TT_METAL_PROFILER_DIR=$PR \
+    timeout ${TRACY_TIMEOUT:-300} $PR/inner.sh > $S/T-$tag.log 2>&1
   rc=$?; echo "tracy $tag rc=$rc $(date +%T)"
   { [ $rc = 124 ] || [ $rc = 137 ]; } && hang $tag
-  grep -E "^(B2B |SUMMARY)|Traceback|TT_FATAL|DRAM buffers were full" $S/T-$tag.log | cut -c1-300 | head -8
+  grep -E "^(B2B |B2B_STAGES pass=0|SUMMARY)|Traceback|TT_FATAL|DRAM buffers were full" $S/T-$tag.log | cut -c1-300 | head -8
   dl=$(find $PR -name profile_log_device.csv | head -1)
   [ -n "$dl" ] || { echo "no device csv $tag"; exit 2; }
   head -1 "$dl" | cut -c1-200

@@ -1,0 +1,28 @@
+[ttw 2026-10-12T10:21:04-0700] WARNING: devrun (--timeout / ttw.toml timeout_s) timeout=560s is over the 400s reservation limit — RUNNING IT ANYWAY.
+[ttw 2026-10-12T10:21:04-0700]   timeout_sec IS the reservation: a crash squats on the shared device for the full 560s.
+[ttw 2026-10-12T10:21:05-0700]   FIX THE RUN — never skip it, never just raise the number. Two levers:
+[ttw 2026-10-12T10:21:05-0700]   (a) MOVE WORK OFF THE RESERVATION (it carries device compute only):
+[ttw 2026-10-12T10:21:05-0700]       cold JIT compile       -> tt_metal/tools/kernel_prewarm/prewarm_and_submit.sh
+[ttw 2026-10-12T10:21:05-0700]       profiler post-process  -> capture with 'tracy -p' only; process_ops_logs.py on the host
+[ttw 2026-10-12T10:21:06-0700]       CPU reference / PCC    -> run the oracle off-reservation
+[ttw 2026-10-12T10:21:06-0700]   (b) CHUNK IT — each chunk lands under the limit, and ALL the work still runs:
+[ttw 2026-10-12T10:21:06-0700]       monolithic pipeline    -> one capture per stage/block, stitch off-device
+[ttw 2026-10-12T10:21:06-0700]       long sweep             -> several shorter jobs
+[ttw 2026-10-12T10:21:06-0700]       untraced/eager gen     -> the traced/warm path
+[ttw 2026-10-12T10:21:06-0700]   Proceeding with this run. Size the next from the MEASURED device-held time (aim <=400s).
+================ BUILD ID ================
+  cpp : #124 sha=4b5664e0 bin=1d97cc6a96aa78c2 t528 b26e530e b2b profile (bh-33)
+  data: # sha= 
+=========================================
+host=bh-33  tag=t528-r1  timeout=560s  worry=600s  ts=2026-10-12T10:21:11-0700
+cmd: T=/localdev/smarton/gstt2-t513 bash /localdev/smarton/gstt2-t513/docs/profile-t224/bench.sh b2b 1
+-----------------------------------------
+=== b2b-r1 b26e530e 17:21:14 card=p100a load=1.13 0.80 1.61
+run rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B_STAGES pass=10 views=30 gap_ms=0.00 t_end=1791825683.223 period=9.131 render=9.131 py_resid=0.056 head=0.003 project=2.236 tile_assign=0.003 sort=0.958 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.757 d2h=0.009 assemble=0.000 tail=0.004 xview=0.103 view_total=9.075 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=11 views=30 gap_ms=0.00 t_end=1791825683.657 period=9.124 render=9.124 py_resid=0.056 head=0.003 project=2.234 tile_assign=0.003 sort=0.959 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.751 d2h=0.009 assemble=0.000 tail=0.004 xview=0.104 view_total=9.069 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=12 views=30 gap_ms=0.00 t_end=1791825684.091 period=9.129 render=9.129 py_resid=0.057 head=0.003 project=2.235 tile_assign=0.003 sort=0.960 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.753 d2h=0.008 assemble=0.000 tail=0.004 xview=0.103 view_total=9.072 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=13 views=30 gap_ms=0.00 t_end=1791825684.525 period=9.127 render=9.127 py_resid=0.057 head=0.003 project=2.235 tile_assign=0.003 sort=0.957 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.752 d2h=0.009 assemble=0.000 tail=0.004 xview=0.105 view_total=9.070 sort_pread=0.002 sort_bin_co
+B2B_STAGES pass=14 views=30 gap_ms=0.00 t_end=1791825684.959 period=9.138 render=9.138 py_resid=0.056 head=0.003 project=2.236 tile_assign=0.003 sort=0.961 blend_setup=0.000 mat=0.000 cull=0.000 blend=5.757 d2h=0.009 assemble=0.000 tail=0.005 xview=0.105 view_total=9.082 sort_pread=0.002 sort_bin_co
+[ttw] log: /Users/smarton/dev/gsplat_tt/tt-project/state/runs/1449/wt/tmp/ttw-state/logs/t528-r1-20261012-102107.log

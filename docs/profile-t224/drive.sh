@@ -38,12 +38,20 @@ pat="^(===|run rc|tracy |device csv|no device|B2B |SUMMARY|VIEW_COUNTS lines|HAN
 rc=0
 step() {  # name bench-args...
   local n=$1; shift
-  $DEVRUN --host "$H" --no-verify --timeout 560 --tag t528-$n -- \
+  $DEVRUN --host "$H" --no-verify --timeout 380 --tag t528-$n -- \
     "T=$T bash $T/$D/bench.sh $*" 2>&1 | tee "$O/$n.out" | grep -E "$pat"
   local s=${PIPESTATUS[0]}; [ "$s" = 0 ] || { echo "=== step $n rc=$s"; rc=$s; }
   [ "$s" = 124 ] && exit 124
   return 0
 }
+if [ "${STEPS:-full}" = prof2 ]; then
+  # second pass (run 1453): device-profiler chunks of 5 views (11 renders, one profiler read), as t506
+  step u0 chunk U0 0 5
+  for v in 0 5 10 15 20 25; do step p$v tracy P$v $v $((v + 5)); done
+  for v in 0 10 20; do step m$v tracy M$v $v $((v + 5)) GSPLAT_TT_MATCULL_PROF=1; done
+  step x0 tracy X0 0 5 GSPLAT_TT_K2_PROF=1 GSPLAT_TT_OL_EMIT_PROF=1
+  step r4 b2b 4
+else
 step warm b2b 0
 step r1 b2b 1
 step counts counts
@@ -55,6 +63,7 @@ step r2 b2b 2
 step m0 tracy M0 0 10 GSPLAT_TT_MATCULL_PROF=1
 step x0 tracy X0 0 5 GSPLAT_TT_K2_PROF=1 GSPLAT_TT_OL_EMIT_PROF=1
 step r3 b2b 3
+fi
 scp -q -o BatchMode=yes "$H:$T/tmp/t528/run-*.log" "$H:$T/tmp/t528/T-*.log" "$H:$T/tmp/t528/dev-*.csv.gz" "$O/" || rc=4
 echo "=== drive t528 done rc=$rc $(TZ=America/Los_Angeles date)"
 exit $rc
