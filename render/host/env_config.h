@@ -180,6 +180,12 @@ inline bool ol_emit_town() {
     static const bool v = env_uint("GSPLAT_TT_OL_EMIT_TOWN", 1u) != 0u && ol_ring() != 0u;
     return v;
 }
+// Task #546 (B4' step 3a): town owners, 3 (default: all TRISCs) or 1 (TRISC 2
+// only, the variant the fused mat+blend program hosts). Same output either way.
+inline unsigned int ol_town_nt() {
+    static const unsigned int v = env_uint("GSPLAT_TT_OL_TOWN_NT", 3u) == 1u ? 1u : 3u;
+    return v;
+}
 
 
 // Task #188 blend claim knobs (docs/blend-tail-t183). Late claim: the blend

@@ -908,7 +908,7 @@ void kernel_main() {
         for (uint32_t i = 0; i < 8u; i++) asm volatile("nop");
     };
     if (town) {
-        uint32_t q_rd[tw::NT] = {0u, 0u, 0u};
+        uint32_t q_rd[tw::NT] = {};
         // The TRISCs' run words: write the runs, wait until they left L1,
         // then mark the tiles' rings free and the words consumed.
         auto service = [&]() -> bool {
@@ -951,9 +951,10 @@ void kernel_main() {
         auto min_done = [&]() -> uint32_t {
             invalidate_l1_cache();
             uint32_t m = twh[tw::H_DONE];
-            const uint32_t d1 = twh[tw::H_DONE + 4u], d2 = twh[tw::H_DONE + 8u];
-            if (d1 < m) m = d1;
-            if (d2 < m) m = d2;
+            for (uint32_t i = 1; i < tw::NT; i++) {
+                const uint32_t d = twh[tw::H_DONE + 4u * i];
+                if (d < m) m = d;
+            }
             return m;
         };
         // Batch k's lists in slot s: per pair t << 16 | the byte offset of its
@@ -969,7 +970,8 @@ void kernel_main() {
             uint32_t n_el = batch_pages(k) * ELEMS_PER_PAGE;
             if (p0 + n_el > P) n_el = (P > p0) ? P - p0 : 0u;
             uint32_t* const l0 = reinterpret_cast<uint32_t*>(twn + tw::list_off(s, 0u));
-            uint32_t* lw[tw::NT] = {l0, l0 + tw::LIST_MAX, l0 + 2u * tw::LIST_MAX};
+            uint32_t* lw[tw::NT];
+            for (uint32_t i = 0; i < tw::NT; i++) lw[i] = l0 + i * tw::LIST_MAX;
             const uint32_t ba = bk_a[s], bn = bk_n[s];
             uint32_t jl = 0, jr = 0, off = 0, npg = 0;
             int32_t g_c = -1;
@@ -1001,9 +1003,9 @@ void kernel_main() {
                 *lw[tw::owner(t)]++ = tw::entry(t, off + brec_ho(static_cast<uint32_t>(g)));
             }
             auto desc = reinterpret_cast<volatile uint32_t*>(twn + tw::desc_off(s));
-            desc[0] = static_cast<uint32_t>(lw[0] - l0);
-            desc[1] = static_cast<uint32_t>(lw[1] - (l0 + tw::LIST_MAX));
-            desc[2] = static_cast<uint32_t>(lw[2] - (l0 + 2u * tw::LIST_MAX));
+            for (uint32_t i = 0; i < 3u; i++) {
+                desc[i] = i < tw::NT ? static_cast<uint32_t>(lw[i] - (l0 + i * tw::LIST_MAX)) : 0u;
+            }
             desc[3] = rec_cache_l1 + s * BREC_HALF * PAGE_BYTES;
             return true;
         };
@@ -1223,10 +1225,9 @@ void kernel_main() {
         EP_T0(ep_t_fin);
         for (;;) {
             invalidate_l1_cache();
-            if (twh[tw::H_FIN] == tw::MAGIC && twh[tw::H_FIN + 1u] == tw::MAGIC &&
-                twh[tw::H_FIN + 2u] == tw::MAGIC) {
-                break;
-            }
+            bool fin = true;
+            for (uint32_t i = 0; i < tw::NT; i++) fin = fin && twh[tw::H_FIN + i] == tw::MAGIC;
+            if (fin) break;
             tw_spin();
         }
         twh[tw::H_GO] = 0u;

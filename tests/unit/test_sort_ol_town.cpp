@@ -5,8 +5,9 @@
 //
 //   c++ -O2 -std=c++17 -Irender/kernels/dataflow tests/unit/test_sort_ol_town.cpp
 //     -o /tmp/t_town && /tmp/t_town
+//   (task #546: also with -DOL_TOWN_NT=1u, the TRISC-2-only town)
 //
-//  - owner(t) == t % 3, the entry / run word encodings round-trip, the mailbox
+//  - owner(t) == t % NT, the entry / run word encodings round-trip, the mailbox
 //    regions do not overlap and fit BYTES;
 //  - the list builder's bulk page offsets equal the bank-major slot of issue_brec
 //    for every bank count 1..16, also when g steps back inside the run;
@@ -18,6 +19,7 @@
 //    changes between a run's write issue and its flush; run length R and ring
 //    depth D (task #479: D / R runs of a tile in flight), also with bursts into
 //    few tiles (Morton-ordered scenes).
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <cstdio>
@@ -27,6 +29,10 @@
 
 #include "sort_ol_town.h"
 #include "sort_onelaunch_algo.h"
+
+#ifdef OL_TOWN_NT
+static_assert(sort_ol_town::NT == OL_TOWN_NT, "sort_ol_town.h honours OL_TOWN_NT (task #546)");
+#endif
 
 namespace tw = sort_ol_town;
 
@@ -59,17 +65,17 @@ struct Sim {
         std::vector<uint32_t> cur, startp, fl;
         std::vector<std::array<uint64_t, DMAX>> ring;
         std::vector<std::vector<uint32_t>> slot_mem;  // page index in slot -> g
-        std::vector<std::array<std::vector<uint32_t>, 3>> lists;
+        std::vector<std::array<std::vector<uint32_t>, tw::NT>> lists;
         std::vector<uint32_t> bkn;
-        std::array<std::vector<uint32_t>, 3> q;
-        std::array<uint32_t, 3> qwp{}, qrd{}, done{};
+        std::array<std::vector<uint32_t>, tw::NT> q;
+        std::array<uint32_t, tw::NT> qwp{}, qrd{}, done{};
         uint32_t ready = 0;
         // mover: phase 0 loop top, 1 slot wait, 2 tail wait, 3 flush pending, 4 finished
         uint32_t mk = 0, phase = 0, after_flush = 0;
-        std::array<uint32_t, 3> q_rd{}, wp{};
+        std::array<uint32_t, tw::NT> q_rd{}, wp{};
         std::vector<Write> inflight;
         // TRISC side, per TRISC
-        std::array<uint32_t, 3> tk{}, tj{}, tqwp{};
+        std::array<uint32_t, tw::NT> tk{}, tj{}, tqwp{};
     };
     std::array<Stream, 2> st;
 
@@ -142,10 +148,10 @@ struct Sim {
     // One mover action. Returns false once finished.
     bool mover_step(uint32_t m) {
         Stream& s = st[m];
-        auto min_done = [&]() { return std::min(s.done[0], std::min(s.done[1], s.done[2])); };
+        auto min_done = [&]() { return *std::min_element(s.done.begin(), s.done.end()); };
         auto service_issue = [&](uint32_t next_phase) -> bool {
             bool any = false;
-            for (uint32_t i = 0; i < 3; i++) {
+            for (uint32_t i = 0; i < tw::NT; i++) {
                 s.wp[i] = s.qwp[i];
                 for (uint32_t j = s.q_rd[i]; j != s.wp[i]; j++) {
                     const uint32_t w = s.q[i][j % qcap];
@@ -204,7 +210,7 @@ struct Sim {
                         bucket[wr.t * cap + c] = wr.snap[c - wr.s0];
                     }
                 }
-                for (uint32_t i = 0; i < 3; i++) {
+                for (uint32_t i = 0; i < tw::NT; i++) {
                     for (uint32_t j = s.q_rd[i]; j != s.wp[i]; j++) {
                         const uint32_t w = s.q[i][j % qcap];
                         s.fl[tw::run_tile(w)] = tw::run_last(w) + 1u;
@@ -286,12 +292,12 @@ struct Sim {
             for (auto& qq : s.q) qq.assign(qcap, 0);
             if (s.nb) issue(s, m, 0);
         }
-        std::array<uint32_t, 3> rr{};
+        std::array<uint32_t, tw::NT> rr{};
         uint64_t steps = 0, idle = 0;
         for (;;) {
             const bool fin = st[0].phase == 4 && st[1].phase == 4;
             if (fin) break;
-            const uint32_t who = rng() % 5u;
+            const uint32_t who = rng() % (2u + tw::NT);
             bool prog;
             if (who < 2) prog = mover_step(who);
             else prog = trisc_step(who - 2, rr[who - 2]);
@@ -307,7 +313,7 @@ struct Sim {
 
 int main() {
     // encodings and layout
-    for (uint32_t tt = 0; tt < 65536u; tt++) CHECK(tw::owner(tt) == tt % 3u);
+    for (uint32_t tt = 0; tt < 65536u; tt++) CHECK(tw::owner(tt) == tt % tw::NT);
     for (uint32_t tt : {0u, 1u, 513u, 1023u}) {
         for (uint32_t c : {0u, 7u, 4095u, (1u << 22) - 1u}) {
             CHECK(tw::run_tile(tw::run_word(tt, c)) == tt && tw::run_last(tw::run_word(tt, c)) == c);

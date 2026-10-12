@@ -35,6 +35,9 @@
 #ifndef OL_EMIT_PROF
 #define OL_EMIT_PROF 0
 #endif
+#ifndef OL_TOWN_ADDR_RTA
+#define OL_TOWN_ADDR_RTA 0  // task #546: mailbox addresses from runtime args (NT = 1 only)
+#endif
 
 namespace {
 
@@ -185,8 +188,32 @@ void process(Stream& sm, uint32_t me, uint32_t s) {
 
 }  // namespace
 
+#if OL_TOWN_NT == 1 && !OL_TOWN_ADDR_RTA
+// Base address of a CB this RISC never moves (PACK has write, UNPACK read pointers).
+template <typename Iface>
+inline uint32_t cb_base(const Iface& c) {
+    return (c.fifo_limit - c.fifo_size) << cb_addr_shift;
+}
+#endif
+
 void kernel_main() {
     uint32_t me = 0, a0 = 0, a1 = 0;
+#if OL_TOWN_NT == 1
+    // Task #546: PACK owns every tile; UNPACK and MATH have nothing to do.
+    UNPACK(({ return; }));
+    MATH(({ return; }));
+#if OL_TOWN_ADDR_RTA
+    PACK(({
+        a0 = get_arg_val<uint32_t>(0);
+        a1 = get_arg_val<uint32_t>(1);
+    }));
+#else
+    PACK(({
+        a0 = cb_base(get_local_cb_interface(CB_TWN + 16u));
+        a1 = cb_base(get_local_cb_interface(CB_TWN));
+    }));
+#endif
+#else
     UNPACK(({
         me = 0u;
         a0 = get_local_cb_interface(CB_TWN + 16u).fifo_rd_ptr << 4;  // mover 0 (BRISC)
@@ -206,6 +233,7 @@ void kernel_main() {
         a0 = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
         a1 = ckernel::mailbox_read(ckernel::ThreadId::UnpackThreadId);
     }));
+#endif
 #if OL_EMIT_PROF
     for (uint32_t i = 0; i < TP_N; i++) g_tp[i] = 0u;
     g_tp[TP_ME] = me;
@@ -214,6 +242,7 @@ void kernel_main() {
 #endif
     Stream sm[2] = {{reinterpret_cast<volatile uint32_t*>(a0), a0, 0u, 0u, 0u, 0u, QCAP},
                     {reinterpret_cast<volatile uint32_t*>(a1), a1, 0u, 0u, 0u, 0u, QCAP}};
+    if (a1 == 0u) sm[1].st = 2u;  // one stream (OL_TOWN_ADDR_RTA, fused program)
     // Before GO: no zone (the movers' count, prefix and barriers run first).
     for (;;) {
         bool any = false;
@@ -227,7 +256,7 @@ void kernel_main() {
             s.st = 1u;
             any = true;
         }
-        if (sm[0].st != 0u || sm[1].st != 0u) break;
+        if (sm[0].st == 1u || sm[1].st == 1u) break;
         if (!any) spin_pause();
     }
 #if OL_EMIT_PROF

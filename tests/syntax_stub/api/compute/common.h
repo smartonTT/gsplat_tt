@@ -18,6 +18,7 @@
 #endif
 struct LocalCBInterface { uint32_t fifo_size, fifo_limit, fifo_page_size, fifo_num_pages, fifo_rd_ptr, fifo_wr_ptr; };
 LocalCBInterface& get_local_cb_interface(uint32_t cb);
+constexpr uint32_t cb_addr_shift = 4;
 namespace ckernel {
 enum class ThreadId : uint32_t { UnpackThreadId = 0, MathThreadId = 1, PackThreadId = 2 };
 void mailbox_write(ThreadId, uint32_t);

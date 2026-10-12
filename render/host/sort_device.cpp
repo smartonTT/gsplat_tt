@@ -1030,9 +1030,9 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         logged = true;
         std::fprintf(stderr,
                      "[SORT] ONELAUNCH v2 OL_PB=%u OL_RING=%u OL_RING_DEPTH=%u OL_WIN_PAGES=%u OL_MAT_SELECT=%u "
-                     "OL_BREC_BULK=%u OL_EMIT_TOWN=%u cb_bytes/mover=%u shared=%u\n",
+                     "OL_BREC_BULK=%u OL_EMIT_TOWN=%u OL_TOWN_NT=%u cb_bytes/mover=%u shared=%u\n",
                      pb, ring, depth, win, gsplat_tt::env_config::ol_mat_select() ? 1u : 0u, brec_bulk ? 1u : 0u,
-                     town ? 1u : 0u, mover_bytes,
+                     town ? 1u : 0u, gsplat_tt::env_config::ol_town_nt(), mover_bytes,
                      BIN_ROW_BYTES + (2u * num_cores + 2u) * PAGE_BYTES);
     }
     for (uint32_t& sem : ctx.ol_sem) sem = CreateSemaphore(program, cores, 0);
@@ -1072,6 +1072,12 @@ static void build_program_sort_onelaunch(SortDeviceContext& ctx) {
         defines["OL_EMIT_TOWN"] = "1";
         std::map<std::string, std::string> tdef = {{"OL_RING", std::to_string(ring) + "u"},
                                                     {"OL_RING_DEPTH", std::to_string(depth) + "u"}};
+        // Task #546: GSPLAT_TT_OL_TOWN_NT=1 runs the town on TRISC 2 only (the
+        // mailbox CB keeps the NT = 3 size, which is larger).
+        if (gsplat_tt::env_config::ol_town_nt() == 1u) {
+            defines["OL_TOWN_NT"] = "1u";
+            tdef["OL_TOWN_NT"] = "1u";
+        }
         if (emit_prof) tdef["OL_EMIT_PROF"] = "1";
         if (rec32) tdef["PFWC_REC32"] = "1";
         CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/sort_ol_town_compute.cpp", cores,

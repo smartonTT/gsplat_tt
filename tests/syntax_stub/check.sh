@@ -25,6 +25,7 @@ chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_BULK=0" $DF -DEMIT_PUBOC=1u -DOL_P
 chk "sort_bin_onelaunch.cpp v2 PB8 RING8 BREC_HALF256 EMIT_TOWN" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 EMIT_TOWN EMIT_PROF" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 -DOL_EMIT_PROF=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 EMIT_TOWN PFWC_REC32" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 -DPFWC_REC32=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
+chk "sort_bin_onelaunch.cpp v2 EMIT_TOWN PFWC_REC32 TOWN_NT1" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DOL_EMIT_TOWN=1 -DPFWC_REC32=1 -DOL_TOWN_NT=1u render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_bin_onelaunch.cpp v2 PFWC_REC32 no TOWN" $DF -DEMIT_PUBOC=1u -DOL_PB=8u -DOL_RING=8u -DOL_BREC_BULK=1 -DOL_BREC_HALF=256u -DPFWC_REC32=1 render/kernels/dataflow/sort_bin_onelaunch.cpp
 chk "sort_subchunk_materialize.cpp" $DF render/kernels/dataflow/sort_subchunk_materialize.cpp
 chk "sort_subchunk_materialize.cpp SORT_ONELAUNCH" $DF -DSORT_ONELAUNCH=1 render/kernels/dataflow/sort_subchunk_materialize.cpp
@@ -64,6 +65,8 @@ for tr in TRISC_UNPACK TRISC_MATH TRISC_PACK; do
   chk "sort_ol_town_compute.cpp $tr" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u render/kernels/compute/sort_ol_town_compute.cpp
   chk "sort_ol_town_compute.cpp $tr EMIT_PROF" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DOL_EMIT_PROF=1 render/kernels/compute/sort_ol_town_compute.cpp
   chk "sort_ol_town_compute.cpp $tr PFWC_REC32" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DPFWC_REC32=1 render/kernels/compute/sort_ol_town_compute.cpp
+  chk "sort_ol_town_compute.cpp $tr TOWN_NT1" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DOL_TOWN_NT=1u render/kernels/compute/sort_ol_town_compute.cpp
+  chk "sort_ol_town_compute.cpp $tr TOWN_NT1 ADDR_RTA" ${CP/-DTRISC_MATH=1/} -D$tr=1 -DOL_RING=8u -DOL_TOWN_NT=1u -DOL_TOWN_ADDR_RTA=1 render/kernels/compute/sort_ol_town_compute.cpp
 done
 chk "project_pfwc_compute.cpp PFWC_VIS PFWC_PRECULL PRECULL_PC PFWC_WSPLIT" $CP -DPFWC_VIS=1 -DPFWC_PRECULL=1 -DPRECULL_PC=1 -DPFWC_WSPLIT=1 render/kernels/compute/project_pfwc_compute.cpp
 chk "project_pfwc_compute.cpp PFWC_COVCAM_SFPU" $CP -DPFWC_COVCAM_SFPU=1 render/kernels/compute/project_pfwc_compute.cpp

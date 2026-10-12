@@ -24,6 +24,13 @@
 //            TRISC starts a run (c % R == 0) only once fl[t] == c.
 // The mover writes GO last; at its end, after every TRISC finished all its
 // batches, it clears GO, so the next launch's TRISCs wait for the new one.
+//
+// Task #546 (B4' step 3a): OL_TOWN_NT=1 (host: GSPLAT_TT_OL_TOWN_NT=1, default 3)
+// gives every tile to one owner, TRISC 2 (PACK); TRISC 0 and 1 return at once,
+// so the town fits next to blend's unpack/math in the fused mat+blend program.
+// OL_TOWN_ADDR_RTA=1: PACK takes the two mailbox addresses from runtime args 0
+// (mover 0) and 1 (mover 1, 0 = none) instead of the CB_TWN configs (the fused
+// program places the mailbox in the phased L1 arena, not in a CB of its own).
 #pragma once
 
 #include <cstdint>
@@ -31,7 +38,10 @@
 namespace sort_ol_town {
 
 constexpr uint32_t CB_TWN = 14;  // + 16 for mover 0 (BRISC)
-constexpr uint32_t NT = 3;       // owners: TRISC 0 (UNPACK), 1 (MATH), 2 (PACK)
+#ifndef OL_TOWN_NT
+#define OL_TOWN_NT 3u
+#endif
+constexpr uint32_t NT = OL_TOWN_NT;  // owners: TRISC 0 (UNPACK), 1 (MATH), 2 (PACK); NT = 1: PACK only
 constexpr uint32_t SLOTS = 4;    // batch / blendrec slots per stream
 constexpr uint32_t LIST_MAX = 128;  // entries per list (>= OL_PB * 16 records per batch)
 constexpr uint32_t QCAP = 256;      // run words per queue (power of two)
@@ -59,13 +69,14 @@ constexpr uint32_t desc_off(uint32_t s) { return DESC_OFF + s * 16u; }
 constexpr uint32_t list_off(uint32_t s, uint32_t i) { return LIST_OFF + (s * NT + i) * LIST_MAX * 4u; }
 constexpr uint32_t q_off(uint32_t i) { return Q_OFF + i * QCAP * 4u; }
 
-// t % 3 for t < 2^16.
-inline uint32_t owner(uint32_t t) { return t - 3u * ((t * 0xAAABu) >> 17); }
+// t % NT for t < 2^16.
+inline uint32_t owner(uint32_t t) { return NT == 1u ? 0u : t - 3u * ((t * 0xAAABu) >> 17); }
 constexpr uint32_t entry(uint32_t t, uint32_t page_off) { return (t << 16) | page_off; }
 constexpr uint32_t run_word(uint32_t t, uint32_t c) { return t | (c << 10); }
 constexpr uint32_t run_tile(uint32_t w) { return w & 1023u; }
 constexpr uint32_t run_last(uint32_t w) { return w >> 10; }
 
+static_assert(NT == 1u || NT == 3u, "OL_TOWN_NT: 1 or 3");
 static_assert((QCAP & (QCAP - 1u)) == 0u, "QCAP: power of two");
 static_assert(TILES <= 1024u, "run words hold t in 10 bits");
 
