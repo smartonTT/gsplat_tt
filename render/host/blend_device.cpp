@@ -475,14 +475,10 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
         d["BLEND_RTA_BASE"] = std::to_string(mbf::kDmRtaBase);
         if (b4a_shadow_enabled()) {
             // Task #542 (B4a shadow): BRISC reruns this view's K2 into scratch
-            // outputs, with its raw scratch CB and 8 accessors after ours.
-            constexpr uint32_t kB4aCb = 62;
-            constexpr uint32_t kB4aBytes = (128u + 6u + 128u) * 64u + 64u;
-            CircularBufferConfig c(kB4aBytes, {{kB4aCb, DataFormat::UInt32}});
-            c.set_page_size(kB4aCb, kB4aBytes);
-            CreateCircularBuffer(program, cores, c);
+            // outputs, with its raw scratch CB (mbf::kB4aCb, aliased in
+            // add_mat_part) and 8 accessors after ours.
             d["B4A_K2"] = "1";
-            d["TA_CB_OFFSET"] = std::to_string(kB4aCb);
+            d["TA_CB_OFFSET"] = std::to_string(mbf::kB4aCb);
             d["K2_CTA_BASE"] = std::to_string(ct.size());
             d["K2_RTA_BASE"] = std::to_string(kB4aRtaBase);
             for (int i = 0; i < 8; i++) TensorAccessorArgs::create_dram_interleaved().append_to(ct);
