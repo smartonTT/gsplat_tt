@@ -1,0 +1,66 @@
+default arm: 30 views; nt1 arm: 30 views (warmup frames dropped)
+
+zone spans, default arm (ms, median over views; first start -> last end over cores/RISCs):
+  BRISC-FW                   9.179
+  BRISC-KERNEL               9.178
+  NCRISC-FW                  8.891
+  NCRISC-KERNEL              8.890
+  TRISC-FW                   9.047
+  TRISC-KERNEL               9.046
+  k2_pairs                   0.647
+  k2_rows                    0.267
+  k2_trisc                   0.536
+  mat_cull_mask              2.046
+  pfwc                       1.463
+  rd_l1_bulk                 3.812
+  sort_ol_barrier            0.150
+  sort_ol_emit               1.388
+  sort_ol_fill               0.137
+  sort_ol_fillb              0.150
+  sort_ol_prefix             0.085
+  sort_ol_town               1.302
+  sort_subchunk_mat          2.045
+  tile_blend_load            4.007
+  tile_blend_sfpu            4.104
+  sort program (sort_ol_*)   1.488   n=  30 min 1.198 p10 1.226 med 1.488 mean 1.455 p90 1.646 max 1.684
+
+TRISC 2 in fused mat+blend, default arm: 3300 (view, core) launches, 110 cores. ms per core per view:
+  tot       n=3300 min 2.015 p10 3.116 med 3.725 mean 3.671 p90 4.264 max 4.769
+  busy      n=3300 min 1.984 p10 3.006 med 3.693 mean 3.617 p90 4.238 max 4.573
+  pre       n=3300 min 0.000 p10 0.000 med 0.000 mean 0.002 p90 0.006 max 0.051
+  wait      n=3300 min 0.001 p10 0.001 med 0.010 mean 0.052 p90 0.115 max 1.086
+  wcnt      n=3300 min 0.000 p10 0.000 med 0.008 mean 0.044 p90 0.078 max 1.076
+  wbulk     n=3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  wrba      n=3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  wmath     n=3300 min 0.000 p10 0.000 med 0.000 mean 0.000 p90 0.000 max 0.000
+  wres      n=3300 min 0.000 p10 0.001 med 0.001 mean 0.008 p90 0.008 max 0.390
+  l1k       n=3300 min 0.000 p10 0.000 med 0.009 mean 0.051 p90 0.113 max 1.085
+  l4k       n=3300 min 0.000 p10 0.000 med 0.009 mean 0.051 p90 0.113 max 1.085
+  l16k      n=3300 min 0.000 p10 0.000 med 0.000 mean 0.049 p90 0.113 max 1.076
+  l64k      n=3300 min 0.000 p10 0.000 med 0.000 mean 0.041 p90 0.110 max 1.076
+  tail      n=3300 min 0.000 p10 0.043 med 0.140 mean 0.145 p90 0.251 max 0.342
+  mat_tot   n=3300 min 0.936 p10 1.079 med 1.418 mean 1.420 p90 1.695 max 2.154
+  mat_wait  n=3300 min 0.301 p10 0.586 med 0.794 mean 0.763 p90 0.931 max 0.993
+  nw        n=3300 min 95.000 p10 143.000 med 178.000 mean 175.975 p90 207.000 max 250.000  (counts)
+  nt        n=3300 min 5.000 p10 8.000 med 9.000 mean 9.309 p90 10.000 max 12.000  (counts)
+  nsc       n=3300 min 5.000 p10 9.000 med 10.000 mean 10.022 p90 11.000 max 13.000  (counts)
+  nrb       n=3300 min 17.000 p10 32.000 med 43.000 mean 42.334 p90 52.000 max 67.000  (counts)
+  per-core (median over views) blend idle = wait + tail:
+    n= 110 min 0.104 p10 0.137 med 0.167 mean 0.170 p90 0.202 max 0.252
+
+NT=1 town (TRISC 2 only) per core per view, nt1 arm: 3300 launches, 110 cores:
+  net       n=3300 min 2.046 p10 2.533 med 3.270 mean 3.182 p90 3.822 max 4.045
+  busy      n=3300 min 2.065 p10 2.548 med 3.287 mean 3.200 p90 3.840 max 4.062
+  tot       n=3300 min 2.214 p10 2.684 med 3.450 mean 3.356 p90 4.003 max 4.213
+  rec       n=3300 min 16096.000 p10 19200.000 med 24640.000 mean 24001.069 p90 28644.800 max 30160.000  (records)
+  per-batch net us: n=3300 min 15.931 p10 16.622 med 16.919 mean 16.876 p90 17.063 max 17.256
+  cores: blend 110, sort 110, both 110, sort-only 0
+  sort_ol_town span NT=1 (ms): n=  30 min 2.593 p10 2.664 med 3.470 mean 3.366 p90 3.971 max 4.089
+
+projection: extension of mat+blend(N) when core c also runs its NT=1 town work (net):
+  hide = wait +tail: extension ms/view n=  30 min 2.304 p10 2.476 med 3.317 mean 3.209 p90 3.834 max 4.004; hidden fraction per core median 0.05
+  hide = l1k  +tail: extension ms/view n=  30 min 2.306 p10 2.477 med 3.319 mean 3.211 p90 3.835 max 4.005; hidden fraction per core median 0.05
+  hide = l4k  +tail: extension ms/view n=  30 min 2.309 p10 2.477 med 3.319 mean 3.211 p90 3.835 max 4.005; hidden fraction per core median 0.05
+  hide = l16k +tail: extension ms/view n=  30 min 2.309 p10 2.477 med 3.319 mean 3.211 p90 3.835 max 4.005; hidden fraction per core median 0.05
+  hide = l64k +tail: extension ms/view n=  30 min 2.321 p10 2.477 med 3.328 mean 3.220 p90 3.855 max 4.005; hidden fraction per core median 0.05
+  hide = none +tail: extension ms/view n=  30 min 2.571 p10 2.637 med 3.433 mean 3.333 p90 3.932 max 4.045; hidden fraction per core median 0.00

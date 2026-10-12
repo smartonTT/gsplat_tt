@@ -51,7 +51,7 @@ grep -E "^(===|run rc|VIEWS|ALL_|SHOT|SHOT_FAIL)" "$O/shot.out"; echo "shot rc=$
 [ $s = 0 ] || rc=5
 step b2b 590 docs/b4-step3a-t546/remote_ab.sh 1 b2b nt3
 fi
-for arm in def nt1; do
+for arm in ${ARMS:-def nt1}; do
   for a in 0 10 20; do step $arm-c$a 590 $D/remote_tracy.sh $arm $a; done
 done
 scp -q -o BatchMode=yes "$H:$T/tmp/t550/*.csv.gz" "$H:$T/tmp/t550/*.log" "$O/" || rc=4

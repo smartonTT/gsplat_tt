@@ -28,7 +28,7 @@ from stitch_device_csv import segment_frames  # noqa: E402
 
 MHZ = 1350.0
 DATA, ZONE, TYPE, T_COL = 6, 10, 11, 5
-T2 = "tot pre wcnt wbulk wrba wmath wres l1k l4k l16k l64k nw nt nsc nrb".split()
+T2 = "tot pre wcnt wbulk wrba wmath wres l1k l4k l16k l64k nw nt nsc nrb wdrn".split()
 TOWN = "tot go proc wfl wq rdy rec run nb ng me".split()
 
 
@@ -127,18 +127,18 @@ def main():
         for c, t in v["t2"].items():
             if "tot" not in t:
                 continue
-            w = sum(t[k] for k in ("wcnt", "wbulk", "wrba", "wmath", "wres"))
+            w = sum(t.get(k, 0) for k in ("wcnt", "wbulk", "wrba", "wmath", "wres", "wdrn"))
             fz = v["fz"].get(c, {})
             matw = sum(fz.get(k, 0) for k in ("mbw", "regw", "patchw"))
             rows.append(dict(view=vi, core=c, tot=ms(t["tot"]), pre=ms(t["pre"]), wait=ms(w),
                              busy=ms(t["tot"] - t["pre"] - w), **{k: ms(t[k]) for k in T2[2:11] if k != "nw"},
-                             nw=t["nw"], nt=t["nt"], nsc=t["nsc"], nrb=t["nrb"],
+                             wdrn=ms(t.get("wdrn", 0)), nw=t["nw"], nt=t["nt"], nsc=t["nsc"], nrb=t["nrb"],
                              tail=ms(pend - ends.get(c, pend)), mat_tot=ms(fz.get("tot", 0)), mat_wait=ms(matw)))
     if not rows:
         sys.exit("no t2_pc markers: capture with GSPLAT_TT_T2_PROF=1 under the device profiler")
     pr(f"\nTRISC 2 in fused mat+blend, default arm: {len(rows)} (view, core) launches, "
        f"{len({r['core'] for r in rows})} cores. ms per core per view:")
-    for k in ("tot", "busy", "pre", "wait", "wcnt", "wbulk", "wrba", "wmath", "wres", "l1k", "l4k", "l16k", "l64k",
+    for k in ("tot", "busy", "pre", "wait", "wcnt", "wbulk", "wrba", "wmath", "wres", "wdrn", "l1k", "l4k", "l16k", "l64k",
               "tail", "mat_tot", "mat_wait"):
         pr(f"  {k:9s} {stats([r[k] for r in rows])}")
     for k in ("nw", "nt", "nsc", "nrb"):
@@ -178,18 +178,18 @@ def main():
         for r in rows:
             blend_by[r["view"]][r["core"]] = r
         pr("\nprojection: extension of mat+blend(N) when core c also runs its NT=1 town work (net):")
-        for g in ("wait", "l1k", "l4k", "l16k", "l64k", "none"):
+        for g in ("wait", "l1k", "l4k", "l16k", "l64k", "none", "wait+mat"):
             ext = []
             hid = []
             for vi in sorted(set(sort_by) & set(blend_by)):
                 late = []
                 for c, s in sort_by[vi].items():
                     b = blend_by[vi].get(c)
-                    hide = (0.0 if g == "none" else b[g] + b["tail"]) if b else 0.0
+                    hide = (0.0 if g == "none" else (b["wait"] + b["mat_wait"] if g == "wait+mat" else b[g]) + b["tail"]) if b else 0.0
                     late.append(max(0.0, s - hide))
                     hid.append(min(s, hide) / s if s > 0 else 1.0)
                 ext.append(max(late) if late else 0.0)
-            pr(f"  hide = {g:5s}+tail: extension ms/view {stats(ext)}; hidden fraction per core median {np.median(hid):.2f}")
+            pr(f"  hide = {g:8s}+tail: extension ms/view {stats(ext)}; hidden fraction per core median {np.median(hid):.2f}")
     if a.out:
         os.makedirs(a.out, exist_ok=True)
         with open(os.path.join(a.out, "ana550.txt"), "w") as f:

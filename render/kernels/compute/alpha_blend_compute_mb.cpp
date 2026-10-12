@@ -522,7 +522,7 @@ inline void blend_stage_floor() {
 #if defined(T2_PROF) && T2_PROF && defined(PROFILE_KERNEL) && defined(TRISC_PACK)
 enum : uint32_t {
     T2_TOT, T2_PRE, T2_WCNT, T2_WBULK, T2_WRBA, T2_WMATH, T2_WRES,
-    T2_L1K, T2_L4K, T2_L16K, T2_L64K, T2_NW, T2_NT, T2_NSC, T2_NRB, T2_N
+    T2_L1K, T2_L4K, T2_L16K, T2_L64K, T2_NW, T2_NT, T2_NSC, T2_NRB, T2_WDRN, T2_N
 };
 uint32_t g_t2[T2_N];
 inline uint32_t t2_now() { return reinterpret_cast<volatile tt_reg_ptr uint32_t*>(RISCV_DEBUG_REG_WALL_CLOCK_L)[0]; }
@@ -535,11 +535,25 @@ inline void t2_wait(uint32_t i, uint32_t t0) {
     if (d >= 16384u) g_t2[T2_L16K] += d;
     if (d >= 65536u) g_t2[T2_L64K] += d;
 }
+// tile_regs_wait() is a Tensix SEMWAIT: the RISC-V does not block there but later, on a full
+// instruction FIFO inside pack_tile, so a timer around it reads ~0. T2_MATHWAIT makes the RISC-V
+// itself wait: drain this thread's Tensix pipe (WDRN: the previous pack/release still executing),
+// then poll the MATH_PACK semaphore (WMATH: MATH not done yet). Both are RISC-V idle time.
+#define T2_MATHWAIT()                                                                   \
+    do {                                                                                \
+        const uint32_t t2d = t2_now();                                                  \
+        ckernel::tensix_sync();                                                         \
+        t2_wait(T2_WDRN, t2d);                                                          \
+        const uint32_t t2m = t2_now();                                                  \
+        while (ckernel::semaphore_read(ckernel::semaphore::MATH_PACK) == 0) {}          \
+        t2_wait(T2_WMATH, t2m);                                                         \
+    } while (0)
 #define T2_T0(v) const uint32_t v = t2_now()
 #define T2_W(i, t0) t2_wait(i, t0)
 #define T2_INC(i) (++g_t2[i])
 #define T2_SET(i, v) (g_t2[i] = (v))
 #else
+#define T2_MATHWAIT() ((void)0)
 #define T2_T0(v)
 #define T2_W(i, t0) ((void)0)
 #define T2_INC(i) ((void)0)
@@ -1043,9 +1057,8 @@ inline void blend_t_readback(uint32_t& live_mb_mask) {
     MATH((_llk_math_eltwise_unary_sfpu_done_()));    // drain SFPU writes into dest
     tile_regs_commit();                               // MATH: dest section done (no zero)
     T2_INC(T2_NRB);
-    T2_T0(t2a);
+    T2_MATHWAIT();
     tile_regs_wait();                                 // PACK: wait for math done
-    T2_W(T2_WMATH, t2a);
     T2_T0(t2b);
     cb_reserve_back(CB_T_RB, 1);                       // PACK: reserve scratch slot
     T2_W(T2_WRES, t2b);
@@ -1806,9 +1819,8 @@ void kernel_main() {
                 BLEND_PZ("cmp_emit");
                 TC_PART0();
                 tile_regs_commit();
-                T2_T0(t2a);
+                T2_MATHWAIT();
                 tile_regs_wait();
-                T2_W(T2_WMATH, t2a);
                 T2_T0(t2b);
                 cb_reserve_back(CB_COLOR_OUT, 3);
                 T2_W(T2_WRES, t2b);

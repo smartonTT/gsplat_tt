@@ -15,7 +15,7 @@ case $arm in def) X= ;; nt1) X="GSPLAT_TT_OL_TOWN_NT=1 GSPLAT_TT_OL_EMIT_PROF=1"
 cat > $PR/inner.sh <<IN
 #!/bin/bash
 cd $T; source .venv/bin/activate
-env TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t550-prof GSPLAT_TT_T2_PROF=1 $X \
+env TT_METAL_CACHE_RENDER=/localdev/smarton/.cache/ttmc-gstt2-t550-prof2 GSPLAT_TT_T2_PROF=1 $X \
   GSPLAT_TT_PROFILE_READ_EVERY=11 python3 render/run.py --no-ref --iter-dir t550-$arm-T$a --view-range $a:$b
 IN
 chmod +x $PR/inner.sh
