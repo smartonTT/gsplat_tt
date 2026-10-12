@@ -1,0 +1,63 @@
+=== host bh-33-special-smarton-for-reservation-138447 2026-10-12T16:30:24Z nproc=24 sha=228fd0e11d8bd00c5585bb306f485646c0beb58a
+card=p100a aiclk=1350 load=14.12 12.75 12.52 13/2493 35686
+=== warm off b2b [] 16:30:24 load=14.12
+warm rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.367 fps=106.76 ms_frame_median=9.362 pass_ms_frame=9.356,9.364,9.380,9.379,9.352,9.353,9.361,9.368,9.362,9.356,9.372,9.360,9.364,9.360,9.363,9.349,9.381,9.356,9.408,9.391 check_pass_ms_frame=10
+=== r1-off off b2b [] 16:30:58 load=14.45
+r1-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.375 fps=106.66 ms_frame_median=9.373 pass_ms_frame=9.382,9.358,9.359,9.352,9.351,9.365,9.373,9.380,9.389,9.395,9.394,9.355,9.372,9.361,9.374,9.362,9.413,9.407,9.377,9.384 check_pass_ms_frame=10
+=== r1-rg rg b2b [GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:31:13 load=14.10
+r1-rg rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::pfwc] pfwc deal range: 5989 tiles on 110 cores, weights /localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.372 fps=106.71 ms_frame_median=9.369 pass_ms_frame=9.411,9.365,9.389,9.382,9.390,9.396,9.375,9.373,9.357,9.377,9.360,9.358,9.385,9.361,9.337,9.366,9.374,9.348,9.362,9.366 check_pass_ms_frame=9.
+=== r2-rg rg b2b [GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:31:34 load=13.60
+r2-rg rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::pfwc] pfwc deal range: 5989 tiles on 110 cores, weights /localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.373 fps=106.69 ms_frame_median=9.368 pass_ms_frame=9.391,9.414,9.389,9.375,9.387,9.369,9.357,9.369,9.387,9.367,9.367,9.368,9.352,9.368,9.364,9.360,9.356,9.366,9.360,9.386 check_pass_ms_frame=10
+=== r2-off off b2b [] 16:31:49 load=13.93
+r2-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.369 fps=106.73 ms_frame_median=9.359 pass_ms_frame=9.355,9.351,9.354,9.394,9.360,9.372,9.356,9.356,9.354,9.353,9.377,9.357,9.368,9.478,9.360,9.353,9.369,9.385,9.358,9.373 check_pass_ms_frame=10
+=== r3-off off b2b [] 16:32:03 load=13.88
+r3-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.380 fps=106.61 ms_frame_median=9.372 pass_ms_frame=9.373,9.359,9.358,9.374,9.361,9.361,9.385,9.364,9.356,9.371,9.377,9.358,9.467,9.394,9.394,9.378,9.443,9.393,9.372,9.365 check_pass_ms_frame=10
+=== r3-rg rg b2b [GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:32:18 load=13.82
+r3-rg rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::pfwc] pfwc deal range: 5989 tiles on 110 cores, weights /localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.366 fps=106.77 ms_frame_median=9.366 pass_ms_frame=9.359,9.355,9.351,9.361,9.359,9.347,9.363,9.368,9.375,9.347,9.384,9.373,9.374,9.369,9.368,9.368,9.363,9.377,9.406,9.356 check_pass_ms_frame=10
+=== r4-rg rg b2b [GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:32:33 load=13.06
+r4-rg rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::pfwc] pfwc deal range: 5989 tiles on 110 cores, weights /localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.367 fps=106.75 ms_frame_median=9.365 pass_ms_frame=9.365,9.370,9.370,9.361,9.359,9.365,9.363,9.364,9.358,9.358,9.354,9.361,9.367,9.362,9.410,9.372,9.372,9.369,9.375,9.375 check_pass_ms_frame=10
+=== r4-off off b2b [] 16:32:48 load=13.13
+r4-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.362 fps=106.82 ms_frame_median=9.361 pass_ms_frame=9.371,9.379,9.365,9.360,9.361,9.361,9.366,9.355,9.356,9.354,9.354,9.362,9.364,9.358,9.356,9.379,9.364,9.358,9.363,9.350 check_pass_ms_frame=9.
+=== r5-off off b2b [] 16:33:02 load=13.11
+r5-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.368 fps=106.75 ms_frame_median=9.368 pass_ms_frame=9.413,9.378,9.378,9.386,9.352,9.372,9.374,9.356,9.349,9.356,9.351,9.362,9.374,9.377,9.355,9.355,9.361,9.371,9.365,9.373 check_pass_ms_frame=10
+=== r5-rg rg b2b [GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:33:17 load=13.04
+r5-rg rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::pfwc] pfwc deal range: 5989 tiles on 110 cores, weights /localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt
+B2B scene=bicycle n_views=30 passes=20 warmup=1 drop=no ms_frame=9.361 fps=106.83 ms_frame_median=9.360 pass_ms_frame=9.368,9.360,9.359,9.362,9.357,9.357,9.358,9.358,9.360,9.353,9.375,9.360,9.353,9.363,9.365,9.360,9.355,9.368,9.366,9.356 check_pass_ms_frame=10
+=== dump-off off dump [] 16:33:32 load=13.34
+dump-off rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== dump-rg rg dump [GSPLAT_TT_PFWC_DEAL=range GSPLAT_TT_PFWC_DEAL_W=/localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt] 16:33:48 load=12.64
+dump-rg rc=0
+[DEV] dispatch worker (worker), command queues 2, compute grid 11x10
+[gsplat_tt::pfwc] pfwc deal range: 5989 tiles on 110 cores, weights /localdev/smarton/t517/docs/pfwc-speed-deal-t517/bicycle-w517.txt
+MD5_GOLDEN_OK grid 11x10: list 906e0435 = golden (30/30 views)
+=== summary
+10
+=== bench end rc=0 2026-10-12T16:34:05Z
