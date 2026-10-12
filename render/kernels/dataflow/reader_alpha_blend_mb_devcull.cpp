@@ -109,6 +109,8 @@ inline void mb_cb_commit_fence() {
     asm volatile("fence" ::: "memory");
 }
 
+#include "mv_prof.h"  // task #553 mover counters (no-op unless MV_PROF)
+
 // Task #83: fine per-tile zones for floor attribution (host env
 // GSPLAT_TT_BLEND_PROF=1; compiled out by default).
 #if defined(BLEND_PROF) && BLEND_PROF
@@ -280,7 +282,7 @@ void kernel_main() {
         // space; the first subchunk's reserve below then returns at once.
         {
             BLEND_PZ("rd_bulk_wait");
-            cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+            MV_WRAP(MV_WCB, cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT));
         }
 #endif
         ret_ptr[0] = 0xFFFFFFFFu;
@@ -288,6 +290,7 @@ void kernel_main() {
         noc_fast_atomic_increment<noc_mode, /*program_ret_addr=*/true>(
             noc_index, write_at_cmd_buf, ctr_noc_addr, NOC_UNICAST_WRITE_VC, 1u, 31u,
             false, false, ret_l1);
+        MV_T0(mv_claim);
         noc_async_atomic_barrier();
         uint32_t claim;
         {
@@ -297,6 +300,7 @@ void kernel_main() {
                 claim = ret_ptr[0];
             } while (claim == 0xFFFFFFFFu);
         }
+        MV_W(MV_WNOC, mv_claim);
         if (claim >= total_tiles) {
             break;
         }
@@ -321,11 +325,11 @@ void kernel_main() {
         {
             BLEND_PZ("rd_tid");
             noc_async_read_tile(flat >> 4, tile_ids_acc, tid_scr);
-            noc_async_read_barrier();
+            MV_WRAP(MV_WNOC, noc_async_read_barrier());
         }
         const uint32_t tile_id = reinterpret_cast<volatile uint32_t*>(tid_scr)[flat & 0xFu];
         // Hand the tile id to the writer (output address) before its data.
-        cb_reserve_back(CB_TILE_Q, 1);
+        MV_WRAP(MV_WCB, cb_reserve_back(CB_TILE_Q, 1));
         reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_TILE_Q))[0] = tile_id;
         cb_push_back(CB_TILE_Q, 1);
         const uint32_t tx = tile_id % tiles_x;
@@ -348,13 +352,13 @@ void kernel_main() {
             const uint32_t off = elem0 & 0xF;
             auto rng_ptr = reinterpret_cast<volatile uint32_t*>(scr);
             noc_async_read_tile(page, ranges_acc, scr);
-            noc_async_read_barrier();
+            MV_WRAP(MV_WNOC, noc_async_read_barrier());
             id_start = rng_ptr[off];
             if (off + 1u < 16u) {
                 id_end = rng_ptr[off + 1u];
             } else {
                 noc_async_read_tile(page + 1u, ranges_acc, scr);
-                noc_async_read_barrier();
+                MV_WRAP(MV_WNOC, noc_async_read_barrier());
                 id_end = rng_ptr[0];
             }
         }
@@ -371,7 +375,7 @@ void kernel_main() {
             const uint32_t off = e0 & 0xF;
             const uint32_t scr = get_write_ptr(CB_SCR_IDS);
             noc_async_read_tile(pg, subchunk_meta_acc, scr);
-            noc_async_read_barrier();
+            MV_WRAP(MV_WNOC, noc_async_read_barrier());
             auto smp = reinterpret_cast<volatile uint32_t*>(scr);
             dir_base = smp[off];
             num_subchunks = smp[off + 1u];
@@ -396,7 +400,7 @@ void kernel_main() {
                 const uint32_t dof = de & 0xF;
                 const uint32_t scr = get_write_ptr(CB_SCR_IDS);
                 noc_async_read_tile(dpg, subchunk_dir_acc, scr);
-                noc_async_read_barrier();
+                MV_WRAP(MV_WNOC, noc_async_read_barrier());
                 payload_page = reinterpret_cast<volatile uint32_t*>(scr)[dof];
             }
 
@@ -413,12 +417,14 @@ void kernel_main() {
                 BLEND_PZ("rd_ready");
                 const uint32_t scr = get_write_ptr(CB_SCR_IDS);
                 auto fp = reinterpret_cast<volatile uint32_t*>(scr);
+                MV_T0(mv_rdy);
                 for (uint32_t it = 0; it < (1u << 22); ++it) {
                     noc_async_read_tile(tile_id * 8u + sc, ready_acc, scr);
                     noc_async_read_barrier();
                     invalidate_l1_cache();
                     if (fp[0] == ready_epoch) break;
                 }
+                MV_W(MV_WRDY, mv_rdy);
             }
 #endif
             const uint32_t rec_pages =
@@ -430,7 +436,7 @@ void kernel_main() {
             DeviceZoneScopedN("rd_l1_bulk");
             {
                 BLEND_PZ("rd_bulk_wait");
-                cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT);
+                MV_WRAP(MV_WCB, cb_reserve_back(CB_BUCKET_BULK, BULK_REC_SLOT));
             }
             const uint32_t buck = get_write_ptr(CB_BUCKET_BULK);
             {
@@ -443,14 +449,14 @@ void kernel_main() {
                             page0 + q, subchunk_payload_acc,
                             buck + q * SLAB_PAGE_BYTES);
                     }
-                    noc_async_read_barrier();
+                    MV_WRAP(MV_WBULK, noc_async_read_barrier());
                     pp = end;
                 }
             }
             mb_cb_commit_fence();
             cb_push_back(CB_BUCKET_BULK, BULK_REC_SLOT);
 
-            cb_reserve_back(CB_MB_COUNTS, 1);
+            MV_WRAP(MV_WCB, cb_reserve_back(CB_MB_COUNTS, 1));
             {
                 auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(
                     get_write_ptr(CB_MB_COUNTS));
@@ -460,7 +466,7 @@ void kernel_main() {
             cb_push_back(CB_MB_COUNTS, 1);
             continue;
         }
-        cb_reserve_back(CB_MB_COUNTS, 1);
+        MV_WRAP(MV_WCB, cb_reserve_back(CB_MB_COUNTS, 1));
         {
             auto cnt_ptr = reinterpret_cast<volatile uint32_t*>(get_write_ptr(CB_MB_COUNTS));
             cnt_ptr[0] = L_sub;

@@ -54,6 +54,8 @@
 
 // Task #83: fine per-tile zones for floor attribution (host env
 // GSPLAT_TT_BLEND_PROF=1; compiled out by default).
+#include "mv_prof.h"  // task #553 mover counters (no-op unless MV_PROF)
+
 #if defined(BLEND_PROF) && BLEND_PROF
 #define BLEND_PZ(name) DeviceZoneScopedN(name)
 #else
@@ -95,7 +97,7 @@ void kernel_main() {
     const uint32_t stage_addr = get_write_ptr(CB_IMG_U8);
     auto stage = reinterpret_cast<volatile uint8_t*>(stage_addr);
     for (;;) {
-        cb_wait_front(CB_TILE_Q, 1);
+        MV_WRAP(MV_WCB, cb_wait_front(CB_TILE_Q, 1));
         const uint32_t screen_tile =
             reinterpret_cast<volatile uint32_t*>(get_read_ptr(CB_TILE_Q))[0];
         cb_pop_front(CB_TILE_Q, 1);
@@ -109,12 +111,12 @@ void kernel_main() {
         // 3-tile batch never straddles a CB wrap.
         {
             BLEND_PZ("wr_wait_out");
-            cb_wait_front(CB_COLOR_OUT, 3);
+            MV_WRAP(MV_WCB, cb_wait_front(CB_COLOR_OUT, 3));
         }
         uint32_t read_ptr = get_read_ptr(CB_COLOR_OUT);
         // The previous tile's rows must have left the staging block (they had
         // a whole blend tile to drain, so this does not wait in practice).
-        noc_async_writes_flushed();
+        MV_WRAP(MV_WNOC, noc_async_writes_flushed());
         BLEND_PZ("wr_pack");
         for (uint32_t ch = 0; ch < 3; ch++) {
             img_pack_u8::pack_channel(
@@ -139,5 +141,5 @@ void kernel_main() {
         }
 #endif
     }
-    noc_async_write_barrier();
+    MV_WRAP(MV_WNOC, noc_async_write_barrier());
 }

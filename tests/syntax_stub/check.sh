@@ -37,6 +37,8 @@ chk "writer_alpha_blend.cpp BLEND_CB_BASE" $DF -DBLEND_CB_BASE=32 -DBLEND_CTA_BA
 FZ="-DSORT_ONELAUNCH=1 -DFUSE_CULL=1 -DFUSE_CULL_DEPTH=2u -DMATCULL_FOLD=0 -DMATBLEND_FUSE=1 -DBLEND_CB_BASE=32 -DBLEND_CTA_BASE=24"
 chk "matblend_ncrisc.cpp" $DF $FZ -DMB_BUCKET_FIT=8192u -DMB_TILE_L1_MASKS=1 render/kernels/dataflow/matblend_ncrisc.cpp
 chk "matblend_brisc.cpp" $DF $FZ -DMAT_CB_BASE=16 render/kernels/dataflow/matblend_brisc.cpp
+chk "matblend_ncrisc.cpp MV_PROF" $DF $FZ -DMV_PROF=1 -DPROFILE_KERNEL=1 -DMB_BUCKET_FIT=8192u -DMB_TILE_L1_MASKS=1 render/kernels/dataflow/matblend_ncrisc.cpp
+chk "matblend_brisc.cpp MV_PROF" $DF $FZ -DMV_PROF=1 -DPROFILE_KERNEL=1 -DMAT_CB_BASE=16 render/kernels/dataflow/matblend_brisc.cpp
 chk "writer_pfwc_fuse.cpp" $DF render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp EMIT_PUBOC" $DF -DEMIT_PUBOC=1 render/kernels/dataflow/writer_pfwc_fuse.cpp
 chk "writer_pfwc_fuse.cpp FUSE_ABL=7" $DF -DFUSE_ABL=7u render/kernels/dataflow/writer_pfwc_fuse.cpp

@@ -14,6 +14,7 @@
 #include "sort_bin_fp32.h"
 #include "sort_radix_tile_algo.h"
 #include "../blend_alias_fifo.h"
+#include "mv_prof.h"
 
 #ifndef BLEND_RTA_BASE
 #define BLEND_RTA_BASE 32
@@ -32,10 +33,13 @@ inline T get_arg_val(int arg_idx) {
 }  // namespace blendk
 
 void kernel_main() {
+    MV_BEGIN();  // task #553: GSPLAT_TT_MV_PROF=1 mover counters (profiler builds)
     matk::kernel_main();
     noc_async_write_barrier();
+    MV_MARK_PRE();
 #ifdef BLEND_ALIAS_CUT
     blend_fifo_shrink(BLEND_CB_BASE + 3, BLEND_MB_COUNTS_BYTES, BLEND_MB_COUNTS_PAGE);  // reader pushes
 #endif
     blendk::kernel_main();
+    MV_END();
 }

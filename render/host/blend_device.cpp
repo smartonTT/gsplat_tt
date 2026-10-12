@@ -343,6 +343,11 @@ static void build_program_and_workload_mb(DeviceContext& ctx, bool fused = false
             fz_common["BLEND_OUT_PAGE"] = std::to_string(TILE_BYTES_BF16) + "u";
             fz_common["BLEND_IMG_U8_BYTES"] = std::to_string(IMG_ROW_BYTES * TILE_H) + "u";
         }
+        // Task #553: GSPLAT_TT_MV_PROF=1 (profiler builds) adds BRISC/NCRISC wait counters
+        // ("mv_pc" timestamped data, kernels/dataflow/mv_prof.h). Default OFF.
+        if (const char* mv = std::getenv("GSPLAT_TT_MV_PROF"); mv != nullptr && mv[0] == '1') {
+            fz_common["MV_PROF"] = "1";
+        }
         TensorAccessorArgs::create_dram_interleaved().append_to(reader_ct);
         std::vector<uint32_t> ct = mat.ct;
         ct.insert(ct.end(), reader_ct.begin(), reader_ct.end());
