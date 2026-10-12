@@ -505,6 +505,12 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
     // per-part cycle totals as Tracy "k2p_*" markers. Unset: no define.
     if (const char* e = std::getenv("GSPLAT_TT_K2_PROF"); e != nullptr && std::atoi(e) != 0)
         defines["K2_PROF"] = "1";
+    // Task #538: GSPLAT_TT_ELLIPSE_PROBE=1 (profiling only) runs lever B2's
+    // per-pair ellipse test in the K2 pair loop without changing a pair
+    // (pfwc_fuse::EllipseProbe), to measure its cost. Unset: no define.
+    const char* ep = std::getenv("GSPLAT_TT_ELLIPSE_PROBE");
+    const bool eprobe = ep != nullptr && std::atoi(ep) != 0;
+    if (eprobe) defines["K2_ELLIPSE_PROBE"] = "1";
     // Task #274: GSPLAT_TT_K2_TRISC hands two slices of each mover's pages to
     // the idle TRISCs (k2_trisc.h, k2_trisc_compute.cpp). Default on since #469
     // (b2b -0.305 ms/view on p100a, md5-exact); =0 restores the mover-only K2.
@@ -517,8 +523,9 @@ static void build_program_k2seg(TileAssignDeviceContext& ctx, uint32_t nseg) {
             c.set_page_size(id, k2_trisc::CB_BYTES);
             CreateCircularBuffer(program, cores, c);
         }
-        CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/k2_trisc_compute.cpp", cores,
-                     ComputeConfig{});
+        ComputeConfig cc{};
+        if (eprobe) cc.defines["K2_ELLIPSE_PROBE"] = "1";
+        CreateKernel(program, OVERRIDE_KERNEL_PREFIX "kernels/compute/k2_trisc_compute.cpp", cores, cc);
     }
     ctx.k2s = CreateKernel(program,
                            OVERRIDE_KERNEL_PREFIX "kernels/dataflow/tile_assign_scatter_seg.cpp",
