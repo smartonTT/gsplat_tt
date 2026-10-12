@@ -658,10 +658,10 @@ static void add_mat_cbs_and_defines(Program& program, const CoreRangeSet& cores,
     const char* perm_noc = std::getenv("GSPLAT_TT_PERM_NOC");
     mat_defines["PERM_NOC"] =
         (perm_noc != nullptr && perm_noc[0] >= '0' && perm_noc[0] <= '7') ? std::string(1, perm_noc[0]) : "7";
-    // Task #519: GSPLAT_TT_MAT_EARLY_CULL=1 (default off) posts the TRISC cull before the
-    // sort (whole-tile items) and sorts only the select_bins candidates of big items.
+    // Task #519: GSPLAT_TT_MAT_EARLY_CULL (default on since iter 224, =0 off) posts the TRISC
+    // cull before the sort (whole-tile items) and sorts only the select_bins candidates of big items.
     if (const char* ec = std::getenv("GSPLAT_TT_MAT_EARLY_CULL");
-        ec != nullptr && ec[0] == '1' && mat_defines.count("MATCULL_TRISC_FILL") != 0u &&
+        (ec == nullptr || ec[0] != '0') && mat_defines.count("MATCULL_TRISC_FILL") != 0u &&
         mat_defines.count("SORT_ONELAUNCH") != 0u && mat_defines.count("OL_MAT_SELECT") == 0u) {
         mat_defines["MAT_EARLY_CULL"] = "1";
     }
